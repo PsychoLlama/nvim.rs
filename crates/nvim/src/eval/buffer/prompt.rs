@@ -14,7 +14,7 @@
 use super::lines::set_buffer_lines;
 use super::*;
 use crate::cstr;
-use crate::eval::typval::NumBuf;
+use crate::eval::typval::{NumBuf, tv_list_items_mut, tv_list_last, tv_list_len};
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 use core::mem::offset_of;
@@ -35,12 +35,7 @@ unsafe fn ends_in_newline(s: *const c_char) -> bool {
 /// List.
 fn list_last(lines: &TypVal) -> *mut ListItem {
     // SAFETY: a `VAR_LIST` holds a live list or NULL.
-    let l = lines.list_or_null();
-    if l.is_null() {
-        return ptr::null_mut();
-    }
-    let (len, last) = unsafe { ((*l).lv_len, (*l).lv_last) };
-    if len == 0 { ptr::null_mut() } else { last }
+    unsafe { tv_list_last(lines.list_or_null()) }
 }
 
 /// `prompt_appendbuf({buf}, {string/list})` — 0 when the text went in.
@@ -81,9 +76,8 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         };
         if lines.v_type() == VAR_LIST {
             let l = lines.list_or_null();
-            if !l.is_null() && unsafe { (*l).lv_len } > 0 {
-                let mut item = unsafe { Li::new((*l).lv_first) };
-                let itv = item.field_ptr::<TypVal>(offset_of!(ListItem, li_tv));
+            if let Some(item) = (unsafe { tv_list_items_mut(l) }).first_mut() {
+                let itv = &raw mut item.li_tv;
                 let joined = unsafe { concat_str(text, numbuf.string(&*itv)) };
                 unsafe { tv_clear(&mut *itv) };
                 item.li_tv.write_string(joined);
@@ -96,16 +90,15 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         }
     }
     if did_emsg.get() == did_emsg_before {
-        let split = did_concat && unsafe { (*lines.list_or_null()).lv_len } > 1;
+        let split = did_concat && unsafe { tv_list_len(lines.list_or_null()) } > 1;
         if split {
             // The joined first item replaces the prompt line; the rest is
             // appended after it, but only once the replacement worked.
             let l = lines.list_or_null();
-            let li = unsafe { (*l).lv_first };
-            let itv = unsafe { Li::new(li) }.field_ptr::<TypVal>(offset_of!(ListItem, li_tv));
+            let itv = &raw mut unsafe { tv_list_items_mut(l) }[0].li_tv;
             unsafe { set_buffer_lines(Some(buf), lnum, false, &*itv, result) };
             if result.number_or_zero() == 0 {
-                unsafe { tv_list_item_remove(l, li) };
+                unsafe { tv_list_remove_at(l, 0) };
                 unsafe { set_buffer_lines(Some(buf), lnum, true, lines, result) };
             }
         } else {

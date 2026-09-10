@@ -27,9 +27,7 @@ use core::mem::MaybeUninit;
 
 use crate::eval::typval::DictSlot;
 
-use crate::types::{
-    Blob, Dict, Float, List, ListItem, Partial, TypVal, int64_t, ptrdiff_t, size_t,
-};
+use crate::types::{Blob, Dict, Float, List, Partial, TypVal, int64_t, ptrdiff_t, size_t};
 
 // The walk itself; this half is the contract it runs against.
 mod walk;
@@ -97,11 +95,15 @@ pub(crate) enum Frame {
     },
     List {
         list: *mut List,
-        li: *mut ListItem,
+        /// The item the walk stands on -- an *index*, because the list owns
+        /// its items and a body may edit it.  `at == tv_list_len(list)` is
+        /// a drained frame.
+        at: usize,
     },
     Pairs {
         list: *mut List,
-        li: *mut ListItem,
+        /// As [`Frame::List`].
+        at: usize,
     },
     Partial {
         stage: PartialStage,

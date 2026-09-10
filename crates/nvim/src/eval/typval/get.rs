@@ -292,7 +292,7 @@ pub unsafe fn tv2bool(tv: &TypVal) -> bool {
         }
         VAR_LIST => {
             let l = tv.list_or_null();
-            !l.is_null() && unsafe { (*l).lv_len } > 0
+            !l.is_null() && unsafe { tv_list_len(l) } > 0
         }
         VAR_DICT => {
             let d = tv.dict_or_null();

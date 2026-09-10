@@ -28,13 +28,11 @@ use neovim::eval::typval::{
     tv_dict_add, tv_dict_alloc, tv_dict_free, tv_dict_is_watched, tv_dict_item_alloc,
     tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_item_remove, tv_dict_watcher_add,
     tv_dict_watcher_remove, tv_list_alloc, tv_list_append_number, tv_list_append_string,
-    tv_list_drop_items, tv_list_first, tv_list_last, tv_list_len, tv_list_unref, tv_list_watch_add,
-    tv_list_watch_remove,
+    tv_list_find, tv_list_first, tv_list_last, tv_list_len, tv_list_remove_range, tv_list_unref,
+    tv_list_watch_add, tv_list_watch_remove,
 };
-use neovim::memory::{xfree, xstrdup};
-use neovim::types::{
-    Callback, Failed, ListItem, ListWatch, TypVal, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t,
-};
+use neovim::memory::xstrdup;
+use neovim::types::{Callback, Failed, ListWatch, TypVal, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::Payload;
@@ -43,10 +41,12 @@ use crate::support::{check_emsg, cstr, editor_lock};
 /// `describe('list') describe('append') describe('string()') itp('works')`,
 /// spec line 663.
 ///
-/// The assertion is the *order*: `tv_list_append_string` copies the string
-/// before it allocates the item that will hold it.
+/// The assertion is that the *string* is copied and nothing else is: the
+/// list owns its items in one array, so appending allocates only when the
+/// array has to grow, and that growth is the Rust allocator's, which this
+/// log does not see.
 #[test]
-fn tv_list_append_string_copies_then_appends() {
+fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
     let log = AllocLog::start();
     // SAFETY: the list is this case's own, freed at the end; the strings
     // outlive every call that reads them.
@@ -56,46 +56,32 @@ fn tv_list_append_string_copies_then_appends() {
 
         let test = cstr("test");
         tv_list_append_string(l, test.as_ptr(), 3);
-        log.check(&[
-            alloc::string((*(*l).lv_last).li_tv.string(), 3),
-            alloc::li((*l).lv_last),
-        ]);
+        log.check(&[alloc::string(last_string(l), 3)]);
 
-        // A NULL string allocates nothing but the item.
+        // A NULL string allocates nothing at all.
         tv_list_append_string(l, ptr::null(), 0);
-        log.check(&[alloc::li((*l).lv_last)]);
+        log.check(&[]);
         tv_list_append_string(l, ptr::null(), -1);
-        log.check(&[alloc::li((*l).lv_last)]);
+        log.check(&[]);
 
         // A negative length means "to the terminator".
         tv_list_append_string(l, test.as_ptr(), -1);
-        log.check(&[
-            alloc::string((*(*l).lv_last).li_tv.string(), 4),
-            alloc::li((*l).lv_last),
-        ]);
+        log.check(&[alloc::string(last_string(l), 4)]);
 
         assert_eq!(strings(l), [Some("tes"), None, None, Some("test")]);
 
         // The spec left this to a LuaJIT finalizer, so it never said what
-        // freeing costs. It is worth saying: each item releases its string
-        // before itself, and the list goes last. An item holding a NULL
+        // freeing costs. It is worth saying: the items release their strings
+        // front to back, and the list goes last. An item holding a NULL
         // string reaches the allocator not at all: `tv_clear` recognises an
         // already-empty value and returns, where the C called `xfree(NULL)`.
-        let items: Vec<(*mut c_char, *mut ListItem)> = {
-            let mut items = Vec::new();
-            let mut item = (*l).lv_first;
-            while !item.is_null() {
-                items.push(((*item).li_tv.string(), item));
-                item = (*item).li_next;
-            }
-            items
-        };
-        let mut expected: Vec<_> = items
+        let held: Vec<*mut c_char> = (0..tv_list_len(l))
+            .map(|at| (*tv_list_find(l, at)).li_tv.string())
+            .collect();
+        let mut expected: Vec<_> = held
             .iter()
-            .flat_map(|&(string, item)| {
-                let released = (!string.is_null()).then(|| alloc::freed(string));
-                released.into_iter().chain([alloc::freed(item)])
-            })
+            .filter(|s| !s.is_null())
+            .map(|&s| alloc::freed(s))
             .collect();
         expected.push(alloc::freed(l));
         tv_list_unref(l);
@@ -103,19 +89,25 @@ fn tv_list_append_string_copies_then_appends() {
     }
 }
 
+/// The string the last item of `l` holds.
+///
+/// # Safety
+/// `l` is a live, non-empty list whose last item holds a `VAR_STRING`.
+unsafe fn last_string(l: *mut neovim::types::List) -> *mut c_char {
+    unsafe { (*tv_list_last(l)).li_tv.string() }
+}
+
 /// The list's items as UTF-8, with a NULL string spelled `None`.
 ///
 /// # Safety
 /// `l` is a live list of `VAR_STRING` items.
-unsafe fn strings(l: *const neovim::types::List) -> Vec<Option<&'static str>> {
-    let mut out = Vec::new();
-    let mut item = unsafe { (*l).lv_first };
-    while !item.is_null() {
-        let s = unsafe { (*item).li_tv.string() };
-        out.push((!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_str().unwrap()));
-        item = unsafe { (*item).li_next };
-    }
-    out
+unsafe fn strings(l: *mut neovim::types::List) -> Vec<Option<&'static str>> {
+    (0..unsafe { tv_list_len(l) })
+        .map(|at| {
+            let s = unsafe { (*tv_list_find(l, at)).li_tv.string() };
+            (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_str().unwrap())
+        })
+        .collect()
 }
 
 /// `describe('dict') describe('item') describe('alloc()/free()')
@@ -245,9 +237,9 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
 /// (`1787432513-typvalmutate.py --blind list-drop-len`). The length is
 /// still what `len()` answers for a list any *runtime* code shortened.
 #[test]
-fn dropping_items_shortens_the_list() {
+fn removing_a_run_shortens_the_list() {
     let _editor = editor_lock();
-    // SAFETY: the list and its items are this case's own, freed below.
+    // SAFETY: the list is this case's own, freed below.
     unsafe {
         let l = tv_list_alloc(kListLenUnknown as ptrdiff_t);
         for n in 1..=4 {
@@ -255,20 +247,11 @@ fn dropping_items_shortens_the_list() {
         }
         assert_eq!(tv_list_len(l), 4);
 
-        let second = (*tv_list_first(l)).li_next;
-        let third = (*second).li_next;
-        tv_list_drop_items(l, second, third);
+        tv_list_remove_range(l, 1, 2);
 
-        assert_eq!(tv_list_len(l), 2, "two of the four items were unlinked");
-        let first = tv_list_first(l);
-        let last = tv_list_last(l);
-        assert_eq!((*first).li_next, last, "the gap closed forwards");
-        assert_eq!((*last).li_prev, first, "and backwards");
-
-        // `drop` does not free; these two are ours now. They hold numbers,
-        // so there is nothing to clear.
-        xfree(second.cast());
-        xfree(third.cast());
+        assert_eq!(tv_list_len(l), 2, "two of the four items were removed");
+        assert_eq!((*tv_list_first(l)).li_tv.number(), 1);
+        assert_eq!((*tv_list_last(l)).li_tv.number(), 4, "the gap closed");
         tv_list_unref(l);
     }
 }
@@ -282,7 +265,7 @@ fn dropping_items_shortens_the_list() {
 /// *first* one; a watcher pushed backwards off the front is NULL, which ends
 /// the walk with the same answer. Measured NOT CAUGHT by `evalsweep`.
 #[test]
-fn a_watcher_on_a_dropped_item_advances_past_it() {
+fn a_watcher_on_a_removed_item_advances_past_it() {
     let _editor = editor_lock();
     // SAFETY: as above; `lw` outlives its registration.
     unsafe {
@@ -290,19 +273,19 @@ fn a_watcher_on_a_dropped_item_advances_past_it() {
         for n in 1..=3 {
             tv_list_append_number(l, n);
         }
-        let second = (*tv_list_first(l)).li_next;
-        let third = (*second).li_next;
 
         let mut lw = ListWatch {
-            lw_item: second,
+            lw_index: 1,
             lw_next: ptr::null_mut(),
         };
         tv_list_watch_add(l, &raw mut lw);
-        tv_list_drop_items(l, second, second);
-        assert_eq!(lw.lw_item, third, "the watcher moved on, not back");
+        tv_list_remove_range(l, 1, 1);
+        // Index 1 again -- but the item that *followed* the removed one,
+        // which has shifted down into its place.
+        assert_eq!(lw.lw_index, 1, "the watcher moved on, not back");
+        assert_eq!((*tv_list_find(l, lw.lw_index)).li_tv.number(), 3);
 
         tv_list_watch_remove(l, &raw mut lw);
-        xfree(second.cast());
         tv_list_unref(l);
     }
 }

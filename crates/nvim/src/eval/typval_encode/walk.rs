@@ -14,9 +14,9 @@ use super::{
 };
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::typval::{
-    DictSlot, Dt, Li, Pt, Tv, di_tv, dv_copyid, li_tv, lv_copyid, tv_blob_len, tv_dict_find,
-    tv_dict_hi2di, tv_dict_item_key, tv_list_copyid, tv_list_first, tv_list_last, tv_list_len,
-    tv_list_set_copyid,
+    DictSlot, Dt, Li, Pt, Tv, di_tv, dv_copyid, lv_copyid, tv_blob_len, tv_dict_find,
+    tv_dict_hi2di, tv_dict_item_key, tv_list_copyid, tv_list_first, tv_list_items,
+    tv_list_items_mut, tv_list_iter, tv_list_last, tv_list_len, tv_list_set_copyid,
 };
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::eval::{get_copy_id, partial_name};
@@ -267,10 +267,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                 stack.push(ConvFrame {
                     tv,
                     saved_copyid,
-                    frame: Frame::List {
-                        list,
-                        li: unsafe { tv_list_first(list) },
-                    },
+                    frame: Frame::List { list, at: 0 },
                 });
                 item_hook!(unsafe { sink.conv_real_list_after_start(slot!(), stack.last_mut()) });
             }
@@ -406,26 +403,14 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             if unsafe { tv_list_len(val_list) } != 4 {
                 return Ok(None);
             }
-            // SAFETY: the four items of a list this long, walked forwards
-            // from the head as upstream does.
-            let sign_li = unsafe { Li::new(tv_list_first(val_list)) };
-            let sign: VarNumber = sign_li.number();
-            if sign_li.v_type() != VAR_NUMBER || sign == 0 {
+            // SAFETY: the four items of a list this long.
+            let parts = unsafe { tv_list_items(val_list) };
+            let [sign, highest_bits, high_bits, low_bits] =
+                [0, 1, 2, 3].map(|i| parts[i].li_tv.number_or_zero());
+            if parts.iter().any(|li| li.li_tv.v_type() != VAR_NUMBER) {
                 return Ok(None);
             }
-            let highest_bits_li = unsafe { Li::new(sign_li.li_next) };
-            let highest_bits: VarNumber = highest_bits_li.number();
-            if highest_bits_li.v_type() != VAR_NUMBER || highest_bits < 0 {
-                return Ok(None);
-            }
-            let high_bits_li = unsafe { Li::new(highest_bits_li.li_next) };
-            let high_bits: VarNumber = high_bits_li.number();
-            if high_bits_li.v_type() != VAR_NUMBER || high_bits < 0 {
-                return Ok(None);
-            }
-            let low_bits_li = unsafe { Li::new(tv_list_last(val_list)) };
-            let low_bits: VarNumber = low_bits_li.number();
-            if low_bits_li.v_type() != VAR_NUMBER || low_bits < 0 {
+            if sign == 0 || highest_bits < 0 || high_bits < 0 || low_bits < 0 {
                 return Ok(None);
             }
             let number =
@@ -485,7 +470,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                 saved_copyid,
                 frame: Frame::List {
                     list: val_list,
-                    li: unsafe { tv_list_first(val_list) },
+                    at: 0,
                 },
             });
         }
@@ -500,15 +485,12 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             }
             // Every item has to be a two-element list, or this is not a
             // map after all.
-            let mut li = unsafe { tv_list_first(val_list) };
-            while !li.is_null() {
-                let item = li_tv(li);
-                if unsafe { (*item).v_type() } != VAR_LIST
-                    || unsafe { tv_list_len((*item).list_or_null()) } != 2
+            for li in tv_list_iter(unsafe { val_list.as_ref() }) {
+                if li.li_tv.v_type() != VAR_LIST
+                    || unsafe { tv_list_len(li.li_tv.list_or_null()) } != 2
                 {
                     return Ok(None);
                 }
-                li = unsafe { (*li).li_next };
             }
             let saved_copyid = unsafe { tv_list_copyid(val_list) };
             {
@@ -530,7 +512,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                 saved_copyid,
                 frame: Frame::Pairs {
                     list: val_list,
-                    li: unsafe { tv_list_first(val_list) },
+                    at: 0,
                 },
             });
         }
@@ -673,40 +655,44 @@ unsafe fn walk<S: TypvalSink>(
                 unsafe { sink.conv_dict_after_key(Some(dictp)) };
                 tv = di_tv(di);
             }
-            Frame::List { list, li } => {
-                if li.is_null() {
+            Frame::List { list, at } => {
+                // SAFETY: the frame's own list, which stays live for the
+                // walk.
+                let items = unsafe { tv_list_items_mut(list) };
+                let Some(item) = items.get_mut(at) else {
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
                     unsafe { tv_list_set_copyid(list, saved_copyid) };
                     unsafe { sink.conv_list_end(cur_tv.as_mut()) };
                     continue;
-                }
-                if li != unsafe { tv_list_first(list) } {
+                };
+                if at > 0 {
                     unsafe { sink.conv_list_between_items(cur_tv.as_mut()) };
                 }
-                tv = li_tv(li);
-                if let Frame::List { li: li_slot, .. } = &mut stack.get_mut(idx).frame {
-                    // SAFETY: an item of the frame's list, checked non-null.
-                    *li_slot = unsafe { Li::new(li) }.li_next;
+                tv = &raw mut item.li_tv;
+                if let Frame::List { at: slot, .. } = &mut stack.get_mut(idx).frame {
+                    *slot = at + 1;
                 }
             }
-            Frame::Pairs { list, li } => {
-                if li.is_null() {
+            Frame::Pairs { list, at } => {
+                // SAFETY: as above.
+                let items = unsafe { tv_list_items(list) };
+                let Some(item) = items.get(at) else {
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
                     unsafe { tv_list_set_copyid(list, saved_copyid) };
                     unsafe { sink.conv_dict_end(None) };
                     continue;
-                }
-                if li != unsafe { tv_list_first(list) } {
+                };
+                if at > 0 {
                     unsafe { sink.conv_dict_between_items(None) };
                 }
-                // SAFETY: an item of the frame's list, checked non-null above.
-                let item = unsafe { Li::new(li) };
-                let kv_pair = item.list();
-                let key = li_tv(unsafe { tv_list_first(kv_pair) });
-                // SAFETY: an item of a `[key, value]` pair, live while the
-                // list is.
+                let kv_pair = item.li_tv.list_or_null();
+                // SAFETY: a `[key, value]` pair, checked when the frame was
+                // pushed.
+                let pair = unsafe { tv_list_items_mut(kv_pair) };
+                let key = &raw mut pair[0].li_tv;
+                // SAFETY: an item of the pair, live while the list is.
                 walk_hook!(unsafe { sink.special_dict_key_check(&*key) });
                 // The key goes through the whole walk, and may itself be a
                 // container: this frame is not necessarily the top one by
@@ -715,9 +701,11 @@ unsafe fn walk<S: TypvalSink>(
                 // that an error raised there names this pair's index.
                 unsafe { convert_one_value(sink, &mut stack, key, copyid, objname) }?;
                 unsafe { sink.conv_dict_after_key(None) };
-                tv = li_tv(unsafe { tv_list_last(kv_pair) });
-                if let Frame::Pairs { li: li_slot, .. } = &mut stack.get_mut(idx).frame {
-                    *li_slot = item.li_next;
+                // Re-derived: the key's own walk may have edited the pair.
+                // SAFETY: as above.
+                tv = &raw mut unsafe { tv_list_items_mut(kv_pair) }[1].li_tv;
+                if let Frame::Pairs { at: slot, .. } = &mut stack.get_mut(idx).frame {
+                    *slot = at + 1;
                 }
             }
             Frame::Partial { stage, pt } => {

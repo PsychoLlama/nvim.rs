@@ -15,8 +15,8 @@
 use crate::api::private::helpers::cstr_to_string;
 use crate::cstr;
 use crate::eval::typval::{
-    tv_list_alloc, tv_list_append_list, tv_list_append_string, tv_list_first, tv_list_last,
-    tv_list_len,
+    tv_list_alloc, tv_list_append_list, tv_list_append_string, tv_list_first, tv_list_iter,
+    tv_list_last, tv_list_len,
 };
 use crate::eval::{eval_call_provider, eval_has_provider};
 use crate::global_cell::GlobalCell;
@@ -224,18 +224,16 @@ pub(crate) unsafe fn get_clipboard(
 
         let mut tv_idx: size_t = 0;
         if !lines.is_null() {
-            let mut li = unsafe { (*lines).lv_first };
-            while !li.is_null() {
-                if unsafe { (*li).li_tv.v_type() } != VAR_STRING {
+            for li in tv_list_iter(unsafe { lines.as_ref() }) {
+                if li.li_tv.v_type() != VAR_STRING {
                     break 'err;
                 }
-                let s = unsafe { (*li).li_tv.string_or_null() };
+                let s = li.li_tv.string_or_null();
                 unsafe {
                     *(*reg).y_array.add(tv_idx) =
                         cstr_to_string(if !s.is_null() { s } else { c"".as_ptr() })
                 };
                 tv_idx += 1;
-                li = unsafe { (*li).li_next };
             }
         }
 

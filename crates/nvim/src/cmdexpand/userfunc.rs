@@ -11,12 +11,12 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
-use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{CallFrame, tv_list_iter};
 use crate::memory::handoff::owned_cstr_array;
 use crate::path::ExpandFlags;
 use crate::strings::vim_strchr;
-use crate::types::{ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST, VAR_STRING};
+use crate::types::{ExpandContext, Failed, MAXPATHL, NUL, PATHSEPSTR, VAR_LIST};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::{CStr, CString};
@@ -416,16 +416,13 @@ pub(crate) unsafe fn process_user_list(
 
     // Loop over the items in the list.
     if !retlist.is_null() {
-        let mut li: *const ListItem = unsafe { (*retlist).lv_first };
-        while !li.is_null() {
+        for li in tv_list_iter(unsafe { retlist.as_ref() }) {
             // Skip non-string items and empty strings.
-            if unsafe { (*li).li_tv.v_type() } == VAR_STRING
-                && !unsafe { (*li).li_tv.string_or_null() }.is_null()
-            {
+            let s = li.li_tv.string_or_null();
+            if !s.is_null() {
                 // SAFETY: the item is a live, NUL-terminated string.
-                found.push(unsafe { CStr::from_ptr((*li).li_tv.string_or_null()) }.to_owned());
+                found.push(unsafe { CStr::from_ptr(s) }.to_owned());
             }
-            li = unsafe { (*li).li_next };
         }
     }
     unsafe { tv_list_unref(retlist) };

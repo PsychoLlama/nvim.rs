@@ -23,11 +23,12 @@
 //! # Re-entrancy
 //!
 //! Nothing here caches anything across a call that can run Vimscript, and
-//! the four walks run one per item.  [`Item::next`] re-reads `li_next`
-//! *after* the callback has run, exactly where upstream reads it;
-//! [`DictRef::items`] holds only the two locals upstream's `TV_DICT_ITER`
-//! holds; and an item's value crosses into the evaluator as a [`TvRef`]
-//! rather than a borrow that would have to survive the call.
+//! the four walks run one per item.  An [`Item`] is a list and an *index*,
+//! so it re-derives the slot after every callback rather than holding an
+//! address the callback could have invalidated; [`DictRef::items`] holds
+//! only the two locals upstream's `TV_DICT_ITER` holds; and an item's value
+//! crosses into the evaluator as a [`TvRef`] rather than a borrow that would
+//! have to survive the call.
 //!
 //! Original: `src/nvim/eval/list.c`, Vim/Neovim, Vim license.
 
@@ -45,13 +46,13 @@ use core::slice;
 
 use crate::cstr;
 use crate::eval::typval::{
-    NumBuf, tv_blob_copy, tv_blob_remove, tv_blob_set_ret, tv_check_for_string_or_list_or_blob_arg,
-    tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret, tv_dict_copy, tv_dict_extend,
-    tv_dict_item_remove, tv_dict_remove, tv_dict_unref, tv_equal, tv_get_number_chk,
-    tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_owned_tv,
-    tv_list_append_tv, tv_list_copy, tv_list_extend, tv_list_find, tv_list_insert_tv,
-    tv_list_item_remove, tv_list_remove, tv_list_reverse, tv_list_set_ret, tv_list_unref,
-    value_check_lock,
+    NumBuf, index_of, tv_blob_copy, tv_blob_remove, tv_blob_set_ret,
+    tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret,
+    tv_dict_copy, tv_dict_extend, tv_dict_item_remove, tv_dict_remove, tv_dict_unref, tv_equal,
+    tv_get_number_chk, tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret,
+    tv_list_append_owned_tv, tv_list_append_tv, tv_list_copy, tv_list_extend, tv_list_index,
+    tv_list_insert_tv, tv_list_items_mut, tv_list_remove, tv_list_remove_at, tv_list_reverse,
+    tv_list_set_ret, tv_list_unref, value_check_lock,
 };
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
@@ -201,19 +202,32 @@ impl ListRef {
     /// Number of items; a NULL list is empty.
     #[inline(always)]
     pub(crate) fn len(self) -> c_int {
-        self.get().map_or(0, |l| l.lv_len)
+        index_of(self.count())
+    }
+
+    /// How many items, as the array's own count.
+    #[inline(always)]
+    fn count(self) -> usize {
+        self.get().map_or(0, |l| l.lv_items.len())
     }
 
     #[inline(always)]
     pub(crate) fn first(self) -> Option<Item> {
-        Item::new(self.get().map_or(core::ptr::null_mut(), |l| l.lv_first))
+        self.at(0)
+    }
+
+    /// The item at `at`, or None when the list is shorter than that.
+    #[inline(always)]
+    fn at(self, at: usize) -> Option<Item> {
+        (at < self.count()).then_some(Item { list: self, at })
     }
 
     /// The item at `n`, which may count back from the end.
     #[inline(always)]
     pub(crate) fn find(self, n: c_int) -> Option<Item> {
-        // SAFETY: live or NULL, which is what `tv_list_find` takes.
-        Item::new(unsafe { tv_list_find(self.0, n) })
+        // SAFETY: live or NULL, which is what `tv_list_index` takes.
+        let at = unsafe { tv_list_index(self.0, n) }?;
+        Some(Item { list: self, at })
     }
 
     #[inline(always)]
@@ -248,22 +262,23 @@ impl ListRef {
     pub(crate) fn insert_tv(self, tv: &TypVal, before: Option<Item>) {
         // SAFETY: live, `tv` is a live value, and `before` is an item of this
         // very list -- `find` is the only thing that produces one.
-        unsafe { tv_list_insert_tv(self.0, tv, Item::raw(before)) };
+        unsafe { tv_list_insert_tv(self.0, tv, before.map(|i| i.at)) };
     }
 
     /// Splice copies of `other`'s items in before `before`.
     #[inline(always)]
     pub(crate) fn extend_with(self, other: ListRef, before: Option<Item>) {
         // SAFETY: both live or NULL, and `before` is an item of this list.
-        unsafe { tv_list_extend(self.0, other.0, Item::raw(before)) };
+        unsafe { tv_list_extend(self.0, other.0, before.map(|i| i.at)) };
     }
 
     /// Remove `item` and answer the one that followed it.
     #[inline(always)]
     pub(crate) fn remove_item(self, item: Item) -> Option<Item> {
-        // SAFETY: live, and `item` is an item of this list.  Upstream's
-        // `tv_list_item_remove` is what fixes up any watcher parked on it.
-        Item::new(unsafe { tv_list_item_remove(self.0, item.0) })
+        // SAFETY: live, and `item` is an item of this list.  This is what
+        // shifts any `:for` cursor parked on it.
+        unsafe { tv_list_remove_at(self.0, item.at) };
+        self.at(item.at)
     }
 
     /// A shallow copy, for `extendnew()`.  NULL when the copy failed.
@@ -290,26 +305,26 @@ pub(crate) fn list_alloc_ret(result: &mut TypVal) -> ListRef {
     ListRef(unsafe { tv_list_alloc_ret(result, LEN_UNKNOWN) })
 }
 
-/// One item of a list.  Never NULL -- absence is `Option<Item>`.
+/// One item of a list: the list, and *where in it*.
+///
+/// An index and not an address, because a callback between two steps of a
+/// walk may insert or remove items and move every one of them.  An `Item`
+/// that named a slot that has since gone panics rather than reading a stale
+/// one -- the walks here re-derive it through [`ListRef::at`] each step,
+/// which answers `None` instead.
 #[derive(Clone, Copy)]
-pub(crate) struct Item(*mut ListItem);
+pub(crate) struct Item {
+    list: ListRef,
+    at: usize,
+}
 
 impl Item {
     /// The item itself.  The one unsafe step.
     #[inline(always)]
     fn get<'a>(self) -> &'a mut ListItem {
-        // SAFETY: an `Item` is only ever made from a live list's own item.
-        unsafe { &mut *self.0 }
-    }
-
-    #[inline(always)]
-    fn new(li: *mut ListItem) -> Option<Self> {
-        (!li.is_null()).then_some(Self(li))
-    }
-
-    #[inline(always)]
-    fn raw(item: Option<Self>) -> *mut ListItem {
-        item.map_or(core::ptr::null_mut(), |i| i.0)
+        // SAFETY: an `Item` is only ever made from a live list.
+        let items = unsafe { tv_list_items_mut(self.list.0) };
+        &mut items[self.at]
     }
 
     /// The item's value.  A [`TvRef`] and not a borrow: it is handed to a
@@ -324,12 +339,12 @@ impl Item {
         self.get().li_lock
     }
 
-    /// The item after this one, read *now*: a callback runs between two of
-    /// these reads and may have removed items, so a walk that remembered the
-    /// pointer from before it would follow a freed one.
+    /// The item after this one, looked up *now*: a callback runs between two
+    /// of these and may have edited the list, so a walk that remembered a
+    /// slot from before it would read a stale one.
     #[inline(always)]
     pub(crate) fn next(self) -> Option<Self> {
-        Self::new(self.get().li_next)
+        self.list.at(self.at + 1)
     }
 
     /// Replace the item's value with `newtv`, clearing what was there.

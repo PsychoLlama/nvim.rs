@@ -6,10 +6,9 @@
 #![cfg(not(miri))]
 
 use std::mem::ManuallyDrop;
-use std::ptr;
 
 use neovim::eval::encode::encode_list_write;
-use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append};
+use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append_owned_tv, tv_list_first};
 use neovim::types::{List, Refcount, TypVal};
 
 use crate::support::alloc::{self, AllocLog};
@@ -147,13 +146,9 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
                     _ => (*inner_tv.dict()).dv_refcount.retain(),
                 }
             }
-            let li = tv::list_item_alloc();
-            (*li).li_next = ptr::null_mut();
-            (*li).li_prev = ptr::null_mut();
             // Every item names the same container; the retain above is
             // what pays for the extra holder.
-            (&raw mut (*li).li_tv).write(tv::bit_copy(&inner_tv));
-            tv_list_append(outer, li);
+            tv_list_append_owned_tv(outer, tv::bit_copy(&inner_tv));
         }
         TypVal::List(outer)
     }
@@ -170,91 +165,44 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&l [1], *l, *l]`
         let mut tv = sharing(3, &Tv::List(vec![Tv::Float(1.0)]));
         let outer = tv.list();
-        let lis = tv::list_items(outer);
-        let inner = (*lis[0]).li_tv.list();
-        let inner_li = (*inner).lv_first;
-        log.check(&[
-            alloc::list(outer),
-            alloc::list(inner),
-            alloc::li(inner_li),
-            alloc::li(lis[0]),
-            alloc::li(lis[1]),
-            alloc::li(lis[2]),
-        ]);
+        let inner = (*tv_list_first(outer)).li_tv.list();
+        // Two lists and nothing per item: the items are the lists' own
+        // arrays, whose growth this log does not see.
+        log.check(&[alloc::list(outer), alloc::list(inner)]);
         assert_eq!((*inner).lv_refcount.get(), 3);
         tv_clear(&mut tv);
-        log.check(&[
-            alloc::freed(inner_li),
-            alloc::freed(inner),
-            alloc::freed(lis[0]),
-            alloc::freed(lis[1]),
-            alloc::freed(lis[2]),
-            alloc::freed(outer),
-        ]);
+        log.check(&[alloc::freed(inner), alloc::freed(outer)]);
 
         // `[&l [], *l, *l]`
         let mut tv = sharing(3, &Tv::List(vec![]));
         let outer = tv.list();
-        let lis = tv::list_items(outer);
-        let inner = (*lis[0]).li_tv.list();
-        log.check(&[
-            alloc::list(outer),
-            alloc::list(inner),
-            alloc::li(lis[0]),
-            alloc::li(lis[1]),
-            alloc::li(lis[2]),
-        ]);
+        let inner = (*tv_list_first(outer)).li_tv.list();
+        log.check(&[alloc::list(outer), alloc::list(inner)]);
         assert_eq!((*inner).lv_refcount.get(), 3);
         tv_clear(&mut tv);
-        log.check(&[
-            alloc::freed(inner),
-            alloc::freed(lis[0]),
-            alloc::freed(lis[1]),
-            alloc::freed(lis[2]),
-            alloc::freed(outer),
-        ]);
+        log.check(&[alloc::freed(inner), alloc::freed(outer)]);
 
         // `[&d {}, *d]`
         let mut tv = sharing(2, &Tv::Dict(vec![]));
         let outer = tv.list();
-        let lis = tv::list_items(outer);
-        let inner = (*lis[0]).li_tv.dict();
-        log.check(&[
-            alloc::list(outer),
-            alloc::dict(inner),
-            alloc::li(lis[0]),
-            alloc::li(lis[1]),
-        ]);
+        let inner = (*tv_list_first(outer)).li_tv.dict();
+        log.check(&[alloc::list(outer), alloc::dict(inner)]);
         assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&mut tv);
-        log.check(&[
-            alloc::freed(inner),
-            alloc::freed(lis[0]),
-            alloc::freed(lis[1]),
-            alloc::freed(outer),
-        ]);
+        log.check(&[alloc::freed(inner), alloc::freed(outer)]);
 
         // `[&d {a: 1}, *d]`
         let mut tv = sharing(2, &Tv::dict([("a", Tv::Float(1.0))]));
         let outer = tv.list();
-        let lis = tv::list_items(outer);
-        let inner = (*lis[0]).li_tv.dict();
+        let inner = (*tv_list_first(outer)).li_tv.dict();
         let di = tv::first_di(inner);
         log.check(&[
             alloc::list(outer),
             alloc::dict(inner),
             alloc::di(di, "a".len()),
-            alloc::li(lis[0]),
-            alloc::li(lis[1]),
         ]);
         assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&mut tv);
-        log.check(&[
-            alloc::freed(di),
-            alloc::freed(inner),
-            alloc::freed(lis[0]),
-            alloc::freed(lis[1]),
-            alloc::freed(outer),
-        ]);
+        log.check(&[alloc::freed(di), alloc::freed(inner), alloc::freed(outer)]);
     }
 }

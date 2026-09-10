@@ -172,8 +172,11 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: &mut TypVal) -> bo
                     // Not populated yet; append a list item to fill.
                     tv_list_append_owned_tv(list, TV_INITIAL_VALUE);
                     stack.push(cur);
-                    // TODO(ZyX-I): use indexes, the list item *will* be
-                    // reallocated here.
+                    // The item store *is* an array now, so this append may
+                    // well have moved it -- which is why the slot is taken
+                    // afterwards.  Nothing on the stack points into this
+                    // list: an entry names a slot in its *parent*, and a
+                    // parent is only appended to once its child is done.
                     cur = TVPopStackItem::leaf(&mut (*tv_list_last(list)).li_tv);
                 }
             }

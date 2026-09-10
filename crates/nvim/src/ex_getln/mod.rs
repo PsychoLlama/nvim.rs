@@ -43,8 +43,7 @@ use crate::eval::typval::{
     callback_free, tv_check_for_opt_number_arg, tv_check_for_string_arg, tv_clear, tv_copy,
     tv_dict_add_bool, tv_dict_add_nr, tv_dict_add_str, tv_dict_find, tv_dict_get_callback,
     tv_dict_get_number, tv_dict_get_string_buf_chk, tv_dict_set_keys_readonly, tv_get_number,
-    tv_get_number_chk, tv_get_string_buf_chk, tv_list_first, tv_list_free, tv_list_last,
-    tv_list_len,
+    tv_get_number_chk, tv_get_string_buf_chk, tv_list_free, tv_list_len,
 };
 use crate::eval::vars::{get_globvar_dict, heredoc_get, set_vim_var_char};
 use crate::eval::{callback_call, eval_has_provider, get_echo_hl_id, get_v_event, restore_v_event};
@@ -156,11 +155,11 @@ use crate::types::{
     CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg,
     ExArgt, Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
-    HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList, Object, OpArg,
-    OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg,
-    String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window,
-    XpPrefix, ptrdiff_t, size_t, time_t, uint8_t, uint32_t,
+    HistoryType, Integer, LineNr, List, Magic, MotionType, MsgList, Object, OpArg, OptInt,
+    OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
+    ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg, String_0,
+    TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window, XpPrefix,
+    ptrdiff_t, size_t, time_t, uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

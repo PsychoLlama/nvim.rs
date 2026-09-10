@@ -1,11 +1,25 @@
-//! Allocating, freeing and unlinking a `List` and its `ListItem`s.
+//! Allocating, freeing and editing a `List` and the items it owns.
 //!
 //! [`tv_list_alloc`] and [`tv_list_free`] are the reference-counted pair,
 //! [`tv_list_unref`] the one every caller actually uses.  The `ListWatch`
-//! half ([`tv_list_watch_add`], [`tv_list_watch_fix`]) is how a `:for` loop
-//! survives having the item it is standing on removed underneath it, and
-//! [`tv_list_drop_items`] / [`tv_list_move_items`] are the two ways items
-//! leave a list.
+//! half ([`tv_list_watch_add`], [`tv_list_watch_shift`]) is how a `:for`
+//! loop survives having the item it is standing on removed underneath it,
+//! and [`tv_list_remove_range`] / [`tv_list_move_range`] are the two ways
+//! items leave a list.
+//!
+//! # The item store
+//!
+//! A `List` owns its items in a `Vec<ListItem>`, so an item's identity *is*
+//! its index and there is nothing to free per item.  Everything that used to
+//! be a link walk is an index walk, everything that used to hold a
+//! `*mut ListItem` across an edit holds an index instead, and the one such
+//! cursor that outlives an edit -- a `:for` loop's [`ListWatch`] -- is
+//! shifted by [`tv_list_watch_shift`] at every insert and removal so that it
+//! keeps naming the same *item*.
+//!
+//! A `*mut ListItem` still exists, and is still what most callers hold; it
+//! is a **borrow of the array** and is invalidated by any edit, exactly as a
+//! `&mut` into a `Vec` would be.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Every entry point here dereferences the caller's list.
@@ -21,36 +35,54 @@
 use super::*;
 use crate::types::Refcount;
 
-/// Safe: it takes nothing and reads nothing.  `xmalloc` either answers an
-/// allocation or aborts, so the only obligation left is the ambient one every
-/// allocation in the editor carries — being on the main thread — and *using*
-/// what comes back is the caller's business, not this call's.
-///
-/// The three links and the value are the caller's to fill in; `li_lock` is
-/// not, because an item is born unlocked and no caller says so.  Upstream got
-/// it for free — the lock lived in the value being assigned — and here it is
-/// one store into an `xmalloc`'d slot that would otherwise stay uninitialised.
-pub(crate) fn tv_list_item_alloc() -> *mut ListItem {
-    let li = unsafe { xmalloc(::core::mem::size_of::<ListItem>()).cast::<ListItem>() };
-    // SAFETY: the allocation just made, whose lock nothing has read yet.
-    unsafe { li_lock(li).write(VarLock::Unlocked) };
-    li
-}
-
-/// Remove `item` from `l`, clear its value and free it.
-///
-/// Answers the item that followed it, or NULL when it was the last one.
+/// The items of `l` as a slice; a NULL list is empty.
 ///
 /// # Safety
+/// `l` is null or points at a live list, and the slice borrows it: any edit
+/// to the list invalidates it.
+#[inline(always)]
+pub(crate) unsafe fn tv_list_items<'a>(l: *const List) -> &'a [ListItem] {
+    match unsafe { l.as_ref() } {
+        Some(l) => &l.lv_items,
+        None => &[],
+    }
+}
+
+/// The items of `l` as a mutable slice; a NULL list is empty.
 ///
-/// `l` must point at a live list, unaliased for the call. `item` must point
-/// at an item of `l`.
-pub unsafe fn tv_list_item_remove(l: *mut List, item: *mut ListItem) -> *mut ListItem {
-    let next_item = unsafe { (*item).li_next };
-    unsafe { tv_list_drop_items(l, item, item) };
-    unsafe { tv_clear(&mut (*item).li_tv) };
-    unsafe { xfree(item.cast()) };
-    next_item
+/// # Safety
+/// As [`tv_list_items`], and the caller must hold no other borrow of the
+/// list for the life of the slice.
+#[inline(always)]
+pub(crate) unsafe fn tv_list_items_mut<'a>(l: *mut List) -> &'a mut [ListItem] {
+    match unsafe { l.as_mut() } {
+        Some(l) => &mut l.lv_items,
+        None => &mut [],
+    }
+}
+
+/// The item store of `l`, for the handful of places that edit it.
+///
+/// # Safety
+/// `l` must point at a live list, unaliased for the borrow.
+#[inline(always)]
+unsafe fn items_of<'a>(l: *mut List) -> &'a mut Vec<ListItem> {
+    // SAFETY: the caller's promise: a live, unaliased list.
+    unsafe { &mut (*l).lv_items }
+}
+
+/// Remove `l[at]`, clearing the value it held.
+///
+/// Answers the index of the item that followed it, which is `at` again --
+/// or `None` when the removed item was the last one.
+///
+/// # Safety
+/// `l` must point at a live list, unaliased for the call, and `at` must be
+/// an index into it.
+pub unsafe fn tv_list_remove_at(l: *mut List, at: usize) -> Option<usize> {
+    unsafe { tv_list_remove_range(l, at, at) };
+    // SAFETY: as above.
+    (at < unsafe { tv_list_items(l) }.len()).then_some(at)
 }
 
 /// Push `lw` onto `l`'s watcher chain.
@@ -58,7 +90,7 @@ pub unsafe fn tv_list_item_remove(l: *mut List, item: *mut ListItem) -> *mut Lis
 /// # Safety
 ///
 /// `l` must point at a live list, unaliased for the call. `lw` must point at
-/// an entry of `l`'s watcher chain.
+/// a watcher that outlives its registration.
 pub unsafe fn tv_list_watch_add(l: *mut List, lw: *mut ListWatch) {
     unsafe { (*lw).lw_next = (*l).lv_watch };
     unsafe { (*l).lv_watch = lw };
@@ -86,86 +118,142 @@ pub unsafe fn tv_list_watch_remove(l: *mut List, lwrem: *mut ListWatch) {
     }
 }
 
-/// Advance any watcher standing on `item` to the item after it.
+/// Move every cursor on `l` so that it keeps naming the item it named, after
+/// `count` items were inserted at (`count > 0`) or removed from (`count < 0`)
+/// index `at`.
 ///
-/// This is what keeps a `:for` loop walking a list whose current item is
-/// removed underneath it.
+/// This is what keeps a `:for` loop walking a list edited underneath it.  The
+/// three cases, and what each one is:
+///
+/// - **before the edit** -- the cursor's item did not move, so neither does
+///   the cursor.
+/// - **after the edit** -- the item moved by `count` places, so the cursor
+///   follows it.
+/// - **inside a removed run** -- the item is gone, so the cursor lands on
+///   whatever followed the run, which is index `at` once everything has
+///   shifted down.  That is upstream's `lw_item = item->li_next` walked to
+///   the end of the run.
+///
+/// A cursor that lands past the last item is [`ENDED`](ListWatch::ENDED), and
+/// stays ended however the list grows afterwards -- which is why a `:for`
+/// loop whose body appends to the list it is walking still terminates.
 ///
 /// # Safety
 ///
-/// `l` must point at a live list, unaliased for the call. `item` must point
-/// at an item of `l`.
-pub(crate) unsafe fn tv_list_watch_fix(l: *mut List, item: *const ListItem) {
+/// `l` must point at a live list whose items have already been edited, and
+/// `at` must be an index into the list as it now is.
+pub(crate) unsafe fn tv_list_watch_shift(
+    l: *mut List,
+    at: ::core::ffi::c_int,
+    count: ::core::ffi::c_int,
+) {
     let mut lw = unsafe { (*l).lv_watch };
+    if lw.is_null() {
+        return;
+    }
+    // SAFETY: the caller's promise: a live list.
+    let len = index_of(unsafe { tv_list_items(l) }.len());
     while !lw.is_null() {
         // SAFETY: an entry of `l`'s watcher chain.
         let watch = unsafe { Lw::new(lw) };
-        if watch.lw_item.cast_const() == item {
-            unsafe { (*lw).lw_item = (*item).li_next };
+        let was = watch.lw_index;
+        if was >= at {
+            // Clamped at `at`: a cursor inside a removed run lands on
+            // whatever followed the run.
+            let moved = (was + count).max(at);
+            let landed = if moved >= len {
+                ListWatch::ENDED
+            } else {
+                moved
+            };
+            unsafe { (*lw).lw_index = landed };
         }
         lw = watch.lw_next;
     }
 }
 
+/// Move every cursor on `l` through a permutation of its items: whatever
+/// stood at index `i` now stands at `moved[i]`.
+///
+/// The two callers are `sort()` and `reverse()`, which move items without
+/// adding or removing any.  A cursor stands on an *item*, not on a place, so
+/// it goes where the item went -- which is what upstream got for free by
+/// relinking the items and leaving `lw_item` alone.
+///
+/// `moved` must be one index per item, as the list stood before.
+pub(crate) fn tv_list_watch_permute(l: &mut List, moved: &[::core::ffi::c_int]) {
+    let mut lw = l.lv_watch;
+    while !lw.is_null() {
+        // SAFETY: an entry of `l`'s watcher chain.
+        let watch = unsafe { Lw::new(lw) };
+        let to = usize::try_from(watch.lw_index)
+            .ok()
+            .and_then(|at| moved.get(at));
+        if let Some(&to) = to {
+            unsafe { (*lw).lw_index = to };
+        }
+        lw = watch.lw_next;
+    }
+}
+
+/// A length or index of a list, as the `int` the family counts in.
+///
+/// Lists are `int`-indexed the whole way down (`tv_list_len`, `E684`, the
+/// `[n1:n2]` arithmetic), so this is where the width changes, once.  A list
+/// longer than `INT_MAX` cannot be built: every path that adds an item goes
+/// through a length this saturates.
+#[inline(always)]
+pub(crate) fn index_of(n: usize) -> ::core::ffi::c_int {
+    ::core::ffi::c_int::try_from(n).unwrap_or(::core::ffi::c_int::MAX)
+}
+
 /// Allocate an empty list.  The caller owns the reference count.
 ///
-/// `len` is upstream's hint for a future array-backed list; nothing reads it.
-pub fn tv_list_alloc(_len: ptrdiff_t) -> *mut List {
+/// `len` is a capacity hint: a caller that knows how many items are coming
+/// reserves them here rather than growing the array on the way.  A negative
+/// one (`kListLenUnknown`) reserves nothing.
+pub fn tv_list_alloc(len: ptrdiff_t) -> *mut List {
+    // Still the `xmalloc` family rather than a `Box`, because the allocation
+    // log the unit cases assert against sees only that family -- and because
+    // the tree hands `*mut List` around and frees it in `tv_list_free_list`.
     let list = unsafe { xcalloc(1, ::core::mem::size_of::<List>()) }.cast::<List>();
+    // Written, not assigned: a zeroed `List` is not a valid one (`Vec` never
+    // holds a null pointer), so there is nothing there to drop.
+    // SAFETY: the allocation just made, of exactly this size.
+    unsafe { list.write(List::empty()) };
+    if let Ok(len) = usize::try_from(len) {
+        unsafe { items_of(list) }.reserve_exact(len);
+    }
 
     // Prepend the list to the list of lists for garbage collection.
     if let Some(first) = unsafe { gc_first_list.get().as_mut() } {
         first.lv_used_prev = list;
     }
-    unsafe { (*list).lv_used_prev = ::core::ptr::null_mut() };
     unsafe { (*list).lv_used_next = gc_first_list.get() };
     gc_first_list.set(list);
-    unsafe { (*list).lua_table_ref = LUA_NOREF as LuaRef };
     list
 }
 
-/// Initialise a stack-allocated ten-item list, all items zeroed and linked.
+/// Initialise a `List` embedded in the caller's own storage: empty, locked
+/// and carrying `DO_NOT_FREE_CNT`, so nothing frees it.
 ///
-/// The list is `VarLock::Fixed` and carries `DO_NOT_FREE_CNT`, so nothing frees it.
-///
-/// # Safety
-///
-/// `sl` must point at a `StaticList10` the caller owns for as long as the
-/// list is used; the list is *not* heap-allocated and must never be freed.
-pub unsafe fn tv_list_init_static10(sl: *mut StaticList10) {
-    // No `Live<StaticList10>` here: the list this builds points at the item
-    // array in the *same* struct, and a `DerefMut` that reborrows the whole
-    // struct pops those interior pointers under Stacked and Tree Borrows.
-    unsafe { sl.write_bytes(0, 1) };
-    let l = unsafe { &raw mut (*sl).sl_list };
-    let items = unsafe { &raw mut (*sl).sl_items }.cast::<ListItem>();
-
-    unsafe { (*l).lv_first = items };
-    unsafe { (*l).lv_last = items.add(SL_SIZE - 1) };
-    unsafe { (*l).lv_refcount = Refcount::new(DO_NOT_FREE_CNT.cast_signed()) };
-    unsafe { tv_list_set_lock(l, VarLock::Fixed) };
-    unsafe { (*l).lv_len = 10 };
-
-    unsafe { (*items).li_prev = ::core::ptr::null_mut() };
-    unsafe { (*items).li_next = items.add(1) };
-    unsafe { (*items.add(SL_SIZE - 1)).li_prev = items.add(SL_SIZE - 2) };
-    unsafe { (*items.add(SL_SIZE - 1)).li_next = ::core::ptr::null_mut() };
-
-    for i in 1..SL_SIZE - 1 {
-        let li = unsafe { items.add(i) };
-        unsafe { (*li).li_prev = li.sub(1) };
-        unsafe { (*li).li_next = li.add(1) };
-    }
-}
-
-/// Initialise a stack-allocated empty list that nothing may free.
+/// The caller's storage is what owns it -- `FuncCall`'s `a:000` list, a `\=`
+/// expression's submatch list -- and dropping that storage drops the items.
 ///
 /// # Safety
 ///
-/// `l` must point at a live list, unaliased for the call.
+/// `l` must point at storage the caller owns and will not free through
+/// [`tv_list_free`]; whatever was there is overwritten without being
+/// dropped, so it must hold no list yet.
 pub unsafe fn tv_list_init_static(l: *mut List) {
-    unsafe { l.write_bytes(0, 1) };
-    unsafe { (*l).lv_refcount = Refcount::new(DO_NOT_FREE_CNT.cast_signed()) };
+    // SAFETY: the caller's promise: storage holding no list yet.
+    unsafe {
+        l.write(List {
+            lv_refcount: Refcount::new(DO_NOT_FREE_CNT.cast_signed()),
+            lv_lock: VarLock::Fixed,
+            ..List::empty()
+        });
+    }
 }
 
 /// Free every item in `l`, leaving the list itself allocated and empty.
@@ -174,27 +262,26 @@ pub unsafe fn tv_list_init_static(l: *mut List) {
 ///
 /// `l` must point at a live list, unaliased for the call.
 pub unsafe fn tv_list_free_contents(l: *mut List) {
-    // Unlink each item before clearing it: `tv_clear` can re-enter.
+    // Taken out before anything is cleared: releasing a value can re-enter
+    // the evaluator, and what it must not find is a list half way through
+    // being emptied.
     // SAFETY: the caller's promise: a live list.
-    let mut list = unsafe { Ls::new(l) };
-    let mut item = list.lv_first;
-    while !item.is_null() {
-        unsafe { (*l).lv_first = (*item).li_next };
-        unsafe { tv_clear(&mut (*item).li_tv) };
-        unsafe { xfree(item.cast()) };
-        item = list.lv_first;
-    }
-    list.lv_len = 0;
-    unsafe { (*l).lv_idx_item = ::core::ptr::null_mut() };
-    unsafe { (*l).lv_last = ::core::ptr::null_mut() };
-    debug_assert!(list.lv_watch.is_null());
+    let items = ::core::mem::take(unsafe { items_of(l) });
+    debug_assert!(unsafe { (*l).lv_watch }.is_null());
+    // Dropping the array clears each value in turn, front to back.
+    drop(items);
 }
 
 /// Unlink `l` from the garbage collector's chain and free the `List` itself.
 ///
+/// Upstream freed the header and left whatever was still linked off it --
+/// a leak the collector's two passes made unreachable.  The items are the
+/// header's own array now, so they go with it.
+///
 /// # Safety
 ///
-/// `l` must point at a live list, unaliased for the call.
+/// `l` must point at a live list, unaliased for the call.  Anything still
+/// in it is **released**, so no caller may hold a reference to an item.
 pub unsafe fn tv_list_free_list(l: *mut List) {
     // Remove the list from the list of lists for garbage collection.
     // SAFETY: the caller's promise: a live list.
@@ -212,6 +299,9 @@ pub unsafe fn tv_list_free_list(l: *mut List) {
         unsafe { api_free_luaref((*l).lua_table_ref) };
         list.lua_table_ref = LUA_NOREF as LuaRef;
     }
+    // The item array itself: `xfree` is the C's and runs no destructor.
+    // SAFETY: as above.
+    unsafe { ::core::ptr::drop_in_place(&raw mut (*l).lv_items) };
     unsafe { xfree(l.cast()) };
 }
 
@@ -242,82 +332,71 @@ pub unsafe fn tv_list_unref(l: *mut List) {
     }
 }
 
-/// Unlink the items `item..=item2` from `l` without freeing them.
+/// Take the items `l[first..=last]` out of `l` without releasing what they
+/// hold; the caller owns them now.
 ///
 /// # Safety
 ///
-/// `l` must point at a live list, unaliased for the call. `item` must point
-/// at an item of `l`. `item2` must point at an item of `l`.
-pub unsafe fn tv_list_drop_items(l: *mut List, item: *mut ListItem, item2: *mut ListItem) {
-    // Notify watchers.
-    let mut ip = item;
-    // SAFETY: the caller's promise: an item of `l`.
-    let last = unsafe { Li::new(item2) };
-    while ip != last.li_next {
-        unsafe { (*l).lv_len -= 1 };
-        unsafe { tv_list_watch_fix(l, ip) };
-        ip = unsafe { (*ip).li_next };
-    }
-
-    // SAFETY: the caller's promise: an item of `l`.
-    let first = unsafe { Li::new(item) };
-    match unsafe { (*item2).li_next.as_mut() } {
-        Some(after) => after.li_prev = first.li_prev,
-        None => unsafe { (*l).lv_last = (*item).li_prev },
-    }
-    match unsafe { (*item).li_prev.as_mut() } {
-        Some(before) => before.li_next = last.li_next,
-        None => unsafe { (*l).lv_first = (*item2).li_next },
-    }
-    unsafe { (*l).lv_idx_item = ::core::ptr::null_mut() };
+/// `l` must point at a live list, unaliased for the call, and
+/// `first..=last` must be a run of its items.
+pub(crate) unsafe fn tv_list_take_range(l: *mut List, first: usize, last: usize) -> Vec<ListItem> {
+    // SAFETY: the caller's promise: a live list and a run of its items.
+    let taken: Vec<ListItem> = unsafe { items_of(l) }.drain(first..=last).collect();
+    // SAFETY: as above; the items are gone, so the cursors move now.
+    unsafe { tv_list_watch_shift(l, index_of(first), -index_of(taken.len())) };
+    taken
 }
 
-/// Unlink the items `item..=item2` from `l` and free them.
+/// Remove the items `l[first..=last]` from `l`, releasing what they hold.
 ///
 /// # Safety
 ///
-/// `l` must point at a live list, unaliased for the call. `item` must point
-/// at an item of `l`. `item2` must point at an item of `l`.
-pub unsafe fn tv_list_remove_items(l: *mut List, item: *mut ListItem, item2: *mut ListItem) {
-    unsafe { tv_list_drop_items(l, item, item2) };
-    let mut li = item;
-    loop {
-        unsafe { tv_clear(&mut (*li).li_tv) };
-        // Read the link before the free, not after.
-        let nli = unsafe { (*li).li_next };
-        unsafe { xfree(li.cast()) };
-        if li == item2 {
-            break;
-        }
-        li = nli;
+/// As [`tv_list_take_range`].
+pub unsafe fn tv_list_remove_range(l: *mut List, first: usize, last: usize) {
+    // Dropped after the cursors have moved: releasing a value can re-enter
+    // the evaluator, which must not see a list whose watchers still name
+    // items that are gone.
+    drop(unsafe { tv_list_take_range(l, first, last) });
+}
+
+/// Move the items `l[first..=last]` onto `tgt_l`'s tail.
+///
+/// # Safety
+///
+/// As [`tv_list_take_range`], and `tgt_l` must point at a live list,
+/// unaliased for the call and not `l` itself.
+pub unsafe fn tv_list_move_range(l: *mut List, first: usize, last: usize, tgt_l: *mut List) {
+    debug_assert!(l != tgt_l);
+    let moved = unsafe { tv_list_take_range(l, first, last) };
+    // SAFETY: the caller's promise: a live target list, which is not `l`.
+    unsafe { items_of(tgt_l) }.extend(moved);
+}
+
+/// Empty `l` without releasing anything its items name.
+///
+/// The one caller is a funccall's `a:000`, whose items *borrow* the caller's
+/// arguments for the length of the call and own nothing.  Upstream spelled
+/// this `lv_first = NULL`, which threw away an array of values it had never
+/// owned; this is the same statement about an array that would otherwise
+/// release them.
+pub(crate) fn tv_list_disown_items(l: &mut List) {
+    for mut item in ::core::mem::take(&mut l.lv_items) {
+        item.li_tv.disown();
     }
 }
 
-/// Move the items `item..=item2` (`cnt` of them) from `l` onto `tgt_l`'s tail.
+/// Upgrade every item of `l` to a value of its own.
 ///
-/// # Safety
-///
-/// `l` must point at a live list, unaliased for the call. `item` must point
-/// at an item of `l`. `item2` must point at an item of `l`. `tgt_l` must
-/// point at a live list, unaliased for the call.
-pub unsafe fn tv_list_move_items(
-    l: *mut List,
-    item: *mut ListItem,
-    item2: *mut ListItem,
-    tgt_l: *mut List,
-    cnt: ::core::ffi::c_int,
-) {
-    unsafe { tv_list_drop_items(l, item, item2) };
-    unsafe { (*item).li_prev = (*tgt_l).lv_last };
-    unsafe { (*item2).li_next = ::core::ptr::null_mut() };
-    // SAFETY: the caller's promise: a live target list.
-    let mut tgt = unsafe { Ls::new(tgt_l) };
-    match unsafe { (*tgt_l).lv_last.as_mut() } {
-        Some(last) => last.li_next = item,
-        None => tgt.lv_first = item,
+/// The counterpart of [`tv_list_disown_items`]: a funccall that has to
+/// outlive the call that made it cannot keep naming the caller's arguments,
+/// so each item takes a real copy.
+pub(crate) fn tv_list_own_items(l: &mut List) {
+    for li in &mut l.lv_items {
+        let slot = &raw mut li.li_tv;
+        // SAFETY: source and destination are one slot, which `tv_copy` reads
+        // before overwriting it with a value that owns what it names.
+        unsafe { tv_copy(&*slot, &mut *slot) };
     }
-    tgt.lv_last = item2;
-    tgt.lv_len += cnt;
 }
 
 /// Allocate an empty list and store it in `ret_tv` as the return value.
@@ -366,25 +445,19 @@ mod tests {
         /// rather than how many.
         pub(super) fn numbers(l: *mut List) -> Vec<VarNumber> {
             // SAFETY: a list `counted` made, holding numbers.
-            unsafe { tv_list_iter(l.as_ref()).map(|li| (*li).li_tv.number_or_zero()) }.collect()
+            unsafe { tv_list_iter(l.as_ref()).map(|li| li.li_tv.number_or_zero()) }.collect()
         }
 
-        /// The item at `at`, which must be there.
-        pub(super) fn at(l: *mut List, at: usize) -> *mut ListItem {
-            // SAFETY: a list `counted` made.
-            let item = unsafe { tv_list_find(l, index(at)) };
-            assert!(!item.is_null(), "no item at {at}");
-            item
-        }
-
-        /// A watcher standing on `l[index]`, registered with `l`.
+        /// A watcher standing on `l[at]`, registered with `l`.
         ///
         /// Handed out as a raw pointer rather than a `Box`: the list stores
         /// the address, so moving the `Box` afterwards would invalidate it.
         /// [`done`] takes it back.
-        pub(super) fn watch(l: *mut List, index: usize) -> *mut ListWatch {
+        pub(super) fn watch(l: *mut List, at: usize) -> *mut ListWatch {
+            // SAFETY: a list `counted` made.
+            assert!(at < unsafe { tv_list_items(l) }.len(), "no item at {at}");
             let lw = Box::into_raw(Box::new(ListWatch {
-                lw_item: at(l, index),
+                lw_index: index(at),
                 lw_next: ::core::ptr::null_mut(),
             }));
             // SAFETY: as above, and the watcher outlives its registration.
@@ -402,36 +475,35 @@ mod tests {
         /// what [`tv_list_watch_fix`] and its successors owe is that the
         /// item does not change under an edit somewhere else in the list.
         pub(super) fn watching(l: *mut List, lw: *mut ListWatch) -> Option<usize> {
-            // SAFETY: a watcher `watch` registered with `l`.
-            let at = unsafe { tv_list_idx_of_item(l, (*lw).lw_item) };
-            // -1 is "not an item of this list", which for a watcher means
-            // the NULL it was pushed off the end to.
-            usize::try_from(at).ok()
+            let _ = l;
+            // SAFETY: a watcher `watch` registered with `l`.  `ENDED` is
+            // negative, which is the NULL upstream pushed a cursor off the
+            // end to.
+            usize::try_from(unsafe { (*lw).lw_index }).ok()
         }
 
-        /// Remove `l[index]`.
-        pub(super) fn remove(l: *mut List, index: usize) {
-            // SAFETY: a list `counted` made, and an item of it.
-            unsafe { tv_list_item_remove(l, at(l, index)) };
+        /// Remove `l[at]`.
+        pub(super) fn remove(l: *mut List, at: usize) {
+            // SAFETY: a list `counted` made, and an index of it.
+            unsafe { tv_list_remove_at(l, at) };
         }
 
         /// Remove `l[first..=last]`.
         pub(super) fn remove_run(l: *mut List, first: usize, last: usize) {
             // SAFETY: as above, and a run of items of `l`.
-            unsafe { tv_list_remove_items(l, at(l, first), at(l, last)) };
+            unsafe { tv_list_remove_range(l, first, last) };
         }
 
         /// Move `l[first..=last]` onto `tgt`'s tail.
         pub(super) fn move_run(l: *mut List, first: usize, last: usize, tgt: *mut List) {
-            let cnt = index(last - first + 1);
             // SAFETY: as above, plus a second list of this module's own.
-            unsafe { tv_list_move_items(l, at(l, first), at(l, last), tgt, cnt) };
+            unsafe { tv_list_move_range(l, first, last, tgt) };
         }
 
-        /// Insert the number `n` in front of `l[index]`.
-        pub(super) fn insert(l: *mut List, n: VarNumber, index: usize) {
+        /// Insert the number `n` in front of `l[at]`.
+        pub(super) fn insert(l: *mut List, n: VarNumber, at: usize) {
             // SAFETY: as above, and a value the insert copies.
-            unsafe { tv_list_insert_tv(l, &TypVal::Number(n), at(l, index)) };
+            unsafe { tv_list_insert_tv(l, &TypVal::Number(n), Some(at)) };
         }
 
         /// Unregister every watcher and free `l`; the pair every case ends
@@ -448,6 +520,19 @@ mod tests {
             // SAFETY: a list `counted` made, now unwatched.
             unsafe { tv_list_free(l) };
         }
+    }
+
+    /// A slot and its lock, and nothing else: the links are gone, so an
+    /// item is the value plus the four bytes `:lockvar l[0]` sets.
+    ///
+    /// Twenty-four is what a `Vec` of them costs per item, against
+    /// upstream's forty *plus* an `xmalloc` header per item -- which is
+    /// where `tvbuild` and `tvlist` get their instructions back.
+    #[test]
+    fn an_item_is_a_value_and_a_lock() {
+        assert_eq!(::core::mem::size_of::<ListItem>(), 24);
+        assert_eq!(::core::mem::align_of::<ListItem>(), 8);
+        assert_eq!(::core::mem::offset_of!(ListItem, li_tv), 0);
     }
 
     #[test]

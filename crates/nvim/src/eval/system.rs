@@ -20,8 +20,8 @@ use core::ptr::{null, null_mut};
 use crate::buffer::find_buf;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    NumBuf, tv_get_number, tv_list_alloc, tv_list_alloc_ret, tv_list_first, tv_list_len,
-    tv_list_ref,
+    NumBuf, tv_get_number, tv_list_alloc, tv_list_alloc_ret, tv_list_first, tv_list_iter,
+    tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::emsg_static;
 use crate::eval::vars::set_vim_var_nr;
@@ -39,8 +39,8 @@ use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_fre
 use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
-    EvalFuncData, IOSIZE, List, ListItem, NUL, OptInt, ProfTime, TypVal, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, VarNumber, Vv, kListLenMayKnow, ptrdiff_t, size_t,
+    EvalFuncData, IOSIZE, List, NUL, OptInt, ProfTime, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarNumber, Vv, kListLenMayKnow, ptrdiff_t, size_t,
 };
 
 /// Build a `NULL`-terminated argument vector out of a String (through the
@@ -126,11 +126,10 @@ pub unsafe fn tv_to_argv(
     let mut i = 0;
     if !argl.is_null() {
         // SAFETY: `argl` is a live List.
-        let mut arg: *const ListItem = unsafe { (*argl).lv_first };
-        while !arg.is_null() {
+        for arg in tv_list_iter(unsafe { argl.as_ref() }) {
             // SAFETY: `arg` is one of the List's items, and `numbuf3`
             // outlives the string rendered into it.
-            let a = unsafe { numbuf3.string_chk(&(*arg).li_tv) };
+            let a = unsafe { numbuf3.string_chk(&arg.li_tv) };
             if a.is_null() {
                 // SAFETY: `argv` holds `i` owned strings and a NULL tail.
                 unsafe { shell_free_argv(argv) };
@@ -142,8 +141,6 @@ pub unsafe fn tv_to_argv(
             // vector; `a` is NUL-terminated.
             unsafe { *argv.offset(i) = xstrdup(a) };
             i += 1;
-            // SAFETY: `arg` is a live item.
-            arg = unsafe { (*arg).li_next };
         }
     }
     // Slot 0 holds the item's own spelling; swap in the resolved path.
@@ -450,14 +447,11 @@ unsafe fn list_as_string(
     // Measure first, charging every item a separator.
     if !list.is_null() {
         // SAFETY: the caller's promise -- a live List.
-        let mut li: *const ListItem = unsafe { (*list).lv_first };
-        while !li.is_null() {
-            // SAFETY: `li` is one of the List's items, `numbuf` outlives
-            // the string rendered into it, and `len` is the caller's.
-            let tv_len = unsafe { cstr::bytes_at(numbuf.string(&(*li).li_tv)) }.len();
+        for li in tv_list_iter(unsafe { list.as_ref() }) {
+            // SAFETY: `numbuf` outlives the string rendered into it, and
+            // `len` is the caller's.
+            let tv_len = unsafe { cstr::bytes_at(numbuf.string(&li.li_tv)) }.len();
             unsafe { *len += tv_len as ptrdiff_t + sep };
-            // SAFETY: `li` is a live item.
-            li = unsafe { (*li).li_next };
         }
     }
     // SAFETY: the caller's promise about `len`.
@@ -472,14 +466,12 @@ unsafe fn list_as_string(
     let mut end = ret;
     if !list.is_null() {
         // SAFETY: the caller's promise -- a live List.
-        let mut li: *const ListItem = unsafe { (*list).lv_first };
-        while !li.is_null() {
-            // SAFETY: `li` is one of the List's items, `numbuf2` outlives
-            // the string rendered into it, and the measurement above left
-            // room for that string's bytes.
-            unsafe { end = copy_swapping_nl(numbuf2.string(&(*li).li_tv), end) };
-            // SAFETY: `li` is a live item.
-            let last = unsafe { (*li).li_next }.is_null();
+        let count = unsafe { tv_list_len(list) } as usize;
+        for (at, li) in tv_list_iter(unsafe { list.as_ref() }).enumerate() {
+            // SAFETY: `numbuf2` outlives the string rendered into it, and
+            // the measurement above left room for that string's bytes.
+            unsafe { end = copy_swapping_nl(numbuf2.string(&li.li_tv), end) };
+            let last = at + 1 == count;
             if endnl || !last {
                 if crlf {
                     // SAFETY: the measurement charged every item `sep`
@@ -489,8 +481,6 @@ unsafe fn list_as_string(
                 // SAFETY: as above.
                 end = unsafe { put(end, b'\n' as c_char) };
             }
-            // SAFETY: `li` is a live item.
-            li = unsafe { (*li).li_next };
         }
     }
     // SAFETY: the terminator's room is the separator the last item was

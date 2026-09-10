@@ -258,8 +258,8 @@ pub unsafe fn tv_item_lock(
                 unsafe { (*l).lv_lock = (*l).lv_lock.changed(lock) };
                 if !(0..=1).contains(&deep) {
                     // Recursive: lock/unlock the items the List contains.
-                    for li in tv_list_iter(unsafe { l.as_ref() }) {
-                        let (lock_of, value) = (li_lock(li), li_tv(li));
+                    for li in tv_list_iter_mut(unsafe { l.as_mut() }) {
+                        let (lock_of, value) = (&raw mut li.li_lock, &raw mut li.li_tv);
                         unsafe {
                             tv_item_lock(lock_of, &mut *value, deep - 1, lock, check_refcount)
                         };

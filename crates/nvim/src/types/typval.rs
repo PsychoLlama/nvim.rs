@@ -382,7 +382,6 @@ pub struct FuncCall {
     pub fc_l_avars: Dict,
     pub fc_l_avars_var: ScopeDictDictItem,
     pub fc_l_varlist: List,
-    pub fc_l_listitems: [ListItem; 20],
     pub fc_rettv: *mut TypVal,
     pub fc_breakpoint: LineNr,
     pub fc_dbg_tick: ::core::ffi::c_int,
@@ -437,36 +436,97 @@ pub struct ListStack {
 /// `li_lock` is the *slot's* lock -- `:lockvar l[0]` locks the place, not the
 /// value that happens to sit in it -- so it lives here rather than in the
 /// value.  See [`TypVal`].
-#[repr(C)]
+///
+/// Twenty-four bytes and no links: the list owns its items in an array, so
+/// an item's identity is its index and there is nothing to thread.
 pub struct ListItem {
-    pub li_next: *mut ListItem,
-    pub li_prev: *mut ListItem,
     pub li_tv: TypVal,
     pub li_lock: VarLock,
 }
-#[repr(C)]
+
+impl ListItem {
+    /// An unlocked slot holding `tv`.  Every push starts here; the two
+    /// places that want a locked one (`a:000`, the submatch list) set
+    /// `li_lock` afterwards.
+    pub const fn new(li_tv: TypVal) -> ListItem {
+        ListItem {
+            li_tv,
+            li_lock: VarLock::Unlocked,
+        }
+    }
+}
+
+/// A Vimscript List: an array of values, reference counted, and a chain of
+/// cursors (`lv_watch`) held by whatever `:for` loops are walking it.
+///
+/// The items are owned outright -- dropping the list drops them -- which is
+/// why an item's identity outside the array is an *index* and not an
+/// address.  [`ListWatch`] is the one identity that has to survive an edit,
+/// and `tv_list_watch_*` is what keeps it pointing at the same item.
 pub struct List {
-    pub lv_first: *mut ListItem,
-    pub lv_last: *mut ListItem,
+    pub lv_items: Vec<ListItem>,
     pub lv_watch: *mut ListWatch,
-    pub lv_idx_item: *mut ListItem,
     pub lv_copylist: *mut List,
     pub lv_used_next: *mut List,
     pub lv_used_prev: *mut List,
     pub lv_refcount: Refcount,
-    pub lv_len: ::core::ffi::c_int,
-    pub lv_idx: ::core::ffi::c_int,
     pub lv_copy_id: ::core::ffi::c_int,
     pub lv_lock: VarLock,
     pub lua_table_ref: LuaRef,
 }
-/// Not `Copy`: a node of the intrusive watcher list a `:for` loop links
-/// into its list, so a duplicate would be a second node claiming the same
-/// place in it.
+
+impl List {
+    /// An empty, unreferenced list on no chain: what a fresh allocation is
+    /// written with, and what a `List` embedded in another structure
+    /// (`FuncCall`'s `a:000`, a `\=` expression's submatch list) starts as.
+    ///
+    /// A `const` and not `Default` because the embedders reach it from a
+    /// `const` context, and because a zeroed allocation is *not* a valid
+    /// `List` any more -- `lv_items` is a `Vec`, whose pointer is never
+    /// null.
+    pub const fn empty() -> List {
+        List {
+            lv_items: Vec::new(),
+            lv_watch: ::core::ptr::null_mut(),
+            lv_copylist: ::core::ptr::null_mut(),
+            lv_used_next: ::core::ptr::null_mut(),
+            lv_used_prev: ::core::ptr::null_mut(),
+            lv_refcount: Refcount::ZERO,
+            lv_copy_id: 0,
+            lv_lock: VarLock::Unlocked,
+            // `LUA_NOREF`: no Lua table mirrors this list.
+            lua_table_ref: -2,
+        }
+    }
+}
+
+/// A `:for` loop's cursor into the list it is walking: the index of the item
+/// it will hand out next, or [`ListWatch::ENDED`] once it has run off the
+/// end.
+///
+/// Not `Copy`: a node of the intrusive watcher chain the loop links into its
+/// list, so a duplicate would be a second node claiming the same place in
+/// it.
 #[derive(Clone)]
 pub struct ListWatch {
-    pub lw_item: *mut ListItem,
+    pub lw_index: ::core::ffi::c_int,
     pub lw_next: *mut ListWatch,
+}
+
+impl ListWatch {
+    /// The cursor is past the last item.  Upstream spelled this a NULL
+    /// `lw_item`, and it is *sticky*: a loop whose body appends to the list
+    /// it is walking still ends, because the cursor ran off the end before
+    /// the item existed.
+    pub const ENDED: ::core::ffi::c_int = -1;
+
+    /// A cursor on `l[0]`, which is where a `:for` loop starts.
+    pub const fn at_start() -> ListWatch {
+        ListWatch {
+            lw_index: 0,
+            lw_next: ::core::ptr::null_mut(),
+        }
+    }
 }
 /// A partial: a function plus bound arguments and an optional `self` dict.
 ///
@@ -528,11 +588,6 @@ impl Default for ScriptCtx {
     fn default() -> Self {
         Self::NONE
     }
-}
-#[repr(C)]
-pub struct StaticList10 {
-    pub sl_list: List,
-    pub sl_items: [ListItem; 10],
 }
 /// A Vimscript value.
 ///

@@ -14,7 +14,7 @@ use crate::eval::EVALARG_EVALUATE;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_string_buf_chk,
-    tv_list_first, tv_list_len, tv_list_ref, tv_list_unref,
+    tv_list_items, tv_list_iter, tv_list_len, tv_list_ref, tv_list_unref,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -43,8 +43,8 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{
-    EvalFuncData, FuncDict, GArray, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_DICT,
-    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, uint8_t,
+    EvalFuncData, FuncDict, GArray, List, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -165,9 +165,11 @@ pub fn f_eval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// Where the `:execute` List form is up to, as `do_cmdline`'s cookie.
 struct ListLines {
-    /// Held only to keep the reference count honest; the walk uses `item`.
-    _list: *mut List,
-    item: *const ListItem,
+    /// The list being walked, whose reference this holds.
+    list: *mut List,
+    /// Where the walk is: an index, because a command in the list can edit
+    /// the very list it is being read from.
+    at: usize,
 }
 
 /// `do_cmdline`'s line getter for `execute([...])`: one allocated line per
@@ -185,12 +187,13 @@ unsafe fn get_list_line(
     // SAFETY: the caller's obligation. `buf` outlives the string
     // `tv_get_string_buf_chk` may park in it, because the duplicate is made
     // before returning.
-    let Some(item) = (unsafe { (*state).item.as_ref() }) else {
+    let at = unsafe { (*state).at };
+    let Some(item) = (unsafe { tv_list_items((*state).list) }).get(at) else {
         return ptr::null_mut();
     };
     let mut buf = [0 as c_char; NUMBUFLEN];
     let s = unsafe { tv_get_string_buf_chk(&item.li_tv, buf.as_mut_ptr()) };
-    unsafe { (*state).item = item.li_next };
+    unsafe { (*state).at = at + 1 };
     if s.is_null() {
         ptr::null_mut()
     } else {
@@ -271,10 +274,7 @@ pub unsafe fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_in
         // The List is held across the run: a command may drop the
         // variable holding it.
         unsafe { tv_list_ref(list) };
-        let mut cookie = ListLines {
-            _list: list,
-            item: unsafe { tv_list_first(list) },
-        };
+        let mut cookie = ListLines { list, at: 0 };
         type GetLine = unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char;
         let getline = Some(get_list_line as GetLine);
         let cookie = (&raw mut cookie).cast::<c_void>();
@@ -499,13 +499,9 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             unsafe { tv_copy(&*from, &mut *to) };
             i += 1;
         }
-        if lv_len > 0 && !list.is_null() {
-            let mut li = unsafe { (*list).lv_first };
-            while !li.is_null() {
-                unsafe { tv_copy(&(*li).li_tv, &mut *(*pt).pt_argv.add(i as usize)) };
-                i += 1;
-                li = unsafe { (*li).li_next };
-            }
+        for li in tv_list_iter(unsafe { list.as_ref() }) {
+            unsafe { tv_copy(&li.li_tv, &mut *(*pt).pt_argv.add(i as usize)) };
+            i += 1;
         }
     }
 

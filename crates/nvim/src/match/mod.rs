@@ -23,10 +23,10 @@ use crate::drawscreen::state::search_hl_has_cursor_lnum;
 use crate::drawscreen::{UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_range_later};
 use crate::eval::funcs::get_optional_window;
 use crate::eval::typval::{
-    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
+    index_of, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
     tv_dict_get_number, tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
     tv_list_append_dict, tv_list_append_number, tv_list_append_string, tv_list_append_tv,
-    tv_list_first, tv_list_idx_of_item, tv_list_len, tv_list_ref, tv_list_unref,
+    tv_list_items, tv_list_iter, tv_list_len, tv_list_ref, tv_list_unref,
 };
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};
@@ -234,25 +234,23 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
     let mut botlnum: LineNr = 0;
     let mut i = 0;
 
-    let mut li = unsafe { tv_list_first(pos_list) };
-    while !li.is_null() {
-        let tv = unsafe { &raw mut (*li).li_tv };
+    for (at, li) in tv_list_iter(unsafe { pos_list.as_ref() }).enumerate() {
+        let at = index_of(at);
+        let tv = &li.li_tv;
         let mut lnum: LineNr = 0;
         let mut col: ColNr = 0;
         let mut len: c_int = 1;
         let mut error = false;
         let mut skip = false;
 
-        if unsafe { (*tv).v_type() } == VAR_LIST {
-            let subl = unsafe { (*tv).list_or_null() };
-            let mut subli = unsafe { tv_list_first(subl) };
-            if subli.is_null() {
-                // SAFETY: `pos_list` holds `li`, as the caller established.
-                let at = unsafe { tv_list_idx_of_item(pos_list, li) };
+        if tv.v_type() == VAR_LIST {
+            // SAFETY: a `VAR_LIST` holds a live list or NULL.
+            let sub = unsafe { tv_list_items(tv.list_or_null()) };
+            if sub.is_empty() {
                 semsg!("E5030: Empty list at position {at}");
                 return None;
             }
-            lnum = unsafe { tv_get_number_chk(&(*subli).li_tv, &raw mut error) } as LineNr;
+            lnum = unsafe { tv_get_number_chk(&sub[0].li_tv, &raw mut error) } as LineNr;
             if error {
                 return None;
             }
@@ -260,26 +258,21 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                 skip = true;
             } else {
                 unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
-                subli = unsafe { (*subli).li_next };
-                if !subli.is_null() {
-                    col = unsafe { tv_get_number_chk(&(*subli).li_tv, &raw mut error) } as ColNr;
+                if let Some(second) = sub.get(1) {
+                    col = unsafe { tv_get_number_chk(&second.li_tv, &raw mut error) } as ColNr;
                     if error {
                         return None;
                     }
                     if col < 0 {
                         skip = true;
-                    } else {
-                        subli = unsafe { (*subli).li_next };
-                        if !subli.is_null() {
-                            len = unsafe { tv_get_number_chk(&(*subli).li_tv, &raw mut error) }
-                                as ColNr;
-                            // Note the order: a negative length is
-                            // skipped before `error` is even looked at.
-                            if len < 0 {
-                                skip = true;
-                            } else if error {
-                                return None;
-                            }
+                    } else if let Some(third) = sub.get(2) {
+                        len = unsafe { tv_get_number_chk(&third.li_tv, &raw mut error) } as ColNr;
+                        // Note the order: a negative length is skipped
+                        // before `error` is even looked at.
+                        if len < 0 {
+                            skip = true;
+                        } else if error {
+                            return None;
                         }
                     }
                 }
@@ -288,18 +281,16 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                     unsafe { (*m.mit_pos_array.offset(i as isize)).len = len };
                 }
             }
-        } else if unsafe { (*tv).v_type() } == VAR_NUMBER {
-            if unsafe { (*tv).number_or_zero() } <= 0 {
+        } else if tv.v_type() == VAR_NUMBER {
+            if tv.number_or_zero() <= 0 {
                 skip = true;
             } else {
-                lnum = unsafe { (*tv).number_or_zero() } as LineNr;
+                lnum = tv.number_or_zero() as LineNr;
                 unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
                 unsafe { (*m.mit_pos_array.offset(i as isize)).col = 0 };
                 unsafe { (*m.mit_pos_array.offset(i as isize)).len = 0 };
             }
         } else {
-            // SAFETY: `pos_list` holds `li`, as the caller established.
-            let at = unsafe { tv_list_idx_of_item(pos_list, li) };
             semsg!("E5031: List or number required at position {at}");
             return None;
         }
@@ -313,7 +304,6 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
             }
             i += 1;
         }
-        li = unsafe { (*li).li_next };
     }
     Some((toplnum, botlnum))
 }

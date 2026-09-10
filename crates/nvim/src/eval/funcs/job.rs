@@ -15,7 +15,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     NumBuf, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend,
     tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove, tv_list_alloc,
-    tv_list_append_number, tv_list_len, tv_list_ref,
+    tv_list_append_number, tv_list_iter, tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
@@ -46,8 +46,8 @@ use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, Error,
-    EvalFuncData, IOSIZE, Integer, List, ListItem, MAXPATHL, NUL, Object, TypVal, VAR_BOOL,
-    VAR_DICT, VAR_LIST, VAR_NUMBER, VarNumber, Vv, uint16_t, uint64_t,
+    EvalFuncData, IOSIZE, Integer, List, MAXPATHL, NUL, Object, TypVal, VAR_BOOL, VAR_DICT,
+    VAR_LIST, VAR_NUMBER, VarNumber, Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -174,13 +174,12 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let waiting_jobs = unsafe { multiqueue_new(Some(loop_on_put), main_loop.ptr() as *mut c_void) };
 
     let mut i = 0;
-    if !list.is_null() {
-        let mut arg: *const ListItem = unsafe { (*list).lv_first };
-        while !arg.is_null() {
+    {
+        for arg in tv_list_iter(unsafe { list.as_ref() }) {
             let chan;
-            if unsafe { (*arg).li_tv.v_type() } != VAR_NUMBER
+            if arg.li_tv.v_type() != VAR_NUMBER
                 || {
-                    chan = find_channel(unsafe { (*arg).li_tv.number_or_zero() } as uint64_t);
+                    chan = find_channel(arg.li_tv.number_or_zero() as uint64_t);
                     chan.is_null()
                 }
                 || unsafe { (*chan).streamtype } != kChannelStreamProc
@@ -200,7 +199,6 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 }
             }
             i += 1;
-            arg = unsafe { (*arg).li_next };
         }
     }
 

@@ -138,7 +138,7 @@ unsafe fn fc_ufuncs(fc: *mut FuncCall) -> *mut [*mut UserFunc] {
 /// `fc` has been through [`cleanup_function_call`] and is off every list.
 unsafe fn free_funccal(fc: *mut FuncCall) {
     // SAFETY: the caller's promise -- `fc` is a live funccall off every list.
-    let frame = unsafe { Fc::new(fc) };
+    let mut frame = unsafe { Fc::new(fc) };
     for i in 0..frame.fc_ufuncs.ga_len as usize {
         // SAFETY: `i` is inside the garray `fc_ufuncs` just measured.
         let fp = unsafe { (*fc_ufuncs(fc))[i] };
@@ -156,7 +156,10 @@ unsafe fn free_funccal(fc: *mut FuncCall) {
     // The reference `create_funccal` took.  This is the *only* place it
     // is given back, which is why a funccall parked for the garbage
     // collector keeps its function undeletable until then.
+    // SAFETY: as above -- the function is this call's own.
     unsafe { func_ptr_unref(frame.fc_func) };
+    // The `a:000` array's own allocation: `xfree` runs no destructor.
+    drop(core::mem::take(&mut frame.fc_l_varlist.lv_items));
     unsafe { xfree(fc as *mut c_void) };
 }
 
@@ -172,8 +175,8 @@ unsafe fn free_funccal_contents(fc: *mut FuncCall) {
     let (vars, avars, items) = unsafe { scopes_of(fc) };
     unsafe { vars_clear(vars) };
     unsafe { vars_clear(avars) };
-    for li in unsafe { tv_list_iter(items.as_ref()) } {
-        unsafe { tv_clear(&mut (*li).li_tv) };
+    for li in tv_list_iter_mut(unsafe { items.as_mut() }) {
+        unsafe { tv_clear(&mut li.li_tv) };
     }
     unsafe { free_funccal(fc) };
 }
@@ -213,14 +216,11 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
     }
 
     if may_free_fc && frame.fc_l_varlist.lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
-        frame.fc_l_varlist.lv_first = ptr::null_mut();
+        tv_list_disown_items(&mut frame.fc_l_varlist);
     } else {
         free_fc = false;
         // Make a copy of the a:000 items, since that was not done above.
-        // SAFETY: as above -- the `a:000` list is this funccall's own.
-        for li in unsafe { tv_list_iter(Some(&(*fc).fc_l_varlist)) } {
-            unsafe { tv_copy(&(*li).li_tv, &mut (*li).li_tv) };
-        }
+        tv_list_own_items(&mut frame.fc_l_varlist);
     }
 
     if free_fc {

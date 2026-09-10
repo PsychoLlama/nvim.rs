@@ -206,7 +206,7 @@ unsafe fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     let hint = VarNumber::from(n > 0) * n * VarNumber::from(unsafe { tv_list_len(src) });
     let out = list_alloc_ret(result, hint as isize);
     for _ in 0..n.max(0) {
-        unsafe { tv_list_extend(out, src, ptr::null_mut()) };
+        unsafe { tv_list_extend(out, src, None) };
     }
 }
 

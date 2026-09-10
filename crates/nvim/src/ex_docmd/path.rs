@@ -18,7 +18,9 @@ use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::eval::typval::{TV_INITIAL_VALUE, callback_free, tv_clear, tv_list_copy, tv_list_find};
+use crate::eval::typval::{
+    TV_INITIAL_VALUE, callback_free, tv_clear, tv_list_copy, tv_list_find, tv_list_iter,
+};
 
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
@@ -47,8 +49,8 @@ use crate::os::env::expand_env;
 
 use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, List, ListItem, MAXPATHL,
-    NUL, OK, OptInt, OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, List, MAXPATHL, NUL, OK,
+    OptInt, OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
     kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
 };
 
@@ -135,13 +137,11 @@ pub unsafe fn expand_findfunc(
     // strings — so the count answered may be smaller.
     unsafe { *files = xmalloc(size_of::<*mut c_char>() * len as size_t) as *mut *mut c_char };
     let mut idx = 0;
-    let mut li: *const ListItem = unsafe { (*l).lv_first };
-    while !li.is_null() {
-        if unsafe { (*li).li_tv.v_type() } as c_uint == VAR_STRING as c_uint {
-            unsafe { *(*files).offset(idx as isize) = xstrdup((*li).li_tv.string_or_null()) };
+    for li in tv_list_iter(unsafe { l.as_ref() }) {
+        if li.li_tv.v_type() as c_uint == VAR_STRING as c_uint {
+            unsafe { *(*files).offset(idx as isize) = xstrdup(li.li_tv.string_or_null()) };
             idx += 1;
         }
-        li = unsafe { (*li).li_next };
     }
     unsafe { *num_matches = idx };
     tv_list_free(l);

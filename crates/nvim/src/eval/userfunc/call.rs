@@ -24,7 +24,7 @@ use core::mem::size_of_val;
 use core::ptr;
 
 use super::*;
-use crate::eval::typval::{di_tv, li_tv};
+use crate::eval::typval::di_tv;
 use crate::types::{Failed, Refcount};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
@@ -252,14 +252,17 @@ pub unsafe fn call_user_func(
         }
 
         if (0..MAX_FUNC_ARGS).contains(&ai) {
-            // Add the extra argument to a:000, through the funccall's own
-            // listitem storage.
-            let li =
-                unsafe { (&raw mut (*fc).fc_l_listitems as *mut ListItem).offset(ai as isize) };
-            // As `a:name` above: `a:000`'s item borrows the caller's value.
-            unsafe { li_tv(li).write(args[i as usize].bit_copy()) };
-            unsafe { (*li).li_lock = VarLock::Fixed };
-            unsafe { tv_list_append(&raw mut (*fc).fc_l_varlist, li) };
+            // Add the extra argument to a:000.  As `a:name` above, the item
+            // *names* the caller's value without owning it;
+            // `tv_list_disown_items` is the counterpart.
+            // SAFETY: the caller keeps the value for the length of the
+            // call, and the list is the funccall's own.
+            let value = unsafe { args[i as usize].bit_copy() };
+            let item = ListItem {
+                li_tv: value,
+                li_lock: VarLock::Fixed,
+            };
+            unsafe { &mut (*fc).fc_l_varlist.lv_items }.push(item);
         }
         i += 1;
     }

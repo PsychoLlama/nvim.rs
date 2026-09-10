@@ -26,7 +26,7 @@ use super::{__S_IFMT, SEEK_END, SEEK_SET, no_fileinfo, str_arg};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{
     tv_blob_alloc_ret, tv_blob_free, tv_get_number, tv_list_alloc_ret, tv_list_append_owned_tv,
-    tv_list_first, tv_list_item_remove, tv_list_len,
+    tv_list_len, tv_list_remove_at,
 };
 use crate::garray::ga_grow;
 use crate::memory::{xfree, xmemdupz, xrealloc};
@@ -169,7 +169,7 @@ impl Lines {
     /// last few.
     fn drop_first(self) {
         // SAFETY: a live list, reached only with at least one item in it.
-        unsafe { tv_list_item_remove(self.0, tv_list_first(self.0)) };
+        unsafe { tv_list_remove_at(self.0, 0) };
     }
 }
 

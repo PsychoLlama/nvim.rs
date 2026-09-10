@@ -6,8 +6,8 @@ use super::wrappers::{arg_string, arg_string_chk};
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
 use crate::cstr;
 use crate::eval::typval::{
-    NumBuf, callback_free, di_lock, di_tv, li_lock, li_tv, tv_dict_watcher_add,
-    tv_dict_watcher_remove, tv_islocked,
+    NumBuf, callback_free, di_lock, di_tv, tv_dict_watcher_add, tv_dict_watcher_remove,
+    tv_islocked, tv_list_items,
 };
 use crate::eval::vars::find_var;
 use crate::eval::{callback_from_typval, clear_lval, get_lval};
@@ -136,9 +136,9 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let ll_newkey = unsafe { c_str(lv.ll_newkey) };
             semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
         } else if !lv.ll_list.is_null() {
-            let li = lv.ll_li;
-            // SAFETY: a resolved lvalue's own item, whose lock is its own.
-            let locked = unsafe { tv_islocked(*li_lock(li), &*li_tv(li)) };
+            // SAFETY: a resolved lvalue's own list and an index into it.
+            let li = &unsafe { tv_list_items(lv.ll_list) }[lv.ll_li];
+            let locked = unsafe { tv_islocked(li.li_lock, &li.li_tv) };
             result.write_number(locked as VarNumber);
         } else {
             let di = lv.ll_di;

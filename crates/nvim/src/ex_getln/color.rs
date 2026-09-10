@@ -12,8 +12,8 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{NumBuf, index_of, tv_list_items, tv_list_iter};
 use crate::guard::Suppress;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext_ptr;
@@ -289,14 +289,13 @@ msg_putchar('\n' as ::core::ffi::c_int);
         }
 
         let mut prev_end: VarNumber = 0;
-        let mut i: ::core::ffi::c_int = 0;
-        let mut li: *const ListItem = unsafe { (*tv.list_or_null()).lv_first };
-        while !li.is_null() {
-            if unsafe { (*li).li_tv.v_type() } != VAR_LIST {
+        for (i, li) in tv_list_iter(unsafe { tv.list_or_null().as_ref() }).enumerate() {
+            let i = index_of(i);
+            if li.li_tv.v_type() != VAR_LIST {
                 print_errmsg!("E5401: List item {i} is not a List");
                 break 'body Label::Error;
             }
-            let l: *const List = unsafe { (*li).li_tv.list_or_null() };
+            let l: *const List = li.li_tv.list_or_null();
             if unsafe { tv_list_len(l) } != 3 {
                 // SAFETY: `l` is the list item just checked.
                 let len = unsafe { tv_list_len(l) };
@@ -305,7 +304,10 @@ msg_putchar('\n' as ::core::ffi::c_int);
             }
 
             let mut error = false;
-            let start = unsafe { tv_get_number_chk(&(*tv_list_first(l)).li_tv, &raw mut error) };
+            // SAFETY: the item's own list, just checked to hold three
+            // items.
+            let chunk = unsafe { tv_list_items(l) };
+            let start = unsafe { tv_get_number_chk(&chunk[0].li_tv, &raw mut error) };
             if error {
                 break 'body Label::Error;
             } else if !(prev_end <= start && start < colored_ccline.len() as VarNumber) {
@@ -330,8 +332,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
                 unsafe { (*ccline_colors).push(coloured) };
             }
 
-            let end =
-                unsafe { tv_get_number_chk(&(*(*tv_list_first(l)).li_next).li_tv, &raw mut error) };
+            let end = unsafe { tv_get_number_chk(&chunk[1].li_tv, &raw mut error) };
             if error {
                 break 'body Label::Error;
             } else if !(start < end && end <= colored_ccline.len() as VarNumber) {
@@ -348,7 +349,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
             }
 
             prev_end = end;
-            let group = unsafe { numbuf.string_chk(&(*tv_list_last(l)).li_tv) };
+            let group = unsafe { numbuf.string_chk(&chunk[2].li_tv) };
             if group.is_null() {
                 break 'body Label::Error;
             }
@@ -359,8 +360,6 @@ msg_putchar('\n' as ::core::ffi::c_int);
             };
             // SAFETY: the command line's own chunk list, taken above.
             unsafe { (*ccline_colors).push(coloured) };
-            i += 1;
-            li = unsafe { (*li).li_next };
         }
 
         if prev_end < colored_ccline.len() as VarNumber {

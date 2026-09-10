@@ -40,7 +40,7 @@ use crate::eval::gc::{gc_first_dict, gc_first_list};
 use crate::eval::typval::{
     tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
     tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy, tv_list_copyid,
-    tv_list_free_contents, tv_list_free_list, tv_list_ref,
+    tv_list_free_contents, tv_list_free_list, tv_list_iter_mut, tv_list_ref,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -71,10 +71,10 @@ use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     AdditionalData, Buffer, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem,
-    DictWatcher, Failed, FileMark, FileMarkView, HashItem, HashTab, HtStack, List, ListItem,
-    ListStack, NUL, OptInt, Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc,
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VimConv, Window, XFileMark, YankReg, size_t,
+    DictWatcher, Failed, FileMark, FileMarkView, HashItem, HashTab, HtStack, List, ListStack, NUL,
+    OptInt, Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL,
+    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
+    VAR_UNKNOWN, VimConv, Window, XFileMark, YankReg, size_t,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -478,17 +478,12 @@ pub unsafe fn set_ref_in_list_items(
     let mut list_stack: *mut ListStack = null_mut();
     let mut cur_l = l;
     loop {
-        if !cur_l.is_null() {
-            let mut li: *mut ListItem = unsafe { (*cur_l).lv_first };
-            while !li.is_null() {
-                if abort {
-                    break;
-                }
-                abort = unsafe {
-                    set_ref_in_item(&mut (*li).li_tv, copy_id, ht_stack, &raw mut list_stack)
-                };
-                li = unsafe { (*li).li_next };
+        for li in tv_list_iter_mut(unsafe { cur_l.as_mut() }) {
+            if abort {
+                break;
             }
+            abort =
+                unsafe { set_ref_in_item(&mut li.li_tv, copy_id, ht_stack, &raw mut list_stack) };
         }
         if list_stack.is_null() {
             break;

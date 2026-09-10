@@ -17,7 +17,7 @@
 )]
 
 use super::*;
-use crate::eval::typval::NumBuf;
+use crate::eval::typval::{NumBuf, tv_list_items};
 use crate::narrow::number_as_int;
 use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
 use core::ptr;
@@ -117,19 +117,11 @@ unsafe fn hl_name(id: ::core::ffi::c_int) -> *const ::core::ffi::c_char {
 ///
 /// # Safety
 /// `l` must be null or a live list the body does not modify.
-unsafe fn list_items(l: *const List) -> impl Iterator<Item = *mut TypVal> {
-    // SAFETY: the caller's list.
-    let mut at = unsafe { tv_list_first(l) };
-    ::core::iter::from_fn(move || {
-        if at.is_null() {
-            return None;
-        }
-        let item = at;
-        // SAFETY: `item` is a live element of the caller's list.
-        at = unsafe { (*item).li_next };
-        // SAFETY: as above. No read happens here.
-        Some(unsafe { &raw mut (*item).li_tv })
-    })
+unsafe fn list_items<'a>(l: *const List) -> impl Iterator<Item = *mut TypVal> + 'a {
+    // SAFETY: the caller's list, which the body does not modify.
+    unsafe { tv_list_items(l) }
+        .iter()
+        .map(|li| ::core::ptr::from_ref(&li.li_tv).cast_mut())
 }
 
 /// Runs `one` over every dictionary in `l`, appending what it answers to

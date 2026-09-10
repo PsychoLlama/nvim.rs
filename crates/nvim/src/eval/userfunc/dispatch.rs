@@ -119,8 +119,7 @@ pub unsafe fn func_call(
             }
             // Copy each argument, so that `v_lock` can be set to
             // VarLock::Fixed in the copy without changing the original list.
-            let from = unsafe { &raw mut (*item).li_tv };
-            unsafe { tv_copy(&*from, &mut argv[argc]) };
+            unsafe { tv_copy(&item.li_tv, &mut argv[argc]) };
             argc += 1;
         }
 

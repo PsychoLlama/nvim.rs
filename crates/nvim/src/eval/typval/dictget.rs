@@ -62,7 +62,7 @@ pub(crate) unsafe fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
         let l2 = tv_list_alloc(2);
         unsafe { tv_list_append_list((*result).list_or_null(), l2) };
         unsafe { tv_list_append_number(l2, idx as VarNumber) };
-        unsafe { tv_list_append_tv(l2, &(*li).li_tv) };
+        unsafe { tv_list_append_tv(l2, &li.li_tv) };
     }
 }
 

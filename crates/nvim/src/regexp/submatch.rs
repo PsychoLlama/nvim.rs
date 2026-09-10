@@ -16,13 +16,10 @@ use core::ffi::{c_char, c_int};
 use super::{
     LineOrigin, RegMMatch, RegMatch, RegSubMatch, Rex, can_f_submatch, reg_line, reg_line_len, rsm,
 };
-use crate::eval::typval::{
-    li_tv, tv_clear, tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10,
-    tv_list_ref,
-};
+use crate::eval::typval::{SL_SIZE, tv_list_alloc, tv_list_append_string, tv_list_ref};
 use crate::memory::{xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, LineNr, List, NUL, StaticList10, TypVal, UserFunc};
+use crate::types::{ColNr, LineNr, List, ListItem, NUL, TypVal, UserFunc, VarLock};
 use crate::winlayer::Live;
 use ::libc::{strcpy, strncpy};
 
@@ -116,7 +113,7 @@ pub(crate) unsafe fn fill_submatch_list(
     argskip: usize,
     func: *mut UserFunc,
 ) -> usize {
-    // `argv[argskip]` holds the `StaticList10` the caller keeps alive
+    // `argv[argskip]` holds the caller's own list, which it keeps alive
     // across the call.
     let listarg = &argv[argskip];
     // SAFETY: the caller's promise -- a live function.
@@ -125,43 +122,27 @@ pub(crate) unsafe fn fill_submatch_list(
         return argskip;
     }
 
-    // Relies on `sl_list` being the first member of `StaticList10`.
-    // SAFETY: the slot holds the caller's static list.
-    unsafe { tv_list_init_static10(listarg.list_or_null() as *mut StaticList10) };
-
-    // A `StaticList10` always has exactly ten items, one per capture.
-    // SAFETY: the caller promises a live string match.
+    // The list is the caller's own storage; it starts empty and gets one
+    // item per capture.
+    let list = listarg.list_or_null();
     // SAFETY: the running string match is the caller's structure.
     let match_ = unsafe { Live::new(Rsm::acquire().match_()) };
-    let mut li = unsafe { tv_list_first(listarg.list_or_null()) };
-    for i in 0..10 {
+    // SAFETY: the slot holds the caller's list, which nothing else names.
+    let items = unsafe { &mut (*list).lv_items };
+    items.reserve_exact(SL_SIZE);
+    for i in 0..SL_SIZE {
         let start = match_.startp[i];
         let text = if start.is_null() || match_.endp[i].is_null() {
             core::ptr::null_mut()
         } else {
             unsafe { xstrnsave(start, match_.endp[i].offset_from(start) as usize) }
         };
-        unsafe { (*li).li_tv.write_string(text) };
-        li = unsafe { (*li).li_next };
+        items.push(ListItem {
+            li_tv: TypVal::String(text),
+            li_lock: VarLock::Fixed,
+        });
     }
     argskip + 1
-}
-
-/// Free the strings [`fill_submatch_list`] allocated into `sl`.
-///
-/// # Safety
-///
-/// `sl` must point at a live `StaticList10`, unaliased for the call.
-pub(crate) unsafe fn clear_submatch_list(sl: *mut StaticList10) {
-    // SAFETY: `sl` is the caller's list, whose items own their strings.
-    // Cleared rather than freed by hand: the list lives in the caller's
-    // frame, so its items are dropped when that frame ends and a slot left
-    // naming freed bytes would be released twice.
-    let mut li = unsafe { (*sl).sl_list.lv_first };
-    while !li.is_null() {
-        unsafe { tv_clear(&mut *li_tv(li)) };
-        li = unsafe { (*li).li_next };
-    }
 }
 
 /// The text capture `no` matched, as an allocated string the caller owns.

@@ -14,7 +14,7 @@ use crate::charset::getdigits_int;
 use crate::cstr;
 use crate::eval::typval::{
     NumBuf, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_find, tv_dict_get_number,
-    tv_dict_len, tv_get_string_buf_chk, tv_list_alloc, tv_list_len, tv_list_ref,
+    tv_dict_len, tv_get_string_buf_chk, tv_list_alloc, tv_list_iter, tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
@@ -27,8 +27,8 @@ use crate::register::{
 use crate::semsg;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    BoolVarValue, ColNr, Dict, EvalFuncData, Failed, List, ListItem, MotionType, NUL, TypVal,
-    VAR_DICT, VAR_LIST, Vv, kBoolVarFalse, kBoolVarTrue,
+    BoolVarValue, ColNr, Dict, EvalFuncData, Failed, List, MotionType, NUL, TypVal, VAR_DICT,
+    VAR_LIST, Vv, kBoolVarFalse, kBoolVarTrue,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -365,10 +365,9 @@ unsafe fn write_list(
 
     let mut complete = true;
     if !l.is_null() {
-        let mut li: *const ListItem = unsafe { (*l).lv_first };
-        while !li.is_null() {
+        for li in tv_list_iter(unsafe { l.as_ref() }) {
             let mut buf: [c_char; 65] = [0; 65];
-            let s = unsafe { tv_get_string_buf_chk(&(*li).li_tv, buf.as_mut_ptr()) };
+            let s = unsafe { tv_get_string_buf_chk(&li.li_tv, buf.as_mut_ptr()) };
             if s.is_null() {
                 complete = false;
                 break;
@@ -390,7 +389,6 @@ unsafe fn write_list(
             // for one per item plus the terminator.
             unsafe { *curval = value };
             curval = unsafe { curval.add(1) };
-            li = unsafe { (*li).li_next };
         }
     }
     if complete {

@@ -21,8 +21,8 @@ use core::ptr::null_mut;
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    tv_blob_copy, tv_blob_get, tv_blob_len, tv_blob_unref, tv_list_first, tv_list_unref,
-    tv_list_watch_add, tv_list_watch_remove,
+    index_of, tv_blob_copy, tv_blob_get, tv_blob_len, tv_blob_unref, tv_list_items_mut,
+    tv_list_unref, tv_list_watch_add, tv_list_watch_remove,
 };
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{ex_let_vars, skip_var_list};
@@ -31,7 +31,7 @@ use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::types::{
-    EvalArg, ExArg, ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, size_t,
+    EvalArg, ExArg, ListWatch, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, size_t,
 };
 
 /// A freshly declared typval.
@@ -101,15 +101,15 @@ pub unsafe fn eval_for_line(
                         // is what keeps the cursor valid across changes
                         // to the List while the loop runs.
                         fi.fi_list = l;
-                        let lw = fi.field_ptr(offset_of!(ForInfo, fi_lw));
-                        // SAFETY: `l` is the live List the typval held, and
-                        // `lw` is the `ForInfo`'s own watcher.
-                        unsafe { tv_list_watch_add(l, lw) };
+                        let lw = fi.field_ptr::<ListWatch>(offset_of!(ForInfo, fi_lw));
                         // The List holds `lw` from here on, so this write
                         // goes through the pointer rather than borrowing
                         // the whole record — `winlayer::live`'s note.
-                        // SAFETY: as above.
-                        unsafe { (*lw).lw_item = tv_list_first(l) };
+                        // SAFETY: `lw` is the `ForInfo`'s own watcher, which
+                        // the loop's first step reads.
+                        unsafe { (*lw).lw_index = 0 };
+                        // SAFETY: `l` is the live List the typval held.
+                        unsafe { tv_list_watch_add(l, lw) };
                         // The reference is `fi`'s now.
                         tv.disown();
                     }
@@ -210,15 +210,29 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         return ok;
     }
 
-    let item: *mut ListItem = fi.fi_lw.lw_item;
-    if item.is_null() {
+    // The cursor is an index into the list, which
+    // `tv_list_watch_shift` moves at every insert and removal so that it
+    // keeps naming the same item.  `ENDED` is upstream's NULL `lw_item`,
+    // and is sticky: a loop whose body appends to the list it is walking
+    // still ends.
+    let Ok(at) = usize::try_from(fi.fi_lw.lw_index) else {
         return false;
-    }
-    // SAFETY: the watcher keeps `lw_item` pointing at a live item, and
-    // `rec` is the caller's record.
-    unsafe { (*rec).fi_lw.lw_item = (*item).li_next };
-    // SAFETY: as above -- the item's typval is the List's own.
-    unsafe { assign(fi, arg, &mut (*item).li_tv) }
+    };
+    // SAFETY: `fi_list` is the List the loop took a reference to.
+    let items = unsafe { tv_list_items_mut(fi.fi_list) };
+    let Some(item) = items.get_mut(at) else {
+        return false;
+    };
+    let value = &raw mut item.li_tv;
+    let next = if at + 1 >= items.len() {
+        ListWatch::ENDED
+    } else {
+        index_of(at + 1)
+    };
+    // SAFETY: `rec` is the caller's record, and the item's typval is the
+    // List's own.
+    unsafe { (*rec).fi_lw.lw_index = next };
+    unsafe { assign(fi, arg, &mut *value) }
 }
 
 /// Hand one item to the loop's variable list, copying it.

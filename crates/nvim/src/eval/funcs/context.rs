@@ -7,7 +7,7 @@ use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::context::{
     ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
 };
-use crate::eval::typval::tv_list_first;
+use crate::eval::typval::tv_list_iter;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::state::did_emsg;
 use crate::message_fmt::c_str;
@@ -83,9 +83,8 @@ pub fn f_ctxpush(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let types = match args.first().map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_LIST => {
             let mut types: c_int = 0;
-            let mut li = unsafe { tv_list_first(args[0].list_or_null()) };
-            while !li.is_null() {
-                let tv = unsafe { &(*li).li_tv };
+            for li in tv_list_iter(unsafe { args[0].list_or_null().as_ref() }) {
+                let tv = &li.li_tv;
                 // An unrecognised name is silently ignored, as is a
                 // non-String item.
                 // A null `v_string` is the empty string, which matches
@@ -101,7 +100,6 @@ pub fn f_ctxpush(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
                         _ => 0,
                     };
                 }
-                li = unsafe { (*li).li_next };
             }
             types
         }

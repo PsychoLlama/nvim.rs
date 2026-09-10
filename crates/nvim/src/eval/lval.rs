@@ -38,12 +38,12 @@ use crate::charset::skipwhite;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
-    NumBuf, di_lock, li_lock, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range,
-    tv_blob_len, tv_blob_set_append, tv_blob_set_range, tv_check_lock, tv_check_str, tv_clear,
-    tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc,
+    NumBuf, di_lock, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range, tv_blob_len,
+    tv_blob_set_append, tv_blob_set_range, tv_check_lock, tv_check_str, tv_clear, tv_copy,
+    tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc,
     tv_dict_watcher_notify, tv_dict_wrong_func_name, tv_get_number, tv_get_number_chk,
     tv_list_alloc_ret, tv_list_assign_range, tv_list_check_range_index_one,
-    tv_list_check_range_index_two, value_check_lock,
+    tv_list_check_range_index_two, tv_list_items_mut, value_check_lock,
 };
 use crate::eval::userfunc::get_funccal_args_ht;
 use crate::eval::vars::{clear_local, emsg_static};
@@ -337,27 +337,28 @@ pub(crate) unsafe fn get_lval_list(
         (*rec).ll_list = Tv::new((*rec).ll_tv).list_or_null();
     };
     // SAFETY: `ll_list` is the typval's List and `n1` is `lval`'s own field.
-    let (list, li) = unsafe {
+    let (list, at) = unsafe {
         let list = (*rec).ll_list;
-        let li = tv_list_check_range_index_one(list, n1, quiet);
-        (*rec).ll_li = li;
-        (list, li)
+        let at = tv_list_check_range_index_one(list, n1, quiet);
+        (*rec).ll_li = at.unwrap_or(0);
+        (list, at)
     };
-    if li.is_null() {
+    let Some(at) = at else {
         return Err(Failed);
-    }
+    };
     // SAFETY: `rec` is the caller's record.
     let ranged = unsafe { (*rec).ll_range && !(*rec).ll_empty2 };
     if ranged {
         // SAFETY: `var2` is the caller's second index expression, and both
         // indexes are `lval`'s own fields.
         unsafe { *n2 = tv_get_number(var2) as c_int };
-        // SAFETY: `li` is the item index one selected.
-        unsafe { tv_list_check_range_index_two(list, n1, li, n2, quiet) }?;
+        // SAFETY: `at` is the index one selected.
+        unsafe { tv_list_check_range_index_two(list, n1, at, n2, quiet) }?;
     }
-    // SAFETY: `ll_li` is a live item, whose typval is the target.
-    unsafe { (*rec).ll_tv = &raw mut (*li).li_tv };
-    unsafe { (*rec).ll_lock = li_lock(li) };
+    // SAFETY: `ll_li` is an index of the list, whose item is the target.
+    let item = &raw mut unsafe { tv_list_items_mut(list) }[at];
+    unsafe { (*rec).ll_tv = &raw mut (*item).li_tv };
+    unsafe { (*rec).ll_lock = &raw mut (*item).li_lock };
     Ok(())
 }
 

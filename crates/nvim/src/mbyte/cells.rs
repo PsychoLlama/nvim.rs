@@ -19,6 +19,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::eval::typval::{index_of, tv_list_iter};
 use crate::semsg;
 use crate::types::NUL;
 use core::cmp::Ordering;
@@ -356,19 +357,13 @@ pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
 /// `l` must be a live list.
 unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
     let mut rows: Vec<CellWidthRange> = Vec::with_capacity(unsafe { tv_list_len(l) } as usize);
-    let mut li = unsafe { (*l).lv_first };
-    let mut item: c_int = 0;
-    while !li.is_null() {
-        let li_tv = unsafe { &raw const (*li).li_tv };
-        if unsafe { (*li_tv).v_type() } as c_uint != VAR_LIST as c_uint
-            || unsafe { (*li_tv).list_or_null() }.is_null()
-        {
+    for (item, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
+        let item = index_of(item);
+        if li.li_tv.v_type() as c_uint != VAR_LIST as c_uint || li.li_tv.list_or_null().is_null() {
             semsg!("E1109: List item {} is not a List", item);
             return None;
         }
-        rows.push(unsafe { parse_cell_width_row((*li_tv).list_or_null(), item) }?);
-        li = unsafe { (*li).li_next };
-        item += 1;
+        rows.push(unsafe { parse_cell_width_row(li.li_tv.list_or_null(), item) }?);
     }
 
     // Upstream sorts with qsort, which is unstable; two rows sharing a
@@ -398,13 +393,12 @@ unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
 unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWidthRange> {
     let mut numbers = [0 as VarNumber; 3];
     let mut seen = 0;
-    let mut lili = unsafe { tv_list_first(li_l) };
-    while !lili.is_null() {
-        let tv = unsafe { &raw const (*lili).li_tv };
-        if unsafe { (*tv).v_type() } as c_uint != VAR_NUMBER as c_uint {
+    for lili in tv_list_iter(unsafe { li_l.as_ref() }) {
+        let tv = &lili.li_tv;
+        if tv.v_type() as c_uint != VAR_NUMBER as c_uint {
             break;
         }
-        let n = unsafe { (*tv).number_or_zero() };
+        let n = tv.number_or_zero();
         match seen {
             0 if n < 0x80 => {
                 emsg(gettext(c"E1114: Only values of 0x80 and higher supported"));
@@ -424,7 +418,6 @@ unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWid
             numbers[seen] = n;
         }
         seen += 1;
-        lili = unsafe { (*lili).li_next };
     }
 
     // A fourth number, a non-number, or too few: all "not three numbers".

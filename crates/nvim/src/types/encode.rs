@@ -13,10 +13,11 @@ use super::*;
 
 /// How far a list-backed reader has got.
 ///
-/// `Copy`: three cursors into a list the reader does not own.
+/// Three cursors into a list the reader does not own: which item, how far
+/// into it, and how long it is.
 pub struct ListReaderState {
     pub list: *const List,
-    pub li: *const ListItem,
+    pub at: size_t,
     pub offset: size_t,
     pub li_length: size_t,
 }

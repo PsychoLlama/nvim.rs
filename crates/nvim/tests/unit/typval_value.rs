@@ -15,7 +15,7 @@ use neovim::eval::typval::{
     tv_check_lock, tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy,
     tv_dict_alloc_ret, tv_equal, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk,
     tv_get_string_buf, tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret,
-    tv_list_append_number, value_check_lock,
+    tv_list_append_number, tv_list_first, value_check_lock,
 };
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
@@ -135,7 +135,7 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         // *outside* reference frees nothing and leaves the count at one.
         let mut tv = Tv::List(vec![Tv::Cycle(0)]).build();
         let l = tv.list();
-        log.check(&[alloc::list(l), alloc::li((*l).lv_first)]);
+        log.check(&[alloc::list(l)]);
         tv_clear(&mut tv);
         log.check(&[]);
         assert_eq!((*l).lv_refcount.get(), 1);
@@ -269,7 +269,7 @@ fn copying_a_container_is_shallow() {
     unsafe {
         let mut from = Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build();
         let outer = from.list();
-        let inner = (*(*outer).lv_first).li_tv.list();
+        let inner = (*tv_list_first(outer)).li_tv.list();
         assert_eq!(
             ((*outer).lv_refcount.get(), (*inner).lv_refcount.get()),
             (1, 1)
@@ -280,7 +280,7 @@ fn copying_a_container_is_shallow() {
 
         assert_eq!(to.list(), outer, "the copy names the same list");
         assert_eq!(
-            (*(*to.list()).lv_first).li_tv.list(),
+            (*tv_list_first(to.list())).li_tv.list(),
             inner,
             "and the same list inside it",
         );
@@ -779,7 +779,7 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
     unsafe {
         let mut tv = Slot::new(Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build());
         let outer = tv.tv.list();
-        let inner = (*(*outer).lv_first).li_tv.list();
+        let inner = (*tv_list_first(outer)).li_tv.list();
 
         // A second name for the outer list, as an argument binding is.
         let mut other = TypVal::Unknown;

@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::tv_list_items;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::strings::vim_strchr;
@@ -45,8 +46,8 @@ enum Source {
         last: LineNr,
     },
     /// A Vimscript list, one entry per line; non-string entries are
-    /// skipped.
-    List(*mut ListItem),
+    /// skipped.  The cursor is an index: the list owns its items.
+    List(*const List, usize),
     /// A Vimscript string, split on newlines.
     Text(*mut c_char),
     /// A Vimscript value that is neither a string nor a list. Upstream
@@ -151,7 +152,7 @@ impl Reader {
             reader.source = if tv.v_type() == VAR_STRING as VarType {
                 Source::Text(tv.string_or_null())
             } else if tv.v_type() == VAR_LIST as VarType {
-                Source::List(unsafe { tv_list_first(tv.list_or_null()) })
+                Source::List(tv.list_or_null(), 0)
             } else {
                 Source::Unusable
             };
@@ -200,7 +201,7 @@ impl Reader {
             // SAFETY: forwarded from the caller.
             Source::File(fd) => unsafe { self.read_file(fd) },
             Source::Buffer { .. } => unsafe { self.read_buffer() },
-            Source::List(_) => unsafe { self.read_list() },
+            Source::List(..) => unsafe { self.read_list() },
             Source::Text(_) => unsafe { self.read_text() },
             Source::Unusable => Status::Fail,
         };
@@ -251,24 +252,25 @@ impl Reader {
     ///
     /// The list items must still be allocated.
     unsafe fn read_list(&mut self) -> Status {
-        let Source::List(mut at) = self.source else {
+        let Source::List(list, mut at) = self.source else {
             unreachable!()
         };
         // SAFETY: the caller's list is live.
-        while !at.is_null()
-            && (unsafe { (*at).li_tv.v_type() } != VAR_STRING as VarType
-                || unsafe { (*at).li_tv.string_or_null() }.is_null())
+        let items = unsafe { tv_list_items(list) };
+        while items
+            .get(at)
+            .is_some_and(|li| li.li_tv.string_or_null().is_null())
         {
-            at = unsafe { (*at).li_next };
+            at += 1;
         }
-        if at.is_null() {
-            self.source = Source::List(ptr::null_mut());
+        let Some(item) = items.get(at) else {
+            self.source = Source::List(list, at);
             return Status::EndOfInput;
-        }
-        let text = unsafe { (*at).li_tv.string_or_null() };
+        };
+        let text = item.li_tv.string_or_null();
         self.len = self.fit(unsafe { cstr::bytes_at(text) }.len());
         unsafe { xstrlcpy(self.line(), text, self.len + 1) };
-        self.source = Source::List(unsafe { (*at).li_next });
+        self.source = Source::List(list, at + 1);
         Status::Ok
     }
 

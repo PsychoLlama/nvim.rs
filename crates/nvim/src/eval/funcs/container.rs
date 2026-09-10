@@ -13,7 +13,7 @@ use crate::eval::typval::{
     tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
     tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def, tv_dict_len,
     tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_list_append_tv, tv_list_copy, tv_list_find,
-    tv_list_first, tv_list_flatten, tv_list_len, tv_list_locked, tv_list_ref, tv_list_uidx,
+    tv_list_flatten, tv_list_items, tv_list_len, tv_list_locked, tv_list_ref, tv_list_uidx,
     value_check_lock,
 };
 use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
@@ -29,11 +29,11 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    Blob, BoolVarValue, EvalFuncData, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_BLOB,
-    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC,
-    VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv,
-    kBoolVarTrue, kSpecialVarNull,
+    Blob, BoolVarValue, EvalFuncData, List, NUL, Partial, Refcount, TypVal, VAR_BLOB, VAR_BOOL,
+    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
+    VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
+    VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv, kBoolVarTrue,
+    kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -150,7 +150,7 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
     }
     // SAFETY: `list` is the live List argument 0 named.
     let len = unsafe { tv_list_len(list) } as i64;
-    unsafe { tv_list_flatten(list, ptr::null_mut(), len, maxdepth as i64) };
+    unsafe { tv_list_flatten(list, 0, len, maxdepth as i64) };
 }
 
 /// `get({container}, {key} [, {default}])` — for a Blob, List, Dict,
@@ -399,30 +399,34 @@ fn index_list(args: &[TypVal], result: &mut TypVal) {
         return;
     }
     let mut idx: c_int = 0;
-    let mut item = unsafe { tv_list_first(l) };
+    let mut start = Some(0usize);
     let mut ic = false;
     if args.len() > 2 {
         let mut error = false;
         idx = unsafe { tv_list_uidx(l, arg_number_chk(&args[2], Some(&mut error)) as c_int) };
-        if error || idx == -1 {
-            item = ptr::null_mut();
+        start = if error {
+            None
         } else {
-            item = unsafe { tv_list_find(l, idx) };
-            debug_assert!(!item.is_null());
-        }
+            usize::try_from(idx).ok()
+        };
         if args.len() > 3 {
             ic = arg_number_chk(&args[3], Some(&mut error)) != 0;
             if error {
-                item = ptr::null_mut();
+                start = None;
             }
         }
     }
-    while !item.is_null() {
-        if unsafe { tv_equal(&(*item).li_tv, &args[1], ic) } {
-            result.write_number(idx as VarNumber);
+    let Some(start) = start else { return };
+    // By index: `tv_equal` compares two values and can re-enter.
+    let mut at = start;
+    // SAFETY: the caller's obligation: a live list.
+    while at < unsafe { tv_list_items(l) }.len() {
+        let item = &unsafe { tv_list_items(l) }[at];
+        if unsafe { tv_equal(&item.li_tv, &args[1], ic) } {
+            result.write_number(VarNumber::from(idx));
             return;
         }
-        item = unsafe { (*item).li_next };
+        at += 1;
         idx += 1;
     }
 }
@@ -535,25 +539,24 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: &TypVal) -> VarN
         return -1;
     }
     let mut idx: VarNumber = 0;
-    let mut item: *mut ListItem;
     // A zero start index is taken literally rather than run through
     // `tv_list_uidx`, so it does not have to be a valid index.
-    if startidx == 0 {
-        item = unsafe { tv_list_first(l) };
+    let start = if startidx == 0 {
+        Some(0usize)
     } else {
-        idx = unsafe { tv_list_uidx(l, startidx as c_int) } as VarNumber;
-        if idx == -1 {
-            item = ptr::null_mut();
-        } else {
-            item = unsafe { tv_list_find(l, idx as c_int) };
-            debug_assert!(!item.is_null());
-        }
-    }
+        idx = VarNumber::from(unsafe { tv_list_uidx(l, startidx as c_int) });
+        usize::try_from(idx).ok()
+    };
+    let Some(start) = start else { return -1 };
     set_vim_var_type(Vv::Key, VAR_NUMBER);
     let called_emsg_start = called_emsg.get();
-    while !item.is_null() {
+    // By index: `expr` is the user's, and may edit the list it is testing.
+    let mut at = start;
+    // SAFETY: the caller's obligation: a live list.
+    while at < unsafe { tv_list_items(l) }.len() {
         set_vim_var_nr(Vv::Key, idx);
-        unsafe { tv_copy(&(*item).li_tv, &mut *get_vim_var_tv(Vv::Val)) };
+        let item = &unsafe { tv_list_items(l) }[at];
+        unsafe { tv_copy(&item.li_tv, &mut *get_vim_var_tv(Vv::Val)) };
         let found = unsafe { indexof_matches(expr) };
         unsafe { tv_clear(&mut *get_vim_var_tv(Vv::Val)) };
         if found {
@@ -562,7 +565,7 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: &TypVal) -> VarN
         if called_emsg.get() != called_emsg_start {
             return -1;
         }
-        item = unsafe { (*item).li_next };
+        at += 1;
         idx += 1;
     }
     -1

@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::{tv_list_items, tv_list_len};
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 
@@ -55,16 +56,15 @@ pub(crate) unsafe fn set_buffer_lines(
         Buf::current().line_count()
     };
     let mut l: *mut List = ptr::null_mut();
-    let mut li: *mut ListItem = ptr::null_mut();
+    let mut at: usize = 0;
     let mut line: *mut c_char = ptr::null_mut();
     let src = lines;
     '_cleanup: {
         if src.v_type() == VAR_LIST {
             l = src.list_or_null();
-            if l.is_null() || unsafe { (*l).lv_len } == 0 {
+            if unsafe { tv_list_len(l) } == 0 {
                 break '_cleanup;
             }
-            li = unsafe { (*l).lv_first };
         } else {
             line = unsafe { typval_tostring(Some(lines), false) };
         }
@@ -72,13 +72,14 @@ pub(crate) unsafe fn set_buffer_lines(
             // Re-read, as upstream does: the type tag is the argument's own
             // and the walk below can run user code.
             if src.v_type() == VAR_LIST {
-                if li.is_null() {
+                // Re-read the items too: the body below runs autocommands,
+                // which may edit the very list being appended.
+                let Some(item) = (unsafe { tv_list_items(l) }).get(at) else {
                     break;
-                }
-                let item = unsafe { Li::new(li) };
+                };
                 unsafe { xfree(line.cast()) };
                 line = unsafe { typval_tostring(Some(&item.li_tv), false) };
-                li = item.li_next;
+                at += 1;
             }
             ret.write_number(1);
             if line.is_null() || lnum > Buf::current().line_count() + 1 {

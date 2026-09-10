@@ -255,8 +255,10 @@ impl TypvalSink for NothingSink {
             tv.write_list(ptr::null_mut());
             // Always a `List`: the walk calls this straight after pushing
             // one for this very value.
-            if let Frame::List { li, .. } = &mut frame.frame {
-                *li = ptr::null_mut();
+            if let Frame::List { at, .. } = &mut frame.frame {
+                // Past the last item, whatever the list holds: the walk
+                // pops a frame whose cursor names no item.
+                *at = usize::MAX;
             }
             return Flow::Stop;
         }

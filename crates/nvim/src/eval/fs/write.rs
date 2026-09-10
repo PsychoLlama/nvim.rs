@@ -25,7 +25,9 @@ use super::{
     str_arg_chk,
 };
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_blob_len, tv_check_str_or_nr, tv_get_string_buf_chk};
+use crate::eval::typval::{
+    NumBuf, tv_blob_len, tv_check_str_or_nr, tv_get_string_buf_chk, tv_list_items,
+};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
@@ -40,8 +42,8 @@ use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::tr_c;
 use crate::types::{
-    Blob, EvalFuncData, FileDescriptor, List, ListItem, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING,
-    VarNumber, ptrdiff_t, size_t,
+    Blob, EvalFuncData, FileDescriptor, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber,
+    ptrdiff_t, size_t,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -107,24 +109,26 @@ impl Out {
     }
 }
 
-/// One item of the List being written.
+/// One item of the List being written: the list, and where in it.
 #[derive(Clone, Copy)]
-struct Item(*const ListItem);
+struct Item {
+    list: *const List,
+    at: usize,
+}
 
 impl Item {
-    fn of(p: *const ListItem) -> Option<Self> {
-        (!p.is_null()).then_some(Self(p))
+    fn of(list: *const List, at: usize) -> Option<Self> {
+        // SAFETY: a live list, or NULL, which reads as empty.
+        (at < unsafe { tv_list_items(list) }.len()).then_some(Self { list, at })
     }
 
     /// The first item of `list`, which may itself be NULL.
     fn first(list: *const List) -> Option<Self> {
-        // SAFETY: a live list, or NULL, which `as_ref` answers None for.
-        Self::of(unsafe { list.as_ref() }.map_or(ptr::null(), |l| l.lv_first))
+        Self::of(list, 0)
     }
 
     fn next(self) -> Option<Self> {
-        // SAFETY: a live item.
-        Self::of(unsafe { (*self.0).li_next })
+        Self::of(self.list, self.at + 1)
     }
 
     /// The item's value as a string, or None -- having reported -- for a
@@ -133,7 +137,7 @@ impl Item {
     fn string(self, buf: &mut NumBuf) -> Option<&CStr> {
         // SAFETY: a live item and a scratch of the promised length; the
         // answer is NUL-terminated, or NULL.
-        let tv = unsafe { &raw const (*self.0).li_tv };
+        let tv = &raw const unsafe { tv_list_items(self.list) }[self.at].li_tv;
         unsafe { tv_get_string_buf_chk(&*tv, buf.as_mut_ptr()).as_ref() }
             .map(|p| unsafe { CStr::from_ptr(p) })
     }
@@ -141,7 +145,7 @@ impl Item {
     /// Whether the item is a String or a Number, having reported if not.
     fn is_str_or_nr(self) -> bool {
         // SAFETY: a live item.
-        unsafe { tv_check_str_or_nr(&(*self.0).li_tv) }
+        unsafe { tv_check_str_or_nr(&tv_list_items(self.list)[self.at].li_tv) }
     }
 }
 

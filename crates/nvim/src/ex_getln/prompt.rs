@@ -10,8 +10,8 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{NumBuf, tv_list_iter};
 use crate::memory::handoff::owned_cstr;
 use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
 use core::mem::ManuallyDrop;
@@ -60,16 +60,14 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
 
     let skip = unsafe { (*args).skip } != 0;
     let mut text = Vec::<u8>::new();
-    let mut li: *const ListItem = unsafe { (*l).lv_first };
-    while !li.is_null() {
+    for li in tv_list_iter(unsafe { l.as_ref() }) {
         if !skip {
             // SAFETY: the item's rendering is NUL-terminated and outlives
             // the copy.
-            let line = unsafe { numbuf.string(&(*li).li_tv) };
+            let line = unsafe { numbuf.string(&li.li_tv) };
             text.extend_from_slice(unsafe { cstr::bytes_at(line) });
             text.push(b'\n');
         }
-        li = unsafe { (*li).li_next };
     }
 
     // The length is the text without the terminator `owned_cstr` adds.

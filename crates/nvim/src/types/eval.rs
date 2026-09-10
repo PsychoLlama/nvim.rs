@@ -410,7 +410,9 @@ pub struct LVal {
     /// item's or a dictionary item's -- since the lock belongs to the place
     /// and not to the value sitting in it.  Null exactly when `ll_tv` is.
     pub ll_lock: *mut VarLock,
-    pub ll_li: *mut ListItem,
+    /// Where in `ll_list` the lvalue is -- an index, because the list owns
+    /// its items.  Only meaningful when `ll_list` is non-null.
+    pub ll_li: usize,
     pub ll_list: *mut List,
     pub ll_range: bool,
     pub ll_empty2: bool,

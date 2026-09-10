@@ -328,6 +328,11 @@ mod arity_audit {
     /// A direct `args[i]` reaches past the minimum arity only where the body
     /// has already asked how many arguments there are; anywhere else it is a
     /// panic waiting for the first call that omits the optional argument.
+    ///
+    /// Not under Miri: this reads and masks every source file in the crate,
+    /// which the interpreter turns from half a second into hours, and there
+    /// is no memory to be unsafe about -- it is a text audit.
+    #[cfg_attr(miri, ignore = "a source-text audit, and far too slow to interpret")]
     #[test]
     fn no_builtin_indexes_past_its_minimum_arity() {
         let rows = rows();

@@ -14,7 +14,7 @@ use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::edit::buf_prompt_text;
 use crate::eval::prompt_get_input;
-use crate::eval::typval::{NumBuf, tv_list_len};
+use crate::eval::typval::{NumBuf, tv_list_iter, tv_list_len};
 use crate::event::libuv::uv_kill;
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::get_user_input;
@@ -34,7 +34,7 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
-use crate::types::{EvalFuncData, FAIL, ListItem, NUL, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
+use crate::types::{EvalFuncData, FAIL, NUL, TypVal, TypeaheadSave, VAR_LIST, VarNumber};
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
@@ -183,16 +183,13 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { msg_clr_eos() };
 
     let list = args[0].list_or_null();
-    if !list.is_null() {
-        let mut li: *const ListItem = unsafe { (*list).lv_first };
-        while !li.is_null() {
-            msg_str(unsafe { cstr::at(numbuf.string(&(*li).li_tv)) });
-            // A UI that owns the message area keeps the items in one
-            // message, bar the last separator.
-            if !ui_has(kUIMessages) || !unsafe { (*li).li_next }.is_null() {
-                msg_putchar('\n' as c_int);
-            }
-            li = unsafe { (*li).li_next };
+    let len = unsafe { tv_list_len(list) } as usize;
+    for (at, li) in tv_list_iter(unsafe { list.as_ref() }).enumerate() {
+        msg_str(unsafe { cstr::at(numbuf.string(&li.li_tv)) });
+        // A UI that owns the message area keeps the items in one message,
+        // bar the last separator.
+        if !ui_has(kUIMessages) || at + 1 < len {
+            msg_putchar('\n' as c_int);
         }
     }
 

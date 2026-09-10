@@ -25,8 +25,8 @@ use crate::eval::{Tv, grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
 use crate::strings::concat_str;
 use crate::types::{
-    Blob, Failed, Float, ListItem, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, uint8_t,
+    Blob, Failed, Float, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, uint8_t,
 };
 use ::libc::abort;
 use core::ffi::{CStr, c_char};
@@ -123,7 +123,7 @@ unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
         unsafe { (*l2).lv_refcount.retain() };
     } else {
         // SAFETY: both Lists are live.
-        unsafe { tv_list_extend(l1, l2, ::core::ptr::null_mut::<ListItem>()) };
+        unsafe { tv_list_extend(l1, l2, None) };
     }
     Ok(())
 }

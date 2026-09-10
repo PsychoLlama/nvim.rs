@@ -22,7 +22,7 @@ use super::*;
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{Failed, NUL};
+use crate::types::{Failed, ListWatch, NUL};
 
 /// Compare two list items by the ordering `sortinfo` selected: numeric, float,
 /// or a string comparison of their `string()` forms.
@@ -287,21 +287,30 @@ fn sort_item(item: *mut ListItem, idx: ::core::ffi::c_int) -> ListSortItem {
 
 /// `sort()` over `l`, in place.
 ///
+/// The items are **taken out of the list** for the duration: `qsort` permutes
+/// an array of pointers into them, and a user comparator that re-enters the
+/// evaluator must not be able to move them.  Upstream sorted the links in
+/// place and left a comparator that edited the list holding freed items;
+/// what a comparator sees here is an empty list instead, and anything it
+/// appends is dropped when the sorted items go back (upstream leaked them).
+///
 /// # Safety
 ///
 /// `l` must point at a live list, unaliased for the call. `info` must point
 /// at the sort's `SortInfo`, unaliased for the call.
 pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
-    let len = unsafe { tv_list_len(l) };
+    // SAFETY: the caller's promise: a live list.
+    let mut taken = ::core::mem::take(unsafe { &mut (*l).lv_items });
+    let len = taken.len();
 
-    // Make an array with each entry pointing to an item in the List.
-    let ptrs = unsafe { xmalloc(len as usize * ::core::mem::size_of::<ListSortItem>()) }
-        as *mut ListSortItem;
-
-    // f_sort(): ptrs will be the list to sort
-    for (i, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
-        unsafe { *ptrs.add(i) = sort_item(li, i as ::core::ffi::c_int) };
-    }
+    // Make an array with each entry pointing to an item.  Every pointer is
+    // an offset from the *one* derivation of the array below, so nothing
+    // here retags an element out from under the comparator.
+    let base = taken.as_mut_ptr();
+    let mut ptrs: Vec<ListSortItem> = (0..len)
+        // SAFETY: `i` is inside the array `base` names.
+        .map(|i| sort_item(unsafe { base.add(i) }, index_of(i)))
+        .collect();
 
     // SAFETY: the caller's `SortInfo`.
     let mut sort_info = unsafe { Si::new(info) };
@@ -311,22 +320,44 @@ pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
     // Sort the array with item pointers.
     let itemsize = ::core::mem::size_of::<ListSortItem>();
     let cmp = item_compare_func as __compar_fn_t;
-    unsafe { qsort(ptrs.cast(), len as size_t, itemsize, cmp) };
+    // SAFETY: `ptrs` holds `len` records of exactly `itemsize`, and the
+    // comparator reads two of them.
+    unsafe { qsort(ptrs.as_mut_ptr().cast(), len as size_t, itemsize, cmp) };
 
     if sort_info.item_compare_func_err {
         emsg(gettext(c"E702: Sort compare function failed"));
-    } else {
-        // Clear the list and append the items in the sorted order.
-        unsafe { (*l).lv_first = ::core::ptr::null_mut() };
-        unsafe { (*l).lv_last = ::core::ptr::null_mut() };
-        unsafe { (*l).lv_idx_item = ::core::ptr::null_mut() };
-        unsafe { (*l).lv_len = 0 };
-        for i in 0..len {
-            unsafe { tv_list_append(l, (*ptrs.offset(i as isize)).item) };
-        }
+        // The list is left as it was.
+        unsafe { (*l).lv_items = taken };
+        return;
     }
 
-    unsafe { xfree(ptrs.cast()) };
+    // Put the items back in the sorted order.  Each pointer in `ptrs` names
+    // a different item of `taken`, so every item moves out exactly once.
+    let mut sorted: Vec<ListItem> = Vec::with_capacity(len);
+    for entry in &ptrs {
+        // SAFETY: a distinct item of `taken`, moved out once.
+        sorted.push(unsafe { entry.item.read() });
+    }
+    // Every item has moved out; the array is only its allocation now.
+    // SAFETY: `len` items were read out of it, and none is left to drop.
+    unsafe { taken.set_len(0) };
+    // A cursor stands on an item, not on a place, so it goes where the item
+    // went.  Only paid for when something is actually walking the list.
+    // SAFETY: the caller's promise: a live list.
+    let list = unsafe { &mut *l };
+    if !list.lv_watch.is_null() {
+        let mut moved = vec![ListWatch::ENDED; len];
+        for (dest, entry) in ptrs.iter().enumerate() {
+            // SAFETY: every entry points at an item of `taken`, whose base
+            // is `base`.
+            let from = unsafe { entry.item.offset_from(base) };
+            moved[from.cast_unsigned()] = index_of(dest);
+        }
+        tv_list_watch_permute(list, &moved);
+    }
+    // Anything the comparator appended is dropped with the empty list it
+    // went into.
+    unsafe { (*l).lv_items = sorted };
 }
 
 /// `uniq()` over `l`, in place: drop each item equal to the one before it.
@@ -336,20 +367,16 @@ pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
 /// `l` must point at a live list, unaliased for the call. `info` must point
 /// at the sort's `SortInfo`, unaliased for the call.
 pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
-    let len = unsafe { tv_list_len(l) };
-
-    // Upstream allocates this array and never fills it — `uniq` walks the
-    // list directly. Kept because it is what the C does; nothing reads it.
-    let ptrs = unsafe { xmalloc(len as usize * ::core::mem::size_of::<ListSortItem>()) }
-        as *mut ListSortItem;
-
     // SAFETY: the caller's `SortInfo`.
     let mut sort_info = unsafe { Si::new(info) };
     sort_info.item_compare_func_err = false;
     let compare = sorter(info, true).expect("non-null function pointer");
 
-    let mut li = unsafe { (*tv_list_first(l)).li_next };
-    while !li.is_null() {
+    let mut at = 1;
+    // Re-read the length every step: the comparator runs a user function,
+    // which may edit the list.
+    // SAFETY: the caller's promise: a live list.
+    while at < unsafe { tv_list_items(l) }.len() {
         // Upstream hands the comparator the addresses of two bare
         // `ListItem *` locals and lets it read them as `ListSortItem *`,
         // relying on `item` sitting at offset 0 and on `idx` never being
@@ -362,21 +389,23 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
         // `ListSortItem` stays free to be reordered.  The indexes are only
         // read by the `_not_keeping_zero` comparators, which never reach
         // here; they are still filled in list order so that would work.
-        let prev = sort_item(unsafe { (*li).li_prev }, 0);
-        let cur = sort_item(li, 1);
+        // SAFETY: two items of the list, read out afresh each step.
+        let items = unsafe { tv_list_items_mut(l) };
+        let prev = sort_item(&raw mut items[at - 1], 0);
+        let cur = sort_item(&raw mut items[at], 1);
+        // SAFETY: the two records just built.
         let equal = unsafe { compare((&raw const prev).cast(), (&raw const cur).cast()) } == 0;
-        li = if equal {
-            unsafe { tv_list_item_remove(l, li) }
+        if equal {
+            // SAFETY: a live list and an index of it.
+            unsafe { tv_list_remove_range(l, at, at) };
         } else {
-            unsafe { (*li).li_next }
-        };
+            at += 1;
+        }
         if sort_info.item_compare_func_err {
             emsg(gettext(c"E882: Uniq compare function failed"));
             break;
         }
     }
-
-    unsafe { xfree(ptrs.cast()) };
 }
 
 /// Read `sort()`/`uniq()`'s optional `{how}` and `{dict}` arguments into

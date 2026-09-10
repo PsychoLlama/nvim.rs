@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_dict_get_string_alloc};
+use crate::eval::typval::{NumBuf, tv_dict_get_string_alloc, tv_list_items, tv_list_iter};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, Key};
 use crate::types::{
@@ -163,15 +163,19 @@ pub(crate) unsafe fn ins_compl_add_list(list: *mut List) {
     if list.is_null() {
         return;
     }
-    let mut li = unsafe { (*list).lv_first };
-    while !li.is_null() {
-        if unsafe { ins_compl_add_tv(&(*li).li_tv, dir, true) } == OK {
+    // By index: `ins_compl_add_tv` runs user code (an autocommand, a
+    // `'completefunc'`), which may edit the very list it is reading.
+    let mut at = 0;
+    // SAFETY: the caller's promise: a live list.
+    while at < unsafe { tv_list_items(list) }.len() {
+        let tv = &raw const unsafe { tv_list_items(list) }[at].li_tv;
+        if unsafe { ins_compl_add_tv(&*tv, dir, true) } == OK {
             // If dir was BACKWARD then honour it just once.
             dir = FORWARD;
         } else if did_emsg.get() != 0 {
             break;
         }
-        li = unsafe { (*li).li_next };
+        at += 1;
     }
 }
 
@@ -435,11 +439,10 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
         what_flag = CI_WHAT_ALL & !(CI_WHAT_MATCHES | CI_WHAT_COMPLETED);
     } else {
         what_flag = 0;
-        let mut item = unsafe { tv_list_first(what_list) };
-        while !item.is_null() {
+        for item in tv_list_iter(unsafe { what_list.as_ref() }) {
             // `tv_get_string` answers "" rather than NULL for anything it
             // cannot render, so this is never a null pointer.
-            let what = unsafe { CStr::from_ptr(numbuf.string(&(*item).li_tv)) };
+            let what = unsafe { CStr::from_ptr(numbuf.string(&item.li_tv)) };
             what_flag |= match what.to_bytes() {
                 b"mode" => CI_WHAT_MODE,
                 b"pum_visible" => CI_WHAT_PUM_VISIBLE,
@@ -450,7 +453,6 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
                 b"matches" => CI_WHAT_MATCHES,
                 _ => 0,
             };
-            item = unsafe { (*item).li_next };
         }
     }
 

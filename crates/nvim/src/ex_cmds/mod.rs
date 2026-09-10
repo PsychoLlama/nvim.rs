@@ -33,7 +33,7 @@
 use crate::autocmd::apply_autocmds;
 use crate::charset::{skip, vim_is_ident_char};
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_list_find_str, tv_list_len};
+use crate::eval::typval::{NumBuf, tv_list_find_str, tv_list_iter, tv_list_len};
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
@@ -372,24 +372,23 @@ pub unsafe fn ex_oldfiles(args: *mut ExArg) {
 unsafe fn list_oldfiles(list: *mut List) {
     let mut number = NumBuf::new();
     let mut text = NumBuf::new();
-    // SAFETY: caller's contract.
-    let mut item = unsafe { (*list).lv_first };
     let mut nr = 0;
-    while !item.is_null() && !got_int.get() {
+    // SAFETY: caller's contract: a live list.
+    for item in tv_list_iter(unsafe { list.as_ref() }) {
+        if got_int.get() {
+            break;
+        }
         nr += 1;
-        // SAFETY: a live item of the list.
-        let value = &raw mut unsafe { &mut *item }.li_tv;
+        let value = &item.li_tv;
         // SAFETY: `value` is that item's own.
-        if !message_filtered(unsafe { cstr::at(number.string(&*value)) }) {
+        if !message_filtered(unsafe { cstr::at(number.string(value)) }) {
             msg_outnum(nr);
             say::puts(c": ");
-            msg_display(unsafe { cstr::at(text.string(&*value)) }, 0, false);
+            msg_display(unsafe { cstr::at(text.string(value)) }, 0, false);
             say::clear_eos();
             say::putchar('\n' as ::core::ffi::c_int);
             os_breakcheck();
         }
-        // SAFETY: as above.
-        item = unsafe { (*item).li_next };
     }
 }
 

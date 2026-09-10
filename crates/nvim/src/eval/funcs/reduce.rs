@@ -9,8 +9,8 @@ use super::{
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
     NumBuf, di_of_key, di_tv, tv_blob_get, tv_blob_len, tv_check_for_number_arg,
-    tv_check_for_string_arg, tv_copy, tv_dict_len, tv_get_number_chk, tv_list_first, tv_list_len,
-    tv_list_locked, tv_list_set_lock,
+    tv_check_for_string_arg, tv_copy, tv_dict_len, tv_get_number_chk, tv_list_items, tv_list_iter,
+    tv_list_len, tv_list_locked, tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
@@ -58,16 +58,14 @@ unsafe fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
             if unsafe { tv_list_len(tv.list_or_null()) } == 0 {
                 return;
             }
-            let mut li = unsafe { tv_list_first(tv.list_or_null()) };
-            while !li.is_null() {
-                let i = unsafe { tv_get_number_chk(&(*li).li_tv, &raw mut error) };
+            for li in tv_list_iter(unsafe { tv.list_or_null().as_ref() }) {
+                let i = unsafe { tv_get_number_chk(&li.li_tv, &raw mut error) };
                 if error {
                     return;
                 }
                 if better(i, n) {
                     n = i;
                 }
-                li = unsafe { (*li).li_next };
             }
         }
         VAR_DICT => {
@@ -196,17 +194,17 @@ unsafe fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     let called_emsg_start = called_emsg.get();
     // The accumulator starts as a copy of the initial value, or of the
     // first item when the call gave none.
-    let mut li = if args.len() > 2 {
+    let mut at = if args.len() > 2 {
         unsafe { tv_copy(&args[2], result) };
-        unsafe { tv_list_first(l) }
+        0
     } else {
-        if unsafe { tv_list_len(l) } == 0 {
+        // SAFETY: a live list, or NULL, which reads as empty.
+        let Some(first) = (unsafe { tv_list_items(l) }).first() else {
             semsg!("E998: Reduce of an empty {} with no initial value", "List");
             return;
-        }
-        let first = unsafe { tv_list_first(l) };
-        unsafe { tv_copy(&(*first).li_tv, result) };
-        unsafe { (*first).li_next }
+        };
+        unsafe { tv_copy(&first.li_tv, result) };
+        1
     };
     // A null List is `v:_null_list`: nothing to fold, and nothing to
     // lock either.
@@ -215,11 +213,15 @@ unsafe fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     }
     let prev_locked = unsafe { tv_list_locked(l) };
     unsafe { tv_list_set_lock(l, VarLock::Fixed) };
-    while !li.is_null() {
-        if !unsafe { fold_step(expr, result, &(*li).li_tv, LIST_CLEANUP, called_emsg_start) } {
+    // By index: `expr` is the user's function, and the lock above stops it
+    // editing the list but not a `:for` on the same list from doing so.
+    // SAFETY: a live list.
+    while at < unsafe { tv_list_items(l) }.len() {
+        let item = &raw const unsafe { tv_list_items(l) }[at].li_tv;
+        if !unsafe { fold_step(expr, result, &*item, LIST_CLEANUP, called_emsg_start) } {
             break;
         }
-        li = unsafe { (*li).li_next };
+        at += 1;
     }
     unsafe { tv_list_set_lock(l, prev_locked) };
 }

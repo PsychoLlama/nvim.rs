@@ -314,11 +314,17 @@ fn walk(at: &Path) -> Vec<PathBuf> {
 /// ```ignore
 /// log.clear();
 /// unsafe { tv_list_append_string(l, cstr("test").as_ptr(), 3) };
-/// log.check(&[
-///     alloc::string(unsafe { (*(*l).lv_last).li_tv.string() }, 3),
-///     alloc::li(unsafe { (*l).lv_last }),
-/// ]);
+/// log.check(&[alloc::string(
+///     unsafe { (*tv_list_last(l)).li_tv.string() },
+///     3,
+/// )]);
 /// ```
+///
+/// The spec's `a.li(...)` has no twin: a `List` owns its items in a
+/// `Vec<ListItem>`, whose growth goes through Rust's global allocator,
+/// which this log does not record. An expectation over a list is the
+/// list's own `xcalloc` plus the allocations of the *values* its items
+/// hold.
 ///
 /// The one property to preserve when porting a case: **every size is
 /// derived from the layout**, never written as a literal. The Lua
@@ -334,7 +340,7 @@ pub(crate) mod alloc {
     use std::mem::{offset_of, size_of};
 
     use neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
-    use neovim::types::{Dict, DictItem, DictWatcher, List, ListItem, Partial, TypVal};
+    use neovim::types::{Dict, DictItem, DictWatcher, List, Partial, TypVal};
 
     /// A recording of this thread's editor allocations, plus the editor lock
     /// — recording only means anything with one case running at a time.
@@ -397,14 +403,6 @@ pub(crate) mod alloc {
             count: 1,
             size: size_of::<List>(),
             ret: l as *mut c_void,
-        }
-    }
-
-    /// `tv_list_item_alloc`'s allocation: `a.li(li)`.
-    pub(crate) fn li(li: *const ListItem) -> AllocEvent {
-        AllocEvent::Malloc {
-            size: size_of::<ListItem>(),
-            ret: li as *mut c_void,
         }
     }
 

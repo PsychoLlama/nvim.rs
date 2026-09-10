@@ -10,8 +10,8 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{NumBuf, tv_list_items};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
@@ -262,14 +262,15 @@ unsafe fn qf_add_entries(
     let mut entry_to_select: Option<Qfe> = None;
     let mut entry_to_select_index = 0;
     if !list.is_null() {
-        let first = unsafe { tv_list_first(list) };
-        let mut li = unsafe { (*list).lv_first };
-        while !li.is_null() {
-            if unsafe { (*li).li_tv.v_type() } == VAR_DICT
-                && !unsafe { (*li).li_tv.dict_or_null() }.is_null()
-            {
-                let d = unsafe { (*li).li_tv.dict_or_null() };
-                unsafe { qf_add_entry_from_dict(qfl, d, ptr::eq(li, first), &mut valid_entry) };
+        // An index: `qf_add_entry_from_dict` reads a user dictionary and
+        // can re-enter.
+        let mut at = 0;
+        // SAFETY: a live list.
+        while at < unsafe { tv_list_items(list) }.len() {
+            let item = &unsafe { tv_list_items(list) }[at].li_tv;
+            if item.v_type() == VAR_DICT && !item.dict_or_null().is_null() {
+                let d = item.dict_or_null();
+                unsafe { qf_add_entry_from_dict(qfl, d, at == 0, &mut valid_entry) };
 
                 let entry = unsafe { Qfe::new((*qfl).qf_last) };
                 let wanted = select_first_entry && entry_to_select.is_none()
@@ -282,7 +283,7 @@ unsafe fn qf_add_entries(
                     entry_to_select_index = unsafe { (*qfl).qf_count };
                 }
             }
-            li = unsafe { (*li).li_next };
+            at += 1;
         }
     }
 

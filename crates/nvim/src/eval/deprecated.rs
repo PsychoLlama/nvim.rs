@@ -28,7 +28,7 @@ use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{
-    CallFrame, NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len,
+    CallFrame, NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_items, tv_list_len,
 };
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
@@ -63,20 +63,10 @@ const CALLBACK_READER_INIT: CallbackReader = CallbackReader::none();
 /// # Safety
 /// `list` must be live, and nothing may change it while the iterator is
 /// alive.
-unsafe fn items(list: *const List) -> impl Iterator<Item = *const ListItem> {
-    let mut li = if list.is_null() {
-        core::ptr::null()
-    } else {
-        unsafe { (*list).lv_first }
-    };
-    core::iter::from_fn(move || {
-        let cur = li;
-        if cur.is_null() {
-            return None;
-        }
-        li = unsafe { (*cur).li_next };
-        Some(cur)
-    })
+unsafe fn items<'a>(list: *const List) -> impl Iterator<Item = &'a ListItem> {
+    // SAFETY: the caller's promise -- a live list nothing changes for the
+    // life of the iterator.
+    unsafe { tv_list_items(list) }.iter()
 }
 
 /// `rpcstart(prog[, argv])`: start a job and speak RPC over its pipes.
@@ -112,7 +102,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // Assert that all list items are strings.
         for (i, arg) in unsafe { items(args_list) }.enumerate() {
             // SAFETY: `arg` is one of the list's items.
-            if unsafe { (*arg).li_tv.v_type() } != VAR_STRING {
+            if arg.li_tv.v_type() != VAR_STRING {
                 semsg!(
                     "E5010: List item {} of the second argument is not a string",
                     i as c_int
@@ -142,7 +132,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the list is unchanged since it was counted, so it still has
     // `argsl` items and they all fit.
     for arg in unsafe { items(args_list) } {
-        child_argv[i] = unsafe { xstrdup(numbuf.string(&(*arg).li_tv)) };
+        child_argv[i] = unsafe { xstrdup(numbuf.string(&arg.li_tv)) };
         i += 1;
     }
     child_argv[i] = core::ptr::null_mut();

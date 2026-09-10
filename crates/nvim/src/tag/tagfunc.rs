@@ -12,8 +12,8 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{CallFrame, tv_list_iter};
 use crate::types::TypVal;
 use crate::types::{
     FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,
@@ -200,13 +200,12 @@ pub(crate) unsafe fn find_tagfunc_tags(
     }
 
     let mut ntags = 0;
-    let mut li = unsafe { (*rettv.list_or_null()).lv_first };
-    while !li.is_null() {
-        if unsafe { (*li).li_tv.v_type() } != VAR_DICT {
+    for li in tv_list_iter(unsafe { rettv.list_or_null().as_ref() }) {
+        if li.li_tv.v_type() != VAR_DICT {
             tag_emsg(E_INVALID_RETURN);
             break;
         }
-        let parsed = unsafe { tag_of((*li).li_tv.dict_or_null(), flags) };
+        let parsed = unsafe { tag_of(li.li_tv.dict_or_null(), flags) };
         let Some(mfp) = parsed else {
             tag_emsg(E_INVALID_RETURN);
             break;
@@ -216,7 +215,6 @@ pub(crate) unsafe fn find_tagfunc_tags(
         found.push(mfp);
         ntags += 1;
         result = OK;
-        li = unsafe { (*li).li_next };
     }
 
     unsafe { tv_clear(&mut rettv) };

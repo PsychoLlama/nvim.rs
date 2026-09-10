@@ -15,7 +15,7 @@ use crate::eval::encode::{
 };
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, tv_blob_len, tv_list_append_owned_tv, tv_list_first, tv_list_len,
+    NumBuf, tv_blob_len, tv_list_append_owned_tv, tv_list_items, tv_list_len,
 };
 use crate::memory::{alloc_block, free_block, strequal, xfree};
 use crate::message_fmt::c_str_len;
@@ -98,20 +98,21 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // The per-item label the encoder names in its own error messages.
     // One buffer, reused, as the C's 189-byte stack array was.
     let mut label = String::with_capacity(64);
-    let mut li = unsafe { tv_list_first(args[0].list_or_null()) };
-    let mut idx: c_int = 0;
-    while !li.is_null() {
+    let list = args[0].list_or_null();
+    let mut idx: usize = 0;
+    // By index: an encoder hook can run Lua, which may edit the list being
+    // dumped.
+    // SAFETY: a live list, or NULL, which reads as empty.
+    while let Some(item) = (unsafe { tv_list_items(list) }).get(idx) {
         label.clear();
         let _ = write!(label, "msgpackdump() argument, index {idx}\0");
         idx += 1;
-        // SAFETY: `packer` is the local writer, `item` is the List item the
-        // walk is on, and `label` is NUL-terminated by the `write!` above.
-        let item = unsafe { &(*li).li_tv };
+        // SAFETY: `packer` is the local writer and `label` is NUL-terminated
+        // by the `write!` above.
         let what = CStr::from_bytes_with_nul(label.as_bytes()).expect("the NUL above");
-        if unsafe { encode_vim_to_msgpack(&raw mut packer, item, what) } == 0 {
+        if unsafe { encode_vim_to_msgpack(&raw mut packer, &item.li_tv, what) } == 0 {
             break;
         }
-        li = unsafe { (*li).li_next };
     }
     let data = packer_take_string(&packer);
     if args.len() > 1 && unsafe { strequal(arg_string(&mut numbuf, &args[1]), c"B".as_ptr()) } {
@@ -151,7 +152,7 @@ unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
     if unsafe { tv_list_len(list) } == 0 {
         return;
     }
-    if unsafe { (*tv_list_first(list)).li_tv.v_type() } != VAR_STRING {
+    if unsafe { tv_list_items(list) }[0].li_tv.v_type() != VAR_STRING {
         semsg!("E475: Invalid argument: List item is not a string");
         return;
     }

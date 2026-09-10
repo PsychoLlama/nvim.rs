@@ -10,6 +10,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::eval::typval::tv_list_items;
 use crate::highlight_group::HLF_D;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -158,10 +159,12 @@ impl TagStack {
         // SAFETY: the list and its items are live for the whole walk, and
         // the two strings taken out of each dict are freshly allocated
         // copies the new entry takes over.
-        let mut li = unsafe { tv_list_first(l) };
-        while !li.is_null() {
-            let tv = unsafe { &raw mut (*li).li_tv };
-            li = unsafe { (*li).li_next };
+        // An index: `push` below reads user dictionaries and can re-enter.
+        let mut at = 0;
+        // SAFETY: the caller's promise -- a live list.
+        while at < unsafe { tv_list_items(l) }.len() {
+            let tv = &raw const unsafe { tv_list_items(l) }[at].li_tv;
+            at += 1;
 
             // Skip anything that is not a dict describing a jump.
             if unsafe { (*tv).v_type() } != VAR_DICT || unsafe { (*tv).dict_or_null().is_null() } {

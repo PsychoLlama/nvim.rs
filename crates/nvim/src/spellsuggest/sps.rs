@@ -14,7 +14,7 @@ use super::{
     MAXPATHL, MAXWLEN, NUL, SCORE_FILE, SPS_BEST, SPS_DOUBLE, SPS_FAST, Sug, sps_flags, sps_limit,
 };
 use crate::charset::getdigits_int;
-use crate::eval::typval::{Li, NumBuf, tv_list_unref};
+use crate::eval::typval::{NumBuf, tv_list_iter, tv_list_unref};
 use crate::eval::vars::{eval_spell_expr, get_spellword};
 use crate::fileio::vim_fgets;
 use crate::getchar::state::got_int;
@@ -121,14 +121,11 @@ pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
     // the evaluator.
     let list = unsafe { eval_spell_expr(su.su_badword() as *mut c_char, expr) };
     if !list.is_null() {
-        let mut li = unsafe { (*list).lv_first };
-        while !li.is_null() {
-            // SAFETY: the item the walk is standing on, live until it steps.
-            let item = unsafe { Li::new(li) };
-            if item.v_type() == VAR_LIST {
+        for li in tv_list_iter(unsafe { list.as_ref() }) {
+            if li.li_tv.v_type() == VAR_LIST {
                 // Each item is a [word, score] pair.
                 let mut word: *const c_char = ptr::null();
-                let pair = item.list();
+                let pair = li.li_tv.list_or_null();
                 let score = unsafe { get_spellword(pair, &raw mut word, &mut numbuf) };
                 if score >= 0 && score <= su.su_maxscore {
                     let sug = su.raw();
@@ -141,7 +138,6 @@ pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
                     unsafe { add_suggestion(sug, ga, word, badlen, score, 0, true, lang, false) };
                 }
             }
-            li = unsafe { (*li).li_next };
         }
         unsafe { tv_list_unref(list) };
     }

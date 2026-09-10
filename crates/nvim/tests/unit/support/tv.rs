@@ -29,13 +29,13 @@ use std::ptr;
 
 use neovim::eval::typval::{
     tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear, tv_copy, tv_dict_add, tv_dict_alloc,
-    tv_dict_item_alloc, tv_list_alloc, tv_list_append,
+    tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv, tv_list_find, tv_list_len,
 };
 use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
     Blob, Callback, Dict, DictItem, DictWatcher, List, ListItem, Object, Partial, Refcount, TypVal,
-    VarLock, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
+    VarNumber, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
 };
 
 use super::cstr;
@@ -154,12 +154,7 @@ impl Tv {
                 path.push(Container::List(l));
                 for item in items {
                     let item_tv = unsafe { item.build_at(path) };
-                    let li = unsafe { list_item_alloc() };
-                    // The item's value has never held one, so the value goes
-                    // in rather than over: an assignment would drop what the
-                    // allocator left behind.
-                    unsafe { (&raw mut (*li).li_tv).write(item_tv) };
-                    unsafe { tv_list_append(l, li) };
+                    unsafe { tv_list_append_owned_tv(l, item_tv) };
                 }
                 path.pop();
                 TypVal::List(l)
@@ -257,6 +252,8 @@ pub(crate) trait Payload {
     fn partial(&self) -> *mut Partial;
     /// The string this value holds, under either kind that holds one.
     fn string(&self) -> *mut c_char;
+    /// The number this value holds.
+    fn number(&self) -> VarNumber;
 }
 
 impl Payload for TypVal {
@@ -292,6 +289,13 @@ impl Payload for TypVal {
         match self {
             TypVal::String(s) | TypVal::Func(s) => *s,
             other => panic!("not a string: v_type {}", other.v_type()),
+        }
+    }
+
+    fn number(&self) -> VarNumber {
+        match self {
+            TypVal::Number(n) => *n,
+            other => panic!("not a number: v_type {}", other.v_type()),
         }
     }
 }
@@ -402,10 +406,9 @@ unsafe fn read_list_at(l: *const List, path: &mut Vec<Container>) -> Tv {
     }
     path.push(Container::List(l.cast_mut()));
     let mut items = Vec::new();
-    let mut li = unsafe { (*l).lv_first };
-    while !li.is_null() {
+    for at in 0..unsafe { tv_list_len(l) } {
+        let li = unsafe { tv_list_find(l.cast_mut(), at) };
         items.push(unsafe { read_at(&raw const (*li).li_tv, path) });
-        li = unsafe { (*li).li_next };
     }
     path.pop();
     Tv::List(items)
@@ -456,36 +459,6 @@ fn seen(path: &[Container], at: *const c_void) -> Option<usize> {
     path.iter().position(|c| c.addr() == at)
 }
 
-/// `tv_list_item_alloc`, which the crate keeps private: an item whose links
-/// and value the caller fills in and hands to `tv_list_append`.
-///
-/// The lock is written here for the same reason the crate's copy writes it:
-/// it is the *slot's*, so no caller sets it and an `xmalloc`'d one would be
-/// whatever the heap last held.
-///
-/// # Safety
-/// The editor must be up.
-pub(crate) unsafe fn list_item_alloc() -> *mut ListItem {
-    let li: *mut ListItem = unsafe { xmalloc(size_of::<ListItem>()) }.cast();
-    unsafe { (&raw mut (*li).li_lock).write(VarLock::Unlocked) };
-    li
-}
-
-/// The spec's `li_alloc`: an item holding `VAR_UNKNOWN`, unlinked.
-///
-/// # Safety
-/// As [`list_item_alloc`].
-pub(crate) unsafe fn li_alloc() -> *mut ListItem {
-    let li = unsafe { list_item_alloc() };
-    unsafe {
-        (*li).li_next = ptr::null_mut();
-        (*li).li_prev = ptr::null_mut();
-        // Written, not assigned: the slot has never held a value.
-        (&raw mut (*li).li_tv).write(TypVal::Unknown);
-    }
-    li
-}
-
 /// The spec's `list(...)`: a fresh list with `lv_refcount` 1 holding these
 /// values.
 ///
@@ -514,19 +487,17 @@ pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut Dict {
 
 /// The spec's `list_items`: every item of `l`, front to back.
 ///
+/// The items are the list's own array, so these addresses are a *borrow*
+/// and any edit to the list invalidates them -- unlike the spec's, which
+/// were one allocation each.  A case that outlives an edit compares values
+/// ([`read_list`]) rather than addresses.
+///
 /// # Safety
 /// `l` is NULL or points at a live list.
 pub(crate) unsafe fn list_items(l: *const List) -> Vec<*mut ListItem> {
-    let mut items = Vec::new();
-    if l.is_null() {
-        return items;
-    }
-    let mut li = unsafe { (*l).lv_first };
-    while !li.is_null() {
-        items.push(li);
-        li = unsafe { (*li).li_next };
-    }
-    items
+    (0..unsafe { tv_list_len(l) })
+        .map(|at| unsafe { tv_list_find(l.cast_mut(), at) })
+        .collect()
 }
 
 /// The spec's `dict_items`: every live item of `d`, in hashtab order —

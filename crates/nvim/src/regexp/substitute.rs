@@ -27,13 +27,13 @@ use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 use super::api::with_rex;
-use super::submatch::{Rsm, clear_submatch_list, fill_submatch_list};
+use super::submatch::{Rsm, fill_submatch_list};
 use super::{
     CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC,
     RegSubMatch, Rex, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
     reg_prev_sub, reg_prev_sublen, rsm,
 };
-use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_string_buf_chk, tv_list_len};
+use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_get_string_buf_chk, tv_list_init_static};
 use crate::eval::userfunc::call_func;
 use crate::eval::{eval_to_string, partial_name};
 use crate::global_cell::GlobalCell;
@@ -48,8 +48,8 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strsave_escaped, xstrnsave};
 use crate::types::{
-    FuncExe, LineNr, NUL, Partial, RegMMatch, RegMatch, StaticList10, TypVal, VAR_FUNC,
-    VAR_PARTIAL, VAR_UNKNOWN, VarLock,
+    FuncExe, LineNr, List, NUL, Partial, RegMMatch, RegMatch, TypVal, VAR_FUNC, VAR_PARTIAL,
+    VAR_UNKNOWN,
 };
 use crate::winlayer::Live;
 use ::libc::strcpy;
@@ -554,10 +554,12 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     // SAFETY: `expr` is the caller's live callable.
     // `fill_submatch_list` fills this in place if the function takes an
     // argument at all, so it must outlive the call.
-    let mut match_list: StaticList10 = unsafe { core::mem::zeroed() };
-    match_list.sl_list.lv_lock = VarLock::Fixed;
-    // The list is this frame's own storage, so the slot names it.
-    let argv = CallFrame::naming([TypVal::List(&raw mut match_list.sl_list)]);
+    // The list is this frame's own storage, and drops its items with it.
+    let mut match_list = List::empty();
+    // SAFETY: this frame's own storage, holding no list yet.
+    unsafe { tv_list_init_static(&raw mut match_list) };
+    // The slot names the list without owning it.
+    let argv = CallFrame::naming([TypVal::List(&raw mut match_list)]);
 
     let mut rettv = TV_INITIAL_VALUE;
     rettv.write_string(core::ptr::null_mut());
@@ -577,10 +579,6 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     if let Some(name) = name {
         let funcexe = &raw mut funcexe;
         let _ = unsafe { call_func(name, -1, &mut rettv, argv.args(), funcexe) };
-    }
-    if unsafe { tv_list_len(&raw mut match_list.sl_list) } > 0 {
-        // A non-empty list means `fill_submatch_list` ran and allocated.
-        unsafe { clear_submatch_list(&raw mut match_list) };
     }
 
     // An unknown return type means the call failed and has already said

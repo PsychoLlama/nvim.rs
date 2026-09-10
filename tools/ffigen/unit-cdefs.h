@@ -13,7 +13,7 @@ typedef struct Expand Expand;
 typedef struct ExtmarkUndoObject ExtmarkUndoObject;
 typedef struct FuncCall FuncCall;
 typedef struct KeySetLink KeySetLink;
-typedef struct ListWatch ListWatch;
+typedef struct List List;
 typedef struct MainParams MainParams;
 typedef struct MultiQueue MultiQueue;
 typedef struct OptExpand OptExpand;
@@ -132,8 +132,6 @@ typedef struct KeyDict_win_config KeyDict_win_config;
 typedef struct KeyDict_win_text_height KeyDict_win_text_height;
 typedef struct KeyDict_xdl_diff KeyDict_xdl_diff;
 typedef struct key_value_pair key_value_pair;
-typedef struct List List;
-typedef struct ListItem ListItem;
 typedef struct MTPos MTPos;
 typedef struct MTKey MTKey;
 typedef struct mtnode_inner_s mtnode_inner_s;
@@ -153,7 +151,6 @@ typedef struct uv_signal_s_tree_entry uv_signal_s_tree_entry;
 typedef union uv_signal_s_u uv_signal_s_u;
 typedef struct uv_signal_s uv_signal_s;
 typedef struct signal_watcher signal_watcher;
-typedef struct StaticList10 StaticList10;
 typedef struct StrCharInfo StrCharInfo;
 typedef union TermKeyKey_code TermKeyKey_code;
 typedef struct TerminalCursor TerminalCursor;
@@ -1347,27 +1344,6 @@ struct key_value_pair {
   String key;
   Object value;
 };
-struct List {
-  ListItem *lv_first;
-  ListItem *lv_last;
-  ListWatch *lv_watch;
-  ListItem *lv_idx_item;
-  List *lv_copylist;
-  List *lv_used_next;
-  List *lv_used_prev;
-  Refcount lv_refcount;
-  int lv_len;
-  int lv_idx;
-  int lv_copy_id;
-  VarLock lv_lock;
-  LuaRef lua_table_ref;
-};
-struct ListItem {
-  ListItem *li_next;
-  ListItem *li_prev;
-  TypVal li_tv;
-  VarLock li_lock;
-};
 struct MTPos {
   int32_t row;
   int32_t col;
@@ -1493,10 +1469,6 @@ struct signal_watcher {
   signal_cb cb;
   signal_close_cb close_cb;
   MultiQueue *events;
-};
-struct StaticList10 {
-  List sl_list;
-  ListItem sl_items[10];
 };
 struct StrCharInfo {
   char *ptr;

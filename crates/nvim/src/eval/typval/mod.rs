@@ -38,10 +38,10 @@ use crate::strings::vim_snprintf;
 use crate::types::{
     __compar_fn_t, Arena, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData,
     Float, FuncExe, GArray, HashTab, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE,
-    SpecialVarValue, StaticList10, String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT,
-    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow,
-    kSpecialVarNull, ptrdiff_t, size_t, ssize_t, uint8_t,
+    SpecialVarValue, String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t,
+    ssize_t, uint8_t,
 };
 use core::mem::ManuallyDrop;
 
@@ -203,9 +203,8 @@ pub(crate) const UNSET_ARG: ManuallyDrop<TypVal> = ManuallyDrop::new(TV_INITIAL_
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());
-/// `ARRAY_SIZE(sl->sl_items)`: how many `ListItem`s a `StaticList10`
-/// embeds.  c2rust rendered `ARRAY_SIZE` as a division by the macro's own
-/// `== 0` static assertion; the value it computes is just the length.
+/// How many submatches a `\=` replacement expression is handed: `\0`
+/// through `\9`.
 pub const SL_SIZE: usize = 10;
 static sortinfo: GlobalCell<*mut SortInfo> = GlobalCell::new(::core::ptr::null_mut::<SortInfo>());
 pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;

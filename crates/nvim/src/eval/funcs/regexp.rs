@@ -14,13 +14,14 @@ use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, callback_free, tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
-    tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_clear,
-    tv_copy, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str_len, tv_dict_alloc, tv_dict_find,
-    tv_dict_get_callback, tv_dict_has_key, tv_get_bool, tv_get_lnum_buf, tv_get_number_chk,
-    tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list,
-    tv_list_append_number, tv_list_append_string, tv_list_append_tv, tv_list_find, tv_list_first,
-    tv_list_item_remove, tv_list_uidx,
+    NumBuf, callback_free, index_of, tv_check_for_buffer_arg, tv_check_for_list_arg,
+    tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg,
+    tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_add_list, tv_dict_add_nr,
+    tv_dict_add_str_len, tv_dict_alloc, tv_dict_find, tv_dict_get_callback, tv_dict_has_key,
+    tv_get_bool, tv_get_lnum_buf, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_dict, tv_list_append_list, tv_list_append_number, tv_list_append_string,
+    tv_list_append_tv, tv_list_find, tv_list_items, tv_list_items_mut, tv_list_remove_at,
+    tv_list_uidx,
 };
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
 use crate::mbyte::utfc_ptr2len;
@@ -36,9 +37,8 @@ use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg;
 use crate::types::{
-    Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, RegMatch, RegProg, TypVal,
-    VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kListLenMayKnow,
-    kListLenUnknown,
+    Callback, ColNr, Dict, EvalFuncData, LineNr, List, RegMatch, RegProg, TypVal, VAR_BOOL,
+    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -145,7 +145,9 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
     }
 
     let mut l: *mut List = ptr::null_mut();
-    let mut li: *mut ListItem = ptr::null_mut();
+    // Where the List walk is; `encode_tv2echo` below runs the evaluator, so
+    // this cannot be an address into the item store.
+    let mut at: usize = 0;
     let mut str: *mut c_char = ptr::null_mut();
     let mut expr: *mut c_char = ptr::null_mut();
     let mut len: i64 = 0;
@@ -166,7 +168,6 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
             if l.is_null() {
                 break 'theend;
             }
-            li = unsafe { tv_list_first(l) };
         } else {
             str = arg_string(&mut numbuf, &args[0]) as *mut c_char;
             expr = str;
@@ -187,10 +188,10 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
             }
             if !l.is_null() {
                 idx = unsafe { tv_list_uidx(l, start as c_int) };
-                if idx == -1 {
+                let Ok(start_at) = usize::try_from(idx) else {
                     break 'theend;
-                }
-                li = unsafe { tv_list_find(l, idx) };
+                };
+                at = start_at;
             } else {
                 if start < 0 {
                     start = 0;
@@ -223,11 +224,12 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
         let regmatch = &mut prog.0;
         loop {
             if !l.is_null() {
-                if li.is_null() {
+                // SAFETY: a live list, re-read each step.
+                let Some(item) = (unsafe { tv_list_items(l) }).get(at) else {
                     matched = false;
                     break;
-                }
-                tofree = Echoed(unsafe { encode_tv2echo(&(*li).li_tv, ptr::null_mut()) });
+                };
+                tofree = Echoed(unsafe { encode_tv2echo(&item.li_tv, ptr::null_mut()) });
                 str = tofree.0;
                 expr = str;
                 if str.is_null() {
@@ -248,7 +250,7 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
                 break;
             }
             if !l.is_null() {
-                li = unsafe { (*li).li_next };
+                at += 1;
                 idx += 1;
                 continue;
             }
@@ -270,20 +272,18 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
             kSomeMatchStrPos => {
                 // The four items seeded above, overwritten in place.
                 let ret_l = result.list_or_null();
-                let li1 = unsafe { tv_list_first(ret_l) };
-                let li2 = unsafe { (*li1).li_next };
-                let li3 = unsafe { (*li2).li_next };
-                let li4 = unsafe { (*li3).li_next };
-                unsafe { xfree((*li1).li_tv.string_or_null() as *mut c_void) };
+                // SAFETY: the four items seeded above.
+                let seeded = unsafe { tv_list_items_mut(ret_l) };
+                unsafe { xfree(seeded[0].li_tv.string_or_null() as *mut c_void) };
                 let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
                 let text = unsafe { xmemdupz(regmatch.startp[0].cast(), rd) };
-                unsafe { (*li1).li_tv.write_string(text as *mut c_char) };
+                seeded[0].li_tv.write_string(text as *mut c_char);
                 let start = unsafe { regmatch.startp[0].offset_from(expr) };
-                unsafe { (*li3).li_tv.write_number(start as VarNumber) };
+                seeded[2].li_tv.write_number(start as VarNumber);
                 let end = unsafe { regmatch.endp[0].offset_from(expr) };
-                unsafe { (*li4).li_tv.write_number(end as VarNumber) };
+                seeded[3].li_tv.write_number(end as VarNumber);
                 if !l.is_null() {
-                    unsafe { (*li2).li_tv.write_number(idx as VarNumber) };
+                    seeded[1].li_tv.write_number(VarNumber::from(idx));
                 }
             }
             kSomeMatchList => {
@@ -302,7 +302,8 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
                 if !l.is_null() {
                     // A List subject answers with the whole item, not
                     // with the part that matched.
-                    unsafe { tv_copy(&(*li).li_tv, result) };
+                    // SAFETY: a live list and the index the walk matched at.
+                    unsafe { tv_copy(&tv_list_items(l)[at].li_tv, result) };
                 } else {
                     let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
                     result
@@ -334,7 +335,9 @@ unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchT
     // placeholder seeded above comes back out.
     if kind == kSomeMatchStrPos && l.is_null() && !result.list_or_null().is_null() {
         let ret_l = result.list_or_null();
-        unsafe { tv_list_item_remove(ret_l, (*tv_list_first(ret_l)).li_next) };
+        // SAFETY: the placeholder is the second of the four items seeded
+        // above.
+        unsafe { tv_list_remove_at(ret_l, 1) };
     }
 }
 
@@ -555,18 +558,19 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let Some(submatches) = (unsafe { want_submatches(args, 2) }) else {
         return;
     };
-    let mut li = unsafe { tv_list_first(l) };
-    let mut idx: c_int = 0;
-    while !li.is_null() {
-        let li_tv = unsafe { &(*li).li_tv };
+    let mut at = 0;
+    // By index: `get_matches_in_str` fills a result list and can re-enter.
+    // SAFETY: a live list, or NULL, which reads as empty.
+    while at < unsafe { tv_list_items(l) }.len() {
+        let li_tv = &unsafe { tv_list_items(l) }[at].li_tv;
         // A non-String item, and the null String, contribute nothing.
         if li_tv.v_type() == VAR_STRING && !li_tv.string_or_null().is_null() {
             let str = li_tv.string_or_null();
             let rmp = &raw mut prog.0;
+            let idx = index_of(at);
             unsafe { get_matches_in_str(str, rmp, retlist, idx, submatches, false) };
         }
-        idx += 1;
-        li = unsafe { (*li).li_next };
+        at += 1;
     }
 }
 
@@ -601,8 +605,10 @@ struct Request {
 struct FuzzyItem {
     /// Where it sat in the input list, which is how ties are broken.
     idx: usize,
-    /// The item itself, copied to the result list as it is.
-    item: *mut ListItem,
+    /// Where the item is in the input list, which is where the result
+    /// copies it from.  An index and not an address: the callback that
+    /// produced the string may have edited the list.
+    at: usize,
     score: c_int,
     /// Whether the pattern occurs literally at the first matched position.
     exact: bool,
@@ -679,14 +685,17 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
     let pattern = unsafe { CStr::from_ptr(request.pattern) };
     let mut found: Vec<FuzzyItem> = Vec::new();
     let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
-    let mut li = unsafe { (*list).lv_first };
-    while !li.is_null() {
+    let mut at = 0;
+    // SAFETY: the caller's promise: a live list.
+    while at < unsafe { tv_list_items(list) }.len() {
         if request.limit > 0 && found.len() >= request.limit as usize {
             break;
         }
         let mut rettv = TV_UNKNOWN;
-        // SAFETY: `li` is an item of the caller's live list.
-        let item_tv = unsafe { &(*li).li_tv };
+        // SAFETY: as above, and an index of it; re-read each step because
+        // `item_string` may run the user's `text_cb`.
+        let item_tv = &raw const unsafe { tv_list_items(list) }[at].li_tv;
+        let item_tv = unsafe { &*item_tv };
         let itemstr = unsafe { item_string(request, item_tv, &mut rettv, &mut numbuf) };
         if !itemstr.is_null() {
             let itemstr = unsafe { CStr::from_ptr(itemstr) };
@@ -712,7 +721,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
                 });
                 found.push(FuzzyItem {
                     idx: found.len(),
-                    item: li,
+                    at,
                     score,
                     exact,
                     positions,
@@ -720,7 +729,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
             }
         }
         unsafe { tv_clear(&mut rettv) };
-        li = unsafe { (*li).li_next };
+        at += 1;
     }
     if found.is_empty() {
         return;
@@ -744,7 +753,12 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
         fmatchlist
     };
     for item in &found {
-        unsafe { tv_list_append_tv(strings, &(*item.item).li_tv) };
+        // SAFETY: the caller's live list; a callback above may have
+        // shortened it, in which case the item it matched is simply gone.
+        let Some(li) = (unsafe { tv_list_items(list) }).get(item.at) else {
+            continue;
+        };
+        unsafe { tv_list_append_tv(strings, &li.li_tv) };
     }
     if request.retmatchpos {
         let positions = unsafe { nested_list(fmatchlist, -2) };

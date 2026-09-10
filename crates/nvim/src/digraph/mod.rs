@@ -18,7 +18,8 @@ use crate::drawscreen::status_redraw_curbuf;
 use crate::eval::eval_to_string;
 use crate::eval::typval::{
     NumBuf, tv_check_for_opt_bool_arg, tv_get_bool, tv_get_string_buf_chk, tv_list_alloc,
-    tv_list_alloc_ret, tv_list_append_list, tv_list_append_string,
+    tv_list_alloc_ret, tv_list_append_list, tv_list_append_string, tv_list_items, tv_list_iter,
+    tv_list_len,
 };
 use crate::ex_docmd::{do_cmdline_cmd, getline_equal};
 use crate::ex_getln::putcmdline;
@@ -606,22 +607,17 @@ unsafe fn digraph_setlist_common(arg: &TypVal) -> bool {
     }
     // SAFETY: `pl` is a valid list; the walk only follows its links, and
     // `digraph_set_common` does not touch the list it is reading from.
-    let mut pli = unsafe { (*pl).lv_first };
-    while !pli.is_null() {
-        if unsafe { (*pli).li_tv.v_type() } != VAR_LIST {
+    for pli in tv_list_iter(unsafe { pl.as_ref() }) {
+        let l = pli.li_tv.list_or_null();
+        if l.is_null() || unsafe { tv_list_len(l) } != 2 {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;
         }
-        let l = unsafe { (*pli).li_tv.list_or_null() };
-        if l.is_null() || unsafe { (*l).lv_len } != 2 {
-            crate::semsg!("{E_DIGRAPH_SETLIST}");
+        // SAFETY: a live list of exactly two items.
+        let pair = unsafe { tv_list_items(l) };
+        if !unsafe { digraph_set_common(&pair[0].li_tv, &pair[1].li_tv) } {
             return false;
         }
-        let first = unsafe { (*l).lv_first };
-        if !unsafe { digraph_set_common(&(*first).li_tv, &(*(*first).li_next).li_tv) } {
-            return false;
-        }
-        pli = unsafe { (*pli).li_next };
     }
     true
 }

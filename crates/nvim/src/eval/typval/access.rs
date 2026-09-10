@@ -10,8 +10,8 @@
 //! sites across the tree pass `*mut List`/`*mut Dict` around, and the
 //! `TypVal` family's layout is frozen by the LuaJIT unit specs.  What they
 //! buy the rest of the family is that *nothing else* has to spell a field walk:
-//! the children below reach a list through `tv_list_first`/`tv_list_last`/
-//! `tv_list_len`, never through `(*l).lv_first`.
+//! the children below reach a list through `tv_list_items`/`tv_list_iter`/
+//! `tv_list_len`, never through `(*l).lv_items`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -81,12 +81,6 @@ pub(crate) fn di_tv(di: *mut DictItem) -> *mut TypVal {
     field_of(di, ::core::mem::offset_of!(DictItem, di_tv))
 }
 
-/// The address of a list item's value; see [`field_of`].
-#[inline(always)]
-pub(crate) fn li_tv(li: *mut ListItem) -> *mut TypVal {
-    field_of(li, ::core::mem::offset_of!(ListItem, li_tv))
-}
-
 /// The address of a dictionary item's lock; see [`field_of`].
 ///
 /// The lock belongs to the *slot*, not to the value in it: `:lockvar d.k`
@@ -95,12 +89,6 @@ pub(crate) fn li_tv(li: *mut ListItem) -> *mut TypVal {
 #[inline(always)]
 pub(crate) fn di_lock(di: *mut DictItem) -> *mut VarLock {
     field_of(di, ::core::mem::offset_of!(DictItem, di_lock))
-}
-
-/// The address of a list item's lock; see [`di_lock`].
-#[inline(always)]
-pub(crate) fn li_lock(li: *mut ListItem) -> *mut VarLock {
-    field_of(li, ::core::mem::offset_of!(ListItem, li_lock))
 }
 
 /// The address of a dictionary's hash table; see [`field_of`].
@@ -653,7 +641,8 @@ pub unsafe fn tv_list_set_copyid(l: *mut List, copyid: ::core::ffi::c_int) {
 /// `l` is null or points at a live list.
 #[inline]
 pub unsafe fn tv_list_len(l: *const List) -> ::core::ffi::c_int {
-    unsafe { l.as_ref() }.map_or(0, |l| l.lv_len)
+    // SAFETY: the caller's promise: null or a live list.
+    index_of(unsafe { tv_list_items(l) }.len())
 }
 
 /// The copyID of `l`.  Does not expect a NULL list, be careful.
@@ -679,62 +668,27 @@ pub unsafe fn tv_list_uidx(l: *const List, n: ::core::ffi::c_int) -> ::core::ffi
     if n < 0 || n >= len { -1 } else { n }
 }
 
-/// First item of `l`, or NULL when it is empty or NULL.
-///
-/// # Safety
-/// `l` is null or points at a live list. The item borrows the list, so it
-/// is only valid while the list is.
-#[inline]
-pub unsafe fn tv_list_first(l: *const List) -> *mut ListItem {
-    unsafe { l.as_ref() }.map_or(::core::ptr::null_mut(), |l| l.lv_first)
-}
-
-/// Last item of `l`, or NULL when it is empty or NULL.
-///
-/// # Safety
-/// `l` is null or points at a live list. The item borrows the list, so it
-/// is only valid while the list is.
-#[inline]
-pub unsafe fn tv_list_last(l: *const List) -> *mut ListItem {
-    unsafe { l.as_ref() }.map_or(::core::ptr::null_mut(), |l| l.lv_last)
-}
-
-/// A walk over a list's items.  See [`tv_list_iter`].
-pub(crate) struct ListIter {
-    li: *mut ListItem,
-}
-
-impl Iterator for ListIter {
-    type Item = *mut ListItem;
-
-    #[inline]
-    fn next(&mut self) -> Option<*mut ListItem> {
-        let li = self.li;
-        if li.is_null() {
-            return None;
-        }
-        self.li = unsafe { (*li).li_next };
-        Some(li)
-    }
-}
-
 /// Walk `l`'s items: upstream's `TV_LIST_ITER_CONST`.
 ///
-/// It is **not** `TV_LIST_ITER`.  That macro re-reads `li_next` *after* the
-/// body has run, so a body that frees or relinks the item it is standing on
-/// still advances correctly; this reads the link first.  The two agree only
-/// where the body leaves the walked list alone — which is every use in this
-/// family, but check before reaching for it.
+/// It is **not** `TV_LIST_ITER`.  That macro re-reads the link *after* the
+/// body has run, so a body that removes the item it is standing on still
+/// advances correctly; this one is a borrow of the item array, so a body
+/// that edits the list is a borrow error rather than a wrong answer.  Where
+/// the body does edit the list, walk it by index instead.
 ///
-/// Takes an `Option` rather than a pointer because the macro's NULL handling is
-/// half of what it does, and because that makes this one safe: `l.as_ref()` at
-/// the call site costs the caller nothing, its `unsafe` block being already
-/// open.
+/// Takes an `Option` rather than a pointer because the macro's NULL handling
+/// is half of what it does, and because that makes this one safe: `l.as_ref()`
+/// at the call site costs the caller nothing, its `unsafe` block being
+/// already open.
 #[inline]
-pub(crate) fn tv_list_iter(l: Option<&List>) -> ListIter {
-    ListIter {
-        li: l.map_or(::core::ptr::null_mut(), |l| l.lv_first),
-    }
+pub(crate) fn tv_list_iter(l: Option<&List>) -> ::core::slice::Iter<'_, ListItem> {
+    l.map_or(&[][..], |l| &l.lv_items).iter()
+}
+
+/// [`tv_list_iter`] with the items writable.
+#[inline]
+pub(crate) fn tv_list_iter_mut(l: Option<&mut List>) -> ::core::slice::IterMut<'_, ListItem> {
+    l.map_or(&mut [][..], |l| &mut l.lv_items).iter_mut()
 }
 
 /// Store `d` in `tv` as the return value, taking a reference to it.

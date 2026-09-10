@@ -16,7 +16,7 @@ use crate::api::vim::nvim__chan_set_detach;
 use crate::api::vimscript::nvim_command;
 use crate::channel::{channel_close, channel_job_start, find_channel};
 
-use crate::eval::typval::{NumBuf, tv_list_len};
+use crate::eval::typval::{NumBuf, tv_list_items, tv_list_len};
 use crate::eval::vars::{get_vim_var_list, get_vim_var_str};
 
 use crate::event::proc::{proc_stop, proc_wait};
@@ -34,8 +34,7 @@ use crate::strings::{concat_str, has_bytes};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair,
-    ListItem, NUL, Object, String_0, VarNumber, Vv, key_value_pair, ptrdiff_t, size_t, uint16_t,
-    uint64_t,
+    NUL, Object, String_0, VarNumber, Vv, key_value_pair, ptrdiff_t, size_t, uint16_t, uint64_t,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 use crate::winlayer::Ea;
@@ -107,9 +106,11 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
     let mut i: size_t = 0;
     let mut listen_arg: *const c_char = ptr::null();
 
-    let mut li: *const ListItem = unsafe { (*argv_list).lv_first };
-    while !li.is_null() {
-        let arg = unsafe { numbuf.string(&(*li).li_tv) };
+    // SAFETY: `v:argv` is a live list of strings.
+    let items = unsafe { tv_list_items(argv_list) };
+    let mut at = 0;
+    while at < items.len() {
+        let arg = unsafe { numbuf.string(&items[at].li_tv) };
         // `-- [files…]` is dropped: it is almost never wanted, and
         // `:mksession` is the way to carry a session over.
         if i > 0 && strequal(arg, c"--".as_ptr()) {
@@ -117,25 +118,23 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
         }
         // `-s <scriptfile>` is dropped, script file and all.
         if i > 0 && strequal(arg, c"-s".as_ptr()) {
-            li = unsafe { (*li).li_next };
-            if li.is_null() {
+            if at + 1 >= items.len() {
                 break;
             }
-            li = unsafe { (*li).li_next };
+            at += 2;
             continue;
         }
         // The address after `--listen` is in use by *this* server, so
         // it has to be released before the new one can take it.
         if i > 0 && strequal(arg, c"--listen".as_ptr()) {
-            let next_li = unsafe { (*li).li_next };
-            if !next_li.is_null() {
-                // SAFETY: the list entry is live and `string` answers a
-                // NUL-terminated buffer that outlives the loop.
-                let addr = unsafe { numbuf2.string(&(*next_li).li_tv) };
-                let text = unsafe { cstr::at(addr) };
-                if has_bytes(text, b":") || has_bytes(text, b"/") || has_bytes(text, b"\\") {
-                    listen_arg = addr;
-                }
+            // SAFETY: the list entry is live and `string` answers a
+            // NUL-terminated buffer that outlives the loop.
+            if let Some(next_li) = items.get(at + 1)
+                && let addr = unsafe { numbuf2.string(&next_li.li_tv) }
+                && let text = unsafe { cstr::at(addr) }
+                && (has_bytes(text, b":") || has_bytes(text, b"/") || has_bytes(text, b"\\"))
+            {
+                listen_arg = addr;
             }
         }
         // `--embed`, `--headless` and `-` are replaced by exactly one
@@ -159,7 +158,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
                 }
             }
         }
-        li = unsafe { (*li).li_next };
+        at += 1;
     }
 
     let server_stopped = !listen_arg.is_null() && unsafe { server_stop(listen_arg, true) };

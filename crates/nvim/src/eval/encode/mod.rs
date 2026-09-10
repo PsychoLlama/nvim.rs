@@ -36,8 +36,7 @@ use core::mem::ManuallyDrop;
 use core::slice;
 
 use crate::eval::typval::{
-    Li, tv_dict_find, tv_list_append_allocated_string, tv_list_first, tv_list_idx_of_item,
-    tv_list_last, tv_list_len,
+    tv_dict_find, tv_list_append_allocated_string, tv_list_items, tv_list_items_mut, tv_list_len,
 };
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::eval::vars::eval_msgpack_type_lists;
@@ -90,13 +89,17 @@ fn tr(msg: &'static CStr) -> *const c_char {
     gettext(msg).as_ptr()
 }
 
-/// The string `li` holds; a NULL one is an empty line.
+/// The string `l[at]` holds; a NULL one, or no such item, is an empty line.
 ///
 /// # Safety
-/// `li` must be a live list item whose value is a `VAR_STRING`.
+/// `l` must be a live list.
 #[inline(always)]
-unsafe fn item_string(li: *const ListItem) -> *mut c_char {
-    unsafe { (*li).li_tv.string_or_null() }
+unsafe fn item_string(l: *const List, at: size_t) -> *mut c_char {
+    // SAFETY: the caller's promise: a live list.
+    match unsafe { tv_list_items(l) }.get(at) {
+        Some(li) => li.li_tv.string_or_null(),
+        None => core::ptr::null_mut(),
+    }
 }
 
 /// `strlen` of [`item_string`], with a NULL string reading as zero.
@@ -104,8 +107,8 @@ unsafe fn item_string(li: *const ListItem) -> *mut c_char {
 /// # Safety
 /// As [`item_string`].
 #[inline(always)]
-unsafe fn item_strlen(li: *const ListItem) -> size_t {
-    let s = unsafe { item_string(li) };
+unsafe fn item_strlen(l: *const List, at: size_t) -> size_t {
+    let s = unsafe { item_string(l, at) };
     if s.is_null() {
         0
     } else {
@@ -118,20 +121,10 @@ unsafe fn item_strlen(li: *const ListItem) -> size_t {
 /// # Safety
 /// `list` must be live, and nothing may add to or remove from it while the
 /// iterator is alive.
-unsafe fn items(list: *const List) -> impl Iterator<Item = *const ListItem> {
-    let mut li = if list.is_null() {
-        core::ptr::null()
-    } else {
-        unsafe { (*list).lv_first }
-    };
-    core::iter::from_fn(move || {
-        let cur = li;
-        if cur.is_null() {
-            return None;
-        }
-        li = unsafe { (*cur).li_next };
-        Some(cur)
-    })
+unsafe fn items<'a>(list: *const List) -> impl Iterator<Item = &'a ListItem> {
+    // SAFETY: the caller's promise -- a live list nothing adds to or removes
+    // from for the life of the iterator.
+    unsafe { tv_list_items(list) }.iter()
 }
 
 /// Store a line the way a `readfile()`-style list does: NUL bytes become
@@ -145,16 +138,17 @@ fn store_nuls_as_newlines(line: &mut [u8]) {
     }
 }
 
-/// Append `line` to the string `li` already holds, which grows in place.
+/// Append `line` to the string `l[at]` already holds, which grows in place.
 ///
 /// # Safety
-/// `li` must be a live list item whose value is a `VAR_STRING` this may take
-/// ownership of and replace.
-unsafe fn extend_item(li: *mut ListItem, line: &[u8]) {
-    let old_len = unsafe { item_strlen(li) };
-    let grown = unsafe { xrealloc(item_string(li).cast::<c_void>(), old_len + line.len() + 1) }
-        .cast::<c_char>();
-    unsafe { (*li).li_tv.write_string(grown) };
+/// `l` must be a live list and `at` an index of it whose value is a
+/// `VAR_STRING` this may take ownership of and replace.
+unsafe fn extend_item(l: *mut List, at: size_t, line: &[u8]) {
+    let old_len = unsafe { item_strlen(l, at) };
+    let held = unsafe { item_string(l, at) };
+    let grown =
+        unsafe { xrealloc(held.cast::<c_void>(), old_len + line.len() + 1) }.cast::<c_char>();
+    unsafe { tv_list_items_mut(l)[at].li_tv.write_string(grown) };
     let tail =
         unsafe { slice::from_raw_parts_mut(grown.add(old_len).cast::<u8>(), line.len() + 1) };
     tail[..line.len()].copy_from_slice(line);
@@ -198,14 +192,14 @@ pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size
 
     // SAFETY: `list` is the caller's, and nothing runs between these calls
     // that could touch it.
-    let last = unsafe { tv_list_last(list) };
+    let count = unsafe { tv_list_items(list) }.len();
     let mut at = 0;
-    if !last.is_null() {
+    if let Some(last) = count.checked_sub(1) {
         // Continue the last item, unless the write starts with a newline.
         let (line, next) = split(bytes, 0);
         if !line.is_empty() {
             // SAFETY: `last` is this list's own final item.
-            unsafe { extend_item(last, line) };
+            unsafe { extend_item(list, last, line) };
         }
         at = next;
     }
@@ -283,41 +277,28 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // SAFETY: `encode_tv2string` hands back an owned buffer.
                 unsafe { xfree(key.cast::<c_void>()) };
             }
-            Frame::List { list, li } | Frame::Pairs { list, li } => {
-                // The item most recently handed out: one back from `li`, or
-                // the last one once the walk has run off the end.
-                // SAFETY: the frame's list is live and `li` is one of its
-                // items or NULL.
-                let idx = if li == unsafe { tv_list_first(list) } {
-                    0
-                } else if li.is_null() {
-                    (unsafe { tv_list_len(list) }) - 1
-                } else {
-                    unsafe { tv_list_idx_of_item(list, (*li).li_prev) }
-                };
-                let li = if li.is_null() {
-                    unsafe { tv_list_last(list) }
-                } else {
-                    unsafe { (*li).li_prev }
-                };
+            Frame::List { list, at } | Frame::Pairs { list, at } => {
+                // SAFETY: the frame's list is live for the walk.
+                let items = unsafe { tv_list_items(list) };
+                // The item most recently handed out: one back from the
+                // cursor, or the last one once the walk has run off the end.
+                let cur = at
+                    .checked_sub(1)
+                    .map(|back| back.min(items.len().saturating_sub(1)));
+                let idx = c_int::try_from(cur.unwrap_or(0)).unwrap_or(c_int::MAX);
                 let pairs = matches!(frame.frame, Frame::Pairs { .. });
-                let not_a_pair = || {
-                    // SAFETY: `li` is an item of the frame's list.
-                    let item = unsafe { Li::new(li) };
-                    let ty = item.v_type();
-                    ty != VAR_LIST && unsafe { tv_list_len(item.list()) } <= 0
-                };
-                let pair_key = if !pairs || li.is_null() || not_a_pair() {
-                    None
-                } else {
+                let pair_key = cur.filter(|_| pairs).and_then(|at| {
+                    let value = &items[at].li_tv;
+                    let inner = value.list_or_null();
+                    if value.v_type() != VAR_LIST && unsafe { tv_list_len(inner) } <= 0 {
+                        return None;
+                    }
                     // A special map's item is a [key, value] pair, so the
                     // path can name the key rather than the index.
-                    // SAFETY: `li` is an item of the frame's list.
-                    let inner = unsafe { Li::new(li) }.list();
-                    let first_item = unsafe { tv_list_first(inner) };
-                    let key_tv = unsafe { &raw mut (*first_item).li_tv };
-                    Some(unsafe { encode_tv2echo(&*key_tv, core::ptr::null_mut()) })
-                };
+                    // SAFETY: the pair's own first item.
+                    let key_tv = &unsafe { tv_list_items(inner) }.first()?.li_tv;
+                    Some(unsafe { encode_tv2echo(key_tv, core::ptr::null_mut()) })
+                });
                 match pair_key {
                     None => append_formatted!(idx_msg, idx),
                     Some(key) => {
@@ -379,13 +360,13 @@ pub unsafe fn encode_vim_list_to_buf(
 ) -> bool {
     let mut len: size_t = 0;
     // SAFETY: the caller's promise about `list`.
-    for li in unsafe { items(list) } {
-        // SAFETY: `li` is one of the list's items.
-        if unsafe { (*li).li_tv.v_type() } != VAR_STRING {
+    for (at, li) in unsafe { items(list) }.enumerate() {
+        if li.li_tv.v_type() != VAR_STRING {
             return false;
         }
         // One separator per item, so the total is one too many.
-        len += 1 + unsafe { item_strlen(li) };
+        // SAFETY: the caller's promise about `list`, and an index of it.
+        len += 1 + unsafe { item_strlen(list, at) };
     }
     len = len.saturating_sub(1);
     // SAFETY: the caller's promise about the two out parameters.
@@ -448,7 +429,7 @@ pub unsafe fn encode_read_from_list(
     let mut p = 0;
     while p < nbuf {
         debug_assert!(
-            state.li_length == 0 || !unsafe { item_string(state.li) }.is_null(),
+            state.li_length == 0 || !unsafe { item_string(state.list, state.at) }.is_null(),
             "state->li_length == 0 || TV_LIST_ITEM_TV(state->li)->vval.v_string != NULL"
         );
         // `i` and `state.offset` step together; upstream keeps both because
@@ -457,36 +438,36 @@ pub unsafe fn encode_read_from_list(
         while i < state.li_length && p < nbuf {
             // SAFETY: the item holds at least `li_length` bytes and `offset`
             // is below that.
-            let ch = unsafe { *item_string(state.li).add(state.offset) } as u8;
+            let ch = unsafe { *item_string(state.list, state.at).add(state.offset) } as u8;
             state.offset += 1;
             out[p] = if ch == b'\n' { 0 } else { ch };
             p += 1;
             i += 1;
         }
         if p < nbuf {
-            // SAFETY: `state.li` is a live item of the walked list.
-            state.li = unsafe { (*state.li).li_next };
-            if state.li.is_null() {
+            state.at += 1;
+            // SAFETY: the caller's promise: a live list.
+            let Some(item) = (unsafe { tv_list_items(state.list) }).get(state.at) else {
                 // SAFETY: the caller's promise about `read_bytes`.
                 unsafe { *read_bytes = p };
                 return Ok(ListRead::Drained);
-            }
+            };
             out[p] = b'\n';
             p += 1;
-            // SAFETY: as above.
-            if unsafe { (*state.li).li_tv.v_type() } != VAR_STRING {
+            if item.li_tv.v_type() != VAR_STRING {
                 unsafe { *read_bytes = p };
                 return Err(Failed);
             }
             state.offset = 0;
             // SAFETY: the item was just checked to hold a string.
-            state.li_length = unsafe { item_strlen(state.li) };
+            state.li_length = unsafe { item_strlen(state.list, state.at) };
         }
     }
     // SAFETY: the caller's promise about `read_bytes`.
     unsafe { *read_bytes = nbuf };
-    // SAFETY: `state.li` is a live item.
-    if state.offset < state.li_length || !unsafe { (*state.li).li_next }.is_null() {
+    // SAFETY: the caller's promise: a live list.
+    let more = state.at + 1 < unsafe { tv_list_items(state.list) }.len();
+    if state.offset < state.li_length || more {
         Ok(ListRead::More)
     } else {
         Ok(ListRead::Drained)
@@ -498,13 +479,12 @@ pub unsafe fn encode_read_from_list(
 /// # Safety
 /// `list` must be live and must have at least one item.
 pub unsafe fn encode_init_lrstate(list: *const List) -> ListReaderState {
-    // SAFETY: the caller's promise; the first item holds a string or NULL.
-    let li = unsafe { tv_list_first(list) };
     ListReaderState {
         list,
-        li,
+        at: 0,
         offset: 0,
-        li_length: unsafe { item_strlen(li) },
+        // SAFETY: the caller's promise; the first item holds a string or NULL.
+        li_length: unsafe { item_strlen(list, 0) },
     }
 }
 
@@ -780,7 +760,7 @@ pub unsafe fn encode_check_json_key(tv: &TypVal) -> bool {
     // SAFETY: a `VAR_LIST` holds a live list or NULL, and nothing runs
     // between the items.
     for li in unsafe { items(val_tv.list_or_null()) } {
-        if unsafe { (*li).li_tv.v_type() } != VAR_STRING {
+        if li.li_tv.v_type() != VAR_STRING {
             return false;
         }
     }

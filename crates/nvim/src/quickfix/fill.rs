@@ -13,9 +13,9 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::CallFrame;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{CallFrame, tv_list_items};
 use crate::guard::Lock;
 use crate::memline::MlFlags;
 use crate::types::{BCount, MAXPATHL, OptionSetFlags, VAR_LIST, VarLock};
@@ -427,7 +427,9 @@ pub(crate) unsafe fn qf_fill_buffer(
 
         let qftf_list =
             unsafe { call_qftf_func(qfl, qf_winid, lnum as c_int + 1, (*qfl).qf_count) };
-        let mut qftf_li = unsafe { tv_list_first(qftf_list) };
+        // An index: `qf_buf_add_line` below writes to a buffer, which runs
+        // autocommands.
+        let mut qftf_at = 0;
         let mut prev_bufnr = -1;
         let mut invalid_val = false;
 
@@ -436,8 +438,12 @@ pub(crate) unsafe fn qf_fill_buffer(
             // it answers something that is not a string, the rest of
             // its answer is ignored too.
             let mut qftf_str = ptr::null::<c_char>();
-            if !qftf_li.is_null() && !invalid_val {
-                qftf_str = unsafe { numbuf.string_chk(&(*qftf_li).li_tv) };
+            // SAFETY: the list the user's `quickfixtextfunc` answered.
+            let qftf_item = unsafe { tv_list_items(qftf_list) }.get(qftf_at);
+            if let Some(item) = qftf_item
+                && !invalid_val
+            {
+                qftf_str = unsafe { numbuf.string_chk(&item.li_tv) };
                 if qftf_str.is_null() {
                     invalid_val = true;
                 }
@@ -461,8 +467,8 @@ pub(crate) unsafe fn qf_fill_buffer(
             if qfp.is_null() {
                 break;
             }
-            if !qftf_li.is_null() {
-                qftf_li = unsafe { (*qftf_li).li_next };
+            if qftf_item.is_some() {
+                qftf_at += 1;
             }
         }
         if rewriting {

@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::eval::typval::NumBuf;
+use crate::eval::typval::{NumBuf, tv_list_items, tv_list_iter};
 use crate::semsg;
 use crate::types::{Failed, MB_MAXCHAR, VAR_DICT, VAR_LIST, kListLenMayKnow};
 use crate::winlayer::Win;
@@ -166,18 +166,16 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let l = args[0].list_or_null();
 
     // To some extent make sure this really came from getmatches().
-    let mut li_idx = 0;
-    let mut li = unsafe { tv_list_first(l) };
-    while !li.is_null() {
-        let tv = unsafe { &raw mut (*li).li_tv };
-        if unsafe { (*tv).v_type() } != VAR_DICT || unsafe { (*tv).dict_or_null() }.is_null() {
+    for (li_idx, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
+        let tv = &li.li_tv;
+        if tv.v_type() != VAR_DICT || tv.dict_or_null().is_null() {
             semsg!(
                 "E474: List item {} is either not a dictionary or an empty one",
                 li_idx
             );
             return;
         }
-        let d = unsafe { (*tv).dict_or_null() };
+        let d = tv.dict_or_null();
         let ok = !unsafe { find(d, "group") }.is_null()
             && (!unsafe { find(d, "pattern") }.is_null() || !unsafe { find(d, "pos1") }.is_null())
             && !unsafe { find(d, "priority") }.is_null()
@@ -189,15 +187,16 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
             );
             return;
         }
-        li_idx += 1;
-        li = unsafe { (*li).li_next };
     }
 
     unsafe { clear_matches(win) };
     let mut match_add_failed = false;
-    let mut li = unsafe { tv_list_first(l) };
-    while !li.is_null() {
-        let d = unsafe { (*li).li_tv.dict_or_null() };
+    // By index: `match_add` runs no user code, but the dictionary lookups
+    // below do reach the evaluator, and the list is the caller's own.
+    let mut at = 0;
+    // SAFETY: a live list, or NULL, which reads as empty.
+    while at < unsafe { tv_list_items(l) }.len() {
+        let d = unsafe { tv_list_items(l) }[at].li_tv.dict_or_null();
 
         // A match with no `pattern` is a position match: collect
         // pos1..pos8 into the list `match_add` wants.
@@ -251,7 +250,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
             match_add_failed = true;
         }
 
-        li = unsafe { (*li).li_next };
+        at += 1;
     }
     if !match_add_failed {
         result.write_number(0);

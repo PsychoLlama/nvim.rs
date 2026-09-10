@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::eval::typval::NumBuf;
+use crate::eval::typval::{NumBuf, tv_list_items, tv_list_items_mut};
 use crate::option::boolean_optval;
 use crate::os::cshim::gettext_owned;
 use crate::types::{Failed, NUL, OptionSetFlags};
@@ -246,21 +246,23 @@ pub unsafe fn ex_let_vars(
     // E688 or earlier before it can get here.
     debug_assert!(!l.is_null());
 
-    // SAFETY: a live list, whose items stay live for the walk.
-    let mut item = unsafe { tv_list_first(l) };
+    // An index, not an address: `ex_let_one` runs the evaluator, which may
+    // edit the very list being unpacked.
+    let mut at: usize = 0;
     let mut rest_len = unsafe { tv_list_len(l) } as size_t;
     while unsafe { *arg } != b']' as c_char {
         // Skip the whitespace after the '[', ',' or ';'.
         // SAFETY: `arg` is inside the caller's NUL-terminated string, and
-        // `item` is a live item of `l` -- the length checks above are what
-        // keep the walk inside it.
-        let (next, itv) = unsafe { (skipwhite(arg.add(1)), &mut (*item).li_tv) };
-        arg = unsafe { ex_let_one(next, itv, true, is_const, c",;]".as_ptr(), op) };
+        // `at` is inside `l` -- the length checks above are what keep the
+        // walk inside it.
+        let itv = &raw mut unsafe { tv_list_items_mut(l) }[at].li_tv;
+        let next = unsafe { skipwhite(arg.add(1)) };
+        arg = unsafe { ex_let_one(next, &mut *itv, true, is_const, c",;]".as_ptr(), op) };
         if arg.is_null() {
             return Err(Failed);
         }
         rest_len -= 1;
-        item = unsafe { (*item).li_next };
+        at += 1;
 
         arg = unsafe { skipwhite(arg) };
         let sep = unsafe { *arg } as u8;
@@ -268,9 +270,11 @@ pub unsafe fn ex_let_vars(
             // The rest of the list, which may be empty, goes to the
             // variable after the ';', as a list of its own.
             let rest_list = tv_list_alloc(rest_len as ptrdiff_t);
-            while !item.is_null() {
-                unsafe { tv_list_append_tv(rest_list, &(*item).li_tv) };
-                item = unsafe { (*item).li_next };
+            // SAFETY: a live list, re-read each step.
+            while at < unsafe { tv_list_items(l) }.len() {
+                let tv = &raw const unsafe { tv_list_items(l) }[at].li_tv;
+                unsafe { tv_list_append_tv(rest_list, &*tv) };
+                at += 1;
             }
             let mut ltv = TypVal::List(rest_list);
             unsafe { tv_list_ref(rest_list) };

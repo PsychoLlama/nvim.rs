@@ -8,6 +8,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::eval::typval::{
+    index_of, tv_list_items, tv_list_iter_mut, tv_list_remove_at, tv_list_remove_range,
+};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -191,7 +194,7 @@ unsafe fn do_unlet_var(
         unsafe { tv_list_unlet_range(lval.ll_list, lval.ll_li, n1, to_end, n2) };
     } else if !lval.ll_list.is_null() {
         // One List item.
-        unsafe { tv_list_item_remove(lval.ll_list, lval.ll_li) };
+        unsafe { tv_list_remove_at(lval.ll_list, lval.ll_li) };
     } else {
         // One Dict item.
         let d = lval.ll_dict;
@@ -220,30 +223,24 @@ unsafe fn do_unlet_var(
     Ok(())
 }
 
-/// Delete the items of `l` from `li_first` through the `n2`-th, or to the
+/// Delete the items of `l` from `first` through the `n2`-th, or to the
 /// end when `has_n2` is false.
 ///
 /// # Safety
-/// `l` is a live list and `li_first` one of its items.
-unsafe fn tv_list_unlet_range(
-    l: *mut List,
-    li_first: *mut ListItem,
-    n1_arg: c_int,
-    has_n2: bool,
-    n2: c_int,
-) {
+/// `l` is a live list and `first` an index into it.
+unsafe fn tv_list_unlet_range(l: *mut List, first: usize, n1: c_int, has_n2: bool, n2: c_int) {
     debug_assert!(!l.is_null());
-    let mut li_last = li_first;
-    let mut n1 = n1_arg;
-    loop {
-        let li = unsafe { (*li_last).li_next };
-        n1 += 1;
-        if li.is_null() || (has_n2 && n2 < n1) {
-            break;
-        }
-        li_last = li;
-    }
-    unsafe { tv_list_remove_items(l, li_first, li_last) };
+    // SAFETY: the caller's promise: a live list.
+    let len = unsafe { tv_list_items(l) }.len();
+    // The run ends at `n2` when there is one, and at the last item either
+    // way.
+    let last = if has_n2 {
+        first + (n2 - n1).max(0) as usize
+    } else {
+        len - 1
+    };
+    // SAFETY: as above; `first..=last` is a run of the list's items.
+    unsafe { tv_list_remove_range(l, first, last.min(len - 1)) };
 }
 
 /// Delete the variable `name[0..name_len]`, reporting E108 if it does not
@@ -386,20 +383,26 @@ unsafe fn do_lock_var(
             unsafe { tv_item_lock(lock_of, &mut *tv, deep, lock, false) };
         }
     } else if deep != 0 {
-        if lval.ll_range {
-            // A range of List items.
-            let mut li = lval.ll_li;
-            while !li.is_null() && (lval.ll_empty2 || lval.ll_n2 >= lval.ll_n1) {
-                // SAFETY: a resolved lvalue's items, walked to the end.
-                unsafe { tv_item_lock(li_lock(li), &mut *li_tv(li), deep, lock, false) };
-                li = unsafe { (*li).li_next };
-                lval.ll_n1 += 1;
+        if !lval.ll_list.is_null() {
+            // The one List item the lvalue named, or the run of them a
+            // range named -- which ends at `ll_n2` unless the range was
+            // open, and at the last item either way.
+            let count = if !lval.ll_range {
+                1
+            } else if lval.ll_empty2 {
+                usize::MAX
+            } else {
+                usize::try_from(lval.ll_n2 - lval.ll_n1 + 1).unwrap_or(0)
+            };
+            // SAFETY: a resolved lvalue's own list, and `ll_li` an index of it.
+            let items = tv_list_iter_mut(unsafe { lval.ll_list.as_mut() });
+            let mut done = 0;
+            for li in items.skip(lval.ll_li).take(count) {
+                // SAFETY: an item of that list.
+                unsafe { tv_item_lock(&raw mut li.li_lock, &mut li.li_tv, deep, lock, false) };
+                done += 1;
             }
-        } else if !lval.ll_list.is_null() {
-            // One List item.
-            let li = lval.ll_li;
-            // SAFETY: a resolved lvalue's own item.
-            unsafe { tv_item_lock(li_lock(li), &mut *li_tv(li), deep, lock, false) };
+            lval.ll_n1 += index_of(done);
         } else {
             // One Dict item.
             let di = lval.ll_di;
