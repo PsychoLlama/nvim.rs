@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_dict_get_string_alloc, tv_list_items, tv_list_iter};
+use crate::eval::typval::{DictRef, NumBuf, tv_dict_get_string_alloc, tv_list_items, tv_list_iter};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, Key};
 use crate::types::{
@@ -67,11 +67,11 @@ pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c
 /// # Safety
 ///
 /// `match_0` must point at a live `ComplItem`, unaliased for the call.
-pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut ComplItem) -> *mut Dict {
+pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut ComplItem) -> DictRef {
     // { word, abbr, menu, kind, info, user_data } — the same keys and the
     // same order `complete_info()` fills in, minus its "match" flag.
-    let dict = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
-    unsafe { fill_complete_info_dict(dict, match_0, false) };
+    let dict = tv_dict_alloc_lock(VarLock::Fixed);
+    unsafe { fill_complete_info_dict(dict.as_ptr(), match_0, false) };
     dict
 }
 
@@ -520,8 +520,9 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
                 // SAFETY: a fresh dict, taken over by the list, and
                 // `match_0` is a live match.
                 unsafe {
-                    let di = tv_dict_alloc();
-                    tv_list_append_dict(li, di);
+                    let di_held = tv_dict_alloc();
+                    let di = di_held.as_ptr();
+                    tv_list_append_dict(li, Some(di_held));
                     fill_complete_info_dict(di, match_0.raw(), has_matches && has_items);
                 }
             }
@@ -541,16 +542,17 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
         }
     }
     if ret.is_ok() && selected_idx != -1 && has_completed {
-        let di = unsafe { tv_dict_alloc() };
+        let di_held = tv_dict_alloc();
+        let di = di_held.as_ptr();
         unsafe { fill_complete_info_dict(di, compl_curr_match.get(), false) };
         let (key, klen) = ("completed".as_ptr().cast(), "completed".len());
-        let _ = unsafe { tv_dict_add_dict(retdict, key, klen, di) };
+        let _ = unsafe { tv_dict_add_dict(retdict, key, klen, Some(di_held)) };
     }
 }
 
 /// The `complete_info()` function; a `VimLFunc` row in the builtin table.
 pub fn f_complete_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
 
     let mut what_list: *mut List = ptr::null_mut();
     if !args.is_empty() {

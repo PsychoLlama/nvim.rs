@@ -12,10 +12,10 @@ use std::ptr;
 
 use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
-    ListRef, tv_check_lock, tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy,
-    tv_dict_alloc_ret, tv_equal, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk,
-    tv_get_string_buf, tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret,
-    tv_list_append_number, tv_list_first, value_check_lock,
+    DictRef, ListRef, tv_check_lock, tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear,
+    tv_copy, tv_dict_alloc_ret, tv_equal, tv_get_float, tv_get_lnum, tv_get_number,
+    tv_get_number_chk, tv_get_string_buf, tv_get_string_buf_chk, tv_islocked, tv_item_lock,
+    tv_list_alloc_ret, tv_list_append_number, tv_list_first, value_check_lock,
 };
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
@@ -53,7 +53,9 @@ fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
         // SAFETY: a made-up address the case never follows; the value is
         // a `ManuallyDrop`, so the handle is never released.
         VAR_LIST => TypVal::List(unsafe { ListRef::owning(p.cast()) }),
-        VAR_DICT => TypVal::Dict(p.cast()),
+        // SAFETY: as the list arm -- a made-up address in a
+        // `ManuallyDrop`, never released.
+        VAR_DICT => TypVal::Dict(unsafe { DictRef::owning(p.cast()) }),
         VAR_PARTIAL => TypVal::Partial(p.cast()),
         VAR_BLOB => TypVal::Blob(p.cast()),
         VAR_BOOL => TypVal::Bool(kBoolVarTrue),
@@ -1190,7 +1192,7 @@ fn number_rows(number: &CString) -> Vec<Row> {
         ),
         row(TypVal::List(None), Some("E745: Using a List as a Number")),
         row(
-            TypVal::Dict(ptr::null_mut()),
+            TypVal::Dict(None),
             Some("E728: Using a Dictionary as a Number"),
         ),
         row(TypVal::Special(kSpecialVarNull), None),
@@ -1324,7 +1326,7 @@ fn getting_a_float_accepts_only_numbers() {
                 0.0,
             ),
             (
-                ManuallyDrop::new(TypVal::Dict(ptr::null_mut())),
+                ManuallyDrop::new(TypVal::Dict(None)),
                 Some("E894: Using a Dictionary as a Float"),
                 0.0,
             ),
@@ -1399,7 +1401,7 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 None,
             ),
             (
-                ManuallyDrop::new(TypVal::Dict(ptr::null_mut())),
+                ManuallyDrop::new(TypVal::Dict(None)),
                 Some("E731: Using a Dictionary as a String"),
                 None,
             ),

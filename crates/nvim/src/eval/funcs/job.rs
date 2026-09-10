@@ -296,7 +296,8 @@ unsafe fn create_environment(
 ) -> *mut Dict {
     // SAFETY: the caller's obligation; every key below is a `'static`
     // NUL-terminated string and the dict owns what it is given.
-    let env = unsafe { tv_dict_alloc() };
+    let env_held = tv_dict_alloc();
+    let env = env_held.as_ptr();
 
     if !clear_env {
         // Start from our own environment. `f_environ` is the builtin,
@@ -365,7 +366,8 @@ unsafe fn create_environment(
         }
     }
 
-    env
+    // The caller takes the reference over, and frees it with the process.
+    env_held.into_raw()
 }
 
 /// `jobstart({cmd} [, {opts}])`

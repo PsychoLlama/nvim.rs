@@ -45,13 +45,12 @@ use core::slice;
 
 use crate::cstr;
 use crate::eval::typval::{
-    ListRef, NumBuf, index_of, tv_blob_copy, tv_blob_remove, tv_blob_set_ret,
+    DictRef, ListRef, NumBuf, index_of, tv_blob_copy, tv_blob_remove, tv_blob_set_ret,
     tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret,
-    tv_dict_copy, tv_dict_extend, tv_dict_item_remove, tv_dict_remove, tv_dict_unref, tv_equal,
-    tv_get_number_chk, tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret,
-    tv_list_append_owned_tv, tv_list_append_tv, tv_list_copy, tv_list_extend, tv_list_index,
-    tv_list_insert_tv, tv_list_items_mut, tv_list_remove, tv_list_remove_at, tv_list_reverse,
-    value_check_lock,
+    tv_dict_copy, tv_dict_extend, tv_dict_item_remove, tv_dict_remove, tv_equal, tv_get_number_chk,
+    tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_owned_tv,
+    tv_list_append_tv, tv_list_copy, tv_list_extend, tv_list_index, tv_list_insert_tv,
+    tv_list_items_mut, tv_list_remove, tv_list_remove_at, tv_list_reverse, value_check_lock,
 };
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
@@ -372,6 +371,13 @@ impl Item {
 pub(crate) struct DictArg(*mut Dict);
 
 impl DictArg {
+    /// A borrow of a dictionary something else holds a reference to; null
+    /// for `v:_null_dict`.
+    #[inline(always)]
+    pub(crate) fn of(d: *mut Dict) -> DictArg {
+        DictArg(d)
+    }
+
     /// The dict itself, or None when it is NULL.  The one unsafe step.
     #[inline(always)]
     fn get<'a>(self) -> Option<&'a mut Dict> {
@@ -382,12 +388,6 @@ impl DictArg {
     #[inline(always)]
     pub(crate) fn is_null(self) -> bool {
         self.0.is_null()
-    }
-
-    /// The dict itself, for the `TypVal` `extendnew()` builds by hand.
-    #[inline(always)]
-    pub(crate) fn raw(self) -> *mut Dict {
-        self.0
     }
 
     #[inline(always)]
@@ -468,24 +468,17 @@ impl DictArg {
         unsafe { tv_dict_extend(self.0, other.0, action.as_ptr()) };
     }
 
-    /// A shallow copy, for `extendnew()`.  NULL when the copy failed.
+    /// A shallow copy, for `extendnew()`.  `None` when the copy failed.
     #[inline(always)]
-    pub(crate) fn copy(self) -> DictArg {
+    pub(crate) fn copy(self) -> Option<DictRef> {
         // SAFETY: live; no conversion, and a fresh copyID.
-        Self(unsafe { tv_dict_copy(core::ptr::null::<VimConv>(), self.0, false, get_copy_id()) })
-    }
-
-    #[inline(always)]
-    pub(crate) fn unref(self) {
-        // SAFETY: live or NULL, and the caller gives up its reference.
-        unsafe { tv_dict_unref(self.0) };
+        unsafe { tv_dict_copy(core::ptr::null::<VimConv>(), self.0, false, get_copy_id()) }
     }
 
     /// Allocate a fresh dict into `result`, for `mapnew()`.
     #[inline(always)]
     pub(crate) fn alloc_ret(result: &mut TypVal) -> DictArg {
-        // SAFETY: `result` is a cleared result slot.
-        unsafe { tv_dict_alloc_ret(result) };
+        tv_dict_alloc_ret(result);
         Self(result.dict_or_null())
     }
 }

@@ -366,7 +366,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // already is.
     let mut recompute = true;
 
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
 
     if !args.is_empty() {
         if tv_check_for_nonnull_dict_arg(args, 0).is_err() {

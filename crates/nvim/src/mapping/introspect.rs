@@ -294,7 +294,7 @@ unsafe fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     } else {
         // Return an empty dictionary.
         // SAFETY: the caller's writable answer slot.
-        unsafe { tv_dict_alloc_ret(result) };
+        tv_dict_alloc_ret(result);
     }
 }
 
@@ -345,7 +345,7 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 let mut obj = Object::dict(dict);
                 object_to_vim_take_luaref(&raw mut obj, &mut d, true);
                 debug_assert_eq!(d.v_type(), VAR_DICT);
-                tv_list_append_dict((*result).list_or_null(), d.dict_or_null());
+                tv_list_append_dict((*result).list_or_null(), d.take_dict());
                 arena_mem_free(arena_finish(&raw mut arena));
             }
             None

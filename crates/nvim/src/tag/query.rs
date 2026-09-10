@@ -157,8 +157,10 @@ unsafe fn describe_match(list: *mut List, entry: *mut c_char) -> bool {
         return true;
     }
 
-    let dict = unsafe { tv_dict_alloc() };
-    unsafe { tv_list_append_dict(list, dict) };
+    let dict_held = tv_dict_alloc();
+
+    let dict = dict_held.as_ptr();
+    unsafe { tv_list_append_dict(list, Some(dict_held)) };
 
     // Short-circuiting is upstream's: once one field fails, the rest
     // of these are not tried.

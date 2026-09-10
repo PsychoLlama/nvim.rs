@@ -602,10 +602,8 @@ pub(crate) fn setmouse() {
 /// the editor knows.
 pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
-    let d = unsafe {
-        tv_dict_alloc_ret(result);
-        (*result).dict_or_null()
-    };
+    tv_dict_alloc_ret(result);
+    let d = result.dict_or_null();
     let add = |key: &CStr, value: VarNumber| {
         // SAFETY: the dict just allocated, and a NUL-terminated literal key.
         let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.to_bytes().len() as size_t, value) };

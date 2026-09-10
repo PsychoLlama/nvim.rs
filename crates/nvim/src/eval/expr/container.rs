@@ -13,15 +13,12 @@ use core::ptr::null_mut;
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    ListRef, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_free, tv_dict_item_alloc,
-    tv_dict_item_free, tv_dict_set_ret, tv_get_string_buf_chk, tv_list_alloc,
-    tv_list_append_owned_tv,
+    DictRef, ListRef, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc,
+    tv_dict_item_free, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_owned_tv,
 };
 use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
-use crate::types::{
-    Dict, EvalArg, Failed, NUL, TypVal, VarLock, kListLenShouldKnow, ptrdiff_t, size_t,
-};
+use crate::types::{EvalArg, Failed, NUL, TypVal, VarLock, kListLenShouldKnow, ptrdiff_t, size_t};
 use crate::winlayer::Live;
 
 /// The scratch a non-String dict key is rendered into.
@@ -167,11 +164,11 @@ pub(crate) unsafe fn eval_dict(
         return Ok(Parsed::NotThis);
     }
 
-    let dict: *mut Dict = if evaluate {
-        unsafe { tv_dict_alloc() }
-    } else {
-        null_mut()
-    };
+    // The one reference to the dictionary being built. A path that gives
+    // up drops it, which is what upstream's `tv_dict_free` on a dictionary
+    // still at refcount zero was.
+    let held = evaluate.then(tv_dict_alloc);
+    let dict = held.as_ref().map_or(null_mut(), DictRef::as_ptr);
     let mut tvkey = UNSET_TV;
     tv = UNSET_TV;
     cur.skip(1);
@@ -253,18 +250,16 @@ pub(crate) unsafe fn eval_dict(
             break 'items false;
         }
         cur.skip(1);
-        if evaluate {
-            unsafe { tv_dict_set_ret(result, dict) };
-        }
         true
     };
 
     if ok {
+        result.write_dict(held);
         return Ok(Parsed::Done);
     }
-    if !dict.is_null() {
-        unsafe { tv_dict_free(dict) };
-    }
+    // The half-built dictionary goes with the handle, which is its only
+    // reference.
+    drop(held);
     Err(Failed)
 }
 

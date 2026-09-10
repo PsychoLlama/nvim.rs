@@ -18,7 +18,7 @@ use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
 ///
 /// # Safety
 /// `window` must be a live window whose buffer is live.
-unsafe fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
+unsafe fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
     // SAFETY: the caller's obligation. The dictionary is handed straight to
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the two closures add.
@@ -26,7 +26,8 @@ unsafe fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
     // "botline" is one past the last displayed line, hence the -1; the row
     // and column counts are zero-based inside and one-based to vimscript.
     validate_botline_win(window);
-    let (dict, textoff) = unsafe { (tv_dict_alloc(), window.col_off()) };
+    let (dict_held, textoff) = (tv_dict_alloc(), window.col_off());
+    let dict = dict_held.as_ptr();
     let (quickfix, terminal) = (buf_is_quickfix(Some(buf)), buf_is_terminal(Some(buf)));
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
@@ -55,22 +56,25 @@ unsafe fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
     );
     // SAFETY: a live dictionary and the window's own variable dictionary.
     let vars = c"variables";
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), window.w_vars) };
-    dict
+    // SAFETY: the window's own `w:` scope; the answer takes a reference.
+    let w_vars = unsafe { DictRef::retained(window.w_vars) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), w_vars) };
+    dict_held
 }
 
 /// One `gettabinfo()` entry.
 ///
 /// # Safety
 /// `tabpage` must be a live tab page.
-unsafe fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> *mut Dict {
+unsafe fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
     // SAFETY: the caller's obligation; both containers are handed on rather
     // than freed here, so both stay alive for the appends below.
     // The keys go in in upstream's order: a dictionary's iteration order is
     // its hash table's, which insertion order can still perturb.
     let (nrkey, hint) = (c"tabnr", kListLenMayKnow as ptrdiff_t);
     let nr = VarNumber::from(tp_idx);
-    let dict = unsafe { tv_dict_alloc() };
+    let dict_held = tv_dict_alloc();
+    let dict = dict_held.as_ptr();
     let _ = unsafe { tv_dict_add_nr(dict, nrkey.as_ptr(), nrkey.count_bytes(), nr) };
     let windows = tv_list_alloc(hint);
     let into = windows.as_ptr();
@@ -84,8 +88,10 @@ unsafe fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> *mut Dict {
     // SAFETY: a live dictionary, and the tab page's own variable dictionary.
     let (wins, vars) = (c"windows", c"variables");
     let _ = unsafe { tv_dict_add_list(dict, wins.as_ptr(), wins.count_bytes(), Some(windows)) };
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tabpage.tp_vars) };
-    dict
+    // SAFETY: the tab page's own `t:` scope; the answer takes a reference.
+    let tp_vars = unsafe { DictRef::retained(tabpage.tp_vars) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tp_vars) };
+    dict_held
 }
 
 /// `gettabinfo([{tabnr}])` — every tab page, or just the one named.
@@ -111,7 +117,7 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             continue;
         }
         // SAFETY: a live tab page, and a live list `result` owns.
-        unsafe { tv_list_append_dict(list, get_tabpage_info(tp, tpnr)) };
+        unsafe { tv_list_append_dict(list, Some(get_tabpage_info(tp, tpnr))) };
         if wanted.is_some() {
             return;
         }
@@ -150,7 +156,7 @@ pub fn f_getwininfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let numbered = if wp.has_winnr(tp) { winnr } else { 0 };
             // SAFETY: a live window in a live tab page, and a live list
             // `result` owns.
-            unsafe { tv_list_append_dict(list, get_win_info(wp, tabnr, numbered)) };
+            unsafe { tv_list_append_dict(list, Some(get_win_info(wp, tabnr, numbered))) };
             if wanted.is_some() {
                 return;
             }

@@ -42,9 +42,9 @@ use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
-    ApiDict, Arena, Array, Blob, BoolVarValue, Dict, DictItem, Float, Integer, KeyValuePair,
-    LuaRef, Object, String_0, TypVal, VAR_UNKNOWN, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull, size_t,
+    ApiDict, Arena, Array, Blob, BoolVarValue, DictItem, Float, Integer, KeyValuePair, LuaRef,
+    Object, String_0, TypVal, VAR_UNKNOWN, int64_t, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
+    size_t,
 };
 use crate::winlayer::Live;
 
@@ -440,7 +440,8 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: &mut TypVal, take_
         }
         Object::Dict(pairs) => {
             // SAFETY: the dictionary is this call's until it is handed over.
-            let dict: *mut Dict = unsafe { tv_dict_alloc() };
+            let dict_held = tv_dict_alloc();
+            let dict = dict_held.as_ptr();
             for i in 0..pairs.size {
                 // SAFETY: `i` is below `size`, so the pair is inside `items`,
                 // and its key is a NUL-terminated name.
@@ -452,10 +453,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: &mut TypVal, take_
                     let _ = tv_dict_add(dict, di);
                 }
             }
-            // SAFETY: `dict` is the dictionary just built; the reference the
-            // typval is about to hold is what this counts.
-            unsafe { (*dict).dv_refcount.retain() };
-            tv.write_dict(dict);
+            tv.write_dict(Some(dict_held));
         }
         Object::LuaRef(mut ref_0) => {
             if take_luaref {

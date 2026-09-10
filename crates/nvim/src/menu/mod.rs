@@ -41,8 +41,8 @@ use crate::autocmd::apply_autocmds;
 use crate::charset::skipwhite;
 use crate::cstr;
 use crate::eval::typval::{
-    ListRef, tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_list,
-    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_len, tv_list_alloc,
+    DictRef, ListRef, tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict,
+    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_len, tv_list_alloc,
     tv_list_append_dict, tv_list_append_string,
 };
 use crate::global_cell::GlobalCell;
@@ -527,9 +527,9 @@ pub(crate) fn free_str(s: *mut c_char) {
 // module has just allocated and still owns; the keys are `'static` literals
 // and the values are copied or taken over by the callee.
 
-pub(crate) fn dict_alloc() -> *mut Dict {
+pub(crate) fn dict_alloc() -> DictRef {
     // SAFETY: allocates a fresh Dict and never answers null.
-    unsafe { tv_dict_alloc() }
+    tv_dict_alloc()
 }
 
 pub(crate) fn dict_len(dict: *const Dict) -> c_long {
@@ -571,7 +571,7 @@ pub(crate) fn dict_add_list(dict: *mut Dict, key: &CStr, value: Option<ListRef>)
 /// A nested Dict under a key given as raw bytes -- `menu_get()` files each
 /// mapping under a mode letter, and takes only the *first* byte of one, so
 /// terminal mode lands under `t` rather than `tl`.
-pub(crate) fn dict_add_dict(dict: *mut Dict, key: &[u8], value: *mut Dict) {
+pub(crate) fn dict_add_dict(dict: *mut Dict, key: &[u8], value: Option<DictRef>) {
     // SAFETY: see the section note; `key` is a live slice of `key.len()`.
     let _ = unsafe { tv_dict_add_dict(dict, key.as_ptr().cast(), key.len(), value) };
 }
@@ -580,7 +580,7 @@ pub(crate) fn list_alloc() -> ListRef {
     tv_list_alloc(kListLenMayKnow as ptrdiff_t)
 }
 
-pub(crate) fn list_append_dict(list: *mut List, dict: *mut Dict) {
+pub(crate) fn list_append_dict(list: *mut List, dict: Option<DictRef>) {
     // SAFETY: see the section note.
     unsafe { tv_list_append_dict(list, dict) };
 }

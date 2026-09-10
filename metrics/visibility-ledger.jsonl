@@ -57,6 +57,7 @@
 {"path":"neovim::eval::encode::encode_vim_to_msgpack","kind":"fn","file":"crates/nvim/src/eval/encode/msgpack.rs","tests":["crates/nvim/tests/unit/encode_sinks.rs"]}
 {"path":"neovim::eval::gc::rooted_lists","kind":"fn","file":"crates/nvim/src/eval/gc.rs","tests":["crates/nvim/tests/unit/channel_reader.rs"]}
 {"path":"neovim::eval::list::kTVCstring","kind":"static","file":"crates/nvim/src/eval/list/mod.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
+{"path":"neovim::eval::typval::DictRef","kind":"struct","file":"crates/nvim/src/eval/typval/dict.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::eval::typval::ListRef","kind":"struct","file":"crates/nvim/src/eval/typval/list.rs","tests":["crates/nvim/tests/unit/support/tv.rs","crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs","crates/nvim/tests/unit/typval_value.rs"]}
 {"path":"neovim::eval::typval::NumBuf","kind":"struct","file":"crates/nvim/src/eval/typval/get.rs","tests":["crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::eval::typval::callback_free","kind":"fn","file":"crates/nvim/src/eval/typval/watcher.rs","tests":["crates/nvim/tests/unit/typval_dict.rs"]}

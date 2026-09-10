@@ -333,8 +333,9 @@ pub unsafe fn get_tagstack(window: Win, retdict: *mut Dict) {
     let (key, key_len) = (c"items".as_ptr(), c"items".count_bytes());
     let _ = unsafe { tv_dict_add_list(retdict, key, key_len, Some(held)) };
     for entry in stack.entries() {
-        let d = unsafe { tv_dict_alloc() };
-        unsafe { tv_list_append_dict(items, d) };
+        let d_held = tv_dict_alloc();
+        let d = d_held.as_ptr();
+        unsafe { tv_list_append_dict(items, Some(d_held)) };
         unsafe { tag_details(entry, d) };
     }
 }

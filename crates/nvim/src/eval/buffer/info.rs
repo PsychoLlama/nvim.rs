@@ -18,11 +18,12 @@ use crate::types::{VAR_DICT, kListLenMayKnow};
 ///
 /// # Safety
 /// `buffer` must be a live buffer.
-unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
+unsafe fn get_buffer_info(buffer: Buf) -> DictRef {
     // SAFETY: the caller's obligation. The dictionary is handed straight to
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the closure adds.
-    let dict = unsafe { tv_dict_alloc() };
+    let dict_held = tv_dict_alloc();
+    let dict = dict_held.as_ptr();
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
         let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
@@ -72,7 +73,9 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
     );
     // SAFETY: a live dictionary and the buffer's own variable dictionary.
     let vars = c"variables";
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), buffer.b_vars) };
+    // SAFETY: the buffer's own `b:` scope; the answer takes a reference.
+    let b_vars = unsafe { DictRef::retained(buffer.b_vars) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), b_vars) };
 
     // The windows displaying this buffer.
     let windows = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
@@ -92,7 +95,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
         list(c"signs", Some(unsafe { get_buffer_signs(buffer) }));
     }
     nr(c"lastused", buffer.b_last_used);
-    dict
+    dict_held
 }
 
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
@@ -129,7 +132,7 @@ pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if !argbuf.is_null() && argbuf != buf.raw() || filter.rejects(buf) {
             continue;
         }
-        unsafe { tv_list_append_dict(list, get_buffer_info(buf)) };
+        unsafe { tv_list_append_dict(list, Some(get_buffer_info(buf))) };
         if !argbuf.is_null() {
             return;
         }

@@ -31,8 +31,8 @@ use crate::memory::xstrdup;
 use crate::message::e_command_too_recursive;
 use crate::option::vars::p_mfd;
 use crate::types::{
-    Arena, Callback, CallbackReader, FAIL, FuncExe, HtStack, ListStack, NUL, OK, OptInt, Partial,
-    TypVal, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, Vv,
+    Arena, Callback, CallbackReader, DictRef, FAIL, FuncExe, HtStack, ListStack, NUL, OK, OptInt,
+    Partial, TypVal, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, Vv,
 };
 use crate::winlayer::Win;
 
@@ -244,7 +244,8 @@ pub(crate) unsafe fn set_ref_in_callback_reader(
     let self_dict = unsafe { (*reader).self_0 };
     if !self_dict.is_null() {
         // As above: the reader keeps the reference.
-        let mut tv = ManuallyDrop::new(TypVal::Dict(self_dict));
+        // SAFETY: the reader's own dictionary, which it keeps.
+        let mut tv = ManuallyDrop::new(TypVal::Dict(unsafe { DictRef::owning(self_dict) }));
         // SAFETY: `tv` is this frame's, and the stacks are the caller's.
         return unsafe { set_ref_in_item(&mut tv, copy_id, ht_stack, list_stack) };
     }

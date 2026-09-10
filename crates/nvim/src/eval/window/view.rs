@@ -292,7 +292,7 @@ fn restored_topline(topline: LineNr, line_count: LineNr) -> LineNr {
 pub fn f_winsaveview(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value and `curwin` is set; the
     // dictionary stays alive for the appends because `result` owns it.
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
     let dict = result.dict_or_null();
     let win = Win::current();
     let nr = |key: &CStr, value: VarNumber| {

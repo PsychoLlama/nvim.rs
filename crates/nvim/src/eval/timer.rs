@@ -35,7 +35,7 @@ use crate::message::state::{called_emsg, did_emsg};
 use crate::registry::SlotTable;
 use crate::startup::main_loop;
 use crate::types::{
-    Callback, Dict, DictItem, Refcount, TimeWatcher, Timer, TypVal, VarNumber, int64_t, ptrdiff_t,
+    Callback, DictItem, Refcount, TimeWatcher, Timer, TypVal, VarNumber, int64_t, ptrdiff_t,
     size_t, uint64_t,
 };
 
@@ -69,11 +69,12 @@ pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
     // SAFETY: the caller's promise -- both pointees outlive the call.
     let (rettv, timer) = unsafe { (Tv::new(result), Tm::new(timer)) };
     // SAFETY: `tv_dict_alloc` never answers NULL.
-    let dict: *mut Dict = unsafe { tv_dict_alloc() };
+    let dict_held = tv_dict_alloc();
+    let dict = dict_held.as_ptr();
     // SAFETY: the caller's promise that `rettv` holds a List, so `v_list` is
     // the kind the caller promised; the append takes over the dictionary's
     // reference.
-    unsafe { tv_list_append_dict(rettv.list_or_null(), dict) };
+    unsafe { tv_list_append_dict(rettv.list_or_null(), Some(dict_held)) };
 
     for (key, value) in [
         (c"id", timer.timer_id as VarNumber),

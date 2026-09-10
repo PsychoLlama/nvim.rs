@@ -311,11 +311,13 @@ pub unsafe fn tv_dict_watcher_notify(
     // Slot 0 names the caller's dictionary, which the retain below holds
     // across the callbacks; the other two are this frame's own.
     let mut argv = CallFrame::<3>::new();
-    argv.push_naming(TypVal::Dict(dict));
+    // SAFETY: the caller's dictionary, live for the call. The slot *names*
+    // it: the reference the callbacks run under is the retain below, and
+    // `tv_dict_unref` at the bottom is what gives it back.
+    argv.push_naming(TypVal::Dict(unsafe { DictRef::owning(dict) }));
     argv.push_owned(TypVal::String(unsafe { xstrdup(key) }));
-    argv.push_owned(TypVal::Dict(unsafe { tv_dict_alloc() }));
+    argv.push_owned(TypVal::Dict(Some(tv_dict_alloc())));
     let event = argv.args()[2].dict_or_null();
-    unsafe { (*event).dv_refcount.retain() };
 
     // `tv_dict_item_alloc_len` copies exactly the length given and appends
     // the NUL itself, so a Rust `&str` is upstream's `S_LEN(…)`.

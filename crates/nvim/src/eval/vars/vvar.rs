@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::DictRef;
 use crate::eval::typval::ListRef;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -262,16 +263,18 @@ pub unsafe fn set_vim_var_list(idx: Vv, val: Option<ListRef>) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is NULL or a live dictionary.
-pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut Dict) {
+pub unsafe fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
+    let at = val
+        .as_ref()
+        .map_or(::core::ptr::null_mut(), DictRef::as_ptr);
     tv.write_dict(val);
-    if val.is_null() {
+    if at.is_null() {
         return;
     }
     // SAFETY: the caller's obligation -- a live dictionary.
-    unsafe { (*val).dv_refcount.retain() };
-    unsafe { tv_dict_set_keys_readonly(val) };
+    unsafe { tv_dict_set_keys_readonly(at) };
 }
 
 /// Set `v:lua`'s partial.

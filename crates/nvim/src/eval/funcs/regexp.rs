@@ -14,14 +14,14 @@ use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    ListRef, NumBuf, callback_free, index_of, tv_check_for_buffer_arg, tv_check_for_list_arg,
-    tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg,
-    tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_add_list, tv_dict_add_nr,
-    tv_dict_add_str_len, tv_dict_alloc, tv_dict_find, tv_dict_get_callback, tv_dict_has_key,
-    tv_get_bool, tv_get_lnum_buf, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_dict, tv_list_append_list, tv_list_append_number, tv_list_append_string,
-    tv_list_append_tv, tv_list_find, tv_list_items, tv_list_items_mut, tv_list_remove_at,
-    tv_list_uidx,
+    DictRef, ListRef, NumBuf, callback_free, index_of, tv_check_for_buffer_arg,
+    tv_check_for_list_arg, tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg,
+    tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_add_list,
+    tv_dict_add_nr, tv_dict_add_str_len, tv_dict_alloc, tv_dict_find, tv_dict_get_callback,
+    tv_dict_has_key, tv_get_bool, tv_get_lnum_buf, tv_get_number_chk, tv_list_alloc,
+    tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list, tv_list_append_number,
+    tv_list_append_string, tv_list_append_tv, tv_list_find, tv_list_items, tv_list_items_mut,
+    tv_list_remove_at, tv_list_uidx,
 };
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
 use crate::mbyte::utfc_ptr2len;
@@ -362,8 +362,9 @@ unsafe fn get_matches_in_str(
         if !unsafe { vim_regexec_nl(rmp, str, startidx) } {
             return;
         }
-        let d: *mut Dict = unsafe { tv_dict_alloc() };
-        unsafe { tv_list_append_dict(mlist, d) };
+        let d_held = tv_dict_alloc();
+        let d = d_held.as_ptr();
+        unsafe { tv_list_append_dict(mlist, Some(d_held)) };
         // A buffer's matches are keyed by line number, a List's by the
         // index of the item they came from.
         if matchbuf {
@@ -644,8 +645,10 @@ unsafe fn item_string(
         Source::Callback(cb) => {
             // The callback is handed the dict, which it must not be able
             // to free out from under this loop.
-            unsafe { (*(*tv).dict_or_null()).dv_refcount.retain() };
-            let argv = [TypVal::Dict((*tv).dict_or_null())];
+            // SAFETY: the value's own dictionary; the argument holds a
+            // reference of its own for the length of the call.
+            let held = unsafe { DictRef::retained((*tv).dict_or_null()) };
+            let argv = [TypVal::Dict(held)];
             // SAFETY: `result` is the caller's return value.
             let rv = &mut *result;
             let called = unsafe { callback_call(cb, &argv, rv) };

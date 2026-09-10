@@ -185,7 +185,7 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
 
     // SAFETY: a running completion's current match, and the dicts are fresh
     // allocations `v:event` takes over.
-    let item = unsafe {
+    let item_held = unsafe {
         if cur < 0 {
             tv_dict_alloc()
         } else {
@@ -200,7 +200,7 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     // SAFETY: `v_event` is the dict just built, and the key is a static
     // string of the length given.
     unsafe {
-        let _ = tv_dict_add_dict(v_event, c"completed_item".as_ptr(), 14, item);
+        let _ = tv_dict_add_dict(v_event, c"completed_item".as_ptr(), 14, Some(item_held));
         pum_set_event_info(v_event);
         tv_dict_set_keys_readonly(v_event);
     }

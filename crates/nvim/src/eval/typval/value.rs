@@ -98,7 +98,7 @@ pub unsafe fn tv_free(tv: Option<&mut TypVal>) {
         }
         VAR_BLOB => unsafe { tv_blob_unref(tv.blob_or_null()) },
         VAR_LIST => drop(tv.take_list()),
-        VAR_DICT => unsafe { tv_dict_unref(tv.dict_or_null()) },
+        VAR_DICT => drop(tv.take_dict()),
         _ => {}
     }
     // SAFETY: the caller's promise -- the box is theirs to free.
@@ -146,13 +146,8 @@ impl Clone for TypVal {
             // The handle's own `Clone` is the reference: one more owner of
             // the same list, and `v:_null_list` counts nothing.
             TypVal::List(ref list) => TypVal::List(list.clone()),
-            TypVal::Dict(d) => {
-                // SAFETY: as above, for a dictionary.
-                if let Some(dict) = unsafe { d.as_mut() } {
-                    dict.dv_refcount.retain();
-                }
-                TypVal::Dict(d)
-            }
+            // As `List`: the handle's own `Clone` is the reference.
+            TypVal::Dict(ref dict) => TypVal::Dict(dict.clone()),
             TypVal::Unknown => {
                 let arg0 = "tv_copy(UNKNOWN)";
                 semsg!("E685: Internal error: {arg0}");

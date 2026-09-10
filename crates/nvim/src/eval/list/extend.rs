@@ -14,7 +14,8 @@
 use core::ffi::{CStr, c_int};
 
 use super::{
-    Container, ListArg, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, number_of,
+    Container, DictArg, ListArg, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str,
+    number_of,
 };
 use crate::eval::typval::NumBuf;
 use crate::message::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
@@ -44,11 +45,15 @@ fn extend_dict(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
     if !is_new && check_lock(d1.lock(), arg_errmsg) {
         return;
     }
+    // `extendnew()` merges into a copy, which this body owns until it
+    // becomes the answer.
+    let mut held = None;
     if is_new {
-        d1 = d1.copy();
-        if d1.is_null() {
+        let Some(copy) = d1.copy() else {
             return;
-        }
+        };
+        d1 = DictArg::of(copy.as_ptr());
+        held = Some(copy);
     }
 
     // Check the third argument.
@@ -56,16 +61,11 @@ fn extend_dict(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
     let mut action = c"force";
     if args.len() > 2 {
         let Some(name) = cstr_of_chk(&args[2], &mut numbuf) else {
-            // Type error; error message already given.
-            if is_new {
-                d1.unref();
-            }
+            // Type error; error message already given. The copy goes with
+            // `held`, which is its only reference.
             return;
         };
         if !matches!(name.to_bytes(), b"keep" | b"force" | b"error") {
-            if is_new {
-                d1.unref();
-            }
             err_str(e_invarg2, name);
             return;
         }
@@ -75,7 +75,7 @@ fn extend_dict(args: &[TypVal], arg_errmsg: &CStr, is_new: bool, result: &mut Ty
     d1.extend_with(d2, action);
 
     if is_new {
-        *result = TypVal::Dict(d1.raw());
+        result.write_dict(held);
     } else {
         copy_tv(&args[0], result);
     }

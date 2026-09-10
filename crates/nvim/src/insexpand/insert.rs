@@ -252,7 +252,7 @@ pub fn ins_compl_delete(new_leader: bool) {
     // causes flicker, thus we can't do that.
     changed_cline_bef_curs(Win::current());
     // Clear v:completed_item.
-    unsafe { set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed)) };
+    unsafe { set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed))) };
 }
 
 /// Insert a completion string that contains newlines, line by line.
@@ -358,7 +358,7 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
     compl_used_match.set(!(shown.is_original() || (preinsert && !insert_prefix)));
 
     // SAFETY: `shown` is a live node, and the fresh dict is handed over.
-    unsafe { set_vim_var_dict(Vv::CompletedItem, ins_compl_dict_alloc(shown.raw())) };
+    unsafe { set_vim_var_dict(Vv::CompletedItem, Some(ins_compl_dict_alloc(shown.raw()))) };
     compl_hi_on_autocompl_longest.set(insert_prefix && move_cursor);
 }
 

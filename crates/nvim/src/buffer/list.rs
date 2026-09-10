@@ -372,7 +372,9 @@ fn new_buffer() -> Owned<Buffer> {
     let mut buf = unsafe { Buf::new(owned.address()) };
     // Init the b: variables.
     // SAFETY: a fresh dictionary for the buffer's own `b:` scope.
-    buf.b_vars = unsafe { tv_dict_alloc() };
+    // The buffer's storage owns it: `init_var_dict` seeds it with
+    // `DO_NOT_FREE_CNT` and `unref_var_dict` gives the block back.
+    buf.b_vars = tv_dict_alloc().into_raw();
     let (vars, scope_var) = (buf.b_vars, &raw mut buf.b_bufvar);
     // SAFETY: the dictionary just allocated and the buffer's scope variable.
     unsafe { init_var_dict(vars, scope_var, VAR_SCOPE) };

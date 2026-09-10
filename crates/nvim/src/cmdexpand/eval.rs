@@ -208,7 +208,7 @@ pub fn f_getcompletiontype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
 pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let xpc = Cc::current().xpc();
 
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
     if xpc.is_null() || unsafe { (*xpc).xp_files }.is_null() {
         return;
     }

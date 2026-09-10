@@ -103,8 +103,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: &mut TypVal) -> bo
     unsafe {
         // Make `tv` a fresh, referenced, empty dictionary carrying `ref_`.
         let new_dict = |tv: *mut TypVal, ref_: LuaRef| {
-            (*tv).write_dict(tv_dict_alloc());
-            (*(*tv).dict_or_null()).dv_refcount.retain();
+            (*tv).write_dict(Some(tv_dict_alloc()));
             (*(*tv).dict_or_null()).lua_table_ref = ref_;
         };
 

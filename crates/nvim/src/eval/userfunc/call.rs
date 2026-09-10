@@ -25,7 +25,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::di_tv;
-use crate::eval::typval::{DictEntry, DictTab, ListRef};
+use crate::eval::typval::{DictEntry, DictRef, DictTab, ListRef};
 use crate::types::{DictKey, Failed, Refcount};
 
 /// Run `body` inside a `:verbose` report frame: no wait-return, scrolled,
@@ -125,8 +125,10 @@ pub unsafe fn call_user_func(
         add_fix_var(v, unsafe { &raw mut (*fc).fc_l_vars.dv_hashtab }, c"self");
         unsafe { (*v).di_tv.write_empty(VAR_DICT) };
         unsafe { (*v).di_lock = VarLock::Unlocked };
-        unsafe { (*v).di_tv.write_dict(selfdict) };
-        unsafe { (*selfdict).dv_refcount.retain() };
+        // SAFETY: the caller's `self` dictionary; `l:self` takes a
+        // reference of its own.
+        let held = unsafe { DictRef::retained(selfdict) };
+        unsafe { (*v).di_tv.write_dict(held) };
     }
 
     // Init the a: variables, unless the function body is known to use

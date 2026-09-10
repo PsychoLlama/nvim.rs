@@ -456,7 +456,7 @@ pub fn f_prevnonblank(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// `pum_getpos()` — where the popup menu is, or an empty dict.
 pub fn f_pum_getpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
     unsafe { pum_set_event_info((*result).dict_or_null()) };
 }
 
@@ -539,6 +539,6 @@ pub fn f_windowsversion(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 /// `wordcount()`
 pub fn f_wordcount(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
     unsafe { cursor_pos_info((*result).dict_or_null()) };
 }

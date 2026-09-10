@@ -446,7 +446,8 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
     };
     // SAFETY: the option table is a plain array, and `get_varp` hands back
     // the variable for the current buffer and window.
-    let d = unsafe { tv_dict_alloc() };
+    let d_held = tv_dict_alloc();
+    let d = d_held.as_ptr();
     for opt_idx in kOptAleph..kOptCount {
         if !option_has_scope(opt_idx, scope) {
             continue;
@@ -462,7 +463,8 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
         let name = get_option(opt_idx).fullname;
         let _ = unsafe { tv_dict_add_tv(d, name, cstr::bytes_at(name).len(), &mut tv) };
     }
-    d
+    // The caller takes the reference over.
+    d_held.into_raw()
 }
 
 /// 'scrolloff' for a window, local where set. A terminal buffer never

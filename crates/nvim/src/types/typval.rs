@@ -13,7 +13,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::eval::gc::RootId;
-pub use crate::eval::typval::{DictTab, ItemSlot, ListRef};
+pub use crate::eval::typval::{DictRef, DictTab, ItemSlot, ListRef};
 
 pub type BoolVarValue = ::core::ffi::c_uint;
 /// The two `VAR_BOOL` values: `v:false` and `v:true`.
@@ -614,8 +614,8 @@ pub enum TypVal {
     Func(*mut ::core::ffi::c_char) = VAR_FUNC,
     /// A list, owned as one reference; `None` is `v:_null_list`.
     List(Option<ListRef>) = VAR_LIST,
-    /// A dictionary; owned as one reference, and null for `v:_null_dict`.
-    Dict(*mut Dict) = VAR_DICT,
+    /// A dictionary, owned as one reference; `None` is `v:_null_dict`.
+    Dict(Option<DictRef>) = VAR_DICT,
     /// A float.
     Float(Float) = VAR_FLOAT,
     /// `v:true` or `v:false`.

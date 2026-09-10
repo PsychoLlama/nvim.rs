@@ -28,7 +28,7 @@ use std::ops::Deref;
 use std::ptr;
 
 use neovim::eval::typval::{
-    ListRef, tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear, tv_copy, tv_dict_add,
+    DictRef, ListRef, tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear, tv_copy, tv_dict_add,
     tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv, tv_list_find,
     tv_list_len,
 };
@@ -139,7 +139,7 @@ impl Tv {
             Tv::Str(s) => TypVal::String(unsafe { xmemdupz(s.as_ptr().cast(), s.len()) }.cast()),
             Tv::NullStr => TypVal::String(ptr::null_mut()),
             Tv::NullList => TypVal::List(None),
-            Tv::NullDict => TypVal::Dict(ptr::null_mut()),
+            Tv::NullDict => TypVal::Dict(None),
             Tv::NullBlob => TypVal::Blob(ptr::null_mut()),
             Tv::Blob(bytes) => {
                 let b = tv_blob_alloc();
@@ -161,8 +161,8 @@ impl Tv {
                 TypVal::List(Some(list))
             }
             Tv::Dict(entries) => {
-                let d = unsafe { tv_dict_alloc() };
-                unsafe { (*d).dv_refcount = Refcount::ONE };
+                let dict = tv_dict_alloc();
+                let d = dict.as_ptr();
                 path.push(Container::Dict(d));
                 for (key, value) in entries {
                     let di = unsafe { tv_dict_item_alloc(cstr(key.clone()).as_ptr()) };
@@ -172,7 +172,7 @@ impl Tv {
                     let _ = unsafe { tv_dict_add(d, di) };
                 }
                 path.pop();
-                TypVal::Dict(d)
+                TypVal::Dict(Some(dict))
             }
             Tv::Func(name) => {
                 TypVal::Func(unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast())
@@ -184,10 +184,7 @@ impl Tv {
                     // SAFETY: the container is already live, and this is
                     // a second reference to it.
                     Container::List(l) => TypVal::List(unsafe { ListRef::retained(l) }),
-                    Container::Dict(d) => {
-                        unsafe { (*d).dv_refcount.retain() };
-                        TypVal::Dict(d)
-                    }
+                    Container::Dict(d) => TypVal::Dict(unsafe { DictRef::retained(d) }),
                 }
             }
             Tv::Copied(from) => {
@@ -218,7 +215,7 @@ impl Pt {
             // The partial takes the dictionary over, so the value that
             // built it must not release it on the way out of the match.
             Some(dict) => match ManuallyDrop::new(unsafe { dict.build_at(path) }).deref() {
-                TypVal::Dict(d) => *d,
+                TypVal::Dict(d) => d.as_ref().map_or(ptr::null_mut(), DictRef::as_ptr),
                 other => panic!("a partial's dict is a dict, not {}", other.v_type()),
             },
         };
@@ -266,7 +263,7 @@ impl Payload for TypVal {
 
     fn dict(&self) -> *mut Dict {
         match self {
-            TypVal::Dict(d) => *d,
+            TypVal::Dict(d) => d.as_ref().map_or(ptr::null_mut(), DictRef::as_ptr),
             other => panic!("not a dictionary: v_type {}", other.v_type()),
         }
     }
@@ -383,7 +380,10 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
             let at: *const List = l.as_ref().map_or(ptr::null(), |l| l.as_ptr().cast_const());
             unsafe { read_list_at(at, path) }
         }
-        TypVal::Dict(d) => unsafe { read_dict_at(*d, path) },
+        TypVal::Dict(d) => {
+            let at: *const Dict = d.as_ref().map_or(ptr::null(), |d| d.as_ptr().cast_const());
+            unsafe { read_dict_at(at, path) }
+        }
         TypVal::Partial(pt) => Tv::Partial(Box::new(unsafe { read_partial(*pt, path) })),
     }
 }

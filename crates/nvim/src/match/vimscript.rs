@@ -105,7 +105,8 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
 
     let mut cur = win.w_match_head;
     while !cur.is_null() {
-        let dict = unsafe { tv_dict_alloc() };
+        let dict_held = tv_dict_alloc();
+        let dict = dict_held.as_ptr();
         if unsafe { (*cur).mit_match.regprog }.is_null() {
             // Added with matchaddpos(): one `posN` key per position.
             for i in 0..unsafe { (*cur).mit_pos_count } {
@@ -140,7 +141,7 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
             unsafe { put_str(dict, "conceal", buf.as_ptr()) };
         }
 
-        unsafe { tv_list_append_dict(l, dict) };
+        unsafe { tv_list_append_dict(l, Some(dict_held)) };
         cur = unsafe { (*cur).mit_next };
     }
 }

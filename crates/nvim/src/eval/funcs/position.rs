@@ -505,7 +505,7 @@ pub fn f_getcharsearch(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     // SAFETY throughout: `result` is the dispatcher's cleared return value; the three
     // readers answer from the process-wide character-search state.
     let csearch = last_csearch();
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
     let dict = result.dict_or_null();
     let _ = unsafe { tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr()) };
     let forward = last_csearch_forward() as VarNumber;

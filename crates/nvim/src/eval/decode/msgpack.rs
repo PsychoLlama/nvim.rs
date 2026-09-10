@@ -230,9 +230,9 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
         }
     }
 
-    let dict = unsafe { tv_dict_alloc() };
-    unsafe { (*dict).dv_refcount.retain() };
-    unsafe { ptr::write(result, TypVal::Dict(dict)) };
+    let dict_held = tv_dict_alloc();
+    let dict = dict_held.as_ptr();
+    unsafe { ptr::write(result, TypVal::Dict(Some(dict_held))) };
 
     for i in 0..len {
         let key = pairs[i * 2].string_or_null();

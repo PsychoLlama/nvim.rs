@@ -176,7 +176,6 @@ union_readers! {
     Float,   Float,                    as_float,     float_or_zero = 0.0;
     String,  *mut ::core::ffi::c_char, as_string,    string_or_null = ::core::ptr::null_mut();
     Func,    *mut ::core::ffi::c_char, as_func_name, func_name_or_null = ::core::ptr::null_mut();
-    Dict,    *mut Dict,                as_dict,      dict_or_null = ::core::ptr::null_mut();
     Partial, *mut Partial,             as_partial,   partial_or_null = ::core::ptr::null_mut();
     Blob,    *mut Blob,                as_blob,      blob_or_null = ::core::ptr::null_mut();
 }
@@ -196,53 +195,42 @@ impl TypVal {
         }
     }
 
-    /// The list, or `None` unless this is a `List` -- including the
-    /// `v:_null_list` case, which answers `Some(NULL)` as the generated
-    /// readers' `as_*` forms do for their own empty payloads.
+    /// The dictionary, or `None` unless this is a `Dict` -- including the
+    /// `v:_null_dict` case, which answers `Some(NULL)`.
     #[inline(always)]
-    pub(crate) fn as_list(&self) -> Option<*mut List> {
+    pub(crate) fn as_dict(&self) -> Option<*mut Dict> {
         match self {
-            TypVal::List(list) => Some(
-                list.as_ref()
-                    .map_or(::core::ptr::null_mut(), ListRef::as_ptr),
+            TypVal::Dict(dict) => Some(
+                dict.as_ref()
+                    .map_or(::core::ptr::null_mut(), DictRef::as_ptr),
             ),
             _ => None,
         }
     }
 
-    /// The list this value holds, or NULL unless it is a list holding one.
-    ///
-    /// A **borrow**: the answer is live as long as this value holds the
-    /// reference, and a caller that keeps it past that owes a
-    /// [`ListRef::retained`] of its own. This is the spelling the family
-    /// reads a container in -- `tv_list_len(NULL) == 0` and the rest of the
-    /// null-tolerant entry points -- so the tag test and the `v:_null_list`
-    /// case answer the same NULL, as the union read they replaced did.
+    /// The dictionary this value holds, or NULL unless it is a dictionary
+    /// holding one.  A **borrow**; see [`TypVal::list_or_null`].
     #[inline(always)]
-    pub(crate) fn list_or_null(&self) -> *mut List {
+    pub(crate) fn dict_or_null(&self) -> *mut Dict {
         match self {
-            TypVal::List(Some(list)) => list.as_ptr(),
+            TypVal::Dict(Some(dict)) => dict.as_ptr(),
             _ => ::core::ptr::null_mut(),
         }
     }
 
-    /// Overwrite this slot with `list`, **releasing nothing**: see
+    /// Overwrite this slot with `dict`, **releasing nothing**: see
     /// [`union_writers`].  The slot takes over whatever the handle owns.
     #[inline(always)]
-    pub(crate) fn write_list(&mut self, list: Option<ListRef>) {
-        self.overwrite(TypVal::List(list));
+    pub(crate) fn write_dict(&mut self, dict: Option<DictRef>) {
+        self.overwrite(TypVal::Dict(dict));
     }
 
-    /// Move the list out of this slot, leaving `v:_null_list` behind.
-    ///
-    /// The caller owns the reference now: dropping the answer is what
-    /// `tv_list_unref` on the payload was, and keeping it is what a slot
-    /// handing its container on by value wants.  Answers `None` for every
-    /// other kind, which leaves the slot alone.
+    /// Move the dictionary out of this slot, leaving `v:_null_dict` behind.
+    /// See [`TypVal::take_list`].
     #[inline(always)]
-    pub(crate) fn take_list(&mut self) -> Option<ListRef> {
+    pub(crate) fn take_dict(&mut self) -> Option<DictRef> {
         match self {
-            TypVal::List(list) => list.take(),
+            TypVal::Dict(dict) => dict.take(),
             _ => None,
         }
     }
@@ -284,7 +272,7 @@ impl TypVal {
             VAR_STRING => TypVal::String(::core::ptr::null_mut()),
             VAR_FUNC => TypVal::Func(::core::ptr::null_mut()),
             VAR_LIST => TypVal::List(None),
-            VAR_DICT => TypVal::Dict(::core::ptr::null_mut()),
+            VAR_DICT => TypVal::Dict(None),
             VAR_FLOAT => TypVal::Float(0.0),
             VAR_BOOL => TypVal::Bool(crate::types::kBoolVarFalse),
             VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
@@ -326,7 +314,7 @@ impl TypVal {
             TypVal::Special(s) => s == kSpecialVarNull,
             TypVal::String(p) | TypVal::Func(p) => p.is_null(),
             TypVal::List(ref list) => list.is_none(),
-            TypVal::Dict(p) => p.is_null(),
+            TypVal::Dict(ref dict) => dict.is_none(),
             TypVal::Partial(p) => p.is_null(),
             TypVal::Blob(p) => p.is_null(),
         }
@@ -366,7 +354,9 @@ impl TypVal {
             TypVal::List(list) => list
                 .as_ref()
                 .map_or(::core::ptr::null(), |l| l.as_ptr().cast_const().cast()),
-            TypVal::Dict(p) => p.cast_const().cast(),
+            TypVal::Dict(dict) => dict
+                .as_ref()
+                .map_or(::core::ptr::null(), |d| d.as_ptr().cast_const().cast()),
             TypVal::Partial(p) => p.cast_const().cast(),
             TypVal::Blob(p) => p.cast_const().cast(),
             TypVal::Number(n) => bits(n.cast_unsigned()),
@@ -453,7 +443,6 @@ union_writers! {
     Float,   float,     Float,                    write_float,     "a float";
     String,  string,    *mut ::core::ffi::c_char, write_string,    "an owned string";
     Func,    name,      *mut ::core::ffi::c_char, write_func_name, "an owned function name";
-    Dict,    dict,      *mut Dict,                write_dict,      "a dictionary";
     Partial, partial,   *mut Partial,             write_partial,   "a partial";
     Blob,    blob,      *mut Blob,                write_blob,      "a blob";
 }
@@ -464,7 +453,7 @@ impl TypVal {
     /// The engine under [`union_writers`]; see its note for why the release
     /// is the caller's and not this call's.
     #[inline(always)]
-    fn overwrite(&mut self, value: TypVal) {
+    pub(crate) fn overwrite(&mut self, value: TypVal) {
         // SAFETY: `self` is a `&mut`, so the place is writable and aligned;
         // `write` does not read what was there, which is the point -- these
         // callers own the old value's release and some of them fill storage
@@ -591,7 +580,7 @@ impl DictSlot {
     pub(crate) unsafe fn clear(self) {
         match self {
             // SAFETY: the caller's promise: a live slot.
-            DictSlot::Value(tv) => unsafe { (*tv).write_dict(::core::ptr::null_mut()) },
+            DictSlot::Value(tv) => unsafe { (*tv).write_dict(None) },
             DictSlot::Field(dictp) => unsafe { *dictp = ::core::ptr::null_mut() },
         }
     }
@@ -737,15 +726,11 @@ pub(crate) fn tv_list_iter_mut(l: Option<&mut List>) -> ::core::slice::IterMut<'
 /// # Safety
 /// `tv` must point at a writable `TypVal` holding no value yet — the old
 /// contents are overwritten, not cleared — and `d` is null or a live
-/// dictionary.
+/// dictionary the caller holds a reference to.
 #[inline(always)]
 pub unsafe fn tv_dict_set_ret(tv: &mut TypVal, d: *mut Dict) {
-    // SAFETY: the caller's promise: a writable typval.
-    let mut val = unsafe { Tv::new(tv) };
-    val.write_dict(d);
-    if let Some(d) = unsafe { d.as_mut() } {
-        d.dv_refcount.retain();
-    }
+    // SAFETY: the caller's promise: a writable typval and a live dictionary.
+    unsafe { Tv::new(tv) }.write_dict(unsafe { DictRef::retained(d) });
 }
 
 /// Number of items in `d`; a NULL dictionary is empty.
@@ -987,7 +972,8 @@ mod tests {
             // SAFETY: a made-up address, wrapped in a `ManuallyDrop` by
             // `tagged` so that nothing ever releases it.
             VAR_LIST => TypVal::List(unsafe { ListRef::owning(p.cast()) }),
-            VAR_DICT => TypVal::Dict(p.cast()),
+            // SAFETY: as the list arm above.
+            VAR_DICT => TypVal::Dict(unsafe { DictRef::owning(p.cast()) }),
             VAR_BLOB => TypVal::Blob(p.cast()),
             VAR_PARTIAL => TypVal::Partial(p.cast()),
             VAR_STRING => TypVal::String(p.cast()),
@@ -1066,7 +1052,7 @@ mod tests {
             TypVal::String(::core::ptr::null_mut()),
             TypVal::Func(::core::ptr::null_mut()),
             TypVal::List(None),
-            TypVal::Dict(::core::ptr::null_mut()),
+            TypVal::Dict(None),
             TypVal::Float(1.0),
             TypVal::Bool(kBoolVarTrue),
             TypVal::Special(kSpecialVarNull),

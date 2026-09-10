@@ -132,7 +132,7 @@ pub(crate) fn list_set_ret(result: &mut TypVal, l: *mut List) {
 /// Make `result` a fresh, empty Dictionary.
 pub(crate) fn dict_alloc_ret(result: &mut TypVal) {
     // SAFETY: `result` is the caller's cleared return value.
-    unsafe { tv_dict_alloc_ret(result) }
+    tv_dict_alloc_ret(result)
 }
 
 /// Make `result` a fresh, empty Blob.

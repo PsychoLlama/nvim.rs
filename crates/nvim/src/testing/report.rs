@@ -207,7 +207,8 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
     // SAFETY: the caller's dictionaries. The two walks only ever add to the
     // *new* dictionaries, so neither hashtab is rehashed under its own walk.
     let (exp_d, got_d) = (exp_tv.dict_or_null(), got_tv.dict_or_null());
-    let (exp, got) = unsafe { (tv_dict_alloc(), tv_dict_alloc()) };
+    let (exp_held, got_held) = (tv_dict_alloc(), tv_dict_alloc());
+    let (exp, got) = (exp_held.as_ptr(), got_held.as_ptr());
 
     let mut omitted = 0;
     for item in unsafe { &mut *exp_d }.items_mut() {
@@ -231,7 +232,11 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
             let _ = unsafe { tv_dict_add_tv(got, key, key_len, &mut item.di_tv) };
         }
     }
-    (TypVal::Dict(exp), TypVal::Dict(got), omitted)
+    (
+        TypVal::Dict(Some(exp_held)),
+        TypVal::Dict(Some(got_held)),
+        omitted,
+    )
 }
 
 /// Fill `gap` with what was expected and what arrived.

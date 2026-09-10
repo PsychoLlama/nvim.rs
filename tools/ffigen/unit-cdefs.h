@@ -280,6 +280,7 @@ typedef uint16_t DecorPriority;
 typedef uint32_t DecorPriorityInternal;
 typedef unsigned int DecorProvider_state;
 typedef uint8_t DecorRangeKind;
+typedef Dict *DictRef;
 typedef int Direction;
 typedef uint64_t DispTick;
 typedef unsigned int DoBufAction;
@@ -1508,7 +1509,7 @@ struct TypVal {
     char *string_;
     char *func_;
     ListRef list_;
-    Dict *dict_;
+    DictRef dict_;
     Float float_;
     BoolVarValue bool_;
     SpecialVarValue special_;

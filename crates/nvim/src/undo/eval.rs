@@ -107,7 +107,8 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> ListRef {
     let mut link = first;
     while let Some(uh) = buffer.header(link) {
         // SAFETY: a fresh dictionary.
-        let dict: *mut Dict = unsafe { tv_dict_alloc() };
+        let dict_held = tv_dict_alloc();
+        let dict = dict_held.as_ptr();
         dict_add_nr(dict, c"seq", VarNumber::from(uh.uh_seq));
         dict_add_nr(dict, c"time", uh.uh_time);
         if uh.link() == buffer.b_u_newhead {
@@ -123,7 +124,7 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> ListRef {
             dict_add_list(dict, c"alt", Some(eval_tree(buffer, uh.uh_alt_next)));
         }
         // SAFETY: a list and a dictionary this function owns.
-        unsafe { tv_list_append_dict(list, dict) };
+        unsafe { tv_list_append_dict(list, Some(dict_held)) };
         link = uh.uh_prev;
     }
     held
@@ -155,7 +156,7 @@ pub fn f_undofile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `undotree([{buf}])` — the whole tree, plus where in it the buffer sits.
 pub fn f_undotree(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
     let raw = match args.first() {
         // SAFETY: as above.
         Some(tv) => unsafe { get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw) },

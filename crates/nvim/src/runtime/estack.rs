@@ -30,7 +30,6 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::ListRef;
 use crate::memory::handoff::owned_cstr;
-use core::mem::ManuallyDrop;
 
 use core::ffi::{CStr, c_char};
 use core::ptr;
@@ -328,13 +327,13 @@ unsafe fn stacktrace_push_item(
     // SAFETY: `l` is the caller's list, and the dict below is freshly
     // allocated, so every `tv_dict_add_*` writes into memory we own until the
     // final append hands the dict to the list.
-    let d = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
+    let d_held = tv_dict_alloc_lock(VarLock::Fixed);
+    let d = d_held.as_ptr();
     // Upstream marks this local `VAR_LOCKED`; the lock never travels, because
     // `tv_list_append_tv` copies it into a fresh item and a copy is unlocked.
-    // The dictionary is still unowned -- `tv_dict_alloc` starts it at zero --
-    // so the value that names it must not release it: the append's copy is
-    // what takes the first reference.
-    let tv = ManuallyDrop::new(TypVal::Dict(d));
+    // The value holds the one reference the allocator handed out, and the
+    // append takes a second; both are given back when this frame ends.
+    let tv = TypVal::Dict(Some(d_held));
     if !func.is_null() {
         let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), func) };
     }

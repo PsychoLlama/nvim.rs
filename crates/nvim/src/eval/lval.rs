@@ -149,10 +149,9 @@ pub(crate) unsafe fn get_lval_dict_item(
     // A null Dict is an empty Dict; allocate one now.
     // SAFETY: as above.
     if container.dict_or_null().is_null() {
-        // SAFETY: `tv_dict_alloc` never answers NULL.
-        container.write_dict(unsafe { tv_dict_alloc() });
-        // SAFETY: the typval now holds the reference this takes.
-        unsafe { (*container.dict_or_null()).dv_refcount.retain() };
+        // SAFETY: the allocator is the editor's own; the typval takes the
+        // handle over.
+        container.write_dict(Some(tv_dict_alloc()));
     }
     lval.ll_dict = container.dict_or_null();
     // SAFETY: `ll_dict` is a live Dict, and `key` is NUL-terminated or `len` bytes long.

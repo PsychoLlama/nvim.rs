@@ -53,7 +53,7 @@ pub(crate) fn filter_map_dict(
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        result.write_dict(ptr::null_mut());
+        result.write_dict(None);
     }
     if d.is_null() || (filtermap == FilterMap::Filter && check_lock(d.lock(), arg_errmsg)) {
         return;

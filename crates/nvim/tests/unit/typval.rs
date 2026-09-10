@@ -193,7 +193,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
     // SAFETY: the dict and the item are this case's own; the item is handed
     // to the dict, which then owns it, and the dict is freed at the end.
     unsafe {
-        let d = tv_dict_alloc();
+        let d = tv_dict_alloc().into_raw();
         log.check(&[alloc::dict(d)]);
 
         let di = tv_dict_item_alloc(cstr("").as_ptr());
@@ -302,7 +302,7 @@ fn a_watcher_is_removed_only_by_its_own_pattern() {
     // SAFETY: the dict is this case's own and is freed below; a
     // `kCallbackNone` callback owns nothing.
     unsafe {
-        let d = tv_dict_alloc();
+        let d = tv_dict_alloc().into_raw();
         let callback = Callback::None;
         let pattern = cstr("key*");
         tv_dict_watcher_add(d, pattern.as_ptr(), 4, callback.clone());

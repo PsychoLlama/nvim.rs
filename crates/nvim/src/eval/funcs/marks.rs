@@ -37,8 +37,9 @@ pub fn f_changenr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 unsafe fn append_mark(l: *mut List, mark: Pos) -> *mut Dict {
     // SAFETY: the caller's obligation; the dict is handed to the list
     // immediately, so it is not leaked.
-    let d = unsafe { tv_dict_alloc() };
-    unsafe { tv_list_append_dict(l, d) };
+    let d_held = tv_dict_alloc();
+    let d = d_held.as_ptr();
+    unsafe { tv_list_append_dict(l, Some(d_held)) };
     let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, mark.lnum as VarNumber) };
     let _ = unsafe { tv_dict_add_nr(d, c"col".as_ptr(), 3, mark.col as VarNumber) };
     let _ = unsafe { tv_dict_add_nr(d, c"coladd".as_ptr(), 6, mark.coladd as VarNumber) };

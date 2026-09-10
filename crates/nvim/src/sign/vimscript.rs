@@ -17,7 +17,7 @@
 )]
 
 use super::*;
-use crate::eval::typval::{ListRef, NumBuf, tv_list_items};
+use crate::eval::typval::{DictRef, ListRef, NumBuf, tv_list_items};
 use crate::narrow::number_as_int;
 use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
 use core::ptr;
@@ -168,9 +168,10 @@ unsafe fn each_dict_arg(args: &[TypVal], result: &mut TypVal, one: impl FnMut(*m
 ///
 /// # Safety
 /// `sign` must be a live sign definition.
-pub(crate) unsafe fn sign_get_info_dict(sign: SignRef) -> *mut Dict {
+pub(crate) unsafe fn sign_get_info_dict(sign: SignRef) -> DictRef {
     // SAFETY: a definition's name, icon and cells are its own.
-    let d = unsafe { tv_dict_alloc() };
+    let d_held = tv_dict_alloc();
+    let d = d_held.as_ptr();
     unsafe { put_str(d, "name", sign.sn_name) };
     if !sign.sn_icon.is_null() {
         unsafe { put_str(d, "icon", sign.sn_icon) };
@@ -194,23 +195,24 @@ pub(crate) unsafe fn sign_get_info_dict(sign: SignRef) -> *mut Dict {
             unsafe { put_str(d, key, hl_name(id)) };
         }
     }
-    d
+    d_held
 }
 
 /// `sign_getplaced()`'s dictionary for one placed sign.
 ///
 /// # Safety
 /// `mark` must carry a live sign decoration.
-pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut Dict {
+pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
     // SAFETY: the caller's mark, and the decoration the store names for it.
-    let d = unsafe { tv_dict_alloc() };
+    let d_held = tv_dict_alloc();
+    let d = d_held.as_ptr();
     let sh = unsafe { Sh::new(decor_find_sign(mt_decor(mark))) };
     unsafe { put_str(d, "name", sign_get_name(sh.raw())) };
     unsafe { put_nr(d, "id", VarNumber::from(mark.id.cast_signed())) };
     unsafe { put_str(d, "group", describe_ns(mark.ns.cast_signed(), c"".as_ptr())) };
     unsafe { put_nr(d, "lnum", VarNumber::from(mark.pos.row + 1)) };
     unsafe { put_nr(d, "priority", VarNumber::from(sh.priority)) };
-    d
+    d_held
 }
 
 /// Every sign placed in `buffer`, in marktree order — `getbufinfo()`'s `signs`.
@@ -221,7 +223,7 @@ pub(crate) unsafe fn get_buffer_signs(buffer: Buf) -> ListRef {
     let signs = placed_signs(buffer, 0, ALL_GROUPS, |_| Keep::Yes);
     let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     for mark in signs {
-        unsafe { tv_list_append_dict(l.as_ptr(), sign_get_placed_info_dict(mark)) };
+        unsafe { tv_list_append_dict(l.as_ptr(), Some(sign_get_placed_info_dict(mark))) };
     }
     l
 }
@@ -244,9 +246,10 @@ unsafe fn sign_get_placed_in_buf(
     // SAFETY: the caller's buffer.
     let cbuf = buffer;
     // SAFETY: the caller's list, and the buffer handle it reports.
+    let d_held = tv_dict_alloc();
+    let d = d_held.as_ptr();
     let l = unsafe {
-        let d = tv_dict_alloc();
-        tv_list_append_dict(retlist, d);
+        tv_list_append_dict(retlist, Some(d_held));
         put_nr(d, "bufnr", VarNumber::from(cbuf.handle));
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
         // A borrow of the list the dictionary owns from here on.
@@ -281,7 +284,7 @@ unsafe fn sign_get_placed_in_buf(
     unsafe {
         sort_signs(&mut signs);
         for mark in signs {
-            tv_list_append_dict(l, sign_get_placed_info_dict(mark));
+            tv_list_append_dict(l, Some(sign_get_placed_info_dict(mark)));
         }
     };
 }
@@ -400,7 +403,7 @@ pub(crate) fn f_sign_getdefined(args: &[TypVal], result: &mut TypVal, _fptr: Eva
             sign_defs()
         };
         for sp in defs {
-            tv_list_append_dict(l, sign_get_info_dict(sp));
+            tv_list_append_dict(l, Some(sign_get_info_dict(sp)));
         }
     };
 }

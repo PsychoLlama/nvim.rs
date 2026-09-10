@@ -33,7 +33,7 @@ use crate::message::{
     msg_display, msg_display_keys, msg_outnum, msg_putchar, msg_str, msg_str_hl, msg_title,
 };
 use crate::message_fmt::msg_cstr;
-use crate::types::{Dict, List, VarNumber};
+use crate::types::{List, VarNumber};
 
 /// Enable or disable the (sub)menus `name` reaches, recursively.
 ///
@@ -201,12 +201,13 @@ pub(crate) fn free_menu_string(mut menu: Menu, idx: usize) {
 
 /// One node as the nested Dict `menu_get()` answers with, or null when the
 /// node is in none of `modes`.
-fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut Dict {
+fn menu_get_recursive(menu: Menu, modes: c_int) -> Option<DictRef> {
     if !menu.in_modes(modes) {
-        return ptr::null_mut();
+        return None;
     }
 
-    let dict = dict_alloc();
+    let dict_held = dict_alloc();
+    let dict = dict_held.as_ptr();
     dict_add_str(dict, c"name", menu.dname());
     dict_add_nr(dict, c"priority", VarNumber::from(menu.priority));
     dict_add_nr(dict, c"hidden", VarNumber::from(is_hidden(menu.dname())));
@@ -224,13 +225,15 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut Dict {
 
     match menu.children() {
         None => {
-            let commands = dict_alloc();
-            dict_add_dict(dict, c"mappings".to_bytes(), commands);
+            let commands_held = dict_alloc();
+            let commands = commands_held.as_ptr();
+            dict_add_dict(dict, c"mappings".to_bytes(), Some(commands_held));
             for (bit, mode) in MODE_CHARS.iter().enumerate() {
                 if menu.modes & modes & (1 << bit) == 0 {
                     continue;
                 }
-                let mapping = dict_alloc();
+                let mapping_held = dict_alloc();
+                let mapping = mapping_held.as_ptr();
                 dict_add_allocated_str(mapping, c"rhs", special_text(menu.strings[bit]));
                 dict_add_nr(mapping, c"silent", VarNumber::from(menu.silent[bit]));
                 dict_add_nr(
@@ -255,21 +258,21 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut Dict {
                     VarNumber::from(menu.noremap[bit] & REMAP_SCRIPT != 0),
                 );
                 // One byte of the mode letters, so `tl` files under `t`.
-                dict_add_dict(commands, &mode.to_bytes()[..1], mapping);
+                dict_add_dict(commands, &mode.to_bytes()[..1], Some(mapping_held));
             }
         }
         Some(children) => {
             let list = list_alloc();
             for child in children.siblings() {
                 let entry = menu_get_recursive(child, modes);
-                if dict_len(entry) > 0 {
+                if entry.as_ref().is_some_and(|d| dict_len(d.as_ptr()) > 0) {
                     list_append_dict(list.as_ptr(), entry);
                 }
             }
             dict_add_list(dict, c"submenus", Some(list));
         }
     }
-    dict
+    Some(dict_held)
 }
 
 /// Export the menus matching `path_name` into `list` -- the `menu_get()`
@@ -290,7 +293,7 @@ pub(crate) unsafe fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut L
     }
     for node in menu.into_iter().flat_map(Menu::siblings) {
         let entry = menu_get_recursive(node, modes);
-        if !entry.is_null() && dict_len(entry) > 0 {
+        if entry.as_ref().is_some_and(|d| dict_len(d.as_ptr()) > 0) {
             list_append_dict(list, entry);
         }
         if !path.is_empty() {

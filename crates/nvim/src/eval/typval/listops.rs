@@ -98,16 +98,12 @@ pub unsafe fn tv_list_append_list(l: *mut List, itemlist: Option<ListRef>) {
     unsafe { tv_list_append_owned_tv(l, TypVal::List(itemlist)) };
 }
 
-/// Append `dict` to `l`, taking a reference to it.
+/// Append `dict` to `l`, which takes the handle over.
 ///
 /// # Safety
-/// `l` must point at a live list, and `dict` is null or a live dictionary.
-/// A reference to `dict` is taken.
-pub unsafe fn tv_list_append_dict(l: *mut List, dict: *mut Dict) {
+/// `l` must point at a live list.
+pub unsafe fn tv_list_append_dict(l: *mut List, dict: Option<DictRef>) {
     unsafe { tv_list_append_owned_tv(l, TypVal::Dict(dict)) };
-    if let Some(dict) = unsafe { dict.as_mut() } {
-        dict.dv_refcount.retain();
-    }
 }
 
 /// Append a copy of `str`'s first `len` bytes to `l`.

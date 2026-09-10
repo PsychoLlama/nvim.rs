@@ -55,8 +55,9 @@ pub(super) unsafe fn add_mark(
     // SAFETY: the caller promised a live list and NUL-terminated strings; the
     // dict and the position list are handed to `l`, which owns them from
     // `tv_list_append_dict` on.
-    let d = unsafe { tv_dict_alloc() };
-    unsafe { tv_list_append_dict(l, d) };
+    let d_held = tv_dict_alloc();
+    let d = d_held.as_ptr();
+    unsafe { tv_list_append_dict(l, Some(d_held)) };
     let held = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     let lpos = held.as_ptr();
     unsafe { tv_list_append_number(lpos, VarNumber::from(bufnr)) };

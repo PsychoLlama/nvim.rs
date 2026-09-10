@@ -223,7 +223,9 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);
     // SAFETY: a fresh dictionary, which becomes the window's own.
-    new_wp.w_vars = unsafe { tv_dict_alloc() };
+    // The window's storage owns it; `init_var_dict` seeds it with
+    // `DO_NOT_FREE_CNT`.
+    new_wp.w_vars = tv_dict_alloc().into_raw();
     // SAFETY: the dictionary just allocated, and the window's own scope.
     unsafe { init_var_dict(new_wp.w_vars, &raw mut new_wp.w_winvar, VAR_SCOPE) };
     block_autocmds();

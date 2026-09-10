@@ -40,9 +40,9 @@ use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage
 use crate::eval::typval::DictEntry;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    ListRef, tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
-    tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy, tv_list_copyid,
-    tv_list_free_contents, tv_list_free_list, tv_list_iter_mut,
+    DictRef, ListRef, tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents,
+    tv_dict_free_dict, tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy,
+    tv_list_copyid, tv_list_free_contents, tv_list_free_list, tv_list_iter_mut,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -599,7 +599,7 @@ pub(crate) unsafe fn set_ref_in_item_partial(
     if !unsafe { (*pt).pt_dict }.is_null() {
         // A borrowed view, not an owner: the partial keeps the reference,
         // so `dtv` releases nothing.
-        let mut dtv = ManuallyDrop::new(TypVal::Dict(unsafe { (*pt).pt_dict }));
+        let mut dtv = ManuallyDrop::new(TypVal::Dict(unsafe { DictRef::owning((*pt).pt_dict) }));
         abort = abort || unsafe { set_ref_in_item(&mut dtv, copy_id, ht_stack, list_stack) };
     }
     // SAFETY: `pt` is a live partial, so it holds `pt_argc` bound
@@ -714,14 +714,12 @@ pub unsafe fn var_item_copy(
         VAR_DICT => {
             let d = src.dict_or_null();
             if d.is_null() {
-                dst.write_dict(null_mut::<Dict>());
+                dst.write_dict(None);
             // SAFETY: `d` is the source's live Dict.
             } else if copy_id != 0 && unsafe { (*d).dv_copy_id } == copy_id {
                 // SAFETY: as above -- the copy it was given under this id,
                 // which gains this reference.
-                dst.write_dict(unsafe { (*d).dv_copydict });
-                // SAFETY: as above -- the shared copy gains this reference.
-                unsafe { (*dst.dict_or_null()).dv_refcount.retain() };
+                dst.write_dict(unsafe { DictRef::retained((*d).dv_copydict) });
             } else {
                 // SAFETY: as above; `conv` is null or the caller's.
                 dst.write_dict(unsafe { tv_dict_copy(conv, d, deep, copy_id) });

@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::DictRef;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -83,8 +84,10 @@ unsafe fn get_var_from(
                 if unsafe { *varname.add(1) } == NUL as c_char {
                     // A bare "&": every window- or buffer-local option.
                     let opts = get_winbuf_options(c_int::from(htname == b'b' as c_int));
-                    if !opts.is_null() {
-                        unsafe { tv_dict_set_ret(result, opts) };
+                    // SAFETY: the dictionary just built, whose one reference
+                    // the answer takes over.
+                    if let Some(opts) = unsafe { DictRef::owning(opts) } {
+                        result.write_dict(Some(opts));
                         done = true;
                     }
                 } else if unsafe { eval_option(&raw mut varname, Some(result), true) }.is_ok() {

@@ -164,7 +164,7 @@ unsafe fn get_qf_loc_list(
         return;
     };
 
-    unsafe { tv_dict_alloc_ret(result) };
+    tv_dict_alloc_ret(result);
     if !is_qf && window.is_none() {
         return;
     }

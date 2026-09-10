@@ -12,12 +12,13 @@ use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
-    ListRef, callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str, tv_dict_add_dict,
-    tv_dict_add_float, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc,
-    tv_dict_clear, tv_dict_copy, tv_dict_equal, tv_dict_extend, tv_dict_find, tv_dict_free,
-    tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string_alloc, tv_dict_get_string_buf,
-    tv_dict_get_string_buf_chk, tv_dict_item_alloc_len, tv_dict_set_keys_readonly, tv_dict_unref,
-    tv_dict_watcher_add, tv_dict_watcher_remove, tv_list_unref,
+    DictRef, ListRef, callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str,
+    tv_dict_add_dict, tv_dict_add_float, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
+    tv_dict_alloc, tv_dict_clear, tv_dict_copy, tv_dict_equal, tv_dict_extend, tv_dict_find,
+    tv_dict_free, tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string_alloc,
+    tv_dict_get_string_buf, tv_dict_get_string_buf_chk, tv_dict_item_alloc_len,
+    tv_dict_set_keys_readonly, tv_dict_unref, tv_dict_watcher_add, tv_dict_watcher_remove,
+    tv_list_unref,
 };
 use neovim::guard::sandbox;
 use neovim::mbyte::convert_setup;
@@ -25,9 +26,27 @@ use neovim::memory::{xfree, xmalloc, xstrdup};
 use neovim::message::state::emsg_skip;
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{Callback, Dict, Failed, VarLock, VimConv};
+use std::ffi::c_int;
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Cb, Payload, Pt, Tv};
+
+/// [`tv_dict_copy`] answering the pointer these cases are written against.
+///
+/// The copy comes back as an owning handle; the case takes the reference
+/// over and gives it back with `tv_dict_free`/`tv_dict_unref`, which is what
+/// upstream's `tv_dict_copy` left it holding.
+///
+/// # Safety
+/// As [`tv_dict_copy`].
+unsafe fn dict_copied(
+    conv: *const VimConv,
+    orig: *mut Dict,
+    deep: bool,
+    copy_id: c_int,
+) -> *mut Dict {
+    unsafe { tv_dict_copy(conv, orig, deep, copy_id) }.map_or(ptr::null_mut(), DictRef::into_raw)
+}
 use crate::support::{check_emsg, cstr};
 
 /// The spec's bare Lua numbers, which `lua2typvalt` made floats.
@@ -786,7 +805,9 @@ fn adding_a_typed_value_takes_the_key_by_length() {
             ),
             (
                 "dict",
-                Box::new(move |d, _| tv_dict_add_dict(d, cstr("testt").as_ptr(), 3, d2)),
+                Box::new(move |d, _| {
+                    tv_dict_add_dict(d, cstr("testt").as_ptr(), 3, DictRef::retained(d2))
+                }),
                 Tv::dict([("foo", f(42.0))]),
                 false,
             ),
@@ -884,7 +905,7 @@ fn clearing_a_dict_frees_its_items() {
     let log = AllocLog::start();
     // SAFETY: the dict is this case's own.
     unsafe {
-        let d = tv_dict_alloc();
+        let d = tv_dict_alloc().into_raw();
         log.check(&[alloc::dict(d)]);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
@@ -922,9 +943,9 @@ fn extending_a_dict_keeps_forces_or_reports() {
             );
         };
 
-        let d1 = tv_dict_alloc();
+        let d1 = tv_dict_alloc().into_raw();
         log.check(&[alloc::dict(d1)]);
-        let d2 = tv_dict_alloc();
+        let d2 = tv_dict_alloc().into_raw();
         log.check(&[alloc::dict(d2)]);
         for action in ["error", "keep", "force"] {
             extend(d1, d2, action, None);
@@ -1054,9 +1075,11 @@ fn comparing_dicts_folds_the_values_case_but_never_the_keys() {
     // SAFETY: every dict is this case's own.
     unsafe {
         assert!(tv_dict_equal(ptr::null_mut(), ptr::null_mut(), false));
-        let d1 = tv_dict_alloc();
+        let d1 = tv_dict_alloc().into_raw();
         log.check(&[alloc::dict(d1)]);
-        assert_eq!((*d1).dv_refcount.get(), 0);
+        // The allocator hands out one reference, which `into_raw` gave to
+        // this case; `tv_dict_free` at the bottom is where it goes back.
+        assert_eq!((*d1).dv_refcount.get(), 1);
         assert!(tv_dict_equal(ptr::null_mut(), d1, false));
         assert!(tv_dict_equal(d1, ptr::null_mut(), false));
         assert!(tv_dict_equal(d1, d1, false));
@@ -1109,7 +1132,7 @@ fn copying_a_null_dict_answers_null() {
         for deep in [true, false] {
             for copy_id in [0, 1] {
                 assert!(
-                    tv_dict_copy(ptr::null(), ptr::null_mut(), deep, copy_id).is_null(),
+                    dict_copied(ptr::null(), ptr::null_mut(), deep, copy_id).is_null(),
                     "deep {deep} copyID {copy_id}"
                 );
             }
@@ -1149,7 +1172,7 @@ fn copying_a_dict_shares_or_rebuilds_its_containers() {
 
         assert_eq!((*inner_dict).dv_refcount.get(), 1);
         assert_eq!((*inner_list).lv_refcount.get(), 1);
-        let shallow = tv_dict_copy(ptr::null(), d, false, 0);
+        let shallow = dict_copied(ptr::null(), d, false, 0);
         assert_eq!((*inner_dict).dv_refcount.get(), 2);
         assert_eq!((*inner_list).lv_refcount.get(), 2);
         assert_eq!((*tv::di_of(shallow, "a")).di_tv.dict(), inner_dict);
@@ -1159,7 +1182,7 @@ fn copying_a_dict_shares_or_rebuilds_its_containers() {
 
         assert_eq!((*inner_dict).dv_refcount.get(), 1);
         assert_eq!((*inner_list).lv_refcount.get(), 1);
-        let deep = tv_dict_copy(ptr::null(), d, true, 0);
+        let deep = dict_copied(ptr::null(), d, true, 0);
         assert!(!deep.is_null());
         assert_eq!(
             (*inner_dict).dv_refcount.get(),
@@ -1197,7 +1220,7 @@ fn a_converting_dict_copy_rewrites_the_keys_as_well() {
         let inner_dict = (*tv::di_of(d, "a")).di_tv.dict();
         let inner_list = (*tv::di_of(d, "b")).di_tv.list();
 
-        let deep = tv_dict_copy(&raw const vc, d, true, 0);
+        let deep = dict_copied(&raw const vc, d, true, 0);
         assert!(!deep.is_null());
         assert_eq!((*inner_dict).dv_refcount.get(), 1);
         assert_eq!((*inner_list).lv_refcount.get(), 1);
@@ -1246,7 +1269,7 @@ fn a_dict_copy_id_preserves_sharing() {
             (*tv::di_of(d, "b")).di_tv.dict()
         );
 
-        let without = tv_dict_copy(ptr::null(), d, true, 0);
+        let without = dict_copied(ptr::null(), d, true, 0);
         assert_ne!(
             (*tv::di_of(without, "a")).di_tv.dict(),
             (*tv::di_of(without, "b")).di_tv.dict()
@@ -1256,7 +1279,7 @@ fn a_dict_copy_id_preserves_sharing() {
             Tv::dict([("a", Tv::Dict(vec![])), ("b", Tv::Dict(vec![]))])
         );
 
-        let with = tv_dict_copy(ptr::null(), d, true, 2);
+        let with = dict_copied(ptr::null(), d, true, 2);
         assert_eq!(
             (*tv::di_of(with, "a")).di_tv.dict(),
             (*tv::di_of(with, "b")).di_tv.dict()
@@ -1283,10 +1306,10 @@ fn a_self_referencing_dict_copies_into_a_self_referencing_copy() {
         let mut d_tv = Tv::Dict(vec![]).build();
         let d = d_tv.dict();
         assert_eq!((*d).dv_refcount.get(), 1);
-        let _ = tv_dict_add_dict(d, cstr("test").as_ptr(), 4, d);
+        let _ = tv_dict_add_dict(d, cstr("test").as_ptr(), 4, DictRef::retained(d));
         assert_eq!((*d).dv_refcount.get(), 2);
 
-        let copy = tv_dict_copy(ptr::null(), d, true, 2);
+        let copy = dict_copied(ptr::null(), d, true, 2);
         assert_eq!((*copy).dv_refcount.get(), 2, "the copy holds itself");
         assert_eq!(tv::read_dict(copy), Tv::dict([("test", Tv::Cycle(0))]));
 

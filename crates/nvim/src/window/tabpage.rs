@@ -100,7 +100,9 @@ pub(crate) fn alloc_tabpage() -> TabPage {
 
     // Init t: variables.
     // SAFETY: a fresh dictionary, which becomes the tab page's own.
-    tp.tp_vars = unsafe { tv_dict_alloc() };
+    // The tab page's storage owns it; `init_var_dict` seeds it with
+    // `DO_NOT_FREE_CNT`.
+    tp.tp_vars = tv_dict_alloc().into_raw();
     let (vars, scope) = (tp.tp_vars, &raw mut tp.tp_winvar);
     // SAFETY: the dictionary just allocated, and the tab page's own scope.
     unsafe { init_var_dict(vars, scope, VAR_SCOPE) };

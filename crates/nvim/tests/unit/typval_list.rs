@@ -31,13 +31,13 @@ use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
 use neovim::eval::typval::{
-    ListRef, NumBuf, tv_clear, tv_list_alloc, tv_list_append_allocated_string, tv_list_append_dict,
-    tv_list_append_list, tv_list_append_number, tv_list_append_owned_tv, tv_list_append_string,
-    tv_list_append_tv, tv_list_concat, tv_list_copy, tv_list_equal, tv_list_extend, tv_list_find,
-    tv_list_find_nr, tv_list_find_str, tv_list_first, tv_list_free, tv_list_free_contents,
-    tv_list_free_list, tv_list_insert_tv, tv_list_join, tv_list_last, tv_list_len,
-    tv_list_move_range, tv_list_remove_at, tv_list_remove_range, tv_list_unref, tv_list_watch_add,
-    tv_list_watch_remove,
+    DictRef, ListRef, NumBuf, tv_clear, tv_list_alloc, tv_list_append_allocated_string,
+    tv_list_append_dict, tv_list_append_list, tv_list_append_number, tv_list_append_owned_tv,
+    tv_list_append_string, tv_list_append_tv, tv_list_concat, tv_list_copy, tv_list_equal,
+    tv_list_extend, tv_list_find, tv_list_find_nr, tv_list_find_str, tv_list_first, tv_list_free,
+    tv_list_free_contents, tv_list_free_list, tv_list_insert_tv, tv_list_join, tv_list_last,
+    tv_list_len, tv_list_move_range, tv_list_remove_at, tv_list_remove_range, tv_list_unref,
+    tv_list_watch_add, tv_list_watch_remove,
 };
 use neovim::garray::ga_clear;
 use neovim::mbyte::convert_setup;
@@ -744,12 +744,12 @@ fn appending_a_dict_takes_a_reference() {
         let d = d_tv.dict();
         log.clear();
         assert_eq!((*d).dv_refcount.get(), 1);
-        tv_list_append_dict(l, d);
+        tv_list_append_dict(l, DictRef::retained(d));
         assert_eq!((*d).dv_refcount.get(), 2);
         assert_eq!((*tv_list_first(l)).li_tv.dict(), d);
         log.check(&[]);
 
-        tv_list_append_dict(l, ptr::null_mut());
+        tv_list_append_dict(l, None);
         log.check(&[]);
 
         assert_eq!(

@@ -783,7 +783,7 @@ pub unsafe fn ins_compl_clear() {
     compl_from_nonkeyword.set(false);
     compl_num_bests.set(0);
     // SAFETY: a fresh locked dict, which `set_vim_var_dict` takes over.
-    unsafe { set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed)) };
+    unsafe { set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed))) };
 }
 
 /// Score the matches and, unless `'completeopt'` says `nosort`, reorder them.

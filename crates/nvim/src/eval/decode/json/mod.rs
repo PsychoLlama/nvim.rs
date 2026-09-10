@@ -278,9 +278,7 @@ pub unsafe fn json_decode_string(
                             let len = kListLenMayKnow as ptrdiff_t;
                             special_val = unsafe { decode_create_map_special_dict(&mut tv, len) };
                         } else {
-                            let dict = unsafe { tv_dict_alloc() };
-                            unsafe { (*dict).dv_refcount.retain() };
-                            tv = TypVal::Dict(dict);
+                            tv = TypVal::Dict(Some(tv_dict_alloc()));
                         }
                         dec.open(tv, special_val, p);
                     }

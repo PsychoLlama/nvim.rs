@@ -393,8 +393,10 @@ pub(crate) unsafe fn add_llist_tags(
         };
         let pattern = (lnum == 0).then(|| unsafe { search_pattern(&tagp) });
 
-        let dict = unsafe { tv_dict_alloc() };
-        unsafe { tv_list_append_dict(list, dict) };
+        let dict_held = tv_dict_alloc();
+
+        let dict = dict_held.as_ptr();
+        unsafe { tv_list_append_dict(list, Some(dict_held)) };
         unsafe { add_str(dict, c"text", name.as_ptr()) };
         unsafe { add_str(dict, c"filename", fname.as_ptr()) };
         let _ = unsafe {

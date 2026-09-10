@@ -28,7 +28,7 @@ use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{
-    CallFrame, NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_items, tv_list_len,
+    CallFrame, DictRef, NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_list_items, tv_list_len,
 };
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
@@ -227,14 +227,21 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     // has the `term` flag in it; with no options given, a dictionary is
     // borrowed for the call and freed again on the way out.  The frame
     // borrows the caller's values, so nothing in it is released.
-    let borrowed = args.len() < 2;
+    // The borrowed options dictionary this body owns; the frame *names* it
+    // and releases nothing, so dropping the handle at the end is the free.
+    let held = (args.len() < 2).then(tv_dict_alloc);
     let mut frame = CallFrame::<2>::new();
     frame.push_borrowed(&args[0]);
     match args.get(1) {
         Some(opts) => frame.push_borrowed(opts),
-        // SAFETY: `tv_dict_alloc` never answers NULL; the dictionary is
-        // freed by hand below.
-        None => frame.push_naming(TypVal::Dict(unsafe { tv_dict_alloc() })),
+        // SAFETY: the dictionary `held` owns, live for the call.
+        None => {
+            let at = held
+                .as_ref()
+                .expect("no options means a fresh one")
+                .as_ptr();
+            frame.push_naming(TypVal::Dict(unsafe { DictRef::owning(at) }));
+        }
     }
 
     if frame.args()[1].v_type() != VAR_DICT {
@@ -247,8 +254,5 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     // SAFETY: `dict` is the dictionary the frame's second slot names.
     let _ = unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
     f_jobstart(frame.args(), result, fptr);
-    if borrowed {
-        // SAFETY: the dictionary was borrowed for this call only.
-        unsafe { tv_dict_free(dict) };
-    }
+    drop(held);
 }

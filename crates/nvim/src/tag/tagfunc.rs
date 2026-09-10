@@ -13,7 +13,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{CallFrame, tv_list_iter};
+use crate::eval::typval::{CallFrame, DictRef, tv_list_iter};
 use crate::types::TypVal;
 use crate::types::{
     FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,
@@ -148,7 +148,8 @@ pub(crate) unsafe fn find_tagfunc_tags(
         }
     }
 
-    let info = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
+    let info_held = tv_dict_alloc_lock(VarLock::Fixed);
+    let info = info_held.as_ptr();
     if flags & TAG_INS_COMP as c_int == 0
         && let Some(from) = from
         && !from.user_data.is_null()
@@ -158,16 +159,14 @@ pub(crate) unsafe fn find_tagfunc_tags(
     if !buf_ffname.is_null() {
         unsafe { add_str(info, c"buf_ffname", buf_ffname) };
     }
-    // Held alive for the call: the dict is ours, not the argument
-    // list's.
-    unsafe { (*info).dv_refcount.retain() };
-
-    // Two of the caller's strings and the dictionary retained above: the
-    // frame names all three and releases none.
+    // Two of the caller's strings and the dictionary allocated above: the
+    // frame names all three and releases none, so the handle outlives it.
+    // SAFETY: the dictionary this body owns, live for the call.
+    let named = unsafe { DictRef::owning(info) };
     let args = CallFrame::naming([
         TypVal::String(pat),
         TypVal::String(flag_string.as_mut_ptr()),
-        TypVal::Dict(info),
+        TypVal::Dict(named),
     ]);
 
     let mut rettv = TV_INITIAL_VALUE;
@@ -183,7 +182,9 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // that no longer exists.
     Win::current().w_cursor = save_pos;
     check_cursor(Win::current());
-    unsafe { (*info).dv_refcount.release() };
+    // The one reference the allocator handed out; upstream released the
+    // count without freeing and left the collector to notice.
+    drop(info_held);
 
     if result == FAIL {
         return FAIL;

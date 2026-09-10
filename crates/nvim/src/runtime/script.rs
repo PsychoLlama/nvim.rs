@@ -422,8 +422,9 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
         }
 
         // SAFETY: a fresh dict, handed to the list before anything else sees it.
-        let d = unsafe { tv_dict_alloc() };
-        unsafe { tv_list_append_dict(l, d) };
+        let d_held = tv_dict_alloc();
+        let d = d_held.as_ptr();
+        unsafe { tv_list_append_dict(l, Some(d_held)) };
         unsafe { dict_add_str(d, c"name", name) };
         unsafe { dict_add_nr(d, c"sid", sid) };
         unsafe { dict_add_nr(d, c"version", 1) };

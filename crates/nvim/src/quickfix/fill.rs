@@ -15,7 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{CallFrame, ListRef, tv_list_items};
+use crate::eval::typval::{CallFrame, DictRef, ListRef, tv_list_items};
 use crate::guard::Lock;
 use crate::memline::MlFlags;
 use crate::types::{BCount, MAXPATHL, OptionSetFlags, VAR_LIST, VarLock};
@@ -271,7 +271,8 @@ unsafe fn call_qftf_func(
     }
     RECURSIVE.set(true);
 
-    let dict = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
+    let dict_held = tv_dict_alloc_lock(VarLock::Fixed);
+    let dict = dict_held.as_ptr();
     let add = |key: &CStr, value: VarNumber| {
         let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
@@ -280,10 +281,12 @@ unsafe fn call_qftf_func(
     add(c"id", qfl.qf_id as VarNumber);
     add(c"start_idx", start_idx as VarNumber);
     add(c"end_idx", end_idx as VarNumber);
-    unsafe { (*dict).dv_refcount.retain() };
 
-    // The frame names the retain above, which is given back below.
-    let args = CallFrame::naming([TypVal::Dict(dict)]);
+    // The frame *names* the dictionary this body owns and releases nothing;
+    // `dict_held` is what frees it, once the call is over.
+    // SAFETY: the dictionary allocated above, live for the call.
+    let named = unsafe { DictRef::owning(dict) };
+    let args = CallFrame::naming([TypVal::Dict(named)]);
     let mut rettv = TV_INITIAL_VALUE;
     let mut answer = ptr::null_mut::<List>();
     let locked = Lock::text();
@@ -297,7 +300,8 @@ unsafe fn call_qftf_func(
         unsafe { tv_clear(&mut rettv) };
     }
     drop(locked);
-    unsafe { tv_dict_unref(dict) };
+    drop(args);
+    drop(dict_held);
 
     RECURSIVE.set(false);
     answer

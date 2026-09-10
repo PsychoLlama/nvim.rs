@@ -13,7 +13,7 @@ use core::mem::{ManuallyDrop, offset_of};
 use core::ptr;
 
 use super::*;
-use crate::eval::typval::{DictEntry, DictTab, ListRef, tv_dict_item_free};
+use crate::eval::typval::{DictEntry, DictRef, DictTab, ListRef, tv_dict_item_free};
 use crate::types::MessagePackType;
 use crate::types::{DictKey, Refcount};
 
@@ -71,7 +71,8 @@ pub unsafe fn evalvars_init() {
 
     // `v:msgpack_types`: eight empty, locked lists, compared by identity
     // by the msgpack encoder and decoder rather than by name.
-    let msgpack_types_dict = unsafe { tv_dict_alloc() };
+    let msgpack_types_dict_held = tv_dict_alloc();
+    let msgpack_types_dict = msgpack_types_dict_held.as_ptr();
     let mut type_lists = eval_msgpack_type_lists.get();
     for (i, name) in msgpack_type_names.iter().enumerate() {
         let type_list = tv_list_alloc(0);
@@ -94,12 +95,12 @@ pub unsafe fn evalvars_init() {
     }
     eval_msgpack_type_lists.set(type_lists);
     unsafe { (*msgpack_types_dict).dv_lock = VarLock::Fixed };
-    unsafe { set_vim_var_dict(Vv::MsgpackTypes, msgpack_types_dict) };
+    unsafe { set_vim_var_dict(Vv::MsgpackTypes, Some(msgpack_types_dict_held)) };
 
     // SAFETY: `Vv` names a row of the table, and each value below is a live
     // container this hands its reference to.
-    unsafe { set_vim_var_dict(Vv::CompletedItem, tv_dict_alloc_lock(VarLock::Fixed)) };
-    unsafe { set_vim_var_dict(Vv::Event, tv_dict_alloc_lock(VarLock::Fixed)) };
+    unsafe { set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed))) };
+    unsafe { set_vim_var_dict(Vv::Event, Some(tv_dict_alloc_lock(VarLock::Fixed))) };
     let errors = Some(tv_list_alloc(kListLenUnknown as ptrdiff_t));
     unsafe { set_vim_var_list(Vv::Errors, errors) };
 
@@ -279,7 +280,11 @@ pub unsafe fn init_var_dict(dict: *mut Dict, dict_var: *mut ScopeDictItem, scope
     d.dv_scope = scope;
     d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
     d.dv_copy_id = 0;
-    var.di_tv.write_dict(dict);
+    // The scope variable **names** the dictionary its own storage owns:
+    // `DO_NOT_FREE_CNT` above is what keeps anything from freeing it, and
+    // `unref_var_dict` gives the whole block back.
+    // SAFETY: the caller's dictionary, live for as long as the variable is.
+    var.di_tv.write_dict(unsafe { DictRef::owning(dict) });
     var.di_lock = VarLock::Fixed;
     var.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
     var.di_key = DictKey::EMPTY;
