@@ -170,3 +170,198 @@ pub const FNE_CHECK_START: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;
 pub const SIGINT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
+
+#[cfg(test)]
+mod arity_audit {
+    //! The check the compiler cannot make: an `args[i]` past a builtin's
+    //! *minimum* arity is a panic, not a type error, and the suites only
+    //! reach the builtins some test happens to call.
+    //!
+    //! A source-level audit rather than a static one, because the row and
+    //! the body are connected by a function *pointer*: the table's text is
+    //! where the name, the arity and the body's identifier meet.
+
+    use std::collections::BTreeMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    /// The crate's `src` directory.
+    fn src_dir() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+    }
+
+    /// `text` with comments and string, char and byte-string literals blanked
+    /// to spaces, so a brace or an `args[` inside prose is not code.
+    fn masked(text: &str) -> String {
+        let b = text.as_bytes();
+        let mut out = vec![b' '; b.len()];
+        let (mut i, copy) = (0, |out: &mut Vec<u8>, a: usize, z: usize| {
+            out[a..z].copy_from_slice(&b[a..z]);
+        });
+        while i < b.len() {
+            match b[i] {
+                b'/' if b.get(i + 1) == Some(&b'/') => {
+                    while i < b.len() && b[i] != b'\n' {
+                        out[i] = if b[i] == b'\r' { b'\r' } else { b' ' };
+                        i += 1;
+                    }
+                }
+                b'/' if b.get(i + 1) == Some(&b'*') => {
+                    i += 2;
+                    while i < b.len() && !(b[i] == b'*' && b.get(i + 1) == Some(&b'/')) {
+                        i += 1;
+                    }
+                    i = (i + 2).min(b.len());
+                }
+                q @ (b'"' | b'\'') => {
+                    i += 1;
+                    while i < b.len() && b[i] != q {
+                        i += if b[i] == b'\\' { 2 } else { 1 };
+                    }
+                    i += 1;
+                }
+                _ => {
+                    // At least one byte, so that a `/` that opens no comment
+                    // -- a division, a doc link -- cannot stall the walk.
+                    let start = i;
+                    i += 1;
+                    while i < b.len() && !matches!(b[i], b'/' | b'"' | b'\'') {
+                        i += 1;
+                    }
+                    copy(&mut out, start, i);
+                }
+            }
+        }
+        // Newlines are kept so that a failure can be located by eye.
+        for (o, s) in out.iter_mut().zip(b) {
+            if *s == b'\n' {
+                *o = b'\n';
+            }
+        }
+        String::from_utf8(out).expect("masking keeps the byte count")
+    }
+
+    /// The body of the `fn` whose header starts at `at`, braces included.
+    fn body_at(masked: &str, at: usize) -> &str {
+        let Some(open) = masked[at..].find('{').map(|i| at + i) else {
+            return "";
+        };
+        let (mut depth, mut end) = (0usize, open);
+        for (i, c) in masked[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = open + i + 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        &masked[open..end]
+    }
+
+    /// Every `args[<literal>]` in `body`.
+    fn indices(body: &str) -> Vec<usize> {
+        let mut found = Vec::new();
+        for (at, _) in body.match_indices("args[") {
+            let rest = &body[at + "args[".len()..];
+            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            if !digits.is_empty() && rest[digits.len()..].starts_with(']') {
+                found.push(digits.parse().expect("a run of digits"));
+            }
+        }
+        found
+    }
+
+    /// Every builtin's body identifier and the smallest argument count the
+    /// table lets a call have, read out of the generated rows.
+    ///
+    /// A row states its arity and then names its function, in that order and
+    /// with nothing between them, however rustfmt wrapped it; the rows that
+    /// state no arity are the `float()` shorthand, whose one argument no
+    /// `args[i]` reads.
+    fn rows() -> BTreeMap<String, usize> {
+        let mut out = BTreeMap::new();
+        for chunk in 1..=3 {
+            let path = src_dir().join(format!("eval/funcs/table/table_{chunk}.rs"));
+            let text = fs::read_to_string(&path).expect("the generated table");
+            for (at, _) in text.match_indices("Arity::") {
+                let rest = &text[at + "Arity::".len()..];
+                let min: String = rest
+                    .split_once('(')
+                    .expect("an arity takes its bound in parentheses")
+                    .1
+                    .chars()
+                    .take_while(char::is_ascii_digit)
+                    .collect();
+                let row = &rest[..rest.find("Arity::").unwrap_or(rest.len())];
+                let Some((_, tail)) = row.split_once("Some(") else {
+                    continue;
+                };
+                let ident: String = tail.chars().take_while(|c| *c != ')').collect();
+                out.insert(ident, min.parse().expect("a run of digits"));
+            }
+        }
+        out
+    }
+
+    /// Every `.rs` under `src`, masked once.
+    fn masked_sources() -> Vec<String> {
+        fn walk(dir: &Path, into: &mut Vec<String>) {
+            for entry in fs::read_dir(dir).expect("a readable directory") {
+                let path = entry.expect("a directory entry").path();
+                if path.is_dir() {
+                    walk(&path, into);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    into.push(masked(&fs::read_to_string(&path).expect("a source file")));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&src_dir(), &mut out);
+        out
+    }
+
+    /// A direct `args[i]` reaches past the minimum arity only where the body
+    /// has already asked how many arguments there are; anywhere else it is a
+    /// panic waiting for the first call that omits the optional argument.
+    #[test]
+    fn no_builtin_indexes_past_its_minimum_arity() {
+        let rows = rows();
+        let mut wrong = Vec::new();
+        let mut seen = 0usize;
+        // One pass per source, not per row: the table has some 570 of them.
+        for text in masked_sources() {
+            for (at, _) in text.match_indices("fn f") {
+                let ident: String = text[at + 3..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                if !text[at + 3 + ident.len()..].starts_with('(') {
+                    continue;
+                }
+                let Some(&min) = rows.get(&ident) else {
+                    continue;
+                };
+                seen += 1;
+                let body = body_at(&text, at);
+                // "Has the body asked how many arguments there are?" -- the
+                // three spellings a guard takes. A body that asks nowhere and
+                // still indexes past the minimum is the bug this looks for.
+                let guarded = ["args.len()", "args.is_empty()", "args.get(", "args.first()"]
+                    .iter()
+                    .any(|ask| body.contains(ask));
+                for i in indices(body) {
+                    if i >= min && !guarded {
+                        wrong.push(format!("{ident}: args[{i}], minimum arity {min}"));
+                    }
+                }
+            }
+        }
+        assert!(seen > 400, "only {seen} of the table's bodies were found");
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+}
