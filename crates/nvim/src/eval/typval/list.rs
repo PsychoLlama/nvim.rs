@@ -331,3 +331,241 @@ pub unsafe fn tv_list_alloc_ret(ret_tv: &mut TypVal, len: ptrdiff_t) -> *mut Lis
     unsafe { tv_list_set_ret(ret_tv, l) };
     l
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The safe layer these cases are written against.
+    ///
+    /// Every entry point below takes the caller's list by pointer; the
+    /// helpers here promise what those signatures ask for once — the list is
+    /// this module's own, the indexes are inside it — so that a case reads
+    /// as ordinary code and says only what it is about.
+    mod l {
+        use super::*;
+
+        /// A count the case wrote, as the `int` this family indexes by.
+        fn index(n: usize) -> ::core::ffi::c_int {
+            ::core::ffi::c_int::try_from(n).expect("a short list")
+        }
+
+        /// `[0, 1, ..., len - 1]`, the list every case below edits.
+        pub(super) fn counted(len: usize) -> *mut List {
+            let l = tv_list_alloc(ptrdiff_t::try_from(len).expect("a short list"));
+            for n in 0..len {
+                // SAFETY: the list just allocated.
+                unsafe {
+                    tv_list_append_number(l, VarNumber::try_from(n).expect("a small number"))
+                };
+            }
+            l
+        }
+
+        /// The numbers `l` holds, so a case can say which items survived
+        /// rather than how many.
+        pub(super) fn numbers(l: *mut List) -> Vec<VarNumber> {
+            // SAFETY: a list `counted` made, holding numbers.
+            unsafe { tv_list_iter(l.as_ref()).map(|li| (*li).li_tv.number_or_zero()) }.collect()
+        }
+
+        /// The item at `at`, which must be there.
+        pub(super) fn at(l: *mut List, at: usize) -> *mut ListItem {
+            // SAFETY: a list `counted` made.
+            let item = unsafe { tv_list_find(l, index(at)) };
+            assert!(!item.is_null(), "no item at {at}");
+            item
+        }
+
+        /// A watcher standing on `l[index]`, registered with `l`.
+        ///
+        /// Handed out as a raw pointer rather than a `Box`: the list stores
+        /// the address, so moving the `Box` afterwards would invalidate it.
+        /// [`done`] takes it back.
+        pub(super) fn watch(l: *mut List, index: usize) -> *mut ListWatch {
+            let lw = Box::into_raw(Box::new(ListWatch {
+                lw_item: at(l, index),
+                lw_next: ::core::ptr::null_mut(),
+            }));
+            // SAFETY: as above, and the watcher outlives its registration.
+            unsafe { tv_list_watch_add(l, lw) };
+            lw
+        }
+
+        /// Where a watcher is standing, as an index into `l` -- `None` once
+        /// it has been pushed off the end.
+        ///
+        /// The watcher's own field is a pointer today and an index
+        /// tomorrow; every case below is written in indexes so that it says
+        /// the same thing either way.  That is the whole point of these
+        /// cases: the identity a `:for` loop holds on to is *the item*, and
+        /// what [`tv_list_watch_fix`] and its successors owe is that the
+        /// item does not change under an edit somewhere else in the list.
+        pub(super) fn watching(l: *mut List, lw: *mut ListWatch) -> Option<usize> {
+            // SAFETY: a watcher `watch` registered with `l`.
+            let at = unsafe { tv_list_idx_of_item(l, (*lw).lw_item) };
+            // -1 is "not an item of this list", which for a watcher means
+            // the NULL it was pushed off the end to.
+            usize::try_from(at).ok()
+        }
+
+        /// Remove `l[index]`.
+        pub(super) fn remove(l: *mut List, index: usize) {
+            // SAFETY: a list `counted` made, and an item of it.
+            unsafe { tv_list_item_remove(l, at(l, index)) };
+        }
+
+        /// Remove `l[first..=last]`.
+        pub(super) fn remove_run(l: *mut List, first: usize, last: usize) {
+            // SAFETY: as above, and a run of items of `l`.
+            unsafe { tv_list_remove_items(l, at(l, first), at(l, last)) };
+        }
+
+        /// Move `l[first..=last]` onto `tgt`'s tail.
+        pub(super) fn move_run(l: *mut List, first: usize, last: usize, tgt: *mut List) {
+            let cnt = index(last - first + 1);
+            // SAFETY: as above, plus a second list of this module's own.
+            unsafe { tv_list_move_items(l, at(l, first), at(l, last), tgt, cnt) };
+        }
+
+        /// Insert the number `n` in front of `l[index]`.
+        pub(super) fn insert(l: *mut List, n: VarNumber, index: usize) {
+            // SAFETY: as above, and a value the insert copies.
+            unsafe { tv_list_insert_tv(l, &TypVal::Number(n), at(l, index)) };
+        }
+
+        /// Unregister every watcher and free `l`; the pair every case ends
+        /// with.
+        pub(super) fn done(l: *mut List, lws: &[*mut ListWatch]) {
+            for &lw in lws {
+                // SAFETY: a watcher `watch` registered with `l`, whose `Box`
+                // is taken back here.
+                drop(unsafe {
+                    tv_list_watch_remove(l, lw);
+                    Box::from_raw(lw)
+                });
+            }
+            // SAFETY: a list `counted` made, now unwatched.
+            unsafe { tv_list_free(l) };
+        }
+    }
+
+    #[test]
+    fn removing_an_item_after_the_watcher_leaves_it_where_it_was() {
+        let list = l::counted(5);
+        let lw = l::watch(list, 1);
+        l::remove(list, 3);
+        assert_eq!(l::numbers(list), [0, 1, 2, 4]);
+        assert_eq!(l::watching(list, lw), Some(1));
+        l::done(list, &[lw]);
+    }
+
+    #[test]
+    fn removing_an_item_before_the_watcher_keeps_it_on_the_same_item() {
+        let list = l::counted(5);
+        let lw = l::watch(list, 3);
+        l::remove(list, 1);
+        assert_eq!(l::numbers(list), [0, 2, 3, 4]);
+        // The item it stands on is still the one holding 3 -- which has
+        // moved down one place.
+        assert_eq!(l::watching(list, lw), Some(2));
+        l::done(list, &[lw]);
+    }
+
+    #[test]
+    fn removing_the_watched_item_lands_the_watcher_on_the_next_one() {
+        let list = l::counted(5);
+        let lw = l::watch(list, 2);
+        l::remove(list, 2);
+        assert_eq!(l::numbers(list), [0, 1, 3, 4]);
+        // Index 2 again, but the item that *followed* the removed one.
+        assert_eq!(l::watching(list, lw), Some(2));
+        l::done(list, &[lw]);
+    }
+
+    #[test]
+    fn removing_the_watched_last_item_pushes_the_watcher_off_the_end() {
+        let list = l::counted(3);
+        let lw = l::watch(list, 2);
+        l::remove(list, 2);
+        assert_eq!(l::numbers(list), [0, 1]);
+        assert_eq!(l::watching(list, lw), None);
+        l::done(list, &[lw]);
+    }
+
+    #[test]
+    fn a_watcher_off_the_end_stays_off_it_when_the_list_grows_again() {
+        // What ends a `:for` loop whose body appends to the list it is
+        // walking: the cursor is already past the end, and nothing puts it
+        // back.
+        let list = l::counted(2);
+        let lw = l::watch(list, 1);
+        l::remove(list, 1);
+        assert_eq!(l::watching(list, lw), None);
+        // SAFETY: this module's own list.
+        unsafe { tv_list_append_number(list, 9) };
+        assert_eq!(l::watching(list, lw), None);
+        l::done(list, &[lw]);
+    }
+
+    #[test]
+    fn removing_a_run_around_the_watcher_lands_it_after_the_run() {
+        let list = l::counted(7);
+        let lws = [l::watch(list, 0), l::watch(list, 3), l::watch(list, 6)];
+        l::remove_run(list, 2, 4);
+        assert_eq!(l::numbers(list), [0, 1, 5, 6]);
+        assert_eq!(l::watching(list, lws[0]), Some(0));
+        // Was on 3, inside the run: now on what followed the run, 5.
+        assert_eq!(l::watching(list, lws[1]), Some(2));
+        // Was on 6, after the run: still on 6.
+        assert_eq!(l::watching(list, lws[2]), Some(3));
+        l::done(list, &lws);
+    }
+
+    #[test]
+    fn inserting_before_the_watcher_keeps_it_on_the_same_item() {
+        let list = l::counted(4);
+        let lw = l::watch(list, 2);
+        l::insert(list, 90, 1);
+        assert_eq!(l::numbers(list), [0, 90, 1, 2, 3]);
+        assert_eq!(l::watching(list, lw), Some(3));
+        l::done(list, &[lw]);
+    }
+
+    #[test]
+    fn inserting_after_the_watcher_leaves_it_where_it_was() {
+        let list = l::counted(4);
+        let lw = l::watch(list, 1);
+        l::insert(list, 90, 3);
+        assert_eq!(l::numbers(list), [0, 1, 2, 90, 3]);
+        assert_eq!(l::watching(list, lw), Some(1));
+        l::done(list, &[lw]);
+    }
+
+    #[test]
+    fn inserting_at_the_watched_item_pushes_the_watcher_up() {
+        let list = l::counted(4);
+        let lw = l::watch(list, 1);
+        l::insert(list, 90, 1);
+        assert_eq!(l::numbers(list), [0, 90, 1, 2, 3]);
+        // Still on the item holding 1, now one place further along.
+        assert_eq!(l::watching(list, lw), Some(2));
+        l::done(list, &[lw]);
+    }
+
+    #[test]
+    fn moving_the_watched_run_to_another_list_lands_the_watcher_after_it() {
+        let list = l::counted(6);
+        let tgt = l::counted(0);
+        let lws = [l::watch(list, 1), l::watch(list, 4)];
+        l::move_run(list, 1, 2, tgt);
+        assert_eq!(l::numbers(list), [0, 3, 4, 5]);
+        assert_eq!(l::numbers(tgt), [1, 2]);
+        // A watcher follows the list it is registered with, not the items
+        // that left it.
+        assert_eq!(l::watching(list, lws[0]), Some(1));
+        assert_eq!(l::watching(list, lws[1]), Some(2));
+        l::done(list, &lws);
+        l::done(tgt, &[]);
+    }
+}
