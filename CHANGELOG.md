@@ -34,9 +34,12 @@ and this project adheres to [CalVer](https://calver.org/).
   cells, so indexing it is immediate rather than a walk. A Dictionary entry
   owns its key instead of being allocated around it, and the garbage
   collector keeps its own register of live containers rather than a chain
-  threaded through every one of them. Behaviour is unchanged -- the order
-  `keys()`, `values()` and `items()` hand out included; several values the
-  interpreter used to leak are released.
+  threaded through every one of them. A List or Dictionary is now owned
+  through a counted handle, so it is freed the moment its last holder goes
+  rather than when somebody remembers to say so. Behaviour is unchanged --
+  the order `keys()`, `values()` and `items()` hand out included; several
+  values the interpreter used to leak are released, and `flatten()` on a
+  locked List no longer frees it out from under the variable.
 - Rewrote how the editor hands text to the message area, which every command
   that prints a listing goes through: `:highlight`, `:syntax`, `:syntime`,
   `:map`, `:marks`, `:jumps`, `:changes`, `:registers`, `:tags`, `:tselect`,
