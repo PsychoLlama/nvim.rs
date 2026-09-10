@@ -97,9 +97,8 @@ pub(crate) unsafe fn eval_list(
         result.write_list(held);
         return Ok(());
     }
-    if evaluate {
-        drop(held);
-    }
+    // The half-built list goes with the handle, which is its only reference.
+    drop(held);
     Err(Failed)
 }
 
