@@ -3913,6 +3913,7 @@ static const int TSQueryPredicateStepTypeDone = 0;
 static const int TSQueryPredicateStepTypeString = 2;
 static const int TSSymbolTypeAnonymous = 1;
 static const int TSSymbolTypeAuxiliary = 3;
+static const int TURN_SLOTS = 3;
 static const int TYPELEN_INIT = 265;
 static const int TYPE_NOTIFICATION = 2;
 static const int TYPE_REQUEST = 0;

@@ -142,7 +142,9 @@ pub unsafe fn nlua_call_user_expand_func(xp: *mut Expand, ret_tv: &mut TypVal) {
             nlua_error(lstate, gettext(c"E5108: Lua function: %.*s").as_ptr());
             return;
         }
-        nlua_pop_typval(lstate, ret_tv);
+        // A refusal has reported itself; the caller's slot then answers the
+        // zero upstream left in it.
+        ret_tv.overwrite(nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0)));
     }
 }
 
@@ -181,7 +183,7 @@ pub(crate) unsafe fn nlua_typval_exec(
             return;
         }
         if let Some(ret_tv) = ret_tv.take() {
-            nlua_pop_typval(lstate, ret_tv);
+            ret_tv.overwrite(nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0)));
         }
     }
 }
@@ -252,7 +254,7 @@ pub unsafe fn typval_exec_lua_callable(
             nlua_error(lstate, gettext(c"Lua callback: %.*s").as_ptr());
             return FCERR_OTHER as c_int;
         }
-        nlua_pop_typval(lstate, rettv);
+        rettv.overwrite(nlua_pop_typval(lstate).unwrap_or(TypVal::Number(0)));
         FCERR_NONE as c_int
     }
 }

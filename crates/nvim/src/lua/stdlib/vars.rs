@@ -115,11 +115,10 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         }
 
         // Convert the Lua value into a temporary before anything is disturbed.
-        let mut tv = TV_INITIAL_VALUE;
         lua_pushvalue(lstate, 4);
-        if !nlua_pop_typval(lstate, &mut tv) {
+        let Some(mut tv) = nlua_pop_typval(lstate) else {
             return luaL_error(lstate, c"Couldn't convert lua value".as_ptr());
-        }
+        };
 
         let mut oldtv = TV_INITIAL_VALUE;
         if di.is_null() {

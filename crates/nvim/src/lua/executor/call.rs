@@ -91,11 +91,11 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
         'free_vim_args: {
             for i in 0..nargs {
                 lua_pushvalue(lstate, len_as_int(i) + 2);
-                if !nlua_pop_typval(lstate, vim_args.claim()) {
-                    let n = i + 1;
-                    err = api_error!(kErrorTypeException, "error converting argument {n}");
+                let Some(arg) = nlua_pop_typval(lstate) else {
+                    err = api_error!(kErrorTypeException, "error converting argument {}", i + 1);
                     break 'free_vim_args;
-                }
+                };
+                *vim_args.claim() = arg;
             }
 
             // Start the call from a clean exception state: a Lua caller has
