@@ -41,22 +41,18 @@ pub fn nvim_buf_clear_namespace(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
-    if !(line_start >= 0 as Integer && line_start < MAXLNUM as Integer) {
+    if !(line_start >= 0 && line_start < Integer::from(MAXLNUM)) {
         error = err_out_of_range(c"line number");
         return ().reported(error);
     }
-    if line_end < 0 as Integer || line_end > MAXLNUM as Integer {
-        line_end = MAXLNUM as Integer;
+    if line_end < 0 || line_end > Integer::from(MAXLNUM) {
+        line_end = Integer::from(MAXLNUM);
     }
-    let ns = if ns_id < 0 as Integer {
-        0 as uint32_t
-    } else {
-        ns_id as uint32_t
-    };
+    // A negative namespace means every one of them.
+    let ns = if ns_id < 0 { 0 } else { ns_id as uint32_t };
     let start = line_start as ::core::ffi::c_int;
-    let end = line_end as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
-    let maxcol = MAXCOL as ::core::ffi::c_int;
-    extmark_clear(b, ns, start, 0 as ColNr, end, maxcol);
+    let end = line_end as ::core::ffi::c_int - 1;
+    extmark_clear(b, ns, start, 0, end, MAXCOL);
     ().reported(error)
 }
 
@@ -100,113 +96,89 @@ pub unsafe fn nvim_set_decoration_provider(
     unsafe { (*p).hl_cached = false };
 }
 
-/// # Safety
+/// The `[[text, hl], ..]` chunk array every virtual-text entry point decodes.
 ///
-/// `chunks` must be a well-formed API array, its `size` elements initialized.
-/// `width` must point at a writable `int` the caller owns.
-pub unsafe fn parse_virt_text(
+/// `width` takes the total display width of the chunks, for the callers that
+/// need it to lay the text out.
+pub fn parse_virt_text(
     chunks: &Array,
-    width: *mut ::core::ffi::c_int,
+    width: Option<&mut ::core::ffi::c_int>,
 ) -> Result<VirtText, Error> {
-    let mut virt_text: VirtText = VirtText {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<VirtTextChunk>(),
+    let mut virt_text = VirtText {
+        size: 0,
+        capacity: 0,
+        items: ::core::ptr::null_mut(),
     };
-    let mut w: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    let mut i: size_t = 0 as size_t;
-    // The refusal is held rather than returned: the half-built text has to
-    // be released on the way out.
-    let failed;
-    '_free_exit: {
-        while i < chunks.len() {
-            // SAFETY: `i` is below `chunks.size`.
-            let Some(chunk) = chunks[i].as_array() else {
-                let want = api_typename(kObjectTypeArray);
-                // SAFETY: as above.
-                let got = api_typename((chunks[i]).kind());
-                failed = err_expected(c"chunk", want, Some(got));
-                break '_free_exit;
-            };
-            let head = match chunk.len() {
-                // SAFETY: a non-empty array names its first item.
-                1..=2 => (chunk[0]).as_string(),
-                _ => None,
-            };
-            let Some(str) = head else {
-                let why = c"Invalid chunk: expected Array with 1 or 2 Strings";
-                failed = Error::validation(why);
-                break '_free_exit;
-            };
-            let mut hl_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-            's_146: {
-                if chunk.len() == 2 as size_t {
-                    let hl = &chunk[1];
-                    if let Some(arr) = hl.as_array() {
-                        let mut j: size_t = 0 as size_t;
-                        loop {
-                            if j >= arr.len() {
-                                break 's_146;
-                            }
-                            let item = &arr[j];
-                            let what = c"virt_text highlight".as_ptr();
-                            // SAFETY: `what` is a NUL-terminated literal.
-                            hl_id = match unsafe { object_to_hl_id(item, what) } {
-                                Ok(id) => id,
-                                Err(e) => {
-                                    failed = e;
-                                    break '_free_exit;
-                                }
-                            };
-                            if j < arr.len().wrapping_sub(1 as size_t) {
-                                // `kv_push`, whose growth step c2rust expanded inline.
-                                let mut vt = Kvec::new(
-                                    &mut virt_text.size,
-                                    &mut virt_text.capacity,
-                                    &mut virt_text.items,
-                                );
-                                let text = ::core::ptr::null_mut::<::core::ffi::c_char>();
-                                // SAFETY: `items` is this vector's own allocation.
-                                unsafe { vt.push(VirtTextChunk { text, hl_id }) };
-                            }
-                            j = j.wrapping_add(1);
-                        }
-                    } else {
-                        let what = c"virt_text highlight".as_ptr();
-                        // SAFETY: `hl` is the caller's object.
-                        hl_id = match unsafe { object_to_hl_id(hl, what) } {
-                            Ok(id) => id,
-                            Err(e) => {
-                                failed = e;
-                                break '_free_exit;
-                            }
-                        };
+    let mut cells = 0;
+    for chunk in chunks.iter() {
+        if let Err(refused) = push_chunk(chunk, &mut virt_text, &mut cells) {
+            // The half-built text has to be released on the way out.
+            // SAFETY: this frame's own vector, which nothing else names.
+            unsafe { clear_virttext(&raw mut virt_text) };
+            return Err(refused);
+        }
+    }
+    if let Some(width) = width {
+        *width = cells;
+    }
+    Ok(virt_text)
+}
+
+/// Decode one `[text, hl]` chunk into `into`, growing `cells` by its width.
+fn push_chunk(
+    chunk: &Object,
+    into: &mut VirtText,
+    cells: &mut ::core::ffi::c_int,
+) -> Result<(), Error> {
+    let Some(chunk) = chunk.as_array() else {
+        let want = api_typename(kObjectTypeArray);
+        let got = api_typename(chunk.kind());
+        return Err(err_expected(c"chunk", want, Some(got)));
+    };
+    let head = match chunk.len() {
+        1..=2 => chunk[0].as_string(),
+        _ => None,
+    };
+    let Some(str) = head else {
+        let why = c"Invalid chunk: expected Array with 1 or 2 Strings";
+        return Err(Error::validation(why));
+    };
+    let what = c"virt_text highlight".as_ptr();
+    let mut hl_id = -1;
+    if let Some(hl) = chunk.get(1) {
+        match hl.as_array() {
+            // A stack of groups: every one but the last becomes a chunk of
+            // its own with no text, and the last is this chunk's.
+            Some(groups) => {
+                for (n, group) in groups.iter().enumerate() {
+                    // SAFETY: `what` is a NUL-terminated literal.
+                    hl_id = unsafe { object_to_hl_id(group, what) }?;
+                    if n + 1 < groups.len() {
+                        let text = ::core::ptr::null_mut();
+                        push(into, VirtTextChunk { text, hl_id });
                     }
                 }
             }
-            let src = if str.len() > 0 as size_t {
-                str.data() as *const ::core::ffi::c_char
-            } else {
-                c"".as_ptr()
-            };
-            // SAFETY: `src` is a C string -- the chunk's own bytes or a literal.
-            let text: *mut ::core::ffi::c_char = unsafe { transstr(src, false) };
-            w += unsafe { mb_string2cells(text) } as ::core::ffi::c_int;
-            // `kv_push`, whose growth step c2rust expanded inline.
-            let mut vt = Kvec::new(
-                &mut virt_text.size,
-                &mut virt_text.capacity,
-                &mut virt_text.items,
-            );
-            // SAFETY: `items` is this vector's own allocation.
-            unsafe { vt.push(VirtTextChunk { text, hl_id }) };
-            i = i.wrapping_add(1);
+            // SAFETY: as above.
+            None => hl_id = unsafe { object_to_hl_id(hl, what) }?,
         }
-        if !width.is_null() {
-            unsafe { *width = w };
-        }
-        return Ok(virt_text);
     }
-    unsafe { clear_virttext(&raw mut virt_text) };
-    Err(failed)
+    let src = if str.is_empty() {
+        c"".as_ptr()
+    } else {
+        str.data().cast_const()
+    };
+    // SAFETY: `src` is a C string -- the chunk's own bytes or a literal.
+    let text = unsafe { transstr(src, false) };
+    // SAFETY: `transstr` answers a NUL-terminated allocation.
+    *cells += unsafe { mb_string2cells(text) } as ::core::ffi::c_int;
+    push(into, VirtTextChunk { text, hl_id });
+    Ok(())
+}
+
+/// `kv_push`, whose growth step c2rust expanded inline.
+fn push(into: &mut VirtText, chunk: VirtTextChunk) {
+    let mut vt = Kvec::new(&mut into.size, &mut into.capacity, &mut into.items);
+    // SAFETY: `items` is this vector's own allocation.
+    unsafe { vt.push(chunk) };
 }

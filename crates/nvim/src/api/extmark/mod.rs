@@ -32,9 +32,9 @@ use crate::types::{
     DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
     DecorVirtText_data, Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark,
     KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark,
-    KeySetLink, LineNr, LuaRef, MTKey, MTPair, NS, Object, ScreenChar, String_0, UndoObjectType,
-    VirtLines, VirtText, VirtTextChunk, Window, WindowHandle, int32_t, kObjectTypeArray, size_t,
-    uint8_t, uint16_t, uint32_t, virt_line,
+    LineNr, LuaRef, MTKey, MTPair, NS, Object, ScreenChar, String_0, VirtLines, VirtText,
+    VirtTextChunk, Window, WindowHandle, int32_t, kObjectTypeArray, size_t, uint8_t, uint16_t,
+    uint32_t, virt_line,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -47,8 +47,6 @@ pub use self::decor::*;
 pub use self::ns::*;
 pub use self::query::*;
 pub use self::set::*;
-pub const kExtmarkMove: UndoObjectType = 1;
-pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kSHConcealLines: ::core::ffi::c_uint = 128;
 pub const kSHConceal: ::core::ffi::c_uint = 64;
 pub const kSHSpellOff: ::core::ffi::c_uint = 32;
@@ -62,33 +60,30 @@ pub const kExtmarkVirtLines: ExtmarkType = 16;
 pub const kExtmarkVirtText: ExtmarkType = 8;
 pub const kExtmarkSign: ExtmarkType = 2;
 pub const kExtmarkNone: ExtmarkType = 1;
-pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
-pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
-pub const DECOR_ID_INVALID: ::core::ffi::c_uint = UINT32_MAX;
-pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
+/// No allocated decoration: the index a `DecorSignHighlight` chain ends on.
+pub const DECOR_ID_INVALID: uint32_t = u32::MAX;
+/// Where a decoration with no `priority` of its own sits.
+pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000;
 pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {
-    flags: 0 as uint16_t,
+    flags: 0,
     // `DECOR_PRIORITY_BASE`, in the width the field carries it.
     priority: 0x1000,
-    hl_id: 0 as ::core::ffi::c_int,
-    conceal_char: 0 as ScreenChar,
+    hl_id: 0,
+    conceal_char: 0,
 };
 pub const DECOR_SIGN_HIGHLIGHT_INIT: DecorSignHighlight = DecorSignHighlight {
-    flags: 0 as uint16_t,
+    flags: 0,
     // `DECOR_PRIORITY_BASE`, in the width the field carries it.
     priority: 0x1000,
-    hl_id: 0 as ::core::ffi::c_int,
-    text: [0 as ScreenChar, 0 as ScreenChar],
-    sign_name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    sign_add_id: 0 as ::core::ffi::c_int,
-    number_hl_id: 0 as ::core::ffi::c_int,
-    line_hl_id: 0 as ::core::ffi::c_int,
-    cursorline_hl_id: 0 as ::core::ffi::c_int,
-    next: DECOR_ID_INVALID as uint32_t,
-    url: ::core::ptr::null::<::core::ffi::c_char>(),
+    hl_id: 0,
+    text: [0; 2],
+    sign_name: ::core::ptr::null_mut(),
+    sign_add_id: 0,
+    number_hl_id: 0,
+    line_hl_id: 0,
+    cursorline_hl_id: 0,
+    next: DECOR_ID_INVALID,
+    url: ::core::ptr::null(),
 };
 pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
     ext: false,
@@ -96,4 +91,3 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
         hl: DECOR_HIGHLIGHT_INLINE_INIT,
     },
 };
-pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;

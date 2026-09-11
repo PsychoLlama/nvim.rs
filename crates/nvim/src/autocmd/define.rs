@@ -588,7 +588,7 @@ pub fn autocmd_delete_id(id: int64_t) -> bool {
 /// `ac` must point at a live `AutoCmd`, unaliased for the call.
 pub unsafe fn aucmd_handler_to_string(ac: *mut AutoCmd) -> *mut ::core::ffi::c_char {
     if unsafe { (*ac).handler_cmd.is_null() } {
-        unsafe { callback_to_string(&raw mut (*ac).handler_fn, ::core::ptr::null_mut()) }
+        unsafe { callback_to_string(&(*ac).handler_fn, ::core::ptr::null_mut()) }
     } else {
         unsafe { xstrdup((*ac).handler_cmd) }
     }

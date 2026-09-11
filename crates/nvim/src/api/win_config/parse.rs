@@ -304,9 +304,7 @@ unsafe fn parse_bordertext(
         }
         Object::Array(array) => {
             *width = 0;
-            // SAFETY: the caller's promise about the array, and both
-            // out-parameters name fields of the config.
-            let parsed = unsafe { parse_virt_text(array, width.raw()) };
+            let parsed = parse_virt_text(array, Some(&mut width));
             if let Some(parsed) = stored(err, parsed) {
                 *chunks = parsed;
             }

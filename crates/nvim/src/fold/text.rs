@@ -95,7 +95,7 @@ pub unsafe fn get_foldtext(
                     // A list of `[text, hl]` chunks: the caller draws them,
                     // and the returned text is empty.
                     let chunks = obj.into_array().expect("the tag says Array");
-                    if let Ok(parsed) = unsafe { parse_virt_text(&chunks, ptr::null_mut()) } {
+                    if let Ok(parsed) = parse_virt_text(&chunks, None) {
                         unsafe { (*vt, *buf) = (parsed, NUL as c_char) };
                         text = buf;
                     }

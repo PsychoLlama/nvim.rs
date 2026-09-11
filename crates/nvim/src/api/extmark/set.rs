@@ -214,8 +214,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                 }
                 if let Some(given) = opts.virt_text.as_ref() {
-                    let width = &raw mut virt_text.width;
-                    match unsafe { parse_virt_text(&given, width) } {
+                    match parse_virt_text(&given, Some(&mut virt_text.width)) {
                         Ok(text) => *virt_text.data.text_mut() = text,
                         Err(e) => {
                             error = e;
@@ -310,17 +309,13 @@ pub unsafe fn nvim_buf_set_extmark(
                                 error = err_expected(c"virt_text_line", want, Some(got));
                                 break '_error;
                             };
-                            let mut dummig: ::core::ffi::c_int = 0;
-                            let dummy_width = &raw mut dummig;
-                            // SAFETY: the array the caller's item names.
-                            let jtem: VirtText =
-                                match unsafe { parse_virt_text(&item, dummy_width) } {
-                                    Ok(jtem) => jtem,
-                                    Err(e) => {
-                                        error = e;
-                                        break '_error;
-                                    }
-                                };
+                            let jtem: VirtText = match parse_virt_text(&item, None) {
+                                Ok(jtem) => jtem,
+                                Err(e) => {
+                                    error = e;
+                                    break '_error;
+                                }
+                            };
                             // `kv_push`, whose growth step c2rust expanded inline.
                             let lines = virt_lines.data.lines_mut();
                             let mut vl =

@@ -209,7 +209,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
 pub unsafe fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
     let mut error = Error::none();
     let mut opts = KeyDict_ns_opts::default();
-    let mut windows: Array = ARRAY_DICT_INIT;
+    let mut windows: Array = Array::EMPTY;
     opts.wins = Some(windows);
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);

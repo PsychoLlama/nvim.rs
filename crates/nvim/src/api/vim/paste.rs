@@ -14,9 +14,6 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
-
 use super::*;
 use crate::api::private::helpers::{Reported, api_try};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
@@ -49,7 +46,9 @@ pub unsafe fn nvim_paste(
     arena: *mut Arena,
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
-    static cancelled: GlobalCell<bool> = GlobalCell::new(false);
+    /// Whether the handler declined this paste: set until the next one
+    /// starts, and what makes a later chunk a no-op.
+    static CANCELLED: GlobalCell<bool> = GlobalCell::new(false);
     if !(-1..=3).contains(&phase) {
         let name = c"phase".as_ptr();
         // SAFETY: `error` is this frame's own slot and `name` a literal.
@@ -57,17 +56,16 @@ pub unsafe fn nvim_paste(
         return false.reported(error);
     }
     let whole = phase == -1;
-    's_151: {
-        if whole || phase == 1 {
-            cancelled.set(false);
-            let terminal = cur_buf_terminal();
-            if !terminal.is_null() {
-                // SAFETY: the current buffer's own terminal.
-                unsafe { terminal_set_streamed_paste(terminal, true) };
-            }
-        } else if cancelled.get() {
-            break 's_151;
+    let starting = whole || phase == 1;
+    if starting {
+        CANCELLED.set(false);
+        let terminal = cur_buf_terminal();
+        if !terminal.is_null() {
+            // SAFETY: the current buffer's own terminal.
+            unsafe { terminal_set_streamed_paste(terminal, true) };
         }
+    }
+    if !CANCELLED.get() {
         let lines = string_to_array(&data, crlf);
         let mut args = Array::with_capacity(2);
         args.push(Object::array(lines));
@@ -85,10 +83,10 @@ pub unsafe fn nvim_paste(
         };
         let refused = rv.as_boolean() == Some(false);
         if error.is_set() || refused {
-            cancelled.set(true);
+            CANCELLED.set(true);
         }
         let terminal = cur_buf_terminal();
-        if (whole || phase == 3 || cancelled.get()) && !terminal.is_null() {
+        if (whole || phase == 3 || CANCELLED.get()) && !terminal.is_null() {
             // SAFETY: the current buffer's own terminal.
             unsafe { terminal_set_streamed_paste(terminal, false) };
         }
@@ -96,20 +94,20 @@ pub unsafe fn nvim_paste(
         // so that the redo carries the same text.
         // SAFETY: `data` names its own bytes.
         unsafe {
-            if !cancelled.get() && (whole || phase == 1) {
+            if !CANCELLED.get() && starting {
                 paste_store(channel_id, PastePhase::Start, String_0::NULL, crlf);
             }
-            if !cancelled.get() {
+            if !CANCELLED.get() {
                 paste_store(channel_id, PastePhase::Chunk, data, crlf);
             }
-            if phase == 3 || phase == if cancelled.get() { 2 } else { -1 } {
+            if phase == 3 || phase == if CANCELLED.get() { 2 } else { -1 } {
                 paste_store(channel_id, PastePhase::End, String_0::NULL, crlf);
             }
         }
     }
-    let retval = !cancelled.get();
+    let retval = !CANCELLED.get();
     if whole || phase == 3 {
-        cancelled.set(false);
+        CANCELLED.set(false);
     }
     retval.reported(error)
 }
@@ -143,7 +141,7 @@ pub unsafe fn nvim_put(
         error = err_bad_value(c"type", type_0.as_cstr());
         return ().reported(error);
     }
-    if lines.len() == 0 as size_t {
+    if lines.is_empty() {
         return ().reported(error);
     }
     let bytes = lines.len().wrapping_mul(::core::mem::size_of::<String_0>());
@@ -178,22 +176,14 @@ pub unsafe fn nvim_put(
     }
     // SAFETY: `reg` is this frame's own, now holding `y_size` lines.
     unsafe { finish_yankreg_from_object(&raw mut reg, false) };
-    let dir = if after {
-        FORWARD as ::core::ffi::c_int
-    } else {
-        BACKWARD as ::core::ffi::c_int
-    };
-    let flags = if follow {
-        PUT_CURSEND.cast_signed()
-    } else {
-        0 as ::core::ffi::c_int
-    };
+    let dir = if after { FORWARD } else { BACKWARD };
+    let flags = if follow { PUT_CURSEND.cast_signed() } else { 0 };
     api_try(|| {
         // `do_put` can leave Visual mode; the caller's is put back.
         let visual_was_active = visual_active();
         let silenced = Suppress::messages();
         // SAFETY: `reg` is this frame's own, filled in above.
-        unsafe { do_put(0 as ::core::ffi::c_int, &raw mut reg, dir, 1, flags) };
+        unsafe { do_put(0, &raw mut reg, dir, 1, flags) };
         drop(silenced);
         set_visual_active(visual_was_active);
     })?;

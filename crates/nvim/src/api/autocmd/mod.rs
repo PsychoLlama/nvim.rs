@@ -24,7 +24,7 @@ use crate::types::{
     ApiDict, Arena, Array, AutoCmd, AutoCmdVec, AutoPat, BufferHandle, Callback, Error, ExArg,
     Exception, Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
     KeyDict_exec_autocmds, KeyDict_get_autocmds, MsgList, Object, String_0, TryState, int64_t,
-    kErrorTypeValidation, kObjectTypeNil, kObjectTypeString, size_t, uint64_t,
+    kErrorTypeValidation, kObjectTypeString, size_t, uint64_t,
 };
 use ::libc::abort;
 

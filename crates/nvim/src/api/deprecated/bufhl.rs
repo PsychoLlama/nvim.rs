@@ -170,8 +170,7 @@ pub unsafe fn nvim_buf_set_virtual_text(
     }
     let ns_id = src2ns(&mut src_id);
     let mut width: ::core::ffi::c_int = 0;
-    // SAFETY: `chunks` is the caller's array, and `width` is this frame's.
-    let virt_text: VirtText = unsafe { parse_virt_text(&chunks, &raw mut width) }?;
+    let virt_text: VirtText = parse_virt_text(&chunks, Some(&mut width))?;
 
     let lnum = line as ::core::ffi::c_int;
     let existing = decor_find_virttext(buf, lnum, ns_id as uint64_t);

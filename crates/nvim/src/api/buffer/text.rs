@@ -9,7 +9,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_out_of_range;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
@@ -31,7 +30,6 @@ pub unsafe fn nvim_buf_set_text(
     mut replacement: Array,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
     if replacement.is_empty() {
         // An empty replacement deletes the range, which is the same as
         // replacing it with one empty line.
@@ -44,13 +42,11 @@ pub unsafe fn nvim_buf_set_text(
     let mut oob: bool = false;
     start_row = unsafe { normalize_index(b, start_row as int64_t, false, &raw mut oob) } as Integer;
     if oob {
-        error = err_out_of_range(c"start_row");
-        return ().reported(error);
+        return Err(err_out_of_range(c"start_row"));
     }
     end_row = unsafe { normalize_index(b, end_row as int64_t, false, &raw mut oob) } as Integer;
     if oob {
-        error = err_out_of_range(c"end_row");
-        return ().reported(error);
+        return Err(err_out_of_range(c"end_row"));
     }
     let mut str_at_start: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, start_row as LineNr) };
     let len_at_start: ColNr = unsafe { ml_get_buf_len(b, start_row as LineNr) };
@@ -61,8 +57,7 @@ pub unsafe fn nvim_buf_set_text(
         start_col
     };
     if !(start_col >= 0 as Integer && start_col <= len_at_start as Integer) {
-        error = err_out_of_range(c"start_col");
-        return ().reported(error);
+        return Err(err_out_of_range(c"start_col"));
     }
     let mut str_at_end: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, end_row as LineNr) };
     let len_at_end: ColNr = unsafe { ml_get_buf_len(b, end_row as LineNr) };
@@ -73,13 +68,10 @@ pub unsafe fn nvim_buf_set_text(
         end_col
     };
     if !(end_col >= 0 as Integer && end_col <= len_at_end as Integer) {
-        error = err_out_of_range(c"end_col");
-        return ().reported(error);
+        return Err(err_out_of_range(c"end_col"));
     }
     if !(start_row <= end_row && !(end_row == start_row && start_col > end_col)) {
-        let why = c"'start' is higher than 'end'";
-        error = Error::validation(why);
-        return ().reported(error);
+        return Err(Error::validation(c"'start' is higher than 'end'"));
     }
     let disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
     // SAFETY: `replacement` is the caller's array.
@@ -195,168 +187,196 @@ pub unsafe fn nvim_buf_set_text(
         did_emsg: 0,
     };
     unsafe { try_enter(&raw mut tstate) };
-    's_652: {
+    let edit = Replacement {
+        buffer,
+        start_row,
+        start_col,
+        end_row,
+        end_col,
+        lines,
+        new_len,
+        last_len: last_item.len() as ColNr,
+        old_byte,
+        new_byte,
+    };
+    // SAFETY: `lines` names the `new_len` arena strings filled in above, and
+    // `buffer` is the loaded buffer they belong to.
+    let outcome = unsafe { edit.apply() };
+    // The bracket outranks whatever the body answered, which is the order the
+    // two had when both went through one slot.
+    unsafe { try_leave(&raw mut tstate) }?;
+    outcome
+}
+
+/// The edit `nvim_buf_set_text` has prepared, once its arguments are checked
+/// and the replacement lines are built.
+struct Replacement {
+    buffer: Buf,
+    start_row: Integer,
+    start_col: Integer,
+    end_row: Integer,
+    end_col: Integer,
+    /// The lines that replace the range, each a NUL-terminated arena string.
+    lines: *mut *mut ::core::ffi::c_char,
+    /// How many of them there are.
+    new_len: size_t,
+    /// How long the last one is: where the range's tail ends up.
+    last_len: ColNr,
+    /// How many bytes the range held, and how many replace them.
+    old_byte: BCount,
+    new_byte: BCount,
+}
+
+impl Replacement {
+    /// Write the lines in, then tell the marks, the extmarks and every
+    /// window's cursor where the text moved.
+    ///
+    /// # Safety
+    /// `lines` must name `new_len` live C strings and `buffer` be a loaded
+    /// buffer.
+    unsafe fn apply(&self) -> Result<(), Error> {
+        let b = self.buffer;
         if b.b_p_ma == 0 {
-            let why = c"Buffer is not 'modifiable'";
-            error = Error::exception(why);
-        } else if u_save_buf(
-            buffer,
-            start_row as LineNr - 1 as LineNr,
-            end_row as LineNr + 1 as LineNr,
-        )
-        .is_err()
-        {
-            let why = c"Failed to save undo information";
-            error = Error::exception(why);
+            return Err(Error::exception(c"Buffer is not 'modifiable'"));
+        }
+        let (from, to) = (self.start_row as LineNr - 1, self.end_row as LineNr + 1);
+        if u_save_buf(self.buffer, from, to).is_err() {
+            return Err(Error::exception(c"Failed to save undo information"));
+        }
+        // SAFETY: the caller's promise, carried through.
+        let extra = unsafe { self.write_lines() }?;
+
+        let col_extent: ColNr = (self.end_col
+            - if self.end_row == self.start_row {
+                self.start_col
+            } else {
+                0
+            }) as ColNr;
+        let adjust: LineNr = if self.end_row >= self.start_row {
+            MAXLNUM as LineNr
         } else {
-            let mut extra: ptrdiff_t = 0 as ptrdiff_t;
-            let old_len: size_t = (end_row - start_row + 1 as Integer) as size_t;
-            let to_delete: size_t = if new_len < old_len {
-                old_len.wrapping_sub(new_len)
-            } else {
-                0 as size_t
-            };
-            let mut i_1: size_t = 0 as size_t;
-            while i_1 < to_delete {
-                if unsafe { ml_delete_buf(b, start_row as LineNr, false) }.is_err() {
-                    let why = c"Failed to delete line";
-                    error = Error::exception(why);
-                    break 's_652;
-                } else {
-                    i_1 = i_1.wrapping_add(1);
-                }
-            }
-            if to_delete > 0 as size_t {
-                extra -= to_delete as ptrdiff_t;
-            }
-            let to_replace: size_t = if old_len < new_len { old_len } else { new_len };
-            let mut i_2: size_t = 0 as size_t;
-            while i_2 < to_replace {
-                let lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
-                if !(lnum_0 < MAXLNUM as int64_t) {
-                    let why = c"Index out of bounds";
-                    error = Error::validation(why);
-                    break 's_652;
-                } else if unsafe {
-                    ml_replace_buf(b, lnum_0 as LineNr, *lines.add(i_2), false, true)
-                }
-                .is_err()
-                {
-                    let why = c"Failed to replace line";
-                    error = Error::exception(why);
-                    break 's_652;
-                } else {
-                    i_2 = i_2.wrapping_add(1);
-                }
-            }
-            let mut i_3: size_t = to_replace;
-            while i_3 < new_len {
-                let lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
-                if !(lnum_1 < MAXLNUM as int64_t) {
-                    let why = c"Index out of bounds";
-                    error = Error::validation(why);
-                    break 's_652;
-                } else if unsafe {
-                    ml_append_buf(b, lnum_1 as LineNr, *lines.add(i_3), 0 as ColNr, false)
-                }
-                .is_err()
-                {
-                    let why = c"Failed to insert line";
-                    error = Error::exception(why);
-                    break 's_652;
-                } else {
-                    extra += 1;
-                    i_3 = i_3.wrapping_add(1);
-                }
-            }
-            let col_extent: ColNr = (end_col
-                - (if end_row == start_row {
-                    start_col
-                } else {
-                    0 as Integer
-                })) as ColNr;
-            let adjust: LineNr = if end_row >= start_row {
-                MAXLNUM as LineNr
-            } else {
-                0 as LineNr
-            };
-            unsafe {
-                mark_adjust_buf(
-                    buffer,
-                    start_row as LineNr,
-                    end_row as LineNr - 1 as LineNr,
-                    adjust,
-                    extra as LineNr,
-                    true,
-                    kMarkAdjustApi,
-                    kExtmarkNOOP,
-                )
-            };
-            if visual_active() && b.raw() == Buf::current_raw() && !visual_mode().is_block() {
-                let mut anchor = visual_anchor();
-                unsafe {
-                    fix_pos_col(
-                        b,
-                        &raw mut anchor,
-                        start_row as LineNr,
-                        start_col as ColNr,
-                        end_row as LineNr,
-                        end_col as ColNr,
-                        new_len as LineNr,
-                        last_item.len() as ColNr,
-                        1 as ColNr,
-                    )
-                };
-                set_visual_anchor(anchor);
-                check_visual_pos();
-            }
-            extmark_splice(
-                buffer,
-                start_row as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                start_col as ColNr,
-                (end_row - start_row) as ::core::ffi::c_int,
-                col_extent,
-                old_byte,
-                new_len as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                last_item.len() as ColNr,
-                new_byte,
-                kExtmarkUndo,
-            );
-            changed_lines(
-                buffer,
-                start_row as LineNr,
-                start_col as ColNr,
-                end_row as LineNr + 1 as LineNr,
+            0
+        };
+        // SAFETY: the loaded buffer whose lines just moved.
+        unsafe {
+            mark_adjust_buf(
+                self.buffer,
+                self.start_row as LineNr,
+                self.end_row as LineNr - 1,
+                adjust,
                 extra as LineNr,
                 true,
+                kMarkAdjustApi,
+                kExtmarkNOOP,
             );
-            for win in tab_windows() {
-                if win.w_buffer == b.raw() {
-                    if win.w_cursor.lnum as Integer >= start_row
-                        && win.w_cursor.lnum as Integer <= end_row
-                    {
-                        fix_cursor_cols(
-                            win,
-                            start_row as LineNr,
-                            start_col as ColNr,
-                            end_row as LineNr,
-                            end_col as ColNr,
-                            new_len as LineNr,
-                            last_item.len() as ColNr,
-                        );
-                    } else {
-                        let (lo, hi) = (start_row as LineNr, end_row as LineNr);
-                        // SAFETY: a live window showing this buffer.
-                        fix_cursor(win, lo, hi, extra as LineNr);
-                    }
-                }
+        }
+        if visual_active() && b.raw() == Buf::current_raw() && !visual_mode().is_block() {
+            let mut anchor = visual_anchor();
+            // SAFETY: `anchor` is this frame's own position.
+            unsafe {
+                fix_pos_col(
+                    b,
+                    &raw mut anchor,
+                    self.start_row as LineNr,
+                    self.start_col as ColNr,
+                    self.end_row as LineNr,
+                    self.end_col as ColNr,
+                    self.new_len as LineNr,
+                    self.last_len,
+                    1,
+                )
+            };
+            set_visual_anchor(anchor);
+            check_visual_pos();
+        }
+        extmark_splice(
+            self.buffer,
+            self.start_row as ::core::ffi::c_int - 1,
+            self.start_col as ColNr,
+            (self.end_row - self.start_row) as ::core::ffi::c_int,
+            col_extent,
+            self.old_byte,
+            self.new_len as ::core::ffi::c_int - 1,
+            self.last_len,
+            self.new_byte,
+            kExtmarkUndo,
+        );
+        changed_lines(
+            self.buffer,
+            self.start_row as LineNr,
+            self.start_col as ColNr,
+            self.end_row as LineNr + 1,
+            extra as LineNr,
+            true,
+        );
+        for win in tab_windows() {
+            if win.w_buffer != b.raw() {
+                continue;
+            }
+            let cursor = win.w_cursor.lnum as Integer;
+            if cursor >= self.start_row && cursor <= self.end_row {
+                fix_cursor_cols(
+                    win,
+                    self.start_row as LineNr,
+                    self.start_col as ColNr,
+                    self.end_row as LineNr,
+                    self.end_col as ColNr,
+                    self.new_len as LineNr,
+                    self.last_len,
+                );
+            } else {
+                let (lo, hi) = (self.start_row as LineNr, self.end_row as LineNr);
+                fix_cursor(win, lo, hi, extra as LineNr);
             }
         }
+        Ok(())
     }
-    // The bracket outranks whatever the body wrote into `error`, which is
-    // the order the two had when both went through one slot.
-    unsafe { try_leave(&raw mut tstate) }?;
-    ().reported(error)
+
+    /// Delete, replace and append until the range holds the new lines,
+    /// answering how many lines the buffer grew by.
+    ///
+    /// # Safety
+    /// As [`Replacement::apply`].
+    unsafe fn write_lines(&self) -> Result<ptrdiff_t, Error> {
+        let b = self.buffer;
+        let mut extra: ptrdiff_t = 0;
+        let old_len: size_t = (self.end_row - self.start_row + 1) as size_t;
+        let to_delete = old_len.saturating_sub(self.new_len);
+        for _ in 0..to_delete {
+            // SAFETY: a loaded buffer, and a line that is still in it.
+            if unsafe { ml_delete_buf(b, self.start_row as LineNr, false) }.is_err() {
+                return Err(Error::exception(c"Failed to delete line"));
+            }
+        }
+        extra -= to_delete as ptrdiff_t;
+        let to_replace = old_len.min(self.new_len);
+        for i in 0..to_replace {
+            let lnum: int64_t = self.start_row as int64_t + i as int64_t;
+            if lnum >= MAXLNUM as int64_t {
+                return Err(Error::validation(c"Index out of bounds"));
+            }
+            // SAFETY: the caller's promise -- `i` is below `new_len`.
+            let line = unsafe { *self.lines.add(i) };
+            // SAFETY: a loaded buffer, and a line that is still in it.
+            if unsafe { ml_replace_buf(b, lnum as LineNr, line, false, true) }.is_err() {
+                return Err(Error::exception(c"Failed to replace line"));
+            }
+        }
+        for i in to_replace..self.new_len {
+            let lnum: int64_t = self.start_row as int64_t + i as int64_t - 1;
+            if lnum >= MAXLNUM as int64_t {
+                return Err(Error::validation(c"Index out of bounds"));
+            }
+            // SAFETY: as above.
+            let line = unsafe { *self.lines.add(i) };
+            // SAFETY: as above.
+            if unsafe { ml_append_buf(b, lnum as LineNr, line, 0, false) }.is_err() {
+                return Err(Error::exception(c"Failed to insert line"));
+            }
+            extra += 1;
+        }
+        Ok(extra)
+    }
 }
 
 pub(crate) fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: LineNr) {
