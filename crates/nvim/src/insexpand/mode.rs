@@ -313,20 +313,18 @@ pub fn ins_compl_preinsert_longest() -> bool {
 /// The text matches are filtered against: what the user typed since the
 /// completion started, or the original text when nothing was typed.
 pub fn ins_compl_leader() -> *mut c_char {
-    let leader = compl_leader().value();
-    if leader.data().is_null() {
+    if compl_leader().is_unset() {
         compl_orig_text().data()
     } else {
-        leader.data()
+        compl_leader().data()
     }
 }
 
 pub(crate) fn ins_compl_leader_len() -> size_t {
-    let leader = compl_leader().value();
-    if leader.data().is_null() {
+    if compl_leader().is_unset() {
         compl_orig_text().len()
     } else {
-        leader.len()
+        compl_leader().len()
     }
 }
 

@@ -89,12 +89,12 @@ unsafe fn decode_shape(shape_str: *const core::ffi::c_char) -> CursorShape {
 ///
 /// # Safety
 /// `args` must be a valid `ApiDict` whose items outlive the call.
-pub unsafe fn decode_cursor_entry(args: ApiDict) -> CursorEntry {
+pub unsafe fn decode_cursor_entry(args: &ApiDict) -> CursorEntry {
     // SAFETY: the caller guarantees the dict and its items are valid.
     unsafe {
         let mut entry = shape_entry(SHAPE_IDX_N);
-        for i in 0..args.size {
-            let item = &*args.items.add(i);
+        for i in 0..args.len() {
+            let item = &args[i];
             let key = if item.key.data().is_null() {
                 b"".as_slice()
             } else {
@@ -103,11 +103,11 @@ pub unsafe fn decode_cursor_entry(args: ApiDict) -> CursorEntry {
             // A value of the wrong kind keeps the default, the same as a
             // key nobody recognised; the transpile read the union arm the
             // *key* named and would have dereferenced whatever was there.
-            match (key, item.value) {
+            match (key, &item.value) {
                 (b"cursor_shape", Object::String(name)) => entry.shape = decode_shape(name.data()),
-                (b"blinkon", Object::Integer(ms)) => entry.blinkon = ms as c_int,
-                (b"blinkoff", Object::Integer(ms)) => entry.blinkoff = ms as c_int,
-                (b"attr_id", Object::Integer(id)) => entry.id = id as c_int,
+                (b"blinkon", Object::Integer(ms)) => entry.blinkon = *ms as c_int,
+                (b"blinkoff", Object::Integer(ms)) => entry.blinkoff = *ms as c_int,
+                (b"attr_id", Object::Integer(id)) => entry.id = *id as c_int,
                 _ => {}
             }
         }

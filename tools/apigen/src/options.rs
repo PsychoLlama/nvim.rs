@@ -916,7 +916,7 @@ const fn number(value: OptInt) -> OptVal {
 }
 
 const fn string(value: &'static CStr) -> OptVal {
-    OptVal::String(String_0::from_cstr(value))
+    OptVal::static_string(value)
 }
 
 /// Copy one generated part into the table under construction.
@@ -982,7 +982,6 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
         "OptScopeFlags",
         "OptVal",
         "OptVar",
-        "String_0",
         "ssize_t",
         "VimOption",
     ];

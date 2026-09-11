@@ -11,13 +11,13 @@
 mod vim_patches;
 
 use crate::cstr;
+use crate::types::String_0;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
 use self::vim_patches::VIM_BASELINES;
-use crate::api::private::helpers::api_free_object;
 use crate::buffer::buf_is_empty;
 use crate::charset::vim_strsize;
 use crate::drawscreen::screenclear;
@@ -34,7 +34,6 @@ use crate::option::vars::{p_ls, p_shm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::startup::starting;
-use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{Arena, Array, ExArg, OptInt, ShmFlag};
 use crate::ui::state::{Columns, Rows};
@@ -309,18 +308,14 @@ pub(crate) unsafe fn list_lua_version() {
 
     // SAFETY: the caller's obligation. `CODE` is borrowed, not owned, by the
     // `String_0`; `nlua_exec` only reads it.
-    let no_args = Array {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-    };
-    let (chunk, name) = (static_cstring(CODE), ptr::null());
+    let no_args = Array::EMPTY;
+    let (chunk, name) = (String_0::from_cstr(CODE), ptr::null());
     let arena = ptr::null_mut::<Arena>();
-    let ret = unsafe { nlua_exec(chunk, name, no_args, kRetObject, arena) }
+    let ret = unsafe { nlua_exec(&chunk, name, no_args, kRetObject, arena) }
         .expect("a literal chunk cannot fail");
     let version = ret.as_string().expect("_VERSION is a string");
     msg_str(unsafe { cstr::at(version.data()) });
-    unsafe { api_free_object(ret) };
+    drop(ret);
 }
 
 /// The `:version` screen. `nvim -v` prints the same thing, and `nvim -V1 -v`

@@ -67,6 +67,7 @@ use crate::ui_compositor::{
     ui_comp_raw_line,
 };
 use core::ffi::{CStr, c_int};
+use core::mem::ManuallyDrop;
 
 use super::callbacks::ui_call_event;
 
@@ -111,6 +112,27 @@ macro_rules! wire {
     };
 }
 
+/// One sink argument, for each UI in turn.
+///
+/// A serializer takes its arguments by value and releases them, so an
+/// argument that owns something is handed a *copy* per UI and the sink
+/// releases the original. Everything else is a scalar and is copied by the
+/// compiler.
+macro_rules! dup {
+    (Array, $v:expr) => {
+        $v.clone()
+    };
+    (String_0, $v:expr) => {
+        $v.clone()
+    };
+    (Object, $v:expr) => {
+        $v.clone()
+    };
+    ($ty:ident, $v:expr) => {
+        $v
+    };
+}
+
 /// Defines a sink that hands its arguments to each UI's serializer.
 ///
 /// `reach` selects which UIs — see [`Reach`]. `via` is a compositor call to
@@ -125,7 +147,7 @@ macro_rules! wire {
 macro_rules! broadcast {
     ($(
         $(#[$attr:meta])*
-        fn $sink:ident($($arg:ident: $ty:ty),* $(,)?)
+        fn $sink:ident($($arg:ident: $ty:ident),* $(,)?)
             => $serialize:ident, $reach:ident, $name:literal
             $(, via $comp:expr)?;
     )*) => {$(
@@ -134,7 +156,7 @@ macro_rules! broadcast {
         pub fn $sink($($arg: $ty),*) {
             $( $comp; )?
             broadcast_to(Reach::$reach, $name, |ui| unsafe {
-                $serialize(ui, $($arg),*)
+                $serialize(ui, $(dup!($ty, $arg)),*)
             });
         }
     )*};
@@ -316,8 +338,8 @@ broadcast! {
         zindex: Integer,
         compindex: Integer,
     ) => remote_ui_msg_set_pos, Uncomposed, c"msg_set_pos",
-        // SAFETY: `sep_char` came off the wire as a valid string.
-        via unsafe { ui_comp_msg_set_pos(grid, row, scrolled, sep_char, zindex, compindex) };
+        // SAFETY: the compositor reads `sep_char` and keeps nothing.
+        via unsafe { ui_comp_msg_set_pos(grid, row, scrolled, &sep_char, zindex, compindex) };
 }
 
 event! {
@@ -491,18 +513,27 @@ unsafe fn raw_line_to(
 
 /// `set_title` is one of two sinks a test drives directly over the C ABI:
 /// the 64 KiB title in `tui_spec.lua` has no other way in.
+///
+/// **The argument is borrowed, not taken.** These two are the only sinks
+/// reached across the C ABI, and what reaches them is a `String` the caller
+/// built over its own buffer -- a LuaJIT array, in the spec that drives
+/// them. Releasing it would free memory this allocator never handed out, so
+/// the value is parked in a `ManuallyDrop` and each UI is sent a copy.
 #[unsafe(no_mangle)]
 pub extern "C" fn ui_call_set_title(title: String_0) {
+    let title = ManuallyDrop::new(title);
     broadcast_to(Reach::All, c"set_title", |ui| unsafe {
-        remote_ui_set_title(ui, title)
+        remote_ui_set_title(ui, (*title).clone())
     });
 }
 
-/// As [`ui_call_set_title`]; `tui_spec.lua` drives this one to check that a
-/// relative path sent by the server is resolved against the server's cwd.
+/// As [`ui_call_set_title`], borrowed argument included; `tui_spec.lua`
+/// drives this one to check that a relative path sent by the server is
+/// resolved against the server's cwd.
 #[unsafe(no_mangle)]
 pub extern "C" fn ui_call_chdir(path: String_0) {
+    let path = ManuallyDrop::new(path);
     broadcast_to(Reach::All, c"chdir", |ui| unsafe {
-        remote_ui_chdir(ui, path)
+        remote_ui_chdir(ui, (*path).clone())
     });
 }

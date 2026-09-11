@@ -24,21 +24,30 @@
 //! 2008, 2009, 2011 Attractive Chaos, under the MIT license; the notice is
 //! reproduced in licenses/klib-LICENSE.txt.
 
-use core::ffi::{c_char, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::slice;
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::map::{
     MH_TOMBSTONE, MapKey, grown_keys_capacity, kMHExisting, kMHNewKeyDidFit, kMHNewKeyRealloc,
     mh_realloc, probe,
 };
 use crate::memory::xrealloc;
-use crate::types::{MHPutStatus, Set_glyph, String_0, uint32_t};
+use crate::types::{MHPutStatus, Set_glyph, uint32_t};
 
 /// A glyph's length as the index counts it: bytes, and never near 2^32
 /// because [`crate::grid::MAX_SCHAR_SIZE`] caps it at 32.
-fn key_len(key: String_0) -> uint32_t {
+fn key_len(key: &[u8]) -> uint32_t {
     uint32_t::try_from(key.len()).expect("a glyph is at most MAX_SCHAR_SIZE bytes")
+}
+
+/// The glyph stored at `pos`, as bytes.
+///
+/// # Safety
+/// `pos` must be the offset of a NUL-terminated glyph in `keys`, which must
+/// stay put for the borrow.
+unsafe fn stored_glyph<'a>(keys: *const c_char, pos: uint32_t) -> &'a [u8] {
+    // SAFETY: the caller's promise.
+    unsafe { CStr::from_ptr(keys.add(pos as usize)) }.to_bytes()
 }
 
 /// The bucket `key` belongs in. See [`crate::map::probe`].
@@ -46,7 +55,7 @@ fn key_len(key: String_0) -> uint32_t {
 /// # Safety
 /// `set` must point at a live `Set_glyph`: `h.hash` at `h.n_buckets` slots,
 /// `keys` at `h.n_keys` bytes of NUL-terminated glyphs.
-unsafe fn find_bucket(set: *const Set_glyph, key: String_0, put: bool) -> uint32_t {
+unsafe fn find_bucket(set: *const Set_glyph, key: &[u8], put: bool) -> uint32_t {
     // SAFETY: the caller promises a live `Set_glyph`.
     let set = unsafe { &*set };
     // SAFETY: as above — `h.hash` points at `h.n_buckets` slots.
@@ -54,7 +63,7 @@ unsafe fn find_bucket(set: *const Set_glyph, key: String_0, put: bool) -> uint32
     probe(buckets, set.h.n_buckets - 1, key.map_hash(), put, |pos| {
         // SAFETY: a live bucket holds the one-based byte offset of a
         // NUL-terminated glyph in `keys`.
-        unsafe { cstr_as_string(set.keys.add(pos as usize)) }.map_eq(&key)
+        unsafe { stored_glyph(set.keys, pos) == key }
     })
 }
 
@@ -71,7 +80,7 @@ unsafe fn rehash(set: *mut Set_glyph) {
     let mut at = 0;
     while at < n_keys {
         // SAFETY: `at` is the offset of a NUL-terminated glyph.
-        let key = unsafe { cstr_as_string(keys.add(at as usize)) };
+        let key = unsafe { stored_glyph(keys, at) };
         // SAFETY: as above; the bucket table is all-zero.
         let idx = unsafe { find_bucket(set, key, true) };
         // SAFETY: `find_bucket` answers a slot of the live bucket table.
@@ -96,11 +105,10 @@ unsafe fn rehash(set: *mut Set_glyph) {
 /// the keys array moved.
 ///
 /// # Safety
-/// As [`find_bucket`]; `status` must be writable, and `key` must have
-/// [`len`](String_0::len) readable bytes.
+/// As [`find_bucket`]; `status` must be writable.
 pub(crate) unsafe fn mh_put_glyph(
     set: *mut Set_glyph,
-    key: String_0,
+    key: &[u8],
     status: *mut MHPutStatus,
 ) -> uint32_t {
     // The keys array's first heap size. Bytes, not entries, so it is eight
@@ -133,7 +141,7 @@ pub(crate) unsafe fn mh_put_glyph(
         // SAFETY: `status` is the caller's, and `pos` names a live glyph.
         unsafe {
             *status = kMHExisting;
-            debug_assert!(cstr_as_string((*set).keys.add(pos as usize)).map_eq(&key));
+            debug_assert!(stored_glyph((*set).keys, pos) == key);
         }
         return pos;
     }
@@ -166,9 +174,8 @@ pub(crate) unsafe fn mh_put_glyph(
     unsafe {
         let room =
             slice::from_raw_parts_mut((*set).keys.add(pos as usize).cast::<u8>(), width as usize);
-        let bytes = key.as_bytes();
-        room[..bytes.len()].copy_from_slice(bytes);
-        room[bytes.len()] = 0;
+        room[..key.len()].copy_from_slice(key);
+        room[key.len()] = 0;
         *(*h).hash.add(idx as usize) = pos + 1;
     }
     pos

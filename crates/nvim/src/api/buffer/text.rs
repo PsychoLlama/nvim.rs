@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_out_of_range;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
@@ -32,22 +32,10 @@ pub unsafe fn nvim_buf_set_text(
     arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut scratch: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    let mut scratch_items: [Object; 1] = [Object::Nil; 1];
-    scratch.capacity = 1 as size_t;
-    scratch.items = &raw mut scratch_items as *mut Object;
-    if replacement.size == 0 as size_t {
-        let put_value = Object::string(String_0::from_raw_parts(
-            c"".as_ptr() as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 1]>().wrapping_sub(1 as size_t),
-        ));
-        // SAFETY: the collection is this call's own.
-        unsafe { array_add(&mut scratch, put_value) };
-        replacement = scratch;
+    if replacement.is_empty() {
+        // An empty replacement deletes the range, which is the same as
+        // replacing it with one empty line.
+        replacement.push(Object::string(String_0::from_cstr(c"")));
     }
     let Some(b) = api_buf_ensure_loaded(buf)? else {
         return Ok(());
@@ -95,8 +83,8 @@ pub unsafe fn nvim_buf_set_text(
     }
     let disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
     // SAFETY: `replacement` is the caller's array.
-    unsafe { check_string_array(replacement, c"replacement string", disallow_nl) }?;
-    let new_len: size_t = replacement.size;
+    check_string_array(&replacement, c"replacement string", disallow_nl)?;
+    let new_len: size_t = replacement.len();
     let mut new_byte: BCount = 0 as BCount;
     let mut old_byte: BCount = 0 as BCount;
     if start_row == end_row {
@@ -114,21 +102,20 @@ pub unsafe fn nvim_buf_set_text(
         }
         old_byte += end_col as BCount + 1 as BCount;
     }
-    let last_index = replacement.size.wrapping_sub(1 as size_t);
+    let last_index = replacement.len().wrapping_sub(1 as size_t);
     // Every item is a String: `check_string_array` above turned anything else
     // into an error.
     let only_strings = "check_string_array accepted only Strings";
     // SAFETY: `replacement` is a non-empty array, so both indices are in it.
-    let first_item: String_0 = unsafe { *replacement.items }
-        .as_string()
-        .expect(only_strings);
+    let first_item: String_0 = replacement[0].as_string().expect(only_strings).clone();
     // SAFETY: as above.
-    let last_item: String_0 = unsafe { *replacement.items.add(last_index) }
+    let last_item: String_0 = replacement[last_index]
         .as_string()
-        .expect(only_strings);
+        .expect(only_strings)
+        .clone();
     let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.len());
     let last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
-    if replacement.size == 1 as size_t {
+    if replacement.len() == 1 as size_t {
         firstlen = firstlen.wrapping_add(last_part_len);
     }
     let first: *mut ::core::ffi::c_char = unsafe { arena_allocz(arena, firstlen) };
@@ -150,7 +137,7 @@ pub unsafe fn nvim_buf_set_text(
     unsafe { memchrsub(head, nul, nl, first_item.len()) };
     // SAFETY: `end_col` is within the line `str_at_end` copied.
     let tail = unsafe { str_at_end.offset(end_col as isize) } as *const ::core::ffi::c_void;
-    if replacement.size == 1 as size_t {
+    if replacement.len() == 1 as size_t {
         // SAFETY: `firstlen` counted `last_part_len` in as well.
         let after = unsafe { first.offset(start_col as isize).add(first_item.len()) };
         let after = after as *mut ::core::ffi::c_void;
@@ -185,9 +172,7 @@ pub unsafe fn nvim_buf_set_text(
     let mut i_0: size_t = 1 as size_t;
     while i_0 < new_len.wrapping_sub(1 as size_t) {
         // SAFETY: `i_0` is below `replacement.size`.
-        let l: String_0 = unsafe { *replacement.items.add(i_0) }
-            .as_string()
-            .expect(only_strings);
+        let l: String_0 = replacement[i_0].as_string().expect(only_strings).clone();
         unsafe { *lines.add(i_0) = arena_memdupz(arena, l.data(), l.len()) };
         // SAFETY: `i_0` is below `new_len`, so the slot was just written.
         let line = unsafe { *lines.add(i_0) } as *mut ::core::ffi::c_void;
@@ -196,8 +181,8 @@ pub unsafe fn nvim_buf_set_text(
         new_byte += l.len() as BCount + 1 as BCount;
         i_0 = i_0.wrapping_add(1);
     }
-    if replacement.size > 1 as size_t {
-        unsafe { *lines.add(replacement.size.wrapping_sub(1 as size_t)) = last };
+    if replacement.len() > 1 as size_t {
+        unsafe { *lines.add(replacement.len().wrapping_sub(1 as size_t)) = last };
         new_byte += last_item.len() as BCount + 1 as BCount;
     }
     let mut tstate: TryState = TryState {

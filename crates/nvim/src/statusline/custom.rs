@@ -23,9 +23,10 @@
 
 use crate::memline::MlFlags;
 use core::ffi::{c_char, c_int};
+use core::slice;
 
 use super::*;
-use crate::api::private::helpers::{api_free_array, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::is_aucmd_win;
 use crate::buffer::{col_print, get_rel_pos};
@@ -36,10 +37,8 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{default_grid_ref, schar_from_ascii, schar_get};
 use crate::highlight::state::{highlight_stlnc, highlight_user};
 use crate::highlight_group::{HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_len};
-use crate::kvec::Kvec;
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memline::ml_get_buf;
-use crate::memory::xmemdupz;
 use crate::message::state::{msg_col, msg_row};
 use crate::message::{msg_clr_eos, msg_grid_view};
 use crate::option::vars::{p_ch, p_ru, p_ruf, p_stl, p_tal, p_wbr};
@@ -426,27 +425,14 @@ fn run_highlight(
 
 /// Append one `[attr, text, group]` chunk to an `ext_messages` array.
 fn push_chunk(content: &mut Array, attr: c_int, text: &[c_char], group: c_int) {
-    let mut chunk = ARRAY_DICT_INIT;
-    // SAFETY: both are kvecs this frame owns, so growing them is ours to
-    // do; `text` holds its own length in readable bytes, which `xmemdupz`
-    // copies into a string the event owns.
-    // SAFETY: `text` holds its own length in readable bytes, and the copy
-    // becomes the event's to free.
-    let copy = unsafe { xmemdupz(text.as_ptr().cast(), text.len()) };
-    let owned = String_0::from_raw_parts(copy.cast(), text.len());
-    let parts = [
-        Object::integer(attr as Integer),
-        Object::string(owned),
-        Object::integer(group as Integer),
-    ];
-    {
-        let mut c = Kvec::new(&mut chunk.size, &mut chunk.capacity, &mut chunk.items);
-        // SAFETY: a kvec this frame owns, so growing it is ours to do.
-        parts.into_iter().for_each(|part| unsafe { c.push(part) });
-    }
-    let mut a = Kvec::new(&mut content.size, &mut content.capacity, &mut content.items);
-    // SAFETY: as above.
-    unsafe { a.push(Object::array(chunk)) };
+    let mut chunk = Array::with_capacity(3);
+    // The text is copied: the event outlives the buffer it was built in.
+    // SAFETY: `text` holds its own length in readable bytes.
+    let bytes = unsafe { slice::from_raw_parts(text.as_ptr().cast::<u8>(), text.len()) };
+    chunk.push(Object::integer(attr as Integer));
+    chunk.push(Object::string(String_0::from_bytes(bytes)));
+    chunk.push(Object::integer(group as Integer));
+    content.push(Object::array(chunk));
 }
 
 /// Redraw the status line, window bar, ruler or tab line of `window` -- null for
@@ -513,12 +499,10 @@ unsafe fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, 
     let start_col = target.col;
 
     if ui_event {
-        let mut content = ARRAY_DICT_INIT;
+        let mut content = Array::EMPTY;
         paint_chunks(&target, line, runs, win, Some(&mut content));
         ui_call_msg_ruler(content);
         DID_SHOW_EXT_RULER.set(true);
-        // SAFETY: the array and every string in it were built above.
-        unsafe { api_free_array(content) };
         return;
     }
 
@@ -759,29 +743,18 @@ fn truncate_at_width(buffer: &mut [c_char], this_ru_col: c_int, width: c_int) {
 
 /// Send the ruler to a UI that has taken the message area over.
 fn show_ext_ruler(buffer: &[c_char], attr: c_int) {
-    let mut content_items = [Object::Nil; 1];
-    let mut chunk_items = [Object::Nil; 3];
-    let mut content = Array {
-        size: 0,
-        capacity: 1,
-        items: content_items.as_mut_ptr(),
-    };
-    let mut chunk = Array {
-        size: 0,
-        capacity: 3,
-        items: chunk_items.as_mut_ptr(),
-    };
+    let mut content = Array::with_capacity(1);
+    let mut chunk = Array::with_capacity(3);
     debug_assert!(
         attr == hl_attr(HLF_MSG as c_int),
         "attr == HL_ATTR(HLF_MSG)"
     );
-    // SAFETY: `buffer` is NUL-terminated, and the string it becomes is
-    // borrowed for the call only.
-    let text = unsafe { cstr_as_string(buffer.as_ptr().cast_mut()) };
-    push(&mut chunk, Object::integer(attr as Integer));
-    push(&mut chunk, Object::string(text));
-    push(&mut chunk, Object::integer(HLF_MSG as Integer));
-    push(&mut content, Object::array(chunk));
+    // SAFETY: `buffer` is NUL-terminated, and its bytes are copied.
+    let text = unsafe { cstr_to_string(buffer.as_ptr().cast_mut()) };
+    chunk.push(Object::integer(attr as Integer));
+    chunk.push(Object::string(text));
+    chunk.push(Object::integer(HLF_MSG as Integer));
+    content.push(Object::array(chunk));
     ui_call_msg_ruler(content);
     DID_SHOW_EXT_RULER.set(true);
     DID_RULER_COL.set(1);

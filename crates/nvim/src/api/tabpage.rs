@@ -11,8 +11,8 @@
 )]
 
 use crate::api::private::helpers::{
-    api_try, arena_array, array_add, dict_get_value, dict_set_var, find_buffer_by_handle,
-    find_tab_by_handle, find_window_by_handle,
+    api_try, dict_get_value, dict_set_var, find_buffer_by_handle, find_tab_by_handle,
+    find_window_by_handle,
 };
 use crate::api::vim::nvim_get_current_win;
 use crate::window::tab_index;
@@ -22,7 +22,7 @@ use crate::guard::Suppress;
 use crate::message::e_cmdwin;
 use crate::narrow::number_as_int;
 use crate::types::{
-    Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object, String_0,
+    Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object, String_0,
     TabpageHandle, WindowHandle, kErrorTypeException, size_t,
 };
 use crate::window::{
@@ -37,10 +37,7 @@ use core::ptr;
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_tabpage_list_wins(
-    tabpage: TabpageHandle,
-    arena: *mut Arena,
-) -> Result<Array, Error> {
+pub unsafe fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
     let mut rv = Array::EMPTY;
     let Some(tab) = find_tab_by_handle(tabpage)?.filter(|&t| valid_tabpage(t.id())) else {
         return Ok(rv);
@@ -50,9 +47,9 @@ pub unsafe fn nvim_tabpage_list_wins(
     let n = windows_in_tab(tab).count() as size_t;
     // SAFETY: `arena` is the caller's, and `rv` is the block it just handed
     // back, sized for exactly the windows appended below.
-    rv = arena_array(arena, n);
+    rv = Array::with_capacity(n);
     for wp in windows_in_tab(tab) {
-        unsafe { array_add(&mut rv, Object::window(wp.handle)) };
+        rv.push(Object::window(wp.handle));
     }
     Ok(rv)
 }
@@ -64,14 +61,13 @@ pub unsafe fn nvim_tabpage_list_wins(
 pub unsafe fn nvim_tabpage_get_var(
     tabpage: TabpageHandle,
     name: String_0,
-    arena: *mut Arena,
 ) -> Result<Object, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
     // SAFETY: `tab` is a live tabpage, so `tp_vars` is its own dictionary;
     // `name` and `arena` are the caller's, per this function's contract.
-    unsafe { dict_get_value(tab.tp_vars, name, arena) }
+    unsafe { dict_get_value(tab.tp_vars, &name) }
 }
 
 /// Set the tab-scoped variable `name`.
@@ -88,9 +84,8 @@ pub unsafe fn nvim_tabpage_set_var(
     };
     // SAFETY: as `nvim_tabpage_get_var`; `value` is the caller's and the
     // store takes it over.
-    let no_arena = ptr::null_mut::<Arena>();
     let vars = tab.tp_vars;
-    unsafe { dict_set_var(vars, name, value, false, false, no_arena) }.map(|_| ())
+    unsafe { dict_set_var(vars, &name, value, false, false) }.map(|_| ())
 }
 
 /// Remove the tab-scoped variable `name`.
@@ -102,9 +97,8 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Re
         return Ok(());
     };
     // SAFETY: as `nvim_tabpage_set_var`, with the deleting flag set.
-    let no_arena = ptr::null_mut::<Arena>();
     let vars = tab.tp_vars;
-    unsafe { dict_set_var(vars, name, Object::Nil, true, false, no_arena) }.map(|_| ())
+    unsafe { dict_set_var(vars, &name, Object::Nil, true, false) }.map(|_| ())
 }
 
 /// The window `tabpage` is showing.

@@ -17,6 +17,7 @@ use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
 use crate::message::emsg_ptr;
+use crate::types::OptStr;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
 };
@@ -504,7 +505,9 @@ pub(crate) fn command_line_enter(
 
         set_option_direct(
             kOptInccommand,
-            OptVal::String(unsafe { cstr_as_string(s.save_p_icm) }),
+            // SAFETY: the saved value is NUL-terminated and outlives the
+            // call, which copies it.
+            OptVal::String(unsafe { OptStr::borrowing(s.save_p_icm) }),
             OptionSetFlags::NONE,
             SID_NONE,
         );

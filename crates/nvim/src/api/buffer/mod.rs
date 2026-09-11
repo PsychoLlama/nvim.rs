@@ -3,8 +3,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    arena_array, arena_dict, arena_string, buf_get_text, cstr_as_string, dict_get_value,
-    dict_set_var, find_buffer_by_handle, normalize_index, set_mark, try_enter, try_leave,
+    buf_get_text, cstr_to_string, dict_get_value, dict_set_var, find_buffer_by_handle,
+    normalize_index, set_mark, try_enter, try_leave,
 };
 use crate::api::private::validate::check_string_array;
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
@@ -38,9 +38,9 @@ use crate::state::mode::State;
 use crate::types::{
     AcoSave, AlignTextPos, ApiDict, Arena, Array, BCount, Boolean, BufUpdateCallbacks,
     BufferHandle, ColNr, DoBufAction, DoBufStart, Error, Exception, ExtmarkOp, FileMark, Integer,
-    KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair, LineNr,
-    LuaRef, MarkAdjustMode, MarkGet, MsgList, Object, Pos, String_0, TryState, UndoObjectType,
-    WinSplit, WinStyle, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t, uint64_t,
+    KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, LineNr, LuaRef,
+    MarkAdjustMode, MarkGet, MsgList, Object, Pos, String_0, TryState, UndoObjectType, WinSplit,
+    WinStyle, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
 

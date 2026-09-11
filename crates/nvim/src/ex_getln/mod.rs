@@ -4,9 +4,7 @@
 
 pub(crate) mod state;
 use crate::api::extmark::nvim_create_namespace;
-use crate::api::private::helpers::{
-    api_free_array, arena_array, cstr_as_string, try_enter, try_leave,
-};
+use crate::api::private::helpers::{cstr_to_string, try_enter, try_leave};
 use crate::api::vim::nvim_create_buf;
 use crate::ascii::{ascii_isalpha, ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{
@@ -75,10 +73,7 @@ use crate::mbyte::{
     utf8len_tab_zero, utfc_ptr2len,
 };
 use crate::memline::{decl, incl, ml_append, ml_replace};
-use crate::memory::{
-    ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree, xmalloc, xmallocz, xmemdupz,
-    xrealloc, xstrdup,
-};
+use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::state::{
     cmd_silent, cmdmsg_rl, did_emsg, emsg_on_display, lines_left, msg_col, msg_didout, msg_no_more,
     msg_row, msg_scroll, msg_scrolled, need_wait_return, quit_more, redir_off,
@@ -150,7 +145,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    AcoSave, Arena, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdMod,
+    AcoSave, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdMod,
     CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
     CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg,
     ExArgt, Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
@@ -429,11 +424,7 @@ pub(crate) enum KeyOutcome {
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const ARRAY_DICT_INIT: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
 pub const B_IMODE_USE_INSERT: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const B_IMODE_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const B_IMODE_LMAP: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
@@ -540,10 +531,7 @@ pub(crate) const TRY_STATE_INIT: TryState = TryState {
 /// C's `STATIC_CSTR_AS_OPTVAL`: a string option value borrowing a literal.
 /// Nothing frees it.
 pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
-    OptVal::String(String_0::from_raw_parts(
-        value.as_ptr() as *mut ::core::ffi::c_char,
-        value.count_bytes() as size_t,
-    ))
+    OptVal::static_string(value)
 }
 
 /// An all-zero [`ExArg`]; `parse_cmdline` fills it.

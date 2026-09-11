@@ -147,7 +147,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_get_var(lstate: *mut lua_S
             .inspect_err(|_| *err_param = c"tabpage".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena) }?;
+        let mut ret = unsafe { nvim_tabpage_get_var(arg_1, arg_2) }?;
         // SAFETY: as above.
         unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
         Ok(())
@@ -241,9 +241,9 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_list_wins(lstate: *mut lua
             .inspect_err(|_| *err_param = c"tabpage".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_tabpage_list_wins(arg_1, arena) }?;
+        let mut ret = unsafe { nvim_tabpage_list_wins(arg_1) }?;
         // SAFETY: as above.
-        unsafe { nlua_push_array(lstate, ret, PUSH_SPECIAL) };
+        unsafe { nlua_push_array(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -271,9 +271,6 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_set_var(lstate: *mut lua_S
         // SAFETY: as above.
         let arg_3 = unsafe { nlua_pop_object(lstate, true, arena) }
             .inspect_err(|_| *err_param = c"value".as_ptr().cast_mut())?;
-        // SAFETY: the conversion took the references and nothing else
-        // releases them.
-        let arg_3 = unsafe { ObjectArg::new(arg_3) };
         // SAFETY: as above.
         let arg_2 = unsafe { nlua_pop_string(lstate, arena) }
             .inspect_err(|_| *err_param = c"name".as_ptr().cast_mut())?;
@@ -282,7 +279,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_tabpage_set_var(lstate: *mut lua_S
             .inspect_err(|_| *err_param = c"tabpage".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3.value) }?;
+        unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3) }?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.

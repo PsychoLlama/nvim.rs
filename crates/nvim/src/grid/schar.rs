@@ -123,7 +123,8 @@ pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> ScreenChar {
         return sc;
     }
 
-    let str = String_0::from_raw_parts(buf as *mut c_char, len);
+    // SAFETY: the caller's promise -- `len` readable bytes at `buf`.
+    let str = unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), len) };
     let mut status: MHPutStatus = kMHExisting;
     let idx = unsafe { mh_put_glyph(glyph_cache().raw(), str, &raw mut status) };
     debug_assert!(idx < 0xffffff, "idx < 0xFFFFFF");

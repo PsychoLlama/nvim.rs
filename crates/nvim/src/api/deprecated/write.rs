@@ -182,5 +182,5 @@ pub unsafe fn nvim_notify(
     // SAFETY: `code` borrows a static, `args` borrows this frame's buffer
     // for the length of the call, and `arena`/`error` are the caller's and
     // this frame's slot.
-    unsafe { nlua_exec(code, no_name, args, kRetObject, arena) }
+    unsafe { nlua_exec(&code, no_name, args, kRetObject, arena) }
 }

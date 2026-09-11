@@ -55,7 +55,6 @@ pub struct MsgpackRpcRequestHandler {
     pub name: *const ::core::ffi::c_char,
     pub fn_0: Option<ApiDispatchFn>,
     pub fast: bool,
-    pub ret_alloc: bool,
 }
 pub type NS = Handle;
 pub type OptInt = int64_t;

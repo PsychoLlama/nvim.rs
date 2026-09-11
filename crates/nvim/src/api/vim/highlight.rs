@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, dict_put_str};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 
 /// # Safety
@@ -48,10 +48,10 @@ pub unsafe fn nvim_set_hl(
     let hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
     if !(hl_id != 0 as ::core::ffi::c_int) {
         // SAFETY: the caller's highlight name is NUL-terminated.
-        return Err(err_bad_value(c"highlight name", unsafe { name.as_cstr() }));
+        return Err(err_bad_value(c"highlight name", name.as_cstr()));
     }
     let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    if unsafe { (*val).url }.is_some() {
+    if unsafe { (*val).url.as_ref() }.is_some() {
         return Err(Error::validation(c"Invalid key: 'url'"));
     }
     let update: bool = unsafe { (*val).update }.unwrap_or(false);
@@ -114,13 +114,13 @@ pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-pub unsafe fn nvim_get_color_map(arena: *mut Arena) -> ApiDict {
-    let mut colors: ApiDict = arena_dict(arena, COLOR_NAMES.len() as size_t);
+pub unsafe fn nvim_get_color_map() -> ApiDict {
+    let mut colors: ApiDict = ApiDict::with_capacity(COLOR_NAMES.len() as size_t);
     for entry in &COLOR_NAMES {
         let name = String_0::from_cstr(entry.name);
         let color = Object::integer(entry.color as Integer);
         // SAFETY: `colors` is the arena block sized for every colour name.
-        unsafe { dict_put_str(&mut colors, name, color) };
+        colors.insert(name, color);
     }
     colors
 }

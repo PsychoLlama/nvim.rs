@@ -41,10 +41,10 @@
 pub(crate) mod state;
 use crate::types::CAR;
 use crate::types::NL;
+use crate::types::String_0;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
-use crate::api::private::helpers::{array_add, dict_put};
 use crate::charset::vim_strnsize;
 use crate::drawscreen::redrawing;
 use crate::eval::vars::set_vim_var_nr;
@@ -90,11 +90,7 @@ pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
 pub const kNumBaseDecimal: NumberBase = 10;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
@@ -556,14 +552,12 @@ pub(crate) fn stl_is_global() -> bool {
 /// same expression that decides how many keys it puts; the debug assertion
 /// inside catches a mismatch.
 pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
-    // SAFETY: the invariant above.
-    unsafe { dict_put(dict, key, value) };
+    dict.insert(String_0::from_cstr(key), value);
 }
 
 /// C's `ADD_C`. See [`put`].
 pub(crate) fn push(array: &mut Array, value: Object) {
-    // SAFETY: the invariant above.
-    unsafe { array_add(array, value) };
+    array.push(value);
 }
 
 // ---------------------------------------------------------------------------

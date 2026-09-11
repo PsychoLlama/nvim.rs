@@ -129,7 +129,7 @@ use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
 use crate::types::option::MAX_MCO;
-use crate::types::{OptIndex, OptInt, OptScopeFlags, OptVal, OptVar, String_0, VimOption, ssize_t};
+use crate::types::{OptIndex, OptInt, OptScopeFlags, OptVal, OptVar, VimOption, ssize_t};
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 
 /// `scope_flags` bits.
@@ -176,7 +176,7 @@ const fn number(value: OptInt) -> OptVal {
 }
 
 const fn string(value: &'static CStr) -> OptVal {
-    OptVal::String(String_0::from_cstr(value))
+    OptVal::static_string(value)
 }
 
 /// Copy one generated part into the table under construction.

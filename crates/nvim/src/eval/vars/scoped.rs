@@ -188,7 +188,7 @@ pub(crate) unsafe fn tv_to_optval(
         // the name of one.
         let strval = unsafe { encode_tv2string(tv, ptr::null_mut()) };
         err = strval.is_null();
-        OptVal::String(unsafe { cstr_as_string(strval) })
+        OptVal::string(unsafe { cstr_to_string(strval) })
     } else if option_has_bool || option_has_num {
         let n = if option_has_num {
             unsafe { tv_get_number_chk(tv, &raw mut err) }
@@ -227,7 +227,7 @@ pub(crate) unsafe fn tv_to_optval(
         if tvh.v_type() != VAR_BOOL && tvh.v_type() != VAR_SPECIAL {
             let strval = unsafe { tv_get_string_buf_chk(tv, nbuf.as_mut_ptr()) };
             err = strval.is_null();
-            OptVal::String(unsafe { cstr_to_string(strval) })
+            OptVal::string(unsafe { cstr_to_string(strval) })
         } else {
             if !is_tty_opt {
                 err = true;

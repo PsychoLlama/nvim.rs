@@ -20,7 +20,6 @@ use super::{
     FCERR_NONE, FCERR_OTHER, get_global_lstate, kRetLuaref, kRetMulti, kRetNilBool, kRetObject,
     nlua_error, nlua_fast_cfpcall, nlua_pcall, nlua_pushref, nlua_ref_global,
 };
-use crate::api::private::helpers::arena_array;
 use crate::ex_cmds::check_secure;
 use crate::lua::converter::{
     kNluaPushSpecial, nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval,
@@ -260,12 +259,14 @@ pub unsafe fn typval_exec_lua_callable(
 
 /// Run a chunk with api values as its arguments and its answer as one.
 ///
+/// The arguments are this call's: they are pushed and then released.
+///
 /// # Safety
-/// `str` must be a live api string.
+/// `chunkname` must be null or a NUL-terminated string.
 pub unsafe fn nlua_exec(
-    str: String_0,
+    str: &String_0,
     chunkname: *const c_char,
-    args: Array,
+    mut args: Array,
     mode: LuaRetMode,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
@@ -280,10 +281,11 @@ pub unsafe fn nlua_exec(
         if luaL_loadbuffer(lstate, str.data(), str.len(), name) != 0 {
             return Err(lua_error_of(kErrorTypeValidation, lstate));
         }
-        for i in 0..args.size {
-            nlua_push_object(lstate, args.items.add(i), 0);
+        let argc = args.len() as c_int;
+        for item in args.iter_mut() {
+            nlua_push_object(lstate, item, 0);
         }
-        if nlua_pcall(lstate, args.size as c_int, 1) != 0 {
+        if nlua_pcall(lstate, argc, 1) != 0 {
             return Err(lua_error_of(kErrorTypeException, lstate));
         }
         nlua_call_pop_retval(lstate, mode, arena, top)
@@ -352,7 +354,7 @@ pub unsafe fn nlua_call_ref_ctx(
     fast: bool,
     ref_0: LuaRef,
     name: *const c_char,
-    args: Array,
+    mut args: Array,
     mode: LuaRetMode,
     arena: *mut Arena,
     reports: bool,
@@ -361,13 +363,13 @@ pub unsafe fn nlua_call_ref_ctx(
         let lstate = get_global_lstate();
         let top = lua_gettop(lstate);
         nlua_pushref(lstate, ref_0);
-        let mut nargs = args.size as c_int;
+        let mut nargs = args.len() as c_int;
         if !name.is_null() {
             lua_pushstring(lstate, name);
             nargs += 1;
         }
-        for i in 0..args.size {
-            nlua_push_object(lstate, args.items.add(i), 0);
+        for item in args.iter_mut() {
+            nlua_push_object(lstate, item, 0);
         }
 
         if fast {
@@ -423,13 +425,14 @@ unsafe fn nlua_call_pop_retval(
                 // The results come off the stack top-down, so they are stored
                 // back-to-front.
                 let nres = lua_gettop(lstate) - pretop;
-                let mut res: Array = arena_array(arena, nres as size_t);
-                for i in 0..nres {
-                    *res.items.offset((nres - i - 1) as isize) =
-                        nlua_pop_object(lstate, false, arena)?;
+                // The values come off the stack topmost first, so they are
+                // collected and then turned back into call order.
+                let mut res: Vec<Object> = Vec::with_capacity(nres as size_t);
+                for _ in 0..nres {
+                    res.push(nlua_pop_object(lstate, false, arena)?);
                 }
-                res.size = nres as size_t;
-                Ok(Object::array(res))
+                res.reverse();
+                Ok(Object::array(Array::from(res)))
             }
             _ => unreachable!(),
         }

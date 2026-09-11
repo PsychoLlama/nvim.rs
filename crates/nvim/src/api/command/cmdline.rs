@@ -27,15 +27,10 @@ use core::ptr;
 ///
 /// `str` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
-pub(crate) unsafe fn string_iswhite(str: String_0) -> bool {
-    for i in 0..str.len() {
-        // SAFETY: `i` is below `len`, so the byte is inside the string.
-        let byte = unsafe { *str.data().add(i) };
-        if !ascii_iswhite(byte as c_int) {
-            return false;
-        }
-    }
-    true
+pub(crate) fn string_iswhite(str: &String_0) -> bool {
+    str.as_bytes()
+        .iter()
+        .all(|&byte| ascii_iswhite(c_int::from(byte)))
 }
 
 /// Append `len` bytes: upstream's `kv_concat_len(cmdline, src, len)`, which
@@ -129,7 +124,7 @@ pub(crate) unsafe fn build_cmdline_str(
     // SAFETY: the caller's promise -- `cmd` is the command being built and
     // is live for the call.
     let mut cmd = unsafe { Ea::new(cmd) };
-    let argc: size_t = args.size;
+    let argc: size_t = args.len();
     // Upstream's `kv_resize(cmdline, 32)`: a size hint, nothing more.
     let mut cmdline: Vec<u8> = Vec::with_capacity(32);
     // SAFETY: `cmdinfo` is the caller's, live for the call.
@@ -171,9 +166,8 @@ pub(crate) unsafe fn build_cmdline_str(
     };
     let argstart_idx: size_t = cmdline.len();
     let arglens = cmd.arglens;
-    for i in 0..argc {
-        // SAFETY: `i` is below `size`, so the object is inside `items`.
-        let s: String_0 = unsafe { *args.items.add(i) }
+    for (i, item) in args.iter().enumerate().take(argc) {
+        let s = item
             .as_string()
             .expect("collect_args puts only Strings in the array");
         // SAFETY: `arglens` was allocated with `argc` slots.

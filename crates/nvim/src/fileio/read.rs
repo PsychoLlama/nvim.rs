@@ -768,7 +768,7 @@ pub(crate) unsafe fn readfile(
             // Also for ":read ++edit file".
             set_option_direct(
                 kOptFileencoding,
-                OptVal::String(unsafe { cstr_as_string(fenc) }),
+                OptVal::string(unsafe { cstr_to_string(fenc) }),
                 OptionSetFlags::LOCAL,
                 0 as ScriptId,
             );

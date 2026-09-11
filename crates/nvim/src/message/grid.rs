@@ -14,7 +14,6 @@ use crate::cstr;
 use crate::grid::{default_grid_ref, default_gridview};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
-use core::ptr;
 
 /// The message grid, as a handle.
 ///
@@ -65,10 +64,9 @@ pub(crate) unsafe fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
     let mut sep = [0 as c_char; 32];
     // SAFETY: the caller's promise -- a live window, whose 'fillchars' this
     // reads; `schar_get` writes at most `MAX_SCHAR_SIZE` bytes plus a NUL.
-    // `sep` outlives the call below, which copies the separator out.
     let sep = unsafe {
         let size = schar_get(sep.as_mut_ptr(), Win::current().w_p_fcs_chars.msgsep);
-        String_0::from_raw_parts(sep.as_mut_ptr(), size)
+        String_0::from_bytes(core::slice::from_raw_parts(sep.as_ptr().cast::<u8>(), size))
     };
     ui_call_msg_set_pos(
         grid.handle.into(),
@@ -339,22 +337,24 @@ pub(crate) unsafe fn inc_msg_scrolled() {
     if unsafe { *get_vim_var_str(Vv::Scrollstart) } == 0 {
         // v:scrollstart is empty: set it to the script/function name and
         // line number the scrolling started at.
-        let mut p = String_0::from_raw_parts(sourcing_top().es_name, 0);
-        let mut tofree: *mut c_char = ptr::null_mut();
+        // SAFETY: the innermost frame's name is null or NUL-terminated.
+        let mut p = unsafe { cstr_to_string(sourcing_top().es_name) };
         if p.data().is_null() {
-            p = unsafe { cstr_as_string(gettext(c"Unknown").as_ptr()) };
+            p = unsafe { cstr_to_string(gettext(c"Unknown").as_ptr()) };
         } else {
             let tofreesize = unsafe { cstr::bytes_at(p.data()) }.len() + 40;
-            tofree = unsafe { xmalloc(tofreesize) }.cast();
+            let tofree: *mut c_char = unsafe { xmalloc(tofreesize) }.cast();
             let fmt = gettext(c"%s line %ld");
             let name = p.data();
             let lnum = sourcing_top().es_lnum as int64_t;
             let len = unsafe { vim_snprintf_safelen(tofree, tofreesize, fmt.as_ptr(), name, lnum) };
-            p.set_len(len);
-            p.set_data(tofree);
+            // The formatted text replaces the name, and the buffer it was
+            // formatted into becomes the string's own.
+            // SAFETY: `tofree` is `len` bytes plus the terminator
+            // `vim_snprintf_safelen` wrote, and nothing else names it.
+            p = unsafe { String_0::from_owned_parts(tofree, len) };
         }
         unsafe { set_vim_var_string(Vv::Scrollstart, p.data(), p.len() as ptrdiff_t) };
-        unsafe { xfree(tofree.cast()) };
     }
     msg_scrolled.set(msg_scrolled.get() + 1);
     set_must_redraw(UPD_VALID);

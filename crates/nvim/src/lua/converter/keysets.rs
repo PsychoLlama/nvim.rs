@@ -193,6 +193,13 @@ pub unsafe fn nlua_push_keydict(
             (*$at.cast::<Option<$ty>>()).unwrap_or($absent)
         };
     }
+    /// [`field!`] for a field the keyset owns, which the push borrows: a
+    /// keydict keeps its values and releases them itself.
+    macro_rules! borrowed {
+        ($at:expr, $ty:ty, $absent:expr) => {
+            (*$at.cast::<Option<$ty>>()).as_ref().unwrap_or($absent)
+        };
+    }
     unsafe {
         lua_createtable(lstate, 0, 0);
         let mut i: size_t = 0;
@@ -208,8 +215,11 @@ pub unsafe fn nlua_push_keydict(
             lua_pushstring(lstate, (*field).str);
             match (*field).type_0 as ObjectTypeInt {
                 T_ANY => {
-                    let mut object = field!(mem, Object, Object::Nil);
-                    nlua_push_object(lstate, &raw mut object, 0);
+                    let mut absent = Object::Nil;
+                    let object = (*mem.cast::<Option<Object>>())
+                        .as_mut()
+                        .unwrap_or(&mut absent);
+                    nlua_push_object(lstate, object, 0);
                 }
                 T_INTEGER => lua_pushinteger(lstate, field!(mem, Integer, 0) as lua_Integer),
                 T_BUFFER | T_WINDOW | T_TABPAGE => {
@@ -217,9 +227,21 @@ pub unsafe fn nlua_push_keydict(
                 }
                 T_FLOAT => lua_pushnumber(lstate, field!(mem, Float, 0.0)),
                 T_BOOLEAN => lua_pushboolean(lstate, c_int::from(field!(mem, Boolean, false))),
-                T_STRING => nlua_push_string(lstate, field!(mem, String_0, String_0::NULL), 0),
-                T_ARRAY => nlua_push_array(lstate, field!(mem, Array, Array::EMPTY), 0),
-                T_DICT => nlua_push_dict(lstate, field!(mem, ApiDict, ApiDict::EMPTY), 0),
+                T_STRING => nlua_push_string(lstate, borrowed!(mem, String_0, &String_0::NULL), 0),
+                T_ARRAY => {
+                    let mut absent = Array::EMPTY;
+                    let array = (*mem.cast::<Option<Array>>())
+                        .as_mut()
+                        .unwrap_or(&mut absent);
+                    nlua_push_array(lstate, array, 0);
+                }
+                T_DICT => {
+                    let mut absent = ApiDict::EMPTY;
+                    let dict = (*mem.cast::<Option<ApiDict>>())
+                        .as_mut()
+                        .unwrap_or(&mut absent);
+                    nlua_push_dict(lstate, dict, 0);
+                }
                 T_LUAREF => nlua_pushref(lstate, field!(mem, LuaRef, 0)),
                 _ => abort(),
             }

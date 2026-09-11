@@ -16,7 +16,6 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::ex_docmd::cmdmod_filters_out;
 use crate::grid::default_grid_ref;
 use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
-use crate::types::builders::static_cstring;
 use crate::types::{Callback, NUL};
 use core::ffi::{c_int, c_uint};
 use core::ptr;
@@ -31,11 +30,7 @@ pub(crate) fn on_print_cb() -> *mut Callback {
 }
 
 /// C's `ARRAY_DICT_INIT`: empty, and owning nothing.
-const EMPTY_ARRAY: Array = Array {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
-};
+const EMPTY_ARRAY: Array = Array::EMPTY;
 
 /// Start putting a message on the screen.
 ///
@@ -165,7 +160,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
             // SAFETY: main-thread editor call.
             unsafe { msg_ext_ui_flush() }; // ensure messages until now are emitted
             ui_call_msg_show(
-                static_cstring(c"empty"),
+                String_0::from_cstr(c"empty"),
                 EMPTY_ARRAY,
                 false,
                 false,

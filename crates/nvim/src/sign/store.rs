@@ -168,7 +168,7 @@ pub(super) unsafe fn namespace_of(group: *const c_char) -> Integer {
     // SAFETY: the caller's group name.
     let known = unsafe { namespace_id(group) } != 0;
     // SAFETY: as above.
-    let ns = unsafe { nvim_create_namespace(cstr_as_string(group)) };
+    let ns = unsafe { nvim_create_namespace(cstr_to_string(group)) };
     if !known {
         SIGN_GROUPS.with_mut(|groups| groups.push(ns));
     }

@@ -17,11 +17,12 @@
 
 use crate::api::private::dispatch_wrappers::handle_nvim_paste;
 use crate::api::ui::remote_ui_flush_pending_data;
+use crate::cstr;
 use crate::event::wstream::wstream_new_buffer;
+use crate::types::String_0;
 use core::ffi::{c_char, c_void};
 use core::{ptr, slice};
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::memory::{alloc_block, free_block};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_integer, mpack_object, mpack_object_array, mpack_str, mpack_uint,
@@ -38,13 +39,12 @@ use super::{Chan, channel_write, trace};
 /// to each of `chans`.
 ///
 /// # Safety
-/// Every channel in `chans` is live, `method` is a NUL-terminated string, and
-/// `args` describes `args.size` live objects.
+/// Every channel in `chans` is live and `method` is a NUL-terminated string.
 pub unsafe fn serialize_request(
     chans: &mut [*mut Channel],
     request_id: uint32_t,
     method: *const c_char,
-    args: Array,
+    mut args: Array,
 ) {
     // SAFETY: the caller's channels, method name and argument array.
     let mut packer = unsafe { packer_buffer_init(chans) };
@@ -59,8 +59,9 @@ pub unsafe fn serialize_request(
     if is_request {
         mpack_uint(packer.cursor_mut(), request_id);
     }
-    unsafe { mpack_str(cstr_as_string(method), &mut packer) };
-    unsafe { mpack_object_array(args, &mut packer) };
+    // SAFETY: the caller's NUL-terminated method name.
+    mpack_str(unsafe { cstr::bytes_at(method) }, &mut packer);
+    mpack_object_array(&mut args, &mut packer);
     unsafe { packer_buffer_finish(&mut packer) };
 }
 
@@ -104,10 +105,7 @@ pub unsafe fn serialize_response(
     if errored {
         mpack_array(packer.cursor_mut(), 2);
         mpack_integer(packer.cursor_mut(), Integer::from(err_type));
-        // SAFETY: the caller's error slot, whose message is a live string.
-        let why = unsafe { cstr_as_string(err.message_or_empty().as_ptr()) };
-        // SAFETY: `packer` is this frame's own.
-        unsafe { mpack_str(why, &mut packer) };
+        mpack_str(err.message_or_empty().to_bytes(), &mut packer);
         unsafe { put_byte(&mut packer, wire::NIL) };
     } else {
         unsafe { put_byte(&mut packer, wire::NIL) };
@@ -135,17 +133,10 @@ unsafe fn report_failed_notification(
         return;
     }
 
-    // SAFETY: the caller's error slot. `items` lives until the request has
-    // been packed, which `serialize_request` does before returning.
-    let mut items = [
+    let args = Array::from(vec![
         Object::Integer(Integer::from(err.kind())),
-        Object::String(unsafe { cstr_as_string(err.message_or_empty().as_ptr()) }),
-    ];
-    let args = Array {
-        size: 2,
-        capacity: 2,
-        items: items.as_mut_ptr(),
-    };
+        Object::string(String_0::from_cstr(err.message_or_empty())),
+    ]);
     let mut chan = channel;
     let to = slice::from_mut(&mut chan);
     unsafe { serialize_request(to, 0, c"nvim_error_event".as_ptr(), args) };

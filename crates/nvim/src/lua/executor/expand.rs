@@ -86,9 +86,9 @@ pub unsafe fn nlua_expand_pat(xp: *mut Expand) {
                 let Ok(completions) = completions else {
                     break 'cleanup_array;
                 };
-                matches.reserve(completions.size);
-                for i in 0..completions.size {
-                    let Some(text) = (*completions.items.add(i)).as_string() else {
+                matches.reserve(completions.len());
+                for i in 0..completions.len() {
+                    let Some(text) = (completions[i]).as_string() else {
                         break 'cleanup_array;
                     };
                     matches.push(string_to_cstr(text));

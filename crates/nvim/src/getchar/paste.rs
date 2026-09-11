@@ -144,14 +144,21 @@ pub unsafe fn paste_repeat(count: c_int) {
     }
     drop(unmapped);
 
-    let str = String_0::from_raw_parts(pasted.as_mut_ptr().cast(), pasted.len());
+    let str = String_0::from_bytes(&pasted);
     let mut arena: Arena = ARENA_EMPTY;
     let mut err = Error::none();
     let mut i = 0;
     while !aborted && i < count {
-        if let Err(e) =
-            unsafe { nvim_paste(LUA_INTERNAL_CALL, str, false, -1 as Integer, &raw mut arena) }
-        {
+        // A copy per pass: the call takes the text over.
+        if let Err(e) = unsafe {
+            nvim_paste(
+                LUA_INTERNAL_CALL,
+                str.clone(),
+                false,
+                -1 as Integer,
+                &raw mut arena,
+            )
+        } {
             err = e;
         }
         aborted = err.is_set();

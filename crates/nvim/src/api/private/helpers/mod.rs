@@ -38,8 +38,8 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    ApiDict, BufferHandle, ColNr, Error, ExceptType, FileMarkView, Integer, LineNr, MsgList, NUL,
-    Pos, ScriptId, String_0, TabpageHandle, TryState, WindowHandle, int64_t, kErrorTypeException,
+    BufferHandle, ColNr, Error, ExceptType, FileMarkView, Integer, LineNr, MsgList, NUL, Pos,
+    ScriptId, String_0, TabpageHandle, TryState, WindowHandle, int64_t, kErrorTypeException,
     uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
@@ -54,7 +54,6 @@ pub(crate) use self::text::*;
 pub(crate) use self::value::*;
 // Reached by name from `crates/nvim/tests/unit`, which links the library from
 // outside; the rest of `value` stays in-crate.
-pub use self::value::api_free_object;
 pub(crate) use self::vimdict::*;
 
 const ET_ERROR: ExceptType = 1;
@@ -78,12 +77,6 @@ const SID_API_CLIENT: ScriptId = -9;
 const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
 const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
-
-const EMPTY_DICT: ApiDict = ApiDict {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
-};
 
 use crate::api::private::validate::{Bad, err_bad_number, err_invalid};
 use crate::api_error;

@@ -16,15 +16,14 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::types::AutoEvent;
+use crate::types::String_0;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::api::private::converter::object_to_vim;
-use crate::api::private::helpers::{arena_array, arena_dict, arena_string, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::channel::channels;
 use crate::eval::encode::encode_tv2json;
@@ -34,14 +33,13 @@ use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::proc_is_stopped;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree};
+use crate::memory::xfree;
 use crate::message_fmt::c_str;
 use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, SaveVEvent, TypVal, VAR_DICT,
-    key_value_pair, uint64_t,
+    ApiDict, Array, Channel, IOSIZE, Integer, Object, SaveVEvent, TypVal, VAR_DICT, uint64_t,
 };
 
 use super::known::*;
@@ -50,11 +48,9 @@ use super::{
     main_loop_events,
 };
 
-/// A string object borrowing a `'static` C literal.
+/// A string object holding a copy of a `'static` C literal.
 fn literal_obj(text: &'static CStr) -> Object {
-    // SAFETY: a `CStr` is NUL-terminated and, being `'static`, outlives the
-    // borrowed `String_0`.
-    Object::String(unsafe { cstr_as_string(text.as_ptr()) })
+    Object::string(String_0::from_cstr(text))
 }
 
 /// A fresh `TypVal` of no type, which is what every consumer here starts
@@ -63,12 +59,11 @@ fn literal_obj(text: &'static CStr) -> Object {
 ///
 /// # Safety
 /// `id` may name any channel; `arena` owns the dict's storage.
-unsafe fn info_tv(id: uint64_t, arena: *mut Arena) -> TypVal {
-    let mut tv = TV_INITIAL_VALUE;
-    // SAFETY: the caller's arena; `channel_info` answers a dict, which
-    // `object_to_vim` converts without ever failing.
-    let info = unsafe { channel_info(id, arena) };
-    unsafe { object_to_vim(Object::Dict(info), &mut tv) };
+unsafe fn info_tv(id: uint64_t) -> TypVal {
+    // SAFETY: `channel_info` answers a dict, which converts without ever
+    // failing.
+    let info = unsafe { channel_info(id) };
+    let tv = TypVal::from(Object::dict(info));
     debug_assert!(tv.v_type() == VAR_DICT);
     tv
 }
@@ -95,11 +90,9 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
         .as_ref()
         .map_or(ext_source, |name| name.as_ptr());
 
-    // SAFETY: the caller's live channel; the arena owns everything the dict
-    // points at until it is finished below.
+    // SAFETY: the caller's live channel.
     debug_assert!(unsafe { (*chan).id } <= i64::MAX as uint64_t);
-    let mut arena: Arena = ARENA_EMPTY;
-    let tv = unsafe { info_tv((*chan).id, &raw mut arena) };
+    let tv = unsafe { info_tv((*chan).id) };
     let str = unsafe { encode_tv2json(&tv, ptr::null_mut()) };
     // SAFETY: the caller's live channel, and two NUL-terminated strings --
     // the caller's `source` and the JSON just rendered.
@@ -111,7 +104,6 @@ pub unsafe fn channel_create_event(chan: *mut Channel, ext_source: *const c_char
         "new channel {id} ({source}) : {info}"
     );
     unsafe { xfree(str.cast()) };
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     unsafe { channel_info_changed(chan, true) };
 }
 
@@ -161,8 +153,7 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
 
     let mut save_v_event = SaveVEvent::default();
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
-    let mut arena: Arena = ARENA_EMPTY;
-    let retval = unsafe { info_tv((*chan).id, &raw mut arena) };
+    let retval = unsafe { info_tv((*chan).id) };
     // SAFETY: the answer's own dictionary; `v:event` takes a reference.
     let info = unsafe { DictRef::retained(retval.dict_or_null()) };
     let _ = unsafe { tv_dict_add_dict(dict, c"info".as_ptr(), 4, info) };
@@ -170,7 +161,6 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     let __hoisted_0 = Buf::current_or_none();
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, __hoisted_0) };
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     unsafe { channel_decref(chan) };
 }
 
@@ -194,26 +184,16 @@ pub unsafe fn channel_job_running(id: uint64_t) -> bool {
 /// dict rather than an error.
 ///
 /// # Safety
-/// Called from the main thread; `arena` owns the answer's storage.
-pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> ApiDict {
+/// Called from the main thread.
+pub unsafe fn channel_info(id: uint64_t) -> ApiDict {
     let chan = find_channel(id);
     if chan.is_null() {
         return empty_dict();
     }
 
     // id, stream, mode, and up to six more from the branches below.
-    let mut info = arena_dict(arena, 9);
-    let mut push = |key: &CStr, value: Object| {
-        // SAFETY: the arena sized `items` for nine entries and no path below
-        // pushes more than that.
-        unsafe {
-            *info.items.add(info.size) = key_value_pair {
-                key: cstr_as_string(key.as_ptr()),
-                value,
-            }
-        };
-        info.size += 1;
-    };
+    let mut info = ApiDict::with_capacity(9);
+    let mut push = |key: &CStr, value: Object| info.insert(String_0::from_cstr(key), value);
 
     // SAFETY: `chan` is a live channel; the transport reads below are guarded
     // by its `streamtype`.
@@ -223,13 +203,10 @@ pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> ApiDict {
         kChannelStreamProc => {
             let proc = unsafe { channel_proc(chan) };
             if unsafe { (*proc).type_0 }.cast_signed() == kProcTypePty {
-                let name = unsafe { cstr_as_string(pty_proc_tty_name(channel_pty(chan))) };
-                push(c"pty", Object::String(unsafe { arena_string(arena, name) }));
+                let name = unsafe { cstr_to_string(pty_proc_tty_name(channel_pty(chan))) };
+                push(c"pty", Object::string(name));
             }
-            push(
-                c"argv",
-                Object::Array(unsafe { argv_array((*proc).argv, arena) }),
-            );
+            push(c"argv", Object::array(unsafe { argv_array((*proc).argv) }));
             c"job"
         }
         kChannelStreamStdio => c"stdio",
@@ -245,15 +222,15 @@ pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> ApiDict {
     push(c"stream", literal_obj(stream_desc));
 
     let mode_desc = if unsafe { (*chan).is_rpc } {
-        push(c"client", Object::Dict(unsafe { (*chan).rpc.info }));
+        push(c"client", Object::dict(unsafe { (*chan).rpc.info.clone() }));
         c"rpc"
     } else if unsafe { (*chan).term }.is_null() {
         c"bytes"
     } else {
-        let buf = Object::Buffer(Integer::from(unsafe { terminal_buf((*chan).term) }));
+        let handle = Integer::from(unsafe { terminal_buf((*chan).term) });
         // `buf` is the documented key; `buffer` is kept for older plugins.
-        push(c"buf", buf);
-        push(c"buffer", buf);
+        push(c"buf", Object::Buffer(handle));
+        push(c"buffer", Object::Buffer(handle));
         push(
             c"exitcode",
             Object::Integer(Integer::from(unsafe { (*chan).exit_status })),
@@ -264,48 +241,40 @@ pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> ApiDict {
     info
 }
 
-/// The child's command line, as an array of strings borrowed from it.
+/// The child's command line, as an array of strings copied out of it.
 ///
 /// # Safety
 /// `args` is null or a NULL-terminated argument vector.
-unsafe fn argv_array(args: *mut *mut c_char, arena: *mut Arena) -> Array {
+unsafe fn argv_array(args: *mut *mut c_char) -> Array {
     if args.is_null() {
-        return Array {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut(),
-        };
+        return Array::EMPTY;
     }
-    // SAFETY: the caller's NULL-terminated vector, and an arena array sized
-    // for exactly the arguments counted out of it.
+    // SAFETY: the caller's NULL-terminated vector.
     let mut n = 0;
     while !unsafe { *args.add(n) }.is_null() {
         n += 1;
     }
-    let mut argv = arena_array(arena, n);
+    let mut argv = Array::with_capacity(n);
     for i in 0..n {
-        unsafe { *argv.items.add(i) = Object::String(cstr_as_string(*args.add(i))) };
+        // SAFETY: `i` is below the count walked above.
+        argv.push(Object::string(unsafe { cstr_to_string(*args.add(i)) }));
     }
-    argv.size = n;
     argv
 }
 
 /// Every channel's info, ordered by id.
 ///
 /// # Safety
-/// Called from the main thread; `arena` owns the answer's storage.
-pub unsafe fn channel_all_info(arena: *mut Arena) -> Array {
+/// Called from the main thread.
+pub unsafe fn channel_all_info() -> Array {
     // The registry iterates in registration order; the API contract is
     // ascending id.
     let mut ids = channels.with(SlotTable::snapshot_keys);
     ids.sort_unstable();
-    // SAFETY: the arena array is sized for exactly as many entries as there
-    // are ids, and the arena is a bump allocator, so building the dicts
-    // leaves the array where it is.
-    let mut ret = arena_array(arena, ids.len());
-    for (i, id) in ids.iter().enumerate() {
-        unsafe { *ret.items.add(i) = Object::Dict(channel_info(*id, arena)) };
+    let mut ret = Array::with_capacity(ids.len());
+    for id in ids {
+        // SAFETY: the id came out of the registry.
+        ret.push(Object::dict(unsafe { channel_info(id) }));
     }
-    ret.size = ids.len();
     ret
 }

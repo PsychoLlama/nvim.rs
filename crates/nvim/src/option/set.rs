@@ -23,13 +23,14 @@
 
 use crate::tr;
 use crate::types::AutoEvent;
+use crate::types::OptStr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::ptr;
 use std::ffi::CString;
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, do_filetype_autocmd};
 use crate::charset::buf_init_chartab;
 use crate::cstr;
@@ -228,8 +229,9 @@ pub(crate) fn get_tty_option(name: &CStr) -> OptVal {
             return OptVal::Nil;
         }
     };
-    // SAFETY: every arm above allocated a NUL-terminated string.
-    OptVal::String(unsafe { cstr_as_string(value) })
+    // SAFETY: every arm above allocated a NUL-terminated string, which the
+    // value takes over.
+    OptVal::String(unsafe { OptStr::owning(value) })
 }
 
 /// Remember what a script set `term` or `ttytype` to, so it reads back.
@@ -306,7 +308,7 @@ pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> 
     }
     // SAFETY: `opt` points into the option table, which is what both of
     // these want.
-    optval_copy(unsafe { optval_from_varp(opt_idx, get_varp_scope(opt_idx, opt_flags)) })
+    optval_copy(&unsafe { optval_from_varp(opt_idx, get_varp_scope(opt_idx, opt_flags)) })
 }
 
 /// The option table's row for an option: everything the option *is*, all
@@ -333,7 +335,7 @@ pub(crate) fn get_option_unset_value(opt_idx: OptIndex) -> OptVal {
     }
     // A string global-local option is unset when it is empty.
     if option_has_type(opt_idx, kOptValTypeString) {
-        return OptVal::String(String_0::from_raw_parts(c"".as_ptr() as *mut c_char, 0));
+        return OptVal::string(String_0::from_cstr(c""));
     }
     match opt_idx {
         kOptAutocomplete | kOptAutoread | kOptFsync => boolean_optval(None),
@@ -354,7 +356,7 @@ pub(crate) fn is_option_local_value_unset(opt_idx: OptIndex) -> bool {
         let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
         optval_from_varp(opt_idx, varp_local)
     };
-    optval_equal(local, get_option_unset_value(opt_idx))
+    optval_equal(&local, &get_option_unset_value(opt_idx))
 }
 
 /// React to an option whose variable already holds its new value: run the
@@ -409,7 +411,7 @@ pub(crate) unsafe fn did_set_option(
 
     if direct {
         // Nothing to vet: the caller is putting a value back.
-    } else if opt.immutable && !optval_equal(old_value, new_value) {
+    } else if opt.immutable && !optval_equal(&old_value, &new_value) {
         errmsg = e_unsupportedoption.as_ptr();
     } else if (secure.get() != 0 || sandbox.get() != 0)
         && opt.flags & kOptFlagSecure as uint32_t != 0
@@ -467,11 +469,11 @@ pub(crate) unsafe fn did_set_option(
             // A bare `:set` on a global-local option drops the local
             // value rather than assigning it too.
             let varp_local = get_varp_scope(opt_idx, OptionSetFlags::LOCAL);
-            let unset = optval_copy(get_option_unset_value(opt_idx));
+            let unset = optval_copy(&get_option_unset_value(opt_idx));
             unsafe { set_option_varp(opt_idx, varp_local, unset, true) };
         } else {
             let varp_global = get_varp_scope(opt_idx, OptionSetFlags::GLOBAL);
-            unsafe { set_option_varp(opt_idx, varp_global, optval_copy(new_value), true) };
+            unsafe { set_option_varp(opt_idx, varp_global, optval_copy(&new_value), true) };
         }
     }
 
@@ -609,10 +611,10 @@ pub(crate) unsafe fn set_option(
 
     // The autocommand may close the buffer these live in, so it gets
     // copies that outlive the variables.
-    let saved_used_value = optval_copy(used_old_value);
-    let saved_old_global_value = optval_copy(old_global_value);
-    let saved_old_local_value = optval_copy(old_local_value);
-    let saved_new_value = optval_copy(value);
+    let saved_used_value = optval_copy(&used_old_value);
+    let saved_old_global_value = optval_copy(&old_global_value);
+    let saved_old_local_value = optval_copy(&old_local_value);
+    let saved_new_value = optval_copy(&value);
 
     let insecure = insecure_flag(Win::current_or_none(), opt_idx, opt_flags).is_set();
     let secure_saved = secure.get();
@@ -656,7 +658,7 @@ pub(crate) unsafe fn set_option(
         }
         if opt.flags & kOptFlagUIOption as uint32_t != 0 {
             ui_call_option_set(
-                unsafe { cstr_as_string(opt.fullname) },
+                unsafe { cstr_to_string(opt.fullname) },
                 super::optval_as_object(saved_new_value),
             );
         }
@@ -687,7 +689,7 @@ pub(crate) fn set_option_direct(
     let errmsg = unsafe {
         set_option(
             opt_idx,
-            optval_copy(value),
+            optval_copy(&value),
             opt_flags,
             set_sid,
             true,
@@ -744,7 +746,7 @@ pub(crate) fn set_option_value(
     let errmsg = unsafe {
         set_option(
             opt_idx,
-            optval_copy(value),
+            optval_copy(&value),
             opt_flags,
             0,
             false,

@@ -41,7 +41,7 @@
 //! * [`namespace`] — per-namespace group definitions and the `HLF_*` tables.
 
 pub(crate) mod state;
-use crate::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set};
 use crate::drawscreen::screen_invalidate_highlights;
 use crate::global_cell::GlobalCell;
@@ -49,14 +49,10 @@ use crate::highlight::state::{highlight_attr, highlight_attr_last};
 use crate::highlight_group::{
     HLF_COUNT, highlight_attr_set_all, highlight_changed, hlf_names, syn_id2name,
 };
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::builders::static_cstring;
-use crate::types::{
-    ApiDict, Arena, Array, HlAttrs, HlEntry, HlKind, Integer, KeyValuePair, Object, RemoteUI,
-    uint32_t,
-};
+use crate::types::String_0;
+use crate::types::{ApiDict, Array, HlAttrs, HlEntry, HlKind, Integer, Object, RemoteUI, uint32_t};
 use crate::ui::ui_call_hl_attr_define;
 use cache::AttrCache;
 use core::ffi::{CStr, c_char, c_int};
@@ -350,13 +346,11 @@ pub(crate) unsafe fn get_attr_entry(mut entry: HlEntry) -> c_int {
     };
 
     // A new id: tell the UIs what it looks like.
-    // SAFETY: the arena is local and the event only borrows the array.
-    let mut arena = ARENA_EMPTY;
-    let inspect = unsafe { hl_inspect(id, &raw mut arena) };
+    // SAFETY: main-thread call against the attribute table.
+    let inspect = unsafe { hl_inspect(id) };
     // Internally there is one attribute set for cterm and rgb;
     // `remote_ui_hl_attr_define` is where they part company.
     ui_call_hl_attr_define(Integer::from(id), entry.attr, entry.attr, inspect);
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     id
 }
 
@@ -372,15 +366,13 @@ pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
     // ever did this stops rather than reading past the end.
     let mut i = 1;
     while i < ATTRS.with(AttrTable::len) {
-        let mut arena = ARENA_EMPTY;
-        let inspect = unsafe { hl_inspect(i as c_int, &raw mut arena) };
+        let inspect = unsafe { hl_inspect(i as c_int) };
         let attr = ATTRS.with(|attrs| attrs.at(i as c_int)).attr;
         unsafe { remote_ui_hl_attr_define(ui, i as Integer, attr, attr, inspect) };
-        unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
         i += 1;
     }
     for hlf in 0..HLF_COUNT as usize {
-        let name = unsafe { cstr_as_string(hlf_names[hlf]) };
+        let name = unsafe { cstr_to_string(hlf_names[hlf]) };
         let attr = Integer::from(default_hl_attr(hlf));
         unsafe { remote_ui_hl_group_set(ui, name, attr) };
     }
@@ -644,18 +636,15 @@ pub fn syn_attr2entry(attr: c_int) -> HlAttrs {
 /// Empty unless some UI asked for `ext_hlstate`.
 ///
 /// # Safety
-/// `arena` is null or a live arena; main thread only.
-pub unsafe fn hl_inspect(attr: c_int, arena: *mut Arena) -> Array {
+/// Main thread only. Nothing is taken from `_arena` any more: the answer
+/// owns its entries.
+pub unsafe fn hl_inspect(attr: c_int) -> Array {
     if !HLSTATE_ACTIVE.get() {
-        return Array {
-            size: 0,
-            capacity: 0,
-            items: ::core::ptr::null_mut(),
-        };
+        return Array::EMPTY;
     }
-    // SAFETY: the caller's arena.
-    let mut ret = arena_array(arena, hl_inspect_size(attr));
-    unsafe { hl_inspect_impl(&mut ret, attr, arena) };
+    let mut ret = Array::with_capacity(hl_inspect_size(attr));
+    // SAFETY: `ret` was sized by the same walk that fills it.
+    unsafe { hl_inspect_impl(&mut ret, attr) };
     ret
 }
 
@@ -676,75 +665,68 @@ fn hl_inspect_size(attr: c_int) -> usize {
 /// Appends `attr`'s provenance to `arr`.
 ///
 /// # Safety
-/// `arr` must have room for [`hl_inspect_size`] more entries, and `arena` is
-/// null or live.
-unsafe fn hl_inspect_impl(arr: &mut Array, attr: c_int, arena: *mut Arena) {
+/// Main thread only.
+unsafe fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
     let Some(entry) = ATTRS.with(|attrs| attrs.live(attr)) else {
         return;
     };
-    // SAFETY: the caller's arena and array.
     let mut item = match entry.kind {
         kHlSyntax => {
-            let mut item = arena_dict(arena, 3);
-            unsafe { put(&mut item, c"kind", Object::literal("syntax")) };
-            unsafe { put(&mut item, c"hi_name", name_object(syn_id2name(entry.id1))) };
+            let mut item = ApiDict::with_capacity(3);
+            put(&mut item, c"kind", Object::literal("syntax"));
+            // SAFETY: `syn_id2name` answers a NUL-terminated group name.
+            put(&mut item, c"hi_name", unsafe {
+                name_object(syn_id2name(entry.id1))
+            });
             item
         }
         kHlUI => {
-            let mut item = arena_dict(arena, 4);
-            unsafe { put(&mut item, c"kind", Object::literal("ui")) };
+            let mut item = ApiDict::with_capacity(4);
+            put(&mut item, c"kind", Object::literal("ui"));
             // -1 is `Normal`, which is not one of the `hlf_names`.
             let ui_name = if entry.id1 == -1 {
                 c"Normal".as_ptr()
             } else {
                 hlf_names[entry.id1 as usize]
             };
-            unsafe { put(&mut item, c"ui_name", name_object(ui_name)) };
-            unsafe { put(&mut item, c"hi_name", name_object(syn_id2name(entry.id2))) };
+            // SAFETY: both spellings are NUL-terminated names.
+            put(&mut item, c"ui_name", unsafe { name_object(ui_name) });
+            // SAFETY: `syn_id2name` answers a NUL-terminated group name.
+            put(&mut item, c"hi_name", unsafe {
+                name_object(syn_id2name(entry.id2))
+            });
             item
         }
         kHlTerminal => {
-            let mut item = arena_dict(arena, 2);
-            unsafe { put(&mut item, c"kind", Object::literal("term")) };
+            let mut item = ApiDict::with_capacity(2);
+            put(&mut item, c"kind", Object::literal("term"));
             item
         }
         kHlCombine | kHlBlend | kHlBlendThrough => {
             // Combination is associative, so flatten it to an array.
-            unsafe { hl_inspect_impl(arr, entry.id1, arena) };
-            unsafe { hl_inspect_impl(arr, entry.id2, arena) };
+            unsafe { hl_inspect_impl(arr, entry.id1) };
+            unsafe { hl_inspect_impl(arr, entry.id2) };
             return;
         }
         // kHlUnknown and kHlInvalid: nothing to say about the entry.
         _ => return,
     };
-    unsafe { put(&mut item, c"id", Object::integer(Integer::from(attr))) };
-    unsafe { *arr.items.add(arr.size) = Object::dict(item) };
-    arr.size += 1;
+    put(&mut item, c"id", Object::integer(Integer::from(attr)));
+    arr.push(Object::dict(item));
 }
 
-/// A group name, borrowed rather than copied.
+/// A group name, copied into the object that carries it.
 ///
 /// # Safety
 /// `name` is null or NUL-terminated.
 unsafe fn name_object(name: *const c_char) -> Object {
     // SAFETY: the caller's string.
-    Object::string(unsafe { cstr_as_string(name) })
+    Object::string(unsafe { cstr_to_string(name) })
 }
 
-/// Appends `key: value` to an arena dict.
-///
-/// # Safety
-/// `dict.items` must have room for one more entry.
-unsafe fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
-    assert!(dict.size < dict.capacity, "hl_inspect dict overflow");
-    // SAFETY: the assert above kept the index inside the arena block.
-    unsafe {
-        *dict.items.add(dict.size) = KeyValuePair {
-            key: static_cstring(key),
-            value,
-        }
-    };
-    dict.size += 1;
+/// Appends `key: value`, with the key copied out of the literal.
+fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
+    dict.insert(String_0::from_cstr(key), value);
 }
 
 #[cfg(test)]

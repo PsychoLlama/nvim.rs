@@ -16,17 +16,15 @@ use super::*;
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_error_event(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_error_event",
         c"nvim_error_event",
@@ -36,10 +34,10 @@ pub unsafe fn handle_nvim_error_event(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_integer(args[0]) else {
+    let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_error_event", c"Integer"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_error_event", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -56,17 +54,15 @@ pub unsafe fn handle_nvim_error_event(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_term_event(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_term_event",
         c"nvim_ui_term_event",
@@ -76,10 +72,10 @@ pub unsafe fn handle_nvim_ui_term_event(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_term_event", c"String"));
     };
-    let arg_2 = args[1];
+    let arg_2 = args[1].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
     unsafe { nvim_ui_term_event(channel_id, arg_1, arg_2) }?;

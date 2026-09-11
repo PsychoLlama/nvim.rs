@@ -38,7 +38,7 @@ pub use callbacks::{ui_add_cb, ui_call_event, ui_cb_ext, ui_remove_cb};
 pub use mouse::{ui_check_mouse, ui_mouse_has};
 pub use sinks::*;
 
-use crate::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::api::ui::remote_ui_option_set;
 use crate::autocmd::do_autocmd_uienter;
 use crate::buffer::resettitle;
@@ -72,14 +72,13 @@ use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
 use crate::strings::has_char;
-use crate::types::builders::static_string;
 use crate::types::ui::{
     kLineFlagInvalid, kLineFlagWrap, kUIExtCount, kUIFloatDebug, kUIHlState, kUILinegrid,
     kUIMessages, kUIMultigrid, kUITermColors,
 };
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Error, Handle, Integer, KeyValuePair, LineFlags, Object,
-    OptVal, OptionSetFlags, RemoteUI, String_0, UIExtension,
+    ApiDict, Arena, Array, Boolean, Error, Handle, Integer, LineFlags, Object, OptVal,
+    OptionSetFlags, RemoteUI, String_0, UIExtension,
 };
 use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
 use crate::ui_compositor::{
@@ -251,7 +250,7 @@ pub unsafe fn ui_refresh() {
         if widget < kUILinegrid as usize {
             let name = ext_name(widget);
             ui_call_option_set(
-                unsafe { cstr_as_string(name.cast_mut()) },
+                unsafe { cstr_to_string(name.cast_mut()) },
                 Object::boolean(enabled),
             );
         }
@@ -455,7 +454,9 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     let mut cwd = [0; 4096];
     let mut cwdlen = cwd.len();
     if unsafe { uv_cwd(cwd.as_mut_ptr(), &raw mut cwdlen) } == 0 {
-        ui_call_chdir(String_0::from_raw_parts(cwd.as_mut_ptr(), cwdlen));
+        // SAFETY: `uv_cwd` filled `cwdlen` bytes of the buffer.
+        let cwd = unsafe { core::slice::from_raw_parts(cwd.as_ptr().cast::<u8>(), cwdlen) };
+        ui_call_chdir(String_0::from_bytes(cwd));
     }
 
     for widget in kUILinegrid as usize..kUIExtCount as usize {
@@ -516,7 +517,7 @@ pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: boo
     let private = unsafe { *name } == b'_' as core::ffi::c_char;
     if !private || active {
         unsafe {
-            remote_ui_option_set(ui, cstr_as_string(name.cast_mut()), Object::boolean(active))
+            remote_ui_option_set(ui, cstr_to_string(name.cast_mut()), Object::boolean(active))
         };
     }
     if ext == kUITermColors {
@@ -676,7 +677,7 @@ pub unsafe fn ui_flush() {
 
     if pending_mode_info_update.get() {
         let mut arena: Arena = ARENA_EMPTY;
-        let style = unsafe { mode_style_array(&raw mut arena) };
+        let style = unsafe { mode_style_array() };
         let enabled = unsafe { *p_guicursor.get() } != 0;
         ui_call_mode_info_set(enabled as Boolean, style);
         unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
@@ -696,7 +697,7 @@ pub unsafe fn ui_flush() {
             ui_mode_idx.get()
         };
         let full_name = shape_entry(idx).full_name;
-        ui_call_mode_change(unsafe { cstr_as_string(full_name) }, idx as Integer);
+        ui_call_mode_change(unsafe { cstr_to_string(full_name) }, idx as Integer);
         pending_mode_update.set(false);
         cursor_was_obscured.set(cursor_obscured);
     }
@@ -773,23 +774,13 @@ pub fn ui_has(ext: UIExtension) -> bool {
 ///
 /// # Safety
 ///
-/// `arena` must be live; the result borrows it.
-pub unsafe fn ui_array(arena: *mut Arena) -> Array {
-    /// Appends `key: value`. Within the capacity asked for below: ten fixed
-    /// keys plus at most one per extension.
-    ///
-    /// # Safety
-    ///
-    /// `info` must have room for another entry.
-    unsafe fn push(info: &mut ApiDict, key: String_0, value: Object) {
-        unsafe { *info.items.add(info.size) = KeyValuePair { key, value } };
-        info.size += 1;
-    }
-
-    let mut all_uis = arena_array(arena, ui_count());
+/// Reaches the UI table; main thread only. Nothing is taken from `_arena`
+/// any more: the answer owns its entries.
+pub unsafe fn ui_array(_arena: *mut Arena) -> Array {
+    let mut all_uis = Array::with_capacity(ui_count());
     for ui in each_ui() {
         let ui = unsafe { &*ui };
-        let mut info = arena_dict(arena, 10 + kUIExtCount as usize);
+        let mut info = ApiDict::with_capacity(10 + kUIExtCount as usize);
         let fixed: [(&'static str, Object); 9] = [
             ("width", Object::integer(ui.width as Integer)),
             ("height", Object::integer(ui.height as Integer)),
@@ -797,7 +788,7 @@ pub unsafe fn ui_array(arena: *mut Arena) -> Array {
             ("override", Object::boolean(ui.override_0)),
             (
                 "term_name",
-                Object::string(unsafe { cstr_as_string(ui.term_name) }),
+                Object::string(unsafe { cstr_to_string(ui.term_name) }),
             ),
             // Reported empty rather than read back: the background a UI
             // sent is only meaningful to whoever sent it.
@@ -807,7 +798,7 @@ pub unsafe fn ui_array(arena: *mut Arena) -> Array {
             ("stdout_tty", Object::boolean(ui.stdout_tty)),
         ];
         for (key, value) in fixed {
-            unsafe { push(&mut info, static_string(key), value) };
+            info.insert(String_0::from(key), value);
         }
         for widget in 0..kUIExtCount as usize {
             let name = ext_name(widget);
@@ -816,23 +807,15 @@ pub unsafe fn ui_array(arena: *mut Arena) -> Array {
             let private = unsafe { *name } == b'_' as core::ffi::c_char;
             if !private || ui.ui_ext[widget] {
                 let on = Object::boolean(ui.ui_ext[widget]);
-                // SAFETY: `name` is one of the static protocol names, and
-                // `info` was reserved for every key written here.
-                unsafe {
-                    let key = cstr_as_string(name.cast_mut());
-                    push(&mut info, key, on)
-                };
+                // SAFETY: `name` is one of the static protocol names.
+                let key = unsafe { cstr_to_string(name.cast_mut()) };
+                info.insert(key, on);
             }
         }
-        let (key, id) = (
-            static_string("chan"),
-            Object::integer(ui.channel_id as Integer),
-        );
-        // SAFETY: as above.
-        unsafe { push(&mut info, key, id) };
+        let id = Object::integer(ui.channel_id as Integer);
+        info.insert(String_0::from("chan"), id);
 
-        unsafe { *all_uis.items.add(all_uis.size) = Object::dict(info) };
-        all_uis.size += 1;
+        all_uis.push(Object::dict(info));
     }
     all_uis
 }

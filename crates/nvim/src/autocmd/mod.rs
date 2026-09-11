@@ -8,11 +8,7 @@ use crate::types::AutoEvent;
 use core::cmp::Ordering;
 use core::ffi::CStr;
 
-use crate::api::private::converter::object_to_vim;
-use crate::api::private::helpers::{
-    api_free_object, api_free_string, copy_object, cstr_as_string, cstr_to_string,
-    find_buffer_by_handle,
-};
+use crate::api::private::helpers::{cstr_to_string, find_buffer_by_handle};
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::state::{
     autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,

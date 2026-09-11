@@ -21,7 +21,7 @@ use core::ptr;
 
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::{tv_get_number_chk, tv_get_string_buf_chk};
-use crate::memory::{arena_alloc, arena_alloc_block};
+use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, vsnprintf};
 use crate::types::{
@@ -242,34 +242,30 @@ const TMP_LEN: c_int = 350;
 /// format, and the variadic arguments must be exactly the ones its
 /// conversions name, at the types they name -- the list is read blind.
 pub unsafe extern "C" fn arena_printf(
-    arena: *mut Arena,
+    _arena: *mut Arena,
     fmt: *const c_char,
     args: ...
 ) -> String_0 {
-    let mut remaining: size_t = 0;
-    let mut buf = ptr::null_mut::<c_char>();
-    if !arena.is_null() {
-        if unsafe { (*arena).cur_blk }.is_null() {
-            unsafe { arena_alloc_block(arena) };
-        }
-        remaining = unsafe { (*arena).size } - unsafe { (*arena).pos };
-        buf = unsafe { (*arena).cur_blk.add((*arena).pos) };
-    }
-
-    let mut printed = unsafe { vsnprintf(buf, remaining, fmt, args.clone()) };
+    // The answer owns its bytes, so the arena has nothing left to do here:
+    // measure the rendering, then write it into a block of its own.
+    //
+    // SAFETY: the caller's format and argument list, read twice -- `clone`
+    // is what makes a second pass over a `va_list` legal.
+    let printed = unsafe { vsnprintf(ptr::null_mut(), 0, fmt, args.clone()) };
     if printed < 0 {
         return String_0::NULL;
     }
-
-    if printed as size_t >= remaining {
-        buf = unsafe { arena_alloc(arena, printed as size_t + 1, false) as *mut c_char };
-        printed = unsafe { vsnprintf(buf, printed as size_t + 1, fmt, args.clone()) };
-        if printed < 0 {
-            return String_0::NULL;
-        }
-    } else {
-        unsafe { (*arena).pos += printed as size_t + 1 };
+    let room = printed as size_t + 1;
+    // SAFETY: `xmalloc` answers `room` writable bytes or aborts.
+    let buf = unsafe { xmalloc(room) } as *mut c_char;
+    // SAFETY: as above; `room` is what the measuring pass asked for.
+    let printed = unsafe { vsnprintf(buf, room, fmt, args.clone()) };
+    if printed < 0 {
+        // SAFETY: the block this function just made.
+        unsafe { xfree(buf.cast()) };
+        return String_0::NULL;
     }
-
-    String_0::from_raw_parts(buf, printed as size_t)
+    // SAFETY: `vsnprintf` filled and terminated the block, which the answer
+    // takes over.
+    unsafe { String_0::from_owned_parts(buf, printed as size_t) }
 }

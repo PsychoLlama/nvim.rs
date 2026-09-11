@@ -87,8 +87,8 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     Arena, Array, CharsizeArg, ColNr, Error, EvalFuncData, FileDescriptor, FlushBuffers, Integer,
-    LuaRef, LuaRetMode, MotionType, MultiQueue, Object, OpArg, OptInt, RemapValues, SaveRedo,
-    String_0, TypVal, TypeaheadSave, VarNumber, Vv, ptrdiff_t, size_t, uint8_t, uint64_t,
+    LuaRef, LuaRetMode, MotionType, MultiQueue, OpArg, OptInt, RemapValues, SaveRedo, String_0,
+    TypVal, TypeaheadSave, VarNumber, Vv, ptrdiff_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
@@ -156,11 +156,7 @@ pub const kFileNoSymlink: FileOpenFlags = 8;
 pub const kFileWriteOnly: FileOpenFlags = 4;
 pub const kFileCreate: FileOpenFlags = 2;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 /// The top bit of a channel id, which no real channel has: a call that
 /// carries it came from inside nvim rather than over a channel.

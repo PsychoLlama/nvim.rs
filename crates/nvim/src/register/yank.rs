@@ -57,8 +57,6 @@ unsafe fn yank_copy_line(
     // SAFETY: `size` is not negative, so it is a length; `xmallocz` adds the
     // terminating NUL's byte itself.
     let start = unsafe { xmallocz(size as size_t) } as *mut c_char;
-    // SAFETY: the caller promises `y_array` has more than `y_idx` slots.
-    unsafe { (*(*reg).y_array.add(y_idx)).set_data(start) };
 
     // Lay the line out: the leading padding, the text, the trailing padding.
     //
@@ -96,8 +94,13 @@ unsafe fn yank_copy_line(
     // SAFETY: `pnew` is at most one past the text, and `xmallocz` left room
     // for a NUL there.
     unsafe { *pnew = NUL as c_char };
-    // SAFETY: the slot the data went into; `pnew` is at or past `start`.
-    unsafe { (*(*reg).y_array.add(y_idx)).set_len(pnew.offset_from(start) as size_t) };
+    // SAFETY: `pnew` is at or past `start`, so the length is the block's own;
+    // the caller promises `y_array` has more than `y_idx` slots, whose old
+    // string the assignment releases.
+    unsafe {
+        let len = pnew.offset_from(start) as size_t;
+        *(*reg).y_array.add(y_idx) = String_0::from_owned_parts(start, len);
+    };
 }
 
 /// Move the lines of `reg` onto the end of `curr`, and free `reg`'s array.
@@ -120,7 +123,9 @@ unsafe fn append_to_register(curr: *mut YankReg, reg: *mut YankReg, yank_type: M
         let room = ::core::mem::size_of::<String_0>().wrapping_mul(old.wrapping_add((*reg).y_size));
         let new_ptr = xmalloc(room) as *mut String_0;
         for i in 0..old {
-            *new_ptr.add(i) = *(*curr).y_array.add(i);
+            // The strings move; `xmalloc` left the destination uninitialised,
+            // so nothing there is released.
+            new_ptr.add(i).write((*curr).y_array.add(i).read());
         }
         xfree((*curr).y_array as *mut c_void);
         (*curr).y_array = new_ptr;
@@ -142,20 +147,19 @@ unsafe fn append_to_register(curr: *mut YankReg, reg: *mut YankReg, yank_type: M
         // because a charwise register holds a line, and the caller promises
         // `reg` holds one too.  Both strings are NUL-terminated and carry
         // their own lengths, and the joined allocation is the sum plus a NUL.
-        let first_new = unsafe { *(*reg).y_array };
+        let first_new = unsafe { &mut *(*reg).y_array };
         j = j.wrapping_sub(1);
         let last_old = unsafe { &mut *(*curr).y_array.add(j) };
         let joined_size = last_old.len().wrapping_add(first_new.len());
         let pnew = unsafe { xmalloc(joined_size.wrapping_add(1)) } as *mut c_char;
         unsafe { strcpy(pnew, last_old.data()) };
         unsafe { strcpy(pnew.add(last_old.len()), first_new.data()) };
-        unsafe { xfree(last_old.data() as *mut c_void) };
-        *last_old = String_0::from_raw_parts(pnew, joined_size);
+        // SAFETY: `pnew` is this block's own, NUL-terminated by the copies
+        // above. The assignments release both old strings.
+        *last_old = unsafe { String_0::from_owned_parts(pnew, joined_size) };
         j = j.wrapping_add(1);
 
-        unsafe { xfree(first_new.data() as *mut c_void) };
-        unsafe { *(*reg).y_array }.set_data(::core::ptr::null_mut());
-        unsafe { *(*reg).y_array }.set_len(0);
+        *first_new = String_0::NULL;
         y_idx = 1;
     }
 
@@ -165,7 +169,12 @@ unsafe fn append_to_register(curr: *mut YankReg, reg: *mut YankReg, yank_type: M
     // SAFETY: the space for them was made above, and `y_idx` walks `reg`'s
     // own `y_size` strings.
     while y_idx < unsafe { (*reg).y_size } {
-        unsafe { *(*curr).y_array.add(j) = *(*reg).y_array.add(y_idx) };
+        // The string moves; the slot it leaves behind is emptied so that
+        // freeing `reg` does not release it twice.
+        unsafe {
+            *(*curr).y_array.add(j) =
+                core::mem::replace(&mut *(*reg).y_array.add(y_idx), String_0::NULL);
+        };
         y_idx = y_idx.wrapping_add(1);
         j = j.wrapping_add(1);
     }
@@ -449,7 +458,7 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     let list = unsafe {
         let list = tv_list_alloc((*reg).y_size as ptrdiff_t);
         for i in 0..(*reg).y_size {
-            let line = *(*reg).y_array.add(i);
+            let line = &*(*reg).y_array.add(i);
             tv_list_append_string(list.as_ptr(), line.data(), line.len() as c_int as ssize_t);
         }
         tv_list_set_lock(list.as_ptr(), VarLock::Fixed);

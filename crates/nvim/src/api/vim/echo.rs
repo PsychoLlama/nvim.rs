@@ -55,23 +55,24 @@ pub unsafe fn nvim_echo(
         opts._truncate.unwrap_or(false),
     );
     let (title, status, source) = (
-        opts.title.unwrap_or(no_string),
-        opts.status.unwrap_or(no_string),
-        opts.source.unwrap_or(no_string),
+        opts.title.as_ref().unwrap_or(&no_string),
+        opts.status.as_ref().unwrap_or(&no_string),
+        opts.source.as_ref().unwrap_or(&no_string),
     );
     let percent = opts.percent.unwrap_or(0);
-    let data = opts.data.unwrap_or(ApiDict::EMPTY);
-    let given_id = opts.id.unwrap_or(Object::Nil);
+    let (no_dict, nil) = (ApiDict::EMPTY, Object::Nil);
+    let data = opts.data.as_ref().unwrap_or(&no_dict);
+    let given_id = opts.id.as_ref().unwrap_or(&nil);
     let mut id = Object::integer(-1);
     let mut hl_msg = EMPTY_HL_MESSAGE;
     // SAFETY: the caller's chunk array, and `hl_msg` is this frame's own.
-    if let Err(e) = unsafe { parse_hl_msg(&mut hl_msg, chunks, err) } {
+    if let Err(e) = parse_hl_msg(&mut hl_msg, &chunks, err) {
         // SAFETY: the message this frame just built and nothing else owns.
         unsafe { hl_msg_free(hl_msg) };
         return Err(e);
     }
 
-    let mut kind: *mut c_char = opts.kind.unwrap_or(no_string).data();
+    let mut kind: *mut c_char = opts.kind.as_ref().unwrap_or(&no_string).data();
     if verbose {
         // SAFETY: paired with the `verbose_leave` below.
         unsafe { verbose_enter() };
@@ -94,7 +95,7 @@ pub unsafe fn nvim_echo(
     let has_progress_keys = !status.is_empty()
         || !title.is_empty()
         || percent != 0
-        || data.size != 0
+        || data.len() != 0
         || !source.is_empty();
     let echo_id = given_id.as_integer();
     // SAFETY: the keyset's strings are NUL-terminated, and `error` is this
@@ -107,7 +108,7 @@ pub unsafe fn nvim_echo(
                 "Conflict: title/source/status/percent/data not allowed with kind='{kind}'"
             );
             true
-        } else if is_progress && !status_named(status) {
+        } else if is_progress && !status_named(status.clone()) {
             let names = c"success|failed|running|cancel";
             // SAFETY: the keyset's string names its own NUL-terminated bytes.
             let got = crate::cstr::at_opt(status.data());
@@ -129,11 +130,11 @@ pub unsafe fn nvim_echo(
 
     if !rejected {
         let mut msg_data = MessageData {
-            source,
+            source: source.clone(),
             percent,
-            title,
-            status,
-            data,
+            title: title.clone(),
+            status: status.clone(),
+            data: data.clone(),
         };
         let save_nwr = need_wait_return.get();
         let save_lines_left = lines_left.get();
@@ -148,7 +149,7 @@ pub unsafe fn nvim_echo(
         // message is the one built above.
         id = unsafe {
             msg_multihl(
-                given_id,
+                given_id.clone(),
                 hl_msg.clone(),
                 kind,
                 history,
@@ -173,7 +174,7 @@ pub unsafe fn nvim_echo(
         }
         if is_progress {
             // SAFETY: `msg_data` is this frame's own, live for the call.
-            unsafe { do_autocmd_progress(id, hl_msg.clone(), &raw mut msg_data) };
+            unsafe { do_autocmd_progress(id.clone(), hl_msg.clone(), &raw mut msg_data) };
         }
         if !needs_clear {
             return id.reported(error);

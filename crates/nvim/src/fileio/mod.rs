@@ -4,7 +4,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isspace;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{
@@ -715,7 +715,7 @@ pub unsafe fn set_forced_fenc(args: *mut ExArg) {
     let fenc = unsafe { enc_canonize(ea.cmd.offset(ea.force_enc as isize)) };
     set_option_direct(
         kOptFileencoding,
-        OptVal::String(unsafe { cstr_as_string(fenc) }),
+        OptVal::string(unsafe { cstr_to_string(fenc) }),
         OptionSetFlags::LOCAL,
         0 as ScriptId,
     );

@@ -65,8 +65,8 @@ use crate::startup::{full_screen, readonlymode, starting};
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    Buffer, ColNr, LineNr, NUL, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, String_0, Vv,
-    ptrdiff_t, size_t, uint8_t,
+    Buffer, ColNr, LineNr, NUL, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv, ptrdiff_t,
+    uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
@@ -192,11 +192,8 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// A borrowed string option value. The callee copies it if it keeps it.
-fn cstr_optval(value: &'static CStr) -> OptVal {
-    OptVal::String(String_0::from_raw_parts(
-        value.as_ptr() as *mut c_char,
-        value.count_bytes() as size_t,
-    ))
+const fn cstr_optval(value: &'static CStr) -> OptVal {
+    OptVal::static_string(value)
 }
 
 /// 'autochdir': follow the current file's directory from now on.

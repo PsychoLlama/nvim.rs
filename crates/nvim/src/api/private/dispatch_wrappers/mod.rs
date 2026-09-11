@@ -180,20 +180,6 @@ mod known {
 
 use known::*;
 
-/// The arguments a client sent, as a slice. An empty array need not carry a
-/// pointer at all, so that case answers without forming one.
-///
-/// # Safety
-/// `args.items` points at `args.size` initialized `Object`s that outlive the
-/// borrow.
-unsafe fn args_slice(args: &Array) -> &[Object] {
-    if args.size == 0 {
-        return &[];
-    }
-    // SAFETY: the caller vouches for `size` objects at `items`.
-    unsafe { core::slice::from_raw_parts(args.items, args.size) }
-}
-
 /// One "RPC: ch N: invoke nvim_foo" debug line. Below the configured log
 /// level — the default — this is a load and a compare.
 fn log_invoke(handler: &'static CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
@@ -245,38 +231,43 @@ fn as_float(o: Object) -> Option<Float> {
 }
 
 fn as_string(o: Object) -> Option<String_0> {
-    o.as_string()
+    o.into_string()
 }
 
 fn as_array(o: Object) -> Option<Array> {
-    o.as_array()
+    o.into_array()
 }
 
 /// An empty Lua table is indistinguishable from an empty list on the wire, so
 /// a Dict parameter accepts one.
 fn as_dict(o: Object) -> Option<ApiDict> {
-    match o {
-        Object::Dict(d) => Some(d),
-        Object::Array(a) if a.size == 0 => Some(ApiDict::EMPTY),
-        _ => None,
+    if is_empty_array(&o) {
+        // An empty Lua table is indistinguishable from an empty list on the
+        // wire, so a Dict parameter accepts one.
+        return Some(ApiDict::EMPTY);
     }
+    o.into_dict()
 }
 
 /// Buffer, Window and Tabpage each have a variant of their own, and a bare
 /// nonnegative integer is accepted as any of them. `tag` names the one the
 /// parameter declares: a window handle is not a buffer.
 fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
-    let n = match o {
-        Object::Integer(n) => n,
+    let n = match &o {
+        Object::Integer(n) => *n,
         Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) => {
             if o.kind() != tag {
                 return None;
             }
-            n
+            *n
         }
         _ => return None,
     };
     (n >= 0).then_some(n as Handle)
+}
+
+fn is_empty_array(o: &Object) -> bool {
+    matches!(o, Object::Array(a) if a.is_empty())
 }
 
 /// What reading a keyset argument produced.
@@ -296,12 +287,12 @@ enum KeySetArg<K> {
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
 fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
-    let Object::Dict(dict) = item else {
-        if !is_empty_array(item) {
-            return KeySetArg::WrongType;
-        }
+    if is_empty_array(&item) {
         // An empty list is an empty dict: it sets no key.
         return KeySetArg::Read(K::default());
+    }
+    let Some(dict) = item.into_dict() else {
+        return KeySetArg::WrongType;
     };
     // Every field of a keyset is an `Option`, and `Default` is every one of
     // them `None`. Zeroing would be the *opposite* answer for the booleans:
@@ -313,10 +304,6 @@ fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K
         Ok(()) => KeySetArg::Read(out),
         Err(e) => KeySetArg::Refused(e),
     }
-}
-
-fn is_empty_array(o: Object) -> bool {
-    matches!(o, Object::Array(a) if a.size == 0)
 }
 
 /// Refuses a call made while the text is locked.

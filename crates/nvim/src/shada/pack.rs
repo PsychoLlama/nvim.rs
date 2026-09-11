@@ -13,11 +13,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
-
-use crate::types::builders::static_cstring;
 
 use super::*;
 use crate::types::{FAIL, Object, VAR_BLOB, VAR_TYPE_BLOB};
@@ -87,13 +86,13 @@ impl Payload {
 
     /// A map key. ShaDa spells them as one- or two-letter codes.
     fn key(&mut self, name: &'static CStr) {
-        // SAFETY: `name` is a static string and the buffer has room.
-        unsafe { mpack_str(static_cstring(name), &mut self.buf) };
+        mpack_str(name.to_bytes(), &mut self.buf);
     }
 
     /// What has been packed so far. Valid until this is dropped.
     fn packed(&self) -> String_0 {
-        packer_take_string(&self.buf)
+        // SAFETY: the buffer is this payload's own `packer_string_buffer`.
+        unsafe { packer_take_string(&self.buf) }
     }
 }
 
@@ -156,7 +155,7 @@ pub(crate) unsafe fn shada_pack_entry(
             Ok(())
         }
         ShadaEntryData::Header(header) => {
-            unsafe { pack_header(*header, sbuf) };
+            pack_header(header, sbuf);
             Ok(())
         }
         ShadaEntryData::HistoryEntry(history) => {
@@ -169,7 +168,7 @@ pub(crate) unsafe fn shada_pack_entry(
             Ok(())
         }
         ShadaEntryData::SearchPattern(pattern) => {
-            unsafe { pack_search_pattern(entry, *pattern, &mut payload) };
+            unsafe { pack_search_pattern(entry, pattern, &mut payload) };
             Ok(())
         }
         ShadaEntryData::GlobalMark(mark)
@@ -226,14 +225,13 @@ pub(crate) unsafe fn shada_pack_entry(
 ///
 /// `header` must be a well-formed API dictionary, its `size` entries
 /// initialized.
-unsafe fn pack_header(header: ApiDict, sbuf: &mut PackerBuffer) {
-    mpack_map(sbuf.cursor_mut(), header.size as uint32_t);
-    for i in 0..header.size {
-        let item = unsafe { *header.items.add(i) };
-        unsafe { mpack_str(item.key, sbuf) };
-        match item.value {
-            Object::String(s) => unsafe { mpack_bin(s, sbuf) },
-            Object::Integer(n) => mpack_integer(sbuf.cursor_mut(), n),
+fn pack_header(header: &ApiDict, sbuf: &mut PackerBuffer) {
+    mpack_map(sbuf.cursor_mut(), header.len() as uint32_t);
+    for item in header {
+        mpack_str(item.key.as_bytes(), sbuf);
+        match &item.value {
+            Object::String(s) => mpack_bin(s.as_bytes(), sbuf),
+            Object::Integer(n) => mpack_integer(sbuf.cursor_mut(), *n),
             other => unreachable!("shada: header holds an object of type {}", other.kind()),
         }
     }
@@ -253,7 +251,8 @@ unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut
         2 + is_search as uint32_t + unsafe { additional_data_len(entry.additional_data) },
     );
     mpack_uint(sbuf.cursor_mut(), history.histtype as uint32_t);
-    unsafe { mpack_bin(cstr_as_string(history.string), sbuf) };
+    // SAFETY: the entry's string is NUL-terminated.
+    mpack_bin(unsafe { cstr::bytes_at(history.string) }, sbuf);
     if is_search {
         mpack_uint(sbuf.cursor_mut(), history.sep as uint8_t as uint32_t);
     }
@@ -277,15 +276,16 @@ unsafe fn pack_variable(
         sbuf.cursor_mut(),
         2 + is_blob as uint32_t + unsafe { additional_data_len(entry.additional_data) },
     );
-    let varname = unsafe { cstr_as_string(global_var.name) };
-    unsafe { mpack_bin(varname, sbuf) };
+    // SAFETY: the variable's name is NUL-terminated.
+    let varname = unsafe { cstr::bytes_at(global_var.name) };
+    mpack_bin(varname, sbuf);
 
     // What `encode_vim_to_msgpack` calls the value in its complaints.
     // Upstream formats this into a `char[256]` and `memcpy`s the name in
     // unbounded, overrunning it for a long enough variable name; built
     // here in a buffer that fits.
     let mut vardesc = b"variable g:".to_vec();
-    vardesc.extend_from_slice(unsafe { varname.as_bytes() });
+    vardesc.extend_from_slice(varname);
     vardesc.push(0);
 
     // SAFETY: the bytes just built end in the NUL pushed above.
@@ -316,7 +316,8 @@ unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut Pa
         sbuf.cursor_mut(),
         1 + unsafe { additional_data_len(entry.additional_data) },
     );
-    unsafe { mpack_bin(cstr_as_string(sub.sub), sbuf) };
+    // SAFETY: the substitution text is NUL-terminated.
+    mpack_bin(unsafe { cstr::bytes_at(sub.sub) }, sbuf);
     unsafe { dump_additional_data(entry.additional_data, sbuf) };
 }
 
@@ -331,7 +332,7 @@ unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut Pa
 /// fields point at live data for the call.
 unsafe fn pack_search_pattern(
     entry: &ShadaEntry,
-    pattern: KeyDict__shada_search_pat,
+    pattern: &KeyDict__shada_search_pat,
     payload: &mut Payload,
 ) {
     let default = DEFAULT_SEARCH_PATTERN;
@@ -364,7 +365,10 @@ unsafe fn pack_search_pattern(
     mpack_map(payload.buf.cursor_mut(), size);
 
     payload.key(c"sp");
-    unsafe { mpack_bin(pattern.pat.unwrap_or(String_0::NULL), &mut payload.buf) };
+    mpack_bin(
+        pattern.pat.as_ref().map_or(&[][..], String_0::as_bytes),
+        &mut payload.buf,
+    );
     for (name, _, default) in flags.iter().filter(|(_, value, d)| value != d) {
         payload.key(name);
         mpack_bool(payload.buf.cursor_mut(), !default.unwrap_or(false));
@@ -394,7 +398,8 @@ unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Paylo
     mpack_map(payload.buf.cursor_mut(), size);
 
     payload.key(c"f");
-    unsafe { mpack_bin(cstr_as_string(mark.fname), &mut payload.buf) };
+    // SAFETY: the mark's file name is NUL-terminated.
+    mpack_bin(unsafe { cstr::bytes_at(mark.fname) }, &mut payload.buf);
     if mark.mark.lnum != default.mark.lnum {
         payload.key(c"l");
         mpack_integer(payload.buf.cursor_mut(), mark.mark.lnum as Integer);
@@ -436,7 +441,12 @@ unsafe fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Pa
     payload.key(c"rc");
     mpack_array(payload.buf.cursor_mut(), reg.contents_size as uint32_t);
     for i in 0..reg.contents_size {
-        unsafe { mpack_bin(*reg.contents.add(i), &mut payload.buf) };
+        // SAFETY: `i` is below `contents_size`, so the string is inside
+        // the register's own array.
+        mpack_bin(
+            unsafe { (*reg.contents.add(i)).as_bytes() },
+            &mut payload.buf,
+        );
     }
     payload.key(c"n");
     mpack_uint(payload.buf.cursor_mut(), reg.name as uint8_t as uint32_t);
@@ -475,7 +485,8 @@ unsafe fn pack_buffer_list(list: ShadaBufferList, payload: &mut Payload) {
         mpack_map(payload.buf.cursor_mut(), size);
 
         payload.key(c"f");
-        unsafe { mpack_bin(cstr_as_string(buffer.fname), &mut payload.buf) };
+        // SAFETY: the buffer's file name is NUL-terminated.
+        mpack_bin(unsafe { cstr::bytes_at(buffer.fname) }, &mut payload.buf);
         if buffer.pos.lnum != default.lnum {
             payload.key(c"l");
             mpack_uint64(payload.buf.cursor_mut(), buffer.pos.lnum as uint64_t);

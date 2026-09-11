@@ -63,15 +63,8 @@ pub unsafe fn event_name2nr(
 ///
 /// `str` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
-pub unsafe fn event_name2nr_str(str: String_0) -> Option<AutoEvent> {
-    // An empty API string has a null `data`, which is not a valid pointer
-    // even for a zero-length slice.
-    let wanted: &[u8] = if str.is_empty() {
-        &[]
-    } else {
-        unsafe { str.as_bytes() }
-    };
-    event_name_index(wanted).map(|at| EVENT_NAMES[at].event)
+pub fn event_name2nr_str(str: &String_0) -> Option<AutoEvent> {
+    event_name_index(str.as_bytes()).map(|at| EVENT_NAMES[at].event)
 }
 
 /// The canonical name of `event`.
@@ -227,10 +220,10 @@ unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
     // SAFETY: `value` is the caller's NUL-terminated string.  The `String_0`
     // borrows it rather than owning it, and only for the call below, which
     // copies what it is given.
-    let string = unsafe { cstr_as_string(value) };
+    let string = unsafe { cstr_to_string(value) };
     set_option_direct(
         kOptEventignore,
-        OptVal::String(string),
+        OptVal::string(string),
         OptionSetFlags::NONE,
         SID_NONE,
     );

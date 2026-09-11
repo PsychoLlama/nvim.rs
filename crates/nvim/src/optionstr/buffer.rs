@@ -176,7 +176,7 @@ pub unsafe fn did_set_buftype(args: &mut OptSet) -> Option<&CStr> {
         // mark (freeing what the old one held).
         set_option_direct(
             kOptComments,
-            OptVal::String(String_0::from_raw_parts(c"".as_ptr().cast_mut(), 0)),
+            OptVal::string(String_0::from_cstr(c"")),
             OptionSetFlags::LOCAL,
             SID_NONE,
         );

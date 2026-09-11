@@ -12,7 +12,6 @@
 #![cfg(not(miri))]
 
 use std::ffi::CStr;
-use std::ptr;
 
 use neovim::api::extmark::{describe_ns, nvim_create_namespace, nvim_get_namespaces};
 use neovim::types::String_0;
@@ -24,12 +23,9 @@ use super::support::{Sandbox, editor_lock};
 /// # Safety
 /// The caller holds the editor lock.
 unsafe fn namespace_names() -> Vec<Vec<u8>> {
-    let dict = nvim_get_namespaces(ptr::null_mut());
-    (0..dict.size)
-        .map(|i| {
-            let item = &*dict.items.add(i);
-            CStr::from_ptr(item.key.data()).to_bytes().to_vec()
-        })
+    let dict = nvim_get_namespaces();
+    dict.iter()
+        .map(|item| item.key.as_bytes().to_vec())
         .collect()
 }
 

@@ -212,7 +212,7 @@ pub unsafe fn update_yankreg_width(reg: *mut YankReg) {
     }
     let mut maxlen: size_t = 0;
     for i in 0..unsafe { (*reg).y_size } {
-        let line = unsafe { *(*reg).y_array.add(i) };
+        let line = unsafe { &*(*reg).y_array.add(i) };
         maxlen = maxlen.max(unsafe { mb_string2cells_len(line.data(), line.len()) });
     }
     debug_assert!(maxlen <= c_int::MAX as size_t);
@@ -304,10 +304,9 @@ pub unsafe fn copy_register(name: c_int) -> *mut YankReg {
                 xcalloc((*copy).y_size, ::core::mem::size_of::<String_0>()) as *mut String_0
         };
         for i in 0..unsafe { (*copy).y_size } {
-            unsafe {
-                *(*copy).y_array.add(i) =
-                    copy_string(*(*reg).y_array.add(i), ::core::ptr::null_mut())
-            };
+            // SAFETY: `xcalloc` zeroed the destination, which is the null
+            // string, so the assignment has nothing to release.
+            unsafe { *(*copy).y_array.add(i) = (*(*reg).y_array.add(i)).clone() };
         }
     }
     copy
@@ -344,10 +343,9 @@ pub unsafe fn free_register(reg: *mut YankReg) {
         return;
     }
     for i in (0..unsafe { (*reg).y_size }).rev() {
-        let line = unsafe { &mut *(*reg).y_array.add(i) };
-        unsafe { xfree(line.data() as *mut c_void) };
-        line.set_data(::core::ptr::null_mut());
-        line.set_len(0);
+        // SAFETY: the register owns `y_size` strings at `y_array`, each of
+        // them initialised.
+        unsafe { (*reg).y_array.add(i).drop_in_place() };
     }
     unsafe { xfree((*reg).y_array as *mut c_void) };
     unsafe { (*reg).y_array = ::core::ptr::null_mut() };
@@ -420,5 +418,5 @@ unsafe fn reg_empty(reg: *const YankReg) -> bool {
         || unsafe { (*reg).y_size } == 0
         || unsafe { (*reg).y_size } == 1
             && unsafe { (*reg).y_type } == kMTCharWise
-            && unsafe { *(*reg).y_array }.is_empty()
+            && unsafe { (*(*reg).y_array).is_empty() }
 }

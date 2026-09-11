@@ -5,11 +5,10 @@
 
 use super::wrappers::{arg_string, list_alloc_ret};
 use super::{
-    ARENA_EMPTY, ARRAY_DICT_INIT, MAX_FUNC_ARGS, kChannelPartAll, kChannelPartRpc,
-    kChannelPartStderr, kChannelPartStdin, kChannelPartStdout, kRetObject,
+    ARENA_EMPTY, kChannelPartAll, kChannelPartRpc, kChannelPartStderr, kChannelPartStdin,
+    kChannelPartStdout, kRetObject,
 };
-use crate::api::private::converter::{object_to_vim, vim_to_object};
-use crate::api::private::helpers::{arena_array, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::channel::{
     channel_close, channel_connect, channel_from_stdio, channel_send, find_channel,
@@ -60,31 +59,13 @@ const CHANNEL_PARTS: [(&CStr, ChannelPart); 4] = [
     (c"rpc", kChannelPartRpc),
 ];
 
-/// The trailing arguments of `rpcnotify()`/`rpcrequest()`, converted to an
-/// API `Array` backed by the caller's storage.
-///
-/// # Safety
-/// `args` is a live call frame, `items` is at least `MAX_FUNC_ARGS` long
-/// and outlives the returned `Array`, and `arena` is a live arena that owns
-/// what the conversion allocates.
-unsafe fn trailing_args(
-    args: &[TypVal],
-    first: usize,
-    items: &mut [Object; MAX_FUNC_ARGS as usize],
-    arena: *mut Arena,
-) -> Array {
-    let mut out = ARRAY_DICT_INIT;
-    out.capacity = MAX_FUNC_ARGS as usize;
-    out.items = items.as_mut_ptr();
-    // SAFETY throughout: the caller's obligation; the loop stops at the terminator,
-    // which the dispatcher writes at or before `MAX_ARGS`.
-    let mut i = first;
-    while args.len() > i {
-        unsafe { *out.items.add(out.size) = vim_to_object(&args[i], arena, true) };
-        out.size += 1;
-        i += 1;
-    }
-    out
+/// The trailing arguments of `rpcnotify()`/`rpcrequest()` as an API `Array`
+/// the caller owns.
+fn trailing_args(args: &[TypVal], first: usize) -> Array {
+    args[first.min(args.len())..]
+        .iter()
+        .map(Object::from)
+        .collect()
 }
 
 /// `chanclose({id} [, {stream}])`
@@ -198,13 +179,10 @@ pub fn f_rpcnotify(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut items = [Object::Nil; MAX_FUNC_ARGS as usize];
-    let mut arena: Arena = ARENA_EMPTY;
-    let event_args = unsafe { trailing_args(args, 2, &mut items, &raw mut arena) };
+    let event_args = trailing_args(args, 2);
     let id = args[0].number_or_zero() as uint64_t;
     let event = arg_string(&mut numbuf, &args[1]);
     let ok = unsafe { rpc_send_event(id, event, event_args) };
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     if !ok {
         let what = c"Channel doesn't exist".as_ptr();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -312,9 +290,7 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut items = [Object::Nil; MAX_FUNC_ARGS as usize];
-    let mut arena: Arena = ARENA_EMPTY;
-    let call_args = unsafe { trailing_args(args, 2, &mut items, &raw mut arena) };
+    let call_args = trailing_args(args, 2);
 
     let scope = (nesting != 0).then(|| unsafe { ProviderScope::enter() });
 
@@ -322,7 +298,6 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let method = arg_string(&mut numbuf, &args[1]);
     let mut res_mem: ArenaMem = ptr::null_mut();
     let called = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem) };
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 
     if let Some(scope) = scope {
         unsafe { scope.leave() };
@@ -357,7 +332,9 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             );
         }
     } else if let Ok(object) = called {
-        unsafe { object_to_vim(object, result) };
+        // The response is this frame's, so its Lua references move into the
+        // value rather than being copied.
+        *result = TypVal::from(object);
     }
     unsafe { arena_mem_free(res_mem) };
 }
@@ -372,33 +349,24 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut arena: Arena = ARENA_EMPTY;
     // The same addresses twice: once handed to the List, once copied
     // into the Array the Lua helper is passed.
-    let mut addrs_arr = arena_array(&raw mut arena, n);
+    let mut addrs_arr = Array::with_capacity(n);
     let list = list_alloc_ret(result, n as isize);
     for i in 0..n {
         unsafe { tv_list_append_allocated_string(list, *addrs.add(i)) };
         let addr = unsafe { *addrs.add(i) };
-        let entry = Object::String(unsafe { cstr_as_string(addr) });
-        unsafe { *addrs_arr.items.add(addrs_arr.size) = entry };
-        addrs_arr.size += 1;
+        addrs_arr.push(Object::string(unsafe { cstr_to_string(addr) }));
     }
 
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT)
         && unsafe { tv_dict_get_bool(args[0].dict_or_null(), c"peer".as_ptr(), 0) } != 0
     {
-        let mut items = [Object::Nil; 1];
-        let mut lua_args = ARRAY_DICT_INIT;
-        lua_args.capacity = 1;
-        lua_args.items = items.as_mut_ptr();
-        let entry = Object::Array(addrs_arr);
-        unsafe { *lua_args.items = entry };
-        lua_args.size = 1;
+        let lua_args = Array::from(vec![Object::array(addrs_arr)]);
 
         let mut err = Error::none();
         const PEERS: &str = "return require('vim._core.server').serverlist(...)";
-        let code = PEERS.as_ptr() as *mut c_char;
-        let code = String_0::from_raw_parts(code, PEERS.len());
+        let code = String_0::from(PEERS);
         let mem = &raw mut arena;
-        let rv = match unsafe { nlua_exec(code, ptr::null(), lua_args, kRetObject, mem) } {
+        let rv = match unsafe { nlua_exec(&code, ptr::null(), lua_args, kRetObject, mem) } {
             Ok(value) => value,
             Err(e) => {
                 err = e;
@@ -420,11 +388,11 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let peers = rv
                 .as_array()
                 .expect("`vim._core.server.serverlist()` answers with a list");
-            for i in 0..peers.size {
-                let item = unsafe { *peers.items.add(i) };
+            for item in peers {
                 let addr = item
                     .as_string()
                     .expect("`serverlist()` answers with a list of strings");
+                // SAFETY: the address is the object's own, NUL-terminated.
                 unsafe { tv_list_append_string(list, addr.data(), -1) };
             }
         }

@@ -10,12 +10,11 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, dict_put};
+use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::types::CmdIdx;
-use crate::types::builders::static_cstring;
 use crate::types::{ExArgt, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -29,8 +28,8 @@ use core::ptr;
 /// `arg_str` must point at a NUL-terminated string. `arena` must point at a
 /// live arena, which the memory this answers with is taken from and must
 /// outlive.
-unsafe fn parse_map_cmd(arg_str: *const c_char, arena: *mut Arena) -> Array {
-    let mut args: Array = arena_array(arena, 2);
+unsafe fn parse_map_cmd(arg_str: *const c_char) -> Array {
+    let mut args: Array = Array::with_capacity(2);
     let lhs_start: *mut c_char = arg_str.cast_mut();
     // SAFETY: the caller's promise -- `arg_str` is NUL-terminated, so the
     // two scans and the difference between them stay inside it.
@@ -40,12 +39,9 @@ unsafe fn parse_map_cmd(arg_str: *const c_char, arena: *mut Arena) -> Array {
     };
     // SAFETY: `args` was reserved for two, and the left-hand side holds
     // `lhs_len` bytes.
-    unsafe {
-        array_add(
-            &mut args,
-            Object::string(cstrn_as_string(lhs_start, lhs_len)),
-        )
-    };
+    args.push(Object::string(unsafe {
+        cstrn_to_string(lhs_start, lhs_len)
+    }));
     // SAFETY: as above.
     let rhs_start: *mut c_char = unsafe { skipwhite(lhs_end) };
     // SAFETY: `rhs_start` is inside the string, at worst at its terminator.
@@ -53,10 +49,7 @@ unsafe fn parse_map_cmd(arg_str: *const c_char, arena: *mut Arena) -> Array {
         // SAFETY: as above -- the rest of the line is one opaque argument.
         unsafe {
             let rhs_len = cstr::bytes_at(rhs_start).len();
-            array_add(
-                &mut args,
-                Object::string(cstrn_as_string(rhs_start, rhs_len)),
-            );
+            args.push(Object::string(cstrn_to_string(rhs_start, rhs_len)));
         }
     }
     args
@@ -75,16 +68,16 @@ unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
     // SAFETY: `cmdidx` is in range, checked immediately to its left.
     if ea.cmdidx != CmdIdx::SIZE && is_map_cmd(ea.cmdidx) && !empty {
         // SAFETY: caller contract.
-        return unsafe { parse_map_cmd(ea.arg, arena) };
+        return unsafe { parse_map_cmd(ea.arg) };
     }
     if ea.argt.has(ExArgt::NOSPC) {
         // One argument, whitespace and all.
         if empty {
             return Array::EMPTY;
         }
-        let mut args: Array = arena_array(arena, 1);
+        let mut args: Array = Array::with_capacity(1);
         // SAFETY: room for the one item was just reserved.
-        unsafe { array_add(&mut args, Object::string(cstrn_as_string(ea.arg, length))) };
+        args.push(Object::string(unsafe { cstrn_to_string(ea.arg, length) }));
         return args;
     }
 
@@ -98,7 +91,7 @@ unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
         let buf: *mut c_char = arena_alloc(arena, length + 1, false).cast();
         (
             buf,
-            arena_array(arena, uc_nargs_upper_bound(ea.arg, length)),
+            Array::with_capacity(uc_nargs_upper_bound(ea.arg, length)),
         )
     };
     let (mut end, mut len): (size_t, size_t) = (0, 0);
@@ -109,7 +102,7 @@ unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
         unsafe {
             done = uc_split_args_iter(ea.arg, length, &raw mut end, buf, &raw mut len);
             if len > 0 {
-                array_add(&mut args, Object::string(cstrn_as_string(buf, len)));
+                args.push(Object::string(cstrn_to_string(buf, len)));
                 buf = buf.add(len + 1);
             }
         }
@@ -152,37 +145,24 @@ fn addr_type_name(addr_type: CmdAddr) -> &'static CStr {
 
 /// Collect `entries` into an arena Dict sized to hold exactly them.
 ///
-/// Sizing from the same array that is then drained is what makes the puts
-/// sound: `dict_put`'s only requirement is room, and `entries.len()` is it.
-fn dict_of<const N: usize>(arena: *mut Arena, entries: [(&'static CStr, Object); N]) -> ApiDict {
-    let mut dict = arena_dict(arena, N);
-    // SAFETY: the dict was reserved for exactly `N` pairs and this is the
-    // only thing that writes to it.
-    unsafe {
-        for (key, value) in entries {
-            dict_put(&mut dict, key, value);
-        }
+/// Sizing from the same array that is then drained is what keeps the
+/// dictionary to one allocation.
+fn dict_of<const N: usize>(entries: [(&'static CStr, Object); N]) -> ApiDict {
+    let mut dict = ApiDict::with_capacity(N);
+    for (key, value) in entries {
+        dict.insert(String_0::from_cstr(key), value);
     }
     dict
 }
 
 /// The `mods` sub-dictionary: every command modifier the line carried.
-///
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
-unsafe fn parse_mods(cmdmod: &CmdMod, arena: *mut Arena) -> ApiDict {
-    // SAFETY: `cmod_filter_pat` is null or a NUL-terminated pattern, and the
-    // arena copy outlives the Dict.
-    let pattern = unsafe { arena_string(arena, cstr_as_string(cmdmod.cmod_filter_pat)) };
-    let filter = dict_of(
-        arena,
-        [
-            (c"pattern", Object::string(pattern)),
-            (c"force", Object::boolean(cmdmod.cmod_filter_force)),
-        ],
-    );
+fn parse_mods(cmdmod: &CmdMod) -> ApiDict {
+    // SAFETY: `cmod_filter_pat` is null or a NUL-terminated pattern.
+    let pattern = unsafe { cstr_to_string(cmdmod.cmod_filter_pat) };
+    let filter = dict_of([
+        (c"pattern", Object::string(pattern)),
+        (c"force", Object::boolean(cmdmod.cmod_filter_force)),
+    ]);
 
     let flag = |mask: CmdModFlags| Object::boolean(cmdmod.cmod_flags.has(mask));
     let split_flag = |mask: c_int| Object::boolean(cmdmod.cmod_split & mask != 0);
@@ -199,36 +179,33 @@ unsafe fn parse_mods(cmdmod: &CmdMod, arena: *mut Arena) -> ApiDict {
         c""
     };
 
-    dict_of(
-        arena,
-        [
-            (c"filter", Object::dict(filter)),
-            (c"silent", flag(CmdModFlags::SILENT)),
-            (c"emsg_silent", flag(CmdModFlags::ERRSILENT)),
-            (c"unsilent", flag(CmdModFlags::UNSILENT)),
-            (c"sandbox", flag(CmdModFlags::SANDBOX)),
-            (c"noautocmd", flag(CmdModFlags::NOAUTOCMD)),
-            // Both counts are stored one higher than they read, so that zero
-            // means "not given".
-            (c"tab", Object::integer((cmdmod.cmod_tab - 1) as Integer)),
-            (
-                c"verbose",
-                Object::integer((cmdmod.cmod_verbose - 1) as Integer),
-            ),
-            (c"browse", flag(CmdModFlags::BROWSE)),
-            (c"confirm", flag(CmdModFlags::CONFIRM)),
-            (c"hide", flag(CmdModFlags::HIDE)),
-            (c"keepalt", flag(CmdModFlags::KEEPALT)),
-            (c"keepjumps", flag(CmdModFlags::KEEPJUMPS)),
-            (c"keepmarks", flag(CmdModFlags::KEEPMARKS)),
-            (c"keeppatterns", flag(CmdModFlags::KEEPPATTERNS)),
-            (c"lockmarks", flag(CmdModFlags::LOCKMARKS)),
-            (c"noswapfile", flag(CmdModFlags::NOSWAPFILE)),
-            (c"vertical", split_flag(WSP_VERT as c_int)),
-            (c"horizontal", split_flag(WSP_HOR as c_int)),
-            (c"split", Object::string(static_cstring(split))),
-        ],
-    )
+    dict_of([
+        (c"filter", Object::dict(filter)),
+        (c"silent", flag(CmdModFlags::SILENT)),
+        (c"emsg_silent", flag(CmdModFlags::ERRSILENT)),
+        (c"unsilent", flag(CmdModFlags::UNSILENT)),
+        (c"sandbox", flag(CmdModFlags::SANDBOX)),
+        (c"noautocmd", flag(CmdModFlags::NOAUTOCMD)),
+        // Both counts are stored one higher than they read, so that zero
+        // means "not given".
+        (c"tab", Object::integer((cmdmod.cmod_tab - 1) as Integer)),
+        (
+            c"verbose",
+            Object::integer((cmdmod.cmod_verbose - 1) as Integer),
+        ),
+        (c"browse", flag(CmdModFlags::BROWSE)),
+        (c"confirm", flag(CmdModFlags::CONFIRM)),
+        (c"hide", flag(CmdModFlags::HIDE)),
+        (c"keepalt", flag(CmdModFlags::KEEPALT)),
+        (c"keepjumps", flag(CmdModFlags::KEEPJUMPS)),
+        (c"keepmarks", flag(CmdModFlags::KEEPMARKS)),
+        (c"keeppatterns", flag(CmdModFlags::KEEPPATTERNS)),
+        (c"lockmarks", flag(CmdModFlags::LOCKMARKS)),
+        (c"noswapfile", flag(CmdModFlags::NOSWAPFILE)),
+        (c"vertical", split_flag(WSP_VERT as c_int)),
+        (c"horizontal", split_flag(WSP_HOR as c_int)),
+        (c"split", Object::string(String_0::from_cstr(split))),
+    ])
 }
 
 /// # Safety
@@ -293,18 +270,15 @@ pub unsafe fn nvim_parse_cmd(
     let uc_def = (!cmd.is_null()).then(|| unsafe { (*cmd).uc_def });
 
     // SAFETY: both names are NUL-terminated, and outlive the reply.
-    result.cmd = Some(unsafe { cstr_as_string(command_name(&ea, cmd)) });
+    result.cmd = Some(unsafe { cstr_to_string(command_name(&ea, cmd)) });
 
     if ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
         // Two addresses give both bounds, one gives only `line2`.
-        let mut range: Array = arena_array(arena, 2);
-        // SAFETY: at most the two items just reserved are added.
-        unsafe {
-            if ea.addr_count > 1 {
-                array_add(&mut range, Object::integer(ea.line1 as Integer));
-            }
-            array_add(&mut range, Object::integer(ea.line2 as Integer));
+        let mut range: Array = Array::with_capacity(2);
+        if ea.addr_count > 1 {
+            range.push(Object::integer(ea.line1 as Integer));
         }
+        range.push(Object::integer(ea.line2 as Integer));
         result.range = Some(range);
     }
 
@@ -321,9 +295,9 @@ pub unsafe fn nvim_parse_cmd(
     }
 
     if ea.argt.has(ExArgt::REGSTR) {
-        let mut reg: [c_char; 2] = [ea.regname as c_char, NUL as c_char];
-        // SAFETY: `reg` is NUL-terminated and alive until the copy is made.
-        result.reg = Some(unsafe { arena_string(arena, cstr_as_string(reg.as_mut_ptr())) });
+        let reg: [c_char; 2] = [ea.regname as c_char, NUL as c_char];
+        // SAFETY: `reg` is NUL-terminated and alive for the copy.
+        result.reg = Some(unsafe { cstr_to_string(reg.as_ptr()) });
     }
 
     result.bang = Some(ea.forceit != 0);
@@ -344,20 +318,17 @@ pub unsafe fn nvim_parse_cmd(
         c"*"
     };
     // SAFETY: the arena copy is what the reply keeps; `nargs` is a literal.
-    let nargs = unsafe { arena_string(arena, static_cstring(nargs)) };
+    let nargs = String_0::from_cstr(nargs);
     result.nargs = Some(Object::string(nargs));
-    result.addr = Some(static_cstring(addr_type_name(ea.addr_type)));
+    result.addr = Some(String_0::from_cstr(addr_type_name(ea.addr_type)));
     // SAFETY: `ea.nextcmd` points into the arena copy of the command line.
-    result.nextcmd = Some(unsafe { cstr_as_string(ea.nextcmd) });
+    result.nextcmd = Some(unsafe { cstr_to_string(ea.nextcmd) });
     // SAFETY: `cmdinfo.cmdmod` is what `parse_cmdline` filled in.
-    result.mods = Some(unsafe { parse_mods(&cmdinfo.cmdmod, arena) });
-    result.magic = Some(dict_of(
-        arena,
-        [
-            (c"file", Object::boolean(cmdinfo.magic.file)),
-            (c"bar", Object::boolean(cmdinfo.magic.bar)),
-        ],
-    ));
+    result.mods = Some(parse_mods(&cmdinfo.cmdmod));
+    result.magic = Some(dict_of([
+        (c"file", Object::boolean(cmdinfo.magic.file)),
+        (c"bar", Object::boolean(cmdinfo.magic.bar)),
+    ]));
     // The `:filter` pattern `parse_mods` copied out is freed here, not before.
     undo_cmdmod(&mut cmdinfo.cmdmod);
     result.reported(error)

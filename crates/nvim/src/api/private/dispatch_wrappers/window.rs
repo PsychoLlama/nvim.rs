@@ -16,17 +16,15 @@ use super::*;
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_close(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_close",
         c"nvim_win_close",
@@ -36,10 +34,10 @@ pub unsafe fn handle_nvim_win_close(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_close", c"Window"));
     };
-    let Some(arg_2) = as_boolean(args[1]) else {
+    let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_close", c"Boolean"));
     };
     if textlock.get() != 0 || expr_map_locked() {
@@ -57,17 +55,15 @@ pub unsafe fn handle_nvim_win_close(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_del_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_del_var",
         c"nvim_win_del_var",
@@ -77,10 +73,10 @@ pub unsafe fn handle_nvim_win_del_var(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_del_var", c"Window"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_del_var", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -97,17 +93,15 @@ pub unsafe fn handle_nvim_win_del_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_buf(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_buf",
         c"nvim_win_get_buf",
@@ -117,7 +111,7 @@ pub unsafe fn handle_nvim_win_get_buf(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_buf", c"Window"));
     };
     let rv = nvim_win_get_buf(arg_1)?;
@@ -132,17 +126,15 @@ pub unsafe fn handle_nvim_win_get_buf(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_cursor(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_cursor",
         c"nvim_win_get_cursor",
@@ -152,13 +144,13 @@ pub unsafe fn handle_nvim_win_get_cursor(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_cursor", c"Window"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_win_get_cursor(arg_1, arena) }?;
-    Ok(Object::Array(rv))
+    let rv = unsafe { nvim_win_get_cursor(arg_1) }?;
+    Ok(Object::array(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_height`.
@@ -169,17 +161,15 @@ pub unsafe fn handle_nvim_win_get_cursor(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_height(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_height",
         c"nvim_win_get_height",
@@ -189,7 +179,7 @@ pub unsafe fn handle_nvim_win_get_height(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_height", c"Window"));
     };
     let rv = nvim_win_get_height(arg_1)?;
@@ -204,17 +194,15 @@ pub unsafe fn handle_nvim_win_get_height(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_number(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_number",
         c"nvim_win_get_number",
@@ -224,7 +212,7 @@ pub unsafe fn handle_nvim_win_get_number(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_number", c"Window"));
     };
     let rv = nvim_win_get_number(arg_1)?;
@@ -239,17 +227,15 @@ pub unsafe fn handle_nvim_win_get_number(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_position(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_position",
         c"nvim_win_get_position",
@@ -259,13 +245,13 @@ pub unsafe fn handle_nvim_win_get_position(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_position", c"Window"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_win_get_position(arg_1, arena) }?;
-    Ok(Object::Array(rv))
+    let rv = unsafe { nvim_win_get_position(arg_1) }?;
+    Ok(Object::array(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_tabpage`.
@@ -276,17 +262,15 @@ pub unsafe fn handle_nvim_win_get_position(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_tabpage(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_tabpage",
         c"nvim_win_get_tabpage",
@@ -296,7 +280,7 @@ pub unsafe fn handle_nvim_win_get_tabpage(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_tabpage", c"Window"));
     };
     let rv = nvim_win_get_tabpage(arg_1)?;
@@ -311,17 +295,15 @@ pub unsafe fn handle_nvim_win_get_tabpage(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_var(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_var",
         c"nvim_win_get_var",
@@ -331,15 +313,15 @@ pub unsafe fn handle_nvim_win_get_var(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_var", c"Window"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_get_var", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    unsafe { nvim_win_get_var(arg_1, arg_2, arena) }
+    unsafe { nvim_win_get_var(arg_1, arg_2) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_width`.
@@ -350,17 +332,15 @@ pub unsafe fn handle_nvim_win_get_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_width(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_width",
         c"nvim_win_get_width",
@@ -370,7 +350,7 @@ pub unsafe fn handle_nvim_win_get_width(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_width", c"Window"));
     };
     let rv = nvim_win_get_width(arg_1)?;
@@ -385,17 +365,15 @@ pub unsafe fn handle_nvim_win_get_width(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_hide(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_hide",
         c"nvim_win_hide",
@@ -405,7 +383,7 @@ pub unsafe fn handle_nvim_win_hide(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_hide", c"Window"));
     };
     if textlock.get() != 0 || expr_map_locked() {
@@ -423,17 +401,15 @@ pub unsafe fn handle_nvim_win_hide(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_is_valid(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_is_valid",
         c"nvim_win_is_valid",
@@ -443,7 +419,7 @@ pub unsafe fn handle_nvim_win_is_valid(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_is_valid", c"Window"));
     };
     let rv = nvim_win_is_valid(arg_1);
@@ -458,17 +434,15 @@ pub unsafe fn handle_nvim_win_is_valid(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_set_buf(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_buf",
         c"nvim_win_set_buf",
@@ -478,10 +452,10 @@ pub unsafe fn handle_nvim_win_set_buf(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_buf", c"Window"));
     };
-    let Some(arg_2) = as_handle(args[1], kObjectTypeBuffer) else {
+    let Some(arg_2) = as_handle(args[1].take(), kObjectTypeBuffer) else {
         return Err(wrong_type(2, c"nvim_win_set_buf", c"Buffer"));
     };
     if textlock.get() != 0 || expr_map_locked() {
@@ -499,17 +473,15 @@ pub unsafe fn handle_nvim_win_set_buf(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_set_cursor(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_cursor",
         c"nvim_win_set_cursor",
@@ -519,10 +491,10 @@ pub unsafe fn handle_nvim_win_set_cursor(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_cursor", c"Window"));
     };
-    let Some(arg_2) = as_array(args[1]) else {
+    let Some(arg_2) = as_array(args[1].take()) else {
         return Err(wrong_type(
             2,
             c"nvim_win_set_cursor",
@@ -543,17 +515,15 @@ pub unsafe fn handle_nvim_win_set_cursor(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_set_height(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_height",
         c"nvim_win_set_height",
@@ -563,10 +533,10 @@ pub unsafe fn handle_nvim_win_set_height(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_height", c"Window"));
     };
-    let Some(arg_2) = as_integer(args[1]) else {
+    let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_set_height", c"Integer"));
     };
     nvim_win_set_height(arg_1, arg_2)?;
@@ -581,17 +551,15 @@ pub unsafe fn handle_nvim_win_set_height(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_set_hl_ns(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_hl_ns",
         c"nvim_win_set_hl_ns",
@@ -601,10 +569,10 @@ pub unsafe fn handle_nvim_win_set_hl_ns(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_hl_ns", c"Window"));
     };
-    let Some(arg_2) = as_integer(args[1]) else {
+    let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_set_hl_ns", c"Integer"));
     };
     nvim_win_set_hl_ns(arg_1, arg_2)?;
@@ -619,17 +587,15 @@ pub unsafe fn handle_nvim_win_set_hl_ns(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_var",
         c"nvim_win_set_var",
@@ -639,13 +605,13 @@ pub unsafe fn handle_nvim_win_set_var(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_var", c"Window"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_set_var", c"String"));
     };
-    let arg_3 = args[2];
+    let arg_3 = args[2].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
     unsafe { nvim_win_set_var(arg_1, arg_2, arg_3) }?;
@@ -660,17 +626,15 @@ pub unsafe fn handle_nvim_win_set_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_set_width(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_width",
         c"nvim_win_set_width",
@@ -680,10 +644,10 @@ pub unsafe fn handle_nvim_win_set_width(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_width", c"Window"));
     };
-    let Some(arg_2) = as_integer(args[1]) else {
+    let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_set_width", c"Integer"));
     };
     nvim_win_set_width(arg_1, arg_2)?;
@@ -698,17 +662,15 @@ pub unsafe fn handle_nvim_win_set_width(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_text_height(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_text_height",
         c"nvim_win_text_height",
@@ -718,11 +680,11 @@ pub unsafe fn handle_nvim_win_text_height(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_text_height", c"Window"));
     };
     let mut arg_2: KeyDict_win_text_height =
-        match read_keydict(Some(key_dict_win_text_height_get_field), args[1]) {
+        match read_keydict(Some(key_dict_win_text_height_get_field), args[1].take()) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
@@ -735,6 +697,6 @@ pub unsafe fn handle_nvim_win_text_height(
         };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_win_text_height(arg_1, &raw mut arg_2, arena) }?;
-    Ok(Object::Dict(rv))
+    let rv = unsafe { nvim_win_text_height(arg_1, &raw mut arg_2) }?;
+    Ok(Object::dict(rv))
 }

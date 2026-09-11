@@ -20,7 +20,7 @@ use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::{cstr_as_string, find_window_by_handle, try_enter, try_leave};
+use crate::api::private::helpers::{cstr_to_string, find_window_by_handle, try_enter, try_leave};
 use crate::buffer::do_buffer;
 use crate::decoration::clear_virttext;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -294,7 +294,7 @@ fn ext_win_position(window: Win, validate: bool) {
         let (anchor, anchor_grid) = unsafe {
             let names = (&raw const float_anchor_str).cast::<*const c_char>();
             (
-                cstr_as_string(*names.offset(c.anchor as isize)),
+                cstr_to_string(*names.offset(c.anchor as isize)),
                 (*grid).handle,
             )
         };

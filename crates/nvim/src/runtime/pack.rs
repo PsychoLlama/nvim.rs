@@ -423,7 +423,7 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), F
             let was_valid = runtime_search_path_valid.get();
             set_option_value_give_err(
                 kOptRuntimepath,
-                OptVal::String(unsafe { cstr_as_string(spliced.rtp) }),
+                OptVal::string(unsafe { cstr_to_string(spliced.rtp) }),
                 OptionSetFlags::NONE,
             );
             debug_assert!(

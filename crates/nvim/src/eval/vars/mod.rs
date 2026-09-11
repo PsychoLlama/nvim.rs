@@ -11,7 +11,7 @@ use core::mem::ManuallyDrop;
 
 use crate::eval::gc::RootId;
 
-use crate::api::private::helpers::{cstr_as_string, cstr_to_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::charset::{getdigits_int, skiptowhite, skipwhite};

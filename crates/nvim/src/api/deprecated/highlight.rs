@@ -53,7 +53,7 @@ pub unsafe fn nvim_get_hl_by_name(
     let id = unsafe { syn_name2id(name.data()) };
     if id == 0 {
         // SAFETY: the caller's highlight name is NUL-terminated.
-        error = err_bad_value(c"highlight name", unsafe { name.as_cstr() });
+        error = err_bad_value(c"highlight name", name.as_cstr());
         return ApiDict::EMPTY.reported(error);
     }
     // SAFETY: `arena` is the caller's.

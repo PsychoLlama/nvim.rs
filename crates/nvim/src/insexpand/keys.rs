@@ -236,11 +236,10 @@ pub fn ins_compl_addfrommatch() {
         let mut plen: size_t = 0;
         let mut next = shown.next().filter(|cp| !cp.is_first());
         while let Some(cp) = next {
-            let leader = compl_leader().value();
+            let (leader_data, leader_len) = compl_leader().parts();
             // SAFETY: the leader is readable for its own length.
-            let equal = unsafe {
-                leader.data().is_null() || ins_compl_equal(cp, leader.data(), leader.len())
-            };
+            let equal =
+                unsafe { leader_data.is_null() || ins_compl_equal(cp, leader_data, leader_len) };
             if equal {
                 p = cp.cp_str.data();
                 plen = cp.cp_str.len();
@@ -277,7 +276,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         // current match.
         let mut ptr: *mut c_char = ptr::null_mut();
         if !compl_curr_match.get().is_null() && compl_used_match.get() && c != Ctrl_E {
-            ptr = unsafe { (*compl_curr_match.get()).cp_str }.data();
+            ptr = unsafe { (*compl_curr_match.get()).cp_str.data() };
         }
         unsafe { ins_compl_fix_redo_buf_for_leader(ptr) };
     }
@@ -335,7 +334,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         && compl_used_match.get()
         && compl_match_array().is_unset()
         && !compl_curr_match.get().is_null()
-        && !unsafe { (*compl_curr_match.get()).cp_str }.data().is_null()
+        && !unsafe { (*compl_curr_match.get()).cp_str.data() }.is_null()
     {
         word = unsafe { xstrdup((*compl_curr_match.get()).cp_str.data()) };
     }
@@ -344,20 +343,20 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // only if the popup is still visible.
     if c == Ctrl_E {
         ins_compl_delete(false);
-        let text = if !compl_leader().is_unset() {
-            compl_leader().value()
+        let (text_data, text_len) = if !compl_leader().is_unset() {
+            compl_leader().parts()
         } else if !compl_first_match.get().is_null() {
-            compl_orig_text().value()
+            compl_orig_text().parts()
         } else {
-            String_0::NULL
+            (ptr::null_mut(), 0)
         };
-        if !text.data().is_null() {
+        if !text_data.is_null() {
             let compl_len = get_compl_len();
-            if text.len() as c_int > compl_len {
+            if text_len as c_int > compl_len {
                 unsafe {
                     ins_compl_insert_bytes(
-                        text.data().offset(compl_len as isize),
-                        text.len() as c_int - compl_len,
+                        text_data.offset(compl_len as isize),
+                        text_len as c_int - compl_len,
                     )
                 };
             }

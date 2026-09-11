@@ -341,13 +341,13 @@ pub(crate) unsafe fn process_next_cpt_value(
 
 /// Identifiers (`i`) or defines (`d`) from included files.
 pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
-    let pattern = compl_pattern().value();
+    let (pattern_data, pattern_len) = compl_pattern().parts();
     let what = if compl_type == CTRL_X_PATH_DEFINES && compl_cont_status.get() & CONT_SOL == 0 {
         FIND_DEFINE
     } else {
         FIND_ANY
     };
-    let (pat, len) = (pattern.data(), pattern.len());
+    let (pat, len) = (pattern_data, pattern_len);
     let dir = compl_direction.get();
     let end = MAXLNUM;
     let auto = compl_autocomplete.get();
@@ -458,7 +458,8 @@ pub(crate) fn get_next_filename_completion() {
                     leader,
                 )
             };
-            compl_pattern().replace(String_0::from_raw_parts(path_with_wildcard, path_len + 1));
+            // SAFETY: `vim_snprintf` filled and terminated this block.
+            unsafe { compl_pattern().set_owned(path_with_wildcard, path_len + 1) };
             // Restrict the leader to the file-name part.
             leader = unsafe { last_sep.offset(1) };
             leader_len -= path_len;
@@ -468,11 +469,11 @@ pub(crate) fn get_next_filename_completion() {
     // `expand_wildcards` takes an *array* of patterns, hence a `char **`,
     // and only ever reads through it — so a local copy of the two words
     // gives it the address it wants without handing it the global.
-    let mut pattern = compl_pattern().value();
+    let mut pattern_data = compl_pattern().data();
     if unsafe {
         expand_wildcards(
             1,
-            pattern.data_mut(),
+            &raw mut pattern_data,
             &raw mut num_matches,
             &raw mut matches,
             ExpandFlags::FILE | ExpandFlags::DIR | ExpandFlags::ADDSLASH | ExpandFlags::SILENT,
@@ -576,12 +577,12 @@ pub(crate) fn get_next_filename_completion() {
 pub(crate) fn get_next_cmdline_completion() {
     let mut matches: *mut *mut c_char = ptr::null_mut();
     let mut num_matches = 0;
-    let pattern = compl_pattern().value();
+    let (pattern_data, pattern_len) = compl_pattern().parts();
     if unsafe {
         expand_cmdline(
             compl_xp.ptr(),
-            pattern.data(),
-            pattern.len() as c_int,
+            pattern_data,
+            pattern_len as c_int,
             &raw mut num_matches,
             &raw mut matches,
         )

@@ -25,7 +25,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::{cbuf_to_string, copy_string, cstr_to_string};
+use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_is_empty, buflist_findpat, buflist_name_nr, find_buf, getaltfname};

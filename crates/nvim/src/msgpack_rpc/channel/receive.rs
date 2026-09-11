@@ -22,7 +22,6 @@ use core::ffi::{c_char, c_void};
 use core::{mem, ptr};
 
 use crate::api::private::dispatch_wrappers::{handle_nvim_get_mode, handle_nvim_ui_try_resize};
-use crate::api::private::helpers::api_free_object;
 use crate::channel::{channel_decref, channel_incref};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
@@ -154,11 +153,11 @@ unsafe fn dispatch_redraw(p: &mut Unpacker) {
         // SAFETY: the event the unpacker just filled in.
         unsafe { ui_client_event_raw_line(&raw mut p.grid_line_event) };
         p.has_grid_line_event = false;
-    } else if let Some(args) = p.result.as_array()
-        && let Some(handler) = p.ui_handler.fn_0
+    } else if let Some(handler) = p.ui_handler.fn_0
+        && let Some(args) = p.result.take().into_array()
     {
         // SAFETY: the handler was resolved from the event name by the
-        // unpacker.
+        // unpacker, and takes the argument array over.
         unsafe { handler(args) };
     }
 }
@@ -195,7 +194,13 @@ unsafe fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
     // call stack, so it outlives this write.
     unsafe { (*frame).returned = true };
     unsafe { (*frame).errored = !p.error.is_nil() };
-    unsafe { (*frame).result = if (*frame).errored { p.error } else { p.result } };
+    unsafe {
+        (*frame).result = if (*frame).errored {
+            p.error.take()
+        } else {
+            p.result.take()
+        };
+    };
     unsafe { (*frame).result_mem = arena_finish(&raw mut p.arena) };
     trace::log_response(
         trace::RECV,
@@ -217,7 +222,7 @@ unsafe fn dispatch_incoming(chan: Chan, p: &mut Unpacker) -> bool {
     // SAFETY: the handler name is either null or a static string.
     unsafe { trace::log_call(trace::RECV, chan.id, req_id, p.handler.name) };
 
-    let Some(args) = p.result.as_array() else {
+    let Some(args) = p.result.take().into_array() else {
         // SAFETY: a static string, and the channel is live.
         let why = c"msgpack-rpc request args must be an array"
             .as_ptr()
@@ -317,8 +322,14 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
         (e, Chan::new((*e).channel))
     };
     // SAFETY: as above.
-    let (handler, type_0, request_id, args) =
-        unsafe { ((*e).handler, (*e).type_0, (*e).request_id, (*e).args) };
+    let (handler, type_0, request_id, args) = unsafe {
+        (
+            (*e).handler,
+            (*e).type_0,
+            (*e).request_id,
+            mem::take(&mut (*e).args),
+        )
+    };
     let mut error = Error::none();
 
     // A channel closed while the request sat on a queue is simply dropped —
@@ -329,7 +340,7 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
         let mem = unsafe { &raw mut (*e).used_mem };
         // A refused call answers nil, as every wrapper's own refusal paths
         // did, and the failure travels in `error` for the response below.
-        let result =
+        let mut answer =
             match unsafe { handler.fn_0.expect("dispatched with a handler")(chan.id, args, mem) } {
                 Ok(rv) => rv,
                 Err(e) => {
@@ -340,14 +351,9 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
         // A notification is only answered when it failed, and then with
         // `nvim_error_event` rather than a response.
         if type_0 == kMessageTypeRequest || error.is_set() {
-            let mut answer = result;
             // SAFETY: the channel is live and both slots are stack locals.
             let (to, out) = (chan.as_ptr(), &raw mut answer);
             unsafe { serialize_response(to, handler, type_0, request_id, &error, out) };
-        }
-        if handler.ret_alloc {
-            // SAFETY: the handler said it allocated the result.
-            unsafe { api_free_object(result) };
         }
     }
     // SAFETY: the arena, the reference and the allocation this event owned.

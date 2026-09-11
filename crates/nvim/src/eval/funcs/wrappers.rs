@@ -9,11 +9,9 @@
 
 use super::table::{BUILTINS, builtin_index};
 use super::{
-    ARENA_EMPTY, ARRAY_DICT_INIT, FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY,
-    FCERR_UNKNOWN, MAX_FUNC_ARGS, VIML_INTERNAL_CALL,
+    ARENA_EMPTY, FCERR_NONE, FCERR_NOTMETHOD, FCERR_TOOFEW, FCERR_TOOMANY, FCERR_UNKNOWN,
+    MAX_FUNC_ARGS, VIML_INTERNAL_CALL,
 };
-use crate::api::private::converter::{object_to_vim_take_luaref, vim_to_object};
-use crate::api::private::helpers::api_free_object;
 use crate::buffer::{buflist_findpat, find_buf};
 use crate::cstr;
 use crate::eval::buffer::find_buffer;
@@ -404,36 +402,24 @@ pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
     };
     let handler: MsgpackRpcRequestHandler = unsafe { *row };
 
-    let mut items = [Object::Nil; MAX_FUNC_ARGS as usize];
-    let mut array: Array = ARRAY_DICT_INIT;
-    array.capacity = MAX_FUNC_ARGS as usize;
-    array.items = items.as_mut_ptr();
     let mut arena: Arena = ARENA_EMPTY;
-
-    for arg in args {
-        unsafe { *array.items.add(array.size) = vim_to_object(arg, &raw mut arena, false) };
-        array.size += 1;
-    }
+    let array: Array = args.iter().map(Object::from).collect();
 
     let call = handler.fn_0.expect("non-null function pointer");
     let mem = &raw mut arena;
-    // SAFETY: `array` is the Array built above and both are locals.
-    let mut answer = Object::Nil;
+    // SAFETY: `array` is the Array built above, which the handler takes over,
+    // and `arena` is this frame's.
     match unsafe { call(VIML_INTERNAL_CALL, array, mem) } {
         Ok(rv) => {
-            answer = rv;
-            unsafe { object_to_vim_take_luaref(&raw mut answer, result, true) };
+            // The answer is this frame's, so the conversion takes the Lua
+            // references below it rather than making new ones.
+            *result = TypVal::from(rv);
         }
         Err(err) => {
             // SAFETY: a message the error holds as a NUL-terminated string.
             let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
             semsg_multiline!(c"emsg", "E5555: API call: {msg}");
         }
-    }
-    // Only some handlers allocate their result; the row's handler says
-    // which.
-    if handler.ret_alloc {
-        unsafe { api_free_object(answer) };
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }

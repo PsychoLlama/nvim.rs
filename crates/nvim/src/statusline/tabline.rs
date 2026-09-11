@@ -22,13 +22,12 @@ use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::api::private::helpers::{arena_array, arena_dict, arena_string, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::charset::{ptr2cells, vim_strsize};
 use crate::drawscreen::state::redraw_tabline;
 use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
 use crate::mbyte::utfc_ptr2len;
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::normal::showcmd_buf;
 use crate::option::vars::{p_sc, p_sloc, p_tal};
 use crate::path::shorten_dir;
@@ -36,7 +35,7 @@ use crate::statusline::state::{tab_page_click_defs, tab_page_click_defs_size};
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUITabline;
 use crate::types::{
-    Arena, BufferHandle, MAXPATHL, Object, StlClickDefinition_type_0, String_0, TabpageHandle,
+    BufferHandle, MAXPATHL, Object, StlClickDefinition_type_0, String_0, TabpageHandle,
 };
 use crate::ui::state::{Columns, t_colors};
 use crate::ui::{ui_call_tabline_update, ui_has};
@@ -68,62 +67,54 @@ fn current_window_of(tabpage: TabPage) -> Win {
 /// # Safety
 /// The editor's tab page and buffer lists must be live.
 unsafe fn ui_ext_tabline_update() {
-    let mut arena: Arena = ARENA_EMPTY;
-    let arenap = &raw mut arena;
     let mut name = [0 as c_char; MAXPATHL as usize];
 
     // SAFETY: every list walk, handle read and name copy below is of the
-    // editor's own live objects (the caller's promise); the arena outlives
-    // every string put in it, and each container is sized by the same walk
-    // that fills it.
-    let mut tab_infos = arena_array(arenap, tabs().count());
+    // editor's own live objects (the caller's promise), and each container
+    // is sized by the same walk that fills it.
+    let mut tab_infos = Array::with_capacity(tabs().count());
     for tp in tabs() {
-        let mut info = arena_dict(arenap, 2);
+        let mut info = ApiDict::with_capacity(2);
         let (handle, cwp) = (tp.handle as TabpageHandle, current_window_of(tp));
         put(&mut info, c"tab", Object::tabpage(handle));
         unsafe { get_trans_bufname(cwp.buffer(), &mut name) };
         put(
             &mut info,
             c"name",
-            Object::string(unsafe { name_in(arenap, &name) }),
+            Object::string(unsafe { name_in(&name) }),
         );
         push(&mut tab_infos, Object::dict(info));
     }
 
     // Unlisted buffers are left out of the event. SAFETY: as above.
     let listed = || buffers().filter(|buf| buf.b_p_bl != 0);
-    let mut bufs = arena_array(arenap, listed().count());
+    let mut bufs = Array::with_capacity(listed().count());
     for buf in listed() {
-        let mut info = arena_dict(arenap, 2);
+        let mut info = ApiDict::with_capacity(2);
         put(&mut info, c"buffer", Object::buffer(buf.handle));
         unsafe { get_trans_bufname(buf, &mut name) };
         put(
             &mut info,
             c"name",
-            Object::string(unsafe { name_in(arenap, &name) }),
+            Object::string(unsafe { name_in(&name) }),
         );
         push(&mut bufs, Object::dict(info));
     }
 
-    // SAFETY: as above; the arena is released once the event has been sent.
-    unsafe {
-        let (tab, buf) = (
-            TabPage::current().handle as TabpageHandle,
-            Buf::current().handle as BufferHandle,
-        );
-        ui_call_tabline_update(tab, tab_infos, buf, bufs);
-        arena_mem_free(arena_finish(arenap));
-    }
+    let (tab, buf) = (
+        TabPage::current().handle as TabpageHandle,
+        Buf::current().handle as BufferHandle,
+    );
+    ui_call_tabline_update(tab, tab_infos, buf, bufs);
 }
 
-/// A copy of `name` in `arena`.
+/// A copy of `name`, owned by the answer.
 ///
 /// # Safety
-/// `arena` must be live for as long as the copy is, and `name` must be
-/// NUL-terminated.
-unsafe fn name_in(arena: *mut Arena, name: &[c_char; MAXPATHL as usize]) -> String_0 {
+/// `name` must be NUL-terminated.
+unsafe fn name_in(name: &[c_char; MAXPATHL as usize]) -> String_0 {
     // SAFETY: the caller's promise.
-    unsafe { arena_string(arena, cstr_as_string(name.as_ptr())) }
+    unsafe { cstr_to_string(name.as_ptr()) }
 }
 
 /// Draw the tab pages line at the top of the editor.

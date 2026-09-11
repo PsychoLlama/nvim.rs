@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add};
+use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::cstr;
 use crate::guard::Lock;
@@ -120,21 +120,14 @@ unsafe fn term_write(
     if cb == LUA_NOREF {
         return;
     }
-    let mut args: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    let mut args_items: [Object; 3] = [Object::Nil; 3];
-    args.capacity = 3 as size_t;
-    args.items = &raw mut args_items as *mut Object;
-    let text = Object::string(String_0::from_raw_parts(buf.cast_mut(), size));
-    // SAFETY: `chan` is the terminal's channel and `args` the three-slot
-    // block just declared above it.
+    let mut args: Array = Array::with_capacity(3);
+    // SAFETY: `buf` holds `size` readable bytes, and `chan` is the
+    // terminal's channel.
     unsafe {
-        array_add(&mut args, Object::integer((*chan).id as Integer));
-        array_add(&mut args, Object::buffer(terminal_buf((*chan).term)));
-        array_add(&mut args, text);
+        let text = String_0::from_bytes(core::slice::from_raw_parts(buf.cast::<u8>(), size));
+        args.push(Object::integer((*chan).id as Integer));
+        args.push(Object::buffer(terminal_buf((*chan).term)));
+        args.push(Object::string(text));
     }
     let _locked = Lock::text();
     let (name, no_arena) = (c"input".as_ptr(), ::core::ptr::null_mut::<Arena>());

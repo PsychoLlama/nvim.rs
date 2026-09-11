@@ -16,17 +16,15 @@ use super::*;
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_open_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_open_win",
         c"nvim_open_win",
@@ -36,14 +34,14 @@ pub unsafe fn handle_nvim_open_win(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
         return Err(wrong_type(1, c"nvim_open_win", c"Buffer"));
     };
-    let Some(arg_2) = as_boolean(args[1]) else {
+    let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_open_win", c"Boolean"));
     };
     let mut arg_3: KeyDict_win_config =
-        match read_keydict(Some(key_dict_win_config_get_field), args[2]) {
+        match read_keydict(Some(key_dict_win_config_get_field), args[2].take()) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
@@ -67,17 +65,15 @@ pub unsafe fn handle_nvim_open_win(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_config(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_config",
         c"nvim_win_get_config",
@@ -87,12 +83,12 @@ pub unsafe fn handle_nvim_win_get_config(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_config", c"Window"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let mut rv = unsafe { nvim_win_get_config(arg_1, arena) }?;
+    let mut rv = unsafe { nvim_win_get_config(arg_1) }?;
     // SAFETY: `rv` is a `KeyDict_win_config`, whose field table is
     // `win_config_table` and whose length is 25.
     let dict = unsafe {
@@ -100,10 +96,9 @@ pub unsafe fn handle_nvim_win_get_config(
             (&raw mut rv).cast(),
             win_config_table.as_ptr(),
             25 as size_t,
-            arena,
         )
     };
-    Ok(Object::Dict(dict))
+    Ok(Object::dict(dict))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_config`.
@@ -114,17 +109,15 @@ pub unsafe fn handle_nvim_win_get_config(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_set_config(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_config",
         c"nvim_win_set_config",
@@ -134,11 +127,11 @@ pub unsafe fn handle_nvim_win_set_config(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_config", c"Window"));
     };
     let mut arg_2: KeyDict_win_config =
-        match read_keydict(Some(key_dict_win_config_get_field), args[1]) {
+        match read_keydict(Some(key_dict_win_config_get_field), args[1].take()) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {

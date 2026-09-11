@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, dict_put};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_value;
 use crate::cstr;
 
@@ -32,26 +32,21 @@ const FLAGS: [::core::ffi::c_int; 6] = [
 /// `opts` must point at the `KeyDict_context` the dispatcher filled in, live
 /// for the call. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
-pub unsafe fn nvim_get_context(
-    opts: *mut KeyDict_context,
-    arena: *mut Arena,
-) -> Result<ApiDict, Error> {
+pub unsafe fn nvim_get_context(opts: *mut KeyDict_context) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    let types: Array = unsafe { (*opts).types }.unwrap_or(Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    });
-    let mut int_types: ::core::ffi::c_int = if types.size > 0 as size_t {
+    let types: Array = unsafe { (*opts).types.as_ref() }
+        .unwrap_or(&Array::EMPTY)
+        .clone();
+    let mut int_types: ::core::ffi::c_int = if types.len() > 0 as size_t {
         0 as ::core::ffi::c_int
     } else {
         kCtxAll.get()
     };
-    if types.size > 0 as size_t {
+    if types.len() > 0 as size_t {
         let mut i: size_t = 0 as size_t;
-        while i < types.size {
+        while i < types.len() {
             // SAFETY: `types` names its own `size` items.
-            let item = unsafe { *types.items.add(i) };
+            let item = &types[i];
             let named = item.as_string().map(|s| s.data());
             if let Some(s) = named {
                 // SAFETY: the keyset's strings are NUL-terminated.
@@ -61,12 +56,7 @@ pub unsafe fn nvim_get_context(
                 } else {
                     // SAFETY: the keyset's strings are NUL-terminated.
                     error = err_bad_value(c"type", unsafe { cstr::at(s) });
-                    return ApiDict {
-                        size: 0 as size_t,
-                        capacity: 0 as size_t,
-                        items: ::core::ptr::null_mut::<KeyValuePair>(),
-                    }
-                    .reported(error);
+                    return ApiDict::EMPTY.reported(error);
                 }
             }
             i = i.wrapping_add(1);
@@ -74,7 +64,7 @@ pub unsafe fn nvim_get_context(
     }
     let mut ctx: Context = CONTEXT_INIT;
     unsafe { ctx_save(&raw mut ctx, int_types) };
-    let dict: ApiDict = unsafe { ctx_to_dict(&raw mut ctx, arena) };
+    let dict: ApiDict = unsafe { ctx_to_dict(&raw mut ctx) };
     unsafe { ctx_free(&raw mut ctx) };
     dict.reported(error)
 }
@@ -102,14 +92,16 @@ pub unsafe fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
 pub unsafe fn nvim_get_mode(arena: *mut Arena) -> ApiDict {
-    let mut rv: ApiDict = arena_dict(arena, 2 as size_t);
+    let mut rv: ApiDict = ApiDict::with_capacity(2 as size_t);
     let modestr: *mut ::core::ffi::c_char =
         unsafe { arena_alloc(arena, MODE_MAX_LENGTH as size_t, false) } as *mut ::core::ffi::c_char;
     // The name is copied into the arena because the `ApiDict` borrows it;
     // `get_mode` answers exactly `MODE_MAX_LENGTH` NUL-padded bytes.
     unsafe { modestr.copy_from_nonoverlapping(get_mode().as_ptr(), MODE_MAX_LENGTH as size_t) };
     let blocked: bool = input_blocking();
-    unsafe { dict_put(&mut rv, c"mode", Object::string(cstr_as_string(modestr))) };
-    unsafe { dict_put(&mut rv, c"blocking", Object::boolean(blocked)) };
+    // SAFETY: `modestr` is the NUL-padded buffer filled just above.
+    let mode = unsafe { cstr_to_string(modestr) };
+    rv.insert(String_0::from_cstr(c"mode"), Object::string(mode));
+    rv.insert(String_0::from_cstr(c"blocking"), Object::boolean(blocked));
     rv
 }

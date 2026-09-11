@@ -28,7 +28,6 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::memory::xmemdupz;
 use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
-use crate::types::builders::static_cstring;
 use crate::types::{
     Error, Event, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
     VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, ptrdiff_t,
@@ -130,21 +129,13 @@ pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
         return;
     };
     let mut err = Error::none();
-    let title = Object::string(String_0::from_raw_parts(
-        title.as_ptr().cast::<c_char>().cast_mut(),
-        title.len(),
-    ));
-    let (vars, key, arena) = (
-        buf.b_vars,
-        static_cstring(c"term_title"),
-        ::core::ptr::null_mut(),
-    );
+    let title = Object::string(String_0::from_bytes(title));
+    let (vars, key) = (buf.b_vars, String_0::from_cstr(c"term_title"));
     // Setting a variable can run `BufModified`-ish machinery; the lock
     // keeps that from touching the buffer's lines mid-update.
     buf.b_locked += 1;
-    // SAFETY: the buffer's own variable dictionary, and a string that
-    // outlives the call, which copies it.
-    drop(unsafe { dict_set_var(vars, key, title, false, false, arena) });
+    // SAFETY: the buffer's own variable dictionary.
+    drop(unsafe { dict_set_var(vars, &key, title, false, false) });
     buf.b_locked -= 1;
     err.clear();
     status_redraw_buf(buf);

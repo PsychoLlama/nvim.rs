@@ -74,7 +74,7 @@ use crate::strings::vim_snprintf_safelen;
 use crate::tag::state::keep_help_flag;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, ptrdiff_t, time_t,
+    ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, Vv, ptrdiff_t, time_t,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -106,14 +106,16 @@ pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: LineNr) -> bool {
     } else {
         unsafe { strlen_of(command) + 3 }
     };
-    let mut val = String_0::from_raw_parts(unsafe { xmalloc(valsize) } as *mut c_char, 0);
-    val.set_len(if command.is_null() {
-        unsafe { vim_snprintf_safelen(val.data(), valsize, c"%ldG".as_ptr(), newlnum as i64) }
+    // SAFETY: `valsize` writable bytes, which the verbs below fill and the
+    // `xfree` releases.
+    let val = unsafe { xmalloc(valsize) }.cast::<c_char>();
+    let len = if command.is_null() {
+        unsafe { vim_snprintf_safelen(val, valsize, c"%ldG".as_ptr(), newlnum as i64) }
     } else {
-        unsafe { vim_snprintf_safelen(val.data(), valsize, c":%s\r".as_ptr(), command) }
-    });
-    unsafe { set_vim_var_string(Vv::Swapcommand, val.data(), val.len() as ptrdiff_t) };
-    unsafe { xfree(val.data().cast()) };
+        unsafe { vim_snprintf_safelen(val, valsize, c":%s\r".as_ptr(), command) }
+    };
+    unsafe { set_vim_var_string(Vv::Swapcommand, val, len as ptrdiff_t) };
+    unsafe { xfree(val.cast()) };
     true
 }
 

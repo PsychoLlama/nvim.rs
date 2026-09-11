@@ -74,10 +74,70 @@ pub enum OptVal {
     /// `kOptValTypeNumber`.
     Number(OptInt),
     /// `kOptValTypeString`.
-    String(String_0),
+    String(OptStr),
+}
+
+/// The bytes of a string option's value: a pointer and a length, with
+/// ownership carried by the option protocol rather than by the type.
+///
+/// **Deliberately not [`String_0`].** An API string owns its bytes; a string
+/// option's value may be the generated table's `.rodata` default, the shared
+/// empty string every unset string option points at, or an allocation the
+/// option variable is about to take over -- which is why
+/// [`optval_free`](crate::option::optval_free) exists and why this pair is
+/// `Copy`. The option table is a `const` in `.rodata` and names its string
+/// defaults there, so a value that allocated could not be one of its rows.
+#[derive(Copy, Clone)]
+pub struct OptStr {
+    data: *mut ::core::ffi::c_char,
+    size: size_t,
+}
+
+impl OptStr {
+    /// A view of a `.rodata` string: the generated option table's defaults,
+    /// which `alloc_options_default` replaces with owned copies at startup.
+    /// Nothing may free one of these.
+    pub const fn borrowed(text: &'static ::core::ffi::CStr) -> Self {
+        Self {
+            data: text.as_ptr().cast_mut(),
+            size: text.count_bytes(),
+        }
+    }
+
+    /// The pair, for the option variables and the C callees that hold a
+    /// `char *` and a length separately.
+    ///
+    /// Building one is safe -- an `OptStr` releases nothing by itself. The
+    /// obligation is on whoever passes the value it ends up in to
+    /// [`optval_free`](crate::option::optval_free): `data` must by then be
+    /// the shared empty string, a `.rodata` default, or one allocation with
+    /// one owner.
+    pub const fn from_raw_parts(data: *mut ::core::ffi::c_char, size: size_t) -> Self {
+        Self { data, size }
+    }
+
+    /// The pointer. Never null: an unset string option holds the shared
+    /// empty string rather than nothing.
+    pub const fn data(&self) -> *mut ::core::ffi::c_char {
+        self.data
+    }
+
+    /// The byte count, not counting the terminator every option value has.
+    pub const fn len(&self) -> size_t {
+        self.size
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.size == 0
+    }
 }
 
 impl OptVal {
+    /// A string value over a `.rodata` literal. See [`OptStr::borrowed`].
+    pub const fn static_string(text: &'static ::core::ffi::CStr) -> Self {
+        OptVal::String(OptStr::borrowed(text))
+    }
+
     /// The type this value is, as the option table spells one.
     pub const fn kind(&self) -> OptValType {
         match self {
@@ -94,7 +154,7 @@ impl OptVal {
 
     /// A boolean option's value, `None` for the unset global-local marker
     /// and for every other kind of option.
-    pub const fn as_boolean(self) -> Option<bool> {
+    pub const fn as_boolean(&self) -> Option<bool> {
         match self {
             OptVal::Boolean(0) => Some(false),
             OptVal::Boolean(1..) => Some(true),
@@ -104,23 +164,24 @@ impl OptVal {
 
     /// The tri-state word itself, for the callers that write it through to
     /// an option variable.
-    pub const fn tristate(self) -> Option<::core::ffi::c_int> {
+    pub const fn tristate(&self) -> Option<::core::ffi::c_int> {
         match self {
-            OptVal::Boolean(word) => Some(word),
+            OptVal::Boolean(word) => Some(*word),
             _ => None,
         }
     }
 
-    pub const fn as_number(self) -> Option<OptInt> {
+    pub const fn as_number(&self) -> Option<OptInt> {
         match self {
-            OptVal::Number(n) => Some(n),
+            OptVal::Number(n) => Some(*n),
             _ => None,
         }
     }
 
-    pub const fn as_string(self) -> Option<String_0> {
+    /// The string pair, for a string value.
+    pub const fn as_string(&self) -> Option<OptStr> {
         match self {
-            OptVal::String(s) => Some(s),
+            OptVal::String(s) => Some(*s),
             _ => None,
         }
     }

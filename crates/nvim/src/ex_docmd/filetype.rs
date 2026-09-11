@@ -228,7 +228,7 @@ pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
     }
     set_option_value_give_err(
         kOptFiletype,
-        OptVal::String(cstr_as_string(arg)),
+        OptVal::string(cstr_to_string(arg)),
         OptionSetFlags::LOCAL,
     );
     if arg != args.arg {
@@ -245,12 +245,6 @@ pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
 pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut env = env_buf();
-    let mut items: [Object; 2] = unsafe { core::mem::zeroed() };
-    let mut argv = Array {
-        size: 0,
-        capacity: 2,
-        items: (&raw mut items).cast::<Object>(),
-    };
 
     // The modifiers are passed as text, because the health check opens
     // its own window and has to reproduce `:vertical`, `:tab` and the
@@ -265,21 +259,16 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
         debug_assert!(mods_len < size_of::<[c_char; 1024]>());
     }
 
-    items[0] = Object::String(String_0::from_raw_parts(
-        (&raw mut mods).cast::<c_char>(),
-        mods_len,
-    ));
-    // `args.items` aliases `items`, so `nlua_exec` below reads this write.
-    // `unused_assignments` only sees direct uses of the local and calls it dead.
-    #[allow(unused_assignments)]
-    {
-        items[1] = Object::String(cstr_as_string(args.arg));
-    }
-    argv.size = 2;
+    // SAFETY: `add_win_cmd_modifiers` wrote `mods_len` bytes into `mods`.
+    let mods = unsafe { core::slice::from_raw_parts(mods.as_ptr().cast::<u8>(), mods_len) };
+    let argv = Array::from(vec![
+        Object::string(String_0::from_bytes(mods)),
+        Object::string(cstr_to_string(args.arg)),
+    ]);
 
     let ran = unsafe {
         nlua_exec(
-            lua_chunk(c"vim.health._check(...)"),
+            &lua_chunk(c"vim.health._check(...)"),
             ptr::null(),
             argv,
             kRetNilBool,
@@ -312,7 +301,7 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
 
 /// A `'static` Lua source string as the API's counted string.
 fn lua_chunk(src: &'static CStr) -> String_0 {
-    String_0::from_raw_parts(src.as_ptr() as *mut c_char, src.to_bytes().len() as size_t)
+    String_0::from_cstr(src)
 }
 
 /// `strncmp()`'s prefix test as checked code.
@@ -321,10 +310,10 @@ fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
     unsafe { cstr::starts_with(p, prefix) }
 }
 
-/// `cstr_as_string()` as checked code.
-fn cstr_as_string(str: *const c_char) -> String_0 {
+/// `cstr_to_string()` as checked code.
+fn cstr_to_string(str: *const c_char) -> String_0 {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::api::private::helpers::cstr_as_string(str) }
+    unsafe { crate::api::private::helpers::cstr_to_string(str) }
 }
 
 /// `do_doautocmd()` as checked code.

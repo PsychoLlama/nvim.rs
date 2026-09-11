@@ -16,17 +16,15 @@ use super::*;
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_attach(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_attach",
         c"nvim_ui_attach",
@@ -36,13 +34,13 @@ pub unsafe fn handle_nvim_ui_attach(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_integer(args[0]) else {
+    let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_attach", c"Integer"));
     };
-    let Some(arg_2) = as_integer(args[1]) else {
+    let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_ui_attach", c"Integer"));
     };
-    let Some(arg_3) = as_dict(args[2]) else {
+    let Some(arg_3) = as_dict(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_ui_attach", c"Dict"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -59,17 +57,14 @@ pub unsafe fn handle_nvim_ui_attach(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_detach(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
     log_invoke(
         c"handle_nvim_ui_detach",
         c"nvim_ui_detach",
@@ -91,17 +86,15 @@ pub unsafe fn handle_nvim_ui_detach(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_pum_set_bounds(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_pum_set_bounds",
         c"nvim_ui_pum_set_bounds",
@@ -111,16 +104,16 @@ pub unsafe fn handle_nvim_ui_pum_set_bounds(
     if args.len() != 4 {
         return Err(wrong_arity(4, args.len()));
     }
-    let Some(arg_1) = as_float(args[0]) else {
+    let Some(arg_1) = as_float(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_pum_set_bounds", c"Float"));
     };
-    let Some(arg_2) = as_float(args[1]) else {
+    let Some(arg_2) = as_float(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_ui_pum_set_bounds", c"Float"));
     };
-    let Some(arg_3) = as_float(args[2]) else {
+    let Some(arg_3) = as_float(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_ui_pum_set_bounds", c"Float"));
     };
-    let Some(arg_4) = as_float(args[3]) else {
+    let Some(arg_4) = as_float(args[3].take()) else {
         return Err(wrong_type(4, c"nvim_ui_pum_set_bounds", c"Float"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -137,17 +130,15 @@ pub unsafe fn handle_nvim_ui_pum_set_bounds(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_pum_set_height(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_pum_set_height",
         c"nvim_ui_pum_set_height",
@@ -157,7 +148,7 @@ pub unsafe fn handle_nvim_ui_pum_set_height(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_integer(args[0]) else {
+    let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_pum_set_height", c"Integer"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -174,17 +165,15 @@ pub unsafe fn handle_nvim_ui_pum_set_height(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_send(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_send",
         c"nvim_ui_send",
@@ -194,7 +183,7 @@ pub unsafe fn handle_nvim_ui_send(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_send", c"String"));
     };
     nvim_ui_send(channel_id, arg_1);
@@ -209,17 +198,15 @@ pub unsafe fn handle_nvim_ui_send(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_set_focus(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_set_focus",
         c"nvim_ui_set_focus",
@@ -229,7 +216,7 @@ pub unsafe fn handle_nvim_ui_set_focus(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_boolean(args[0]) else {
+    let Some(arg_1) = as_boolean(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_set_focus", c"Boolean"));
     };
     nvim_ui_set_focus(channel_id, arg_1)?;
@@ -244,17 +231,15 @@ pub unsafe fn handle_nvim_ui_set_focus(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_set_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_set_option",
         c"nvim_ui_set_option",
@@ -264,10 +249,10 @@ pub unsafe fn handle_nvim_ui_set_option(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_set_option", c"String"));
     };
-    let arg_2 = args[1];
+    let arg_2 = args[1].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
     unsafe { nvim_ui_set_option(channel_id, arg_1, arg_2) }?;
@@ -282,17 +267,15 @@ pub unsafe fn handle_nvim_ui_set_option(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_try_resize(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_try_resize",
         c"nvim_ui_try_resize",
@@ -302,10 +285,10 @@ pub unsafe fn handle_nvim_ui_try_resize(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_integer(args[0]) else {
+    let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_try_resize", c"Integer"));
     };
-    let Some(arg_2) = as_integer(args[1]) else {
+    let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_ui_try_resize", c"Integer"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -322,17 +305,15 @@ pub unsafe fn handle_nvim_ui_try_resize(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_ui_try_resize_grid(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_ui_try_resize_grid",
         c"nvim_ui_try_resize_grid",
@@ -342,13 +323,13 @@ pub unsafe fn handle_nvim_ui_try_resize_grid(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_integer(args[0]) else {
+    let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_try_resize_grid", c"Integer"));
     };
-    let Some(arg_2) = as_integer(args[1]) else {
+    let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_ui_try_resize_grid", c"Integer"));
     };
-    let Some(arg_3) = as_integer(args[2]) else {
+    let Some(arg_3) = as_integer(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_ui_try_resize_grid", c"Integer"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -365,17 +346,15 @@ pub unsafe fn handle_nvim_ui_try_resize_grid(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_ui_attach(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_ui_attach",
         c"ui_attach",
@@ -385,13 +364,13 @@ pub unsafe fn handle_ui_attach(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_integer(args[0]) else {
+    let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"ui_attach", c"Integer"));
     };
-    let Some(arg_2) = as_integer(args[1]) else {
+    let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"ui_attach", c"Integer"));
     };
-    let Some(arg_3) = as_boolean(args[2]) else {
+    let Some(arg_3) = as_boolean(args[2].take()) else {
         return Err(wrong_type(3, c"ui_attach", c"Boolean"));
     };
     // SAFETY: each argument was checked against the type the signature declares,

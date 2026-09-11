@@ -28,9 +28,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::api::private::helpers::{
-    arena_array, arena_dict, arena_string, array_add, cstr_as_string, dict_put,
-};
+use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, has_autocmd};
 use crate::charset::{skip_to_newline, skiptowhite, skiptowhite_esc, skipwhite, skipwhite_len};
 use crate::cmdexpand::globpath;
@@ -239,11 +237,7 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const ARRAY_DICT_INIT: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 pub const SYS_OPTWIN_FILE: &::core::ffi::CStr = c"$VIMRUNTIME/scripts/optwin.lua";
 pub const AUTOLOAD_CHAR: ::core::ffi::c_int = '#' as ::core::ffi::c_int;

@@ -75,7 +75,7 @@ pub(crate) fn stored<T>(err: ErrSlot, r: Result<T, Error>) -> Option<T> {
 ///
 /// # Safety
 /// `val`'s bytes must be NUL-terminated.
-pub(crate) unsafe fn err_invalid_str(err: ErrSlot, name: &CStr, val: String_0, quote_val: bool) {
+pub(crate) unsafe fn err_invalid_str(err: ErrSlot, name: &CStr, val: &String_0, quote_val: bool) {
     // SAFETY: the caller's promise about `val`.
     let val = unsafe { cstr::at_opt(val.data()) };
     let bad = match (val, quote_val) {
@@ -206,11 +206,11 @@ unsafe fn parse_config_split(split: String_0, out: &mut WinSplit) -> bool {
 /// # Safety
 /// `bufpos` must name its own `size` items.
 unsafe fn parse_float_bufpos(bufpos: Array, out: &mut LPos) -> bool {
-    if bufpos.size != 2 {
+    if bufpos.len() != 2 {
         return false;
     }
     // SAFETY: the caller's promise -- the array holds the two items read here.
-    let (lnum, col) = unsafe { (*bufpos.items, *bufpos.items.add(1)) };
+    let (lnum, col) = (&bufpos[0], &bufpos[1]);
     let (Some(lnum), Some(col)) = (lnum.as_integer(), col.as_integer()) else {
         return false;
     };
@@ -268,14 +268,12 @@ unsafe fn parse_bordertext(
     fconfig: WinCfg,
     err: ErrSlot,
 ) {
-    if let Object::Array(array) = bordertext
-        && array.size == 0
-    {
+    if bordertext.as_array().is_some_and(|array| array.is_empty()) {
         err_exp(err, c"title/footer", c"non-empty Array", None);
         return;
     }
     let (mut is_present, mut chunks, mut width) = bordertext_fields(fconfig, bordertext_type);
-    match bordertext {
+    match &bordertext {
         Object::String(string) => {
             if string.is_empty() {
                 *is_present = false;
@@ -351,14 +349,14 @@ unsafe fn parse_bordertext_pos(
     }
     const NAMES: [&CStr; 3] = [c"left", c"center", c"right"];
     // SAFETY: the caller's promise.
-    let Some(which) = (unsafe { smatch(bordertext_pos, &NAMES) }) else {
+    let Some(which) = (unsafe { smatch(&bordertext_pos, &NAMES) }) else {
         let name = if bordertext_type == kBorderTextTitle {
             c"title_pos"
         } else {
             c"footer_pos"
         };
         // SAFETY: as above.
-        unsafe { err_invalid_str(err, name, bordertext_pos, true) };
+        unsafe { err_invalid_str(err, name, &bordertext_pos, true) };
         return false;
     };
     *align = [kAlignLeft, kAlignCenter, kAlignRight][which];
@@ -369,7 +367,7 @@ unsafe fn parse_bordertext_pos(
 ///
 /// # Safety
 /// `s`'s bytes must be NUL-terminated.
-unsafe fn smatch(s: String_0, names: &[&CStr]) -> Option<usize> {
+unsafe fn smatch(s: &String_0, names: &[&CStr]) -> Option<usize> {
     names
         .iter()
         // SAFETY: the caller's promise about `s`.
@@ -405,13 +403,14 @@ pub(crate) unsafe fn parse_win_config(
     let mut relative_is_win = false;
     let mut is_split = false;
     '_fail: {
-        let relative = config.relative.unwrap_or(String_0::NULL);
+        let no_string = String_0::NULL;
+        let relative = config.relative.as_ref().unwrap_or(&no_string);
         if !relative.is_empty() {
             // SAFETY: the caller's promise -- the keyset's strings are
             // NUL-terminated.
-            if !unsafe { parse_float_relative(relative, &mut fconfig.relative) } {
+            if !unsafe { parse_float_relative(relative.clone(), &mut fconfig.relative) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"relative", relative, true) };
+                unsafe { err_invalid_str(err, c"relative", &relative.clone(), true) };
                 break '_fail;
             }
             if !(config.row.is_some() && config.col.is_some()) && config.bufpos.is_none() {
@@ -443,19 +442,19 @@ pub(crate) unsafe fn parse_win_config(
             err_conflict(err, c"split", c"floating windows");
             break '_fail;
         }
-        if let Some(split) = config.split {
+        if let Some(split) = config.split.as_ref() {
             // SAFETY: the caller's promise about the keyset's strings.
-            if !unsafe { parse_config_split(split, &mut fconfig.split) } {
+            if !unsafe { parse_config_split(split.clone(), &mut fconfig.split) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"split", split, true) };
+                unsafe { err_invalid_str(err, c"split", &split.clone(), true) };
                 break '_fail;
             }
         }
-        if let Some(anchor) = config.anchor {
+        if let Some(anchor) = config.anchor.as_ref() {
             // SAFETY: as above.
-            if !unsafe { parse_float_anchor(anchor, &mut fconfig.anchor) } {
+            if !unsafe { parse_float_anchor(anchor.clone(), &mut fconfig.anchor) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"anchor", anchor, true) };
+                unsafe { err_invalid_str(err, c"anchor", &anchor.clone(), true) };
                 break '_fail;
             }
         }
@@ -473,14 +472,14 @@ pub(crate) unsafe fn parse_win_config(
             }
             fconfig.col = col;
         }
-        if let Some(bufpos) = config.bufpos {
+        if let Some(bufpos) = config.bufpos.as_ref() {
             if !has_relative || is_split {
                 generate_error(window, c"bufpos", err);
                 break '_fail;
             }
             // SAFETY: the caller's promise -- the keyset's arrays name their
             // own items.
-            if !unsafe { parse_float_bufpos(bufpos, &mut fconfig.bufpos) } {
+            if !unsafe { parse_float_bufpos(bufpos.clone(), &mut fconfig.bufpos) } {
                 err_exp(err, c"bufpos", c"[row, col] array", None);
                 break '_fail;
             }
@@ -578,7 +577,7 @@ pub(crate) unsafe fn parse_win_config(
             }
             fconfig.zindex = zindex as c_int;
         }
-        if let Some(title) = config.title {
+        if let Some(title) = config.title.as_ref() {
             if is_split {
                 err_conflict(err, c"title", c"non-float window");
                 break '_fail;
@@ -586,11 +585,11 @@ pub(crate) unsafe fn parse_win_config(
             // SAFETY: the caller's promise about the keyset's strings and
             // arrays.
             let placed = unsafe {
-                parse_bordertext(title, kBorderTextTitle, fconfig, err);
+                parse_bordertext(title.clone(), kBorderTextTitle, fconfig, err);
                 !err.is_set()
                     && parse_bordertext_pos(
                         window,
-                        config.title_pos.unwrap_or(String_0::NULL),
+                        config.title_pos.as_ref().unwrap_or(&String_0::NULL).clone(),
                         kBorderTextTitle,
                         fconfig,
                         err,
@@ -603,18 +602,22 @@ pub(crate) unsafe fn parse_win_config(
             err_required(err, c"'title' requires 'title_pos'");
             break '_fail;
         }
-        if let Some(footer) = config.footer {
+        if let Some(footer) = config.footer.as_ref() {
             if is_split {
                 err_conflict(err, c"footer", c"non-float window");
                 break '_fail;
             }
             // SAFETY: as the title above.
             let placed = unsafe {
-                parse_bordertext(footer, kBorderTextFooter, fconfig, err);
+                parse_bordertext(footer.clone(), kBorderTextFooter, fconfig, err);
                 !err.is_set()
                     && parse_bordertext_pos(
                         window,
-                        config.footer_pos.unwrap_or(String_0::NULL),
+                        config
+                            .footer_pos
+                            .as_ref()
+                            .unwrap_or(&String_0::NULL)
+                            .clone(),
                         kBorderTextFooter,
                         fconfig,
                         err,
@@ -627,7 +630,7 @@ pub(crate) unsafe fn parse_win_config(
             err_required(err, c"'footer' requires 'footer_pos'");
             break '_fail;
         }
-        if let Some(border_style) = config.border {
+        if let Some(border_style) = config.border.as_ref() {
             if is_split {
                 err_conflict(err, c"border", c"non-float window");
                 break '_fail;
@@ -635,7 +638,7 @@ pub(crate) unsafe fn parse_win_config(
             if !border_style.is_nil() {
                 // SAFETY: the caller's promise about the keyset's strings and
                 // arrays, and `fconfig` is live.
-                let parsed = unsafe { parse_border_style(border_style, fconfig.raw()) };
+                let parsed = unsafe { parse_border_style(border_style.clone(), fconfig.raw()) };
                 if stored(err, parsed).is_none() {
                     break '_fail;
                 }
@@ -653,19 +656,19 @@ pub(crate) unsafe fn parse_win_config(
                 }
             }
         }
-        if let Some(style) = config.style {
+        if let Some(style) = config.style.as_ref() {
             // SAFETY: the caller's promise -- the keyset's strings are
             // NUL-terminated.
             let empty = unsafe { *style.data() } as c_int == NUL;
             // SAFETY: as above.
-            let minimal = !empty && unsafe { imatch(style, &[c"minimal"]) }.is_some();
+            let minimal = !empty && unsafe { imatch(style.clone(), &[c"minimal"]) }.is_some();
             if empty {
                 fconfig.style = kWinStyleUnused;
             } else if minimal {
                 fconfig.style = kWinStyleMinimal;
             } else {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"style", style, true) };
+                unsafe { err_invalid_str(err, c"style", &style.clone(), true) };
                 break '_fail;
             }
         }

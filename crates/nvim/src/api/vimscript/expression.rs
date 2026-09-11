@@ -16,7 +16,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, dict_put};
+use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::kvec::InitVec;
 use crate::message_fmt::msg_bytes;
@@ -41,7 +41,6 @@ pub unsafe fn nvim_parse_expression(
     expr: String_0,
     flags: String_0,
     hl: Boolean,
-    arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     let error = Error::none();
     // SAFETY: `flags` is the caller's string.
@@ -90,7 +89,7 @@ pub unsafe fn nvim_parse_expression(
 
     // "len" and "ast", plus "error" and "highlight" when they apply.
     let ret_size = 2 + size_t::from(!east.err.msg.is_null()) + size_t::from(hl);
-    let mut ret: ApiDict = arena_dict(arena, ret_size);
+    let mut ret: ApiDict = ApiDict::with_capacity(ret_size);
     // A multi-line expression stops at the end of the first line.
     let consumed = if pstate.pos.line == 1 {
         parser_lines[0].size
@@ -101,43 +100,45 @@ pub unsafe fn nvim_parse_expression(
     // the one promise `dict_put`/`array_add` ask for is this function's own
     // invariant -- stated here once rather than at every call site.
     // SAFETY: as above.
-    unsafe { dict_put(&mut ret, c"len", Object::integer(consumed as Integer)) };
+    ret.insert(
+        String_0::from_cstr(c"len"),
+        Object::integer(consumed as Integer),
+    );
 
     if !east.err.msg.is_null() {
-        let mut err_dict: ApiDict = arena_dict(arena, 2);
-        let arg = String_0::from_raw_parts(east.err.arg.cast_mut(), east.err.arg_len as size_t);
+        let mut err_dict: ApiDict = ApiDict::with_capacity(2);
         // SAFETY: the parser's message is NUL-terminated and `arg` names
-        // `arg_len` bytes of the expression; both dictionaries are sized.
+        // `arg_len` bytes of the expression.
         unsafe {
-            let msg = arena_string(arena, cstr_as_string(east.err.msg));
-            dict_put(&mut err_dict, c"message", Object::string(msg));
-            dict_put(
-                &mut err_dict,
-                c"arg",
-                Object::string(arena_string(arena, arg)),
-            );
-            dict_put(&mut ret, c"error", Object::dict(err_dict));
+            let arg = String_0::from_bytes(core::slice::from_raw_parts(
+                east.err.arg.cast::<u8>(),
+                east.err.arg_len as size_t,
+            ));
+            let msg = cstr_to_string(east.err.msg);
+            err_dict.insert(String_0::from_cstr(c"message"), Object::string(msg));
+            err_dict.insert(String_0::from_cstr(c"arg"), Object::string(arg));
+            ret.insert(String_0::from_cstr(c"error"), Object::dict(err_dict));
         }
     }
 
     if hl {
-        let mut hl_arr: Array = arena_array(arena, colors.size);
+        let mut hl_arr: Array = Array::with_capacity(colors.size);
         for i in 0..colors.size {
             // SAFETY: `i` is below `size`, so the chunk is inside `items`.
             let chunk: ParserHighlightChunk = unsafe { *colors.items.add(i) };
-            let mut chunk_arr: Array = arena_array(arena, 4);
+            let mut chunk_arr: Array = Array::with_capacity(4);
             // SAFETY: as above -- both arrays are sized for these pushes,
             // and `group` is a static highlight-group name.
             unsafe {
-                array_add(&mut chunk_arr, Object::integer(chunk.start.line as Integer));
-                array_add(&mut chunk_arr, Object::integer(chunk.start.col as Integer));
-                array_add(&mut chunk_arr, Object::integer(chunk.end_col as Integer));
-                array_add(&mut chunk_arr, Object::string(cstr_as_string(chunk.group)));
-                array_add(&mut hl_arr, Object::array(chunk_arr));
+                chunk_arr.push(Object::integer(chunk.start.line as Integer));
+                chunk_arr.push(Object::integer(chunk.start.col as Integer));
+                chunk_arr.push(Object::integer(chunk.end_col as Integer));
+                chunk_arr.push(Object::string(cstr_to_string(chunk.group)));
+                hl_arr.push(Object::array(chunk_arr));
             }
         }
         // SAFETY: as above.
-        unsafe { dict_put(&mut ret, c"highlight", Object::array(hl_arr)) };
+        ret.insert(String_0::from_cstr(c"highlight"), Object::array(hl_arr));
     }
     // The vector `colors` describes is either its inline array or one heap
     // block; only the second has anything to free.
@@ -154,10 +155,10 @@ pub unsafe fn nvim_parse_expression(
     let mut ast = Object::Nil;
     // SAFETY: `east.root` and `ast` are this frame's, and `arena` the
     // caller's.
-    unsafe { convert_ast(arena, &raw mut east.root, &raw mut ast) };
+    unsafe { convert_ast(&raw mut east.root, &raw mut ast) };
     // SAFETY: as above.
-    unsafe { dict_put(&mut ret, c"ast", ast) };
-    debug_assert!(ret.size == ret.capacity, "ret.size == ret.capacity");
+    ret.insert(String_0::from_cstr(c"ast"), ast);
+    debug_assert!(ret.len() == ret.capacity(), "ret.len() == ret.capacity()");
 
     // SAFETY: the walk freed every node it rendered and NULLed its slot, so
     // this frees only what is left; `pstate` is this frame's.
@@ -212,7 +213,7 @@ unsafe fn parse_flags(flags: String_0) -> Result<c_int, Error> {
 /// # Safety
 /// `root_p` and `out` must name the caller's slots, and the tree below
 /// `*root_p` must be the parser's own.
-unsafe fn convert_ast(arena: *mut Arena, root_p: *mut *mut ExprASTNode, out: *mut Object) {
+unsafe fn convert_ast(root_p: *mut *mut ExprASTNode, out: *mut Object) {
     let mut stack: Vec<ConvFrame> = Vec::with_capacity(16);
     stack.push(ConvFrame {
         node_p: root_p,
@@ -232,35 +233,43 @@ unsafe fn convert_ast(arena: *mut Arena, root_p: *mut *mut ExprASTNode, out: *mu
         // SAFETY: as above.
         if unsafe { (*frame.ret_node_p).is_nil() } {
             // SAFETY: `node` is a live node of the parser's tree.
-            let ret_node = arena_dict(arena, unsafe { node_dict_size(&*node) });
+            let ret_node = ApiDict::with_capacity(unsafe { node_dict_size(&*node) });
             // SAFETY: as above.
             unsafe { *frame.ret_node_p = Object::dict(ret_node) };
         }
         // SAFETY: as above -- and the slot now holds a dictionary, which is
         // what this addresses in place.
-        let ret_node: *mut ApiDict = match unsafe { &mut *frame.ret_node_p } {
-            Object::Dict(dict) => dict,
-            _ => unreachable!("the slot was given a dictionary just above"),
-        };
+        let ret_node: *mut ApiDict = unsafe { &mut *frame.ret_node_p }
+            .as_dict_mut()
+            .expect("the slot was given a dictionary just above");
         // SAFETY: `node` is live.
         let children = unsafe { (*node).children };
         if !children.is_null() {
             // A node has at most two children, laid out as a `next` chain.
             // SAFETY: `children` is the first of them.
             let num_children = 1 + size_t::from(!unsafe { (*children).next }.is_null());
-            let mut children_array: Array = arena_array(arena, num_children);
+            let mut children_array: Array = Array::with_capacity(num_children);
             // SAFETY: the array was sized for exactly these pushes, and the
             // dictionary for this pair.
-            unsafe {
-                for _ in 0..num_children {
-                    array_add(&mut children_array, Object::Nil);
-                }
-                dict_put(&mut *ret_node, c"children", Object::array(children_array));
+            for _ in 0..num_children {
+                children_array.push(Object::Nil);
             }
+            // SAFETY: `ret_node` names the dictionary the slot holds.
+            let node_dict: &mut ApiDict = unsafe { &mut *ret_node };
+            node_dict.insert(
+                String_0::from_cstr(c"children"),
+                Object::array(children_array),
+            );
+            let last = node_dict.len() - 1;
+            let slot = node_dict[last]
+                .value
+                .as_array_mut()
+                .expect("the pair just inserted holds an array")
+                .as_mut_ptr();
             stack.push(ConvFrame {
                 // SAFETY: `node` is live for as long as the frame is.
                 node_p: unsafe { &raw mut (*node).children },
-                ret_node_p: children_array.items,
+                ret_node_p: slot,
             });
         } else if !unsafe { (*node).next }.is_null() {
             stack.push(ConvFrame {
@@ -273,12 +282,11 @@ unsafe fn convert_ast(arena: *mut Arena, root_p: *mut *mut ExprASTNode, out: *mu
             stack.pop();
             // SAFETY: `node` is live and `ret_node` is its dictionary,
             // sized by `node_dict_size` for exactly what this adds.
-            unsafe { finish_node(arena, node, &mut *ret_node) };
+            unsafe { finish_node(node, &mut *ret_node) };
             // SAFETY: `ret_node` still addresses the dictionary just filled in.
-            let filled = unsafe { *ret_node };
             debug_assert!(
-                filled.size == filled.capacity,
-                "cur_item.ret_node_p->data.dict.size == cur_item.ret_node_p->data.dict.capacity"
+                unsafe { (*ret_node).len() == (*ret_node).capacity() },
+                "the node dictionary was sized for exactly the keys it holds"
             );
             // SAFETY: the node has been rendered, so nothing names it any
             // more, and the slot it hung off is the caller's.
@@ -316,7 +324,7 @@ fn node_dict_size(node: &ExprASTNode) -> size_t {
 /// # Safety
 /// `node` must be a live node of the parser's tree, and `ret_node` its
 /// dictionary, sized by [`node_dict_size`].
-unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut ApiDict) {
+unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
     // SAFETY: the caller's promise -- `node` is live, and nothing below
     // writes through it.
     let node = unsafe { &*node };
@@ -327,33 +335,28 @@ unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut 
     // rather than at each of the fifteen call sites below.
     let put = |dict: &mut ApiDict, key: &'static CStr, value: Object| {
         // SAFETY: as above.
-        unsafe { dict_put(dict, key, value) };
+        dict.insert(String_0::from_cstr(key), value);
     };
     // The three name tables hold static C strings.
     let table_name = |name: *const c_char| {
         // SAFETY: as above.
-        Object::string(unsafe { cstr_as_string(name) })
+        Object::string(unsafe { cstr_to_string(name) })
     };
-    // The string body is owned by the node; hand the copy over and free it
-    // here, since the node itself is about to go.
+    // The string body is the node's; the answer gets a copy, since the node
+    // itself is about to go.
     let string_body = |value: *mut c_char, size: size_t| {
-        let borrowed = String_0::from_raw_parts(value, size);
         // SAFETY: the node owns `size` readable bytes at `value`.
-        Object::string(unsafe { arena_string(arena, borrowed) })
+        let bytes = unsafe { core::slice::from_raw_parts(value.cast::<u8>(), size) };
+        Object::string(String_0::from_bytes(bytes))
     };
 
     let type_name = east_node_type_tab.with(|tab| tab[type_0 as usize]);
     put(ret_node, c"type", table_name(type_name));
 
-    let mut start_array: Array = arena_array(arena, 2);
+    let mut start_array: Array = Array::with_capacity(2);
     // SAFETY: the array was sized for exactly these two pushes.
-    unsafe {
-        array_add(
-            &mut start_array,
-            Object::integer(node.start.line as Integer),
-        );
-        array_add(&mut start_array, Object::integer(node.start.col as Integer));
-    }
+    start_array.push(Object::integer(node.start.line as Integer));
+    start_array.push(Object::integer(node.start.col as Integer));
     put(ret_node, c"start", Object::array(start_array));
     put(ret_node, c"len", Object::integer(node.len as Integer));
 

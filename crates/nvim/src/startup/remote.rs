@@ -9,17 +9,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::size_of;
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-use crate::api::private::helpers::{api_free_object, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::channel::channel_connect;
 use crate::event::socket::socket_address_is_tcp;
-use crate::kvec::ARRAY_DICT_INIT;
 use crate::lua::executor::nlua_exec;
 use crate::lua::state::kRetObject;
-use crate::memory::{strequal, xfree, xrealloc};
+use crate::memory::strequal;
 use crate::os::cshim::stderr;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::startup::exit::os_exit;
@@ -81,10 +79,8 @@ fn bad_reply_type(key: &CStr) -> ! {
 
 /// Read one key of the reply dict, checking its type first.
 fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
-    // SAFETY: `index` is below `dict.size`, so the pair is in the items array
-    // and its key is a NUL-terminated string.
-    let pair = unsafe { &*dict.items.add(index) };
-    (unsafe { CStr::from_ptr(pair.key.data()) }, &pair.value)
+    let pair = &dict[index];
+    (pair.key.as_cstr(), &pair.value)
 }
 
 /// Hand the rest of the command line to the server named by `--server`.
@@ -142,42 +138,33 @@ pub(crate) unsafe fn remote_request(
     }
 
     // The forwarded arguments, as an API Array of strings.
-    let mut args: Array = ARRAY_DICT_INIT;
-    args.capacity = (argc - remote_args) as size_t;
-    let want = size_of::<Object>().wrapping_mul(args.capacity);
-    args.items = unsafe { xrealloc(args.items as *mut c_void, want) } as *mut Object;
+    let mut args = Array::with_capacity((argc - remote_args) as size_t);
     for i in remote_args..argc {
-        let word = unsafe { cstr_as_string(*argv.offset(i as isize)) };
-        unsafe { *args.items.add(args.size) = Object::String(word) };
-        args.size += 1;
+        // SAFETY: the command line's own NUL-terminated words.
+        let word = unsafe { cstr_to_string(*argv.offset(i as isize)) };
+        args.push(Object::string(word));
     }
 
     // `vim._cs_remote(channel, address, connect_error, args)`.
-    let mut call_args: [Object; 4] = [
+    // SAFETY: the two addresses are NUL-terminated strings of this process.
+    let call_args = Array::from(vec![
         Object::Integer(chan as c_int as Integer),
-        Object::String(unsafe { cstr_as_string(server_addr) }),
-        Object::String(unsafe { cstr_as_string(connect_error) }),
-        Object::Array(args),
-    ];
-    let a = Array {
-        size: 4,
-        capacity: 4,
-        items: call_args.as_mut_ptr(),
-    };
+        Object::string(unsafe { cstr_to_string(server_addr) }),
+        Object::string(unsafe { cstr_to_string(connect_error) }),
+        Object::array(args),
+    ]);
 
     let mut err = Error::none();
-    let script =
-        String_0::from_raw_parts(CS_REMOTE.as_ptr() as *mut c_char, CS_REMOTE.count_bytes());
+    let script = String_0::from_cstr(CS_REMOTE);
     let no_arena = ptr::null_mut::<Arena>();
-    let reply = match unsafe { nlua_exec(script, ptr::null(), a, kRetObject, no_arena) } {
+    let ran = unsafe { nlua_exec(&script, ptr::null(), call_args, kRetObject, no_arena) };
+    let reply = match ran {
         Ok(value) => value,
         Err(e) => {
             err = e;
             Object::Nil
         }
     };
-
-    unsafe { xfree(args.items as *mut c_void) };
 
     if err.is_set() {
         unsafe { fprintf(stderr, c"%s\n".as_ptr(), err.message_or_empty().as_ptr()) };
@@ -193,7 +180,7 @@ pub(crate) unsafe fn remote_request(
     // not say" is distinguishable from "the server said no".
     let mut should_exit: Option<bool> = None;
     let mut tabbed: Option<bool> = None;
-    for i in 0..dict.size {
+    for i in 0..dict.len() {
         let (key, value) = field(&dict, i);
         match key.to_bytes() {
             b"errmsg" => {
@@ -232,7 +219,7 @@ pub(crate) unsafe fn remote_request(
         os_exit(2);
     }
 
-    unsafe { api_free_object(reply) };
+    drop(reply);
 
     if should_exit == Some(true) {
         os_exit(0);

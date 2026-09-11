@@ -17,12 +17,13 @@
 
 use crate::cstr;
 use crate::strings::has_char;
+use crate::types::OptStr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::api::private::helpers::{cstr_as_string, cstr_to_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::buffer::buf_is_empty;
 use crate::change::save_file_ff;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
@@ -53,7 +54,7 @@ use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    GArray, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, String_0, size_t, uint32_t,
+    GArray, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, size_t, uint32_t,
 };
 use crate::ui::state::Rows;
 use crate::window::{last_status, win_comp_scroll};
@@ -75,11 +76,8 @@ fn all_options() -> impl Iterator<Item = OptIndex> {
 }
 
 /// A borrowed string default. Only for a literal: nothing frees it.
-fn borrowed(value: &'static CStr) -> OptVal {
-    OptVal::String(String_0::from_raw_parts(
-        value.as_ptr() as *mut c_char,
-        value.count_bytes() as size_t,
-    ))
+const fn borrowed(value: &'static CStr) -> OptVal {
+    OptVal::static_string(value)
 }
 
 /// An owned string value, taking ownership of `value`.
@@ -88,8 +86,9 @@ fn borrowed(value: &'static CStr) -> OptVal {
 ///
 /// `value` must be a NUL-terminated allocation the option module may free.
 unsafe fn owned(value: *mut c_char) -> OptVal {
-    // SAFETY: the caller's `value` is NUL-terminated.
-    OptVal::String(unsafe { cstr_as_string(value) })
+    // SAFETY: the caller's `value` is a NUL-terminated allocation, which the
+    // value takes over.
+    OptVal::String(unsafe { OptStr::owning(value) })
 }
 
 /// The two boolean option values this module installs.
@@ -241,9 +240,11 @@ fn set_init_expand_env() {
             Some(Some(expanded)) => expanded.as_ptr(),
             Some(None) => continue,
         };
-        let value = OptVal::String(unsafe { cstr_to_string(expanded) });
+        // Two allocations: the variable takes one over and the default the
+        // other, and `expanded` is neither's.
+        let value = OptVal::string(unsafe { cstr_to_string(expanded) });
         unsafe { set_option_varp(opt_idx, option_var(opt_idx), value, true) };
-        let default = OptVal::String(unsafe { cstr_to_string(expanded) });
+        let default = OptVal::string(unsafe { cstr_to_string(expanded) });
         change_option_default(opt_idx, default);
     }
 }
@@ -379,7 +380,7 @@ pub(crate) fn get_option_default(
 /// computed ones below can free what they replace.
 fn alloc_options_default() {
     for opt_idx in all_options() {
-        store_option_default(opt_idx, optval_copy(option_default(opt_idx)));
+        store_option_default(opt_idx, optval_copy(&option_default(opt_idx)));
     }
 }
 
@@ -553,12 +554,12 @@ pub(crate) fn set_init_3() {
         if do_sp {
             let sp = borrowed(if is_csh { c"|& tee" } else { c"2>&1| tee" });
             set_option_direct(kOptShellpipe, sp, OptionSetFlags::NONE, SID_NONE);
-            change_option_default(kOptShellpipe, optval_copy(sp));
+            change_option_default(kOptShellpipe, optval_copy(&sp));
         }
         if do_srr {
             let srr = borrowed(if is_csh { c">&" } else { c">%s 2>&1" });
             set_option_direct(kOptShellredir, srr, OptionSetFlags::NONE, SID_NONE);
-            change_option_default(kOptShellredir, optval_copy(srr));
+            change_option_default(kOptShellredir, optval_copy(&srr));
         }
     }
     unsafe { xfree(shell.cast::<c_void>()) };

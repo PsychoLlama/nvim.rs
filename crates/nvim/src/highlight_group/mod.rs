@@ -5,7 +5,7 @@
 
 use core::ffi::{CStr, c_int, c_uint};
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::decoration_provider::decor_provider_invalidate_hl;
 use crate::drawscreen::state::clear_cmdline;
 use crate::highlight::state::{
@@ -189,7 +189,7 @@ pub(crate) unsafe fn highlight_changed() {
             clear_cmdline.set(true);
             msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
         }
-        ui_call_hl_group_set(unsafe { cstr_as_string(name) }, Integer::from(attr));
+        ui_call_hl_group_set(unsafe { cstr_to_string(name) }, Integer::from(attr));
         highlight_attr_last.with_mut(|last| last[hlf as usize] = attr);
     }
 

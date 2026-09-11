@@ -709,12 +709,12 @@ pub(crate) fn get_register_completion() {
     // a candidate counts when there is no original text to compare against,
     // or it starts with it.
     let starts_with_orig = |s: *mut c_char| {
-        let orig = compl_orig_text().value();
-        orig.data().is_null()
+        let (data, len) = compl_orig_text().parts();
+        data.is_null()
             || if p_ic.get() != 0 {
-                unsafe { strncasecmp(s, orig.data(), orig.len()) == 0 }
+                unsafe { strncasecmp(s, data, len) == 0 }
             } else {
-                unsafe { cstr::prefix_eq(s, orig.data(), orig.len()) }
+                unsafe { cstr::prefix_eq(s, data, len) }
             }
     };
 
@@ -736,7 +736,7 @@ pub(crate) fn get_register_completion() {
         }
 
         for j in 0..unsafe { (*reg).y_size } as isize {
-            let str = unsafe { *(*reg).y_array.offset(j) }.data();
+            let str = unsafe { (*(*reg).y_array.offset(j)).data() };
             if str.is_null() {
                 continue;
             }

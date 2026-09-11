@@ -1,6 +1,6 @@
 //! What `nvim_get_option_info` reports.
 //!
-//! Thirteen keys per option, built into an arena the caller owns. The keys
+//! Thirteen keys per option, in a dictionary the caller owns. The keys
 //! and their order are API surface — the oracle byte-compares them — so the
 //! push order below is deliberate and must not be sorted.
 
@@ -17,11 +17,10 @@
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_char;
 
-use crate::api::private::helpers::{arena_dict, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::options::*;
 use crate::types::{
-    ApiDict, Arena, Error, Integer, Object, OptIndex, OptionSetFlags, ScriptCtx, String_0,
-    key_value_pair, size_t,
+    ApiDict, Error, Integer, Object, OptIndex, OptionSetFlags, ScriptCtx, String_0, size_t,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -32,31 +31,21 @@ use super::{
     option_last_set, option_was_set, optval_as_object, optval_type_name,
 };
 
-/// Append `key: value` to an arena-backed dictionary.
+/// Append `key: value` to the dictionary.
 ///
-/// # Safety
-///
-/// `dict` must have been allocated with room for one more pair.
-unsafe fn push(dict: &mut ApiDict, key: &'static core::ffi::CStr, value: Object) {
-    // SAFETY: the caller reserved the capacity.
-    unsafe {
-        *dict.items.add(dict.size) = key_value_pair {
-            key: cstr_as_string(key.as_ptr().cast_mut()),
-            value,
-        }
-    };
-    dict.size += 1;
+fn push(dict: &mut ApiDict, key: &'static core::ffi::CStr, value: Object) {
+    dict.insert(String_0::from_cstr(key), value);
 }
 
 /// A `String` value naming one of the option table's static strings.
 ///
 /// Every `*const c_char` this module hands over comes from the generated
 /// table or from a `c"..."` literal, so it is a live NUL-terminated string
-/// for the whole run — which is the whole of `cstr_as_string`'s promise, and
+/// for the whole run — which is the whole of `cstr_to_string`'s promise, and
 /// why it is paid once here rather than at each of the four keys below.
 fn name_value(name: *const c_char) -> Object {
     // SAFETY: a static NUL-terminated string.
-    Object::String(unsafe { cstr_as_string(name) })
+    Object::string(unsafe { cstr_to_string(name) })
 }
 
 /// A `Boolean` value.
@@ -73,45 +62,39 @@ fn int_value(n: Integer) -> Object {
 ///
 /// # Safety
 ///
-/// `name` must be a valid string; `buffer`, `win` and `arena` must be live.
+/// `name` must be a valid string; `buffer` and `win` must be live.
 pub(crate) unsafe fn get_vimoption(
     name: String_0,
     opt_flags: OptionSetFlags,
     buffer: Buf,
     win: Win,
-    arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     // SAFETY: the caller's pointers are live.
-    let opt_idx: OptIndex = find_option_len(unsafe { name.as_bytes() });
+    let opt_idx: OptIndex = find_option_len(name.as_bytes());
     if opt_idx == kOptInvalid {
         // SAFETY: the keyset's name is NUL-terminated.
-        let name = unsafe { name.as_cstr() };
+        let name = name.as_cstr();
         return Err(err_bad_value(c"option (not found)", name));
     }
-    Ok(unsafe { vimoption2dict(opt_idx, opt_flags, buffer, win, arena) })
+    Ok(unsafe { vimoption2dict(opt_idx, opt_flags, buffer, win) })
 }
 
 /// Every option's info dictionary, keyed by full name.
 ///
 /// # Safety
 ///
-/// `arena` must be live.
-pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
+/// `curbuf` and `curwin` must be live.
+pub(crate) unsafe fn get_all_vimoptions() -> ApiDict {
     // SAFETY: the arena is live, and it is asked for exactly `kOptCount`
     // pairs before any is pushed.
-    let mut retval = arena_dict(arena, kOptCount as size_t);
+    let mut retval = ApiDict::with_capacity(kOptCount as size_t);
     for opt_idx in kOptAleph..kOptCount {
         let (scope, buf, win) = (OptionSetFlags::GLOBAL, Buf::current(), Win::current());
-        // SAFETY: the caller's arena, and `curbuf`/`curwin` are live.
-        let opt_dict = unsafe { vimoption2dict(opt_idx, scope, buf, win, arena) };
-        let pair = key_value_pair {
-            // SAFETY: the option table's names are static C strings.
-            key: unsafe { cstr_as_string(get_option(opt_idx).fullname) },
-            value: Object::Dict(opt_dict),
-        };
-        // SAFETY: the dictionary was asked for exactly `kOptCount` pairs.
-        unsafe { *retval.items.add(retval.size) = pair };
-        retval.size += 1;
+        // SAFETY: `curbuf`/`curwin` are live.
+        let opt_dict = unsafe { vimoption2dict(opt_idx, scope, buf, win) };
+        // SAFETY: the option table's names are static C strings.
+        let key = unsafe { cstr_to_string(get_option(opt_idx).fullname) };
+        retval.insert(key, Object::dict(opt_dict));
     }
     retval
 }
@@ -144,18 +127,17 @@ fn last_set(opt_idx: OptIndex, opt_flags: OptionSetFlags, buffer: Buf, win: Win)
 ///
 /// # Safety
 ///
-/// `buffer`, `win` and `arena` must be live.
+/// `buffer` and `win` must be live.
 pub(crate) unsafe fn vimoption2dict(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     buffer: Buf,
     win: Win,
-    arena: *mut Arena,
 ) -> ApiDict {
     let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live, and the dictionary is asked
     // for exactly the thirteen slots pushed below.
-    let mut dict = arena_dict(arena, 13 as size_t);
+    let mut dict = ApiDict::with_capacity(13 as size_t);
 
     // An option in more than one scope reports the narrowest.
     let scope = if option_has_scope(opt_idx, kOptScopeBuf) {
@@ -195,9 +177,8 @@ pub(crate) unsafe fn vimoption2dict(
             bool_value(opt.flags & kOptFlagNoDup == 0),
         ),
     ];
-    // SAFETY: the dictionary was asked for exactly these thirteen slots.
     for (key, value) in entries {
-        unsafe { push(&mut dict, key, value) };
+        push(&mut dict, key, value);
     }
 
     dict

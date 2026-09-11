@@ -16,11 +16,11 @@
 
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::api::private::helpers::{arena_dict, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::narrow::number_as_int;
-use crate::types::{ApiDict, Arena, Error, KeyDict_get_highlight, KeyValuePair, NS, Object};
+use crate::types::{ApiDict, Arena, Error, KeyDict_get_highlight, NS, Object};
 use crate::ui::ui_rgb_attached;
 
 use super::{
@@ -29,11 +29,7 @@ use super::{
 };
 
 /// The empty dict every "nothing to say" path answers.
-const NO_DICT: ApiDict = ApiDict {
-    size: 0,
-    capacity: 0,
-    items: core::ptr::null_mut::<KeyValuePair>(),
-};
+const NO_DICT: ApiDict = ApiDict::EMPTY;
 
 /// Describes the group with id `hl_id`, as namespace `ns_id` sees it.
 ///
@@ -42,8 +38,9 @@ const NO_DICT: ApiDict = ApiDict {
 /// never given settings.
 ///
 /// # Safety
-/// Reaches the group and namespace tables; `arena` is live; main thread only.
-unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int, arena: *mut Arena) -> bool {
+/// Reaches the group and namespace tables; main thread only. Nothing is
+/// taken from `_arena` any more: the dict owns its entries.
+unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int, _arena: *mut Arena) -> bool {
     let entry = group(hl_id);
     let mut ns = ns_id;
     // SAFETY: the editor's own tables.
@@ -71,22 +68,22 @@ unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int, arena: *mut Ar
     };
 
     // SAFETY: the arena hands out `HLATTRS_DICT_SIZE + 1` writable entries.
-    *hl = arena_dict(arena, HLATTRS_DICT_SIZE + 1);
+    *hl = ApiDict::with_capacity(HLATTRS_DICT_SIZE + 1);
     if attr.rgb_ae_attr.has(HlAttrFlags::DEFAULT) {
-        unsafe { put(hl, c"default", Object::boolean(true)) };
+        put(hl, c"default", Object::boolean(true));
     }
     if link > 0 {
         assert!(link <= highlight_num_groups(), "link out of bounds");
         // SAFETY: the group's own name, which outlives the answer.
-        let value = Object::string(unsafe { cstr_as_string(group(link).name.as_ptr()) });
+        let value = Object::string(unsafe { cstr_to_string(group(link).name.as_ptr()) });
         // SAFETY: the arena dict has room for one more entry.
-        unsafe { put(hl, c"link", value) };
+        put(hl, c"link", value);
     }
-    let mut cterm = arena_dict(arena, HLATTRS_DICT_SIZE);
+    let mut cterm = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
     unsafe { hlattrs2dict(hl, None, attr, true, true) };
     unsafe { hlattrs2dict(hl, Some(&mut cterm), attr, false, true) };
-    if cterm.size != 0 {
-        unsafe { put(hl, c"cterm", Object::dict(cterm)) };
+    if cterm.len() != 0 {
+        put(hl, c"cterm", Object::dict(cterm));
     }
     true
 }
@@ -108,7 +105,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
     let link = unsafe { (*opts).link }.unwrap_or(true);
 
     let mut id = -1;
-    if let Some(name) = unsafe { (*opts).name } {
+    if let Some(name) = unsafe { (*opts).name.as_ref() } {
         let create = unsafe { (*opts).create }.unwrap_or(true);
         let (name, len) = (name.data(), name.len());
         id = if create {
@@ -141,7 +138,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
 
     let groups = usize::try_from(highlight_num_groups())
         .expect("the highlight group count is never negative");
-    let mut rv = arena_dict(arena, groups);
+    let mut rv = ApiDict::with_capacity(groups);
     for id in 1..=highlight_num_groups() {
         let mut attrs = NO_DICT;
         if !unsafe { hlgroup2dict(&mut attrs, ns_id, id, arena) } {
@@ -152,14 +149,9 @@ pub(crate) unsafe fn ns_get_hl_defs(
         } else {
             unsafe { syn_get_final_id(id) }
         };
-        assert!(rv.size < rv.capacity, "highlight dict overflow");
-        unsafe {
-            *rv.items.add(rv.size) = KeyValuePair {
-                key: cstr_as_string(group(named).name.as_ptr()),
-                value: Object::dict(attrs),
-            }
-        };
-        rv.size += 1;
+        // SAFETY: a group's name is a NUL-terminated string.
+        let key = unsafe { cstr_to_string(group(named).name.as_ptr()) };
+        rv.insert(key, Object::dict(attrs));
     }
     Ok(rv)
 }

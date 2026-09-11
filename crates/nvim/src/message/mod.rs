@@ -55,9 +55,7 @@
 #![allow(non_upper_case_globals)]
 
 pub mod state;
-use crate::api::private::helpers::{
-    api_free_array, cbuf_to_string, copy_string, cstr_as_string, cstr_to_string,
-};
+use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
 use crate::api::vim::nvim_echo;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{AUGROUP_ALL, apply_autocmds_group, has_event};
@@ -113,8 +111,7 @@ use crate::mbyte::{
     utf_ptr2char, utf8len_tab, utfc_ptr2len,
 };
 use crate::memory::{
-    arena_alloc, strequal, strnequal, xcalloc, xfree, xmalloc, xmemdupz, xrealloc, xstrdup,
-    xstrlcat, xstrlcpy,
+    arena_alloc, strequal, strnequal, xfree, xmalloc, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::message::state::{
     called_emsg, capture_ga, cmd_silent, cmdmsg_rl, did_emsg, did_wait_return,
@@ -248,7 +245,7 @@ static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =
 static msg_ext_trigger: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
 static msg_ext_id: GlobalCell<Object> = GlobalCell::new(Object::Integer(1 as Integer));
-static msg_ext_chunks: GlobalCell<*mut Array> = GlobalCell::new(::core::ptr::null_mut::<Array>());
+static msg_ext_chunks: GlobalCell<Option<Array>> = GlobalCell::new(None);
 /// The text written under the current highlight, waiting to be closed off
 /// into a `msg_show` chunk by [`ext::msg_ext_emit_chunk`].
 static msg_ext_last_chunk: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
@@ -299,11 +296,7 @@ fn sourcing_top() -> EStack {
 }
 
 /// An [`Array`] owning nothing, C's `ARRAY_DICT_INIT`.
-pub(crate) const EMPTY_ARRAY: Array = Array {
-    size: 0,
-    capacity: 0,
-    items: ::core::ptr::null_mut(),
-};
+pub(crate) const EMPTY_ARRAY: Array = Array::EMPTY;
 
 /// A [`HlMessage`] owning nothing.
 pub(crate) const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
@@ -312,36 +305,11 @@ pub(crate) const EMPTY_HL_MESSAGE: HlMessage = HlMessage {
     items: ::core::ptr::null_mut(),
 };
 
-/// Append to a heap-allocated [`Array`], growing it the way C's `kv_push`
-/// does: eight elements, then doubling.
-///
-/// [`crate::types::builders::ArrayBuf`] is the stack-allocated
-/// form, and is what a callee that only reads the value wants. This is for
-/// the arrays whose ownership outlives the frame that builds them -- which
-/// is every array the message code hands to the UI or to the history.
+/// C's `kv_push` for a [`HlMessage`]: eight chunks, then doubling.
 ///
 /// # Safety
-/// `array` must be [`EMPTY_ARRAY`] or the result of earlier `array_push`es,
-/// and must not be borrowed elsewhere: a growth reallocates `items`.
-unsafe fn array_push(array: &mut Array, value: Object) {
-    if array.size == array.capacity {
-        array.capacity = if array.capacity != 0 {
-            array.capacity * 2
-        } else {
-            8
-        };
-        let bytes = ::core::mem::size_of::<Object>() * array.capacity;
-        array.items = unsafe { xrealloc(array.items.cast(), bytes) }.cast();
-    }
-    unsafe { array.items.add(array.size).write(value) };
-    array.size += 1;
-}
-
-/// [`array_push`] for a [`HlMessage`], which is the same shape over
-/// [`HlMessageChunk`].
-///
-/// # Safety
-/// As [`array_push`], with [`EMPTY_HL_MESSAGE`] as the empty value.
+/// `msg` must be [`EMPTY_HL_MESSAGE`] or the result of earlier pushes, and
+/// must not be borrowed elsewhere: a growth reallocates `items`.
 unsafe fn hl_msg_push(msg: &mut HlMessage, chunk: HlMessageChunk) {
     if msg.size == msg.capacity {
         msg.capacity = if msg.capacity != 0 {
@@ -397,8 +365,7 @@ pub unsafe fn msg_multiline(
     hist: bool,
     need_clear: *mut bool,
 ) {
-    // SAFETY: the caller's contract -- `str` describes a readable range.
-    let bytes = unsafe { str.as_bytes() };
+    let bytes = str.as_bytes();
     let mut chunk = 0;
     let mut at = 0;
     while at < bytes.len() {
@@ -490,7 +457,7 @@ pub unsafe fn msg_multihl(
         unsafe { msg_ext_set_kind(kind) };
     }
     msg_ext_skip_flush.set(true);
-    msg_ext_id.set(id);
+    msg_ext_id.set(id.clone());
 
     // A progress message displays as "title: percent% msg".
     if is_progress && !msg_data.is_null() {
@@ -588,7 +555,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
 
     let mut need_clear = true;
     if multiline {
-        unsafe { msg_multiline(cstr_as_string(s), hl_id, false, false, &raw mut need_clear) };
+        unsafe { msg_multiline(cstr_to_string(s), hl_id, false, false, &raw mut need_clear) };
     } else {
         msg_display(unsafe { cstr::at(s) }, hl_id, false);
     }

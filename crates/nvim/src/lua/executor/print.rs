@@ -50,8 +50,10 @@ const LUA_PRINT_KIND: &CStr = c"lua_print";
 /// `argv` must be the two-element array `nlua_print` built.
 unsafe extern "C" fn nlua_print_event(argv: *mut *mut c_void) {
     unsafe {
+        // The buffer is `nlua_print`'s own allocation, NUL-terminated at the
+        // length below, and the chunk takes it over.
         let chunk = HlMessageChunk {
-            text: String_0::from_raw_parts(
+            text: String_0::from_owned_parts(
                 (*argv.add(0)).cast::<c_char>(),
                 ((*argv.add(1)).expose_provenance() as intptr_t as size_t).wrapping_sub(1),
             ),

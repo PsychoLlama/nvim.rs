@@ -119,10 +119,6 @@ use crate::api::private::dispatch::{
     set_extmark_table, tabpage_config_table, user_command_table, win_config_table,
     win_text_height_table,
 };
-use crate::api::private::helpers::{
-    api_free_dict, api_free_object, api_free_string, api_luarefs_free_keydict,
-    api_luarefs_free_object,
-};
 use crate::api::tabpage::{
     nvim_open_tabpage, nvim_tabpage_del_var, nvim_tabpage_get_number, nvim_tabpage_get_var,
     nvim_tabpage_get_win, nvim_tabpage_is_valid, nvim_tabpage_list_wins, nvim_tabpage_set_var,
@@ -259,9 +255,9 @@ fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *const K
     table.as_ptr()
 }
 
-/// A keyset argument, with its release armed from the moment it exists: the
-/// decoder fills it field by field, and a fill that stops halfway still holds
-/// whatever references it took before it stopped.
+/// A keyset argument. A keyset owns its fields, so this is a name for the
+/// decoder's target rather than a guard -- what a half-filled keyset took
+/// before it stopped is released by dropping it.
 struct KeyDictArg<K: KeySet> {
     dict: K,
 }
@@ -270,14 +266,6 @@ impl<K: KeySet> KeyDictArg<K> {
     /// Every key absent, which is where a keyset argument starts out.
     fn unset() -> Self {
         KeyDictArg { dict: K::default() }
-    }
-}
-
-impl<K: KeySet> Drop for KeyDictArg<K> {
-    fn drop(&mut self) {
-        // SAFETY: `K::table()` describes `K`'s fields, per `KeySet`'s
-        // contract, and the binding owns the references they name.
-        unsafe { api_luarefs_free_keydict((&raw mut self.dict).cast(), K::table()) };
     }
 }
 
@@ -319,36 +307,17 @@ unsafe fn push_keydict<K: KeySet>(lstate: *mut lua_State, value: *mut K) {
 
 // -- argument guards -------------------------------------------------------
 
-/// An `Object` argument, which puts the Lua references the conversion took
-/// out of the registry back when the binding leaves.
-struct ObjectArg {
-    value: Object,
-}
-
-impl ObjectArg {
-    /// # Safety
-    /// The binding owns the references `value` names and nothing else
-    /// releases them.
-    unsafe fn new(value: Object) -> Self {
-        ObjectArg { value }
-    }
-}
-
-impl Drop for ObjectArg {
-    fn drop(&mut self) {
-        // SAFETY: `new`'s contract.
-        unsafe { api_luarefs_free_object(self.value) };
-    }
-}
-
-/// A `LuaRef` argument, released the same way.
+/// A `LuaRef` argument, which puts the reference the conversion took out of
+/// the registry back when the binding leaves. An `Object` needs no such
+/// guard: it owns what it names.
 struct LuaRefArg {
     value: LuaRef,
 }
 
 impl LuaRefArg {
     /// # Safety
-    /// As [`ObjectArg::new`].
+    /// The binding owns the reference `value` names and nothing else
+    /// releases it.
     unsafe fn new(value: LuaRef) -> Self {
         LuaRefArg { value }
     }

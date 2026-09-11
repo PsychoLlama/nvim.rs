@@ -27,15 +27,11 @@ use crate::winlayer::Buf;
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
-pub unsafe fn nvim_buf_get_var(
-    buf: BufferHandle,
-    name: String_0,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
+pub unsafe fn nvim_buf_get_var(buf: BufferHandle, name: String_0) -> Result<Object, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Object::Nil);
     };
-    unsafe { dict_get_value(b.b_vars, name, arena) }
+    unsafe { dict_get_value(b.b_vars, &name) }
 }
 
 pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
@@ -50,19 +46,11 @@ pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
 /// `mode` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
-pub unsafe fn nvim_buf_get_keymap(
-    buf: BufferHandle,
-    mode: String_0,
-    arena: *mut Arena,
-) -> Result<Array, Error> {
+pub unsafe fn nvim_buf_get_keymap(buf: BufferHandle, mode: String_0) -> Result<Array, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
-        return Ok(Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        });
+        return Ok(Array::EMPTY);
     };
-    Ok(unsafe { keymap_array(mode, Some(b), arena) })
+    Ok(unsafe { keymap_array(mode, Some(b)) })
 }
 
 /// # Safety
@@ -94,8 +82,7 @@ pub unsafe fn nvim_buf_del_keymap(
     mode: String_0,
     lhs: String_0,
 ) -> Result<(), Error> {
-    let rhs: String_0 =
-        String_0::from_raw_parts(c"".as_ptr() as *mut ::core::ffi::c_char, 0 as size_t);
+    let rhs: String_0 = String_0::from_cstr(c"");
     let no_opts = ::core::ptr::null_mut::<KeyDict_keymap>();
     // SAFETY: the mapping is deleted, so it takes no options.
     unsafe { modify_keymap(channel_id, buf, true, mode, lhs, rhs, no_opts) }
@@ -115,9 +102,8 @@ pub unsafe fn nvim_buf_set_var(
         return Ok(());
     };
     let vars = b.b_vars;
-    let no_arena = ::core::ptr::null_mut::<Arena>();
     // SAFETY: `vars` is that buffer's variable dict, `error` our own slot.
-    unsafe { dict_set_var(vars, name, value, false, false, no_arena) }.map(|_| ())
+    unsafe { dict_set_var(vars, &name, value, false, false) }.map(|_| ())
 }
 
 /// # Safety
@@ -129,18 +115,16 @@ pub unsafe fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), 
         return Ok(());
     };
     let vars = b.b_vars;
-    let no_arena = ::core::ptr::null_mut::<Arena>();
     // SAFETY: `vars` is that buffer's variable dict, `error` our own slot.
-    unsafe { dict_set_var(vars, name, Object::Nil, true, false, no_arena) }.map(|_| ())
+    unsafe { dict_set_var(vars, &name, Object::Nil, true, false) }.map(|_| ())
 }
 
 pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
-    let rv: String_0 =
-        String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
+    let rv: String_0 = String_0::NULL;
     let Some(b) = find_buffer_by_handle(buf)?.filter(|b| !b.b_ffname.is_null()) else {
         return Ok(rv);
     };
-    Ok(unsafe { cstr_as_string(b.b_ffname) })
+    Ok(unsafe { cstr_to_string(b.b_ffname) })
 }
 
 /// # Safety

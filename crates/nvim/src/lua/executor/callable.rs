@@ -23,7 +23,7 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use super::{get_global_lstate, kRetNilBool, lua_Debug, lua_getinfo, nlua_error, nlua_exec};
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::eval::userfunc::register_luafunc;
 use crate::getchar::state::{got_int, mod_mask};
 use crate::global_cell::GlobalCell;
@@ -38,7 +38,6 @@ use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
 use crate::strings::{arena_printf, vim_snprintf};
-use crate::types::builders::static_cstring;
 use crate::types::{Arena, Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST, size_t};
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
@@ -221,15 +220,10 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
         let str = xmalloc(length).cast::<c_char>();
         vim_snprintf(str, length, c"return %s".as_ptr(), lua_funcname);
 
-        let mut args_items = [Object::string(cstr_as_string(str))];
-        let args = Array {
-            size: 1,
-            capacity: 1,
-            items: args_items.as_mut_ptr(),
-        };
+        let args = Array::from(vec![Object::string(cstr_to_string(str))]);
 
         let result = nlua_exec(
-            static_cstring(c"return type(loadstring(...)()) == 'function'"),
+            &String_0::from_cstr(c"return type(loadstring(...)()) == 'function'"),
             ptr::null::<c_char>(),
             args,
             kRetNilBool,

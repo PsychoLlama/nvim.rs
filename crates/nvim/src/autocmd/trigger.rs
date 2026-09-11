@@ -25,6 +25,7 @@ use crate::buffer::BufRef;
 use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::smsg;
+use crate::types::TypVal;
 use crate::types::{Failed, OptionSetFlags};
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, first_buffer};
@@ -232,7 +233,7 @@ pub unsafe fn aucmd_defer(
             ::core::ptr::null_mut()
         } else {
             let copy = xmalloc(::core::mem::size_of::<Object>()).cast::<Object>();
-            *copy = copy_object(*data, ::core::ptr::null_mut());
+            copy.write((*data).clone());
             copy
         }
     };
@@ -280,13 +281,10 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
         let v_event = unsafe { get_v_event(&raw mut save_v_event) };
         // SAFETY: non-null, so it is the object the caller published.
         if !data.is_null()
-            && let Some(items) = unsafe { *data }.as_dict()
+            && let Some(items) = unsafe { &*data }.as_dict()
         {
-            for i in 0..items.size {
-                let item = unsafe { *items.items.add(i) };
-                let mut tv = TV_INITIAL_VALUE;
-                // SAFETY: `tv` and `err` are this frame's own.
-                unsafe { object_to_vim(item.value, &mut tv) };
+            for item in items {
+                let mut tv = TypVal::from(&item.value);
                 // A value `v:event` cannot hold is dropped, not fatal.
                 if !err.is_set() {
                     // SAFETY: `v_event` is that dictionary and `item.key` is
@@ -317,7 +315,8 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     unsafe { xfree(fname.cast::<::core::ffi::c_void>()) };
     unsafe { xfree(fname_io.cast::<::core::ffi::c_void>()) };
     if !data.is_null() {
-        unsafe { api_free_object(*data) };
+        // SAFETY: the copy `aucmd_defer` made, owned by this event alone.
+        drop(unsafe { data.read() });
         unsafe { xfree(data.cast::<::core::ffi::c_void>()) };
     }
     unsafe { xfree(e.cast::<::core::ffi::c_void>()) };

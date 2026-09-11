@@ -15,7 +15,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_value;
 use crate::winlayer::Win;
 
@@ -34,7 +34,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.
         // SAFETY: the caller's mark name is NUL-terminated.
-        let name = unsafe { name.as_cstr() };
+        let name = name.as_cstr();
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
@@ -48,7 +48,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
         )
     };
     if fm.is_null() {
-        error = err_bad_value(c"mark name", unsafe { name.as_cstr() });
+        error = err_bad_value(c"mark name", name.as_cstr());
         return (res as Boolean).reported(error);
     }
     if unsafe { (*fm).mark.lnum } != 0 as LineNr && unsafe { (*fm).fnum } == b.handle {
@@ -78,7 +78,7 @@ pub unsafe fn nvim_buf_set_mark(
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.
         // SAFETY: the caller's mark name is NUL-terminated.
-        let name = unsafe { name.as_cstr() };
+        let name = name.as_cstr();
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
@@ -92,26 +92,18 @@ pub unsafe fn nvim_buf_set_mark(
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
-pub unsafe fn nvim_buf_get_mark(
-    buf: BufferHandle,
-    name: String_0,
-    arena: *mut Arena,
-) -> Result<Array, Error> {
+pub unsafe fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Error> {
     let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
-    let mut rv: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
+    let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
     if !(name.len() == 1 as size_t) {
         // SAFETY: the value the keyset carried, live for this call.
         // SAFETY: the caller's mark name is NUL-terminated.
-        let name = unsafe { name.as_cstr() };
+        let name = name.as_cstr();
         error = err_bad_value(c"mark name (must be a single char)", name);
         return rv.reported(error);
     }
@@ -131,7 +123,7 @@ pub unsafe fn nvim_buf_get_mark(
         )
     };
     if fm.is_null() {
-        error = err_bad_value(c"mark name", unsafe { name.as_cstr() });
+        error = err_bad_value(c"mark name", name.as_cstr());
         return rv.reported(error);
     }
     if unsafe { (*fm).fnum } != b.handle {
@@ -140,8 +132,8 @@ pub unsafe fn nvim_buf_get_mark(
     } else {
         pos = unsafe { (*fm).mark };
     }
-    rv = arena_array(arena, 2 as size_t);
-    unsafe { array_add(&mut rv, Object::integer(Integer::from(pos.lnum))) };
-    unsafe { array_add(&mut rv, Object::integer(Integer::from(pos.col))) };
+    rv = Array::with_capacity(2 as size_t);
+    rv.push(Object::integer(Integer::from(pos.lnum)));
+    rv.push(Object::integer(Integer::from(pos.col)));
     rv.reported(error)
 }

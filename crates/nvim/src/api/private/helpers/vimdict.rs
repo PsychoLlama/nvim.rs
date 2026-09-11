@@ -15,7 +15,6 @@
 )]
 
 use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
-use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api_error;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
@@ -23,10 +22,9 @@ use crate::eval::typval::{
     tv_dict_item_remove, tv_dict_watcher_notify,
 };
 use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
-use crate::message_fmt::c_str;
+use crate::types::TypVal;
 use crate::types::{
-    Arena, Dict, DictItem, Error, Object, String_0, kErrorTypeException, kErrorTypeValidation,
-    size_t,
+    Dict, DictItem, Error, Object, String_0, kErrorTypeException, kErrorTypeValidation, size_t,
 };
 use core::ffi::c_int;
 
@@ -37,25 +35,17 @@ use core::ffi::c_int;
 ///
 /// # Safety
 ///
-/// `dict` must point at a live dictionary, unaliased for the call. `key` must
-/// be a well-formed API string: `size` readable bytes with a NUL at
-/// `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
-pub(crate) unsafe fn dict_get_value(
-    dict: *mut Dict,
-    key: String_0,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
+/// `dict` must point at a live dictionary, unaliased for the call.
+pub(crate) unsafe fn dict_get_value(dict: *mut Dict, key: &String_0) -> Result<Object, Error> {
     // SAFETY: `dict` is a live Vimscript dictionary and `key` borrows the
     // caller's text.
     let di = unsafe { tv_dict_find(dict, key.data(), key.len().cast_signed()) };
     if di.is_null() {
-        // SAFETY: `key` borrows the caller's NUL-terminated text.
-        let key = unsafe { c_str(key.data()) };
+        let key = key.as_cstr().to_string_lossy();
         return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
     }
     // SAFETY: the lookup answered a live item of `dict`.
-    Ok(unsafe { vim_to_object(&(*di).di_tv, arena, true) })
+    Ok(Object::from(unsafe { &(*di).di_tv }))
 }
 
 /// The item `key` names, or why it could not be assigned to (or, with `del`,
@@ -70,7 +60,7 @@ pub(crate) unsafe fn dict_get_value(
 /// `data[size]`.
 pub(crate) unsafe fn dict_check_writable(
     dict: *mut Dict,
-    key: String_0,
+    key: &String_0,
     del: bool,
 ) -> Result<*mut DictItem, Error> {
     // SAFETY: as `dict_get_value`.
@@ -88,8 +78,7 @@ pub(crate) unsafe fn dict_check_writable(
             None
         };
         if let Some(why) = refused {
-            // SAFETY: `key` borrows the caller's NUL-terminated text.
-            let key = unsafe { c_str(key.data()) };
+            let key = key.as_cstr().to_string_lossy();
             return Err(api_error!(kErrorTypeException, "Key is {why}: {key}"));
         }
         return Ok(di);
@@ -117,16 +106,13 @@ pub(crate) unsafe fn dict_check_writable(
 ///
 /// `dict` must point at a live dictionary, unaliased for the call. `key` must
 /// be a well-formed API string: `size` readable bytes with a NUL at
-/// `data[size]`. `value` must be a well-formed API object the caller owns for
-/// the call. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// `data[size]`.
 pub(crate) unsafe fn dict_set_var(
     dict: *mut Dict,
-    key: String_0,
+    key: &String_0,
     value: Object,
     del: bool,
     retval: bool,
-    arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut rv = Object::Nil;
     // SAFETY: as `dict_get_value`.
@@ -136,8 +122,7 @@ pub(crate) unsafe fn dict_set_var(
 
     if del {
         if di.is_null() {
-            // SAFETY: `key` borrows the caller's NUL-terminated text.
-            let key = unsafe { c_str(key.data()) };
+            let key = key.as_cstr().to_string_lossy();
             return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
         }
         // SAFETY: `di` is the live item the lookup found. A raw pointer
@@ -149,16 +134,14 @@ pub(crate) unsafe fn dict_set_var(
         }
         if retval {
             // SAFETY: as above.
-            rv = unsafe { vim_to_object(&*old, arena, false) };
+            rv = Object::from(unsafe { &*old });
         }
         // SAFETY: `di` is an item of `dict`.
         unsafe { tv_dict_item_remove(dict, di) };
         return Ok(rv);
     }
 
-    let mut tv = TV_INITIAL_VALUE;
-    // SAFETY: `tv` is this frame's and `err` the caller's slot.
-    unsafe { object_to_vim(value, &mut tv) };
+    let mut tv = TypVal::from(value);
     // Only filled in for a key that already existed; the watchers see an
     // unset value for a key that did not.
     let mut oldtv = TV_INITIAL_VALUE;
@@ -172,7 +155,7 @@ pub(crate) unsafe fn dict_set_var(
     } else {
         if retval {
             // SAFETY: `di` is the live item the lookup found.
-            rv = unsafe { vim_to_object(&(*di).di_tv, arena, false) };
+            rv = Object::from(unsafe { &(*di).di_tv });
         }
         // `v:` keys are typed, and some of them run a hook on assignment.
         let mut type_error = false;
@@ -185,8 +168,7 @@ pub(crate) unsafe fn dict_set_var(
             // SAFETY: `tv` is this frame's.
             unsafe { tv_clear(&mut tv) };
             if type_error {
-                // SAFETY: `key` borrows the caller's NUL-terminated text.
-                let key = unsafe { c_str(key.data()) };
+                let key = key.as_cstr().to_string_lossy();
                 return Err(api_error!(
                     kErrorTypeValidation,
                     "Setting v:{key} to value with wrong type"

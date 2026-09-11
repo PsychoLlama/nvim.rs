@@ -11,7 +11,6 @@
 use super::*;
 use crate::api::private::helpers::{Reported, api_try};
 use crate::api::private::validate::err_bad_value;
-use crate::kvec::InitVec;
 use crate::types::NUL;
 use crate::winlayer::Live;
 use core::ffi::CStr;
@@ -30,7 +29,7 @@ pub unsafe fn nvim_exec_lua(
     let name = ::core::ptr::null::<::core::ffi::c_char>();
     // SAFETY: `code` and `args` are the caller's, and `arena` is the
     // caller's own.
-    unsafe { nlua_exec(code, name, args, kRetObject, arena) }
+    unsafe { nlua_exec(&code, name, args, kRetObject, arena) }
 }
 
 /// # Safety
@@ -88,23 +87,10 @@ pub unsafe fn nvim_get_runtime_file(
     all: Boolean,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut cookie: RuntimeCookie = RuntimeCookie {
-        rv: ArrayBuilder {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-            init_array: [Object::Nil; 16],
-        },
+    let mut cookie = RuntimeCookie {
+        rv: Array::EMPTY,
         arena,
     };
-    cookie.rv.capacity = ::core::mem::size_of::<[Object; 16]>()
-        .wrapping_div(::core::mem::size_of::<Object>())
-        .wrapping_div(
-            (::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
-                == 0) as ::core::ffi::c_int as usize,
-        ) as size_t;
-    cookie.rv.size = 0 as size_t;
-    cookie.rv.items = &raw mut cookie.rv.init_array as *mut Object;
     let flags = RuntimeOpts::DIRFILE | RuntimeOpts::ALL.when(all);
     let pat = if name.is_empty() {
         c"".as_ptr().cast_mut()
@@ -126,10 +112,7 @@ pub unsafe fn nvim_get_runtime_file(
         // live for the whole walk.
         let _ = unsafe { do_in_runtimepath(pat, flags, found, cookie) };
     })?;
-    Ok(
-        // SAFETY: `arena` is the caller's and `cookie.rv` this frame's own.
-        unsafe { arena_take_arraybuilder(arena, &raw mut cookie.rv) },
-    )
+    Ok(cookie.rv)
 }
 
 /// # Safety
@@ -150,19 +133,13 @@ unsafe fn find_runtime_cb(
         // `RuntimeCookie` this walk was started with -- the copy the arena
         // takes is what outlives it.
         let name = unsafe {
-            let found = cstr_as_string(*fnames.offset(i as isize));
-            Object::string(arena_string((*cookie).arena, found))
+            let found = cstr_to_string(*fnames.offset(i as isize));
+            Object::string(found.clone())
         };
         // SAFETY: as above. The borrow ends with the push.
         let rv = unsafe { &mut (*cookie).rv };
         // `kv_push`, whose growth step c2rust expanded inline.
-        InitVec::new(
-            &mut rv.size,
-            &mut rv.capacity,
-            &mut rv.items,
-            &mut rv.init_array,
-        )
-        .push(name);
+        rv.push(name);
         if !all {
             return true;
         }
@@ -174,7 +151,7 @@ unsafe fn find_runtime_cb(
 // `nvim__get_lib_dir` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub fn nvim__get_lib_dir() -> String_0 {
-    unsafe { cstr_as_string(get_lib_dir()) }
+    unsafe { cstr_to_string(get_lib_dir()) }
 }
 
 /// # Safety
@@ -202,12 +179,12 @@ pub unsafe fn nvim__get_runtime(
         return Array::EMPTY.reported(error);
     }
     // SAFETY: `pat` is the caller's array and `arena` its own.
-    let res: Array = unsafe { runtime_get_named(is_lua, pat, all, arena) };
+    let res: Array = unsafe { runtime_get_named(is_lua, &pat, all, arena) };
     if should_source {
-        for i in 0..res.size {
+        for i in 0..res.len() {
             // SAFETY: `res` is the array `runtime_get_named` just built, of
             // `size` Strings.
-            let name = unsafe { *res.items.add(i) }
+            let name = &res[i]
                 .as_string()
                 .expect("`runtime_get_named` answers an array of Strings");
             let none = DOSO_NONE as ::core::ffi::c_int;

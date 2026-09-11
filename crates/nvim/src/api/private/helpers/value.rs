@@ -1,10 +1,13 @@
-//! The `Object` tree: where one comes from and where it goes.
+//! The `Object` tree: what it owns, and how it is released and copied.
 //!
-//! An object is either arena-allocated — `arena_*` and `copy_*` build those,
-//! and the arena reclaims the whole tree at once — or heap-allocated, and
-//! then `api_free_*` takes it apart member by member. `api_luarefs_free_*`
-//! is the third case: an arena-allocated tree still holds Lua registry
-//! references, which the arena knows nothing about.
+//! An object owns its whole tree -- its string's bytes, its array's and
+//! dictionary's elements, its Lua registry reference -- so the three
+//! families this file used to hold (`arena_*` to build, `api_free_*` to
+//! take apart, `api_luarefs_free_*` to catch the references an arena knew
+//! nothing about) collapse into [`Object`]'s own `Drop` and `Clone`.
+//!
+//! Those two `impl`s live here rather than beside the type because `types/`
+//! forbids `unsafe` and both have to reach a `ManuallyDrop`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -18,373 +21,180 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::cstr_as_string;
 use crate::api::private::metadata::PACKED_API_METADATA;
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_E, highlight_num_groups, syn_check_group};
-use crate::kvec::InitVec;
 use crate::lua::executor::{api_free_luaref, api_new_luaref};
-use crate::memory::{
-    ARENA_EMPTY, arena_alloc, arena_finish, arena_memdupz, xfree, xrealloc, xstrdup,
-};
+use crate::memory::xrealloc;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::narrow::number_as_int;
-use crate::types::builders::static_cstring;
 use crate::types::{
-    ApiDict, Arena, ArenaMem, Array, ArrayBuilder, ConsumedBlk, Error, HlMessage, HlMessageChunk,
-    KeyValuePair, Object, ObjectType, String_0, kObjectTypeArray, kObjectTypeBoolean,
-    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
-    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, key_value_pair,
-    size_t,
+    ApiDict, Array, Error, HlMessage, HlMessageChunk, LuaRef, Object, ObjectType, String_0,
+    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
+    kObjectTypeWindow,
 };
 use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::mem::ManuallyDrop;
 
-// -- Arena allocation ------------------------------------------------------
+// -- Ownership -------------------------------------------------------------
 
-/// An empty array with room for `max_size` items, taken from `arena` — or
-/// from the heap when `arena` is null.
-pub(crate) fn arena_array(arena: *mut Arena, max_size: size_t) -> Array {
-    // SAFETY: `arena_alloc` accepts a null arena and falls back to `xmalloc`.
-    let items = unsafe { arena_alloc(arena, size_of::<Object>() * max_size, true) };
-    Array {
-        size: 0,
-        capacity: max_size,
-        items: items.cast(),
+impl Drop for Object {
+    /// Release the value and everything below it.
+    ///
+    /// The walk is iterative: an `Object` tree comes off the wire and can be
+    /// nested as deeply as a caller cares to nest it, and a recursive
+    /// destructor would meet the stack before it met the end of the tree.
+    /// The payloads are `ManuallyDrop` so that this is the *only* release
+    /// path -- see the note on [`Object`].
+    fn drop(&mut self) {
+        release(self);
     }
 }
 
-/// [`arena_array`] for a dictionary.
-pub(crate) fn arena_dict(arena: *mut Arena, max_size: size_t) -> ApiDict {
-    // SAFETY: as `arena_array`.
-    let items = unsafe { arena_alloc(arena, size_of::<KeyValuePair>() * max_size, true) };
-    ApiDict {
-        size: 0,
-        capacity: max_size,
-        items: items.cast(),
-    }
-}
-
-/// C's `ADD_C(array, value)`: append to an array whose capacity was reserved
-/// up front, by [`arena_array`] or by an on-stack literal.
-///
-/// The transpile spells this as `let n = a.size; a.size += 1; *a.items.add(n)
-/// = value;` at every site — note the order, which is why the capacity check
-/// here is a `debug_assert!`: `size` is bumped before `value` is stored either
-/// way, and every caller sized the container from the same expression that
-/// decides how many times it pushes.
-///
-/// # Safety
-/// `array` must have room, and its `items` must be writable for `capacity`.
-pub(crate) unsafe fn array_add(array: &mut Array, value: Object) {
-    debug_assert!(array.size < array.capacity, "array_add past capacity");
-    // SAFETY: `size` is below `capacity`, so the slot is inside `items`.
-    unsafe { *array.items.add(array.size) = value };
-    array.size += 1;
-}
-
-/// C's `PUT_C(dict, key, value)`. See [`array_add`].
-///
-/// The key is a `&'static CStr` because these keys are all literals and the
-/// consumers (msgpack, the Lua converter, the editor's own hashtables) read
-/// one byte past `size`; `count_bytes` is const where the transpile's
-/// `cstr_as_string` was a `strlen` per call.
-///
-/// # Safety
-/// As [`array_add`].
-pub(crate) unsafe fn dict_put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
-    // SAFETY: as `array_add`.
-    unsafe { dict_put_str(dict, static_cstring(key), value) };
-}
-
-/// [`dict_put`] where the key is not a literal — an option name, a buffer
-/// variable's name, anything the caller built.
-///
-/// # Safety
-/// As [`array_add`]; `key` must outlive the dictionary.
-pub(crate) unsafe fn dict_put_str(dict: &mut ApiDict, key: String_0, value: Object) {
-    debug_assert!(dict.size < dict.capacity, "dict_put past capacity");
-    // SAFETY: `size` is below `capacity`, so the slot is inside `items`.
-    unsafe { *dict.items.add(dict.size) = KeyValuePair { key, value } };
-    dict.size += 1;
-}
-
-/// A copy of `str` in `arena`, NUL-terminated. The empty string is a shared
-/// literal rather than an allocation — but only when there is an arena to
-/// outlive it; without one the caller frees what it gets.
-///
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive. `str` must be a well-formed API string:
-/// `size` readable bytes with a NUL at `data[size]`.
-pub(crate) unsafe fn arena_string(arena: *mut Arena, str: String_0) -> String_0 {
-    // SAFETY: `str` has `size` readable bytes.
-    unsafe {
-        if !str.is_empty() {
-            return String_0::from_raw_parts(
-                arena_memdupz(arena, str.data(), str.len()),
-                str.len(),
-            );
+/// [`Object`]'s destructor, out of line so the drop shim stays a tail call.
+fn release(root: &mut Object) {
+    // Nothing is allocated for a scalar or a string: a `Vec` that is never
+    // pushed to never reaches the allocator.
+    let mut pending: Vec<Object> = Vec::new();
+    let mut current = ManuallyDrop::new(root.take());
+    loop {
+        // SAFETY (every arm): `current` is a value this walk owns and
+        // will not look at again -- the next statement overwrites it -- so
+        // taking each payload out of it happens exactly once.
+        match &mut *current {
+            Object::String(str) => unsafe { ManuallyDrop::drop(str) },
+            Object::LuaRef(reference) => unsafe { api_free_luaref(*reference) },
+            Object::Array(array) => {
+                let items = unsafe { ManuallyDrop::take(array) };
+                pending.extend(items);
+            }
+            Object::Dict(dict) => {
+                let entries = unsafe { ManuallyDrop::take(dict) };
+                pending.extend(entries.into_vec().into_iter().map(|pair| pair.value));
+            }
+            _ => {}
         }
-        let empty = if arena.is_null() {
-            xstrdup(c"".as_ptr())
-        } else {
-            c"".as_ptr() as *mut c_char
-        };
-        String_0::from_raw_parts(empty, 0)
-    }
-}
-
-/// Move a builder's items into an arena-allocated array of exactly the right
-/// size, freeing the builder's own buffer if it had grown onto the heap.
-///
-/// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive. `arr` must point at the caller's
-/// `ArrayBuilder`, unaliased for the call.
-pub(crate) unsafe fn arena_take_arraybuilder(arena: *mut Arena, arr: *mut ArrayBuilder) -> Array {
-    // SAFETY: `arr` is the caller's builder, live for the call, and the four
-    // fields are its own.
-    let mut items = unsafe {
-        InitVec::new(
-            &mut (*arr).size,
-            &mut (*arr).capacity,
-            &mut (*arr).items,
-            &mut (*arr).init_array,
-        )
-    };
-    let mut ret = arena_array(arena, items.len());
-    ret.size = items.len();
-    let (dest, src) = (ret.items, items.as_slice().as_ptr());
-    // SAFETY: `ret` was sized for exactly this many objects.
-    let into = dest.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(src.cast(), size_of::<Object>() * ret.size) };
-    // The vector is the builder's inline array or one heap block; only the
-    // second has anything to free.
-    let heap = items.take_heap();
-    // SAFETY: `heap` is null or that block, which nothing names now.
-    unsafe { xfree(heap) };
-    ret
-}
-
-// -- Freeing ---------------------------------------------------------------
-
-/// # Safety
-///
-/// `value` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub(crate) unsafe fn api_free_string(value: String_0) {
-    // SAFETY: `value` owns its allocation.
-    unsafe { xfree(value.data().cast()) };
-}
-
-/// Free `value` and everything below it. Only for objects that were built on
-/// the heap; an arena-allocated object is freed with its arena.
-///
-/// # Safety
-///
-/// `value` must be a well-formed API object the caller owns for the call.
-pub unsafe fn api_free_object(value: Object) {
-    // SAFETY (every arm): the tag says which arm of the union is live, and
-    // `value` owns whatever it points at.
-    match value {
-        Object::String(s) => unsafe { api_free_string(s) },
-        Object::Array(a) => unsafe { api_free_array(a) },
-        Object::Dict(d) => unsafe { api_free_dict(d) },
-        Object::LuaRef(r) => unsafe { api_free_luaref(r) },
-        _ => {}
-    }
-}
-
-/// # Safety
-///
-/// `value` must be a well-formed API array, its `size` elements initialized.
-pub(crate) unsafe fn api_free_array(value: Array) {
-    for i in 0..value.size {
-        // SAFETY: as `api_free_object`; `i` is below `size`.
-        unsafe { api_free_object(*value.items.add(i)) };
-    }
-    // SAFETY: `items` is the array's own allocation.
-    unsafe { xfree(value.items.cast()) };
-}
-
-/// # Safety
-///
-/// `value` must be a well-formed API dictionary, its `size` entries
-/// initialized.
-pub(crate) unsafe fn api_free_dict(value: ApiDict) {
-    for i in 0..value.size {
-        // SAFETY: as `api_free_object`; `i` is below `size`.
-        unsafe {
-            let pair = *value.items.add(i);
-            api_free_string(pair.key);
-            api_free_object(pair.value);
+        match pending.pop() {
+            Some(next) => current = ManuallyDrop::new(next),
+            None => return,
         }
     }
-    // SAFETY: `items` is the dictionary's own allocation.
-    unsafe { xfree(value.items.cast()) };
 }
 
-/// Release the Lua references `value` holds, without freeing `value` itself.
-/// For arena-allocated objects, whose memory the arena reclaims but whose
-/// references the Lua registry does not.
-///
-/// # Safety
-///
-/// `value` must be a well-formed API object the caller owns for the call.
-pub(crate) unsafe fn api_luarefs_free_object(value: Object) {
-    // SAFETY (every arm): the tag says which arm of the union is live, and
-    // `value` owns the references it names.
-    match value {
-        Object::LuaRef(r) => unsafe { api_free_luaref(r) },
-        Object::Array(a) => unsafe { api_luarefs_free_array(a) },
-        Object::Dict(d) => unsafe { api_luarefs_free_dict(d) },
-        _ => {}
-    }
-}
-
-/// # Safety
-///
-/// `value` must be a well-formed API array, its `size` elements initialized.
-pub(crate) unsafe fn api_luarefs_free_array(value: Array) {
-    for i in 0..value.size {
-        // SAFETY: as `api_luarefs_free_object`; `i` is below `size`.
-        unsafe { api_luarefs_free_object(*value.items.add(i)) };
-    }
-}
-
-/// # Safety
-///
-/// `value` must be a well-formed API dictionary, its `size` entries
-/// initialized.
-pub(crate) unsafe fn api_luarefs_free_dict(value: ApiDict) {
-    for i in 0..value.size {
-        // SAFETY: as `api_luarefs_free_object`; `i` is below `size`.
-        unsafe { api_luarefs_free_object((*value.items.add(i)).value) };
-    }
-}
-
-// -- Copying ---------------------------------------------------------------
-
-/// A copy of `str` in `arena`. Unlike [`arena_string`] a null string stays
-/// null rather than becoming the empty one.
-///
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
-pub(crate) unsafe fn copy_string(str: String_0, arena: *mut Arena) -> String_0 {
-    if str.data().is_null() {
-        return String_0::NULL;
-    }
-    // SAFETY: `str` has `size` readable bytes and `arena` is the caller's.
-    let copy = unsafe { arena_memdupz(arena, str.data(), str.len()) };
-    String_0::from_raw_parts(copy, str.len())
-}
-
-/// # Safety
-///
-/// `array` must be a well-formed API array, its `size` elements initialized.
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
-pub(crate) unsafe fn copy_array(array: Array, arena: *mut Arena) -> Array {
-    // Sized for exactly this many items, so it cannot need to grow.
-    let mut rv = arena_array(arena, array.size);
-    for i in 0..array.size {
-        // SAFETY: `array` is live for the call and `rv` is the same size, so
-        // `i` is inside both.
-        unsafe { *rv.items.add(i) = copy_object(*array.items.add(i), arena) };
-    }
-    rv.size = array.size;
-    rv
-}
-
-/// # Safety
-///
-/// `dict` must be a well-formed API dictionary, its `size` entries
-/// initialized. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
-pub(crate) unsafe fn copy_dict(dict: ApiDict, arena: *mut Arena) -> ApiDict {
-    let mut rv = arena_dict(arena, dict.size);
-    for i in 0..dict.size {
-        // SAFETY: `dict` is live for the call and `rv` is the same size, so
-        // `i` is inside both. The key's length is re-derived rather than
-        // copied, so a key holding a NUL comes back truncated -- upstream's
-        // shape.
-        unsafe {
-            let item = *dict.items.add(i);
-            *rv.items.add(i) = key_value_pair {
-                key: cstr_as_string(copy_string(item.key, arena).data()),
-                value: copy_object(item.value, arena),
-            };
+impl Clone for Object {
+    /// A deep copy. Handles and scalars copy as they stand; a Lua reference
+    /// gets a second registry reference of its own.
+    fn clone(&self) -> Self {
+        match self {
+            Object::Nil => Object::Nil,
+            Object::Boolean(on) => Object::Boolean(*on),
+            Object::Integer(number) => Object::Integer(*number),
+            Object::Float(number) => Object::Float(*number),
+            Object::String(str) => Object::string(String_0::clone(str)),
+            Object::Array(array) => Object::array(Array::clone(array)),
+            Object::Dict(dict) => Object::dict(ApiDict::clone(dict)),
+            // SAFETY: `self` holds a live registry reference, so the state
+            // it names is on the registry for the call.
+            Object::LuaRef(reference) => Object::LuaRef(unsafe { api_new_luaref(*reference) }),
+            Object::Buffer(handle) => Object::Buffer(*handle),
+            Object::Window(handle) => Object::Window(*handle),
+            Object::Tabpage(handle) => Object::Tabpage(*handle),
         }
     }
-    rv.size = dict.size;
-    rv
 }
 
-/// A deep copy of `obj` in `arena`. Handles and scalars copy as they stand;
-/// a Lua reference gets a second registry reference of its own.
+/// Moving a payload out of an [`Object`].
 ///
-/// # Safety
-///
-/// `obj` must be a well-formed API object the caller owns for the call.
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
-pub(crate) unsafe fn copy_object(obj: Object, arena: *mut Arena) -> Object {
-    // SAFETY (every arm): the tag says which arm of the union is live, and
-    // `obj` is live for the call.
-    match obj {
-        Object::String(s) => Object::String(unsafe { copy_string(s, arena) }),
-        Object::Array(a) => Object::Array(unsafe { copy_array(a, arena) }),
-        Object::Dict(d) => Object::Dict(unsafe { copy_dict(d, arena) }),
-        Object::LuaRef(r) => Object::LuaRef(unsafe { api_new_luaref(r) }),
-        _ => obj,
+/// An `Object` has a destructor, so it cannot be destructured where it
+/// stands; each of these replaces the value with [`Object::Nil`] and takes
+/// the payload out of the husk.
+impl Object {
+    /// The string, if this is one. Anything else answers `None` and is
+    /// released.
+    pub fn into_string(self) -> Option<String_0> {
+        let mut this = ManuallyDrop::new(self);
+        match &mut *this {
+            // SAFETY: the husk is not looked at again.
+            Object::String(str) => Some(unsafe { ManuallyDrop::take(str) }),
+            _ => {
+                ManuallyDrop::into_inner(this);
+                None
+            }
+        }
+    }
+
+    /// The array, if this is one. See [`Object::into_string`].
+    pub fn into_array(self) -> Option<Array> {
+        let mut this = ManuallyDrop::new(self);
+        match &mut *this {
+            // SAFETY: the husk is not looked at again.
+            Object::Array(array) => Some(unsafe { ManuallyDrop::take(array) }),
+            _ => {
+                ManuallyDrop::into_inner(this);
+                None
+            }
+        }
+    }
+
+    /// The dictionary, if this is one. See [`Object::into_string`].
+    pub fn into_dict(self) -> Option<ApiDict> {
+        let mut this = ManuallyDrop::new(self);
+        match &mut *this {
+            // SAFETY: the husk is not looked at again.
+            Object::Dict(dict) => Some(unsafe { ManuallyDrop::take(dict) }),
+            _ => {
+                ManuallyDrop::into_inner(this);
+                None
+            }
+        }
+    }
+
+    /// The Lua registry reference, if this is one, which becomes the
+    /// caller's to release. See [`Object::into_string`].
+    pub fn into_luaref(self) -> Option<LuaRef> {
+        let this = ManuallyDrop::new(self);
+        match &*this {
+            Object::LuaRef(reference) => Some(*reference),
+            _ => {
+                ManuallyDrop::into_inner(this);
+                None
+            }
+        }
     }
 }
 
 // -- Metadata --------------------------------------------------------------
 
-/// The arena `api_metadata`'s unpacked tree lives in, kept alive for the
-/// process's lifetime because the tree is handed out by reference.
-static METADATA_ARENA: GlobalCell<ArenaMem> = GlobalCell::new(ptr::null_mut::<ConsumedBlk>());
-
-/// The API description, as the `nvim_get_api_info` reply carries it. Unpacked
-/// from the blob on first use and then shared.
+/// The API description, as the `nvim_get_api_info` reply carries it.
+/// Unpacked from the blob on first use and then shared.
+///
+/// The answer is a copy: the tree is a dictionary of a few hundred entries
+/// and the caller owns whatever it is given, so handing out the shared one
+/// would mean handing out something it must not free.
 pub(crate) fn api_metadata() -> Object {
     static METADATA: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     if METADATA.with(Object::is_nil) {
-        let mut arena = ARENA_EMPTY;
         let blob = PACKED_API_METADATA.as_ptr() as *mut c_char;
-        let (len, ar) = (PACKED_API_METADATA.len(), &raw mut arena);
         // SAFETY: the blob is a compile-time constant of `len` bytes and a
-        // valid msgpack map; `arena` is this frame's.
-        let unpacked = unsafe { unpack(blob, len, ar) };
+        // valid msgpack map.
+        let unpacked = unsafe { unpack(blob, PACKED_API_METADATA.len()) };
         if !unpacked.as_ref().is_ok_and(|o| o.as_dict().is_some()) {
             // SAFETY: `abort` takes nothing.
             unsafe { abort() };
         }
         METADATA.set(unpacked.expect("the check above accepted a Dict"));
-        // SAFETY: `arena` is this frame's, and the tree it holds is kept
-        // alive by the static below for the life of the process.
-        METADATA_ARENA.set(unsafe { arena_finish(&raw mut arena) });
     }
-    METADATA.get()
+    METADATA.with(Object::clone)
 }
 
 /// [`api_metadata`] still packed, for a caller that is going to forward it
 /// over the wire unchanged.
 pub(crate) fn api_metadata_raw() -> String_0 {
-    String_0::from_raw_parts(
-        PACKED_API_METADATA.as_ptr() as *mut c_char,
-        PACKED_API_METADATA.len(),
-    )
+    String_0::from_bytes(PACKED_API_METADATA)
 }
 
 // -- Object conversion -----------------------------------------------------
@@ -412,10 +222,9 @@ pub(crate) fn api_typename(t: ObjectType) -> &'static CStr {
 ///
 /// # Safety
 ///
-/// `obj` must be a well-formed API object the caller owns for the call.
 /// `what` must point at a NUL-terminated string.
 pub(crate) unsafe fn api_object_to_bool(
-    obj: Object,
+    obj: &Object,
     what: *const c_char,
     nil_value: bool,
 ) -> Result<bool, Error> {
@@ -437,14 +246,13 @@ pub(crate) unsafe fn api_object_to_bool(
 ///
 /// # Safety
 ///
-/// `obj` must be a well-formed API object the caller owns for the call.
 /// `what` must point at a NUL-terminated string.
-pub(crate) unsafe fn object_to_hl_id(obj: Object, what: *const c_char) -> Result<c_int, Error> {
+pub(crate) unsafe fn object_to_hl_id(obj: &Object, what: *const c_char) -> Result<c_int, Error> {
     if let Some(str) = obj.as_string() {
         if str.is_empty() {
             return Ok(0);
         }
-        // SAFETY: `str` names its own bytes, per this function's contract.
+        // SAFETY: `str` names its own bytes.
         return Ok(unsafe { syn_check_group(str.data(), str.len()) });
     }
     if let Some(number) = obj.as_integer() {
@@ -477,37 +285,26 @@ fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
 /// Parse `[[text, hl], …]` — the shape `nvim_echo` and friends take — into
 /// `hl_msg`, refusing at the first bad chunk. What it managed to push before
 /// refusing stays in `hl_msg`, which the caller owns and frees either way.
-///
-/// # Safety
-///
-/// `chunks` must be a well-formed API array, its `size` elements initialized.
-pub(crate) unsafe fn parse_hl_msg(
+pub(crate) fn parse_hl_msg(
     hl_msg: &mut HlMessage,
-    chunks: Array,
+    chunks: &Array,
     is_err: bool,
 ) -> Result<(), Error> {
-    for i in 0..chunks.size {
-        // SAFETY: `i` is below `size`, so the item is inside `items`.
-        let item = unsafe { *chunks.items.add(i) };
+    for item in chunks {
         let Some(chunk) = item.as_array() else {
             let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.kind()));
             return Err(err_expected(c"chunk", want, Some(got)));
         };
-        // SAFETY: a non-empty array has a first item.
-        let head = (1..=2)
-            .contains(&chunk.size)
-            .then(|| unsafe { *chunk.items });
+        let head = (1..=2).contains(&chunk.len()).then(|| &chunk[0]);
         let Some(text) = head.and_then(Object::as_string) else {
             return Err(Error::validation(
                 c"Invalid chunk: expected Array with 1 or 2 Strings",
             ));
         };
-        // Heap-allocated: the message outlives the caller's arena.
-        // SAFETY: `text` names its own bytes.
-        let text = unsafe { copy_string(text, ptr::null_mut()) };
-        let hl_id = if chunk.size == 2 {
-            // SAFETY: a two-item chunk has an item at index 1.
-            unsafe { object_to_hl_id(*chunk.items.add(1), c"text highlight".as_ptr()) }?
+        let text = text.clone();
+        let hl_id = if chunk.len() == 2 {
+            // SAFETY: the name is a NUL-terminated literal.
+            unsafe { object_to_hl_id(&chunk[1], c"text highlight".as_ptr()) }?
         } else if is_err {
             HLF_E
         } else {

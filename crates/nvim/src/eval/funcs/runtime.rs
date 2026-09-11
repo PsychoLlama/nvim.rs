@@ -7,7 +7,6 @@ use super::wrappers::{
     arg_lnum, arg_number, arg_number_chk, arg_string, list_alloc_ret, non_zero_arg,
 };
 use super::{MENU_ALL_MODES, kRetNilBool};
-use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::state::autocmd_busy;
@@ -243,14 +242,11 @@ fn has_wsl() -> bool {
         const PROBE: &str = "return vim.uv.os_uname()['release']:lower():match('microsoft')";
         // SAFETY throughout: `PROBE` outlives the call (it is a `'static`), the
         // argument list is empty, and `err` is a live out-parameter.
-        let code = String_0::from_raw_parts(PROBE.as_ptr() as *mut c_char, PROBE.len());
-        let no_args = Array {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut(),
-        };
+        let code = String_0::from(PROBE);
+        let no_args = Array::EMPTY;
         let arena = ptr::null_mut::<Arena>();
-        let o: Object = match unsafe { nlua_exec(code, ptr::null(), no_args, kRetNilBool, arena) } {
+        let o: Object = match unsafe { nlua_exec(&code, ptr::null(), no_args, kRetNilBool, arena) }
+        {
             Ok(value) => value,
             Err(e) => {
                 err = e;
@@ -299,9 +295,8 @@ pub fn f_has(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `api_info()` — the whole API metadata dict.
 pub fn f_api_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the cleared return value; a null `Error` out-pointer
-    // is what the converter's infallible path takes.
-    unsafe { object_to_vim(api_metadata(), result) };
+    // `api_metadata` answers a copy, so the conversion may take it.
+    *result = TypVal::from(api_metadata());
 }
 
 /// `did_filetype()` — whether a FileType autocommand has fired for this

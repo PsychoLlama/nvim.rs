@@ -29,7 +29,6 @@ use core::ffi::{CStr, c_int};
 use core::{ptr, slice};
 
 use crate::api::buffer::buf_collect_lines;
-use crate::api::private::helpers::arena_array;
 use crate::buffer::buf_get_changedtick;
 use crate::ex_getln::state::cmdpreview;
 use crate::guard::Lock;
@@ -40,8 +39,8 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Arena, Array, BCount, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object,
-    int64_t, size_t, uint64_t,
+    Array, BCount, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object, int64_t,
+    size_t, uint64_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -270,15 +269,13 @@ fn flush_deleted_bytes(buffer: Buf) -> Deleted {
     }
 }
 
-/// `linedata` for `nvim_buf_lines_event`: `n` lines from `first`, allocated
-/// in `arena`.
-fn collect_lines(buffer: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Array {
-    let ar = &raw mut *arena;
-    let mut linedata = arena_array(ar, n);
+/// `linedata` for `nvim_buf_lines_event`: `n` lines from `first`.
+fn collect_lines(buffer: Buf, n: size_t, first: LineNr) -> Array {
+    let mut linedata = Array::with_capacity(n);
     let (out, none) = (&raw mut linedata, ptr::null_mut());
     // SAFETY: a live buffer holding lines `first ..= first + n - 1`, and an
-    // array of `n` slots in the same arena the callee fills from.
-    unsafe { buf_collect_lines(buffer, n, first, 0, true, out, none, ar) };
+    // array reserved for `n` of them.
+    unsafe { buf_collect_lines(buffer, n, first, 0, true, out, none) };
     linedata
 }
 
@@ -347,7 +344,7 @@ fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
     let mut arena = ARENA_EMPTY;
     let mut linedata = Array::EMPTY;
     if line_count > 0 {
-        linedata = collect_lines(buffer, line_count, 1, &mut arena);
+        linedata = collect_lines(buffer, line_count, 1);
     }
 
     let mut args = ArrayBuf::<6>::new();
@@ -525,7 +522,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
     let mut linedata = Array::EMPTY;
     if num_added > 0 && buffer.channels().len() != 0 {
         let n = num_added as size_t;
-        linedata = collect_lines(buffer, n, firstline, &mut arena);
+        linedata = collect_lines(buffer, n, firstline);
     }
 
     // Notify each of the active channels.
@@ -539,7 +536,8 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
         args.push(Object::integer((firstline - 1) as Integer));
         args.push(Object::integer((firstline - 1) as int64_t + num_removed));
         // Linedata of the lines being swapped in.
-        args.push(Object::array(linedata));
+        // One copy per channel: the event takes over what it is sent.
+        args.push(Object::array(linedata.clone()));
         args.push(Object::boolean(false));
         if !send_event(channelid, c"nvim_buf_lines_event", args.array()) {
             // The channel can't be unregistered while this loop is walking

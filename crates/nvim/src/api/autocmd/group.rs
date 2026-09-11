@@ -97,25 +97,29 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     Ok(())
 }
 
-/// # Safety
-///
-/// `group` must be a well-formed API object the caller owns for the call.
-pub(crate) unsafe fn get_augroup_from_object(group: Object) -> Result<::core::ffi::c_int, Error> {
+/// The group a `group` key names: absent is the default group, a String is
+/// looked up by name and an Integer is checked for existence.
+pub(crate) unsafe fn get_augroup_from_object(
+    group: Option<&Object>,
+) -> Result<::core::ffi::c_int, Error> {
     let au_group: ::core::ffi::c_int;
     let name: *mut ::core::ffi::c_char;
+    let Some(group) = group.filter(|group| !group.is_nil()) else {
+        return Ok(AUGROUP_DEFAULT as ::core::ffi::c_int);
+    };
     match group {
         Object::Nil => Ok(AUGROUP_DEFAULT as ::core::ffi::c_int),
         Object::String(s) => {
             au_group = unsafe { augroup_find(s.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                 // SAFETY: the string's bytes outlive this call.
-                let name = unsafe { s.as_cstr() };
+                let name = s.as_cstr();
                 return Err(err_bad_value(c"group", name));
             }
             Ok(au_group)
         }
         Object::Integer(n) => {
-            au_group = number_as_int(n);
+            au_group = number_as_int(*n);
             name = if au_group == 0 as ::core::ffi::c_int {
                 ::core::ptr::null_mut::<::core::ffi::c_char>()
             } else {

@@ -70,7 +70,7 @@ pub unsafe fn nvim_ui_term_event(
     // SAFETY: `termresponse` is that string, live for `len` bytes.
     unsafe {
         set_vim_var_string(Vv::Termresponse, text, len);
-        do_termresponse_autocmd(termresponse);
+        do_termresponse_autocmd(termresponse.clone());
     }
     ().reported(err)
 }

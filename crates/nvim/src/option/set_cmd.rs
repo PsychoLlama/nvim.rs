@@ -23,13 +23,13 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{Key, find_special_key};
 use crate::strings::has_char;
 use crate::types::CmdIdx;
+use crate::types::OptStr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
 
 use super::{OptSlot, SetOp, boolean_optval, option_last_set, ui_refresh_options};
-use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
 use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
@@ -297,7 +297,7 @@ unsafe fn get_option_newval(
     // that a `:setlocal opt&` on a global-local option gets the real
     // default rather than the unset marker.
     if nextchar == '&' as c_int {
-        return optval_copy(get_option_default(opt_idx, global, &mut expansion));
+        return optval_copy(&get_option_default(opt_idx, global, &mut expansion));
     }
     // `:set opt<` resets to the global value; `:setlocal opt<` copies it
     // into the local one.
@@ -342,8 +342,9 @@ unsafe fn get_option_newval(
             // SAFETY: the old value names its own NUL-terminated bytes.
             let newval_str =
                 unsafe { stropt_get_newval(opt_idx, argp, varp, old.data(), op_var, flags) };
-            // SAFETY: `stropt_get_newval` answers a NUL-terminated string.
-            OptVal::String(unsafe { cstr_as_string(newval_str) })
+            // SAFETY: `stropt_get_newval` answers a NUL-terminated
+            // allocation, which the value takes over.
+            OptVal::String(unsafe { OptStr::owning(newval_str) })
         }
         OptVal::Nil => unreachable!("an option with no type has no value to set"),
     }

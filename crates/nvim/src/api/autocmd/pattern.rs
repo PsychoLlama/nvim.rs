@@ -17,39 +17,40 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::array_add;
 use crate::api::private::validate::err_expected;
-use crate::kvec::InitVec;
 
 /// # Safety
 ///
-/// `v` must be a well-formed API object the caller owns for the call. `k`
-/// must point at a NUL-terminated string, unaliased for the call. `arena`
-/// must point at a live arena, which the memory this answers with is taken
-/// from and must outlive.
+/// `k` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn unpack_string_or_array(
-    v: Object,
+    v: Option<Object>,
     k: *mut ::core::ffi::c_char,
     required: bool,
-    arena: *mut Arena,
 ) -> Result<Array, Error> {
+    let Some(v) = v.filter(|v| !v.is_nil()) else {
+        if required {
+            // SAFETY: `k` is a NUL-terminated key.
+            let k = unsafe { core::ffi::CStr::from_ptr(k) };
+            return Err(err_expected(k, c"Array or String", Some(c"nil")));
+        }
+        return Ok(Array::EMPTY);
+    };
     if matches!(v, Object::String(_)) {
-        let mut arr: Array = arena_array(arena, 1 as size_t);
-        unsafe { array_add(&mut arr, v) };
+        let mut arr: Array = Array::with_capacity(1);
+        arr.push(v);
         return Ok(arr);
-    } else if let Object::Array(array) = v {
+    }
+    if matches!(v, Object::Array(_)) {
         // SAFETY: `k` is a NUL-terminated key.
         let key = unsafe { core::ffi::CStr::from_ptr(k) };
-        // SAFETY: the array is the caller's.
-        unsafe { check_string_array(array, key, true) }?;
+        let array = v.into_array().expect("the arm above matched an Array");
+        check_string_array(&array, key, true)?;
         return Ok(array);
-    } else if !(!required && v.is_nil()) {
-        let got = api_typename(v.kind());
-        // SAFETY: `k` is a NUL-terminated key.
-        let k = unsafe { core::ffi::CStr::from_ptr(k) };
-        return Err(err_expected(k, c"Array or String", Some(got)));
     }
-    Ok(Array::EMPTY)
+    let got = api_typename(v.kind());
+    // SAFETY: `k` is a NUL-terminated key.
+    let k = unsafe { core::ffi::CStr::from_ptr(k) };
+    Err(err_expected(k, c"Array or String", Some(got)))
 }
 
 /// # Safety
@@ -59,102 +60,61 @@ pub(crate) unsafe fn unpack_string_or_array(
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
 pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
-    pattern: Object,
+    pattern: Option<&Object>,
     has_buf: bool,
     buffer: BufferHandle,
     fallback: *mut ::core::ffi::c_char,
-    arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut patterns: ArrayBuilder = ArrayBuilder {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-        init_array: [Object::Nil; 16],
-    };
-    patterns.capacity = ::core::mem::size_of::<[Object; 16]>()
-        .wrapping_div(::core::mem::size_of::<Object>())
-        .wrapping_div(usize::from(
-            ::core::mem::size_of::<[Object; 16]>().wrapping_rem(::core::mem::size_of::<Object>())
-                == 0,
-        )) as size_t;
-    patterns.size = 0 as size_t;
-    patterns.items = (&raw mut patterns.init_array).cast::<Object>();
-    if !pattern.is_nil() {
-        if let Object::String(string) = pattern {
-            let mut pat: *const ::core::ffi::c_char = string.data();
-            let mut patlen: size_t = unsafe { aucmd_span_pattern(pat, &raw mut pat) };
-            while patlen != 0 {
-                // `kv_push`, whose growth step c2rust expanded inline.
-                InitVec::new(
-                    &mut patterns.size,
-                    &mut patterns.capacity,
-                    &mut patterns.items,
-                    &mut patterns.init_array,
-                )
-                .push(Object::string(unsafe {
-                    arena_string(
-                        arena,
-                        String_0::from_raw_parts(pat as *mut ::core::ffi::c_char, patlen),
-                    )
-                }));
-                patlen = unsafe { aucmd_span_pattern(pat.add(patlen), &raw mut pat) };
-            }
-        } else if let Object::Array(array) = pattern {
-            // SAFETY: the array is the caller's.
-            unsafe { check_string_array(array, c"pattern", true) }?;
-            let mut entry_index: size_t = 0 as size_t;
-            while entry_index < array.size {
-                let entry: Object = unsafe { *array.items.add(entry_index) };
-                let entry = entry
-                    .as_string()
-                    .expect("`check_string_array` accepted only Strings");
-                let mut pat_0: *const ::core::ffi::c_char = entry.data();
-                let mut patlen_0: size_t = unsafe { aucmd_span_pattern(pat_0, &raw mut pat_0) };
-                while patlen_0 != 0 {
-                    // `kv_push`, whose growth step c2rust expanded inline.
-                    InitVec::new(
-                        &mut patterns.size,
-                        &mut patterns.capacity,
-                        &mut patterns.items,
-                        &mut patterns.init_array,
-                    )
-                    .push(Object::string(unsafe {
-                        arena_string(
-                            arena,
-                            String_0::from_raw_parts(pat_0 as *mut ::core::ffi::c_char, patlen_0),
-                        )
-                    }));
-                    patlen_0 = unsafe { aucmd_span_pattern(pat_0.add(patlen_0), &raw mut pat_0) };
-                }
-                entry_index = entry_index.wrapping_add(1);
-            }
-        } else {
-            let want = c"String or Table";
-            let got = api_typename(pattern.kind());
-            return Err(err_expected(c"pattern", want, Some(got)));
+    /// One pattern string per `,`-separated span of `text`, which is what
+    /// `aucmd_span_pattern` walks.
+    ///
+    /// # Safety
+    /// `text` must name its own NUL-terminated bytes.
+    unsafe fn push_spans(patterns: &mut Array, text: &String_0) {
+        let mut pat: *const ::core::ffi::c_char = text.data();
+        // SAFETY: the caller's promise.
+        let mut patlen: size_t = unsafe { aucmd_span_pattern(pat, &raw mut pat) };
+        while patlen != 0 {
+            // SAFETY: the span is `patlen` bytes of `text`.
+            let span = unsafe { core::slice::from_raw_parts(pat.cast::<u8>(), patlen) };
+            patterns.push(Object::string(String_0::from_bytes(span)));
+            // SAFETY: as above.
+            patlen = unsafe { aucmd_span_pattern(pat.add(patlen), &raw mut pat) };
         }
+    }
+
+    let mut patterns = Array::EMPTY;
+    let pattern = pattern.filter(|pattern| !pattern.is_nil());
+    if let Some(string) = pattern.and_then(Object::as_string) {
+        // SAFETY: a keyset string names its own NUL-terminated bytes.
+        unsafe { push_spans(&mut patterns, string) };
+    } else if let Some(array) = pattern.and_then(Object::as_array) {
+        check_string_array(array, c"pattern", true)?;
+        for entry in array {
+            let entry = entry
+                .as_string()
+                .expect("`check_string_array` accepted only Strings");
+            // SAFETY: as above.
+            unsafe { push_spans(&mut patterns, entry) };
+        }
+    } else if let Some(pattern) = pattern {
+        let want = c"String or Table";
+        let got = api_typename(pattern.kind());
+        return Err(err_expected(c"pattern", want, Some(got)));
     } else if has_buf {
         let b = find_buffer_by_handle(buffer)?;
-        // `kv_push`, whose growth step c2rust expanded inline.
-        InitVec::new(
-            &mut patterns.size,
-            &mut patterns.capacity,
-            &mut patterns.items,
-            &mut patterns.init_array,
-        )
-        .push(Object::string(unsafe {
-            arena_printf(arena, c"<buffer=%d>".as_ptr(), b.map_or(0, |b| b.handle))
+        // SAFETY: the verb matches the argument.
+        patterns.push(Object::string(unsafe {
+            arena_printf(
+                ::core::ptr::null_mut(),
+                c"<buffer=%d>".as_ptr(),
+                b.map_or(0, |b| b.handle),
+            )
         }));
     }
-    if patterns.size == 0 as size_t && !fallback.is_null() {
-        // `kv_push`, whose growth step c2rust expanded inline.
-        InitVec::new(
-            &mut patterns.size,
-            &mut patterns.capacity,
-            &mut patterns.items,
-            &mut patterns.init_array,
-        )
-        .push(Object::string(unsafe { cstr_as_string(fallback) }));
+    if patterns.is_empty() && !fallback.is_null() {
+        // SAFETY: the caller's NUL-terminated fallback pattern.
+        patterns.push(Object::string(unsafe { cstr_to_string(fallback) }));
     }
-    Ok(unsafe { arena_take_arraybuilder(arena, &raw mut patterns) })
+    Ok(patterns)
 }

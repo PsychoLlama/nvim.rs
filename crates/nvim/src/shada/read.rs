@@ -193,7 +193,7 @@ impl Reading {
         // parser fills those in, and a collector names every one of them, so
         // in practice nothing here falls back -- the defaults are what say
         // so.
-        let pat = *entry.data.search_pattern_mut();
+        let pat = unsafe { &mut *(&raw mut *entry.data.search_pattern_mut()) };
         let default = DEFAULT_SEARCH_PATTERN;
         let flag = |set: Option<bool>, d: Option<bool>| set.or(d).unwrap_or(false);
         let is_sub = flag(pat.is_substitute_pattern, default.is_substitute_pattern);
@@ -211,7 +211,7 @@ impl Reading {
         }
 
         // The pattern takes the entry's string and extra data over.
-        let text = pat.pat.unwrap_or(String_0::NULL);
+        let text = pat.pat.take().unwrap_or(String_0::NULL);
         let spat = SearchPattern {
             pat: text.data(),
             patlen: text.len(),
@@ -623,19 +623,17 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
     match data {
         ShadaEntryData::Missing => {}
         ShadaEntryData::Unknown(item) => unsafe { xfree(item.contents.cast()) },
-        ShadaEntryData::Header(header) => unsafe { api_free_dict(*header) },
+        ShadaEntryData::Header(header) => drop(core::mem::take(header)),
         ShadaEntryData::GlobalMark(mark)
         | ShadaEntryData::Jump(mark)
         | ShadaEntryData::LocalMark(mark)
         | ShadaEntryData::Change(mark) => unsafe { xfree(mark.fname.cast()) },
-        ShadaEntryData::SearchPattern(pattern) => {
-            if let Some(pat) = pattern.pat {
-                unsafe { api_free_string(pat) };
-            }
-        }
+        ShadaEntryData::SearchPattern(pattern) => pattern.pat = None,
         ShadaEntryData::Register(reg) => {
             for i in 0..reg.contents_size {
-                unsafe { api_free_string(*reg.contents.add(i)) };
+                // SAFETY: the register owns `contents_size` strings at
+                // `contents`, each of them initialised by `parse_register`.
+                unsafe { reg.contents.add(i).drop_in_place() };
             }
             unsafe { xfree(reg.contents.cast()) };
         }

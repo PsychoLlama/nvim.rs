@@ -93,30 +93,31 @@ pub(crate) unsafe fn set_hl_group(
     let spellings = [
         (
             entry.rgb_fg,
-            pick(dict.fg, dict.foreground),
+            pick(&dict.fg, &dict.foreground),
             linked.map(|g| g.rgb_fg_idx),
         ),
         (
             entry.rgb_bg,
-            pick(dict.bg, dict.background),
+            pick(&dict.bg, &dict.background),
             linked.map(|g| g.rgb_bg_idx),
         ),
         (
             entry.rgb_sp,
-            pick(dict.sp, dict.special),
+            pick(&dict.sp, &dict.special),
             linked.map(|g| g.rgb_sp_idx),
         ),
     ];
     let mut idxs = [KEEP; 3];
     for (slot, &(value, name, linked_idx)) in idxs.iter_mut().zip(&spellings) {
-        *slot = if !name.is_nil() {
+        // An absent key and an explicit `nil` are the same thing here.
+        *slot = if name.is_some_and(|given| !given.is_nil()) {
             if value < 0 {
                 kColorIdxNone
-            } else if let Object::String(spelling) = name
-                && !spelling.is_empty()
+            } else if let Some(spelling) = name
+                .and_then(Object::as_string)
+                .filter(|spelling| !spelling.is_empty())
             {
-                // SAFETY: an API string is NUL-terminated.
-                name_to_color(unsafe { ::core::ffi::CStr::from_ptr(spelling.data()) }).1
+                name_to_color(spelling.as_cstr()).1
             } else {
                 kColorIdxHex
             }
@@ -201,6 +202,6 @@ const KEEP: c_int = c_int::MIN;
 /// The long key wins only if the short one was not given, which is how
 /// `fg`/`foreground` and their two siblings pair up. Neither given is a nil
 /// object: "the caller named no colour".
-fn pick(short: Option<Object>, long: Option<Object>) -> Object {
-    short.or(long).unwrap_or(Object::Nil)
+fn pick<'a>(short: &'a Option<Object>, long: &'a Option<Object>) -> Option<&'a Object> {
+    short.as_ref().or(long.as_ref())
 }

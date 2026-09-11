@@ -46,7 +46,7 @@ use crate::pos::MAXLNUM;
 use crate::startup::{getout, readonlymode, v_dying};
 use crate::types::{
     AcoSave, ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags,
-    ShmFlag, String_0, StringBuilder, VarNumber, int64_t, size_t,
+    ShmFlag, StringBuilder, VarNumber, int64_t, size_t,
 };
 use crate::winlayer::buffers;
 
@@ -133,8 +133,7 @@ fn prepare_exarg(args: &mut ExArg, buffer: Buf) {
 }
 
 fn set_option_string(id: c_int, value: &'static CStr) {
-    let string = String_0::from_raw_parts(value.as_ptr().cast_mut(), value.count_bytes());
-    set_option_value_give_err(id, OptVal::String(string), OptionSetFlags::LOCAL);
+    set_option_value_give_err(id, OptVal::static_string(value), OptionSetFlags::LOCAL);
 }
 
 fn set_option_false(id: c_int) {

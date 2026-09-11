@@ -776,7 +776,7 @@ pub unsafe fn ui_comp_msg_set_pos(
     _grid: Integer,
     row: Integer,
     scrolled: Boolean,
-    sep_char: String_0,
+    sep_char: &String_0,
     _zindex: Integer,
     _compindex: Integer,
 ) {

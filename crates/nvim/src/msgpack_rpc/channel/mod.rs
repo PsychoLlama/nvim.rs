@@ -32,7 +32,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::{ptr, slice};
 
-use crate::api::private::helpers::{api_free_dict, arena_string, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::api::ui::remote_ui_disconnect;
 use crate::channel::channels;
 use crate::channel::{
@@ -211,11 +211,7 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
     rpc.closed = false;
     rpc.unpacker = unpacker;
     rpc.next_request_id = 1;
-    rpc.info = ApiDict {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-    };
+    rpc.info = ApiDict::EMPTY;
     rpc.call_stack = CallStack::new();
 
     // An internal channel has no transport to read from: its peer hands
@@ -305,8 +301,8 @@ pub unsafe fn rpc_free(channel: *mut Channel) {
     unsafe { unpacker_teardown(chan.rpc.unpacker) };
     unsafe { xfree(chan.rpc.unpacker.cast::<c_void>()) };
     chan.rpc.call_stack = CallStack::new();
-    // SAFETY: the dict was built by `rpc_set_client_info` and is owned here.
-    unsafe { api_free_dict(chan.rpc.info) };
+    // The dict was built by `rpc_set_client_info` and is owned here.
+    drop(core::mem::take(&mut chan.rpc.info));
 }
 
 /// The channel `id` is talking msgpack-rpc over, if it still is.
@@ -339,8 +335,9 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
         if !unsafe { (*frame).returned } {
             unsafe { (*frame).returned = true };
             unsafe { (*frame).errored = true };
-            let string = unsafe { arena_string(arena, cstr_as_string(msg)) };
-            unsafe { (*frame).result = Object::String(string) };
+            // SAFETY: the caller's NUL-terminated message.
+            let string = unsafe { cstr_to_string(msg) };
+            unsafe { (*frame).result = Object::string(string) };
             let mem = unsafe { arena_finish(arena) };
             unsafe { (*frame).result_mem = mem };
         }
@@ -437,8 +434,8 @@ pub unsafe fn rpc_send_call(
     }
     let mut refusal = None;
     if frame.errored {
-        // SAFETY: the result the decoder placed in the frame, and its arena.
-        refusal = Some(unsafe { call_error(&frame.result) });
+        refusal = Some(call_error(&frame.result));
+        // SAFETY: the arena the decoder left with the frame.
         unsafe { arena_mem_free(frame.result_mem) };
         frame.result_mem = ptr::null_mut();
     }
@@ -459,25 +456,21 @@ pub unsafe fn rpc_send_call(
 ///
 /// # Safety
 /// `result` is a live decoded object.
-unsafe fn call_error(result: &Object) -> Error {
-    if let Object::String(text) = *result {
-        // SAFETY: the message is a NUL-terminated string.
-        let text = unsafe { cstr::at(text.data()) };
-        return Error::from_message(kErrorTypeException, text);
+fn call_error(result: &Object) -> Error {
+    if let Some(text) = result.as_string() {
+        return Error::from_message(kErrorTypeException, text.as_cstr());
     }
-    if let Object::Array(array) = *result
-        && array.size == 2
+    if let Some(array) = result.as_array()
+        && array.len() == 2
     {
-        // SAFETY: the caller's decoded result; the array holds its two items.
-        let kind = unsafe { &*array.items };
-        let message = unsafe { &*array.items.add(1) };
+        let (kind, message) = (&array[0], &array[1]);
         if let (Some(kind), Some(message)) = (kind.as_integer(), message.as_string())
             && (kind == Integer::from(kErrorTypeException)
                 || kind == Integer::from(kErrorTypeValidation))
         {
             let kind = crate::narrow::number_as_int(kind);
             // SAFETY: the message is the string the frame carried.
-            let text = unsafe { message.as_cstr() };
+            let text = message.as_cstr();
             return Error::from_message(kind, text);
         }
     }
@@ -628,8 +621,7 @@ pub unsafe fn rpc_set_client_info(id: uint64_t, info: ApiDict) {
     // SAFETY: the channel table is live whenever the editor is.
     let mut chan =
         unsafe { find_rpc_channel(id) }.expect("client info for a channel that is not rpc");
-    // SAFETY: the dict being replaced was owned by the channel.
-    unsafe { api_free_dict(chan.rpc.info) };
+    // The dict being replaced was owned by the channel.
     chan.rpc.info = info;
     // SAFETY: the dict was just stored on this channel, so its strings are
     // live for the classification.
@@ -649,12 +641,11 @@ pub unsafe fn get_client_info(chan: *mut Channel, key: *const c_char) -> *const 
     if !unsafe { (*chan).is_rpc } {
         return ptr::null();
     }
-    let info = unsafe { (*chan).rpc.info };
+    let info = unsafe { &(*chan).rpc.info };
     let key = unsafe { CStr::from_ptr(key) };
-    for i in 0..info.size {
-        let item = unsafe { &*info.items.add(i) };
+    for item in info {
         if let Some(value) = item.value.as_string()
-            && unsafe { CStr::from_ptr(item.key.data()) } == key
+            && item.key.as_cstr() == key
         {
             return value.data();
         }

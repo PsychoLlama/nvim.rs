@@ -30,7 +30,7 @@ use super::{
 };
 use super::{default_hl_attr, default_hl_attr_table};
 use crate::api::private::dispatch::key_dict_highlight_get_field;
-use crate::api::private::helpers::{api_dict_to_keydict, cstr_as_string};
+use crate::api::private::helpers::{api_dict_to_keydict, cstr_to_string};
 use crate::cstr;
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
@@ -225,7 +225,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         let mut args = ArrayBuf::<3>::new();
         args.push(Object::integer(ns_id.into()));
         args.push(Object::string(unsafe {
-            cstr_as_string(syn_id2name(hl_id))
+            cstr_to_string(syn_id2name(hl_id))
         }));
         args.push(Object::boolean(link));
 
@@ -245,7 +245,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         // provider's so the next lookup asks again.
         let mut provisional = false;
         let mut attrs = HLATTRS_INIT;
-        if let Object::Dict(answer) = ret {
+        if let Some(answer) = ret.into_dict() {
             fallback = false;
             let mut dict = KeyDict_highlight::default();
             let field: FieldHashfn = Some(key_dict_highlight_get_field);

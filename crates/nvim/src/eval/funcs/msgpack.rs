@@ -4,7 +4,6 @@
 
 use super::wrappers::{arg_string, arg_string_chk, blob_alloc_ret, list_alloc_ret};
 use super::{ARENA_BLOCK_SIZE, MPACK_EOF, MPACK_ERROR, MPACK_OK};
-use crate::api::private::helpers::api_free_string;
 use crate::cstr;
 use crate::eval::decode::{
     json_decode_string, mpack_parse_typval, typval_parser_error_free, unpack_typval,
@@ -114,7 +113,8 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             break;
         }
     }
-    let data = packer_take_string(&packer);
+    // SAFETY: the buffer is this function's own `packer_string_buffer`.
+    let data = unsafe { packer_take_string(&packer) };
     if args.len() > 1 && unsafe { strequal(arg_string(&mut numbuf, &args[1]), c"B".as_ptr()) } {
         // The Blob adopts the packer's allocation as-is, capacity and
         // all; nothing copies.
@@ -125,7 +125,7 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     } else {
         let l = list_alloc_ret(result, kListLenMayKnow as isize);
         unsafe { encode_list_write(l as *mut c_void, data.data(), data.len()) };
-        unsafe { api_free_string(data) };
+        drop(data);
     }
 }
 

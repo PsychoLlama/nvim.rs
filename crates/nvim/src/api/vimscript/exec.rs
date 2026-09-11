@@ -16,11 +16,9 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{api_try, dict_put_str};
+use crate::api::private::helpers::api_try;
 use crate::guard::Suppress;
-use crate::types::NUL;
 use core::ffi::c_char;
-use core::ptr;
 
 /// # Safety
 ///
@@ -40,12 +38,12 @@ pub unsafe fn nvim_exec2(
     }
     // Heap-allocated rather than arena-allocated: the caller frees this
     // dictionary key by key, so the key is a copy too.
-    let mut result: ApiDict = arena_dict(ptr::null_mut(), 1);
+    let mut result: ApiDict = ApiDict::with_capacity(1);
     // SAFETY: `result` was sized for exactly this pair, and the key is a
     // fresh copy the caller takes over with it.
     unsafe {
         let key = cstr_to_string(c"output".as_ptr());
-        dict_put_str(&mut result, key, Object::string(output));
+        result.insert(key, Object::string(output));
     }
     Ok(result)
 }
@@ -108,17 +106,19 @@ pub unsafe fn exec_impl(
     if !caught && capture && capture_local.ga_len > 1 {
         let captured =
             usize::try_from(capture_local.ga_len).expect("a garray length is never negative");
-        let mut s: String_0 =
-            String_0::from_raw_parts(capture_local.ga_data.cast::<c_char>(), captured);
-        let nul = c_char::try_from(NUL).expect("NUL is zero");
-        // SAFETY: the capture holds `ga_len` bytes, at least two of them.
-        unsafe {
-            if *s.data() == '\n' as c_char {
+        // SAFETY: the capture holds `ga_len` bytes of message text.
+        let mut s: String_0 = String_0::from_bytes(unsafe {
+            core::slice::from_raw_parts(capture_local.ga_data.cast::<u8>(), captured)
+        });
+        // Messages open with a newline the caller did not ask for.
+        if s.as_bytes().first() == Some(&b'\n') {
+            // SAFETY: the string is its own, and the shift leaves `len - 1`
+            // bytes with the terminator `truncate` writes after them.
+            unsafe {
                 s.data()
                     .cast::<u8>()
                     .copy_from(s.data().add(1).cast(), s.len() - 1);
-                *s.data().add(s.len() - 1) = nul;
-                s.set_len(s.len() - 1);
+                s.truncate(s.len() - 1);
             }
         }
         return Ok(s);

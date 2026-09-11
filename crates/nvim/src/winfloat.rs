@@ -28,7 +28,7 @@ use crate::cstr;
 use crate::winlayer::cmdwin_window;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr::{self};
+use core::ptr;
 
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::vim::nvim_create_buf;
@@ -48,9 +48,9 @@ use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptVal,
-    OptionSetFlags, Pos, ScreenChar, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window,
-    WindowHandle, kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor,
-    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow,
+    OptionSetFlags, Pos, ScreenChar, VirtText, WinConfig, WinSplit, WinStyle, Window, WindowHandle,
+    kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
+    kFloatRelativeMouse, kFloatRelativeWindow,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
@@ -318,8 +318,7 @@ fn create_scratch_buffer() -> Result<BufferHandle, Error> {
     nvim_create_buf(false, true)
 }
 fn set_bufhidden_wipe(buffer: Buf) {
-    let s = String_0::from_raw_parts(c"wipe".as_ptr().cast_mut(), c"wipe".count_bytes());
-    let wipe = OptVal::String(s);
+    let wipe = OptVal::static_string(c"wipe");
     let target = OptionTarget::Buf(buffer);
     set_option_direct_for(kOptBufhidden, wipe, OptionSetFlags::LOCAL, 0, target);
 }

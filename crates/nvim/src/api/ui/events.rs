@@ -26,7 +26,7 @@
 )]
 
 use super::packer::{push_call, ui_flush_buf};
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
 use crate::option::vars::p_bg;
 use crate::types::builders::{ArrayBuf, DictBuf};
@@ -284,7 +284,7 @@ pub(super) unsafe fn remote_ui_cursor_goto(ui: *mut RemoteUI, row: Integer, col:
 /// `ui` must be live and `cell` a valid C string.
 pub(super) unsafe fn remote_ui_put(ui: *mut RemoteUI, cell: *const c_char) {
     unsafe { (*ui).client_col += 1 };
-    send!(ui, c"put", Object::string(unsafe { cstr_as_string(cell) }));
+    send!(ui, c"put", Object::string(unsafe { cstr_to_string(cell) }));
 }
 
 /// Sets the highlight subsequent [`remote_ui_put`]s draw with.

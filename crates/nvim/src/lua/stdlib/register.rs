@@ -37,7 +37,7 @@ use crate::lua::xdiff::nlua_xdl_diff;
 use crate::mpack::lmpack::luaopen_mpack;
 use crate::narrow::number_as_int;
 use crate::types::{Handle, LineNr, lua_State};
-use crate::winlayer::{self};
+use crate::winlayer;
 
 unsafe extern "C-unwind" {
     /// lpeg's own `luaopen_*`, linked in from the vendored library.

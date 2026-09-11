@@ -440,11 +440,7 @@ pub(super) unsafe fn channel_destroy_early(chan: *mut Channel) {
 /// The empty `ApiDict`, which is what a channel starts with and what
 /// [`channel_info`] answers for an id that is not registered.
 fn empty_dict() -> ApiDict {
-    ApiDict {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-    }
+    ApiDict::EMPTY
 }
 
 /// The stream layer's close callback: the channel is what owns the stream.

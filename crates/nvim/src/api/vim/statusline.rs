@@ -58,11 +58,7 @@ pub unsafe fn nvim_eval_statusline(
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    let empty = ApiDict {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut::<KeyValuePair>(),
-    };
+    let empty = ApiDict::EMPTY;
     // SAFETY: the API dispatcher's own frame; `str` is a checked string.
     let opts = unsafe { &mut *opts };
     // `%!` is an expression producing the real format, so there is nothing
@@ -91,7 +87,7 @@ pub unsafe fn nvim_eval_statusline(
     // SAFETY: an arena the caller owns, whose allocations outlive the reply.
     let (mut result, buf) = unsafe {
         (
-            arena_dict(arena, 3),
+            ApiDict::with_capacity(3),
             arena_alloc(arena, MAXPATHL as size_t, false).cast::<c_char>(),
         )
     };
@@ -139,7 +135,7 @@ pub unsafe fn nvim_eval_statusline(
     put(
         &mut result,
         c"str",
-        Object::string(unsafe { cstr_as_string(buf) }),
+        Object::string(unsafe { cstr_to_string(buf) }),
     );
     result.reported(error)
 }
@@ -160,7 +156,7 @@ impl Context {
             opts.use_tabline.unwrap_or(false),
         );
         let mut fillchar = 0 as ScreenChar;
-        if let Some(given) = opts.fillchar {
+        if let Some(given) = opts.fillchar.as_ref() {
             // A fill character is one whole character, however wide.
             // SAFETY: a checked API string.
             let single = unsafe {
@@ -305,7 +301,7 @@ fn highlight_dicts(
     runs: HlRuns,
     runs_len: size_t,
 ) -> Array {
-    let mut values = arena_array(arena, runs_len + 1);
+    let mut values = Array::with_capacity(runs_len + 1);
     // For the tab line the default group belongs to no window.
     let ctxwin = (!opts.use_tabline.unwrap_or(false)).then_some(ctx.win);
     let dfltname = get_default_stl_hl(ctxwin, opts.use_winbar.unwrap_or(false), ctx.stc_hl_id);
@@ -313,19 +309,19 @@ fn highlight_dicts(
     // If the first character has no highlight of its own, the default one
     // opens the list.
     if runs.first_start().is_none_or(|start| !ptr::eq(start, buf)) {
-        let mut info = arena_dict(arena, 3);
+        let mut info = ApiDict::with_capacity(3);
         put(&mut info, c"start", Object::integer(0));
         // SAFETY: a static group name.
         put(
             &mut info,
             c"group",
-            Object::string(unsafe { cstr_as_string(dfltname) }),
+            Object::string(unsafe { cstr_to_string(dfltname) }),
         );
-        let mut groups = arena_array(arena, 1);
+        let mut groups = Array::with_capacity(1);
         // SAFETY: as above.
         push(
             &mut groups,
-            Object::string(unsafe { cstr_as_string(dfltname) }),
+            Object::string(unsafe { cstr_to_string(dfltname) }),
         );
         put(&mut info, c"groups", Object::array(groups));
         push(&mut values, Object::dict(info));
@@ -360,14 +356,14 @@ fn highlight_dicts(
             dfltname
         };
 
-        let mut info = arena_dict(arena, 3);
+        let mut info = ApiDict::with_capacity(3);
         // SAFETY: `run.start` is a position in `buf`.
         let start = unsafe { run.start.offset_from(buf) };
         put(&mut info, c"start", Object::integer(start as Integer));
         // SAFETY: both are NUL-terminated group names outliving the reply.
-        let (grp, comb) = unsafe { (cstr_as_string(grpname), cstr_as_string(combine)) };
-        put(&mut info, c"group", Object::string(grp));
-        let mut groups = arena_array(arena, 1 + size_t::from(!ptr::eq(combine, grpname)));
+        let (grp, comb) = unsafe { (cstr_to_string(grpname), cstr_to_string(combine)) };
+        put(&mut info, c"group", Object::string(grp.clone()));
+        let mut groups = Array::with_capacity(1 + size_t::from(!ptr::eq(combine, grpname)));
         if !ptr::eq(combine, grpname) {
             push(&mut groups, Object::string(comb));
         }
@@ -388,17 +384,16 @@ fn highlight_dicts(
 pub unsafe fn nvim__complete_set(
     index: Integer,
     opts: *mut KeyDict_complete_set,
-    arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    let mut rv = arena_dict(arena, 2);
+    let mut rv = ApiDict::with_capacity(2);
     // SAFETY: the API dispatcher's own frame.
     let opts = unsafe { &*opts };
     if get_cot_flags() & kOptCotFlagPopup as c_int as ::core::ffi::c_uint == 0 {
         error = Error::exception(c"completeopt option does not include popup");
         return rv.reported(error);
     }
-    if let Some(info) = opts.info {
+    if let Some(info) = opts.info.as_ref() {
         // SAFETY: a checked API string.
         let win = unsafe { pum_set_info(index as c_int, info.data()) };
         if let Some(win) = win {

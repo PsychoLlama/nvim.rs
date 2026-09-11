@@ -152,7 +152,7 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
     } else if cc.redraw_state != kCmdRedrawAll {
         let mut charbuf: [::core::ffi::c_char; 2] = [c, 0];
         ui_call_cmdline_special_char(
-            unsafe { cstr_as_string(charbuf.as_mut_ptr()) },
+            unsafe { cstr_to_string(charbuf.as_mut_ptr()) },
             shift as Boolean,
             cc.level as Integer,
         );

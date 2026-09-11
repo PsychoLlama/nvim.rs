@@ -15,7 +15,6 @@
 use crate::memory::xstrlcpy;
 use crate::winlayer::Win;
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_isprintc};
 use crate::cstr;
 use crate::cursor::get_cursor_pos_ptr;
@@ -32,15 +31,15 @@ use crate::memline::ml_get_pos;
 use crate::message::state::msg_silent;
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::normal::{
-    ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear,
-    showcmd_visual, visual_selection,
+    SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear, showcmd_visual,
+    visual_selection,
 };
 use crate::option::vars::{p_ch, p_sbr, p_sc, p_sel, p_sloc};
 use crate::optionstr::empty_option;
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
-use crate::types::{Array, ColNr, LineNr, NUL, Object, OptInt};
+use crate::types::{Array, ColNr, LineNr, NUL, Object, OptInt, String_0};
 use crate::ui::state::Rows;
 use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{CStr, c_char, c_int};
@@ -420,33 +419,16 @@ pub(crate) fn display_showcmd() {
 /// The message-UI form: one chunk of `[attr, text, hl_id]` inside a
 /// one-element content array.
 ///
-/// Both arrays borrow stack storage for the length of the call, which is
-/// what upstream does too -- `ui_call_msg_showcmd` copies what it keeps.
+/// The event carries one `[attr, text, hl_id]` chunk, or nothing at all.
 fn show_through_ui(clear: bool) {
-    // The text outlives the call, which is all `cstr_as_string`'s borrow
-    // needs: `ui_call_msg_showcmd` copies what it keeps.
-    let sc = showcmd_buf.get();
-    let text = sc.as_cstr();
-    let mut chunk_items: [Object; 3] = [Object::Nil; 3];
-    let mut content_items: [Object; 1] = [Object::Nil; 1];
-    let mut chunk: Array = ARRAY_DICT_INIT;
-    chunk.capacity = 3;
-    chunk.items = chunk_items.as_mut_ptr();
-    let mut content: Array = ARRAY_DICT_INIT;
-    content.capacity = 1;
-    content.items = content_items.as_mut_ptr();
-
+    let mut content = Array::with_capacity(usize::from(!clear));
     if !clear {
-        // SAFETY: `chunk` has capacity 3 and `content` capacity 1, and the
-        // three writes below are the only ones.
-        // SAFETY: `text` is NUL-terminated.
-        let string = unsafe { cstr_as_string(text.as_ptr()) };
-        unsafe { *chunk.items.add(0) = Object::Integer(0) };
-        unsafe { *chunk.items.add(1) = Object::String(string) };
-        unsafe { *chunk.items.add(2) = Object::Integer(0) };
-        chunk.size = 3;
-        unsafe { *content.items.add(0) = Object::Array(chunk) };
-        content.size = 1;
+        let sc = showcmd_buf.get();
+        let mut chunk = Array::with_capacity(3);
+        chunk.push(Object::integer(0));
+        chunk.push(Object::string(String_0::from_cstr(sc.as_cstr())));
+        chunk.push(Object::integer(0));
+        content.push(Object::array(chunk));
     }
     ui_call_msg_showcmd(content);
 }

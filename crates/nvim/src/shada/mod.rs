@@ -7,7 +7,7 @@ use crate::api::private::dispatch::{
     key_dict__shada_buflist_item_get_field, key_dict__shada_mark_get_field,
     key_dict__shada_register_get_field, key_dict__shada_search_pat_get_field,
 };
-use crate::api::private::helpers::{api_free_dict, api_free_string, copy_string, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_is_quickfix, buf_is_terminal, buflist_new, buflist_setfpos, find_buf};
 use crate::cmdhist::{HistShadaEntry, hist_shada_replace, hist_shada_take, hist_shada_view};
@@ -61,12 +61,12 @@ use crate::search::{
     set_search_pattern, set_substitute_pattern,
 };
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, BlnFlags, Buffer, ColNr, FileDescriptor,
+    AdditionalData, AdditionalDataBuilder, ApiDict, BlnFlags, Buffer, ColNr, FileDescriptor,
     FileInfo, FileMark, FileMarkView, HistoryType, Integer, KeyDict__shada_buflist_item,
-    KeyDict__shada_mark, KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr,
-    List, MarkGet, MotionType, PackerBuffer, Pos, SearchOffset, SearchPattern, String_0,
-    StringArray, SubReplacementString, Timestamp, TypVal, VarFlavour, XFileMark, YankReg, int64_t,
-    ptrdiff_t, size_t, ssize_t, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    KeyDict__shada_mark, KeyDict__shada_register, KeyDict__shada_search_pat, LineNr, List, MarkGet,
+    MotionType, PackerBuffer, Pos, SearchOffset, SearchPattern, String_0, StringArray,
+    SubReplacementString, Timestamp, TypVal, VarFlavour, XFileMark, YankReg, int64_t, ptrdiff_t,
+    size_t, ssize_t, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -600,11 +600,7 @@ pub const DEFAULT_POS: Pos = Pos {
     coladd: 0 as ColNr,
 };
 /// The empty dictionary a header entry starts as.
-const EMPTY_DICT: ApiDict = ApiDict {
-    size: 0,
-    capacity: 0,
-    items: ::core::ptr::null_mut::<KeyValuePair>(),
-};
+const EMPTY_DICT: ApiDict = ApiDict::EMPTY;
 
 /// What a search-pattern entry's fields default to. A pattern is magic and
 /// was the last one used unless the file says otherwise. Only `pat` starts

@@ -19,81 +19,63 @@ use crate::cstr;
 /// `line` must be an initialized `Cc` whose pointer fields point at live data
 /// for the call.
 pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
-    let mut arena: Arena = ARENA_EMPTY;
-
-    // C's `ADD_C`: an arena array is allocated at its final size, so the
-    // push is a store and a bump with no capacity test.
-    let push = |arr: &mut Array, value: Object| {
-        unsafe { *arr.items.add(arr.size) = value };
-        arr.size += 1;
-    };
-
     let mut content: Array;
     if cmdline_star.get() != 0 {
         // Obscured (`inputsecret()`): one '*' per *character*.
-        content = arena_array(&raw mut arena, 1);
+        content = Array::with_capacity(1);
         let mut len: size_t = 0;
         let mut p = Cc::current().text();
         while unsafe { *p } != 0 {
             len += 1;
             p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
         }
-        let buf = unsafe { arena_alloc(&raw mut arena, len, false) } as *mut ::core::ffi::c_char;
-        unsafe { buf.cast::<u8>().write_bytes(b'*', len) };
+        let stars = vec![b'*'; len];
 
-        let mut item = arena_array(&raw mut arena, 3);
-        push(&mut item, Object::integer(0));
-        push(
-            &mut item,
-            Object::string(String_0::from_raw_parts(buf, len)),
-        );
-        push(&mut item, Object::integer(0));
-        push(&mut content, Object::array(item));
+        let mut item = Array::with_capacity(3);
+        item.push(Object::integer(0));
+        item.push(Object::string(String_0::from_bytes(&stars)));
+        item.push(Object::integer(0));
+        content.push(Object::array(item));
     } else if !line.last_colors.chunks().is_empty() {
-        content = arena_array(&raw mut arena, line.last_colors.chunks().len());
+        content = Array::with_capacity(line.last_colors.chunks().len());
         let mut i: size_t = 0;
         while i < line.last_colors.chunks().len() {
             let chunk: CmdlineColorChunk = line.last_colors.chunks()[i];
-            let mut item = arena_array(&raw mut arena, 3);
-            push(
-                &mut item,
-                Object::integer(if chunk.hl_id == 0 {
-                    0
-                } else {
-                    unsafe { syn_id2attr(chunk.hl_id) as Integer }
-                }),
-            );
+            let mut item = Array::with_capacity(3);
+            item.push(Object::integer(if chunk.hl_id == 0 {
+                0
+            } else {
+                unsafe { syn_id2attr(chunk.hl_id) as Integer }
+            }));
 
             debug_assert!(chunk.end >= chunk.start);
-            push(
-                &mut item,
-                Object::string(String_0::from_raw_parts(
-                    line.at(chunk.start),
+            // SAFETY: the chunk names a run of the command line's own text.
+            let text = unsafe {
+                core::slice::from_raw_parts(
+                    line.at(chunk.start).cast::<u8>(),
                     (chunk.end - chunk.start) as size_t,
-                )),
-            );
-            push(&mut item, Object::integer(chunk.hl_id as Integer));
-            push(&mut content, Object::array(item));
+                )
+            };
+            item.push(Object::string(String_0::from_bytes(text)));
+            item.push(Object::integer(chunk.hl_id as Integer));
+            content.push(Object::array(item));
             i += 1;
         }
     } else {
-        let mut item = arena_array(&raw mut arena, 3);
-        push(&mut item, Object::integer(0));
-        push(
-            &mut item,
-            Object::string(unsafe { cstr_as_string(line.text()) }),
-        );
-        push(&mut item, Object::integer(0));
-        content = arena_array(&raw mut arena, 1);
-        push(&mut content, Object::array(item));
+        let mut item = Array::with_capacity(3);
+        item.push(Object::integer(0));
+        item.push(Object::string(unsafe { cstr_to_string(line.text()) }));
+        item.push(Object::integer(0));
+        content = Array::with_capacity(1);
+        content.push(Object::array(item));
     }
 
     let mut charbuf: [::core::ffi::c_char; 2] = [line.cmdfirstc as ::core::ffi::c_char, 0];
     ui_call_cmdline_show(
         content,
         line.cmdpos as Integer,
-        unsafe { cstr_as_string(charbuf.as_mut_ptr()) },
-        unsafe { cstr_as_string(line.cmdprompt) },
+        unsafe { cstr_to_string(charbuf.as_mut_ptr()) },
+        unsafe { cstr_to_string(line.cmdprompt) },
         line.cmdindent as Integer,
         line.level as Integer,
         line.hl_id as Integer,
@@ -101,12 +83,11 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
     if line.special_char != 0 {
         charbuf[0] = line.special_char;
         ui_call_cmdline_special_char(
-            unsafe { cstr_as_string(charbuf.as_mut_ptr()) },
+            unsafe { cstr_to_string(charbuf.as_mut_ptr()) },
             line.special_shift as Boolean,
             line.level as Integer,
         );
     }
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
 
 /// The `ext_cmdline` block: the lines a `:if` or `:function` body
@@ -114,8 +95,8 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
 ///
 /// Deliberately not `Copy`: `cmdline_block.get()` handed every caller a
 /// second owner of the same `items` pointer, so the cell and the caller both
-/// believed they had to free it. Owning the array here makes the free this
-/// type's `Drop`, and [`ui_ext_cmdline_block_leave`]'s move a `take`.
+/// believed they had to free it. The array owns its lines, so the free is
+/// the field's own, and [`ui_ext_cmdline_block_leave`]'s move a `take`.
 pub(crate) struct CmdlineBlock(Array);
 
 impl CmdlineBlock {
@@ -123,28 +104,20 @@ impl CmdlineBlock {
 
     /// The lines, for the UI call that serialises them.
     ///
-    /// A shallow copy that the UI call reads and does not free; it must not
-    /// outlive the next append, which is why every caller takes it inside
-    /// the expression that hands it over.
+    /// A copy: the UI call takes over what it is handed, and the block goes
+    /// on owning its own lines.
     fn lines(&self) -> Array {
-        self.0
+        self.0.clone()
     }
 
     fn is_empty(&self) -> bool {
-        self.0.size == 0
+        self.0.is_empty()
     }
 }
 
 impl Default for CmdlineBlock {
     fn default() -> Self {
         CmdlineBlock::EMPTY
-    }
-}
-
-impl Drop for CmdlineBlock {
-    fn drop(&mut self) {
-        // SAFETY: the array and its objects are this value's own.
-        unsafe { api_free_array(self.0) };
     }
 }
 
@@ -155,44 +128,29 @@ impl Drop for CmdlineBlock {
 ///
 /// `line` must point at a NUL-terminated string.
 pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
-    let buf = unsafe { xmallocz(indent + cstr::bytes_at(line).len()) } as *mut ::core::ffi::c_char;
-    unsafe { buf.cast::<u8>().write_bytes(b' ', indent) };
     let line_len = unsafe { cstr::bytes_at(line) }.len();
+    let buf = unsafe { xmallocz(indent + line_len) } as *mut ::core::ffi::c_char;
+    unsafe { buf.cast::<u8>().write_bytes(b' ', indent) };
     let into = unsafe { buf.add(indent) }.cast::<u8>();
     unsafe { into.copy_from_nonoverlapping(line.cast(), line_len) };
 
-    // C's `ADD`: `kv_push` onto a heap array, doubling from 8.
-    let push = |arr: &mut Array, value: Object| {
-        if arr.size == arr.capacity {
-            arr.capacity = if arr.capacity != 0 {
-                arr.capacity << 1
-            } else {
-                8
-            };
-            arr.items = unsafe {
-                xrealloc(
-                    arr.items as *mut ::core::ffi::c_void,
-                    ::core::mem::size_of::<Object>() * arr.capacity,
-                )
-            } as *mut Object;
-        }
-        unsafe { *arr.items.add(arr.size) = value };
-        arr.size += 1;
-    };
+    let mut item = Array::with_capacity(3);
+    item.push(Object::integer(0));
+    // SAFETY: `buf` is the NUL-terminated allocation just filled in, which
+    // the string takes over.
+    item.push(Object::string(unsafe {
+        String_0::from_owned_parts(buf, indent + line_len)
+    }));
+    item.push(Object::integer(0));
 
-    let mut item: Array = ARRAY_DICT_INIT;
-    push(&mut item, Object::integer(0));
-    push(&mut item, Object::string(unsafe { cstr_as_string(buf) }));
-    push(&mut item, Object::integer(0));
-
-    let mut content: Array = ARRAY_DICT_INIT;
-    push(&mut content, Object::array(item));
+    let mut content = Array::with_capacity(1);
+    content.push(Object::array(item));
 
     // A leaf closure over the array itself: nothing it runs can re-enter
     // the block, so the exclusive borrow cannot overlap another.
     let first = cmdline_block.with_mut(|block| {
-        push(&mut block.0, Object::array(content));
-        block.0.size == 1
+        block.0.push(Object::array(content.clone()));
+        block.0.len() == 1
     });
     if first {
         ui_call_cmdline_block_show(cmdline_block.with(CmdlineBlock::lines));

@@ -1167,15 +1167,35 @@ impl<'w> Emitter<'w> {
         // struct has no C-visible layout either. Pointers to such a type
         // are still fine, and `cty` renders those without coming past here
         // with a bare path.
-        if let syn::Type::Path(tp) = &f.ty {
-            if let Some(seg) = tp.path.segments.last() {
-                if self.unknown.contains(&seg.ident.to_string()) {
-                    return None;
-                }
-            }
+        //
+        // The transparent wrappers are peeled first: an `Object`'s payload
+        // is a `ManuallyDrop<Array>`, and it is `Array` that has no image.
+        if self.names_unknown(&f.ty) {
+            return None;
         }
         let cty = self.cty(file, &f.ty)?;
         Some(vec![format!("{};", decl(&cty, &c_name(&f.name)))])
+    }
+
+    /// Whether `ty` is, under the `repr(transparent)` wrappers, a type this
+    /// run only ever declared incomplete.
+    fn names_unknown(&self, ty: &syn::Type) -> bool {
+        let syn::Type::Path(tp) = ty else {
+            return false;
+        };
+        let Some(seg) = tp.path.segments.last() else {
+            return false;
+        };
+        let name = seg.ident.to_string();
+        if matches!(name.as_str(), "GlobalCell" | "SharedCell" | "ManuallyDrop") {
+            if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+                if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
+                    return self.names_unknown(inner);
+                }
+            }
+            return false;
+        }
+        self.unknown.contains(&name)
     }
 
     fn run(&mut self) {

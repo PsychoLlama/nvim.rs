@@ -19,7 +19,6 @@ use crate::api::private::dispatch::key_dict_xdl_diff_get_field;
 use core::ffi::{c_char, c_int, c_long, c_void};
 use core::{ptr, slice};
 
-use crate::api::private::helpers::api_free_string;
 use crate::linematch::{block_from_lnum, linematch_nbuffers};
 use crate::lua::converter::nlua_pop_keydict;
 use crate::lua::executor::{api_free_luaref, nlua_pushref};
@@ -362,7 +361,7 @@ unsafe fn process_xdl_diff_opts(
 
     // SAFETY: the keydict owns these; `opts` is not read again.
     for string in [opts.result_type, opts.algorithm].into_iter().flatten() {
-        unsafe { api_free_string(string) };
+        drop(string);
     }
     if let Some(on_hunk) = opts.on_hunk {
         unsafe { api_free_luaref(on_hunk) };
@@ -385,7 +384,7 @@ unsafe fn apply_opts(
     let mut had_result_type_indices = false;
     // SAFETY: `result_type`/`algorithm` are NUL-terminated or null, which is
     // what `strequal` takes.
-    if let Some(result_type) = opts.result_type
+    if let Some(result_type) = opts.result_type.as_ref()
         && !unsafe { strequal(c"unified".as_ptr(), result_type.data()) }
     {
         if unsafe { strequal(c"indices".as_ptr(), result_type.data()) } {
@@ -397,7 +396,7 @@ unsafe fn apply_opts(
     }
 
     // SAFETY: as above.
-    if let Some(named) = opts.algorithm
+    if let Some(named) = opts.algorithm.as_ref()
         && !unsafe { strequal(c"myers".as_ptr(), named.data()) }
     {
         // SAFETY: as above.
@@ -425,10 +424,10 @@ unsafe fn apply_opts(
     if let Some(interhunkctxlen) = opts.interhunkctxlen {
         cfg.interhunkctxlen = interhunkctxlen as c_long;
     }
-    if let Some(given) = opts.linematch {
+    if let Some(given) = opts.linematch.as_ref() {
         match given {
-            Object::Boolean(on) => *linematch = if on { int64_t::MAX } else { 0 },
-            Object::Integer(n) => *linematch = n,
+            Object::Boolean(on) => *linematch = if *on { int64_t::MAX } else { 0 },
+            Object::Integer(n) => *linematch = *n,
             _ => {
                 let why = Error::validation(c"linematch must be a boolean or integer");
                 return (Mode::Unified, Some(why));

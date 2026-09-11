@@ -6,7 +6,7 @@ pub(crate) mod state;
 use crate::arglist::get_arglist_name;
 use crate::types::TAB;
 
-use crate::api::private::helpers::{api_free_object, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 use crate::autocmd::{expand_get_augroup_name, expand_get_event_name, set_context_in_autocmd};
 use crate::buffer::expand_buf_names;
@@ -278,11 +278,7 @@ pub const TAG_MANY: ::core::ffi::c_int = 300;
 pub const WM_SCROLLED: ::core::ffi::c_int = 2;
 pub const WM_SHOWN: ::core::ffi::c_int = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);

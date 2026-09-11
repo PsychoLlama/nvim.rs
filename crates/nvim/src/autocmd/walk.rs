@@ -168,21 +168,22 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     data.insert(c"id", Object::integer(unsafe { (*ac).id }));
     data.insert(
         c"event",
-        Object::string(unsafe { cstr_as_string(event_nr2name((*apc).event)) }),
+        Object::string(unsafe { cstr_to_string(event_nr2name((*apc).event)) }),
     );
     data.insert(
         c"file",
-        Object::string(unsafe { cstr_as_string((*apc).afile_orig) }),
+        Object::string(unsafe { cstr_to_string((*apc).afile_orig) }),
     );
     data.insert(
         c"match",
-        Object::string(unsafe { cstr_as_string(autocmd_match.get()) }),
+        Object::string(unsafe { cstr_to_string(autocmd_match.get()) }),
     );
     data.insert(c"buf", Object::integer(autocmd_bufnr.get() as Integer));
     let event_data = unsafe { (*apc).data };
     if !event_data.is_null() {
-        // SAFETY: non-null, so it is the object the caller published.
-        data.insert(c"data", unsafe { *event_data });
+        // SAFETY: non-null, so it is the object the caller published, which
+        // stays the publisher's -- the entry gets a copy.
+        data.insert(c"data", unsafe { (*event_data).clone() });
     }
     // SAFETY: a row that is being run still has its pattern.
     let group = unsafe { (*(*ac).pat).group };

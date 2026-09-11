@@ -35,23 +35,18 @@ pub unsafe fn buffer_insert(
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-pub unsafe fn buffer_get_line(
-    buffer: BufferHandle,
-    index: Integer,
-    arena: *mut Arena,
-) -> Result<String_0, Error> {
+pub unsafe fn buffer_get_line(buffer: BufferHandle, index: Integer) -> Result<String_0, Error> {
     let index = convert_index(index as int64_t) as Integer;
     let no_lua = ::core::ptr::null_mut::<lua_State>();
     // SAFETY: `arena` is the caller's; a null `lua_State` asks for the API
     // representation rather than a Lua one.
-    let slice: Array =
-        unsafe { nvim_buf_get_lines(0, buffer, index, index + 1, true, arena, no_lua) }?;
-    if slice.size == 0 {
+    let slice: Array = unsafe { nvim_buf_get_lines(0, buffer, index, index + 1, true, no_lua) }?;
+    if slice.len() == 0 {
         return Ok(String_0::NULL);
     }
     // SAFETY: the array has an item, which the call above filled in.
-    let first = unsafe { *slice.items };
-    Ok(first.as_string().unwrap_or(String_0::NULL))
+    let first = &slice[0];
+    Ok(first.as_string().unwrap_or(&String_0::NULL).clone())
 }
 
 /// # Safety
@@ -65,15 +60,10 @@ pub unsafe fn buffer_set_line(
     line: String_0,
     arena: *mut Arena,
 ) -> Result<(), Error> {
-    let mut l = Object::string(line);
-    let array: Array = Array {
-        size: 1 as size_t,
-        capacity: 0,
-        items: &raw mut l,
-    };
+    let mut array = Array::with_capacity(1);
+    array.push(Object::string(line));
     let index = convert_index(index as int64_t) as Integer;
-    // SAFETY: `array` borrows this frame's object for the length of the
-    // call, and `arena` is the caller's.
+    // SAFETY: `arena` is the caller's.
     unsafe { nvim_buf_set_lines(0, buffer, index, index + 1, true, array, arena) }
 }
 
@@ -101,13 +91,12 @@ pub unsafe fn buffer_get_line_slice(
     end: Integer,
     include_start: Boolean,
     include_end: Boolean,
-    arena: *mut Arena,
 ) -> Result<Array, Error> {
     let start = (convert_index(start as int64_t) + int64_t::from(!include_start)) as Integer;
     let end = (convert_index(end as int64_t) + int64_t::from(include_end)) as Integer;
     let no_lua = ::core::ptr::null_mut::<lua_State>();
     // SAFETY: as `buffer_get_line`.
-    unsafe { nvim_buf_get_lines(0, buffer, start, end, false, arena, no_lua) }
+    unsafe { nvim_buf_get_lines(0, buffer, start, end, false, no_lua) }
 }
 
 /// # Safety

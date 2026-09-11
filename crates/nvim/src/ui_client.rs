@@ -27,9 +27,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::dispatch::key_dict_highlight_get_field;
-use crate::api::private::helpers::{
-    api_dict_to_keydict, api_free_array, api_metadata, copy_array, cstr_as_string,
-};
+use crate::api::private::helpers::{api_dict_to_keydict, api_metadata, cstr_to_string};
 use crate::channel::{channel_connect, channel_job_start};
 use crate::event::r#loop::process_events;
 use crate::event::multiqueue::multiqueue_put_event;
@@ -187,7 +185,7 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
     if !term.is_null() {
         opts.insert(
             c"term_name",
-            Object::string(unsafe { cstr_as_string(term) }),
+            Object::string(unsafe { cstr_to_string(term) }),
         );
     }
     opts.insert(
@@ -222,26 +220,22 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
     let mut info = DictBuf::<3>::new();
     info.insert(
         c"website",
-        Object::string(unsafe { cstr_as_string(c"https://neovim.io".as_ptr()) }),
+        Object::string(unsafe { cstr_to_string(c"https://neovim.io".as_ptr()) }),
     );
     info.insert(
         c"license",
-        Object::string(unsafe { cstr_as_string(c"Apache 2".as_ptr()) }),
+        Object::string(unsafe { cstr_to_string(c"Apache 2".as_ptr()) }),
     );
     info.insert(c"pid", Object::integer(os_get_pid()));
 
     let mut client = ArrayBuf::<5>::new();
     client.push(Object::string(unsafe {
-        cstr_as_string(c"nvim-tui".as_ptr())
+        cstr_to_string(c"nvim-tui".as_ptr())
     }));
     client.push(Object::dict(unsafe { api_version() }));
-    client.push(Object::string(unsafe { cstr_as_string(c"ui".as_ptr()) }));
+    client.push(Object::string(unsafe { cstr_to_string(c"ui".as_ptr()) }));
     // A UI exposes no methods of its own.
-    client.push(Object::array(Array {
-        size: 0,
-        capacity: 0,
-        items: core::ptr::null_mut(),
-    }));
+    client.push(Object::array(Array::EMPTY));
     client.push(info.object());
     unsafe {
         rpc_send_event(
@@ -259,12 +253,18 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
 ///
 /// The API metadata must be initialised.
 unsafe fn api_version() -> ApiDict {
-    let metadata = api_metadata().as_dict().expect("API metadata is a dict");
-    assert!(metadata.size > 0, "API metadata is empty");
-    for i in 0..metadata.size {
-        let entry = unsafe { *metadata.items.add(i) };
+    let metadata = api_metadata();
+    let metadata = metadata.as_dict().expect("API metadata is a dict");
+    assert!(!metadata.is_empty(), "API metadata is empty");
+    for entry in metadata {
+        // SAFETY: a dictionary key is a NUL-terminated string.
         if unsafe { strequal(entry.key.data(), c"version".as_ptr()) } {
-            return entry.value.as_dict().expect("API `version` is a dict");
+            // Copied: the metadata this walked is released on the way out.
+            return entry
+                .value
+                .as_dict()
+                .expect("API `version` is a dict")
+                .clone();
         }
     }
     panic!("API metadata has no version");
@@ -290,11 +290,7 @@ pub(crate) unsafe fn ui_client_detach() {
     let (id, name, no_args) = (
         ui_client_channel_id.get(),
         c"nvim_ui_detach".as_ptr(),
-        Array {
-            size: 0,
-            capacity: 0,
-            items: core::ptr::null_mut(),
-        },
+        Array::EMPTY,
     );
     // SAFETY: the caller's promise -- a channel is set -- and the event
     // carries no arguments to own.
@@ -471,17 +467,17 @@ static EVENT_HANDLERS: [Handler; 27] = {
 /// `want` of `None` accepts anything, for the one event whose argument is
 /// declared as an untyped `Object`.
 ///
+/// The value is **taken** out of the array: an event's arguments are handed
+/// on to the sink, which owns what it is given.
+///
 /// # Safety
 ///
-/// `args` must be a valid array.
-unsafe fn arg(args: Array, index: usize, want: Option<ObjectType>) -> Option<Object> {
-    if index >= args.size {
-        return None;
-    }
-    let value = unsafe { *args.items.add(index) };
+/// `args` must be the array the decoder produced for this event.
+unsafe fn arg(args: &mut Array, index: usize, want: Option<ObjectType>) -> Option<Object> {
+    let value = args.get_mut(index)?;
     match want {
         Some(ty) if value.kind() != ty => None,
-        _ => Some(value),
+        _ => Some(value.take()),
     }
 }
 
@@ -543,13 +539,13 @@ macro_rules! payload {
         $v.as_integer().expect("`arg` checked the tag")
     };
     (String_0, $v:expr) => {
-        $v.as_string().expect("`arg` checked the tag")
+        $v.into_string().expect("`arg` checked the tag")
     };
     (Array, $v:expr) => {
-        $v.as_array().expect("`arg` checked the tag")
+        $v.into_array().expect("`arg` checked the tag")
     };
     (Dict, $v:expr) => {
-        $v.as_dict().expect("`arg` checked the tag")
+        $v.into_dict().expect("`arg` checked the tag")
     };
     (Object, $v:expr) => {
         $v
@@ -574,14 +570,14 @@ macro_rules! forward {
         // `pub(crate)`, not `pub`: the module is not reachable from outside
         // the crate, so a `pub` here is `unreachable_pub` at the macro's own
         // line, once for all of its expansions.
-        pub(crate) unsafe fn $wrapper(args: Array) {
+        pub(crate) unsafe fn $wrapper(mut args: Array) {
             // An event may take no arguments, in which case neither of
             // these is read; borrowing them keeps that case warning-free
             // without an allow on every wrapper.
             let mut index = 0usize;
-            let _ = (&args, &mut index);
+            let _ = (&mut args, &mut index);
             $(
-                let Some($arg) = (unsafe { arg(args, index, tag!($ty)) }) else {
+                let Some($arg) = (unsafe { arg(&mut args, index, tag!($ty)) }) else {
                     return bad_event($event, cstr!(stringify!($wrapper)));
                 };
                 index += 1;
@@ -648,11 +644,11 @@ forward! {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_grid_resize(args: Array) {
+pub(crate) unsafe fn ui_client_event_grid_resize(mut args: Array) {
     let (Some(grid), Some(width), Some(height)) = (
-        unsafe { arg(args, 0, Some(kObjectTypeInteger)) },
-        unsafe { arg(args, 1, Some(kObjectTypeInteger)) },
-        unsafe { arg(args, 2, Some(kObjectTypeInteger)) },
+        unsafe { arg(&mut args, 0, Some(kObjectTypeInteger)) },
+        unsafe { arg(&mut args, 1, Some(kObjectTypeInteger)) },
+        unsafe { arg(&mut args, 2, Some(kObjectTypeInteger)) },
     ) else {
         return bad_event(c"grid_resize", c"ui_client_event_grid_resize");
     };
@@ -712,27 +708,27 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
+pub(crate) unsafe fn ui_client_event_hl_attr_define(mut args: Array) {
     let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
-        unsafe { arg(args, 0, Some(kObjectTypeInteger)) },
-        unsafe { arg(args, 1, Some(kObjectTypeDict)) },
-        unsafe { arg(args, 2, Some(kObjectTypeDict)) },
-        unsafe { arg(args, 3, Some(kObjectTypeArray)) },
+        unsafe { arg(&mut args, 0, Some(kObjectTypeInteger)) },
+        unsafe { arg(&mut args, 1, Some(kObjectTypeDict)) },
+        unsafe { arg(&mut args, 2, Some(kObjectTypeDict)) },
+        unsafe { arg(&mut args, 3, Some(kObjectTypeArray)) },
     ) else {
         return bad_event(c"hl_attr_define", c"ui_client_event_hl_attr_define");
     };
     let expect = "`arg` checked the tag";
     let (id, rgb, cterm, info) = (
         id.as_integer().expect(expect),
-        rgb.as_dict().expect(expect),
-        cterm.as_dict().expect(expect),
-        info.as_array().expect(expect),
+        rgb.into_dict().expect(expect),
+        cterm.into_dict().expect(expect),
+        info.into_array().expect(expect),
     );
     tui_hl_attr_define(
         unsafe { &mut *tui.get() },
         id,
-        unsafe { dict_to_hlattrs(rgb, true) },
-        unsafe { dict_to_hlattrs(cterm, false) },
+        unsafe { dict_to_hlattrs(&rgb, true) },
+        unsafe { dict_to_hlattrs(&cterm, false) },
         info,
     );
 }
@@ -743,7 +739,7 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
 /// # Safety
 ///
 /// `d` must be a valid dict.
-unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
+unsafe fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
     // Every key unset, which is the state `api_dict_to_keydict` fills in
     // over -- and the only one that lets `dict2hlattrs` tell "the UI said
     // `bold = false`" from "the UI said nothing about `bold`".
@@ -752,7 +748,7 @@ unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
         api_dict_to_keydict(
             (&raw mut dict).cast::<c_void>(),
             Some(key_dict_highlight_get_field),
-            d,
+            d.clone(),
         )
     }
     .is_err()
@@ -764,7 +760,7 @@ unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
     };
     // A URL is not an attribute the terminal understands; the TUI
     // interns it and the entry keeps the index.
-    if let Some(url) = dict.url {
+    if let Some(url) = &dict.url {
         attrs.url = unsafe { tui_add_url(&mut *tui.get(), url.data()) };
     }
     attrs
@@ -776,8 +772,8 @@ unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_error_exit(args: Array) {
-    let Some(status) = (unsafe { arg(args, 0, Some(kObjectTypeInteger)) }) else {
+pub(crate) unsafe fn ui_client_event_error_exit(mut args: Array) {
+    let Some(status) = (unsafe { arg(&mut args, 0, Some(kObjectTypeInteger)) }) else {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
     let status = status.as_integer().expect("`arg` checked the tag");
@@ -793,8 +789,8 @@ pub(crate) unsafe fn ui_client_event_error_exit(args: Array) {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-pub(crate) unsafe fn ui_client_event_connect(args: Array) {
-    let Some(address) = (unsafe { arg(args, 0, Some(kObjectTypeString)) }) else {
+pub(crate) unsafe fn ui_client_event_connect(mut args: Array) {
+    let Some(address) = (unsafe { arg(&mut args, 0, Some(kObjectTypeString)) }) else {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
     let address = address.as_string().expect("`arg` checked the tag");
@@ -873,23 +869,12 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
 struct RestartArgs(Array);
 
 impl RestartArgs {
-    const EMPTY: RestartArgs = RestartArgs(Array {
-        size: 0,
-        capacity: 0,
-        items: core::ptr::null_mut(),
-    });
+    const EMPTY: RestartArgs = RestartArgs(Array::EMPTY);
 }
 
 impl Default for RestartArgs {
     fn default() -> Self {
         RestartArgs::EMPTY
-    }
-}
-
-impl Drop for RestartArgs {
-    fn drop(&mut self) {
-        // SAFETY: the array and its objects are this value's own.
-        unsafe { api_free_array(self.0) };
     }
 }
 
@@ -909,7 +894,7 @@ static restart_pending: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) unsafe fn ui_client_event_restart(args: Array) {
     // `set` drops what the cell held, which frees the previous copy.
     // SAFETY: the caller's promise -- the decoder's array for this event.
-    let copied = unsafe { copy_array(args, core::ptr::null_mut::<Arena>()) };
+    let copied = args.clone();
     restart_args.set(RestartArgs(copied));
     restart_pending.set(true);
 }
@@ -929,8 +914,8 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
     restart_pending.set(false);
     // The arguments move out here, so the cell has nothing left to free and
     // dropping `args` at the end of the scope is the only free.
-    let args = restart_args.take();
-    let address = unsafe { arg(args.0, 0, Some(kObjectTypeString)) };
+    let mut args = restart_args.take();
+    let address = unsafe { arg(&mut args.0, 0, Some(kObjectTypeString)) };
     match address {
         None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
         Some(address) => {

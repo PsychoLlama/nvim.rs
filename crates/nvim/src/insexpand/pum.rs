@@ -258,10 +258,8 @@ pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_i
     let prepend_len = compl_col.get() - startcol;
     let new_length = prepend_len + src.len() as c_int;
 
-    dest.set_len(new_length as size_t);
     // SAFETY: `xmalloc` answers `new_length + 1` writable bytes or aborts.
     let buf = unsafe { xmalloc(new_length as size_t + 1) } as *mut c_char; // +1 for NUL
-    dest.set_data(buf);
 
     // SAFETY: the cursor line exists, `startcol .. compl_col` is inside it,
     // and `buf` has room for the two pieces and the NUL.
@@ -271,9 +269,12 @@ pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_i
         buf.cast::<u8>()
             .copy_from(head.cast(), prepend_len as size_t);
         let tail = buf.offset(prepend_len as isize);
-        tail.cast::<u8>().copy_from(src.data().cast(), src.len());
+        let (src_data, src_len) = src.parts();
+        tail.cast::<u8>().copy_from(src_data.cast(), src_len);
         *buf.offset(new_length as isize) = NUL as c_char;
     }
+    // SAFETY: the block above is this function's own, filled and terminated.
+    unsafe { dest.set_owned(buf, new_length as size_t) };
 }
 
 /// Drop the cached [`adjusted_leader`] — upstream's

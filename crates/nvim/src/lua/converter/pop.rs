@@ -15,9 +15,7 @@ use crate::semsg;
 use core::ffi::{c_int, c_void};
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, nlua_pop_object};
-use crate::api::private::helpers::{
-    api_free_array, api_free_dict, api_typename, arena_array, arena_dict,
-};
+use crate::api::private::helpers::api_typename;
 use crate::api_error;
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
@@ -26,12 +24,11 @@ use crate::lua::ffi::{
     lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
 };
 use crate::lua::state::nlua_global_refs;
-use crate::memory::arena_memdupz;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Error, Float, Handle, Integer, LuaRef, ObjectType, String_0,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
-    key_value_pair, lua_Number, lua_State, size_t,
+    lua_Number, lua_State, size_t,
 };
 use ::libc::memchr;
 
@@ -161,24 +158,25 @@ pub(crate) unsafe fn nlua_traverse_table(lstate: *mut lua_State) -> LuaTableProp
     }
 }
 
-/// Pop a Lua string, copied into `arena`.
+/// Pop a Lua string, copied out of the Lua state.
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top.
 pub unsafe fn nlua_pop_string(
     lstate: *mut lua_State,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<String_0, Error> {
     unsafe {
         if lua_type(lstate, -1) != LUA_TSTRING {
             lua_pop(lstate, 1);
             return Err(Error::validation(c"Expected Lua string"));
         }
-        let mut ret = String_0::NULL;
-        let data = lua_tolstring(lstate, -1, ret.len_mut()).cast_mut();
-        ret.set_data(data);
-        debug_assert!(!ret.data().is_null());
-        ret.set_data(arena_memdupz(arena, ret.data(), ret.len()));
+        let mut len: size_t = 0;
+        let data = lua_tolstring(lstate, -1, &raw mut len);
+        debug_assert!(!data.is_null());
+        // The copy has to happen before the pop: the bytes are the Lua
+        // string's own and the collector may take them afterwards.
+        let ret = String_0::from_bytes(core::slice::from_raw_parts(data.cast::<u8>(), len));
         lua_pop(lstate, 1);
         Ok(ret)
     }
@@ -321,7 +319,7 @@ unsafe fn nlua_pop_array_unchecked(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     unsafe {
-        let mut ret = arena_array(arena, table_props.maxidx);
+        let mut ret = Array::with_capacity(table_props.maxidx);
         if table_props.maxidx == 0 {
             lua_pop(lstate, 1);
             return Ok(ret);
@@ -333,14 +331,10 @@ unsafe fn nlua_pop_array_unchecked(
                 Ok(val) => val,
                 Err(e) => {
                     lua_pop(lstate, 1);
-                    if arena.is_null() {
-                        api_free_array(ret);
-                    }
                     return Err(e);
                 }
             };
-            *ret.items.add(ret.size) = val;
-            ret.size = ret.size.wrapping_add(1);
+            ret.push(val);
         }
         lua_pop(lstate, 1);
         Ok(ret)
@@ -375,7 +369,7 @@ unsafe fn nlua_pop_dict_unchecked(
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     unsafe {
-        let mut ret = arena_dict(arena, table_props.string_keys_num);
+        let mut ret = ApiDict::with_capacity(table_props.string_keys_num);
         if table_props.string_keys_num == 0 {
             lua_pop(lstate, 1);
             return Ok(ret);
@@ -399,15 +393,11 @@ unsafe fn nlua_pop_dict_unchecked(
             let (key, value) = match pair {
                 Ok(pair) => pair,
                 Err(e) => {
-                    if arena.is_null() {
-                        api_free_dict(ret);
-                    }
                     lua_pop(lstate, 3);
                     return Err(e);
                 }
             };
-            *ret.items.add(ret.size) = key_value_pair { key, value };
-            ret.size = ret.size.wrapping_add(1);
+            ret.insert(key, value);
             i = i.wrapping_add(1);
         }
         lua_pop(lstate, 1);

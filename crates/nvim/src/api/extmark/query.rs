@@ -11,7 +11,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, dict_put};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::winlayer::Buf;
 use crate::winlayer::Live;
@@ -20,8 +20,8 @@ use crate::winlayer::Live;
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena) -> Array {
-    let mut chunks: Array = arena_array(arena, vt.size);
+pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool) -> Array {
+    let mut chunks: Array = Array::with_capacity(vt.size);
     let mut i: size_t = 0 as size_t;
     while i < vt.size {
         let mut j: size_t = i;
@@ -31,34 +31,35 @@ pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena)
             }
             j = j.wrapping_add(1);
         }
-        let mut hl_array: Array = arena_array(
-            arena,
-            if i < j {
-                j.wrapping_sub(i).wrapping_add(1 as size_t)
-            } else {
-                0 as size_t
-            },
-        );
+        let mut hl_array: Array = Array::with_capacity(if i < j {
+            j.wrapping_sub(i).wrapping_add(1 as size_t)
+        } else {
+            0 as size_t
+        });
         while i < j {
             let hl_id: ::core::ffi::c_int = unsafe { (*vt.items.add(i)).hl_id };
             if hl_id >= 0 as ::core::ffi::c_int {
-                unsafe { array_add(&mut hl_array, hl_group_name(hl_id, hl_name)) };
+                // SAFETY: `hl_id` is a resolved highlight id.
+                hl_array.push(unsafe { hl_group_name(hl_id, hl_name) });
             }
             i = i.wrapping_add(1);
         }
         let text: *mut ::core::ffi::c_char = unsafe { (*vt.items.add(i)).text };
         let hl_id_0: ::core::ffi::c_int = unsafe { (*vt.items.add(i)).hl_id };
-        let mut chunk: Array = arena_array(arena, 2 as size_t);
-        unsafe { array_add(&mut chunk, Object::string(cstr_as_string(text))) };
-        if hl_array.size > 0 as size_t {
+        let mut chunk: Array = Array::with_capacity(2 as size_t);
+        // SAFETY: the chunk's text is NUL-terminated.
+        chunk.push(Object::string(unsafe { cstr_to_string(text) }));
+        if hl_array.len() > 0 as size_t {
             if hl_id_0 >= 0 as ::core::ffi::c_int {
-                unsafe { array_add(&mut hl_array, hl_group_name(hl_id_0, hl_name)) };
+                // SAFETY: as above.
+                hl_array.push(unsafe { hl_group_name(hl_id_0, hl_name) });
             }
-            unsafe { array_add(&mut chunk, Object::array(hl_array)) };
+            chunk.push(Object::array(hl_array));
         } else if hl_id_0 >= 0 as ::core::ffi::c_int {
-            unsafe { array_add(&mut chunk, hl_group_name(hl_id_0, hl_name)) };
+            // SAFETY: as above.
+            chunk.push(unsafe { hl_group_name(hl_id_0, hl_name) });
         }
-        unsafe { array_add(&mut chunks, Object::array(chunk)) };
+        chunks.push(Object::array(chunk));
         i = i.wrapping_add(1);
     }
     chunks
@@ -76,15 +77,14 @@ unsafe fn extmark_to_array(
     arena: *mut Arena,
 ) -> Array {
     let start: MTKey = extmark.start;
-    let mut rv: Array = arena_array(arena, 4 as size_t);
+    let mut rv: Array = Array::with_capacity(4 as size_t);
     if id {
-        unsafe { array_add(&mut rv, Object::integer(start.id as Integer)) };
+        rv.push(Object::integer(start.id as Integer));
     }
-    unsafe { array_add(&mut rv, Object::integer(start.pos.row as Integer)) };
-    unsafe { array_add(&mut rv, Object::integer(start.pos.col as Integer)) };
+    rv.push(Object::integer(start.pos.row as Integer));
+    rv.push(Object::integer(start.pos.col as Integer));
     if add_dict {
-        let mut dict: ApiDict = arena_dict(
-            arena,
+        let mut dict: ApiDict = ApiDict::with_capacity(
             ::core::mem::size_of::<[KeySetLink; 36]>()
                 .wrapping_div(::core::mem::size_of::<KeySetLink>())
                 .wrapping_div(
@@ -93,32 +93,35 @@ unsafe fn extmark_to_array(
                         == 0) as ::core::ffi::c_int as size_t,
                 ),
         );
-        unsafe { dict_put(&mut dict, c"ns_id", Object::integer(start.ns as Integer)) };
+        dict.insert(
+            String_0::from_cstr(c"ns_id"),
+            Object::integer(start.ns as Integer),
+        );
         let d_right_gravity = Object::boolean(mt_right(start));
         // SAFETY: the collection is this call's own.
-        unsafe { dict_put(&mut dict, c"right_gravity", d_right_gravity) };
+        dict.insert(String_0::from_cstr(c"right_gravity"), d_right_gravity);
         if mt_paired(start) {
             let d_end_row = Object::integer(extmark.end_pos.row as Integer);
             // SAFETY: the collection is this call's own.
-            unsafe { dict_put(&mut dict, c"end_row", d_end_row) };
+            dict.insert(String_0::from_cstr(c"end_row"), d_end_row);
             let d_end_col = Object::integer(extmark.end_pos.col as Integer);
             // SAFETY: the collection is this call's own.
-            unsafe { dict_put(&mut dict, c"end_col", d_end_col) };
+            dict.insert(String_0::from_cstr(c"end_col"), d_end_col);
             let gravity = Object::boolean(extmark.end_right_gravity);
             // SAFETY: `dict` is this call's own.
-            unsafe { dict_put(&mut dict, c"end_right_gravity", gravity) };
+            dict.insert(String_0::from_cstr(c"end_right_gravity"), gravity);
         }
         if mt_no_undo(start) {
-            unsafe { dict_put(&mut dict, c"undo_restore", Object::boolean(false)) };
+            dict.insert(String_0::from_cstr(c"undo_restore"), Object::boolean(false));
         }
         if mt_invalidate(start) {
-            unsafe { dict_put(&mut dict, c"invalidate", Object::boolean(true)) };
+            dict.insert(String_0::from_cstr(c"invalidate"), Object::boolean(true));
         }
         if mt_invalid(start) {
-            unsafe { dict_put(&mut dict, c"invalid", Object::boolean(true)) };
+            dict.insert(String_0::from_cstr(c"invalid"), Object::boolean(true));
         }
         unsafe { decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name, arena) };
-        unsafe { array_add(&mut rv, Object::dict(dict)) };
+        rv.push(Object::dict(dict));
     }
     rv
 }
@@ -184,7 +187,7 @@ pub unsafe fn nvim_buf_get_extmarks(
     let details: bool = opts.details.unwrap_or(false);
     let hl_name: bool = opts.hl_name.unwrap_or(true);
     let mut type_0: ExtmarkType = kExtmarkNone;
-    if let Some(named) = opts.type_0 {
+    if let Some(named) = opts.type_0.as_ref() {
         // SAFETY: the keyset's string names its own NUL-terminated bytes.
         let name = unsafe { crate::cstr::at_opt(named.data()) };
         type_0 = match name.map(core::ffi::CStr::to_bytes) {
@@ -229,24 +232,21 @@ pub unsafe fn nvim_buf_get_extmarks(
         type_0,
         opts.overlap.unwrap_or(false),
     );
-    rv = arena_array(
-        arena,
-        if marks.size < rv_limit {
-            marks.size
-        } else {
-            rv_limit
-        },
-    );
+    rv = Array::with_capacity(if marks.size < rv_limit {
+        marks.size
+    } else {
+        rv_limit
+    });
     if reverse {
         let mut i: ::core::ffi::c_int = marks.size as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
-        while i >= 0 as ::core::ffi::c_int && rv.size < rv_limit {
+        while i >= 0 as ::core::ffi::c_int && rv.len() < rv_limit {
             // SAFETY: `i` indexes the array `extmark_get` filled.
             let mark = unsafe { *marks.items.offset(i as isize) };
             // SAFETY: `arena` is the caller's.
             let put_value =
                 unsafe { Object::array(extmark_to_array(mark, true, details, hl_name, arena)) };
             // SAFETY: the collection is this call's own.
-            unsafe { array_add(&mut rv, put_value) };
+            rv.push(put_value);
             i -= 1;
         }
     } else {
@@ -258,7 +258,7 @@ pub unsafe fn nvim_buf_get_extmarks(
             let put_value =
                 unsafe { Object::array(extmark_to_array(mark, true, details, hl_name, arena)) };
             // SAFETY: the collection is this call's own.
-            unsafe { array_add(&mut rv, put_value) };
+            rv.push(put_value);
             i_0 = i_0.wrapping_add(1);
         }
     }
@@ -297,14 +297,10 @@ unsafe fn extmark_get_index_from_obj(
         unsafe { *row = extmark.start.pos.row as ::core::ffi::c_int };
         unsafe { *col = extmark.start.pos.col as ColNr };
         return Ok(());
-    } else if let Object::Array(pos) = obj {
-        let two = match pos.size {
+    } else if let Some(pos) = obj.as_array() {
+        let two = match pos.len() {
             // SAFETY: a two-item array names the two items read here.
-            2 => unsafe {
-                (*pos.items)
-                    .as_integer()
-                    .zip((*pos.items.add(1)).as_integer())
-            },
+            2 => (pos[0]).as_integer().zip((pos[1]).as_integer()),
             _ => None,
         };
         let Some((pos_row, pos_col)) = two else {

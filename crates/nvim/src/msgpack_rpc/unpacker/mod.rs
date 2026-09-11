@@ -18,7 +18,7 @@
 //! [`protocol`] for the stages.
 //!
 //! Message bodies go through libmpack's tree parser, with [`api_parse_enter`]
-//! building `Object`s in an arena as the tokens arrive. `redraw`
+//! building owned `Object`s as the tokens arrive. `redraw`
 //! notifications from a UI server bypass that — a `grid_line` event would
 //! otherwise allocate an object per screen cell — and are decoded a token at
 //! a time straight into the shared line buffers.
@@ -26,7 +26,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::api::private::dispatch::{NO_HANDLER, msgpack_rpc_get_handler_for};
-use crate::memory::{ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free};
+use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xmallocz};
 use crate::mpack::conv::{
     mpack_unpack_boolean, mpack_unpack_float_fast, mpack_unpack_sint, mpack_unpack_uint,
 };
@@ -35,9 +35,8 @@ use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
-    ApiDict, ApiDispatchFn, Arena, Array, Error, Integer, KeyValuePair, MessageType, Object,
-    String_0, Unpacker, mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb,
-    size_t,
+    ApiDict, ApiDispatchFn, Array, Error, Integer, KeyValuePair, MessageType, Object, String_0,
+    Unpacker, mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb, size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 use ::libc::abort;
@@ -90,12 +89,8 @@ pub const MPACK_NOMEM: c_int = 3;
 /// left over is an error rather than the start of the next message.
 ///
 /// # Safety
-/// `data` points at `size` readable bytes and `arena` at a writable `Arena`.
-pub unsafe fn unpack(
-    mut data: *const c_char,
-    mut size: size_t,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
+/// `data` points at `size` readable bytes.
+pub unsafe fn unpack(mut data: *const c_char, mut size: size_t) -> Result<Object, Error> {
     // SAFETY: the caller's buffer, arena and error slot. `api_parse_enter`
     // navigates back here through the parser's `data` field, so every access
     // below has to go through the same pointer it is handed — writing to
@@ -106,10 +101,6 @@ pub unsafe fn unpack(
         let p: *mut Unpacker = &raw mut unpacker;
         mpack_parser_init(&raw mut (*p).parser, 0);
         (*p).parser.data.p = p.cast::<c_void>();
-        // The caller lends its arena for the parse and takes it back at the
-        // end; an arena owns its block chain, so it is *moved* both ways and
-        // the caller's slot is empty in between.
-        (*p).arena = core::mem::replace(&mut *arena, ARENA_EMPTY);
 
         let result = mpack_parse(
             &raw mut (*p).parser,
@@ -119,8 +110,7 @@ pub unsafe fn unpack(
             Some(parse_nop),
         );
 
-        *arena = core::mem::replace(&mut (*p).arena, ARENA_EMPTY);
-        (result, (*p).result)
+        (result, (*p).result.take())
     };
 
     let message = if result == MPACK_NOMEM {
@@ -153,22 +143,28 @@ pub(super) fn scalar_object(tok: mpack_token_t) -> Option<Object> {
     })
 }
 
-/// An array `Object` over `capacity` slots that have already been allocated.
-fn array_object(items: *mut Object, capacity: size_t) -> Object {
-    Object::Array(Array {
-        size: capacity,
-        capacity,
-        items,
-    })
+/// An array `Object` of `capacity` slots, every one of them nil.
+///
+/// The array reports its full size before a single element has landed, and a
+/// message that ends early leaves the tail as it was -- so the slots start
+/// out as values, not as room.
+fn array_object(capacity: size_t) -> Object {
+    Object::array(Array::from(
+        (0..capacity).map(|_| Object::Nil).collect::<Vec<_>>(),
+    ))
 }
 
-/// A dict `Object` over `capacity` entries that have already been allocated.
-fn dict_object(items: *mut KeyValuePair, capacity: size_t) -> Object {
-    Object::Dict(ApiDict {
-        size: capacity,
-        capacity,
-        items,
-    })
+/// A dict `Object` of `capacity` entries, every key and value empty. See
+/// [`array_object`].
+fn dict_object(capacity: size_t) -> Object {
+    Object::dict(ApiDict::from(
+        (0..capacity)
+            .map(|_| KeyValuePair {
+                key: String_0::NULL,
+                value: Object::Nil,
+            })
+            .collect::<Vec<_>>(),
+    ))
 }
 
 /// Where a node's value belongs: the slot to write it into, and — for a map
@@ -199,19 +195,24 @@ unsafe fn destination(
     // the token type it belongs to.
     match unsafe { (*parent).tok.type_0 } {
         TOKEN_ARRAY => {
-            let obj = unsafe { *(*parent).data[0].p.cast::<Object>() };
-            let items = obj.as_array().expect("an array node fills an array").items;
+            let obj = unsafe { &mut *(*parent).data[0].p.cast::<Object>() };
+            let items = obj
+                .as_array_mut()
+                .expect("an array node fills an array")
+                .as_mut_ptr();
             Destination {
                 result: unsafe { items.add((*parent).pos) },
                 key_location: core::ptr::null_mut(),
             }
         }
         TOKEN_MAP => {
-            let obj = unsafe { *(*parent).data[0].p.cast::<Object>() };
-            let items = obj.as_dict().expect("a map node fills a dict").items;
+            let obj = unsafe { &mut *(*parent).data[0].p.cast::<Object>() };
+            let items = obj
+                .as_dict_mut()
+                .expect("a map node fills a dict")
+                .as_mut_ptr();
             let kv: *mut KeyValuePair = unsafe { items.add((*parent).pos) };
             let key_location = if unsafe { (*parent).key_visited } == 0 {
-                unsafe { (*kv).key = String_0::NULL };
                 unsafe { &raw mut (*kv).key }
             } else {
                 core::ptr::null_mut()
@@ -278,17 +279,19 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
             // One byte over length: the API hands out NUL-terminated strings
             // even though it carries the length beside them.
             let len = tok.length as size_t;
-            // SAFETY: the arena hands back `len + 1` writable bytes, and the
-            // node's back-pointer is where its chunks will write.
-            let mem = unsafe { arena_alloc(&raw mut (*p).arena, len + 1, false) }.cast::<c_char>();
-            unsafe { *mem.add(len) = 0 };
-            let str = String_0::from_raw_parts(mem, len);
+            // SAFETY: `xmallocz` hands back `len + 1` writable bytes with the
+            // terminator already written, which the string takes over.
+            let str = unsafe { String_0::from_owned_parts(xmallocz(len).cast::<c_char>(), len) };
+            // The node's back-pointer is where its chunks will write, which
+            // is the string's own block -- so it is taken before the string
+            // moves into its slot.
+            let mem = str.data();
             if key_location.is_null() {
-                unsafe { *result = Object::String(str) };
+                unsafe { *result = Object::string(str) };
             } else {
                 unsafe { *key_location = str };
             }
-            unsafe { (*node).data[0].p = str.data().cast::<c_void>() };
+            unsafe { (*node).data[0].p = mem.cast::<c_void>() };
         }
         TOKEN_EXT => {
             // SAFETY: the node is live; its chunks assemble the payload and
@@ -304,26 +307,13 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
             unsafe { copy_chunk(p, parent, tok, EXT_PAYLOAD_MAX) };
         }
         TOKEN_ARRAY => {
-            let capacity = tok.length as size_t;
-            // The array reports its full size before a single element has
-            // landed, and a message that ends early leaves the tail
-            // unwritten -- so the slots are zeroed, which is `Object::Nil`.
-            // SAFETY: the arena hands back that many writable bytes.
-            let bytes = size_of::<Object>() * capacity;
-            let items = unsafe { arena_alloc(&raw mut (*p).arena, bytes, true) }.cast::<Object>();
-            unsafe { items.write_bytes(0, capacity) };
-            unsafe { *result = array_object(items, capacity) };
+            // SAFETY: the slot the destination named is a live `Object`.
+            unsafe { *result = array_object(tok.length as size_t) };
             unsafe { (*node).data[0].p = result.cast::<c_void>() };
         }
         TOKEN_MAP => {
-            let capacity = tok.length as size_t;
-            // Zeroed for the reason the array slots above are.
-            // SAFETY: the arena hands back that many writable bytes.
-            let bytes = size_of::<KeyValuePair>() * capacity;
-            let items =
-                unsafe { arena_alloc(&raw mut (*p).arena, bytes, true) }.cast::<KeyValuePair>();
-            unsafe { items.write_bytes(0, capacity) };
-            unsafe { *result = dict_object(items, capacity) };
+            // SAFETY: as above.
+            unsafe { *result = dict_object(tok.length as size_t) };
             unsafe { (*node).data[0].p = result.cast::<c_void>() };
         }
         _ => {}
@@ -645,7 +635,7 @@ pub unsafe fn unpacker_advance(p: *mut Unpacker) -> bool {
         // SAFETY: the caller's unpacker.
         match unsafe { (*p).state } {
             protocol::RESPONSE_ERROR => {
-                unsafe { (*p).error = (*p).result };
+                unsafe { (*p).error = (*p).result.take() };
                 unsafe { (*p).state = protocol::BODY };
             }
             protocol::BODY => {

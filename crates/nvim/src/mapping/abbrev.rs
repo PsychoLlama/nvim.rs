@@ -264,11 +264,11 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
         // SAFETY: the string the call handed back, then the object it came
         // out of, which is ours to release.
         let answer = unsafe {
-            let answer = match ret {
-                Object::String(s) => COwned::new(string_to_cstr(s)),
-                _ => COwned::new(ptr::null_mut()),
+            let answer = match ret.as_string() {
+                Some(s) => COwned::new(string_to_cstr(s)),
+                None => COwned::new(ptr::null_mut()),
             };
-            api_free_object(ret);
+            drop(ret);
             answer
         };
         if err.is_set() {

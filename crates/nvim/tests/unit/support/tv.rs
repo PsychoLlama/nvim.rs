@@ -725,32 +725,20 @@ impl Obj {
 /// # Safety
 /// `o` points at a live `Object` whose contents are live.
 pub(crate) unsafe fn read_object(o: *const Object) -> Obj {
-    match unsafe { *o } {
+    match unsafe { &*o } {
         Object::Nil => Obj::Nil,
-        Object::Boolean(on) => Obj::Bool(on),
-        Object::Integer(n) => Obj::Int(n),
-        Object::Float(f) => Obj::Float(f),
-        Object::String(s) => Obj::Str(if s.is_null() {
-            Vec::new()
-        } else {
-            unsafe { std::slice::from_raw_parts(s.data().cast::<u8>(), s.len()) }.to_vec()
-        }),
-        Object::Array(a) => Obj::Array(
-            (0..a.size)
-                .map(|i| unsafe { read_object(a.items.add(i)) })
-                .collect(),
-        ),
+        Object::Boolean(on) => Obj::Bool(*on),
+        Object::Integer(n) => Obj::Int(*n),
+        Object::Float(f) => Obj::Float(*f),
+        Object::String(s) => Obj::Str(s.as_bytes().to_vec()),
+        Object::Array(a) => Obj::Array(a.iter().map(|item| unsafe { read_object(item) }).collect()),
         Object::Dict(d) => {
-            let mut entries: Vec<(Vec<u8>, Obj)> = (0..d.size)
-                .map(|i| {
-                    let kv = unsafe { *d.items.add(i) };
-                    (
-                        unsafe {
-                            std::slice::from_raw_parts(kv.key.data().cast::<u8>(), kv.key.len())
-                        }
-                        .to_vec(),
-                        unsafe { read_object(&raw const kv.value) },
-                    )
+            let mut entries: Vec<(Vec<u8>, Obj)> = d
+                .iter()
+                .map(|kv| {
+                    (kv.key.as_bytes().to_vec(), unsafe {
+                        read_object(&raw const kv.value)
+                    })
                 })
                 .collect();
             entries.sort_by(|(a, _), (b, _)| a.cmp(b));

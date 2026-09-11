@@ -11,7 +11,7 @@ use crate::winlayer::cmdline_window;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::api::buffer::nvim_buf_set_lines;
-use crate::api::private::helpers::{api_free_array, arena_array, cstr_as_string, cstr_to_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::api::win_config::{BORDER_NONE, BORDER_SHADOW, parse_winborder};
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_clear, buf_is_nofile, current_buf};
@@ -41,7 +41,7 @@ use crate::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc};
+use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree};
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
 use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::emsg;
@@ -100,11 +100,7 @@ pub const kZIndexFloatDefault: c_uint = 50;
 pub const CPT_MENU: c_uint = 2;
 pub const CPT_KIND: c_uint = 1;
 pub const CPT_ABBR: c_uint = 0;
-pub const ARRAY_DICT_INIT: Array = Array {
-    size: 0,
-    capacity: 0,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
 pub const DEFAULT_GRID_HANDLE: c_int = 1;
 
 // The menu's state. Every one of these is written by one of the placement
@@ -313,19 +309,17 @@ unsafe fn pum_publish_external(
     selected: c_int,
     anchor: &PumAnchor,
 ) {
-    // SAFETY: the arena owns the arrays until `arena_mem_free`, and
-    // `cstr_as_string` borrows the item strings for the duration of the call.
     let mut arena = ARENA_EMPTY;
-    let mut arr = arena_array(&raw mut arena, size as size_t);
+    let mut arr = Array::with_capacity(size as size_t);
     for i in 0..size as isize {
+        // SAFETY: `i` is below `size`, so the entry is inside `array`.
         let src = unsafe { &*array.offset(i) };
-        let mut item = arena_array(&raw mut arena, 4);
+        let mut item = Array::with_capacity(4);
         for text in [src.pum_text, src.pum_kind, src.pum_extra, src.pum_info] {
-            unsafe { *item.items.add(item.size) = Object::String(cstr_as_string(text)) };
-            item.size += 1;
+            // SAFETY: an entry's four strings are null or NUL-terminated.
+            item.push(Object::string(unsafe { cstr_to_string(text) }));
         }
-        unsafe { *arr.items.add(arr.size) = Object::Array(item) };
-        arr.size += 1;
+        arr.push(Object::array(item));
     }
     ui_call_popupmenu_show(
         arr,
@@ -593,7 +587,7 @@ unsafe fn pum_send_float_pos() {
     let anchor = if above { c"SW" } else { c"NW" };
     let row_off = if above { -pum_height.get() } else { 0 };
     // SAFETY: the anchor is a literal.
-    let anchor = unsafe { cstr_as_string(anchor.as_ptr()) };
+    let anchor = unsafe { cstr_to_string(anchor.as_ptr()) };
     ui_call_win_float_pos(
         grid.handle as Integer,
         -1 as WindowHandle,

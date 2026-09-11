@@ -16,6 +16,7 @@ use crate::path::ExpandFlags;
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::types::OptStr;
 use crate::types::{IOSIZE, MAXPATHL, NUL, OptionSetFlags};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -253,7 +254,9 @@ pub unsafe fn ex_helpgrep(args: *mut ExArg) {
         if unsafe { *p_cpo.get() } as c_int == NUL {
             set_option_value_give_err(
                 kOptCpoptions,
-                OptVal::String(unsafe { cstr_as_string(save_cpo) }),
+                // SAFETY: the saved value is NUL-terminated and freed just
+                // below, after the option layer has copied it.
+                OptVal::String(unsafe { OptStr::borrowing(save_cpo) }),
                 OptionSetFlags::NONE,
             );
         }

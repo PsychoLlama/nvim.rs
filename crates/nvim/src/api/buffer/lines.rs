@@ -11,7 +11,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add};
+use crate::api::private::helpers::Reported;
 use crate::cstr;
 use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::types::NUL;
@@ -39,15 +39,10 @@ pub unsafe fn nvim_buf_get_lines(
     mut start: Integer,
     mut end: Integer,
     strict_indexing: Boolean,
-    arena: *mut Arena,
     lstate: *mut lua_State,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
-    let mut rv: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
+    let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
@@ -67,12 +62,12 @@ pub unsafe fn nvim_buf_get_lines(
         return rv.reported(error);
     }
     let size: size_t = (end - start) as size_t;
-    unsafe { init_line_array(lstate, &raw mut rv, size, arena) };
+    unsafe { init_line_array(lstate, &raw mut rv, size) };
     let at = start as LineNr;
     let nl = channel_id != VIML_INTERNAL_CALL;
     let rvp = &raw mut rv;
     // SAFETY: `b` is the live buffer and `rvp` this call's own array.
-    unsafe { buf_collect_lines(b, size, at, 0, nl, rvp, lstate, arena) };
+    unsafe { buf_collect_lines(b, size, at, 0, nl, rvp, lstate) };
     rv.reported(error)
 }
 
@@ -109,8 +104,8 @@ pub unsafe fn nvim_buf_set_lines(
     }
     let disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
     // SAFETY: `replacement` is the caller's array.
-    unsafe { check_string_array(replacement, c"replacement string", disallow_nl) }?;
-    let new_len: size_t = replacement.size;
+    check_string_array(&replacement, c"replacement string", disallow_nl)?;
+    let new_len: size_t = replacement.len();
     let old_len: size_t = (end - start) as size_t;
     let mut extra: ptrdiff_t = 0 as ptrdiff_t;
     let bytes = new_len.wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>());
@@ -128,9 +123,10 @@ pub unsafe fn nvim_buf_set_lines(
         // Every item is a String: `check_string_array` above turned anything
         // else into an error.
         // SAFETY: `i` is below `replacement.size`.
-        let l: String_0 = unsafe { *replacement.items.add(i) }
+        let l: String_0 = replacement[i]
             .as_string()
-            .expect("check_string_array accepted only Strings");
+            .expect("check_string_array accepted only Strings")
+            .clone();
         unsafe { *lines.add(i) = arena_memdupz(arena, l.data(), l.len()) };
         // SAFETY: `i` is below `new_len`, so the slot was just written.
         let line = unsafe { *lines.add(i) } as *mut ::core::ffi::c_void;
@@ -303,16 +299,11 @@ pub unsafe fn nvim_buf_get_text(
     mut end_row: Integer,
     end_col: Integer,
     _opts: *mut KeyDict_empty,
-    arena: *mut Arena,
     lstate: *mut lua_State,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
     let mut str: String_0;
-    let mut rv: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
+    let mut rv: Array = Array::EMPTY;
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
@@ -335,7 +326,7 @@ pub unsafe fn nvim_buf_get_text(
     }
     let replace_nl: bool = channel_id != VIML_INTERNAL_CALL;
     let size: size_t = ((end_row - start_row) as size_t).wrapping_add(1 as size_t);
-    unsafe { init_line_array(lstate, &raw mut rv, size, arena) };
+    unsafe { init_line_array(lstate, &raw mut rv, size) };
     let rvp = &raw mut rv;
     let first = start_row as int64_t;
     if start_row == end_row {
@@ -343,7 +334,7 @@ pub unsafe fn nvim_buf_get_text(
         let line: String_0 = buf_get_text(b, first, from, to)?;
         let (data, len) = (line.data(), line.len());
         // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-        unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
+        unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl) };
         return Ok(rv);
     }
     let from = start_col as int64_t;
@@ -351,12 +342,12 @@ pub unsafe fn nvim_buf_get_text(
     str = buf_get_text(b, first, from, to)?;
     let (data, len) = (str.data(), str.len());
     // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-    unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
+    unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl) };
     if size > 2 as size_t {
         let n = size.wrapping_sub(2 as size_t);
         let at = start_row as LineNr + 1 as LineNr;
         // SAFETY: `b` is the live buffer and `rvp` this call's array.
-        unsafe { buf_collect_lines(b, n, at, 1, replace_nl, rvp, lstate, arena) };
+        unsafe { buf_collect_lines(b, n, at, 1, replace_nl, rvp, lstate) };
     }
     let last = end_row as int64_t;
     let to = end_col as int64_t;
@@ -364,7 +355,7 @@ pub unsafe fn nvim_buf_get_text(
     let (data, len) = (str.data(), str.len());
     let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
     // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-    unsafe { push_linestr(lstate, rvp, data, len, at, replace_nl, arena) };
+    unsafe { push_linestr(lstate, rvp, data, len, at, replace_nl) };
     Ok(rv)
 }
 
@@ -396,11 +387,11 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
 /// at a live arena, which the memory this answers with is taken from and must
 /// outlive.
 #[inline]
-unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t, arena: *mut Arena) {
+unsafe fn init_line_array(lstate: *mut lua_State, a: *mut Array, size: size_t) {
     if !lstate.is_null() {
         unsafe { lua_createtable(lstate, size as ::core::ffi::c_int, 0 as ::core::ffi::c_int) };
     } else {
-        unsafe { *a = arena_array(arena, size) };
+        unsafe { *a = Array::with_capacity(size) };
     };
 }
 
@@ -417,7 +408,6 @@ unsafe fn push_linestr(
     len: size_t,
     idx: ::core::ffi::c_int,
     replace_nl: bool,
-    arena: *mut Arena,
 ) {
     if !lstate.is_null() {
         // The question is only whether these `len` bytes hold a NL, and the
@@ -445,19 +435,18 @@ unsafe fn push_linestr(
         // SAFETY: the caller's Lua state, with the table on top.
         unsafe { lua_rawseti(lstate, -2 as ::core::ffi::c_int, at) };
     } else {
-        let mut str: String_0 =
-            String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
+        let mut str: String_0 = String_0::NULL;
         if len > 0 as size_t {
-            let borrowed = String_0::from_raw_parts(s as *mut ::core::ffi::c_char, len);
-            // SAFETY: the caller's promise about `s` and `len`, and `arena`.
-            str = unsafe { arena_string(arena, borrowed) };
+            // SAFETY: the caller's promise about `s` and `len`.
+            str = String_0::from_bytes(unsafe { core::slice::from_raw_parts(s.cast::<u8>(), len) });
             if replace_nl {
                 let (nl, nul) = ('\n' as ::core::ffi::c_char, NUL as ::core::ffi::c_char);
-                // SAFETY: `str` is the copy the arena just made.
+                // SAFETY: `str` names its own bytes.
                 unsafe { strchrsub(str.data(), nl, nul) };
             }
         }
-        unsafe { array_add(&mut (*a), Object::string(str)) };
+        // SAFETY: `a` is the caller's array.
+        unsafe { (*a).push(Object::string(str)) };
     };
 }
 
@@ -475,7 +464,6 @@ pub unsafe fn buf_collect_lines(
     replace_nl: bool,
     l: *mut Array,
     lstate: *mut lua_State,
-    arena: *mut Arena,
 ) {
     let mut i: size_t = 0 as size_t;
     while i < n {
@@ -485,7 +473,7 @@ pub unsafe fn buf_collect_lines(
         let at = start_idx + i as ::core::ffi::c_int;
         // SAFETY: `bufstr` holds `len` bytes, and `l`/`lstate` are the
         // caller's.
-        unsafe { push_linestr(lstate, l, bufstr, len, at, replace_nl, arena) };
+        unsafe { push_linestr(lstate, l, bufstr, len, at, replace_nl) };
         i = i.wrapping_add(1);
     }
 }

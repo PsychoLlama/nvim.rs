@@ -21,7 +21,7 @@
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memory::{strequal, xfree};
+use crate::memory::strequal;
 use crate::message_fmt::c_str;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::startup::{stdin_isatty, ui_client_channel_id};
@@ -100,11 +100,11 @@ pub unsafe fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args
         cursor_reset_style(tui);
         return;
     }
-    assert!(args.size != 0, "mode_info_set with no modes");
+    assert!(args.len() != 0, "mode_info_set with no modes");
     // SAFETY: the caller guarantees `args`.
     unsafe {
-        for i in 0..args.size {
-            let entry = (*args.items.add(i))
+        for i in 0..args.len() {
+            let entry = (args[i])
                 .as_dict()
                 .expect("mode_info_set entry is not a dict");
             tui.cursor_shapes[i] = decode_cursor_entry(entry);
@@ -339,8 +339,7 @@ pub unsafe fn tui_chdir(_tui: &mut TUIData, path: String_0) {
 ///
 /// `tui`'s terminfo must be resolved.
 fn show_verbose_terminfo(tui: &TUIData) {
-    // SAFETY: the message is owned here and freed once the event has been
-    // serialised.
+    // SAFETY: `tui`'s terminfo is resolved, per this function's contract.
     let info = unsafe { terminfo_info_msg(&tui.ti, tui.term, tui.terminfo_found_in_db) };
 
     // Each chunk is [text] or [text, highlight group], as `nvim_echo` takes.
@@ -364,13 +363,12 @@ fn show_verbose_terminfo(tui: &TUIData) {
     args.push(Object::boolean(true));
     args.push(opts.object());
 
-    // SAFETY: the event borrows the buffers above, which outlive the call.
+    // SAFETY: the channel is this client's own.
     unsafe {
         rpc_send_event(
             ui_client_channel_id.get(),
             c"nvim_echo".as_ptr(),
             args.array(),
         );
-        xfree(info.data().cast());
     }
 }

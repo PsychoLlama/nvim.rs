@@ -8,43 +8,6 @@
 
 use super::*;
 
-/// The msgpack-RPC dispatch wrapper for `nvim_get_option_info`.
-///
-/// Decodes the argument array against the signature, answers `Err` if
-/// the arity or a type is wrong, and encodes the answer as an
-/// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
-pub unsafe fn handle_nvim_get_option_info(
-    channel_id: uint64_t,
-    args: Array,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
-    log_invoke(
-        c"handle_nvim_get_option_info",
-        c"nvim_get_option_info",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 1 {
-        return Err(wrong_arity(1, args.len()));
-    }
-    let Some(arg_1) = as_string(args[0]) else {
-        return Err(wrong_type(1, c"nvim_get_option_info", c"String"));
-    };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_option_info(arg_1, arena) }?;
-    Ok(Object::Dict(rv))
-}
-
 /// The msgpack-RPC dispatch wrapper for `nvim_notify`.
 ///
 /// Decodes the argument array against the signature, answers `Err` if
@@ -53,17 +16,15 @@ pub unsafe fn handle_nvim_get_option_info(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_notify(
     channel_id: uint64_t,
     args: Array,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_notify",
         c"nvim_notify",
@@ -73,13 +34,13 @@ pub unsafe fn handle_nvim_notify(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_notify", c"String"));
     };
-    let Some(arg_2) = as_integer(args[1]) else {
+    let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_notify", c"Integer"));
     };
-    let Some(arg_3) = as_dict(args[2]) else {
+    let Some(arg_3) = as_dict(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_notify", c"Dict"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -95,17 +56,15 @@ pub unsafe fn handle_nvim_notify(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_out_write(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_out_write",
         c"nvim_out_write",
@@ -115,7 +74,7 @@ pub unsafe fn handle_nvim_out_write(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_out_write", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -132,17 +91,15 @@ pub unsafe fn handle_nvim_out_write(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_set_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_set_option",
         c"nvim_set_option",
@@ -152,10 +109,10 @@ pub unsafe fn handle_nvim_set_option(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_set_option", c"String"));
     };
-    let arg_2 = args[1];
+    let arg_2 = args[1].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
     unsafe { nvim_set_option(channel_id, arg_1, arg_2) }?;
@@ -170,17 +127,15 @@ pub unsafe fn handle_nvim_set_option(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_subscribe(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_subscribe",
         c"nvim_subscribe",
@@ -190,7 +145,7 @@ pub unsafe fn handle_nvim_subscribe(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_subscribe", c"String"));
     };
     nvim_subscribe(channel_id, arg_1);
@@ -205,17 +160,15 @@ pub unsafe fn handle_nvim_subscribe(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_unsubscribe(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_unsubscribe",
         c"nvim_unsubscribe",
@@ -225,7 +178,7 @@ pub unsafe fn handle_nvim_unsubscribe(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_unsubscribe", c"String"));
     };
     nvim_unsubscribe(channel_id, arg_1);
@@ -240,17 +193,15 @@ pub unsafe fn handle_nvim_unsubscribe(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_get_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_get_option",
         c"nvim_win_get_option",
@@ -260,10 +211,10 @@ pub unsafe fn handle_nvim_win_get_option(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_get_option", c"Window"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_get_option", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -279,17 +230,15 @@ pub unsafe fn handle_nvim_win_get_option(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_win_set_option(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_win_set_option",
         c"nvim_win_set_option",
@@ -299,13 +248,13 @@ pub unsafe fn handle_nvim_win_set_option(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"nvim_win_set_option", c"Window"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_set_option", c"String"));
     };
-    let arg_3 = args[2];
+    let arg_3 = args[2].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
     unsafe { nvim_win_set_option(channel_id, arg_1, arg_2, arg_3) }?;
@@ -320,17 +269,15 @@ pub unsafe fn handle_nvim_win_set_option(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_tabpage_del_var(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_tabpage_del_var",
         c"tabpage_del_var",
@@ -340,15 +287,15 @@ pub unsafe fn handle_tabpage_del_var(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"tabpage_del_var", c"Tabpage"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"tabpage_del_var", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    unsafe { tabpage_del_var(arg_1, arg_2, arena) }
+    unsafe { tabpage_del_var(arg_1, arg_2) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `tabpage_set_var`.
@@ -359,17 +306,15 @@ pub unsafe fn handle_tabpage_del_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_tabpage_set_var(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_tabpage_set_var",
         c"tabpage_set_var",
@@ -379,16 +324,16 @@ pub unsafe fn handle_tabpage_set_var(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"tabpage_set_var", c"Tabpage"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"tabpage_set_var", c"String"));
     };
-    let arg_3 = args[2];
+    let arg_3 = args[2].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    unsafe { tabpage_set_var(arg_1, arg_2, arg_3, arena) }
+    unsafe { tabpage_set_var(arg_1, arg_2, arg_3) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `vim_del_var`.
@@ -399,17 +344,15 @@ pub unsafe fn handle_tabpage_set_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_vim_del_var(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_vim_del_var",
         c"vim_del_var",
@@ -419,12 +362,12 @@ pub unsafe fn handle_vim_del_var(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"vim_del_var", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    unsafe { vim_del_var(arg_1, arena) }
+    unsafe { vim_del_var(arg_1) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `vim_set_var`.
@@ -435,17 +378,15 @@ pub unsafe fn handle_vim_del_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_vim_set_var(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_vim_set_var",
         c"vim_set_var",
@@ -455,13 +396,13 @@ pub unsafe fn handle_vim_set_var(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_string(args[0]) else {
+    let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"vim_set_var", c"String"));
     };
-    let arg_2 = args[1];
+    let arg_2 = args[1].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    unsafe { vim_set_var(arg_1, arg_2, arena) }
+    unsafe { vim_set_var(arg_1, arg_2) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `window_del_var`.
@@ -472,17 +413,15 @@ pub unsafe fn handle_vim_set_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_window_del_var(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_window_del_var",
         c"window_del_var",
@@ -492,15 +431,15 @@ pub unsafe fn handle_window_del_var(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"window_del_var", c"Window"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"window_del_var", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    unsafe { window_del_var(arg_1, arg_2, arena) }
+    unsafe { window_del_var(arg_1, arg_2) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `window_set_var`.
@@ -511,17 +450,15 @@ pub unsafe fn handle_window_del_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_window_set_var(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_window_set_var",
         c"window_set_var",
@@ -531,14 +468,14 @@ pub unsafe fn handle_window_set_var(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeWindow) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeWindow) else {
         return Err(wrong_type(1, c"window_set_var", c"Window"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"window_set_var", c"String"));
     };
-    let arg_3 = args[2];
+    let arg_3 = args[2].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    unsafe { window_set_var(arg_1, arg_2, arg_3, arena) }
+    unsafe { window_set_var(arg_1, arg_2, arg_3) }
 }

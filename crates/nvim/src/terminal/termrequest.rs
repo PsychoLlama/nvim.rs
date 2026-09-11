@@ -113,10 +113,7 @@ unsafe extern "C" fn emit_termrequest(argv: *mut *mut c_void) {
 
 /// The body of [`emit_termrequest`] once the terminal is known to be alive.
 fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
-    let sequence = String_0::from_raw_parts(
-        request.sequence.as_ptr().cast::<c_char>().cast_mut(),
-        request.sequence.len(),
-    );
+    let sequence = String_0::from_bytes(&request.sequence);
     let (data, size) = (sequence.data(), sequence.len().cast_signed());
     // SAFETY: `v:termrequest` takes a string of `size` readable bytes,
     // which it copies.

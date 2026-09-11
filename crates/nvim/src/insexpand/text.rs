@@ -249,8 +249,8 @@ pub(crate) fn get_next_bufname_token() {
         // SAFETY: a live buffer from the editor's own list, whose short name
         // is a NUL-terminated string.
         let tail = unsafe { path_tail(b.b_sfname) };
-        let orig = compl_orig_text().value();
-        if unsafe { cstr::prefix_eq(tail, orig.data(), orig.len()) } {
+        let (orig_data, orig_len) = compl_orig_text().parts();
+        if unsafe { cstr::prefix_eq(tail, orig_data, orig_len) } {
             let flags = if p_ic.get() != 0 { CP_ICASE } else { 0 };
             let no_name = ptr::null_mut();
             let _no_data: Option<&mut TypVal> = None;

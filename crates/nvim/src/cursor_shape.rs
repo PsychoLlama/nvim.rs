@@ -23,9 +23,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::types::ApiDict;
+use crate::types::String_0;
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::api::private::helpers::{arena_array, arena_dict, array_add, cstr_as_string, dict_put};
+use crate::api::private::helpers::cstr_to_string;
 use crate::charset::getdigits_int;
 use crate::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::global_cell::GlobalCell;
@@ -36,8 +38,7 @@ use crate::state::mode::{State, finish_op};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
 };
-use crate::types::builders::static_cstring;
-use crate::types::{Arena, Array, CursorEntry, CursorShape, Object, size_t};
+use crate::types::{Array, CursorEntry, CursorShape, Object, size_t};
 use crate::ui::ui_mode_info_set;
 
 /// Where a mode's cursor shape sits in the shape table.
@@ -165,25 +166,23 @@ fn clear_shape_table() {
 /// mode, in table order.
 ///
 /// # Safety
-/// `arena` must be null or the caller's live arena.
-pub(crate) unsafe fn mode_style_array(arena: *mut Arena) -> Array {
-    let mut all = arena_array(arena, SHAPE_IDX_COUNT as size_t);
+/// Reaches the shape table and can run a namespace callback; main thread
+/// only.
+pub(crate) unsafe fn mode_style_array() -> Array {
+    let mut all = Array::with_capacity(SHAPE_IDX_COUNT as size_t);
     for idx in 0..SHAPE_IDX_COUNT {
         let cur = shape_entry(idx);
         let for_mouse = c_int::from(cur.used_for) & SHAPE_MOUSE != 0;
         let for_cursor = c_int::from(cur.used_for) & SHAPE_CURSOR != 0;
         // Upstream sizes for three keys plus the nine cursor ones, so a
         // cursor-only entry ("sm", "t") leaves one slot unused.
-        let mut dic = arena_dict(arena, if for_cursor { 12 } else { 3 });
-        let mut put = |key, value| {
-            // SAFETY: `dic` was reserved above for every key added below.
-            unsafe { dict_put(&mut dic, key, value) };
-        };
+        let mut dic = ApiDict::with_capacity(if for_cursor { 12 } else { 3 });
+        let mut put = |key, value| dic.insert(String_0::from_cstr(key), value);
         // SAFETY: both are static literals the table ships with; nothing
         // ever writes either field.
-        let full_name = unsafe { cstr_as_string(cur.full_name) };
+        let full_name = unsafe { cstr_to_string(cur.full_name) };
         // SAFETY: as above.
-        let short_name = unsafe { cstr_as_string(cur.name) };
+        let short_name = unsafe { cstr_to_string(cur.name) };
         put(c"name", Object::string(full_name));
         put(c"short_name", Object::string(short_name));
         if for_mouse {
@@ -196,7 +195,7 @@ pub(crate) unsafe fn mode_style_array(arena: *mut Arena) -> Array {
                 SHAPE_HOR => c"horizontal",
                 _ => c"unknown",
             };
-            put(c"cursor_shape", Object::string(static_cstring(shape)));
+            put(c"cursor_shape", Object::string(String_0::from_cstr(shape)));
             put(c"cell_percentage", Object::integer(cur.percentage.into()));
             put(c"blinkwait", Object::integer(cur.blinkwait.into()));
             put(c"blinkon", Object::integer(cur.blinkon.into()));
@@ -215,8 +214,7 @@ pub(crate) unsafe fn mode_style_array(arena: *mut Arena) -> Array {
             let attr_lm = unsafe { attr_of(id_lm) };
             put(c"attr_id_lm", Object::integer(attr_lm.into()));
         }
-        // SAFETY: `all` was reserved for one object per entry.
-        unsafe { array_add(&mut all, Object::dict(dic)) };
+        all.push(Object::dict(dic));
     }
     all
 }

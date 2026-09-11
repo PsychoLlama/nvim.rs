@@ -138,7 +138,7 @@ pub(crate) unsafe fn add_search_pattern(
             } else {
                 Some(pat.off.off as Integer)
             },
-            pat: Some(unsafe { cstr_as_string(pat.pat) }),
+            pat: Some(unsafe { cstr_to_string(pat.pat) }),
         }),
         additional_data: pat.additional_data,
     };
@@ -382,7 +382,7 @@ pub fn shada_encode_regs() -> String_0 {
         }
     }
     unsafe { xfree(wms.cast::<c_void>()) };
-    packer_take_string(&packer)
+    unsafe { packer_take_string(&packer) }
 }
 
 /// The jump list, as msgpack.
@@ -396,7 +396,7 @@ pub fn shada_encode_jumps() -> String_0 {
         let written = unsafe { shada_pack_pfreed_entry(&raw mut packer, jump, 0) };
         assert!(written != kSDWriteFailed, "shada: cannot pack a jump");
     }
-    packer_take_string(&packer)
+    unsafe { packer_take_string(&packer) }
 }
 
 /// The buffer list, as msgpack.
@@ -411,7 +411,7 @@ pub fn shada_encode_buflist() -> String_0 {
         "shada: cannot pack the buffer list"
     );
     unsafe { xfree(buflist_entry.data.buffer_list().buffers.cast::<c_void>()) };
-    packer_take_string(&packer)
+    unsafe { packer_take_string(&packer) }
 }
 
 /// Every global variable `'shada'` says to remember, as msgpack.
@@ -431,7 +431,7 @@ pub fn shada_encode_gvars() -> String_0 {
             )
         };
         if name.is_null() {
-            return packer_take_string(&packer);
+            return unsafe { packer_take_string(&packer) };
         }
         // A function reference cannot be written to a file.
         if vartv.v_type() != VAR_FUNC && vartv.v_type() != VAR_PARTIAL {
@@ -454,7 +454,7 @@ pub fn shada_encode_gvars() -> String_0 {
         }
         unsafe { tv_clear(&mut vartv) };
         if var_iter.is_none() {
-            return packer_take_string(&packer);
+            return unsafe { packer_take_string(&packer) };
         }
     }
 }

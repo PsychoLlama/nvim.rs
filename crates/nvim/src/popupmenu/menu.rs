@@ -290,10 +290,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
 
 /// Tell the UI whether to send mouse-move events.
 fn set_mousemoveevent(on: bool) {
-    ui_call_option_set(
-        String_0::from_raw_parts(c"mousemoveevent".as_ptr().cast_mut(), 14),
-        Object::Boolean(on),
-    );
+    ui_call_option_set(String_0::from_cstr(c"mousemoveevent"), Object::Boolean(on));
 }
 
 /// `:popup` -- show the menu at `path_name`, at the mouse or at the cursor.

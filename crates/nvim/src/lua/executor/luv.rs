@@ -25,7 +25,6 @@ use super::{
     LUVF_CALLBACK_NOEXIT, in_fast_callback, kThread, kThreadCallback, nlua_get_error,
     nlua_init_state, nlua_luv_error_event, nlua_pcall,
 };
-use crate::api::private::helpers::api_free_array;
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::guard::Depth;
@@ -234,10 +233,10 @@ pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
             }
         };
 
-        let ret = runtime_get_named_thread(is_lua, pat, all);
-        nlua_push_array(lstate, ret, kNluaPushSpecial as c_int);
-        api_free_array(ret);
-        api_free_array(pat);
+        let mut ret = runtime_get_named_thread(is_lua, &pat, all);
+        nlua_push_array(lstate, &mut ret, kNluaPushSpecial as c_int);
+        drop(ret);
+        drop(pat);
         1
     }
 }

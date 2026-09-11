@@ -21,7 +21,6 @@
 //! layer, which frees the block itself, still needs the C allocator.
 
 use core::fmt::Write as _;
-use core::ptr;
 
 use crate::marktree::key::{mt_end, mt_paired, mt_start, unrelative};
 use crate::marktree::node::Node;
@@ -51,7 +50,7 @@ pub(crate) unsafe fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> Stri
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
         // An empty tree renders as nothing at all: the C handed back its
         // untouched growarray, which is a null string.
-        return String_0::from_raw_parts(ptr::null_mut(), 0);
+        return String_0::NULL;
     };
     let mut out = String::new();
     if dot {
@@ -64,7 +63,8 @@ pub(crate) unsafe fn mt_inspect(b: &mut MarkTree, keys: bool, dot: bool) -> Stri
     // SAFETY: `out` names `len` initialised bytes, which is what `xmemdupz`
     // copies into the fresh block it answers.
     let data = unsafe { xmemdupz(out.as_ptr().cast(), out.len()) };
-    String_0::from_raw_parts(data.cast(), out.len())
+    // SAFETY: that block is the answer's own, NUL-terminated by `xmemdupz`.
+    unsafe { String_0::from_owned_parts(data.cast(), out.len()) }
 }
 
 /// The id a paired mark is known by in the dump: the `(ns, id)` handle with

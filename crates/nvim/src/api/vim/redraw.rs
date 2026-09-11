@@ -109,9 +109,9 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             redraw_all_later(type_0);
         }
     }
-    if let Some(range) = opts.range {
+    if let Some(range) = opts.range.as_ref() {
         // SAFETY: the caller's keyset -- `range` names its own items.
-        let pair = unsafe { (range.size == 2).then(|| (*range.items, *range.items.add(1))) };
+        let pair = (range.len() == 2).then(|| (&range[0], &range[1]));
         let range = pair
             .and_then(|(begin, end)| begin.as_integer().zip(end.as_integer()))
             .filter(|&(begin, end)| begin >= 0 && end >= -1);

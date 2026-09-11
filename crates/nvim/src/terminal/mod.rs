@@ -41,7 +41,7 @@ pub(crate) mod refresh;
 pub(crate) mod scrollback;
 pub(crate) mod termrequest;
 
-use crate::api::private::helpers::{api_free_object, cstr_as_string, dict_get_value};
+use crate::api::private::helpers::{cstr_to_string, dict_get_value};
 use crate::autocmd::{
     apply_autocmds, apply_autocmds_group, aucmd_prepbuf, aucmd_restbuf, block_autocmds,
     is_aucmd_win, is_autocmd_blocked, unblock_autocmds,
@@ -64,10 +64,11 @@ use crate::options::kOptBuftype;
 use crate::startup::exiting;
 use crate::state::mode::State;
 use crate::types::AutoEvent;
-use crate::types::builders::{DictBuf, static_cstring};
+use crate::types::String_0;
+use crate::types::builders::DictBuf;
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    AcoSave, Arena, BufferHandle, ColNr, Dict, Event, ExArg, ExtmarkOp, Handle, HlAttrs, LineNr,
+    AcoSave, BufferHandle, ColNr, Dict, Event, ExArg, ExtmarkOp, Handle, HlAttrs, LineNr,
     MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue, SaveVEvent,
     Terminal, TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs,
     VTermState, VTermValue, VarNumber, int16_t, size_t, uint8_t,
@@ -368,7 +369,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
     buffer.b_locked += 1;
     set_option_value(
         kOptBuftype,
-        OptVal::String(static_cstring(c"terminal")),
+        OptVal::static_string(c"terminal"),
         OptionSetFlags::LOCAL,
     );
     buffer.b_locked -= 1;
@@ -951,23 +952,20 @@ fn is_focused(term: Term) -> bool {
 ///
 /// The lookup cannot fail in a way this module's caller could act on, so the
 /// error is cleared and dropped. **The answer BORROWS `dict`**:
-/// `dict_get_value` converts with `reuse_strdata`, so a string in it points
-/// at the variable's own bytes rather than at a copy.
+/// The answer is a copy of the variable's value.
 ///
 /// # Safety
 /// `dict` must be a live dictionary and `key` NUL-terminated.
 unsafe fn dict_lookup(dict: *mut Dict, key: *const c_char) -> Object {
-    let no_arena = ::core::ptr::null_mut::<Arena>();
     // SAFETY: forwarded to this function's own caller. A key that is not
     // there answers nil rather than a refusal.
-    unsafe { dict_get_value(dict, cstr_as_string(key), no_arena) }.unwrap_or(Object::Nil)
+    let key = unsafe { cstr_to_string(key) };
+    unsafe { dict_get_value(dict, &key) }.unwrap_or(Object::Nil)
 }
 
 /// `b:<key>`, falling back to `g:<key>`, if it is a string.
 ///
-/// The result BORROWS the variable's own bytes, or is null. It must not be
-/// freed, and it stays valid only until something assigns to or unsets the
-/// variable.
+/// The answer is a fresh allocation the caller frees, or null.
 ///
 /// # Safety
 ///
@@ -979,11 +977,6 @@ unsafe fn get_config_string(buffer: Buf, key: *const c_char) -> *mut c_char {
         // SAFETY: as above, against the global variables.
         obj = unsafe { dict_lookup(get_globvar_dict(), key) };
     }
-    if let Object::String(s) = obj {
-        // The bytes are the variable's, so nothing here owns them.
-        return s.data();
-    }
-    // SAFETY: not a string, so there is no borrowed `String` to release.
-    unsafe { api_free_object(obj) };
-    ::core::ptr::null_mut()
+    obj.into_string()
+        .map_or(::core::ptr::null_mut(), String_0::into_raw)
 }

@@ -27,7 +27,6 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
-use crate::api::private::helpers::array_add;
 use crate::api::private::validate::{err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 
@@ -186,25 +185,24 @@ unsafe fn style_slots(style: &BorderStyle) -> Slots {
 ///
 /// # Safety
 /// `item` must be a live API object.
-unsafe fn parse_border_item(item: Object) -> Result<(String_0, c_int), Error> {
+unsafe fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
     if let Object::Array(arr) = item {
-        if arr.size == 0 || arr.size > 2 {
+        if arr.len() == 0 || arr.len() > 2 {
             return Err(err_border(c"1 or 2-item Array", None));
         }
-        // SAFETY: a non-empty array has an item at index 0.
-        let first = unsafe { *arr.items };
-        let Some(string) = first.as_string() else {
+        // A non-empty array has an item at index 0.
+        let Some(string) = arr[0].as_string() else {
             return Err(err_border(c"Array of Strings", None));
         };
-        if arr.size < 2 {
-            return Ok((string, 0));
+        if arr.len() < 2 {
+            return Ok((string.clone(), 0));
         }
-        // SAFETY: a two-item array has an item at index 1.
-        let hl = unsafe { object_to_hl_id(*arr.items.add(1), c"border char highlight".as_ptr()) };
-        return hl.map(|hl_id| (string, hl_id));
+        // SAFETY: the name is a NUL-terminated literal.
+        let hl = unsafe { object_to_hl_id(&arr[1], c"border char highlight".as_ptr()) };
+        return hl.map(|hl_id| (string.clone(), hl_id));
     }
-    if let Object::String(string) = item {
-        return Ok((string, 0));
+    if let Some(string) = item.as_string() {
+        return Ok((string.clone(), 0));
     }
     Err(err_border(
         c"String or Array",
@@ -240,8 +238,8 @@ type Slots = ([BorderChar; 8], [c_int; 8]);
 ///
 /// # Safety
 /// `arr` must be a live API array.
-unsafe fn parse_border_array(arr: Array) -> Result<Slots, Error> {
-    let size = arr.size;
+unsafe fn parse_border_array(arr: &Array) -> Result<Slots, Error> {
+    let size = arr.len();
     if size == 0 || size > 8 || !size.is_power_of_two() {
         return Err(err_border(c"1, 2, 4, or 8 chars", None));
     }
@@ -250,9 +248,9 @@ unsafe fn parse_border_array(arr: Array) -> Result<Slots, Error> {
     let mut hl_ids = [0 as c_int; 8];
     for i in 0..size {
         // SAFETY: `i` is below the array's own size.
-        let item = unsafe { *arr.items.add(i) };
+        let item = &arr[i];
         // SAFETY: an item of a live array.
-        let (string, hl_id) = unsafe { parse_border_item(item) }?;
+        let (string, hl_id) = unsafe { parse_border_item(&item.clone()) }?;
         // SAFETY: a live API string.
         if !string.is_empty() && unsafe { mb_string2cells_len(string.data(), string.len()) } > 1 {
             return Err(err_border(c"only one-cell chars", None));
@@ -297,10 +295,10 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig) -> Resu
     let mut cfg = unsafe { WinCfg::new(fconfig) };
     cfg.border = true;
 
-    let slots = if let Object::Array(array) = style {
+    let slots = if let Some(array) = style.as_array() {
         // SAFETY: the caller's live array.
         Some(unsafe { parse_border_array(array) }?)
-    } else if let Object::String(str) = style {
+    } else if let Some(str) = style.as_string() {
         // SAFETY: a live API string is NUL-terminated.
         if str.is_empty() || unsafe { strequal(str.data(), BORDER_NONE.as_ptr()) } {
             // Border text does not work without a border.
@@ -312,7 +310,7 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig) -> Resu
         // SAFETY: as above.
         let Some(style) = (unsafe { find_style(str.data()) }) else {
             // SAFETY: the keyset's string is NUL-terminated.
-            return Err(err_bad_value(c"border", unsafe { str.as_cstr() }));
+            return Err(err_bad_value(c"border", str.as_cstr()));
         };
         // SAFETY: the editor's highlight tables are initialised by the time
         // any window can be configured.
@@ -371,10 +369,7 @@ pub unsafe fn parse_winborder(
         Object::string(unsafe { cstr_to_string(border_opt) })
     };
     // SAFETY: the caller's config, and the object just built.
-    let parsed = unsafe { parse_border_style(style, fconfig) };
-    // SAFETY: as above.
-    unsafe { api_free_object(style) };
-    parsed.map(|()| true)
+    unsafe { parse_border_style(style, fconfig) }.map(|()| true)
 }
 
 /// The eight comma-separated cells of a `'winborder'` value, or `None` when
@@ -385,13 +380,13 @@ pub unsafe fn parse_winborder(
 unsafe fn border_cell_list(border_opt: *mut c_char) -> Option<Array> {
     // Room for the eight it must have: nine parts is already a failure, so
     // the transpile's doubling growth step never got past this size either.
-    let mut cells = arena_array(::core::ptr::null_mut(), 8);
+    let mut cells = Array::with_capacity(8);
     let mut p = border_opt;
     let mut part: BorderChar = BLANK_CHAR;
     // SAFETY: the caller's option value, NUL-terminated; `copy_option_part`
     // advances `p` and writes at most `part.len()` bytes into `part`.
     while unsafe { *p } != 0 {
-        let full = cells.size == cells.capacity;
+        let full = cells.len() == 8;
         let (next, into, room) = (&raw mut p, part.as_mut_ptr(), part.len());
         let comma = c",".as_ptr().cast_mut();
         // The copy is still short-circuited by `full`: a ninth part is
@@ -401,19 +396,19 @@ unsafe fn border_cell_list(border_opt: *mut c_char) -> Option<Array> {
             full || unsafe { copy_option_part(next, into, room, comma) } == 0 || part[0] == 0;
         if empty {
             // SAFETY: the array holds only strings this loop allocated.
-            unsafe { api_free_array(cells) };
+            drop(cells);
             return None;
         }
         // SAFETY: `part` is NUL-terminated by `copy_option_part`, and
         // `cells` is this function's own array.
         unsafe {
             let cell = Object::string(cstr_to_string(part.as_mut_ptr()));
-            array_add(&mut cells, cell);
+            cells.push(cell);
         };
     }
-    if cells.size != cells.capacity {
+    if cells.len() != 8 {
         // SAFETY: as above.
-        unsafe { api_free_array(cells) };
+        drop(cells);
         return None;
     }
     Some(cells)

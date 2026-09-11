@@ -241,7 +241,7 @@ pub(crate) unsafe fn validate_option_value(
     // unset; nothing else needs to look at the value.
     if option_is_global_local(opt_idx)
         && opt_flags.has(OptionSetFlags::LOCAL)
-        && optval_equal(*newval, get_option_unset_value(opt_idx))
+        && optval_equal(newval, &get_option_unset_value(opt_idx))
     {
         return ptr::null();
     }
@@ -251,10 +251,10 @@ pub(crate) unsafe fn validate_option_value(
         if opt_flags == OptionSetFlags::GLOBAL {
             return gettext(c"Cannot unset global option value").as_ptr();
         }
-        *newval = optval_copy(get_option_unset_value(opt_idx));
+        *newval = optval_copy(&get_option_unset_value(opt_idx));
         ptr::null()
     } else if !option_has_type(opt_idx, newval.kind()) {
-        let rep = optval_to_cstr(*newval);
+        let rep = optval_to_cstr(newval);
         let fmt = c"Invalid value for option '%s': expected %s, got %s %s";
         let fmt = gettext(fmt);
         let want = optval_type_name(opt.type_0).as_ptr();

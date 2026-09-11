@@ -63,36 +63,42 @@ pub unsafe fn msg_ext_set_trigger(trigger: *const c_char) {
 /// # Safety
 /// Only that the emitter statics are in a consistent state.
 pub(crate) unsafe fn msg_ext_emit_chunk() {
-    if msg_ext_chunks.get().is_null() {
-        // SAFETY: the caller's obligation, as documented above.
-        unsafe { msg_ext_init_chunks() };
+    if msg_ext_chunks.with(Option::is_none) {
+        // The first chunk of the session starts the column over, as the
+        // null-pointer check upstream's `msg_ext_init_chunks` guards did.
+        msg_ext_init_chunks();
     }
     if msg_ext_last_attr.get() == -1 {
         return;
     }
     // The accumulated text moves out, leaving the buffer empty.
     let accumulated = msg_ext_last_chunk.take();
-    let mut chunk = EMPTY_ARRAY;
+    let mut chunk = Array::with_capacity(3);
 
-    // SAFETY: `accumulated` is the chunk's own bytes, and `msg_ext_chunks` is
-    // non-null by the test above.
-    unsafe { array_push(&mut chunk, Object::integer(msg_ext_last_attr.get().into())) };
+    chunk.push(Object::integer(msg_ext_last_attr.get().into()));
     msg_ext_last_attr.set(-1);
+    // SAFETY: `accumulated` is the chunk's own bytes.
     let text = unsafe { cbuf_to_string(accumulated.as_ptr().cast::<c_char>(), accumulated.len()) };
-    unsafe { array_push(&mut chunk, Object::string(text)) };
-    unsafe { array_push(&mut chunk, Object::integer(msg_ext_last_hl_id.get().into())) };
-    unsafe { array_push(&mut *msg_ext_chunks.get(), Object::array(chunk)) };
+    chunk.push(Object::string(text));
+    chunk.push(Object::integer(msg_ext_last_hl_id.get().into()));
+    msg_ext_chunks.with_mut(|chunks| {
+        chunks
+            .as_mut()
+            .expect("the check above installed an array")
+            .push(Object::array(chunk));
+    });
 }
 
-/// Start a fresh chunk array, handing the old one to the caller to dispose of.
+/// Start a fresh chunk array, handing the old one to the caller.
 ///
-/// # Safety
-/// Only that the emitter statics are in a consistent state.
-pub(crate) unsafe fn msg_ext_init_chunks() -> *mut Array {
-    let tofree = msg_ext_chunks.get();
-    msg_ext_chunks.set(unsafe { xcalloc(1, ::core::mem::size_of::<Array>()) }.cast());
+/// `None` is upstream's null pointer: the array does not exist until the
+/// first chunk is emitted, and resetting the column is what that first
+/// emission did.
+pub(crate) fn msg_ext_init_chunks() -> Array {
     msg_col.set(0);
-    tofree
+    msg_ext_chunks
+        .with_mut(|chunks| chunks.replace(Array::EMPTY))
+        .unwrap_or(Array::EMPTY)
 }
 
 /// Emit everything accumulated so far as one `msg_show` event.
@@ -112,51 +118,57 @@ pub unsafe fn msg_ext_ui_flush() {
     }
 
     unsafe { msg_ext_emit_chunk() };
-    if unsafe { (*msg_ext_chunks.get()).size } == 0 {
+    if msg_ext_chunks.with(|chunks| chunks.as_ref().is_none_or(|chunks| chunks.is_empty())) {
         return;
     }
 
-    let tofree = unsafe { msg_ext_init_chunks() };
+    let mut chunks = msg_ext_init_chunks();
+    let to_ui_history = msg_ext_history.get();
+    // The UI is sent a copy only when this message is also kept here; when
+    // the UI takes the history the array moves out whole.
+    let shown = if to_ui_history {
+        core::mem::take(&mut chunks)
+    } else {
+        chunks.clone()
+    };
     ui_call_msg_show(
-        unsafe { cstr_as_string(msg_ext_kind.get()) },
-        unsafe { *tofree },
+        // SAFETY: both are null or NUL-terminated protocol names.
+        unsafe { cstr_to_string(msg_ext_kind.get()) },
+        shown,
         msg_ext_overwrite.get(),
-        msg_ext_history.get(),
+        to_ui_history,
         msg_ext_append.get(),
-        msg_ext_id.get(),
-        unsafe { cstr_as_string(msg_ext_trigger.get()) },
+        msg_ext_id.with(Object::clone),
+        unsafe { cstr_to_string(msg_ext_trigger.get()) },
     );
 
-    if msg_ext_history.get() {
-        // The UI owns the history copy; ours is redundant.
-        unsafe { api_free_array(*tofree) };
-    } else {
+    if !to_ui_history {
         // Not going to the UI's history, so keep it in ours -- as a
         // temporary entry, which the next message displaces.  The chunk
         // arrays are unwrapped rather than copied: the strings move.
         let mut msg = EMPTY_HL_MESSAGE;
-        for i in 0..unsafe { (*tofree).size } {
-            let chunk = unsafe { *(*tofree).items.add(i) }
-                .as_array()
-                .expect("a chunk this module emitted is an array")
-                .items;
+        for entry in chunks {
+            let chunk = entry
+                .into_array()
+                .expect("a chunk this module emitted is an array");
             // `msg_ext_emit_chunk` pushed [attr, text, hl_id] in that order.
-            let hl_id = unsafe { *chunk.add(2) }
+            let hl_id = chunk[2]
                 .as_integer()
                 .expect("a chunk's third element is its highlight id");
+            let mut chunk = chunk.into_vec();
             let moved = HlMessageChunk {
-                text: unsafe { *chunk.add(1) }
-                    .as_string()
+                text: chunk[1]
+                    .take()
+                    .into_string()
                     .expect("a chunk's second element is its text"),
                 hl_id: c_int::try_from(hl_id).expect("this module only emits c_int ids"),
             };
+            // SAFETY: `msg` started empty and is only pushed to here.
             unsafe { hl_msg_push(&mut msg, moved) };
-            unsafe { xfree(chunk.cast()) };
         }
-        unsafe { xfree((*tofree).items.cast()) };
+        // SAFETY: `msg` is this frame's, and the history takes it over.
         unsafe { msg_hist_add_multihl(msg, true, ptr::null_mut()) };
     }
-    unsafe { xfree(tofree.cast()) };
 
     msg_ext_overwrite.set(false);
     msg_ext_history.set(false);
@@ -182,9 +194,6 @@ pub unsafe fn msg_ext_flush_showmode() {
     if ui_has(kUIMessages) && (pending || clear.get()) {
         clear.set(pending);
         unsafe { msg_ext_emit_chunk() };
-        let tofree = unsafe { msg_ext_init_chunks() };
-        ui_call_msg_showmode(unsafe { *tofree });
-        unsafe { api_free_array(*tofree) };
-        unsafe { xfree(tofree.cast()) };
+        ui_call_msg_showmode(msg_ext_init_chunks());
     }
 }

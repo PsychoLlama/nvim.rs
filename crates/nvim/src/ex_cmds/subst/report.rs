@@ -12,7 +12,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
 use crate::decoration::bufhl_add_hl_pos_offset;
@@ -30,9 +29,9 @@ use crate::options::kOptShortmess;
 use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
 use crate::strings::vim_snprintf_add;
+use crate::types::OptStr;
 use crate::types::{
-    ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptVal, OptionSetFlags, Pos, String_0,
-    int64_t, size_t,
+    ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptVal, OptionSetFlags, Pos, int64_t, size_t,
 };
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -43,11 +42,8 @@ use std::ffi::CString;
 
 /// An option value that borrows a static C string, for the two options this
 /// module sets and puts back.
-pub(crate) fn static_cstr_optval(s: &'static CStr) -> OptVal {
-    OptVal::String(String_0::from_raw_parts(
-        s.as_ptr() as *mut c_char,
-        s.to_bytes().len() as size_t,
-    ))
+pub(crate) const fn static_cstr_optval(s: &'static CStr) -> OptVal {
+    OptVal::static_string(s)
 }
 
 /// The singular and plural forms of the report, for one line and for several.
@@ -353,13 +349,14 @@ pub(crate) unsafe fn show_sub(
     if let Some(pv) = pv {
         unsafe { xfree(pv.str as *mut c_void) };
     }
-    // `cstr_as_string` borrows rather than copies, so the saved option must
+    // The value borrows rather than copies, so the saved option must
     // outlive the call that puts it back -- which is why it is dropped here
     // and not before.
-    // SAFETY: `save_shm` is this call's own NUL-terminated copy.
+    // SAFETY: `save_shm` is this call's own NUL-terminated copy, and
+    // `set_option_direct` copies what it is given.
     set_option_direct(
         kOptShortmess,
-        OptVal::String(unsafe { cstr_as_string(save_shm.as_ptr().cast_mut()) }),
+        OptVal::String(unsafe { OptStr::borrowing(save_shm.as_ptr()) }),
         OptionSetFlags::NONE,
         SID_NONE,
     );

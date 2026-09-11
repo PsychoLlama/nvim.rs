@@ -18,7 +18,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::arglist::get_arglist_exp;
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::{
@@ -117,7 +116,6 @@ use crate::state::mode::restart_edit;
 use crate::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen};
 use crate::types::AutoEvent;
 use crate::types::TAB;
-use crate::types::builders::static_cstring;
 use crate::types::{
     AcoSave, BlnFlags, Buffer, Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction,
     DoBufAction, EvalFuncData, ExArg, ExtmarkOp, FILE, FileInfo, GetFileFlags, LineNr, List,

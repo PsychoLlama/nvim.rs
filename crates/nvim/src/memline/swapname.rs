@@ -530,7 +530,7 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
     } else {
         let mut need_clear = false;
         unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
-        let text = String_0::from_raw_parts(msg.as_mut_ptr().cast::<c_char>(), msg.len());
+        let text = String_0::from_bytes(&msg);
         let clear = &raw mut need_clear;
         unsafe { msg_multiline(text, 0, false, false, clear) };
     }
@@ -882,8 +882,7 @@ pub unsafe fn recover_names(
                     let mut msg_buf: Vec<u8> = Vec::with_capacity(IOSIZE as usize);
                     unsafe { swapfile_info(name, &mut msg_buf) };
                     let mut need_clear = false;
-                    let data = msg_buf.as_mut_ptr().cast::<c_char>();
-                    let text = String_0::from_raw_parts(data, msg_buf.len());
+                    let text = String_0::from_bytes(&msg_buf);
                     let clear = &raw mut need_clear;
                     unsafe { msg_multiline(text, 0, false, false, clear) };
                 }

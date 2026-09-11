@@ -11,10 +11,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
-use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::kvec::InitVec;
 use crate::memory::handoff::owned_cstr;
-use crate::types::builders::static_cstring;
 use crate::types::{NUL, VAR_DICT, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -65,16 +62,8 @@ impl Filling {
 
     /// C's `PUT_C`: append `key: value`.
     fn put(&mut self, key: &'static CStr, value: Object) {
-        debug_assert!(self.0.size < MAPARG_DICT_KEYS);
-        // SAFETY: the constructor's promise — room for `MAPARG_DICT_KEYS`
-        // entries — and `size` counts the ones written so far.
-        unsafe {
-            self.0.items.add(self.0.size).write(key_value_pair {
-                key: static_cstring(key),
-                value,
-            });
-        }
-        self.0.size += 1;
+        debug_assert!(self.0.len() < MAPARG_DICT_KEYS);
+        self.0.insert(String_0::from_cstr(key), value);
     }
 
     /// The finished dict.
@@ -91,21 +80,26 @@ impl Filling {
 /// is not told apart from `:noremap`, and there is no `"buf"` key.
 /// `lhsrawalt` is the other spelling of a simplified LHS, or null.
 ///
+/// The arena here is this call's own scratch: `str2special_arena` and the
+/// mode buffer are intermediates the dictionary copies out of, so the whole
+/// chain is released before the answer leaves.
+///
 /// # Safety
-/// `mp` must be a live mapblock and `arena` a live arena.
+/// `mp` must be a live mapblock.
 pub(crate) unsafe fn mapblock_fill_dict(
     mp: Mb,
     lhsrawalt: Option<&MapStr>,
     buffer_value: c_int,
     abbr: bool,
     compatible: bool,
-    arena: *mut Arena,
 ) -> ApiDict {
-    // SAFETY: the caller's promise — `arena` is live and `mp` a live mapblock,
-    // so `m_keys` is its NUL-terminated LHS.  `arena_alloc` answers seven
-    // writable bytes, which is the width `map_mode_to_chars` fills.
+    let mut scratch = ARENA_EMPTY;
+    let arena = &raw mut scratch;
+    // SAFETY: the caller's promise — `mp` is a live mapblock, so `m_keys` is
+    // its NUL-terminated LHS.  `arena_alloc` answers seven writable bytes,
+    // which is the width `map_mode_to_chars` fills.
     let (dict, lhs, mapmode) = unsafe {
-        let dict = arena_dict(arena, MAPARG_DICT_KEYS);
+        let dict = ApiDict::with_capacity(MAPARG_DICT_KEYS);
         let lhs = str2special_arena(mp.m_keys.as_ptr(), compatible, !compatible, arena);
         let mapmode: *mut c_char = arena_alloc(arena, 7, false).cast();
         mapmode.copy_from_nonoverlapping(map_mode_to_chars(mp.m_mode).as_ptr(), 7);
@@ -131,9 +125,9 @@ pub(crate) unsafe fn mapblock_fill_dict(
         out.put(c"callback", Object::LuaRef(luaref));
     } else {
         // SAFETY: `orig_str` and `str` are the mapping's own NUL-terminated
-        // strings, and `arena` is live.
+        // strings, and `arena` is this call's scratch.
         let text = unsafe {
-            cstr_as_string(if compatible {
+            cstr_to_string(if compatible {
                 rhs.orig_str.as_ptr()
             } else {
                 str2special_arena(rhs.str.as_ptr(), false, true, arena)
@@ -143,18 +137,18 @@ pub(crate) unsafe fn mapblock_fill_dict(
     }
     if let Some(desc) = &rhs.desc {
         // SAFETY: the mapping's own NUL-terminated text.
-        let desc = unsafe { cstr_as_string(desc.as_ptr()) };
+        let desc = unsafe { cstr_to_string(desc.as_ptr()) };
         out.put(c"desc", Object::string(desc));
     }
     // SAFETY: `lhs` is `str2special_arena`'s answer and `m_keys` the mapping's
     // own LHS; both are NUL-terminated.
-    let (lhs, lhsraw) = unsafe { (cstr_as_string(lhs), cstr_as_string(mp.m_keys.as_ptr())) };
+    let (lhs, lhsraw) = unsafe { (cstr_to_string(lhs), cstr_to_string(mp.m_keys.as_ptr())) };
     out.put(c"lhs", Object::string(lhs));
     out.put(c"lhsraw", Object::string(lhsraw));
     if let Some(alt) = lhsrawalt {
         // Also add the value for the simplified entry.
         // SAFETY: a `MapStr` is NUL-terminated by its own invariant.
-        let alt = unsafe { cstr_as_string(alt.as_ptr()) };
+        let alt = unsafe { cstr_to_string(alt.as_ptr()) };
         out.put(c"lhsrawalt", Object::string(alt));
     }
     out.put(c"noremap", Object::integer(noremap_value.into()));
@@ -177,11 +171,15 @@ pub(crate) unsafe fn mapblock_fill_dict(
         Object::integer(Integer::from(mp.m_replace_keycodes)),
     );
     // SAFETY: `mapmode` is the seven-byte NUL-terminated copy made above.
-    let mode = unsafe { cstr_as_string(mapmode) };
+    let mode = unsafe { cstr_to_string(mapmode) };
     out.put(c"mode", Object::string(mode));
     out.put(c"abbr", Object::integer(Integer::from(abbr)));
     out.put(c"mode_bits", Object::integer(mp.m_mode.into()));
 
+    // Every string above was copied out of the scratch, so nothing the
+    // answer holds points into it.
+    // SAFETY: the chain is this call's own.
+    unsafe { arena_mem_free(arena_finish(arena)) };
     out.finish()
 }
 
@@ -274,23 +272,13 @@ unsafe fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
         }
     } else if let Some((mp, local)) = found {
         // Return a dictionary.
-        let mut arena = ARENA_EMPTY;
         // SAFETY: `keys_simplified` is `replace_termcodes`'s NUL-terminated
-        // answer, `arena` is this frame's own, and `result` the caller's slot.
-        unsafe {
+        // answer and `mp` a live mapping.
+        let dict = unsafe {
             let alt = did_simplify.then(|| MapStr::new(cstr::bytes_at(keys_simplified)));
-            let dict = mapblock_fill_dict(
-                mp,
-                alt.as_ref(),
-                c_int::from(local),
-                abbr,
-                true,
-                &raw mut arena,
-            );
-            let mut obj = Object::dict(dict);
-            object_to_vim_take_luaref(&raw mut obj, result, true);
-            arena_mem_free(arena_finish(&raw mut arena));
-        }
+            mapblock_fill_dict(mp, alt.as_ref(), c_int::from(local), abbr, true)
+        };
+        *result = TypVal::from(Object::dict(dict));
     } else {
         // Return an empty dictionary.
         // SAFETY: the caller's writable answer slot.
@@ -336,14 +324,11 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 (alt, COwned::new(keys_buf))
             };
 
-            let mut d = TV_INITIAL_VALUE;
-            // SAFETY: `mp` is a live entry of the table being walked, `arena`
-            // is this frame's own, and `result`'s list was allocated above.
+            // SAFETY: `mp` is a live entry of the table being walked and
+            // `result`'s list was allocated above.
             unsafe {
-                let dict =
-                    mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true, &raw mut arena);
-                let mut obj = Object::dict(dict);
-                object_to_vim_take_luaref(&raw mut obj, &mut d, true);
+                let dict = mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true);
+                let mut d = TypVal::from(Object::dict(dict));
                 debug_assert_eq!(d.v_type(), VAR_DICT);
                 tv_list_append_dict((*result).list_or_null(), d.take_dict());
                 arena_mem_free(arena_finish(&raw mut arena));
@@ -377,7 +362,7 @@ pub fn f_mapcheck(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// # Safety
 /// `mode` must be a live API string.
-pub(crate) unsafe fn parse_shortname_mode(mode: String_0) -> (c_int, bool, *mut c_char) {
+pub(crate) unsafe fn parse_shortname_mode(mode: &String_0) -> (c_int, bool, *mut c_char) {
     let mut p = if !mode.is_empty() {
         mode.data()
     } else {
@@ -404,51 +389,36 @@ pub(crate) unsafe fn parse_shortname_mode(mode: String_0) -> (c_int, bool, *mut 
 /// global ones.
 ///
 /// # Safety
-/// `arena` must be live.
-pub unsafe fn keymap_array(mode: String_0, buffer: Option<Buf>, arena: *mut Arena) -> Array {
+/// The mapping tables must be live.
+pub unsafe fn keymap_array(mode: String_0, buffer: Option<Buf>) -> Array {
     // SAFETY: the caller's promise — `mode` is a live API string.
-    let (int_mode, is_abbrev, _) = unsafe { parse_shortname_mode(mode) };
+    let (int_mode, is_abbrev, _) = unsafe { parse_shortname_mode(&mode) };
     let buffer_value = buffer.map_or(0, |buf| buf.handle as c_int);
     let table = match buffer {
         Some(buf) => MapTable::Buffer(buf),
         None => MapTable::Global,
     };
 
-    let mut mappings = ArrayBuilder {
-        size: 0,
-        capacity: 0,
-        items: ptr::null_mut(),
-        init_array: [Object::Nil; 16],
-    };
+    let mut mappings = Array::EMPTY;
     {
-        let mut items = InitVec::new(
-            &mut mappings.size,
-            &mut mappings.capacity,
-            &mut mappings.items,
-            &mut mappings.init_array,
-        );
-        items.init();
         let collect = |mp: Mb| {
             if mp.m_simplified || int_mode & mp.m_mode == 0 {
                 return None;
             }
             let alt = mp.m_alt;
             // SAFETY: a non-null `m_alt` is the live twin of this entry, whose
-            // `m_keys` is its own LHS; `arena` is the caller's.
+            // `m_keys` is its own LHS.
             let dict = unsafe {
                 let twin = (!alt.is_null()).then(|| Mb::new(alt));
                 let lhsrawalt = twin.as_ref().map(|twin| &twin.m_keys);
-                mapblock_fill_dict(mp, lhsrawalt, buffer_value, is_abbrev, false, arena)
+                mapblock_fill_dict(mp, lhsrawalt, buffer_value, is_abbrev, false)
             };
-            items.push(Object::dict(dict));
+            mappings.push(Object::dict(dict));
             None
         };
         // SAFETY: the tables are live, and `collect` neither unlinks nor frees
         // an entry.
         unsafe { map_walk::<()>(table, is_abbrev, collect) };
     }
-
-    // SAFETY: the caller's promise — `arena` is live — and `mappings` is this
-    // frame's own builder.
-    unsafe { arena_take_arraybuilder(arena, &raw mut mappings) }
+    mappings
 }

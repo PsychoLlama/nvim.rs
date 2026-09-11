@@ -23,7 +23,7 @@ use crate::event::proc::{proc_stop, proc_wait};
 use crate::ex_docmd::xfree;
 use crate::ex_docmd::{cmdmod_has, kChannelPartAll};
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::memory::{xcalloc, xmemdupz};
+use crate::memory::xcalloc;
 use crate::message::e_invchan;
 use crate::startup::{exiting, getout};
 use crate::ui::state::current_ui;
@@ -39,11 +39,9 @@ use crate::types::{
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 use crate::winlayer::Ea;
 
-/// An `Object` holding a NUL-terminated string, without copying it.
+/// An `Object` holding a copy of a NUL-terminated string.
 fn obj_str(s: *const c_char) -> Object {
-    // `cstr_as_string` measures the string; it does not outlive the caller's
-    // storage, which every call site keeps alive across the RPC call.
-    Object::String(cstr_as_string(s))
+    Object::string(cstr_to_string(s))
 }
 
 /// An `Object` holding a boolean.
@@ -51,29 +49,21 @@ fn obj_bool(b: bool) -> Object {
     Object::Boolean(b)
 }
 
-/// A borrowed `Array` over `items`, full.
-fn array_of(items: &mut [Object]) -> Array {
-    Array {
-        size: items.len() as size_t,
-        capacity: items.len() as size_t,
-        items: items.as_mut_ptr(),
-    }
+/// An `Array` of `items`.
+fn array_of<const N: usize>(items: [Object; N]) -> Array {
+    Array::from(Vec::from(items))
 }
 
-/// A borrowed `ApiDict` over `items`, full.
-fn dict_of(items: &mut [KeyValuePair]) -> ApiDict {
-    ApiDict {
-        size: items.len() as size_t,
-        capacity: items.len() as size_t,
-        items: items.as_mut_ptr(),
-    }
+/// An `ApiDict` of `items`.
+fn dict_of<const N: usize>(items: [KeyValuePair; N]) -> ApiDict {
+    ApiDict::from(Vec::from(items))
 }
 
 /// A `key = value` entry for a borrowed `ApiDict`.
 fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
     key_value_pair {
         // SAFETY: the key is a `'static` C string literal.
-        key: cstr_as_string(key.as_ptr()),
+        key: cstr_to_string(key.as_ptr()),
         value,
     }
 }
@@ -198,11 +188,11 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
 
         'fail_2: {
             // Stop the new server exiting when this channel closes.
-            let mut detach_items = [obj_bool(true)];
+            let detach_items = [obj_bool(true)];
             if let Err(e) = rpc_send_call(
                 id,
                 c"nvim__chan_set_detach".as_ptr(),
-                array_of(&mut detach_items),
+                array_of(detach_items),
                 &raw mut result_mem,
             ) {
                 err = e;
@@ -214,19 +204,19 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
             // `:restart {cmd}` runs {cmd} over there, once a UI has
             // arrived.
             if byte(args.arg) != NUL {
-                let mut opt_items = [
+                let opt_items = [
                     entry(c"once", obj_bool(true)),
                     entry(c"nested", obj_bool(true)),
                     entry(c"command", obj_str(args.arg)),
                 ];
-                let mut autocmd_items = [
+                let autocmd_items = [
                     obj_str(c"UIEnter".as_ptr()),
-                    Object::Dict(dict_of(&mut opt_items)),
+                    Object::dict(dict_of(opt_items)),
                 ];
                 if let Err(e) = rpc_send_call(
                     id,
                     c"nvim_create_autocmd".as_ptr(),
-                    array_of(&mut autocmd_items),
+                    array_of(autocmd_items),
                     &raw mut result_mem,
                 ) {
                     err = e;
@@ -237,11 +227,11 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
             }
 
             // Where the UIs are to reconnect.
-            let mut name_items = [obj_str(c"servername".as_ptr())];
+            let name_items = [obj_str(c"servername".as_ptr())];
             let result = match rpc_send_call(
                 id,
                 c"nvim_get_vvar".as_ptr(),
-                array_of(&mut name_items),
+                array_of(name_items),
                 &raw mut result_mem,
             ) {
                 Ok(result) => result,
@@ -250,23 +240,16 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
                     break 'fail_2;
                 }
             };
-            let servername = match result {
-                Object::String(s) if !s.is_empty() => s,
-                _ => {
-                    emsg(c"restart failed: could not get listen address from new server".as_ptr());
-                    break 'fail_2;
-                }
+            let servername = result.into_string().filter(|s| !s.is_empty());
+            let Some(servername) = servername else {
+                emsg(c"restart failed: could not get listen address from new server".as_ptr());
+                break 'fail_2;
             };
-            // Copied out before the arena it lives in is freed.
-            let listen_addr =
-                unsafe { xmemdupz(servername.data() as *const c_void, servername.len()) }
-                    as *mut c_char;
             arena_mem_free(result_mem);
             result_mem = ptr::null_mut();
 
-            ui_call_restart(cstr_as_string(listen_addr));
+            ui_call_restart(servername);
             unsafe { ui_flush() };
-            xfree(listen_addr as *mut c_void);
 
             set_vim_var_string(Vv::Exitreason, c"restart".as_ptr(), 7 as ptrdiff_t);
 
@@ -280,7 +263,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
                 quit_cmd_copy = unsafe { concat_str(c"confirm ".as_ptr(), quit_cmd) };
                 quit_cmd = quit_cmd_copy;
             }
-            if let Err(e) = unsafe { nvim_command(cstr_as_string(quit_cmd)) } {
+            if let Err(e) = unsafe { nvim_command(cstr_to_string(quit_cmd)) } {
                 err = e;
             }
             xfree(quit_cmd_copy as *mut c_void);
@@ -305,11 +288,11 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
 
         // Close the new server's stderr before killing it, or its dying
         // words land on this UI.
-        let mut chanclose_items = [obj_str(c"chanclose(v:stderr)".as_ptr())];
+        let chanclose_items = [obj_str(c"chanclose(v:stderr)".as_ptr())];
         drop(rpc_send_call(
             id,
             c"nvim_eval".as_ptr(),
-            array_of(&mut chanclose_items),
+            array_of(chanclose_items),
             &raw mut result_mem,
         ));
         arena_mem_free(result_mem);
@@ -424,10 +407,10 @@ fn channel_proc(chan: *mut Channel) -> *mut Proc {
     unsafe { crate::channel::channel_proc(chan) }
 }
 
-/// `cstr_as_string()` as checked code.
-fn cstr_as_string(str: *const c_char) -> String_0 {
+/// `cstr_to_string()` as checked code.
+fn cstr_to_string(str: *const c_char) -> String_0 {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::api::private::helpers::cstr_as_string(str) }
+    unsafe { crate::api::private::helpers::cstr_to_string(str) }
 }
 
 /// `emsg()` as checked code.

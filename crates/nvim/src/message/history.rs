@@ -87,10 +87,7 @@ pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
         return;
     }
 
-    // SAFETY: `text` is readable for its own length, and the copy is a
-    // fresh allocation the message takes ownership of.
-    let owned = unsafe { xmemdupz(text.as_ptr().cast(), text.len()) };
-    let text = String_0::from_raw_parts(owned.cast(), text.len());
+    let text = String_0::from_bytes(text);
     let mut msg = EMPTY_HL_MESSAGE;
     // SAFETY: `msg` is a live, empty message.
     unsafe { hl_msg_push(&mut msg, HlMessageChunk { text, hl_id }) };
@@ -309,16 +306,17 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
             0
         };
         let mut content_entry = EMPTY_ARRAY;
-        unsafe { array_push(&mut content_entry, Object::integer(attr.into())) };
-        let text = unsafe { copy_string(chunk.text, ptr::null_mut()) };
-        unsafe { array_push(&mut content_entry, Object::string(text)) };
-        unsafe { array_push(&mut content_entry, Object::integer(chunk.hl_id.into())) };
-        unsafe { array_push(&mut content, Object::array(content_entry)) };
+        content_entry.push(Object::integer(attr.into()));
+        let text = chunk.text.clone();
+        content_entry.push(Object::string(text));
+        content_entry.push(Object::integer(chunk.hl_id.into()));
+        content.push(Object::array(content_entry));
     }
 
-    unsafe { array_push(&mut out, Object::string(cstr_to_string((*entry).kind))) };
-    unsafe { array_push(&mut out, Object::array(content)) };
-    unsafe { array_push(&mut out, Object::boolean((*entry).append)) };
+    // SAFETY: the caller's entry; its kind is null or NUL-terminated.
+    out.push(Object::string(unsafe { cstr_to_string((*entry).kind) }));
+    out.push(Object::array(content));
+    out.push(Object::boolean(unsafe { (*entry).append }));
     Object::array(out)
 }
 
@@ -365,7 +363,8 @@ pub unsafe fn ex_messages(args: *mut ExArg) {
         };
         if !temporary && !counted_out {
             if ui_has(kUIMessages) && msg_silent.get() == 0 {
-                unsafe { array_push(&mut entries, entry_to_event(p)) };
+                // SAFETY: `p` is a live history entry.
+                entries.push(unsafe { entry_to_event(p) });
             }
             if unsafe { redirecting() } || !ui_has(kUIMessages) {
                 // Under ext_messages the text has already gone to the UI
@@ -388,8 +387,7 @@ pub unsafe fn ex_messages(args: *mut ExArg) {
         p = unsafe { (*p).next };
     }
 
-    if entries.size > 0 {
+    if !entries.is_empty() {
         ui_call_msg_history_show(entries, unsafe { (*args).skip } != 0);
-        unsafe { api_free_array(entries) };
     }
 }

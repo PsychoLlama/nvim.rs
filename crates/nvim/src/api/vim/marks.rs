@@ -15,7 +15,6 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::array_add;
 use crate::api::private::validate::err_bad_value;
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
@@ -28,16 +27,16 @@ use core::ffi::{CStr, c_char, c_int};
 ///
 /// # Safety
 /// `name` must name its own bytes.
-unsafe fn global_mark_name(name: String_0) -> Result<c_char, Error> {
+unsafe fn global_mark_name(name: &String_0) -> Result<c_char, Error> {
     if name.len() != 1 {
         // SAFETY: the caller's promise about `name`.
-        return Err(unsafe { reject(c"mark name (must be a single char)", name) });
+        return Err(unsafe { reject(c"mark name (must be a single char)", name.clone()) });
     }
     // SAFETY: the caller's promise -- `name` has the one byte read here.
     let mark = unsafe { *name.data() };
     if !(mark.cast_unsigned().is_ascii_uppercase() || ascii_isdigit(c_int::from(mark))) {
         // SAFETY: as above.
-        return Err(unsafe { reject(c"mark name (must be file/uppercase)", name) });
+        return Err(unsafe { reject(c"mark name (must be file/uppercase)", name.clone()) });
     }
     Ok(mark)
 }
@@ -58,7 +57,7 @@ unsafe fn reject(what: &CStr, name: String_0) -> Error {
 /// `name` must name its own bytes.
 pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
     // SAFETY: `name` is the caller's.
-    unsafe { global_mark_name(name) }?;
+    unsafe { global_mark_name(&name) }?;
     // SAFETY: a global mark takes no buffer.
     unsafe { set_mark(None, name, 0, 0) }?;
     Ok(true)
@@ -71,13 +70,9 @@ pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
 ///
 /// # Safety
 /// `name` must name its own bytes and `arena` must be the caller's.
-pub unsafe fn nvim_get_mark(
-    name: String_0,
-    _opts: *mut KeyDict_empty,
-    arena: *mut Arena,
-) -> Result<Array, Error> {
+pub unsafe fn nvim_get_mark(name: String_0, _opts: *mut KeyDict_empty) -> Result<Array, Error> {
     // SAFETY: `name` is the caller's.
-    let mark = unsafe { global_mark_name(name) }?;
+    let mark = unsafe { global_mark_name(&name) }?;
     // SAFETY: `mark_get_global` answers a live global mark for every name
     // this one accepts -- the slot exists whether or not it is set.
     let (pos, fnum, fname) = unsafe {
@@ -107,17 +102,15 @@ pub unsafe fn nvim_get_mark(
         row = Integer::from(pos.lnum);
         col = Integer::from(pos.col);
     }
-    let mut rv = arena_array(arena, 4 as size_t);
+    let mut rv = Array::with_capacity(4 as size_t);
     // SAFETY: `filename` is NUL-terminated and `arena` is the caller's, so
     // the copy outlives the answer.
-    let path = unsafe { Object::string(arena_string(arena, cstr_as_string(filename))) };
+    let path = unsafe { Object::string(cstr_to_string(filename)) };
     // SAFETY: `rv` is the four-slot block the arena just handed back.
-    unsafe {
-        array_add(&mut rv, Object::integer(row));
-        array_add(&mut rv, Object::integer(col));
-        array_add(&mut rv, Object::integer(Integer::from(bufnr)));
-        array_add(&mut rv, path);
-    }
+    rv.push(Object::integer(row));
+    rv.push(Object::integer(col));
+    rv.push(Object::integer(Integer::from(bufnr)));
+    rv.push(path);
     if allocated {
         // SAFETY: as above -- the arena has its own copy now.
         unsafe { xfree(filename.cast()) };

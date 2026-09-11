@@ -179,7 +179,7 @@ impl Put {
         unsafe {
             let ptr = ml_get(lnum).offset(col as isize);
             let ptrlen = (ml_get_len(lnum) - col) as size_t;
-            let last = *self.y_array.add(self.y_size.wrapping_sub(1));
+            let last = &*self.y_array.add(self.y_size.wrapping_sub(1));
             let newp = xmalloc(ptrlen.wrapping_add(last.len()).wrapping_add(1)) as *mut c_char;
             strcpy(newp, last.data());
             strcpy(newp.add(last.len()), ptr);
@@ -283,7 +283,7 @@ impl Put {
         Buf::current().b_op_end.lnum = new_lnum;
         // SAFETY: `y_array` holds `y_size` strings and `y_size` is at least
         // one, so the last is there.
-        let last = unsafe { *self.y_array.add(self.y_size.wrapping_sub(1)) };
+        let last = unsafe { &*self.y_array.add(self.y_size.wrapping_sub(1)) };
         let col = (last.len() as ColNr - lendiff).max(0);
         if col > 1 {
             Buf::current().b_op_end.col = col - 1;

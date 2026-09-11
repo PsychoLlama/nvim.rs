@@ -21,7 +21,7 @@ use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::charset::{transchar, vim_strsize};
 use crate::ex_session::{put_eol, put_eol_unchecked, put_line};
 use crate::getchar::state::got_int;
@@ -172,7 +172,7 @@ pub(crate) fn ui_refresh_options() {
         if opt.flags & kOptFlagUIOption as uint32_t == 0 {
             continue;
         }
-        let name = unsafe { cstr_as_string(opt.fullname) };
+        let name = unsafe { cstr_to_string(opt.fullname) };
         let value = optval_as_object(unsafe { optval_from_varp(opt_idx, option_var(opt_idx)) });
         ui_call_option_set(name, value);
     }
@@ -400,7 +400,7 @@ pub(crate) unsafe fn put_set(
     // A global-local option with no local value has nothing to say.
     if option_is_global_local(opt_idx)
         && varp != option_var(opt_idx)
-        && optval_equal(value, get_option_unset_value(opt_idx))
+        && optval_equal(&value, &get_option_unset_value(opt_idx))
     {
         return Ok(());
     }

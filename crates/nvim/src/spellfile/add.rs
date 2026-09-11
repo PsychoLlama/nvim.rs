@@ -33,10 +33,10 @@ use crate::semsg;
 use crate::smsg;
 use crate::strings::has_bytes;
 use crate::strings::has_char;
+use crate::types::OptStr;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_long, c_void};
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::BufRef;
 use crate::buffer::buflist_findname_exp;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
@@ -361,7 +361,9 @@ fn init_spellfile() {
 
     set_option_value_give_err(
         kOptSpellfile,
-        OptVal::String(unsafe { cstr_as_string(buf) }),
+        // SAFETY: `buf` is NUL-terminated and freed just below, after the
+        // option layer has copied it.
+        OptVal::String(unsafe { OptStr::borrowing(buf) }),
         OptionSetFlags::LOCAL,
     );
     unsafe { xfree(buf as *mut c_void) };

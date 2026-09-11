@@ -6,8 +6,8 @@ use crate::api::private::dispatch::{
     key_dict_cmd_magic_get_field, key_dict_cmd_mods_filter_get_field, key_dict_cmd_mods_get_field,
 };
 use crate::api::private::helpers::{
-    api_dict_to_keydict, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
-    cstr_as_string, cstrn_as_string, find_buffer_by_handle, string_to_cstr, try_enter, try_leave,
+    api_dict_to_keydict, api_set_sctx, api_typename, cstr_to_string, cstrn_to_string,
+    find_buffer_by_handle, string_to_cstr, try_enter, try_leave,
 };
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::charset::{skiptowhite, skipwhite};

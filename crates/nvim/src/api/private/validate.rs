@@ -166,22 +166,9 @@ pub(crate) fn err_conflict(name: &CStr, name2: &CStr) -> Error {
 /// The name upstream builds -- `'<name>' item` -- always holds a space, so
 /// the message always takes [`err_expected`]'s phrase spelling; it is written
 /// out here rather than assembled in the shared scratch buffer first.
-///
-/// # Safety
-/// `arr` must point at its own elements.
-pub(crate) unsafe fn check_string_array(
-    arr: Array,
-    name: &CStr,
-    disallow_nl: bool,
-) -> Result<(), Error> {
-    // SAFETY: `arr` is the caller's array, per this function's contract; an
-    // empty one may carry a null `items`, which no slice may.
-    let items = match arr.size {
-        0 => &[][..],
-        size => unsafe { core::slice::from_raw_parts(arr.items, size) },
-    };
+pub(crate) fn check_string_array(arr: &Array, name: &CStr, disallow_nl: bool) -> Result<(), Error> {
     let name = msg_cstr(name);
-    for item in items {
+    for item in arr {
         let Some(l) = item.as_string() else {
             let want = msg_cstr(api_typename(kObjectTypeString));
             let got = msg_cstr(api_typename(item.kind()));
@@ -190,8 +177,7 @@ pub(crate) unsafe fn check_string_array(
                 "Invalid '{name}' item: expected {want}, got {got}"
             ));
         };
-        // SAFETY: the string is the caller's, live for its own length.
-        if disallow_nl && unsafe { l.as_bytes() }.contains(&b'\n') {
+        if disallow_nl && l.as_bytes().contains(&b'\n') {
             return Err(api_error!(
                 kErrorTypeValidation,
                 "'{name}' item contains newlines"

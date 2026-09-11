@@ -67,7 +67,7 @@ impl Qfl {
 
 /// An option value holding a string constant.
 pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
-    OptVal::String(static_cstring(text))
+    OptVal::static_string(text)
 }
 
 /// `buf_valid()`: whether the window still shows a buffer on the buffer list.

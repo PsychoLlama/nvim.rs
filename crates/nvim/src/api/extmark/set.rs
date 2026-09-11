@@ -125,15 +125,12 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                     col2 = val_0 as ::core::ffi::c_int as ColNr;
                 }
-                if let Some(given_hl_group) = opts.hl_group {
+                if let Some(given_hl_group) = opts.hl_group.as_ref() {
                     's_293: {
-                        if let Object::Array(arr) = given_hl_group {
-                            if arr.size >= 1 as size_t {
+                        if let Some(arr) = given_hl_group.as_array() {
+                            if arr.len() >= 1 as size_t {
                                 hl.hl_id = match unsafe {
-                                    object_to_hl_id(
-                                        *arr.items.offset(0 as ::core::ffi::c_int as isize),
-                                        c"hl_group item".as_ptr(),
-                                    )
+                                    object_to_hl_id(&arr[0], c"hl_group item".as_ptr())
                                 } {
                                     Ok(id) => id,
                                     Err(e) => {
@@ -144,11 +141,11 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                             let mut i: size_t = 1 as size_t;
                             loop {
-                                if i >= arr.size {
+                                if i >= arr.len() {
                                     break 's_293;
                                 }
                                 let hl_id: ::core::ffi::c_int = match unsafe {
-                                    object_to_hl_id(*arr.items.add(i), c"hl_group item".as_ptr())
+                                    object_to_hl_id(&arr[i], c"hl_group item".as_ptr())
                                 } {
                                     Ok(id) => id,
                                     Err(e) => {
@@ -163,7 +160,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                         } else {
                             hl.hl_id = match unsafe {
-                                object_to_hl_id(given_hl_group, c"hl_group".as_ptr())
+                                object_to_hl_id(&given_hl_group, c"hl_group".as_ptr())
                             } {
                                 Ok(id) => id,
                                 Err(e) => {
@@ -188,7 +185,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         | kSHIsSign as ::core::ffi::c_int)
                         as uint16_t;
                 }
-                if let Some(conceal) = opts.conceal {
+                if let Some(conceal) = opts.conceal.as_ref() {
                     hl.flags = (hl.flags as ::core::ffi::c_int | kSHConceal as ::core::ffi::c_int)
                         as uint16_t;
                     has_hl = true;
@@ -202,7 +199,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         }
                     }
                 }
-                if let Some(conceal_lines) = opts.conceal_lines {
+                if let Some(conceal_lines) = opts.conceal_lines.as_ref() {
                     hl.flags = (hl.flags as ::core::ffi::c_int
                         | kSHConcealLines as ::core::ffi::c_int)
                         as uint16_t;
@@ -216,9 +213,9 @@ pub unsafe fn nvim_buf_set_extmark(
                         break '_error;
                     }
                 }
-                if let Some(given) = opts.virt_text {
+                if let Some(given) = opts.virt_text.as_ref() {
                     let width = &raw mut virt_text.width;
-                    match unsafe { parse_virt_text(given, width) } {
+                    match unsafe { parse_virt_text(&given, width) } {
                         Ok(text) => *virt_text.data.text_mut() = text,
                         Err(e) => {
                             error = e;
@@ -226,7 +223,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         }
                     }
                 }
-                if let Some(str) = opts.virt_text_pos {
+                if let Some(str) = opts.virt_text_pos.as_ref() {
                     if unsafe { strequal(c"eol".as_ptr(), str.data()) } {
                         virt_text.pos = kVPosEndOfLine;
                     } else if unsafe { strequal(c"overlay".as_ptr(), str.data()) } {
@@ -239,7 +236,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         virt_text.pos = kVPosInline;
                     } else if true {
                         // SAFETY: the value the keyset carried, live for this call.
-                        error = err_bad_value(c"virt_text_pos", unsafe { str.as_cstr() });
+                        error = err_bad_value(c"virt_text_pos", str.as_cstr());
                         break '_error;
                     }
                 }
@@ -263,7 +260,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     } else {
                         0 as ::core::ffi::c_int
                     }))) as uint8_t;
-                if let Some(str_0) = opts.hl_mode {
+                if let Some(str_0) = opts.hl_mode.as_ref() {
                     if unsafe { strequal(c"replace".as_ptr(), str_0.data()) } {
                         virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int as uint8_t;
                     } else if unsafe { strequal(c"combine".as_ptr(), str_0.data()) } {
@@ -280,7 +277,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         virt_text.hl_mode = kHlModeBlend as ::core::ffi::c_int as uint8_t;
                     } else if true {
                         // SAFETY: the value the keyset carried, live for this call.
-                        error = err_bad_value(c"hl_mode", unsafe { str_0.as_cstr() });
+                        error = err_bad_value(c"hl_mode", str_0.as_cstr());
                         break '_error;
                     }
                 }
@@ -289,24 +286,24 @@ pub unsafe fn nvim_buf_set_extmark(
                 } else {
                     0 as ::core::ffi::c_int
                 };
-                if let Some(str_1) = opts.virt_lines_overflow {
+                if let Some(str_1) = opts.virt_lines_overflow.as_ref() {
                     if unsafe { strequal(c"scroll".as_ptr(), str_1.data()) } {
                         virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
                     } else if !unsafe { strequal(c"trunc".as_ptr(), str_1.data()) } && true {
                         // SAFETY: the value the keyset carried, live for this call.
-                        error = err_bad_value(c"virt_lines_overflow", unsafe { str_1.as_cstr() });
+                        error = err_bad_value(c"virt_lines_overflow", str_1.as_cstr());
                         break '_error;
                     }
                 }
                 's_785: {
-                    if let Some(a) = opts.virt_lines {
+                    if let Some(a) = opts.virt_lines.as_ref() {
                         let mut j: size_t = 0 as size_t;
                         loop {
-                            if j >= a.size {
+                            if j >= a.len() {
                                 break 's_785;
                             }
                             // SAFETY: the pointer the caller handed this call.
-                            let item = unsafe { *a.items.add(j) };
+                            let item = &a[j];
                             let Object::Array(item) = item else {
                                 let want = api_typename(kObjectTypeArray);
                                 let got = api_typename(item.kind());
@@ -316,14 +313,14 @@ pub unsafe fn nvim_buf_set_extmark(
                             let mut dummig: ::core::ffi::c_int = 0;
                             let dummy_width = &raw mut dummig;
                             // SAFETY: the array the caller's item names.
-                            let jtem: VirtText = match unsafe { parse_virt_text(item, dummy_width) }
-                            {
-                                Ok(jtem) => jtem,
-                                Err(e) => {
-                                    error = e;
-                                    break '_error;
-                                }
-                            };
+                            let jtem: VirtText =
+                                match unsafe { parse_virt_text(&item, dummy_width) } {
+                                    Ok(jtem) => jtem,
+                                    Err(e) => {
+                                        error = e;
+                                        break '_error;
+                                    }
+                                };
                             // `kv_push`, whose growth step c2rust expanded inline.
                             let lines = virt_lines.data.lines_mut();
                             let mut vl =
@@ -357,7 +354,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     virt_text.priority = priority as DecorPriority;
                     virt_lines.priority = priority as DecorPriority;
                 }
-                if let Some(sign_text) = opts.sign_text {
+                if let Some(sign_text) = opts.sign_text.as_ref() {
                     sign.text[0 as ::core::ffi::c_int as usize] = 0 as ScreenChar;
                     if unsafe {
                         init_sign_text(
@@ -393,8 +390,8 @@ pub unsafe fn nvim_buf_set_extmark(
                             }) as uint16_t;
                         has_hl = true;
                     }
-                    if let Some(given) = opts.url {
-                        url = unsafe { string_to_cstr(given) };
+                    if let Some(given) = opts.url.as_ref() {
+                        url = string_to_cstr(&given);
                         has_hl = true;
                     }
                     if opts.ui_watched.unwrap_or(false) {
@@ -562,20 +559,17 @@ pub unsafe fn nvim_buf_set_extmark(
                                 }
                             }
                             if has_hl_multiple {
-                                let Object::Array(arr_0) = opts.hl_group.unwrap_or(Object::Nil)
+                                let Some(arr_0) = opts.hl_group.as_ref().and_then(Object::as_array)
                                 else {
                                     unreachable!("`has_hl_multiple` is set only under an Array")
                                 };
-                                let mut i_0: size_t = arr_0.size.wrapping_sub(1 as size_t);
+                                let mut i_0: size_t = arr_0.len().wrapping_sub(1 as size_t);
                                 while i_0 > 0 as size_t {
                                     // The same objects resolved above, so a
                                     // refusal here is impossible; zero is the
                                     // id an unresolvable name would have got.
                                     let hl_id_0: ::core::ffi::c_int = unsafe {
-                                        object_to_hl_id(
-                                            *arr_0.items.add(i_0),
-                                            c"hl_group item".as_ptr(),
-                                        )
+                                        object_to_hl_id(&arr_0[i_0], c"hl_group item".as_ptr())
                                     }
                                     .unwrap_or(0);
                                     if hl_id_0 > 0 as ::core::ffi::c_int {

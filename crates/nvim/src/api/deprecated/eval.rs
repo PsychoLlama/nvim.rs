@@ -17,7 +17,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_expected;
 use crate::api::vim::nvim_exec_lua;
 use crate::api::vimscript::exec_impl;
@@ -80,17 +80,17 @@ pub unsafe fn nvim_call_atomic(
 ) -> Result<Array, Error> {
     let mut error = Error::none();
     // "results" and the error report, and one result per call.
-    let mut rv: Array = arena_array(arena, 2 as size_t);
-    let mut results: Array = arena_array(arena, calls.size);
+    let mut rv: Array = Array::with_capacity(2 as size_t);
+    let mut results: Array = Array::with_capacity(calls.len());
     let mut nested_error = Error::none();
     let mut i: size_t = 0;
     // A call that is not a well-formed [name, args] pair is the caller's
     // mistake rather than a failed call, so it is reported through `err` and
     // answers nothing at all -- not even the results already collected.
     '_theend: {
-        while i < calls.size {
+        while i < calls.len() {
             // SAFETY: `i` is below `size`, so the item is inside `items`.
-            let item = unsafe { *calls.items.add(i) };
+            let item = &calls[i];
             let Some(call) = item.as_array() else {
                 let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.kind()));
                 // SAFETY: `err` is this frame's slot and the names are
@@ -98,14 +98,14 @@ pub unsafe fn nvim_call_atomic(
                 error = err_expected(c"'calls' item", want, Some(got));
                 break '_theend;
             };
-            if call.size != 2 as size_t {
+            if call.len() != 2 as size_t {
                 let want = c"2-item Array";
                 // SAFETY: as above.
                 error = err_expected(c"'calls' item", want, None);
                 break '_theend;
             }
-            // SAFETY: the pair has both of its items.
-            let (head, tail) = unsafe { (*call.items, *call.items.add(1)) };
+            // The length check above says the pair has both of its items.
+            let (head, tail) = (&call[0], &call[1]);
             let Some(name) = head.as_string() else {
                 let (want, got) = (api_typename(kObjectTypeString), api_typename(head.kind()));
                 // SAFETY: as above.
@@ -133,41 +133,35 @@ pub unsafe fn nvim_call_atomic(
             let dispatch = handler.fn_0.expect("non-null function pointer");
             // SAFETY: the handler is the generated wrapper for `name`, which
             // reads `args`.
-            let result = match unsafe { dispatch(channel_id, args, arena) } {
+            let result = match unsafe { dispatch(channel_id, args.clone(), arena) } {
                 Ok(rv) => rv,
                 Err(e) => {
                     nested_error = e;
                     break;
                 }
             };
-            // SAFETY: `results` was sized for one item per call, and the
-            // copy is the arena's rather than the handler's.
-            unsafe { array_add(&mut results, copy_object(result, arena)) };
-            if handler.ret_alloc {
-                // SAFETY: the handler allocated its answer, so freeing it is
-                // this call's job.
-                unsafe { api_free_object(result) };
-            }
+            // `results` was sized for one item per call.
+            results.push(result);
             i = i.wrapping_add(1);
         }
         // SAFETY: `rv` was sized for exactly these two pushes.
-        unsafe { array_add(&mut rv, Object::array(results)) };
+        rv.push(Object::array(results));
         if nested_error.is_set() {
-            let mut errval: Array = arena_array(arena, 3 as size_t);
+            let mut errval: Array = Array::with_capacity(3 as size_t);
             let failed_at = Integer::try_from(i).expect("a call index fits an Integer");
             // SAFETY: `errval` was sized for these three, and the message is
             // `nested_error`'s own NUL-terminated string.
             unsafe {
-                array_add(&mut errval, Object::integer(failed_at));
-                array_add(&mut errval, Object::integer(nested_error.kind().into()));
+                errval.push(Object::integer(failed_at));
+                errval.push(Object::integer(nested_error.kind().into()));
                 let why = nested_error.message_or_empty().as_ptr();
-                let msg = copy_string(cstr_as_string(why), arena);
-                array_add(&mut errval, Object::string(msg));
-                array_add(&mut rv, Object::array(errval));
+                let msg = cstr_to_string(why);
+                errval.push(Object::string(msg));
+                rv.push(Object::array(errval));
             }
         } else {
             // SAFETY: as above.
-            unsafe { array_add(&mut rv, Object::Nil) };
+            rv.push(Object::Nil);
         }
     }
     // SAFETY: `nested_error` is this frame's slot.

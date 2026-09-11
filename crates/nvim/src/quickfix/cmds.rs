@@ -24,6 +24,7 @@
 
 use super::*;
 use crate::types::CmdIdx;
+use crate::types::OptStr;
 use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_LIST};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -63,7 +64,9 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
     if c_int::from(unsafe { *args.arg }) != NUL {
         set_option_direct(
             kOptErrorfile,
-            OptVal::String(unsafe { cstr_as_string(args.arg) }),
+            // SAFETY: the command line's own NUL-terminated argument,
+            // which the option layer copies.
+            OptVal::String(unsafe { OptStr::borrowing(args.arg) }),
             OptionSetFlags::NONE,
             0 as ScriptId,
         );

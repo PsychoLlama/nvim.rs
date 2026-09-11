@@ -158,12 +158,12 @@ pub(super) unsafe fn prepare_call(ui: *mut RemoteUI, name: &'static CStr) {
 /// `ui` must be live, `name` must outlive the batch (see [`prepare_call`]),
 /// and every value reachable from `args` must stay valid until this
 /// returns — the packer copies as it goes and keeps nothing.
-pub(super) unsafe fn push_call(ui: *mut RemoteUI, name: &'static CStr, args: Array) {
+pub(super) unsafe fn push_call(ui: *mut RemoteUI, name: &'static CStr, mut args: Array) {
     // SAFETY: the caller's promise.
     unsafe { prepare_call(ui, name) };
     // SAFETY: as above. The packer is the UI's own, and reaches back to it
     // through `anydata` if it runs out of room mid-array.
-    unsafe { mpack_object_array(args, &mut (*ui).packer) };
+    unsafe { mpack_object_array(&mut args, &mut (*ui).packer) };
 }
 
 /// The packer's out-of-room callback: send what is packed and continue in a

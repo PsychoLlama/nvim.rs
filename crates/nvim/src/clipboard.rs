@@ -307,7 +307,7 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
     // provider call below owns the whole structure from here on.
     let lines = tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t);
     for i in 0..reg.y_size {
-        let line = unsafe { *reg.y_array.add(i) };
+        let line = unsafe { &*reg.y_array.add(i) };
         unsafe { tv_list_append_string(lines.as_ptr(), line.data(), line.len() as ssize_t) };
     }
     if trailing {

@@ -11,7 +11,7 @@ use crate::types::TAB;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::api::private::helpers::{cbuf_to_string, copy_string, cstr_as_string};
+use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::buf_spname;
@@ -118,9 +118,9 @@ use crate::tag::find_tags;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    Arena, BackslashEscape, BoolVarValue, Buffer, Callback, ColNr, Dict, Direction, EvalFuncData,
-    Expand, ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet,
-    Pos, PumItem, RegMatch, SaveVEvent, ScriptCtx, String_0, TypVal, VarNumber, Vv, XpPrefix,
+    BackslashEscape, BoolVarValue, Buffer, Callback, ColNr, Dict, Direction, EvalFuncData, Expand,
+    ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos,
+    PumItem, RegMatch, SaveVEvent, ScriptCtx, String_0, TypVal, VarNumber, Vv, XpPrefix,
     extmark_undo_vec_t, ptrdiff_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
@@ -378,9 +378,9 @@ pub(crate) fn ctrl_x_msg(mode: c_int) -> *mut c_char {
 /// carried in the reader's head.
 ///
 /// `ComplStr` is the one owner of each. It names the cell rather than
-/// pointing into it, so every read copies the two words out and no reference
-/// into the global is ever formed — which matters because completion runs
-/// user callbacks, and a callback can reach the same string. The *bytes* are
+/// pointing into it, and every read takes the cell's borrow only for the
+/// length of that read — which matters because completion runs user
+/// callbacks, and a callback can reach the same string. The *bytes* are
 /// still handed out raw, because every consumer of them is C-shaped; they
 /// stay valid until the next [`set`](ComplStr::set) or
 /// [`replace`](ComplStr::replace), exactly as upstream's did.
@@ -388,49 +388,76 @@ pub(crate) fn ctrl_x_msg(mode: c_int) -> *mut c_char {
 pub(crate) struct ComplStr(&'static GlobalCell<String_0>);
 
 impl ComplStr {
-    /// The two words by value.
-    pub(crate) fn value(self) -> String_0 {
-        self.0.get()
-    }
-
     /// The bytes, or null while the string is unset.
     pub(crate) fn data(self) -> *mut c_char {
-        self.value().data()
+        self.0.with(String_0::data)
     }
 
     /// The byte count.
     pub(crate) fn len(self) -> size_t {
-        self.value().len()
+        self.0.with(String_0::len)
+    }
+
+    /// Both words, read under one borrow, for the callers that want a
+    /// snapshot rather than two separate reads.
+    pub(crate) fn parts(self) -> (*mut c_char, size_t) {
+        self.0.with(|s| (s.data(), s.len()))
+    }
+
+    /// A copy of the string, with its own allocation.
+    pub(crate) fn to_owned(self) -> String_0 {
+        self.0.with(String_0::clone)
     }
 
     /// Whether the string has no buffer at all — upstream's
     /// `if (compl_leader.data == NULL)`, which asks something different from
     /// [`is_empty`](Self::is_empty).
     pub(crate) fn is_unset(self) -> bool {
-        self.value().is_null()
+        self.0.with(String_0::is_null)
     }
 
     /// Whether the string has no bytes.
     pub(crate) fn is_empty(self) -> bool {
-        self.value().is_empty()
+        self.0.with(String_0::is_empty)
     }
 
-    /// Point at `s`. What was there is *not* freed: this is the fresh-start
-    /// shape, where the string was cleared before the new value was built.
+    /// Take `s`, releasing what was there.
+    ///
+    /// Upstream has two spellings of this — one that frees first and one
+    /// that assumes the string was already cleared — and an owning string
+    /// makes them the same operation.
     pub(crate) fn set(self, s: String_0) {
         self.0.set(s);
     }
 
-    /// C's `XFREE_CLEAR(x.data); x = s`: free this string's bytes, then take
-    /// `s`.
+    /// C's `XFREE_CLEAR(x.data); x = s`. See [`set`](Self::set).
     pub(crate) fn replace(self, s: String_0) {
-        self.free_bytes();
         self.0.set(s);
     }
 
     /// C's `XFREE_CLEAR(s->data); s->size = 0`.
     pub(crate) fn clear(self) {
-        self.replace(String_0::NULL);
+        self.0.set(String_0::NULL);
+    }
+
+    /// Release the bytes and take over `data`, an `xmalloc`ed block of
+    /// `len + 1` bytes with a NUL at `len`.
+    ///
+    /// The two-step build in `get_normal_compl_info` sizes the pattern and
+    /// fills it in one go now, because a string that owns its bytes has no
+    /// half-set state to go through.
+    ///
+    /// # Safety
+    /// `data` must be such a block, which nothing else frees.
+    pub(crate) unsafe fn set_owned(self, data: *mut c_char, len: size_t) {
+        // SAFETY: the caller's promise.
+        self.0.set(unsafe { String_0::from_owned_parts(data, len) });
+    }
+
+    /// Shorten the string to `len` bytes. Panics past the current length.
+    pub(crate) fn truncate(self, len: size_t) {
+        let shorter = self.0.with(|s| String_0::from_bytes(&s.as_bytes()[..len]));
+        self.0.set(shorter);
     }
 
     /// C's `XFREE_CLEAR(compl_leader)` written on the *struct* rather than on
@@ -439,29 +466,11 @@ impl ComplStr {
     /// reader guards on the pointer.
     pub(crate) fn free_bytes_keep_len(self) {
         let stale = self.len();
-        self.free_bytes();
-        self.0.set(String_0::from_raw_parts(ptr::null_mut(), stale));
-    }
-
-    /// Point at `data`, keeping the length — the two-step build in
-    /// `get_normal_compl_info`, which sizes the pattern before it fills it.
-    pub(crate) fn set_data(self, data: *mut c_char) {
-        let mut s = self.value();
-        s.set_data(data);
-        self.0.set(s);
-    }
-
-    /// Set the length, keeping the pointer.
-    pub(crate) fn set_len(self, len: size_t) {
-        let mut s = self.value();
-        s.set_len(len);
-        self.0.set(s);
-    }
-
-    /// Free the bytes, leaving the two words alone.
-    fn free_bytes(self) {
-        // SAFETY: the bytes are this string's own, and `xfree` takes null.
-        unsafe { xfree(self.data().cast::<c_void>()) };
+        // SAFETY: a null pointer owns nothing, so the string has nothing to
+        // free; the stale length is the whole point of this spelling and is
+        // only ever read behind a null check.
+        self.0
+            .set(unsafe { String_0::from_owned_parts(ptr::null_mut(), stale) });
     }
 }
 

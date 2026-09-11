@@ -12,7 +12,7 @@ use crate::winlayer::Ea;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::charset::skipwhite;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::typval::NumBuf;
@@ -125,7 +125,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
             let (hl, clear) = (echo_hl_id.get(), &raw mut need_clear);
             // SAFETY: `tofree` is the NUL-terminated rendering just made and
             // `clear` names this frame's flag.
-            unsafe { msg_multiline(cstr_as_string(tofree), hl, true, false, clear) };
+            unsafe { msg_multiline(cstr_to_string(tofree), hl, true, false, clear) };
             // SAFETY: nothing else owns the rendering.
             unsafe { xfree(tofree as *mut c_void) };
         }

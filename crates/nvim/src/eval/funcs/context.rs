@@ -3,7 +3,6 @@
 #![allow(unsafe_code)]
 
 use super::{CONTEXT_INIT, kCtxBufs, kCtxFuncs, kCtxGVars, kCtxJumps, kCtxRegs, kCtxSFuncs};
-use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::context::{
     ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
 };
@@ -59,11 +58,9 @@ pub fn f_ctxget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(ctx) = context_at(index) else {
         return;
     };
-    let mut arena = ARENA_EMPTY;
-    let ctx_dict = unsafe { ctx_to_dict(ctx, &raw mut arena) };
+    let ctx_dict = unsafe { ctx_to_dict(ctx) };
     let mut err = NO_ERROR;
-    unsafe { object_to_vim(Object::Dict(ctx_dict), result) };
-    unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
+    *result = TypVal::from(Object::dict(ctx_dict));
     err.clear();
 }
 
@@ -128,13 +125,13 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let Some(ctx) = context_at(index) else {
         return;
     };
-    // `vim_to_object` reports conversion problems through `did_emsg`;
-    // the caller's flag is restored whatever happens here.
+    // The conversion reports its problems through `did_emsg`; the caller's
+    // flag is restored whatever happens here.
     let save_did_emsg = did_emsg.get();
     did_emsg.set(0);
     let mut arena = ARENA_EMPTY;
-    let dict = unsafe { vim_to_object(&args[0], &raw mut arena, true) }
-        .as_dict()
+    let dict = Object::from(&args[0])
+        .into_dict()
         .expect("a VAR_DICT converts to a Dict object");
     let mut tmp = CONTEXT_INIT;
     if let Err(e) = unsafe { ctx_from_dict(dict, &raw mut tmp) } {

@@ -2,11 +2,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::converter::{object_to_vim, vim_to_object};
-use crate::api::private::helpers::{
-    api_set_sctx, arena_array, arena_dict, arena_string, cstr_as_string, cstr_to_string, try_enter,
-    try_leave,
-};
+use crate::api::private::helpers::{api_set_sctx, cstr_to_string, try_enter, try_leave};
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::{tv_clear, tv_dict_find};
 use crate::eval::userfunc::call_func;
@@ -19,12 +15,12 @@ use crate::memory::xfree;
 use crate::message::state::{capture_ga, did_emsg, msg_col, redir_off};
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Dict, DictItem, Error, ExArg, ExprAST, ExprASTNode,
-    ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope,
-    ExprParserFlags, FuncExe, GArray, Integer, KeyDict_exec_opts, KeyValuePair, LineNr, Object,
-    ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Partial,
-    String_0, TryState, TypVal, UVarNumber, VAR_DICT, VAR_FUNC, VAR_PARTIAL, kErrorTypeException,
-    kErrorTypeValidation, ptrdiff_t, size_t, uint64_t,
+    ApiDict, Array, Boolean, Dict, DictItem, Error, ExArg, ExprAST, ExprASTNode, ExprASTNodeType,
+    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
+    FuncExe, GArray, Integer, KeyDict_exec_opts, LineNr, Object, ParserHighlight,
+    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Partial, String_0, TryState,
+    TypVal, UVarNumber, VAR_DICT, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation,
+    ptrdiff_t, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
@@ -111,11 +107,7 @@ pub const kExprFlagsDisallowEOC: ExprParserFlags = 2;
 pub const kExprFlagsMulti: ExprParserFlags = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: ApiDict = ApiDict {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<KeyValuePair>(),
-};
+pub const KV_INITIAL_VALUE: ApiDict = ApiDict::EMPTY;
 pub const ARRAY_DICT_INIT: ApiDict = KV_INITIAL_VALUE;
 pub const FUNCEXE_INIT: FuncExe = FuncExe {
     fe_argv_func: None,

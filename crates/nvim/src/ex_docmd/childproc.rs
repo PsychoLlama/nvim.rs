@@ -7,7 +7,7 @@ use crate::ex_docmd::xfree;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab, kRetNilBool};
 use crate::highlight_group::HLF_E;
@@ -141,19 +141,12 @@ pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
 /// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_lsp(args: *mut ExArg) {
     let eap = unsafe { Ea::new(args) };
-    let mut items: [Object; 1] = [Object::String(unsafe { cstr_as_string(eap.arg) })];
-    let args = Array {
-        size: 1,
-        capacity: 1,
-        items: &raw mut items as *mut Object,
-    };
+    // SAFETY: the command line's own NUL-terminated argument.
+    let args = Array::from(vec![Object::string(unsafe { cstr_to_string(eap.arg) })]);
     const CHUNK: &core::ffi::CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
     let ran = unsafe {
         nlua_exec(
-            String_0::from_raw_parts(
-                CHUNK.as_ptr() as *mut c_char,
-                CHUNK.to_bytes().len() as size_t,
-            ),
+            &String_0::from_cstr(CHUNK),
             ptr::null(),
             args,
             kRetNilBool,

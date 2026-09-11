@@ -19,9 +19,7 @@
 use super::attr::named_addr_type;
 use super::complete::command_complete_name;
 use super::{LUA_NOREF, Scope, Table, ucmd_name};
-use crate::api::private::helpers::{
-    arena_dict, arena_string, cstr_as_string, dict_put, dict_put_str,
-};
+use crate::api::private::helpers::cstr_to_string;
 use crate::cstr;
 use crate::eval::last_set_msg;
 use crate::getchar::state::got_int;
@@ -36,8 +34,8 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
-use crate::types::builders::static_cstring;
-use crate::types::{ApiDict, Arena, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t};
+use crate::types::String_0;
+use crate::types::{ApiDict, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t};
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -248,23 +246,22 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
     }
 }
 
-/// Collect the entries that are present into an arena Dict.
+/// Collect the entries that are present into a Dict.
 ///
 /// `capacity` is upstream's, not `N`: sizing and filling from one array is
 /// what makes the puts sound, and the two must agree, so the assertion is
 /// the contract rather than a hope.
 fn dict_of<const N: usize>(
-    arena: *mut Arena,
     capacity: size_t,
     entries: [(&'static CStr, Option<Object>); N],
 ) -> ApiDict {
     debug_assert!(N <= capacity, "dict_of past capacity");
-    let mut dict = arena_dict(arena, capacity);
+    let mut dict = ApiDict::with_capacity(capacity);
     // SAFETY: the dict was reserved for `capacity` pairs, at most `N` are
     // written, and this is the only thing that writes to it.
     for (key, value) in entries {
         if let Some(value) = value {
-            unsafe { dict_put(&mut dict, key, value) };
+            dict.insert(String_0::from_cstr(key), value);
         }
     }
     dict
@@ -274,18 +271,16 @@ fn dict_of<const N: usize>(
 /// when `buffer` is null, as a map from name to description.
 ///
 /// # Safety
-/// Module contract; `arena` must be the dispatcher's.
-pub(crate) unsafe fn commands_array(buffer: Option<Buf>, arena: *mut Arena) -> ApiDict {
+/// Module contract.
+pub(crate) unsafe fn commands_array(buffer: Option<Buf>) -> ApiDict {
     let table = buffer.map_or(Table::Global, Table::Buffer);
     // SAFETY: caller contract; nothing below adds or removes a command.
     let cmds = unsafe { table.list() };
-    let mut rv = arena_dict(arena, cmds.len());
+    let mut rv = ApiDict::with_capacity(cmds.len());
     for cmd in cmds {
-        // SAFETY: module contract.
-        let d = unsafe { describe(cmd, arena) };
-        // SAFETY: `rv` was reserved for exactly one pair per command, and
-        // this is the only thing that writes to it.
-        unsafe { dict_put_str(&mut rv, cstr_as_string(cmd.uc_name), Object::dict(d)) };
+        // SAFETY: module contract -- the command's name is NUL-terminated.
+        let (d, name) = unsafe { (describe(cmd), cstr_to_string(cmd.uc_name)) };
+        rv.insert(name, Object::dict(d));
     }
     rv
 }
@@ -295,51 +290,49 @@ pub(crate) unsafe fn commands_array(buffer: Option<Buf>, arena: *mut Arena) -> A
 ///
 /// # Safety
 /// Module contract.
-unsafe fn describe(cmd: &UserCmd, arena: *mut Arena) -> ApiDict {
+unsafe fn describe(cmd: &UserCmd) -> ApiDict {
     let a = cmd.uc_argt;
     // SAFETY: module contract; the entry owns each reference, and
     // `api_new_luaref` takes a fresh one for the caller to own.
     let luaref = |r: LuaRef| (r != LUA_NOREF).then(|| Object::luaref(unsafe { api_new_luaref(r) }));
-    // SAFETY: module contract; the three strings outlive the arena copy.
-    let (name, definition) = unsafe { (cstr_as_string(cmd.uc_name), cstr_as_string(cmd.uc_rep)) };
+    // SAFETY: module contract; the three strings are NUL-terminated.
+    let (name, definition) = unsafe { (cstr_to_string(cmd.uc_name), cstr_to_string(cmd.uc_rep)) };
     let complete_arg = if cmd.uc_compl_arg.is_null() {
         Object::Nil
     } else {
         // SAFETY: as above.
-        Object::string(unsafe { cstr_as_string(cmd.uc_compl_arg) })
+        Object::string(unsafe { cstr_to_string(cmd.uc_compl_arg) })
     };
     // The completion is a Lua reference when the command was given one,
     // and the `-complete=` name otherwise.
     let complete = match luaref(cmd.uc_compl_luaref) {
         Some(callback) => callback,
         None => match command_complete_name(cmd.uc_compl) {
-            Some(text) => Object::string(static_cstring(text)),
+            Some(text) => Object::string(String_0::from_cstr(text)),
             None => Object::Nil,
         },
     };
     let count = (a.has(ExArgt::COUNT)).then(|| {
         if cmd.uc_def >= 0 {
-            // SAFETY: `arena` is the dispatcher's.
-            Object::string(unsafe { arena_printf(arena, c"%ld".as_ptr(), cmd.uc_def) })
+            // SAFETY: the format and its one argument match.
+            Object::string(unsafe { arena_printf(ptr::null_mut(), c"%ld".as_ptr(), cmd.uc_def) })
         } else {
-            Object::string(static_cstring(c"0"))
+            Object::string(String_0::from_cstr(c"0"))
         }
     });
     let range = (a.has(ExArgt::RANGE)).then(|| {
         if a.has(ExArgt::DFLALL) {
-            Object::string(static_cstring(c"%"))
+            Object::string(String_0::from_cstr(c"%"))
         } else if cmd.uc_def >= 0 {
-            // SAFETY: `arena` is the dispatcher's.
-            Object::string(unsafe { arena_printf(arena, c"%ld".as_ptr(), cmd.uc_def) })
+            // SAFETY: the format and its one argument match.
+            Object::string(unsafe { arena_printf(ptr::null_mut(), c"%ld".as_ptr(), cmd.uc_def) })
         } else {
-            Object::string(static_cstring(c"."))
+            Object::string(String_0::from_cstr(c"."))
         }
     });
-    // SAFETY: `arena` is the dispatcher's and `nargs_str` is a literal.
-    let nargs = unsafe { arena_string(arena, static_cstring(nargs_str(a))) };
+    let nargs = String_0::from_cstr(nargs_str(a));
 
     dict_of(
-        arena,
         16,
         [
             (c"name", Some(Object::string(name))),
@@ -371,7 +364,7 @@ unsafe fn describe(cmd: &UserCmd, arena: *mut Arena) -> ApiDict {
 /// one that is not the default.
 fn addr_object(cmd: &UserCmd) -> Object {
     match named_addr_type(cmd.uc_addr_type) {
-        Some(row) => Object::string(static_cstring(row.name)),
+        Some(row) => Object::string(String_0::from_cstr(row.name)),
         None => Object::Nil,
     }
 }

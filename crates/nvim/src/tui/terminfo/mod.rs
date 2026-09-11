@@ -25,7 +25,7 @@ pub mod caps;
 pub mod param;
 
 use crate::charset::transstr;
-use crate::memory::{arena_strdup, xfree, xmemdupz};
+use crate::memory::{arena_strdup, xfree};
 use crate::tui::terminfo::caps::{
     BACK_COLOR_ERASE, COLUMNS, EXT_CAPS, FUNCTION_KEYS, KEYS, LINES, MAX_COLORS, STRING_CAPS,
     kTerm_reset_cursor_style, kTermCount,
@@ -250,9 +250,7 @@ pub unsafe fn terminfo_info_msg(
         }
     }
 
-    // SAFETY: `msg` is a live `Vec<u8>` of its own length.
-    let owned = unsafe { xmemdupz(msg.as_ptr().cast::<c_void>(), msg.len()) };
-    String_0::from_raw_parts(owned.cast::<c_char>(), msg.len())
+    String_0::from_bytes(&msg)
 }
 
 /// Expand a parameterised capability into `[buf_start, buf_end)`.

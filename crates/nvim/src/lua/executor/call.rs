@@ -19,13 +19,13 @@
 use crate::cstr;
 use crate::narrow::len_as_int;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
 use super::{
     FUNCEXE_INIT, LUA_INTERNAL_CALL, MAX_FUNC_ARGS, nlua_is_deferred_safe, viml_func_is_fast,
 };
-use crate::api::private::helpers::{api_set_sctx, arena_array, try_enter, try_leave};
+use crate::api::private::helpers::{api_set_sctx, try_enter, try_leave};
 use crate::api_error;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
@@ -36,13 +36,13 @@ use crate::lua::ffi::{
     lua_error, lua_gettop, lua_pushstring, lua_pushvalue, luaL_checkinteger, luaL_checklstring,
     luaL_error,
 };
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
+use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::e_fast_api_disabled;
 use crate::message::state::did_emsg;
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Arena, ArenaMem, Array, ConsumedBlk, Error, Object, kErrorTypeException, kErrorTypeValidation,
+    Arena, ArenaMem, Array, ConsumedBlk, Error, kErrorTypeException, kErrorTypeValidation,
     lua_State, size_t, uint64_t,
 };
 
@@ -173,32 +173,16 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
         let mut err = Error::none();
         let mut arena: Arena = ARENA_EMPTY;
         let count = size_t::try_from(nargs).expect("two arguments precede the rpc arguments");
-        let mut args: Array = arena_array(&raw mut arena, count);
+        let mut args: Array = Array::with_capacity(count);
 
         'check_err: {
             for i in 0..nargs {
                 lua_pushvalue(lstate, i + 3);
-                // The arena sized the array for exactly `nargs`, but a
-                // conversion may push more; grow as upstream's `kv_push`
-                // would.
-                if args.size == args.capacity {
-                    args.capacity = if args.capacity != 0 {
-                        args.capacity << 1
-                    } else {
-                        8
-                    };
-                    args.items = xrealloc(
-                        args.items.cast::<c_void>(),
-                        size_of::<Object>().wrapping_mul(args.capacity),
-                    )
-                    .cast::<Object>();
-                }
                 let popped = nlua_pop_object(lstate, false, &raw mut arena);
                 let Ok(value) = popped.inspect_err(|e| err = e.clone()) else {
                     break 'check_err;
                 };
-                *args.items.add(args.size) = value;
-                args.size = args.size.wrapping_add(1);
+                args.push(value);
             }
 
             if request {

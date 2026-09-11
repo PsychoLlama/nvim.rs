@@ -6,9 +6,6 @@
 //! plus the boundaries where this implementation deliberately differs from
 //! it, and the object walker is checked end to end through a string buffer.
 
-use std::ffi::c_char;
-
-use neovim::memory::xfree;
 use neovim::msgpack_rpc::packer::{format, mpack_object, packer_string_buffer, packer_take_string};
 use neovim::types::{ApiDict, Array, KeyValuePair, Object, PackerBuffer, String_0};
 
@@ -198,33 +195,21 @@ fn a_large_negative_handle_is_rejected() {
 fn pack(object: &mut Object) -> Vec<u8> {
     let mut buffer: PackerBuffer = packer_string_buffer();
     unsafe { mpack_object(object, &mut buffer) };
-    let packed: String_0 = packer_take_string(&buffer);
-    let bytes = unsafe { packed.as_bytes() }.to_vec();
-    unsafe { xfree(packed.data().cast()) };
-    bytes
+    // SAFETY: the buffer is this call's own `packer_string_buffer`.
+    let packed: String_0 = unsafe { packer_take_string(&buffer) };
+    packed.as_bytes().to_vec()
 }
 
-fn string(text: &mut [u8]) -> Object {
-    Object::String(String_0::from_raw_parts(
-        text.as_mut_ptr().cast::<c_char>(),
-        text.len(),
-    ))
+fn string(text: &[u8]) -> Object {
+    Object::string(String_0::from_bytes(text))
 }
 
-fn array(items: &mut [Object]) -> Object {
-    Object::Array(Array {
-        size: items.len(),
-        capacity: items.len(),
-        items: items.as_mut_ptr(),
-    })
+fn array(items: Vec<Object>) -> Object {
+    Object::array(Array::from(items))
 }
 
-fn dict(items: &mut [KeyValuePair]) -> Object {
-    Object::Dict(ApiDict {
-        size: items.len(),
-        capacity: items.len(),
-        items: items.as_mut_ptr(),
-    })
+fn dict(items: Vec<KeyValuePair>) -> Object {
+    Object::dict(ApiDict::from(items))
 }
 
 #[test]
@@ -236,8 +221,7 @@ fn packs_scalars() {
         pack(&mut Object::Float(1.0)),
         [0xcb, 0x3f, 0xf0, 0, 0, 0, 0, 0, 0]
     );
-    let mut hi = *b"hi";
-    assert_eq!(pack(&mut string(&mut hi)), [0xa2, b'h', b'i']);
+    assert_eq!(pack(&mut string(b"hi")), [0xa2, b'h', b'i']);
     assert_eq!(pack(&mut Object::Buffer(3)), [0xd4, 0, 3]);
     assert_eq!(
         pack(&mut Object::Window(1000)),
@@ -247,8 +231,8 @@ fn packs_scalars() {
 
 #[test]
 fn packs_empty_containers() {
-    assert_eq!(pack(&mut array(&mut [])), [0x90]);
-    assert_eq!(pack(&mut dict(&mut [])), [0x80]);
+    assert_eq!(pack(&mut array(vec![])), [0x90]);
+    assert_eq!(pack(&mut dict(vec![])), [0x80]);
 }
 
 /// The walker enters a one-element array without remembering anything, so
@@ -256,12 +240,10 @@ fn packs_empty_containers() {
 #[test]
 fn packs_deeply_nested_single_element_arrays() {
     const DEPTH: usize = 8;
-    let mut levels: Vec<Vec<Object>> = (0..DEPTH).map(|_| vec![Object::Integer(7)]).collect();
-    for level in 1..DEPTH {
-        let (below, above) = levels.split_at_mut(level);
-        above[0][0] = array(&mut below[level - 1][..]);
+    let mut root = Object::Integer(7);
+    for _ in 0..DEPTH {
+        root = array(vec![root]);
     }
-    let mut root = array(&mut levels[DEPTH - 1][..]);
 
     let mut expected = vec![0x91_u8; DEPTH];
     expected.push(0x07);
@@ -271,26 +253,23 @@ fn packs_deeply_nested_single_element_arrays() {
 #[test]
 fn packs_a_nested_object() {
     // { "a": [1, 2], "b": { "c": true } }
-    let mut inner_key = *b"c";
-    let mut inner = [KeyValuePair {
-        key: String_0::from_raw_parts(inner_key.as_mut_ptr().cast::<c_char>(), 1),
+    let inner = vec![KeyValuePair {
+        key: String_0::from_bytes(b"c"),
         value: Object::Boolean(true),
     }];
-    let mut list = [Object::Integer(1), Object::Integer(2)];
-    let mut a = *b"a";
-    let mut b = *b"b";
-    let mut entries = [
+    let list = vec![Object::Integer(1), Object::Integer(2)];
+    let entries = vec![
         KeyValuePair {
-            key: String_0::from_raw_parts(a.as_mut_ptr().cast::<c_char>(), 1),
-            value: array(&mut list),
+            key: String_0::from_bytes(b"a"),
+            value: array(list),
         },
         KeyValuePair {
-            key: String_0::from_raw_parts(b.as_mut_ptr().cast::<c_char>(), 1),
-            value: dict(&mut inner),
+            key: String_0::from_bytes(b"b"),
+            value: dict(inner),
         },
     ];
     assert_eq!(
-        pack(&mut dict(&mut entries)),
+        pack(&mut dict(entries)),
         [
             0x82, // map of 2
             0xa1, b'a', 0x92, 0x01, 0x02, // "a" -> [1, 2]
@@ -303,9 +282,9 @@ fn packs_a_nested_object() {
 /// has to grow it mid-object — twice for the payload and again between items.
 #[test]
 fn grows_the_buffer_across_a_long_payload() {
-    let mut text = vec![b'x'; 300];
-    let mut items = [string(&mut text), Object::Integer(42)];
-    let packed = pack(&mut array(&mut items));
+    let text = vec![b'x'; 300];
+    let items = vec![string(&text), Object::Integer(42)];
+    let packed = pack(&mut array(items));
     assert_eq!(&packed[..4], &[0x92, 0xda, 0x01, 0x2c]);
     assert!(packed[4..304].iter().all(|&byte| byte == b'x'));
     assert_eq!(&packed[304..], &[42]);

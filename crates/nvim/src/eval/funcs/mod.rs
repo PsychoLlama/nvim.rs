@@ -7,7 +7,7 @@ use crate::global_cell::GlobalCell;
 use crate::memory::ARENA_EMPTY;
 use crate::types::{
     Array, ChannelPart, ChannelStreamType, Context, GArray, GRegFlags, LuaRetMode, MotionType,
-    Object, ProcType, String_0, XDGVarType, size_t, uint64_t,
+    ProcType, String_0, XDGVarType, uint64_t,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -133,11 +133,7 @@ pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c
 pub const SIZE_MAX: ::core::ffi::c_ulong = 18446744073709551615 as ::core::ffi::c_ulong;
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const ARENA_BLOCK_SIZE: ::core::ffi::c_int = 4096 as ::core::ffi::c_int;
-pub const KV_INITIAL_VALUE: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const INTERNAL_CALL_MASK: uint64_t = 1_u64
     << ::core::mem::size_of::<uint64_t>()

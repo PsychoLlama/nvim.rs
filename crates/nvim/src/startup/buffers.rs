@@ -15,11 +15,11 @@ use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::guard::Suppress;
 use crate::semsg;
+use crate::types::OptStr;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::arglist::alist_name;
 use crate::arglist::state::arg_had_last;
 use crate::buffer::state::{
@@ -127,7 +127,8 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     if !parm.use_ef.is_null() {
         set_option_direct(
             kOptErrorfile,
-            OptVal::String(unsafe { cstr_as_string(parm.use_ef) }),
+            // SAFETY: NUL-terminated and outlives the call, which copies.
+            OptVal::String(unsafe { OptStr::borrowing(parm.use_ef) }),
             OptionSetFlags::NONE,
             SID_CARG,
         );
@@ -484,7 +485,7 @@ unsafe fn set_shortmess(value: *mut c_char) {
     // option layer copies it.
     set_option_value_give_err(
         kOptShortmess,
-        OptVal::String(unsafe { cstr_as_string(value) }),
+        OptVal::String(unsafe { OptStr::borrowing(value) }),
         OptionSetFlags::NONE,
     );
 }

@@ -35,12 +35,10 @@
 )]
 
 mod handlers;
-mod handlers_2;
 mod keysets;
 mod keysets_2;
 
 pub use self::handlers::*;
-pub use self::handlers_2::*;
 pub use self::keysets::*;
 pub use self::keysets_2::*;
 
@@ -141,19 +139,15 @@ unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
 /// One row of [`method_handlers`]: the name a client calls the method by, the
 /// wrapper that serves it, whether it may run straight from the RPC read
 /// callback instead of being deferred to the main loop, and whether its result
-/// is heap-allocated for the caller to free rather than owned by the request
-/// arena.
 const fn handler(
     name: &'static CStr,
     f: unsafe fn(uint64_t, Array, *mut Arena) -> Result<Object, Error>,
     fast: bool,
-    ret_alloc: bool,
 ) -> MsgpackRpcRequestHandler {
     MsgpackRpcRequestHandler {
         name: name.as_ptr(),
         fn_0: Some(f),
         fast,
-        ret_alloc,
     }
 }
 
@@ -163,7 +157,6 @@ pub(crate) const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler
     name: ptr::null(),
     fn_0: None,
     fast: false,
-    ret_alloc: false,
 };
 
 /// Look a method up by name.

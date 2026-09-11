@@ -592,9 +592,10 @@ pub extern "C" fn block_autocmds() {
 pub extern "C" fn unblock_autocmds() {
     autocmd_blocked.set(autocmd_blocked.get() - 1);
     if !is_autocmd_blocked() && termresponse_changed.get() && has_event(AutoEvent::TermResponse) {
+        // SAFETY: `v:termresponse` is a NUL-terminated string, and the
+        // autocommand takes the copy over.
         let sequence = unsafe { cstr_to_string(get_vim_var_str(Vv::Termresponse)) };
         unsafe { do_termresponse_autocmd(sequence) };
-        unsafe { api_free_string(sequence) };
     }
 }
 

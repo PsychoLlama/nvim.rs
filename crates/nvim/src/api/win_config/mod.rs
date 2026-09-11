@@ -4,9 +4,8 @@
 
 use crate::api::extmark::{parse_virt_text, virt_text_to_array};
 use crate::api::private::helpers::{
-    api_free_array, api_free_object, api_typename, arena_array, cstr_as_string, cstr_to_string,
-    cstrn_as_string, find_buffer_by_handle, find_window_by_handle, object_to_hl_id, try_enter,
-    try_leave,
+    api_typename, cstr_to_string, cstrn_to_string, find_buffer_by_handle, find_window_by_handle,
+    object_to_hl_id, try_enter, try_leave,
 };
 use crate::autocmd::{apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
@@ -24,7 +23,7 @@ use crate::strings::striequal;
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Arena, Array, Boolean, BorderTextType, BufferHandle, ColNr, Error, FloatAnchor,
+    AlignTextPos, Array, Boolean, BorderTextType, BufferHandle, ColNr, Error, FloatAnchor,
     FloatRelative, Integer, KeyDict_win_config, LPos, LineNr, Object, String_0, SwitchWin, Tabpage,
     TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle,
     kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
@@ -71,11 +70,7 @@ pub const kZIndexFloatDefault: ::core::ffi::c_uint = 50;
 pub const kBorderTextFooter: BorderTextType = 1;
 pub const kBorderTextTitle: BorderTextType = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
-pub const KV_INITIAL_VALUE: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const KV_INITIAL_VALUE: Array = Array::EMPTY;
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

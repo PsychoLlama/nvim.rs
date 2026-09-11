@@ -530,7 +530,8 @@ pub unsafe fn get_recorded() -> *mut c_char {
 pub unsafe fn get_inserted() -> String_0 {
     // SAFETY (this body): as [`get_recorded`] -- the answer owns its bytes.
     let (data, size) = unsafe { redobuff().contents(false) };
-    String_0::from_raw_parts(data, size)
+    // SAFETY: `contents` answers its own `xmalloc`ed NUL-terminated block.
+    unsafe { String_0::from_owned_parts(data, size) }
 }
 
 /// Write `n` into `out` as decimal digits and answer how many there are.

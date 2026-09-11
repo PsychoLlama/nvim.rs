@@ -30,10 +30,7 @@ const PUM_PREVIEW_HEIGHT: c_int = 3;
 
 /// `STATIC_CSTR_AS_OPTVAL`: an option value borrowed from a string literal.
 fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
-    OptVal::String(String_0::from_raw_parts(
-        value.as_ptr().cast_mut(),
-        value.count_bytes(),
-    ))
+    OptVal::static_string(value)
 }
 
 /// The selected item's `info` text, if it has one.
@@ -92,7 +89,8 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
         max_width = max_width.max(unsafe { win_linetabsize(win, 0, curr, MAXCOL as c_int) });
         win.w_onebuf_opt.wo_wrap = save_wrap;
 
-        lines.push(Object::String(unsafe { cstr_to_string(curr) }));
+        // SAFETY: `curr` points at the line, NUL-terminated by the split.
+        lines.push(Object::string(unsafe { cstr_to_string(curr) }));
 
         if !next.is_null() {
             unsafe { *next = b'\n' as c_char };
@@ -104,17 +102,8 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
         };
     }
 
-    // Hand the lines over as an api `Array`, which `api_free_array` frees
-    // with `xfree` — so the buffer has to come from `xmalloc`, not `Vec`.
-    let mut replacement = ARRAY_DICT_INIT;
-    if !lines.is_empty() {
-        replacement.items =
-            unsafe { xmalloc(size_of::<Object>().wrapping_mul(lines.len())) }.cast::<Object>();
-        unsafe { ::core::ptr::copy_nonoverlapping(lines.as_ptr(), replacement.items, lines.len()) };
-        replacement.size = lines.len() as size_t;
-        replacement.capacity = replacement.size;
-    }
     let lnum = lines.len() as LineNr;
+    let replacement = Array::from(lines);
 
     let mut arena = ARENA_EMPTY;
     // Setting the lines is the editor's own doing, not a plugin's.
@@ -136,7 +125,6 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
         err.clear();
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    unsafe { api_free_array(replacement) };
     unsafe { (*buf).b_p_ma = 0 };
 
     (lnum, max_width)

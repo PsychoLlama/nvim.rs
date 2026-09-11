@@ -60,7 +60,7 @@ pub struct KeyDict__shada_register {
 }
 /// ShaDa entries spell their keys as two-letter codes, so every field here
 /// names the one it travels under.
-#[derive(Copy, Clone, Default)]
+#[derive(Default)]
 #[repr(C)]
 pub struct KeyDict__shada_search_pat {
     /// Wire key: `sm`.

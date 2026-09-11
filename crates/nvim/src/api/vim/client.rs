@@ -17,21 +17,21 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, dict_put};
+use crate::api::private::helpers::Reported;
 use crate::cstr;
 
 /// # Safety
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Array {
-    let mut rv: Array = arena_array(arena, 2 as size_t);
+pub unsafe fn nvim_get_api_info(channel_id: uint64_t) -> Array {
+    let mut rv: Array = Array::with_capacity(2 as size_t);
     debug_assert!(
         channel_id <= 9223372036854775807 as uint64_t,
         "channel_id <= INT64_MAX"
     );
-    unsafe { array_add(&mut rv, Object::integer(channel_id.cast_signed())) };
-    unsafe { array_add(&mut rv, api_metadata()) };
+    rv.push(Object::integer(channel_id.cast_signed()));
+    rv.push(api_metadata());
     rv
 }
 
@@ -52,54 +52,21 @@ pub unsafe fn nvim_set_client_info(
     type_0: String_0,
     methods: ApiDict,
     attributes: ApiDict,
-    arena: *mut Arena,
 ) {
-    let mut info: ApiDict = ApiDict {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<KeyValuePair>(),
-    };
-    let mut info_items: [KeyValuePair; 5] = [KeyValuePair {
-        key: String_0::NULL,
-        value: Object::Nil,
-    }; 5];
-    info.capacity = 5 as size_t;
-    info.items = (&raw mut info_items).cast::<KeyValuePair>();
-    unsafe { dict_put(&mut info, c"name", Object::string(name)) };
-    let mut has_major: bool = false;
-    let mut i: size_t = 0 as size_t;
-    while i < version.size {
-        if unsafe { strequal((*version.items.add(i)).key.data(), c"major".as_ptr()) } {
-            has_major = true;
-            break;
-        } else {
-            i = i.wrapping_add(1);
-        }
-    }
+    let mut info: ApiDict = ApiDict::with_capacity(5);
+    info.insert(String_0::from_cstr(c"name"), Object::string(name));
+    // A client that did not say which major version it speaks is version 0.
+    let has_major = version.iter().any(|pair| pair.key.as_bytes() == b"major");
     if !has_major {
-        let mut v: ApiDict = arena_dict(arena, version.size.wrapping_add(1 as size_t));
-        if version.size != 0 {
-            let dst = v.items.cast::<::core::ffi::c_void>();
-            let src = version.items.cast::<::core::ffi::c_void>();
-            let bytes = version
-                .size
-                .wrapping_mul(::core::mem::size_of::<KeyValuePair>());
-            // SAFETY: `v` is the arena block just sized for one more pair
-            // than `version` holds, and `version` is the caller's.
-            unsafe { dst.cast::<u8>().copy_from_nonoverlapping(src.cast(), bytes) };
-            v.size = version.size;
-        }
-        unsafe { dict_put(&mut v, c"major", Object::integer(0 as Integer)) };
-        version = v;
+        version.insert(String_0::from_cstr(c"major"), Object::integer(0 as Integer));
     }
-    unsafe { dict_put(&mut info, c"version", Object::dict(version)) };
-    unsafe { dict_put(&mut info, c"type", Object::string(type_0)) };
-    unsafe { dict_put(&mut info, c"methods", Object::dict(methods)) };
-    unsafe { dict_put(&mut info, c"attributes", Object::dict(attributes)) };
-    let no_arena = ::core::ptr::null_mut::<Arena>();
+    info.insert(String_0::from_cstr(c"version"), Object::dict(version));
+    info.insert(String_0::from_cstr(c"type"), Object::string(type_0));
+    info.insert(String_0::from_cstr(c"methods"), Object::dict(methods));
+    info.insert(String_0::from_cstr(c"attributes"), Object::dict(attributes));
     // SAFETY: `info` is this frame's own, and the copy the channel keeps is
     // owned rather than borrowed from the arena.
-    unsafe { rpc_set_client_info(channel_id, copy_dict(info, no_arena)) };
+    unsafe { rpc_set_client_info(channel_id, info.clone()) };
 }
 
 // `nvim__chan_set_detach` is an API method's own name, published over msgpack-RPC.
@@ -121,17 +88,9 @@ pub fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<()
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-pub unsafe fn nvim_get_chan_info(
-    channel_id: uint64_t,
-    mut chan: Integer,
-    arena: *mut Arena,
-) -> ApiDict {
+pub unsafe fn nvim_get_chan_info(channel_id: uint64_t, mut chan: Integer) -> ApiDict {
     if chan < 0 as Integer {
-        return ApiDict {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<KeyValuePair>(),
-        };
+        return ApiDict::EMPTY;
     }
     if chan == 0 as Integer && !is_internal_call(channel_id) {
         debug_assert!(
@@ -140,15 +99,15 @@ pub unsafe fn nvim_get_chan_info(
         );
         chan = channel_id.cast_signed();
     }
-    unsafe { channel_info(chan.cast_unsigned(), arena) }
+    unsafe { channel_info(chan.cast_unsigned()) }
 }
 
 /// # Safety
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-pub unsafe fn nvim_list_chans(arena: *mut Arena) -> Array {
-    unsafe { channel_all_info(arena) }
+pub unsafe fn nvim_list_chans() -> Array {
+    unsafe { channel_all_info() }
 }
 
 /// # Safety

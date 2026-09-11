@@ -24,7 +24,6 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::strings::vim_strchr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -164,63 +163,31 @@ unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: 
 /// Answers the allocated line array and whether a trailing newline made the
 /// register linewise. `insert_string` is edited, not copied.
 ///
-/// # Safety
-/// `insert_string.data` must be an allocated, NUL-terminated string of
-/// `insert_string.size` bytes.
-unsafe fn split_expr_result(insert_string: String_0) -> (*mut String_0, size_t, MotionType) {
-    // Two passes over the same walk: the first counts the lines, the
-    // second fills the array the count sized.
-    let mut y_array: *mut String_0 = ::core::ptr::null_mut();
+fn split_expr_result(insert_string: &String_0) -> (Vec<String_0>, MotionType) {
+    // Each line is its own string now, so the walk is one pass over the
+    // bytes rather than upstream's count-then-fill over one allocation it
+    // punched NULs into.
     let mut y_type = kMTCharWise;
+    let mut lines: Vec<String_0> = Vec::new();
+    let mut rest = insert_string.as_bytes();
     loop {
-        // A pure pointer walk, so it keeps one region around the whole of it.
-        //
-        // SAFETY: the caller promises `insert_string` is an allocated,
-        // NUL-terminated string of `len()` bytes.  `ptr` only ever moves
-        // forward inside it: `vim_strchr` answers a newline of that string or
-        // null, and the byte after a newline is still one of its own -- worst
-        // case the NUL, which is what ends the walk.  On the filling pass
-        // `y_array` has exactly the `y_size` slots the counting pass measured,
-        // and `y_size` is only ever the index of the line just started.
-        let (y_size, done) = unsafe {
-            let mut y_size: size_t = 0;
-            let mut ptr = insert_string.data();
-            let mut ptrlen = insert_string.len();
-            while !ptr.is_null() {
-                if !y_array.is_null() {
-                    (*y_array.add(y_size)).set_data(ptr);
-                }
-                y_size = y_size.wrapping_add(1);
-                let mut tmp = vim_strchr(ptr, '\n' as c_int);
-                if tmp.is_null() {
-                    if !y_array.is_null() {
-                        (*y_array.add(y_size.wrapping_sub(1))).set_len(ptrlen);
-                    }
-                } else {
-                    if !y_array.is_null() {
-                        *tmp = NUL as c_char;
-                        let len = tmp.offset_from(ptr) as size_t;
-                        (*y_array.add(y_size.wrapping_sub(1))).set_len(len);
-                        ptrlen = ptrlen.wrapping_sub(len.wrapping_add(1));
-                    }
-                    tmp = tmp.add(1);
-                    // A trailing newline makes the register linewise.
-                    if c_int::from(*tmp) == NUL {
-                        y_type = kMTLineWise;
-                        break;
-                    }
-                }
-                ptr = tmp;
+        match rest.iter().position(|&b| b == b'\n') {
+            None => {
+                lines.push(String_0::from_bytes(rest));
+                break;
             }
-            (y_size, !y_array.is_null())
-        };
-        if done {
-            return (y_array, y_size, y_type);
+            Some(at) => {
+                lines.push(String_0::from_bytes(&rest[..at]));
+                rest = &rest[at + 1..];
+                // A trailing newline makes the register linewise.
+                if rest.is_empty() {
+                    y_type = kMTLineWise;
+                    break;
+                }
+            }
         }
-        // SAFETY: `y_size` slots is what the counting pass just measured.
-        let room = y_size.wrapping_mul(::core::mem::size_of::<String_0>());
-        y_array = unsafe { xmalloc(room) } as *mut String_0;
     }
+    (lines, y_type)
 }
 
 impl Put {
@@ -400,17 +367,29 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
     }
 
     // A computed register becomes a fake one-line yankreg.
-    let mut insert_string = String_0::NULL;
+    let mut spec_data: *mut c_char = ::core::ptr::null_mut();
     let mut allocated = false;
     // SAFETY: both out-parameters are writable locals.  The chain is left
     // whole: the register is only read when the caller did not hand one over,
     // and `"=` running Vimscript is this function's own promise.
     let nothing_to_put = reg.is_null()
-        && unsafe { get_spec_reg(regname, insert_string.data_mut(), &raw mut allocated, true) }
-        && insert_string.data().is_null();
+        && unsafe { get_spec_reg(regname, &raw mut spec_data, &raw mut allocated, true) }
+        && spec_data.is_null();
     if nothing_to_put {
         return;
     }
+    // The answer owns its bytes either way: `allocated` is `get_spec_reg`
+    // saying the block is ours, and otherwise it lent one that is copied.
+    // SAFETY: a non-null answer is NUL-terminated.
+    let mut insert_string = if spec_data.is_null() {
+        String_0::NULL
+    } else if allocated {
+        unsafe { String_0::from_owned_parts(spec_data, cstr::bytes_at(spec_data).len()) }
+    } else {
+        unsafe { String_0::from_bytes(cstr::bytes_at(spec_data)) }
+    };
+    // The lines `"=` splits into, kept alive for as long as `put` names them.
+    let mut expr_lines: Vec<String_0>;
 
     if Buf::current().terminal.is_null() {
         // Saving for undo can run autocommands, which would invalidate
@@ -434,14 +413,14 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         split_pos: 0,
     };
 
-    if !insert_string.data().is_null() {
-        // SAFETY: the computed register answered a NUL-terminated string.
-        insert_string.set_len(unsafe { cstr::bytes_at(insert_string.data()) }.len());
+    if !insert_string.is_null() {
         if regname == '=' as c_int {
             // Only `"=` can produce more than one line.
-            //
-            // SAFETY: as above, and it is an allocated one this call owns.
-            (put.y_array, put.y_size, put.y_type) = unsafe { split_expr_result(insert_string) };
+            let (lines, y_type) = split_expr_result(&insert_string);
+            expr_lines = lines;
+            put.y_type = y_type;
+            put.y_size = expr_lines.len();
+            put.y_array = expr_lines.as_mut_ptr();
         } else {
             put.y_size = 1;
             put.y_array = &raw mut insert_string;
@@ -570,14 +549,6 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
         Buf::current().b_op_start = orig_start;
         Buf::current().b_op_end = orig_end;
-    }
-    if allocated {
-        // SAFETY: `allocated` is `get_spec_reg` saying the string is ours.
-        unsafe { xfree(insert_string.data() as *mut c_void) };
-    }
-    if regname == '=' as c_int {
-        // SAFETY: `split_expr_result` allocated the array above.
-        unsafe { xfree(put.y_array as *mut c_void) };
     }
 
     if Buf::current().terminal.is_null() {

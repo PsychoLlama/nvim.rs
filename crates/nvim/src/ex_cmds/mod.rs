@@ -63,7 +63,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     BCount, BfaFlags, BlnFlags, CmdModFlags, DoBufAction, ExArg, ExtmarkOp, GetFileRet, LPos,
-    LineNr, List, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv, size_t, uint8_t,
+    LineNr, List, NUL, OptVal, OptionSetFlags, UndoObjectType, Vv, uint8_t,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -238,10 +238,7 @@ pub fn prepare_tagpreview(undo_sync: bool) -> bool {
     Win::current().w_onebuf_opt.wo_diff = 0;
     set_option_direct(
         kOptFoldcolumn,
-        OptVal::String(String_0::from_raw_parts(
-            c"0".as_ptr() as *mut ::core::ffi::c_char,
-            ::core::mem::size_of::<[::core::ffi::c_char; 2]>().wrapping_sub(1 as size_t),
-        )),
+        OptVal::static_string(c"0"),
         OptionSetFlags::NONE,
         SID_NONE,
     );

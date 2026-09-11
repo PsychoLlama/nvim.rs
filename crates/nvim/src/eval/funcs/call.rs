@@ -5,7 +5,7 @@
 
 use super::wrappers::{arg_number, arg_string, arg_string_chk};
 use super::{AUTOLOAD_CHAR, MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::{au_exists, autocmd_supported};
 use crate::charset::skipwhite;
@@ -633,7 +633,7 @@ pub fn f_luaeval(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // which `nlua_push_typval` reads as nil.
     let absent = TypVal::Unknown;
     let arg = args.get(1).unwrap_or(&absent);
-    unsafe { nlua_typval_eval(cstr_as_string(chunk), arg, result) };
+    unsafe { nlua_typval_eval(cstr_to_string(chunk), arg, result) };
 }
 
 /// `py3eval({expr})`

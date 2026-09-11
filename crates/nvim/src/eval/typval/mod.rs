@@ -82,9 +82,14 @@ pub const DI_FLAGS_FIX: ::core::ffi::c_uint = 4;
 pub const DI_FLAGS_RO_SBX: ::core::ffi::c_uint = 2;
 pub const DI_FLAGS_RO: ::core::ffi::c_uint = 1;
 pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
+/// One stringified list item on `join()`'s way to the answer.
+///
+/// Upstream carries the allocation twice -- once as the string and once as
+/// `tofree`, because its `String` did not own anything -- and clears the
+/// array with `FREE_JOIN_TOFREE`. The string owns its bytes here, so there
+/// is one field and the array's own clear releases it.
 pub struct Join {
     pub s: String_0,
-    pub tofree: *mut ::core::ffi::c_char,
 }
 pub struct SortInfo {
     pub item_compare_ic: ::core::ffi::c_int,

@@ -12,6 +12,7 @@ use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::types::CmdIdx;
+use crate::types::OptStr;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 
@@ -20,7 +21,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 
 use crate::buffer::BufFlags;
@@ -577,7 +577,7 @@ fn apply_cmdmod() {
 
 /// The 'eventignore' value `:noautocmd` installs.
 fn eventignore_all() -> OptVal {
-    OptVal::String(String_0::from_raw_parts(c"all".as_ptr() as *mut c_char, 3))
+    OptVal::string(String_0::from_cstr(c"all"))
 }
 
 /// Take the modifiers back out of force.
@@ -593,7 +593,9 @@ pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
     if !cm.cmod_save_ei.is_null() {
         set_option_direct(
             kOptEventignore,
-            OptVal::String(unsafe { cstr_as_string(cm.cmod_save_ei) }),
+            // SAFETY: the saved value is NUL-terminated and freed just
+            // below, after `set_option_direct` has copied it.
+            OptVal::String(unsafe { OptStr::borrowing(cm.cmod_save_ei) }),
             OptionSetFlags::NONE,
             SID_NONE,
         );

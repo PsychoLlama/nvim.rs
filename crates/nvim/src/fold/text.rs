@@ -12,7 +12,6 @@
 use crate::api::extmark::parse_virt_text;
 use crate::cstr;
 
-use crate::api::private::helpers::api_free_object;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{ptr2cells, skipwhite, transstr, vim_isprintc};
 use crate::eval::eval_foldtext;
@@ -90,21 +89,25 @@ pub unsafe fn get_foldtext(
             let saved_sctx = current_sctx.get();
             current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
             let no_emsg = Suppress::emsg();
-            let mut obj: Object = unsafe { eval_foldtext(window) };
-            if let Object::Array(chunks) = obj {
-                // A list of `[text, hl]` chunks: the caller draws them,
-                // and the returned text is empty.
-                if let Ok(parsed) = unsafe { parse_virt_text(chunks, ptr::null_mut()) } {
-                    unsafe { (*vt, *buf) = (parsed, NUL as c_char) };
-                    text = buf;
+            let obj: Object = unsafe { eval_foldtext(window) };
+            match obj.kind() {
+                kObjectTypeArray => {
+                    // A list of `[text, hl]` chunks: the caller draws them,
+                    // and the returned text is empty.
+                    let chunks = obj.into_array().expect("the tag says Array");
+                    if let Ok(parsed) = unsafe { parse_virt_text(&chunks, ptr::null_mut()) } {
+                        unsafe { (*vt, *buf) = (parsed, NUL as c_char) };
+                        text = buf;
+                    }
                 }
-            } else if let Object::String(s) = obj {
-                // `text` keeps the bytes; clear the object so the free below
-                // leaves them alone.
-                text = s.data();
-                obj = Object::Nil;
+                kObjectTypeString => {
+                    // The allocation leaves the object and becomes the
+                    // caller's, which is what the answer's contract says.
+                    let string = obj.into_string().expect("the tag says String");
+                    text = string.into_raw();
+                }
+                _ => drop(obj),
             }
-            unsafe { api_free_object(obj) };
             drop(no_emsg);
             if text.is_null() || did_emsg.get() != 0 {
                 got_fdt_error.set(true);

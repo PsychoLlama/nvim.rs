@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, dict_put};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_number;
 use crate::api_error;
 use crate::cstr;
@@ -27,8 +27,8 @@ use core::ptr;
 /// taken from and must outlive.
 // `nvim__id` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
-    unsafe { copy_object(obj, arena) }
+pub unsafe fn nvim__id(obj: Object) -> Object {
+    obj.clone()
 }
 
 /// # Safety
@@ -38,8 +38,8 @@ pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
 /// taken from and must outlive.
 // `nvim__id_array` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__id_array(arr: Array, arena: *mut Arena) -> Array {
-    unsafe { copy_array(arr, arena) }
+pub unsafe fn nvim__id_array(arr: Array) -> Array {
+    arr.clone()
 }
 
 /// # Safety
@@ -49,8 +49,8 @@ pub unsafe fn nvim__id_array(arr: Array, arena: *mut Arena) -> Array {
 /// answers with is taken from and must outlive.
 // `nvim__id_dict` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__id_dict(dct: ApiDict, arena: *mut Arena) -> ApiDict {
-    unsafe { copy_dict(dct, arena) }
+pub unsafe fn nvim__id_dict(dct: ApiDict) -> ApiDict {
+    dct.clone()
 }
 
 // `nvim__id_float` is an API method's own name, published over msgpack-RPC.
@@ -66,7 +66,7 @@ pub fn nvim__id_float(flt: Float) -> Float {
 /// `arena` must be the caller's, and live for as long as the answer is.
 // `nvim__stats` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__stats(arena: *mut Arena) -> ApiDict {
+pub unsafe fn nvim__stats() -> ApiDict {
     let stats = g_stats.get();
     // SAFETY: the Lua state exists from startup to exit.
     let lua_refcount = unsafe { nlua_get_global_ref_count() };
@@ -84,10 +84,10 @@ pub unsafe fn nvim__stats(arena: *mut Arena) -> ApiDict {
             Object::integer(tslua_query_parse_count.get() as Integer),
         ),
     ];
-    let mut rv: ApiDict = arena_dict(arena, entries.len());
+    let mut rv: ApiDict = ApiDict::with_capacity(entries.len());
     for (key, value) in entries {
         // SAFETY: `rv` is the dict the arena just sized for these six keys.
-        unsafe { dict_put(&mut rv, key, value) };
+        rv.insert(String_0::from_cstr(key), value);
     }
     rv
 }
@@ -99,11 +99,7 @@ pub unsafe fn nvim__stats(arena: *mut Arena) -> ApiDict {
 pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<Array, Error> {
     let mut error = Error::none();
     let mut rv: ::core::ffi::c_int = 0;
-    let mut rvobj: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
+    let mut rvobj: Array = Array::EMPTY;
     let mut children: Vec<::core::ffi::c_int> = Vec::new();
     if !(pid > 0 as Integer && pid <= 2147483647 as Integer) {
         let name = c"pid".as_ptr();
@@ -122,27 +118,20 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
                 1924,
                 "fallback to vim._os_proc_children()"
             );
-            let mut a: Array = Array {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<Object>(),
-            };
-            let mut a_items: [Object; 1] = [Object::Nil; 1];
-            a.capacity = 1 as size_t;
-            a.items = &raw mut a_items as *mut Object;
-            unsafe { array_add(&mut a, Object::integer(pid)) };
+            let mut a: Array = Array::with_capacity(1);
+            a.push(Object::integer(pid));
             let code = String_0::from_cstr(c"return vim._os_proc_children(...)");
             let name = ::core::ptr::null::<::core::ffi::c_char>();
             // SAFETY: `a` is the one-slot block above, `arena` is the
             // caller's and `error` this frame's own slot.
-            let o = match unsafe { nlua_exec(code, name, a, kRetObject, arena) } {
+            let o = match unsafe { nlua_exec(&code, name, a, kRetObject, arena) } {
                 Ok(value) => value,
                 Err(e) => {
                     error = e;
                     Object::Nil
                 }
             };
-            if let Object::Array(array) = o {
+            if let Some(array) = o.into_array() {
                 rvobj = array;
             } else if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int)
             {
@@ -152,9 +141,9 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
                 );
             }
         } else {
-            rvobj = arena_array(arena, children.len() as size_t);
+            rvobj = Array::with_capacity(children.len() as size_t);
             for pid in children {
-                unsafe { array_add(&mut rvobj, Object::integer(pid as Integer)) };
+                rvobj.push(Object::integer(pid as Integer));
             }
         }
     }
@@ -174,41 +163,20 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
         error = err_bad_number(unsafe { cstr::at(name) }, pid);
         return Object::Nil.reported(error);
     }
-    let mut a: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
-    let mut a_items: [Object; 1] = [Object::Nil; 1];
-    a.capacity = 1 as size_t;
-    a.items = &raw mut a_items as *mut Object;
-    if a.size == a.capacity {
-        a.capacity = if a.capacity != 0 {
-            a.capacity << 1 as ::core::ffi::c_int
-        } else {
-            8 as size_t
-        };
-        let (items, bytes) = (
-            a.items.cast::<::core::ffi::c_void>(),
-            ::core::mem::size_of::<Object>().wrapping_mul(a.capacity),
-        );
-        // SAFETY: `a.items` is this frame's own one-slot array, which
-        // `xrealloc` copies out of and does not free.
-        a.items = unsafe { xrealloc(items, bytes) }.cast::<Object>();
-    };
-    unsafe { array_add(&mut a, Object::integer(pid)) };
+    let mut a: Array = Array::with_capacity(1);
+    a.push(Object::integer(pid));
     let code = String_0::from_cstr(c"return vim._os_proc_info(...)");
     let name = ::core::ptr::null::<::core::ffi::c_char>();
     // SAFETY: `a` is the one-slot block above, `arena` is the caller's and
     // `error` this frame's own slot.
-    let o = match unsafe { nlua_exec(code, name, a, kRetObject, arena) } {
+    let o = match unsafe { nlua_exec(&code, name, a, kRetObject, arena) } {
         Ok(value) => value,
         Err(e) => {
             error = e;
             Object::Nil
         }
     };
-    if o.as_array().is_some_and(|array| array.size == 0 as size_t) {
+    if o.as_array().is_some_and(|array| array.len() == 0 as size_t) {
         return Object::Nil.reported(error);
     } else if matches!(o, Object::Dict(_)) {
         rvobj = o;
@@ -231,11 +199,7 @@ pub unsafe fn nvim__inspect_cell(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
-    let mut ret: Array = Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
+    let mut ret: Array = Array::EMPTY;
     let mut g: GridRef = default_grid_ref();
     if grid == pum_grid_ref().handle as Integer {
         g = pum_grid_ref();
@@ -257,19 +221,21 @@ pub unsafe fn nvim__inspect_cell(
     {
         return ret.reported(error);
     }
-    ret = arena_array(arena, 3 as size_t);
+    ret = Array::with_capacity(3 as size_t);
     let off: size_t = g.cell_offset(row as ::core::ffi::c_int, col as ::core::ffi::c_int);
     let sc_buf: *mut ::core::ffi::c_char =
         unsafe { arena_alloc(arena, MAX_SCHAR_SIZE as size_t, false) } as *mut ::core::ffi::c_char;
     unsafe { schar_get(sc_buf, g.char_at(off)) };
-    unsafe { array_add(&mut ret, Object::string(cstr_as_string(sc_buf))) };
+    // SAFETY: `sc_buf` is the NUL-terminated cell buffer filled above.
+    ret.push(Object::string(unsafe { cstr_to_string(sc_buf) }));
     let attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
     // SAFETY: `arena` is this frame's own.
     let hl = Object::dict(unsafe { hl_get_attr_by_id(attr as Integer, true, arena) }?);
     // SAFETY: `ret` has room for the three items the arena sized it for.
-    unsafe { array_add(&mut ret, hl) };
+    ret.push(hl);
     if !unsafe { highlight_use_hlstate() } {
-        unsafe { array_add(&mut ret, Object::array(hl_inspect(attr, arena))) };
+        // SAFETY: `attr` is a resolved attribute id.
+        ret.push(Object::array(unsafe { hl_inspect(attr) }));
     }
     ret.reported(error)
 }
@@ -294,7 +260,7 @@ pub fn nvim__invalidate_glyph_cache() {
 /// answers with is taken from and must outlive.
 // `nvim__unpack` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, Error> {
+pub unsafe fn nvim__unpack(str: String_0) -> Result<Object, Error> {
     // SAFETY: the caller's string names its own bytes.
-    unsafe { unpack(str.data(), str.len(), arena) }
+    unsafe { unpack(str.data(), str.len()) }
 }

@@ -1,84 +1,179 @@
 //! Strings and buffer text.
 //!
-//! An API `String` is a pointer and a length, and may or may not own its
-//! bytes: `*_to_string` copies, `*_as_string` borrows. Getting that wrong
-//! is a leak or a double free, so the name of every function here says
-//! which it is.
+//! An API `String` owns its bytes, so there is nothing to get wrong about
+//! who frees them: this file holds the half of [`String_0`] that has to
+//! touch the pointer -- the allocating constructors, `Clone`, `Drop` and
+//! the two readers -- because `types/` forbids `unsafe`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::{CAR, NL, arena_string, arena_take_arraybuilder};
+use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
 use crate::cstr;
-use crate::kvec::InitVec;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::memory::{memchrsub, xmemdupz, xstrndup};
+use crate::memory::{memchrsub, xfree, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
-use crate::types::{
-    Arena, Array, ArrayBuilder, Error, LineNr, NUL, Object, String_0, int64_t, size_t,
-};
+use crate::types::{Array, Error, LineNr, NUL, Object, String_0, int64_t, size_t};
 use crate::winlayer::Buf;
 use ::libc::strnlen;
 use core::ffi::{CStr, c_char};
-use core::{mem, slice};
+use core::slice;
 
 // -- Strings ---------------------------------------------------------------
 
-/// The reading half of [`String_0`], which cannot live with the type:
-/// `types/` forbids `unsafe` and this dereferences the pointer.
+/// The half of [`String_0`] that touches the pointer, which cannot live
+/// with the type: `types/` forbids `unsafe`.
+///
+/// The string owns an `xmalloc`ed block of `len() + 1` bytes with a NUL at
+/// `len()`, or is [`String_0::NULL`] and owns nothing. That invariant is
+/// what makes the two readers *safe*: there is no second answer to "whose
+/// bytes are these and how many".
 impl String_0 {
-    /// The bytes.
+    /// The bytes, not counting the terminator.
     ///
     /// [`String_0::NULL`] answers the empty slice: `slice::from_raw_parts`
     /// may not be handed a null pointer even for a zero length, and the
     /// empty answer is what every caller wants there.
-    ///
-    /// # Safety
-    /// A non-null string must have [`len`](String_0::len) readable bytes at
-    /// [`data`](String_0::data), unwritten for `'a`.
-    pub unsafe fn as_bytes<'a>(&self) -> &'a [u8] {
+    pub fn as_bytes(&self) -> &[u8] {
         if self.is_null() {
             return &[];
         }
-        // SAFETY: caller's contract.
+        // SAFETY: the type's invariant -- a non-null string owns `len()`
+        // readable bytes, and the borrow is this string's.
         unsafe { slice::from_raw_parts(self.data().cast::<u8>(), self.len()) }
     }
 
-    /// The string as a C string.
+    /// The string as a C string, stopping at the terminator this type
+    /// always writes.
     ///
     /// [`String_0::NULL`] answers `c""`, as [`as_bytes`](String_0::as_bytes)
-    /// answers the empty slice. The bytes are *not* re-measured: a producer
-    /// that terminated its buffer somewhere other than `len` -- which nothing
-    /// in the tree does -- would be believed.
-    ///
-    /// # Safety
-    /// A non-null string is NUL-terminated at `len` and unwritten for `'a`.
-    /// Every `*_to_string`/`*_as_string` in this module terminates; a
-    /// `String` built by hand out of [`from_raw_parts`](String_0::from_raw_parts)
-    /// need not.
-    pub unsafe fn as_cstr<'a>(&self) -> &'a CStr {
+    /// answers the empty slice. The bytes are *not* re-measured: a string
+    /// holding an interior NUL comes back truncated at it, which is what
+    /// every C consumer of `data()` sees anyway.
+    pub fn as_cstr(&self) -> &CStr {
         if self.is_null() {
             return c"";
         }
-        // SAFETY: caller's contract.
+        // SAFETY: the type's invariant -- a non-null string is
+        // NUL-terminated, and the borrow is this string's.
         unsafe { CStr::from_ptr(self.data()) }
     }
+
+    /// Take ownership of `size` bytes at `data`.
+    ///
+    /// # Safety
+    ///
+    /// `data` must be null -- and then `size` zero -- or an `xmalloc`ed
+    /// block of at least `size + 1` bytes with a NUL at `data[size]`, which
+    /// nothing else frees or writes.
+    pub unsafe fn from_owned_parts(data: *mut c_char, size: size_t) -> Self {
+        let mut str = String_0::NULL;
+        let (into_data, into_size) = str.parts_mut();
+        // SAFETY: the two addresses are `str`'s own fields, and what the
+        // caller promised about `data` is exactly the type's invariant.
+        unsafe {
+            *into_data = data;
+            *into_size = size;
+        }
+        str
+    }
+
+    /// Shorten the string to `size` bytes, writing a terminator there.
+    ///
+    /// Only shortens: the block is not reallocated, so the bytes past `size`
+    /// are still the string's and are released with it.
+    ///
+    /// # Safety
+    ///
+    /// `size` must not be past the string's current length.
+    pub unsafe fn truncate(&mut self, size: size_t) {
+        debug_assert!(size <= self.len());
+        let (data, len) = self.parts_mut();
+        // SAFETY: `size` is inside the block, which has room for a
+        // terminator at its own end and therefore at any earlier offset.
+        unsafe {
+            if !(*data).is_null() {
+                *(*data).add(size) = 0;
+            }
+            *len = size;
+        }
+    }
+
+    /// A copy of `bytes`, NUL-terminated, owned by the answer.
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        // SAFETY: `bytes` is a live slice, and `xmemdupz` answers a block of
+        // `len + 1` bytes with the terminator already written.
+        let data = unsafe { xmemdupz(bytes.as_ptr().cast(), bytes.len()) };
+        // SAFETY: that block is the answer's own.
+        unsafe { String_0::from_owned_parts(data.cast(), bytes.len()) }
+    }
+
+    /// A copy of `str`'s bytes, stopping at its terminator.
+    pub fn from_cstr(str: &CStr) -> Self {
+        Self::from_bytes(str.to_bytes())
+    }
 }
+
+impl Clone for String_0 {
+    /// A copy with its own allocation. [`String_0::NULL`] stays null rather
+    /// than becoming the empty string.
+    fn clone(&self) -> Self {
+        if self.is_null() {
+            return String_0::NULL;
+        }
+        Self::from_bytes(self.as_bytes())
+    }
+}
+
+impl Drop for String_0 {
+    fn drop(&mut self) {
+        // SAFETY: the type's invariant -- the block is the string's own, and
+        // `xfree` accepts a null pointer.
+        unsafe { xfree(self.data().cast()) };
+    }
+}
+
+impl From<&CStr> for String_0 {
+    /// [`from_cstr`](String_0::from_cstr): a copy of `s`'s bytes.
+    fn from(s: &CStr) -> Self {
+        Self::from_cstr(s)
+    }
+}
+
+impl From<&[u8]> for String_0 {
+    fn from(bytes: &[u8]) -> Self {
+        Self::from_bytes(bytes)
+    }
+}
+
+impl From<&str> for String_0 {
+    fn from(text: &str) -> Self {
+        Self::from_bytes(text.as_bytes())
+    }
+}
+
+impl PartialEq for String_0 {
+    /// Byte equality. The null string equals only itself: it is a value of
+    /// its own, not the empty string.
+    fn eq(&self, other: &Self) -> bool {
+        self.is_null() == other.is_null() && self.as_bytes() == other.as_bytes()
+    }
+}
+
+impl Eq for String_0 {}
 
 /// A copy of the C string `str`, owned by the caller.
 ///
 /// # Safety
 ///
-/// `str` must point at a NUL-terminated string.
+/// `str` must be null or point at a NUL-terminated string.
 pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
-    // SAFETY: `str` is null or NUL-terminated.
-    unsafe {
-        if str.is_null() {
-            return String_0::NULL;
-        }
-        cbuf_to_string(str, cstr::bytes_at(str).len())
+    if str.is_null() {
+        return String_0::NULL;
     }
+    // SAFETY: `str` is NUL-terminated.
+    String_0::from_bytes(unsafe { cstr::bytes_at(str) })
 }
 
 /// A copy of `size` bytes of `buf`, owned by the caller and NUL-terminated
@@ -89,114 +184,63 @@ pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
 /// `buf` must point at `size` readable bytes.
 pub(crate) unsafe fn cbuf_to_string(buf: *const c_char, size: size_t) -> String_0 {
     // SAFETY: `buf` has `size` readable bytes.
-    unsafe { String_0::from_raw_parts(xmemdupz(buf.cast(), size).cast(), size) }
+    String_0::from_bytes(unsafe { slice::from_raw_parts(buf.cast::<u8>(), size) })
+}
+
+/// A copy of `str`'s bytes, stopping at a terminator within `maxsize` bytes
+/// or at `maxsize`, whichever comes first.
+///
+/// # Safety
+///
+/// `str` must point at `maxsize` readable bytes.
+pub(crate) unsafe fn cstrn_to_string(str: *const c_char, maxsize: size_t) -> String_0 {
+    // SAFETY: the caller's promise.
+    let len = unsafe { strnlen(str, maxsize) };
+    // SAFETY: as above; `len` is at most `maxsize`.
+    String_0::from_bytes(unsafe { slice::from_raw_parts(str.cast::<u8>(), len) })
 }
 
 /// A NUL-terminated copy of `str`'s bytes, owned by the caller.
-///
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub(crate) unsafe fn string_to_cstr(str: String_0) -> *mut c_char {
-    // SAFETY: `str` has `size` readable bytes.
+pub(crate) fn string_to_cstr(str: &String_0) -> *mut c_char {
+    // SAFETY: `str` names its own bytes, which are NUL-terminated.
     unsafe { xstrndup(str.data(), str.len()) }
 }
 
-/// `str` viewed as an API string, borrowing rather than copying.
-///
-/// # Safety
-///
-/// `str` must be null, or point at a NUL-terminated string, which the
-/// answer borrows rather than copies.
-pub(crate) unsafe fn cstr_as_string(str: *const c_char) -> String_0 {
-    // SAFETY: `str` is null or NUL-terminated.
-    unsafe {
-        if str.is_null() {
-            return String_0::NULL;
-        }
-        String_0::from_raw_parts(str as *mut c_char, cstr::bytes_at(str).len())
-    }
-}
-
-/// [`cstr_as_string`] for a buffer that need not be NUL-terminated within
-/// `maxsize` bytes.
-///
-/// # Safety
-///
-/// `str` must point at `maxsize` readable bytes, which the answer borrows
-/// rather than copies.
-pub(crate) unsafe fn cstrn_as_string(str: *mut c_char, maxsize: size_t) -> String_0 {
-    // SAFETY: `str` has `maxsize` readable bytes.
-    unsafe { String_0::from_raw_parts(str, strnlen(str, maxsize)) }
-}
-
-/// Split `input` into one array item per line, arena-allocating the lines.
+/// Split `input` into one array item per line, each line its own string.
 ///
 /// Line breaks are `\n`, or `\r` and `\r\n` as well with `crlf`. A NUL in
 /// the text stands for a newline, as it does everywhere a buffer line is
 /// passed as a C string, and is turned back into one. Text that ends *with*
 /// a break gets a trailing empty item, so that the array round-trips.
-///
-/// # Safety
-///
-/// `input` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
-pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Arena) -> Array {
-    // SAFETY: an `ArrayBuilder` is a size, a capacity, two pointers and an
-    // inline array of plain-data objects, so all-zero is a valid value.
-    let mut ret: ArrayBuilder = unsafe { mem::zeroed() };
-    let mut items = InitVec::new(
-        &mut ret.size,
-        &mut ret.capacity,
-        &mut ret.items,
-        &mut ret.init_array,
-    );
-    items.init();
+pub(crate) fn string_to_array(input: &String_0, crlf: bool) -> Array {
+    let bytes = input.as_bytes();
+    let is_break = |byte: u8| byte == NL as u8 || (crlf && byte == CAR as u8);
+    let mut items: Vec<Object> = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        let line_len = bytes[at..]
+            .iter()
+            .position(|&byte| is_break(byte))
+            .unwrap_or(bytes.len() - at);
+        let line = String_0::from_bytes(&bytes[at..at + line_len]);
+        // SAFETY: `line` names its own `line_len` bytes.
+        unsafe { memchrsub(line.data().cast(), NUL as c_char, NL, line_len) };
+        items.push(Object::string(line));
 
-    let mut i: size_t = 0;
-    while i < input.len() {
-        let start = input.data().wrapping_add(i);
-        let mut end = start;
-        let mut line_len: size_t = 0;
-        while line_len < input.len() - i {
-            end = start.wrapping_add(line_len);
-            // SAFETY: the caller's promise -- `end` is inside the input.
-            let byte = unsafe { *end };
-            if byte == NL || (crlf && byte == CAR) {
-                break;
-            }
-            line_len += 1;
-        }
-        i += line_len;
-        // SAFETY: as above -- `end` is the break the walk stopped at, or the
-        // last byte it looked at.
-        let at_break = unsafe { *end };
-        let ends_line = at_break == NL || (crlf && at_break == CAR);
+        at += line_len;
+        let ends_line = at < bytes.len();
         // A CRLF counts as one break, so the LF is stepped over as well.
-        if crlf && at_break == CAR && i + 1 < input.len() {
-            // SAFETY: the byte after the CR is still inside the input.
-            if unsafe { *end.add(1) } == NL {
-                i += 1;
-            }
+        if crlf && ends_line && bytes[at] == CAR as u8 && bytes.get(at + 1) == Some(&(NL as u8)) {
+            at += 1;
         }
-
-        let borrowed = String_0::from_raw_parts(start, line_len);
-        // SAFETY: the line has `line_len` readable bytes at `start`.
-        let s = unsafe { arena_string(arena, borrowed) };
-        // SAFETY: `s` is that many bytes of the arena, this call's own.
-        unsafe { memchrsub(s.data().cast(), NUL as c_char, NL, line_len) };
-        items.push(Object::string(s));
-        if i + 1 == input.len() && ends_line {
+        if at + 1 == bytes.len() && ends_line {
             // Text that ends with a break round-trips through a trailing
             // empty item.
             items.push(Object::string(String_0::NULL));
         }
-        i += 1;
+        at += 1;
     }
-    // SAFETY: `ret` is this frame's builder, filled in above.
-    unsafe { arena_take_arraybuilder(arena, &raw mut ret) }
+    Array::from(items)
 }
 
 // -- Buffer text -----------------------------------------------------------
@@ -237,8 +281,8 @@ pub(crate) unsafe fn normalize_index(
     index + 1
 }
 
-/// The text of line `lnum` between the two columns, as a *borrowed* string
-/// into the buffer's own line. Negative columns count back from the end.
+/// The text of line `lnum` between the two columns, copied out of the
+/// buffer's own line. Negative columns count back from the end.
 pub(crate) fn buf_get_text(
     buffer: Buf,
     lnum: int64_t,
@@ -261,10 +305,13 @@ pub(crate) fn buf_get_text(
         let why = c"start_col must be less than or equal to end_col";
         return Err(Error::validation(why));
     }
-    // SAFETY: `start_col` was clamped into the line.
-    let text = unsafe { bufstr.offset(start_col as isize) };
-    Ok(String_0::from_raw_parts(
-        text,
-        (end_col - start_col) as size_t,
-    ))
+    // SAFETY: `start_col` and `end_col` were clamped into the line, whose
+    // bytes `ml_get_buf` answered.
+    let text = unsafe {
+        slice::from_raw_parts(
+            bufstr.cast::<u8>().offset(start_col as isize),
+            (end_col - start_col) as size_t,
+        )
+    };
+    Ok(String_0::from_bytes(text))
 }

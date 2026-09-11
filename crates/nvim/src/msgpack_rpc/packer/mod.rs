@@ -288,22 +288,20 @@ fn container_len(size: size_t) -> uint32_t {
     uint32_t::try_from(size).expect("container too long for msgpack")
 }
 
-/// # Safety
-/// `str` must describe `str.size` readable bytes at `str.data`.
-pub unsafe fn mpack_str(str: String_0, packer: &mut PackerBuffer) {
-    let header = format::str_header(str.len()).expect("string too long for msgpack");
+/// Packs `bytes` as a msgpack string.
+pub fn mpack_str(bytes: &[u8], packer: &mut PackerBuffer) {
+    let header = format::str_header(bytes.len()).expect("string too long for msgpack");
     emit(packer.cursor_mut(), header.bytes());
-    // SAFETY: the caller's bytes.
-    unsafe { mpack_raw(str.data(), str.len(), packer) };
+    // SAFETY: the slice's own bytes.
+    unsafe { mpack_raw(bytes.as_ptr().cast(), bytes.len(), packer) };
 }
 
-/// # Safety
-/// `str` must describe `str.size` readable bytes at `str.data`.
-pub unsafe fn mpack_bin(str: String_0, packer: &mut PackerBuffer) {
-    let header = format::bin_header(str.len()).expect("blob too long for msgpack");
+/// Packs `bytes` as a msgpack binary.
+pub fn mpack_bin(bytes: &[u8], packer: &mut PackerBuffer) {
+    let header = format::bin_header(bytes.len()).expect("blob too long for msgpack");
     emit(packer.cursor_mut(), header.bytes());
-    // SAFETY: the caller's bytes.
-    unsafe { mpack_raw(str.data(), str.len(), packer) };
+    // SAFETY: the slice's own bytes.
+    unsafe { mpack_raw(bytes.as_ptr().cast(), bytes.len(), packer) };
 }
 
 /// Copies `len` opaque bytes, flushing as often as it takes.
@@ -374,24 +372,14 @@ pub unsafe fn mpack_object(obj: *mut Object, packer: &mut PackerBuffer) {
 
 /// Packs an array's elements without wrapping them in another object.
 ///
-/// # Safety
-/// `arr` must describe `arr.size` live objects at `arr.items`.
-pub unsafe fn mpack_object_array(arr: Array, packer: &mut PackerBuffer) {
-    mpack_array(packer.cursor_mut(), container_len(arr.size));
-    if arr.size == 0 {
-        return;
+/// The walk below is iterative for what is *under* an element; the elements
+/// themselves are one loop here, because each is a complete value.
+pub fn mpack_object_array(arr: &mut Array, packer: &mut PackerBuffer) {
+    mpack_array(packer.cursor_mut(), container_len(arr.len()));
+    for item in arr.iter_mut() {
+        // SAFETY: the element is the caller's, live for the walk.
+        unsafe { mpack_object_inner(item, core::ptr::null_mut(), 0, packer) };
     }
-    // The walk needs a container to come back to only when more than one
-    // element is left after the first.
-    let mut container = Object::Array(arr);
-    let resume = if arr.size > 1 {
-        &raw mut container
-    } else {
-        core::ptr::null_mut()
-    };
-    // SAFETY: the caller's elements, and a container that lives to the end of
-    // the walk below.
-    unsafe { mpack_object_inner(arr.items, resume, 1, packer) };
 }
 
 /// Walks `current` and everything below it, iteratively.
@@ -442,8 +430,7 @@ pub unsafe fn mpack_object_inner(
                     break 'packed;
                 }
                 Object::String(value) => {
-                    // SAFETY: the string is live for the pack.
-                    unsafe { mpack_str(*value, packer) };
+                    mpack_str(value.as_bytes(), packer);
                     break 'packed;
                 }
                 Object::Buffer(handle) => {
@@ -459,7 +446,7 @@ pub unsafe fn mpack_object_inner(
                     break 'packed;
                 }
                 Object::Array(array) => {
-                    let (size, items) = (array.size, array.items);
+                    let (size, items) = (array.len(), array.as_mut_ptr());
                     mpack_array(packer.cursor_mut(), container_len(size));
                     if size == 0 {
                         break 'packed;
@@ -478,7 +465,7 @@ pub unsafe fn mpack_object_inner(
                     break 'packed;
                 }
                 Object::Dict(dict) => {
-                    let size = dict.size;
+                    let size = dict.len();
                     mpack_map(packer.cursor_mut(), container_len(size));
                     if size == 0 {
                         break 'packed;
@@ -506,21 +493,26 @@ pub unsafe fn mpack_object_inner(
 
         // SAFETY: `container` is a live array or dict, and `container_idx` is
         // below its size -- the two assignments below restore that.
-        match unsafe { *container } {
+        match unsafe { &mut *container } {
             Object::Array(arr) => {
-                current = unsafe { arr.items.add(container_idx) };
+                let len = arr.len();
+                current = unsafe { arr.as_mut_ptr().add(container_idx) };
                 container_idx += 1;
-                if container_idx >= arr.size {
+                if container_idx >= len {
                     container = core::ptr::null_mut();
                 }
             }
             Object::Dict(dict) => {
-                let entry: *mut KeyValuePair = unsafe { dict.items.add(container_idx) };
+                let len = dict.len();
+                let entry: *mut KeyValuePair = unsafe { dict.as_mut_ptr().add(container_idx) };
                 container_idx += 1;
                 mpack_check_buffer(packer);
-                unsafe { mpack_str((*entry).key, packer) };
-                current = unsafe { &raw mut (*entry).value };
-                if container_idx >= dict.size {
+                // SAFETY: `entry` is that live entry of the dictionary.
+                unsafe {
+                    mpack_str((*entry).key.as_bytes(), packer);
+                    current = &raw mut (*entry).value;
+                }
+                if container_idx >= len {
                     container = core::ptr::null_mut();
                 }
             }
@@ -554,6 +546,18 @@ unsafe fn flush_string_buffer(buffer: *mut PackerBuffer) {
 }
 
 /// Takes ownership of everything written to a [`packer_string_buffer`].
-pub fn packer_take_string(buffer: &PackerBuffer) -> String_0 {
-    String_0::from_raw_parts(buffer.start(), buffer.used())
+///
+/// # Safety
+///
+/// The buffer must be a [`packer_string_buffer`]'s, whose block is an
+/// `xmalloc`ed one with room for the terminator this writes; nothing may
+/// write to it afterwards.
+pub unsafe fn packer_take_string(buffer: &PackerBuffer) -> String_0 {
+    let used = buffer.used();
+    // SAFETY: the caller's promise -- the block has room past `used`, which
+    // `mpack_check_buffer` keeps by never filling a buffer to its last byte.
+    unsafe {
+        *buffer.start().add(used) = 0;
+        String_0::from_owned_parts(buffer.start(), used)
+    }
 }

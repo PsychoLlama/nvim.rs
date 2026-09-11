@@ -16,10 +16,11 @@ use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::path::ExpandFlags;
 use crate::syntax::EXPAND_BUF_LEN;
+use crate::types::String_0;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
-use crate::types::{ArrayBuf, BackslashEscape, ExpandContext, Failed, static_cstring};
+use crate::types::{ArrayBuf, BackslashEscape, ExpandContext, Failed};
 
 /// Expand a file or directory pattern.
 ///
@@ -207,22 +208,20 @@ pub(crate) fn get_mapclear_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char 
 ///
 /// # Safety
 ///
-/// `names` must hold a well-formed API object: if it is an array, its `size`
-/// items must be initialized, since one of them is read. `idx` is bounds-
-/// checked against that size and needs nothing.
-unsafe fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char {
+/// The answer borrows the cached object's bytes, which stay live until the
+/// cache is replaced.
+fn nth_lua_string(names: &GlobalCell<Object>, idx: c_int) -> *mut c_char {
     names.with(|names| {
         let Some(array) = names.as_array() else {
             return ptr::null_mut();
         };
-        if idx < 0 || idx >= array.size as c_int {
-            return ptr::null_mut();
-        }
-        // SAFETY: `idx` is in range of the cached array.
-        let Object::String(name) = (unsafe { *array.items.add(idx as usize) }) else {
+        let Ok(idx) = usize::try_from(idx) else {
             return ptr::null_mut();
         };
-        name.data()
+        match array.get(idx).and_then(Object::as_string) {
+            Some(name) => name.data(),
+            None => ptr::null_mut(),
+        }
     })
 }
 
@@ -235,7 +234,7 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
     // A failed lookup caches nil, as it did when the error was dropped.
     let res = unsafe {
         nlua_exec(
-            static_cstring(script),
+            &String_0::from_cstr(script),
             ptr::null(),
             args,
             kRetObject,
@@ -243,9 +242,10 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
         )
     }
     .unwrap_or(Object::Nil);
-    // `replace` rather than a `get`/`set` pair: the old answer must not
-    // be reachable through the cell while it is being freed.
-    unsafe { api_free_object(names.replace(res)) };
+    // The swap happens inside the borrow and the old answer is released
+    // outside it: it must not be reachable through the cell while it is
+    // being freed.
+    drop(names.with_mut(|slot| core::mem::replace(slot, res)));
 }
 
 /// Completion for `:checkhealth`: the available healthcheck names.
@@ -263,7 +263,7 @@ pub(crate) unsafe fn get_healthcheck_names(_expand: *mut Expand, idx: c_int) -> 
         unsafe { cache_lua_answer(&names, c"return vim.health._complete()", ARRAY_DICT_INIT) };
         last_gen.set(get_cmdline_last_prompt_id());
     }
-    unsafe { nth_lua_string(&names, idx) }
+    nth_lua_string(&names, idx)
 }
 
 /// Completion for `:lsp`.
@@ -289,7 +289,7 @@ pub(crate) unsafe fn get_lsp_arg(expand: *mut Expand, idx: c_int) -> *mut c_char
         last_xp_line.set(unsafe { xstrdup(expand.xp_line) });
         // The current command line, as the Lua function's one argument.
         let mut args = ArrayBuf::<1>::new();
-        args.push(Object::string(unsafe { cstr_as_string(expand.xp_line) }));
+        args.push(Object::string(unsafe { cstr_to_string(expand.xp_line) }));
         unsafe {
             cache_lua_answer(
                 &names,
@@ -299,7 +299,7 @@ pub(crate) unsafe fn get_lsp_arg(expand: *mut Expand, idx: c_int) -> *mut c_char
         };
         last_gen.set(get_cmdline_last_prompt_id());
     }
-    unsafe { nth_lua_string(&names, idx) }
+    nth_lua_string(&names, idx)
 }
 
 /// `(context, generator, match case-insensitively, escape the matches)`.

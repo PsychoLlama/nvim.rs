@@ -13,7 +13,6 @@ use crate::highlight::HlAttrFlags;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
 use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
@@ -635,13 +634,7 @@ impl KeyLoop {
         }
         set_option_value_give_err(
             kOptBackground,
-            OptVal::String(unsafe {
-                cstr_as_string(if dark {
-                    c"dark".as_ptr()
-                } else {
-                    c"light".as_ptr()
-                })
-            }),
+            OptVal::static_string(if dark { c"dark" } else { c"light" }),
             OptionSetFlags::NONE,
         );
         reset_option_was_set(kOptBackground);

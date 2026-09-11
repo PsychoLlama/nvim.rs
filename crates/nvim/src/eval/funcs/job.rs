@@ -3,7 +3,7 @@
 #![allow(unsafe_code)]
 
 use super::{NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};
-use crate::api::private::helpers::{cstr_as_string, dict_set_var};
+use crate::api::private::helpers::{cstr_to_string, dict_set_var};
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_close_terminal, setfname};
 use crate::channel::{
@@ -45,8 +45,8 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, EvalFuncData,
-    IOSIZE, Integer, List, MAXPATHL, NUL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
+    Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, EvalFuncData, IOSIZE,
+    Integer, List, MAXPATHL, NUL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
     VarNumber, Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
@@ -658,9 +658,8 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 /// `buffer` is a live buffer.
 unsafe fn set_buf_var(buffer: Buf, name: &CStr, value: Integer) {
     let value = Object::Integer(value);
-    let arena = ptr::null_mut::<Arena>();
     // SAFETY: the caller's obligation; the name is `'static`.
     let vars = buffer.b_vars;
-    let name = unsafe { cstr_as_string(name.as_ptr()) };
-    drop(unsafe { dict_set_var(vars, name, value, false, false, arena) });
+    let name = unsafe { cstr_to_string(name.as_ptr()) };
+    drop(unsafe { dict_set_var(vars, &name, value, false, false) });
 }

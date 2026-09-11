@@ -14,7 +14,7 @@
 
 use super::say;
 use super::{CAR, EOL_MAC, NL, TAB};
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
 use crate::charset::{transchar, transchar_nonprint, vim_isprintc};
@@ -229,7 +229,7 @@ unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool)
     // SAFETY: caller's contract.
     unsafe {
         msg_multiline(
-            cstr_as_string(line.as_mut_ptr()),
+            cstr_to_string(line.as_mut_ptr()),
             0,
             true,
             false,

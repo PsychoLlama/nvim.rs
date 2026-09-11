@@ -36,7 +36,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::array_add;
 use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
 use crate::cstr;
@@ -48,11 +47,7 @@ use crate::types::{ExArgt, FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-const EMPTY_ARRAY: Array = Array {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
-};
+const EMPTY_ARRAY: Array = Array::EMPTY;
 
 // Two locals over `api::private::validate`'s family: the ones whose argument
 // is still a pointer into the caller's own text rather than a literal.
@@ -77,11 +72,13 @@ fn err_expected_at(name: &CStr, expected: &CStr, actual: *const c_char) -> Error
 /// `get_field` must be `K`'s own generated field lookup: the decoder writes
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
-fn sub_keyset<K: Default>(dict: ApiDict, get_field: FieldHashfn) -> Result<K, Error> {
+fn sub_keyset<K: Default>(dict: &ApiDict, get_field: FieldHashfn) -> Result<K, Error> {
     // Every key unset, which is what the decoder expects to start from.
     let mut out = K::default();
+    // The keyset takes its fields over, and the caller's dictionary is a
+    // borrow of the outer keyset's -- so the copy is the sub-keyset's.
     // SAFETY: as above.
-    unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) }?;
+    unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict.clone()) }?;
     Ok(out)
 }
 
@@ -95,7 +92,6 @@ pub unsafe fn nvim_cmd(
     channel_id: uint64_t,
     cmd: *mut KeyDict_cmd,
     opts: *mut KeyDict_cmd_opts,
-    arena: *mut Arena,
 ) -> Result<String_0, Error> {
     // SAFETY: the dispatcher decodes both keydicts onto its own frame and
     // keeps them alive across the call; neither is reachable from anything
@@ -116,12 +112,14 @@ pub unsafe fn nvim_cmd(
     // SAFETY: `arena` is the dispatcher's, live for the call. The cleanup
     // below has to run whichever way the two stages went, so the answer is
     // held rather than returned from inside them.
-    let answered = unsafe { prepare_cmd(cmd, &mut ea, &mut cmdinfo, &mut cmdline, arena) }
-        .and_then(|prepared| match prepared {
-            // SAFETY: `prepare_cmd` answering true means `ea`/`cmdinfo`
-            // describe a resolved, validated command.
-            true => unsafe { run_cmd(channel_id, &mut ea, &mut cmdinfo, output, arena) },
-            false => Ok(String_0::NULL),
+    let answered =
+        unsafe { prepare_cmd(cmd, &mut ea, &mut cmdinfo, &mut cmdline) }.and_then(|prepared| {
+            match prepared {
+                // SAFETY: `prepare_cmd` answering true means `ea`/`cmdinfo`
+                // describe a resolved, validated command.
+                true => unsafe { run_cmd(channel_id, &mut ea, &mut cmdinfo, output) },
+                false => Ok(String_0::NULL),
+            }
         });
 
     // SAFETY: all three are heap blocks this call owns; `build_cmdline_str`
@@ -143,37 +141,33 @@ pub unsafe fn nvim_cmd(
 /// # Safety
 ///
 /// `cmdline` must point at a `*mut c_char` slot the caller owns; on success
-/// it is left holding a heap-allocated command line the caller frees. `arena`
-/// must point at a live arena the answer borrows from.
+/// it is left holding a heap-allocated command line the caller frees.
 unsafe fn prepare_cmd(
     cmd: &KeyDict_cmd,
     ea: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
     cmdline: &mut *mut c_char,
-    arena: *mut Arena,
 ) -> Result<bool, Error> {
-    // SAFETY (all): each stage takes the arena the caller was handed.
-    let Some(range_only) = unsafe { resolve_command(cmd, ea, arena) }? else {
+    // SAFETY (all): the keyset and the command the caller was handed.
+    let Some(range_only) = unsafe { resolve_command(cmd, ea) }? else {
         return Ok(false);
     };
 
     let mut args = EMPTY_ARRAY;
     let mut count_from_first_arg = false;
-    if let Some(given) = cmd.args {
-        count_from_first_arg = unsafe { collect_args(given, ea, &mut args, arena) }?;
+    if let Some(given) = cmd.args.as_ref() {
+        count_from_first_arg = unsafe { collect_args(given, ea, &mut args) }?;
     }
 
     if !range_only {
         // Only the first argument is ever consulted.
-        let first = if args.size > 0 {
-            // SAFETY: `args` was built above, so item 0 is in bounds.
-            unsafe { *args.items }
-                .as_string()
+        // `args` was built above, so item 0 is in bounds when it is not
+        // empty.
+        let first = args.first().map_or(ptr::null_mut(), |arg| {
+            arg.as_string()
                 .expect("`collect_args` puts only Strings in the array")
                 .data()
-        } else {
-            ptr::null_mut()
-        };
+        });
         unsafe { set_cmd_addr_type(ea, first) };
     }
 
@@ -208,27 +202,23 @@ unsafe fn prepare_cmd(
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-unsafe fn resolve_command(
-    cmd: &KeyDict_cmd,
-    ea: &mut ExArg,
-    arena: *mut Arena,
-) -> Result<Option<bool>, Error> {
-    let Some(name) = cmd.cmd else {
+unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bool>, Error> {
+    let Some(name) = cmd.cmd.as_ref() else {
         return Err(err_required(c"cmd"));
     };
 
     // SAFETY: the key is set, so `name` is a NUL-terminated keydict String.
     let named = unsafe { *name.data() } as c_int != NUL;
-    let has_range = cmd.range.is_some_and(|range| range.size > 0);
+    let has_range = cmd.range.as_ref().is_some_and(|range| !range.is_empty());
     let has_mods = cmd.mods.is_some();
 
     if !named && !has_range && !has_mods {
         return Err(err_expected_at(c"cmd", c"non-empty String", ptr::null()));
     }
 
-    // SAFETY: `arena` is the caller's; `find_ex_command` reads `ea.cmd`,
-    // which the arena copy keeps alive for the whole call.
-    let cmdname = unsafe { arena_string(arena, name) }.data();
+    // `find_ex_command` reads `ea.cmd`, which is the keydict's own string --
+    // and the keydict outlives this call.
+    let cmdname = name.data();
     ea.cmd = cmdname;
     let mut p = unsafe { find_ex_command(ea, ptr::null_mut()) };
 
@@ -241,7 +231,7 @@ unsafe fn resolve_command(
     {
         // SAFETY: as above.
         unsafe {
-            p = arena_string(arena, name).data();
+            p = name.data();
             let ret = apply_autocmds(AutoEvent::CmdUndefined, p, p, true, None);
             p = if ret as c_int != 0 && !aborting() {
                 find_ex_command(ea, ptr::null_mut())
@@ -319,19 +309,12 @@ unsafe fn resolve_command(
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-unsafe fn collect_args(
-    given: Array,
-    ea: &mut ExArg,
-    args: &mut Array,
-    arena: *mut Arena,
-) -> Result<bool, Error> {
+unsafe fn collect_args(given: &Array, ea: &mut ExArg, args: &mut Array) -> Result<bool, Error> {
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
-    if given.size == 1 && ea.argt.has(ExArgt::COUNT) && !ea.argt.has(ExArgt::EXTRA) {
-        // SAFETY: the size is 1, so item 0 is in bounds.
-        let first = unsafe { *given.items };
-        let count = match first {
-            Object::Integer(n) => Some(n as int64_t),
+    if given.len() == 1 && ea.argt.has(ExArgt::COUNT) && !ea.argt.has(ExArgt::EXTRA) {
+        let count = match &given[0] {
+            Object::Integer(n) => Some(*n as int64_t),
             Object::String(str) => {
                 let mut endptr: *mut c_char = ptr::null_mut();
                 // SAFETY: the argument is NUL-terminated and `endptr` is this
@@ -349,44 +332,41 @@ unsafe fn collect_args(
             ea.addr_count = 1;
             ea.line2 = count as LineNr;
             ea.line1 = ea.line2;
-            *args = arena_array(arena, 0);
+            *args = Array::with_capacity(0);
             return Ok(true);
         }
     }
 
-    *args = arena_array(arena, given.size);
-    for i in 0..given.size {
-        // SAFETY: `i` is in bounds.
-        let elem: Object = unsafe { *given.items.add(i) };
+    *args = Array::with_capacity(given.len());
+    for elem in given {
         match elem {
             // A boolean argument is spelled to the command as "0" or "1".
-            // SAFETY: `arena_alloc` hands back a block of the size asked for.
-            Object::Boolean(b) => unsafe {
-                let data_str: *mut c_char = arena_alloc(arena, 2, false).cast();
-                *data_str = if b { b'1' } else { b'0' } as c_char;
-                *data_str.add(1) = NUL as c_char;
-                array_add(args, Object::string(cstr_as_string(data_str)));
-            },
+            Object::Boolean(b) => {
+                let digit = if *b { c"1" } else { c"0" };
+                args.push(Object::string(String_0::from_cstr(digit)));
+            }
             // A handle is its id, like any integer.
-            // SAFETY: as above.
-            Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) | Object::Integer(n) => unsafe {
-                let data_str: *mut c_char = arena_alloc(arena, NUMBUFLEN as size_t, false).cast();
-                let (room, fmt) = (NUMBUFLEN as size_t, c"%ld".as_ptr());
-                snprintf(data_str, room, fmt, n);
-                array_add(args, Object::string(cstr_as_string(data_str)));
-            },
+            Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) | Object::Integer(n) => {
+                let mut buf = [0 as c_char; NUMBUFLEN as usize];
+                // SAFETY: the buffer is `NUMBUFLEN` writable bytes and the
+                // verb matches the argument.
+                let rendered = unsafe {
+                    let (room, fmt) = (NUMBUFLEN as size_t, c"%ld".as_ptr());
+                    snprintf(buf.as_mut_ptr(), room, fmt, *n);
+                    cstr::bytes_at(buf.as_ptr())
+                };
+                args.push(Object::string(String_0::from_bytes(rendered)));
+            }
             Object::String(s) => {
                 // An all-whitespace argument would vanish into the separators.
-                // SAFETY: the string names its own bytes.
-                if unsafe { string_iswhite(s) } {
+                if string_iswhite(s) {
                     return Err(err_expected_at(
                         c"command arg",
                         c"non-whitespace",
                         ptr::null(),
                     ));
                 }
-                // SAFETY: `args` has room, reserved above.
-                unsafe { array_add(args, elem) };
+                args.push(Object::string(String_0::clone(s)));
             }
             _ => {
                 let got = api_typename(elem.kind());
@@ -397,11 +377,11 @@ unsafe fn collect_args(
 
     let arity = ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG;
     let argc_valid = match ea.argt.masked(arity) {
-        v if v == arity => args.size == 1,
-        v if v == ExArgt::EXTRA | ExArgt::NOSPC => args.size <= 1,
-        v if v == ExArgt::EXTRA | ExArgt::NEEDARG => args.size >= 1,
+        v if v == arity => args.len() == 1,
+        v if v == ExArgt::EXTRA | ExArgt::NOSPC => args.len() <= 1,
+        v if v == ExArgt::EXTRA | ExArgt::NEEDARG => args.len() >= 1,
         v if v == ExArgt::EXTRA => true,
-        _ => args.size == 0,
+        _ => args.len() == 0,
     };
     if !argc_valid {
         return Err(Error::validation(c"Wrong number of arguments"));
@@ -412,18 +392,18 @@ unsafe fn collect_args(
 
 /// Apply `cmd.range`, then fall back to the command's default range.
 fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
-    if let Some(range) = cmd.range {
+    if let Some(range) = cmd.range.as_ref() {
         if !ea.argt.has(ExArgt::RANGE) {
             return Err(err_cannot_accept(c"range", cmd));
         }
-        if range.size > 2 {
+        if range.len() > 2 {
             return Err(err_expected_at(c"range", c"<=2 elements", ptr::null()));
         }
 
-        ea.addr_count = range.size as c_int;
-        for i in 0..range.size {
+        ea.addr_count = range.len() as c_int;
+        for i in 0..range.len() {
             // SAFETY: `i` is in bounds.
-            let bound = unsafe { *range.items.add(i) };
+            let bound = &range[i];
             if bound.as_integer().is_none_or(|n| n < 0) {
                 return Err(err_expected_at(
                     c"range element",
@@ -433,10 +413,10 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
             }
         }
         // One element gives both bounds.
-        if range.size > 0 {
+        if range.len() > 0 {
             // SAFETY: both indices are in bounds.
-            let last_idx = range.size - 1;
-            let (first, last) = unsafe { (*range.items, *range.items.add(last_idx)) };
+            let last_idx = range.len() - 1;
+            let (first, last) = (&range[0], &range[last_idx]);
             // Every item is an Integer, checked above.
             let expect = "the loop above rejected everything but Integers";
             let (first, last) = (
@@ -497,7 +477,7 @@ fn apply_count(cmd: &KeyDict_cmd, ea: &mut ExArg, count_from_first_arg: bool) ->
 
 /// Apply `cmd.reg`.
 fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
-    let Some(reg) = cmd.reg else {
+    let Some(reg) = cmd.reg.as_ref() else {
         return Ok(());
     };
     if !ea.argt.has(ExArgt::REGSTR) {
@@ -541,8 +521,11 @@ fn apply_bang(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
 /// above raise when a field contradicts the command's `argt`.
 fn err_cannot_accept(what: &CStr, cmd: &KeyDict_cmd) -> Error {
     let what = msg_cstr(what);
-    // SAFETY: `cmd.cmd` names its own NUL-terminated bytes.
-    let name = unsafe { c_str(cmd.cmd.unwrap_or(String_0::NULL).data()) };
+    let name = cmd
+        .cmd
+        .as_ref()
+        .map_or(c"", |cmd| cmd.as_cstr())
+        .to_string_lossy();
     api_error!(kErrorTypeValidation, "Command cannot accept {what}: {name}")
 }
 
@@ -551,7 +534,7 @@ fn apply_magic(cmd: &KeyDict_cmd, ea: &mut ExArg, cmdinfo: &mut CmdParseInfo) ->
     let argt_file = ea.argt.has(ExArgt::XFILE);
     let argt_bar = ea.argt.has(ExArgt::TRLBAR);
 
-    let Some(given) = cmd.magic else {
+    let Some(given) = cmd.magic.as_ref() else {
         cmdinfo.magic.file = argt_file;
         cmdinfo.magic.bar = argt_bar;
         return Ok(());
@@ -574,7 +557,7 @@ fn apply_magic(cmd: &KeyDict_cmd, ea: &mut ExArg, cmdinfo: &mut CmdParseInfo) ->
 
 /// Unpack the `mods` sub-keyset into `cmdinfo.cmdmod`.
 fn apply_mods(cmd: &KeyDict_cmd, ea: &ExArg, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
-    let Some(given) = cmd.mods else {
+    let Some(given) = cmd.mods.as_ref() else {
         return Ok(());
     };
 
@@ -601,7 +584,7 @@ fn apply_mods(cmd: &KeyDict_cmd, ea: &ExArg, cmdinfo: &mut CmdParseInfo) -> Resu
     if mods.horizontal.unwrap_or(false) {
         cmdinfo.cmdmod.cmod_split |= WSP_HOR as c_int;
     }
-    if let Some(named) = mods.split {
+    if let Some(named) = mods.split.as_ref() {
         // SAFETY: `mods.split` is a NUL-terminated keydict String.
         let split = unsafe { CStr::from_ptr(named.data()) };
         match split_direction(split) {
@@ -662,9 +645,11 @@ fn split_direction(name: &CStr) -> Option<Option<c_int>> {
 /// Unpack `mods.filter` and compile its pattern.
 fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
     let get_field = Some(key_dict_cmd_mods_filter_get_field as _);
-    let filter =
-        sub_keyset::<KeyDict_cmd_mods_filter>(mods.filter.unwrap_or(ApiDict::EMPTY), get_field)?;
-    let Some(pattern) = filter.pattern else {
+    let filter = sub_keyset::<KeyDict_cmd_mods_filter>(
+        mods.filter.as_ref().unwrap_or(&ApiDict::EMPTY),
+        get_field,
+    )?;
+    let Some(pattern) = filter.pattern.as_ref() else {
         return Ok(());
     };
 
@@ -674,7 +659,7 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Resu
     if unsafe { *pattern.data() } as c_int != NUL || cmdinfo.cmdmod.cmod_filter_force {
         // SAFETY: the pattern outlives the compiled program, which
         // `undo_cmdmod` frees.
-        let pat = unsafe { string_to_cstr(pattern) };
+        let pat = string_to_cstr(pattern);
         cmdinfo.cmdmod.cmod_filter_pat = pat;
         // SAFETY: as above.
         cmdinfo.cmdmod.cmod_filter_regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
@@ -717,7 +702,6 @@ unsafe fn run_cmd(
     ea: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
     capture: bool,
-    arena: *mut Arena,
 ) -> Result<String_0, Error> {
     let mut capture_local = GArray {
         ga_len: 0,
@@ -771,17 +755,16 @@ unsafe fn run_cmd(
 
     let mut retv = String_0::NULL;
     if caught.is_ok() && capture && capture_local.ga_len > 1 {
-        let captured =
-            String_0::from_raw_parts(capture_local.ga_data.cast(), capture_local.ga_len as size_t);
         // SAFETY: the garray holds `ga_len` bytes of message text.
-        retv = unsafe { arena_string(arena, captured) };
+        let captured = unsafe {
+            core::slice::from_raw_parts(
+                capture_local.ga_data.cast::<u8>(),
+                capture_local.ga_len as size_t,
+            )
+        };
         // Messages open with a newline the caller did not ask for.
-        // SAFETY: the arena copy is non-empty and NUL-terminated.
-        if unsafe { *retv.data() } as c_int == '\n' as c_int {
-            // SAFETY: the copy is longer than the byte just skipped.
-            retv.set_data(unsafe { retv.data().add(1) });
-            retv.set_len(retv.len() - 1);
-        }
+        let skip = usize::from(captured[0] == b'\n');
+        retv = String_0::from_bytes(&captured[skip..]);
     }
     if capture {
         // SAFETY: initialised above under the same condition.

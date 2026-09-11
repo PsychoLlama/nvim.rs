@@ -150,15 +150,19 @@ fn update_ext() {
 ///
 /// # Safety
 ///
-/// `args` must be a valid array for the duration of the call; the handlers
-/// and the serializers both read it.
+/// The handlers and the serializers each take an array of their own, so the
+/// event's own array is copied per consumer and released here.
+///
+/// # Safety
+///
+/// The handlers this reaches are arbitrary Lua.
 pub unsafe fn ui_call_event(name: &'static CStr, args: Array) {
-    let handled = unsafe { offer_to_handlers(name, args) };
+    let handled = unsafe { offer_to_handlers(name, &args) };
     if !handled {
         let mut any_call = false;
         let mut i = 0;
         while i < ui_count() {
-            unsafe { remote_ui_event(ui_at(i), name, args) };
+            unsafe { remote_ui_event(ui_at(i), name, args.clone()) };
             any_call = true;
             i += 1;
         }
@@ -174,7 +178,7 @@ pub unsafe fn ui_call_event(name: &'static CStr, args: Array) {
 /// # Safety
 ///
 /// As [`ui_call_event`].
-unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
+unsafe fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
     // A handler is arbitrary Lua and may legitimately want to move the
     // cursor or set a variable, which the locks held while redrawing would
     // forbid. Upstream lifts them for the duration and puts them back.
@@ -200,10 +204,19 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
         let fast = unsafe { is_fast(name, args) };
         let event = name.as_ptr().cast_mut();
         let no_arena = core::ptr::null_mut::<Arena>();
-        // SAFETY: `name` is a static protocol name and `args` is handed over
-        // to the callee.
-        let res =
-            unsafe { nlua_call_ref_ctx(fast, callback, event, args, kRetNilBool, no_arena, true) };
+        // SAFETY: `name` is a static protocol name; the callee takes over
+        // the copy it is handed.
+        let res = unsafe {
+            nlua_call_ref_ctx(
+                fast,
+                callback,
+                event,
+                args.clone(),
+                kRetNilBool,
+                no_arena,
+                true,
+            )
+        };
         ui_event_ns_id.set(0);
         match res {
             Ok(res) => {
@@ -232,7 +245,7 @@ unsafe fn offer_to_handlers(name: &CStr, args: Array) -> bool {
 /// # Safety
 ///
 /// As [`ui_call_event`].
-unsafe fn is_fast(name: &CStr, args: Array) -> bool {
+unsafe fn is_fast(name: &CStr, args: &Array) -> bool {
     /// `msg_show` kinds that are not redraw-driven.
     const SLOW_KINDS: [&CStr; 12] = [
         c"empty",
@@ -253,7 +266,7 @@ unsafe fn is_fast(name: &CStr, args: Array) -> bool {
     }
     // `kind` is `msg_show`'s first argument, and an unkinded message
     // carries it as an empty string with no buffer behind it at all.
-    let kind = unsafe { *args.items }
+    let kind = args[0]
         .as_string()
         .expect("`msg_show`'s first argument is its kind")
         .data();

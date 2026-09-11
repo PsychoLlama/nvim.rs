@@ -34,7 +34,7 @@ use std::ffi::CString;
 
 use crate::api::extmark::namespace_id_for;
 use crate::api::extmark::{describe_ns, nvim_create_namespace};
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::buffer::{buflist_findname_exp, find_buf};
 use crate::charset::{

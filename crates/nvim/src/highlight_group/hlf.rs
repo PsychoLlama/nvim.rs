@@ -164,7 +164,7 @@ pub(crate) const HLF_COUNT: c_int = 76;
 ///
 /// Index 0 (`HLF_NONE`) is a NULL, as upstream has it: the sentinel is not a
 /// group and the two readers that walk from 0 hand it straight to
-/// `cstr_as_string`, which answers an empty string for a NULL.
+/// `cstr_to_string`, which answers an empty string for a NULL.
 pub(crate) static hlf_names: ConstTable<[*const c_char; HLF_COUNT as usize]> = ConstTable::new([
     ::core::ptr::null::<c_char>(),
     c"SpecialKey".as_ptr(),

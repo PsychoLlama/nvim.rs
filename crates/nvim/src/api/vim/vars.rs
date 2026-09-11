@@ -32,10 +32,10 @@ fn cursor_line() -> (BufferHandle, Integer) {
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_get_current_line(arena: *mut Arena) -> Result<String_0, Error> {
+pub unsafe fn nvim_get_current_line() -> Result<String_0, Error> {
     let (buf, lnum) = cursor_line();
     // SAFETY: `arena` is the caller's, and the pair names the cursor's line.
-    unsafe { buffer_get_line(buf, lnum, arena) }
+    unsafe { buffer_get_line(buf, lnum) }
 }
 
 /// Replace the line the cursor is on with `line`.
@@ -63,36 +63,37 @@ pub unsafe fn nvim_del_current_line(arena: *mut Arena) -> Result<(), Error> {
 ///
 /// # Safety
 /// `name` must name its own bytes and `arena` must be the caller's.
-pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
+pub unsafe fn nvim_get_var(name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     // SAFETY: the caller's promise about `name`.
-    let mut di = unsafe { find_globvar(name) };
+    let mut di = unsafe { find_globvar(&name) };
     if di.is_null() {
         // SAFETY: as above.
         let loaded = unsafe { script_autoload(name.data(), name.len(), false) };
         if !loaded || aborting() {
             // SAFETY: `name` names its own NUL-terminated bytes.
-            error = unsafe { key_not_found(name) };
+            error = unsafe { key_not_found(&name) };
             return Object::Nil.reported(error);
         }
         // SAFETY: as above.
-        di = unsafe { find_globvar(name) };
+        di = unsafe { find_globvar(&name) };
     }
     if di.is_null() {
         // SAFETY: as above.
-        error = unsafe { key_not_found(name) };
+        error = unsafe { key_not_found(&name) };
         return Object::Nil.reported(error);
     }
     // SAFETY: `di` is the live dictionary item just found, and `arena` is the
     // caller's.
-    unsafe { vim_to_object(&(*di).di_tv, arena, true) }.reported(error)
+    // SAFETY: `di` is the live item the lookup found.
+    Object::from(unsafe { &(*di).di_tv }).reported(error)
 }
 
 /// `g:name`'s dictionary item, or null.
 ///
 /// # Safety
 /// `name` must name its own bytes.
-unsafe fn find_globvar(name: String_0) -> *mut DictItem {
+unsafe fn find_globvar(name: &String_0) -> *mut DictItem {
     // SAFETY: the caller's promise; the global dictionary is live from
     // startup to exit.
     let len: ptrdiff_t = name.len().cast_signed();
@@ -103,7 +104,7 @@ unsafe fn find_globvar(name: String_0) -> *mut DictItem {
 ///
 /// # Safety
 /// `name` must be NUL-terminated.
-unsafe fn key_not_found(name: String_0) -> Error {
+unsafe fn key_not_found(name: &String_0) -> Error {
     // SAFETY: the caller's promise.
     let name = unsafe { c_str(name.data()) };
     api_error!(kErrorTypeValidation, "Key not found: {name}")
@@ -117,7 +118,7 @@ pub unsafe fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
     let dict = get_globvar_dict();
     // SAFETY: the caller's promise, and `error` is this frame's own slot. The
     // null arena means the value is copied rather than borrowed.
-    unsafe { dict_set_var(dict, name, value, false, false, NO_ARENA) }.map(|_| ())
+    unsafe { dict_set_var(dict, &name, value, false, false) }.map(|_| ())
 }
 
 /// Remove the global variable `name`.
@@ -127,17 +128,17 @@ pub unsafe fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
 pub unsafe fn nvim_del_var(name: String_0) -> Result<(), Error> {
     let dict = get_globvar_dict();
     // SAFETY: as [`nvim_set_var`]; `del` says to remove rather than assign.
-    unsafe { dict_set_var(dict, name, Object::Nil, true, false, NO_ARENA) }.map(|_| ())
+    unsafe { dict_set_var(dict, &name, Object::Nil, true, false) }.map(|_| ())
 }
 
 /// The `v:` variable `name`.
 ///
 /// # Safety
 /// `name` must name its own bytes and `arena` must be the caller's.
-pub unsafe fn nvim_get_vvar(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
+pub unsafe fn nvim_get_vvar(name: String_0) -> Result<Object, Error> {
     // SAFETY: the caller's promise; `v:` is live from startup to exit and
     // `error` is this frame's own slot.
-    unsafe { dict_get_value(get_vimvar_dict(), name, arena) }
+    unsafe { dict_get_value(get_vimvar_dict(), &name) }
 }
 
 /// Set the `v:` variable `name` to `value`.
@@ -147,8 +148,5 @@ pub unsafe fn nvim_get_vvar(name: String_0, arena: *mut Arena) -> Result<Object,
 pub unsafe fn nvim_set_vvar(name: String_0, value: Object) -> Result<(), Error> {
     let dict = get_vimvar_dict();
     // SAFETY: as [`nvim_set_var`], over `v:` rather than the globals.
-    unsafe { dict_set_var(dict, name, value, false, false, NO_ARENA) }.map(|_| ())
+    unsafe { dict_set_var(dict, &name, value, false, false) }.map(|_| ())
 }
-
-/// No arena: `dict_set_var` copies the value rather than borrowing it.
-const NO_ARENA: *mut Arena = ::core::ptr::null_mut();

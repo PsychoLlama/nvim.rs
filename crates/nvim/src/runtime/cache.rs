@@ -44,6 +44,7 @@ use crate::smsg;
 use crate::types::{FAIL, MAXPATHL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use core::slice;
 
 /// The mutex guarding [`runtime_search_path_thread`], named once so the raw
 /// handle has a single spelling.
@@ -96,7 +97,7 @@ impl RuntimeSearchPath {
             return &[];
         }
         // SAFETY: the caller's path, `size` items long.
-        unsafe { core::slice::from_raw_parts(self.items, self.size) }
+        unsafe { slice::from_raw_parts(self.items, self.size) }
     }
 
     /// Take a path back, to grow or to free it.
@@ -449,10 +450,12 @@ fn runtime_search_path_build() -> RuntimeSearchPath {
                 c",".as_ptr().cast_mut(),
             )
         };
-        let the_entry = String_0::from_raw_parts(cur_entry, buflen);
+        // SAFETY: `copy_option_part` filled `buflen` bytes of the buffer
+        // `cur_entry` points into.
+        let the_entry =
+            String_0::from_bytes(unsafe { slice::from_raw_parts(cur_entry.cast::<u8>(), buflen) });
+        pack_used.insert(the_entry.as_bytes().into(), 0);
         pack_entries.push(the_entry);
-        // SAFETY: `the_entry` names `buflen` bytes of 'packpath'.
-        pack_used.insert(unsafe { the_entry.as_bytes() }.into(), 0);
     }
 
     // 'runtimepath' up to its first `after/` entry.
@@ -512,14 +515,8 @@ fn runtime_search_path_build() -> RuntimeSearchPath {
     let mut sentinel_pos_in_rtp = unsafe { rtp_entry.offset_from(p_rtp.get()) }.cast_unsigned();
     sentinel_pos_in_rtp -= usize::from(sentinel_pos_in_rtp > 0);
 
-    for &item in &pack_entries {
-        // SAFETY: `item` names its own bytes of 'packpath'.
-        if pack_used
-            .get(unsafe { item.as_bytes() })
-            .copied()
-            .unwrap_or(0)
-            == 0
-        {
+    for item in &pack_entries {
+        if pack_used.get(item.as_bytes()).copied().unwrap_or(0) == 0 {
             unsafe {
                 expand_pack_entry(
                     &mut search_path,

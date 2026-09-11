@@ -40,8 +40,8 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    AcoSave, ApiDict, Arena, Buffer, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope,
-    OptVal, OptionSetFlags, String_0, kErrorTypeValidation, uint64_t,
+    AcoSave, ApiDict, Buffer, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
+    OptionSetFlags, String_0, kErrorTypeValidation, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -85,8 +85,14 @@ unsafe fn option_target(
     name: *mut c_char,
 ) -> Result<OptionTarget, Error> {
     // SAFETY: `opts` is the caller's, per this function's contract.
-    let (given_scope, given_win, given_buf, given_filetype) =
-        unsafe { ((*opts).scope, (*opts).win, (*opts).buf, (*opts).filetype) };
+    let (given_scope, given_win, given_buf, given_filetype) = unsafe {
+        (
+            (*opts).scope.as_ref(),
+            (*opts).win,
+            (*opts).buf,
+            (*opts).filetype.as_ref(),
+        )
+    };
     let mut opt_flags = OptionSetFlags::NONE;
     if let Some(given) = given_scope {
         // SAFETY: as above; `scope` is a NUL-terminated key of `opts`.
@@ -252,7 +258,7 @@ unsafe fn do_ft_buf(
 /// An `OptVal` borrowing the static string `text`, for the two option writes
 /// `do_ft_buf` makes: `set_option_direct` copies what it is given.
 fn static_option(text: &'static CStr) -> OptVal {
-    OptVal::String(String_0::from_cstr(text))
+    OptVal::string(String_0::from_cstr(text))
 }
 
 /// Take the scratch buffer `do_ft_buf` made back out of existence.
@@ -327,7 +333,7 @@ pub unsafe fn nvim_get_option_value(
     }
     optval_free(value);
     // SAFETY: the caller's option name is NUL-terminated.
-    Err(err_bad_value(c"option", unsafe { name.as_cstr() }))
+    Err(err_bad_value(c"option", name.as_cstr()))
 }
 
 /// Set option `name` to `value`, at whatever scope `opts` names.
@@ -352,8 +358,8 @@ pub unsafe fn nvim_set_option_value(
     {
         opt_flags = OptionSetFlags::LOCAL;
     }
+    let got = api_typename(value.kind());
     let Some(optval) = object_as_optval(value) else {
-        let got = api_typename(value.kind());
         return Err(err_expected(c"value", c"valid option type", Some(got)));
     };
     // Whoever made this API call owns the write, so that `:verbose set` names
@@ -370,9 +376,9 @@ pub unsafe fn nvim_set_option_value(
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_get_all_options_info(arena: *mut Arena) -> ApiDict {
+pub unsafe fn nvim_get_all_options_info() -> ApiDict {
     // SAFETY: `arena` is the caller's, per this function's contract.
-    unsafe { get_all_vimoptions(arena) }
+    unsafe { get_all_vimoptions() }
 }
 
 /// Option `name`'s metadata, as seen at whatever scope `opts` names.
@@ -383,7 +389,6 @@ pub unsafe fn nvim_get_all_options_info(arena: *mut Arena) -> ApiDict {
 pub unsafe fn nvim_get_option_info2(
     name: String_0,
     opts: *mut KeyDict_option,
-    arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     // SAFETY: as `nvim_get_option_value`.
     let target = unsafe { option_target(opts, name.data()) }?;
@@ -401,5 +406,5 @@ pub unsafe fn nvim_get_option_info2(
         false => Win::current(),
     };
     // SAFETY: `buf` and `win` are live, and `name`/`arena` are the caller's.
-    unsafe { get_vimoption(name, target.opt_flags, buf, win, arena) }
+    unsafe { get_vimoption(name, target.opt_flags, buf, win) }
 }

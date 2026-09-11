@@ -412,7 +412,7 @@ pub unsafe fn nvim_win_set_config(
     let old_style = live.w_config.style;
     let mut fconfig = live.w_config.clone();
     let external = keys.external.unwrap_or(false);
-    let relative_named = keys.relative.is_some_and(|r| !r.is_empty());
+    let relative_named = keys.relative.as_ref().is_some_and(|r| !r.is_empty());
     let to_split = !relative_named && !external && (has_split || has_vertical || was_split);
     // SAFETY: `fconfig` is this frame's own, and `keys` the caller's keyset.
     let parsed = unsafe {

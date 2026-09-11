@@ -45,7 +45,6 @@ use neovim::eval::encode::{
     encode_tv2echo, encode_tv2json, encode_tv2string, encode_vim_to_msgpack,
 };
 use neovim::eval::typval::{tv_clear, tv_list_free};
-use neovim::memory::xfree;
 use neovim::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use neovim::types::{PackerBuffer, String_0, TypVal};
 
@@ -349,9 +348,9 @@ unsafe fn json(tv: *mut TypVal) -> String {
 unsafe fn msgpack(tv: *mut TypVal) -> Option<Vec<u8>> {
     let mut buffer: PackerBuffer = packer_string_buffer();
     let ok = unsafe { encode_vim_to_msgpack(&raw mut buffer, &*tv, MSGPACK_OBJNAME) };
-    let packed: String_0 = packer_take_string(&buffer);
-    let bytes = unsafe { packed.as_bytes() }.to_vec();
-    unsafe { xfree(packed.data().cast()) };
+    // SAFETY: the buffer is this call's own `packer_string_buffer`.
+    let packed: String_0 = unsafe { packer_take_string(&buffer) };
+    let bytes = packed.as_bytes().to_vec();
     (ok != 0).then_some(bytes)
 }
 

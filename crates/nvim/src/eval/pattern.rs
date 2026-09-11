@@ -10,7 +10,7 @@
 use core::ffi::{c_char, c_int};
 use core::ptr::{copy_nonoverlapping, null_mut};
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::eval::{REGSUB_COPY, REGSUB_MAGIC};
 use crate::mbyte::utfc_ptr2len;
 use crate::option::set_option_value_give_err;
@@ -62,7 +62,7 @@ impl Drop for QuietCpo {
         if unsafe { *p_cpo.get() } == NUL as c_char {
             set_option_value_give_err(
                 kOptCpoptions,
-                OptVal::String(unsafe { cstr_as_string(self.saved) }),
+                OptVal::string(unsafe { cstr_to_string(self.saved) }),
                 OptionSetFlags::NONE,
             );
         }

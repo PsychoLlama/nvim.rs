@@ -83,13 +83,15 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
     unsafe {
         // Non-local return if the scope names nothing.
         let dict = nlua_get_var_scope(lstate);
-        let mut key = String_0::NULL;
-        let data = luaL_checklstring(lstate, 3, key.len_mut()).cast_mut();
-        key.set_data(data);
+        let mut key_len: size_t = 0;
+        let data = luaL_checklstring(lstate, 3, &raw mut key_len);
+        // Copied out of the Lua state: the key outlives the value below,
+        // which runs Lua and may collect the string it came from.
+        let key = String_0::from_bytes(core::slice::from_raw_parts(data.cast::<u8>(), key_len));
 
         let del = lua_gettop(lstate) < 4 || lua_type(lstate, 4) == LUA_TNIL;
 
-        let mut di: *mut DictItem = match dict_check_writable(dict, key, del) {
+        let mut di: *mut DictItem = match dict_check_writable(dict, &key, del) {
             Ok(di) => di,
             Err(e) => {
                 nlua_push_errstr(lstate, c"%s".as_ptr(), e.message_or_empty().as_ptr());

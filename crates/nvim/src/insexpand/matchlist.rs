@@ -381,7 +381,7 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: Cm) {
     if compl_leader().is_unset() {
         // SAFETY: `cp_str` is this match's own string; a null arena asks
         // `copy_string` for a fresh allocation.
-        let copy = unsafe { copy_string(match_0.cp_str, ptr::null_mut::<Arena>()) };
+        let copy = match_0.cp_str.clone();
         compl_leader().set(copy);
         let had_match = Win::current().w_cursor.col > compl_col.get();
         // SAFETY: the leader is a NUL-terminated string, and a completion is
@@ -426,10 +426,10 @@ pub(crate) unsafe fn ins_compl_longest_match(match_0: Cm) {
         // SAFETY: `p` is inside the leader, which is this module's own
         // writable allocation.
         unsafe { *p = NUL as c_char };
-        let leader = compl_leader().value();
-        // SAFETY: `p` and the leader's bytes are the same allocation.
-        let len = unsafe { p.offset_from(leader.data()) } as size_t;
-        compl_leader().set(String_0::from_raw_parts(leader.data(), len));
+        // SAFETY: `p` and the leader's bytes are the same allocation, so the
+        // offset is inside the leader.
+        let len = unsafe { p.offset_from(compl_leader().data()) } as size_t;
+        compl_leader().truncate(len);
         let had_match = Win::current().w_cursor.col > compl_col.get();
         // SAFETY: as in the branch above.
         unsafe { ins_compl_longest_insert(compl_leader().data()) };
@@ -613,19 +613,17 @@ pub(crate) unsafe fn set_fuzzy_score() {
     };
 
     // Determine the pattern to match against.
-    let leader = compl_leader().value();
-    let use_leader = !leader.data().is_null() && !leader.is_empty();
+    let use_leader = !compl_leader().is_unset() && !compl_leader().is_empty();
     let mut pattern: *mut c_char = ptr::null_mut();
     if use_leader {
         // Clear the leader cache once before the loop; the pattern is
         // then computed per match, since each may have its own startcol.
         clear_adjusted_leader();
     } else {
-        let orig = compl_orig_text().value();
-        if orig.data().is_null() || orig.is_empty() {
+        if compl_orig_text().is_unset() || compl_orig_text().is_empty() {
             return;
         }
-        pattern = orig.data();
+        pattern = compl_orig_text().data();
     }
 
     for mut comp in matches_from(Some(first)) {

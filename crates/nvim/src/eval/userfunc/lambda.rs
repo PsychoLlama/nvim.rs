@@ -47,26 +47,24 @@ pub(crate) unsafe fn register_closure(func: *mut UserFunc) {
 /// `"<lambda>"` plus `NUMBUFLEN`, the widest a `VarNumber` prints.
 const LAMBDA_NAME_LEN: usize = 8 + 65;
 
-/// The name of the next lambda, in `into` — the caller's, so that two
-/// names can be alive at once. Upstream answers one static buffer.
-///
-/// # Safety
-/// `into` must outlive the answer.
-unsafe fn get_lambda_name(into: &mut [c_char; LAMBDA_NAME_LEN]) -> String_0 {
+/// The name of the next lambda, rendered through `into` — the caller's
+/// scratch buffer, so that two names can be alive at once. Upstream answers
+/// one static buffer.
+fn get_lambda_name(into: &mut [c_char; LAMBDA_NAME_LEN]) -> String_0 {
     static lambda_no: GlobalCell<c_int> = GlobalCell::new(0);
     lambda_no.set(lambda_no.get() + 1);
     let buf = into.as_mut_ptr();
     let nr = lambda_no.get();
     // SAFETY: `buf` is the caller's array of `LAMBDA_NAME_LEN` bytes.
     let n = unsafe { snprintf(buf, LAMBDA_NAME_LEN, c"<lambda>%d".as_ptr(), nr) };
-    String_0::from_raw_parts(
-        buf,
-        if n < 1 {
-            0
-        } else {
-            n.min(LAMBDA_NAME_LEN as c_int - 1) as size_t
-        },
-    )
+    let len = if n < 1 {
+        0
+    } else {
+        n.min(LAMBDA_NAME_LEN as c_int - 1) as size_t
+    };
+    // SAFETY: `snprintf` wrote `len` bytes of the caller's array, which the
+    // answer copies.
+    String_0::from_bytes(unsafe { slice::from_raw_parts(buf.cast::<u8>(), len) })
 }
 
 /// Allocate a `UserFunc` for a function called `name`, whose name lives in the
@@ -177,7 +175,7 @@ pub unsafe fn get_lambda_tv(
 
         if evaluate {
             let mut flags = FuncFlags::NONE;
-            let name = unsafe { get_lambda_name(&mut lambda_buf) };
+            let name = get_lambda_name(&mut lambda_buf);
             let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
             let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
             // SAFETY: both are this call's own allocations, and `result` is
@@ -343,7 +341,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
 /// `ref_0` is a live Lua reference the new function takes over.
 pub unsafe fn register_luafunc(ref_0: LuaRef) -> *mut c_char {
     let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
-    let name = unsafe { get_lambda_name(&mut lambda_buf) };
+    let name = get_lambda_name(&mut lambda_buf);
     let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
     // SAFETY: `fp` is the allocation just made.
     let mut f = unsafe { Uf::new(fp) };

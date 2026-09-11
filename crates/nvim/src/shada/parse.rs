@@ -138,17 +138,15 @@ unsafe fn parse_search_pattern(
             pos,
             *error,
         );
-        // The keyset may have been left holding a borrowed pattern.
+        // A half-filled entry is discarded, so what it read is released
+        // here rather than waiting for the entry to be freed.
         it.pat = None;
         return Err(Malformed);
     }
-    let Some(pat) = it.pat else {
+    if it.pat.is_none() {
         malformed_entry(c"E575: Error while reading ShaDa file: search pattern entry at position %lu has no pattern", pos);
         return Err(Malformed);
-    };
-    // The pattern still points into the entry's bytes; take a copy that
-    // outlives them.
-    it.pat = Some(unsafe { copy_string(pat, core::ptr::null_mut::<Arena>()) });
+    }
     Ok(0)
 }
 
@@ -235,17 +233,9 @@ unsafe fn parse_register(
         extra,
         error,
     );
-    // The contents array is the keyset's own allocation either way.
-    let contents = it.rc.take().unwrap_or(StringArray {
-        size: 0,
-        capacity: 0,
-        items: core::ptr::null_mut(),
-    });
-    let lines = if contents.items.is_null() {
-        &[][..]
-    } else {
-        unsafe { core::slice::from_raw_parts(contents.items, contents.size) }
-    };
+    // The contents array is the keyset's own either way.
+    let contents = it.rc.take().unwrap_or(StringArray::EMPTY);
+    let lines: &[String_0] = &contents;
     let claim = (|| {
         if !ok {
             malformed_entry_because(
@@ -263,12 +253,8 @@ unsafe fn parse_register(
         reg.contents_size = lines.len();
         reg.contents = unsafe { xmalloc(size_of_val(lines)) }.cast::<String_0>();
         for (i, line) in lines.iter().enumerate() {
-            // Each line still points into the entry's bytes.
-            unsafe {
-                reg.contents
-                    .add(i)
-                    .write(copy_string(*line, core::ptr::null_mut::<Arena>()))
-            };
+            // SAFETY: `contents` was sized for exactly these lines.
+            unsafe { reg.contents.add(i).write(line.clone()) };
         }
         if let Some(is_unnamed) = it.ru {
             reg.is_unnamed = is_unnamed;
@@ -284,7 +270,6 @@ unsafe fn parse_register(
         }
         Ok(0)
     })();
-    unsafe { xfree(contents.items.cast::<c_void>()) };
     claim
 }
 
@@ -315,7 +300,7 @@ unsafe fn parse_history(
         malformed_entry(c"E575: Error while reading ShaDa file: history entry at position %lu has wrong history string type", pos);
         return Err(Malformed);
     }
-    let text = unsafe { item.as_bytes() };
+    let text = item.as_bytes();
     if text.contains(&0) {
         malformed_entry(c"E575: Error while reading ShaDa file: history entry at position %lu contains string with zero byte inside", pos);
         return Err(Malformed);

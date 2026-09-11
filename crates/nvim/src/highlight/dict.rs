@@ -18,17 +18,17 @@
 
 use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
 use crate::api::private::dispatch::key_dict_highlight_cterm_get_field;
-use crate::api::private::helpers::{api_dict_to_keydict, arena_dict};
+use crate::api::private::helpers::api_dict_to_keydict;
 use crate::api::private::validate::{err_bad_value, err_expected, err_out_of_range};
 use crate::api_error;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
-use crate::types::builders::static_cstring;
+use crate::types::String_0;
 use crate::types::{
     ApiDict, Arena, Boolean, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
-    KeyDict_highlight_cterm, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException,
-    kErrorTypeValidation, size_t,
+    KeyDict_highlight_cterm, Object, int16_t, int32_t, kErrorTypeException, kErrorTypeValidation,
+    size_t,
 };
 use ::libc::strcasecmp;
 use core::ffi::{CStr, c_int};
@@ -38,24 +38,14 @@ use core::ffi::{CStr, c_int};
 /// ones, the two `*_indexed` flags and `blend`.
 pub const HLATTRS_DICT_SIZE: size_t = 24;
 
-/// Appends `key: value` to a dict built in storage the caller allocated.
+/// Appends `key: value`, with the key copied out of the literal.
 ///
-/// Upstream's `PUT_C` writes past the end rather than checking; the callers
-/// here all size their storage at [`HLATTRS_DICT_SIZE`], so a full dict is a
-/// bug in this file and worth a panic instead of a heap overwrite.
-///
-/// # Safety
-/// `dict.items` must point at `dict.capacity` writable entries.
-pub(crate) unsafe fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
-    assert!(dict.size < dict.capacity, "highlight dict overflow");
-    // SAFETY: the assert above kept the index inside the caller's storage.
-    unsafe {
-        *dict.items.add(dict.size) = KeyValuePair {
-            key: static_cstring(key),
-            value,
-        }
-    };
-    dict.size += 1;
+/// Every caller reserves [`HLATTRS_DICT_SIZE`] entries up front, which is the
+/// most this file can write; overrunning that is a bug here rather than
+/// anything a user can provoke, so it is an assert rather than a growth.
+pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
+    assert!(dict.len() < HLATTRS_DICT_SIZE, "highlight dict overflow");
+    dict.insert(String_0::from_cstr(key), value);
 }
 
 /// Gets the highlight description of attribute id `attr_id` as a dict.
@@ -65,17 +55,14 @@ pub(crate) unsafe fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) 
 /// out.
 ///
 /// # Safety
-/// `arena` is null or a live arena.
+/// `_arena` is null or a live arena. Nothing is taken from it any more: the
+/// answer owns its entries.
 pub unsafe fn hl_get_attr_by_id(
     attr_id: Integer,
     rgb: Boolean,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
-    let empty = ApiDict {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut(),
-    };
+    let empty = ApiDict::EMPTY;
     if attr_id == 0 {
         return Ok(empty);
     }
@@ -83,9 +70,9 @@ pub unsafe fn hl_get_attr_by_id(
         let why = api_error!(kErrorTypeException, "Invalid attribute id: {attr_id}");
         return Err(why);
     }
-    let mut retval = arena_dict(arena, HLATTRS_DICT_SIZE);
+    let mut retval = ApiDict::with_capacity(HLATTRS_DICT_SIZE);
     let attrs = syn_attr2entry(attr_id as c_int);
-    // SAFETY: the caller's arena.
+    // SAFETY: the dict was just reserved for every key `hlattrs2dict` writes.
     unsafe { hlattrs2dict(&mut retval, None, attrs, rgb, false) };
     Ok(retval)
 }
@@ -110,7 +97,7 @@ pub unsafe fn hlattrs2dict(
     short_keys: bool,
 ) {
     assert!(
-        hl.capacity >= HLATTRS_DICT_SIZE,
+        hl.capacity() >= HLATTRS_DICT_SIZE,
         "hlattrs2dict: hl too small"
     );
     let mask = if use_rgb {
@@ -118,101 +105,86 @@ pub unsafe fn hlattrs2dict(
     } else {
         ae.cterm_ae_attr
     };
-    // SAFETY: both dicts have the capacity the caller promised.
     match hl_attrs {
         Some(attrs) => {
             assert!(
-                attrs.capacity >= HLATTRS_DICT_SIZE,
+                attrs.capacity() >= HLATTRS_DICT_SIZE,
                 "hlattrs2dict: hl_attrs too small"
             );
-            unsafe { put_flags(attrs, mask) };
+            put_flags(attrs, mask);
         }
-        None => unsafe { put_flags(hl, mask) },
+        None => put_flags(hl, mask),
     }
-    unsafe { put_colors(hl, ae, mask, use_rgb, short_keys) };
+    put_colors(hl, ae, mask, use_rgb, short_keys);
 }
 
 /// The attribute bits of `mask`, one boolean key each.
-///
-/// # Safety
-/// As [`put`].
-unsafe fn put_flags(hl: &mut ApiDict, mask: HlAttrFlags) {
-    // SAFETY: the caller's storage, sized for every key below.
+fn put_flags(hl: &mut ApiDict, mask: HlAttrFlags) {
     let flag = |bit: HlAttrFlags| mask.has(bit);
     if flag(HlAttrFlags::INVERSE) {
-        unsafe { put(hl, c"reverse", Object::boolean(true)) };
+        put(hl, c"reverse", Object::boolean(true));
     }
     if flag(HlAttrFlags::BOLD) {
-        unsafe { put(hl, c"bold", Object::boolean(true)) };
+        put(hl, c"bold", Object::boolean(true));
     }
     if flag(HlAttrFlags::ITALIC) {
-        unsafe { put(hl, c"italic", Object::boolean(true)) };
+        put(hl, c"italic", Object::boolean(true));
     }
     // The underline styles share one field, so at most one is reported.
     match mask.masked(HlAttrFlags::UNDERLINE_MASK) {
-        HlAttrFlags::UNDERLINE => unsafe { put(hl, c"underline", Object::boolean(true)) },
-        HlAttrFlags::UNDERCURL => unsafe { put(hl, c"undercurl", Object::boolean(true)) },
-        HlAttrFlags::UNDERDOUBLE => unsafe { put(hl, c"underdouble", Object::boolean(true)) },
-        HlAttrFlags::UNDERDOTTED => unsafe { put(hl, c"underdotted", Object::boolean(true)) },
-        HlAttrFlags::UNDERDASHED => unsafe { put(hl, c"underdashed", Object::boolean(true)) },
+        HlAttrFlags::UNDERLINE => put(hl, c"underline", Object::boolean(true)),
+        HlAttrFlags::UNDERCURL => put(hl, c"undercurl", Object::boolean(true)),
+        HlAttrFlags::UNDERDOUBLE => put(hl, c"underdouble", Object::boolean(true)),
+        HlAttrFlags::UNDERDOTTED => put(hl, c"underdotted", Object::boolean(true)),
+        HlAttrFlags::UNDERDASHED => put(hl, c"underdashed", Object::boolean(true)),
         _ => {}
     }
     if flag(HlAttrFlags::STANDOUT) {
-        unsafe { put(hl, c"standout", Object::boolean(true)) };
+        put(hl, c"standout", Object::boolean(true));
     }
     if flag(HlAttrFlags::STRIKETHROUGH) {
-        unsafe { put(hl, c"strikethrough", Object::boolean(true)) };
+        put(hl, c"strikethrough", Object::boolean(true));
     }
     if flag(HlAttrFlags::ALTFONT) {
-        unsafe { put(hl, c"altfont", Object::boolean(true)) };
+        put(hl, c"altfont", Object::boolean(true));
     }
     if flag(HlAttrFlags::DIM) {
-        unsafe { put(hl, c"dim", Object::boolean(true)) };
+        put(hl, c"dim", Object::boolean(true));
     }
     if flag(HlAttrFlags::BLINK) {
-        unsafe { put(hl, c"blink", Object::boolean(true)) };
+        put(hl, c"blink", Object::boolean(true));
     }
     if flag(HlAttrFlags::CONCEALED) {
-        unsafe { put(hl, c"conceal", Object::boolean(true)) };
+        put(hl, c"conceal", Object::boolean(true));
     }
     if flag(HlAttrFlags::OVERLINE) {
-        unsafe { put(hl, c"overline", Object::boolean(true)) };
+        put(hl, c"overline", Object::boolean(true));
     }
     if flag(HlAttrFlags::NOCOMBINE) {
-        unsafe { put(hl, c"nocombine", Object::boolean(true)) };
+        put(hl, c"nocombine", Object::boolean(true));
     }
 }
 
 /// The colours of `ae`, plus `blend`.
-///
-/// # Safety
-/// As [`put`].
-unsafe fn put_colors(
-    hl: &mut ApiDict,
-    ae: HlAttrs,
-    mask: HlAttrFlags,
-    use_rgb: bool,
-    short_keys: bool,
-) {
-    // SAFETY: the caller's storage, sized for every key below.
+fn put_colors(hl: &mut ApiDict, ae: HlAttrs, mask: HlAttrFlags, use_rgb: bool, short_keys: bool) {
     if use_rgb {
         if ae.rgb_fg_color != -1 {
             let key = if short_keys { c"fg" } else { c"foreground" };
-            unsafe { put(hl, key, Object::integer(Integer::from(ae.rgb_fg_color))) };
+            put(hl, key, Object::integer(Integer::from(ae.rgb_fg_color)));
         }
         if ae.rgb_bg_color != -1 {
             let key = if short_keys { c"bg" } else { c"background" };
-            unsafe { put(hl, key, Object::integer(Integer::from(ae.rgb_bg_color))) };
+            put(hl, key, Object::integer(Integer::from(ae.rgb_bg_color)));
         }
         if ae.rgb_sp_color != -1 {
             let key = if short_keys { c"sp" } else { c"special" };
-            unsafe { put(hl, key, Object::integer(Integer::from(ae.rgb_sp_color))) };
+            put(hl, key, Object::integer(Integer::from(ae.rgb_sp_color)));
         }
         if mask.has(HlAttrFlags::FG_INDEXED) {
-            unsafe { put(hl, c"fg_indexed", Object::boolean(true)) };
+            put(hl, c"fg_indexed", Object::boolean(true));
         }
         if mask.has(HlAttrFlags::BG_INDEXED) {
-            unsafe { put(hl, c"bg_indexed", Object::boolean(true)) };
+            put(hl, c"bg_indexed", Object::boolean(true));
         }
     } else {
         // Cterm colours are stored biased by one so that 0 means unset.
@@ -222,9 +194,11 @@ unsafe fn put_colors(
             } else {
                 c"foreground"
             };
-            let value = Object::integer(Integer::from(ae.cterm_fg_color - 1));
-            // SAFETY: the arena dict has room for one more entry.
-            unsafe { put(hl, key, value) };
+            put(
+                hl,
+                key,
+                Object::integer(Integer::from(ae.cterm_fg_color - 1)),
+            );
         }
         if ae.cterm_bg_color != 0 {
             let key = if short_keys {
@@ -232,14 +206,16 @@ unsafe fn put_colors(
             } else {
                 c"background"
             };
-            let value = Object::integer(Integer::from(ae.cterm_bg_color - 1));
-            // SAFETY: the arena dict has room for one more entry.
-            unsafe { put(hl, key, value) };
+            put(
+                hl,
+                key,
+                Object::integer(Integer::from(ae.cterm_bg_color - 1)),
+            );
         }
     }
     // `nvim_get_hl` reports blend once, with the gui half.
     if ae.hl_blend > -1 && (use_rgb || !short_keys) {
-        unsafe { put(hl, c"blend", Object::integer(Integer::from(ae.hl_blend))) };
+        put(hl, c"blend", Object::integer(Integer::from(ae.hl_blend)));
     }
 }
 
@@ -345,23 +321,22 @@ pub unsafe fn dict2hlattrs(
         flag(dict.bg_indexed, HlAttrFlags::BG_INDEXED, &mut mask);
     }
 
-    // SAFETY: each `Object` carries its own tag. The long spelling is the
-    // fallback for the short one, never both.
-    if let Some(given) = dict.fg {
-        fg = unsafe { object_to_color(given, c"fg", use_rgb) }?;
-    } else if let Some(given) = dict.foreground {
-        fg = unsafe { object_to_color(given, c"foreground", use_rgb) }?;
+    // The long spelling is the fallback for the short one, never both.
+    if let Some(given) = &dict.fg {
+        fg = object_to_color(given, c"fg", use_rgb)?;
+    } else if let Some(given) = &dict.foreground {
+        fg = object_to_color(given, c"foreground", use_rgb)?;
     }
-    if let Some(given) = dict.bg {
-        bg = unsafe { object_to_color(given, c"bg", use_rgb) }?;
-    } else if let Some(given) = dict.background {
-        bg = unsafe { object_to_color(given, c"background", use_rgb) }?;
+    if let Some(given) = &dict.bg {
+        bg = object_to_color(given, c"bg", use_rgb)?;
+    } else if let Some(given) = &dict.background {
+        bg = object_to_color(given, c"background", use_rgb)?;
     }
     // A special colour is always an RGB one: cterm has no such thing.
-    if let Some(given) = dict.sp {
-        sp = unsafe { object_to_color(given, c"sp", true) }?;
-    } else if let Some(given) = dict.special {
-        sp = unsafe { object_to_color(given, c"special", true) }?;
+    if let Some(given) = &dict.sp {
+        sp = object_to_color(given, c"sp", true)?;
+    } else if let Some(given) = &dict.special {
+        sp = object_to_color(given, c"special", true)?;
     }
 
     if let Some(given) = dict.blend {
@@ -393,11 +368,15 @@ pub unsafe fn dict2hlattrs(
 
     // A `cterm` sub-dict replaces the cterm bits outright rather than
     // amending them: what it does not name is off.
-    if let Some(given) = dict.cterm {
+    if let Some(given) = &dict.cterm {
         let mut cterm = KeyDict_highlight_cterm::default();
         let field: FieldHashfn = Some(key_dict_highlight_cterm_get_field);
         let target = (&raw mut cterm).cast();
-        unsafe { api_dict_to_keydict(target, field, given) }?;
+        // The sub-dict is copied: `dict` is the caller's and goes on holding
+        // it. It is a handful of booleans.
+        // SAFETY: `field` is `KeyDict_highlight_cterm`'s own lookup, and
+        // `target` is that keydict.
+        unsafe { api_dict_to_keydict(target, field, given.clone()) }?;
         cterm_mask_provided = true;
         cterm_mask = HlAttrFlags::NONE;
         let bits = [
@@ -423,11 +402,11 @@ pub unsafe fn dict2hlattrs(
         }
     }
 
-    if let Some(given) = dict.ctermfg {
-        ctermfg = unsafe { object_to_color(given, c"ctermfg", false) }?;
+    if let Some(given) = &dict.ctermfg {
+        ctermfg = object_to_color(given, c"ctermfg", false)?;
     }
-    if let Some(given) = dict.ctermbg {
-        ctermbg = unsafe { object_to_color(given, c"ctermbg", false) }?;
+    if let Some(given) = &dict.ctermbg {
+        ctermbg = object_to_color(given, c"ctermbg", false)?;
     }
 
     // Re-bias a colour number for storage: 0 is "unset", so every real
@@ -462,21 +441,19 @@ pub unsafe fn dict2hlattrs(
 ///
 /// `rgb` picks the palette the name is resolved against. `key` names the key
 /// in the error message for a value that is neither a string nor an integer.
-///
-/// # Safety
-/// A string value must be NUL-terminated.
-unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool) -> Result<int32_t, Error> {
-    if let Object::Integer(n) = val {
+fn object_to_color(val: &Object, key: &CStr, rgb: bool) -> Result<int32_t, Error> {
+    if let Some(n) = val.as_integer() {
         return Ok(n as int32_t);
     }
-    let Object::String(str) = val else {
+    let Some(str) = val.as_string() else {
         let expected = c"String or Integer";
         return Err(err_expected(key, expected, None));
     };
+    // SAFETY: an API string is NUL-terminated, so it is a C string too.
     if str.is_empty() || unsafe { strcasecmp(str.data(), c"NONE".as_ptr()) } == 0 {
         return Ok(-1);
     }
-    let name = unsafe { CStr::from_ptr(str.data()) };
+    let name = str.as_cstr();
     let color = if rgb {
         name_to_color(name).0 as int32_t
     } else {

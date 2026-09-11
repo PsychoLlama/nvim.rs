@@ -590,23 +590,18 @@ unsafe fn range_is_lua(args: *const ExArg) -> bool {
     }
     // SAFETY: the caller's command, and the current buffer.
     let (handle, line1, line2) = unsafe { (Buf::current().handle, (*args).line1, (*args).line2) };
-    let mut items = [
+    let args = Array::from(vec![
         integer_obj(handle as Integer),
         integer_obj(line1 as Integer),
         integer_obj(line2 as Integer),
-    ];
-    let args = Array {
-        size: items.len(),
-        capacity: items.len(),
-        items: items.as_mut_ptr(),
-    };
+    ]);
     let mut err = Error::none();
     let src = c"return require('vim._core.util').source_is_lua(...)";
-    let script = String_0::from_raw_parts(src.as_ptr().cast_mut(), src.count_bytes());
+    let script = String_0::from_cstr(src);
     // SAFETY: `items` and `err` live on this frame and outlive the call,
     // which retains neither.
     let nil = ptr::null_mut();
-    let result = match unsafe { nlua_exec(script, ptr::null(), args, kRetNilBool, nil) } {
+    let result = match unsafe { nlua_exec(&script, ptr::null(), args, kRetNilBool, nil) } {
         Ok(value) => value,
         Err(e) => {
             err = e;

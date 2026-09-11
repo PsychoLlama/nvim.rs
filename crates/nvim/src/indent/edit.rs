@@ -9,7 +9,7 @@ use core::ffi::CStr;
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::change::{changed_lines, ins_bytes, ins_str};
 use crate::charset::skip;
@@ -893,7 +893,7 @@ unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
         // 'vartabstop' is in use, or more than one stop was given.
         set_option_direct(
             kOptVartabstop,
-            OptVal::String(unsafe { cstr_as_string(tabs.ts_str) }),
+            OptVal::string(unsafe { cstr_to_string(tabs.ts_str) }),
             OptionSetFlags::LOCAL,
             0,
         );

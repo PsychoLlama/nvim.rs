@@ -57,7 +57,10 @@ pub unsafe fn unpack_string(data: *mut *const c_char, size: *mut size_t) -> Stri
     }
     unsafe { *data = data2.add(tok.length as usize) };
     unsafe { *size = size2 - tok.length as size_t };
-    String_0::from_raw_parts(data2.cast_mut(), tok.length as size_t)
+    // SAFETY: the bound above says the token's bytes are inside the buffer.
+    String_0::from_bytes(unsafe {
+        core::slice::from_raw_parts(data2.cast::<u8>(), tok.length as size_t)
+    })
 }
 
 /// The length of the array that starts here, or -1 if this is not one.
@@ -318,13 +321,8 @@ unsafe fn unpack_field(
             }
             // The array is built beside the slot and stored whole: a field
             // this reaches is unset, so there is nothing there to append to.
-            let mut array = StringArray {
-                size: 0,
-                capacity: 0,
-                items: ::core::ptr::null_mut(),
-            };
-            let read =
-                unsafe { unpack_string_array(&raw mut array, len.cast_unsigned(), data, size) };
+            let mut array = StringArray::EMPTY;
+            let read = unsafe { unpack_string_array(&mut array, len.cast_unsigned(), data, size) };
             unsafe { *mem.cast::<Option<StringArray>>() = Some(array) };
             return read;
         }
@@ -333,37 +331,23 @@ unsafe fn unpack_field(
     Ok(())
 }
 
-/// Appends `len` strings to the hand-rolled vector at `a`.
+/// Appends `len` strings to `a`.
 ///
 /// # Safety
 /// [`unpack_field`]'s contract for a string-array field.
 unsafe fn unpack_string_array(
-    a: *mut StringArray,
+    a: &mut StringArray,
     len: size_t,
     data: *mut *const c_char,
     size: *mut size_t,
 ) -> Result<(), &'static core::ffi::CStr> {
-    // SAFETY: the caller's vector and cursor; every growth reallocates to the
-    // capacity it then writes within.
-    if unsafe { (*a).capacity } < unsafe { (*a).size } + len {
-        unsafe { (*a).capacity = protocol::capacity_for((*a).size + len) };
-        let bytes = size_of::<String_0>() * unsafe { (*a).capacity };
-        let grown = unsafe { xrealloc((*a).items.cast::<c_void>(), bytes) };
-        unsafe { (*a).items = grown.cast::<String_0>() };
-    }
     for _ in 0..len {
+        // SAFETY: the caller's cursor.
         let item = unsafe { unpack_string(data, size) };
         if item.data().is_null() {
             return Err(c"has %.*s array with non-binary value");
         }
-        if unsafe { (*a).size } == unsafe { (*a).capacity } {
-            unsafe { (*a).capacity = protocol::grown_capacity((*a).capacity) };
-            let bytes = size_of::<String_0>() * unsafe { (*a).capacity };
-            let grown = unsafe { xrealloc((*a).items.cast::<c_void>(), bytes) };
-            unsafe { (*a).items = grown.cast::<String_0>() };
-        }
-        unsafe { *(*a).items.add((*a).size) = item };
-        unsafe { (*a).size += 1 };
+        a.push(item);
     }
     Ok(())
 }

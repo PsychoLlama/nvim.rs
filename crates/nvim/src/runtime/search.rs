@@ -474,11 +474,11 @@ pub(crate) fn integer_obj(value: Integer) -> Object {
 }
 
 fn string_obj(string: String_0) -> Object {
-    Object::String(string)
+    Object::string(string)
 }
 
 fn dict_obj(dict: ApiDict) -> Object {
-    Object::Dict(dict)
+    Object::dict(dict)
 }
 
 /// `nvim__runtime_inspect()`: the cached search path as it stands.
@@ -487,35 +487,37 @@ fn dict_obj(dict: ApiDict) -> Object {
 /// [`super::cache`], and the trap that in `nvim -l` script mode nothing else
 /// rebuilds it either.
 ///
+/// The strings are copies: the answer owns its whole tree and outlives the
+/// cache it was read out of.
+///
 /// # Safety
-/// `arena` may be null; the strings borrow the cache and live as long as it.
-pub unsafe fn runtime_inspect(arena: *mut Arena) -> Array {
+/// The cache must be live, which it is once `runtime_init` has run.
+pub unsafe fn runtime_inspect(_arena: *mut Arena) -> Array {
     let path = runtime_search_path.get();
-    let mut rv = arena_array(arena, path.size);
+    let mut rv = Array::with_capacity(path.size);
     for i in 0..path.size {
         // SAFETY: `path` holds `size` live items.
         let item = unsafe { *path.items.add(i) };
-        let mut entry = arena_dict(arena, 5);
-        // SAFETY: `entry` was sized for the five keys below, `item.path` is
-        // the entry's own NUL-terminated directory, and `rv` for `size` items.
-        unsafe { dict_put(&mut entry, c"path", string_obj(cstr_as_string(item.path))) };
+        let mut entry = ApiDict::with_capacity(5);
+        // SAFETY: `item.path` is the entry's own NUL-terminated directory.
+        entry.insert(
+            String_0::from_cstr(c"path"),
+            string_obj(unsafe { cstr_to_string(item.path) }),
+        );
         if item.after {
-            unsafe { dict_put(&mut entry, c"after", boolean_obj(true)) };
+            entry.insert(String_0::from_cstr(c"after"), boolean_obj(true));
         }
         if item.pack_inserted {
-            unsafe { dict_put(&mut entry, c"pack_inserted", boolean_obj(true)) };
+            entry.insert(String_0::from_cstr(c"pack_inserted"), boolean_obj(true));
         }
         if let Some(has_lua) = item.has_lua {
-            unsafe { dict_put(&mut entry, c"has_lua", boolean_obj(has_lua)) };
+            entry.insert(String_0::from_cstr(c"has_lua"), boolean_obj(has_lua));
         }
-        unsafe {
-            dict_put(
-                &mut entry,
-                c"pos_in_rtp",
-                integer_obj(item.pos_in_rtp as Integer),
-            )
-        };
-        unsafe { array_add(&mut rv, dict_obj(entry)) };
+        entry.insert(
+            String_0::from_cstr(c"pos_in_rtp"),
+            integer_obj(item.pos_in_rtp as Integer),
+        );
+        rv.push(dict_obj(entry));
     }
     rv
 }
@@ -524,13 +526,13 @@ pub unsafe fn runtime_inspect(arena: *mut Arena) -> Array {
 /// search path.
 ///
 /// # Safety
-/// `pat` must hold `size` objects; `arena` may be null.
-pub unsafe fn runtime_get_named(lua: bool, pat: Array, all: bool, arena: *mut Arena) -> Array {
+/// The cache must be live.
+pub unsafe fn runtime_get_named(lua: bool, pat: &Array, all: bool, _arena: *mut Arena) -> Array {
     let mut ref_0: c_int = 0;
     // SAFETY: the reference is released below, before this frame ends.
     let path = unsafe { runtime_search_path_get_cached(&raw mut ref_0) };
     let mut buf = [0 as c_char; MAXPATHL as usize];
-    let rv = unsafe { runtime_get_named_common(lua, pat, all, path, &mut buf, arena) };
+    let rv = unsafe { runtime_get_named_common(lua, pat, all, path, &mut buf) };
     unsafe { runtime_search_path_unref(path, &raw const ref_0) };
     rv
 }
@@ -541,21 +543,14 @@ pub unsafe fn runtime_get_named(lua: bool, pat: Array, all: bool, arena: *mut Ar
 /// # Safety
 /// As [`runtime_get_named`]. Called off the main thread; nothing here may
 /// touch main-thread-only editor state.
-pub unsafe fn runtime_get_named_thread(lua: bool, pat: Array, all: bool) -> Array {
+pub unsafe fn runtime_get_named_thread(lua: bool, pat: &Array, all: bool) -> Array {
     // TODO(bfredl): avoid contention between multiple worker threads?
     // SAFETY: the mutex is initialised by `runtime_init` before any thread
     // exists, and guards every access to the snapshot on both sides.
     unsafe { uv_mutex_lock(search_path_mutex()) };
     let mut buf = [0 as c_char; MAXPATHL as usize];
     let rv = unsafe {
-        runtime_get_named_common(
-            lua,
-            pat,
-            all,
-            runtime_search_path_thread.get(),
-            &mut buf,
-            ptr::null_mut(),
-        )
+        runtime_get_named_common(lua, pat, all, runtime_search_path_thread.get(), &mut buf)
     };
     unsafe { uv_mutex_unlock(search_path_mutex()) };
     rv
@@ -588,19 +583,15 @@ unsafe fn dir_has_lua(item: *mut SearchPathItem, buf: &mut [c_char]) -> bool {
 /// The shared body of [`runtime_get_named`] and its thread variant.
 ///
 /// # Safety
-/// `path` must be a live search path, `pat` must hold `size` objects, and
-/// `arena` may be null.
+/// `path` must be a live search path.
 unsafe fn runtime_get_named_common(
     lua: bool,
-    pat: Array,
+    pat: &Array,
     all: bool,
     path: RuntimeSearchPath,
     buf: &mut [c_char],
-    arena: *mut Arena,
 ) -> Array {
-    let mut rv = arena_array(arena, path.size.wrapping_mul(pat.size));
-    // SAFETY: `pat` holds `size` objects.
-    let pats = unsafe { matches_of(pat) };
+    let mut rv = Array::with_capacity(path.size.wrapping_mul(pat.len()));
     for i in 0..path.size {
         // SAFETY: `path` holds `size` live items.
         let item = unsafe { path.items.add(i) };
@@ -608,7 +599,7 @@ unsafe fn runtime_get_named_common(
         if lua && !unsafe { dir_has_lua(item, buf) } {
             continue;
         }
-        for pat_item in pats {
+        for pat_item in pat {
             let Object::String(pattern) = pat_item else {
                 continue;
             };
@@ -625,30 +616,14 @@ unsafe fn runtime_get_named_common(
             if size >= buf.len() || !unsafe { os_file_is_readable(cstr::at(buf.as_mut_ptr())) } {
                 continue;
             }
-            unsafe {
-                array_add(
-                    &mut rv,
-                    string_obj(arena_string(arena, cstr_as_string(buf.as_ptr()))),
-                )
-            };
+            // SAFETY: `buf` is NUL-terminated, as the test above checked.
+            rv.push(string_obj(unsafe { cstr_to_string(buf.as_ptr()) }));
             if !all {
                 return rv;
             }
         }
     }
     rv
-}
-
-/// An API array's items as a slice.
-///
-/// # Safety
-/// `array` must hold `size` objects that stay put for the borrow.
-unsafe fn matches_of<'a>(array: Array) -> &'a [Object] {
-    if array.items.is_null() || array.size == 0 {
-        return &[];
-    }
-    // SAFETY: the caller's array, `size` long.
-    unsafe { slice::from_raw_parts(array.items, array.size) }
 }
 
 /// Find `name` in `path`, and then — for `RuntimeOpts::START`/`RuntimeOpts::OPT` — in

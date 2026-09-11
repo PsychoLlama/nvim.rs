@@ -348,12 +348,13 @@ pub(crate) unsafe fn list_join_inner(
         if got_int.get() {
             break;
         }
-        let mut s = String_0::NULL;
-        let data = unsafe { encode_tv2echo(&item.li_tv, s.len_mut()) };
-        s.set_data(data);
-        if s.data().is_null() {
+        let mut len: size_t = 0;
+        let data = unsafe { encode_tv2echo(&item.li_tv, &raw mut len) };
+        if data.is_null() {
             return Err(Failed);
         }
+        // SAFETY: `encode_tv2echo` answers its own NUL-terminated block.
+        let s = unsafe { String_0::from_owned_parts(data, len) };
 
         sumlen += s.len();
 
@@ -361,7 +362,6 @@ pub(crate) unsafe fn list_join_inner(
         // SAFETY: the entry `ga_append_via_ptr` just made room for.
         let mut joined = unsafe { Live::<Join>::new(p) };
         joined.s = s;
-        joined.tofree = s.data();
 
         line_breakcheck();
     }
@@ -384,7 +384,7 @@ pub(crate) unsafe fn list_join_inner(
             unsafe { ga_concat_len(gap, sep, seplen) };
         }
         let p = unsafe { (ga.ga_data as *const Join).offset(i as isize) };
-        if !unsafe { (*p).s }.data().is_null() {
+        if !unsafe { (*p).s.data() }.is_null() {
             unsafe { ga_concat_len(gap, (*p).s.data(), (*p).s.len()) };
         }
         line_breakcheck();
@@ -415,11 +415,12 @@ pub unsafe fn tv_list_join(
     unsafe { ga_init(&raw mut join_ga, itemsize, growsize) };
     let retval = unsafe { list_join_inner(gap, l, sep, &raw mut join_ga) };
 
-    // GA_DEEP_CLEAR with FREE_JOIN_TOFREE.
+    // GA_DEEP_CLEAR: each entry owns its string, so the clear is a drop.
     if !join_ga.ga_data.is_null() {
         for i in 0..join_ga.ga_len {
             let joined = join_ga.ga_data as *mut Join;
-            unsafe { xfree((*joined.offset(i as isize)).tofree.cast()) };
+            // SAFETY: the garray holds `ga_len` initialised entries.
+            unsafe { joined.offset(i as isize).drop_in_place() };
         }
     }
     unsafe { ga_clear(&raw mut join_ga) };

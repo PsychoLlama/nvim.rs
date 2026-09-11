@@ -161,8 +161,6 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_option(lstate: *mut lua_St
         let mut ret = unsafe { nvim_buf_get_option(arg_1, arg_2) }?;
         // SAFETY: as above.
         unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
-        // SAFETY: as above; the result is the binding's.
-        unsafe { api_free_object(ret) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -190,9 +188,6 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_option(lstate: *mut lua_St
         // SAFETY: as above.
         let arg_3 = unsafe { nlua_pop_object(lstate, true, arena) }
             .inspect_err(|_| *err_param = c"value".as_ptr().cast_mut())?;
-        // SAFETY: the conversion took the references and nothing else
-        // releases them.
-        let arg_3 = unsafe { ObjectArg::new(arg_3) };
         // SAFETY: as above.
         let arg_2 = unsafe { nlua_pop_string(lstate, arena) }
             .inspect_err(|_| *err_param = c"name".as_ptr().cast_mut())?;
@@ -201,7 +196,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_option(lstate: *mut lua_St
             .inspect_err(|_| *err_param = c"buffer".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_buf_set_option(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3.value) }?;
+        unsafe { nvim_buf_set_option(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3) }?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -280,9 +275,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_command_output(lstate: *mut lua_St
         // SAFETY: as above; the arguments are this binding's own.
         let ret = unsafe { nvim_command_output(LUA_INTERNAL_CALL, arg_1) }?;
         // SAFETY: as above.
-        unsafe { nlua_push_string(lstate, ret, PUSH_SPECIAL) };
-        // SAFETY: as above; the result is the binding's.
-        unsafe { api_free_string(ret) };
+        unsafe { nlua_push_string(lstate, &ret, PUSH_SPECIAL) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -377,9 +370,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_exec(lstate: *mut lua_State) -> c_
         // SAFETY: as above; the arguments are this binding's own.
         let ret = unsafe { nvim_exec(LUA_INTERNAL_CALL, arg_1, arg_2) }?;
         // SAFETY: as above.
-        unsafe { nlua_push_string(lstate, ret, PUSH_SPECIAL) };
-        // SAFETY: as above; the result is the binding's.
-        unsafe { api_free_string(ret) };
+        unsafe { nlua_push_string(lstate, &ret, PUSH_SPECIAL) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -412,9 +403,9 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_by_id(lstate: *mut lua_Stat
             .inspect_err(|_| *err_param = c"hl_id".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_get_hl_by_id(arg_1, arg_2, arena) }?;
+        let mut ret = unsafe { nvim_get_hl_by_id(arg_1, arg_2, arena) }?;
         // SAFETY: as above.
-        unsafe { nlua_push_dict(lstate, ret, PUSH_SPECIAL) };
+        unsafe { nlua_push_dict(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -447,9 +438,9 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_by_name(lstate: *mut lua_St
             .inspect_err(|_| *err_param = c"name".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_get_hl_by_name(arg_1, arg_2, arena) }?;
+        let mut ret = unsafe { nvim_get_hl_by_name(arg_1, arg_2, arena) }?;
         // SAFETY: as above.
-        unsafe { nlua_push_dict(lstate, ret, PUSH_SPECIAL) };
+        unsafe { nlua_push_dict(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -482,8 +473,6 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_option(lstate: *mut lua_State)
         let mut ret = unsafe { nvim_get_option(arg_1) }?;
         // SAFETY: as above.
         unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
-        // SAFETY: as above; the result is the binding's.
-        unsafe { api_free_object(ret) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -513,9 +502,9 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_option_info(lstate: *mut lua_S
             .inspect_err(|_| *err_param = c"name".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let ret = unsafe { nvim_get_option_info(arg_1, arena) }?;
+        let mut ret = unsafe { nvim_get_option_info(arg_1) }?;
         // SAFETY: as above.
-        unsafe { nlua_push_dict(lstate, ret, PUSH_SPECIAL) };
+        unsafe { nlua_push_dict(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -611,15 +600,12 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_option(lstate: *mut lua_State)
         // SAFETY: as above.
         let arg_2 = unsafe { nlua_pop_object(lstate, true, arena) }
             .inspect_err(|_| *err_param = c"value".as_ptr().cast_mut())?;
-        // SAFETY: the conversion took the references and nothing else
-        // releases them.
-        let arg_2 = unsafe { ObjectArg::new(arg_2) };
         // SAFETY: as above.
         let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
             .inspect_err(|_| *err_param = c"name".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_set_option(LUA_INTERNAL_CALL, arg_1, arg_2.value) }?;
+        unsafe { nvim_set_option(LUA_INTERNAL_CALL, arg_1, arg_2) }?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -655,8 +641,6 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_option(lstate: *mut lua_St
         let mut ret = unsafe { nvim_win_get_option(arg_1, arg_2) }?;
         // SAFETY: as above.
         unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
-        // SAFETY: as above; the result is the binding's.
-        unsafe { api_free_object(ret) };
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -684,9 +668,6 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_option(lstate: *mut lua_St
         // SAFETY: as above.
         let arg_3 = unsafe { nlua_pop_object(lstate, true, arena) }
             .inspect_err(|_| *err_param = c"value".as_ptr().cast_mut())?;
-        // SAFETY: the conversion took the references and nothing else
-        // releases them.
-        let arg_3 = unsafe { ObjectArg::new(arg_3) };
         // SAFETY: as above.
         let arg_2 = unsafe { nlua_pop_string(lstate, arena) }
             .inspect_err(|_| *err_param = c"name".as_ptr().cast_mut())?;
@@ -695,7 +676,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_option(lstate: *mut lua_St
             .inspect_err(|_| *err_param = c"window".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_win_set_option(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3.value) }?;
+        unsafe { nvim_win_set_option(LUA_INTERNAL_CALL, arg_1, arg_2, arg_3) }?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.

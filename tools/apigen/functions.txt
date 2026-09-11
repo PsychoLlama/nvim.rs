@@ -15,7 +15,7 @@
 #                          instead of being deferred to the main loop. The
 #                          Lua binding of a method that is not fast refuses
 #                          to run where deferring is unsafe.
-#   ret_alloc              the result is heap-allocated for the caller to
+#                the result is heap-allocated for the caller to
 #                          free, rather than owned by the request arena
 #   remote_only            RPC clients only: the method gets no Lua binding
 #   lua_only               Lua only: the method gets no RPC wrapper and no
@@ -43,7 +43,7 @@
 #   deprecated_since=<n>
 #                the API level the method was deprecated at. Metadata only.
 #   alias=<name> this method is a deprecated spelling of <name>: it shares
-#                that method's wrapper, inherits its fast/ret_alloc, and the
+#                that method's wrapper, inherits its `fast`, and the
 #                metadata describes it with that method's parameters.
 #   handler=<p>  the handler is hand-written at crate path <p>.
 #
@@ -105,8 +105,8 @@ nvim_get_commands since=4
 nvim_buf_get_commands since=4
 
 # api/deprecated/
-nvim_exec ret_alloc since=7 deprecated_since=11
-nvim_command_output ret_alloc since=1 deprecated_since=7
+nvim_exec since=7 deprecated_since=11
+nvim_command_output since=1 deprecated_since=7
 nvim_execute_lua remote_only since=3 deprecated_since=7
 nvim_buf_get_number since=1 deprecated_since=2
 nvim_buf_clear_highlight since=1 deprecated_since=7
@@ -130,10 +130,10 @@ vim_set_var remote_only
 vim_del_var remote_only
 nvim_get_option_info since=7 deprecated_since=11
 nvim_set_option since=1 deprecated_since=11
-nvim_get_option ret_alloc since=1 deprecated_since=11
-nvim_buf_get_option ret_alloc since=1 deprecated_since=11
+nvim_get_option since=1 deprecated_since=11
+nvim_buf_get_option since=1 deprecated_since=11
 nvim_buf_set_option since=1 deprecated_since=11
-nvim_win_get_option ret_alloc since=1 deprecated_since=11
+nvim_win_get_option since=1 deprecated_since=11
 nvim_win_set_option since=1 deprecated_since=11
 nvim_call_atomic remote_only since=1 deprecated_since=12
 nvim_subscribe remote_only since=1 deprecated_since=13
@@ -156,12 +156,12 @@ nvim_buf_set_extmark since=7
 nvim_buf_del_extmark since=7
 nvim_buf_clear_namespace since=5
 nvim_set_decoration_provider lua_only since=7
-nvim__buf_debug_extmarks ret_alloc since=-1
+nvim__buf_debug_extmarks since=-1
 nvim__ns_set since=-1
 nvim__ns_get since=-1
 
 # api/options.rs
-nvim_get_option_value ret_alloc since=9
+nvim_get_option_value since=9
 nvim_set_option_value since=9
 nvim_get_all_options_info since=7
 nvim_get_option_info2 since=11
@@ -199,14 +199,14 @@ nvim_set_hl_ns_fast fast since=10
 nvim_feedkeys since=1
 nvim_input fast since=1
 nvim_input_mouse fast since=6
-nvim_replace_termcodes ret_alloc since=1
+nvim_replace_termcodes since=1
 nvim_exec_lua remote_only since=7
 nvim__exec_lua_fast fast remote_only since=-1
 nvim_strwidth since=1
 nvim_list_runtime_paths ret=ArrayOf(String) since=1
 nvim__runtime_inspect since=-1
 nvim_get_runtime_file fast ret=ArrayOf(String) since=7
-nvim__get_lib_dir ret_alloc since=-1
+nvim__get_lib_dir since=-1
 nvim__get_runtime fast arg1=ArrayOf(String) since=-1
 nvim_set_current_dir since=1
 nvim_get_current_line since=1
@@ -265,7 +265,7 @@ nvim__complete_set since=-1
 nvim__redraw since=-1
 
 # api/vimscript/
-nvim_exec2 ret_alloc since=11
+nvim_exec2 since=11
 nvim_command since=1
 nvim_eval since=1
 nvim_call_function since=1
@@ -305,7 +305,7 @@ nvim_win_text_height since=12
 redraw fast handler=crate::ui_client::handle_ui_client_redraw
 
 # Deprecated spellings. Each shares the wrapper of the method it names,
-# and inherits its fast/ret_alloc, so it needs no wrapper of its own.
+# and inherits its `fast`, so it needs no wrapper of its own.
 buffer_line_count alias=nvim_buf_line_count
 buffer_get_lines alias=nvim_buf_get_lines
 buffer_set_lines alias=nvim_buf_set_lines

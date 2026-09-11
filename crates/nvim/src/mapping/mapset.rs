@@ -278,7 +278,7 @@ pub unsafe fn modify_keymap(
         if let Some(reference) = o.callback.take() {
             lua_funcref = reference;
         }
-        if let Some(desc) = o.desc {
+        if let Some(desc) = o.desc.as_ref() {
             // SAFETY: the keyset's own API string, which this copies out of.
             parsed_args.desc = unsafe { COwned::new(string_to_cstr(desc)) }.to_map_str();
         }
@@ -315,7 +315,7 @@ pub unsafe fn modify_keymap(
         }
 
         // SAFETY: `mode` is a live API string.
-        let (mode_val, is_abbrev, mut p) = unsafe { parse_shortname_mode(mode) };
+        let (mode_val, is_abbrev, mut p) = unsafe { parse_shortname_mode(&mode) };
         if is_abbrev {
             // SAFETY: `parse_shortname_mode` left `p` on the `a` it found.
             p = unsafe { p.add(1) };

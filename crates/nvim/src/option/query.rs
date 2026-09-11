@@ -16,7 +16,6 @@ use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::mem::ManuallyDrop;
 use core::ptr;
 
-use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
@@ -341,7 +340,7 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
     if let Some(name) = name {
         set_option_direct(
             kOptFileformat,
-            OptVal::String(unsafe { cstr_as_string(name.as_ptr().cast_mut()) }),
+            OptVal::static_string(name),
             opt_flags,
             0 as ScriptId,
         );

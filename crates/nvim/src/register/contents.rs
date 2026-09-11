@@ -148,7 +148,7 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
         return unsafe {
             let list = tv_list_alloc(y_size as ptrdiff_t);
             for i in 0..y_size {
-                let line = *y_array.add(i);
+                let line = &*y_array.add(i);
                 tv_list_append_string(list.as_ptr(), line.data(), line.len() as c_int as ssize_t);
             }
             // The caller takes the reference over.
@@ -174,7 +174,7 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
     let mut at: size_t = 0;
     for i in 0..y_size {
         // SAFETY: `i` is below `y_size`, as above.
-        let line = unsafe { *y_array.add(i) };
+        let line = unsafe { &*y_array.add(i) };
         // SAFETY: `at` is the offset the loop above measured this line at,
         // and the line is NUL-terminated.
         unsafe { strcpy(retval.add(at), line.data()) };
@@ -417,7 +417,9 @@ unsafe fn str_to_reg(
             }
             // SAFETY: `lnum` is inside the array `xrealloc` sized above, and
             // `s` is an allocation of `s_len` bytes plus a NUL.
-            unsafe { *pp.add(lnum) = String_0::from_raw_parts(s, s_len) };
+            // SAFETY: `s` is that allocation, NUL-terminated at `s_len`, and
+            // the slot it goes into was zeroed by `xcalloc`.
+            unsafe { *pp.add(lnum) = String_0::from_owned_parts(s, s_len) };
             // A NUL in the text is how the editor spells a newline.
             // SAFETY: `s` holds those `s_len` bytes.
             unsafe { memchrsub(s as *mut c_void, NUL as c_char, '\n' as c_char, s_len) };
@@ -634,7 +636,7 @@ pub unsafe fn write_reg_contents_ex(
 /// `reg` must be writable and `regtype` describe readable bytes.
 pub unsafe fn prepare_yankreg_from_object(
     reg: *mut YankReg,
-    regtype: String_0,
+    regtype: &String_0,
     _lines: size_t,
 ) -> bool {
     // SAFETY: a non-null `regtype` describes readable bytes, so its first is

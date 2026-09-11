@@ -7,7 +7,7 @@ use super::wrappers::{arg_number, arg_number_chk, arg_string, arg_string_chk};
 use super::{
     SIGINT, VIM_ERROR, VIM_GENERIC, VIM_INFO, VIM_QUESTION, VIM_WARNING, tv_get_buf_from_arg,
 };
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::api::vim::nvim_feedkeys;
 use crate::buffer::buf_is_prompt;
 use crate::cstr;
@@ -133,7 +133,7 @@ pub fn f_feedkeys(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         ptr::null()
     };
-    unsafe { nvim_feedkeys(cstr_as_string(keys), cstr_as_string(mode), true) };
+    unsafe { nvim_feedkeys(cstr_to_string(keys), cstr_to_string(mode), true) };
 }
 
 /// Whether the prompt currently being read should echo `*` instead of what

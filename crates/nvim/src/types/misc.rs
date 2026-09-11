@@ -92,10 +92,41 @@ pub struct Set_uint64_t {
     pub h: MapHash,
     pub keys: *mut uint64_t,
 }
-pub struct StringArray {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut String_0,
+/// A vector of owned API strings: ShaDa's register contents, the one keyset
+/// field whose value is a list of binaries rather than an [`Object`] tree.
+#[derive(Clone, Default)]
+pub struct StringArray(Vec<String_0>);
+
+impl StringArray {
+    /// No strings and nothing allocated.
+    pub const EMPTY: Self = Self(Vec::new());
+
+    pub fn push(&mut self, str: String_0) {
+        self.0.push(str);
+    }
+}
+
+impl From<Vec<String_0>> for StringArray {
+    fn from(items: Vec<String_0>) -> Self {
+        Self(items)
+    }
+}
+
+impl ::core::ops::Deref for StringArray {
+    type Target = [String_0];
+
+    fn deref(&self) -> &[String_0] {
+        &self.0
+    }
+}
+
+impl<'a> IntoIterator for &'a StringArray {
+    type Item = &'a String_0;
+    type IntoIter = ::core::slice::Iter<'a, String_0>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
 }
 #[derive(Copy, Clone)]
 pub struct StringBuilder {

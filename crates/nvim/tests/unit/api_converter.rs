@@ -15,11 +15,8 @@
 
 #![cfg(not(miri))]
 
-use std::ptr;
-
-use neovim::api::private::converter::vim_to_object;
-use neovim::api::private::helpers::api_free_object;
 use neovim::eval::typval::tv_clear;
+use neovim::types::Object;
 
 use crate::support::alloc::AllocLog;
 use crate::support::tv::{Obj, Pt, Tv};
@@ -32,9 +29,9 @@ unsafe fn convert(value: Tv) -> Obj {
     // SAFETY: the value and the object are this call's own.
     unsafe {
         let mut tv = value.build();
-        let object = vim_to_object(&tv, ptr::null_mut(), false);
+        let object = Object::from(&tv);
         let read = crate::support::tv::read_object(&raw const object);
-        api_free_object(object);
+        drop(object);
         tv_clear(&mut tv);
         read
     }

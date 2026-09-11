@@ -399,7 +399,7 @@ pub(crate) unsafe fn fill_complete_info_dict(
         tv_dict_add_str(di, key.as_ptr().cast(), key.len(), val)
     };
 
-    let _ = add_str("word", unsafe { (*match_0).cp_str }.data());
+    let _ = add_str("word", unsafe { (*match_0).cp_str.data() });
     let _ = add_str("abbr", unsafe { (*match_0).cp_text[CPT_ABBR as usize] });
     let _ = add_str("menu", unsafe { (*match_0).cp_text[CPT_MENU as usize] });
     let _ = add_str("kind", unsafe { (*match_0).cp_text[CPT_KIND as usize] });

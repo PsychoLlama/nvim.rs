@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    api_try, array_add, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
+    api_try, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
 use crate::types::OptionSetFlags;
 use core::ffi::CStr;
@@ -21,19 +21,19 @@ use crate::winlayer::{Buf, TabPage, Win, buffers, tab_windows, tabs};
 
 /// One `String` option's value, borrowing the literal's bytes.
 fn string_optval(value: &'static CStr) -> OptVal {
-    OptVal::String(String_0::from_cstr(value))
+    OptVal::static_string(value)
 }
 
 /// Every listed and unlisted buffer's handle.
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
+pub unsafe fn nvim_list_bufs() -> Array {
     let n: size_t = buffers().count();
-    let mut rv: Array = arena_array(arena, n);
+    let mut rv: Array = Array::with_capacity(n);
     for buf in buffers() {
         // SAFETY: `rv` is the block `arena` just sized for every buffer.
-        unsafe { array_add(&mut rv, Object::buffer(buf.handle)) };
+        rv.push(Object::buffer(buf.handle));
     }
     rv
 }
@@ -65,12 +65,12 @@ pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_list_wins(arena: *mut Arena) -> Array {
+pub unsafe fn nvim_list_wins() -> Array {
     let n: size_t = tab_windows().count();
-    let mut rv: Array = arena_array(arena, n);
+    let mut rv: Array = Array::with_capacity(n);
     for win in tab_windows() {
         // SAFETY: `rv` is the block `arena` just sized for every window.
-        unsafe { array_add(&mut rv, Object::window(win.handle)) };
+        rv.push(Object::window(win.handle));
     }
     rv
 }
@@ -176,12 +176,12 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_list_tabpages(arena: *mut Arena) -> Array {
+pub unsafe fn nvim_list_tabpages() -> Array {
     let n: size_t = tabs().count();
-    let mut rv: Array = arena_array(arena, n);
+    let mut rv: Array = Array::with_capacity(n);
     for tp in tabs() {
         // SAFETY: `rv` is the block `arena` just sized for every tab page.
-        unsafe { array_add(&mut rv, Object::tabpage(tp.handle)) };
+        rv.push(Object::tabpage(tp.handle));
     }
     rv
 }

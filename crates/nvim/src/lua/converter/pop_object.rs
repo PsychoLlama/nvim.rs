@@ -22,7 +22,6 @@
 use core::ffi::CStr;
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, nlua_traverse_table};
-use crate::api::private::helpers::{api_free_object, arena_array, arena_dict, arena_string};
 use crate::eval::typval_encode::InlineStack;
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
@@ -98,7 +97,7 @@ pub unsafe fn nlua_pop_object(
                 }
                 match &mut *cur.obj {
                     Object::Dict(dict) => {
-                        if dict.size == dict.capacity {
+                        if dict.len() == dict.capacity() {
                             // Full: pop the table and the key lua_next left.
                             lua_pop(lstate, 2);
                             continue;
@@ -119,24 +118,31 @@ pub unsafe fn nlua_pop_object(
                         }
                         let mut len: size_t = 0;
                         let s = lua_tolstring(lstate, -2, &raw mut len);
-                        let idx = dict.size;
-                        dict.size = idx.wrapping_add(1);
-                        (*dict.items.add(idx)).key =
-                            arena_string(arena, String_0::from_raw_parts(s.cast_mut(), len));
-                        let value = &raw mut (*dict.items.add(idx)).value;
+                        let key =
+                            String_0::from_bytes(core::slice::from_raw_parts(s.cast::<u8>(), len));
+                        // The entry's own value slot is what the next frame
+                        // fills in. The address survives the pushes that
+                        // follow because the dictionary was sized for every
+                        // entry up front and the test above refuses to go
+                        // past that, so the vector never reallocates.
+                        dict.insert(key, Object::Nil);
+                        let value = &raw mut dict.last_mut().expect("just inserted").value;
                         stack.push(cur);
                         cur = ObjPopStackItem::leaf(value);
                     }
                     Object::Array(array) => {
-                        if array.size == array.capacity {
+                        if array.len() == array.capacity() {
                             lua_pop(lstate, 1);
                             continue;
                         }
-                        let idx = array.size;
-                        array.size = idx.wrapping_add(1);
+                        let idx = array.len();
+                        // As the dictionary arm: sized up front, so the slot
+                        // this hands on keeps its address.
+                        array.push(Object::Nil);
                         lua_rawgeti(lstate, -1, len_as_int(idx) + 1);
+                        let slot: *mut Object = array.last_mut().expect("just pushed");
                         stack.push(cur);
-                        cur = ObjPopStackItem::leaf(array.items.add(idx));
+                        cur = ObjPopStackItem::leaf(slot);
                     }
                     // Only a container is ever suspended back onto the stack,
                     // and the only containers are dictionaries and arrays.
@@ -155,10 +161,8 @@ pub unsafe fn nlua_pop_object(
                     LUA_TSTRING => {
                         let mut len: size_t = 0;
                         let s = lua_tolstring(lstate, -1, &raw mut len);
-                        *cur.obj = Object::string(arena_string(
-                            arena,
-                            String_0::from_raw_parts(s.cast_mut(), len),
-                        ));
+                        let bytes = core::slice::from_raw_parts(s.cast::<u8>(), len);
+                        *cur.obj = Object::string(String_0::from_bytes(bytes));
                         break 'converted;
                     }
                     LUA_TNUMBER => {
@@ -180,7 +184,7 @@ pub unsafe fn nlua_pop_object(
                             kObjectTypeArray => {
                                 *cur.obj = Object::array(Array::EMPTY);
                                 if maxidx != 0 {
-                                    *cur.obj = Object::array(arena_array(arena, maxidx));
+                                    *cur.obj = Object::array(Array::with_capacity(maxidx));
                                     cur.container = true;
                                     stack.push(cur);
                                 }
@@ -188,7 +192,7 @@ pub unsafe fn nlua_pop_object(
                             kObjectTypeDict => {
                                 *cur.obj = Object::dict(ApiDict::EMPTY);
                                 if keys != 0 {
-                                    *cur.obj = Object::dict(arena_dict(arena, keys));
+                                    *cur.obj = Object::dict(ApiDict::with_capacity(keys));
                                     cur.container = true;
                                     stack.push(cur);
                                     lua_pushnil(lstate);
@@ -231,7 +235,7 @@ pub unsafe fn nlua_pop_object(
         }
         if failed.is_some() {
             if arena.is_null() {
-                api_free_object(ret);
+                drop(ret);
             }
             ret = Object::Nil;
             lua_pop(lstate, lua_gettop(lstate) - initial_size + 1);

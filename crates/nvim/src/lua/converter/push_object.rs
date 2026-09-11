@@ -63,9 +63,11 @@ pub(crate) unsafe fn nlua_create_typed_table(
 
 /// Push an api string as a Lua string, NULs and all.
 ///
+/// The string stays the caller's: Lua copies the bytes it is handed.
+///
 /// # Safety
-/// `lstate` must be a live Lua state and `s` a live api string.
-pub unsafe fn nlua_push_string(lstate: *mut lua_State, s: String_0, _flags: c_int) {
+/// `lstate` must be a live Lua state.
+pub unsafe fn nlua_push_string(lstate: *mut lua_State, s: &String_0, _flags: c_int) {
     unsafe {
         // A zero-length api string may carry a null pointer, which
         // lua_pushlstring will not take even for zero bytes.
@@ -114,29 +116,33 @@ pub unsafe fn nlua_push_boolean(lstate: *mut lua_State, b: Boolean, _flags: c_in
 /// indistinguishable from an empty list.
 ///
 /// # Safety
-/// `lstate` must be a live Lua state and `dict` a live api dictionary.
-pub unsafe fn nlua_push_dict(lstate: *mut lua_State, dict: ApiDict, flags: c_int) {
+/// `lstate` must be a live Lua state.
+///
+/// The borrow is mutable because `kNluaPushFreeRefs` clears each `LuaRef` it
+/// releases, one level down.
+pub unsafe fn nlua_push_dict(lstate: *mut lua_State, dict: &mut ApiDict, flags: c_int) {
     unsafe {
-        lua_createtable(lstate, 0, dict.size as c_int);
-        if dict.size == 0 {
+        lua_createtable(lstate, 0, dict.len() as c_int);
+        if dict.is_empty() {
             nlua_pushref(lstate, (*nlua_global_refs.get()).empty_dict_ref);
             lua_setmetatable(lstate, -2);
         }
-        for i in 0..dict.size {
-            nlua_push_string(lstate, (*dict.items.add(i)).key, flags);
-            nlua_push_object(lstate, &raw mut (*dict.items.add(i)).value, flags);
+        for entry in dict.iter_mut() {
+            nlua_push_string(lstate, &entry.key, flags);
+            nlua_push_object(lstate, &raw mut entry.value, flags);
             lua_rawset(lstate, -3);
         }
     }
 }
 
 /// # Safety
-/// `lstate` must be a live Lua state and `array` a live api array.
-pub unsafe fn nlua_push_array(lstate: *mut lua_State, array: Array, flags: c_int) {
+/// `lstate` must be a live Lua state. See [`nlua_push_dict`] for the mutable
+/// borrow.
+pub unsafe fn nlua_push_array(lstate: *mut lua_State, array: &mut Array, flags: c_int) {
     unsafe {
-        lua_createtable(lstate, array.size as c_int, 0);
-        for i in 0..array.size {
-            nlua_push_object(lstate, array.items.add(i), flags);
+        lua_createtable(lstate, array.len() as c_int, 0);
+        for (i, item) in array.iter_mut().enumerate() {
+            nlua_push_object(lstate, item, flags);
             lua_rawseti(lstate, -2, i as c_int + 1);
         }
     }
@@ -158,7 +164,7 @@ pub unsafe fn nlua_push_handle(lstate: *mut lua_State, item: Handle, _flags: c_i
 /// `lstate` must be a live Lua state and `obj` a live api object.
 pub unsafe fn nlua_push_object(lstate: *mut lua_State, obj: *mut Object, flags: c_int) {
     unsafe {
-        match *obj {
+        match &mut *obj {
             Object::Nil => {
                 if flags & kNluaPushSpecial != 0 {
                     lua_pushnil(lstate);
@@ -166,21 +172,24 @@ pub unsafe fn nlua_push_object(lstate: *mut lua_State, obj: *mut Object, flags: 
                     nlua_pushref(lstate, (*nlua_global_refs.get()).nil_ref);
                 }
             }
-            Object::LuaRef(r) => {
-                nlua_pushref(lstate, r);
+            Object::LuaRef(reference) => {
+                nlua_pushref(lstate, *reference);
                 if flags & kNluaPushFreeRefs != 0 {
-                    api_free_luaref(r);
-                    *obj = Object::LuaRef(LUA_NOREF as LuaRef);
+                    api_free_luaref(*reference);
+                    // The arm keeps its tag and gives up the reference, which
+                    // is what stops the object's own `Drop` releasing it
+                    // again.
+                    *reference = LUA_NOREF as LuaRef;
                 }
             }
-            Object::Boolean(b) => nlua_push_boolean(lstate, b, flags),
-            Object::Integer(n) => nlua_push_integer(lstate, n, flags),
-            Object::Float(f) => nlua_push_float(lstate, f, flags),
+            Object::Boolean(b) => nlua_push_boolean(lstate, *b, flags),
+            Object::Integer(n) => nlua_push_integer(lstate, *n, flags),
+            Object::Float(f) => nlua_push_float(lstate, *f, flags),
             Object::String(s) => nlua_push_string(lstate, s, flags),
             Object::Array(a) => nlua_push_array(lstate, a, flags),
             Object::Dict(d) => nlua_push_dict(lstate, d, flags),
             Object::Buffer(h) | Object::Window(h) | Object::Tabpage(h) => {
-                nlua_push_handle(lstate, h as Handle, flags);
+                nlua_push_handle(lstate, *h as Handle, flags);
             }
         }
     }

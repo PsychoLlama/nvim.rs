@@ -18,7 +18,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, api_try, array_add};
+use crate::api::private::helpers::{Reported, api_try};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::cstr;
 use crate::getchar::PastePhase;
@@ -68,24 +68,15 @@ pub unsafe fn nvim_paste(
         } else if cancelled.get() {
             break 's_151;
         }
-        // SAFETY: `data` names its own bytes and `arena` is the caller's.
-        let lines = unsafe { string_to_array(data, crlf, arena) };
-        let mut args_items: [Object; 2] = [Object::Nil; 2];
-        let mut args = Array {
-            size: 0 as size_t,
-            capacity: 2 as size_t,
-            items: (&raw mut args_items).cast::<Object>(),
-        };
-        // SAFETY: `args` is the two-slot block just declared above it.
-        unsafe {
-            array_add(&mut args, Object::array(lines));
-            array_add(&mut args, Object::integer(phase));
-        }
+        let lines = string_to_array(&data, crlf);
+        let mut args = Array::with_capacity(2);
+        args.push(Object::array(lines));
+        args.push(Object::integer(phase));
         let handler = String_0::from_cstr(c"return vim.paste(...)");
         let name = ::core::ptr::null::<::core::ffi::c_char>();
         // SAFETY: `args` is this frame's own and `arena`/`error` the caller's
         // and this frame's; the handler re-enters the editor through Lua.
-        let rv = match unsafe { nlua_exec(handler, name, args, kRetNilBool, arena) } {
+        let rv = match unsafe { nlua_exec(&handler, name, args, kRetNilBool, arena) } {
             Ok(value) => value,
             Err(e) => {
                 error = e;
@@ -146,22 +137,22 @@ pub unsafe fn nvim_put(
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     };
     // SAFETY: `reg` is this frame's own, and `type_0` names its own bytes.
-    let typed = unsafe { prepare_yankreg_from_object(&raw mut reg, type_0, lines.size) };
+    let typed = unsafe { prepare_yankreg_from_object(&raw mut reg, &type_0, lines.len()) };
     if !typed {
         // SAFETY: `err` is this frame's own slot and `type_0` NUL-terminated.
-        error = err_bad_value(c"type", unsafe { type_0.as_cstr() });
+        error = err_bad_value(c"type", type_0.as_cstr());
         return ().reported(error);
     }
-    if lines.size == 0 as size_t {
+    if lines.len() == 0 as size_t {
         return ().reported(error);
     }
-    let bytes = lines.size.wrapping_mul(::core::mem::size_of::<String_0>());
+    let bytes = lines.len().wrapping_mul(::core::mem::size_of::<String_0>());
     // SAFETY: `arena` is the caller's, and outlives the register below.
     reg.y_array = unsafe { arena_alloc(arena, bytes, true) }.cast::<String_0>();
-    reg.y_size = lines.size;
-    for i in 0..lines.size {
+    reg.y_size = lines.len();
+    for i in 0..lines.len() {
         // SAFETY: `lines` names its own `size` items.
-        let item = unsafe { *lines.items.add(i) };
+        let item = &lines[i];
         let Some(line) = item.as_string() else {
             let (want, got) = (api_typename(kObjectTypeString), api_typename(item.kind()));
             // SAFETY: `err` is this frame's own slot, and both type names are
@@ -175,10 +166,11 @@ pub unsafe fn nvim_put(
         // in an API string stands for a newline, as it does in every buffer
         // line.
         unsafe {
-            let copy = copy_string(line, arena);
-            *reg.y_array.add(i) = copy;
+            let copy = line.clone();
             let text = copy.data().cast::<::core::ffi::c_void>();
-            memchrsub(text, nul, nl, line.len());
+            let len = copy.len();
+            *reg.y_array.add(i) = copy;
+            memchrsub(text, nul, nl, len);
         }
     }
     // SAFETY: `reg` is this frame's own, now holding `y_size` lines.

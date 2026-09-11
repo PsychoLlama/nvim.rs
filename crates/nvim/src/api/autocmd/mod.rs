@@ -3,8 +3,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    api_set_sctx, api_typename, arena_array, arena_dict, arena_string, arena_take_arraybuilder,
-    cstr_as_string, find_buffer_by_handle, string_to_cstr, try_enter, try_leave,
+    api_set_sctx, api_typename, cstr_to_string, find_buffer_by_handle, string_to_cstr, try_enter,
+    try_leave,
 };
 use crate::api::private::validate::check_string_array;
 use crate::autocmd::{
@@ -21,10 +21,10 @@ use crate::memory::{strequal, xfree};
 use crate::strings::arena_printf;
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, BufferHandle, Callback,
-    Error, ExArg, Exception, Integer, KeyDict_clear_autocmds, KeyDict_create_augroup,
-    KeyDict_create_autocmd, KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, MsgList, Object,
-    String_0, TryState, int64_t, kErrorTypeValidation, kObjectTypeString, size_t, uint64_t,
+    ApiDict, Arena, Array, AutoCmd, AutoCmdVec, AutoPat, BufferHandle, Callback, Error, ExArg,
+    Exception, Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
+    KeyDict_exec_autocmds, KeyDict_get_autocmds, MsgList, Object, String_0, TryState, int64_t,
+    kErrorTypeValidation, kObjectTypeNil, kObjectTypeString, size_t, uint64_t,
 };
 use ::libc::abort;
 

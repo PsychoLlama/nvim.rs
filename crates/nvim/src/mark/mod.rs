@@ -25,7 +25,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
@@ -84,11 +84,7 @@ pub const BUF_HAS_QF_ENTRY: c_int = 1;
 pub const BUF_HAS_LL_ENTRY: c_int = 2;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMTCharWise: MotionType = 0;
-pub const ARRAY_DICT_INIT: ApiDict = ApiDict {
-    size: 0,
-    capacity: 0,
-    items: ptr::null_mut(),
-};
+pub const ARRAY_DICT_INIT: ApiDict = ApiDict::EMPTY;
 
 /// How `mark_get` is allowed to resolve a mark's name.
 pub const kMarkBufLocal: MarkGet = 0;
@@ -217,25 +213,21 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: Buf) {
     // SAFETY: the three keys are `'static` C strings, `mark_str` and `items`
     // outlive the `aucmd_defer` call, and `aucmd_defer` copies the payload
     // before it returns. `buffer` is the caller's live buffer.
-    let mut items: [KeyValuePair; 3] = [
+    let items: Vec<KeyValuePair> = vec![
         key_value_pair {
-            key: unsafe { cstr_as_string(c"name".as_ptr()) },
-            value: Object::String(String_0::from_raw_parts(mark_str.as_mut_ptr(), 1)),
+            key: String_0::from_cstr(c"name"),
+            value: Object::string(String_0::from_bytes(&[mark_str[0].cast_unsigned()])),
         },
         key_value_pair {
-            key: unsafe { cstr_as_string(c"line".as_ptr()) },
+            key: String_0::from_cstr(c"line"),
             value: Object::Integer(Integer::from(pos.lnum)),
         },
         key_value_pair {
-            key: unsafe { cstr_as_string(c"col".as_ptr()) },
+            key: unsafe { cstr_to_string(c"col".as_ptr()) },
             value: Object::Integer(Integer::from(pos.col)),
         },
     ];
-    let mut payload: Object = Object::Dict(ApiDict {
-        size: items.len(),
-        capacity: items.len(),
-        items: items.as_mut_ptr(),
-    });
+    let mut payload: Object = Object::dict(ApiDict::from(items));
     unsafe {
         aucmd_defer(
             AutoEvent::MarkSet,

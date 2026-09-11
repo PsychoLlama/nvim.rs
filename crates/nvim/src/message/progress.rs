@@ -16,7 +16,7 @@
 )]
 
 use super::*;
-use crate::types::builders::{ArrayBuf, DictBuf, static_cstring};
+use crate::types::builders::{ArrayBuf, DictBuf};
 use core::ffi::{CStr, c_char, c_int, c_long};
 use core::ptr;
 
@@ -61,14 +61,15 @@ pub(crate) unsafe fn format_progress_message(
 ) -> HlMessage {
     let mut updated = EMPTY_HL_MESSAGE;
 
-    if !unsafe { (*msg_data).title }.is_empty() {
+    if !unsafe { (*msg_data).title.is_empty() } {
         let title = HlMessageChunk {
-            text: unsafe { copy_string((*msg_data).title, ptr::null_mut()) },
+            // SAFETY: the caller's message data.
+            text: unsafe { (*msg_data).title.clone() },
             hl_id: unsafe { status_hl_id((*msg_data).status.data()) },
         };
         unsafe { hl_msg_push(&mut updated, title) };
         let separator = HlMessageChunk {
-            text: unsafe { cstr_to_string(c": ".as_ptr()) },
+            text: String_0::from_cstr(c": "),
             hl_id: 0,
         };
         unsafe { hl_msg_push(&mut updated, separator) };
@@ -94,7 +95,7 @@ pub(crate) unsafe fn format_progress_message(
     for i in 0..hl_msg.size {
         let chunk = unsafe { (*hl_msg.items.add(i)).clone() };
         let copy = HlMessageChunk {
-            text: unsafe { copy_string(chunk.text, ptr::null_mut()) },
+            text: chunk.text.clone(),
             hl_id: chunk.hl_id,
         };
         unsafe { hl_msg_push(&mut updated, copy) };
@@ -119,13 +120,13 @@ pub unsafe fn msg_progress(
     trunc: bool,
 ) -> *mut c_char {
     let mut opts = KeyDict_echo_opts {
-        kind: Some(static_cstring(c"progress")),
-        id: Some(Object::string(unsafe { cstr_as_string(id) })),
+        kind: Some(String_0::from_cstr(c"progress")),
+        id: Some(Object::string(unsafe { cstr_to_string(id) })),
         // Not `static_cstring(c"")`: upstream leaves this field zeroed,
         // so `title.data` is null rather than a pointer to "".
-        title: Some(String_0::from_raw_parts(ptr::null_mut(), 0)),
-        status: Some(unsafe { cstr_as_string(status) }),
-        source: Some(static_cstring(c"nvim")),
+        title: Some(String_0::NULL),
+        status: Some(unsafe { cstr_to_string(status) }),
+        source: Some(String_0::from_cstr(c"nvim")),
         ..KeyDict_echo_opts::default()
     };
 
@@ -140,7 +141,7 @@ pub unsafe fn msg_progress(
     }
 
     let mut chunk = ArrayBuf::<2>::new();
-    chunk.push(Object::string(unsafe { cstr_as_string(s) }));
+    chunk.push(Object::string(unsafe { cstr_to_string(s) }));
     chunk.push(Object::integer(hl_id.into()));
     let mut chunks = ArrayBuf::<1>::new();
     chunks.push(chunk.object());
@@ -163,28 +164,33 @@ pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut
         return;
     }
 
-    // The chunk strings are borrowed, not copied: the autocommand runs
-    // before this returns, and `messages` is freed at the end of it.
-    let mut messages = EMPTY_ARRAY;
+    // The event carries copies: the message and its data block outlive the
+    // autocommand and go on being the caller's.
+    let mut messages = Array::with_capacity(msg.size);
     for i in 0..msg.size {
-        unsafe { array_push(&mut messages, Object::string((*msg.items.add(i)).text)) };
+        // SAFETY: `i` is below `size`, so the chunk is inside `items`.
+        messages.push(Object::string(unsafe { (*msg.items.add(i)).text.clone() }));
     }
 
     let mut data = DictBuf::<7>::new();
     data.insert(c"id", msg_id);
     data.insert(c"text", Object::array(messages));
     if !msg_data.is_null() {
-        data.insert(c"percent", Object::integer(unsafe { (*msg_data).percent }));
-        data.insert(c"source", Object::string(unsafe { (*msg_data).source }));
-        data.insert(c"status", Object::string(unsafe { (*msg_data).status }));
-        data.insert(c"title", Object::string(unsafe { (*msg_data).title }));
-        data.insert(c"data", Object::dict(unsafe { (*msg_data).data }));
+        // SAFETY: the caller's data block, live for the call.
+        unsafe {
+            data.insert(c"percent", Object::integer((*msg_data).percent));
+            data.insert(c"source", Object::string((*msg_data).source.clone()));
+            data.insert(c"status", Object::string((*msg_data).status.clone()));
+            data.insert(c"title", Object::string((*msg_data).title.clone()));
+            data.insert(c"data", Object::dict((*msg_data).data.clone()));
+        }
     }
 
     // The autocommand pattern is the message's source, so an autocommand
     // can match one producer's progress.
-    let pattern = if !msg_data.is_null() && !unsafe { (*msg_data).source }.is_empty() {
-        unsafe { (*msg_data).source }.data()
+    // SAFETY: as above.
+    let pattern = if !msg_data.is_null() && !unsafe { (*msg_data).source.is_empty() } {
+        unsafe { (*msg_data).source.data() }
     } else {
         c"".as_ptr().cast_mut()
     };
@@ -202,6 +208,4 @@ pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut
             fired, pattern, no_fname, true, group, no_buf, no_eap, payload,
         )
     };
-
-    unsafe { xfree(messages.items.cast()) };
 }

@@ -97,7 +97,7 @@ pub const kExtmarkNone: ExtmarkType = 1;
 pub const KV_INITIAL_VALUE: ExtmarkInfoArray = ExtmarkInfoArray {
     size: 0,
     capacity: 0,
-    items: ptr::null_mut(),
+    items: ::core::ptr::null_mut(),
 };
 // ---------------------------------------------------------------------------
 // The two containers hanging off a buffer

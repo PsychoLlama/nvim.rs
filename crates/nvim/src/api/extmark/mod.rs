@@ -3,8 +3,8 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    api_typename, arena_array, arena_dict, cstr_as_string, find_buffer_by_handle,
-    find_window_by_handle, object_to_hl_id, string_to_cstr,
+    api_typename, cstr_to_string, find_buffer_by_handle, find_window_by_handle, object_to_hl_id,
+    string_to_cstr,
 };
 use crate::charset::{transstr, vim_isprintc};
 use crate::decoration::{
@@ -23,7 +23,7 @@ use crate::marktree::key::{
 };
 use crate::marktree::mt_inspect;
 use crate::mbyte::{mb_string2cells, utfc_ptr2schar};
-use crate::memory::{strequal, xfree, xrealloc};
+use crate::memory::{strequal, xfree};
 use crate::r#move::changed_window_setting;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
@@ -66,11 +66,7 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
 pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
-pub const ARRAY_DICT_INIT: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
 pub const DECOR_ID_INVALID: ::core::ffi::c_uint = UINT32_MAX;
 pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
 pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInline {

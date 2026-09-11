@@ -16,7 +16,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{array_add, find_window_by_handle};
+use crate::api::private::helpers::find_window_by_handle;
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char};
 
@@ -53,7 +53,6 @@ fn config_put_bordertext(
     config: &mut KeyDict_win_config,
     fconfig: WinCfg,
     bordertext_type: BorderTextType,
-    arena: *mut Arena,
 ) {
     let footer = bordertext_type == kBorderTextFooter;
     let (vt, align) = if footer {
@@ -62,7 +61,7 @@ fn config_put_bordertext(
         (fconfig.title_chunks, fconfig.title_pos)
     };
     // SAFETY: the chunks are the window's own, and `arena` is the caller's.
-    let bordertext = Object::array(unsafe { virt_text_to_array(vt, true, arena) });
+    let bordertext = Object::array(unsafe { virt_text_to_array(vt, true) });
     let pos = String_0::from_cstr(ALIGN_TEXT_STR[align as usize]);
     if footer {
         config.footer = Some(bordertext);
@@ -78,15 +77,15 @@ fn config_put_bordertext(
 ///
 /// # Safety
 /// `arena` must be the caller's, and outlive the answer along with `fconfig`.
-unsafe fn border_array(fconfig: WinCfg, arena: *mut Arena) -> Array {
-    let mut border = arena_array(arena, 8);
+unsafe fn border_array(fconfig: WinCfg) -> Array {
+    let mut border = Array::with_capacity(8);
     for i in 0..8 {
         // SAFETY: the cell is one of the config's own eight, and holds at
         // most `MAX_SCHAR_SIZE` bytes; taking its address off the raw pointer
         // rather than off a `Deref` is what keeps `fconfig` usable after.
         let cell = unsafe {
             let chars = (&raw mut (*fconfig.raw()).border_chars).cast::<c_char>();
-            cstrn_as_string(
+            cstrn_to_string(
                 chars.add(i * MAX_SCHAR_SIZE as usize),
                 MAX_SCHAR_SIZE as size_t,
             )
@@ -99,12 +98,12 @@ unsafe fn border_array(fconfig: WinCfg, arena: *mut Arena) -> Array {
         // it does.
         unsafe {
             if highlighted {
-                let mut tuple = arena_array(arena, 2);
-                array_add(&mut tuple, Object::string(cell));
-                array_add(&mut tuple, Object::string(cstr_as_string(name)));
-                array_add(&mut border, Object::array(tuple));
+                let mut tuple = Array::with_capacity(2);
+                tuple.push(Object::string(cell));
+                tuple.push(Object::string(cstr_to_string(name)));
+                border.push(Object::array(tuple));
             } else {
-                array_add(&mut border, Object::string(cell));
+                border.push(Object::string(cell));
             }
         }
     }
@@ -115,10 +114,7 @@ unsafe fn border_array(fconfig: WinCfg, arena: *mut Arena) -> Array {
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_win_get_config(
-    win: WindowHandle,
-    arena: *mut Arena,
-) -> Result<KeyDict_win_config, Error> {
+pub unsafe fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Error> {
     let mut rv = KeyDict_win_config::default();
     let Some(wp) = find_window_by_handle(win)? else {
         return Ok(rv);
@@ -141,14 +137,12 @@ pub unsafe fn nvim_win_get_config(
             if config.relative == kFloatRelativeWindow {
                 rv.win = Some(config.window);
                 if config.bufpos.lnum >= 0 {
-                    let mut pos = arena_array(arena, 2);
+                    let mut pos = Array::with_capacity(2);
                     let (lnum, col) = (config.bufpos.lnum, config.bufpos.col);
                     // SAFETY: `pos` is the two-slot block `arena` just handed
                     // back.
-                    unsafe {
-                        array_add(&mut pos, Object::integer(Integer::from(lnum)));
-                        array_add(&mut pos, Object::integer(Integer::from(col)));
-                    }
+                    pos.push(Object::integer(Integer::from(lnum)));
+                    pos.push(Object::integer(Integer::from(col)));
                     rv.bufpos = Some(pos);
                 }
             }
@@ -161,12 +155,12 @@ pub unsafe fn nvim_win_get_config(
         if config.border {
             // SAFETY: `arena` is the caller's, and outlives the answer along
             // with the window's config.
-            rv.border = Some(Object::array(unsafe { border_array(config, arena) }));
+            rv.border = Some(Object::array(unsafe { border_array(config) }));
             if config.title {
-                config_put_bordertext(&mut rv, config, kBorderTextTitle, arena);
+                config_put_bordertext(&mut rv, config, kBorderTextTitle);
             }
             if config.footer {
-                config_put_bordertext(&mut rv, config, kBorderTextFooter, arena);
+                config_put_bordertext(&mut rv, config, kBorderTextFooter);
             }
         } else {
             rv.border = Some(Object::string(String_0::from_cstr(c"none")));

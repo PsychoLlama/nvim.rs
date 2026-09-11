@@ -27,8 +27,8 @@ use crate::keycodes::{
 };
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
-    Array, CmdArg, Direction, GetFileFlags, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL,
-    Object, OpArg, Pos, SpellAddType, SpellMoveType, VimState, int16_t, size_t, uint16_t,
+    CmdArg, Direction, GetFileFlags, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, OpArg, Pos,
+    SpellAddType, SpellMoveType, VimState, int16_t, uint16_t,
 };
 use core::ffi::{CStr, c_int, c_uint, c_void};
 
@@ -144,12 +144,6 @@ pub(crate) struct NormalState {
     pub old_pos: Pos,
 }
 pub(crate) const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
-pub(crate) const KV_INITIAL_VALUE: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
-pub(crate) const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub(crate) const TAB: c_int = 9;
 pub(crate) const NL: c_int = '\n' as c_int;
 pub(crate) const CAR: c_int = '\r' as c_int;

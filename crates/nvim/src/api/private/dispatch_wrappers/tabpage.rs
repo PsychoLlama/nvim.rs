@@ -16,17 +16,15 @@ use super::*;
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_open_tabpage(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_open_tabpage",
         c"nvim_open_tabpage",
@@ -36,14 +34,14 @@ pub unsafe fn handle_nvim_open_tabpage(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeBuffer) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeBuffer) else {
         return Err(wrong_type(1, c"nvim_open_tabpage", c"Buffer"));
     };
-    let Some(arg_2) = as_boolean(args[1]) else {
+    let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_open_tabpage", c"Boolean"));
     };
     let mut arg_3: KeyDict_tabpage_config =
-        match read_keydict(Some(key_dict_tabpage_config_get_field), args[2]) {
+        match read_keydict(Some(key_dict_tabpage_config_get_field), args[2].take()) {
             KeySetArg::Read(v) => v,
             KeySetArg::Refused(e) => return Err(e),
             KeySetArg::WrongType => {
@@ -71,17 +69,15 @@ pub unsafe fn handle_nvim_open_tabpage(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_tabpage_del_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_tabpage_del_var",
         c"nvim_tabpage_del_var",
@@ -91,10 +87,10 @@ pub unsafe fn handle_nvim_tabpage_del_var(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"nvim_tabpage_del_var", c"Tabpage"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_tabpage_del_var", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
@@ -111,17 +107,15 @@ pub unsafe fn handle_nvim_tabpage_del_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_tabpage_get_number(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_tabpage_get_number",
         c"nvim_tabpage_get_number",
@@ -131,7 +125,7 @@ pub unsafe fn handle_nvim_tabpage_get_number(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"nvim_tabpage_get_number", c"Tabpage"));
     };
     let rv = nvim_tabpage_get_number(arg_1)?;
@@ -146,17 +140,15 @@ pub unsafe fn handle_nvim_tabpage_get_number(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_tabpage_get_var(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_tabpage_get_var",
         c"nvim_tabpage_get_var",
@@ -166,15 +158,15 @@ pub unsafe fn handle_nvim_tabpage_get_var(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"nvim_tabpage_get_var", c"Tabpage"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_tabpage_get_var", c"String"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    unsafe { nvim_tabpage_get_var(arg_1, arg_2, arena) }
+    unsafe { nvim_tabpage_get_var(arg_1, arg_2) }
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_get_win`.
@@ -185,17 +177,15 @@ pub unsafe fn handle_nvim_tabpage_get_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_tabpage_get_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_tabpage_get_win",
         c"nvim_tabpage_get_win",
@@ -205,7 +195,7 @@ pub unsafe fn handle_nvim_tabpage_get_win(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"nvim_tabpage_get_win", c"Tabpage"));
     };
     let rv = nvim_tabpage_get_win(arg_1)?;
@@ -220,17 +210,15 @@ pub unsafe fn handle_nvim_tabpage_get_win(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_tabpage_is_valid(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_tabpage_is_valid",
         c"nvim_tabpage_is_valid",
@@ -240,7 +228,7 @@ pub unsafe fn handle_nvim_tabpage_is_valid(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"nvim_tabpage_is_valid", c"Tabpage"));
     };
     let rv = nvim_tabpage_is_valid(arg_1);
@@ -255,17 +243,15 @@ pub unsafe fn handle_nvim_tabpage_is_valid(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_tabpage_list_wins(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_tabpage_list_wins",
         c"nvim_tabpage_list_wins",
@@ -275,13 +261,13 @@ pub unsafe fn handle_nvim_tabpage_list_wins(
     if args.len() != 1 {
         return Err(wrong_arity(1, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"nvim_tabpage_list_wins", c"Tabpage"));
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_tabpage_list_wins(arg_1, arena) }?;
-    Ok(Object::Array(rv))
+    let rv = unsafe { nvim_tabpage_list_wins(arg_1) }?;
+    Ok(Object::array(rv))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_tabpage_set_var`.
@@ -292,17 +278,15 @@ pub unsafe fn handle_nvim_tabpage_list_wins(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_tabpage_set_var(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_tabpage_set_var",
         c"nvim_tabpage_set_var",
@@ -312,13 +296,13 @@ pub unsafe fn handle_nvim_tabpage_set_var(
     if args.len() != 3 {
         return Err(wrong_arity(3, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"nvim_tabpage_set_var", c"Tabpage"));
     };
-    let Some(arg_2) = as_string(args[1]) else {
+    let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_tabpage_set_var", c"String"));
     };
-    let arg_3 = args[2];
+    let arg_3 = args[2].take();
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
     unsafe { nvim_tabpage_set_var(arg_1, arg_2, arg_3) }?;
@@ -333,17 +317,15 @@ pub unsafe fn handle_nvim_tabpage_set_var(
 ///
 /// # Safety
 /// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `args` is an `Array` of `size` initialized `Object`s that outlives
-/// the call and stays the caller's to free, and `arena` is the caller's
-/// own and live for the call.
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
 pub unsafe fn handle_nvim_tabpage_set_win(
     channel_id: uint64_t,
     args: Array,
     _arena: *mut Arena,
 ) -> Result<Object, Error> {
-    // SAFETY: the dispatcher hands over an argument array of `size`
-    // initialized objects that outlives the call.
-    let args = unsafe { args_slice(&args) };
+    let mut args = args;
     log_invoke(
         c"handle_nvim_tabpage_set_win",
         c"nvim_tabpage_set_win",
@@ -353,10 +335,10 @@ pub unsafe fn handle_nvim_tabpage_set_win(
     if args.len() != 2 {
         return Err(wrong_arity(2, args.len()));
     }
-    let Some(arg_1) = as_handle(args[0], kObjectTypeTabpage) else {
+    let Some(arg_1) = as_handle(args[0].take(), kObjectTypeTabpage) else {
         return Err(wrong_type(1, c"nvim_tabpage_set_win", c"Tabpage"));
     };
-    let Some(arg_2) = as_handle(args[1], kObjectTypeWindow) else {
+    let Some(arg_2) = as_handle(args[1].take(), kObjectTypeWindow) else {
         return Err(wrong_type(2, c"nvim_tabpage_set_win", c"Window"));
     };
     nvim_tabpage_set_win(arg_1, arg_2)?;

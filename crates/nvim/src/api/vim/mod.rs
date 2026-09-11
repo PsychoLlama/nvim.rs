@@ -4,12 +4,10 @@
 
 use crate::api::buffer::{api_buf_ensure_loaded, nvim_buf_del_keymap};
 use crate::api::deprecated::{buffer_del_line, buffer_get_line, buffer_set_line};
-use crate::api::private::converter::vim_to_object;
 use crate::api::private::helpers::{
-    api_metadata, api_set_sctx, api_typename, arena_array, arena_dict, arena_string,
-    arena_take_arraybuilder, copy_array, copy_dict, copy_object, copy_string, cstr_as_string,
-    dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle, get_default_stl_hl,
-    parse_hl_msg, set_mark, string_to_array,
+    api_metadata, api_set_sctx, api_typename, cstr_to_string, dict_get_value, dict_set_var,
+    find_buffer_by_handle, find_window_by_handle, get_default_stl_hl, parse_hl_msg, set_mark,
+    string_to_array,
 };
 use crate::autocmd::{
     apply_autocmds, block_autocmds, may_trigger_vim_suspend_resume, unblock_autocmds,
@@ -64,7 +62,7 @@ use crate::mark::mark_get_global;
 use crate::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memline::ml_open;
 use crate::memory::arena_alloc_count;
-use crate::memory::{arena_alloc, arena_strdup, memchrsub, strequal, xfree, xrealloc};
+use crate::memory::{arena_alloc, arena_strdup, memchrsub, strequal, xfree};
 use crate::message::state::{
     did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,
 };
@@ -100,16 +98,16 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
-    AdditionalData, ApiDict, Arena, Array, ArrayBuilder, BlnFlags, Boolean, BufferHandle, Channel,
+    AdditionalData, ApiDict, Arena, Array, BlnFlags, Boolean, BufferHandle, Channel,
     ChannelStreamType, Context, DictItem, DoBufAction, DoBufStart, Error, Float, FoldInfo, Handle,
     HlAttrs, Integer, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
-    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LineNr,
-    LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal,
-    RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, String_0, StringBuilder,
-    TabpageHandle, TerminalOptions, VarNumber, Vv, Window, WindowHandle, YankReg, int64_t,
-    kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString,
-    mpack_token_type_t, ptrdiff_t, size_t, uint8_t, uint16_t, uint64_t,
+    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, LineNr, LuaRef, LuaRetMode,
+    MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, RemapValues, ScreenChar,
+    ScriptId, SignTextAttrs, StatusCol, String_0, StringBuilder, TabpageHandle, TerminalOptions,
+    VarNumber, Vv, Window, WindowHandle, YankReg, int64_t, kCdScopeGlobal, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, ptrdiff_t, size_t,
+    uint8_t, uint16_t, uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
@@ -157,7 +155,7 @@ pub const REPTERM_FROM_PART: ::core::ffi::c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 pub struct RuntimeCookie {
-    pub rv: ArrayBuilder,
+    pub rv: Array,
     pub arena: *mut Arena,
 }
 pub const DOSO_NONE: ::core::ffi::c_uint = 0;
@@ -196,10 +194,6 @@ pub const CONTEXT_INIT: Context = Context {
     jumps: String_0::NULL,
     bufs: String_0::NULL,
     gvars: String_0::NULL,
-    funcs: Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    },
+    funcs: Array::EMPTY,
 };
 pub const MODE_MAX_LENGTH: ::core::ffi::c_int = 4 as ::core::ffi::c_int;

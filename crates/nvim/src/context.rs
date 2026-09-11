@@ -17,32 +17,27 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::converter::object_to_vim;
-use crate::api::private::helpers::{
-    api_free_array, api_free_string, arena_dict, copy_array, copy_object, cstr_as_string,
-    string_to_array,
-};
+use crate::api::private::helpers::{cstr_to_string, string_to_array};
 use crate::api::vimscript::exec_impl;
 use crate::eval::encode::encode_vim_list_to_buf;
-use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::tv_clear;
 use crate::eval::userfunc::func_tbl_get;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::VIML_INTERNAL_CALL;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
-use crate::memory::{strequal, xrealloc};
 use crate::option::{get_option_value, optval_free, set_option_value};
 use crate::options::kOptShada;
 use crate::shada::{
     shada_encode_buflist, shada_encode_gvars, shada_encode_jumps, shada_encode_regs,
     shada_read_string,
 };
+use crate::types::TypVal;
 use crate::types::{
-    ApiDict, Arena, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptionSetFlags, String_0, VAR_LIST, key_value_pair, size_t, uint8_t,
+    ApiDict, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
+    OptionSetFlags, String_0, VAR_LIST, size_t, uint8_t,
 };
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 
 /// The `ContextTypeFlags` a `Context` can carry, one bit per section.
 pub const kCtxFuncs: ::core::ffi::c_uint = 32;
@@ -71,11 +66,7 @@ pub static kCtxAll: GlobalCell<c_int> = GlobalCell::new(
         | kCtxFuncs as c_int,
 );
 
-const ARRAY_INIT: Array = Array {
-    size: 0,
-    capacity: 0,
-    items: core::ptr::null_mut(),
-};
+const ARRAY_INIT: Array = Array::EMPTY;
 const CONTEXT_INIT: Context = Context {
     regs: String_0::NULL,
     jumps: String_0::NULL,
@@ -108,12 +99,8 @@ pub fn ctx_get(index: size_t) -> *mut Context {
 /// `ctx` is a live context whose blobs are owned.
 pub unsafe fn ctx_free(ctx: *mut Context) {
     // SAFETY: the caller's context.
-    let ctx = unsafe { &mut *ctx };
-    unsafe { api_free_string(ctx.regs) };
-    unsafe { api_free_string(ctx.jumps) };
-    unsafe { api_free_string(ctx.bufs) };
-    unsafe { api_free_string(ctx.gvars) };
-    unsafe { api_free_array(ctx.funcs) };
+    // Assigning the empty context releases the five fields it replaces.
+    unsafe { *ctx = CONTEXT_INIT };
 }
 
 /// Save the editor state selected by `flags` into `ctx`, or push a new
@@ -178,16 +165,16 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
     set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
     if flags & kCtxRegs as c_int != 0 {
-        unsafe { shada_read_string((*ctx).regs, SHADA_RESTORE) };
+        unsafe { shada_read_string((*ctx).regs.clone(), SHADA_RESTORE) };
     }
     if flags & kCtxJumps as c_int != 0 {
-        unsafe { shada_read_string((*ctx).jumps, SHADA_RESTORE) };
+        unsafe { shada_read_string((*ctx).jumps.clone(), SHADA_RESTORE) };
     }
     if flags & kCtxBufs as c_int != 0 {
-        unsafe { shada_read_string((*ctx).bufs, SHADA_RESTORE) };
+        unsafe { shada_read_string((*ctx).bufs.clone(), SHADA_RESTORE) };
     }
     if flags & kCtxGVars as c_int != 0 {
-        unsafe { shada_read_string((*ctx).gvars, SHADA_RESTORE) };
+        unsafe { shada_read_string((*ctx).gvars.clone(), SHADA_RESTORE) };
     }
     if flags & kCtxFuncs as c_int != 0 {
         unsafe { ctx_restore_funcs(&*ctx) };
@@ -201,12 +188,10 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
     true
 }
 
-/// `'shada'` as the fixed string a restore runs under.
-fn shada_while_restoring() -> OptVal {
-    OptVal::String(String_0::from_raw_parts(
-        SHADA_WHILE_RESTORING.as_ptr().cast_mut(),
-        SHADA_WHILE_RESTORING.count_bytes(),
-    ))
+/// `'shada'` as the fixed string a restore runs under. Borrowed: the caller
+/// does not free what it hands `set_option_value`.
+const fn shada_while_restoring() -> OptVal {
+    OptVal::static_string(SHADA_WHILE_RESTORING)
 }
 
 /// Every name in the global function table, in hash-table order.
@@ -221,27 +206,6 @@ unsafe fn func_names() -> Vec<*const c_char> {
     // SAFETY: the caller's contract -- the function table is live.
     let functbl = unsafe { &*func_tbl_get() };
     functbl.items().map(|hi| hi.hi_key.cast_const()).collect()
-}
-
-/// `kv_push` on an API `Array`: grow by doubling from 8 and append, which is
-/// what the transpiled `ADD` did.
-///
-/// # Safety
-/// `arr.items` is null or an `xmalloc`'d array of `arr.capacity` objects.
-unsafe fn array_push(arr: &mut Array, value: Object) {
-    // SAFETY: the caller's array.
-    if arr.size == arr.capacity {
-        arr.capacity = if arr.capacity != 0 {
-            arr.capacity << 1
-        } else {
-            8
-        };
-        arr.items =
-            unsafe { xrealloc(arr.items as *mut c_void, size_of::<Object>() * arr.capacity) }
-                as *mut Object;
-    }
-    unsafe { *arr.items.add(arr.size) = value };
-    arr.size += 1;
 }
 
 /// Capture every function's `:function` listing into `ctx.funcs`.
@@ -268,11 +232,10 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         cmd.extend_from_slice(bytes);
         cmd.push(0);
         let mut opts = KeyDict_exec_opts { output: Some(true) };
-        let src = unsafe { cstr_as_string(cmd.as_ptr() as *const c_char) };
+        let src = unsafe { cstr_to_string(cmd.as_ptr() as *const c_char) };
         let o = &raw mut opts;
         if let Ok(func_body) = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o) } {
-            let body = Object::String(func_body);
-            unsafe { array_push(&mut ctx.funcs, body) };
+            ctx.funcs.push(Object::string(func_body));
         }
     }
 }
@@ -282,14 +245,14 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
 /// # Safety
 /// Main-thread editor call; `ctx.funcs` holds NUL-terminated strings.
 unsafe fn ctx_restore_funcs(ctx: &Context) {
-    // SAFETY: the caller's contract.
-    for i in 0..ctx.funcs.size {
+    for func in &ctx.funcs {
         // `funcs` is whatever array `ctx_from_dict` was handed, so an entry
         // need not be a string. The C read the string arm under any tag;
         // anything else is skipped here.
-        let Some(cmd) = unsafe { *ctx.funcs.items.add(i) }.as_string() else {
+        let Some(cmd) = func.as_string() else {
             continue;
         };
+        // SAFETY: the caller's contract -- the entry is NUL-terminated.
         let _ = unsafe { do_cmdline_cmd(cmd.data()) };
     }
 }
@@ -300,11 +263,8 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
 /// Main-thread editor call.
 unsafe fn array_to_string(array: Array) -> Result<String_0, Error> {
     let mut sbuf = String_0::NULL;
-    let mut list_tv = TV_INITIAL_VALUE;
-    // SAFETY: the caller's array and error; `list_tv` owns the conversion
-    // result until `tv_clear`.
-    let wrapped = Object::Array(array);
-    unsafe { object_to_vim(wrapped, &mut list_tv) };
+    // `list_tv` owns the conversion result until `tv_clear`.
+    let mut list_tv = TypVal::from(Object::array(array));
     debug_assert!(
         list_tv.v_type() as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
         "list_tv.v_type() == VAR_LIST"
@@ -320,37 +280,27 @@ unsafe fn array_to_string(array: Array) -> Result<String_0, Error> {
     }
 }
 
-/// Append one `key: [bytes...]` entry to an arena-allocated dict.
-///
-/// # Safety
-/// `rv` has room for another entry, and `key` is a NUL-terminated literal.
-unsafe fn put_array(rv: &mut ApiDict, key: &CStr, array: Array) {
-    // SAFETY: the caller's contract.
-    let entry = key_value_pair {
-        key: unsafe { cstr_as_string(key.as_ptr()) },
-        value: Object::Array(array),
-    };
-    unsafe { *rv.items.add(rv.size) = entry };
-    rv.size += 1;
+/// Append one `key: [bytes...]` entry to a dict.
+fn put_array(rv: &mut ApiDict, key: &CStr, array: Array) {
+    rv.insert(String_0::from_cstr(key), Object::array(array));
 }
 
 /// The dict form of a context: each blob as an array of byte-strings, plus
 /// the function bodies. This shape is API surface — see the module docs.
 ///
 /// # Safety
-/// Main-thread editor call; `ctx` is a live context and `arena` a live
-/// arena.
-pub unsafe fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> ApiDict {
+/// Main-thread editor call; `ctx` is a live context.
+pub unsafe fn ctx_to_dict(ctx: *mut Context) -> ApiDict {
     debug_assert!(!ctx.is_null(), "ctx != NULL");
-    // SAFETY: the caller's context and arena; the dict is sized for the five
-    // entries put into it.
+    // SAFETY: the caller's context; the dict is sized for the five entries
+    // put into it.
     let ctx = unsafe { &*ctx };
-    let mut rv = arena_dict(arena, 5);
-    unsafe { put_array(&mut rv, c"regs", string_to_array(ctx.regs, false, arena)) };
-    unsafe { put_array(&mut rv, c"jumps", string_to_array(ctx.jumps, false, arena)) };
-    unsafe { put_array(&mut rv, c"bufs", string_to_array(ctx.bufs, false, arena)) };
-    unsafe { put_array(&mut rv, c"gvars", string_to_array(ctx.gvars, false, arena)) };
-    unsafe { put_array(&mut rv, c"funcs", copy_array(ctx.funcs, arena)) };
+    let mut rv = ApiDict::with_capacity(5);
+    put_array(&mut rv, c"regs", string_to_array(&ctx.regs, false));
+    put_array(&mut rv, c"jumps", string_to_array(&ctx.jumps, false));
+    put_array(&mut rv, c"bufs", string_to_array(&ctx.bufs, false));
+    put_array(&mut rv, c"gvars", string_to_array(&ctx.gvars, false));
+    put_array(&mut rv, c"funcs", ctx.funcs.clone());
     rv
 }
 
@@ -368,28 +318,32 @@ pub unsafe fn ctx_from_dict(dict: ApiDict, ctx: *mut Context) -> Result<c_int, E
     let mut types = 0;
     // SAFETY: the caller's dict and context.
     let ctx = unsafe { &mut *ctx };
-    for i in 0..dict.size {
-        let item: KeyValuePair = unsafe { *dict.items.add(i) };
-        let Object::Array(array) = item.value else {
+    for KeyValuePair { key, value } in dict {
+        let Some(array) = value.into_array() else {
             continue;
         };
-        if unsafe { strequal(item.key.data(), c"regs".as_ptr()) } {
-            types |= kCtxRegs as c_int;
-            ctx.regs = unsafe { array_to_string(array) }?;
-        } else if unsafe { strequal(item.key.data(), c"jumps".as_ptr()) } {
-            types |= kCtxJumps as c_int;
-            ctx.jumps = unsafe { array_to_string(array) }?;
-        } else if unsafe { strequal(item.key.data(), c"bufs".as_ptr()) } {
-            types |= kCtxBufs as c_int;
-            ctx.bufs = unsafe { array_to_string(array) }?;
-        } else if unsafe { strequal(item.key.data(), c"gvars".as_ptr()) } {
-            types |= kCtxGVars as c_int;
-            ctx.gvars = unsafe { array_to_string(array) }?;
-        } else if unsafe { strequal(item.key.data(), c"funcs".as_ptr()) } {
-            types |= kCtxFuncs as c_int;
-            ctx.funcs = unsafe { copy_object(item.value, core::ptr::null_mut::<Arena>()) }
-                .as_array()
-                .expect("a copy of an array is an array");
+        match key.as_bytes() {
+            b"regs" => {
+                types |= kCtxRegs as c_int;
+                ctx.regs = unsafe { array_to_string(array) }?;
+            }
+            b"jumps" => {
+                types |= kCtxJumps as c_int;
+                ctx.jumps = unsafe { array_to_string(array) }?;
+            }
+            b"bufs" => {
+                types |= kCtxBufs as c_int;
+                ctx.bufs = unsafe { array_to_string(array) }?;
+            }
+            b"gvars" => {
+                types |= kCtxGVars as c_int;
+                ctx.gvars = unsafe { array_to_string(array) }?;
+            }
+            b"funcs" => {
+                types |= kCtxFuncs as c_int;
+                ctx.funcs = array;
+            }
+            _ => {}
         }
     }
     Ok(types)

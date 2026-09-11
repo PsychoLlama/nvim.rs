@@ -25,7 +25,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::charset::{trans_characters, vim_strsize};
 use crate::drawscreen::redrawing;
 use crate::drawscreen::state::need_maketitle;
@@ -735,11 +735,11 @@ fn value_change(str: *mut c_char, last: &GlobalCell<*mut c_char>) -> bool {
 
 /// Send the current window title and icon text to the UI.
 pub fn resettitle() {
-    // SAFETY: two NUL-terminated titles, or null, which `cstr_as_string`
+    // SAFETY: two NUL-terminated titles, or null, which `cstr_to_string`
     // answers the empty string for.
-    unsafe { ui_call_set_icon(cstr_as_string(lasticon.get())) };
+    unsafe { ui_call_set_icon(cstr_to_string(lasticon.get())) };
     // SAFETY: as above.
-    unsafe { ui_call_set_title(cstr_as_string(lasttitle.get())) };
+    unsafe { ui_call_set_title(cstr_to_string(lasttitle.get())) };
 }
 
 // ---------------------------------------------------------------------------

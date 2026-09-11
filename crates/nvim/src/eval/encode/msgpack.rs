@@ -27,7 +27,7 @@ use crate::msgpack_rpc::packer::{
     mpack_map, mpack_nil, mpack_str, mpack_uint64,
 };
 use crate::os::cshim::gettext;
-use crate::types::{Blob, Float, Integer, PackerBuffer, String_0, TypVal, int64_t, size_t};
+use crate::types::{Blob, Float, Integer, PackerBuffer, TypVal, int64_t, size_t};
 
 /// The two errors this sink can raise, both through
 /// [`conv_error`][crate::eval::encode::conv_error], which appends
@@ -42,8 +42,12 @@ struct MsgpackSink<'a> {
 
 impl MsgpackSink<'_> {
     /// A string as msgpack's `String_0` sees it: pointer and length, no NUL.
-    fn buf(data: *mut c_char, size: size_t) -> String_0 {
-        String_0::from_raw_parts(data, size)
+    ///
+    /// # Safety
+    /// `data` must point at `size` readable bytes.
+    unsafe fn buf<'a>(data: *mut c_char, size: size_t) -> &'a [u8] {
+        // SAFETY: the caller's promise.
+        unsafe { core::slice::from_raw_parts(data.cast::<u8>(), size) }
     }
 }
 
@@ -91,7 +95,7 @@ impl TypvalSink for MsgpackSink<'_> {
         buf: *mut c_char,
         len: size_t,
     ) -> Flow {
-        unsafe { mpack_bin(Self::buf(buf, len), self.packer) };
+        mpack_bin(unsafe { Self::buf(buf, len) }, self.packer);
         Flow::Go
     }
 
@@ -107,7 +111,7 @@ impl TypvalSink for MsgpackSink<'_> {
         buf: *mut c_char,
         len: size_t,
     ) -> Flow {
-        unsafe { mpack_str(Self::buf(buf, len), self.packer) };
+        mpack_str(unsafe { Self::buf(buf, len) }, self.packer);
         Flow::Go
     }
 
@@ -137,7 +141,7 @@ impl TypvalSink for MsgpackSink<'_> {
             unsafe { (*blob).bv_ga.ga_data }.cast::<c_char>()
         };
         let len = usize::try_from(len).expect("a blob length is never negative");
-        unsafe { mpack_bin(Self::buf(data, len), self.packer) };
+        mpack_bin(unsafe { Self::buf(data, len) }, self.packer);
     }
 
     /// # Safety

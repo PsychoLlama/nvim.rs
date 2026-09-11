@@ -35,7 +35,7 @@ pub use line::remote_ui_raw_line;
 pub use packer::remote_ui_flush_pending_data;
 pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 
-use crate::api::private::helpers::{api_typename, cstr_as_string, string_to_cstr};
+use crate::api::private::helpers::{api_typename, cstr_to_string, string_to_cstr};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
@@ -204,12 +204,10 @@ pub unsafe fn nvim_ui_attach(
     // only possible once the box has an address.
     ui.packer.anydata = raw.cast();
 
-    for i in 0..options.size {
-        // SAFETY: `i` is below `size`, so the slot is inside `items`.
-        let option = unsafe { *options.items.add(i) };
+    for option in &options {
         // SAFETY: `raw` is live, and the value lives as long as the
         // caller's dictionary.
-        let set = unsafe { ui_set_option(raw, true, option.key, option.value) };
+        let set = unsafe { ui_set_option(raw, true, option.key.clone(), option.value.clone()) };
         if let Err(e) = set {
             // Nothing has been published yet, so the half-configured UI
             // can simply be dropped. `term_name` is the only owned
@@ -338,7 +336,7 @@ pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char) -> Re
     let mut args = ArrayBuf::<1>::new();
     // SAFETY: the caller's promise -- `server_addr` is a C string, and the
     // borrowed view of it does not outlive this call.
-    args.push(Object::string(unsafe { cstr_as_string(server_addr) }));
+    args.push(Object::string(unsafe { cstr_to_string(server_addr) }));
     // SAFETY: `ui` is in the attach table, so it is live.
     unsafe { packer::push_call(ui, c"connect", args.array()) };
     Ok(())
@@ -434,9 +432,9 @@ unsafe fn ui_set_option(
         // wins; the copy on the UI is what `nvim_list_uis` reports. Each
         // side gets its own allocation, since both are freed separately.
         // SAFETY: `term` is the caller's string, live for the call.
-        unsafe { set_tty_option(c"term", string_to_cstr(term)) };
+        unsafe { set_tty_option(c"term", string_to_cstr(&term)) };
         // SAFETY: as above.
-        ui.term_name = unsafe { string_to_cstr(term) };
+        ui.term_name = string_to_cstr(&term);
         return Ok(());
     }
 
@@ -493,7 +491,7 @@ unsafe fn ui_set_option(
         }
         let Some(active) = value.as_boolean() else {
             // SAFETY: `name` is the caller's NUL-terminated option name.
-            let name = unsafe { name.as_cstr() };
+            let name = name.as_cstr();
             return Err(wrong_type(name, kObjectTypeBoolean, value));
         };
         // Which protocol a UI speaks is decided at attach: the editor
@@ -510,7 +508,7 @@ unsafe fn ui_set_option(
     }
 
     // SAFETY: the caller's option name is NUL-terminated.
-    let unknown = unsafe { name.as_cstr() };
+    let unknown = name.as_cstr();
     Err(err_bad_value(c"UI option", unknown))
 }
 
@@ -530,9 +528,10 @@ fn want_integer(name: &CStr, value: Object) -> Result<Integer, Error> {
 
 /// [`want_boolean`] for a string.
 fn want_string(name: &CStr, value: Object) -> Result<String_0, Error> {
-    value
-        .as_string()
-        .ok_or_else(|| wrong_type(name, kObjectTypeString, value))
+    if value.as_string().is_none() {
+        return Err(wrong_type(name, kObjectTypeString, value));
+    }
+    Ok(value.into_string().expect("the check above matched"))
 }
 
 /// Reports that `value` is not the `expected` type `name` takes.

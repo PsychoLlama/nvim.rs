@@ -1,17 +1,16 @@
 //! Constructing API values.
 //!
-//! [`Object`], [`Array`] and [`ApiDict`] are C layouts: a tag plus a union, and
-//! a pointer/length/capacity triple. Building one literally takes a dozen
-//! lines of struct syntax per element, which is why the transpiled call
-//! sites run to hundreds of lines for a single `nvim_echo`.
+//! [`Object`] is a tag plus a payload, and [`Array`]/[`ApiDict`] are owned
+//! vectors. Building one literally takes a dozen lines of struct syntax per
+//! element, which is why the transpiled call sites run to hundreds of lines
+//! for a single `nvim_echo`.
 //!
-//! Two pieces here. [`Object`]'s constructors tag the union correctly by
-//! construction. [`ArrayBuf`] and [`DictBuf`] own a fixed-size element
-//! buffer and hand out an [`Array`]/[`ApiDict`] borrowing it — the safe
-//! spelling of C's `MAXSIZE_TEMP_ARRAY`, for callees that read the value and
-//! return (`rpc_send_event`, the API dispatchers) rather than take
-//! ownership. Nothing here allocates or frees; strings keep whatever
-//! ownership their creator gave them.
+//! Two pieces here. [`Object`]'s constructors tag the payload correctly by
+//! construction and put the owning ones in the [`ManuallyDrop`] the type
+//! wants them in. [`ArrayBuf`] and [`DictBuf`] are fixed-capacity builders
+//! -- the safe spelling of C's `MAXSIZE_TEMP_ARRAY`, for the call sites
+//! that know their element count from the shape of the code and would
+//! rather say it once than at every `push`.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -23,30 +22,11 @@
 )]
 
 use super::{
-    ApiDict, Array, BufferHandle, Float, Integer, KeyValuePair, LuaRef, Object, String_0,
-    TabpageHandle, WindowHandle,
+    ApiDict, Array, BufferHandle, Float, Integer, LuaRef, Object, String_0, TabpageHandle,
+    WindowHandle,
 };
-use core::ffi::{CStr, c_char};
-
-/// `text`'s bytes viewed as an API string. Borrowed, never freed — the
-/// bytes are in the binary's read-only data.
-///
-/// Fine for a *value*, which every consumer reads `size` bytes of. Not for
-/// anything a C callee will treat as a C string, because a Rust `str`
-/// literal has no terminator past its last byte — see [`static_cstring`].
-pub const fn static_string(text: &'static str) -> String_0 {
-    String_0::from_raw_parts(text.as_ptr().cast::<c_char>().cast_mut(), text.len())
-}
-
-/// [`static_string`] for the callees that read one byte past `size`.
-///
-/// Dict keys mostly end up in one of the editor's hashtables, which are
-/// keyed by C string; the transpiled code got the terminator for free from
-/// the C literals it was translating. This is why [`DictBuf::insert`] takes
-/// a `CStr` rather than a `str`.
-pub const fn static_cstring(text: &'static CStr) -> String_0 {
-    String_0::from_raw_parts(text.as_ptr().cast_mut(), text.count_bytes())
-}
+use core::ffi::CStr;
+use core::mem::ManuallyDrop;
 
 impl Object {
     pub const fn boolean(value: bool) -> Self {
@@ -61,32 +41,36 @@ impl Object {
         Self::Float(value)
     }
 
-    /// An API string, keeping whatever ownership `value` already had.
+    /// An API string, whose bytes the object takes over.
     pub const fn string(value: String_0) -> Self {
-        Self::String(value)
+        Self::String(ManuallyDrop::new(value))
     }
 
-    /// [`Object::string`] for a string literal. See [`static_string`].
-    pub const fn literal(text: &'static str) -> Self {
-        Self::String(static_string(text))
+    /// [`Object::string`] for a string literal, whose bytes are copied: an
+    /// object owns its string, and the binary's read-only data is not
+    /// something it can own.
+    pub fn literal(text: &'static str) -> Self {
+        Self::string(String_0::from(text))
     }
 
+    /// An array, whose elements the object takes over.
     pub const fn array(value: Array) -> Self {
-        Self::Array(value)
+        Self::Array(ManuallyDrop::new(value))
     }
 
+    /// A dictionary, whose entries the object takes over.
     pub const fn dict(value: ApiDict) -> Self {
-        Self::Dict(value)
+        Self::Dict(ManuallyDrop::new(value))
     }
 
     /// A reference to a Lua value, held in that state's registry. The
-    /// reference is owned: whoever frees the object releases it.
+    /// reference is owned: dropping the object releases it.
     pub const fn luaref(value: LuaRef) -> Self {
         Self::LuaRef(value)
     }
 
     /// A window handle. Handles are `Handle`; the variant carries the
-    /// widened [`Integer`] the wire and the union arm always did.
+    /// widened [`Integer`] the wire and the payload always did.
     pub const fn window(value: WindowHandle) -> Self {
         Self::Window(value as Integer)
     }
@@ -102,60 +86,29 @@ impl Object {
     }
 }
 
-impl Array {
-    /// No elements and nothing allocated: C's `ARRAY_DICT_INIT`.
-    pub const EMPTY: Self = Self {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut(),
-    };
-}
-
-impl ApiDict {
-    /// No pairs and nothing allocated: C's `ARRAY_DICT_INIT`.
-    pub const EMPTY: Self = Self {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut(),
-    };
-}
-
-/// Storage for an [`Array`] of at most `N` elements, on the stack of
-/// whoever declares it.
+/// A builder for an [`Array`] of at most `N` elements.
 ///
-/// [`Self::array`] borrows the buffer, so the [`Array`] it returns is valid
-/// only while the `ArrayBuf` lives and is not pushed to again — the borrow
-/// checker enforces the second half, the first is why this is a local
-/// variable at every call site.
-pub struct ArrayBuf<const N: usize> {
-    items: [Object; N],
-    size: usize,
-}
+/// The capacity is a property of the call site -- how many times the code
+/// below can push -- so it is stated once, in the type, and [`Self::push`]
+/// panics past it rather than growing.
+pub struct ArrayBuf<const N: usize>(Array);
 
 impl<const N: usize> ArrayBuf<N> {
-    pub const fn new() -> Self {
-        Self {
-            items: [Object::Nil; N],
-            size: 0,
-        }
+    pub fn new() -> Self {
+        Self(Array::with_capacity(N))
     }
 
-    /// Appends `value`. Panics past `N` elements — the capacity is a
+    /// Appends `value`. Panics past `N` elements -- the capacity is a
     /// property of the call site, not of anything a user can influence.
     pub fn push(&mut self, value: Object) -> &mut Self {
-        assert!(self.size < N, "ArrayBuf overflow");
-        self.items[self.size] = value;
-        self.size += 1;
+        assert!(self.0.len() < N, "ArrayBuf overflow");
+        self.0.push(value);
         self
     }
 
-    /// The elements pushed so far, as an [`Array`] borrowing this buffer.
+    /// The elements pushed so far, leaving the builder empty.
     pub fn array(&mut self) -> Array {
-        Array {
-            size: self.size,
-            capacity: N,
-            items: self.items.as_mut_ptr(),
-        }
+        ::core::mem::take(&mut self.0)
     }
 
     /// [`Self::array`], wrapped for nesting inside another builder.
@@ -170,48 +123,32 @@ impl<const N: usize> Default for ArrayBuf<N> {
     }
 }
 
-/// Storage for an [`ApiDict`] of at most `N` entries. [`ArrayBuf`]'s rules
+/// A builder for an [`ApiDict`] of at most `N` entries. [`ArrayBuf`]'s rules
 /// apply unchanged.
-pub struct DictBuf<const N: usize> {
-    items: [KeyValuePair; N],
-    size: usize,
-}
+pub struct DictBuf<const N: usize>(ApiDict);
 
 impl<const N: usize> DictBuf<N> {
-    pub const fn new() -> Self {
-        Self {
-            items: [KeyValuePair {
-                key: static_string(""),
-                value: Object::Nil,
-            }; N],
-            size: 0,
-        }
+    pub fn new() -> Self {
+        Self(ApiDict::with_capacity(N))
     }
 
     /// Appends `key: value`, with `key` a literal. Dict keys in generated
     /// calls always are; a computed key wants [`Self::insert_string`].
-    ///
-    /// The literal is a `CStr` so that the terminator is there for the
-    /// callees that want one: see [`static_cstring`].
     pub fn insert(&mut self, key: &'static CStr, value: Object) -> &mut Self {
-        self.insert_string(static_cstring(key), value)
+        self.insert_string(String_0::from_cstr(key), value)
     }
 
-    /// [`Self::insert`], keeping whatever ownership `key` already had.
+    /// [`Self::insert`] for a key the caller built, whose bytes the
+    /// dictionary takes over.
     pub fn insert_string(&mut self, key: String_0, value: Object) -> &mut Self {
-        assert!(self.size < N, "DictBuf overflow");
-        self.items[self.size] = KeyValuePair { key, value };
-        self.size += 1;
+        assert!(self.0.len() < N, "DictBuf overflow");
+        self.0.insert(key, value);
         self
     }
 
-    /// The entries inserted so far, as an [`ApiDict`] borrowing this buffer.
+    /// The entries inserted so far, leaving the builder empty.
     pub fn dict(&mut self) -> ApiDict {
-        ApiDict {
-            size: self.size,
-            capacity: N,
-            items: self.items.as_mut_ptr(),
-        }
+        ::core::mem::take(&mut self.0)
     }
 
     /// [`Self::dict`], wrapped for nesting inside another builder.
@@ -230,45 +167,49 @@ impl<const N: usize> Default for DictBuf<N> {
 mod tests {
     use super::*;
 
-    // What is checkable here is the bookkeeping a consumer reads first —
-    // which variant each slot holds, the sizes, and that the value points
-    // at the buffer.
-
     #[test]
-    fn array_borrows_the_buffer_and_reports_what_was_pushed() {
+    fn array_reports_what_was_pushed() {
         let mut buf = ArrayBuf::<4>::new();
         buf.push(Object::integer(7));
         buf.push(Object::boolean(true));
-        assert_eq!(buf.items[0].as_integer(), Some(7));
-        assert_eq!(buf.items[1].as_boolean(), Some(true));
-        assert!(buf.items[2].is_nil());
-        let expected = buf.items.as_mut_ptr();
         let array = buf.array();
-        assert_eq!((array.size, array.capacity), (2, 4));
-        assert_eq!(array.items, expected);
+        assert_eq!(array.len(), 2);
+        assert_eq!(array[0].as_integer(), Some(7));
+        assert_eq!(array[1].as_boolean(), Some(true));
     }
 
     #[test]
     fn dict_nests_in_an_array() {
         let mut opts = DictBuf::<1>::new();
         opts.insert(c"verbose", Object::boolean(true));
-        assert_eq!(opts.items[0].key.len(), "verbose".len());
-        assert_eq!(opts.items[0].value.as_boolean(), Some(true));
-
         let entry = opts.object();
+        assert_eq!(
+            entry.as_dict().map(|d| d[0].key.as_bytes()),
+            Some(&b"verbose"[..])
+        );
+
         let mut args = ArrayBuf::<2>::new();
         args.push(Object::literal("hello"));
         args.push(entry);
-        assert_eq!(args.items[0].as_string().map(|s| s.len()), Some(5));
-        assert_eq!(args.items[1].as_dict().map(|d| d.size), Some(1));
-        assert_eq!(args.array().size, 2);
+        let array = args.array();
+        assert_eq!(
+            array[0].as_string().map(String_0::as_bytes),
+            Some(&b"hello"[..])
+        );
+        assert_eq!(
+            array[1]
+                .as_dict()
+                .and_then(|d| d.get(b"verbose"))
+                .and_then(Object::as_boolean),
+            Some(true)
+        );
     }
 
     #[test]
-    #[should_panic(expected = "ArrayBuf overflow")]
-    fn pushing_past_capacity_panics() {
-        ArrayBuf::<1>::new()
-            .push(Object::Nil)
-            .push(Object::literal("one too many"));
+    fn a_dropped_array_releases_its_strings() {
+        let mut buf = ArrayBuf::<2>::new();
+        buf.push(Object::literal("one"));
+        buf.push(Object::literal("two"));
+        drop(buf.array());
     }
 }

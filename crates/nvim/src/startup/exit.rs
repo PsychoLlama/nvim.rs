@@ -16,7 +16,7 @@ use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, block_autocmds, is_autocmd_blocked, unblock_autocmds};
 use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick};
 use crate::eval::garbage_collect;
@@ -203,7 +203,7 @@ pub fn getout(mut exitval: c_int) -> ! {
     }
 
     if p_title.get() != 0 && unsafe { *p_titleold.get() } as c_int != NUL {
-        ui_call_set_title(unsafe { cstr_as_string(p_titleold.get()) });
+        ui_call_set_title(unsafe { cstr_to_string(p_titleold.get()) });
     }
 
     if garbage_collect_at_exit.get() {

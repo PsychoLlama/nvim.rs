@@ -59,8 +59,7 @@ use crate::state::mode::exmode_active;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BorderTextType, ColNr, GridCells, GridView, Handle, Integer, MHPutStatus,
-    MapHash, ScreenChar, ScreenGrid, Set_glyph, String_0, VirtText, WLine, WinConfig, size_t,
-    uint32_t,
+    MapHash, ScreenChar, ScreenGrid, Set_glyph, VirtText, WLine, WinConfig, size_t, uint32_t,
 };
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,

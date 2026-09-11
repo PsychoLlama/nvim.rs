@@ -37,7 +37,7 @@ use core::slice;
 
 use super::policy;
 use crate::memory::{strequal, xcalloc, xfree, xrealloc};
-use crate::types::{MHPutStatus, MapHash, String_0, cstr_t, uint32_t, uint64_t};
+use crate::types::{MHPutStatus, MapHash, cstr_t, uint32_t, uint64_t};
 
 /// The bucket slot of a key that is not in the table.
 pub const MH_TOMBSTONE: uint32_t = uint32_t::MAX;
@@ -105,20 +105,17 @@ impl MapKey for cstr_t {
     }
 }
 
-impl MapKey for String_0 {
+impl MapKey for &[u8] {
     fn map_hash(&self) -> uint32_t {
-        // An empty `String` carries a null `data` — the C's fold never ran a
-        // single iteration for it, so it never noticed.
+        // The empty key folds to zero: the C ran no iteration for it, so it
+        // never noticed that its pointer might be null.
         if self.is_empty() {
             return 0;
         }
-        fold_bytes(unsafe { self.as_bytes() })
+        fold_bytes(self)
     }
     fn map_eq(&self, other: &Self) -> bool {
-        // A zero-length String may carry a null `data`, so the length check
-        // has to come first — upstream's `memcmp` never sees a null.
-        self.len() == other.len()
-            && (self.is_empty() || unsafe { self.as_bytes() == other.as_bytes() })
+        self == other
     }
 }
 

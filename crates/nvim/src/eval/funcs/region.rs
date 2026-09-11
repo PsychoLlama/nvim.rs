@@ -347,7 +347,8 @@ unsafe fn block_def2str(bd: &BlockDef) -> String_0 {
     unsafe { into.write_bytes((space) as u8, bd.endspaces as usize) };
     at += bd.endspaces as usize;
     unsafe { *data.add(at) = NUL as c_char };
-    String_0::from_raw_parts(data, at)
+    // SAFETY: `data` is this function's own block, NUL-terminated above.
+    unsafe { String_0::from_owned_parts(data, at) }
 }
 
 /// `getregion({pos1}, {pos2} [, {opts}])` — the selected text, one String

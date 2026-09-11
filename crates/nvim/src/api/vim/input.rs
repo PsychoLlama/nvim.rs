@@ -214,10 +214,7 @@ pub unsafe fn nvim_replace_termcodes(
     special: Boolean,
 ) -> String_0 {
     if str.len() == 0 as size_t {
-        return String_0::from_raw_parts(
-            ::core::ptr::null_mut::<::core::ffi::c_char>(),
-            0 as size_t,
-        );
+        return String_0::NULL;
     }
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if from_part {
@@ -236,7 +233,7 @@ pub unsafe fn nvim_replace_termcodes(
     // and `'cpoptions'` a live NUL-terminated string.
     unsafe { replace_termcodes(text, len, out, 0 as ScriptId, flags, no_flag, cpo) };
     // SAFETY: `replace_termcodes` left an owned C string in `ptr`.
-    unsafe { cstr_as_string(ptr) }
+    unsafe { cstr_to_string(ptr) }
 }
 
 /// # Safety
@@ -244,8 +241,8 @@ pub unsafe fn nvim_replace_termcodes(
 /// `mode` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
-pub unsafe fn nvim_get_keymap(mode: String_0, arena: *mut Arena) -> Array {
-    unsafe { keymap_array(mode, None, arena) }
+pub unsafe fn nvim_get_keymap(mode: String_0) -> Array {
+    unsafe { keymap_array(mode, None) }
 }
 
 /// # Safety

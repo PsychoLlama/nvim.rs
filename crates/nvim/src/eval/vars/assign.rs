@@ -22,7 +22,7 @@ use super::*;
 use crate::eval::typval::{NumBuf, tv_list_items, tv_list_items_mut};
 use crate::option::boolean_optval;
 use crate::os::cshim::gettext_owned;
-use crate::types::{Failed, NUL, OptionSetFlags};
+use crate::types::{Failed, NUL, OptStr, OptionSetFlags};
 
 /// The compound assignment operators, as they appear before the `=`.
 const OPERATORS: &CStr = c"+-*/%.";
@@ -558,9 +558,11 @@ unsafe fn ex_let_option(
                 let (curval_data, newval_data) = (cur.data(), new.data());
                 if !curval_data.is_null() && !newval_data.is_null() {
                     let newval_old = newval;
-                    newval = OptVal::String(unsafe {
-                        cstr_as_string(concat_str(curval_data, newval_data))
-                    });
+                    // `concat_str` answers its own NUL-terminated block,
+                    // which the option value takes over.
+                    let joined = unsafe { concat_str(curval_data, newval_data) };
+                    let len = unsafe { cstr::bytes_at(joined) }.len();
+                    newval = OptVal::String(OptStr::from_raw_parts(joined, len));
                     optval_free(newval_old);
                 }
             }

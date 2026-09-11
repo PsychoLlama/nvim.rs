@@ -30,7 +30,7 @@
 
 mod tags;
 
-use crate::api::private::helpers::{api_free_object, cstr_as_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::buffer::{buf_is_help, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
@@ -59,7 +59,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::state::mode::restart_edit;
 use crate::tag::{do_tag, find_tags};
-use crate::types::builders::static_cstring;
+use crate::types::String_0;
 use crate::types::{
     Array, ArrayBuf, CmdModFlags, Error, ExArg, Failed, FileComparison, IOSIZE, LuaRetMode, NUL,
     Object, OptInt, OptVal, OptionSetFlags, size_t,
@@ -112,7 +112,7 @@ fn keepalt_is_off() -> bool {
 
 /// A borrowed string option value; `set_option_direct` copies what it keeps.
 const fn cstr_optval(value: &'static CStr) -> OptVal {
-    OptVal::String(static_cstring(value))
+    OptVal::static_string(value)
 }
 
 // -- `:help` ---------------------------------------------------------------
@@ -291,26 +291,22 @@ unsafe fn trim_trailing_blanks(arg: *mut c_char) -> *mut c_char {
 unsafe fn resolve_tag_at_cursor() -> *mut c_char {
     let mut err = Error::none();
     // SAFETY: a static chunk, an empty argument array, and our error slot.
-    let chunk = static_cstring(c"return require'vim._core.help'.resolve_tag()");
+    let chunk = String_0::from_cstr(c"return require'vim._core.help'.resolve_tag()");
     let (name, arena) = (ptr::null(), ptr::null_mut());
-    let res = match unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetObject, arena) } {
+    let res = match unsafe { nlua_exec(&chunk, name, Array::EMPTY, kRetObject, arena) } {
         Ok(value) => value,
         Err(e) => {
             err = e;
             Object::Nil
         }
     };
-    // SAFETY: `res` is the chunk's answer and `err` our slot; both are
-    // consumed here.
-    let tag = if !err.is_set()
-        && let Object::String(tag_name) = res
-        && !tag_name.is_empty()
-    {
-        unsafe { xstrdup(tag_name.data()) }
-    } else {
-        ptr::null_mut()
+    let named = res.as_string().filter(|tag| !tag.is_empty());
+    let tag = match named.filter(|_| !err.is_set()) {
+        // SAFETY: the answer's own NUL-terminated bytes; the copy outlives
+        // `res`, which is released with this frame.
+        Some(tag_name) => unsafe { xstrdup(tag_name.data()) },
+        None => ptr::null_mut(),
     };
-    unsafe { api_free_object(res) };
     err.clear();
     tag
 }
@@ -532,12 +528,12 @@ pub(crate) unsafe fn find_help_tags(
     let mut args = ArrayBuf::<1>::new();
     // SAFETY: `arg` is NUL-terminated and outlives the call, which only
     // reads it.
-    args.push(Object::string(unsafe { cstr_as_string(arg) }));
+    args.push(Object::string(unsafe { cstr_to_string(arg) }));
     // SAFETY: a static chunk, an argument array borrowing `args`, and our
     // own error slot.
-    let chunk = static_cstring(c"return require'vim._core.help'.escape_subject(...)");
+    let chunk = String_0::from_cstr(c"return require'vim._core.help'.escape_subject(...)");
     let (name, arena) = (ptr::null(), ptr::null_mut());
-    let res = match unsafe { nlua_exec(chunk, name, args.array(), kRetObject, arena) } {
+    let res = match unsafe { nlua_exec(&chunk, name, args.array(), kRetObject, arena) } {
         Ok(value) => value,
         Err(e) => {
             err = e;
@@ -557,7 +553,7 @@ pub(crate) unsafe fn find_help_tags(
         .as_string()
         .expect("`vim._core.help.escape_subject()` answers with a string");
     unsafe { xstrlcpy(iobuff, escaped.data(), IOSIZE as usize) };
-    unsafe { api_free_object(res) };
+    drop(res);
 
     let mut flags = (TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC) as c_int;
     if keep_lang {
@@ -696,9 +692,9 @@ pub(crate) unsafe fn prepare_help_buffer() {
 pub(crate) unsafe fn get_local_additions() {
     let mut err = Error::none();
     // SAFETY: a static chunk, no arguments, and our own error slot.
-    let chunk = static_cstring(c"return require'vim._core.help'.local_additions()");
+    let chunk = String_0::from_cstr(c"return require'vim._core.help'.local_additions()");
     let (name, arena) = (ptr::null(), ptr::null_mut());
-    let res = match unsafe { nlua_exec(chunk, name, Array::EMPTY, kRetNilBool, arena) } {
+    let res = match unsafe { nlua_exec(&chunk, name, Array::EMPTY, kRetNilBool, arena) } {
         Ok(value) => value,
         Err(e) => {
             err = e;
@@ -709,6 +705,6 @@ pub(crate) unsafe fn get_local_additions() {
         let why = err.message_or_empty().as_ptr();
         unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
     }
-    unsafe { api_free_object(res) };
+    drop(res);
     err.clear();
 }

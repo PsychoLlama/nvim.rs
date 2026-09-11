@@ -11,7 +11,7 @@
 use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};
 use crate::cstr;
 
-use crate::api::private::helpers::cstr_as_string;
+use crate::api::private::helpers::cstr_to_string;
 use crate::cursor::check_cursor;
 use crate::eval::typval::{NumBuf, tv_get_string_buf_chk, tv_list_append_number};
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
@@ -525,7 +525,7 @@ impl Drop for EmptyCpo {
         if unsafe { *p_cpo.get() } == 0 {
             set_option_value_give_err(
                 kOptCpoptions,
-                OptVal::String(unsafe { cstr_as_string(self.0) }),
+                OptVal::string(unsafe { cstr_to_string(self.0) }),
                 OptionSetFlags::NONE,
             );
         }

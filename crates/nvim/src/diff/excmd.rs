@@ -323,7 +323,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
         }
         window.w_onebuf_opt.wo_fdm_save = strdup_of(window.w_onebuf_opt.wo_fdm);
     }
-    let foldmethod = OptVal::String(String_0::from_raw_parts(c"diff".as_ptr() as *mut c_char, 4));
+    let foldmethod = OptVal::string(String_0::from_cstr(c"diff"));
     let scope = OptionSetFlags::LOCAL;
     set_option_direct_for(
         kOptFoldmethod,

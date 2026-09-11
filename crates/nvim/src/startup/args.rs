@@ -17,12 +17,13 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::types::OptStr;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{size_of, size_of_val};
 use core::ptr;
 
-use crate::api::private::helpers::{api_metadata_raw, cstr_as_string};
+use crate::api::private::helpers::api_metadata_raw;
 use crate::arglist::global_arglist;
 use crate::arglist::{alist_add, alist_name};
 use crate::ascii::ascii_isdigit;
@@ -84,8 +85,9 @@ const READONLY_UPDATECOUNT: OptInt = 10000;
 ///
 /// `value` must point at a NUL-terminated string.
 unsafe fn string_opt(value: *const c_char) -> OptVal {
-    // SAFETY: `value` is NUL-terminated and outlives the call.
-    OptVal::String(unsafe { cstr_as_string(value as *mut c_char) })
+    // SAFETY: `value` is NUL-terminated and outlives the call, which
+    // copies it.
+    OptVal::String(unsafe { OptStr::borrowing(value) })
 }
 
 /// A number option value.

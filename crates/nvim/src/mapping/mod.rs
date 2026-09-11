@@ -30,10 +30,8 @@
 use crate::types::{NL, ScriptCtx};
 use core::ffi::{CStr, c_int};
 
-use crate::api::private::converter::object_to_vim_take_luaref;
 use crate::api::private::helpers::{
-    api_free_object, api_set_sctx, arena_dict, arena_take_arraybuilder, cstr_as_string,
-    find_buffer_by_handle, string_to_cstr,
+    api_set_sctx, cstr_to_string, find_buffer_by_handle, string_to_cstr,
 };
 use crate::ascii::{ascii_isspace, ascii_iswhite};
 use crate::charset::{skipwhite, transchar, vim_iswordp};
@@ -84,10 +82,10 @@ use crate::state::{
 };
 use crate::strings::{sort_strings, vim_snprintf};
 use crate::types::{
-    ApiDict, Arena, Array, ArrayBuilder, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand,
-    FILE, FuzMatchStr, Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback,
-    MapRhs, MapStr, Object, OptSet, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber,
-    key_value_pair, ptrdiff_t, size_t, uint64_t,
+    ApiDict, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, FILE, FuzMatchStr,
+    Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr,
+    Object, OptSet, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber, ptrdiff_t,
+    size_t, uint64_t,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp};
@@ -223,11 +221,7 @@ pub const MAPTYPE_UNMAP_LHS: ::core::ffi::c_uint = 3;
 pub const MAPTYPE_MAP: ::core::ffi::c_uint = 0;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
-pub const ARRAY_DICT_INIT: Array = Array {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<Object>(),
-};
+pub const ARRAY_DICT_INIT: Array = Array::EMPTY;
 /// How many hash buckets the mapping table has.
 pub const MAX_MAPHASH: usize = 256;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;

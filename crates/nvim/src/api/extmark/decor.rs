@@ -105,7 +105,7 @@ pub unsafe fn nvim_set_decoration_provider(
 /// `chunks` must be a well-formed API array, its `size` elements initialized.
 /// `width` must point at a writable `int` the caller owns.
 pub unsafe fn parse_virt_text(
-    chunks: Array,
+    chunks: &Array,
     width: *mut ::core::ffi::c_int,
 ) -> Result<VirtText, Error> {
     let mut virt_text: VirtText = VirtText {
@@ -119,18 +119,18 @@ pub unsafe fn parse_virt_text(
     // be released on the way out.
     let failed;
     '_free_exit: {
-        while i < chunks.size {
+        while i < chunks.len() {
             // SAFETY: `i` is below `chunks.size`.
-            let Object::Array(chunk) = (unsafe { *chunks.items.add(i) }) else {
+            let Some(chunk) = chunks[i].as_array() else {
                 let want = api_typename(kObjectTypeArray);
                 // SAFETY: as above.
-                let got = unsafe { api_typename((*chunks.items.add(i)).kind()) };
+                let got = api_typename((chunks[i]).kind());
                 failed = err_expected(c"chunk", want, Some(got));
                 break '_free_exit;
             };
-            let head = match chunk.size {
+            let head = match chunk.len() {
                 // SAFETY: a non-empty array names its first item.
-                1..=2 => unsafe { (*chunk.items).as_string() },
+                1..=2 => (chunk[0]).as_string(),
                 _ => None,
             };
             let Some(str) = head else {
@@ -140,19 +140,17 @@ pub unsafe fn parse_virt_text(
             };
             let mut hl_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
             's_146: {
-                if chunk.size == 2 as size_t {
-                    let hl: Object =
-                        unsafe { *chunk.items.offset(1 as ::core::ffi::c_int as isize) };
-                    if let Object::Array(arr) = hl {
+                if chunk.len() == 2 as size_t {
+                    let hl = &chunk[1];
+                    if let Some(arr) = hl.as_array() {
                         let mut j: size_t = 0 as size_t;
                         loop {
-                            if j >= arr.size {
+                            if j >= arr.len() {
                                 break 's_146;
                             }
-                            // SAFETY: `j` is below `arr.size`.
-                            let item = unsafe { *arr.items.add(j) };
+                            let item = &arr[j];
                             let what = c"virt_text highlight".as_ptr();
-                            // SAFETY: `item` is the array's own object.
+                            // SAFETY: `what` is a NUL-terminated literal.
                             hl_id = match unsafe { object_to_hl_id(item, what) } {
                                 Ok(id) => id,
                                 Err(e) => {
@@ -160,7 +158,7 @@ pub unsafe fn parse_virt_text(
                                     break '_free_exit;
                                 }
                             };
-                            if j < arr.size.wrapping_sub(1 as size_t) {
+                            if j < arr.len().wrapping_sub(1 as size_t) {
                                 // `kv_push`, whose growth step c2rust expanded inline.
                                 let mut vt = Kvec::new(
                                     &mut virt_text.size,

@@ -17,7 +17,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
-use crate::types::builders::{DictBuf, static_cstring};
+use crate::types::builders::DictBuf;
 use crate::types::{NUL, Object, VAR_DICT, VAR_FLAVOUR_SHADA, VAR_FUNC, VAR_LIST, VAR_PARTIAL};
 
 /// What the `'shada'` option allows a write to contain.
@@ -226,8 +226,11 @@ impl Writing {
     fn write_header(&mut self) -> ShaDaWriteResult {
         let mut header = DictBuf::<5>::new();
         header
-            .insert(c"generator", Object::string(static_cstring(c"nvim")))
-            .insert(c"version", Object::string(static_cstring(LONG_VERSION)))
+            .insert(c"generator", Object::string(String_0::from_cstr(c"nvim")))
+            .insert(
+                c"version",
+                Object::string(String_0::from_cstr(LONG_VERSION)),
+            )
             .insert(
                 c"max_kbyte",
                 Object::integer(self.limits.max_kbyte as Integer),
@@ -235,7 +238,7 @@ impl Writing {
             .insert(c"pid", Object::integer(os_get_pid()))
             .insert(
                 c"encoding",
-                Object::string(unsafe { cstr_as_string(p_enc.get()) }),
+                Object::string(unsafe { cstr_to_string(p_enc.get()) }),
             );
         let entry = ShadaEntry {
             can_free_entry: false,

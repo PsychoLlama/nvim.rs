@@ -19,7 +19,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, dict_put_str};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_number;
 use crate::global_cell::GlobalCell;
 use crate::registry::{IdSet, SlotTable, id_set, interned_key};
@@ -78,7 +78,7 @@ fn hide_ns_in_window(win: Win, ns_id: uint32_t) {
 /// `name` must be a live api string.
 pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
     // SAFETY: the caller's api string.
-    let bytes = unsafe { name.as_bytes() };
+    let bytes = name.as_bytes();
     if let Some(id) = namespace_id_for(bytes)
         && id > 0
     {
@@ -96,17 +96,17 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
 
 /// # Safety
 /// `arena` is null or this call's own arena.
-pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> ApiDict {
+pub unsafe fn nvim_get_namespaces() -> ApiDict {
     namespace_ids.with(|ids| {
-        let mut retval: ApiDict = arena_dict(arena, ids.len() as size_t);
+        let mut retval: ApiDict = ApiDict::with_capacity(ids.len() as size_t);
         for (name, id) in ids.entries() {
-            // SAFETY: `ns_key` terminated the key, and `cstr_as_string`
+            // SAFETY: `ns_key` terminated the key, and `cstr_to_string`
             // re-measures it -- so a name with an interior NUL is answered
             // truncated, as it was when the key was a `String_0`.
-            let key = unsafe { cstr_as_string(name.as_ptr().cast::<::core::ffi::c_char>()) };
+            let key = unsafe { cstr_to_string(name.as_ptr().cast::<::core::ffi::c_char>()) };
             let value = Object::integer(*id as Integer);
             // SAFETY: `retval` is this call's own dict.
-            unsafe { dict_put_str(&mut retval, key, value) };
+            retval.insert(key, value);
         }
         retval
     })
@@ -148,17 +148,17 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
         return ().reported(error);
     }
     let mut set_scoped: bool = true;
-    if let Some(wins) = unsafe { (*opts).wins } {
-        if wins.size == 0 as size_t {
+    if let Some(wins) = unsafe { (*opts).wins.as_ref() } {
+        if wins.len() == 0 as size_t {
             set_scoped = false;
         }
         let mut windows: IdSet<*mut Window> = id_set();
         let mut i: size_t = 0 as size_t;
-        while i < wins.size {
+        while i < wins.len() {
             // A `wins` element that is neither a window handle nor a plain
             // integer takes -1, which no window carries, so the lookup below
             // refuses it -- the transpile read its bytes as an integer.
-            let item = unsafe { *wins.items.add(i) };
+            let item = &wins[i];
             let win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
             let Some(wp) = find_window_by_handle(win as WindowHandle)? else {
                 return Ok(());
@@ -206,7 +206,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
 /// taken from and must outlive.
 // `nvim__ns_get` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_ns_opts, Error> {
+pub unsafe fn nvim__ns_get(ns_id: Integer) -> Result<KeyDict_ns_opts, Error> {
     let mut error = Error::none();
     let mut opts = KeyDict_ns_opts::default();
     let mut windows: Array = ARRAY_DICT_INIT;
@@ -224,23 +224,10 @@ pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_
             count = count.wrapping_add(1);
         }
     }
-    windows = arena_array(arena, count);
+    windows = Array::with_capacity(count);
     for win in tab_windows() {
         if window_shows_ns(win, ns_id as uint32_t) {
-            if windows.size == windows.capacity {
-                windows.capacity = if windows.capacity != 0 {
-                    windows.capacity << 1 as ::core::ffi::c_int
-                } else {
-                    8 as size_t
-                };
-                let old = windows.items as *mut ::core::ffi::c_void;
-                let bytes = ::core::mem::size_of::<Object>().wrapping_mul(windows.capacity);
-                // SAFETY: `old` is null or this array's own allocation.
-                windows.items = unsafe { xrealloc(old, bytes) } as *mut Object;
-            };
-            let handle = Object::integer(win.handle() as Integer);
-            // SAFETY: `windows` is this call's own array.
-            unsafe { array_add(&mut windows, handle) };
+            windows.push(Object::integer(win.handle() as Integer));
         }
     }
     opts.wins = Some(windows);

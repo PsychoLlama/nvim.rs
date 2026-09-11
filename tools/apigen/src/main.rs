@@ -217,12 +217,9 @@ struct Spec {
     /// The handler may run straight from the RPC read callback instead of
     /// being deferred to the main loop (`FUNC_API_FAST`).
     fast: bool,
-    /// The result is heap-allocated and the caller frees it, rather than
-    /// belonging to the request arena.
-    ret_alloc: bool,
     /// This method is a deprecated spelling of another one. It has no wrapper
     /// of its own: the handler table points it at that method's, and it
-    /// inherits its `fast` and `ret_alloc`.
+    /// inherits its `fast`.
     alias: Option<String>,
     /// A hand-written handler elsewhere in the crate, named by its full path.
     /// Mutually exclusive with `alias`; either means no wrapper is generated.
@@ -791,7 +788,6 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
                 None if word == "textlock" => spec.textlock = true,
                 None if word == "textlock_allow_cmdwin" => spec.textlock_allow_cmdwin = true,
                 None if word == "fast" => spec.fast = true,
-                None if word == "ret_alloc" => spec.ret_alloc = true,
                 None if word == "remote_only" => spec.remote_only = true,
                 None if word == "lua_only" => spec.lua_only = true,
                 Some(("alias", value)) => spec.alias = Some(value.to_string()),
@@ -835,10 +831,8 @@ fn parse_spec(path: &Path) -> Result<Vec<Spec>, String> {
         if !spec.is_wrapper() && (spec.textlock || spec.textlock_allow_cmdwin) {
             return Err(at("an entry without a wrapper has nothing to lock".into()));
         }
-        if spec.alias.is_some() && (spec.fast || spec.ret_alloc) {
-            return Err(at(
-                "an alias inherits fast/ret_alloc from what it aliases".into()
-            ));
+        if spec.alias.is_some() && spec.fast {
+            return Err(at("an alias inherits fast from what it aliases".into()));
         }
         if spec.lua_only && (spec.alias.is_some() || spec.handler.is_some()) {
             return Err(at(
@@ -892,7 +886,7 @@ fn object_tag(ty: &ApiType) -> &'static str {
 /// The `as_*` reader that turns argument `index` into a parameter, or `None`
 /// if the tag does not match.
 fn reader(ty: &ApiType, index: usize) -> String {
-    let item = format!("args[{index}]");
+    let item = format!("args[{index}].take()");
     match ty {
         ApiType::Boolean => format!("as_boolean({item})"),
         ApiType::Integer => format!("as_integer({item})"),
@@ -1078,9 +1072,9 @@ fn emit_fn(
     writeln!(
         out,
         "/// The dispatcher's contract, which is what every `unsafe` below rests\n\
-         /// on: `args` is an `Array` of `size` initialized `Object`s that outlives\n\
-         /// the call and stays the caller's to free, and `arena` is the caller's\n\
-         /// own and live for the call."
+         /// on: `arena` is the caller's own and live for the call. The argument\n\
+         /// array is this wrapper's: each value it uses is taken out of its slot\n\
+         /// and whatever is left drops with the array."
     )
     .unwrap();
     write!(out, "{}", snake_case_allow(&handler)).unwrap();
@@ -1094,13 +1088,9 @@ fn emit_fn(
     )
     .unwrap();
     writeln!(out, ") -> Result<Object, Error> {{").unwrap();
-    writeln!(
-        out,
-        "    // SAFETY: the dispatcher hands over an argument array of `size`\n\
-         \x20   // initialized objects that outlives the call."
-    )
-    .unwrap();
-    writeln!(out, "    let args = unsafe {{ args_slice(&args) }};").unwrap();
+    if !values.is_empty() {
+        writeln!(out, "    let mut args = args;").unwrap();
+    }
     writeln!(
         out,
         "    log_invoke(c\"{handler}\", c\"{name}\", line!() as c_int, channel_id);"
@@ -1130,14 +1120,14 @@ fn emit_fn(
         match ty {
             // Any Object is acceptable, so there is nothing to check.
             ApiType::Object => {
-                writeln!(out, "    let arg_{slot} = args[{index}];").unwrap();
+                writeln!(out, "    let arg_{slot} = args[{index}].take();").unwrap();
             }
             ApiType::KeyDict(keyset) => {
                 let get_field = format!("key_dict_{keyset}_get_field");
                 writeln!(out, "    let mut arg_{slot}: KeyDict_{keyset} =").unwrap();
                 writeln!(
                     out,
-                    "        match read_keydict(Some({get_field}), args[{index}]) {{"
+                    "        match read_keydict(Some({get_field}), args[{index}].take()) {{"
                 )
                 .unwrap();
                 writeln!(out, "            KeySetArg::Read(v) => v,").unwrap();
@@ -1239,9 +1229,9 @@ fn emit_fn(
         RetType::Boolean => "Object::Boolean(rv)".into(),
         RetType::Integer => "Object::Integer(rv)".into(),
         RetType::Float => "Object::Float(rv)".into(),
-        RetType::String => "Object::String(rv)".into(),
-        RetType::Array => "Object::Array(rv)".into(),
-        RetType::Dict => "Object::Dict(rv)".into(),
+        RetType::String => "Object::string(rv)".into(),
+        RetType::Array => "Object::array(rv)".into(),
+        RetType::Dict => "Object::dict(rv)".into(),
         RetType::Handle(tag) => {
             format!("Object::{tag}(rv as Integer)")
         }
@@ -1258,11 +1248,11 @@ fn emit_fn(
             writeln!(out, "    let dict = unsafe {{").unwrap();
             writeln!(
                 out,
-                "        api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.as_ptr(), {size} as size_t, arena)"
+                "        api_keydict_to_dict((&raw mut rv).cast(), {keyset}_table.as_ptr(), {size} as size_t)"
             )
             .unwrap();
             writeln!(out, "    }};").unwrap();
-            "Object::Dict(dict)".into()
+            "Object::dict(dict)".into()
         }
     };
     writeln!(out, "    Ok({boxed})").unwrap();
@@ -1326,20 +1316,6 @@ struct Emitted {
 
 /// The fixed part of the support code: every wrapper needs it.
 const SUPPORT: &str = r#"
-/// The arguments a client sent, as a slice. An empty array need not carry a
-/// pointer at all, so that case answers without forming one.
-///
-/// # Safety
-/// `args.items` points at `args.size` initialized `Object`s that outlive the
-/// borrow.
-unsafe fn args_slice(args: &Array) -> &[Object] {
-    if args.size == 0 {
-        return &[];
-    }
-    // SAFETY: the caller vouches for `size` objects at `items`.
-    unsafe { core::slice::from_raw_parts(args.items, args.size) }
-}
-
 /// One "RPC: ch N: invoke nvim_foo" debug line. Below the configured log
 /// level — the default — this is a load and a compare.
 fn log_invoke(handler: &'static CStr, method: &CStr, line: c_int, channel_id: uint64_t) {
@@ -1418,7 +1394,7 @@ fn as_float(o: Object) -> Option<Float> {
         "as_string",
         r#"
 fn as_string(o: Object) -> Option<String_0> {
-    o.as_string()
+    o.into_string()
 }
 "#,
     ),
@@ -1426,7 +1402,7 @@ fn as_string(o: Object) -> Option<String_0> {
         "as_array",
         r#"
 fn as_array(o: Object) -> Option<Array> {
-    o.as_array()
+    o.into_array()
 }
 "#,
     ),
@@ -1436,11 +1412,12 @@ fn as_array(o: Object) -> Option<Array> {
 /// An empty Lua table is indistinguishable from an empty list on the wire, so
 /// a Dict parameter accepts one.
 fn as_dict(o: Object) -> Option<ApiDict> {
-    match o {
-        Object::Dict(d) => Some(d),
-        Object::Array(a) if a.size == 0 => Some(ApiDict::EMPTY),
-        _ => None,
+    if is_empty_array(&o) {
+        // An empty Lua table is indistinguishable from an empty list on the
+        // wire, so a Dict parameter accepts one.
+        return Some(ApiDict::EMPTY);
     }
+    o.into_dict()
 }
 "#,
     ),
@@ -1448,7 +1425,7 @@ fn as_dict(o: Object) -> Option<ApiDict> {
         "as_luaref",
         r#"
 fn as_luaref(o: Object) -> Option<LuaRef> {
-    o.as_luaref()
+    o.into_luaref()
 }
 "#,
     ),
@@ -1459,13 +1436,13 @@ fn as_luaref(o: Object) -> Option<LuaRef> {
 /// nonnegative integer is accepted as any of them. `tag` names the one the
 /// parameter declares: a window handle is not a buffer.
 fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
-    let n = match o {
-        Object::Integer(n) => n,
+    let n = match &o {
+        Object::Integer(n) => *n,
         Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) => {
             if o.kind() != tag {
                 return None;
             }
-            n
+            *n
         }
         _ => return None,
     };
@@ -1476,8 +1453,8 @@ fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
     (
         "is_empty_array",
         r#"
-fn is_empty_array(o: Object) -> bool {
-    matches!(o, Object::Array(a) if a.size == 0)
+fn is_empty_array(o: &Object) -> bool {
+    matches!(o, Object::Array(a) if a.is_empty())
 }
 "#,
     ),
@@ -1501,12 +1478,12 @@ enum KeySetArg<K> {
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
 fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
-    let Object::Dict(dict) = item else {
-        if !is_empty_array(item) {
-            return KeySetArg::WrongType;
-        }
+    if is_empty_array(&item) {
         // An empty list is an empty dict: it sets no key.
         return KeySetArg::Read(K::default());
+    }
+    let Some(dict) = item.into_dict() else {
+        return KeySetArg::WrongType;
     };
     // Every field of a keyset is an `Option`, and `Default` is every one of
     // them `None`. Zeroing would be the *opposite* answer for the booleans:
@@ -1952,19 +1929,15 @@ unsafe fn key_bytes<'a>(str: *const c_char, len: size_t) -> &'a [u8] {
 /// One row of [`method_handlers`]: the name a client calls the method by, the
 /// wrapper that serves it, whether it may run straight from the RPC read
 /// callback instead of being deferred to the main loop, and whether its result
-/// is heap-allocated for the caller to free rather than owned by the request
-/// arena.
 const fn handler(
     name: &'static CStr,
     f: unsafe fn(uint64_t, Array, *mut Arena) -> Result<Object, Error>,
     fast: bool,
-    ret_alloc: bool,
 ) -> MsgpackRpcRequestHandler {
     MsgpackRpcRequestHandler {
         name: name.as_ptr(),
         fn_0: Some(f),
         fast,
-        ret_alloc,
     }
 }
 
@@ -1974,7 +1947,6 @@ pub(crate) const NO_HANDLER: MsgpackRpcRequestHandler = MsgpackRpcRequestHandler
     name: ptr::null(),
     fn_0: None,
     fast: false,
-    ret_alloc: false,
 };
 
 /// Look a method up by name.
@@ -2171,12 +2143,7 @@ fn emit_handlers(out: &mut String, specs: &[Spec]) {
             (_, Some(path)) => path.rsplit("::").next().unwrap().to_string(),
             _ => format!("handle_{}", spec.name),
         };
-        writeln!(
-            out,
-            "    handler(c\"{}\", {f}, {}, {}),",
-            spec.name, flags.fast, flags.ret_alloc
-        )
-        .unwrap();
+        writeln!(out, "    handler(c\"{}\", {f}, {}),", spec.name, flags.fast).unwrap();
     }
     writeln!(out, "]);").unwrap();
     out.push('\n');
@@ -2466,9 +2433,9 @@ fn keyset_table<const N: usize>(table: &ConstTable<[KeySetLink; N]>) -> *const K
     table.as_ptr()
 }
 
-/// A keyset argument, with its release armed from the moment it exists: the
-/// decoder fills it field by field, and a fill that stops halfway still holds
-/// whatever references it took before it stopped.
+/// A keyset argument. A keyset owns its fields, so this is a name for the
+/// decoder's target rather than a guard -- what a half-filled keyset took
+/// before it stopped is released by dropping it.
 struct KeyDictArg<K: KeySet> {
     dict: K,
 }
@@ -2479,14 +2446,6 @@ impl<K: KeySet> KeyDictArg<K> {
         KeyDictArg {
             dict: K::default(),
         }
-    }
-}
-
-impl<K: KeySet> Drop for KeyDictArg<K> {
-    fn drop(&mut self) {
-        // SAFETY: `K::table()` describes `K`'s fields, per `KeySet`'s
-        // contract, and the binding owns the references they name.
-        unsafe { api_luarefs_free_keydict((&raw mut self.dict).cast(), K::table()) };
     }
 }
 
@@ -2528,36 +2487,17 @@ unsafe fn push_keydict<K: KeySet>(lstate: *mut lua_State, value: *mut K) {
 
 // -- argument guards -------------------------------------------------------
 
-/// An `Object` argument, which puts the Lua references the conversion took
-/// out of the registry back when the binding leaves.
-struct ObjectArg {
-    value: Object,
-}
-
-impl ObjectArg {
-    /// # Safety
-    /// The binding owns the references `value` names and nothing else
-    /// releases them.
-    unsafe fn new(value: Object) -> Self {
-        ObjectArg { value }
-    }
-}
-
-impl Drop for ObjectArg {
-    fn drop(&mut self) {
-        // SAFETY: `new`'s contract.
-        unsafe { api_luarefs_free_object(self.value) };
-    }
-}
-
-/// A `LuaRef` argument, released the same way.
+/// A `LuaRef` argument, which puts the reference the conversion took out of
+/// the registry back when the binding leaves. An `Object` needs no such
+/// guard: it owns what it names.
 struct LuaRefArg {
     value: LuaRef,
 }
 
 impl LuaRefArg {
     /// # Safety
-    /// As [`ObjectArg::new`].
+    /// The binding owns the reference `value` names and nothing else
+    /// releases it.
     unsafe fn new(value: LuaRef) -> Self {
         LuaRefArg { value }
     }
@@ -2752,18 +2692,19 @@ fn popper(ty: &ApiType) -> (String, &'static str) {
     }
 }
 
-/// The `nlua_push_*` that hands a result back, and whether it takes the value
-/// by pointer.
-fn pusher(ret: &RetType) -> (String, bool) {
+/// The `nlua_push_*` that hands a result back, and how it names the value:
+/// a scalar by value, an owning one by borrow -- the push reads the tree and
+/// the binding goes on owning it.
+fn pusher(ret: &RetType) -> (String, &'static str) {
     match ret {
-        RetType::Boolean => ("nlua_push_boolean".into(), false),
-        RetType::Integer => ("nlua_push_integer".into(), false),
-        RetType::Float => ("nlua_push_float".into(), false),
-        RetType::String => ("nlua_push_string".into(), false),
-        RetType::Array => ("nlua_push_array".into(), false),
-        RetType::Dict => ("nlua_push_dict".into(), false),
-        RetType::Object => ("nlua_push_object".into(), true),
-        RetType::Handle(_) => ("nlua_push_handle".into(), false),
+        RetType::Boolean => ("nlua_push_boolean".into(), "ret"),
+        RetType::Integer => ("nlua_push_integer".into(), "ret"),
+        RetType::Float => ("nlua_push_float".into(), "ret"),
+        RetType::String => ("nlua_push_string".into(), "&ret"),
+        RetType::Array => ("nlua_push_array".into(), "&mut ret"),
+        RetType::Dict => ("nlua_push_dict".into(), "&mut ret"),
+        RetType::Object => ("nlua_push_object".into(), "&raw mut ret"),
+        RetType::Handle(_) => ("nlua_push_handle".into(), "ret"),
         RetType::Void | RetType::KeyDict(_) => unreachable!("handled separately"),
     }
 }
@@ -2802,7 +2743,6 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     // how the call names the value through it. The rest own nothing: their
     // arena memory goes back with the arena.
     let guard = |ty: &ApiType| match ty {
-        ApiType::Object => Some("ObjectArg"),
         ApiType::LuaRef => Some("LuaRefArg"),
         _ => None,
     };
@@ -2977,7 +2917,12 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         "        let _lstate = Restore::of(&active_lstate, lstate);"
     )
     .unwrap();
-    let by_pointer = matches!(f.ret, RetType::Object | RetType::KeyDict(_));
+    // A result the push borrows mutably has to be a `mut` binding: the two
+    // container pushes clear a released Lua reference in place.
+    let by_pointer = matches!(
+        f.ret,
+        RetType::Object | RetType::KeyDict(_) | RetType::Array | RetType::Dict
+    );
     if f.is_unsafe {
         writeln!(
             out,
@@ -3006,8 +2951,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         RetType::Void => String::new(),
         RetType::KeyDict(_) => "unsafe { push_keydict(lstate, &raw mut ret) };".to_string(),
         ret => {
-            let (push, by_pointer) = pusher(ret);
-            let value = if by_pointer { "&raw mut ret" } else { "ret" };
+            let (push, value) = pusher(ret);
             format!("unsafe {{ {push}(lstate, {value}, {flags}) }};")
         }
     };
@@ -3022,21 +2966,6 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     } else if !push.is_empty() {
         writeln!(out, "        // SAFETY: as above.").unwrap();
         writeln!(out, "        {push}").unwrap();
-    }
-    if spec.ret_alloc {
-        let free = match &f.ret {
-            RetType::String => "api_free_string",
-            RetType::Object => "api_free_object",
-            RetType::Dict => "api_free_dict",
-            RetType::Array => "api_free_array",
-            other => return Err(format!("{name}: nothing frees a {other:?} result")),
-        };
-        writeln!(
-            out,
-            "        // SAFETY: as above; the result is the binding's."
-        )
-        .unwrap();
-        writeln!(out, "        unsafe {{ {free}(ret) }};").unwrap();
     }
     writeln!(out, "        Ok(())").unwrap();
     writeln!(out, "    }}").unwrap();
@@ -3305,14 +3234,7 @@ fn generate_lua(
     }
     uses.push(format!(
         "use crate::api::private::helpers::{{{}}};",
-        referenced_names(&[
-            "api_free_dict",
-            "api_free_object",
-            "api_free_string",
-            "api_luarefs_free_keydict",
-            "api_luarefs_free_object",
-        ])
-        .join(", ")
+        referenced_names(&["api_typename"]).join(", ")
     ));
     uses.push("use crate::api_error;".into());
     if referenced.contains("expr_map_locked") {

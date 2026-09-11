@@ -28,11 +28,11 @@ use core::ffi::{CStr, c_char, c_void};
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
-pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<ApiDict, Error> {
+pub unsafe fn nvim_get_option_info(name: String_0) -> Result<ApiDict, Error> {
     let (buf, win) = (Buf::current(), Win::current());
     // SAFETY: `name` is the caller's, the two globals name the current
     // buffer and window, and `arena` is the caller's.
-    unsafe { get_vimoption(name, OptionSetFlags::GLOBAL, buf, win, arena) }
+    unsafe { get_vimoption(name, OptionSetFlags::GLOBAL, buf, win) }
 }
 
 /// # Safety
@@ -188,9 +188,9 @@ unsafe fn set_option_to(
 ) -> Result<(), Error> {
     // SAFETY: `name` names its own bytes.
     let (opt_name, opt_idx) = unsafe { resolve_option(name) }?;
+    let got = api_typename(value.kind());
     let Some(optval) = object_as_optval(value) else {
         let want = c"valid option type";
-        let got = api_typename(value.kind());
         return Err(err_expected(c"value", want, Some(got)));
     };
     // A window-local option with no global half is set locally without the

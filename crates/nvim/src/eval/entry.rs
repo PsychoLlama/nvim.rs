@@ -22,7 +22,6 @@ use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::null_mut;
 
-use crate::api::private::converter::vim_to_object;
 use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
@@ -49,7 +48,7 @@ use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;
 use crate::runtime::state::current_sctx;
 use crate::types::{
-    Arena, Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, NUL, Object,
+    Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, NUL, Object,
     OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
     VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, ptrdiff_t, size_t,
     ssize_t, uint8_t,
@@ -727,7 +726,7 @@ pub unsafe fn eval_foldtext(window: Win) -> Object {
     let mut numbuf = NumBuf::new();
     /// The empty String an error answers with.
     fn empty_string() -> Object {
-        Object::String(String_0::from_raw_parts(null_mut(), 0 as size_t))
+        Object::string(String_0::NULL)
     }
 
     let use_sandbox = was_set_insecurely(window, kOptFoldtext, OptionSetFlags::LOCAL);
@@ -747,9 +746,10 @@ pub unsafe fn eval_foldtext(window: Win) -> Object {
             empty_string()
         } else {
             let obj = if tv.v_type() == VAR_LIST {
-                unsafe { vim_to_object(&tv, null_mut::<Arena>(), false) }
+                Object::from(&tv)
             } else {
-                Object::String(unsafe { cstr_to_string(numbuf.string(&tv)) })
+                // SAFETY: `numbuf` holds the rendering, NUL-terminated.
+                Object::string(unsafe { cstr_to_string(numbuf.string(&tv)) })
             };
             clear_local(&mut tv);
             obj

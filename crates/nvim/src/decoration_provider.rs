@@ -25,7 +25,7 @@
 //!   flood the message area on every redraw.
 
 use crate::api::extmark::describe_ns;
-use crate::api::private::helpers::{api_free_array, api_free_object, api_object_to_bool};
+use crate::api::private::helpers::api_object_to_bool;
 use crate::decoration::{DecorStateRef, decor_check_to_be_deleted, decor_range_count};
 use crate::drawscreen::state::display_tick;
 use crate::global_cell::GlobalCell;
@@ -160,12 +160,12 @@ unsafe fn decor_provider_invoke(
         if let Some(res) = res {
             // `kRetMulti` is what asked for an array, so this is the shape
             // `nlua_call_ref` promises back.
-            *res = ret.as_array().unwrap_or(Array::EMPTY);
+            *res = ret.into_array().unwrap_or(Array::EMPTY);
             return true;
         }
         let what = c"provider %s retval".as_ptr();
-        // SAFETY: the callback's return value.
-        match unsafe { api_object_to_bool(ret, what, default_true) } {
+        // SAFETY: the name is a NUL-terminated format string.
+        match unsafe { api_object_to_bool(&ret, what, default_true) } {
             Ok(true) => return true,
             Ok(false) => {}
             Err(e) => err = e,
@@ -189,7 +189,7 @@ unsafe fn decor_provider_invoke(
 
     err.clear();
     // TODO(bfredl): wants to be on an arena
-    unsafe { api_free_object(ret) };
+    drop(ret);
     false
 }
 
@@ -412,11 +412,7 @@ pub(crate) unsafe fn decor_providers_invoke_range(
         args.push(Object::integer(end_row.into()));
         args.push(Object::integer(end_col.into()));
 
-        let mut res = Array {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut(),
-        };
+        let mut res = Array::EMPTY;
         let (name, cb, args) = (c"range".as_ptr(), p.redraw_range, args.array());
         // SAFETY: as above; `res` receives the callback's return list.
         let status = unsafe { decor_provider_invoke(idx, name, cb, args, true, Some(&mut res)) };
@@ -426,14 +422,14 @@ pub(crate) unsafe fn decor_providers_invoke_range(
         if !status {
             // errored: skip the rest of this window
             set_state(idx, kDecorProviderWinDisabled);
-        } else if res.size >= 1 {
-            match unsafe { *res.items } {
+        } else if res.len() >= 1 {
+            match res[0] {
                 Object::Boolean(false) => set_state(idx, kDecorProviderWinDisabled),
                 Object::Boolean(true) => {}
                 Object::Integer(row) => {
                     let mut col = 0;
-                    if res.size >= 2
-                        && let Some(n) = unsafe { *res.items.add(1) }.as_integer()
+                    if res.len() >= 2
+                        && let Some(n) = res[1].as_integer()
                     {
                         col = n;
                     }
@@ -446,7 +442,7 @@ pub(crate) unsafe fn decor_providers_invoke_range(
             }
         }
 
-        unsafe { api_free_array(res) };
+        drop(res);
         unsafe { hl_check_ns() };
     }
     set_provider_running(false);

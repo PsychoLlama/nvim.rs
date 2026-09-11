@@ -277,10 +277,7 @@ static compl_busy: GlobalCell<bool> = GlobalCell::new(false);
 static Insstart_textlen: GlobalCell<ColNr> = GlobalCell::new(0);
 static Insstart_blank_vcol: GlobalCell<ColNr> = GlobalCell::new(0);
 static update_Insstart_orig: GlobalCell<bool> = GlobalCell::new(true);
-static last_insert: GlobalCell<String_0> = GlobalCell::new(String_0::from_raw_parts(
-    ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    0 as size_t,
-));
+static last_insert: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static last_insert_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static new_insert_skip: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static did_restart_edit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

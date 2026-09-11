@@ -43,8 +43,8 @@ impl Drop for Decoded {
 }
 
 fn decode(bytes: &[u8]) -> Decoded {
-    let mut arena: Arena = ARENA_EMPTY;
-    let decoded = unsafe { unpack(bytes.as_ptr().cast::<c_char>(), bytes.len(), &raw mut arena) };
+    let arena: Arena = ARENA_EMPTY;
+    let decoded = unsafe { unpack(bytes.as_ptr().cast::<c_char>(), bytes.len()) };
     let (object, error) = match decoded {
         Ok(object) => (object, Error::default()),
         Err(error) => (Object::Nil, error),
@@ -57,8 +57,11 @@ fn decode(bytes: &[u8]) -> Decoded {
 }
 
 fn text(object: &Object) -> Vec<u8> {
-    let string = object.as_string().expect("decoded a string");
-    unsafe { string.as_bytes() }.to_vec()
+    object
+        .as_string()
+        .expect("decoded a string")
+        .as_bytes()
+        .to_vec()
 }
 
 #[test]
@@ -84,14 +87,14 @@ fn decodes_strings_and_containers() {
 
     let array = decode(&[0x92, 0x01, 0x02]);
     let items = array.object.as_array().expect("decoded an array");
-    assert_eq!(items.size, 2);
-    assert_eq!(unsafe { *items.items.add(1) }.as_integer(), Some(2));
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[1].as_integer(), Some(2));
 
     let dict = decode(&[0x81, 0xa1, b'a', 0x2a]);
     let entries = dict.object.as_dict().expect("decoded a dict");
-    assert_eq!(entries.size, 1);
-    assert_eq!(unsafe { (*entries.items).key.len() }, 1);
-    assert_eq!(unsafe { (*entries.items).value }.as_integer(), Some(42));
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].key.len(), 1);
+    assert_eq!(entries[0].value.as_integer(), Some(42));
 }
 
 /// The API hands out NUL-terminated strings even though it carries the length

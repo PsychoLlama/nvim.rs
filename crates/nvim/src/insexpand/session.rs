@@ -77,8 +77,9 @@ pub(crate) unsafe fn get_normal_compl_info(
             c"\\<"
         };
         let (data, n) = build_pattern(prefix, compl_length.get());
-        compl_pattern().set_data(data);
-        compl_pattern().set_len(n - 1);
+        // SAFETY: `build_pattern` answers its own NUL-terminated block of
+        // `n` bytes, the terminator included.
+        unsafe { compl_pattern().set_owned(data, n - 1) };
     } else {
         // Upstream decrements in the `else if` test itself, so only these
         // two branches see the smaller column.
@@ -121,12 +122,14 @@ pub(crate) unsafe fn get_normal_compl_info(
                 unsafe { strcpy(data, c"\\<".as_ptr()) };
                 unsafe { quote_meta(data.offset(2), line.offset(compl_col.get() as isize), 1) };
                 unsafe { strcat(data, c"\\k".as_ptr()) };
-                compl_pattern().set_data(data);
-                compl_pattern().set_len(unsafe { cstr::bytes_at(data) }.len());
+                // SAFETY: `data` is this branch's own block, NUL-terminated
+                // by the `strcat` above.
+                let len = unsafe { cstr::bytes_at(data) }.len();
+                unsafe { compl_pattern().set_owned(data, len) };
             } else {
                 let (data, n) = build_pattern(c"\\<", compl_length.get());
-                compl_pattern().set_data(data);
-                compl_pattern().set_len(n - 1);
+                // SAFETY: as above.
+                unsafe { compl_pattern().set_owned(data, n - 1) };
             }
         }
     }
@@ -194,7 +197,7 @@ pub(crate) unsafe fn get_filename_compl_info(
     compl_col.set(compl_col.get() + startcol);
     compl_length.set(curs_col - startcol);
     compl_pattern().set(unsafe {
-        cstr_as_string(addstar(
+        cstr_to_string(addstar(
             line.offset(compl_col.get() as isize),
             compl_length.get() as size_t,
             ExpandContext::Files,
@@ -251,8 +254,7 @@ pub(crate) fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_cpt_com
         if startcol < compl_col.get() {
             prepend_startcol_text(cpt_compl_pattern(), compl_orig_text(), startcol);
         } else {
-            cpt_compl_pattern()
-                .set(unsafe { copy_string(compl_orig_text().value(), ptr::null_mut()) });
+            cpt_compl_pattern().set(compl_orig_text().to_owned());
         }
     } else {
         if startcol < 0 || startcol > curs_col {
@@ -747,7 +749,7 @@ pub(crate) unsafe fn compl_pattern_from_line(line: *mut c_char) -> String_0 {
     unsafe {
         let start = line.offset(at as isize);
         if p_ic.get() != 0 {
-            cstr_as_string(str_foldcase(start, len, ptr::null_mut(), 0))
+            cstr_to_string(str_foldcase(start, len, ptr::null_mut(), 0))
         } else {
             cbuf_to_string(start, len as size_t)
         }

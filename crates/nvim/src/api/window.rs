@@ -11,8 +11,8 @@
 )]
 
 use crate::api::private::helpers::{
-    Reported, api_try, arena_array, arena_dict, array_add, dict_get_value, dict_put, dict_set_var,
-    find_buffer_by_handle, find_window_by_handle, normalize_index,
+    Reported, api_try, dict_get_value, dict_set_var, find_buffer_by_handle, find_window_by_handle,
+    normalize_index,
 };
 use crate::autocmd::is_aucmd_win;
 use crate::cursor::check_cursor_col;
@@ -70,20 +70,18 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_win_get_cursor(win: WindowHandle, arena: *mut Arena) -> Result<Array, Error> {
+pub unsafe fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Array::EMPTY);
     };
-    let mut rv = arena_array(arena, 2 as size_t);
+    let mut rv = Array::with_capacity(2 as size_t);
     let (lnum, col) = (
         Integer::from(w.w_cursor.lnum),
         Integer::from(w.w_cursor.col),
     );
     // SAFETY: `rv` is the two-slot block the arena just handed back.
-    unsafe {
-        array_add(&mut rv, Object::integer(lnum));
-        array_add(&mut rv, Object::integer(col));
-    }
+    rv.push(Object::integer(lnum));
+    rv.push(Object::integer(col));
     Ok(rv)
 }
 
@@ -97,7 +95,7 @@ pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), E
         return Ok(());
     };
     // SAFETY: `pos` is the caller's array, per this function's contract.
-    let items = unsafe { (pos.size == 2).then(|| (*pos.items, *pos.items.add(1))) };
+    let items = (pos.len() == 2).then(|| (&pos[0], &pos[1]));
     let rowcol = items
         .and_then(|(row, col)| row.as_integer().zip(col.as_integer()))
         .map(|(row, col)| (row as int64_t, col as int64_t));
@@ -168,17 +166,13 @@ pub fn nvim_win_set_width(win: WindowHandle, width: Integer) -> Result<(), Error
 ///
 /// # Safety
 /// `name` must point at its own bytes, and `arena` must be the caller's.
-pub unsafe fn nvim_win_get_var(
-    win: WindowHandle,
-    name: String_0,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
+pub unsafe fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Object, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Object::Nil);
     };
     // SAFETY: `w` is live, so `w_vars` is its own dictionary; `name` and
     // `arena` are the caller's, per this function's contract.
-    unsafe { dict_get_value(w.w_vars, name, arena) }
+    unsafe { dict_get_value(w.w_vars, &name) }
 }
 
 /// Set the window-scoped variable `name`.
@@ -193,9 +187,8 @@ pub unsafe fn nvim_win_set_var(
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_get_var`; the store takes `value` over.
-    unsafe { dict_set_var(w.w_vars, name, value, false, false, no_arena) }.map(|_| ())
+    unsafe { dict_set_var(w.w_vars, &name, value, false, false) }.map(|_| ())
 }
 
 /// Remove the window-scoped variable `name`.
@@ -206,26 +199,23 @@ pub unsafe fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), 
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_set_var`, with the deleting flag set.
-    unsafe { dict_set_var(w.w_vars, name, Object::Nil, true, false, no_arena) }.map(|_| ())
+    unsafe { dict_set_var(w.w_vars, &name, Object::Nil, true, false) }.map(|_| ())
 }
 
 /// `win`'s top-left corner, as a `[row, column]` pair of screen cells.
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_win_get_position(win: WindowHandle, arena: *mut Arena) -> Result<Array, Error> {
+pub unsafe fn nvim_win_get_position(win: WindowHandle) -> Result<Array, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Array::EMPTY);
     };
-    let mut rv = arena_array(arena, 2 as size_t);
+    let mut rv = Array::with_capacity(2 as size_t);
     let (row, col) = (Integer::from(w.w_winrow), Integer::from(w.w_wincol));
     // SAFETY: as `nvim_win_get_cursor`.
-    unsafe {
-        array_add(&mut rv, Object::integer(row));
-        array_add(&mut rv, Object::integer(col));
-    }
+    rv.push(Object::integer(row));
+    rv.push(Object::integer(col));
     Ok(rv)
 }
 
@@ -354,12 +344,11 @@ pub fn nvim_win_set_hl_ns(win: WindowHandle, ns_id: Integer) -> Result<(), Error
 pub unsafe fn nvim_win_text_height(
     win: WindowHandle,
     opts: *mut KeyDict_win_text_height,
-    arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
     // `end_vcol`), so every successful call overruns the arena block by two
     // `KeyValuePair`s.  `dict_put`'s capacity assertion is what found it.
-    let mut rv: ApiDict = arena_dict(arena, 4 as size_t);
+    let mut rv: ApiDict = ApiDict::with_capacity(4 as size_t);
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(rv);
     };
@@ -434,10 +423,10 @@ pub unsafe fn nvim_win_text_height(
         all += end_fill;
     }
     // SAFETY: `rv` is the four-slot arena block allocated above.
-    unsafe { dict_put(&mut rv, c"all", Object::integer(all)) };
-    unsafe { dict_put(&mut rv, c"fill", Object::integer(fill)) };
+    rv.insert(String_0::from_cstr(c"all"), Object::integer(all));
+    rv.insert(String_0::from_cstr(c"fill"), Object::integer(fill));
     let end_row = Object::integer(Integer::from(end_lnum - 1));
-    unsafe { dict_put(&mut rv, c"end_row", end_row) };
-    unsafe { dict_put(&mut rv, c"end_vcol", Object::integer(end_vcol)) };
+    rv.insert(String_0::from_cstr(c"end_row"), end_row);
+    rv.insert(String_0::from_cstr(c"end_vcol"), Object::integer(end_vcol));
     Ok(rv)
 }
