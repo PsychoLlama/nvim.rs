@@ -260,7 +260,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_autocmds(lstate: *mut lua_Stat
         unsafe { pop_keydict(lstate, &mut arg_1, arena, err_param) }?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe { nvim_get_autocmds(&raw mut arg_1.dict, arena) }?;
+        let mut ret = unsafe { nvim_get_autocmds(&raw mut arg_1.dict) }?;
         // SAFETY: as above.
         unsafe { nlua_push_array(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())

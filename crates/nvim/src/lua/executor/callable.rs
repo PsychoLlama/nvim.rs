@@ -37,7 +37,7 @@ use crate::lua::ffi::{
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;
-use crate::strings::{arena_printf, vim_snprintf};
+use crate::strings::{printf_string, vim_snprintf};
 use crate::types::{Arena, Array, LuaRef, Object, String_0, TypVal, VAR_DICT, VAR_LIST, size_t};
 
 /// An all-zero [`lua_Debug`], which `lua_getinfo` fills.
@@ -174,9 +174,11 @@ pub unsafe fn nlua_execute_on_key(c: c_int, typed_buf: *mut c_char) -> bool {
 /// How a `LuaRef` renders in a listing: `<Lua N: file:line>` when the
 /// reference is a function defined in a file, `<Lua N>` otherwise.
 ///
+/// The answer is a block of its own, which the caller frees.
+///
 /// # Safety
-/// The main state must exist and `arena` be a live arena or null.
-pub unsafe fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut c_char {
+/// The main state must exist.
+pub unsafe fn nlua_funcref_str(ref_0: LuaRef) -> *mut c_char {
     unsafe {
         let lstate = get_global_lstate();
         if lua_checkstack(lstate, 1) != 0 {
@@ -192,13 +194,8 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut c_char 
                     && ar.linedefined >= 0
                 {
                     let src = home_replace_save(None, ar.source.add(1));
-                    let str: String_0 = arena_printf(
-                        arena,
-                        c"<Lua %d: %s:%d>".as_ptr(),
-                        ref_0,
-                        src,
-                        ar.linedefined,
-                    );
+                    let str: String_0 =
+                        printf_string(c"<Lua %d: %s:%d>".as_ptr(), ref_0, src, ar.linedefined);
                     xfree(src.cast::<c_void>());
                     // The caller frees the rendering, so the string gives
                     // its block up rather than releasing it here.
@@ -206,7 +203,7 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut c_char 
                 }
             }
         }
-        arena_printf(arena, c"<Lua %d>".as_ptr(), ref_0).into_raw()
+        printf_string(c"<Lua %d>".as_ptr(), ref_0).into_raw()
     }
 }
 

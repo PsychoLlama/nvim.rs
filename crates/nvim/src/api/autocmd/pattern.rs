@@ -105,11 +105,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         let b = find_buffer_by_handle(buffer)?;
         // SAFETY: the verb matches the argument.
         patterns.push(Object::string(unsafe {
-            arena_printf(
-                ::core::ptr::null_mut(),
-                c"<buffer=%d>".as_ptr(),
-                b.map_or(0, |b| b.handle),
-            )
+            printf_string(c"<buffer=%d>".as_ptr(), b.map_or(0, |b| b.handle))
         }));
     }
     if patterns.is_empty() && !fallback.is_null() {

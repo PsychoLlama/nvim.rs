@@ -27,12 +27,8 @@ const DICT_KEYS: size_t = 12;
 /// # Safety
 ///
 /// `opts` must point at the `KeyDict_get_autocmds` the dispatcher filled in,
-/// live for the call. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
-pub unsafe fn nvim_get_autocmds(
-    opts: *mut KeyDict_get_autocmds,
-    arena: *mut Arena,
-) -> Result<Array, Error> {
+/// live for the call.
+pub unsafe fn nvim_get_autocmds(opts: *mut KeyDict_get_autocmds) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_autocmds>::new(opts) };
     let group = group_filter(&opts)?;
@@ -79,7 +75,7 @@ pub unsafe fn nvim_get_autocmds(
                 continue;
             }
             // SAFETY: `arena` is the caller's.
-            autocmd_list.push(Object::dict(unsafe { autocmd_dict(event, ac, ap, arena) }));
+            autocmd_list.push(Object::dict(unsafe { autocmd_dict(event, ac, ap) }));
         }
     }
     Ok(autocmd_list)
@@ -270,7 +266,7 @@ fn matches_pattern(ap: &AutoPat, filters: &[&::core::ffi::CStr]) -> bool {
 /// # Safety
 /// A `Partial` handler's pointer must name a live partial, and `arena` must
 /// be the caller's.
-unsafe fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat, arena: *mut Arena) -> ApiDict {
+unsafe fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
     // Every C string read below is either a row's own or a static name, so
     // each `cstr_to_string` copies out of a live one.
     let mut info = ApiDict::with_capacity(DICT_KEYS);
@@ -298,7 +294,7 @@ unsafe fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat, arena: *mut
             },
             handler @ (Callback::Funcref(_) | Callback::Partial(_)) => {
                 // SAFETY: the caller's promise about a partial, and `arena`.
-                let name = unsafe { cstr_to_string(callback_to_string(handler, arena)) };
+                let name = unsafe { cstr_to_string(callback_to_string(handler)) };
                 info.insert(c"callback", Object::string(name));
             }
             // A row with neither a command nor a handler cannot exist.

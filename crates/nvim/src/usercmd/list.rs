@@ -33,14 +33,13 @@ use crate::message::{
 use crate::option::vars::p_verbose;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::line_breakcheck;
-use crate::strings::arena_printf;
+use crate::strings::printf_string;
 use crate::types::String_0;
 use crate::types::{ApiDict, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t};
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
-use core::ptr;
 
 /// The `-nargs=` spelling of a command's argument flags.
 ///
@@ -228,7 +227,7 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
     msg_display(unsafe { cstr::at(middle.as_mut_ptr()) }, 0, false);
 
     if cmd.uc_luaref != LUA_NOREF {
-        let text = unsafe { nlua_funcref_str(cmd.uc_luaref, ptr::null_mut()) };
+        let text = unsafe { nlua_funcref_str(cmd.uc_luaref) };
         msg_str_hl(unsafe { cstr::at(text) }, HLF_8, false);
         unsafe { xfree(text.cast()) };
         // The definition goes on a line of its own.
@@ -315,7 +314,7 @@ unsafe fn describe(cmd: &UserCmd) -> ApiDict {
     let count = (a.has(ExArgt::COUNT)).then(|| {
         if cmd.uc_def >= 0 {
             // SAFETY: the format and its one argument match.
-            Object::string(unsafe { arena_printf(ptr::null_mut(), c"%ld".as_ptr(), cmd.uc_def) })
+            Object::string(unsafe { printf_string(c"%ld".as_ptr(), cmd.uc_def) })
         } else {
             Object::string(String_0::from_cstr(c"0"))
         }
@@ -325,7 +324,7 @@ unsafe fn describe(cmd: &UserCmd) -> ApiDict {
             Object::string(String_0::from_cstr(c"%"))
         } else if cmd.uc_def >= 0 {
             // SAFETY: the format and its one argument match.
-            Object::string(unsafe { arena_printf(ptr::null_mut(), c"%ld".as_ptr(), cmd.uc_def) })
+            Object::string(unsafe { printf_string(c"%ld".as_ptr(), cmd.uc_def) })
         } else {
             Object::string(String_0::from_cstr(c"."))
         }

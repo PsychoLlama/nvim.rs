@@ -22,7 +22,7 @@ use core::ffi::{c_char, c_int, c_void};
 use crate::memory::{xrealloc, xstrdup};
 use crate::mpack::mpack_core::mpack_rtoken;
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
-use crate::strings::arena_printf;
+use crate::strings::printf_string;
 use crate::types::{
     AdditionalData, AdditionalDataBuilder, Boolean, FieldHashfn, Integer, KeySetLink, String_0,
     StringArray, mpack_parser_t, mpack_token_t, mpack_walk_cb, size_t, ssize_t, uint32_t,
@@ -364,8 +364,8 @@ unsafe fn fail(message: &core::ffi::CStr, key: String_0) -> *mut c_char {
     // keydict key cannot reach here — it would have to be a ShaDa entry that
     // big — and if one did, saturating to `c_int::MAX` would print two
     // gigabytes of it into an error message. `len_as_int` says so instead.
-    let (fmt, arena) = (message.as_ptr(), core::ptr::null_mut());
+    let fmt = message.as_ptr();
     let (precision, bytes) = (crate::narrow::len_as_int(key.len()), key.data());
     // The caller frees the message.
-    unsafe { arena_printf(arena, fmt, precision, bytes) }.into_raw()
+    unsafe { printf_string(fmt, precision, bytes) }.into_raw()
 }

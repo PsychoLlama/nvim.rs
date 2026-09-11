@@ -304,7 +304,7 @@ pub unsafe fn handle_nvim_exec_autocmds(
 pub unsafe fn handle_nvim_get_autocmds(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -326,6 +326,6 @@ pub unsafe fn handle_nvim_get_autocmds(
         };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_autocmds(&raw mut arg_1, arena) }?;
+    let rv = unsafe { nvim_get_autocmds(&raw mut arg_1) }?;
     Ok(Object::array(rv))
 }

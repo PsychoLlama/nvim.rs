@@ -36,10 +36,10 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    __compar_fn_t, Arena, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData,
-    Float, FuncExe, GArray, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE,
-    SpecialVarValue, String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
+    __compar_fn_t, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float,
+    FuncExe, GArray, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue,
+    String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
     VarNumber, VimConv, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t,
     ssize_t, uint8_t,
 };

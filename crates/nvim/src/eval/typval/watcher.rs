@@ -176,16 +176,11 @@ pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
 ///
 /// # Safety
 ///
-/// A `Partial` callback's pointer must name a live partial. `arena` must
-/// point at a live arena, which the string this answers with is allocated in
-/// and must outlive.
-pub unsafe fn callback_to_string(
-    callback: &Callback,
-    arena: *mut Arena,
-) -> *mut ::core::ffi::c_char {
+/// A `Partial` callback's pointer must name a live partial.
+pub unsafe fn callback_to_string(callback: &Callback) -> *mut ::core::ffi::c_char {
     if let Callback::Lua(reference) = callback {
-        // SAFETY: a registry index, and the caller's arena.
-        return unsafe { nlua_funcref_str(*reference, arena) };
+        // SAFETY: a registry index.
+        return unsafe { nlua_funcref_str(*reference) };
     }
 
     let msglen: size_t = 100;

@@ -24,9 +24,7 @@ use crate::eval::typval::{tv_get_number_chk, tv_get_string_buf_chk};
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, vsnprintf};
-use crate::types::{
-    Arena, Float, String_0, TypVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, size_t,
-};
+use crate::types::{Float, String_0, TypVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, size_t};
 
 // The carve of the transpiled module; see each child's docs.
 mod emit;
@@ -229,26 +227,19 @@ pub(crate) fn infinity_str(
 /// The scratch buffer `vim_vsnprintf_typval` renders one conversion into.
 const TMP_LEN: c_int = 350;
 
-/// `vsnprintf` into an arena.
+/// `vsnprintf` into a fresh api [`String_0`], which owns the bytes.
 ///
-/// The happy path formats into the rest of the current block and only
-/// charges the arena for what it used; if it does not fit, a block of
-/// exactly the right size is taken and the format run again.
+/// Upstream calls this `arena_printf` and hands it the arena the rendering
+/// is to be cut from. It took an arena until the api value types started
+/// owning their storage; the rendering is measured and then written into a
+/// block of its own, and there is nothing left for an arena to do.
 ///
 /// # Safety
 ///
-/// `arena` must be null or point at a live arena, which the answer's bytes
-/// are taken from and must outlive. `fmt` must point at a NUL-terminated
-/// format, and the variadic arguments must be exactly the ones its
-/// conversions name, at the types they name -- the list is read blind.
-pub unsafe extern "C" fn arena_printf(
-    _arena: *mut Arena,
-    fmt: *const c_char,
-    args: ...
-) -> String_0 {
-    // The answer owns its bytes, so the arena has nothing left to do here:
-    // measure the rendering, then write it into a block of its own.
-    //
+/// `fmt` must point at a NUL-terminated format, and the variadic arguments
+/// must be exactly the ones its conversions name, at the types they name --
+/// the list is read blind.
+pub unsafe extern "C" fn printf_string(fmt: *const c_char, args: ...) -> String_0 {
     // SAFETY: the caller's format and argument list, read twice -- `clone`
     // is what makes a second pass over a `va_list` legal.
     let printed = unsafe { vsnprintf(ptr::null_mut(), 0, fmt, args.clone()) };

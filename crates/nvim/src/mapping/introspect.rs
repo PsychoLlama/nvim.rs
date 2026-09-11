@@ -262,7 +262,7 @@ unsafe fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
             let rhs = &mp.m_rhs;
             ret.write_string(if rhs.luaref() != LUA_NOREF {
                 // SAFETY: `mp` is the matching mapping, still linked.
-                unsafe { nlua_funcref_str(rhs.luaref(), ptr::null_mut()) }
+                unsafe { nlua_funcref_str(rhs.luaref()) }
             } else if rhs.str.is_empty() {
                 owned_cstr(b"<Nop>".to_vec())
             } else {
