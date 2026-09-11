@@ -159,7 +159,7 @@ pub unsafe fn nvim_buf_set_text(
             true,
         )
     } as *mut *mut ::core::ffi::c_char;
-    unsafe { *lines.offset(0 as ::core::ffi::c_int as isize) = first };
+    unsafe { *lines = first };
     new_byte += first_item.len() as BCount;
     let mut i_0: size_t = 1 as size_t;
     while i_0 < new_len.wrapping_sub(1 as size_t) {
@@ -435,7 +435,7 @@ unsafe fn fix_pos_col(
     let old_coladd: ColNr = pos.coladd;
     let coladd = pos.coladd;
     pos.col += coladd;
-    pos.coladd = 0 as ::core::ffi::c_int as ColNr;
+    pos.coladd = 0;
     let new_end_row: LineNr = start_row + new_rows - 1 as LineNr;
     if pos.lnum > new_end_row {
         pos.lnum = new_end_row;
@@ -444,10 +444,7 @@ unsafe fn fix_pos_col(
             pos.col = len;
         }
     }
-    if pos.lnum == new_end_row
-        && pos.col > end_row_change_end
-        && old_coladd == 0 as ::core::ffi::c_int
-    {
+    if pos.lnum == new_end_row && pos.col > end_row_change_end && old_coladd == 0 {
         pos.col = end_row_change_end;
         if pos.col - mode_col_adj >= end_row_change_start {
             pos.col -= mode_col_adj;

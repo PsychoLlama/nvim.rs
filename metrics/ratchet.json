@@ -21,7 +21,7 @@
   "garray_sites": 105,
   "kvec_sites": 15,
   "khash_sites": 34,
-  "ptr_arith": 5083,
+  "ptr_arith": 5082,
   "t_suffix_types": 0,
   "raw_win_buf_sigs": 0,
   "raw_frame_sigs": 0,
