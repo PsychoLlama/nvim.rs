@@ -40,6 +40,13 @@ and this project adheres to [CalVer](https://calver.org/).
   the order `keys()`, `values()` and `items()` hand out included; several
   values the interpreter used to leak are released, and `flatten()` on a
   locked List no longer frees it out from under the variable.
+- Rewrote how an API function reports a failure: it now answers a result
+  rather than writing into an error slot the caller lends it, from the
+  msgpack-RPC and Lua dispatch wrappers down through the helpers behind them.
+  Messages and behaviour are unchanged, with two exceptions that were bugs:
+  an empty `'winborder'` no longer clears a window's border, title and footer
+  settings, and `nvim_buf_set_text`/`nvim_buf_get_text` no longer swallow the
+  reason they refused.
 - Rewrote how the editor hands text to the message area, which every command
   that prints a listing goes through: `:highlight`, `:syntax`, `:syntime`,
   `:map`, `:marks`, `:jumps`, `:changes`, `:registers`, `:tags`, `:tselect`,
