@@ -1,9 +1,9 @@
 //! `nvim_win_set_config()`: reconfiguring an existing window.
 //!
-//! The two directions a reconfiguration can take: `win_config_split` turns a
-//! window into (or moves) a split, which may mean splitting a different parent,
-//! changing the direction, or leaving the float layout entirely; and
-//! `win_config_float_tp` applies a float config, including the tabpage move a
+//! The two directions a reconfiguration can take: [`Relayout`] turns a
+//! window into (or moves) a split, which may mean splitting a different
+//! parent, changing the direction, or leaving the float layout entirely; and
+//! `apply_float` applies a float config, including the tabpage move a
 //! `relative` window may need.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -19,7 +19,8 @@
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api_error;
-use crate::winlayer::{FrameId, FrameRef, TabPage, Win};
+use crate::winlayer::{FrameId, FrameRef, TabPage, Win, WinId};
+use core::ffi::c_int;
 
 /// `None` for "the current tab page", which is how the window family spells
 /// it throughout.
@@ -35,7 +36,7 @@ fn expect_tab(tabpage: Option<TabPage>) -> TabPage {
 }
 
 /// How many frames sit in `frame`'s row or column, `frame` included.
-fn sibling_count(frame: FrameRef) -> ::core::ffi::c_int {
+fn sibling_count(frame: FrameRef) -> c_int {
     frame
         .children()
         .count()
@@ -43,25 +44,325 @@ fn sibling_count(frame: FrameRef) -> ::core::ffi::c_int {
         .expect("a row holds fewer frames than an int can count")
 }
 
+/// What applying a config to a window came to.
+///
+/// Not a two-valued answer, because the split case is not: `win_split_ins`
+/// runs autocommands, and one of them throwing does not undo the split the
+/// editor has already made. The caller finishes applying the rest of the
+/// config either way and reports the exception last -- which is what the
+/// `bool` answer and a borrowed error slot used to say between them, and
+/// what nothing in either signature admitted.
+enum Applied {
+    /// The window was reconfigured.
+    Done,
+    /// It was reconfigured, and an autocommand raised while it was.
+    Raised(Error),
+    /// Nothing was reconfigured and there is nothing to report: a window
+    /// handle that resolved to no window at all.
+    Refused,
+}
+
+/// A refusal, and whether the editor is still standing on the window the
+/// relayout moved away from.
+enum Refusal {
+    /// Nothing moved, or the move itself is what failed: report and leave.
+    AsIs(Error),
+    /// The current window was moved off the one being split, and has to go
+    /// back before the refusal is reported.
+    Restore(Error),
+}
+
+/// One window on its way into a split.
+///
+/// Every window here is named twice over -- as a [`Win`] and as a [`WinId`]
+/// -- because [`win_goto`] fires autocommands that can close either of them,
+/// and every question asked after it is about exactly that.
+struct Relayout {
+    /// The window being moved, and its identity.
+    win: Win,
+    win_id: WinId,
+    /// Whether it was a split before this call.
+    was_split: bool,
+    /// Which side of its neighbour it is to end up on.
+    split: WinSplit,
+    /// The window to split, its identity, and its tab page.
+    parent: Option<Win>,
+    parent_id: Option<WinId>,
+    parent_tp: Option<TabPage>,
+    /// The tab page the moved window is on, re-read after every `win_goto`.
+    win_tp: Option<TabPage>,
+    /// Whether the current window is leaving its tab page for this split.
+    curwin_moving_tp: bool,
+    /// The direction [`winframe_remove`] took the window out in, and the
+    /// frame it left unflattened -- held as an identity, because
+    /// `win_split_ins` can free frames. Both are what puts the layout back
+    /// if the move fails.
+    dir: c_int,
+    unflat_altfr: Option<FrameId>,
+    /// The window that takes the moved one's place where it was.
+    altwin: Option<Win>,
+}
+
+impl Relayout {
+    /// Resolve the window to split against and check that the move is
+    /// allowed at all. `None` for a handle that named no window.
+    fn open(
+        win: Win,
+        config: CfgKeys,
+        fconfig: WinCfg,
+        was_split: bool,
+    ) -> Result<Option<Self>, Error> {
+        let parent_handle = config.win.unwrap_or(0);
+        let (parent, parent_tp) = if parent_handle == 0 {
+            (Some(Win::current()), Some(TabPage::current()))
+        } else if parent_handle > 0 {
+            let Some(found) = find_window_by_handle(fconfig.window)? else {
+                return Ok(None);
+            };
+            (Some(found), win_find_tabpage(found.id()))
+        } else {
+            (None, None)
+        };
+        let win_id = win.id();
+        let win_tp = win_find_tabpage(win_id);
+        if let Some(parent) = parent {
+            if parent.w_floating {
+                return Err(Error::exception(c"Cannot split a floating window"));
+            }
+            if win_tp != parent_tp {
+                // SAFETY: `win` is a live window and `win_tp` the tab page
+                // it was just found on.
+                unsafe { win_can_move_tp(win, expect_tab(win_tp)) }?;
+            }
+        }
+        check_split_disallowed_err(win)?;
+        Ok(Some(Self {
+            win,
+            win_id,
+            was_split,
+            split: fconfig.split,
+            parent,
+            parent_id: parent.map(Win::id),
+            parent_tp,
+            win_tp,
+            curwin_moving_tp: win == Win::current() && parent.is_some() && win_tp != parent_tp,
+            dir: 0,
+            unflat_altfr: None,
+            altwin: None,
+        }))
+    }
+
+    /// Move the window into the split, going back to it if the move failed
+    /// after the editor had already left it.
+    fn run(&mut self) -> Result<Applied, Error> {
+        match self.move_window() {
+            Ok(applied) => Ok(applied),
+            Err(Refusal::AsIs(why)) => Err(why),
+            Err(Refusal::Restore(why)) => {
+                if self.curwin_moving_tp && win_valid(self.win_id) {
+                    win_goto(self.win);
+                }
+                Err(why)
+            }
+        }
+    }
+
+    /// Out of the layout it is in and into the split, in that order.
+    fn move_window(&mut self) -> Result<Applied, Refusal> {
+        self.switch_away()?;
+        self.detach()?;
+        self.insert()
+    }
+
+    /// Leave the window being moved, when it is the current one and the
+    /// split is on another tab page, and check that both windows survived
+    /// the autocommands that leaving fired.
+    fn switch_away(&mut self) -> Result<(), Refusal> {
+        if !self.curwin_moving_tp {
+            return Ok(());
+        }
+        let altwin = win_find_altwin(self.win, expect_tab(self.win_tp)).expect("altwin");
+        win_goto(altwin);
+        if Win::current_raw() == self.win.raw() {
+            let handle = self.win_id.handle();
+            let why = api_error!(
+                kErrorTypeException,
+                "Failed to switch away from window {handle}"
+            );
+            // The editor is still on the window, so there is nothing to
+            // put back.
+            return Err(Refusal::AsIs(why));
+        }
+        self.win_tp = win_find_tabpage(self.win_id);
+        // `win_valid_any_tab` is the check for whether the parent is still
+        // there at all.
+        let live_parent = self
+            .parent
+            .filter(|_| self.parent_id.is_some_and(win_valid_any_tab));
+        let (Some(_), Some(parent)) = (self.win_tp, live_parent) else {
+            let why = Error::exception(c"Windows to split were closed");
+            return Err(Refusal::Restore(why));
+        };
+        if self.was_split == self.win.w_floating || parent.w_floating {
+            let why = Error::exception(c"Floating state of windows to split changed");
+            return Err(Refusal::Restore(why));
+        }
+        Ok(())
+    }
+
+    /// Take the window out of the layout it is in, remembering what has to
+    /// be put back if the insertion below fails.
+    fn detach(&mut self) -> Result<(), Refusal> {
+        if self.was_split {
+            self.unframe()?;
+        } else {
+            self.altwin = win_float_find_altwin(self.win, other_tab(expect_tab(self.win_tp)));
+        }
+        win_remove(self.win, other_tab(expect_tab(self.win_tp)));
+        if self.win_tp == Some(TabPage::current()) {
+            last_status(false);
+            win_comp_pos();
+        }
+        Ok(())
+    }
+
+    /// The non-floating case of [`detach`](Self::detach): the window sits in
+    /// a frame of the layout tree, and comes out of it.
+    fn unframe(&mut self) -> Result<(), Refusal> {
+        let Some(parent_frame) = self.win.frame().parent() else {
+            let why = Error::exception(c"Cannot move last non-floating window");
+            return Err(Refusal::Restore(why));
+        };
+        if !self.parent.is_some_and(|p| p.handle == self.win.handle) {
+            self.remove_frame();
+            return Ok(());
+        }
+
+        // Splitting the window against itself: it is taken out first, and
+        // the neighbour it leaves behind becomes the window to split.
+        let n_frames = sibling_count(parent_frame);
+        if n_frames < 2 {
+            let why = Error::exception(c"Cannot split window into itself");
+            return Err(Refusal::Restore(why));
+        }
+        let neighbour = if n_frames > 2 {
+            // Only a nested row or column has a neighbour on the side the
+            // split is going.
+            let ahead = self.split == kWinSplitAbove || self.split == kWinSplitLeft;
+            let nested = parent_frame.parent().is_some();
+            let found = nested.then(|| {
+                if ahead {
+                    self.win.next()
+                } else {
+                    self.win.prev()
+                }
+            });
+            self.remove_frame();
+            found.flatten()
+        } else {
+            self.remove_frame();
+            self.altwin
+        };
+        // The parent is replaced here, so the identity it stands for is too
+        // -- the neighbour is live, just found.
+        self.parent = neighbour;
+        self.parent_id = neighbour.map(Win::id);
+        Ok(())
+    }
+
+    /// Take the window's frame out of the layout, keeping what
+    /// [`winframe_restore`] would need to put it back.
+    fn remove_frame(&mut self) {
+        let removed = winframe_remove(self.win, other_tab(expect_tab(self.win_tp)), true);
+        (self.altwin, self.dir, self.unflat_altfr) = (removed.win, removed.dir, removed.unflat);
+    }
+
+    /// Put the window back into the layout as a split of its parent, and
+    /// undo the detachment if that does not work.
+    fn insert(&mut self) -> Result<Applied, Refusal> {
+        let flags = win_split_flags(self.split, self.parent.is_none()) | WSP_NOENTER.cast_signed();
+        self.parent_tp = match self.parent_id {
+            None => Some(TabPage::current()),
+            Some(parent) => win_find_tabpage(parent),
+        };
+        let mut tstate = TryState::default();
+        // SAFETY: `tstate` is this frame's own, live until `try_leave`.
+        unsafe { try_enter(&raw mut tstate) };
+        let split_ok = self.split_ins(flags);
+        // SAFETY: `tstate` is what the `try_enter` above filled in.
+        let raised = unsafe { try_leave(&raw mut tstate) }.err();
+
+        if split_ok {
+            let mut tp = expect_tab(self.win_tp);
+            if self.win_tp != self.parent_tp && tp.tp_curwin == Some(self.win_id) {
+                tp.tp_curwin = self.altwin.map(Win::id);
+            }
+            return Ok(match raised {
+                Some(raised) => Applied::Raised(raised),
+                None => Applied::Done,
+            });
+        }
+        if self.was_split
+            && let Some(unflat) = self.unflat_altfr.and_then(FrameId::get)
+        {
+            winframe_restore(self.win, self.dir, unflat);
+        }
+        let why = raised.unwrap_or_else(|| {
+            let handle = self.win_id.handle();
+            api_error!(
+                kErrorTypeException,
+                "Failed to move window {handle} into split"
+            )
+        });
+        Err(Refusal::Restore(why))
+    }
+
+    /// [`win_split_ins`] inside whichever window the split goes into,
+    /// putting the moved window back in its old place if it refuses.
+    fn split_ins(&mut self, flags: c_int) -> bool {
+        let need_switch = self.parent.is_some_and(|parent| !parent.is_current());
+        let mut switchwin = SwitchWin::default();
+        if need_switch {
+            let parent_tp = expect_tab(self.parent_tp);
+            let parent = self.parent.expect("`need_switch` says there is a parent");
+            // SAFETY: `switchwin` is this frame's own, and `parent`/
+            // `parent_tp` are the live window and tab page to split in.
+            let result = unsafe { switch_win(&raw mut switchwin, parent, Some(parent_tp), true) };
+            debug_assert!(result.is_ok(), "the window was switched to");
+        }
+        let split_ok = win_split_ins(
+            0,
+            flags,
+            Some(self.win),
+            0,
+            self.unflat_altfr.and_then(FrameId::get),
+        )
+        .is_some();
+        if !split_ok {
+            win_append(
+                self.win.prev(),
+                self.win,
+                other_tab(expect_tab(self.win_tp)),
+            );
+        }
+        if need_switch {
+            // SAFETY: the matching restore of the switch above.
+            unsafe { restore_win(&raw mut switchwin, true) };
+        }
+        split_ok
+    }
+}
+
 /// Apply the split half of `fconfig` to `win`: make it a split, move it to
 /// another parent, or change which side of one it is on.
 ///
-/// # Safety
-/// `win` must be a live window, and `config`, `fconfig` and `err` must name
-/// live objects for the whole call.
-unsafe fn win_config_split(
-    mut win: Win,
-    config: CfgKeys,
-    mut fconfig: WinCfg,
-    err: ErrSlot,
-) -> bool {
-    // SAFETY: the caller's window, live for the whole call.
-    let w = win;
-    // SAFETY: the caller's window.
+/// Safe: every argument is a handle whose construction already carries the
+/// promise that what it names outlives the call.
+fn apply_split(mut win: Win, config: CfgKeys, mut fconfig: WinCfg) -> Result<Applied, Error> {
     let was_split = !win.w_floating;
     let has_split = config.split.is_some();
     let has_vertical = config.vertical.is_some();
-    let old_split = win_split_dir(w);
+    let old_split = win_split_dir(win);
     if has_vertical && !has_split {
         fconfig.split = if config.vertical.unwrap_or(false) {
             if old_split == kWinSplitRight || p_spr.get() != 0 {
@@ -80,201 +381,19 @@ unsafe fn win_config_split(
     // parent; then only the size below is applied.
     let stays_put = !has_vertical && !has_split
         || was_split && config.win.is_none() && old_split == fconfig.split;
-    '_resize: {
-        if stays_put {
-            break '_resize;
+    let mut applied = Applied::Done;
+    if !stays_put {
+        match Relayout::open(win, config, fconfig, was_split)? {
+            None => return Ok(Applied::Refused),
+            Some(mut relayout) => applied = relayout.run()?,
         }
-        let mut parent: Option<Win> = None;
-        let mut parent_tp: Option<TabPage> = None;
-        let parent_handle = config.win.unwrap_or(0);
-        if parent_handle == 0 {
-            parent = Some(Win::current());
-            parent_tp = Some(TabPage::current());
-        } else if parent_handle > 0 {
-            let Some(found) = stored(err, find_window_by_handle(fconfig.window)).flatten() else {
-                return false;
-            };
-            parent = Some(found);
-            parent_tp = win_find_tabpage(found.id());
-        }
-        // Both identities, taken while both windows are live: `win_goto`
-        // below fires autocommands that can close either, and every question
-        // after it is about exactly that.
-        let (win_id, mut parent_id) = (win.id(), parent.map(Win::id));
-        let mut win_tp = win_find_tabpage(win_id);
-        if let Some(p) = parent {
-            if p.w_floating {
-                err_msg(err, kErrorTypeException, c"Cannot split a floating window");
-                return false;
-            }
-            // SAFETY: the caller's window.
-            if win_tp != parent_tp
-                && stored(err, unsafe { win_can_move_tp(win, expect_tab(win_tp)) }).is_none()
-            {
-                return false;
-            }
-        }
-        if stored(err, check_split_disallowed_err(win)).is_none() {
-            return false;
-        }
-        let to_split_ok;
-        let curwin_moving_tp = win == Win::current() && parent.is_some() && win_tp != parent_tp;
-        let mut dir: ::core::ffi::c_int = 0;
-        // The frame `winframe_remove` left unflattened, as an identity: it is
-        // held across the `win_split_ins` below, which can free frames.
-        let mut unflat_altfr: Option<FrameId> = None;
-        let altwin_0: Option<Win>;
-        '_restore_curwin: {
-            if curwin_moving_tp {
-                let altwin = win_find_altwin(win, expect_tab(win_tp)).expect("altwin");
-                win_goto(altwin);
-                if Win::current_raw() == win.raw() {
-                    let handle = win_id.handle();
-                    let why = api_error!(
-                        kErrorTypeException,
-                        "Failed to switch away from window {handle}"
-                    );
-                    store(err, why);
-                    return false;
-                }
-                win_tp = win_find_tabpage(win_id);
-                // `win_valid_any_tab` is the check for whether `parent` is
-                // still there at all.
-                let live_parent = parent.filter(|_| parent_id.is_some_and(win_valid_any_tab));
-                let (Some(_), Some(p)) = (win_tp, live_parent) else {
-                    err_msg(err, kErrorTypeException, c"Windows to split were closed");
-                    break '_restore_curwin;
-                };
-                let changed = was_split == win.w_floating || p.w_floating;
-                if changed {
-                    let msg = c"Floating state of windows to split changed";
-                    err_msg(err, kErrorTypeException, msg);
-                    break '_restore_curwin;
-                }
-            }
-            if was_split {
-                // A non-floating window sits in a frame of the layout tree.
-                let frame = win.frame();
-                let Some(parent_frame) = frame.parent() else {
-                    let msg = c"Cannot move last non-floating window";
-                    err_msg(err, kErrorTypeException, msg);
-                    break '_restore_curwin;
-                };
-                // SAFETY: both windows are live.
-                let into_itself = parent.is_some_and(|p| p.handle == win.handle);
-                if into_itself {
-                    let n_frames = sibling_count(parent_frame);
-                    let mut neighbor: Option<Win> = None;
-                    if n_frames > 2 {
-                        let nested = parent_frame.parent().is_some();
-                        let win_tp = expect_tab(win_tp);
-                        if nested {
-                            let ahead =
-                                fconfig.split == kWinSplitAbove || fconfig.split == kWinSplitLeft;
-                            let live = w;
-                            neighbor = if ahead { live.next() } else { live.prev() };
-                        }
-                        let removed = winframe_remove(w, other_tab(win_tp), true);
-                        (altwin_0, dir, unflat_altfr) = (removed.win, removed.dir, removed.unflat);
-                    } else if n_frames == 2 {
-                        let win_tp = expect_tab(win_tp);
-                        let removed = winframe_remove(w, other_tab(win_tp), true);
-                        (altwin_0, dir, unflat_altfr) = (removed.win, removed.dir, removed.unflat);
-                        neighbor = altwin_0;
-                    } else {
-                        let msg = c"Cannot split window into itself";
-                        err_msg(err, kErrorTypeException, msg);
-                        break '_restore_curwin;
-                    }
-                    // `parent` is replaced here, so the identity it stands
-                    // for is too -- the neighbour is live, just found.
-                    parent = neighbor;
-                    parent_id = neighbor.map(Win::id);
-                } else {
-                    let win_tp = expect_tab(win_tp);
-                    let removed = winframe_remove(w, other_tab(win_tp), true);
-                    (altwin_0, dir, unflat_altfr) = (removed.win, removed.dir, removed.unflat);
-                }
-            } else {
-                altwin_0 = win_float_find_altwin(win, other_tab(expect_tab(win_tp)));
-            }
-            win_remove(w, other_tab(expect_tab(win_tp)));
-            if win_tp == Some(TabPage::current()) {
-                last_status(false);
-                win_comp_pos();
-            }
-            let flags =
-                win_split_flags(fconfig.split, parent.is_none()) | WSP_NOENTER.cast_signed();
-            parent_tp = match parent_id {
-                None => Some(TabPage::current()),
-                Some(p) => win_find_tabpage(p),
-            };
-            let mut tstate = TryState::default();
-            // SAFETY: `tstate` is this frame's own, live until `try_leave`.
-            unsafe { try_enter(&raw mut tstate) };
-            let need_switch: bool = parent.is_some_and(|p| !p.is_current());
-            let mut switchwin = SwitchWin {
-                sw_curwin: None,
-                sw_curtab: None,
-                sw_same_win: false,
-                sw_visual_active: false,
-            };
-            if need_switch {
-                let parent_tp = expect_tab(parent_tp);
-                let parent = parent.expect("`need_switch` says there is a parent");
-                // SAFETY: `switchwin` is this frame's own, and `parent`/
-                // `parent_tp` are the live window and tab page to split in.
-                let result =
-                    unsafe { switch_win(&raw mut switchwin, parent, Some(parent_tp), true) };
-                debug_assert!(result.is_ok(), "the window was switched to");
-            }
-            to_split_ok = win_split_ins(
-                0 as ::core::ffi::c_int,
-                flags,
-                Some(win),
-                0 as ::core::ffi::c_int,
-                unflat_altfr.and_then(FrameId::get),
-            )
-            .is_some();
-            if !to_split_ok {
-                win_append(w.prev(), w, other_tab(expect_tab(win_tp)));
-            }
-            if need_switch {
-                // SAFETY: the matching restore of the switch above.
-                unsafe { restore_win(&raw mut switchwin, true) };
-            }
-            // SAFETY: `tstate` is what the `try_enter` above filled in.
-            stored(err, unsafe { try_leave(&raw mut tstate) });
-            if to_split_ok {
-                let mut tp = expect_tab(win_tp);
-                if win_tp != parent_tp && tp.tp_curwin == Some(win_id) {
-                    tp.tp_curwin = altwin_0.map(Win::id);
-                }
-                break '_resize;
-            }
-            if was_split && let Some(unflat) = unflat_altfr.and_then(FrameId::get) {
-                winframe_restore(w, dir, unflat);
-            }
-            if !err.is_set() {
-                // SAFETY: the caller's window.
-                let handle = win_id.handle();
-                let why = api_error!(
-                    kErrorTypeException,
-                    "Failed to move window {handle} into split"
-                );
-                store(err, why);
-            }
-        }
-        if curwin_moving_tp && win_valid(win_id) {
-            win_goto(w);
-        }
-        return false;
     }
+
     if config.width.is_some() {
-        win_setwidth_win(fconfig.width, w);
+        win_setwidth_win(fconfig.width, win);
     }
     if config.height.is_some() {
-        win_setheight_win(fconfig.height, w);
+        win_setheight_win(fconfig.height, win);
     }
     if !was_split {
         // SAFETY: the caller's config.
@@ -283,107 +402,150 @@ unsafe fn win_config_split(
     let merged = (*fconfig).clone();
     // SAFETY: the caller's window, whose config field is live with it.
     unsafe { merge_win_config(&raw mut win.w_config, merged) };
-    true
+    Ok(applied)
 }
 
 /// Apply the float half of `fconfig` to `win`, including the move to another
 /// tab page a `win` key may ask for.
 ///
-/// # Safety
-/// `win` must be a live window, and `config`, `fconfig` and `err` must name
-/// live objects for the whole call.
-unsafe fn win_config_float_tp(
-    mut win: Win,
-    config: CfgKeys,
-    fconfig: WinCfg,
-    err: ErrSlot,
-) -> bool {
-    // SAFETY: the caller's window, live for the whole call.
-    let w = win;
-    let mut win_tp = win_find_tabpage(win.id());
-    let mut parent_id = win.id();
-    let mut parent_tp = win_tp;
+/// Safe: as [`apply_split`].
+fn apply_float(win: Win, config: CfgKeys, fconfig: WinCfg) -> Result<Applied, Error> {
+    let mut float = Refloat {
+        win,
+        win_tp: win_find_tabpage(win.id()),
+        parent_id: win.id(),
+        parent_tp: win_find_tabpage(win.id()),
+        curwin_moving_tp: false,
+        altwin: None,
+    };
     if config.win.is_some() {
-        let Some(found) = stored(err, find_window_by_handle(fconfig.window)).flatten() else {
-            return false;
+        let Some(found) = find_window_by_handle(fconfig.window)? else {
+            return Ok(Applied::Refused);
         };
-        parent_id = found.id();
-        parent_tp = win_find_tabpage(parent_id);
+        float.parent_id = found.id();
+        float.parent_tp = win_find_tabpage(float.parent_id);
     }
-    let mut curwin_moving_tp = false;
-    let mut altwin: Option<Win> = None;
-    '_restore_curwin: {
-        if win_tp != parent_tp {
-            // SAFETY: the caller's window.
-            if stored(err, unsafe { win_can_move_tp(win, expect_tab(win_tp)) }).is_none() {
-                return false;
-            }
-            altwin = win_find_altwin(win, expect_tab(win_tp));
-            debug_assert!(altwin.is_some(), "altwin");
-            if win.is_current() {
-                curwin_moving_tp = true;
-                win_goto(altwin.expect("altwin"));
-                if win.is_current() {
-                    let handle = win.id().handle();
-                    let why = api_error!(
-                        kErrorTypeException,
-                        "Failed to switch away from window {handle}"
-                    );
-                    store(err, why);
-                    return false;
-                }
-                win_tp = win_find_tabpage(win.id());
-                parent_tp = win_find_tabpage(parent_id);
-                if win_tp.is_none() || parent_tp.is_none() {
-                    err_msg(err, kErrorTypeException, c"Target windows were closed");
-                    break '_restore_curwin;
-                }
-                // SAFETY: as above.
-                if win_tp != parent_tp
-                    && stored(err, unsafe { win_can_move_tp(win, expect_tab(win_tp)) }).is_none()
-                {
-                    break '_restore_curwin;
-                }
-                altwin = win_find_altwin(win, expect_tab(win_tp));
-                debug_assert!(altwin.is_some(), "altwin");
-            }
+    let moved = float.move_to_parent_tab(fconfig);
+    // The `win_goto` in `leave_tab` left the editor on another window. A
+    // move that got there goes back to this one; a move that finished does
+    // not, because the window it left is on the other tab page now.
+    let restores = matches!(moved, Err(Refusal::Restore(_)) | Ok(false));
+    if restores && float.curwin_moving_tp && win_valid(win.id()) {
+        win_goto(win);
+    }
+    match moved {
+        Err(Refusal::AsIs(why) | Refusal::Restore(why)) => return Err(why),
+        // A window handle that resolved to no window: upstream reports
+        // nothing and leaves the window as it was.
+        Ok(false) => return Ok(Applied::Refused),
+        Ok(true) => {}
+    }
+    let merged = (*fconfig).clone();
+    win_config_float(win, merged);
+    Ok(Applied::Done)
+}
+
+/// A float on its way to another tab page, and the state that move shares
+/// with the refusal that puts the current window back.
+struct Refloat {
+    win: Win,
+    /// The tab page the float is on, re-read after every `win_goto`.
+    win_tp: Option<TabPage>,
+    /// The window the float is relative to, and its tab page.
+    parent_id: WinId,
+    parent_tp: Option<TabPage>,
+    /// Whether the current window left its tab page for this move.
+    curwin_moving_tp: bool,
+    /// The window that takes the float's place where it was.
+    altwin: Option<Win>,
+}
+
+impl Refloat {
+    /// Move the window to the tab page its parent is on, making it a float
+    /// first if it was not one. `false` refuses without a reason.
+    fn move_to_parent_tab(&mut self, fconfig: WinCfg) -> Result<bool, Refusal> {
+        if self.win_tp != self.parent_tp {
+            self.leave_tab()?;
         }
-        if !win.w_floating {
-            let config = (*fconfig).clone();
-            if stored(err, win_new_float(Some(win), false, config))
-                .flatten()
-                .is_none()
-            {
-                break '_restore_curwin;
-            }
+        if !self.win.w_floating && !self.unfloat_to_float(fconfig)? {
+            return Ok(false);
+        }
+        if self.win_tp != self.parent_tp {
+            self.relist();
+        }
+        Ok(true)
+    }
+
+    /// Leave the tab page the window is on, when it is the current window,
+    /// and check that both tab pages survived the autocommands.
+    fn leave_tab(&mut self) -> Result<(), Refusal> {
+        // SAFETY: the window is live for as long as this record, and
+        // `win_tp` the tab page it was just found on.
+        let allowed = unsafe { win_can_move_tp(self.win, expect_tab(self.win_tp)) };
+        allowed.map_err(Refusal::AsIs)?;
+        self.altwin = win_find_altwin(self.win, expect_tab(self.win_tp));
+        debug_assert!(self.altwin.is_some(), "altwin");
+        if !self.win.is_current() {
+            return Ok(());
+        }
+        self.curwin_moving_tp = true;
+        win_goto(self.altwin.expect("altwin"));
+        if self.win.is_current() {
+            let handle = self.win.id().handle();
+            let why = api_error!(
+                kErrorTypeException,
+                "Failed to switch away from window {handle}"
+            );
+            // The editor is still on the window, so there is nothing to
+            // put back.
+            return Err(Refusal::AsIs(why));
+        }
+        self.win_tp = win_find_tabpage(self.win.id());
+        self.parent_tp = win_find_tabpage(self.parent_id);
+        if self.win_tp.is_none() || self.parent_tp.is_none() {
+            let why = Error::exception(c"Target windows were closed");
+            return Err(Refusal::Restore(why));
+        }
+        if self.win_tp != self.parent_tp {
             // SAFETY: as above.
-            redraw_later(win, UPD_NOT_VALID);
+            let allowed = unsafe { win_can_move_tp(self.win, expect_tab(self.win_tp)) };
+            allowed.map_err(Refusal::Restore)?;
         }
-        if win_tp != parent_tp {
-            let append_tp = other_tab(expect_tab(parent_tp));
-            // The caller's window, moved from one tab page's list to the
-            // other's.
-            win_remove(w, other_tab(expect_tab(win_tp)));
-            win_append(Some(lastwin_nofloating(append_tp)), w, append_tp);
-            let mut tp = expect_tab(win_tp);
-            if !tp.is_current() && tp.tp_curwin == Some(win.id()) {
-                tp.tp_curwin = altwin.map(Win::id);
-            }
-            // SAFETY: the window's own grid, which is live with it.
-            unsafe {
-                ui_comp_remove_grid(&raw mut win.w_grid_alloc);
-                redraw_later(win, UPD_NOT_VALID);
-            }
-            set_must_redraw(UPD_NOT_VALID);
-        }
+        self.altwin = win_find_altwin(self.win, expect_tab(self.win_tp));
+        debug_assert!(self.altwin.is_some(), "altwin");
+        Ok(())
+    }
+
+    /// Turn the window into a float, which is what a `relative` key asks of
+    /// a window that is still a split.
+    ///
+    /// `false` is the answer a handle that resolved to no window gives, and
+    /// is not a failure: upstream leaves the window as it was and reports
+    /// nothing.
+    fn unfloat_to_float(&mut self, fconfig: WinCfg) -> Result<bool, Refusal> {
         let config = (*fconfig).clone();
-        win_config_float(w, config);
-        return true;
+        let made = win_new_float(Some(self.win), false, config).map_err(Refusal::Restore)?;
+        if made.is_none() {
+            return Ok(false);
+        }
+        redraw_later(self.win, UPD_NOT_VALID);
+        Ok(true)
     }
-    if curwin_moving_tp && win_valid(win.id()) {
-        win_goto(w);
+
+    /// Move the window from one tab page's window list to the other's.
+    fn relist(&mut self) {
+        let append_tp = other_tab(expect_tab(self.parent_tp));
+        win_remove(self.win, other_tab(expect_tab(self.win_tp)));
+        win_append(Some(lastwin_nofloating(append_tp)), self.win, append_tp);
+        let mut tp = expect_tab(self.win_tp);
+        if !tp.is_current() && tp.tp_curwin == Some(self.win.id()) {
+            tp.tp_curwin = self.altwin.map(Win::id);
+        }
+        // SAFETY: the window's own grid, which is live with it.
+        unsafe { ui_comp_remove_grid(&raw mut self.win.w_grid_alloc) };
+        redraw_later(self.win, UPD_NOT_VALID);
+        set_must_redraw(UPD_NOT_VALID);
     }
-    false
 }
 
 /// Reconfigure `win` from the `config` dictionary.
@@ -404,20 +566,18 @@ pub unsafe fn nvim_win_set_config(
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    // SAFETY: `w` is the live window the lookup answered.
-    let live = w;
-    let was_split = !live.w_floating;
+    let was_split = !w.w_floating;
     let has_split = keys.split.is_some();
     let has_vertical = keys.vertical.is_some();
-    let old_style = live.w_config.style;
-    let mut fconfig = live.w_config.clone();
+    let old_style = w.w_config.style;
+    let mut fconfig = w.w_config.clone();
     let external = keys.external.unwrap_or(false);
     let relative_named = keys.relative.as_ref().is_some_and(|r| !r.is_empty());
     let to_split = !relative_named && !external && (has_split || has_vertical || was_split);
     // SAFETY: `fconfig` is this frame's own, and `keys` the caller's keyset.
     let parsed = unsafe {
         parse_win_config(
-            Some(live),
+            Some(w),
             keys,
             WinCfg::new(&raw mut fconfig),
             !was_split || to_split,
@@ -427,23 +587,27 @@ pub unsafe fn nvim_win_set_config(
     if !parsed {
         return ().reported(error);
     }
-    // SAFETY: `w` is live, `fconfig` this frame's own, and `keys`/`report`
-    // the caller's.
-    let applied = unsafe {
-        let fc = WinCfg::new(&raw mut fconfig);
-        if to_split {
-            win_config_split(w, keys, fc, report)
-        } else {
-            win_config_float_tp(w, keys, fc, report)
-        }
+    // SAFETY: `w` is live, `fconfig` this frame's own, and `keys` the
+    // caller's keyset.
+    // SAFETY: `fconfig` is this frame's own, live for the whole call.
+    let fc = unsafe { WinCfg::new(&raw mut fconfig) };
+    let applied = if to_split {
+        apply_split(w, keys, fc)
+    } else {
+        apply_float(w, keys, fc)
+    }?;
+    // An autocommand that threw while the window was reconfigured does not
+    // undo it: the rest of the config is applied, and the exception is the
+    // answer.
+    let raised = match applied {
+        Applied::Refused => return Ok(()),
+        Applied::Raised(raised) => Some(raised),
+        Applied::Done => None,
     };
-    if !applied {
-        return ().reported(error);
-    }
+
     if fconfig.style == kWinStyleMinimal && old_style != fconfig.style {
-        // SAFETY: `w` is live.
         win_set_minimal_style(w);
-        // SAFETY: as above.
+        // SAFETY: `w` is live.
         unsafe { didset_window_options(w, true) };
         changed_window_setting(w);
     }
@@ -452,5 +616,5 @@ pub unsafe fn nvim_win_set_config(
     } else if cmdline_win.get() == Some(w.id()) && fconfig._cmdline_offset == INT_MAX {
         cmdline_win.set(None);
     }
-    ().reported(error)
+    raised.map_or(Ok(()), Err)
 }
