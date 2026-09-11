@@ -62,9 +62,9 @@ use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     ApiDict, Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs,
-    Integer, KeyDict_highlight, Object, ObjectType, ProfTime, TUIData, UIClientHandler, Unpacker,
-    kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    uint16_t,
+    Integer, KeyDict_highlight, Object, ObjectType, ProfTime, String_0, TUIData, UIClientHandler,
+    Unpacker, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger,
+    kObjectTypeString, uint16_t,
 };
 use crate::ui::state::t_colors;
 use ::libc::{close, dup};
@@ -86,7 +86,11 @@ const UI_CONNECT_TIMEOUT_MS: c_int = 50;
 static tui: GlobalCell<*mut TUIData> = GlobalCell::new(core::ptr::null_mut());
 static tui_width: GlobalCell<c_int> = GlobalCell::new(0);
 static tui_height: GlobalCell<c_int> = GlobalCell::new(0);
-static tui_term: GlobalCell<*mut c_char> = GlobalCell::new(c"".as_ptr().cast_mut());
+/// The terminal name, **owned**. `tui_wait_ready` answers a pointer into
+/// the TUI's own arena, which `tui_terminal_stop` frees; a re-attach can
+/// run after that (a `:restart` that fails, or a close event during
+/// shutdown), so this keeps a copy rather than the TUI's pointer.
+static tui_term: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static tui_rgb: GlobalCell<bool> = GlobalCell::new(false);
 
 /// A reader that discards what it is given, for the streams this client
@@ -170,12 +174,36 @@ pub(crate) unsafe fn ui_client_start_server(
     unsafe { (*channel).id }
 }
 
-/// Attaches this client to the server as a UI.
+/// Attaches this client to the server as a UI, remembering the terminal
+/// description for a later [`ui_client_reattach`].
 ///
 /// # Safety
 ///
 /// `term` must be null or a valid C string, and a channel must be set.
 pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_char, rgb: bool) {
+    tui_width.set(width);
+    tui_height.set(height);
+    tui_rgb.set(rgb);
+    // A copy, not the pointer: `term` names the TUI's own arena, which
+    // stopping the terminal frees, and a re-attach can run after that.
+    // SAFETY: the caller's promise.
+    tui_term.set(unsafe { cstr_to_string(term) });
+    // SAFETY: as above; the description was just remembered.
+    unsafe { ui_client_reattach() };
+}
+
+/// Attaches with the terminal description the last attach remembered.
+///
+/// # Safety
+///
+/// A channel must be set.
+pub(crate) unsafe fn ui_client_reattach() {
+    let (width, height, term, rgb) = (
+        tui_width.get(),
+        tui_height.get(),
+        tui_term.with(String_0::clone),
+        tui_rgb.get(),
+    );
     let mut opts = DictBuf::<8>::new();
     opts.insert(c"rgb", Object::boolean(rgb));
     // A TUI is always on the modern protocol and always owns its own
@@ -183,10 +211,7 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
     opts.insert(c"ext_linegrid", Object::boolean(true));
     opts.insert(c"ext_termcolors", Object::boolean(true));
     if !term.is_null() {
-        opts.insert(
-            c"term_name",
-            Object::string(unsafe { cstr_to_string(term) }),
-        );
+        opts.insert(c"term_name", Object::string(term));
     }
     opts.insert(
         c"term_colors",
@@ -308,10 +333,7 @@ pub(crate) unsafe fn ui_client_run() -> ! {
     // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
     tui.set(unsafe { tui_start() });
     let started = unsafe { tui_wait_ready(tui.get()) };
-    tui_width.set(started.width);
-    tui_height.set(started.height);
-    tui_term.set(started.term);
-    tui_rgb.set(started.rgb);
+    // SAFETY: the terminal reported all four, and the channel is set.
     unsafe { ui_client_attach(started.width, started.height, started.term, started.rgb) };
 
     // The test harness waits for a line in the log before it starts
@@ -840,14 +862,8 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
         os_exit(1);
     }
     ui_client_channel_id.set(chan);
-    let (w, h, term, rgb) = (
-        tui_width.get(),
-        tui_height.get(),
-        tui_term.get(),
-        tui_rgb.get(),
-    );
-    // SAFETY: the terminal reported all four, and a channel is now set.
-    unsafe { ui_client_attach(w, h, term, rgb) };
+    // SAFETY: a channel is now set.
+    unsafe { ui_client_reattach() };
     let line = line!() as c_int;
     logmsg!(
         LOGLVL_INF,
@@ -943,15 +959,8 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
                 );
             } else {
                 ui_client_channel_id.set(chan_id);
-                let (w, h, term, rgb) = (
-                    tui_width.get(),
-                    tui_height.get(),
-                    tui_term.get(),
-                    tui_rgb.get(),
-                );
-                // SAFETY: the terminal reported all four, and the channel is
-                // now set.
-                unsafe { ui_client_attach(w, h, term, rgb) };
+                // SAFETY: the channel is now set.
+                unsafe { ui_client_reattach() };
                 let line = line!() as c_int;
                 logmsg!(
                     LOGLVL_INF,
