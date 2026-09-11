@@ -69,13 +69,7 @@ pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool) -> Array {
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-unsafe fn extmark_to_array(
-    extmark: MTPair,
-    id: bool,
-    add_dict: bool,
-    hl_name: bool,
-    arena: *mut Arena,
-) -> Array {
+unsafe fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) -> Array {
     let start: MTKey = extmark.start;
     let mut rv: Array = Array::with_capacity(4 as size_t);
     if id {
@@ -120,7 +114,7 @@ unsafe fn extmark_to_array(
         if mt_invalid(start) {
             dict.insert(String_0::from_cstr(c"invalid"), Object::boolean(true));
         }
-        unsafe { decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name, arena) };
+        unsafe { decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name) };
         rv.push(Object::dict(dict));
     }
     rv
@@ -136,7 +130,6 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     ns_id: Integer,
     id: Integer,
     opts: *mut KeyDict_get_extmark,
-    arena: *mut Arena,
 ) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
@@ -155,7 +148,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     if extmark.start.pos.row < 0 as int32_t {
         return rv.reported(error);
     }
-    unsafe { extmark_to_array(extmark, false, details, hl_name, arena) }.reported(error)
+    unsafe { extmark_to_array(extmark, false, details, hl_name) }.reported(error)
 }
 
 /// # Safety
@@ -171,7 +164,6 @@ pub unsafe fn nvim_buf_get_extmarks(
     start: Object,
     end: Object,
     opts: *mut KeyDict_get_extmarks,
-    arena: *mut Arena,
 ) -> Result<Array, Error> {
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
@@ -244,7 +236,7 @@ pub unsafe fn nvim_buf_get_extmarks(
             let mark = unsafe { *marks.items.offset(i as isize) };
             // SAFETY: `arena` is the caller's.
             let put_value =
-                unsafe { Object::array(extmark_to_array(mark, true, details, hl_name, arena)) };
+                unsafe { Object::array(extmark_to_array(mark, true, details, hl_name)) };
             // SAFETY: the collection is this call's own.
             rv.push(put_value);
             i -= 1;
@@ -256,7 +248,7 @@ pub unsafe fn nvim_buf_get_extmarks(
             let mark = unsafe { *marks.items.add(i_0) };
             // SAFETY: `arena` is the caller's.
             let put_value =
-                unsafe { Object::array(extmark_to_array(mark, true, details, hl_name, arena)) };
+                unsafe { Object::array(extmark_to_array(mark, true, details, hl_name)) };
             // SAFETY: the collection is this call's own.
             rv.push(put_value);
             i_0 = i_0.wrapping_add(1);

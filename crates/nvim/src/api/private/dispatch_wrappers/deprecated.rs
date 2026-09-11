@@ -824,7 +824,7 @@ pub unsafe fn handle_nvim_execute_lua(
 pub unsafe fn handle_nvim_get_hl_by_id(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -844,7 +844,7 @@ pub unsafe fn handle_nvim_get_hl_by_id(
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_hl_by_id(arg_1, arg_2, arena) }?;
+    let rv = unsafe { nvim_get_hl_by_id(arg_1, arg_2) }?;
     Ok(Object::dict(rv))
 }
 
@@ -862,7 +862,7 @@ pub unsafe fn handle_nvim_get_hl_by_id(
 pub unsafe fn handle_nvim_get_hl_by_name(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -882,7 +882,7 @@ pub unsafe fn handle_nvim_get_hl_by_name(
     };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_hl_by_name(arg_1, arg_2, arena) }?;
+    let rv = unsafe { nvim_get_hl_by_name(arg_1, arg_2) }?;
     Ok(Object::dict(rv))
 }
 

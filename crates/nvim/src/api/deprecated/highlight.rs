@@ -22,11 +22,7 @@ use crate::narrow::number_as_int;
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-pub unsafe fn nvim_get_hl_by_id(
-    hl_id: Integer,
-    rgb: Boolean,
-    arena: *mut Arena,
-) -> Result<ApiDict, Error> {
+pub unsafe fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
     // SAFETY: these take a highlight-group id rather than a pointer.
     let known = unsafe { syn_get_final_id(number_as_int(hl_id)) } != 0;
     if !known {
@@ -35,7 +31,7 @@ pub unsafe fn nvim_get_hl_by_id(
     // SAFETY: as above.
     let attrcode = unsafe { syn_id2attr(number_as_int(hl_id)) };
     // SAFETY: `arena` is the caller's.
-    unsafe { hl_get_attr_by_id(Integer::from(attrcode), rgb, arena) }
+    unsafe { hl_get_attr_by_id(Integer::from(attrcode), rgb) }
 }
 
 /// # Safety
@@ -43,11 +39,7 @@ pub unsafe fn nvim_get_hl_by_id(
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
-pub unsafe fn nvim_get_hl_by_name(
-    name: String_0,
-    rgb: Boolean,
-    arena: *mut Arena,
-) -> Result<ApiDict, Error> {
+pub unsafe fn nvim_get_hl_by_name(name: String_0, rgb: Boolean) -> Result<ApiDict, Error> {
     let error;
     // SAFETY: `name` is the caller's NUL-terminated group name.
     let id = unsafe { syn_name2id(name.data()) };
@@ -57,5 +49,5 @@ pub unsafe fn nvim_get_hl_by_name(
         return ApiDict::EMPTY.reported(error);
     }
     // SAFETY: `arena` is the caller's.
-    unsafe { nvim_get_hl_by_id(Integer::from(id), rgb, arena) }
+    unsafe { nvim_get_hl_by_id(Integer::from(id), rgb) }
 }

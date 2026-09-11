@@ -73,8 +73,8 @@ pub unsafe fn nvim_list_runtime_paths(arena: *mut Arena) -> Result<Array, Error>
 /// taken from and must outlive.
 // `nvim__runtime_inspect` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub unsafe fn nvim__runtime_inspect(arena: *mut Arena) -> Array {
-    unsafe { runtime_inspect(arena) }
+pub unsafe fn nvim__runtime_inspect() -> Array {
+    runtime_inspect()
 }
 
 /// # Safety
@@ -166,7 +166,6 @@ pub unsafe fn nvim__get_runtime(
     pat: Array,
     all: Boolean,
     opts: *mut KeyDict_runtime,
-    arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.
@@ -179,7 +178,7 @@ pub unsafe fn nvim__get_runtime(
         return Array::EMPTY.reported(error);
     }
     // SAFETY: `pat` is the caller's array and `arena` its own.
-    let res: Array = unsafe { runtime_get_named(is_lua, &pat, all, arena) };
+    let res: Array = unsafe { runtime_get_named(is_lua, &pat, all) };
     if should_source {
         for i in 0..res.len() {
             // SAFETY: `res` is the array `runtime_get_named` just built, of

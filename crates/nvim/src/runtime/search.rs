@@ -492,7 +492,7 @@ fn dict_obj(dict: ApiDict) -> Object {
 ///
 /// # Safety
 /// The cache must be live, which it is once `runtime_init` has run.
-pub unsafe fn runtime_inspect(_arena: *mut Arena) -> Array {
+pub fn runtime_inspect() -> Array {
     let path = runtime_search_path.get();
     let mut rv = Array::with_capacity(path.size);
     for i in 0..path.size {
@@ -527,7 +527,7 @@ pub unsafe fn runtime_inspect(_arena: *mut Arena) -> Array {
 ///
 /// # Safety
 /// The cache must be live.
-pub unsafe fn runtime_get_named(lua: bool, pat: &Array, all: bool, _arena: *mut Arena) -> Array {
+pub unsafe fn runtime_get_named(lua: bool, pat: &Array, all: bool) -> Array {
     let mut ref_0: c_int = 0;
     // SAFETY: the reference is released below, before this frame ends.
     let path = unsafe { runtime_search_path_get_cached(&raw mut ref_0) };

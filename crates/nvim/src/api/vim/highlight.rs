@@ -29,9 +29,8 @@ pub unsafe fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
 pub unsafe fn nvim_get_hl(
     ns_id: Integer,
     opts: *mut KeyDict_get_highlight,
-    arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
-    unsafe { ns_get_hl_defs(ns_id as NS, opts, arena) }
+    unsafe { ns_get_hl_defs(ns_id as NS, opts) }
 }
 
 /// # Safety

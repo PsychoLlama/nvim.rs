@@ -403,7 +403,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_by_id(lstate: *mut lua_Stat
             .inspect_err(|_| *err_param = c"hl_id".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe { nvim_get_hl_by_id(arg_1, arg_2, arena) }?;
+        let mut ret = unsafe { nvim_get_hl_by_id(arg_1, arg_2) }?;
         // SAFETY: as above.
         unsafe { nlua_push_dict(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())
@@ -438,7 +438,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_by_name(lstate: *mut lua_St
             .inspect_err(|_| *err_param = c"name".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe { nvim_get_hl_by_name(arg_1, arg_2, arena) }?;
+        let mut ret = unsafe { nvim_get_hl_by_name(arg_1, arg_2) }?;
         // SAFETY: as above.
         unsafe { nlua_push_dict(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())

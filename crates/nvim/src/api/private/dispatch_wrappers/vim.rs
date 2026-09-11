@@ -178,7 +178,7 @@ pub unsafe fn handle_nvim__get_lib_dir(
 pub unsafe fn handle_nvim__get_runtime(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -206,7 +206,7 @@ pub unsafe fn handle_nvim__get_runtime(
         };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim__get_runtime(arg_1, arg_2, &raw mut arg_3, arena) }?;
+    let rv = unsafe { nvim__get_runtime(arg_1, arg_2, &raw mut arg_3) }?;
     Ok(Object::array(rv))
 }
 
@@ -485,7 +485,7 @@ pub unsafe fn handle_nvim__redraw(
 pub unsafe fn handle_nvim__runtime_inspect(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     log_invoke(
         c"handle_nvim__runtime_inspect",
@@ -498,7 +498,7 @@ pub unsafe fn handle_nvim__runtime_inspect(
     }
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim__runtime_inspect(arena) };
+    let rv = unsafe { nvim__runtime_inspect() };
     Ok(Object::array(rv))
 }
 

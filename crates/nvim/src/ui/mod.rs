@@ -776,7 +776,7 @@ pub fn ui_has(ext: UIExtension) -> bool {
 ///
 /// Reaches the UI table; main thread only. Nothing is taken from `_arena`
 /// any more: the answer owns its entries.
-pub unsafe fn ui_array(_arena: *mut Arena) -> Array {
+pub fn ui_array() -> Array {
     let mut all_uis = Array::with_capacity(ui_count());
     for ui in each_ui() {
         let ui = unsafe { &*ui };

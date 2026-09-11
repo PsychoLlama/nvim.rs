@@ -26,7 +26,7 @@ use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
 use crate::types::String_0;
 use crate::types::{
-    ApiDict, Arena, Boolean, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
+    ApiDict, Boolean, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
     KeyDict_highlight_cterm, Object, int16_t, int32_t, kErrorTypeException, kErrorTypeValidation,
     size_t,
 };
@@ -59,11 +59,7 @@ pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
 /// # Safety
 /// `_arena` is null or a live arena. Nothing is taken from it any more: the
 /// answer owns its entries.
-pub unsafe fn hl_get_attr_by_id(
-    attr_id: Integer,
-    rgb: Boolean,
-    _arena: *mut Arena,
-) -> Result<ApiDict, Error> {
+pub unsafe fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
     let empty = ApiDict::EMPTY;
     if attr_id == 0 {
         return Ok(empty);

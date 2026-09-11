@@ -30,8 +30,8 @@ use crate::highlight::dict::put;
 use crate::highlight_group::syn_id2name;
 use crate::sign::describe_sign_text;
 use crate::types::{
-    ApiDict, Arena, Array, DecorInline, DecorSignHighlight, DecorVirtText, Object, String_0,
-    uint16_t, uint32_t,
+    ApiDict, Array, DecorInline, DecorSignHighlight, DecorVirtText, Object, String_0, uint16_t,
+    uint32_t,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -73,12 +73,7 @@ const HL_MODE_STR: [&CStr; 4] = [c"", c"replace", c"combine", c"blend"];
 /// whole `set_extmark` keyset); `decor` must be live. Nothing is taken
 /// from `_arena` any more: the dictionary owns its entries. It is valid or
 /// null.
-pub unsafe fn decor_to_dict_legacy(
-    dict: &mut ApiDict,
-    decor: DecorInline,
-    hl_name: bool,
-    _arena: *mut Arena,
-) {
+pub unsafe fn decor_to_dict_legacy(dict: &mut ApiDict, decor: DecorInline, hl_name: bool) {
     // SAFETY: the caller's decoration and dictionary.
     let mut sh_hl: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
     let mut sh_sign: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;

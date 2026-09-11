@@ -230,7 +230,7 @@ pub unsafe fn handle_nvim_buf_del_extmark(
 pub unsafe fn handle_nvim_buf_get_extmark_by_id(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -265,7 +265,7 @@ pub unsafe fn handle_nvim_buf_get_extmark_by_id(
         };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &raw mut arg_4, arena) }?;
+    let rv = unsafe { nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &raw mut arg_4) }?;
     Ok(Object::array(rv))
 }
 
@@ -283,7 +283,7 @@ pub unsafe fn handle_nvim_buf_get_extmark_by_id(
 pub unsafe fn handle_nvim_buf_get_extmarks(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -317,7 +317,7 @@ pub unsafe fn handle_nvim_buf_get_extmarks(
         };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5, arena) }?;
+    let rv = unsafe { nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5) }?;
     Ok(Object::array(rv))
 }
 

@@ -353,7 +353,7 @@ pub unsafe fn handle_nvim_get_current_win(
 pub unsafe fn handle_nvim_get_hl(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(
@@ -378,7 +378,7 @@ pub unsafe fn handle_nvim_get_hl(
         };
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_hl(arg_1, &raw mut arg_2, arena) }?;
+    let rv = unsafe { nvim_get_hl(arg_1, &raw mut arg_2) }?;
     Ok(Object::dict(rv))
 }
 
@@ -964,7 +964,7 @@ pub unsafe fn handle_nvim_list_tabpages(
 pub unsafe fn handle_nvim_list_uis(
     channel_id: uint64_t,
     args: Array,
-    arena: *mut Arena,
+    _arena: *mut Arena,
 ) -> Result<Object, Error> {
     log_invoke(
         c"handle_nvim_list_uis",
@@ -977,6 +977,6 @@ pub unsafe fn handle_nvim_list_uis(
     }
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_list_uis(arena) };
+    let rv = unsafe { nvim_list_uis() };
     Ok(Object::array(rv))
 }

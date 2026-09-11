@@ -20,7 +20,7 @@ use crate::api::private::helpers::cstr_to_string;
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::narrow::number_as_int;
-use crate::types::{ApiDict, Arena, Error, KeyDict_get_highlight, NS, Object};
+use crate::types::{ApiDict, Error, KeyDict_get_highlight, NS, Object};
 use crate::ui::ui_rgb_attached;
 
 use super::{
@@ -40,7 +40,7 @@ const NO_DICT: ApiDict = ApiDict::EMPTY;
 /// # Safety
 /// Reaches the group and namespace tables; main thread only. Nothing is
 /// taken from `_arena` any more: the dict owns its entries.
-unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int, _arena: *mut Arena) -> bool {
+unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
     let entry = group(hl_id);
     let mut ns = ns_id;
     // SAFETY: the editor's own tables.
@@ -100,7 +100,6 @@ unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int, _arena: *mut A
 pub(crate) unsafe fn ns_get_hl_defs(
     ns_id: NS,
     opts: *mut KeyDict_get_highlight,
-    arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     // SAFETY: the caller's keydict and arena.
     let link = unsafe { (*opts).link }.unwrap_or(true);
@@ -133,7 +132,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
             unsafe { syn_get_final_id(id) }
         };
         // SAFETY: the caller's arena.
-        unsafe { hlgroup2dict(&mut attrs, ns_id, id, arena) };
+        unsafe { hlgroup2dict(&mut attrs, ns_id, id) };
         return Ok(attrs);
     }
 
@@ -142,7 +141,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
     let mut rv = ApiDict::with_capacity(groups);
     for id in 1..=highlight_num_groups() {
         let mut attrs = NO_DICT;
-        if !unsafe { hlgroup2dict(&mut attrs, ns_id, id, arena) } {
+        if !unsafe { hlgroup2dict(&mut attrs, ns_id, id) } {
             continue;
         }
         let named = if link {

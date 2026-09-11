@@ -114,6 +114,6 @@ pub unsafe fn nvim_list_chans() -> Array {
 ///
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
-pub unsafe fn nvim_list_uis(arena: *mut Arena) -> Array {
-    unsafe { ui_array(arena) }
+pub unsafe fn nvim_list_uis() -> Array {
+    ui_array()
 }

@@ -28,8 +28,8 @@ use crate::r#move::changed_window_setting;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline,
-    DecorInline, DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
+    ApiDict, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline, DecorInline,
+    DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
     DecorVirtText_data, Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark,
     KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark,
     KeySetLink, LineNr, LuaRef, MTKey, MTPair, NS, Object, ScreenChar, String_0, UndoObjectType,

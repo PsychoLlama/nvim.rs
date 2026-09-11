@@ -91,12 +91,12 @@ use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn,
-    EStack, EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE,
-    FuncCallEntry, GArray, Integer, LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object,
-    OptSet, OptVal, ProfTime, RegMatch, ScriptCtx, ScriptId, ScriptItem, String_0, TypVal,
-    UV_MUTEX_INIT, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv, XDGVarType, int64_t,
-    kBoolVarFalse, ptrdiff_t, size_t, uv_mutex_t,
+    ApiDict, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, EStack,
+    EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE, FuncCallEntry,
+    GArray, Integer, LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object, OptSet, OptVal,
+    ProfTime, RegMatch, ScriptCtx, ScriptId, ScriptItem, String_0, TypVal, UV_MUTEX_INIT, UserFunc,
+    VAR_DICT, VarLock, VarNumber, VimConv, XDGVarType, int64_t, kBoolVarFalse, ptrdiff_t, size_t,
+    uv_mutex_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};

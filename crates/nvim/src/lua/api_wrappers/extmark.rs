@@ -234,7 +234,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_extmark_by_id(
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
         let mut ret =
-            unsafe { nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &raw mut arg_4.dict, arena) }?;
+            unsafe { nvim_buf_get_extmark_by_id(arg_1, arg_2, arg_3, &raw mut arg_4.dict) }?;
         // SAFETY: as above.
         unsafe { nlua_push_array(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())
@@ -278,9 +278,8 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_extmarks(lstate: *mut lua_
             .inspect_err(|_| *err_param = c"buf".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
         // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe {
-            nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5.dict, arena)
-        }?;
+        let mut ret =
+            unsafe { nvim_buf_get_extmarks(arg_1, arg_2, arg_3, arg_4, &raw mut arg_5.dict) }?;
         // SAFETY: as above.
         unsafe { nlua_push_array(lstate, &mut ret, PUSH_SPECIAL) };
         Ok(())
