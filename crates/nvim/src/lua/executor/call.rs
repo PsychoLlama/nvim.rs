@@ -27,7 +27,7 @@ use super::{
 };
 use crate::api::private::helpers::{api_set_sctx, try_enter, try_leave};
 use crate::api_error;
-use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
+use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::ex_getln::TRY_STATE_INIT;
@@ -84,11 +84,14 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             return luaL_error(lstate, c"Function called with too many arguments".as_ptr());
         }
 
-        let mut vim_args = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
+        // A frame rather than a plain array: it releases the `nargs` slots
+        // it was given and no more, where an array's drop glue walks all
+        // twenty-one on every call.
+        let mut vim_args = CallFrame::<{ MAX_FUNC_ARGS as usize + 1 }>::new();
         'free_vim_args: {
-            for (i, slot) in vim_args.iter_mut().enumerate().take(nargs) {
+            for i in 0..nargs {
                 lua_pushvalue(lstate, len_as_int(i) + 2);
-                if !nlua_pop_typval(lstate, slot) {
+                if !nlua_pop_typval(lstate, vim_args.claim()) {
                     let n = i + 1;
                     err = api_error!(kErrorTypeException, "error converting argument {n}");
                     break 'free_vim_args;
@@ -111,7 +114,7 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
             let sctx = api_set_sctx(LUA_INTERNAL_CALL);
             let mut tstate = TRY_STATE_INIT;
             try_enter(&raw mut tstate);
-            let args = &vim_args[..nargs];
+            let args = vim_args.args();
             let _ = call_func(
                 name,
                 len_as_int(name_len),

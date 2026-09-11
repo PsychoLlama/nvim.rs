@@ -18,11 +18,6 @@ use super::*;
 use crate::eval::typval::CallFrame;
 use crate::types::Failed;
 
-/// An empty argument array for one call: `MAX_FUNC_ARGS` values plus the
-/// slot a `base->Method()` base is put in front of them.
-const ARGV_INIT: [TypVal; MAX_FUNC_ARGS as usize + 1] =
-    [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
-
 /// Evaluate a call written as an expression: read `(a, b)` at `*arg`, then
 /// make the call.
 ///
@@ -37,7 +32,7 @@ pub unsafe fn get_func_tv(
     evalarg: *mut EvalArg,
     funcexe: *mut FuncExe,
 ) -> Result<(), Failed> {
-    let mut argvars = ARGV_INIT;
+    let mut argvars = Argv::new();
     let mut argcount = 0;
     let evaluate = !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE != 0;
 
@@ -53,7 +48,15 @@ pub unsafe fn get_func_tv(
         }
     };
     let argpp = &raw mut argp;
-    let mut ret = unsafe { get_func_arguments(argpp, evalarg, bound, &mut argvars, &mut argcount) };
+    let mut ret =
+        unsafe { get_func_arguments(argpp, evalarg, bound, argvars.room(), &mut argcount) };
+    // A failed argument leaves whatever it half-built in the slot it was
+    // being evaluated into, which upstream leaks and the frame releases.
+    argvars.fill(if ret.is_ok() {
+        argcount
+    } else {
+        (argcount + 1).min(MAX_FUNC_ARGS as usize + 1)
+    });
     debug_assert!(ret.is_ok() || ret.is_err());
 
     if ret.is_ok() {
@@ -62,7 +65,7 @@ pub unsafe fn get_func_tv(
         let pushed = if get_vim_var_nr(Vv::Testing) != 0 {
             funcargs.with_mut(|args| {
                 args.extend(
-                    argvars[..argcount]
+                    argvars.args()[..argcount]
                         .iter()
                         .map(|tv| ptr::from_ref(tv).cast_mut()),
                 );
@@ -73,7 +76,7 @@ pub unsafe fn get_func_tv(
         };
         // SAFETY: the caller's promise -- `result` is the return value.
         let rv = &mut *result;
-        ret = unsafe { call_func(name, len, rv, &argvars[..argcount], funcexe) };
+        ret = unsafe { call_func(name, len, rv, &argvars.args()[..argcount], funcexe) };
         // The nested calls pushed and popped their own; ours are the last.
         funcargs.with_mut(|args| args.truncate(args.len().saturating_sub(pushed)));
     } else if !aborting() && evaluate {
@@ -100,7 +103,7 @@ pub unsafe fn func_call(
     selfdict: *mut Dict,
     result: &mut TypVal,
 ) -> Result<(), Failed> {
-    let mut argv = ARGV_INIT;
+    let mut argv = Argv::new();
     let mut argc = 0;
     let mut r = Ok(());
 
@@ -119,7 +122,7 @@ pub unsafe fn func_call(
             }
             // Copy each argument, so that `v_lock` can be set to
             // VarLock::Fixed in the copy without changing the original list.
-            unsafe { tv_copy(&item.li_tv, &mut argv[argc]) };
+            unsafe { tv_copy(&item.li_tv, argv.claim()) };
             argc += 1;
         }
 
@@ -131,7 +134,7 @@ pub unsafe fn func_call(
         funcexe.fe_selfdict = selfdict;
         // SAFETY: the caller's promise -- `result` is the return value.
         let rv = &mut *result;
-        r = unsafe { call_func(name, -1, rv, &argv[..argc], &raw mut funcexe) };
+        r = unsafe { call_func(name, -1, rv, argv.args(), &raw mut funcexe) };
     }
     r
 }

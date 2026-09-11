@@ -15,6 +15,7 @@
 )]
 
 use super::{TV_INITIAL_VALUE, TypVal};
+use core::mem::ManuallyDrop;
 
 /// One call's argument list, assembled where the caller's own array had no
 /// room: in front of it, or around a `base->Method()` base.
@@ -28,8 +29,13 @@ use super::{TV_INITIAL_VALUE, TypVal};
 /// splicing a base in front of the caller's arguments must not duplicate a
 /// string or take a reference, and a `Vec<TypVal>` built by `clone()` would
 /// do both.
+/// The slots are a [`ManuallyDrop`] for the reason ruling (p30-a) gives:
+/// a frame releases exactly the `len` slots it holds, and a droppable field
+/// would have the compiler walk all `N` of them a second time afterwards --
+/// twenty-one tag tests on every call the interpreter makes, whatever the
+/// arity.
 pub(crate) struct CallFrame<const N: usize> {
-    slots: [TypVal; N],
+    slots: ManuallyDrop<[TypVal; N]>,
     len: usize,
     /// Bit `i` set: slot `i` is this frame's to release.
     owned: u32,
@@ -40,7 +46,7 @@ impl<const N: usize> CallFrame<N> {
     pub(crate) const fn new() -> Self {
         const { assert!(N <= 32, "the ownership mask is a u32") };
         Self {
-            slots: [TV_INITIAL_VALUE; N],
+            slots: ManuallyDrop::new([TV_INITIAL_VALUE; N]),
             len: 0,
             owned: 0,
         }
@@ -111,6 +117,35 @@ impl<const N: usize> CallFrame<N> {
                 self.slots[self.len] = TypVal::Unknown;
                 self.owned &= !(1 << self.len);
             }
+        }
+    }
+
+    /// Take the next slot, which the frame owns and releases, for a caller
+    /// that fills one value at a time.  It arrives `VAR_UNKNOWN`, so a
+    /// caller that fails to fill it releases nothing.
+    pub(crate) fn claim(&mut self) -> &mut TypVal {
+        assert!(self.len < N, "no room for another argument");
+        self.owned |= 1 << self.len;
+        self.len += 1;
+        &mut self.slots[self.len - 1]
+    }
+
+    /// The slots past the ones in use, for a caller that fills them in
+    /// place -- an argument parser writing into the frame it will then hand
+    /// to the call.  Every slot it fills is the frame's, which
+    /// [`fill`](Self::fill) records.
+    #[inline]
+    pub(crate) fn room(&mut self) -> &mut [TypVal] {
+        &mut self.slots[self.len..]
+    }
+
+    /// Take over the first `n` slots of the last [`room`](Self::room): the
+    /// frame owns them and releases them.
+    pub(crate) fn fill(&mut self, n: usize) {
+        assert!(self.len + n <= N, "no room for that many arguments");
+        for _ in 0..n {
+            self.owned |= 1 << self.len;
+            self.len += 1;
         }
     }
 
