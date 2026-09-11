@@ -50,8 +50,27 @@ impl Drop for Object {
     /// destructor would meet the stack before it met the end of the tree.
     /// The payloads are `ManuallyDrop` so that this is the *only* release
     /// path -- see the note on [`Object`].
+    ///
+    /// Seven of the eleven kinds own nothing, and a conversion drops far
+    /// more of those than it does containers -- every number, boolean,
+    /// handle and nil in the tree, plus the husk every `object_to_vim` arm
+    /// leaves behind. The tag test is two instructions in the caller where
+    /// the walk below is a call and a `Vec`.
     fn drop(&mut self) {
-        release(self);
+        if self.owns_storage() {
+            release(self);
+        }
+    }
+}
+
+impl Object {
+    /// Whether the value has anything to release: bytes, elements, entries
+    /// or a Lua registry reference.
+    const fn owns_storage(&self) -> bool {
+        matches!(
+            self,
+            Object::String(_) | Object::Array(_) | Object::Dict(_) | Object::LuaRef(_)
+        )
     }
 }
 
