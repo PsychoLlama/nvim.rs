@@ -16,7 +16,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, find_buffer_by_handle, find_window_by_handle};
+use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
 use crate::types::OptionSetFlags;
@@ -29,13 +29,10 @@ use core::ffi::{CStr, c_char, c_void};
 /// at `data[size]`. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
 pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
     let (buf, win) = (Buf::current(), Win::current());
     // SAFETY: `name` is the caller's, the two globals name the current
-    // buffer and window, and `arena`/`error` are the caller's and this
-    // frame's slot.
-    unsafe { get_vimoption(name, OptionSetFlags::GLOBAL, buf, win, arena, &mut error) }
-        .reported(error)
+    // buffer and window, and `arena` is the caller's.
+    unsafe { get_vimoption(name, OptionSetFlags::GLOBAL, buf, win, arena) }
 }
 
 /// # Safety

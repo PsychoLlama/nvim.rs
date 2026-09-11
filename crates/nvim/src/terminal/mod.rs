@@ -67,10 +67,10 @@ use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    AcoSave, Arena, BufferHandle, ColNr, Dict, Error, Event, ExArg, ExtmarkOp, Handle, HlAttrs,
-    LineNr, MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue,
-    SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell,
-    VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, int16_t, size_t, uint8_t,
+    AcoSave, Arena, BufferHandle, ColNr, Dict, Event, ExArg, ExtmarkOp, Handle, HlAttrs, LineNr,
+    MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue, SaveVEvent,
+    Terminal, TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs,
+    VTermState, VTermValue, VarNumber, int16_t, size_t, uint8_t,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -957,15 +957,10 @@ fn is_focused(term: Term) -> bool {
 /// # Safety
 /// `dict` must be a live dictionary and `key` NUL-terminated.
 unsafe fn dict_lookup(dict: *mut Dict, key: *const c_char) -> Object {
-    let mut err = Error::none();
     let no_arena = ::core::ptr::null_mut::<Arena>();
-    // SAFETY: forwarded to this function's own caller; `err` is this
-    // function's and is released before it returns.
-    unsafe {
-        let obj = dict_get_value(dict, cstr_as_string(key), no_arena, &mut err);
-        err.clear();
-        obj
-    }
+    // SAFETY: forwarded to this function's own caller. A key that is not
+    // there answers nil rather than a refusal.
+    unsafe { dict_get_value(dict, cstr_as_string(key), no_arena) }.unwrap_or(Object::Nil)
 }
 
 /// `b:<key>`, falling back to `g:<key>`, if it is a string.

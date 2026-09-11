@@ -44,14 +44,10 @@ impl Drop for Decoded {
 
 fn decode(bytes: &[u8]) -> Decoded {
     let mut arena: Arena = ARENA_EMPTY;
-    let mut error = Error::default();
-    let object = unsafe {
-        unpack(
-            bytes.as_ptr().cast::<c_char>(),
-            bytes.len(),
-            &raw mut arena,
-            &mut error,
-        )
+    let decoded = unsafe { unpack(bytes.as_ptr().cast::<c_char>(), bytes.len(), &raw mut arena) };
+    let (object, error) = match decoded {
+        Ok(object) => (object, Error::default()),
+        Err(error) => (Object::Nil, error),
     };
     Decoded {
         object,

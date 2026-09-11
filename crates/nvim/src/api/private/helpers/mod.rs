@@ -309,8 +309,8 @@ impl<T> Reported for T {
 // -- Odds and ends ---------------------------------------------------------
 
 /// Set the mark `name` in `buffer` to line/column, or delete it when `line` is
-/// 0. False, with `err` set, when the position is out of range or the mark
-/// name is not one that can be set.
+/// 0. Refuses when the position is out of range or the mark name is not one
+/// that can be set.
 ///
 /// # Safety
 ///
@@ -321,8 +321,7 @@ pub(crate) unsafe fn set_mark(
     name: String_0,
     line: Integer,
     col: Integer,
-    err: &mut Error,
-) -> bool {
+) -> Result<(), Error> {
     let buffer = buffer.unwrap_or_else(Buf::current).raw();
     let mut col = col;
     let mut deleting = false;
@@ -333,15 +332,15 @@ pub(crate) unsafe fn set_mark(
     } else {
         if col > MAXCOL as Integer {
             // SAFETY: the names and values are NUL-terminated strings.
-            *err = err_invalid(c"column", Bad::Bare(unsafe { cstr::at(out_of_range) }));
-            return false;
+            let why = Bad::Bare(unsafe { cstr::at(out_of_range) });
+            return Err(err_invalid(c"column", why));
         }
         // SAFETY: `buffer` is the caller's buffer, or the current one.
         let line_count = unsafe { (*buffer).b_ml.ml_line_count } as Integer;
         if line < 1 || line > line_count {
             // SAFETY: the names and values are NUL-terminated strings.
-            *err = err_invalid(c"line", Bad::Bare(unsafe { cstr::at(out_of_range) }));
-            return false;
+            let why = Bad::Bare(unsafe { cstr::at(out_of_range) });
+            return Err(err_invalid(c"line", why));
         }
     }
     debug_assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
@@ -357,18 +356,16 @@ pub(crate) unsafe fn set_mark(
     let handle = unsafe { (*buffer).handle };
     let (at, no_view) = (&raw mut pos, ptr::null_mut::<FileMarkView>());
     // SAFETY: `pos` is this frame's, and the mark is set in `handle`.
-    let res = unsafe { setmark_pos(mark, at, handle, no_view) }.is_ok();
-    if !res {
-        // `%c` wrote the one byte, whatever it was.
-        let byte = mark as u8;
-        let mark = msg_bytes(core::slice::from_ref(&byte));
-        *err = if deleting {
-            api_error!(kErrorTypeException, "Failed to delete named mark: {mark}")
-        } else {
-            api_error!(kErrorTypeException, "Failed to set named mark: {mark}")
-        };
+    if unsafe { setmark_pos(mark, at, handle, no_view) }.is_ok() {
+        return Ok(());
     }
-    res
+    // `%c` wrote the one byte, whatever it was.
+    let byte = mark as u8;
+    let mark = msg_bytes(core::slice::from_ref(&byte));
+    Err(match deleting {
+        true => api_error!(kErrorTypeException, "Failed to delete named mark: {mark}"),
+        false => api_error!(kErrorTypeException, "Failed to set named mark: {mark}"),
+    })
 }
 
 /// The highlight group a status line, window bar or status column defaults

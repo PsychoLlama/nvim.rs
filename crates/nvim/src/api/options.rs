@@ -19,8 +19,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    Reported, api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle,
-    has_key,
+    api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle, has_key,
 };
 use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
@@ -396,7 +395,6 @@ pub unsafe fn nvim_get_option_info2(
     opts: *mut KeyDict_option,
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
-    let mut err = Error::none();
     // SAFETY: as `nvim_get_option_value`.
     let target = unsafe { option_target(opts, name.data()) }?;
     // The metadata is read off a buffer and a window whatever the scope, so
@@ -412,8 +410,6 @@ pub unsafe fn nvim_get_option_info2(
         true => unsafe { Win::new(target.from.cast()) },
         false => Win::current(),
     };
-    // SAFETY: `buf` and `win` are live, `name` and `arena` are the caller's,
-    // and `err` is this frame's own.
-    let info = unsafe { get_vimoption(name, target.opt_flags, buf, win, arena, &mut err) };
-    info.reported(err)
+    // SAFETY: `buf` and `win` are live, and `name`/`arena` are the caller's.
+    unsafe { get_vimoption(name, target.opt_flags, buf, win, arena) }
 }

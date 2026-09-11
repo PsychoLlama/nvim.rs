@@ -35,7 +35,7 @@ pub use line::remote_ui_raw_line;
 pub use packer::remote_ui_flush_pending_data;
 pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 
-use crate::api::private::helpers::{Reported, api_typename, cstr_as_string, string_to_cstr};
+use crate::api::private::helpers::{api_typename, cstr_as_string, string_to_cstr};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
@@ -84,13 +84,15 @@ const DEFAULT_GRID_HANDLE: Integer = 1;
 /// error path, none of which is worth a hashtable.
 static connected_uis: GlobalCell<Vec<*mut RemoteUI>> = GlobalCell::new(Vec::new());
 
-/// The UI attached to `chan_id`, or null with `err` set.
-fn get_ui_or_err(chan_id: u64, err: &mut Error) -> *mut RemoteUI {
-    let ui = find_ui(chan_id).unwrap_or(core::ptr::null_mut());
-    if ui.is_null() {
-        *err = api_error!(kErrorTypeException, "UI not attached to channel: {chan_id}");
+/// The UI attached to `chan_id`, or why there is none.
+fn get_ui_or_err(chan_id: u64) -> Result<*mut RemoteUI, Error> {
+    match find_ui(chan_id) {
+        Some(ui) if !ui.is_null() => Ok(ui),
+        _ => Err(api_error!(
+            kErrorTypeException,
+            "UI not attached to channel: {chan_id}"
+        )),
     }
-    ui
 }
 
 /// The UI attached to `chan_id`, if there is one.
@@ -124,11 +126,8 @@ unsafe fn remote_ui_destroy(ui: *mut RemoteUI) {
 ///
 /// Safe: every `unsafe` below rests on the attach table, which this function
 /// reads and updates itself, rather than on anything the caller promised.
-pub fn remote_ui_disconnect(channel_id: u64, err: &mut Error, send_error_exit: bool) {
-    let ui = get_ui_or_err(channel_id, err);
-    if ui.is_null() {
-        return;
-    }
+pub fn remote_ui_disconnect(channel_id: u64, send_error_exit: bool) -> Result<(), Error> {
+    let ui = get_ui_or_err(channel_id)?;
     if send_error_exit {
         // A UI told to exit is one whose server is going away, so this
         // has to go out before the channel does.
@@ -153,6 +152,7 @@ pub fn remote_ui_disconnect(channel_id: u64, err: &mut Error, send_error_exit: b
     }
     // SAFETY: `ui` is detached and nothing references it any more.
     unsafe { remote_ui_destroy(ui) };
+    Ok(())
 }
 
 /// Pumps the event loop until some UI has attached.
@@ -183,21 +183,17 @@ pub unsafe fn nvim_ui_attach(
     height: Integer,
     options: ApiDict,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
     if find_ui(channel_id).is_some() {
-        error = api_error!(
+        return Err(api_error!(
             kErrorTypeException,
             "UI already attached to channel: {channel_id}"
-        );
-        return ().reported(error);
+        ));
     }
     if !ui_can_attach_more() {
-        error = Error::exception(c"Maximum UI count reached");
-        return ().reported(error);
+        return Err(Error::exception(c"Maximum UI count reached"));
     }
     if width <= 0 || height <= 0 {
-        error = Error::validation(c"Expected width > 0 and height > 0");
-        return ().reported(error);
+        return Err(Error::validation(c"Expected width > 0 and height > 0"));
     }
 
     let raw = Box::into_raw(Box::new(RemoteUI::new(channel_id, width, height)));
@@ -211,16 +207,16 @@ pub unsafe fn nvim_ui_attach(
     for i in 0..options.size {
         // SAFETY: `i` is below `size`, so the slot is inside `items`.
         let option = unsafe { *options.items.add(i) };
-        // SAFETY: `raw` is live, `error` is this frame's slot, and the value
-        // lives as long as the caller's dictionary.
-        unsafe { ui_set_option(raw, true, option.key, option.value, &mut error) };
-        if error.is_set() {
+        // SAFETY: `raw` is live, and the value lives as long as the
+        // caller's dictionary.
+        let set = unsafe { ui_set_option(raw, true, option.key, option.value) };
+        if let Err(e) = set {
             // Nothing has been published yet, so the half-configured UI
             // can simply be dropped. `term_name` is the only owned
             // field an option sets, and not on an error path.
             // SAFETY: nothing else names `raw` yet.
             drop(unsafe { Box::from_raw(raw) });
-            return ().reported(error);
+            return Err(e);
         }
     }
 
@@ -246,7 +242,7 @@ pub unsafe fn nvim_ui_attach(
         unsafe { (*chan).rpc.ui = raw };
     }
     may_trigger_vim_suspend_resume(false);
-    ().reported(error)
+    Ok(())
 }
 
 impl RemoteUI {
@@ -313,10 +309,7 @@ pub unsafe fn ui_attach(
 
 /// Tells the editor that this UI gained or lost the user's attention.
 pub fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), Error> {
-    let mut error = Error::none();
-    if get_ui_or_err(channel_id, &mut error).is_null() {
-        return Err(error);
-    }
+    get_ui_or_err(channel_id)?;
     if gained {
         // Whichever UI was focused last is the one `nvim_get_current_ui`
         // means and the one a `:suspend` applies to.
@@ -329,9 +322,7 @@ pub fn nvim_ui_set_focus(channel_id: u64, gained: Boolean) -> Result<(), Error> 
 
 /// Detaches the UI on `channel_id`.
 pub fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
-    let mut error = Error::none();
-    remote_ui_disconnect(channel_id, &mut error, false);
-    ().reported(error)
+    remote_ui_disconnect(channel_id, false)
 }
 
 /// Tells a UI to reconnect to `server_addr`.
@@ -342,17 +333,15 @@ pub fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
 /// # Safety
 ///
 /// `server_addr` a valid C string.
-pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char, err: &mut Error) {
-    let ui = get_ui_or_err(channel_id, err);
-    if ui.is_null() {
-        return;
-    }
+pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char) -> Result<(), Error> {
+    let ui = get_ui_or_err(channel_id)?;
     let mut args = ArrayBuf::<1>::new();
     // SAFETY: the caller's promise -- `server_addr` is a C string, and the
     // borrowed view of it does not outlive this call.
     args.push(Object::string(unsafe { cstr_as_string(server_addr) }));
     // SAFETY: `ui` is in the attach table, so it is live.
     unsafe { packer::push_call(ui, c"connect", args.array()) };
+    Ok(())
 }
 
 /// Reports that this UI's window is now `width` by `height` cells.
@@ -365,14 +354,9 @@ pub unsafe fn nvim_ui_try_resize(
     width: Integer,
     height: Integer,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    let ui = get_ui_or_err(channel_id, &mut error);
-    if ui.is_null() {
-        return ().reported(error);
-    }
+    let ui = get_ui_or_err(channel_id)?;
     if width <= 0 || height <= 0 {
-        error = Error::validation(c"Expected width > 0 and height > 0");
-        return ().reported(error);
+        return Err(Error::validation(c"Expected width > 0 and height > 0"));
     }
     // SAFETY: `ui` is in the attach table, so it is live.
     let mut ui = unsafe { Ui::new(ui) };
@@ -382,7 +366,7 @@ pub unsafe fn nvim_ui_try_resize(
     // change what every other one is sent.
     // SAFETY: no borrow of the UI is held across the refresh.
     unsafe { ui_refresh() };
-    ().reported(error)
+    Ok(())
 }
 
 /// Changes one negotiated option after attaching.
@@ -395,14 +379,9 @@ pub unsafe fn nvim_ui_set_option(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    let ui = get_ui_or_err(channel_id, &mut error);
-    if ui.is_null() {
-        return Err(error);
-    }
+    let ui = get_ui_or_err(channel_id)?;
     // SAFETY: the UI just looked up, and the caller's value.
-    unsafe { ui_set_option(ui, false, name, value, &mut error) };
-    ().reported(error)
+    unsafe { ui_set_option(ui, false, name, value) }
 }
 
 /// Applies one option to `ui`.
@@ -419,8 +398,7 @@ unsafe fn ui_set_option(
     init: bool,
     name: String_0,
     value: Object,
-    err: &mut Error,
-) {
+) -> Result<(), Error> {
     // SAFETY: the caller's promise -- `ui` is live for the call. `Live`
     // hands out a borrow only for the length of one field access, so the
     // calls below never run with one outstanding.
@@ -431,19 +409,15 @@ unsafe fn ui_set_option(
     let named = |want: &CStr| unsafe { strequal(name.data(), want.as_ptr()) };
 
     if named(c"override") {
-        let Some(on) = want_boolean(err, c"override", value) else {
-            return;
-        };
+        let on = want_boolean(c"override", value)?;
         // Asks for the highest capabilities any UI requested rather
         // than the intersection, for UIs that can cope with anything.
         ui.override_0 = on;
-        return;
+        return Ok(());
     }
 
     if named(c"rgb") {
-        let Some(on) = want_boolean(err, c"rgb", value) else {
-            return;
-        };
+        let on = want_boolean(c"rgb", value)?;
         ui.rgb = on;
         // Only the legacy protocol bakes the colour model into what it
         // is sent; a linegrid UI gets both and picks.
@@ -451,13 +425,11 @@ unsafe fn ui_set_option(
             // SAFETY: no borrow of the UI is held across the refresh.
             unsafe { ui_refresh() };
         }
-        return;
+        return Ok(());
     }
 
     if named(c"term_name") {
-        let Some(term) = want_string(err, c"term_name", value) else {
-            return;
-        };
+        let term = want_string(c"term_name", value)?;
         // 'term' is global, so the last UI to say what terminal it is
         // wins; the copy on the UI is what `nvim_list_uis` reports. Each
         // side gets its own allocation, since both are freed separately.
@@ -465,58 +437,49 @@ unsafe fn ui_set_option(
         unsafe { set_tty_option(c"term", string_to_cstr(term)) };
         // SAFETY: as above.
         ui.term_name = unsafe { string_to_cstr(term) };
-        return;
+        return Ok(());
     }
 
     if named(c"term_colors") {
-        let Some(colors) = want_integer(err, c"term_colors", value) else {
-            return;
-        };
+        let colors = want_integer(c"term_colors", value)?;
         t_colors.set(colors as c_int);
         ui.term_colors = colors as c_int;
-        return;
+        return Ok(());
     }
 
     if named(c"stdin_fd") {
-        let Some(fd) = want_integer(err, c"stdin_fd", value) else {
-            return;
-        };
+        let fd = want_integer(c"stdin_fd", value)?;
         if fd < 0 {
-            *err = err_bad_number(c"stdin_fd", fd);
-            return;
+            return Err(err_bad_number(c"stdin_fd", fd));
         }
         // The editor reads its startup input from this descriptor,
         // which only means anything before startup has finished.
         if starting.get() != 2 {
-            *err = Error::validation(c"stdin_fd can only be used with first attached UI");
-            return;
+            let why = c"stdin_fd can only be used with first attached UI";
+            return Err(Error::validation(why));
         }
         stdin_fd.set(fd as c_int);
-        return;
+        return Ok(());
     }
 
     if named(c"stdin_tty") {
-        let Some(tty) = want_boolean(err, c"stdin_tty", value) else {
-            return;
-        };
+        let tty = want_boolean(c"stdin_tty", value)?;
         // Only the stdio channel is talking about the editor's own
         // standard streams.
         if ui.channel_id == CHAN_STDIO {
             stdin_isatty.set(tty);
         }
         ui.stdin_tty = tty;
-        return;
+        return Ok(());
     }
 
     if named(c"stdout_tty") {
-        let Some(tty) = want_boolean(err, c"stdout_tty", value) else {
-            return;
-        };
+        let tty = want_boolean(c"stdout_tty", value)?;
         if ui.channel_id == CHAN_STDIO {
             stdout_isatty.set(tty);
         }
         ui.stdout_tty = tty;
-        return;
+        return Ok(());
     }
 
     // The extensions, by their protocol names. `popupmenu_external` is
@@ -531,64 +494,52 @@ unsafe fn ui_set_option(
         let Some(active) = value.as_boolean() else {
             // SAFETY: `name` is the caller's NUL-terminated option name.
             let name = unsafe { name.as_cstr() };
-            wrong_type(err, name, kObjectTypeBoolean, value);
-            return;
+            return Err(wrong_type(name, kObjectTypeBoolean, value));
         };
         // Which protocol a UI speaks is decided at attach: the editor
         // has already sent it events in that protocol's shape.
         if !init && ext == kUILinegrid as usize && active != ui.ui_ext[ext] {
-            *err = Error::validation(c"ext_linegrid option cannot be changed");
+            return Err(Error::validation(c"ext_linegrid option cannot be changed"));
         }
         ui.ui_ext[ext] = active;
         if !init {
             // SAFETY: `ui` is live and no borrow of it is outstanding.
             unsafe { ui_set_ext_option(ui.raw(), ext as UIExtension, active) };
         }
-        return;
+        return Ok(());
     }
 
     // SAFETY: the caller's option name is NUL-terminated.
     let unknown = unsafe { name.as_cstr() };
-    *err = err_bad_value(c"UI option", unknown);
+    Err(err_bad_value(c"UI option", unknown))
 }
 
-/// `value` as the boolean `name` takes, or `None` with `err` set to say
-/// what arrived instead.
-fn want_boolean(err: &mut Error, name: &CStr, value: Object) -> Option<Boolean> {
-    let got = value.as_boolean();
-    if got.is_none() {
-        wrong_type(err, name, kObjectTypeBoolean, value);
-    }
-    got
+/// `value` as the boolean `name` takes, or what arrived instead.
+fn want_boolean(name: &CStr, value: Object) -> Result<Boolean, Error> {
+    value
+        .as_boolean()
+        .ok_or_else(|| wrong_type(name, kObjectTypeBoolean, value))
 }
 
 /// [`want_boolean`] for an integer.
-fn want_integer(err: &mut Error, name: &CStr, value: Object) -> Option<Integer> {
-    let got = value.as_integer();
-    if got.is_none() {
-        wrong_type(err, name, kObjectTypeInteger, value);
-    }
-    got
+fn want_integer(name: &CStr, value: Object) -> Result<Integer, Error> {
+    value
+        .as_integer()
+        .ok_or_else(|| wrong_type(name, kObjectTypeInteger, value))
 }
 
 /// [`want_boolean`] for a string.
-fn want_string(err: &mut Error, name: &CStr, value: Object) -> Option<String_0> {
-    let got = value.as_string();
-    if got.is_none() {
-        wrong_type(err, name, kObjectTypeString, value);
-    }
-    got
+fn want_string(name: &CStr, value: Object) -> Result<String_0, Error> {
+    value
+        .as_string()
+        .ok_or_else(|| wrong_type(name, kObjectTypeString, value))
 }
 
 /// Reports that `value` is not the `expected` type `name` takes.
-///
-/// # Safety
-///
-/// `name` a valid C string.
-fn wrong_type(err: &mut Error, name: &CStr, expected: ObjectType, value: Object) {
+fn wrong_type(name: &CStr, expected: ObjectType, value: Object) -> Error {
     let expected = api_typename(expected);
     let actual = api_typename(value.kind());
-    *err = err_expected(name, expected, Some(actual));
+    err_expected(name, expected, Some(actual))
 }
 
 /// Resizes one grid, for a UI with `ext_multigrid`.
@@ -602,19 +553,15 @@ pub unsafe fn nvim_ui_try_resize_grid(
     width: Integer,
     height: Integer,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    if get_ui_or_err(channel_id, &mut error).is_null() {
-        return ().reported(error);
-    }
+    get_ui_or_err(channel_id)?;
     if grid == DEFAULT_GRID_HANDLE {
         // The default grid is the screen, so resizing it is a window
         // resize like any other.
-        // SAFETY: `error` is this frame's slot.
+        // SAFETY: the editor is running, per this function's contract.
         return unsafe { nvim_ui_try_resize(channel_id, width, height) };
     }
     let (grid, width, height) = (grid as Handle, width as c_int, height as c_int);
-    ui_grid_resize(grid, width, height, &mut error);
-    ().reported(error)
+    ui_grid_resize(grid, width, height)
 }
 
 /// Tells the editor how many lines this UI's popupmenu can show.
@@ -623,23 +570,19 @@ pub unsafe fn nvim_ui_try_resize_grid(
 ///
 /// The editor must be running.
 pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Error> {
-    let mut error = Error::none();
-    let ui = get_ui_or_err(channel_id, &mut error);
-    if ui.is_null() {
-        return ().reported(error);
-    }
+    let ui = get_ui_or_err(channel_id)?;
     if height <= 0 {
-        error = Error::validation(c"Expected pum height > 0");
-        return ().reported(error);
+        return Err(Error::validation(c"Expected pum height > 0"));
     }
     // SAFETY: `ui` is in the attach table, so it is live.
     let mut ui = unsafe { Ui::new(ui) };
     if !ui.ui_ext[kUIPopupmenu as usize] {
-        error = Error::validation(c"UI must support the ext_popupmenu option");
-        return ().reported(error);
+        return Err(Error::validation(
+            c"UI must support the ext_popupmenu option",
+        ));
     }
     ui.pum_nlines = height as c_int;
-    ().reported(error)
+    Ok(())
 }
 
 /// Tells the editor where this UI drew its popupmenu, so that `pumvisible()`
@@ -655,31 +598,26 @@ pub unsafe fn nvim_ui_pum_set_bounds(
     row: Float,
     col: Float,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    let ui = get_ui_or_err(channel_id, &mut error);
-    if ui.is_null() {
-        return ().reported(error);
-    }
+    let ui = get_ui_or_err(channel_id)?;
     // SAFETY: `ui` is in the attach table, so it is live.
     let mut ui = unsafe { Ui::new(ui) };
     if !ui.ui_ext[kUIPopupmenu as usize] {
-        error = Error::validation(c"UI must support the ext_popupmenu option");
-        return ().reported(error);
+        return Err(Error::validation(
+            c"UI must support the ext_popupmenu option",
+        ));
     }
     if width <= 0.0 {
-        error = Error::validation(c"Expected width > 0");
-        return ().reported(error);
+        return Err(Error::validation(c"Expected width > 0"));
     }
     if height <= 0.0 {
-        error = Error::validation(c"Expected height > 0");
-        return ().reported(error);
+        return Err(Error::validation(c"Expected height > 0"));
     }
     ui.pum_row = row;
     ui.pum_col = col;
     ui.pum_width = width;
     ui.pum_height = height;
     ui.pum_pos = true;
-    ().reported(error)
+    Ok(())
 }
 
 /// Forwards `content` to every UI that owns a terminal, as `ui_send`.

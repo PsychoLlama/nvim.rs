@@ -340,42 +340,32 @@ pub unsafe fn nvim_buf_get_text(
     let first = start_row as int64_t;
     if start_row == end_row {
         let (from, to) = (start_col as int64_t, end_col as int64_t);
-        let line: String_0 = buf_get_text(b, first, from, to, &mut error);
-        if !error.is_set() {
-            let (data, len) = (line.data(), line.len());
-            // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-            unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
-            return rv.reported(error);
-        }
-    } else {
-        let from = start_col as int64_t;
-        let to = (MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int64_t;
-        str = buf_get_text(b, first, from, to, &mut error);
-        if !error.is_set() {
-            let (data, len) = (str.data(), str.len());
-            // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-            unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
-            if size > 2 as size_t {
-                let n = size.wrapping_sub(2 as size_t);
-                let at = start_row as LineNr + 1 as LineNr;
-                // SAFETY: `b` is the live buffer and `rvp` this call's array.
-                unsafe { buf_collect_lines(b, n, at, 1, replace_nl, rvp, lstate, arena) };
-            }
-            let last = end_row as int64_t;
-            let to = end_col as int64_t;
-            str = buf_get_text(b, last, 0 as int64_t, to, &mut error);
-            if !error.is_set() {
-                let (data, len) = (str.data(), str.len());
-                let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
-                // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
-                unsafe { push_linestr(lstate, rvp, data, len, at, replace_nl, arena) };
-            }
-        }
+        let line: String_0 = buf_get_text(b, first, from, to)?;
+        let (data, len) = (line.data(), line.len());
+        // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
+        unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
+        return Ok(rv);
     }
-    if error.is_set() {
-        return Err(error);
+    let from = start_col as int64_t;
+    let to = (MAXCOL as ::core::ffi::c_int - 1 as ::core::ffi::c_int) as int64_t;
+    str = buf_get_text(b, first, from, to)?;
+    let (data, len) = (str.data(), str.len());
+    // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
+    unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
+    if size > 2 as size_t {
+        let n = size.wrapping_sub(2 as size_t);
+        let at = start_row as LineNr + 1 as LineNr;
+        // SAFETY: `b` is the live buffer and `rvp` this call's array.
+        unsafe { buf_collect_lines(b, n, at, 1, replace_nl, rvp, lstate, arena) };
     }
-    rv.reported(error)
+    let last = end_row as int64_t;
+    let to = end_col as int64_t;
+    str = buf_get_text(b, last, 0 as int64_t, to)?;
+    let (data, len) = (str.data(), str.len());
+    let at = size.wrapping_sub(1 as size_t) as ::core::ffi::c_int;
+    // SAFETY: `data` holds `len` bytes; `rvp` is this call's array.
+    unsafe { push_linestr(lstate, rvp, data, len, at, replace_nl, arena) };
+    Ok(rv)
 }
 
 pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {

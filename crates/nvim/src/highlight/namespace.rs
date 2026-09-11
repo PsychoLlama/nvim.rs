@@ -50,7 +50,7 @@ use crate::popupmenu::pum_drawn;
 use crate::popupmenu::state::must_redraw_pum;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    ColorItem, ColorKey, DecorProvider, Error, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
+    ColorItem, ColorKey, DecorProvider, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
     LuaRetMode, NS, Object,
 };
 use crate::winlayer::Win;
@@ -232,18 +232,13 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         }));
         args.push(Object::boolean(link));
 
-        let mut err = Error::none();
         let recursing = Depth::of(&RECURSIVE);
         let name = c"hl_def".as_ptr();
         let (args, arena) = (args.array(), ::core::ptr::null_mut());
-        // SAFETY: the namespace's own callback reference.
-        let ret = match unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena) } {
-            Ok(value) => value,
-            Err(e) => {
-                err = e;
-                Object::Nil
-            }
-        };
+        // SAFETY: the namespace's own callback reference. A callback that
+        // failed is a callback that declined, which the fallback below is.
+        let ret = unsafe { nlua_call_ref(hl_def, name, args, kRetObject, arena) };
+        let ret = ret.unwrap_or(Object::Nil);
         drop(recursing);
 
         // Anything but a dict means the callback declined; fall back.
@@ -260,7 +255,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
             let target = (&raw mut dict).cast();
             if unsafe { api_dict_to_keydict(target, field, answer) }.is_ok() {
                 let link_id = &mut item.link_id;
-                attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None, &mut err) };
+                attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None) }.unwrap_or(attrs);
                 let asked = dict.is_set__highlight_ & (1 << KEY_FALLBACK) != 0;
                 fallback = !asked || dict.fallback;
                 provisional = dict.fallback;

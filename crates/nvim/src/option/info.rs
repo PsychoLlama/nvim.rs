@@ -16,13 +16,12 @@
 
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_char;
-use core::ptr;
 
 use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::options::*;
 use crate::types::{
-    ApiDict, Arena, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, ScriptCtx,
-    String_0, key_value_pair, size_t,
+    ApiDict, Arena, Error, Integer, Object, OptIndex, OptionSetFlags, ScriptCtx, String_0,
+    key_value_pair, size_t,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -81,21 +80,15 @@ pub(crate) unsafe fn get_vimoption(
     buffer: Buf,
     win: Win,
     arena: *mut Arena,
-    err: &mut Error,
-) -> ApiDict {
+) -> Result<ApiDict, Error> {
     // SAFETY: the caller's pointers are live.
     let opt_idx: OptIndex = find_option_len(unsafe { name.as_bytes() });
     if opt_idx == kOptInvalid {
         // SAFETY: the keyset's name is NUL-terminated.
         let name = unsafe { name.as_cstr() };
-        *err = err_bad_value(c"option (not found)", name);
-        return ApiDict {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ptr::null_mut::<KeyValuePair>(),
-        };
+        return Err(err_bad_value(c"option (not found)", name));
     }
-    unsafe { vimoption2dict(opt_idx, opt_flags, buffer, win, arena) }
+    Ok(unsafe { vimoption2dict(opt_idx, opt_flags, buffer, win, arena) })
 }
 
 /// Every option's info dictionary, keyed by full name.

@@ -94,13 +94,10 @@ pub unsafe fn get_foldtext(
             if let Object::Array(chunks) = obj {
                 // A list of `[text, hl]` chunks: the caller draws them,
                 // and the returned text is empty.
-                let mut err = Error::none();
-                unsafe { *vt = parse_virt_text(chunks, &mut err, ptr::null_mut()) };
-                if !err.is_set() {
-                    unsafe { *buf = NUL as c_char };
+                if let Ok(parsed) = unsafe { parse_virt_text(chunks, ptr::null_mut()) } {
+                    unsafe { (*vt, *buf) = (parsed, NUL as c_char) };
                     text = buf;
                 }
-                err.clear();
             } else if let Object::String(s) = obj {
                 // `text` keeps the bytes; clear the object so the free below
                 // leaves them alone.

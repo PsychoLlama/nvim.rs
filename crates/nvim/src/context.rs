@@ -40,7 +40,7 @@ use crate::shada::{
 };
 use crate::types::{
     ApiDict, Arena, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptionSetFlags, String_0, VAR_LIST, kErrorTypeNone, key_value_pair, size_t, uint8_t,
+    OptionSetFlags, String_0, VAR_LIST, key_value_pair, size_t, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -254,7 +254,6 @@ unsafe fn array_push(arr: &mut Array, value: Object) {
 /// Main-thread editor call; the function table is live.
 unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
     ctx.funcs = ARRAY_INIT;
-    let mut err = Error::none();
     // SAFETY: the caller's contract; every name is NUL-terminated and alive
     // for the walk, and `cmd` is owned until `exec_impl` has copied it.
     for name in unsafe { func_names() } {
@@ -271,12 +270,10 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         let mut opts = KeyDict_exec_opts { output: true };
         let src = unsafe { cstr_as_string(cmd.as_ptr() as *const c_char) };
         let o = &raw mut opts;
-        let func_body = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o, &mut err) };
-        if !err.is_set() {
+        if let Ok(func_body) = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o) } {
             let body = Object::String(func_body);
             unsafe { array_push(&mut ctx.funcs, body) };
         }
-        err.clear();
     }
 }
 
@@ -300,8 +297,8 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
 /// Convert a `readfile()`-style array back to the msgpack blob it encodes.
 ///
 /// # Safety
-/// Main-thread editor call; `err` is a live error object.
-unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
+/// Main-thread editor call.
+unsafe fn array_to_string(array: Array) -> Result<String_0, Error> {
     let mut sbuf = String_0::NULL;
     let mut list_tv = TV_INITIAL_VALUE;
     // SAFETY: the caller's array and error; `list_tv` owns the conversion
@@ -313,11 +310,14 @@ unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
         "list_tv.v_type() == VAR_LIST"
     );
     let (data, size) = sbuf.parts_mut();
-    if !unsafe { encode_vim_list_to_buf(list_tv.list_or_null(), size, data) } {
-        *err = Error::exception(c"E474: Failed to convert list to msgpack string buffer");
-    }
+    let converted = unsafe { encode_vim_list_to_buf(list_tv.list_or_null(), size, data) };
     unsafe { tv_clear(&mut list_tv) };
-    sbuf
+    match converted {
+        true => Ok(sbuf),
+        false => Err(Error::exception(
+            c"E474: Failed to convert list to msgpack string buffer",
+        )),
+    }
 }
 
 /// Append one `key: [bytes...]` entry to an arena-allocated dict.
@@ -359,32 +359,32 @@ pub unsafe fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> ApiDict {
 /// are not arrays, and names that are not one of the five, are ignored.
 ///
 /// # Safety
-/// Main-thread editor call; `ctx` is a live context and `err` a live error.
-pub unsafe fn ctx_from_dict(dict: ApiDict, ctx: *mut Context, err: &mut Error) -> c_int {
+/// Main-thread editor call; `ctx` is a live context.
+///
+/// The sections read before a refusal stay in `ctx`, which the caller frees
+/// either way.
+pub unsafe fn ctx_from_dict(dict: ApiDict, ctx: *mut Context) -> Result<c_int, Error> {
     debug_assert!(!ctx.is_null(), "ctx != NULL");
     let mut types = 0;
-    // SAFETY: the caller's dict, context and error.
+    // SAFETY: the caller's dict and context.
     let ctx = unsafe { &mut *ctx };
     for i in 0..dict.size {
-        if err.kind() as c_int != kErrorTypeNone as c_int {
-            break;
-        }
         let item: KeyValuePair = unsafe { *dict.items.add(i) };
         let Object::Array(array) = item.value else {
             continue;
         };
         if unsafe { strequal(item.key.data(), c"regs".as_ptr()) } {
             types |= kCtxRegs as c_int;
-            ctx.regs = unsafe { array_to_string(array, err) };
+            ctx.regs = unsafe { array_to_string(array) }?;
         } else if unsafe { strequal(item.key.data(), c"jumps".as_ptr()) } {
             types |= kCtxJumps as c_int;
-            ctx.jumps = unsafe { array_to_string(array, err) };
+            ctx.jumps = unsafe { array_to_string(array) }?;
         } else if unsafe { strequal(item.key.data(), c"bufs".as_ptr()) } {
             types |= kCtxBufs as c_int;
-            ctx.bufs = unsafe { array_to_string(array, err) };
+            ctx.bufs = unsafe { array_to_string(array) }?;
         } else if unsafe { strequal(item.key.data(), c"gvars".as_ptr()) } {
             types |= kCtxGVars as c_int;
-            ctx.gvars = unsafe { array_to_string(array, err) };
+            ctx.gvars = unsafe { array_to_string(array) }?;
         } else if unsafe { strequal(item.key.data(), c"funcs".as_ptr()) } {
             types |= kCtxFuncs as c_int;
             ctx.funcs = unsafe { copy_object(item.value, core::ptr::null_mut::<Arena>()) }
@@ -392,5 +392,5 @@ pub unsafe fn ctx_from_dict(dict: ApiDict, ctx: *mut Context, err: &mut Error) -
                 .expect("a copy of an array is an array");
         }
     }
-    types
+    Ok(types)
 }

@@ -106,20 +106,19 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
 /// # Safety
 ///
 /// `group` must be a well-formed API object the caller owns for the call.
-pub(crate) unsafe fn get_augroup_from_object(group: Object, err: &mut Error) -> ::core::ffi::c_int {
+pub(crate) unsafe fn get_augroup_from_object(group: Object) -> Result<::core::ffi::c_int, Error> {
     let au_group: ::core::ffi::c_int;
     let name: *mut ::core::ffi::c_char;
     match group {
-        Object::Nil => return AUGROUP_DEFAULT as ::core::ffi::c_int,
+        Object::Nil => Ok(AUGROUP_DEFAULT as ::core::ffi::c_int),
         Object::String(s) => {
             au_group = unsafe { augroup_find(s.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
                 // SAFETY: the string's bytes outlive this call.
                 let name = unsafe { s.as_cstr() };
-                *err = err_bad_value(c"group", name);
-                return AUGROUP_ERROR as ::core::ffi::c_int;
+                return Err(err_bad_value(c"group", name));
             }
-            return au_group;
+            Ok(au_group)
         }
         Object::Integer(n) => {
             au_group = number_as_int(n);
@@ -129,19 +128,14 @@ pub(crate) unsafe fn get_augroup_from_object(group: Object, err: &mut Error) -> 
                 augroup_name(au_group)
             };
             if !unsafe { augroup_exists(name) } {
-                *err = err_bad_number(c"group", int64_t::from(au_group));
-                return AUGROUP_ERROR as ::core::ffi::c_int;
+                return Err(err_bad_number(c"group", int64_t::from(au_group)));
             }
-            return au_group;
+            Ok(au_group)
         }
         _ => {
-            if true {
-                let want = c"String or Integer";
-                let got = api_typename(group.kind());
-                *err = err_expected(c"group", want, Some(got));
-                return AUGROUP_ERROR as ::core::ffi::c_int;
-            }
+            let want = c"String or Integer";
+            let got = api_typename(group.kind());
+            Err(err_expected(c"group", want, Some(got)))
         }
     }
-    panic!("Reached end of non-void function without returning");
 }

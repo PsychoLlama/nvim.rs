@@ -244,11 +244,9 @@ pub(crate) fn buf_get_text(
     lnum: int64_t,
     start_col: int64_t,
     end_col: int64_t,
-    err: &mut Error,
-) -> String_0 {
+) -> Result<String_0, Error> {
     if lnum >= i64::from(MAXLNUM) {
-        *err = err_out_of_range(c"line index");
-        return String_0::NULL;
+        return Err(err_out_of_range(c"line index"));
     }
     // SAFETY: the caller's promise -- `buffer` is a loaded buffer, and `lnum`
     // is below `MAXLNUM`.
@@ -260,10 +258,13 @@ pub(crate) fn buf_get_text(
     let start_col = relative(start_col).clamp(0, line_length);
     let end_col = relative(end_col).clamp(0, line_length);
     if start_col > end_col {
-        *err = Error::validation(c"start_col must be less than or equal to end_col");
-        return String_0::NULL;
+        let why = c"start_col must be less than or equal to end_col";
+        return Err(Error::validation(why));
     }
     // SAFETY: `start_col` was clamped into the line.
     let text = unsafe { bufstr.offset(start_col as isize) };
-    String_0::from_raw_parts(text, (end_col - start_col) as size_t)
+    Ok(String_0::from_raw_parts(
+        text,
+        (end_col - start_col) as size_t,
+    ))
 }

@@ -31,7 +31,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::narrow::len_as_int;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 /// Clear the abort/throw state, but only for a call that is not nested inside
@@ -109,12 +109,12 @@ unsafe fn call_function_with(
     args: Array,
     self_0: *mut Dict,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     if args.size > MAX_FUNC_ARGS as size_t {
-        *err = Error::validation(c"Function called with too many arguments");
-        return Object::Nil;
+        return Err(Error::validation(
+            c"Function called with too many arguments",
+        ));
     }
     let mut vim_args = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize];
     for (i, slot) in vim_args[..args.size].iter_mut().enumerate() {
@@ -123,7 +123,7 @@ unsafe fn call_function_with(
         unsafe { object_to_vim(*args.items.add(i), slot) };
     }
 
-    let mut rv = Object::Nil;
+    let rv;
     {
         let _nesting = enter_recursive(&recursive);
         let mut rettv: TypVal = TV_INITIAL_VALUE;
@@ -143,13 +143,12 @@ unsafe fn call_function_with(
         // SAFETY: `name` names `name_len` bytes and `rettv`/`funcexe` are
         // this frame's.
         let _ = unsafe { call_func(name, name_len, &mut rettv, argv, fe) };
-        // SAFETY: `tstate` is what the `try_enter` above filled in, and
-        // `err` is the caller's slot.
-        err.absorb(unsafe { try_leave(&raw mut tstate) });
-        if err.kind() == kErrorTypeNone {
+        // SAFETY: `tstate` is what the `try_enter` above filled in.
+        rv = match unsafe { try_leave(&raw mut tstate) } {
             // SAFETY: `rettv` is this frame's and `arena` the caller's.
-            rv = unsafe { vim_to_object(&*ret, arena, false) };
-        }
+            Ok(()) => Ok(unsafe { vim_to_object(&*ret, arena, false) }),
+            Err(e) => Err(e),
+        };
         // SAFETY: `rettv` is this frame's.
         unsafe { tv_clear(&mut *ret) };
     }
@@ -167,11 +166,9 @@ pub unsafe fn nvim_call_function(
     args: Array,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
-    // SAFETY: `fn_0`/`args`/`arena` are the caller's, and `error` this
-    // frame's slot; a null self dictionary means a plain function call.
-    let rv = unsafe { call_function_with(fn_0, args, ptr::null_mut::<Dict>(), arena, &mut error) };
-    rv.reported(error)
+    // SAFETY: `fn_0`/`args`/`arena` are the caller's; a null self dictionary
+    // means a plain function call.
+    unsafe { call_function_with(fn_0, args, ptr::null_mut::<Dict>(), arena) }
 }
 
 /// # Safety
@@ -229,21 +226,19 @@ pub unsafe fn nvim_call_dict_function(
     let self_dict: *mut Dict = rettv.dict_or_null();
     // SAFETY: `rettv` is this frame's, and `fn_0`/`args`/`arena` are the
     // caller's.
-    let rv = unsafe { call_in_dict(&mut fn_0, dict, args, self_dict, &rettv, arena, &mut error) };
+    let rv = unsafe { call_in_dict(&mut fn_0, dict, args, self_dict, &rettv, arena) };
     if mustfree {
         // SAFETY: the evaluated value is this frame's.
         unsafe { tv_clear(&mut rettv) };
     }
-    rv.reported(error)
+    rv
 }
 
 /// The tail of [`nvim_call_dict_function`]: resolve `fn_0` inside `self_dict`
 /// when it was named rather than given, then call it.
 ///
 /// # Safety
-/// `self_dict` must be null or the dictionary `result` holds, and `err` must
-/// be the caller's error slot.
-#[allow(clippy::too_many_arguments)]
+/// `self_dict` must be null or the dictionary `result` holds.
 unsafe fn call_in_dict(
     fn_0: &mut String_0,
     dict: Object,
@@ -251,16 +246,9 @@ unsafe fn call_in_dict(
     self_dict: *mut Dict,
     result: &TypVal,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Object {
-    // Every refusal below is a validation error, with or without the name
-    // it is about.
-    // SAFETY: the caller's promise about `err`.
-    let mut refuse = |msg: &CStr| *err = Error::validation(msg);
-
+) -> Result<Object, Error> {
     if result.v_type() != VAR_DICT || self_dict.is_null() {
-        refuse(c"dict not found");
-        return Object::Nil;
+        return Err(Error::validation(c"dict not found"));
     }
     // A Dict argument was converted whole, so its function member is
     // already `fn_0`; a String argument named a dictionary to look in.
@@ -271,20 +259,17 @@ unsafe fn call_in_dict(
         if di.is_null() {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
             let name = unsafe { c_str(fn_0.data()) };
-            *err = api_error!(kErrorTypeValidation, "Not found: {name}");
-            return Object::Nil;
+            return Err(api_error!(kErrorTypeValidation, "Not found: {name}"));
         }
         // SAFETY: the lookup answered a live item of `self_dict`.
         let v_type = unsafe { (*di).di_tv.v_type() };
         if v_type == VAR_PARTIAL {
-            refuse(c"partial function not supported");
-            return Object::Nil;
+            return Err(Error::validation(c"partial function not supported"));
         }
         if v_type != VAR_FUNC {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
             let name = unsafe { c_str(fn_0.data()) };
-            *err = api_error!(kErrorTypeValidation, "Not a function: {name}");
-            return Object::Nil;
+            return Err(api_error!(kErrorTypeValidation, "Not a function: {name}"));
         }
         // SAFETY: a `VAR_FUNC` carries a NUL-terminated function name.
         let name = unsafe { (*di).di_tv.func_name_or_null() };
@@ -292,10 +277,9 @@ unsafe fn call_in_dict(
         *fn_0 = String_0::from_raw_parts(name, unsafe { cstr::bytes_at(name) }.len());
     }
     if fn_0.data().is_null() || fn_0.is_empty() {
-        *err = Error::validation(c"Invalid function name: (empty)");
-        return Object::Nil;
+        return Err(Error::validation(c"Invalid function name: (empty)"));
     }
     // SAFETY: `fn_0` names its own bytes and `self_dict` is the live
     // dictionary the call is a method of.
-    unsafe { call_function_with(*fn_0, args, self_dict, arena, err) }
+    unsafe { call_function_with(*fn_0, args, self_dict, arena) }
 }

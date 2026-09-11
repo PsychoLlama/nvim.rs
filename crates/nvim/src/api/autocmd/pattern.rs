@@ -32,41 +32,24 @@ pub(crate) unsafe fn unpack_string_or_array(
     k: *mut ::core::ffi::c_char,
     required: bool,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Array {
+) -> Result<Array, Error> {
     if matches!(v, Object::String(_)) {
         let mut arr: Array = arena_array(arena, 1 as size_t);
         unsafe { array_add(&mut arr, v) };
-        return arr;
+        return Ok(arr);
     } else if let Object::Array(array) = v {
         // SAFETY: `k` is a NUL-terminated key.
         let key = unsafe { core::ffi::CStr::from_ptr(k) };
         // SAFETY: the array is the caller's.
-        if let Err(e) = unsafe { check_string_array(array, key, true) } {
-            *err = e;
-            return Array {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<Object>(),
-            };
-        }
-        return array;
+        unsafe { check_string_array(array, key, true) }?;
+        return Ok(array);
     } else if !(!required && v.is_nil()) {
         let got = api_typename(v.kind());
         // SAFETY: `k` is a NUL-terminated key.
         let k = unsafe { core::ffi::CStr::from_ptr(k) };
-        *err = err_expected(k, c"Array or String", Some(got));
-        return Array {
-            size: 0 as size_t,
-            capacity: 0 as size_t,
-            items: ::core::ptr::null_mut::<Object>(),
-        };
+        return Err(err_expected(k, c"Array or String", Some(got)));
     }
-    Array {
-        size: 0 as size_t,
-        capacity: 0 as size_t,
-        items: ::core::ptr::null_mut::<Object>(),
-    }
+    Ok(Array::EMPTY)
 }
 
 /// # Safety
@@ -81,8 +64,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     buffer: BufferHandle,
     fallback: *mut ::core::ffi::c_char,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Array {
+) -> Result<Array, Error> {
     let mut patterns: ArrayBuilder = ArrayBuilder {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -119,14 +101,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             }
         } else if let Object::Array(array) = pattern {
             // SAFETY: the array is the caller's.
-            if let Err(e) = unsafe { check_string_array(array, c"pattern", true) } {
-                *err = e;
-                return Array {
-                    size: 0 as size_t,
-                    capacity: 0 as size_t,
-                    items: ::core::ptr::null_mut::<Object>(),
-                };
-            }
+            unsafe { check_string_array(array, c"pattern", true) }?;
             let mut entry_index: size_t = 0 as size_t;
             while entry_index < array.size {
                 let entry: Object = unsafe { *array.items.add(entry_index) };
@@ -153,28 +128,13 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
                 }
                 entry_index = entry_index.wrapping_add(1);
             }
-        } else if true {
+        } else {
             let want = c"String or Table";
             let got = api_typename(pattern.kind());
-            *err = err_expected(c"pattern", want, Some(got));
-            return Array {
-                size: 0 as size_t,
-                capacity: 0 as size_t,
-                items: ::core::ptr::null_mut::<Object>(),
-            };
+            return Err(err_expected(c"pattern", want, Some(got)));
         }
     } else if has_buf {
-        let b = match find_buffer_by_handle(buffer) {
-            Ok(b) => b,
-            Err(e) => {
-                *err = e;
-                return Array {
-                    size: 0 as size_t,
-                    capacity: 0 as size_t,
-                    items: ::core::ptr::null_mut::<Object>(),
-                };
-            }
-        };
+        let b = find_buffer_by_handle(buffer)?;
         // `kv_push`, whose growth step c2rust expanded inline.
         InitVec::new(
             &mut patterns.size,
@@ -196,5 +156,5 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
         )
         .push(Object::string(unsafe { cstr_as_string(fallback) }));
     }
-    unsafe { arena_take_arraybuilder(arena, &raw mut patterns) }
+    Ok(unsafe { arena_take_arraybuilder(arena, &raw mut patterns) })
 }

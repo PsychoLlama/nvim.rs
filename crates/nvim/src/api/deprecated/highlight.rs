@@ -27,17 +27,15 @@ pub unsafe fn nvim_get_hl_by_id(
     rgb: Boolean,
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
     // SAFETY: these take a highlight-group id rather than a pointer.
     let known = unsafe { syn_get_final_id(number_as_int(hl_id)) } != 0;
     if !known {
-        error = err_bad_number(c"highlight id", hl_id);
-        return ApiDict::EMPTY.reported(error);
+        return Err(err_bad_number(c"highlight id", hl_id));
     }
     // SAFETY: as above.
     let attrcode = unsafe { syn_id2attr(number_as_int(hl_id)) };
-    // SAFETY: `arena` is the caller's and `error` this frame's slot.
-    unsafe { hl_get_attr_by_id(Integer::from(attrcode), rgb, arena, &mut error) }.reported(error)
+    // SAFETY: `arena` is the caller's.
+    unsafe { hl_get_attr_by_id(Integer::from(attrcode), rgb, arena) }
 }
 
 /// # Safety

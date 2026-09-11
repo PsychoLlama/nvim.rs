@@ -343,7 +343,7 @@ unsafe extern "C" fn request_event(argv: *mut *mut c_void) {
             let mut answer = result;
             // SAFETY: the channel is live and both slots are stack locals.
             let (to, out) = (chan.as_ptr(), &raw mut answer);
-            unsafe { serialize_response(to, handler, type_0, request_id, &mut error, out) };
+            unsafe { serialize_response(to, handler, type_0, request_id, &error, out) };
         }
         if handler.ret_alloc {
             // SAFETY: the handler said it allocated the result.
@@ -368,11 +368,9 @@ unsafe fn send_error(
     id: uint32_t,
     err: *mut c_char,
 ) {
-    let mut e;
     let mut answer = Object::Nil;
     // SAFETY: the message the caller handed over, live for this call.
-    e = Error::from_message(kErrorTypeException, unsafe { cstr::at(err) });
+    let e = Error::from_message(kErrorTypeException, unsafe { cstr::at(err) });
     let (to, out) = (chan.as_ptr(), &raw mut answer);
-    unsafe { serialize_response(to, handler, type_0, id, &mut e, out) };
-    e.clear();
+    unsafe { serialize_response(to, handler, type_0, id, &e, out) };
 }

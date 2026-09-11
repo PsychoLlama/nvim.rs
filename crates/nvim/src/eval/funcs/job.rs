@@ -45,9 +45,9 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, Error,
-    EvalFuncData, IOSIZE, Integer, List, MAXPATHL, NUL, Object, TypVal, VAR_BOOL, VAR_DICT,
-    VAR_LIST, VAR_NUMBER, VarNumber, Vv, uint16_t, uint64_t,
+    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, EvalFuncData,
+    IOSIZE, Integer, List, MAXPATHL, NUL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
+    VarNumber, Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -626,12 +626,11 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, Some(buf)) };
 
         if unsafe { terminal_live(chan) } {
-            let mut err = Error::none();
             // Locked so that the two variables cannot be swapped out
             // from under the terminal by a BufFilePost autocommand.
             buf.b_locked += 1;
-            unsafe { set_buf_var(buf, c"terminal_job_id", (*chan).id as Integer, &mut err) };
-            unsafe { set_buf_var(buf, c"terminal_job_pid", pid as Integer, &mut err) };
+            unsafe { set_buf_var(buf, c"terminal_job_id", (*chan).id as Integer) };
+            unsafe { set_buf_var(buf, c"terminal_job_pid", pid as Integer) };
             buf.b_locked -= 1;
 
             if unsafe { terminal_live(chan) } {
@@ -653,16 +652,15 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
     unsafe { !(*chan).term.is_null() && terminal_buf((*chan).term) != 0 }
 }
 
-/// Set one buffer-local variable to an Integer, discarding any error.
+/// Set one buffer-local variable to an Integer, discarding any refusal.
 ///
 /// # Safety
-/// `buffer` is a live buffer and `err` a live out-parameter.
-unsafe fn set_buf_var(buffer: Buf, name: &CStr, value: Integer, err: &mut Error) {
+/// `buffer` is a live buffer.
+unsafe fn set_buf_var(buffer: Buf, name: &CStr, value: Integer) {
     let value = Object::Integer(value);
     let arena = ptr::null_mut::<Arena>();
     // SAFETY: the caller's obligation; the name is `'static`.
     let vars = buffer.b_vars;
     let name = unsafe { cstr_as_string(name.as_ptr()) };
-    unsafe { dict_set_var(vars, name, value, false, false, arena, err) };
-    err.clear();
+    drop(unsafe { dict_set_var(vars, name, value, false, false, arena) });
 }

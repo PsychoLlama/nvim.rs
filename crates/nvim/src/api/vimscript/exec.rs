@@ -16,7 +16,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, api_try, dict_put_str};
+use crate::api::private::helpers::{api_try, dict_put_str};
 use crate::guard::Suppress;
 use crate::types::NUL;
 use core::ffi::c_char;
@@ -32,13 +32,11 @@ pub unsafe fn nvim_exec2(
     src: String_0,
     opts: *mut KeyDict_exec_opts,
 ) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
-    // SAFETY: `src`/`opts` are the caller's and `error` this frame's slot.
-    let output: String_0 = unsafe { exec_impl(channel_id, src, opts, &mut error) };
+    // SAFETY: `src`/`opts` are the caller's.
+    let output: String_0 = unsafe { exec_impl(channel_id, src, opts) }?;
     // SAFETY: `opts` is the caller's keydict, live for the call.
-    let wanted = unsafe { (*opts).output };
-    if error.is_set() || !wanted {
-        return ApiDict::EMPTY.reported(error);
+    if !unsafe { (*opts).output } {
+        return Ok(ApiDict::EMPTY);
     }
     // Heap-allocated rather than arena-allocated: the caller frees this
     // dictionary key by key, so the key is a copy too.
@@ -49,7 +47,7 @@ pub unsafe fn nvim_exec2(
         let key = cstr_to_string(c"output".as_ptr());
         dict_put_str(&mut result, key, Object::string(output));
     }
-    result.reported(error)
+    Ok(result)
 }
 
 /// Source `src` as an anonymous script, answering whatever it printed when
@@ -64,8 +62,7 @@ pub unsafe fn exec_impl(
     channel_id: uint64_t,
     src: String_0,
     opts: *mut KeyDict_exec_opts,
-    err: &mut Error,
-) -> String_0 {
+) -> Result<String_0, Error> {
     // Read once: `opts` is the dispatcher's own copy of the keyword
     // arguments, which nothing the sourced script can do reaches.
     // SAFETY: `opts` is the caller's keydict, live for the call.
@@ -101,11 +98,10 @@ pub unsafe fn exec_impl(
         msg_col.set(save_msg_col);
     }
     drop(sctx);
-    // SAFETY: `tstate` is what the `try_enter` above filled in, and `err`
-    // is the caller's slot.
-    err.absorb(unsafe { try_leave(&raw mut tstate) });
+    // SAFETY: `tstate` is what the `try_enter` above filled in.
+    let thrown = unsafe { try_leave(&raw mut tstate) };
 
-    let caught = err.kind() != kErrorTypeNone;
+    let caught = thrown.is_err();
     // The capture always starts with the newline that separated the first
     // message from whatever was on screen; drop it. A one-byte capture is
     // that newline alone, i.e. nothing was printed.
@@ -125,14 +121,14 @@ pub unsafe fn exec_impl(
                 s.set_len(s.len() - 1);
             }
         }
-        return s;
+        return Ok(s);
     }
     if capture {
         // SAFETY: `capture_local` is this frame's, and nothing points at it
         // any more.
         unsafe { ga_clear(&raw mut capture_local) };
     }
-    String_0::NULL
+    thrown.map(|()| String_0::NULL)
 }
 
 /// # Safety

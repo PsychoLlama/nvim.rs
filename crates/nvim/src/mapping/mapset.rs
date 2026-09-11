@@ -238,7 +238,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 /// `lhs` instead of adding one.
 ///
 /// # Safety
-/// Every pointer argument must be live; `err` is written on failure.
+/// Every pointer argument must be live.
 #[allow(clippy::too_many_arguments)] // the API dispatcher's own signature
 pub unsafe fn modify_keymap(
     channel_id: uint64_t,
@@ -248,20 +248,14 @@ pub unsafe fn modify_keymap(
     lhs: String_0,
     rhs: String_0,
     opts: *mut KeyDict_keymap,
-    err: &mut Error,
-) {
+) -> Result<(), Error> {
     let mut lua_funcref = LUA_NOREF;
     let global = buffer == -1;
     if global {
         buffer = 0;
     }
-    let target_buf = match find_buffer_by_handle(buffer) {
-        Ok(Some(buf)) => buf,
-        Ok(None) => return,
-        Err(e) => {
-            *err = e;
-            return;
-        }
+    let Some(target_buf) = find_buffer_by_handle(buffer)? else {
+        return Ok(());
     };
 
     // The guard restores the previous script context when it is dropped
@@ -291,9 +285,12 @@ pub unsafe fn modify_keymap(
     }
     parsed_args.buffer = !global;
 
+    // The refusal is held rather than returned: the cleanup below has to run
+    // whichever way the block left.
+    let failed;
     'fail_and_free: {
         if parsed_args.replace_keycodes && !parsed_args.expr {
-            *err = Error::validation(REQUIRES_EXPR);
+            failed = Some(Error::validation(REQUIRES_EXPR));
             break 'fail_and_free;
         }
 
@@ -310,10 +307,10 @@ pub unsafe fn modify_keymap(
         {
             // SAFETY: `lhs` is a live API string.
             let lhs = unsafe { c_str(lhs.data()) };
-            *err = api_error!(
+            failed = Some(api_error!(
                 kErrorTypeValidation,
                 "LHS exceeds maximum map length: {lhs}"
-            );
+            ));
             break 'fail_and_free;
         }
 
@@ -329,11 +326,14 @@ pub unsafe fn modify_keymap(
         if !mode.is_empty() && consumed != mode.len() {
             // SAFETY: `mode` is a live API string.
             let mode = unsafe { c_str(mode.data()) };
-            *err = api_error!(kErrorTypeValidation, "Invalid mode shortname: \"{mode}\"");
+            failed = Some(api_error!(
+                kErrorTypeValidation,
+                "Invalid mode shortname: \"{mode}\""
+            ));
             break 'fail_and_free;
         }
         if parsed_args.lhs_len == 0 {
-            *err = Error::validation(c"Invalid (empty) LHS");
+            failed = Some(Error::validation(c"Invalid (empty) LHS"));
             break 'fail_and_free;
         }
 
@@ -356,7 +356,7 @@ pub unsafe fn modify_keymap(
             // SAFETY: `parsed_args.rhs` is this frame's own NUL-terminated
             // string, and `err` the caller's slot.
             unsafe {
-                *err = if parsed_args.rhs_len() != 0 {
+                failed = Some(if parsed_args.rhs_len() != 0 {
                     let rhs = c_str(parsed_args.rhs().str.as_ptr());
                     api_error!(
                         kErrorTypeValidation,
@@ -364,7 +364,7 @@ pub unsafe fn modify_keymap(
                     )
                 } else {
                     Error::validation(c"Gave nonempty RHS for unmap")
-                };
+                });
             }
             break 'fail_and_free;
         }
@@ -410,9 +410,7 @@ pub unsafe fn modify_keymap(
             )),
             _ => None,
         };
-        if let Some(e) = refused {
-            *err = e;
-        }
+        failed = refused;
     }
 
     drop(sctx);
@@ -425,4 +423,8 @@ pub unsafe fn modify_keymap(
     // Everything else goes with `parsed_args`: the two strings are its own,
     // and whatever a mapblock took is holding its own share of the `Rc`.
     drop(parsed_args);
+    match failed {
+        Some(failed) => Err(failed),
+        None => Ok(()),
+    }
 }

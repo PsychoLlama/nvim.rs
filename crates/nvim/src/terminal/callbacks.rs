@@ -144,7 +144,7 @@ pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
     buf.b_locked += 1;
     // SAFETY: the buffer's own variable dictionary, and a string that
     // outlives the call, which copies it.
-    unsafe { dict_set_var(vars, key, title, false, false, arena, &mut err) };
+    drop(unsafe { dict_set_var(vars, key, title, false, false, arena) });
     buf.b_locked -= 1;
     err.clear();
     status_redraw_buf(buf);

@@ -147,9 +147,8 @@ pub unsafe fn nvim_set_decoration_provider(
 /// `width` must point at a writable `int` the caller owns.
 pub unsafe fn parse_virt_text(
     chunks: Array,
-    err: &mut Error,
     width: *mut ::core::ffi::c_int,
-) -> VirtText {
+) -> Result<VirtText, Error> {
     let mut virt_text: VirtText = VirtText {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -157,6 +156,9 @@ pub unsafe fn parse_virt_text(
     };
     let mut w: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     let mut i: size_t = 0 as size_t;
+    // The refusal is held rather than returned: the half-built text has to
+    // be released on the way out.
+    let failed;
     '_free_exit: {
         while i < chunks.size {
             // SAFETY: `i` is below `chunks.size`.
@@ -164,7 +166,7 @@ pub unsafe fn parse_virt_text(
                 let want = api_typename(kObjectTypeArray);
                 // SAFETY: as above.
                 let got = unsafe { api_typename((*chunks.items.add(i)).kind()) };
-                *err = err_expected(c"chunk", want, Some(got));
+                failed = err_expected(c"chunk", want, Some(got));
                 break '_free_exit;
             };
             let head = match chunk.size {
@@ -174,7 +176,7 @@ pub unsafe fn parse_virt_text(
             };
             let Some(str) = head else {
                 let why = c"Invalid chunk: expected Array with 1 or 2 Strings";
-                *err = Error::validation(why);
+                failed = Error::validation(why);
                 break '_free_exit;
             };
             let mut hl_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
@@ -195,7 +197,7 @@ pub unsafe fn parse_virt_text(
                             hl_id = match unsafe { object_to_hl_id(item, what) } {
                                 Ok(id) => id,
                                 Err(e) => {
-                                    *err = e;
+                                    failed = e;
                                     break '_free_exit;
                                 }
                             };
@@ -218,7 +220,7 @@ pub unsafe fn parse_virt_text(
                         hl_id = match unsafe { object_to_hl_id(hl, what) } {
                             Ok(id) => id,
                             Err(e) => {
-                                *err = e;
+                                failed = e;
                                 break '_free_exit;
                             }
                         };
@@ -246,8 +248,8 @@ pub unsafe fn parse_virt_text(
         if !width.is_null() {
             unsafe { *width = w };
         }
-        return virt_text;
+        return Ok(virt_text);
     }
     unsafe { clear_virttext(&raw mut virt_text) };
-    virt_text
+    Err(failed)
 }

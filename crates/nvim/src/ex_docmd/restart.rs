@@ -199,14 +199,13 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
         'fail_2: {
             // Stop the new server exiting when this channel closes.
             let mut detach_items = [obj_bool(true)];
-            rpc_send_call(
+            if let Err(e) = rpc_send_call(
                 id,
                 c"nvim__chan_set_detach".as_ptr(),
                 array_of(&mut detach_items),
                 &raw mut result_mem,
-                &mut err,
-            );
-            if err.is_set() {
+            ) {
+                err = e;
                 break 'fail_2;
             }
             arena_mem_free(result_mem);
@@ -224,14 +223,13 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
                     obj_str(c"UIEnter".as_ptr()),
                     Object::Dict(dict_of(&mut opt_items)),
                 ];
-                rpc_send_call(
+                if let Err(e) = rpc_send_call(
                     id,
                     c"nvim_create_autocmd".as_ptr(),
                     array_of(&mut autocmd_items),
                     &raw mut result_mem,
-                    &mut err,
-                );
-                if err.is_set() {
+                ) {
+                    err = e;
                     break 'fail_2;
                 }
                 arena_mem_free(result_mem);
@@ -240,16 +238,18 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
 
             // Where the UIs are to reconnect.
             let mut name_items = [obj_str(c"servername".as_ptr())];
-            let result = rpc_send_call(
+            let result = match rpc_send_call(
                 id,
                 c"nvim_get_vvar".as_ptr(),
                 array_of(&mut name_items),
                 &raw mut result_mem,
-                &mut err,
-            );
-            if err.is_set() {
-                break 'fail_2;
-            }
+            ) {
+                Ok(result) => result,
+                Err(e) => {
+                    err = e;
+                    break 'fail_2;
+                }
+            };
             let servername = match result {
                 Object::String(s) if !s.is_empty() => s,
                 _ => {
@@ -306,14 +306,12 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
         // Close the new server's stderr before killing it, or its dying
         // words land on this UI.
         let mut chanclose_items = [obj_str(c"chanclose(v:stderr)".as_ptr())];
-        rpc_send_call(
+        drop(rpc_send_call(
             id,
             c"nvim_eval".as_ptr(),
             array_of(&mut chanclose_items),
             &raw mut result_mem,
-            &mut err,
-        );
-        err.clear();
+        ));
         arena_mem_free(result_mem);
 
         unsafe { proc_stop(channel_proc(channel)) };
@@ -374,11 +372,8 @@ pub(crate) unsafe fn ex_detach(args: *mut ExArg) {
         detach_err.clear();
     }
 
-    let mut err2 = Error::none();
-    unsafe { remote_ui_disconnect((*chan).id, &mut err2, true) };
-    if err2.is_set() {
-        emsg(err2.message_or_empty().as_ptr());
-        err2.clear();
+    if let Err(e) = unsafe { remote_ui_disconnect((*chan).id, true) } {
+        emsg(e.message_or_empty().as_ptr());
         return;
     }
 
@@ -406,11 +401,8 @@ pub(crate) unsafe fn ex_detach(args: *mut ExArg) {
 pub(crate) unsafe fn ex_connect(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let stop_server = args.forceit != 0 && ui_active() == 1;
-    let mut err = Error::none();
-    unsafe { remote_ui_connect(current_ui.get(), args.arg, &mut err) };
-    if err.is_set() {
-        emsg(err.message_or_empty().as_ptr());
-        err.clear();
+    if let Err(e) = unsafe { remote_ui_connect(current_ui.get(), args.arg) } {
+        emsg(e.message_or_empty().as_ptr());
         return;
     }
     unsafe { ex_detach(ptr::null_mut()) };
@@ -450,10 +442,9 @@ fn rpc_send_call(
     method_name: *const c_char,
     args: Array,
     result_mem: *mut ArenaMem,
-    err: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::msgpack_rpc::channel::rpc_send_call(id, method_name, args, result_mem, err) }
+    unsafe { crate::msgpack_rpc::channel::rpc_send_call(id, method_name, args, result_mem) }
 }
 
 /// `set_vim_var_string()` as checked code.

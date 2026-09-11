@@ -744,7 +744,6 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
 ///
 /// `d` must be a valid dict.
 unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
-    let mut err = Error::none();
     // Every field of a keyset is zero when nothing is set: the flags
     // are a bitmask, `kObjectTypeNil` is 0, and the rest are C layouts
     // whose null is their empty value.
@@ -760,7 +759,9 @@ unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
     {
         return HLATTRS_INIT;
     }
-    let mut attrs = unsafe { dict2hlattrs(&dict, rgb, None, None, &mut err) };
+    let Ok(mut attrs) = (unsafe { dict2hlattrs(&dict, rgb, None, None) }) else {
+        return HLATTRS_INIT;
+    };
     // A URL is not an attribute the terminal understands; the TUI
     // interns it and the entry keeps the index.
     if dict.is_set__highlight_ & (1 << KEYSET_OPTIDX_highlight__url) != 0 {

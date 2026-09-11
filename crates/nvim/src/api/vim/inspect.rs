@@ -264,8 +264,8 @@ pub unsafe fn nvim__inspect_cell(
     unsafe { schar_get(sc_buf, g.char_at(off)) };
     unsafe { array_add(&mut ret, Object::string(cstr_as_string(sc_buf))) };
     let attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
-    // SAFETY: `arena` and `error` are this frame's own.
-    let hl = unsafe { Object::dict(hl_get_attr_by_id(attr as Integer, true, arena, &mut error)) };
+    // SAFETY: `arena` is this frame's own.
+    let hl = Object::dict(unsafe { hl_get_attr_by_id(attr as Integer, true, arena) }?);
     // SAFETY: `ret` has room for the three items the arena sized it for.
     unsafe { array_add(&mut ret, hl) };
     if !unsafe { highlight_use_hlstate() } {
@@ -295,6 +295,6 @@ pub fn nvim__invalidate_glyph_cache() {
 // `nvim__unpack` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, Error> {
-    let mut error = Error::none();
-    unsafe { unpack(str.data(), str.len(), arena, &mut error).reported(error) }
+    // SAFETY: the caller's string names its own bytes.
+    unsafe { unpack(str.data(), str.len(), arena) }
 }

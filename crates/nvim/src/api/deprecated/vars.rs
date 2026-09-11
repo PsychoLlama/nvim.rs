@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::api::private::helpers::{
-    Reported, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
+    find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
 
 /// # Safety
@@ -31,14 +31,13 @@ pub unsafe fn buffer_set_var(
     value: Object,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
     let vars = buf.b_vars;
     // SAFETY: `vars` is that buffer's own dictionary, `arena` the caller's
     // and `error` this frame's slot.
-    unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, value, false, true, arena) }
 }
 
 /// # Safety
@@ -51,13 +50,12 @@ pub unsafe fn buffer_del_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
     let vars = buf.b_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena) }
 }
 
 /// # Safety
@@ -72,13 +70,12 @@ pub unsafe fn window_set_var(
     value: Object,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
     let vars = win.w_vars;
     // SAFETY: as `buffer_set_var`, for that window's dictionary.
-    unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, value, false, true, arena) }
 }
 
 /// # Safety
@@ -91,13 +88,12 @@ pub unsafe fn window_del_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
     let vars = win.w_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena) }
 }
 
 /// # Safety
@@ -112,13 +108,12 @@ pub unsafe fn tabpage_set_var(
     value: Object,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
     let vars = tab.tp_vars;
     // SAFETY: as `buffer_set_var`, for that tab page's dictionary.
-    unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, value, false, true, arena) }
 }
 
 /// # Safety
@@ -131,13 +126,12 @@ pub unsafe fn tabpage_del_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
     let vars = tab.tp_vars;
     // SAFETY: as `buffer_set_var`.
-    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena) }
 }
 
 /// # Safety
@@ -151,10 +145,9 @@ pub unsafe fn vim_set_var(
     value: Object,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut error = Error::none();
     let vars = get_globvar_dict();
     // SAFETY: as `buffer_set_var`, for the global dictionary.
-    unsafe { dict_set_var(vars, name, value, false, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, value, false, true, arena) }
 }
 
 /// # Safety
@@ -163,8 +156,7 @@ pub unsafe fn vim_set_var(
 /// at `data[size]`. `arena` must point at a live arena, which the memory this
 /// answers with is taken from and must outlive.
 pub unsafe fn vim_del_var(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
-    let mut error = Error::none();
     let vars = get_globvar_dict();
     // SAFETY: as `vim_set_var`.
-    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena, &mut error) }.reported(error)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, true, arena) }
 }

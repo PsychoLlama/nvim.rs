@@ -71,22 +71,24 @@ pub unsafe fn serialize_request(
 /// `nvim_paste`, whose failures are shown to this editor's user instead,
 /// because the UI that sent the paste has nothing useful to do with them.
 ///
+/// The error is *rendered*, not reported: this reads the failure the caller
+/// already has rather than answering with one of its own.
+///
 /// # Safety
-/// `channel` is live, and `err`/`arg` point at a writable `Error` and a live
-/// `Object`.
+/// `channel` is live and `arg` points at a live `Object`.
 pub unsafe fn serialize_response(
     channel: *mut Channel,
     handler: MsgpackRpcRequestHandler,
     type_0: MessageType,
     response_id: uint32_t,
-    err: &mut Error,
+    err: &Error,
     arg: *mut Object,
 ) {
     let err_type = err.kind();
     let errored = err_type != kErrorTypeNone;
 
     if errored && type_0 == kMessageTypeNotification {
-        // SAFETY: the caller's error slot and channel.
+        // SAFETY: the caller's error and channel.
         unsafe { report_failed_notification(channel, handler, err) };
         return;
     }
@@ -122,7 +124,7 @@ pub unsafe fn serialize_response(
 unsafe fn report_failed_notification(
     channel: *mut Channel,
     handler: MsgpackRpcRequestHandler,
-    err: &mut Error,
+    err: &Error,
 ) {
     let is_paste = handler
         .fn_0
@@ -130,7 +132,6 @@ unsafe fn report_failed_notification(
     if is_paste {
         let msg = err.message_or_empty().to_string_lossy();
         crate::semsg!("paste: {msg}");
-        err.clear();
         return;
     }
 

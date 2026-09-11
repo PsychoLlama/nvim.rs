@@ -114,12 +114,10 @@ unsafe fn key_not_found(name: String_0) -> Error {
 /// # Safety
 /// `name` and `value` must name their own contents.
 pub unsafe fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
-    let mut error = Error::none();
     let dict = get_globvar_dict();
     // SAFETY: the caller's promise, and `error` is this frame's own slot. The
     // null arena means the value is copied rather than borrowed.
-    unsafe { dict_set_var(dict, name, value, false, false, NO_ARENA, &mut error) };
-    ().reported(error)
+    unsafe { dict_set_var(dict, name, value, false, false, NO_ARENA) }.map(|_| ())
 }
 
 /// Remove the global variable `name`.
@@ -127,11 +125,9 @@ pub unsafe fn nvim_set_var(name: String_0, value: Object) -> Result<(), Error> {
 /// # Safety
 /// `name` must name its own bytes.
 pub unsafe fn nvim_del_var(name: String_0) -> Result<(), Error> {
-    let mut error = Error::none();
     let dict = get_globvar_dict();
     // SAFETY: as [`nvim_set_var`]; `del` says to remove rather than assign.
-    unsafe { dict_set_var(dict, name, Object::Nil, true, false, NO_ARENA, &mut error) };
-    ().reported(error)
+    unsafe { dict_set_var(dict, name, Object::Nil, true, false, NO_ARENA) }.map(|_| ())
 }
 
 /// The `v:` variable `name`.
@@ -139,10 +135,9 @@ pub unsafe fn nvim_del_var(name: String_0) -> Result<(), Error> {
 /// # Safety
 /// `name` must name its own bytes and `arena` must be the caller's.
 pub unsafe fn nvim_get_vvar(name: String_0, arena: *mut Arena) -> Result<Object, Error> {
-    let mut error = Error::none();
     // SAFETY: the caller's promise; `v:` is live from startup to exit and
     // `error` is this frame's own slot.
-    unsafe { dict_get_value(get_vimvar_dict(), name, arena, &mut error) }.reported(error)
+    unsafe { dict_get_value(get_vimvar_dict(), name, arena) }
 }
 
 /// Set the `v:` variable `name` to `value`.
@@ -150,11 +145,9 @@ pub unsafe fn nvim_get_vvar(name: String_0, arena: *mut Arena) -> Result<Object,
 /// # Safety
 /// `name` and `value` must name their own contents.
 pub unsafe fn nvim_set_vvar(name: String_0, value: Object) -> Result<(), Error> {
-    let mut error = Error::none();
     let dict = get_vimvar_dict();
     // SAFETY: as [`nvim_set_var`], over `v:` rather than the globals.
-    unsafe { dict_set_var(dict, name, value, false, false, NO_ARENA, &mut error) };
-    ().reported(error)
+    unsafe { dict_set_var(dict, name, value, false, false, NO_ARENA) }.map(|_| ())
 }
 
 /// No arena: `dict_set_var` copies the value rather than borrowing it.

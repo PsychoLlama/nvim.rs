@@ -231,18 +231,10 @@ pub unsafe fn nvim_buf_get_extmarks(
     }
     let mut l_row: ::core::ffi::c_int = 0;
     let mut l_col: ColNr = 0;
-    if !unsafe {
-        extmark_get_index_from_obj(b, ns_id, start, &raw mut l_row, &raw mut l_col, &mut error)
-    } {
-        return rv.reported(error);
-    }
+    unsafe { extmark_get_index_from_obj(b, ns_id, start, &raw mut l_row, &raw mut l_col) }?;
     let mut u_row: ::core::ffi::c_int = 0;
     let mut u_col: ColNr = 0;
-    if !unsafe {
-        extmark_get_index_from_obj(b, ns_id, end, &raw mut u_row, &raw mut u_col, &mut error)
-    } {
-        return rv.reported(error);
-    }
+    unsafe { extmark_get_index_from_obj(b, ns_id, end, &raw mut u_row, &raw mut u_col) }?;
     let rv_limit: size_t = limit as size_t;
     let reverse: bool = l_row > u_row || l_row == u_row && l_col > u_col;
     if reverse {
@@ -309,29 +301,26 @@ unsafe fn extmark_get_index_from_obj(
     obj: Object,
     row: *mut ::core::ffi::c_int,
     col: *mut ColNr,
-    err: &mut Error,
-) -> bool {
+) -> Result<(), Error> {
     if let Object::Integer(id) = obj {
         if id == 0 as Integer {
             unsafe { *row = 0 as ::core::ffi::c_int };
             unsafe { *col = 0 as ::core::ffi::c_int as ColNr };
-            return true;
+            return Ok(());
         } else if id == -1 as Integer {
             unsafe { *row = MAXLNUM };
             unsafe { *col = MAXCOL as ::core::ffi::c_int as ColNr };
-            return true;
+            return Ok(());
         } else if id < 0 as Integer && true {
-            *err = err_bad_number(c"mark id", id);
-            return false;
+            return Err(err_bad_number(c"mark id", id));
         }
         let extmark: MTPair = extmark_from_id(buffer, ns_id as uint32_t, id as uint32_t);
         if !(extmark.start.pos.row >= 0 as int32_t) {
-            *err = err_bad_number(c"mark id (not found)", id);
-            return false;
+            return Err(err_bad_number(c"mark id (not found)", id));
         }
         unsafe { *row = extmark.start.pos.row as ::core::ffi::c_int };
         unsafe { *col = extmark.start.pos.col as ColNr };
-        return true;
+        return Ok(());
     } else if let Object::Array(pos) = obj {
         let two = match pos.size {
             // SAFETY: a two-item array names the two items read here.
@@ -344,8 +333,7 @@ unsafe fn extmark_get_index_from_obj(
         };
         let Some((pos_row, pos_col)) = two else {
             let want = c"2 Integer items";
-            *err = err_expected(c"mark position", want, None);
-            return false;
+            return Err(err_expected(c"mark position", want, None));
         };
         let r = (if pos_row >= 0 as Integer {
             pos_row
@@ -361,11 +349,10 @@ unsafe fn extmark_get_index_from_obj(
         unsafe { *row = r };
         // SAFETY: as above.
         unsafe { *col = c };
-        return true;
+        return Ok(());
     } else if true {
         let want = c"mark id Integer or 2-item Array";
-        *err = err_expected(c"mark position", want, None);
-        return false;
+        return Err(err_expected(c"mark position", want, None));
     }
     panic!("Reached end of non-void function without returning");
 }

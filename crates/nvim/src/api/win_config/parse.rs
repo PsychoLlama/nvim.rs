@@ -51,17 +51,6 @@ pub(crate) type ErrSlot = Live<Error>;
 // the slot is always the caller's own, so the promise is discharged once,
 // here.
 
-/// The slot as the `&mut Error` the shared helpers take.
-///
-/// [`ErrSlot`] is `Copy`, so `DerefMut` cannot hand one out without a `mut`
-/// binding at every call site; this is that binding, made once. The lifetime
-/// is unbounded, which is `cstr`'s convention for the same reason: `Live`'s
-/// constructor already promised the slot outlives every use of the value.
-pub(crate) fn slot_mut<'a>(err: ErrSlot) -> &'a mut Error {
-    // SAFETY: `Live`'s promise, spent here.
-    unsafe { &mut *err.raw() }
-}
-
 /// Store `e` in the caller's slot -- what every reporter here ends with, and
 /// what a call site with a message of its own spells directly.
 pub(crate) fn store(err: ErrSlot, e: Error) {
@@ -319,7 +308,10 @@ unsafe fn parse_bordertext(
             *width = 0;
             // SAFETY: the caller's promise about the array, and both
             // out-parameters name fields of the config.
-            *chunks = unsafe { parse_virt_text(array, slot_mut(err), width.raw()) };
+            let parsed = unsafe { parse_virt_text(array, width.raw()) };
+            if let Some(parsed) = stored(err, parsed) {
+                *chunks = parsed;
+            }
             *is_present = true;
         }
         other => {
@@ -645,22 +637,23 @@ pub(crate) unsafe fn parse_win_config(
             let border_style = config.border;
             if !border_style.is_nil() {
                 // SAFETY: the caller's promise about the keyset's strings and
-                // arrays, and `fconfig` and `err` are live.
-                unsafe { parse_border_style(border_style, fconfig.raw(), slot_mut(err)) };
-                if err.is_set() {
+                // arrays, and `fconfig` is live.
+                let parsed = unsafe { parse_border_style(border_style, fconfig.raw()) };
+                if stored(err, parsed).is_none() {
                     break '_fail;
                 }
             }
         } else if !window.as_ref().is_some_and(floating) {
             // No `border` key on a new float: `'winborder'` decides.
-            // SAFETY: the option's value is a live NUL-terminated string, and
-            // `fconfig` and `err` are live.
+            // SAFETY: the option's value is a live NUL-terminated string,
+            // and `fconfig` is live.
             let winborder = unsafe { *p_winborder.get() };
-            if winborder as c_int != NUL
+            if winborder as c_int != NUL {
                 // SAFETY: as above.
-                && !unsafe { parse_winborder(fconfig.raw(), p_winborder.get(), slot_mut(err)) }
-            {
-                break '_fail;
+                let parsed = unsafe { parse_winborder(fconfig.raw(), p_winborder.get()) };
+                if stored(err, parsed) != Some(true) {
+                    break '_fail;
+                }
             }
         }
         if set(KEYSET_OPTIDX_win_config__style) {
@@ -708,6 +701,7 @@ pub(crate) unsafe fn parse_win_config(
 /// literal: "this key needs a `relative`", or "not on a split".
 fn generate_error(window: Option<Win>, attribute: &CStr, err: ErrSlot) {
     let window = window.map_or(ptr::null_mut(), Win::raw);
-    // SAFETY: `window` is null or a live window, and `err` names a live slot.
-    unsafe { generate_api_error(Win::from_raw(window), attribute, slot_mut(err)) };
+    // SAFETY: `window` is null or a live window.
+    let why = unsafe { generate_api_error(Win::from_raw(window), attribute) };
+    store(err, why);
 }

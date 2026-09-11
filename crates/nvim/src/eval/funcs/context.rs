@@ -137,13 +137,11 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         .as_dict()
         .expect("a VAR_DICT converts to a Dict object");
     let mut tmp = CONTEXT_INIT;
-    let mut err = NO_ERROR;
-    unsafe { ctx_from_dict(dict, &raw mut tmp, &mut err) };
-    if err.is_set() {
+    if let Err(e) = unsafe { ctx_from_dict(dict, &raw mut tmp) } {
         // The message is whatever the API layer produced, so it keeps
         // the variadic call rather than assuming UTF-8.
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
+        // SAFETY: the refusal owns its NUL-terminated message.
+        let msg = unsafe { c_str(e.message_or_empty().as_ptr()) };
         semsg!("{msg}");
         unsafe { ctx_free(&raw mut tmp) };
     } else {
@@ -151,7 +149,6 @@ pub fn f_ctxset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         unsafe { *ctx = tmp };
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    err.clear();
     did_emsg.set(save_did_emsg);
 }
 

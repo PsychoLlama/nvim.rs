@@ -37,8 +37,7 @@ use crate::lua::ffi::{
 use crate::narrow::number_as_int;
 use crate::runtime::script_autoload;
 use crate::types::{
-    BufferHandle, Dict, DictItem, Error, Handle, String_0, TabpageHandle, WindowHandle, lua_State,
-    size_t,
+    BufferHandle, Dict, DictItem, Handle, String_0, TabpageHandle, WindowHandle, lua_State, size_t,
 };
 
 /// The dictionary the `(scope, handle)` pair at stack slots 1 and 2 names.
@@ -90,14 +89,14 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
 
         let del = lua_gettop(lstate) < 4 || lua_type(lstate, 4) == LUA_TNIL;
 
-        let mut err = Error::none();
-        let mut di: *mut DictItem = dict_check_writable(dict, key, del, &mut err);
-        if err.is_set() {
-            nlua_push_errstr(lstate, c"%s".as_ptr(), err.message_or_empty().as_ptr());
-            err.clear();
-            lua_error(lstate);
-            return 0;
-        }
+        let mut di: *mut DictItem = match dict_check_writable(dict, key, del) {
+            Ok(di) => di,
+            Err(e) => {
+                nlua_push_errstr(lstate, c"%s".as_ptr(), e.message_or_empty().as_ptr());
+                lua_error(lstate);
+                return 0;
+            }
+        };
 
         let watched = tv_dict_is_watched(dict);
 

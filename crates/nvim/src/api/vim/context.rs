@@ -90,18 +90,17 @@ pub unsafe fn nvim_get_context(
 /// `dict` must be a well-formed API dictionary, its `size` entries
 /// initialized.
 pub unsafe fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
-    let mut error = Error::none();
     let mut ctx: Context = CONTEXT_INIT;
     let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
     did_emsg.set(0);
-    unsafe { ctx_from_dict(dict, &raw mut ctx, &mut error) };
-    if !error.is_set() {
+    let read = unsafe { ctx_from_dict(dict, &raw mut ctx) };
+    if read.is_ok() {
         // SAFETY: `ctx` is this frame's own, filled in above.
         unsafe { ctx_restore(&raw mut ctx, kCtxAll.get()) };
     }
     unsafe { ctx_free(&raw mut ctx) };
     did_emsg.set(save_did_emsg);
-    Object::Nil.reported(error)
+    read.map(|_| Object::Nil)
 }
 
 /// # Safety

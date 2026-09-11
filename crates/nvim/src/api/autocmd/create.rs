@@ -55,11 +55,10 @@ pub unsafe fn nvim_create_autocmd(
             c"event".as_ptr() as *mut ::core::ffi::c_char,
             true,
             arena,
-            &mut error,
         )
-    };
+    }?;
     '_cleanup: {
-        if error.kind() as ::core::ffi::c_int == kErrorTypeNone as ::core::ffi::c_int {
+        {
             if !(!(has_key(opts.is_set__create_autocmd_, 9 as ::core::ffi::c_int))
                 || !(has_key(opts.is_set__create_autocmd_, 7 as ::core::ffi::c_int)))
             {
@@ -110,7 +109,13 @@ pub unsafe fn nvim_create_autocmd(
                     error = err_required(c"'command' or 'callback'");
                     break '_cleanup;
                 }
-                au_group = unsafe { get_augroup_from_object(opts.group, &mut error) };
+                au_group = match unsafe { get_augroup_from_object(opts.group) } {
+                    Ok(au_group) => au_group,
+                    Err(e) => {
+                        error = e;
+                        AUGROUP_ERROR as ::core::ffi::c_int
+                    }
+                };
                 if au_group != AUGROUP_ERROR as ::core::ffi::c_int {
                     has_buf = has_key(
                         opts.is_set__create_autocmd_,
@@ -136,18 +141,21 @@ pub unsafe fn nvim_create_autocmd(
                     {
                         error = err_conflict(c"pattern", c"buf");
                     } else {
-                        patterns = unsafe {
+                        patterns = match unsafe {
                             get_patterns_from_pattern_or_buf(
                                 opts.pattern,
                                 has_buf,
                                 buf,
                                 c"*".as_ptr() as *mut ::core::ffi::c_char,
                                 arena,
-                                &mut error,
                             )
+                        } {
+                            Ok(patterns) => patterns,
+                            Err(e) => {
+                                error = e;
+                                break '_cleanup;
+                            }
                         };
-                        if error.kind() as ::core::ffi::c_int
-                            == kErrorTypeNone as ::core::ffi::c_int
                         {
                             if has_key(
                                 opts.is_set__create_autocmd_,
@@ -265,12 +273,8 @@ pub unsafe fn nvim_clear_autocmds(
             c"event".as_ptr() as *mut ::core::ffi::c_char,
             false,
             arena,
-            &mut error,
         )
-    };
-    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        return ().reported(error);
-    }
+    }?;
     let has_buf: bool = has_key(
         opts.is_set__clear_autocmds_,
         KEYSET_OPTIDX_clear_autocmds__buf,
@@ -296,10 +300,7 @@ pub unsafe fn nvim_clear_autocmds(
         error = err_conflict(c"pattern", c"buf");
         return ().reported(error);
     }
-    let au_group: ::core::ffi::c_int = unsafe { get_augroup_from_object(opts.group, &mut error) };
-    if au_group == AUGROUP_ERROR as ::core::ffi::c_int {
-        return ().reported(error);
-    }
+    let au_group: ::core::ffi::c_int = unsafe { get_augroup_from_object(opts.group) }?;
     let patterns: Array = unsafe {
         get_patterns_from_pattern_or_buf(
             opts.pattern,
@@ -307,12 +308,8 @@ pub unsafe fn nvim_clear_autocmds(
             buf as BufferHandle,
             c"".as_ptr() as *mut ::core::ffi::c_char,
             arena,
-            &mut error,
         )
-    };
-    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        return ().reported(error);
-    }
+    }?;
     if event_array.size == 0 as size_t {
         for event in AutoEvent::all() {
             let mut pat_object_index: size_t = 0 as size_t;
@@ -322,9 +319,7 @@ pub unsafe fn nvim_clear_autocmds(
                     .as_string()
                     .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
                     .data();
-                if !unsafe { clear_autocmd(event, pat, au_group, &mut error) } {
-                    return ().reported(error);
-                }
+                unsafe { clear_autocmd(event, pat, au_group) }?;
                 pat_object_index = pat_object_index.wrapping_add(1);
             }
         }
@@ -347,9 +342,7 @@ pub unsafe fn nvim_clear_autocmds(
                     .as_string()
                     .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
                     .data();
-                if !unsafe { clear_autocmd(event_nr, pat_0, au_group, &mut error) } {
-                    return ().reported(error);
-                }
+                unsafe { clear_autocmd(event_nr, pat_0, au_group) }?;
                 pat_object_index_0 = pat_object_index_0.wrapping_add(1);
             }
             event_str_index = event_str_index.wrapping_add(1);
@@ -365,12 +358,9 @@ unsafe fn clear_autocmd(
     event: AutoEvent,
     pat: *mut ::core::ffi::c_char,
     au_group: ::core::ffi::c_int,
-    err: &mut Error,
-) -> bool {
+) -> Result<(), Error> {
     if unsafe { do_autocmd_event(event, pat, false, 0, c"".as_ptr(), true, au_group) }.is_err() {
-        let why = c"Failed to clear autocmd";
-        *err = Error::exception(why);
-        return false;
+        return Err(Error::exception(c"Failed to clear autocmd"));
     }
-    true
+    Ok(())
 }

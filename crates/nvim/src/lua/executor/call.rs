@@ -193,22 +193,22 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
                     )
                     .cast::<Object>();
                 }
-                match nlua_pop_object(lstate, false, &raw mut arena) {
-                    Ok(value) => *args.items.add(args.size) = value,
-                    Err(e) => {
-                        err = e;
-                        break 'check_err;
-                    }
-                }
+                let popped = nlua_pop_object(lstate, false, &raw mut arena);
+                let Ok(value) = popped.inspect_err(|e| err = e.clone()) else {
+                    break 'check_err;
+                };
+                *args.items.add(args.size) = value;
                 args.size = args.size.wrapping_add(1);
             }
 
             if request {
                 let mut res_mem: ArenaMem = ptr::null_mut::<ConsumedBlk>();
-                let mut result = rpc_send_call(chan_id, name, args, &raw mut res_mem, &mut err);
-                if !err.is_set() {
-                    nlua_push_object(lstate, &raw mut result, 0);
-                    arena_mem_free(res_mem);
+                match rpc_send_call(chan_id, name, args, &raw mut res_mem) {
+                    Ok(mut result) => {
+                        nlua_push_object(lstate, &raw mut result, 0);
+                        arena_mem_free(res_mem);
+                    }
+                    Err(e) => err = e,
                 }
             } else if !rpc_send_event(chan_id, name, args) {
                 err = api_error!(kErrorTypeValidation, "Invalid channel: {chan_id}");

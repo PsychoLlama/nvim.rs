@@ -105,34 +105,33 @@ pub(crate) unsafe fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) 
 /// Gets the highlight description of attribute id `attr_id` as a dict.
 ///
 /// Answers an empty dict for id 0 (which is "no attributes at all"), and sets
-/// `err` for an id no [`get_attr_entry`](super::get_attr_entry) ever handed
+/// Refuses an id no [`get_attr_entry`](super::get_attr_entry) ever handed
 /// out.
 ///
 /// # Safety
-/// `arena` is null or a live arena; `err` points at a live [`Error`].
+/// `arena` is null or a live arena.
 pub unsafe fn hl_get_attr_by_id(
     attr_id: Integer,
     rgb: Boolean,
     arena: *mut Arena,
-    err: &mut Error,
-) -> ApiDict {
+) -> Result<ApiDict, Error> {
     let empty = ApiDict {
         size: 0,
         capacity: 0,
         items: ::core::ptr::null_mut(),
     };
     if attr_id == 0 {
-        return empty;
+        return Ok(empty);
     }
-    // SAFETY: the caller's arena and error slot.
     if attr_id < 0 || attr_id >= Integer::from(attr_entry_count()) {
-        *err = api_error!(kErrorTypeException, "Invalid attribute id: {attr_id}");
-        return empty;
+        let why = api_error!(kErrorTypeException, "Invalid attribute id: {attr_id}");
+        return Err(why);
     }
     let mut retval = arena_dict(arena, HLATTRS_DICT_SIZE);
     let attrs = syn_attr2entry(attr_id as c_int);
+    // SAFETY: the caller's arena.
     unsafe { hlattrs2dict(&mut retval, None, attrs, rgb, false) };
-    retval
+    Ok(retval)
 }
 
 /// Writes `ae` out as a dict.
@@ -332,18 +331,16 @@ fn set_flag(mask: &mut HlAttrFlags, on: bool, flag: HlAttrFlags) {
 /// a `link`/`link_global` key is reported; passing `None` makes those keys an
 /// error, which is how the UI-side caller rejects them.
 ///
-/// Answers `HLATTRS_INIT` with `err` set on the first bad value.
+/// Refuses at the first bad value.
 ///
 /// # Safety
-/// `err` points at a live [`Error`]; the `Object` fields of `dict` must carry
-/// values matching their tags.
+/// The `Object` fields of `dict` must carry values matching their tags.
 pub unsafe fn dict2hlattrs(
     dict: &KeyDict_highlight,
     use_rgb: bool,
     link_id: Option<&mut c_int>,
     base: Option<&HlAttrs>,
-    err: &mut Error,
-) -> HlAttrs {
+) -> Result<HlAttrs, Error> {
     let mut fg = base.map_or(-1, |b| b.rgb_fg_color);
     let mut bg = base.map_or(-1, |b| b.rgb_bg_color);
     let mut sp = base.map_or(-1, |b| b.rgb_sp_color);
@@ -449,39 +446,29 @@ pub unsafe fn dict2hlattrs(
         &mut mask,
     );
 
-    // SAFETY: the caller's error slot; each `Object` carries its own tag.
-    // The long spelling is the fallback for the short one, never both.
+    // SAFETY: each `Object` carries its own tag. The long spelling is the
+    // fallback for the short one, never both.
     if is_set(dict, key::FG) {
-        fg = unsafe { object_to_color(dict.fg, c"fg", use_rgb, err) };
+        fg = unsafe { object_to_color(dict.fg, c"fg", use_rgb) }?;
     } else if is_set(dict, key::FOREGROUND) {
-        fg = unsafe { object_to_color(dict.foreground, c"foreground", use_rgb, err) };
-    }
-    if err.is_set() {
-        return HLATTRS_INIT;
+        fg = unsafe { object_to_color(dict.foreground, c"foreground", use_rgb) }?;
     }
     if is_set(dict, key::BG) {
-        bg = unsafe { object_to_color(dict.bg, c"bg", use_rgb, err) };
+        bg = unsafe { object_to_color(dict.bg, c"bg", use_rgb) }?;
     } else if is_set(dict, key::BACKGROUND) {
-        bg = unsafe { object_to_color(dict.background, c"background", use_rgb, err) };
-    }
-    if err.is_set() {
-        return HLATTRS_INIT;
+        bg = unsafe { object_to_color(dict.background, c"background", use_rgb) }?;
     }
     // A special colour is always an RGB one: cterm has no such thing.
     if is_set(dict, key::SP) {
-        sp = unsafe { object_to_color(dict.sp, c"sp", true, err) };
+        sp = unsafe { object_to_color(dict.sp, c"sp", true) }?;
     } else if is_set(dict, key::SPECIAL) {
-        sp = unsafe { object_to_color(dict.special, c"special", true, err) };
-    }
-    if err.is_set() {
-        return HLATTRS_INIT;
+        sp = unsafe { object_to_color(dict.special, c"special", true) }?;
     }
 
     if is_set(dict, key::BLEND) {
         let given = dict.blend;
         if !(0..=100).contains(&given) {
-            *err = err_out_of_range(c"blend");
-            return HLATTRS_INIT;
+            return Err(err_out_of_range(c"blend"));
         }
         blend = given as int32_t;
     }
@@ -491,8 +478,7 @@ pub unsafe fn dict2hlattrs(
         let Some(link_id) = link_id else {
             let name = if global { c"link_global" } else { c"link" };
             let name = msg_cstr(name);
-            *err = api_error!(kErrorTypeValidation, "Invalid Key: '{name}'");
-            return HLATTRS_INIT;
+            return Err(api_error!(kErrorTypeValidation, "Invalid Key: '{name}'"));
         };
         if global {
             *link_id = dict.link_global as c_int;
@@ -508,10 +494,7 @@ pub unsafe fn dict2hlattrs(
         let mut cterm = KeyDict_highlight_cterm::default();
         let field: FieldHashfn = Some(key_dict_highlight_cterm_get_field);
         let target = (&raw mut cterm).cast();
-        if let Err(e) = unsafe { api_dict_to_keydict(target, field, dict.cterm) } {
-            *err = e;
-            return HLATTRS_INIT;
-        }
+        unsafe { api_dict_to_keydict(target, field, dict.cterm) }?;
         cterm_mask_provided = true;
         cterm_mask = HlAttrFlags::NONE;
         let bits = [
@@ -538,16 +521,10 @@ pub unsafe fn dict2hlattrs(
     }
 
     if is_set(dict, key::CTERMFG) {
-        ctermfg = unsafe { object_to_color(dict.ctermfg, c"ctermfg", false, err) };
-        if err.is_set() {
-            return HLATTRS_INIT;
-        }
+        ctermfg = unsafe { object_to_color(dict.ctermfg, c"ctermfg", false) }?;
     }
     if is_set(dict, key::CTERMBG) {
-        ctermbg = unsafe { object_to_color(dict.ctermbg, c"ctermbg", false, err) };
-        if err.is_set() {
-            return HLATTRS_INIT;
-        }
+        ctermbg = unsafe { object_to_color(dict.ctermbg, c"ctermbg", false) }?;
     }
 
     // Re-bias a colour number for storage: 0 is "unset", so every real
@@ -574,7 +551,7 @@ pub unsafe fn dict2hlattrs(
         hlattrs.cterm_fg_color = bias(fg);
         hlattrs.cterm_ae_attr = mask;
     }
-    hlattrs
+    Ok(hlattrs)
 }
 
 /// A colour key's value as a colour number: an integer verbatim, a name
@@ -584,18 +561,17 @@ pub unsafe fn dict2hlattrs(
 /// in the error message for a value that is neither a string nor an integer.
 ///
 /// # Safety
-/// A string value must be NUL-terminated. `err` points at a live [`Error`].
-unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: &mut Error) -> int32_t {
+/// A string value must be NUL-terminated.
+unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool) -> Result<int32_t, Error> {
     if let Object::Integer(n) = val {
-        return n as int32_t;
+        return Ok(n as int32_t);
     }
     let Object::String(str) = val else {
         let expected = c"String or Integer";
-        *err = err_expected(key, expected, None);
-        return 0;
+        return Err(err_expected(key, expected, None));
     };
     if str.is_empty() || unsafe { strcasecmp(str.data(), c"NONE".as_ptr()) } == 0 {
-        return -1;
+        return Ok(-1);
     }
     let name = unsafe { CStr::from_ptr(str.data()) };
     let color = if rgb {
@@ -604,7 +580,7 @@ unsafe fn object_to_color(val: Object, key: &CStr, rgb: bool, err: &mut Error) -
         name_to_ctermcolor(name)
     };
     if color < 0 {
-        *err = err_bad_value(c"highlight color", name);
+        return Err(err_bad_value(c"highlight color", name));
     }
-    color
+    Ok(color)
 }

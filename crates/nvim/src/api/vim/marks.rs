@@ -15,7 +15,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add};
+use crate::api::private::helpers::array_add;
 use crate::api::private::validate::err_bad_value;
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
@@ -24,34 +24,32 @@ use core::ffi::{CStr, c_char, c_int};
 /// The one character `name` spells, when it names a global mark: an
 /// uppercase letter, or a digit for one of the numbered file marks.
 ///
-/// `None` -- with `err` set -- when it is neither, or is not one character.
+/// Refuses when it is neither, or is not one character.
 ///
 /// # Safety
 /// `name` must name its own bytes.
-unsafe fn global_mark_name(name: String_0, err: &mut Error) -> Option<c_char> {
+unsafe fn global_mark_name(name: String_0) -> Result<c_char, Error> {
     if name.len() != 1 {
-        // SAFETY: the caller's promise about `name` and `err`.
-        unsafe { reject(err, c"mark name (must be a single char)", name) };
-        return None;
+        // SAFETY: the caller's promise about `name`.
+        return Err(unsafe { reject(c"mark name (must be a single char)", name) });
     }
     // SAFETY: the caller's promise -- `name` has the one byte read here.
     let mark = unsafe { *name.data() };
     if !(mark.cast_unsigned().is_ascii_uppercase() || ascii_isdigit(c_int::from(mark))) {
         // SAFETY: as above.
-        unsafe { reject(err, c"mark name (must be file/uppercase)", name) };
-        return None;
+        return Err(unsafe { reject(c"mark name (must be file/uppercase)", name) });
     }
-    Some(mark)
+    Ok(mark)
 }
 
 /// "Invalid `what`: '`name`'".
 ///
 /// # Safety
 /// `name` must be NUL-terminated.
-unsafe fn reject(err: &mut Error, what: &CStr, name: String_0) {
+unsafe fn reject(what: &CStr, name: String_0) -> Error {
     let (what, got) = (what.as_ptr(), name.data());
     // SAFETY: the names and values are NUL-terminated strings.
-    *err = err_bad_value(unsafe { cstr::at(what) }, unsafe { cstr::at(got) });
+    err_bad_value(unsafe { cstr::at(what) }, unsafe { cstr::at(got) })
 }
 
 /// Remove the global mark `name`.
@@ -59,14 +57,11 @@ unsafe fn reject(err: &mut Error, what: &CStr, name: String_0) {
 /// # Safety
 /// `name` must name its own bytes.
 pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
-    let mut error = Error::none();
-    // SAFETY: `name` is the caller's and `error` this frame's own slot.
-    if unsafe { global_mark_name(name, &mut error) }.is_none() {
-        return false.reported(error);
-    }
-    // SAFETY: a global mark takes no buffer, and `error` is this frame's own.
-    let res = unsafe { set_mark(None, name, 0, 0, &mut error) };
-    res.reported(error)
+    // SAFETY: `name` is the caller's.
+    unsafe { global_mark_name(name) }?;
+    // SAFETY: a global mark takes no buffer.
+    unsafe { set_mark(None, name, 0, 0) }?;
+    Ok(true)
 }
 
 /// The global mark `name`, as `[row, col, buffer, filename]`.
@@ -81,11 +76,8 @@ pub unsafe fn nvim_get_mark(
     _opts: *mut KeyDict_empty,
     arena: *mut Arena,
 ) -> Result<Array, Error> {
-    let mut error = Error::none();
-    // SAFETY: `name` is the caller's and `error` this frame's own slot.
-    let Some(mark) = (unsafe { global_mark_name(name, &mut error) }) else {
-        return Array::EMPTY.reported(error);
-    };
+    // SAFETY: `name` is the caller's.
+    let mark = unsafe { global_mark_name(name) }?;
     // SAFETY: `mark_get_global` answers a live global mark for every name
     // this one accepts -- the slot exists whether or not it is set.
     let (pos, fnum, fname) = unsafe {
@@ -130,5 +122,5 @@ pub unsafe fn nvim_get_mark(
         // SAFETY: as above -- the arena has its own copy now.
         unsafe { xfree(filename.cast()) };
     }
-    rv.reported(error)
+    Ok(rv)
 }

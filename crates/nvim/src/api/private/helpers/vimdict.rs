@@ -25,8 +25,8 @@ use crate::eval::typval::{
 use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::message_fmt::c_str;
 use crate::types::{
-    Arena, Dict, DictItem, Error, Object, String_0, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, size_t,
+    Arena, Dict, DictItem, Error, Object, String_0, kErrorTypeException, kErrorTypeValidation,
+    size_t,
 };
 use core::ffi::c_int;
 
@@ -45,26 +45,23 @@ pub(crate) unsafe fn dict_get_value(
     dict: *mut Dict,
     key: String_0,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: `dict` is a live Vimscript dictionary and `key` borrows the
     // caller's text.
     let di = unsafe { tv_dict_find(dict, key.data(), key.len().cast_signed()) };
     if di.is_null() {
         // SAFETY: `key` borrows the caller's NUL-terminated text.
         let key = unsafe { c_str(key.data()) };
-        *err = api_error!(kErrorTypeValidation, "Key not found: {key}");
-        return Object::Nil;
+        return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
     }
     // SAFETY: the lookup answered a live item of `dict`.
-    unsafe { vim_to_object(&(*di).di_tv, arena, true) }
+    Ok(unsafe { vim_to_object(&(*di).di_tv, arena, true) })
 }
 
-/// The item `key` names, having first reported through `err` any reason it
-/// could not be assigned to (or, with `del`, removed).
+/// The item `key` names, or why it could not be assigned to (or, with `del`,
+/// removed).
 ///
-/// A null return does not mean failure: an absent key is fine for an
-/// assignment. Callers check `err`.
+/// `Ok(null)` does not mean failure: an absent key is fine for an assignment.
 ///
 /// # Safety
 ///
@@ -75,8 +72,7 @@ pub(crate) unsafe fn dict_check_writable(
     dict: *mut Dict,
     key: String_0,
     del: bool,
-    err: &mut Error,
-) -> *mut DictItem {
+) -> Result<*mut DictItem, Error> {
     // SAFETY: as `dict_get_value`.
     let di = unsafe { tv_dict_find(dict, key.data(), key.len().cast_signed()) };
     if !di.is_null() {
@@ -94,9 +90,9 @@ pub(crate) unsafe fn dict_check_writable(
         if let Some(why) = refused {
             // SAFETY: `key` borrows the caller's NUL-terminated text.
             let key = unsafe { c_str(key.data()) };
-            *err = api_error!(kErrorTypeException, "Key is {why}: {key}");
+            return Err(api_error!(kErrorTypeException, "Key is {why}: {key}"));
         }
-        return di;
+        return Ok(di);
     }
     // SAFETY: `dict` is a live Vimscript dictionary.
     let refused = if unsafe { (*dict).dv_lock.is_locked() } {
@@ -108,10 +104,10 @@ pub(crate) unsafe fn dict_check_writable(
     } else {
         None
     };
-    if let Some((kind, msg)) = refused {
-        *err = Error::from_message(kind, msg);
+    match refused {
+        Some((kind, msg)) => Err(Error::from_message(kind, msg)),
+        None => Ok(di),
     }
-    di
 }
 
 /// Set or remove `key` in `dict`. With `retval` the previous value comes
@@ -131,14 +127,10 @@ pub(crate) unsafe fn dict_set_var(
     del: bool,
     retval: bool,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     let mut rv = Object::Nil;
     // SAFETY: as `dict_get_value`.
-    let mut di = unsafe { dict_check_writable(dict, key, del, err) };
-    if err.kind() != kErrorTypeNone {
-        return rv;
-    }
+    let mut di = unsafe { dict_check_writable(dict, key, del) }?;
     // SAFETY: `dict` is live.
     let watched = unsafe { tv_dict_is_watched(dict) };
 
@@ -146,8 +138,7 @@ pub(crate) unsafe fn dict_set_var(
         if di.is_null() {
             // SAFETY: `key` borrows the caller's NUL-terminated text.
             let key = unsafe { c_str(key.data()) };
-            *err = api_error!(kErrorTypeValidation, "Key not found: {key}");
-            return rv;
+            return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
         }
         // SAFETY: `di` is the live item the lookup found. A raw pointer
         // rather than a borrow, because a watcher runs Lua.
@@ -162,7 +153,7 @@ pub(crate) unsafe fn dict_set_var(
         }
         // SAFETY: `di` is an item of `dict`.
         unsafe { tv_dict_item_remove(dict, di) };
-        return rv;
+        return Ok(rv);
     }
 
     let mut tv = TV_INITIAL_VALUE;
@@ -196,13 +187,12 @@ pub(crate) unsafe fn dict_set_var(
             if type_error {
                 // SAFETY: `key` borrows the caller's NUL-terminated text.
                 let key = unsafe { c_str(key.data()) };
-                let e = api_error!(
+                return Err(api_error!(
                     kErrorTypeValidation,
                     "Setting v:{key} to value with wrong type"
-                );
-                *err = e;
+                ));
             }
-            return rv;
+            return Ok(rv);
         }
         if watched {
             // SAFETY: `di` is live and `oldtv` this frame's.
@@ -223,5 +213,5 @@ pub(crate) unsafe fn dict_set_var(
     }
     // SAFETY: `tv` is this frame's.
     unsafe { tv_clear(&mut tv) };
-    rv
+    Ok(rv)
 }

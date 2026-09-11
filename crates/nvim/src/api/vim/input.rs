@@ -262,12 +262,9 @@ pub unsafe fn nvim_set_keymap(
     rhs: String_0,
     opts: *mut KeyDict_keymap,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    let slot = &mut error;
     // `-1` is the API's "every buffer" spelling of the buffer argument.
     let all_buffers: BufferHandle = -1;
-    unsafe { modify_keymap(channel_id, all_buffers, false, mode, lhs, rhs, opts, slot) };
-    ().reported(error)
+    unsafe { modify_keymap(channel_id, all_buffers, false, mode, lhs, rhs, opts) }
 }
 
 /// # Safety

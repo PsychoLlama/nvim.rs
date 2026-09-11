@@ -11,7 +11,7 @@
 )]
 
 use crate::api::private::helpers::{
-    Reported, api_try, arena_array, array_add, dict_get_value, dict_set_var, find_buffer_by_handle,
+    api_try, arena_array, array_add, dict_get_value, dict_set_var, find_buffer_by_handle,
     find_tab_by_handle, find_window_by_handle, has_key,
 };
 use crate::api::vim::nvim_get_current_win;
@@ -66,14 +66,12 @@ pub unsafe fn nvim_tabpage_get_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut err = Error::none();
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
     // SAFETY: `tab` is a live tabpage, so `tp_vars` is its own dictionary;
     // `name` and `arena` are the caller's, per this function's contract.
-    let value = unsafe { dict_get_value(tab.tp_vars, name, arena, &mut err) };
-    value.reported(err)
+    unsafe { dict_get_value(tab.tp_vars, name, arena) }
 }
 
 /// Set the tab-scoped variable `name`.
@@ -85,7 +83,6 @@ pub unsafe fn nvim_tabpage_set_var(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut err = Error::none();
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
@@ -93,8 +90,7 @@ pub unsafe fn nvim_tabpage_set_var(
     // store takes it over.
     let no_arena = ptr::null_mut::<Arena>();
     let vars = tab.tp_vars;
-    unsafe { dict_set_var(vars, name, value, false, false, no_arena, &mut err) };
-    ().reported(err)
+    unsafe { dict_set_var(vars, name, value, false, false, no_arena) }.map(|_| ())
 }
 
 /// Remove the tab-scoped variable `name`.
@@ -102,15 +98,13 @@ pub unsafe fn nvim_tabpage_set_var(
 /// # Safety
 /// `name` must point at its own bytes.
 pub unsafe fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<(), Error> {
-    let mut err = Error::none();
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
     // SAFETY: as `nvim_tabpage_set_var`, with the deleting flag set.
     let no_arena = ptr::null_mut::<Arena>();
     let vars = tab.tp_vars;
-    unsafe { dict_set_var(vars, name, Object::Nil, true, false, no_arena, &mut err) };
-    ().reported(err)
+    unsafe { dict_set_var(vars, name, Object::Nil, true, false, no_arena) }.map(|_| ())
 }
 
 /// The window `tabpage` is showing.

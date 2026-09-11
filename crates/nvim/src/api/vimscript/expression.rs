@@ -43,11 +43,9 @@ pub unsafe fn nvim_parse_expression(
     hl: Boolean,
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
-    // SAFETY: `flags` is the caller's string and `error` this frame's slot.
-    let Some(pflags) = (unsafe { parse_flags(flags, &mut error) }) else {
-        return ApiDict::EMPTY.reported(error);
-    };
+    let error = Error::none();
+    // SAFETY: `flags` is the caller's string.
+    let pflags = unsafe { parse_flags(flags) }?;
 
     let mut parser_lines: [ParserLine; 2] = [
         ParserLine {
@@ -168,12 +166,11 @@ pub unsafe fn nvim_parse_expression(
     ret.reported(error)
 }
 
-/// The `flags` argument as `ExprParserFlags`, or `None` after reporting which
-/// character was not one.
+/// The `flags` argument as `ExprParserFlags`, or which character was not one.
 ///
 /// # Safety
 /// `flags` must name its own bytes.
-unsafe fn parse_flags(flags: String_0, err: &mut Error) -> Option<c_int> {
+unsafe fn parse_flags(flags: String_0) -> Result<c_int, Error> {
     let mut pflags: c_int = 0;
     for i in 0..flags.len() {
         // SAFETY: `i` is below `len`, so the byte is inside the string.
@@ -185,19 +182,23 @@ unsafe fn parse_flags(flags: String_0, err: &mut Error) -> Option<c_int> {
             // A NUL has no `%c` spelling worth printing.
             0 => {
                 let code = ch as c_uint;
-                *err = api_error!(kErrorTypeValidation, "Invalid flag: '\\0' ({code})");
-                return None;
+                return Err(api_error!(
+                    kErrorTypeValidation,
+                    "Invalid flag: '\\0' ({code})"
+                ));
             }
             _ => {
                 let code = ch as c_uint;
                 let raw = ch as u8;
                 let shown = msg_bytes(core::slice::from_ref(&raw));
-                *err = api_error!(kErrorTypeValidation, "Invalid flag: '{shown}' ({code})");
-                return None;
+                return Err(api_error!(
+                    kErrorTypeValidation,
+                    "Invalid flag: '{shown}' ({code})"
+                ));
             }
         }
     }
-    Some(pflags)
+    Ok(pflags)
 }
 
 /// Render the tree at `*root_p` into `*out`, freeing each node as it is

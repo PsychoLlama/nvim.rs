@@ -36,8 +36,8 @@ use crate::api_error;
 ///
 /// The name and the four-argument call are spelled once so that each of the
 /// six call sites is one line rather than six.
-fn err_border(err: &mut Error, want: &CStr, got: Option<&CStr>) {
-    *err = err_expected(c"border", want, got);
+fn err_border(want: &CStr, got: Option<&CStr>) -> Error {
+    err_expected(c"border", want, got)
 }
 
 /// One border cell: up to `MAX_SCHAR_SIZE` bytes of UTF-8, NUL-terminated.
@@ -185,36 +185,31 @@ unsafe fn style_slots(style: &BorderStyle) -> Slots {
 /// One entry of a `border = { ... }` array: a cell and its highlight group.
 ///
 /// # Safety
-/// `item` must be a live API object and `err` a writable error slot.
-unsafe fn parse_border_item(item: Object, err: &mut Error) -> Option<(String_0, c_int)> {
+/// `item` must be a live API object.
+unsafe fn parse_border_item(item: Object) -> Result<(String_0, c_int), Error> {
     if let Object::Array(arr) = item {
         if arr.size == 0 || arr.size > 2 {
-            err_border(err, c"1 or 2-item Array", None);
-            return None;
+            return Err(err_border(c"1 or 2-item Array", None));
         }
         // SAFETY: a non-empty array has an item at index 0.
         let first = unsafe { *arr.items };
         let Some(string) = first.as_string() else {
-            err_border(err, c"Array of Strings", None);
-            return None;
+            return Err(err_border(c"Array of Strings", None));
         };
         if arr.size < 2 {
-            return Some((string, 0));
+            return Ok((string, 0));
         }
         // SAFETY: a two-item array has an item at index 1.
-        match unsafe { object_to_hl_id(*arr.items.add(1), c"border char highlight".as_ptr()) } {
-            Ok(hl_id) => return Some((string, hl_id)),
-            Err(e) => {
-                *err = e;
-                return None;
-            }
-        }
+        let hl = unsafe { object_to_hl_id(*arr.items.add(1), c"border char highlight".as_ptr()) };
+        return hl.map(|hl_id| (string, hl_id));
     }
     if let Object::String(string) = item {
-        return Some((string, 0));
+        return Ok((string, 0));
     }
-    err_border(err, c"String or Array", Some(api_typename(item.kind())));
-    None
+    Err(err_border(
+        c"String or Array",
+        Some(api_typename(item.kind())),
+    ))
 }
 
 /// A `String_0` as one border cell, truncated to what a slot holds.
@@ -239,17 +234,16 @@ type Slots = ([BorderChar; 8], [c_int; 8]);
 /// The eight border slots an array of one, two, four or eight entries --
 /// each a character or a `{ char, hl }` pair -- asks for.
 ///
-/// The "corner char between edge chars" complaint is the one diagnosis that
-/// still answers `Some`: upstream fills the slots and *then* raises it, and
-/// its callers discard the whole config on any error anyway.
+/// The "corner char between edge chars" complaint is raised only after the
+/// slots are filled, as upstream does; every caller discards the whole config
+/// on a refusal, so what it filled in never reaches the window.
 ///
 /// # Safety
-/// `arr` must be a live API array and `err` a writable error slot.
-unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
+/// `arr` must be a live API array.
+unsafe fn parse_border_array(arr: Array) -> Result<Slots, Error> {
     let size = arr.size;
     if size == 0 || size > 8 || !size.is_power_of_two() {
-        err_border(err, c"1, 2, 4, or 8 chars", None);
-        return None;
+        return Err(err_border(c"1, 2, 4, or 8 chars", None));
     }
 
     let mut chars = [BLANK_CHAR; 8];
@@ -257,12 +251,11 @@ unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
     for i in 0..size {
         // SAFETY: `i` is below the array's own size.
         let item = unsafe { *arr.items.add(i) };
-        // SAFETY: an item of a live array, and the caller's error slot.
-        let (string, hl_id) = unsafe { parse_border_item(item, err) }?;
+        // SAFETY: an item of a live array.
+        let (string, hl_id) = unsafe { parse_border_item(item) }?;
         // SAFETY: a live API string.
         if !string.is_empty() && unsafe { mb_string2cells_len(string.data(), string.len()) } > 1 {
-            err_border(err, c"only one-cell chars", None);
-            return None;
+            return Err(err_border(c"only one-cell chars", None));
         }
         // SAFETY: as above.
         chars[i] = unsafe { cell_of(string) };
@@ -285,9 +278,9 @@ unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
         || corner_gap(&chars, 3, 5, 4)
         || corner_gap(&chars, 5, 7, 6)
     {
-        err_border(err, c"corner char between edge chars", None);
+        return Err(err_border(c"corner char between edge chars", None));
     }
-    Some((chars, hl_ids))
+    Ok((chars, hl_ids))
 }
 
 /// Parse the `border` key of `nvim_open_win`/`nvim_win_set_config` into
@@ -295,7 +288,7 @@ unsafe fn parse_border_array(arr: Array, err: &mut Error) -> Option<Slots> {
 ///
 /// # Safety
 /// `fconfig` must be writable and `style` a live API object.
-pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &mut Error) {
+pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig) -> Result<(), Error> {
     // The config is written a field at a time rather than through one
     // long-lived `&mut`: everything below can re-enter the editor, which owns
     // it. That is what `WinCfg` is -- a `Live<WinConfig>` reborrowing per
@@ -305,8 +298,8 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
     cfg.border = true;
 
     let slots = if let Object::Array(array) = style {
-        // SAFETY: the caller's live array and error slot.
-        unsafe { parse_border_array(array, err) }
+        // SAFETY: the caller's live array.
+        Some(unsafe { parse_border_array(array) }?)
     } else if let Object::String(str) = style {
         // SAFETY: a live API string is NUL-terminated.
         if str.is_empty() || unsafe { strequal(str.data(), BORDER_NONE.as_ptr()) } {
@@ -314,19 +307,16 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
             cfg.border = false;
             cfg.title = false;
             cfg.footer = false;
-            return;
+            return Ok(());
         }
         // SAFETY: as above.
-        match unsafe { find_style(str.data()) } {
-            // SAFETY: the editor's highlight tables are initialised by the
-            // time any window can be configured.
-            Some(style) => Some(unsafe { style_slots(style) }),
-            None => {
-                // SAFETY: the keyset's string is NUL-terminated.
-                *err = err_bad_value(c"border", unsafe { str.as_cstr() });
-                None
-            }
-        }
+        let Some(style) = (unsafe { find_style(str.data()) }) else {
+            // SAFETY: the keyset's string is NUL-terminated.
+            return Err(err_bad_value(c"border", unsafe { str.as_cstr() }));
+        };
+        // SAFETY: the editor's highlight tables are initialised by the time
+        // any window can be configured.
+        Some(unsafe { style_slots(style) })
     } else {
         // Neither an Array nor a String names a border; upstream leaves the
         // slots alone and does not diagnose it either.
@@ -337,37 +327,36 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
         cfg.border_chars = chars;
         cfg.border_hl_ids = hl_ids;
     }
+    Ok(())
 }
 
-pub(crate) fn generate_api_error(window: Option<Win>, attribute: &CStr, err: &mut Error) {
-    if let Some(window) = window.filter(|w| w.w_floating) {
-        let handle = window.handle;
-        let e = api_error!(
-            kErrorTypeValidation,
-            "Required: 'relative' when reconfiguring floating window {handle}"
-        );
-        *err = e;
-    } else {
-        *err = err_conflict(attribute, c"non-float window");
+pub(crate) fn generate_api_error(window: Option<Win>, attribute: &CStr) -> Error {
+    match window.filter(|w| w.w_floating) {
+        Some(window) => {
+            let handle = window.handle;
+            api_error!(
+                kErrorTypeValidation,
+                "Required: 'relative' when reconfiguring floating window {handle}"
+            )
+        }
+        None => err_conflict(attribute, c"non-float window"),
     }
 }
 
-/// The `'winborder'` value as a `border` key, or `false` when the option's
-/// value is not one this accepts.
+/// The `'winborder'` value as a `border` key. `Ok(false)` is a value that
+/// does not spell one; `Err` is one that spells a border badly.
 ///
 /// A value holding a comma is eight cells spelled out; anything else is a
 /// style name, which [`parse_border_style`] resolves.
 ///
 /// # Safety
-/// `fconfig` must be null or writable, `border_opt` NUL-terminated and `err`
-/// a writable error slot.
+/// `fconfig` must be null or writable and `border_opt` NUL-terminated.
 pub unsafe fn parse_winborder(
     fconfig: *mut WinConfig,
     border_opt: *mut ::core::ffi::c_char,
-    err: &mut Error,
-) -> bool {
+) -> Result<bool, Error> {
     if fconfig.is_null() {
-        return false;
+        return Ok(false);
     }
     // SAFETY: the caller's option value.
     let listed = has_char(unsafe { cstr::at(border_opt) }, ',' as c_int);
@@ -375,19 +364,17 @@ pub unsafe fn parse_winborder(
         // SAFETY: as above.
         match unsafe { border_cell_list(border_opt) } {
             Some(array) => Object::array(array),
-            None => return false,
+            None => return Ok(false),
         }
     } else {
         // SAFETY: as above.
         Object::string(unsafe { cstr_to_string(border_opt) })
     };
-    // SAFETY: the caller's config and error slot, and the object just built.
-    let slot = unsafe {
-        parse_border_style(style, fconfig, err);
-        api_free_object(style);
-        ErrSlot::new(err)
-    };
-    !slot.is_set()
+    // SAFETY: the caller's config, and the object just built.
+    let parsed = unsafe { parse_border_style(style, fconfig) };
+    // SAFETY: as above.
+    unsafe { api_free_object(style) };
+    parsed.map(|()| true)
 }
 
 /// The eight comma-separated cells of a `'winborder'` value, or `None` when

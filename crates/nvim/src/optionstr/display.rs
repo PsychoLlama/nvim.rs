@@ -37,8 +37,8 @@ use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::state::mode::{km_startsel, km_stopsel};
 use crate::types::{
-    BreakAt, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, NUL, OptInt, OptSet, OptionSetFlags,
-    VirtText, WinConfig, kFloatRelativeEditor,
+    BreakAt, ColNr, FAIL, FloatAnchor, LPos, LineNr, NUL, OptInt, OptSet, OptionSetFlags, VirtText,
+    WinConfig, kFloatRelativeEditor,
 };
 use crate::window::check_colorcolumn;
 
@@ -540,12 +540,9 @@ pub(crate) unsafe fn parse_border_opt(border_opt: *mut c_char) -> bool {
         hide: false,
         _cmdline_offset: INT_MAX,
     };
-    let mut err = Error::none();
     // SAFETY: the caller's C string, and two locals the parser writes into.
-    let ok = unsafe { parse_winborder(&raw mut fconfig, border_opt, &mut err) };
-    // Whatever the call left behind is dropped rather than reported.
-    err.clear();
-    ok
+    // Whatever the call refused with is dropped rather than reported.
+    unsafe { parse_winborder(&raw mut fconfig, border_opt) }.unwrap_or(false)
 }
 
 /// # Safety

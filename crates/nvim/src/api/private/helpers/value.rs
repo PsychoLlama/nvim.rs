@@ -361,16 +361,16 @@ pub(crate) fn api_metadata() -> Object {
     static METADATA: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     if METADATA.with(Object::is_nil) {
         let mut arena = ARENA_EMPTY;
-        let mut err = Error::none();
         let blob = PACKED_API_METADATA.as_ptr() as *mut c_char;
         let (len, ar) = (PACKED_API_METADATA.len(), &raw mut arena);
         // SAFETY: the blob is a compile-time constant of `len` bytes and a
-        // valid msgpack map; `arena` and `err` are this frame's.
-        METADATA.set(unsafe { unpack(blob, len, ar, &mut err) });
-        if err.is_set() || METADATA.with(|m| m.as_dict().is_none()) {
+        // valid msgpack map; `arena` is this frame's.
+        let unpacked = unsafe { unpack(blob, len, ar) };
+        if !unpacked.as_ref().is_ok_and(|o| o.as_dict().is_some()) {
             // SAFETY: `abort` takes nothing.
             unsafe { abort() };
         }
+        METADATA.set(unpacked.expect("the check above accepted a Dict"));
         // SAFETY: `arena` is this frame's, and the tree it holds is kept
         // alive by the static below for the life of the process.
         METADATA_ARENA.set(unsafe { arena_finish(&raw mut arena) });

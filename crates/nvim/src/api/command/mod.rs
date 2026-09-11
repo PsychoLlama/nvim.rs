@@ -32,8 +32,8 @@ use crate::types::{
     Error, ExArg, Expand, GArray, Integer, KeyDict_cmd, KeyDict_cmd_magic, KeyDict_cmd_mods,
     KeyDict_cmd_mods_filter, KeyDict_cmd_opts, KeyDict_empty, KeyDict_get_commands,
     KeyDict_user_command, LineNr, LuaRef, Object, String_0, TryState, UserCmd, int64_t,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeLuaRef,
-    kObjectTypeString, size_t, uint8_t, uint64_t,
+    kErrorTypeException, kErrorTypeValidation, kObjectTypeLuaRef, kObjectTypeString, size_t,
+    uint8_t, uint64_t,
 };
 use crate::usercmd::{
     Table, commands_array, get_user_command_name, parse_addr_type_arg, parse_compl_arg,

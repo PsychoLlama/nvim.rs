@@ -272,8 +272,7 @@ unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
     // SAFETY: as above.
     unsafe { channel_decref(chan.as_ptr()) };
     // Nothing reads the reason a closing channel's UI could not be found.
-    let mut ignored = Error::none();
-    remote_ui_disconnect(chan.id, &mut ignored, false);
+    drop(remote_ui_disconnect(chan.id, false));
 
     if ui_client_channel_id.get() != 0 && chan.id == ui_client_channel_id.get() {
         // A `--remote-ui` client whose server went away: try to reconnect
@@ -393,18 +392,16 @@ pub unsafe fn rpc_send_event(id: uint64_t, name: *const c_char, args: Array) -> 
 ///
 /// # Safety
 /// `method_name` is a NUL-terminated string, `args` describes `args.size` live
-/// objects, and `result_mem`/`err` point at writable slots.
+/// objects, and `result_mem` points at a writable slot.
 pub unsafe fn rpc_send_call(
     id: uint64_t,
     method_name: *const c_char,
     args: Array,
     result_mem: *mut ArenaMem,
-    err: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the channel table is live whenever the editor is.
     let Some(mut chan) = (unsafe { find_rpc_channel(id) }) else {
-        *err = api_error!(kErrorTypeException, "Invalid channel: {id}");
-        return Object::Nil;
+        return Err(api_error!(kErrorTypeException, "Invalid channel: {id}"));
     };
     // SAFETY: the channel is live; this reference is dropped below.
     unsafe { channel_incref(chan.as_ptr()) };
@@ -435,23 +432,22 @@ pub unsafe fn rpc_send_call(
     chan.rpc.call_stack.pop();
 
     if !frame.returned {
-        *err = api_error!(kErrorTypeException, "Invalid channel: {id}");
         unsafe { channel_decref(chan.as_ptr()) };
-        return Object::Nil;
+        return Err(api_error!(kErrorTypeException, "Invalid channel: {id}"));
     }
+    let mut refusal = None;
     if frame.errored {
         // SAFETY: the result the decoder placed in the frame, and its arena.
-        unsafe { report_call_error(err, &frame.result) };
+        refusal = Some(unsafe { call_error(&frame.result) });
         unsafe { arena_mem_free(frame.result_mem) };
         frame.result_mem = ptr::null_mut();
     }
     // SAFETY: the reference taken above, and the caller's out-parameter.
     unsafe { channel_decref(chan.as_ptr()) };
     unsafe { *result_mem = frame.result_mem };
-    if frame.errored {
-        Object::Nil
-    } else {
-        frame.result
+    match refusal {
+        Some(refusal) => Err(refusal),
+        None => Ok(frame.result),
     }
 }
 
@@ -462,13 +458,12 @@ pub unsafe fn rpc_send_call(
 /// API defines, is reported as "unknown error" rather than trusted.
 ///
 /// # Safety
-/// `err` points at a writable `Error` and `result` is a live decoded object.
-unsafe fn report_call_error(err: &mut Error, result: &Object) {
+/// `result` is a live decoded object.
+unsafe fn call_error(result: &Object) -> Error {
     if let Object::String(text) = *result {
         // SAFETY: the message is a NUL-terminated string.
         let text = unsafe { cstr::at(text.data()) };
-        *err = Error::from_message(kErrorTypeException, text);
-        return;
+        return Error::from_message(kErrorTypeException, text);
     }
     if let Object::Array(array) = *result
         && array.size == 2
@@ -483,11 +478,10 @@ unsafe fn report_call_error(err: &mut Error, result: &Object) {
             let kind = crate::narrow::number_as_int(kind);
             // SAFETY: the message is the string the frame carried.
             let text = unsafe { message.as_cstr() };
-            *err = Error::from_message(kind, text);
-            return;
+            return Error::from_message(kind, text);
         }
     }
-    *err = Error::exception(c"unknown error");
+    Error::exception(c"unknown error")
 }
 
 /// Hands an already-encoded message to a channel. Takes ownership of `buffer`.

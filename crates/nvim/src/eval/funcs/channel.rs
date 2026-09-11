@@ -318,18 +318,17 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let scope = (nesting != 0).then(|| unsafe { ProviderScope::enter() });
 
-    let mut err = Error::none();
     let chan_id = args[0].number_or_zero() as uint64_t;
     let method = arg_string(&mut numbuf, &args[1]);
     let mut res_mem: ArenaMem = ptr::null_mut();
-    let object = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem, &mut err) };
+    let called = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 
     if let Some(scope) = scope {
         unsafe { scope.leave() };
     }
 
-    if err.is_set() {
+    if let Err(err) = &called {
         // Name the peer when it told us what it is called.
         let chan = find_channel(chan_id);
         let name = if chan.is_null() {
@@ -357,11 +356,10 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 "Invoking '{method}' on channel {chan_id} ({name}):\n{msg}"
             );
         }
-    } else {
+    } else if let Ok(object) = called {
         unsafe { object_to_vim(object, result) };
     }
     unsafe { arena_mem_free(res_mem) };
-    err.clear();
 }
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the

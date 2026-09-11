@@ -90,14 +90,12 @@ pub const MPACK_NOMEM: c_int = 3;
 /// left over is an error rather than the start of the next message.
 ///
 /// # Safety
-/// `data` points at `size` readable bytes, and `arena`/`err` at a writable
-/// `Arena` and `Error`.
-pub unsafe extern "C" fn unpack(
+/// `data` points at `size` readable bytes and `arena` at a writable `Arena`.
+pub unsafe fn unpack(
     mut data: *const c_char,
     mut size: size_t,
     arena: *mut Arena,
-    err: &mut Error,
-) -> Object {
+) -> Result<Object, Error> {
     // SAFETY: the caller's buffer, arena and error slot. `api_parse_enter`
     // navigates back here through the parser's `data` field, so every access
     // below has to go through the same pointer it is handed — writing to
@@ -134,10 +132,9 @@ pub unsafe extern "C" fn unpack(
     } else if result == MPACK_OK && size != 0 {
         c"trailing data in msgpack string"
     } else {
-        return value;
+        return Ok(value);
     };
-    *err = Error::exception(message);
-    value
+    Err(Error::exception(message))
 }
 
 /// The `Object` a scalar token stands for, or `None` when the token opens a

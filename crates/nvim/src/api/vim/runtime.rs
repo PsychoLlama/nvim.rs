@@ -54,12 +54,10 @@ pub unsafe fn nvim__exec_lua_fast(
 /// `text` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
 pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
-    let mut error = Error::none();
     if text.len() > ::core::ffi::c_int::MAX as size_t {
-        too_long(&mut error, c"text length");
-        return (0 as Integer).reported(error);
+        return Err(too_long(c"text length"));
     }
-    (unsafe { mb_string2cells(text.data()) } as Integer).reported(error)
+    Ok(unsafe { mb_string2cells(text.data()) } as Integer)
 }
 
 /// # Safety
@@ -219,8 +217,8 @@ pub unsafe fn nvim__get_runtime(
 }
 
 /// "Invalid `name`: '(too long)'", the one message this file shares.
-fn too_long(err: &mut Error, name: &CStr) {
-    *err = err_bad_value(name, c"(too long)");
+fn too_long(name: &CStr) -> Error {
+    err_bad_value(name, c"(too long)")
 }
 
 /// # Safety
@@ -228,10 +226,9 @@ fn too_long(err: &mut Error, name: &CStr) {
 /// `dir` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`.
 pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
-    let mut error = Error::none();
+    let error = Error::none();
     if dir.len() >= 4096 as size_t {
-        too_long(&mut error, c"directory name");
-        return ().reported(error);
+        return Err(too_long(c"directory name"));
     }
     let mut string: [::core::ffi::c_char; 4096] = [0; 4096];
     unsafe {

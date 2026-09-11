@@ -249,12 +249,13 @@ pub unsafe fn nvim_buf_set_extmark(
                     opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__virt_text,
                 ) {
-                    let slot = &mut error;
                     let width = &raw mut virt_text.width;
-                    *virt_text.data.text_mut() =
-                        unsafe { parse_virt_text(opts.virt_text, slot, width) };
-                    if error.is_set() {
-                        break '_error;
+                    match unsafe { parse_virt_text(opts.virt_text, width) } {
+                        Ok(text) => *virt_text.data.text_mut() = text,
+                        Err(e) => {
+                            error = e;
+                            break '_error;
+                        }
                     }
                 }
                 if has_key(
@@ -364,10 +365,16 @@ pub unsafe fn nvim_buf_set_extmark(
                                 break '_error;
                             };
                             let mut dummig: ::core::ffi::c_int = 0;
-                            let (slot, dummy_width) = (&mut error, &raw mut dummig);
+                            let dummy_width = &raw mut dummig;
                             // SAFETY: the array the caller's item names.
-                            let jtem: VirtText =
-                                unsafe { parse_virt_text(item, slot, dummy_width) };
+                            let jtem: VirtText = match unsafe { parse_virt_text(item, dummy_width) }
+                            {
+                                Ok(jtem) => jtem,
+                                Err(e) => {
+                                    error = e;
+                                    break '_error;
+                                }
+                            };
                             // `kv_push`, whose growth step c2rust expanded inline.
                             let lines = virt_lines.data.lines_mut();
                             let mut vl =

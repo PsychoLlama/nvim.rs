@@ -173,14 +173,12 @@ pub unsafe fn nvim_win_get_var(
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
-    let mut err = Error::none();
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Object::Nil);
     };
     // SAFETY: `w` is live, so `w_vars` is its own dictionary; `name` and
     // `arena` are the caller's, per this function's contract.
-    let value = unsafe { dict_get_value(w.w_vars, name, arena, &mut err) };
-    value.reported(err)
+    unsafe { dict_get_value(w.w_vars, name, arena) }
 }
 
 /// Set the window-scoped variable `name`.
@@ -192,14 +190,12 @@ pub unsafe fn nvim_win_set_var(
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
-    let mut err = Error::none();
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
     let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_get_var`; the store takes `value` over.
-    unsafe { dict_set_var(w.w_vars, name, value, false, false, no_arena, &mut err) };
-    ().reported(err)
+    unsafe { dict_set_var(w.w_vars, name, value, false, false, no_arena) }.map(|_| ())
 }
 
 /// Remove the window-scoped variable `name`.
@@ -207,14 +203,12 @@ pub unsafe fn nvim_win_set_var(
 /// # Safety
 /// `name` must point at its own bytes.
 pub unsafe fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), Error> {
-    let mut err = Error::none();
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
     let no_arena = ptr::null_mut::<Arena>();
     // SAFETY: as `nvim_win_set_var`, with the deleting flag set.
-    unsafe { dict_set_var(w.w_vars, name, Object::Nil, true, false, no_arena, &mut err) };
-    ().reported(err)
+    unsafe { dict_set_var(w.w_vars, name, Object::Nil, true, false, no_arena) }.map(|_| ())
 }
 
 /// `win`'s top-left corner, as a `[row, column]` pair of screen cells.

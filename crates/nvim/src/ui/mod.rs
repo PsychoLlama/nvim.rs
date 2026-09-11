@@ -846,17 +846,14 @@ fn ext_name(widget: usize) -> *const core::ffi::c_char {
 ///
 /// Safe: the grid handle is looked up here, and every `unsafe` below rests on
 /// that lookup rather than on anything the caller promised.
-pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int, err: &mut Error) {
+pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int) -> Result<(), Error> {
     if grid_handle == DEFAULT_GRID_HANDLE {
         screen_resize(width, height);
-        return;
+        return Ok(());
     }
-    let wp = get_win_by_grid_handle(grid_handle);
-    if wp.is_none() {
-        *err = err_bad_number(c"window handle", grid_handle as i64);
-        return;
-    }
-    let mut wp = wp.expect("the grid handle names a window");
+    let Some(mut wp) = get_win_by_grid_handle(grid_handle) else {
+        return Err(err_bad_number(c"window handle", grid_handle as i64));
+    };
     if wp.w_floating {
         if width != wp.w_width || height != wp.w_height {
             wp.w_config.width = width.max(1);
@@ -869,4 +866,5 @@ pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int, err: &mu
         wp.w_width_request = width.max(0);
         win_set_inner_size(wp, true);
     }
+    Ok(())
 }

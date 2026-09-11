@@ -20,9 +20,7 @@ use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::narrow::number_as_int;
-use crate::types::{
-    ApiDict, Arena, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone,
-};
+use crate::types::{ApiDict, Arena, Error, KeyDict_get_highlight, KeyValuePair, NS, Object};
 use crate::ui::ui_rgb_attached;
 
 use super::{
@@ -110,14 +108,13 @@ unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int, arena: *mut Ar
 /// following it.
 ///
 /// # Safety
-/// `opts`, `arena` and `err` are live; main thread only.
+/// `opts` and `arena` are live; main thread only.
 pub(crate) unsafe fn ns_get_hl_defs(
     ns_id: NS,
     opts: *mut KeyDict_get_highlight,
     arena: *mut Arena,
-    err: &mut Error,
-) -> ApiDict {
-    // SAFETY: the caller's keydict, arena and error slot.
+) -> Result<ApiDict, Error> {
+    // SAFETY: the caller's keydict and arena.
     let link =
         !unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__link) } || unsafe { (*opts).link };
 
@@ -135,7 +132,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
             unsafe { syn_name2id_len(name, len) }
         };
         if id == 0 && !create {
-            return NO_DICT;
+            return Ok(NO_DICT);
         }
     } else if unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__id) } {
         id = number_as_int(unsafe { (*opts).id });
@@ -143,8 +140,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
 
     if id != -1 {
         if id < 1 || id > highlight_num_groups() {
-            *err = Error::validation(c"Highlight id out of bounds");
-            return NO_DICT;
+            return Err(Error::validation(c"Highlight id out of bounds"));
         }
         let mut attrs = NO_DICT;
         // SAFETY: a live group id.
@@ -155,11 +151,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
         };
         // SAFETY: the caller's arena.
         unsafe { hlgroup2dict(&mut attrs, ns_id, id, arena) };
-        return attrs;
-    }
-
-    if err.kind() != kErrorTypeNone {
-        return NO_DICT;
+        return Ok(attrs);
     }
 
     let groups = usize::try_from(highlight_num_groups())
@@ -184,7 +176,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
         };
         rv.size += 1;
     }
-    rv
+    Ok(rv)
 }
 
 /// `synIDattr({id}, {flag})` for a boolean attribute: `"1"` if the group has

@@ -37,12 +37,8 @@ pub unsafe fn nvim_exec_autocmds(
             c"event".as_ptr() as *mut ::core::ffi::c_char,
             true,
             arena,
-            &mut error,
         )
-    };
-    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        return ().reported(error);
-    }
+    }?;
     let name: *mut ::core::ffi::c_char;
     match opts.group {
         Object::Nil => {}
@@ -110,12 +106,8 @@ pub unsafe fn nvim_exec_autocmds(
             buf,
             c"".as_ptr() as *mut ::core::ffi::c_char,
             arena,
-            &mut error,
         )
-    };
-    if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
-        return ().reported(error);
-    }
+    }?;
     if has_key(
         opts.is_set__exec_autocmds_,
         KEYSET_OPTIDX_exec_autocmds__data,

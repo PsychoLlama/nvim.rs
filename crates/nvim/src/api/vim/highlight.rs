@@ -31,8 +31,7 @@ pub unsafe fn nvim_get_hl(
     opts: *mut KeyDict_get_highlight,
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
-    let mut error = Error::none();
-    unsafe { ns_get_hl_defs(ns_id as NS, opts, arena, &mut error).reported(error) }
+    unsafe { ns_get_hl_defs(ns_id as NS, opts, arena) }
 }
 
 /// # Safety
@@ -46,20 +45,17 @@ pub unsafe fn nvim_set_hl(
     name: String_0,
     val: *mut KeyDict_highlight,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
     let hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
     if !(hl_id != 0 as ::core::ffi::c_int) {
         // SAFETY: the caller's highlight name is NUL-terminated.
-        error = err_bad_value(c"highlight name", unsafe { name.as_cstr() });
-        return ().reported(error);
+        return Err(err_bad_value(c"highlight name", unsafe { name.as_cstr() }));
     }
     let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     if has_key(
         unsafe { (*val).is_set__highlight_ },
         KEYSET_OPTIDX_highlight__url,
     ) {
-        error = Error::validation(c"Invalid key: 'url'");
-        return ().reported(error);
+        return Err(Error::validation(c"Invalid key: 'url'"));
     }
     let update: bool = has_key(
         unsafe { (*val).is_set__highlight_ },
@@ -73,12 +69,10 @@ pub unsafe fn nvim_set_hl(
         base_attrs = attrs;
         base = Some(&base_attrs);
     }
-    let attrs: HlAttrs = unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base, &mut error) };
-    if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
-        let _sctx = api_set_sctx(channel_id);
-        unsafe { ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val)) };
-    }
-    ().reported(error)
+    let attrs: HlAttrs = unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base) }?;
+    let _sctx = api_set_sctx(channel_id);
+    unsafe { ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val)) };
+    Ok(())
 }
 
 /// # Safety

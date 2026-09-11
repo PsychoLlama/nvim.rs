@@ -292,15 +292,15 @@ unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         });
     }
 
-    let mut err = Error::none();
-    if !unsafe { parse_winborder(&raw mut *config, p_pumborder.get(), &mut err) } {
-        if err.is_set() {
-            unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
+    match unsafe { parse_winborder(&raw mut *config, p_pumborder.get()) } {
+        Ok(true) => {}
+        Ok(false) => return None,
+        Err(e) => {
+            // SAFETY: the refusal owns its message.
+            unsafe { emsg_ptr(e.message_or_empty().as_ptr()) };
+            return None;
         }
-        err.clear();
-        return None;
     }
-    err.clear();
 
     // The shadow style is not a box: it darkens the cells to the right
     // and below instead, in two dedicated highlight groups.
