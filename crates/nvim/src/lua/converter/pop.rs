@@ -33,6 +33,117 @@ use crate::types::{
 };
 use ::libc::memchr;
 
+// ---------------------------------------------------------------------------
+// The Lua stack, as the two explicit-stack walks name it
+
+/// How many Lua slots one turn of a `pop` walk may need: a table's next key
+/// and value, plus room for the `vim.NIL` a userdata leaf compares itself
+/// with.
+pub(super) const TURN_SLOTS: c_int = 3;
+
+/// One of Lua's `LUA_T*` value kinds.
+pub(super) type LuaKind = c_int;
+
+/// An **absolute** index into the Lua stack.
+///
+/// The walk names a container's table this way rather than by depth from the
+/// top: the table keeps its slot for as long as its frame is open, whatever
+/// the conversion of its elements pushes above it.
+#[derive(Clone, Copy)]
+pub(super) struct At(pub(super) c_int);
+
+/// The Lua stack a `pop` walk reads and writes.
+///
+/// Holding the state for the walk's lifetime is what makes the operations
+/// below safe, as it is for [`LuaSink`](super::push): each is one `lua_*`
+/// call against a state that stays live, and the walk's own discipline about
+/// which slot holds what is the rest of the contract.  Only the two entry
+/// points build one, each from the live state it was handed.
+pub(super) struct LuaStack {
+    pub(super) lstate: *mut lua_State,
+}
+
+impl LuaStack {
+    /// Where the top of the stack is.
+    pub(super) fn top(&self) -> At {
+        At(unsafe { lua_gettop(self.lstate) })
+    }
+
+    /// Drop the top `n` values.
+    pub(super) fn discard(&self, n: c_int) {
+        unsafe { lua_pop(self.lstate, n) };
+    }
+
+    /// Make room for `slots` more values above the top. The `Err` carries
+    /// the size that was asked for, which is what the refusal names.
+    pub(super) fn grow(&self, slots: c_int) -> Result<(), c_int> {
+        let need = self.top().0 + slots;
+        if unsafe { lua_checkstack(self.lstate, need) } == 0 {
+            return Err(need);
+        }
+        Ok(())
+    }
+
+    /// Which of the `LUA_T*` kinds the top of the stack is.
+    pub(super) fn top_kind(&self) -> LuaKind {
+        unsafe { lua_type(self.lstate, -1) }
+    }
+
+    /// Push the entry after the key on top of the stack, leaving that key
+    /// below it; `false` once `table` has no entries left, having popped the
+    /// key.
+    pub(super) fn next_entry(&self, table: At) -> bool {
+        unsafe { lua_next(self.lstate, table.0) != 0 }
+    }
+
+    /// Whether the entry [`next_entry`](Self::next_entry) just pushed has a
+    /// string key.
+    pub(super) fn entry_key_is_string(&self) -> bool {
+        unsafe { lua_type(self.lstate, -2) == LUA_TSTRING }
+    }
+
+    /// Push `table[index]`.
+    pub(super) fn push_item(&self, table: At, index: c_int) {
+        unsafe { lua_rawgeti(self.lstate, table.0, index) };
+    }
+
+    /// Whether the value at `at` is the very value on top of the stack.
+    pub(super) fn top_is(&self, at: At) -> bool {
+        unsafe { lua_rawequal(self.lstate, -1, at.0) != 0 }
+    }
+
+    pub(super) fn push_nil(&self) {
+        unsafe { lua_pushnil(self.lstate) };
+    }
+
+    /// Push the top table's metatable and answer `true`, or push nothing.
+    pub(super) fn push_metatable(&self) -> bool {
+        unsafe { lua_getmetatable(self.lstate, -1) != 0 }
+    }
+
+    pub(super) fn top_as_boolean(&self) -> bool {
+        unsafe { lua_toboolean(self.lstate, -1) != 0 }
+    }
+
+    pub(super) fn top_as_number(&self) -> lua_Number {
+        unsafe { lua_tonumber(self.lstate, -1) }
+    }
+
+    /// The string at `at`, as bytes.
+    ///
+    /// The borrow is the Lua string's, which lives until that slot is popped
+    /// or overwritten; every caller here copies out of it at once.  Asking a
+    /// *number* for its bytes converts it in place, which would derail a
+    /// `lua_next` walking the same table -- so only a slot already known to
+    /// hold a string is passed.
+    pub(super) fn string_at(&self, at: At) -> &[u8] {
+        let mut len: size_t = 0;
+        let bytes = unsafe { lua_tolstring(self.lstate, at.0, &raw mut len) };
+        // SAFETY: a Lua string is `len` readable bytes and never null.
+        unsafe { ::core::slice::from_raw_parts(bytes.cast::<u8>(), len) }
+    }
+}
+
 /// Classify the table on top of the stack.
 ///
 /// Leaves the stack exactly as it found it.  Both `pop` walks call this

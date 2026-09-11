@@ -29,8 +29,9 @@
 )]
 
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 
+use super::pop::{At, LuaStack, TURN_SLOTS};
 use super::{VARNUMBER_MAX, VARNUMBER_MIN, nlua_traverse_table};
 use crate::eval::decode::{decode_create_map_special_dict, decode_string};
 use crate::eval::typval::{
@@ -40,8 +41,7 @@ use crate::eval::userfunc::register_luafunc;
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
     LUA_NOREF, LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE,
-    LUA_TUSERDATA, lua_checkstack, lua_getmetatable, lua_gettop, lua_next, lua_pop, lua_pushnil,
-    lua_rawequal, lua_rawgeti, lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
+    LUA_TUSERDATA,
 };
 use crate::lua::state::nlua_global_refs;
 use crate::memory::xstrdup;
@@ -59,113 +59,6 @@ const E5100_MIXED_KEYS: &CStr = c"E5100: Cannot convert given Lua table: table s
                                  either only integer keys or only string keys";
 /// Refused for a Lua value with no Vimscript image at all.
 const E5101_BAD_TYPE: &CStr = c"E5101: Cannot convert given Lua type";
-
-/// How many Lua slots one turn of the walk may need: a table's next key and
-/// value, plus room for the `vim.NIL` a userdata leaf compares itself with.
-const TURN_SLOTS: c_int = 3;
-
-/// One of Lua's `LUA_T*` value kinds.
-type LuaKind = c_int;
-
-/// An **absolute** index into the Lua stack.
-///
-/// The walk names a container's table this way rather than by depth from the
-/// top: the table keeps its slot for as long as its frame is open, whatever
-/// the conversion of its elements pushes above it.
-#[derive(Clone, Copy)]
-struct At(c_int);
-
-/// The Lua stack this walk reads and writes.
-///
-/// Holding the state for the walk's lifetime is what makes the operations
-/// below safe, as it is for [`LuaSink`](super::push): each is one `lua_*`
-/// call against a state that stays live, and the walk's own discipline about
-/// which slot holds what is the rest of the contract.  Only
-/// [`nlua_pop_typval`] builds one, from the live state it was handed.
-struct LuaStack {
-    lstate: *mut lua_State,
-}
-
-impl LuaStack {
-    /// Where the top of the stack is.
-    fn top(&self) -> At {
-        At(unsafe { lua_gettop(self.lstate) })
-    }
-
-    /// Drop the top `n` values.
-    fn discard(&self, n: c_int) {
-        unsafe { lua_pop(self.lstate, n) };
-    }
-
-    /// Make room for the slots the next turn pushes, or refuse with `E1502`.
-    fn room_for_a_turn(&self) -> bool {
-        let need = self.top().0 + TURN_SLOTS;
-        if unsafe { lua_checkstack(self.lstate, need) } == 0 {
-            semsg!("E1502: Lua failed to grow stack to {need}");
-            return false;
-        }
-        true
-    }
-
-    /// Which of the `LUA_T*` kinds the top of the stack is.
-    fn top_kind(&self) -> LuaKind {
-        unsafe { lua_type(self.lstate, -1) }
-    }
-
-    /// Push the entry after the key on top of the stack, leaving that key
-    /// below it; `false` once `table` has no entries left, having popped the
-    /// key.
-    fn next_entry(&self, table: At) -> bool {
-        unsafe { lua_next(self.lstate, table.0) != 0 }
-    }
-
-    /// Whether the entry [`next_entry`](Self::next_entry) just pushed has a
-    /// string key.
-    fn entry_key_is_string(&self) -> bool {
-        unsafe { lua_type(self.lstate, -2) == LUA_TSTRING }
-    }
-
-    /// Push `table[index]`.
-    fn push_item(&self, table: At, index: c_int) {
-        unsafe { lua_rawgeti(self.lstate, table.0, index) };
-    }
-
-    /// Whether the value at `at` is the very value on top of the stack.
-    fn top_is(&self, at: At) -> bool {
-        unsafe { lua_rawequal(self.lstate, -1, at.0) != 0 }
-    }
-
-    fn push_nil(&self) {
-        unsafe { lua_pushnil(self.lstate) };
-    }
-
-    /// Push the top table's metatable and answer `true`, or push nothing.
-    fn push_metatable(&self) -> bool {
-        unsafe { lua_getmetatable(self.lstate, -1) != 0 }
-    }
-
-    fn top_as_boolean(&self) -> bool {
-        unsafe { lua_toboolean(self.lstate, -1) != 0 }
-    }
-
-    fn top_as_number(&self) -> lua_Number {
-        unsafe { lua_tonumber(self.lstate, -1) }
-    }
-
-    /// The string at `at`, as bytes.
-    ///
-    /// The borrow is the Lua string's, which lives until that slot is popped
-    /// or overwritten; every caller here copies out of it at once.  Asking a
-    /// *number* for its bytes converts it in place, which would derail a
-    /// `lua_next` walking the same table -- so only a slot already known to
-    /// hold a string is passed.
-    fn string_at(&self, at: At) -> &[u8] {
-        let mut len: size_t = 0;
-        let bytes = unsafe { lua_tolstring(self.lstate, at.0, &raw mut len) };
-        // SAFETY: a Lua string is `len` readable bytes and never null.
-        unsafe { ::core::slice::from_raw_parts(bytes.cast::<u8>(), len) }
-    }
-}
 
 /// One container the walk has opened and is still filling.
 ///
@@ -472,7 +365,8 @@ enum Step {
 fn walk(lua: &LuaStack, stack: &mut Vec<OpenValue>) -> Option<TypVal> {
     let mut step = Step::Convert;
     loop {
-        if !lua.room_for_a_turn() {
+        if let Err(need) = lua.grow(TURN_SLOTS) {
+            semsg!("E1502: Lua failed to grow stack to {need}");
             return None;
         }
         step = match step {

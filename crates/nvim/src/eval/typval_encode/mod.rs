@@ -213,16 +213,6 @@ impl<T: Copy, const N: usize> InlineStack<T, N> {
         }
     }
 
-    pub(crate) fn last(&self) -> T {
-        let last = self.len - 1;
-        if last < N {
-            // SAFETY: as `get_mut`; `T` is `Copy`.
-            unsafe { self.inline[last].assume_init() }
-        } else {
-            self.spilled[last - N]
-        }
-    }
-
     pub(crate) fn last_mut(&mut self) -> &mut T {
         let last = self.len - 1;
         self.get_mut(last)
@@ -514,7 +504,7 @@ mod tests {
             stack.push(i);
         }
         assert_eq!(stack.len(), 4);
-        assert_eq!(stack.last(), 3);
+        assert_eq!(*stack.last_mut(), 3);
 
         // Past the budget the Vec takes over, and the two halves stay one
         // sequence indexed from the bottom.
@@ -525,11 +515,11 @@ mod tests {
         for i in 0..10 {
             assert_eq!(*stack.get_mut(i), i, "frame {i}");
         }
-        assert_eq!(stack.last(), 9);
+        assert_eq!(*stack.last_mut(), 9);
 
         // A write through `last_mut` lands on both sides of the boundary.
         *stack.last_mut() = 99;
-        assert_eq!(stack.last(), 99);
+        assert_eq!(*stack.last_mut(), 99);
         *stack.get_mut(3) = 98;
         assert_eq!(*stack.get_mut(3), 98);
 
@@ -546,7 +536,7 @@ mod tests {
     fn the_inline_stack_works_at_both_extremes() {
         let mut inline_only: InlineStack<u8, 8> = InlineStack::new();
         inline_only.push(7);
-        assert_eq!(inline_only.last(), 7);
+        assert_eq!(*inline_only.last_mut(), 7);
         inline_only.pop();
         assert!(inline_only.is_empty());
 
@@ -561,6 +551,6 @@ mod tests {
             assert_eq!(*always_spills.get_mut(usize::from(i)), i);
         }
         always_spills.pop();
-        assert_eq!(always_spills.last(), 1);
+        assert_eq!(*always_spills.last_mut(), 1);
     }
 }
