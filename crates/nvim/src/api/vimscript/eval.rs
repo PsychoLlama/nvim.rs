@@ -63,11 +63,9 @@ impl Drop for RecursionGuard {
 pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Error> {
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     let mut evalarg = EVALARG_EVALUATE;
-    let mut error = Error::none();
-    let mut rv = Object::Nil;
     let _nesting = enter_recursive(&recursive);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
-    let ok = api_try(|| {
+    let evaluated = api_try(|| {
         let no_eap = ptr::null_mut::<ExArg>();
         let ea = &raw mut evalarg;
         // SAFETY: `expr` names its own bytes, and `evalarg` is this frame's.
@@ -76,8 +74,12 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
         unsafe { clear_evalarg(ea, no_eap) };
         ok
     });
-    if !error.is_set() {
-        if ok.is_err() {
+    // A thrown exception outranks the generic message, and `rettv` is cleared
+    // whichever way this went -- so the answer is held rather than returned
+    // from inside the match.
+    let answer = match evaluated {
+        Err(caught) => Err(caught),
+        Ok(Err(_)) => {
             // The expression is quoted back at the user, capped so a huge
             // one does not become the whole message. Upstream's `%.*s` stops
             // at the terminator as well as the cap, which is what the `min`
@@ -85,18 +87,17 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
             let shown = expr.len().min(256);
             // SAFETY: `expr` names its own bytes, per this call's contract.
             let text = unsafe { c_str_len(expr.data(), shown) }.null_as_empty();
-            error = api_error!(
+            Err(api_error!(
                 kErrorTypeException,
                 "Failed to evaluate expression: '{text}'"
-            );
-        } else {
-            // SAFETY: `rettv` is this frame's and `arena` the caller's.
-            rv = unsafe { vim_to_object(&rettv, arena, false) };
+            ))
         }
-    }
+        // SAFETY: `rettv` is this frame's and `arena` the caller's.
+        Ok(Ok(())) => Ok(unsafe { vim_to_object(&rettv, arena, false) }),
+    };
     // SAFETY: `rettv` is this frame's.
     unsafe { tv_clear(&mut rettv) };
-    rv.reported(error)
+    answer
 }
 
 /// Call `fn_0` with `args`, optionally as a method of `self_0`.
