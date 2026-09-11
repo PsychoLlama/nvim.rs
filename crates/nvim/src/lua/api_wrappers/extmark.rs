@@ -111,7 +111,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__ns_set(lstate: *mut lua_State) ->
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_2 = KeyDictArg::<KeyDict_ns_opts>::zeroed();
+        let mut arg_2 = KeyDictArg::<KeyDict_ns_opts>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_2, arena, err_param) }?;
         // SAFETY: as above.
@@ -221,7 +221,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_extmark_by_id(
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_4 = KeyDictArg::<KeyDict_get_extmark>::zeroed();
+        let mut arg_4 = KeyDictArg::<KeyDict_get_extmark>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_4, arena, err_param) }?;
         // SAFETY: as above.
@@ -263,7 +263,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_get_extmarks(lstate: *mut lua_
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_5 = KeyDictArg::<KeyDict_get_extmarks>::zeroed();
+        let mut arg_5 = KeyDictArg::<KeyDict_get_extmarks>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_5, arena, err_param) }?;
         // SAFETY: as above.
@@ -322,7 +322,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_set_extmark(lstate: *mut lua_S
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_5 = KeyDictArg::<KeyDict_set_extmark>::zeroed();
+        let mut arg_5 = KeyDictArg::<KeyDict_set_extmark>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_5, arena, err_param) }?;
         // SAFETY: as above.
@@ -429,7 +429,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_decoration_provider(
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_2 = KeyDictArg::<KeyDict_set_decoration_provider>::zeroed();
+        let mut arg_2 = KeyDictArg::<KeyDict_set_decoration_provider>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_2, arena, err_param) }?;
         // SAFETY: as above.

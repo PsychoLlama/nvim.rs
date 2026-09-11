@@ -80,9 +80,6 @@ fn provider_field<R>(ns_id: NS, f: impl FnOnce(&mut DecorProvider) -> R) -> R {
 const kRetObject: LuaRetMode = 0;
 /// The `hl_def` slot of a provider that has no callback.
 const LUA_NOREF: c_int = -2;
-/// `fallback`'s bit in a `Dict(highlight)`'s `is_set__highlight_` mask.
-const KEY_FALLBACK: c_int = 21;
-
 /// A group definition private to a namespace, indexed by `(ns_id, hl_id)`.
 ///
 /// The `version` is the provider's `hl_valid` at the time it was resolved:
@@ -256,9 +253,8 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
             if unsafe { api_dict_to_keydict(target, field, answer) }.is_ok() {
                 let link_id = &mut item.link_id;
                 attrs = unsafe { dict2hlattrs(&dict, true, Some(link_id), None) }.unwrap_or(attrs);
-                let asked = dict.is_set__highlight_ & (1 << KEY_FALLBACK) != 0;
-                fallback = !asked || dict.fallback;
-                provisional = dict.fallback;
+                fallback = dict.fallback.unwrap_or(true);
+                provisional = dict.fallback.unwrap_or(false);
                 if item.link_id >= 0 {
                     fallback = true;
                 }

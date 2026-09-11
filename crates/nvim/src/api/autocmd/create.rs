@@ -17,7 +17,7 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{Reported, has_key};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{
     err_bad_number, err_bad_value, err_conflict, err_expected, err_required,
 };
@@ -59,18 +59,12 @@ pub unsafe fn nvim_create_autocmd(
     }?;
     '_cleanup: {
         {
-            if !(!(has_key(opts.is_set__create_autocmd_, 9 as ::core::ffi::c_int))
-                || !(has_key(opts.is_set__create_autocmd_, 7 as ::core::ffi::c_int)))
-            {
+            if opts.callback.is_some() && opts.command.is_some() {
                 error = err_conflict(c"callback", c"command");
             } else {
-                if has_key(
-                    opts.is_set__create_autocmd_,
-                    KEYSET_OPTIDX_create_autocmd__callback,
-                ) {
-                    let callback: *mut Object = unsafe { &raw mut (*opts.raw()).callback };
-                    // SAFETY: the pointer the caller handed this call.
-                    match unsafe { *callback } {
+                if let Some(given) = opts.callback {
+                    let callback: *mut Option<Object> = unsafe { &raw mut (*opts.raw()).callback };
+                    match given {
                         Object::LuaRef(luaref) => {
                             if !(luaref != -2 as ::core::ffi::c_int) {
                                 error = err_bad_value(c"callback", c"<no value>");
@@ -85,7 +79,7 @@ pub unsafe fn nvim_create_autocmd(
                                 // The reference is the handler's now, so the
                                 // keyset must not free it a second time.
                                 // SAFETY: the pointer the caller handed this call.
-                                unsafe { *callback = Object::LuaRef(LUA_NOREF as LuaRef) };
+                                unsafe { *callback = Some(Object::LuaRef(LUA_NOREF as LuaRef)) };
                             }
                         }
                         Object::String(name) => {
@@ -100,50 +94,31 @@ pub unsafe fn nvim_create_autocmd(
                             }
                         }
                     }
-                } else if has_key(
-                    opts.is_set__create_autocmd_,
-                    KEYSET_OPTIDX_create_autocmd__command,
-                ) {
-                    handler_cmd = unsafe { string_to_cstr(opts.command) };
+                } else if let Some(command) = opts.command {
+                    handler_cmd = unsafe { string_to_cstr(command) };
                 } else if true {
                     error = err_required(c"'command' or 'callback'");
                     break '_cleanup;
                 }
-                au_group = match unsafe { get_augroup_from_object(opts.group) } {
-                    Ok(au_group) => au_group,
-                    Err(e) => {
-                        error = e;
-                        AUGROUP_ERROR as ::core::ffi::c_int
-                    }
-                };
-                if au_group != AUGROUP_ERROR as ::core::ffi::c_int {
-                    has_buf = has_key(
-                        opts.is_set__create_autocmd_,
-                        KEYSET_OPTIDX_create_autocmd__buf,
-                    ) || has_key(
-                        opts.is_set__create_autocmd_,
-                        KEYSET_OPTIDX_create_autocmd__buffer,
-                    );
-                    buf = if has_key(
-                        opts.is_set__create_autocmd_,
-                        KEYSET_OPTIDX_create_autocmd__buf,
-                    ) {
-                        opts.buf
-                    } else {
-                        opts.buffer
+                au_group =
+                    match unsafe { get_augroup_from_object(opts.group.unwrap_or(Object::Nil)) } {
+                        Ok(au_group) => au_group,
+                        Err(e) => {
+                            error = e;
+                            AUGROUP_ERROR as ::core::ffi::c_int
+                        }
                     };
-                    if !(!(has_key(opts.is_set__create_autocmd_, 1 as ::core::ffi::c_int))
-                        || !(has_key(opts.is_set__create_autocmd_, 5 as ::core::ffi::c_int)))
-                    {
+                if au_group != AUGROUP_ERROR as ::core::ffi::c_int {
+                    has_buf = opts.buf.is_some() || opts.buffer.is_some();
+                    buf = opts.buf.or(opts.buffer).unwrap_or(0);
+                    if opts.buf.is_some() && opts.buffer.is_some() {
                         error = err_conflict(c"buf", c"buffer");
-                    } else if !(!(has_key(opts.is_set__create_autocmd_, 8 as ::core::ffi::c_int))
-                        || !has_buf)
-                    {
+                    } else if opts.pattern.is_some() && has_buf {
                         error = err_conflict(c"pattern", c"buf");
                     } else {
                         patterns = match unsafe {
                             get_patterns_from_pattern_or_buf(
-                                opts.pattern,
+                                opts.pattern.unwrap_or(Object::Nil),
                                 has_buf,
                                 buf,
                                 c"*".as_ptr() as *mut ::core::ffi::c_char,
@@ -157,11 +132,8 @@ pub unsafe fn nvim_create_autocmd(
                             }
                         };
                         {
-                            if has_key(
-                                opts.is_set__create_autocmd_,
-                                KEYSET_OPTIDX_create_autocmd__desc,
-                            ) {
-                                desc = opts.desc.data();
+                            if let Some(given) = opts.desc {
+                                desc = given.data();
                             }
                             if !(event_array.size > 0 as size_t) {
                                 error = err_required(c"event");
@@ -204,8 +176,8 @@ pub unsafe fn nvim_create_autocmd(
                                                     pat.data(),
                                                     patlen,
                                                     au_group,
-                                                    opts.once,
-                                                    opts.nested,
+                                                    opts.once.unwrap_or(false),
+                                                    opts.nested.unwrap_or(false),
                                                     desc,
                                                     handler_cmd,
                                                     &raw mut handler_fn,
@@ -269,41 +241,27 @@ pub unsafe fn nvim_clear_autocmds(
     let mut error = Error::none();
     let event_array: Array = unsafe {
         unpack_string_or_array(
-            opts.event,
+            opts.event.unwrap_or(Object::Nil),
             c"event".as_ptr() as *mut ::core::ffi::c_char,
             false,
             arena,
         )
     }?;
-    let has_buf: bool = has_key(
-        opts.is_set__clear_autocmds_,
-        KEYSET_OPTIDX_clear_autocmds__buf,
-    ) || has_key(
-        opts.is_set__clear_autocmds_,
-        KEYSET_OPTIDX_clear_autocmds__buffer,
-    );
-    let buf: ::core::ffi::c_int = if opts.is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_clear_autocmds__buf
-        != 0 as ::core::ffi::c_ulonglong
-    {
-        opts.buf as ::core::ffi::c_int
-    } else {
-        opts.buffer as ::core::ffi::c_int
-    };
-    if !(!(has_key(opts.is_set__clear_autocmds_, 1 as ::core::ffi::c_int))
-        || !(has_key(opts.is_set__clear_autocmds_, 4 as ::core::ffi::c_int)))
-    {
+    let has_buf: bool = opts.buf.is_some() || opts.buffer.is_some();
+    let buf = opts.buf.or(opts.buffer).unwrap_or(0) as ::core::ffi::c_int;
+    if opts.buf.is_some() && opts.buffer.is_some() {
         error = err_conflict(c"buf", c"buffer");
         return ().reported(error);
     }
-    if !(!(has_key(opts.is_set__clear_autocmds_, 5 as ::core::ffi::c_int)) || !has_buf) {
+    if opts.pattern.is_some() && has_buf {
         error = err_conflict(c"pattern", c"buf");
         return ().reported(error);
     }
-    let au_group: ::core::ffi::c_int = unsafe { get_augroup_from_object(opts.group) }?;
+    let group = opts.group.unwrap_or(Object::Nil);
+    let au_group: ::core::ffi::c_int = unsafe { get_augroup_from_object(group) }?;
     let patterns: Array = unsafe {
         get_patterns_from_pattern_or_buf(
-            opts.pattern,
+            opts.pattern.unwrap_or(Object::Nil),
             has_buf,
             buf as BufferHandle,
             c"".as_ptr() as *mut ::core::ffi::c_char,

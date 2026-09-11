@@ -228,8 +228,6 @@ pub const ARRAY_DICT_INIT: Array = Array {
     capacity: 0 as size_t,
     items: ::core::ptr::null_mut::<Object>(),
 };
-pub const KEYSET_OPTIDX_keymap__desc: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_keymap__callback: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 /// How many hash buckets the mapping table has.
 pub const MAX_MAPHASH: usize = 256;
 pub const ABBR_OFF: ::core::ffi::c_int = 0x100 as ::core::ffi::c_int;

@@ -8,7 +8,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, has_key};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::types::OptionSetFlags;
 use crate::winlayer::Buf;
@@ -30,6 +30,9 @@ pub unsafe fn nvim_exec_autocmds(
     let mut error = Error::none();
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
     let mut buffer: Option<Buf> = Buf::current_or_none();
+    // The event data is handed on by address; the keyset's own `Option` has
+    // no `Object` to point at, so the value is copied into this frame first.
+    let mut event_data: Object;
     let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
     let event_array: Array = unsafe {
         unpack_string_or_array(
@@ -40,7 +43,7 @@ pub unsafe fn nvim_exec_autocmds(
         )
     }?;
     let name: *mut ::core::ffi::c_char;
-    match opts.group {
+    match opts.group.unwrap_or(Object::Nil) {
         Object::Nil => {}
         Object::String(group) => {
             au_group = unsafe { augroup_find(group.data()) };
@@ -65,35 +68,20 @@ pub unsafe fn nvim_exec_autocmds(
         _ => {
             if true {
                 let want = c"String or Integer";
-                let got = api_typename(opts.group.kind());
+                let got = api_typename(opts.group.unwrap_or(Object::Nil).kind());
                 error = err_expected(c"group", want, Some(got));
                 return ().reported(error);
             }
         }
     }
-    let has_buf: bool = has_key(
-        opts.is_set__exec_autocmds_,
-        KEYSET_OPTIDX_exec_autocmds__buf,
-    ) || has_key(
-        opts.is_set__exec_autocmds_,
-        KEYSET_OPTIDX_exec_autocmds__buffer,
-    );
-    let buf: BufferHandle = if has_key(
-        opts.is_set__exec_autocmds_,
-        KEYSET_OPTIDX_exec_autocmds__buf,
-    ) {
-        opts.buf
-    } else {
-        opts.buffer
-    };
-    if !(!(has_key(opts.is_set__exec_autocmds_, 1 as ::core::ffi::c_int))
-        || !(has_key(opts.is_set__exec_autocmds_, 4 as ::core::ffi::c_int)))
-    {
+    let has_buf: bool = opts.buf.is_some() || opts.buffer.is_some();
+    let buf: BufferHandle = opts.buf.or(opts.buffer).unwrap_or(0);
+    if opts.buf.is_some() && opts.buffer.is_some() {
         error = err_conflict(c"buf", c"buffer");
         return ().reported(error);
     }
     if has_buf {
-        if has_key(opts.is_set__exec_autocmds_, 5 as ::core::ffi::c_int) {
+        if opts.pattern.is_some() {
             error = err_conflict(c"pattern", c"buf");
             return ().reported(error);
         }
@@ -101,27 +89,18 @@ pub unsafe fn nvim_exec_autocmds(
     }
     let patterns: Array = unsafe {
         get_patterns_from_pattern_or_buf(
-            opts.pattern,
+            opts.pattern.unwrap_or(Object::Nil),
             has_buf,
             buf,
             c"".as_ptr() as *mut ::core::ffi::c_char,
             arena,
         )
     }?;
-    if has_key(
-        opts.is_set__exec_autocmds_,
-        KEYSET_OPTIDX_exec_autocmds__data,
-    ) {
-        data = unsafe { &raw mut (*opts.raw()).data };
+    if let Some(given) = opts.data {
+        event_data = given;
+        data = &raw mut event_data;
     }
-    let modeline: bool = if has_key(
-        opts.is_set__exec_autocmds_,
-        KEYSET_OPTIDX_exec_autocmds__modeline,
-    ) {
-        opts.modeline as ::core::ffi::c_int
-    } else {
-        1
-    } != 0;
+    let modeline: bool = opts.modeline.unwrap_or(true);
     let mut did_aucmd: bool = false;
     let mut event_str_index: size_t = 0 as size_t;
     while event_str_index < event_array.size {

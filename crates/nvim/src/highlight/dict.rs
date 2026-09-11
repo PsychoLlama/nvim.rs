@@ -13,8 +13,8 @@
 //! `use_rgb` picks which one is being described. Reading splits by *key*:
 //! `fg` and `ctermfg` are separate keys of one dict, a `cterm` sub-dict may
 //! override the attribute bits wholesale, and "the caller said `bold =
-//! false`" has to be told from "the caller said nothing" — which is what the
-//! keyset's `is_set__highlight_` mask is for.
+//! false`" has to be told from "the caller said nothing" — which is the
+//! whole reason a keyset's fields are `Option`s.
 
 use super::{HLATTRS_INIT, attr_entry_count, syn_attr2entry};
 use crate::api::private::dispatch::key_dict_highlight_cterm_get_field;
@@ -37,50 +37,6 @@ use core::ffi::{CStr, c_int};
 /// must hand it. Fourteen attribute bits, three RGB colours or two cterm
 /// ones, the two `*_indexed` flags and `blend`.
 pub const HLATTRS_DICT_SIZE: size_t = 24;
-
-/// Bit positions in `KeyDict_highlight::is_set__highlight_`, which apigen
-/// numbers from the field order in `types::keysets`.
-mod key {
-    use core::ffi::c_int;
-
-    pub(super) const BG: c_int = 1;
-    pub(super) const FG: c_int = 2;
-    pub(super) const SP: c_int = 3;
-    pub(super) const DIM: c_int = 4;
-    pub(super) const BOLD: c_int = 6;
-    pub(super) const LINK: c_int = 7;
-    pub(super) const BLEND: c_int = 8;
-    pub(super) const BLINK: c_int = 10;
-    pub(super) const CTERM: c_int = 11;
-    pub(super) const ITALIC: c_int = 12;
-    pub(super) const REVERSE: c_int = 14;
-    pub(super) const DEFAULT: c_int = 15;
-    pub(super) const ALTFONT: c_int = 16;
-    pub(super) const CONCEAL: c_int = 17;
-    pub(super) const SPECIAL: c_int = 18;
-    pub(super) const CTERMFG: c_int = 19;
-    pub(super) const CTERMBG: c_int = 20;
-    pub(super) const OVERLINE: c_int = 22;
-    pub(super) const STANDOUT: c_int = 23;
-    pub(super) const NOCOMBINE: c_int = 24;
-    pub(super) const UNDERCURL: c_int = 25;
-    pub(super) const UNDERLINE: c_int = 26;
-    pub(super) const BACKGROUND: c_int = 27;
-    pub(super) const BG_INDEXED: c_int = 28;
-    pub(super) const FOREGROUND: c_int = 29;
-    pub(super) const FG_INDEXED: c_int = 30;
-    pub(super) const LINK_GLOBAL: c_int = 31;
-    pub(super) const UNDERDASHED: c_int = 32;
-    pub(super) const UNDERDOTTED: c_int = 33;
-    pub(super) const UNDERDOUBLE: c_int = 34;
-    pub(super) const STRIKETHROUGH: c_int = 35;
-}
-
-/// Did the caller name this key? Optional keyset fields record that, which is
-/// the only way to tell `bold = false` from an absent `bold`.
-fn is_set(dict: &KeyDict_highlight, opt_index: c_int) -> bool {
-    dict.is_set__highlight_ & (1 << opt_index) != 0
-}
 
 /// Appends `key: value` to a dict built in storage the caller allocated.
 ///
@@ -307,9 +263,9 @@ fn apply_flag(mask: &mut HlAttrFlags, on: bool, flag: HlAttrFlags) {
     }
 }
 
-/// Upstream's `CHECK_FLAG`, for the `cterm` sub-dict: it has no "was it
-/// given" mask, so an absent key is simply false and only the set direction
-/// is meaningful.
+/// Upstream's `CHECK_FLAG`, for the `cterm` sub-dict: it replaces the cterm
+/// bits outright, so an absent key is simply false and only the set
+/// direction is meaningful.
 fn set_flag(mask: &mut HlAttrFlags, on: bool, flag: HlAttrFlags) {
     if !on {
         return;
@@ -354,147 +310,94 @@ pub unsafe fn dict2hlattrs(
     let mut cterm_mask = base.map_or(HlAttrFlags::NONE, |b| b.cterm_ae_attr);
     let mut cterm_mask_provided = false;
 
-    let flag = |set: bool, on: bool, bit: HlAttrFlags, mask: &mut HlAttrFlags| {
-        if set {
+    // A key the caller did not name leaves its bit alone; one that is there
+    // sets or clears it.
+    let flag = |on: Option<bool>, bit: HlAttrFlags, mask: &mut HlAttrFlags| {
+        if let Some(on) = on {
             apply_flag(mask, on, bit);
         }
     };
-    flag(
-        is_set(dict, key::REVERSE),
-        dict.reverse,
-        HlAttrFlags::INVERSE,
-        &mut mask,
-    );
-    flag(
-        is_set(dict, key::BOLD),
-        dict.bold,
-        HlAttrFlags::BOLD,
-        &mut mask,
-    );
-    flag(
-        is_set(dict, key::ITALIC),
-        dict.italic,
-        HlAttrFlags::ITALIC,
-        &mut mask,
-    );
-    let underlines = [
-        (key::UNDERLINE, dict.underline, HlAttrFlags::UNDERLINE),
-        (key::UNDERCURL, dict.undercurl, HlAttrFlags::UNDERCURL),
-        (key::UNDERDOUBLE, dict.underdouble, HlAttrFlags::UNDERDOUBLE),
-        (key::UNDERDOTTED, dict.underdotted, HlAttrFlags::UNDERDOTTED),
-        (key::UNDERDASHED, dict.underdashed, HlAttrFlags::UNDERDASHED),
+    let attributes = [
+        (dict.reverse, HlAttrFlags::INVERSE),
+        (dict.bold, HlAttrFlags::BOLD),
+        (dict.italic, HlAttrFlags::ITALIC),
+        (dict.underline, HlAttrFlags::UNDERLINE),
+        (dict.undercurl, HlAttrFlags::UNDERCURL),
+        (dict.underdouble, HlAttrFlags::UNDERDOUBLE),
+        (dict.underdotted, HlAttrFlags::UNDERDOTTED),
+        (dict.underdashed, HlAttrFlags::UNDERDASHED),
+        (dict.standout, HlAttrFlags::STANDOUT),
+        (dict.strikethrough, HlAttrFlags::STRIKETHROUGH),
+        (dict.altfont, HlAttrFlags::ALTFONT),
+        (dict.dim, HlAttrFlags::DIM),
+        (dict.blink, HlAttrFlags::BLINK),
+        (dict.conceal, HlAttrFlags::CONCEALED),
+        (dict.overline, HlAttrFlags::OVERLINE),
+        (dict.nocombine, HlAttrFlags::NOCOMBINE),
+        (dict.default_, HlAttrFlags::DEFAULT),
     ];
-    for (opt, on, bit) in underlines {
-        flag(is_set(dict, opt), on, bit, &mut mask);
+    for (on, bit) in attributes {
+        flag(on, bit, &mut mask);
     }
-    flag(
-        is_set(dict, key::STANDOUT),
-        dict.standout,
-        HlAttrFlags::STANDOUT,
-        &mut mask,
-    );
-    let strike = is_set(dict, key::STRIKETHROUGH);
-    flag(
-        strike,
-        dict.strikethrough,
-        HlAttrFlags::STRIKETHROUGH,
-        &mut mask,
-    );
-    flag(
-        is_set(dict, key::ALTFONT),
-        dict.altfont,
-        HlAttrFlags::ALTFONT,
-        &mut mask,
-    );
-    flag(
-        is_set(dict, key::DIM),
-        dict.dim,
-        HlAttrFlags::DIM,
-        &mut mask,
-    );
-    flag(
-        is_set(dict, key::BLINK),
-        dict.blink,
-        HlAttrFlags::BLINK,
-        &mut mask,
-    );
-    flag(
-        is_set(dict, key::CONCEAL),
-        dict.conceal,
-        HlAttrFlags::CONCEALED,
-        &mut mask,
-    );
-    flag(
-        is_set(dict, key::OVERLINE),
-        dict.overline,
-        HlAttrFlags::OVERLINE,
-        &mut mask,
-    );
     // Only a gui definition can say which colours came from the palette.
     if use_rgb {
-        let indexed = is_set(dict, key::FG_INDEXED);
-        flag(indexed, dict.fg_indexed, HlAttrFlags::FG_INDEXED, &mut mask);
-        let indexed = is_set(dict, key::BG_INDEXED);
-        flag(indexed, dict.bg_indexed, HlAttrFlags::BG_INDEXED, &mut mask);
+        flag(dict.fg_indexed, HlAttrFlags::FG_INDEXED, &mut mask);
+        flag(dict.bg_indexed, HlAttrFlags::BG_INDEXED, &mut mask);
     }
-    let nocombine = is_set(dict, key::NOCOMBINE);
-    flag(nocombine, dict.nocombine, HlAttrFlags::NOCOMBINE, &mut mask);
-    flag(
-        is_set(dict, key::DEFAULT),
-        dict.default_,
-        HlAttrFlags::DEFAULT,
-        &mut mask,
-    );
 
     // SAFETY: each `Object` carries its own tag. The long spelling is the
     // fallback for the short one, never both.
-    if is_set(dict, key::FG) {
-        fg = unsafe { object_to_color(dict.fg, c"fg", use_rgb) }?;
-    } else if is_set(dict, key::FOREGROUND) {
-        fg = unsafe { object_to_color(dict.foreground, c"foreground", use_rgb) }?;
+    if let Some(given) = dict.fg {
+        fg = unsafe { object_to_color(given, c"fg", use_rgb) }?;
+    } else if let Some(given) = dict.foreground {
+        fg = unsafe { object_to_color(given, c"foreground", use_rgb) }?;
     }
-    if is_set(dict, key::BG) {
-        bg = unsafe { object_to_color(dict.bg, c"bg", use_rgb) }?;
-    } else if is_set(dict, key::BACKGROUND) {
-        bg = unsafe { object_to_color(dict.background, c"background", use_rgb) }?;
+    if let Some(given) = dict.bg {
+        bg = unsafe { object_to_color(given, c"bg", use_rgb) }?;
+    } else if let Some(given) = dict.background {
+        bg = unsafe { object_to_color(given, c"background", use_rgb) }?;
     }
     // A special colour is always an RGB one: cterm has no such thing.
-    if is_set(dict, key::SP) {
-        sp = unsafe { object_to_color(dict.sp, c"sp", true) }?;
-    } else if is_set(dict, key::SPECIAL) {
-        sp = unsafe { object_to_color(dict.special, c"special", true) }?;
+    if let Some(given) = dict.sp {
+        sp = unsafe { object_to_color(given, c"sp", true) }?;
+    } else if let Some(given) = dict.special {
+        sp = unsafe { object_to_color(given, c"special", true) }?;
     }
 
-    if is_set(dict, key::BLEND) {
-        let given = dict.blend;
+    if let Some(given) = dict.blend {
         if !(0..=100).contains(&given) {
             return Err(err_out_of_range(c"blend"));
         }
         blend = given as int32_t;
     }
 
-    if is_set(dict, key::LINK) || is_set(dict, key::LINK_GLOBAL) {
-        let global = is_set(dict, key::LINK_GLOBAL);
+    if dict.link.is_some() || dict.link_global.is_some() {
+        let global = dict.link_global;
         let Some(link_id) = link_id else {
-            let name = if global { c"link_global" } else { c"link" };
+            let name = if global.is_some() {
+                c"link_global"
+            } else {
+                c"link"
+            };
             let name = msg_cstr(name);
             return Err(api_error!(kErrorTypeValidation, "Invalid Key: '{name}'"));
         };
-        if global {
-            *link_id = dict.link_global as c_int;
-            mask |= HlAttrFlags::GLOBAL;
-        } else {
-            *link_id = dict.link as c_int;
+        match global {
+            Some(id) => {
+                *link_id = id as c_int;
+                mask |= HlAttrFlags::GLOBAL;
+            }
+            None => *link_id = dict.link.unwrap_or(0) as c_int,
         }
     }
 
     // A `cterm` sub-dict replaces the cterm bits outright rather than
     // amending them: what it does not name is off.
-    if is_set(dict, key::CTERM) {
+    if let Some(given) = dict.cterm {
         let mut cterm = KeyDict_highlight_cterm::default();
         let field: FieldHashfn = Some(key_dict_highlight_cterm_get_field);
         let target = (&raw mut cterm).cast();
-        unsafe { api_dict_to_keydict(target, field, dict.cterm) }?;
+        unsafe { api_dict_to_keydict(target, field, given) }?;
         cterm_mask_provided = true;
         cterm_mask = HlAttrFlags::NONE;
         let bits = [
@@ -516,15 +419,15 @@ pub unsafe fn dict2hlattrs(
             (cterm.nocombine, HlAttrFlags::NOCOMBINE),
         ];
         for (on, bit) in bits {
-            set_flag(&mut cterm_mask, on, bit);
+            set_flag(&mut cterm_mask, on.unwrap_or(false), bit);
         }
     }
 
-    if is_set(dict, key::CTERMFG) {
-        ctermfg = unsafe { object_to_color(dict.ctermfg, c"ctermfg", false) }?;
+    if let Some(given) = dict.ctermfg {
+        ctermfg = unsafe { object_to_color(given, c"ctermfg", false) }?;
     }
-    if is_set(dict, key::CTERMBG) {
-        ctermbg = unsafe { object_to_color(dict.ctermbg, c"ctermbg", false) }?;
+    if let Some(given) = dict.ctermbg {
+        ctermbg = unsafe { object_to_color(given, c"ctermbg", false) }?;
     }
 
     // Re-bias a colour number for storage: 0 is "unset", so every real

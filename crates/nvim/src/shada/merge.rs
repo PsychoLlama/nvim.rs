@@ -561,7 +561,7 @@ pub(crate) unsafe fn shada_read_when_writing(
                 unsafe { shada_free_shada_entry(&raw mut entry) };
             }
             ShadaEntryData::SearchPattern(pattern) => {
-                let slot = if pattern.is_substitute_pattern {
+                let slot = if pattern.is_substitute_pattern.unwrap_or(false) {
                     unsafe { &raw mut (*wms).sub_search_pattern }
                 } else {
                     unsafe { &raw mut (*wms).search_pattern }

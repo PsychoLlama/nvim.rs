@@ -12,7 +12,7 @@
 
 use crate::api::private::helpers::{
     Reported, api_try, arena_array, arena_dict, array_add, dict_get_value, dict_put, dict_set_var,
-    find_buffer_by_handle, find_window_by_handle, has_key, normalize_index,
+    find_buffer_by_handle, find_window_by_handle, normalize_index,
 };
 use crate::autocmd::is_aucmd_win;
 use crate::cursor::check_cursor_col;
@@ -356,15 +356,6 @@ pub unsafe fn nvim_win_text_height(
     opts: *mut KeyDict_win_text_height,
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
-    // `opts`' keys, by their index in its `is_set` mask. Function-local so
-    // that they cannot collide in the flat namespace `tools/ffigen` renders
-    // module-level constants into.
-    const OPTIDX_END_ROW: ::core::ffi::c_int = 1;
-    const OPTIDX_END_VCOL: ::core::ffi::c_int = 2;
-    const OPTIDX_START_ROW: ::core::ffi::c_int = 3;
-    const OPTIDX_MAX_HEIGHT: ::core::ffi::c_int = 4;
-    const OPTIDX_START_VCOL: ::core::ffi::c_int = 5;
-
     // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
     // `end_vcol`), so every successful call overruns the arena block by two
     // `KeyValuePair`s.  `dict_put`'s capacity assertion is what found it.
@@ -375,20 +366,19 @@ pub unsafe fn nvim_win_text_height(
     let buf = w.buffer();
     let line_count: LineNr = w.buffer().line_count();
 
-    // SAFETY: `opts` is the caller's, per this function's contract; `set` and
-    // the field reads only touch it.
-    let set = |key| unsafe { has_key((*opts).is_set__win_text_height_, key) };
+    // SAFETY: `opts` is the caller's, per this function's contract.
+    let opts = unsafe { &*opts };
     let mut start_lnum: LineNr = 1 as LineNr;
     let mut end_lnum: LineNr = line_count;
     let mut oob: bool = false;
-    // SAFETY: as above; `buf` is live and `oob` is this frame's own.
-    if set(OPTIDX_START_ROW) {
-        let row = unsafe { (*opts).start_row } as int64_t;
-        start_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
+    // SAFETY: `buf` is live and `oob` is this frame's own.
+    if let Some(row) = opts.start_row {
+        start_lnum =
+            number_as_int(unsafe { normalize_index(buf, row as int64_t, false, &raw mut oob) });
     }
-    if set(OPTIDX_END_ROW) {
-        let row = unsafe { (*opts).end_row } as int64_t;
-        end_lnum = number_as_int(unsafe { normalize_index(buf, row, false, &raw mut oob) });
+    if let Some(row) = opts.end_row {
+        end_lnum =
+            number_as_int(unsafe { normalize_index(buf, row as int64_t, false, &raw mut oob) });
     }
     if oob {
         return Err(Error::validation(c"Line index out of bounds"));
@@ -398,38 +388,31 @@ pub unsafe fn nvim_win_text_height(
     }
 
     let mut start_vcol: int64_t = -1;
-    if set(OPTIDX_START_VCOL) {
-        if !set(OPTIDX_START_ROW) {
+    if let Some(vcol) = opts.start_vcol {
+        if opts.start_row.is_none() {
             return Err(Error::validation(
                 c"'start_vcol' specified without 'start_row'",
             ));
         }
-        // SAFETY: as above.
-        start_vcol = unsafe { (*opts).start_vcol as int64_t };
+        start_vcol = vcol as int64_t;
         if !(0..=int64_t::from(MAXCOL)).contains(&start_vcol) {
             return Err(err_out_of_range(c"start_vcol"));
         }
     }
     let mut end_vcol: int64_t = -1;
-    if set(OPTIDX_END_VCOL) {
-        if !set(OPTIDX_END_ROW) {
+    if let Some(vcol) = opts.end_vcol {
+        if opts.end_row.is_none() {
             return Err(Error::validation(c"'end_vcol' specified without 'end_row'"));
         }
-        // SAFETY: as above.
-        end_vcol = unsafe { (*opts).end_vcol as int64_t };
+        end_vcol = vcol as int64_t;
         if !(0..=int64_t::from(MAXCOL)).contains(&end_vcol) {
             return Err(err_out_of_range(c"end_vcol"));
         }
     }
-    // SAFETY: as above.
-    let max: int64_t = if set(OPTIDX_MAX_HEIGHT) {
-        let max_height = unsafe { (*opts).max_height };
-        if max_height <= 0 {
-            return Err(err_out_of_range(c"max_height"));
-        }
-        max_height as int64_t
-    } else {
-        int64_t::MAX
+    let max: int64_t = match opts.max_height {
+        Some(max_height) if max_height <= 0 => return Err(err_out_of_range(c"max_height")),
+        Some(max_height) => max_height as int64_t,
+        None => int64_t::MAX,
     };
     if start_lnum == end_lnum && start_vcol >= 0 && end_vcol >= 0 && start_vcol > end_vcol {
         return Err(Error::validation(c"'start_vcol' is higher than 'end_vcol'"));
@@ -441,7 +424,7 @@ pub unsafe fn nvim_win_text_height(
     // frame's own.
     let mut all: int64_t =
         unsafe { win_text_height(w, start_lnum, start_vcol, last.0, last.1, last.2, max) };
-    if !set(OPTIDX_END_ROW) {
+    if opts.end_row.is_none() {
         // With no 'end_row' the answer covers the whole buffer, so the virtual
         // lines below its last line count too.
         //

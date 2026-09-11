@@ -532,7 +532,8 @@ plus these whole-tree metrics, which are not per-file:
                     an anonymous member.
 
                     files_allowing_non_snake_case  the same for value names:
-                    LuaJIT's `L`, and apigen's `is_set__<name>_` keyset mask.
+                    LuaJIT's `L`, and the `KeyDict_*` keysets' field names,
+                    which are the wire keys the API publishes.
                     The `nvim__*` API methods are *not* here -- a name the RPC
                     surface publishes gets an item-level allow, which this
                     does not count, so one frozen name never buys a file a
@@ -541,7 +542,7 @@ plus these whole-tree metrics, which are not per-file:
                     files_allowing_non_upper_case_globals  the widest of the
                     three, because it is every global the editor has: an
                     option's `p_<abbrev>` cell, a `kOpt<Name>` index, a
-                    `KEYSET_OPTIDX_*` mask bit, and the ~880 statics upstream
+                    `k<Name>` tag, and the ~880 statics upstream
                     declares in `globals.h`. Nothing here is a rename this
                     phase could do -- the spelling is what the option
                     metadata, the FFI golden and the handler tables look up --

@@ -22,9 +22,9 @@ use super::*;
 pub static _shada_buflist_item_table: ConstTable<[KeySetLink; 4]> = ConstTable::new({
     type K = KeyDict__shada_buflist_item;
     [
-        key(c"c", offset_of!(K, c), TAG_INTEGER, 1),
-        key(c"f", offset_of!(K, f), TAG_STRING, 2),
-        key(c"l", offset_of!(K, l), TAG_INTEGER, 3),
+        key(c"c", offset_of!(K, c), TAG_INTEGER),
+        key(c"f", offset_of!(K, f), TAG_STRING),
+        key(c"l", offset_of!(K, l), TAG_INTEGER),
         END,
     ]
 });
@@ -53,10 +53,10 @@ pub unsafe fn key_dict__shada_buflist_item_get_field(
 pub static _shada_mark_table: ConstTable<[KeySetLink; 5]> = ConstTable::new({
     type K = KeyDict__shada_mark;
     [
-        key(c"c", offset_of!(K, c), TAG_INTEGER, 1),
-        key(c"f", offset_of!(K, f), TAG_STRING, 2),
-        key(c"l", offset_of!(K, l), TAG_INTEGER, 3),
-        key(c"n", offset_of!(K, n), TAG_INTEGER, 4),
+        key(c"c", offset_of!(K, c), TAG_INTEGER),
+        key(c"f", offset_of!(K, f), TAG_STRING),
+        key(c"l", offset_of!(K, l), TAG_INTEGER),
+        key(c"n", offset_of!(K, n), TAG_INTEGER),
         END,
     ]
 });
@@ -83,11 +83,11 @@ pub unsafe fn key_dict__shada_mark_get_field(str: *const c_char, len: size_t) ->
 pub static _shada_register_table: ConstTable<[KeySetLink; 6]> = ConstTable::new({
     type K = KeyDict__shada_register;
     [
-        key(c"n", offset_of!(K, n), TAG_INTEGER, 1),
-        key(c"rc", offset_of!(K, rc), TAG_STRING_ARRAY, 2),
-        key(c"rt", offset_of!(K, rt), TAG_INTEGER, 3),
-        key(c"ru", offset_of!(K, ru), TAG_BOOLEAN, 4),
-        key(c"rw", offset_of!(K, rw), TAG_INTEGER, 5),
+        key(c"n", offset_of!(K, n), TAG_INTEGER),
+        key(c"rc", offset_of!(K, rc), TAG_STRING_ARRAY),
+        key(c"rt", offset_of!(K, rt), TAG_INTEGER),
+        key(c"ru", offset_of!(K, ru), TAG_BOOLEAN),
+        key(c"rw", offset_of!(K, rw), TAG_INTEGER),
         END,
     ]
 });
@@ -118,16 +118,16 @@ pub unsafe fn key_dict__shada_register_get_field(
 pub static _shada_search_pat_table: ConstTable<[KeySetLink; 11]> = ConstTable::new({
     type K = KeyDict__shada_search_pat;
     [
-        key(c"sb", offset_of!(K, search_backward), TAG_BOOLEAN, 1),
-        key(c"sc", offset_of!(K, smartcase), TAG_BOOLEAN, 2),
-        key(c"se", offset_of!(K, place_cursor_at_end), TAG_BOOLEAN, 3),
-        key(c"sh", offset_of!(K, highlighted), TAG_BOOLEAN, 4),
-        key(c"sl", offset_of!(K, has_line_offset), TAG_BOOLEAN, 5),
-        key(c"sm", offset_of!(K, magic), TAG_BOOLEAN, 6),
-        key(c"so", offset_of!(K, offset), TAG_INTEGER, 7),
-        key(c"sp", offset_of!(K, pat), TAG_STRING, 8),
-        key(c"ss", offset_of!(K, is_substitute_pattern), TAG_BOOLEAN, 9),
-        key(c"su", offset_of!(K, is_last_used), TAG_BOOLEAN, 10),
+        key(c"sb", offset_of!(K, search_backward), TAG_BOOLEAN),
+        key(c"sc", offset_of!(K, smartcase), TAG_BOOLEAN),
+        key(c"se", offset_of!(K, place_cursor_at_end), TAG_BOOLEAN),
+        key(c"sh", offset_of!(K, highlighted), TAG_BOOLEAN),
+        key(c"sl", offset_of!(K, has_line_offset), TAG_BOOLEAN),
+        key(c"sm", offset_of!(K, magic), TAG_BOOLEAN),
+        key(c"so", offset_of!(K, offset), TAG_INTEGER),
+        key(c"sp", offset_of!(K, pat), TAG_STRING),
+        key(c"ss", offset_of!(K, is_substitute_pattern), TAG_BOOLEAN),
+        key(c"su", offset_of!(K, is_last_used), TAG_BOOLEAN),
         END,
     ]
 });
@@ -163,18 +163,13 @@ pub unsafe fn key_dict__shada_search_pat_get_field(
 pub static buf_attach_table: ConstTable<[KeySetLink; 8]> = ConstTable::new({
     type K = KeyDict_buf_attach;
     [
-        key(c"preview", offset_of!(K, preview), TAG_BOOLEAN, 1),
-        key(c"on_bytes", offset_of!(K, on_bytes), TAG_LUAREF, 2),
-        key(c"on_lines", offset_of!(K, on_lines), TAG_LUAREF, 3),
-        key(c"utf_sizes", offset_of!(K, utf_sizes), TAG_BOOLEAN, 4),
-        key(c"on_detach", offset_of!(K, on_detach), TAG_LUAREF, 5),
-        key(c"on_reload", offset_of!(K, on_reload), TAG_LUAREF, 6),
-        key(
-            c"on_changedtick",
-            offset_of!(K, on_changedtick),
-            TAG_LUAREF,
-            7,
-        ),
+        key(c"preview", offset_of!(K, preview), TAG_BOOLEAN),
+        key(c"on_bytes", offset_of!(K, on_bytes), TAG_LUAREF),
+        key(c"on_lines", offset_of!(K, on_lines), TAG_LUAREF),
+        key(c"utf_sizes", offset_of!(K, utf_sizes), TAG_BOOLEAN),
+        key(c"on_detach", offset_of!(K, on_detach), TAG_LUAREF),
+        key(c"on_reload", offset_of!(K, on_reload), TAG_LUAREF),
+        key(c"on_changedtick", offset_of!(K, on_changedtick), TAG_LUAREF),
         END,
     ]
 });
@@ -202,8 +197,8 @@ pub unsafe fn key_dict_buf_attach_get_field(str: *const c_char, len: size_t) -> 
 pub static buf_delete_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_buf_delete;
     [
-        key(c"force", offset_of!(K, force), TAG_BOOLEAN, 1),
-        key(c"unload", offset_of!(K, unload), TAG_BOOLEAN, 2),
+        key(c"force", offset_of!(K, force), TAG_BOOLEAN),
+        key(c"unload", offset_of!(K, unload), TAG_BOOLEAN),
         END,
     ]
 });
@@ -226,11 +221,11 @@ pub unsafe fn key_dict_buf_delete_get_field(str: *const c_char, len: size_t) -> 
 pub static clear_autocmds_table: ConstTable<[KeySetLink; 6]> = ConstTable::new({
     type K = KeyDict_clear_autocmds;
     [
-        key(c"buf", offset_of!(K, buf), TAG_BUFFER, 1),
-        key(c"event", offset_of!(K, event), TAG_NIL, 2),
-        key(c"group", offset_of!(K, group), TAG_NIL, 3),
-        key(c"buffer", offset_of!(K, buffer), TAG_BUFFER, 4),
-        key(c"pattern", offset_of!(K, pattern), TAG_NIL, 5),
+        key(c"buf", offset_of!(K, buf), TAG_BUFFER),
+        key(c"event", offset_of!(K, event), TAG_NIL),
+        key(c"group", offset_of!(K, group), TAG_NIL),
+        key(c"buffer", offset_of!(K, buffer), TAG_BUFFER),
+        key(c"pattern", offset_of!(K, pattern), TAG_NIL),
         END,
     ]
 });
@@ -259,17 +254,17 @@ pub unsafe fn key_dict_clear_autocmds_get_field(
 pub static cmd_table: ConstTable<[KeySetLink; 12]> = ConstTable::new({
     type K = KeyDict_cmd;
     [
-        key(c"cmd", offset_of!(K, cmd), TAG_STRING, 1),
-        key(c"reg", offset_of!(K, reg), TAG_STRING, 2),
-        key(c"bang", offset_of!(K, bang), TAG_BOOLEAN, 3),
-        key(c"addr", offset_of!(K, addr), TAG_STRING, 4),
-        key(c"mods", offset_of!(K, mods), TAG_DICT, 5),
-        key(c"args", offset_of!(K, args), TAG_ARRAY, 6),
-        key(c"count", offset_of!(K, count), TAG_INTEGER, 7),
-        key(c"magic", offset_of!(K, magic), TAG_DICT, 8),
-        key(c"nargs", offset_of!(K, nargs), TAG_NIL, 9),
-        key(c"range", offset_of!(K, range), TAG_ARRAY, 10),
-        key(c"nextcmd", offset_of!(K, nextcmd), TAG_STRING, 11),
+        key(c"cmd", offset_of!(K, cmd), TAG_STRING),
+        key(c"reg", offset_of!(K, reg), TAG_STRING),
+        key(c"bang", offset_of!(K, bang), TAG_BOOLEAN),
+        key(c"addr", offset_of!(K, addr), TAG_STRING),
+        key(c"mods", offset_of!(K, mods), TAG_DICT),
+        key(c"args", offset_of!(K, args), TAG_ARRAY),
+        key(c"count", offset_of!(K, count), TAG_INTEGER),
+        key(c"magic", offset_of!(K, magic), TAG_DICT),
+        key(c"nargs", offset_of!(K, nargs), TAG_NIL),
+        key(c"range", offset_of!(K, range), TAG_ARRAY),
+        key(c"nextcmd", offset_of!(K, nextcmd), TAG_STRING),
         END,
     ]
 });
@@ -301,8 +296,8 @@ pub unsafe fn key_dict_cmd_get_field(str: *const c_char, len: size_t) -> *const 
 pub static cmd_magic_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_cmd_magic;
     [
-        key(c"bar", offset_of!(K, bar), TAG_BOOLEAN, 1),
-        key(c"file", offset_of!(K, file), TAG_BOOLEAN, 2),
+        key(c"bar", offset_of!(K, bar), TAG_BOOLEAN),
+        key(c"file", offset_of!(K, file), TAG_BOOLEAN),
         END,
     ]
 });
@@ -325,31 +320,26 @@ pub unsafe fn key_dict_cmd_magic_get_field(str: *const c_char, len: size_t) -> *
 pub static cmd_mods_table: ConstTable<[KeySetLink; 21]> = ConstTable::new({
     type K = KeyDict_cmd_mods;
     [
-        key(c"tab", offset_of!(K, tab), TAG_INTEGER, 1),
-        key(c"hide", offset_of!(K, hide), TAG_BOOLEAN, 2),
-        key(c"split", offset_of!(K, split), TAG_STRING, 3),
-        key(c"browse", offset_of!(K, browse), TAG_BOOLEAN, 4),
-        key(c"filter", offset_of!(K, filter), TAG_DICT, 5),
-        key(c"silent", offset_of!(K, silent), TAG_BOOLEAN, 6),
-        key(c"confirm", offset_of!(K, confirm), TAG_BOOLEAN, 7),
-        key(c"keepalt", offset_of!(K, keepalt), TAG_BOOLEAN, 8),
-        key(c"sandbox", offset_of!(K, sandbox), TAG_BOOLEAN, 9),
-        key(c"verbose", offset_of!(K, verbose), TAG_INTEGER, 10),
-        key(c"unsilent", offset_of!(K, unsilent), TAG_BOOLEAN, 11),
-        key(c"vertical", offset_of!(K, vertical), TAG_BOOLEAN, 12),
-        key(c"keepjumps", offset_of!(K, keepjumps), TAG_BOOLEAN, 13),
-        key(c"keepmarks", offset_of!(K, keepmarks), TAG_BOOLEAN, 14),
-        key(c"lockmarks", offset_of!(K, lockmarks), TAG_BOOLEAN, 15),
-        key(c"noautocmd", offset_of!(K, noautocmd), TAG_BOOLEAN, 16),
-        key(c"horizontal", offset_of!(K, horizontal), TAG_BOOLEAN, 17),
-        key(c"noswapfile", offset_of!(K, noswapfile), TAG_BOOLEAN, 18),
-        key(c"emsg_silent", offset_of!(K, emsg_silent), TAG_BOOLEAN, 19),
-        key(
-            c"keeppatterns",
-            offset_of!(K, keeppatterns),
-            TAG_BOOLEAN,
-            20,
-        ),
+        key(c"tab", offset_of!(K, tab), TAG_INTEGER),
+        key(c"hide", offset_of!(K, hide), TAG_BOOLEAN),
+        key(c"split", offset_of!(K, split), TAG_STRING),
+        key(c"browse", offset_of!(K, browse), TAG_BOOLEAN),
+        key(c"filter", offset_of!(K, filter), TAG_DICT),
+        key(c"silent", offset_of!(K, silent), TAG_BOOLEAN),
+        key(c"confirm", offset_of!(K, confirm), TAG_BOOLEAN),
+        key(c"keepalt", offset_of!(K, keepalt), TAG_BOOLEAN),
+        key(c"sandbox", offset_of!(K, sandbox), TAG_BOOLEAN),
+        key(c"verbose", offset_of!(K, verbose), TAG_INTEGER),
+        key(c"unsilent", offset_of!(K, unsilent), TAG_BOOLEAN),
+        key(c"vertical", offset_of!(K, vertical), TAG_BOOLEAN),
+        key(c"keepjumps", offset_of!(K, keepjumps), TAG_BOOLEAN),
+        key(c"keepmarks", offset_of!(K, keepmarks), TAG_BOOLEAN),
+        key(c"lockmarks", offset_of!(K, lockmarks), TAG_BOOLEAN),
+        key(c"noautocmd", offset_of!(K, noautocmd), TAG_BOOLEAN),
+        key(c"horizontal", offset_of!(K, horizontal), TAG_BOOLEAN),
+        key(c"noswapfile", offset_of!(K, noswapfile), TAG_BOOLEAN),
+        key(c"emsg_silent", offset_of!(K, emsg_silent), TAG_BOOLEAN),
+        key(c"keeppatterns", offset_of!(K, keeppatterns), TAG_BOOLEAN),
         END,
     ]
 });
@@ -390,8 +380,8 @@ pub unsafe fn key_dict_cmd_mods_get_field(str: *const c_char, len: size_t) -> *c
 pub static cmd_mods_filter_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_cmd_mods_filter;
     [
-        key(c"force", offset_of!(K, force), TAG_BOOLEAN, 1),
-        key(c"pattern", offset_of!(K, pattern), TAG_STRING, 2),
+        key(c"force", offset_of!(K, force), TAG_BOOLEAN),
+        key(c"pattern", offset_of!(K, pattern), TAG_STRING),
         END,
     ]
 });
@@ -416,7 +406,7 @@ pub unsafe fn key_dict_cmd_mods_filter_get_field(
 
 pub static cmd_opts_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_cmd_opts;
-    [key(c"output", offset_of!(K, output), TAG_BOOLEAN, -1), END]
+    [key(c"output", offset_of!(K, output), TAG_BOOLEAN), END]
 });
 
 /// Look a key up in [`cmd_opts_table`].
@@ -435,7 +425,7 @@ pub unsafe fn key_dict_cmd_opts_get_field(str: *const c_char, len: size_t) -> *c
 
 pub static complete_set_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_complete_set;
-    [key(c"info", offset_of!(K, info), TAG_STRING, 1), END]
+    [key(c"info", offset_of!(K, info), TAG_STRING), END]
 });
 
 /// Look a key up in [`complete_set_table`].
@@ -457,7 +447,7 @@ pub unsafe fn key_dict_complete_set_get_field(
 
 pub static context_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_context;
-    [key(c"types", offset_of!(K, types), TAG_ARRAY, 1), END]
+    [key(c"types", offset_of!(K, types), TAG_ARRAY), END]
 });
 
 /// Look a key up in [`context_table`].
@@ -476,7 +466,7 @@ pub unsafe fn key_dict_context_get_field(str: *const c_char, len: size_t) -> *co
 
 pub static create_augroup_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_create_augroup;
-    [key(c"clear", offset_of!(K, clear), TAG_BOOLEAN, 1), END]
+    [key(c"clear", offset_of!(K, clear), TAG_BOOLEAN), END]
 });
 
 /// Look a key up in [`create_augroup_table`].
@@ -499,15 +489,15 @@ pub unsafe fn key_dict_create_augroup_get_field(
 pub static create_autocmd_table: ConstTable<[KeySetLink; 10]> = ConstTable::new({
     type K = KeyDict_create_autocmd;
     [
-        key(c"buf", offset_of!(K, buf), TAG_BUFFER, 1),
-        key(c"desc", offset_of!(K, desc), TAG_STRING, 2),
-        key(c"once", offset_of!(K, once), TAG_BOOLEAN, 3),
-        key(c"group", offset_of!(K, group), TAG_NIL, 4),
-        key(c"buffer", offset_of!(K, buffer), TAG_BUFFER, 5),
-        key(c"nested", offset_of!(K, nested), TAG_BOOLEAN, 6),
-        key(c"command", offset_of!(K, command), TAG_STRING, 7),
-        key(c"pattern", offset_of!(K, pattern), TAG_NIL, 8),
-        key(c"callback", offset_of!(K, callback), TAG_NIL, 9),
+        key(c"buf", offset_of!(K, buf), TAG_BUFFER),
+        key(c"desc", offset_of!(K, desc), TAG_STRING),
+        key(c"once", offset_of!(K, once), TAG_BOOLEAN),
+        key(c"group", offset_of!(K, group), TAG_NIL),
+        key(c"buffer", offset_of!(K, buffer), TAG_BUFFER),
+        key(c"nested", offset_of!(K, nested), TAG_BOOLEAN),
+        key(c"command", offset_of!(K, command), TAG_STRING),
+        key(c"pattern", offset_of!(K, pattern), TAG_NIL),
+        key(c"callback", offset_of!(K, callback), TAG_NIL),
         END,
     ]
 });
@@ -540,16 +530,16 @@ pub unsafe fn key_dict_create_autocmd_get_field(
 pub static echo_opts_table: ConstTable<[KeySetLink; 11]> = ConstTable::new({
     type K = KeyDict_echo_opts;
     [
-        key(c"id", offset_of!(K, id), TAG_NIL, 1),
-        key(c"err", offset_of!(K, err), TAG_BOOLEAN, 2),
-        key(c"data", offset_of!(K, data), TAG_DICT, 3),
-        key(c"kind", offset_of!(K, kind), TAG_STRING, 4),
-        key(c"title", offset_of!(K, title), TAG_STRING, 5),
-        key(c"source", offset_of!(K, source), TAG_STRING, 6),
-        key(c"status", offset_of!(K, status), TAG_STRING, 7),
-        key(c"percent", offset_of!(K, percent), TAG_INTEGER, 8),
-        key(c"verbose", offset_of!(K, verbose), TAG_BOOLEAN, 9),
-        key(c"_truncate", offset_of!(K, _truncate), TAG_BOOLEAN, 10),
+        key(c"id", offset_of!(K, id), TAG_NIL),
+        key(c"err", offset_of!(K, err), TAG_BOOLEAN),
+        key(c"data", offset_of!(K, data), TAG_DICT),
+        key(c"kind", offset_of!(K, kind), TAG_STRING),
+        key(c"title", offset_of!(K, title), TAG_STRING),
+        key(c"source", offset_of!(K, source), TAG_STRING),
+        key(c"status", offset_of!(K, status), TAG_STRING),
+        key(c"percent", offset_of!(K, percent), TAG_INTEGER),
+        key(c"verbose", offset_of!(K, verbose), TAG_BOOLEAN),
+        key(c"_truncate", offset_of!(K, _truncate), TAG_BOOLEAN),
         END,
     ]
 });
@@ -591,17 +581,16 @@ pub unsafe fn key_dict_empty_get_field(_str: *const c_char, _len: size_t) -> *co
 pub static eval_statusline_table: ConstTable<[KeySetLink; 8]> = ConstTable::new({
     type K = KeyDict_eval_statusline;
     [
-        key(c"winid", offset_of!(K, winid), TAG_WINDOW, 1),
-        key(c"fillchar", offset_of!(K, fillchar), TAG_STRING, 2),
-        key(c"maxwidth", offset_of!(K, maxwidth), TAG_INTEGER, 3),
-        key(c"highlights", offset_of!(K, highlights), TAG_BOOLEAN, 4),
-        key(c"use_winbar", offset_of!(K, use_winbar), TAG_BOOLEAN, 5),
-        key(c"use_tabline", offset_of!(K, use_tabline), TAG_BOOLEAN, 6),
+        key(c"winid", offset_of!(K, winid), TAG_WINDOW),
+        key(c"fillchar", offset_of!(K, fillchar), TAG_STRING),
+        key(c"maxwidth", offset_of!(K, maxwidth), TAG_INTEGER),
+        key(c"highlights", offset_of!(K, highlights), TAG_BOOLEAN),
+        key(c"use_winbar", offset_of!(K, use_winbar), TAG_BOOLEAN),
+        key(c"use_tabline", offset_of!(K, use_tabline), TAG_BOOLEAN),
         key(
             c"use_statuscol_lnum",
             offset_of!(K, use_statuscol_lnum),
             TAG_INTEGER,
-            7,
         ),
         END,
     ]
@@ -633,12 +622,12 @@ pub unsafe fn key_dict_eval_statusline_get_field(
 pub static exec_autocmds_table: ConstTable<[KeySetLink; 7]> = ConstTable::new({
     type K = KeyDict_exec_autocmds;
     [
-        key(c"buf", offset_of!(K, buf), TAG_BUFFER, 1),
-        key(c"data", offset_of!(K, data), TAG_NIL, 2),
-        key(c"group", offset_of!(K, group), TAG_NIL, 3),
-        key(c"buffer", offset_of!(K, buffer), TAG_BUFFER, 4),
-        key(c"pattern", offset_of!(K, pattern), TAG_NIL, 5),
-        key(c"modeline", offset_of!(K, modeline), TAG_BOOLEAN, 6),
+        key(c"buf", offset_of!(K, buf), TAG_BUFFER),
+        key(c"data", offset_of!(K, data), TAG_NIL),
+        key(c"group", offset_of!(K, group), TAG_NIL),
+        key(c"buffer", offset_of!(K, buffer), TAG_BUFFER),
+        key(c"pattern", offset_of!(K, pattern), TAG_NIL),
+        key(c"modeline", offset_of!(K, modeline), TAG_BOOLEAN),
         END,
     ]
 });
@@ -667,7 +656,7 @@ pub unsafe fn key_dict_exec_autocmds_get_field(
 
 pub static exec_opts_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_exec_opts;
-    [key(c"output", offset_of!(K, output), TAG_BOOLEAN, -1), END]
+    [key(c"output", offset_of!(K, output), TAG_BOOLEAN), END]
 });
 
 /// Look a key up in [`exec_opts_table`].
@@ -687,12 +676,12 @@ pub unsafe fn key_dict_exec_opts_get_field(str: *const c_char, len: size_t) -> *
 pub static get_autocmds_table: ConstTable<[KeySetLink; 7]> = ConstTable::new({
     type K = KeyDict_get_autocmds;
     [
-        key(c"id", offset_of!(K, id), TAG_INTEGER, 1),
-        key(c"buf", offset_of!(K, buf), TAG_NIL, 2),
-        key(c"event", offset_of!(K, event), TAG_NIL, 3),
-        key(c"group", offset_of!(K, group), TAG_NIL, 4),
-        key(c"buffer", offset_of!(K, buffer), TAG_NIL, 5),
-        key(c"pattern", offset_of!(K, pattern), TAG_NIL, 6),
+        key(c"id", offset_of!(K, id), TAG_INTEGER),
+        key(c"buf", offset_of!(K, buf), TAG_NIL),
+        key(c"event", offset_of!(K, event), TAG_NIL),
+        key(c"group", offset_of!(K, group), TAG_NIL),
+        key(c"buffer", offset_of!(K, buffer), TAG_NIL),
+        key(c"pattern", offset_of!(K, pattern), TAG_NIL),
         END,
     ]
 });
@@ -721,10 +710,7 @@ pub unsafe fn key_dict_get_autocmds_get_field(
 
 pub static get_commands_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_get_commands;
-    [
-        key(c"builtin", offset_of!(K, builtin), TAG_BOOLEAN, -1),
-        END,
-    ]
+    [key(c"builtin", offset_of!(K, builtin), TAG_BOOLEAN), END]
 });
 
 /// Look a key up in [`get_commands_table`].
@@ -747,8 +733,8 @@ pub unsafe fn key_dict_get_commands_get_field(
 pub static get_extmark_table: ConstTable<[KeySetLink; 3]> = ConstTable::new({
     type K = KeyDict_get_extmark;
     [
-        key(c"details", offset_of!(K, details), TAG_BOOLEAN, 1),
-        key(c"hl_name", offset_of!(K, hl_name), TAG_BOOLEAN, 2),
+        key(c"details", offset_of!(K, details), TAG_BOOLEAN),
+        key(c"hl_name", offset_of!(K, hl_name), TAG_BOOLEAN),
         END,
     ]
 });
@@ -771,11 +757,11 @@ pub unsafe fn key_dict_get_extmark_get_field(str: *const c_char, len: size_t) ->
 pub static get_extmarks_table: ConstTable<[KeySetLink; 6]> = ConstTable::new({
     type K = KeyDict_get_extmarks;
     [
-        key(c"type", offset_of!(K, type_0), TAG_STRING, 1),
-        key(c"limit", offset_of!(K, limit), TAG_INTEGER, 2),
-        key(c"details", offset_of!(K, details), TAG_BOOLEAN, 3),
-        key(c"hl_name", offset_of!(K, hl_name), TAG_BOOLEAN, 4),
-        key(c"overlap", offset_of!(K, overlap), TAG_BOOLEAN, 5),
+        key(c"type", offset_of!(K, type_0), TAG_STRING),
+        key(c"limit", offset_of!(K, limit), TAG_INTEGER),
+        key(c"details", offset_of!(K, details), TAG_BOOLEAN),
+        key(c"hl_name", offset_of!(K, hl_name), TAG_BOOLEAN),
+        key(c"overlap", offset_of!(K, overlap), TAG_BOOLEAN),
         END,
     ]
 });
@@ -804,10 +790,10 @@ pub unsafe fn key_dict_get_extmarks_get_field(
 pub static get_highlight_table: ConstTable<[KeySetLink; 5]> = ConstTable::new({
     type K = KeyDict_get_highlight;
     [
-        key(c"id", offset_of!(K, id), TAG_INTEGER, 1),
-        key(c"link", offset_of!(K, link), TAG_BOOLEAN, 2),
-        key(c"name", offset_of!(K, name), TAG_STRING, 3),
-        key(c"create", offset_of!(K, create), TAG_BOOLEAN, 4),
+        key(c"id", offset_of!(K, id), TAG_INTEGER),
+        key(c"link", offset_of!(K, link), TAG_BOOLEAN),
+        key(c"name", offset_of!(K, name), TAG_STRING),
+        key(c"create", offset_of!(K, create), TAG_BOOLEAN),
         END,
     ]
 });
@@ -834,7 +820,7 @@ pub unsafe fn key_dict_get_highlight_get_field(
 
 pub static get_ns_table: ConstTable<[KeySetLink; 2]> = ConstTable::new({
     type K = KeyDict_get_ns;
-    [key(c"winid", offset_of!(K, winid), TAG_WINDOW, 1), END]
+    [key(c"winid", offset_of!(K, winid), TAG_WINDOW), END]
 });
 
 /// Look a key up in [`get_ns_table`].
@@ -854,46 +840,41 @@ pub unsafe fn key_dict_get_ns_get_field(str: *const c_char, len: size_t) -> *con
 pub static highlight_table: ConstTable<[KeySetLink; 36]> = ConstTable::new({
     type K = KeyDict_highlight;
     [
-        key(c"bg", offset_of!(K, bg), TAG_NIL, 1),
-        key(c"fg", offset_of!(K, fg), TAG_NIL, 2),
-        key(c"sp", offset_of!(K, sp), TAG_NIL, 3),
-        key(c"dim", offset_of!(K, dim), TAG_BOOLEAN, 4),
-        key(c"url", offset_of!(K, url), TAG_STRING, 5),
-        key(c"bold", offset_of!(K, bold), TAG_BOOLEAN, 6),
-        hl_key(c"link", offset_of!(K, link), 7),
-        key(c"blend", offset_of!(K, blend), TAG_INTEGER, 8),
-        key(c"force", offset_of!(K, force), TAG_BOOLEAN, 9),
-        key(c"blink", offset_of!(K, blink), TAG_BOOLEAN, 10),
-        key(c"cterm", offset_of!(K, cterm), TAG_DICT, 11),
-        key(c"italic", offset_of!(K, italic), TAG_BOOLEAN, 12),
-        key(c"update", offset_of!(K, update), TAG_BOOLEAN, 13),
-        key(c"reverse", offset_of!(K, reverse), TAG_BOOLEAN, 14),
-        key(c"default", offset_of!(K, default_), TAG_BOOLEAN, 15),
-        key(c"altfont", offset_of!(K, altfont), TAG_BOOLEAN, 16),
-        key(c"conceal", offset_of!(K, conceal), TAG_BOOLEAN, 17),
-        key(c"special", offset_of!(K, special), TAG_NIL, 18),
-        key(c"ctermfg", offset_of!(K, ctermfg), TAG_NIL, 19),
-        key(c"ctermbg", offset_of!(K, ctermbg), TAG_NIL, 20),
-        key(c"fallback", offset_of!(K, fallback), TAG_BOOLEAN, 21),
-        key(c"overline", offset_of!(K, overline), TAG_BOOLEAN, 22),
-        key(c"standout", offset_of!(K, standout), TAG_BOOLEAN, 23),
-        key(c"nocombine", offset_of!(K, nocombine), TAG_BOOLEAN, 24),
-        key(c"undercurl", offset_of!(K, undercurl), TAG_BOOLEAN, 25),
-        key(c"underline", offset_of!(K, underline), TAG_BOOLEAN, 26),
-        key(c"background", offset_of!(K, background), TAG_NIL, 27),
-        key(c"bg_indexed", offset_of!(K, bg_indexed), TAG_BOOLEAN, 28),
-        key(c"foreground", offset_of!(K, foreground), TAG_NIL, 29),
-        key(c"fg_indexed", offset_of!(K, fg_indexed), TAG_BOOLEAN, 30),
-        hl_key(c"link_global", offset_of!(K, link_global), 31),
-        key(c"underdashed", offset_of!(K, underdashed), TAG_BOOLEAN, 32),
-        key(c"underdotted", offset_of!(K, underdotted), TAG_BOOLEAN, 33),
-        key(c"underdouble", offset_of!(K, underdouble), TAG_BOOLEAN, 34),
-        key(
-            c"strikethrough",
-            offset_of!(K, strikethrough),
-            TAG_BOOLEAN,
-            35,
-        ),
+        key(c"bg", offset_of!(K, bg), TAG_NIL),
+        key(c"fg", offset_of!(K, fg), TAG_NIL),
+        key(c"sp", offset_of!(K, sp), TAG_NIL),
+        key(c"dim", offset_of!(K, dim), TAG_BOOLEAN),
+        key(c"url", offset_of!(K, url), TAG_STRING),
+        key(c"bold", offset_of!(K, bold), TAG_BOOLEAN),
+        hl_key(c"link", offset_of!(K, link)),
+        key(c"blend", offset_of!(K, blend), TAG_INTEGER),
+        key(c"force", offset_of!(K, force), TAG_BOOLEAN),
+        key(c"blink", offset_of!(K, blink), TAG_BOOLEAN),
+        key(c"cterm", offset_of!(K, cterm), TAG_DICT),
+        key(c"italic", offset_of!(K, italic), TAG_BOOLEAN),
+        key(c"update", offset_of!(K, update), TAG_BOOLEAN),
+        key(c"reverse", offset_of!(K, reverse), TAG_BOOLEAN),
+        key(c"default", offset_of!(K, default_), TAG_BOOLEAN),
+        key(c"altfont", offset_of!(K, altfont), TAG_BOOLEAN),
+        key(c"conceal", offset_of!(K, conceal), TAG_BOOLEAN),
+        key(c"special", offset_of!(K, special), TAG_NIL),
+        key(c"ctermfg", offset_of!(K, ctermfg), TAG_NIL),
+        key(c"ctermbg", offset_of!(K, ctermbg), TAG_NIL),
+        key(c"fallback", offset_of!(K, fallback), TAG_BOOLEAN),
+        key(c"overline", offset_of!(K, overline), TAG_BOOLEAN),
+        key(c"standout", offset_of!(K, standout), TAG_BOOLEAN),
+        key(c"nocombine", offset_of!(K, nocombine), TAG_BOOLEAN),
+        key(c"undercurl", offset_of!(K, undercurl), TAG_BOOLEAN),
+        key(c"underline", offset_of!(K, underline), TAG_BOOLEAN),
+        key(c"background", offset_of!(K, background), TAG_NIL),
+        key(c"bg_indexed", offset_of!(K, bg_indexed), TAG_BOOLEAN),
+        key(c"foreground", offset_of!(K, foreground), TAG_NIL),
+        key(c"fg_indexed", offset_of!(K, fg_indexed), TAG_BOOLEAN),
+        hl_key(c"link_global", offset_of!(K, link_global)),
+        key(c"underdashed", offset_of!(K, underdashed), TAG_BOOLEAN),
+        key(c"underdotted", offset_of!(K, underdotted), TAG_BOOLEAN),
+        key(c"underdouble", offset_of!(K, underdouble), TAG_BOOLEAN),
+        key(c"strikethrough", offset_of!(K, strikethrough), TAG_BOOLEAN),
         END,
     ]
 });
@@ -949,27 +930,54 @@ pub unsafe fn key_dict_highlight_get_field(str: *const c_char, len: size_t) -> *
 pub static highlight_cterm_table: ConstTable<[KeySetLink; 17]> = ConstTable::new({
     type K = KeyDict_highlight_cterm;
     [
-        key(c"dim", offset_of!(K, dim), TAG_BOOLEAN, -1),
-        key(c"bold", offset_of!(K, bold), TAG_BOOLEAN, -1),
-        key(c"blink", offset_of!(K, blink), TAG_BOOLEAN, -1),
-        key(c"italic", offset_of!(K, italic), TAG_BOOLEAN, -1),
-        key(c"altfont", offset_of!(K, altfont), TAG_BOOLEAN, -1),
-        key(c"conceal", offset_of!(K, conceal), TAG_BOOLEAN, -1),
-        key(c"reverse", offset_of!(K, reverse), TAG_BOOLEAN, -1),
-        key(c"overline", offset_of!(K, overline), TAG_BOOLEAN, -1),
-        key(c"standout", offset_of!(K, standout), TAG_BOOLEAN, -1),
-        key(c"nocombine", offset_of!(K, nocombine), TAG_BOOLEAN, -1),
-        key(c"undercurl", offset_of!(K, undercurl), TAG_BOOLEAN, -1),
-        key(c"underline", offset_of!(K, underline), TAG_BOOLEAN, -1),
-        key(c"underdashed", offset_of!(K, underdashed), TAG_BOOLEAN, -1),
-        key(c"underdotted", offset_of!(K, underdotted), TAG_BOOLEAN, -1),
-        key(c"underdouble", offset_of!(K, underdouble), TAG_BOOLEAN, -1),
-        key(
-            c"strikethrough",
-            offset_of!(K, strikethrough),
-            TAG_BOOLEAN,
-            -1,
-        ),
+        key(c"dim", offset_of!(K, dim), TAG_BOOLEAN),
+        key(c"bold", offset_of!(K, bold), TAG_BOOLEAN),
+        key(c"blink", offset_of!(K, blink), TAG_BOOLEAN),
+        key(c"italic", offset_of!(K, italic), TAG_BOOLEAN),
+        key(c"altfont", offset_of!(K, altfont), TAG_BOOLEAN),
+        key(c"conceal", offset_of!(K, conceal), TAG_BOOLEAN),
+        key(c"reverse", offset_of!(K, reverse), TAG_BOOLEAN),
+        key(c"overline", offset_of!(K, overline), TAG_BOOLEAN),
+        key(c"standout", offset_of!(K, standout), TAG_BOOLEAN),
+        key(c"nocombine", offset_of!(K, nocombine), TAG_BOOLEAN),
+        key(c"undercurl", offset_of!(K, undercurl), TAG_BOOLEAN),
+        key(c"underline", offset_of!(K, underline), TAG_BOOLEAN),
+        key(c"underdashed", offset_of!(K, underdashed), TAG_BOOLEAN),
+        key(c"underdotted", offset_of!(K, underdotted), TAG_BOOLEAN),
+        key(c"underdouble", offset_of!(K, underdouble), TAG_BOOLEAN),
+        key(c"strikethrough", offset_of!(K, strikethrough), TAG_BOOLEAN),
         END,
     ]
 });
+
+/// Look a key up in [`highlight_cterm_table`].
+///
+/// # Safety
+/// `str` points at `len` readable bytes.
+pub unsafe fn key_dict_highlight_cterm_get_field(
+    str: *const c_char,
+    len: size_t,
+) -> *const KeySetLink {
+    // SAFETY: the caller passes a key of `len` bytes.
+    let index: usize = match unsafe { key_bytes(str, len) } {
+        b"dim" => 0,
+        b"bold" => 1,
+        b"blink" => 2,
+        b"italic" => 3,
+        b"altfont" => 4,
+        b"conceal" => 5,
+        b"reverse" => 6,
+        b"overline" => 7,
+        b"standout" => 8,
+        b"nocombine" => 9,
+        b"undercurl" => 10,
+        b"underline" => 11,
+        b"underdashed" => 12,
+        b"underdotted" => 13,
+        b"underdouble" => 14,
+        b"strikethrough" => 15,
+        _ => return ptr::null(),
+    };
+    let table: *const KeySetLink = highlight_cterm_table.as_ptr();
+    table.wrapping_add(index)
+}

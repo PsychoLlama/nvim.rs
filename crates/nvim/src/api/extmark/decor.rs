@@ -72,69 +72,28 @@ pub unsafe fn nvim_set_decoration_provider(
     debug_assert!(!p.is_null(), "p != NULL");
     unsafe { decor_provider_clear(p) };
     redraw_all_later(UPD_NOT_VALID);
-    let cbs: [DecorProviderCallback; 10] = [
-        DecorProviderCallback {
-            name: c"on_start".as_ptr(),
-            source: unsafe { &raw mut (*opts).on_start },
-            dest: unsafe { &raw mut (*p).redraw_start },
-        },
-        DecorProviderCallback {
-            name: c"on_buf".as_ptr(),
-            source: unsafe { &raw mut (*opts).on_buf },
-            dest: unsafe { &raw mut (*p).redraw_buf },
-        },
-        DecorProviderCallback {
-            name: c"on_win".as_ptr(),
-            source: unsafe { &raw mut (*opts).on_win },
-            dest: unsafe { &raw mut (*p).redraw_win },
-        },
-        DecorProviderCallback {
-            name: c"on_line".as_ptr(),
-            source: unsafe { &raw mut (*opts).on_line },
-            dest: unsafe { &raw mut (*p).redraw_line },
-        },
-        DecorProviderCallback {
-            name: c"on_range".as_ptr(),
-            source: unsafe { &raw mut (*opts).on_range },
-            dest: unsafe { &raw mut (*p).redraw_range },
-        },
-        DecorProviderCallback {
-            name: c"on_end".as_ptr(),
-            source: unsafe { &raw mut (*opts).on_end },
-            dest: unsafe { &raw mut (*p).redraw_end },
-        },
-        DecorProviderCallback {
-            name: c"_on_hl_def".as_ptr(),
-            source: unsafe { &raw mut (*opts)._on_hl_def },
-            dest: unsafe { &raw mut (*p).hl_def },
-        },
-        DecorProviderCallback {
-            name: c"_on_spell_nav".as_ptr(),
-            source: unsafe { &raw mut (*opts)._on_spell_nav },
-            dest: unsafe { &raw mut (*p).spell_nav },
-        },
-        DecorProviderCallback {
-            name: c"_on_conceal_line".as_ptr(),
-            source: unsafe { &raw mut (*opts)._on_conceal_line },
-            dest: unsafe { &raw mut (*p).conceal_line },
-        },
-        DecorProviderCallback {
-            name: ::core::ptr::null::<::core::ffi::c_char>(),
-            source: ::core::ptr::null_mut::<LuaRef>(),
-            dest: ::core::ptr::null_mut::<LuaRef>(),
-        },
-    ];
-    let mut i: size_t = 0 as size_t;
-    while !cbs[i as usize].source.is_null()
-        && !cbs[i as usize].dest.is_null()
-        && !cbs[i as usize].name.is_null()
-    {
-        let v: *mut LuaRef = cbs[i as usize].source;
-        if unsafe { *v } > 0 as ::core::ffi::c_int {
-            unsafe { *cbs[i as usize].dest = *v };
-            unsafe { *v = LUA_NOREF as LuaRef };
+    // Each callback the caller named moves into the provider, and the
+    // keyset gives up its reference so that the release walk does not free
+    // what the provider now holds.
+    // SAFETY: `opts` is the caller's keyset and `p` the provider just
+    // cleared; both are live for the call.
+    unsafe {
+        let callbacks: [(&mut Option<LuaRef>, &mut LuaRef); 9] = [
+            (&mut (*opts).on_start, &mut (*p).redraw_start),
+            (&mut (*opts).on_buf, &mut (*p).redraw_buf),
+            (&mut (*opts).on_win, &mut (*p).redraw_win),
+            (&mut (*opts).on_line, &mut (*p).redraw_line),
+            (&mut (*opts).on_range, &mut (*p).redraw_range),
+            (&mut (*opts).on_end, &mut (*p).redraw_end),
+            (&mut (*opts)._on_hl_def, &mut (*p).hl_def),
+            (&mut (*opts)._on_spell_nav, &mut (*p).spell_nav),
+            (&mut (*opts)._on_conceal_line, &mut (*p).conceal_line),
+        ];
+        for (source, dest) in callbacks {
+            if source.is_some_and(|reference| reference > 0) {
+                *dest = source.take().expect("just tested");
+            }
         }
-        i = i.wrapping_add(1);
     }
     unsafe { (*p).state = kDecorProviderActive };
     unsafe { (*p).hl_valid += 1 };

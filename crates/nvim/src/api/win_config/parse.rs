@@ -400,24 +400,21 @@ pub(crate) unsafe fn parse_win_config(
     reconf: bool,
     err: ErrSlot,
 ) -> bool {
-    let keys = config.is_set__win_config_;
-    let set = |key| has_key(keys, key);
     let floating = |w: &Win| w.w_floating;
     let mut has_relative = false;
     let mut relative_is_win = false;
     let mut is_split = false;
     '_fail: {
-        if !config.relative.is_empty() {
+        let relative = config.relative.unwrap_or(String_0::NULL);
+        if !relative.is_empty() {
             // SAFETY: the caller's promise -- the keyset's strings are
             // NUL-terminated.
-            if !unsafe { parse_float_relative(config.relative, &mut fconfig.relative) } {
+            if !unsafe { parse_float_relative(relative, &mut fconfig.relative) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"relative", config.relative, true) };
+                unsafe { err_invalid_str(err, c"relative", relative, true) };
                 break '_fail;
             }
-            if !(set(KEYSET_OPTIDX_win_config__row) && set(KEYSET_OPTIDX_win_config__col))
-                && !set(KEYSET_OPTIDX_win_config__bufpos)
-            {
+            if !(config.row.is_some() && config.col.is_some()) && config.bufpos.is_none() {
                 err_required(err, c"'relative' requires 'row'/'col' or 'bufpos'");
                 break '_fail;
             }
@@ -427,8 +424,8 @@ pub(crate) unsafe fn parse_win_config(
                 relative_is_win = true;
                 fconfig.bufpos.lnum = -1;
             }
-        } else if !config.external {
-            if set(KEYSET_OPTIDX_win_config__vertical) || set(KEYSET_OPTIDX_win_config__split) {
+        } else if !config.external.unwrap_or(false) {
+            if config.vertical.is_some() || config.split.is_some() {
                 is_split = true;
                 fconfig.external = false;
             } else if window.is_none() {
@@ -438,90 +435,90 @@ pub(crate) unsafe fn parse_win_config(
         }
         // A split-only key on a float, and a float-only key on a split, are
         // both reported here rather than in the walk below.
-        if set(KEYSET_OPTIDX_win_config__vertical) && !is_split {
+        if config.vertical.is_some() && !is_split {
             err_conflict(err, c"vertical", c"floating windows");
             break '_fail;
         }
-        if set(KEYSET_OPTIDX_win_config__split) && !is_split {
+        if config.split.is_some() && !is_split {
             err_conflict(err, c"split", c"floating windows");
             break '_fail;
         }
-        if set(KEYSET_OPTIDX_win_config__split) {
+        if let Some(split) = config.split {
             // SAFETY: the caller's promise about the keyset's strings.
-            if !unsafe { parse_config_split(config.split, &mut fconfig.split) } {
+            if !unsafe { parse_config_split(split, &mut fconfig.split) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"split", config.split, true) };
+                unsafe { err_invalid_str(err, c"split", split, true) };
                 break '_fail;
             }
         }
-        if set(KEYSET_OPTIDX_win_config__anchor) {
+        if let Some(anchor) = config.anchor {
             // SAFETY: as above.
-            if !unsafe { parse_float_anchor(config.anchor, &mut fconfig.anchor) } {
+            if !unsafe { parse_float_anchor(anchor, &mut fconfig.anchor) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"anchor", config.anchor, true) };
+                unsafe { err_invalid_str(err, c"anchor", anchor, true) };
                 break '_fail;
             }
         }
-        if set(KEYSET_OPTIDX_win_config__row) {
+        if let Some(row) = config.row {
             if !has_relative || is_split {
                 generate_error(window, c"row", err);
                 break '_fail;
             }
-            fconfig.row = config.row;
+            fconfig.row = row;
         }
-        if set(KEYSET_OPTIDX_win_config__col) {
+        if let Some(col) = config.col {
             if !has_relative || is_split {
                 generate_error(window, c"col", err);
                 break '_fail;
             }
-            fconfig.col = config.col;
+            fconfig.col = col;
         }
-        if set(KEYSET_OPTIDX_win_config__bufpos) {
+        if let Some(bufpos) = config.bufpos {
             if !has_relative || is_split {
                 generate_error(window, c"bufpos", err);
                 break '_fail;
             }
             // SAFETY: the caller's promise -- the keyset's arrays name their
             // own items.
-            if !unsafe { parse_float_bufpos(config.bufpos, &mut fconfig.bufpos) } {
+            if !unsafe { parse_float_bufpos(bufpos, &mut fconfig.bufpos) } {
                 err_exp(err, c"bufpos", c"[row, col] array", None);
                 break '_fail;
             }
             // `bufpos` without `row`/`col` puts the float just below the
             // position, or just above it for a south anchor.
-            if !set(KEYSET_OPTIDX_win_config__row) {
+            if config.row.is_none() {
                 fconfig.row = if fconfig.anchor & kFloatAnchorSouth != 0 {
                     0.0
                 } else {
                     1.0
                 };
             }
-            if !set(KEYSET_OPTIDX_win_config__col) {
+            if config.col.is_none() {
                 fconfig.col = 0.0;
             }
         }
-        if set(KEYSET_OPTIDX_win_config__width) {
-            if config.width <= 0 {
+        if let Some(width) = config.width {
+            if width <= 0 {
                 err_exp(err, c"width", c"positive Integer", None);
                 break '_fail;
             }
-            fconfig.width = config.width as c_int;
+            fconfig.width = width as c_int;
         } else if !reconf && !is_split {
             err_required(err, c"width");
             break '_fail;
         }
-        if set(KEYSET_OPTIDX_win_config__height) {
-            if config.height <= 0 {
+        if let Some(height) = config.height {
+            if height <= 0 {
                 err_exp(err, c"height", c"positive Integer", None);
                 break '_fail;
             }
-            fconfig.height = config.height as c_int;
+            fconfig.height = height as c_int;
         } else if !reconf && !is_split {
             err_required(err, c"height");
             break '_fail;
         }
-        if set(KEYSET_OPTIDX_win_config__external) {
-            fconfig.external = config.external;
+        if let Some(external) = config.external {
+            fconfig.external = external;
             if has_relative && fconfig.external {
                 err_conflict(err, c"relative", c"external");
                 break '_fail;
@@ -532,16 +529,17 @@ pub(crate) unsafe fn parse_win_config(
                 break '_fail;
             }
         }
-        if set(KEYSET_OPTIDX_win_config__win) && fconfig.external {
+        if config.win.is_some() && fconfig.external {
             err_conflict(err, c"win", c"external window");
             break '_fail;
         }
-        let win_is_target = set(KEYSET_OPTIDX_win_config__win)
+        let win_is_target = config.win.is_some()
             && !is_split
             && window.as_ref().is_some_and(floating)
             && fconfig.relative == kFloatRelativeWindow;
         if relative_is_win || win_is_target {
-            let Some(target) = stored(err, find_window_by_handle(config.win)).flatten() else {
+            let win_handle = config.win.unwrap_or(0);
+            let Some(target) = stored(err, find_window_by_handle(win_handle)).flatten() else {
                 break '_fail;
             };
             if Some(target) == window {
@@ -551,36 +549,36 @@ pub(crate) unsafe fn parse_win_config(
             }
             fconfig.window = target.handle;
         } else {
-            if set(KEYSET_OPTIDX_win_config__win) {
+            if let Some(win_handle) = config.win {
                 if !is_split && !has_relative && !window.as_ref().is_some_and(floating) {
                     err_required(err, c"non-float with 'win' requires 'split' or 'vertical'");
                     break '_fail;
                 }
-                fconfig.window = config.win;
+                fconfig.window = win_handle;
             }
             if fconfig.window == 0 {
                 fconfig.window = Win::current().handle;
             }
         }
-        if set(KEYSET_OPTIDX_win_config__focusable) {
-            fconfig.focusable = config.focusable;
-            fconfig.mouse = config.focusable;
+        if let Some(focusable) = config.focusable {
+            fconfig.focusable = focusable;
+            fconfig.mouse = focusable;
         }
-        if set(KEYSET_OPTIDX_win_config__mouse) {
-            fconfig.mouse = config.mouse;
+        if let Some(mouse) = config.mouse {
+            fconfig.mouse = mouse;
         }
-        if set(KEYSET_OPTIDX_win_config__zindex) {
+        if let Some(zindex) = config.zindex {
             if is_split {
                 err_conflict(err, c"zindex", c"non-float window");
                 break '_fail;
             }
-            if config.zindex <= 0 {
+            if zindex <= 0 {
                 err_exp(err, c"zindex", c"positive Integer", None);
                 break '_fail;
             }
-            fconfig.zindex = config.zindex as c_int;
+            fconfig.zindex = zindex as c_int;
         }
-        if set(KEYSET_OPTIDX_win_config__title) {
+        if let Some(title) = config.title {
             if is_split {
                 err_conflict(err, c"title", c"non-float window");
                 break '_fail;
@@ -588,11 +586,11 @@ pub(crate) unsafe fn parse_win_config(
             // SAFETY: the caller's promise about the keyset's strings and
             // arrays.
             let placed = unsafe {
-                parse_bordertext(config.title, kBorderTextTitle, fconfig, err);
+                parse_bordertext(title, kBorderTextTitle, fconfig, err);
                 !err.is_set()
                     && parse_bordertext_pos(
                         window,
-                        config.title_pos,
+                        config.title_pos.unwrap_or(String_0::NULL),
                         kBorderTextTitle,
                         fconfig,
                         err,
@@ -601,22 +599,22 @@ pub(crate) unsafe fn parse_win_config(
             if !placed {
                 break '_fail;
             }
-        } else if set(KEYSET_OPTIDX_win_config__title_pos) {
+        } else if config.title_pos.is_some() {
             err_required(err, c"'title' requires 'title_pos'");
             break '_fail;
         }
-        if set(KEYSET_OPTIDX_win_config__footer) {
+        if let Some(footer) = config.footer {
             if is_split {
                 err_conflict(err, c"footer", c"non-float window");
                 break '_fail;
             }
             // SAFETY: as the title above.
             let placed = unsafe {
-                parse_bordertext(config.footer, kBorderTextFooter, fconfig, err);
+                parse_bordertext(footer, kBorderTextFooter, fconfig, err);
                 !err.is_set()
                     && parse_bordertext_pos(
                         window,
-                        config.footer_pos,
+                        config.footer_pos.unwrap_or(String_0::NULL),
                         kBorderTextFooter,
                         fconfig,
                         err,
@@ -625,16 +623,15 @@ pub(crate) unsafe fn parse_win_config(
             if !placed {
                 break '_fail;
             }
-        } else if set(KEYSET_OPTIDX_win_config__footer_pos) {
+        } else if config.footer_pos.is_some() {
             err_required(err, c"'footer' requires 'footer_pos'");
             break '_fail;
         }
-        if set(KEYSET_OPTIDX_win_config__border) {
+        if let Some(border_style) = config.border {
             if is_split {
                 err_conflict(err, c"border", c"non-float window");
                 break '_fail;
             }
-            let border_style = config.border;
             if !border_style.is_nil() {
                 // SAFETY: the caller's promise about the keyset's strings and
                 // arrays, and `fconfig` is live.
@@ -656,38 +653,38 @@ pub(crate) unsafe fn parse_win_config(
                 }
             }
         }
-        if set(KEYSET_OPTIDX_win_config__style) {
+        if let Some(style) = config.style {
             // SAFETY: the caller's promise -- the keyset's strings are
             // NUL-terminated.
-            let empty = unsafe { *config.style.data() } as c_int == NUL;
+            let empty = unsafe { *style.data() } as c_int == NUL;
             // SAFETY: as above.
-            let minimal = !empty && unsafe { imatch(config.style, &[c"minimal"]) }.is_some();
+            let minimal = !empty && unsafe { imatch(style, &[c"minimal"]) }.is_some();
             if empty {
                 fconfig.style = kWinStyleUnused;
             } else if minimal {
                 fconfig.style = kWinStyleMinimal;
             } else {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"style", config.style, true) };
+                unsafe { err_invalid_str(err, c"style", style, true) };
                 break '_fail;
             }
         }
-        if set(KEYSET_OPTIDX_win_config__noautocmd) {
-            if window.is_some() && config.noautocmd != fconfig.noautocmd {
+        if let Some(noautocmd) = config.noautocmd {
+            if window.is_some() && noautocmd != fconfig.noautocmd {
                 let msg = c"'noautocmd' cannot be changed on existing window";
                 err_msg(err, kErrorTypeValidation, msg);
                 break '_fail;
             }
-            fconfig.noautocmd = config.noautocmd;
+            fconfig.noautocmd = noautocmd;
         }
-        if set(KEYSET_OPTIDX_win_config__fixed) {
-            fconfig.fixed = config.fixed;
+        if let Some(fixed) = config.fixed {
+            fconfig.fixed = fixed;
         }
-        if set(KEYSET_OPTIDX_win_config__hide) {
-            fconfig.hide = config.hide;
+        if let Some(hide) = config.hide {
+            fconfig.hide = hide;
         }
-        if set(KEYSET_OPTIDX_win_config___cmdline_offset) {
-            fconfig._cmdline_offset = config._cmdline_offset as c_int;
+        if let Some(offset) = config._cmdline_offset {
+            fconfig._cmdline_offset = offset as c_int;
         }
         return true;
     }

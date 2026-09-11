@@ -744,10 +744,10 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
 ///
 /// `d` must be a valid dict.
 unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
-    // Every field of a keyset is zero when nothing is set: the flags
-    // are a bitmask, `kObjectTypeNil` is 0, and the rest are C layouts
-    // whose null is their empty value.
-    let mut dict: KeyDict_highlight = unsafe { core::mem::zeroed() };
+    // Every key unset, which is the state `api_dict_to_keydict` fills in
+    // over -- and the only one that lets `dict2hlattrs` tell "the UI said
+    // `bold = false`" from "the UI said nothing about `bold`".
+    let mut dict = KeyDict_highlight::default();
     if unsafe {
         api_dict_to_keydict(
             (&raw mut dict).cast::<c_void>(),
@@ -764,8 +764,8 @@ unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
     };
     // A URL is not an attribute the terminal understands; the TUI
     // interns it and the entry keeps the index.
-    if dict.is_set__highlight_ & (1 << KEYSET_OPTIDX_highlight__url) != 0 {
-        attrs.url = unsafe { tui_add_url(&mut *tui.get(), dict.url.data()) };
+    if let Some(url) = dict.url {
+        attrs.url = unsafe { tui_add_url(&mut *tui.get(), url.data()) };
     }
     attrs
 }
@@ -980,6 +980,3 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
         }
     }
 }
-
-/// The bit `KeyDict_highlight` sets when the dict carried a `url`.
-const KEYSET_OPTIDX_highlight__url: u32 = 5;

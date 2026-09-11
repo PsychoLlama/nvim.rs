@@ -57,15 +57,13 @@ unsafe fn win_config_split(
 ) -> bool {
     // SAFETY: the caller's window, live for the whole call.
     let w = win;
-    let keys = config.is_set__win_config_;
-    let set = |key| has_key(keys, key);
     // SAFETY: the caller's window.
     let was_split = !win.w_floating;
-    let has_split = set(KEYSET_OPTIDX_win_config__split);
-    let has_vertical = set(KEYSET_OPTIDX_win_config__vertical);
+    let has_split = config.split.is_some();
+    let has_vertical = config.vertical.is_some();
     let old_split = win_split_dir(w);
     if has_vertical && !has_split {
-        fconfig.split = if config.vertical {
+        fconfig.split = if config.vertical.unwrap_or(false) {
             if old_split == kWinSplitRight || p_spr.get() != 0 {
                 kWinSplitRight
             } else {
@@ -81,17 +79,18 @@ unsafe fn win_config_split(
     // when the window is already a split on the same side of the same
     // parent; then only the size below is applied.
     let stays_put = !has_vertical && !has_split
-        || was_split && !set(KEYSET_OPTIDX_win_config__win) && old_split == fconfig.split;
+        || was_split && config.win.is_none() && old_split == fconfig.split;
     '_resize: {
         if stays_put {
             break '_resize;
         }
         let mut parent: Option<Win> = None;
         let mut parent_tp: Option<TabPage> = None;
-        if config.win == 0 {
+        let parent_handle = config.win.unwrap_or(0);
+        if parent_handle == 0 {
             parent = Some(Win::current());
             parent_tp = Some(TabPage::current());
-        } else if config.win > 0 {
+        } else if parent_handle > 0 {
             let Some(found) = stored(err, find_window_by_handle(fconfig.window)).flatten() else {
                 return false;
             };
@@ -271,10 +270,10 @@ unsafe fn win_config_split(
         }
         return false;
     }
-    if set(KEYSET_OPTIDX_win_config__width) {
+    if config.width.is_some() {
         win_setwidth_win(fconfig.width, w);
     }
-    if set(KEYSET_OPTIDX_win_config__height) {
+    if config.height.is_some() {
         win_setheight_win(fconfig.height, w);
     }
     if !was_split {
@@ -304,7 +303,7 @@ unsafe fn win_config_float_tp(
     let mut win_tp = win_find_tabpage(win.id());
     let mut parent_id = win.id();
     let mut parent_tp = win_tp;
-    if has_key(config.is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
+    if config.win.is_some() {
         let Some(found) = stored(err, find_window_by_handle(fconfig.window)).flatten() else {
             return false;
         };
@@ -408,14 +407,13 @@ pub unsafe fn nvim_win_set_config(
     // SAFETY: `w` is the live window the lookup answered.
     let live = w;
     let was_split = !live.w_floating;
-    let key_set = keys.is_set__win_config_;
-    let has_split = has_key(key_set, KEYSET_OPTIDX_win_config__split);
-    let has_vertical = has_key(key_set, KEYSET_OPTIDX_win_config__vertical);
+    let has_split = keys.split.is_some();
+    let has_vertical = keys.vertical.is_some();
     let old_style = live.w_config.style;
     let mut fconfig = live.w_config.clone();
-    let external = has_key(key_set, KEYSET_OPTIDX_win_config__external) && keys.external;
-    let to_split =
-        keys.relative.is_empty() && !external && (has_split || has_vertical || was_split);
+    let external = keys.external.unwrap_or(false);
+    let relative_named = keys.relative.is_some_and(|r| !r.is_empty());
+    let to_split = !relative_named && !external && (has_split || has_vertical || was_split);
     // SAFETY: `fconfig` is this frame's own, and `keys` the caller's keyset.
     let parsed = unsafe {
         parse_win_config(

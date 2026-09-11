@@ -189,8 +189,14 @@ impl Reading {
     /// `entry` must be an initialized `ShadaEntry` carrying a search
     /// pattern, whose pointer fields point at live data for the call.
     unsafe fn apply_search_pattern(&self, mut entry: ShadaEntry) {
+        // A key the file left out reads as `DEFAULT_SEARCH_PATTERN`'s: the
+        // parser fills those in, and a collector names every one of them, so
+        // in practice nothing here falls back -- the defaults are what say
+        // so.
         let pat = *entry.data.search_pattern_mut();
-        let is_sub = pat.is_substitute_pattern;
+        let default = DEFAULT_SEARCH_PATTERN;
+        let flag = |set: Option<bool>, d: Option<bool>| set.or(d).unwrap_or(false);
+        let is_sub = flag(pat.is_substitute_pattern, default.is_substitute_pattern);
         if !self.force {
             let mut current: SearchPattern = unsafe { core::mem::zeroed() };
             if is_sub {
@@ -205,17 +211,22 @@ impl Reading {
         }
 
         // The pattern takes the entry's string and extra data over.
+        let text = pat.pat.unwrap_or(String_0::NULL);
         let spat = SearchPattern {
-            pat: pat.pat.data(),
-            patlen: pat.pat.len(),
-            magic: pat.magic,
-            no_scs: !pat.smartcase,
+            pat: text.data(),
+            patlen: text.len(),
+            magic: flag(pat.magic, default.magic),
+            no_scs: !flag(pat.smartcase, default.smartcase),
             timestamp: entry.timestamp,
             off: SearchOffset {
-                dir: if pat.search_backward { b'?' } else { b'/' } as c_char,
-                line: pat.has_line_offset,
-                end: pat.place_cursor_at_end,
-                off: pat.offset as int64_t,
+                dir: if flag(pat.search_backward, default.search_backward) {
+                    b'?'
+                } else {
+                    b'/'
+                } as c_char,
+                line: flag(pat.has_line_offset, default.has_line_offset),
+                end: flag(pat.place_cursor_at_end, default.place_cursor_at_end),
+                off: pat.offset.or(default.offset).unwrap_or(0) as int64_t,
             },
             additional_data: entry.additional_data,
         };
@@ -224,9 +235,9 @@ impl Reading {
         } else {
             unsafe { set_search_pattern(spat) };
         }
-        if pat.is_last_used {
+        if flag(pat.is_last_used, default.is_last_used) {
             set_last_used_pattern(is_sub);
-            set_no_hlsearch(!pat.highlighted);
+            set_no_hlsearch(!flag(pat.highlighted, default.highlighted));
         }
     }
 
@@ -617,7 +628,11 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
         | ShadaEntryData::Jump(mark)
         | ShadaEntryData::LocalMark(mark)
         | ShadaEntryData::Change(mark) => unsafe { xfree(mark.fname.cast()) },
-        ShadaEntryData::SearchPattern(pattern) => unsafe { api_free_string(pattern.pat) },
+        ShadaEntryData::SearchPattern(pattern) => {
+            if let Some(pat) = pattern.pat {
+                unsafe { api_free_string(pat) };
+            }
+        }
         ShadaEntryData::Register(reg) => {
             for i in 0..reg.contents_size {
                 unsafe { api_free_string(*reg.contents.add(i)) };

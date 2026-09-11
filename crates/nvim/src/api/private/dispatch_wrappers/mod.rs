@@ -295,18 +295,18 @@ enum KeySetArg<K> {
 /// `get_field` must be `K`'s own generated field lookup: the decoder writes
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
-fn read_keydict<K>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
+fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
     let Object::Dict(dict) = item else {
         if !is_empty_array(item) {
             return KeySetArg::WrongType;
         }
-        // SAFETY: as below; an empty list sets no field.
-        return KeySetArg::Read(unsafe { core::mem::zeroed() });
+        // An empty list is an empty dict: it sets no key.
+        return KeySetArg::Read(K::default());
     };
-    // SAFETY: a keyset is a `repr(C)` struct of scalars, handles, `String`s
-    // and `Object`s, and all-zero is "unset" for every one of them --
-    // `Object`'s zero discriminant is `Object::Nil`.
-    let mut out: K = unsafe { core::mem::zeroed() };
+    // Every field of a keyset is an `Option`, and `Default` is every one of
+    // them `None`. Zeroing would be the *opposite* answer for the booleans:
+    // `Option<bool>` is niche-packed, so all-zero reads as `Some(false)`.
+    let mut out = K::default();
     // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
     // offsets it hands back are inside `out`.
     match unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) } {

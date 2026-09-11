@@ -17,7 +17,19 @@
 use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
-pub(super) const PART: [VimOption; 79] = [
+pub(super) const PART: [VimOption; 78] = [
+    // 'emoji'
+    VimOption {
+        fullname: name(c"emoji"),
+        shortname: name(c"emo"),
+        flags: kOptFlagRedrAll | kOptFlagUIOption,
+        scope_flags: GLOBAL,
+        scope_idx: scope_idx(kGlobalOptEmoji, kWinOptInvalid, kBufOptInvalid),
+        var: OptVar::Boolean(&p_emoji),
+        opt_did_set_cb: Some(did_set_emoji),
+        def_val: boolean(true),
+        ..BLANK
+    },
     // 'encoding'
     VimOption {
         fullname: name(c"encoding"),
@@ -938,35 +950,6 @@ pub(super) const PART: [VimOption; 79] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptJoinspaces, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Boolean(&p_js),
-        ..BLANK
-    },
-    // 'jumpoptions'
-    VimOption {
-        fullname: name(c"jumpoptions"),
-        shortname: name(c"jop"),
-        flags: kOptFlagOneComma | kOptFlagNoDup,
-        type_0: kOptValTypeString,
-        scope_flags: GLOBAL,
-        scope_idx: scope_idx(kGlobalOptJumpoptions, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_jop),
-        flags_var: Some(&jop_flags),
-        values: &opt_jop_values,
-        opt_did_set_cb: Some(did_set_str_generic),
-        opt_expand_cb: Some(expand_set_str_generic),
-        def_val: string(c"clean"),
-        ..BLANK
-    },
-    // 'keymap'
-    VimOption {
-        fullname: name(c"keymap"),
-        shortname: name(c"kmp"),
-        flags: kOptFlagRedrStat | kOptFlagRedrBuf | kOptFlagNFname | kOptFlagPriMkrc,
-        type_0: kOptValTypeString,
-        scope_flags: BUF,
-        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptKeymap),
-        var: OptVar::String(&p_keymap),
-        opt_did_set_cb: Some(did_set_keymap),
-        def_val: string(c""),
         ..BLANK
     },
 ];

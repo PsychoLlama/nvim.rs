@@ -24,9 +24,8 @@ use crate::types::{ApiDict, Arena, Error, KeyDict_get_highlight, KeyValuePair, N
 use crate::ui::ui_rgb_attached;
 
 use super::{
-    HexBuf, KEYSET_OPTIDX_get_highlight__create, KEYSET_OPTIDX_get_highlight__id,
-    KEYSET_OPTIDX_get_highlight__link, KEYSET_OPTIDX_get_highlight__name, coloridx_to_name, group,
-    highlight_num_groups, syn_check_group, syn_get_final_id, syn_name2id_len,
+    HexBuf, coloridx_to_name, group, highlight_num_groups, syn_check_group, syn_get_final_id,
+    syn_name2id_len,
 };
 
 /// The empty dict every "nothing to say" path answers.
@@ -35,15 +34,6 @@ const NO_DICT: ApiDict = ApiDict {
     capacity: 0,
     items: core::ptr::null_mut::<KeyValuePair>(),
 };
-
-/// Whether the caller set key `bit` of `Dict(get_highlight)`.
-///
-/// # Safety
-/// `opts` is a live keydict.
-unsafe fn has_key(opts: *mut KeyDict_get_highlight, bit: c_int) -> bool {
-    // SAFETY: the caller's keydict.
-    unsafe { (*opts).is_set__get_highlight_ & (1u64 << bit) != 0 }
-}
 
 /// Describes the group with id `hl_id`, as namespace `ns_id` sees it.
 ///
@@ -115,17 +105,12 @@ pub(crate) unsafe fn ns_get_hl_defs(
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     // SAFETY: the caller's keydict and arena.
-    let link =
-        !unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__link) } || unsafe { (*opts).link };
+    let link = unsafe { (*opts).link }.unwrap_or(true);
 
     let mut id = -1;
-    if unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__name) } {
-        let create = !unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__create) }
-            || unsafe { (*opts).create };
-        let (name, len) = (
-            unsafe { (*opts).name }.data(),
-            unsafe { (*opts).name }.len(),
-        );
+    if let Some(name) = unsafe { (*opts).name } {
+        let create = unsafe { (*opts).create }.unwrap_or(true);
+        let (name, len) = (name.data(), name.len());
         id = if create {
             unsafe { syn_check_group(name, len) }
         } else {
@@ -134,8 +119,8 @@ pub(crate) unsafe fn ns_get_hl_defs(
         if id == 0 && !create {
             return Ok(NO_DICT);
         }
-    } else if unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__id) } {
-        id = number_as_int(unsafe { (*opts).id });
+    } else if let Some(given) = unsafe { (*opts).id } {
+        id = number_as_int(given);
     }
 
     if id != -1 {

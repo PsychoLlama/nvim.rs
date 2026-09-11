@@ -139,19 +139,16 @@ unsafe fn parse_search_pattern(
             *error,
         );
         // The keyset may have been left holding a borrowed pattern.
-        it.pat = String_0::NULL;
+        it.pat = None;
         return Err(Malformed);
     }
-    if !has_key(
-        it.is_set___shada_search_pat_,
-        KEYSET_OPTIDX__shada_search_pat__sp,
-    ) {
+    let Some(pat) = it.pat else {
         malformed_entry(c"E575: Error while reading ShaDa file: search pattern entry at position %lu has no pattern", pos);
         return Err(Malformed);
-    }
+    };
     // The pattern still points into the entry's bytes; take a copy that
     // outlives them.
-    it.pat = unsafe { copy_string(it.pat, core::ptr::null_mut::<Arena>()) };
+    it.pat = Some(unsafe { copy_string(pat, core::ptr::null_mut::<Arena>()) });
     Ok(0)
 }
 
@@ -168,13 +165,7 @@ unsafe fn parse_mark(
     error: &mut *mut c_char,
 ) -> Result<uint32_t, Malformed> {
     let pos = header.fpos;
-    let mut it = KeyDict__shada_mark {
-        is_set___shada_mark_: 0,
-        n: 0,
-        l: 0,
-        c: 0,
-        f: String_0::NULL,
-    };
+    let mut it = KeyDict__shada_mark::default();
     if !cursor.keydict(
         (&raw mut it).cast::<c_void>(),
         Some(key_dict__shada_mark_get_field),
@@ -190,23 +181,24 @@ unsafe fn parse_mark(
     }
 
     let mark = unsafe { (*entry).data.filemark_mut() };
-    if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__n) {
+    if let Some(name) = it.n {
         if header.type_u64 == kSDItemJump as uint64_t
             || header.type_u64 == kSDItemChange as uint64_t
         {
             malformed_entry(c"E575: Error while reading ShaDa file: mark entry at position %lu has n key which is only valid for local and global mark entries", pos);
             return Err(Malformed);
         }
-        mark.name = it.n as c_char;
+        mark.name = name as c_char;
     }
-    if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__l) {
-        mark.mark.lnum = it.l as LineNr;
+    if let Some(lnum) = it.l {
+        mark.mark.lnum = lnum as LineNr;
     }
-    if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__c) {
-        mark.mark.col = it.c as ColNr;
+    if let Some(col) = it.c {
+        mark.mark.col = col as ColNr;
     }
-    if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__f) {
-        mark.fname = unsafe { xmemdupz(it.f.data().cast::<c_void>(), it.f.len()) }.cast::<c_char>();
+    if let Some(fname) = it.f {
+        mark.fname =
+            unsafe { xmemdupz(fname.data().cast::<c_void>(), fname.len()) }.cast::<c_char>();
     }
 
     if mark.fname.is_null() {
@@ -236,18 +228,7 @@ unsafe fn parse_register(
     extra: &mut AdditionalDataBuilder,
     error: &mut *mut c_char,
 ) -> Result<uint32_t, Malformed> {
-    let mut it = KeyDict__shada_register {
-        is_set___shada_register_: 0,
-        rc: StringArray {
-            size: 0,
-            capacity: 0,
-            items: core::ptr::null_mut(),
-        },
-        ru: false,
-        rt: 0,
-        n: 0,
-        rw: 0,
-    };
+    let mut it = KeyDict__shada_register::default();
     let ok = cursor.keydict(
         (&raw mut it).cast::<c_void>(),
         Some(key_dict__shada_register_get_field),
@@ -255,14 +236,11 @@ unsafe fn parse_register(
         error,
     );
     // The contents array is the keyset's own allocation either way.
-    let contents = core::mem::replace(
-        &mut it.rc,
-        StringArray {
-            size: 0,
-            capacity: 0,
-            items: core::ptr::null_mut(),
-        },
-    );
+    let contents = it.rc.take().unwrap_or(StringArray {
+        size: 0,
+        capacity: 0,
+        items: core::ptr::null_mut(),
+    });
     let lines = if contents.items.is_null() {
         &[][..]
     } else {
@@ -292,29 +270,17 @@ unsafe fn parse_register(
                     .write(copy_string(*line, core::ptr::null_mut::<Arena>()))
             };
         }
-        if has_key(
-            it.is_set___shada_register_,
-            KEYSET_OPTIDX__shada_register__ru,
-        ) {
-            reg.is_unnamed = it.ru;
+        if let Some(is_unnamed) = it.ru {
+            reg.is_unnamed = is_unnamed;
         }
-        if has_key(
-            it.is_set___shada_register_,
-            KEYSET_OPTIDX__shada_register__rt,
-        ) {
-            reg.type_0 = it.rt as uint8_t as MotionType;
+        if let Some(motion) = it.rt {
+            reg.type_0 = motion as uint8_t as MotionType;
         }
-        if has_key(
-            it.is_set___shada_register_,
-            KEYSET_OPTIDX__shada_register__n,
-        ) {
-            reg.name = it.n as c_char;
+        if let Some(name) = it.n {
+            reg.name = name as c_char;
         }
-        if has_key(
-            it.is_set___shada_register_,
-            KEYSET_OPTIDX__shada_register__rw,
-        ) {
-            reg.width = it.rw as size_t;
+        if let Some(width) = it.rw {
+            reg.width = width as size_t;
         }
         Ok(0)
     })();
@@ -479,12 +445,7 @@ unsafe fn parse_buffer_list(
         // Count it before it is filled in, so that a failure below still
         // frees what has been built.
         list.size += 1;
-        let mut it = KeyDict__shada_buflist_item {
-            is_set___shada_buflist_item_: 0,
-            l: 0,
-            c: 0,
-            f: String_0::NULL,
-        };
+        let mut it = KeyDict__shada_buflist_item::default();
         let mut item_extra = KV_INITIAL_VALUE;
         if !cursor.keydict(
             (&raw mut it).cast::<c_void>(),
@@ -499,24 +460,15 @@ unsafe fn parse_buffer_list(
         let e = unsafe { list.buffers.add(i) };
         unsafe { (*e).additional_data = item_extra.items.cast::<AdditionalData>() };
         unsafe { (*e).pos = DEFAULT_POS };
-        if has_key(
-            it.is_set___shada_buflist_item_,
-            KEYSET_OPTIDX__shada_buflist_item__l,
-        ) {
-            unsafe { (*e).pos.lnum = it.l as LineNr };
+        if let Some(lnum) = it.l {
+            unsafe { (*e).pos.lnum = lnum as LineNr };
         }
-        if has_key(
-            it.is_set___shada_buflist_item_,
-            KEYSET_OPTIDX__shada_buflist_item__c,
-        ) {
-            unsafe { (*e).pos.col = it.c as ColNr };
+        if let Some(col) = it.c {
+            unsafe { (*e).pos.col = col as ColNr };
         }
-        if has_key(
-            it.is_set___shada_buflist_item_,
-            KEYSET_OPTIDX__shada_buflist_item__f,
-        ) {
+        if let Some(fname) = it.f {
             unsafe {
-                (*e).fname = xmemdupz(it.f.data().cast::<c_void>(), it.f.len()).cast::<c_char>()
+                (*e).fname = xmemdupz(fname.data().cast::<c_void>(), fname.len()).cast::<c_char>()
             };
         }
 
@@ -535,9 +487,4 @@ unsafe fn parse_buffer_list(
         }
     }
     Ok(0)
-}
-
-/// Whether an optional keyset key was present in the map.
-fn has_key(is_set: OptionalKeys, index: c_int) -> bool {
-    is_set & (1 << index) != 0
 }

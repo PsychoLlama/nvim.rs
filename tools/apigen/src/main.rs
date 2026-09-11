@@ -329,9 +329,6 @@ struct Keyset {
     name: String,
     /// In table order, which is not declaration order — see [`table_order`].
     keys: Vec<Key>,
-    /// The keyset leads with an `is_set__<name>_` mask, so each key gets an
-    /// `opt_index` naming its bit.
-    has_optional: bool,
 }
 
 impl Keyset {
@@ -347,6 +344,22 @@ impl Keyset {
 fn type_name(ty: &syn::Type) -> Option<String> {
     match ty {
         syn::Type::Path(p) => Some(p.path.segments.last()?.ident.to_string()),
+        _ => None,
+    }
+}
+
+/// For `Option<T>`, the name of `T`.
+fn option_inner(ty: &syn::Type) -> Option<String> {
+    let syn::Type::Path(p) = ty else { return None };
+    let last = p.path.segments.last()?;
+    if last.ident != "Option" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    match args.args.first()? {
+        syn::GenericArgument::Type(inner) => type_name(inner),
         _ => None,
     }
 }
@@ -651,9 +664,13 @@ fn wire_key_override(attrs: &[syn::Attribute]) -> Option<String> {
 }
 
 /// Read the keysets out of their canonical module. The struct definitions are
-/// the source of truth: declaration order fixes the table order and hence
-/// every key's `opt_index`, the field type fixes the tag, and a wire name that
-/// differs from the Rust field name is recorded in a doc comment there.
+/// the source of truth: declaration order fixes the table order, the field
+/// type fixes the tag, and a wire name that differs from the Rust field name
+/// is recorded in a doc comment there.
+///
+/// Every field is an `Option<T>` -- `None` is the key the caller did not
+/// name -- and a field that is not is an error here rather than a keyset
+/// whose "unset" nobody can spell.
 fn collect_keysets(root: &Path) -> Result<Vec<Keyset>, String> {
     let path = root.join("src/types/keysets.rs");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -670,24 +687,15 @@ fn collect_keysets(root: &Path) -> Result<Vec<Keyset>, String> {
             continue;
         };
         let mut keys = Vec::new();
-        let mut has_optional = false;
-        for (i, field) in s.fields.iter().enumerate() {
+        for field in &s.fields {
             let field_name = field
                 .ident
                 .as_ref()
                 .ok_or_else(|| format!("KeyDict_{name}: tuple struct"))?
                 .to_string();
-            let ty = type_name(&field.ty)
-                .ok_or_else(|| format!("KeyDict_{name}.{field_name}: unreadable type"))?;
-            if field_name == format!("is_set__{name}_") {
-                if i != 0 || ty != "OptionalKeys" {
-                    return Err(format!(
-                        "KeyDict_{name}: is_set__{name}_ must come first and be an OptionalKeys"
-                    ));
-                }
-                has_optional = true;
-                continue;
-            }
+            let ty = option_inner(&field.ty).ok_or_else(|| {
+                format!("KeyDict_{name}.{field_name}: every keyset field must be an `Option<T>`")
+            })?;
             let (tag, is_hlgroup) = key_tag(&ty)
                 .ok_or_else(|| format!("KeyDict_{name}.{field_name}: unmapped type `{ty}`"))?;
             keys.push(Key {
@@ -703,11 +711,7 @@ fn collect_keysets(root: &Path) -> Result<Vec<Keyset>, String> {
             .into_iter()
             .map(|i| ordered[i].take().expect("each key placed once"))
             .collect();
-        out.push(Keyset {
-            name,
-            keys,
-            has_optional,
-        });
+        out.push(Keyset { name, keys });
     }
     Ok(out)
 }
@@ -719,9 +723,9 @@ fn collect_keysets(root: &Path) -> Result<Vec<Keyset>, String> {
 /// table out bucket by bucket so a lookup could jump straight to a short run.
 /// The lookup here is a plain `match` on the key bytes instead (see the
 /// generated module's header), but the layout has to survive: a key's position
-/// is its `opt_index`, the bit it owns in the keyset's `is_set__*_` mask, and
-/// call sites all over the crate test those bits by number. The same is true
-/// of the handler table, whose indices `eval/funcs/` has baked in.
+/// the layout has to survive: the handler table's indices are baked into
+/// `eval/funcs/`, and a keyset table's order is what a client sees when a
+/// keyset comes back out as a dictionary.
 ///
 /// Returns the permutation: `result[i]` is the index in `names` of the key
 /// that belongs at position `i`.
@@ -1311,7 +1315,7 @@ fn child_header(module: &str, part: usize, parts: usize) -> String {
 /// Wrapper lines one child module may hold, leaving room under the ratchet's
 /// 1,000-line file cap for the nine-line header. Counted on formatted text,
 /// so `run`'s recheck is a backstop rather than the real guard.
-const CHUNK_BUDGET: usize = 985;
+const CHUNK_BUDGET: usize = 975;
 
 /// One file of the generated module directory.
 struct Emitted {
@@ -1496,18 +1500,18 @@ enum KeySetArg<K> {
 /// `get_field` must be `K`'s own generated field lookup: the decoder writes
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
-fn read_keydict<K>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
+fn read_keydict<K: Default>(get_field: FieldHashfn, item: Object) -> KeySetArg<K> {
     let Object::Dict(dict) = item else {
         if !is_empty_array(item) {
             return KeySetArg::WrongType;
         }
-        // SAFETY: as below; an empty list sets no field.
-        return KeySetArg::Read(unsafe { core::mem::zeroed() });
+        // An empty list is an empty dict: it sets no key.
+        return KeySetArg::Read(K::default());
     };
-    // SAFETY: a keyset is a `repr(C)` struct of scalars, handles, `String`s
-    // and `Object`s, and all-zero is "unset" for every one of them --
-    // `Object`'s zero discriminant is `Object::Nil`.
-    let mut out: K = unsafe { core::mem::zeroed() };
+    // Every field of a keyset is an `Option`, and `Default` is every one of
+    // them `None`. Zeroing would be the *opposite* answer for the booleans:
+    // `Option<bool>` is niche-packed, so all-zero reads as `Some(false)`.
+    let mut out = K::default();
     // SAFETY: `get_field` is `K`'s own lookup, per the contract above, so the
     // offsets it hands back are inside `out`.
     match unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) } {
@@ -1863,8 +1867,8 @@ const TABLES_HEADER: &str = r#"//! The msgpack-RPC dispatch tables.
 //! than a table plus a switch plus a loop.
 //!
 //! What did survive from `hashy` is the *table order*, because it is not an
-//! implementation detail: a key's row index is its `opt_index`, the bit it
-//! owns in its keyset's `is_set__*_` mask, and a method's row index is what
+//! implementation detail: it is the order a keyset comes back out in when it
+//! is converted to a dictionary, and a method's row index is what
 //! `eval/funcs/` stores to bind the builtin `nvim_*()` Vimscript functions.
 //! `tools/apigen`'s `table_order` reproduces the layout upstream's hash
 //! implied.
@@ -1901,27 +1905,24 @@ fn tables_child_header(what: &str, body: &str) -> String {
 /// Shared support for the tables. `key`/`hl_key`/`END` build the rows;
 /// `key_bytes` is how every lookup gets at the bytes it was handed.
 const TABLES_SUPPORT: &str = r#"
-/// One row of a keyset table: the key's name, the offset of the field its
-/// value lands in, the tag that value must arrive as, and the bit it owns in
-/// the keyset's `is_set__*_` mask (-1 when the keyset has no mask).
-const fn key(name: &'static CStr, ptr_off: usize, type_0: c_int, opt_index: c_int) -> KeySetLink {
+/// One row of a keyset table: the key's name, the offset of the `Option`
+/// field its value lands in, and the tag that value must arrive as.
+const fn key(name: &'static CStr, ptr_off: usize, type_0: c_int) -> KeySetLink {
     KeySetLink {
         str: name.as_ptr().cast_mut(),
         ptr_off,
         type_0,
-        opt_index,
         is_hlgroup: false,
     }
 }
 
 /// A row whose value names a highlight group. It arrives as a String and is
 /// stored as the id the converter resolves it to, so its tag is an Integer.
-const fn hl_key(name: &'static CStr, ptr_off: usize, opt_index: c_int) -> KeySetLink {
+const fn hl_key(name: &'static CStr, ptr_off: usize) -> KeySetLink {
     KeySetLink {
         str: name.as_ptr().cast_mut(),
         ptr_off,
         type_0: TAG_INTEGER,
-        opt_index,
         is_hlgroup: true,
     }
 }
@@ -1932,7 +1933,6 @@ const END: KeySetLink = KeySetLink {
     str: ptr::null_mut(),
     ptr_off: 0,
     type_0: TAG_NIL,
-    opt_index: -1,
     is_hlgroup: false,
 };
 
@@ -2044,16 +2044,15 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
         writeln!(out, "    type K = KeyDict_{name};").unwrap();
     }
     writeln!(out, "    [").unwrap();
-    for (i, key) in k.keys.iter().enumerate() {
-        let opt_index: i64 = if k.has_optional { i as i64 + 1 } else { -1 };
+    for key in &k.keys {
         let (ctor, tag) = if key.is_hlgroup {
             ("hl_key", String::new())
         } else {
-            ("key", format!("{}, ", key.tag))
+            ("key", format!(", {}", key.tag))
         };
         writeln!(
             out,
-            "        {ctor}(c\"{}\", offset_of!(K, {}), {tag}{opt_index}),",
+            "        {ctor}(c\"{}\", offset_of!(K, {}){tag}),",
             key.wire, key.field
         )
         .unwrap();
@@ -2455,9 +2454,8 @@ type Convert = unsafe fn(*mut lua_State, &mut Call) -> Result<(), Error>;
 /// `GET_FIELD` must be `Self`'s own field lookup and [`table`](Self::table)
 /// answer `Self`'s own key table: the decoder writes through the offsets the
 /// first hands back and the release walks the second, so either one belonging
-/// to a different keyset would read and write outside `Self`. All zeroes must
-/// be a valid `Self`, which is how a keyset argument starts out.
-unsafe trait KeySet: Sized {
+/// to a different keyset would read and write outside `Self`.
+unsafe trait KeySet: Sized + Default {
     const GET_FIELD: FieldHashfn;
 
     fn table() -> *const KeySetLink;
@@ -2476,10 +2474,10 @@ struct KeyDictArg<K: KeySet> {
 }
 
 impl<K: KeySet> KeyDictArg<K> {
-    fn zeroed() -> Self {
-        // SAFETY: all zeroes is a valid `K`, per `KeySet`'s contract.
+    /// Every key absent, which is where a keyset argument starts out.
+    fn unset() -> Self {
         KeyDictArg {
-            dict: unsafe { core::mem::zeroed() },
+            dict: K::default(),
         }
     }
 }
@@ -2908,8 +2906,8 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         writeln!(out, "        }}").unwrap();
     }
 
-    // The Lua stack hands the arguments back last first. A keyset is zeroed
-    // and armed before its pop, which fills it field by field and may stop
+    // The Lua stack hands the arguments back last first. A keyset starts out
+    // with every key unset and is armed before its pop, which fills it field by field and may stop
     // halfway; everything else arms only once its pop has succeeded, which
     // is what leaves a failed conversion owning nothing. Both orders put the
     // guards on the stack highest slot first, so they drop lowest slot first
@@ -2919,7 +2917,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
         if let ApiType::KeyDict(keyset) = ty {
             writeln!(
                 out,
-                "        let mut arg_{slot} = KeyDictArg::<KeyDict_{keyset}>::zeroed();"
+                "        let mut arg_{slot} = KeyDictArg::<KeyDict_{keyset}>::unset();"
             )
             .unwrap();
             writeln!(out, "        // SAFETY: as above.").unwrap();
@@ -3249,8 +3247,7 @@ fn generate_lua(
         writeln!(
             impls,
             "\n// SAFETY: `{keyset}_table` and `key_dict_{keyset}_get_field` are the\n\
-             // generated table and lookup for `KeyDict_{keyset}`, which is all integers\n\
-             // and pointers, so all zeroes is one.\n\
+             // generated table and lookup for `KeyDict_{keyset}`.\n\
              unsafe impl KeySet for KeyDict_{keyset} {{\n\
              \x20   const GET_FIELD: FieldHashfn = Some(key_dict_{keyset}_get_field);\n\
              \n\

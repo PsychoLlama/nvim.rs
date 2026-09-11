@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, dict_put, dict_put_str, has_key};
+use crate::api::private::helpers::{Reported, array_add, dict_put, dict_put_str};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_conflict, err_expected};
 use crate::api_error;
 use crate::cstr;
@@ -58,7 +58,7 @@ pub unsafe fn nvim_get_autocmds(
     let mut check_event: bool = false;
     let mut group: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     '_cleanup: {
-        match opts.group {
+        match opts.group.unwrap_or(Object::Nil) {
             Object::Nil => {}
             Object::String(group_name) => {
                 group = unsafe { augroup_find(group_name.data()) };
@@ -84,24 +84,18 @@ pub unsafe fn nvim_get_autocmds(
             _ => {
                 if true {
                     let want = c"String or Integer";
-                    let got = api_typename(opts.group.kind());
+                    let got = api_typename(opts.group.unwrap_or(Object::Nil).kind());
                     error = err_expected(c"group", want, Some(got));
                     break '_cleanup;
                 }
             }
         }
-        id = if has_key(opts.is_set__get_autocmds_, KEYSET_OPTIDX_get_autocmds__id) {
-            opts.id as ::core::ffi::c_int
-        } else {
-            -1 as ::core::ffi::c_int
-        };
+        id = opts
+            .id
+            .map_or(-1 as ::core::ffi::c_int, |id| id as ::core::ffi::c_int);
         's_299: {
-            if has_key(
-                opts.is_set__get_autocmds_,
-                KEYSET_OPTIDX_get_autocmds__event,
-            ) {
+            if let Some(v) = opts.event {
                 check_event = true;
-                let v: Object = opts.event;
                 if let Object::String(event_name) = v {
                     let Some(event_nr) = (unsafe { event_name2nr_str(event_name) }) else {
                         // SAFETY: the value the keyset carried, live for this call.
@@ -138,30 +132,16 @@ pub unsafe fn nvim_get_autocmds(
                 }
             }
         }
-        has_buf = has_key(opts.is_set__get_autocmds_, KEYSET_OPTIDX_get_autocmds__buf)
-            || has_key(
-                opts.is_set__get_autocmds_,
-                KEYSET_OPTIDX_get_autocmds__buffer,
-            );
-        buf = if has_key(opts.is_set__get_autocmds_, KEYSET_OPTIDX_get_autocmds__buf) {
-            opts.buf
-        } else {
-            opts.buffer
-        };
-        if !(!(has_key(opts.is_set__get_autocmds_, 2 as ::core::ffi::c_int))
-            || !(has_key(opts.is_set__get_autocmds_, 5 as ::core::ffi::c_int)))
-        {
+        has_buf = opts.buf.is_some() || opts.buffer.is_some();
+        buf = opts.buf.or(opts.buffer).unwrap_or(Object::Nil);
+        if opts.buf.is_some() && opts.buffer.is_some() {
             error = err_conflict(c"buf", c"buffer");
-        } else if !(!(has_key(opts.is_set__get_autocmds_, 6 as ::core::ffi::c_int)) || !has_buf) {
+        } else if opts.pattern.is_some() && has_buf {
             error = err_conflict(c"pattern", c"buf");
         } else {
             pattern_filter_count = 0 as ::core::ffi::c_int;
             's_506: {
-                if has_key(
-                    opts.is_set__get_autocmds_,
-                    KEYSET_OPTIDX_get_autocmds__pattern,
-                ) {
-                    let v_0: Object = opts.pattern;
+                if let Some(v_0) = opts.pattern {
                     if let Object::String(pattern) = v_0 {
                         pattern_filters[pattern_filter_count as usize] = pattern.data();
                         pattern_filter_count += 1 as ::core::ffi::c_int;

@@ -936,6 +936,34 @@ impl<'w> Emitter<'w> {
     }
 
     /// Convert a syn type to a CTy, enqueueing referenced named types.
+    /// Whether `Option<T>` has `T`'s own image: only a function pointer and
+    /// a `NonNull<T>` promise the niche that makes it so, plus any alias or
+    /// `repr(transparent)` newtype over one of those.
+    fn option_is_transparent(&self, file: &str, inner: &syn::Type, depth: u32) -> bool {
+        if depth > 8 {
+            return false;
+        }
+        match inner {
+            syn::Type::BareFn(_) => true,
+            syn::Type::Path(tp) => {
+                let Some(seg) = tp.path.segments.last() else {
+                    return false;
+                };
+                if seg.ident == "NonNull" {
+                    return true;
+                }
+                let name = seg.ident.to_string();
+                match self.resolve(file, &name).map(|def| def.kind) {
+                    Some(Kind::Alias(aliased)) => {
+                        self.option_is_transparent(file, &aliased, depth + 1)
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
     fn cty(&mut self, file: &str, ty: &syn::Type) -> Option<CTy> {
         match ty {
             syn::Type::Path(tp) => {
@@ -947,20 +975,33 @@ impl<'w> Emitter<'w> {
                 {
                     return Some(CTy::Named { name, konst: false });
                 }
-                if name == "Option"
-                    || name == "GlobalCell"
-                    || name == "SharedCell"
-                    || name == "ManuallyDrop"
-                {
-                    // Option<extern "C" fn ...> / GlobalCell<T> /
-                    // ManuallyDrop<T>: unwrap. All three are
-                    // `repr(transparent)` over the thing the C sees, and
-                    // the last of them is how a typval says the compiler
-                    // must not drop its payload.
+                if name == "GlobalCell" || name == "SharedCell" || name == "ManuallyDrop" {
+                    // All three are `repr(transparent)` over the thing the C
+                    // sees, and the last of them is how a typval says the
+                    // compiler must not drop its payload.
                     if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
                         if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
                             let t = t.clone();
                             return self.cty(file, &t);
+                        }
+                    }
+                    return None;
+                }
+                if name == "Option" {
+                    // `Option<T>` is `T`'s own image **only** where `T`
+                    // carries a niche the `None` fits in: a function pointer
+                    // and `NonNull<T>` do, and nothing else here is promised
+                    // to. `Option<Integer>` is sixteen bytes where `Integer`
+                    // is eight and `Option<bool>` reads `Some(false)` for
+                    // C's zero, so a keyset whose fields are optional has no
+                    // C image at all -- it goes opaque, which is what says
+                    // so.
+                    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+                        if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
+                            let t = t.clone();
+                            if self.option_is_transparent(file, &t, 0) {
+                                return self.cty(file, &t);
+                            }
                         }
                     }
                     return None;

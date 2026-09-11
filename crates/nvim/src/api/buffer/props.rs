@@ -203,8 +203,8 @@ pub unsafe fn nvim_buf_delete(
 ) -> Result<(), Error> {
     let mut error = Error::none();
     let b = find_buffer_by_handle(buf)?.expect("a resolved handle names a live buffer");
-    let force: bool = unsafe { (*opts).force };
-    let unload: bool = unsafe { (*opts).unload };
+    let force: bool = unsafe { (*opts).force }.unwrap_or(false);
+    let unload: bool = unsafe { (*opts).unload }.unwrap_or(false);
     let result: Result<(), Failed> = do_buffer(
         if ::core::ffi::c_int::from(unload) != 0 {
             DOBUF_UNLOAD.cast_signed()

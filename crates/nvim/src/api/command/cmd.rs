@@ -36,7 +36,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{array_add, has_key};
+use crate::api::private::helpers::array_add;
 use crate::api::private::validate::{err_bad_value, err_expected, err_required};
 use crate::api_error;
 use crate::cstr;
@@ -77,11 +77,9 @@ fn err_expected_at(name: &CStr, expected: &CStr, actual: *const c_char) -> Error
 /// `get_field` must be `K`'s own generated field lookup: the decoder writes
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
-fn sub_keyset<K>(dict: ApiDict, get_field: FieldHashfn) -> Result<K, Error> {
-    // SAFETY: every keydict is a plain C aggregate whose all-zero state is
-    // "no key set" -- which is what the decoder expects to start from -- and
-    // `get_field` is `K`'s own lookup, per the contract above.
-    let mut out: K = unsafe { ::core::mem::zeroed() };
+fn sub_keyset<K: Default>(dict: ApiDict, get_field: FieldHashfn) -> Result<K, Error> {
+    // Every key unset, which is what the decoder expects to start from.
+    let mut out = K::default();
     // SAFETY: as above.
     unsafe { api_dict_to_keydict((&raw mut out).cast(), get_field, dict) }?;
     Ok(out)
@@ -103,6 +101,7 @@ pub unsafe fn nvim_cmd(
     // keeps them alive across the call; neither is reachable from anything
     // this function runs, so a shared borrow of each holds throughout.
     let (cmd, opts) = unsafe { (&*cmd, &*opts) };
+    let output = opts.output.unwrap_or(false);
 
     // SAFETY: `ExArg` and `CmdParseInfo` are plain C aggregates whose
     // all-zero state is the valid "nothing parsed yet" one; the C original
@@ -121,7 +120,7 @@ pub unsafe fn nvim_cmd(
         .and_then(|prepared| match prepared {
             // SAFETY: `prepare_cmd` answering true means `ea`/`cmdinfo`
             // describe a resolved, validated command.
-            true => unsafe { run_cmd(channel_id, &mut ea, &mut cmdinfo, opts.output, arena) },
+            true => unsafe { run_cmd(channel_id, &mut ea, &mut cmdinfo, output, arena) },
             false => Ok(String_0::NULL),
         });
 
@@ -160,8 +159,8 @@ unsafe fn prepare_cmd(
 
     let mut args = EMPTY_ARRAY;
     let mut count_from_first_arg = false;
-    if has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__args) {
-        count_from_first_arg = unsafe { collect_args(cmd, ea, &mut args, arena) }?;
+    if let Some(given) = cmd.args {
+        count_from_first_arg = unsafe { collect_args(given, ea, &mut args, arena) }?;
     }
 
     if !range_only {
@@ -214,14 +213,14 @@ unsafe fn resolve_command(
     ea: &mut ExArg,
     arena: *mut Arena,
 ) -> Result<Option<bool>, Error> {
-    if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__cmd) {
+    let Some(name) = cmd.cmd else {
         return Err(err_required(c"cmd"));
-    }
+    };
 
-    // SAFETY: the key is set, so `cmd.cmd` is a NUL-terminated keydict String.
-    let named = unsafe { *cmd.cmd.data() } as c_int != NUL;
-    let has_range = has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__range) && cmd.range.size > 0;
-    let has_mods = has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__mods);
+    // SAFETY: the key is set, so `name` is a NUL-terminated keydict String.
+    let named = unsafe { *name.data() } as c_int != NUL;
+    let has_range = cmd.range.is_some_and(|range| range.size > 0);
+    let has_mods = cmd.mods.is_some();
 
     if !named && !has_range && !has_mods {
         return Err(err_expected_at(c"cmd", c"non-empty String", ptr::null()));
@@ -229,7 +228,7 @@ unsafe fn resolve_command(
 
     // SAFETY: `arena` is the caller's; `find_ex_command` reads `ea.cmd`,
     // which the arena copy keeps alive for the whole call.
-    let cmdname = unsafe { arena_string(arena, cmd.cmd) }.data();
+    let cmdname = unsafe { arena_string(arena, name) }.data();
     ea.cmd = cmdname;
     let mut p = unsafe { find_ex_command(ea, ptr::null_mut()) };
 
@@ -242,7 +241,7 @@ unsafe fn resolve_command(
     {
         // SAFETY: as above.
         unsafe {
-            p = arena_string(arena, cmd.cmd).data();
+            p = arena_string(arena, name).data();
             let ret = apply_autocmds(AutoEvent::CmdUndefined, p, p, true, None);
             p = if ret as c_int != 0 && !aborting() {
                 find_ex_command(ea, ptr::null_mut())
@@ -321,16 +320,16 @@ unsafe fn resolve_command(
 /// `arena` must point at a live arena, which the memory this answers with is
 /// taken from and must outlive.
 unsafe fn collect_args(
-    cmd: &KeyDict_cmd,
+    given: Array,
     ea: &mut ExArg,
     args: &mut Array,
     arena: *mut Arena,
 ) -> Result<bool, Error> {
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
-    if cmd.args.size == 1 && ea.argt.has(ExArgt::COUNT) && !ea.argt.has(ExArgt::EXTRA) {
+    if given.size == 1 && ea.argt.has(ExArgt::COUNT) && !ea.argt.has(ExArgt::EXTRA) {
         // SAFETY: the size is 1, so item 0 is in bounds.
-        let first = unsafe { *cmd.args.items };
+        let first = unsafe { *given.items };
         let count = match first {
             Object::Integer(n) => Some(n as int64_t),
             Object::String(str) => {
@@ -355,10 +354,10 @@ unsafe fn collect_args(
         }
     }
 
-    *args = arena_array(arena, cmd.args.size);
-    for i in 0..cmd.args.size {
+    *args = arena_array(arena, given.size);
+    for i in 0..given.size {
         // SAFETY: `i` is in bounds.
-        let elem: Object = unsafe { *cmd.args.items.add(i) };
+        let elem: Object = unsafe { *given.items.add(i) };
         match elem {
             // A boolean argument is spelled to the command as "0" or "1".
             // SAFETY: `arena_alloc` hands back a block of the size asked for.
@@ -413,15 +412,14 @@ unsafe fn collect_args(
 
 /// Apply `cmd.range`, then fall back to the command's default range.
 fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
-    if has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__range) {
+    if let Some(range) = cmd.range {
         if !ea.argt.has(ExArgt::RANGE) {
             return Err(err_cannot_accept(c"range", cmd));
         }
-        if cmd.range.size > 2 {
+        if range.size > 2 {
             return Err(err_expected_at(c"range", c"<=2 elements", ptr::null()));
         }
 
-        let range = cmd.range;
         ea.addr_count = range.size as c_int;
         for i in 0..range.size {
             // SAFETY: `i` is in bounds.
@@ -474,9 +472,9 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
 
 /// Apply `cmd.count`.
 fn apply_count(cmd: &KeyDict_cmd, ea: &mut ExArg, count_from_first_arg: bool) -> Result<(), Error> {
-    if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__count) {
+    let Some(count) = cmd.count else {
         return Ok(());
-    }
+    };
     if count_from_first_arg {
         let why = c"Cannot specify both 'count' and numeric argument";
         return Err(Error::validation(why));
@@ -484,7 +482,7 @@ fn apply_count(cmd: &KeyDict_cmd, ea: &mut ExArg, count_from_first_arg: bool) ->
     if !ea.argt.has(ExArgt::COUNT) {
         return Err(err_cannot_accept(c"count", cmd));
     }
-    if cmd.count < 0 as Integer {
+    if count < 0 as Integer {
         return Err(err_expected_at(
             c"count",
             c"non-negative Integer",
@@ -493,24 +491,24 @@ fn apply_count(cmd: &KeyDict_cmd, ea: &mut ExArg, count_from_first_arg: bool) ->
     }
     // SAFETY: `ea` is resolved; `set_cmd_count` only writes its address
     // fields.
-    unsafe { set_cmd_count(ea, cmd.count as LineNr, true) };
+    unsafe { set_cmd_count(ea, count as LineNr, true) };
     Ok(())
 }
 
 /// Apply `cmd.reg`.
 fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
-    if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__reg) {
+    let Some(reg) = cmd.reg else {
         return Ok(());
-    }
+    };
     if !ea.argt.has(ExArgt::REGSTR) {
         return Err(err_cannot_accept(c"register", cmd));
     }
-    if cmd.reg.len() != 1 {
-        return Err(err_expected_at(c"reg", c"single character", cmd.reg.data()));
+    if reg.len() != 1 {
+        return Err(err_expected_at(c"reg", c"single character", reg.data()));
     }
 
     // SAFETY: the size is 1, so byte 0 is in bounds.
-    let regname = unsafe { *cmd.reg.data() };
+    let regname = unsafe { *reg.data() };
     if regname as c_int == '=' as c_int {
         return Err(Error::validation(c"Cannot use register \"="));
     }
@@ -532,7 +530,7 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
 
 /// Apply `cmd.bang`.
 fn apply_bang(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
-    ea.forceit = cmd.bang as c_int;
+    ea.forceit = c_int::from(cmd.bang.unwrap_or(false));
     if ea.forceit != 0 && !ea.argt.has(ExArgt::BANG) {
         return Err(err_cannot_accept(c"bang", cmd));
     }
@@ -544,7 +542,7 @@ fn apply_bang(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
 fn err_cannot_accept(what: &CStr, cmd: &KeyDict_cmd) -> Error {
     let what = msg_cstr(what);
     // SAFETY: `cmd.cmd` names its own NUL-terminated bytes.
-    let name = unsafe { c_str(cmd.cmd.data()) };
+    let name = unsafe { c_str(cmd.cmd.unwrap_or(String_0::NULL).data()) };
     api_error!(kErrorTypeValidation, "Command cannot accept {what}: {name}")
 }
 
@@ -553,25 +551,17 @@ fn apply_magic(cmd: &KeyDict_cmd, ea: &mut ExArg, cmdinfo: &mut CmdParseInfo) ->
     let argt_file = ea.argt.has(ExArgt::XFILE);
     let argt_bar = ea.argt.has(ExArgt::TRLBAR);
 
-    if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__magic) {
+    let Some(given) = cmd.magic else {
         cmdinfo.magic.file = argt_file;
         cmdinfo.magic.bar = argt_bar;
         return Ok(());
-    }
+    };
 
     let get_field = Some(key_dict_cmd_magic_get_field as _);
-    let magic = sub_keyset::<KeyDict_cmd_magic>(cmd.magic, get_field)?;
+    let magic = sub_keyset::<KeyDict_cmd_magic>(given, get_field)?;
 
-    cmdinfo.magic.file = if has_key(magic.is_set__cmd_magic_, KEYSET_OPTIDX_cmd_magic__file) {
-        magic.file
-    } else {
-        argt_file
-    };
-    cmdinfo.magic.bar = if has_key(magic.is_set__cmd_magic_, KEYSET_OPTIDX_cmd_magic__bar) {
-        magic.bar
-    } else {
-        argt_bar
-    };
+    cmdinfo.magic.file = magic.file.unwrap_or(argt_file);
+    cmdinfo.magic.bar = magic.bar.unwrap_or(argt_bar);
 
     // `magic.file` overrides `XFILE` for the expansion `execute_cmd` does.
     if cmdinfo.magic.file {
@@ -584,36 +574,36 @@ fn apply_magic(cmd: &KeyDict_cmd, ea: &mut ExArg, cmdinfo: &mut CmdParseInfo) ->
 
 /// Unpack the `mods` sub-keyset into `cmdinfo.cmdmod`.
 fn apply_mods(cmd: &KeyDict_cmd, ea: &ExArg, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
-    if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__mods) {
+    let Some(given) = cmd.mods else {
         return Ok(());
-    }
+    };
 
     let get_field = Some(key_dict_cmd_mods_get_field as _);
-    let mods = sub_keyset::<KeyDict_cmd_mods>(cmd.mods, get_field)?;
+    let mods = sub_keyset::<KeyDict_cmd_mods>(given, get_field)?;
     let mods = &mods;
 
-    if has_key(mods.is_set__cmd_mods_, KEYSET_OPTIDX_cmd_mods__filter) {
+    if mods.filter.is_some() {
         apply_filter_mod(mods, cmdinfo)?;
     }
 
     // Saturating: both are caller Integers, so INT_MAX would otherwise end
     // the process here. C wraps.
-    if has_key(mods.is_set__cmd_mods_, KEYSET_OPTIDX_cmd_mods__tab) && mods.tab >= 0 {
-        cmdinfo.cmdmod.cmod_tab = (mods.tab as c_int).saturating_add(1);
+    if let Some(tab) = mods.tab.filter(|&tab| tab >= 0) {
+        cmdinfo.cmdmod.cmod_tab = (tab as c_int).saturating_add(1);
     }
-    if has_key(mods.is_set__cmd_mods_, KEYSET_OPTIDX_cmd_mods__verbose) && mods.verbose >= 0 {
-        cmdinfo.cmdmod.cmod_verbose = (mods.verbose as c_int).saturating_add(1);
+    if let Some(verbose) = mods.verbose.filter(|&verbose| verbose >= 0) {
+        cmdinfo.cmdmod.cmod_verbose = (verbose as c_int).saturating_add(1);
     }
 
-    if mods.vertical {
+    if mods.vertical.unwrap_or(false) {
         cmdinfo.cmdmod.cmod_split |= WSP_VERT as c_int;
     }
-    if mods.horizontal {
+    if mods.horizontal.unwrap_or(false) {
         cmdinfo.cmdmod.cmod_split |= WSP_HOR as c_int;
     }
-    if has_key(mods.is_set__cmd_mods_, KEYSET_OPTIDX_cmd_mods__split) {
+    if let Some(named) = mods.split {
         // SAFETY: `mods.split` is a NUL-terminated keydict String.
-        let split = unsafe { CStr::from_ptr(mods.split.data()) };
+        let split = unsafe { CStr::from_ptr(named.data()) };
         match split_direction(split) {
             Some(Some(bit)) => cmdinfo.cmdmod.cmod_split |= bit,
             // The empty string is "no direction", not a bad one.
@@ -638,7 +628,7 @@ fn apply_mods(cmd: &KeyDict_cmd, ea: &ExArg, cmdinfo: &mut CmdParseInfo) -> Resu
         (mods.lockmarks, CmdModFlags::LOCKMARKS),
         (mods.noswapfile, CmdModFlags::NOSWAPFILE),
     ] {
-        if set {
+        if set.unwrap_or(false) {
             cmdinfo.cmdmod.cmod_flags |= bit;
         }
     }
@@ -672,23 +662,19 @@ fn split_direction(name: &CStr) -> Option<Option<c_int>> {
 /// Unpack `mods.filter` and compile its pattern.
 fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
     let get_field = Some(key_dict_cmd_mods_filter_get_field as _);
-    let filter = sub_keyset::<KeyDict_cmd_mods_filter>(mods.filter, get_field)?;
-    if !has_key(
-        filter.is_set__cmd_mods_filter_,
-        KEYSET_OPTIDX_cmd_mods_filter__pattern,
-    ) {
+    let filter =
+        sub_keyset::<KeyDict_cmd_mods_filter>(mods.filter.unwrap_or(ApiDict::EMPTY), get_field)?;
+    let Some(pattern) = filter.pattern else {
         return Ok(());
-    }
+    };
 
-    cmdinfo.cmdmod.cmod_filter_force = filter.force;
+    cmdinfo.cmdmod.cmod_filter_force = filter.force.unwrap_or(false);
     // A bare `filter!` with an empty pattern still inverts the match.
-    // SAFETY: `filter.pattern` is a NUL-terminated keydict String.
-    if unsafe { *filter.pattern.data() } as c_int != NUL || cmdinfo.cmdmod.cmod_filter_force {
+    // SAFETY: `pattern` is a NUL-terminated keydict String.
+    if unsafe { *pattern.data() } as c_int != NUL || cmdinfo.cmdmod.cmod_filter_force {
         // SAFETY: the pattern outlives the compiled program, which
         // `undo_cmdmod` frees.
-        // SAFETY: the pattern outlives the compiled program, which
-        // `undo_cmdmod` frees.
-        let pat = unsafe { string_to_cstr(filter.pattern) };
+        let pat = unsafe { string_to_cstr(pattern) };
         cmdinfo.cmdmod.cmod_filter_pat = pat;
         // SAFETY: as above.
         cmdinfo.cmdmod.cmod_filter_regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };

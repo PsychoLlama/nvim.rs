@@ -35,7 +35,7 @@ pub unsafe fn nvim_exec2(
     // SAFETY: `src`/`opts` are the caller's.
     let output: String_0 = unsafe { exec_impl(channel_id, src, opts) }?;
     // SAFETY: `opts` is the caller's keydict, live for the call.
-    if !unsafe { (*opts).output } {
+    if !unsafe { (*opts).output }.unwrap_or(false) {
         return Ok(ApiDict::EMPTY);
     }
     // Heap-allocated rather than arena-allocated: the caller frees this
@@ -66,7 +66,7 @@ pub unsafe fn exec_impl(
     // Read once: `opts` is the dispatcher's own copy of the keyword
     // arguments, which nothing the sourced script can do reaches.
     // SAFETY: `opts` is the caller's keydict, live for the call.
-    let capture = unsafe { (*opts).output };
+    let capture = unsafe { (*opts).output }.unwrap_or(false);
     let save_redir_off = redir_off.get();
     let save_capture_ga = capture_ga.get();
     let save_msg_col = msg_col.get();

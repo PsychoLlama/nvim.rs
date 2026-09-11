@@ -4,7 +4,7 @@
 
 use crate::api::private::helpers::{
     api_typename, arena_array, arena_dict, cstr_as_string, find_buffer_by_handle,
-    find_window_by_handle, has_key, object_to_hl_id, string_to_cstr,
+    find_window_by_handle, object_to_hl_id, string_to_cstr,
 };
 use crate::charset::{transstr, vim_isprintc};
 use crate::decoration::{
@@ -32,9 +32,9 @@ use crate::types::{
     DecorInline, DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
     DecorVirtText_data, Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark,
     KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark,
-    KeySetLink, LineNr, LuaRef, MTKey, MTPair, NS, Object, OptionalKeys, ScreenChar, String_0,
-    UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, WindowHandle, int32_t,
-    kObjectTypeArray, size_t, uint8_t, uint16_t, uint32_t, virt_line,
+    KeySetLink, LineNr, LuaRef, MTKey, MTPair, NS, Object, ScreenChar, String_0, UndoObjectType,
+    VirtLines, VirtText, VirtTextChunk, Window, WindowHandle, int32_t, kObjectTypeArray, size_t,
+    uint8_t, uint16_t, uint32_t, virt_line,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -62,11 +62,6 @@ pub const kExtmarkVirtLines: ExtmarkType = 16;
 pub const kExtmarkVirtText: ExtmarkType = 8;
 pub const kExtmarkSign: ExtmarkType = 2;
 pub const kExtmarkNone: ExtmarkType = 1;
-pub struct DecorProviderCallback {
-    pub name: *const ::core::ffi::c_char,
-    pub source: *mut LuaRef,
-    pub dest: *mut LuaRef,
-}
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INT64_MAX: ::core::ffi::c_long = 9223372036854775807 as ::core::ffi::c_long;
@@ -106,39 +101,3 @@ pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
     },
 };
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
-pub const KEYSET_OPTIDX_set_extmark__id: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__url: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__spell: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__strict: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__end_col: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__conceal: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__hl_mode: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__end_row: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__end_line: ::core::ffi::c_int = 11 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__hl_group: ::core::ffi::c_int = 12 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__priority: ::core::ffi::c_int = 13 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__sign_text: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_text: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_lines: ::core::ffi::c_int = 19 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark___subpriority: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__undo_restore: ::core::ffi::c_int = 21 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__conceal_lines: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__right_gravity: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_text_pos: ::core::ffi::c_int = 26 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_text_win_col: ::core::ffi::c_int =
-    31 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_set_extmark__virt_lines_overflow: ::core::ffi::c_int =
-    34 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_extmark__hl_name: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_extmarks__type: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_extmarks__limit: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_get_extmarks__hl_name: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_ns_opts__wins: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYDICT_INIT: KeyDict_ns_opts = KeyDict_ns_opts {
-    is_set__ns_opts_: 0 as OptionalKeys,
-    wins: Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    },
-};

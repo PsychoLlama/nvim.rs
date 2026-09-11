@@ -17,7 +17,36 @@
 use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
-pub(super) const PART: [VimOption; 82] = [
+pub(super) const PART: [VimOption; 81] = [
+    // 'jumpoptions'
+    VimOption {
+        fullname: name(c"jumpoptions"),
+        shortname: name(c"jop"),
+        flags: kOptFlagOneComma | kOptFlagNoDup,
+        type_0: kOptValTypeString,
+        scope_flags: GLOBAL,
+        scope_idx: scope_idx(kGlobalOptJumpoptions, kWinOptInvalid, kBufOptInvalid),
+        var: OptVar::String(&p_jop),
+        flags_var: Some(&jop_flags),
+        values: &opt_jop_values,
+        opt_did_set_cb: Some(did_set_str_generic),
+        opt_expand_cb: Some(expand_set_str_generic),
+        def_val: string(c"clean"),
+        ..BLANK
+    },
+    // 'keymap'
+    VimOption {
+        fullname: name(c"keymap"),
+        shortname: name(c"kmp"),
+        flags: kOptFlagRedrStat | kOptFlagRedrBuf | kOptFlagNFname | kOptFlagPriMkrc,
+        type_0: kOptValTypeString,
+        scope_flags: BUF,
+        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptKeymap),
+        var: OptVar::String(&p_keymap),
+        opt_did_set_cb: Some(did_set_keymap),
+        def_val: string(c""),
+        ..BLANK
+    },
     // 'keymodel'
     VimOption {
         fullname: name(c"keymodel"),
@@ -927,40 +956,6 @@ pub(super) const PART: [VimOption; 82] = [
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptRevins, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::Boolean(&p_ri),
-        ..BLANK
-    },
-    // 'rightleft'
-    VimOption {
-        fullname: name(c"rightleft"),
-        shortname: name(c"rl"),
-        flags: kOptFlagRedrWin,
-        scope_flags: WIN,
-        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptRightleft, kBufOptInvalid),
-        ..BLANK
-    },
-    // 'rightleftcmd'
-    VimOption {
-        fullname: name(c"rightleftcmd"),
-        shortname: name(c"rlc"),
-        flags: kOptFlagComma | kOptFlagRedrWin,
-        type_0: kOptValTypeString,
-        scope_flags: WIN,
-        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptRightleftcmd, kBufOptInvalid),
-        values: &opt_rlc_values,
-        opt_did_set_cb: Some(did_set_str_generic),
-        opt_expand_cb: Some(expand_set_str_generic),
-        def_val: string(c"search"),
-        ..BLANK
-    },
-    // 'ruler'
-    VimOption {
-        fullname: name(c"ruler"),
-        shortname: name(c"ru"),
-        flags: kOptFlagRedrStat,
-        scope_flags: GLOBAL,
-        scope_idx: scope_idx(kGlobalOptRuler, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_ru),
-        def_val: boolean(true),
         ..BLANK
     },
 ];

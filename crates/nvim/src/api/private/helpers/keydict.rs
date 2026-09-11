@@ -3,9 +3,9 @@
 //!
 //! There is one such struct per function, so the code here is untyped and
 //! works off the generated `KeySetLink` table instead: each entry names a
-//! key, the offset of its field, the `ObjectType` that field holds, and —
-//! for an optional key — the bit in `OptKeySet::is_set_` that records
-//! whether the caller supplied it at all.
+//! key, the offset of its field and the `ObjectType` that field holds. Every
+//! field is an `Option`, so the row's type says `Option<T>` and `None` is
+//! the key the caller did not name.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -28,10 +28,11 @@ use crate::api_error;
 use crate::cstr;
 use crate::lua::executor::api_free_luaref;
 use crate::message_fmt::c_str_len;
+use crate::msgpack_rpc::unpacker::kUnpackTypeStringArray;
 use crate::narrow::number_as_int;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
-    Object, ObjectType, OptKeySet, OptionalKeys, String_0, kErrorTypeValidation, kObjectTypeArray,
+    Object, ObjectType, String_0, StringArray, kErrorTypeValidation, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
     kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
     key_value_pair, size_t,
@@ -39,22 +40,41 @@ use crate::types::{
 use ::libc::abort;
 use core::ffi::{c_char, c_int, c_void};
 
-/// Whether the caller supplied the optional key at `idx`.
+/// Whether the keyset field at `mem` has been filled in.
 ///
-/// The keysets carry one `is_set__<kind>_` mask whose bits are indexed by the
-/// generated `KEYSET_OPTIDX_<kind>__<key>` constants. c2rust expanded the
-/// macro at every use, which is three lines of shifting and casting per
-/// question asked.
-pub(crate) const fn has_key(set: OptionalKeys, idx: c_int) -> bool {
-    set & (1 as OptionalKeys) << idx != 0
-}
-
-/// Record that the optional key at `idx` was supplied.
+/// Every keyset field is an `Option`, so "did the caller name this key?" is
+/// one question -- but not one question the *bytes* can answer: an
+/// `Option<Integer>` and an `Option<Boolean>` carry their `None` in
+/// different places and at different widths. So the row's type picks the
+/// arm, exactly as the walks that read and write the field do.
 ///
-/// `PUT_KEY`'s half of the same mask, expanded at every use for the same
-/// reason.
-pub(crate) const fn set_key(set: OptionalKeys, idx: c_int) -> OptionalKeys {
-    set | (1 as OptionalKeys) << idx
+/// `kUnpackTypeStringArray` is ShaDa's own tag, which is why this takes the
+/// row's `c_int` rather than an [`ObjectType`].
+///
+/// # Safety
+///
+/// `mem` must point at a keyset field of the kind `type_0` names.
+pub(crate) unsafe fn keyset_field_is_set(mem: *const c_void, type_0: c_int) -> bool {
+    macro_rules! set {
+        ($ty:ty) => {
+            // SAFETY: the caller's promise: a field of the kind the row names.
+            unsafe { (*mem.cast::<Option<$ty>>()).is_some() }
+        };
+    }
+    match type_0.cast_unsigned() {
+        kObjectTypeNil => set!(Object),
+        kObjectTypeBoolean => set!(Boolean),
+        kObjectTypeInteger => set!(Integer),
+        kObjectTypeFloat => set!(Float),
+        kObjectTypeString => set!(String_0),
+        kObjectTypeArray => set!(Array),
+        kObjectTypeDict => set!(ApiDict),
+        kObjectTypeLuaRef => set!(LuaRef),
+        kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => set!(Handle),
+        _ if type_0 == kUnpackTypeStringArray => set!(StringArray),
+        // SAFETY: the generated tables name no other type.
+        _ => unsafe { abort() },
+    }
 }
 
 /// [`api_luarefs_free_object`] over a keydict, walking `table` to find which
@@ -75,9 +95,21 @@ pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *const K
         unsafe {
             let mem = dict.cast::<c_char>().add(field.ptr_off);
             match field.type_0.cast_unsigned() {
-                kObjectTypeNil => api_luarefs_free_object(*mem.cast::<Object>()),
-                kObjectTypeLuaRef => api_free_luaref(*mem.cast::<LuaRef>()),
-                kObjectTypeDict => api_luarefs_free_dict(*mem.cast::<ApiDict>()),
+                kObjectTypeNil => {
+                    if let Some(object) = *mem.cast::<Option<Object>>() {
+                        api_luarefs_free_object(object);
+                    }
+                }
+                kObjectTypeLuaRef => {
+                    if let Some(luaref) = *mem.cast::<Option<LuaRef>>() {
+                        api_free_luaref(luaref);
+                    }
+                }
+                kObjectTypeDict => {
+                    if let Some(dict) = *mem.cast::<Option<ApiDict>>() {
+                        api_luarefs_free_dict(dict);
+                    }
+                }
                 _ => {}
             }
         }
@@ -145,16 +177,9 @@ pub(crate) unsafe fn api_dict_to_keydict(
         // a `static` in the binary.
         let field = unsafe { &*field };
 
-        // Optional fields record that they were given, so that the API
-        // function can tell "absent" from "set to the default".
-        if field.opt_index >= 0 {
-            let ks = retval.cast::<OptKeySet>();
-            // SAFETY: every keyset with an optional field starts with the
-            // mask those fields index.
-            unsafe { (*ks).is_set_ |= (1 as OptionalKeys) << field.opt_index };
-        }
-
-        // SAFETY: the row's offset names a field of `retval`.
+        // SAFETY: the row's offset names a field of `retval`. Writing
+        // `Some` there is what records that the caller named the key: a
+        // field nobody wrote is still the `None` `Default` left.
         let mem = unsafe { retval.cast::<c_char>().add(field.ptr_off) };
         let expected: ObjectType = field.type_0.cast_unsigned();
         // A mismatch reports the field's name, not the key's: they are
@@ -169,22 +194,22 @@ pub(crate) unsafe fn api_dict_to_keydict(
         match expected {
             // A nil-typed field takes the object as it stands.
             // SAFETY: the row says an `Object` lives at `mem`.
-            kObjectTypeNil => unsafe { *mem.cast::<Object>() = given },
+            kObjectTypeNil => unsafe { *mem.cast::<Option<Object>>() = Some(given) },
             kObjectTypeInteger if field.is_hlgroup => {
                 let mut hl_id = 0;
                 if !given.is_nil() {
                     // SAFETY: `given` is live.
                     hl_id = unsafe { object_to_hl_id(given, key.data()) }?;
                 }
-                // SAFETY: the row says an `Integer` lives at `mem`.
-                unsafe { *mem.cast::<Integer>() = Integer::from(hl_id) };
+                // SAFETY: the row says an `Option<Integer>` lives at `mem`.
+                unsafe { *mem.cast::<Option<Integer>>() = Some(Integer::from(hl_id)) };
             }
             kObjectTypeInteger => {
                 let Some(number) = given.as_integer() else {
                     return Err(wrong_type(kObjectTypeInteger));
                 };
-                // SAFETY: the row says an `Integer` lives at `mem`.
-                unsafe { *mem.cast::<Integer>() = number };
+                // SAFETY: the row says an `Option<Integer>` lives at `mem`.
+                unsafe { *mem.cast::<Option<Integer>>() = Some(number) };
             }
             // A float field takes an integer too.
             kObjectTypeFloat => {
@@ -192,28 +217,28 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 let Some(float) = given.as_float().or(widened) else {
                     return Err(wrong_type(kObjectTypeFloat));
                 };
-                // SAFETY: the row says a `Float` lives at `mem`.
-                unsafe { *mem.cast::<Float>() = float };
+                // SAFETY: the row says an `Option<Float>` lives at `mem`.
+                unsafe { *mem.cast::<Option<Float>>() = Some(float) };
             }
             kObjectTypeBoolean => {
                 // SAFETY: `given` is live and `field.str` is the table's name.
                 let on = unsafe { api_object_to_bool(given, field.str, false) }?;
-                // SAFETY: the row says a `Boolean` lives at `mem`.
-                unsafe { *mem.cast::<Boolean>() = on };
+                // SAFETY: the row says an `Option<Boolean>` lives at `mem`.
+                unsafe { *mem.cast::<Option<Boolean>>() = Some(on) };
             }
             kObjectTypeString => {
                 let Some(str) = given.as_string() else {
                     return Err(wrong_type(kObjectTypeString));
                 };
-                // SAFETY: the row says a `String` lives at `mem`.
-                unsafe { *mem.cast::<String_0>() = str };
+                // SAFETY: the row says an `Option<String>` lives at `mem`.
+                unsafe { *mem.cast::<Option<String_0>>() = Some(str) };
             }
             kObjectTypeArray => {
                 let Some(array) = given.as_array() else {
                     return Err(wrong_type(kObjectTypeArray));
                 };
-                // SAFETY: the row says an `Array` lives at `mem`.
-                unsafe { *mem.cast::<Array>() = array };
+                // SAFETY: the row says an `Option<Array>` lives at `mem`.
+                unsafe { *mem.cast::<Option<Array>>() = Some(array) };
             }
             kObjectTypeDict => {
                 // An empty array is how msgpack spells an empty map.
@@ -226,8 +251,8 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 let Some(pairs) = pairs else {
                     return Err(wrong_type(kObjectTypeDict));
                 };
-                // SAFETY: the row says an `ApiDict` lives at `mem`.
-                unsafe { *mem.cast::<ApiDict>() = pairs };
+                // SAFETY: the row says an `Option<ApiDict>` lives at `mem`.
+                unsafe { *mem.cast::<Option<ApiDict>>() = Some(pairs) };
             }
             kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
                 // A handle arrives either under its own variant or as a plain
@@ -237,8 +262,8 @@ pub(crate) unsafe fn api_dict_to_keydict(
                     _ if given.kind() == expected => given.as_handle().unwrap_or(0),
                     _ => return Err(wrong_type(expected)),
                 };
-                // SAFETY: the row says a handle lives at `mem`.
-                unsafe { *mem.cast::<Handle>() = number_as_int(handle) };
+                // SAFETY: the row says an `Option<Handle>` lives at `mem`.
+                unsafe { *mem.cast::<Option<Handle>>() = Some(number_as_int(handle)) };
             }
             kObjectTypeLuaRef => {
                 // SAFETY: `key` names its own bytes.
@@ -275,34 +300,38 @@ pub(crate) unsafe fn api_keydict_to_dict(
     let mut rv = arena_dict(arena, max_size);
     // SAFETY: as `api_dict_to_keydict`; `max_size` is the table's length.
     for field in unsafe { keyset_fields(table) } {
-        if field.opt_index >= 0 {
-            let ks = value.cast::<OptKeySet>();
-            // SAFETY: every keyset with an optional field starts with the
-            // mask those fields index.
-            let is_set = unsafe { (*ks).is_set_ };
-            if is_set & ((1 as OptionalKeys) << field.opt_index) == 0 {
-                continue;
-            }
-        }
         // SAFETY: the row's offset names a field of `value`, and its type
-        // says what lives there. A Lua reference is still counted as a key,
-        // with a nil value, because it means nothing outside the Lua state.
-        let val = unsafe {
-            let mem = value.cast::<c_char>().add(field.ptr_off);
-            match field.type_0.cast_unsigned() {
-                kObjectTypeNil => *mem.cast::<Object>(),
-                kObjectTypeInteger => Object::integer(*mem.cast::<Integer>()),
-                kObjectTypeFloat => Object::float(*mem.cast::<Float>()),
-                kObjectTypeBoolean => Object::boolean(*mem.cast::<Boolean>()),
-                kObjectTypeString => Object::string(*mem.cast::<String_0>()),
-                kObjectTypeArray => Object::array(*mem.cast::<Array>()),
-                kObjectTypeDict => Object::dict(*mem.cast::<ApiDict>()),
-                kObjectTypeBuffer => Object::buffer(*mem.cast::<Handle>()),
-                kObjectTypeWindow => Object::window(*mem.cast::<Handle>()),
-                kObjectTypeTabpage => Object::tabpage(*mem.cast::<Handle>()),
-                kObjectTypeLuaRef => Object::Nil,
-                _ => abort(),
-            }
+        // says what lives there. A field the caller never named is `None`
+        // and is not a key of the answer at all. A Lua reference *is* still
+        // counted as a key, with a nil value, because it means nothing
+        // outside the Lua state.
+        let mem = unsafe { value.cast::<c_char>().add(field.ptr_off) };
+        // SAFETY: as above.
+        if !unsafe { keyset_field_is_set(mem.cast(), field.type_0) } {
+            continue;
+        }
+        // The field, which the test above says is `Some`; the default is
+        // there to spell the arm's type, not because it can be reached.
+        macro_rules! field {
+            ($ty:ty, $absent:expr) => {
+                // SAFETY: as above -- the row's type says what lives at `mem`.
+                unsafe { (*mem.cast::<Option<$ty>>()).unwrap_or($absent) }
+            };
+        }
+        let val = match field.type_0.cast_unsigned() {
+            kObjectTypeNil => field!(Object, Object::Nil),
+            kObjectTypeInteger => Object::integer(field!(Integer, 0)),
+            kObjectTypeFloat => Object::float(field!(Float, 0.0)),
+            kObjectTypeBoolean => Object::boolean(field!(Boolean, false)),
+            kObjectTypeString => Object::string(field!(String_0, String_0::NULL)),
+            kObjectTypeArray => Object::array(field!(Array, Array::EMPTY)),
+            kObjectTypeDict => Object::dict(field!(ApiDict, ApiDict::EMPTY)),
+            kObjectTypeBuffer => Object::buffer(field!(Handle, 0)),
+            kObjectTypeWindow => Object::window(field!(Handle, 0)),
+            kObjectTypeTabpage => Object::tabpage(field!(Handle, 0)),
+            kObjectTypeLuaRef => Object::Nil,
+            // SAFETY: the generated tables name no other type.
+            _ => unsafe { abort() },
         };
         // SAFETY: `rv` was sized for the whole table, and the row's name is
         // a static C string.

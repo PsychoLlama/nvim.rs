@@ -18,8 +18,8 @@
 //! than a table plus a switch plus a loop.
 //!
 //! What did survive from `hashy` is the *table order*, because it is not an
-//! implementation detail: a key's row index is its `opt_index`, the bit it
-//! owns in its keyset's `is_set__*_` mask, and a method's row index is what
+//! implementation detail: it is the order a keyset comes back out in when it
+//! is converted to a dictionary, and a method's row index is what
 //! `eval/funcs/` stores to bind the builtin `nvim_*()` Vimscript functions.
 //! `tools/apigen`'s `table_order` reproduces the layout upstream's hash
 //! implied.
@@ -94,27 +94,24 @@ mod known {
 
 use known::*;
 
-/// One row of a keyset table: the key's name, the offset of the field its
-/// value lands in, the tag that value must arrive as, and the bit it owns in
-/// the keyset's `is_set__*_` mask (-1 when the keyset has no mask).
-const fn key(name: &'static CStr, ptr_off: usize, type_0: c_int, opt_index: c_int) -> KeySetLink {
+/// One row of a keyset table: the key's name, the offset of the `Option`
+/// field its value lands in, and the tag that value must arrive as.
+const fn key(name: &'static CStr, ptr_off: usize, type_0: c_int) -> KeySetLink {
     KeySetLink {
         str: name.as_ptr().cast_mut(),
         ptr_off,
         type_0,
-        opt_index,
         is_hlgroup: false,
     }
 }
 
 /// A row whose value names a highlight group. It arrives as a String and is
 /// stored as the id the converter resolves it to, so its tag is an Integer.
-const fn hl_key(name: &'static CStr, ptr_off: usize, opt_index: c_int) -> KeySetLink {
+const fn hl_key(name: &'static CStr, ptr_off: usize) -> KeySetLink {
     KeySetLink {
         str: name.as_ptr().cast_mut(),
         ptr_off,
         type_0: TAG_INTEGER,
-        opt_index,
         is_hlgroup: true,
     }
 }
@@ -125,7 +122,6 @@ const END: KeySetLink = KeySetLink {
     str: ptr::null_mut(),
     ptr_off: 0,
     type_0: TAG_NIL,
-    opt_index: -1,
     is_hlgroup: false,
 };
 

@@ -47,6 +47,11 @@ and this project adheres to [CalVer](https://calver.org/).
   an empty `'winborder'` no longer clears a window's border, title and footer
   settings, and `nvim_buf_set_text`/`nvim_buf_get_text` no longer swallow the
   reason they refused.
+- Rewrote how an API function receives its option dictionary: a key the
+  caller did not name is now absent rather than present-and-zero beside a
+  bitmask saying so, across every `nvim_*` method that takes one and the
+  ShaDa reader that shares the same decoder. Which keys a returned option
+  dictionary carries, and what an unnamed key falls back to, are unchanged.
 - Rewrote how the editor hands text to the message area, which every command
   that prints a listing goes through: `:highlight`, `:syntax`, `:syntime`,
   `:map`, `:marks`, `:jumps`, `:changes`, `:registers`, `:tags`, `:tselect`,

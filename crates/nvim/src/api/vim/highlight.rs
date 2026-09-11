@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, dict_put_str, has_key};
+use crate::api::private::helpers::{Reported, dict_put_str};
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 
 /// # Safety
@@ -51,19 +51,13 @@ pub unsafe fn nvim_set_hl(
         return Err(err_bad_value(c"highlight name", unsafe { name.as_cstr() }));
     }
     let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
-    if has_key(
-        unsafe { (*val).is_set__highlight_ },
-        KEYSET_OPTIDX_highlight__url,
-    ) {
+    if unsafe { (*val).url }.is_some() {
         return Err(Error::validation(c"Invalid key: 'url'"));
     }
-    let update: bool = has_key(
-        unsafe { (*val).is_set__highlight_ },
-        KEYSET_OPTIDX_highlight__update,
-    ) && unsafe { (*val).update } as ::core::ffi::c_int != 0;
+    let update: bool = unsafe { (*val).update }.unwrap_or(false);
     let mut base: Option<&HlAttrs> = None;
     let base_attrs: HlAttrs;
-    if update as ::core::ffi::c_int != 0
+    if update
         && let Some(attrs) = unsafe { hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None) }
     {
         base_attrs = attrs;
@@ -80,17 +74,14 @@ pub unsafe fn nvim_set_hl(
 /// `opts` must point at the `KeyDict_get_ns` the dispatcher filled in, live
 /// for the call.
 pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error> {
-    if has_key(
-        unsafe { (*opts).is_set__get_ns_ },
-        KEYSET_OPTIDX_get_ns__winid,
-    ) {
-        let Some(win) = find_window_by_handle(unsafe { (*opts).winid })? else {
-            return Ok(0 as Integer);
-        };
-        Ok(win.w_ns_hl as Integer)
-    } else {
-        Ok(ns_hl_global.get() as Integer)
-    }
+    let winid = unsafe { (*opts).winid };
+    let Some(winid) = winid else {
+        return Ok(ns_hl_global.get() as Integer);
+    };
+    let Some(win) = find_window_by_handle(winid)? else {
+        return Ok(0 as Integer);
+    };
+    Ok(win.w_ns_hl as Integer)
 }
 
 pub fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {

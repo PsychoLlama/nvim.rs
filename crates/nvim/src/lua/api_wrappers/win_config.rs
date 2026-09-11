@@ -37,7 +37,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_open_win(lstate: *mut lua_State) -
         if textlock.get() != 0 || expr_map_locked() {
             return Err(expr_map_locked_error());
         }
-        let mut arg_3 = KeyDictArg::<KeyDict_win_config>::zeroed();
+        let mut arg_3 = KeyDictArg::<KeyDict_win_config>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_3, arena, err_param) }?;
         // SAFETY: as above.
@@ -107,7 +107,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_config(lstate: *mut lua_St
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_2 = KeyDictArg::<KeyDict_win_config>::zeroed();
+        let mut arg_2 = KeyDictArg::<KeyDict_win_config>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_2, arena, err_param) }?;
         // SAFETY: as above.

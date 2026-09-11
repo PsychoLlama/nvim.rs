@@ -19,7 +19,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, dict_put_str, has_key, set_key};
+use crate::api::private::helpers::{Reported, array_add, dict_put_str};
 use crate::api::private::validate::err_bad_number;
 use crate::global_cell::GlobalCell;
 use crate::registry::{IdSet, SlotTable, id_set, interned_key};
@@ -148,20 +148,17 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
         return ().reported(error);
     }
     let mut set_scoped: bool = true;
-    if has_key(
-        unsafe { (*opts).is_set__ns_opts_ },
-        KEYSET_OPTIDX_ns_opts__wins,
-    ) {
-        if unsafe { (*opts).wins.size } == 0 as size_t {
+    if let Some(wins) = unsafe { (*opts).wins } {
+        if wins.size == 0 as size_t {
             set_scoped = false;
         }
         let mut windows: IdSet<*mut Window> = id_set();
         let mut i: size_t = 0 as size_t;
-        while i < unsafe { (*opts).wins.size } {
+        while i < wins.size {
             // A `wins` element that is neither a window handle nor a plain
             // integer takes -1, which no window carries, so the lookup below
             // refuses it -- the transpile read its bytes as an integer.
-            let item = unsafe { *(*opts).wins.items.add(i) };
+            let item = unsafe { *wins.items.add(i) };
             let win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
             let Some(wp) = find_window_by_handle(win as WindowHandle)? else {
                 return Ok(());
@@ -211,10 +208,9 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
 #[allow(non_snake_case)]
 pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_ns_opts, Error> {
     let mut error = Error::none();
-    let mut opts: KeyDict_ns_opts = KEYDICT_INIT;
+    let mut opts = KeyDict_ns_opts::default();
     let mut windows: Array = ARRAY_DICT_INIT;
-    opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
-    opts.wins = windows;
+    opts.wins = Some(windows);
     if !ns_initialized(ns_id as uint32_t) {
         error = err_bad_number(c"ns_id", ns_id);
         return opts.reported(error);
@@ -247,7 +243,6 @@ pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_
             unsafe { array_add(&mut windows, handle) };
         }
     }
-    opts.is_set__ns_opts_ = set_key(opts.is_set__ns_opts_, KEYSET_OPTIDX_ns_opts__wins);
-    opts.wins = windows;
+    opts.wins = Some(windows);
     opts.reported(error)
 }

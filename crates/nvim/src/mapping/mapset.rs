@@ -267,20 +267,20 @@ pub unsafe fn modify_keymap(
         // SAFETY: the caller's promise -- a non-null `opts` is a live keyset,
         // whose `desc` string this copies and whose `callback` it takes over.
         let mut o = unsafe { Live::new(opts) };
-        parsed_args.nowait = o.nowait;
-        parsed_args.noremap = o.noremap;
-        parsed_args.silent = o.silent;
-        parsed_args.script = o.script;
-        parsed_args.expr = o.expr;
-        parsed_args.unique = o.unique;
-        parsed_args.replace_keycodes = o.replace_keycodes;
-        if o.is_set__keymap_ & 1 << KEYSET_OPTIDX_keymap__callback != 0 {
-            lua_funcref = o.callback;
-            o.callback = LUA_NOREF;
+        parsed_args.nowait = o.nowait.unwrap_or(false);
+        parsed_args.noremap = o.noremap.unwrap_or(false);
+        parsed_args.silent = o.silent.unwrap_or(false);
+        parsed_args.script = o.script.unwrap_or(false);
+        parsed_args.expr = o.expr.unwrap_or(false);
+        parsed_args.unique = o.unique.unwrap_or(false);
+        parsed_args.replace_keycodes = o.replace_keycodes.unwrap_or(false);
+        // The mapping takes the callback's reference over.
+        if let Some(reference) = o.callback.take() {
+            lua_funcref = reference;
         }
-        if o.is_set__keymap_ & 1 << KEYSET_OPTIDX_keymap__desc != 0 {
+        if let Some(desc) = o.desc {
             // SAFETY: the keyset's own API string, which this copies out of.
-            parsed_args.desc = unsafe { COwned::new(string_to_cstr(o.desc)) }.to_map_str();
+            parsed_args.desc = unsafe { COwned::new(string_to_cstr(desc)) }.to_map_str();
         }
     }
     parsed_args.buffer = !global;

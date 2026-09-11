@@ -18,6 +18,40 @@ use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
 pub(super) const PART: [VimOption; 80] = [
+    // 'rightleft'
+    VimOption {
+        fullname: name(c"rightleft"),
+        shortname: name(c"rl"),
+        flags: kOptFlagRedrWin,
+        scope_flags: WIN,
+        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptRightleft, kBufOptInvalid),
+        ..BLANK
+    },
+    // 'rightleftcmd'
+    VimOption {
+        fullname: name(c"rightleftcmd"),
+        shortname: name(c"rlc"),
+        flags: kOptFlagComma | kOptFlagRedrWin,
+        type_0: kOptValTypeString,
+        scope_flags: WIN,
+        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptRightleftcmd, kBufOptInvalid),
+        values: &opt_rlc_values,
+        opt_did_set_cb: Some(did_set_str_generic),
+        opt_expand_cb: Some(expand_set_str_generic),
+        def_val: string(c"search"),
+        ..BLANK
+    },
+    // 'ruler'
+    VimOption {
+        fullname: name(c"ruler"),
+        shortname: name(c"ru"),
+        flags: kOptFlagRedrStat,
+        scope_flags: GLOBAL,
+        scope_idx: scope_idx(kGlobalOptRuler, kWinOptInvalid, kBufOptInvalid),
+        var: OptVar::Boolean(&p_ru),
+        def_val: boolean(true),
+        ..BLANK
+    },
     // 'rulerformat'
     VimOption {
         fullname: name(c"rulerformat"),
@@ -927,44 +961,6 @@ pub(super) const PART: [VimOption; 80] = [
         scope_idx: scope_idx(kGlobalOptTerse, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::OwnDefault,
         immutable: true,
-        ..BLANK
-    },
-    // 'textwidth'
-    VimOption {
-        fullname: name(c"textwidth"),
-        shortname: name(c"tw"),
-        flags: kOptFlagRedrBuf | kOptFlagHLOnly,
-        type_0: kOptValTypeNumber,
-        scope_flags: BUF,
-        scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptTextwidth),
-        var: OptVar::Number(&p_tw),
-        opt_did_set_cb: Some(did_set_textwidth),
-        def_val: number(0),
-        ..BLANK
-    },
-    // 'thesaurus'
-    VimOption {
-        fullname: name(c"thesaurus"),
-        shortname: name(c"tsr"),
-        flags: kOptFlagOneComma | kOptFlagExpand | kOptFlagNDname | kOptFlagNoDup,
-        type_0: kOptValTypeString,
-        scope_flags: GLOBAL | BUF,
-        scope_idx: scope_idx(kGlobalOptThesaurus, kWinOptInvalid, kBufOptThesaurus),
-        var: OptVar::String(&p_tsr),
-        def_val: string(c""),
-        ..BLANK
-    },
-    // 'thesaurusfunc'
-    VimOption {
-        fullname: name(c"thesaurusfunc"),
-        shortname: name(c"tsrfu"),
-        flags: kOptFlagSecure | kOptFlagFunc,
-        type_0: kOptValTypeString,
-        scope_flags: GLOBAL | BUF,
-        scope_idx: scope_idx(kGlobalOptThesaurusfunc, kWinOptInvalid, kBufOptThesaurusfunc),
-        var: OptVar::String(&p_tsrfu),
-        opt_did_set_cb: Some(did_set_thesaurusfunc),
-        def_val: string(c""),
         ..BLANK
     },
 ];

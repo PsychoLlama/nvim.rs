@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, array_add, has_key};
+use crate::api::private::helpers::{Reported, array_add};
 use crate::api_error;
 use crate::cstr;
 use crate::guard::Lock;
@@ -48,14 +48,9 @@ pub unsafe fn nvim_open_term(
         buf_close_terminal(buffer);
         may_read_buffer = false;
     }
-    let mut cb: LuaRef = LUA_NOREF;
-    if has_key(
-        unsafe { (*opts).is_set__open_term_ },
-        KEYSET_OPTIDX_open_term__on_input,
-    ) {
-        cb = unsafe { (*opts).on_input };
-        unsafe { (*opts).on_input = LUA_NOREF as LuaRef };
-    }
+    // The channel takes the callback's reference over, so the keyset must
+    // not release it too.
+    let cb: LuaRef = unsafe { (*opts).on_input.take() }.unwrap_or(LUA_NOREF);
     let chan: *mut Channel = unsafe { channel_alloc(kChannelStreamInternal) };
     unsafe { (*channel_internal(chan)).cb = cb };
     unsafe { (*channel_internal(chan)).closed = false };
@@ -78,14 +73,7 @@ pub unsafe fn nvim_open_term(
         ),
         resume_cb: Some(term_resume as unsafe fn(*mut ::core::ffi::c_void) -> ()),
         close_cb: Some(term_close as unsafe fn(*mut ::core::ffi::c_void) -> ()),
-        force_crlf: if has_key(
-            unsafe { (*opts).is_set__open_term_ },
-            KEYSET_OPTIDX_open_term__force_crlf,
-        ) {
-            unsafe { (*opts).force_crlf as ::core::ffi::c_int }
-        } else {
-            1
-        } != 0,
+        force_crlf: unsafe { (*opts).force_crlf }.unwrap_or(true),
     };
     let mut contents: StringBuilder = StringBuilder {
         size: 0 as size_t,

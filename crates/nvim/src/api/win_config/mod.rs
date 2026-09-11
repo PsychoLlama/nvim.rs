@@ -5,8 +5,8 @@
 use crate::api::extmark::{parse_virt_text, virt_text_to_array};
 use crate::api::private::helpers::{
     api_free_array, api_free_object, api_typename, arena_array, cstr_as_string, cstr_to_string,
-    cstrn_as_string, find_buffer_by_handle, find_window_by_handle, has_key, object_to_hl_id,
-    try_enter, try_leave,
+    cstrn_as_string, find_buffer_by_handle, find_window_by_handle, object_to_hl_id, try_enter,
+    try_leave,
 };
 use crate::autocmd::{apply_autocmds, block_autocmds, is_aucmd_win, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
@@ -25,9 +25,9 @@ use crate::types::AutoEvent;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, Arena, Array, Boolean, BorderTextType, BufferHandle, ColNr, Error, FloatAnchor,
-    FloatRelative, Integer, KeyDict_win_config, LPos, LineNr, Object, OptionalKeys, String_0,
-    SwitchWin, Tabpage, TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle,
-    WindowHandle, kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
+    FloatRelative, Integer, KeyDict_win_config, LPos, LineNr, Object, String_0, SwitchWin, Tabpage,
+    TryState, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, WindowHandle,
+    kErrorTypeException, kErrorTypeValidation, kFloatAnchorEast, kFloatAnchorSouth,
     kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
     kFloatRelativeTabline, kFloatRelativeWindow, size_t,
 };
@@ -78,61 +78,6 @@ pub const KV_INITIAL_VALUE: Array = Array {
 };
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
 pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
-pub const KEYSET_OPTIDX_win_config__col: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__row: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__win: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__hide: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__width: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__split: ::core::ffi::c_int = 6 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__title: ::core::ffi::c_int = 7 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__mouse: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__fixed: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__style: ::core::ffi::c_int = 10 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__anchor: ::core::ffi::c_int = 11 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__bufpos: ::core::ffi::c_int = 12 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__height: ::core::ffi::c_int = 13 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__zindex: ::core::ffi::c_int = 14 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__footer: ::core::ffi::c_int = 15 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__border: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__external: ::core::ffi::c_int = 17 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__relative: ::core::ffi::c_int = 18 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__vertical: ::core::ffi::c_int = 19 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__focusable: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__noautocmd: ::core::ffi::c_int = 21 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__title_pos: ::core::ffi::c_int = 22 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config__footer_pos: ::core::ffi::c_int = 23 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX_win_config___cmdline_offset: ::core::ffi::c_int = 24 as ::core::ffi::c_int;
-pub const KEYDICT_INIT: KeyDict_win_config = KeyDict_win_config {
-    is_set__win_config_: 0 as OptionalKeys,
-    external: false,
-    fixed: false,
-    focusable: false,
-    footer: Object::Nil,
-    footer_pos: String_0::NULL,
-    hide: false,
-    height: 0,
-    mouse: false,
-    relative: String_0::NULL,
-    row: 0.,
-    style: String_0::NULL,
-    noautocmd: false,
-    vertical: false,
-    win: 0,
-    width: 0,
-    zindex: 0,
-    anchor: String_0::NULL,
-    border: Object::Nil,
-    bufpos: Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    },
-    col: 0.,
-    split: String_0::NULL,
-    title: Object::Nil,
-    title_pos: String_0::NULL,
-    _cmdline_offset: 0,
-};
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const INT_MAX: ::core::ffi::c_int = __INT_MAX__;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;

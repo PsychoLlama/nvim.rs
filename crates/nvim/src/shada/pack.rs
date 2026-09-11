@@ -335,8 +335,10 @@ unsafe fn pack_search_pattern(
     payload: &mut Payload,
 ) {
     let default = DEFAULT_SEARCH_PATTERN;
-    // Each flag, as (wire key, its value here, its default).
-    let flags: [(&'static CStr, bool, bool); 8] = [
+    // Each flag, as (wire key, its value here, its default). Both sides come
+    // from a keyset every flag of which the entry's own default filled in,
+    // so the pair is two `Some`s and the comparison is the flag's.
+    let flags: [(&'static CStr, Option<bool>, Option<bool>); 8] = [
         (c"sm", pattern.magic, default.magic),
         (c"su", pattern.is_last_used, default.is_last_used),
         (c"sc", pattern.smartcase, default.smartcase),
@@ -362,14 +364,14 @@ unsafe fn pack_search_pattern(
     mpack_map(payload.buf.cursor_mut(), size);
 
     payload.key(c"sp");
-    unsafe { mpack_bin(pattern.pat, &mut payload.buf) };
+    unsafe { mpack_bin(pattern.pat.unwrap_or(String_0::NULL), &mut payload.buf) };
     for (name, _, default) in flags.iter().filter(|(_, value, d)| value != d) {
         payload.key(name);
-        mpack_bool(payload.buf.cursor_mut(), !default);
+        mpack_bool(payload.buf.cursor_mut(), !default.unwrap_or(false));
     }
     if pattern.offset != default.offset {
         payload.key(c"so");
-        mpack_integer(payload.buf.cursor_mut(), pattern.offset);
+        mpack_integer(payload.buf.cursor_mut(), pattern.offset.unwrap_or(0));
     }
     unsafe { dump_additional_data(entry.additional_data, &mut payload.buf) };
 }

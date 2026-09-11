@@ -12,7 +12,7 @@
 
 use crate::api::private::helpers::{
     api_try, arena_array, array_add, dict_get_value, dict_set_var, find_buffer_by_handle,
-    find_tab_by_handle, find_window_by_handle, has_key,
+    find_tab_by_handle, find_window_by_handle,
 };
 use crate::api::vim::nvim_get_current_win;
 use crate::window::tab_index;
@@ -176,11 +176,6 @@ pub unsafe fn nvim_open_tabpage(
     enter: Boolean,
     config: *mut KeyDict_tabpage_config,
 ) -> Result<TabpageHandle, Error> {
-    // `after`'s index in `config`'s `is_set` mask. Function-local so that it
-    // cannot collide in the flat namespace `tools/ffigen` renders
-    // module-level constants into.
-    const OPTIDX_AFTER: ::core::ffi::c_int = 1;
-
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0 as TabpageHandle);
     };
@@ -188,13 +183,7 @@ pub unsafe fn nvim_open_tabpage(
         return Err(Error::exception(e_cmdwin));
     }
     // SAFETY: `config` is the caller's, per this function's contract.
-    let after = unsafe {
-        if has_key((*config).is_set__tabpage_config_, OPTIDX_AFTER) {
-            number_as_int((*config).after)
-        } else {
-            -1
-        }
-    };
+    let after = unsafe { (*config).after }.map_or(-1, number_as_int);
 
     let mut wp: Option<Win> = None;
     // SAFETY: `wp` is this frame's own out-parameter and `b` is live.

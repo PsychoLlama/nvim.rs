@@ -64,10 +64,9 @@ use crate::types::{
     AdditionalData, AdditionalDataBuilder, ApiDict, Arena, BlnFlags, Buffer, ColNr, FileDescriptor,
     FileInfo, FileMark, FileMarkView, HistoryType, Integer, KeyDict__shada_buflist_item,
     KeyDict__shada_mark, KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr,
-    List, MarkGet, MotionType, OptionalKeys, PackerBuffer, Pos, SearchOffset, SearchPattern,
-    String_0, StringArray, SubReplacementString, Timestamp, TypVal, VarFlavour, XFileMark, YankReg,
-    int64_t, ptrdiff_t, size_t, ssize_t, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t,
-    uv_uid_t,
+    List, MarkGet, MotionType, PackerBuffer, Pos, SearchOffset, SearchPattern, String_0,
+    StringArray, SubReplacementString, Timestamp, TypVal, VarFlavour, XFileMark, YankReg, int64_t,
+    ptrdiff_t, size_t, ssize_t, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -571,18 +570,6 @@ unsafe fn shada_key<'a>(name: *const ::core::ffi::c_char) -> &'a [u8] {
 pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const JUMPLISTSIZE: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_search_pat__sp: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_mark__c: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_mark__f: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_mark__l: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_mark__n: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_register__n: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_register__rt: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_register__ru: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_register__rw: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_buflist_item__c: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_buflist_item__f: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-pub const KEYSET_OPTIDX__shada_buflist_item__l: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const MPACK_ITEM_SIZE: ::core::ffi::c_int = 9 as ::core::ffi::c_int;
 #[inline]
 /// Where a global mark's letter lives in `namedfm`: `A`-`Z` first, then the
@@ -620,19 +607,20 @@ const EMPTY_DICT: ApiDict = ApiDict {
 };
 
 /// What a search-pattern entry's fields default to. A pattern is magic and
-/// was the last one used unless the file says otherwise.
+/// was the last one used unless the file says otherwise. Only `pat` starts
+/// out unset: a search-pattern entry that names no pattern is malformed, and
+/// `None` is how the parser sees that.
 const DEFAULT_SEARCH_PATTERN: KeyDict__shada_search_pat = KeyDict__shada_search_pat {
-    is_set___shada_search_pat_: 0,
-    magic: true,
-    smartcase: false,
-    has_line_offset: false,
-    place_cursor_at_end: false,
-    is_last_used: true,
-    is_substitute_pattern: false,
-    highlighted: false,
-    search_backward: false,
-    offset: 0 as Integer,
-    pat: String_0::NULL,
+    magic: Some(true),
+    smartcase: Some(false),
+    has_line_offset: Some(false),
+    place_cursor_at_end: Some(false),
+    is_last_used: Some(true),
+    is_substitute_pattern: Some(false),
+    highlighted: Some(false),
+    search_backward: Some(false),
+    offset: Some(0 as Integer),
+    pat: None,
 };
 
 /// What a sub-string entry defaults to.

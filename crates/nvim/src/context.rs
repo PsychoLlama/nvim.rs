@@ -267,7 +267,7 @@ unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
         cmd.extend_from_slice(b"func! ");
         cmd.extend_from_slice(bytes);
         cmd.push(0);
-        let mut opts = KeyDict_exec_opts { output: true };
+        let mut opts = KeyDict_exec_opts { output: Some(true) };
         let src = unsafe { cstr_as_string(cmd.as_ptr() as *const c_char) };
         let o = &raw mut opts;
         if let Ok(func_body) = unsafe { exec_impl(VIML_INTERNAL_CALL, src, o) } {

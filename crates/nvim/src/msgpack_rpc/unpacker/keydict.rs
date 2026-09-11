@@ -24,8 +24,8 @@ use crate::mpack::mpack_core::mpack_rtoken;
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::strings::arena_printf;
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, Boolean, FieldHashfn, Integer, KeySetLink, OptKeySet,
-    String_0, StringArray, mpack_parser_t, mpack_token_t, mpack_walk_cb, size_t, ssize_t, uint32_t,
+    AdditionalData, AdditionalDataBuilder, Boolean, FieldHashfn, Integer, KeySetLink, String_0,
+    StringArray, mpack_parser_t, mpack_token_t, mpack_walk_cb, size_t, ssize_t, uint32_t,
 };
 use ::libc::abort;
 
@@ -206,7 +206,6 @@ pub unsafe fn unpack_keydict(
     size: *mut size_t,
     error: *mut *mut c_char,
 ) -> bool {
-    let ks: *mut OptKeySet = retval.cast::<OptKeySet>();
     // SAFETY: the caller's cursor and error slot.
     let tok = unsafe {
         let mut tok: mpack_token_t = core::mem::zeroed();
@@ -217,6 +216,11 @@ pub unsafe fn unpack_keydict(
         tok
     };
 
+    // The rows filled so far, for the duplicate-key check below. One entry
+    // per key of the keyset, and the walk stops at the first repeat, so the
+    // array can never fill.
+    let mut filled: [*const KeySetLink; 32] = [::core::ptr::null(); 32];
+    let mut filled_len = 0usize;
     for _ in 0..tok.length {
         // SAFETY: the caller's cursor, keyset and error slot; `key` borrows
         // the buffer the cursor walks.
@@ -243,14 +247,20 @@ pub unsafe fn unpack_keydict(
             continue;
         }
 
-        debug_assert!(unsafe { (*field).opt_index } >= 0);
-        let flag = 1u64 << unsafe { (*field).opt_index };
-        if unsafe { (*ks).is_set_ } & flag != 0 {
+        // A map that names the same key twice is malformed. The *field*
+        // cannot answer that: a keyset the caller pre-filled -- a ShaDa
+        // search-pattern entry arrives holding its defaults -- is already
+        // `Some` before the map is read at all. So the question is which
+        // rows this walk has filled.
+        if filled[..filled_len].contains(&field) {
             unsafe { *error = xstrdup(c"duplicate key".as_ptr()) };
             return false;
         }
-        unsafe { (*ks).is_set_ |= flag };
+        assert!(filled_len < filled.len(), "a keyset with more than 32 keys");
+        filled[filled_len] = field;
+        filled_len += 1;
 
+        // SAFETY: the row's offset names a field of `retval`.
         let mem = unsafe { retval.cast::<c_char>().add((*field).ptr_off) };
         if let Err(message) = unsafe { unpack_field(mem, (*field).type_0, data, size) } {
             unsafe { *error = fail(message, key) };
@@ -283,30 +293,40 @@ unsafe fn unpack_field(
             if unsafe { *size } == 0 || c_int::from(unsafe { **data }) & 0xfe != 0xc2 {
                 return Err(c"has %.*s key value which is not a boolean");
             }
-            unsafe { *mem.cast::<Boolean>() = c_int::from(**data) & 0x1 != 0 };
+            unsafe { *mem.cast::<Option<Boolean>>() = Some(c_int::from(**data) & 0x1 != 0) };
             unsafe { *data = (*data).add(1) };
             unsafe { *size -= 1 };
         }
         field_type::INTEGER => {
-            if !unsafe { unpack_integer(data, size, mem.cast::<Integer>()) } {
+            let mut number: Integer = 0;
+            if !unsafe { unpack_integer(data, size, &raw mut number) } {
                 return Err(c"has %.*s key value which is not an integer");
             }
+            unsafe { *mem.cast::<Option<Integer>>() = Some(number) };
         }
         field_type::STRING => {
             let val = unsafe { unpack_string(data, size) };
             if val.data().is_null() {
                 return Err(c"has %.*s key value which is not a binary");
             }
-            unsafe { *mem.cast::<String_0>() = val };
+            unsafe { *mem.cast::<Option<String_0>>() = Some(val) };
         }
         field_type::STRING_ARRAY => {
             let len = unsafe { unpack_array(data, size) };
             if len < 0 {
                 return Err(c"has %.*s key with non-array value");
             }
-            return unsafe {
-                unpack_string_array(mem.cast::<StringArray>(), len.cast_unsigned(), data, size)
+            // The array is built beside the slot and stored whole: a field
+            // this reaches is unset, so there is nothing there to append to.
+            let mut array = StringArray {
+                size: 0,
+                capacity: 0,
+                items: ::core::ptr::null_mut(),
             };
+            let read =
+                unsafe { unpack_string_array(&raw mut array, len.cast_unsigned(), data, size) };
+            unsafe { *mem.cast::<Option<StringArray>>() = Some(array) };
+            return read;
         }
         _ => unsafe { abort() },
     }

@@ -243,11 +243,10 @@ pub unsafe fn nvim_parse_cmd(
     arena: *mut Arena,
 ) -> Result<KeyDict_cmd, Error> {
     let mut error = Error::none();
-    // SAFETY (all three): a plain C aggregate whose all-zero state is the
-    // valid "nothing parsed yet" one, as the C original's CLEAR_FIELD relies
-    // on.
-    let mut result: KeyDict_cmd = unsafe { ::core::mem::zeroed() };
-    // SAFETY: as above.
+    // Every key unset; the answer names only what the parse found.
+    let mut result = KeyDict_cmd::default();
+    // SAFETY (both): a plain C aggregate whose all-zero state is the valid
+    // "nothing parsed yet" one, as the C original's CLEAR_FIELD relies on.
     let mut ea: ExArg = unsafe { ::core::mem::zeroed() };
     // SAFETY: as above.
     let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
@@ -293,9 +292,8 @@ pub unsafe fn nvim_parse_cmd(
     // SAFETY: `cmd`, when non-null, points at a live `UserCmd`.
     let uc_def = (!cmd.is_null()).then(|| unsafe { (*cmd).uc_def });
 
-    result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__cmd;
     // SAFETY: both names are NUL-terminated, and outlive the reply.
-    result.cmd = unsafe { cstr_as_string(command_name(&ea, cmd)) };
+    result.cmd = Some(unsafe { cstr_as_string(command_name(&ea, cmd)) });
 
     if ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
         // Two addresses give both bounds, one gives only `line2`.
@@ -307,8 +305,7 @@ pub unsafe fn nvim_parse_cmd(
             }
             array_add(&mut range, Object::integer(ea.line2 as Integer));
         }
-        result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__range;
-        result.range = range;
+        result.range = Some(range);
     }
 
     if ea.argt.has(ExArgt::COUNT) {
@@ -319,22 +316,18 @@ pub unsafe fn nvim_parse_cmd(
         };
         // A zero count that nothing asked for is left unset.
         if ea.addr_count > 0 || uc_def.is_some_and(|def| def != 0) || count != 0 {
-            result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__count;
-            result.count = count;
+            result.count = Some(count);
         }
     }
 
     if ea.argt.has(ExArgt::REGSTR) {
         let mut reg: [c_char; 2] = [ea.regname as c_char, NUL as c_char];
-        result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__reg;
         // SAFETY: `reg` is NUL-terminated and alive until the copy is made.
-        result.reg = unsafe { arena_string(arena, cstr_as_string(reg.as_mut_ptr())) };
+        result.reg = Some(unsafe { arena_string(arena, cstr_as_string(reg.as_mut_ptr())) });
     }
 
-    result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__bang;
-    result.bang = ea.forceit != 0;
-    result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__args;
-    result.args = args;
+    result.bang = Some(ea.forceit != 0);
+    result.args = Some(args);
 
     // `:command -nargs=` spelling of how many arguments the command takes.
     let nargs: &CStr = if !ea.argt.has(ExArgt::EXTRA) {
@@ -350,29 +343,21 @@ pub unsafe fn nvim_parse_cmd(
     } else {
         c"*"
     };
-    result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__nargs;
     // SAFETY: the arena copy is what the reply keeps; `nargs` is a literal.
-    result.nargs = Object::string(unsafe { arena_string(arena, static_cstring(nargs)) });
-
-    result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__addr;
-    result.addr = static_cstring(addr_type_name(ea.addr_type));
-    result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__nextcmd;
+    let nargs = unsafe { arena_string(arena, static_cstring(nargs)) };
+    result.nargs = Some(Object::string(nargs));
+    result.addr = Some(static_cstring(addr_type_name(ea.addr_type)));
     // SAFETY: `ea.nextcmd` points into the arena copy of the command line.
-    result.nextcmd = unsafe { cstr_as_string(ea.nextcmd) };
-
-    result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__mods;
+    result.nextcmd = Some(unsafe { cstr_as_string(ea.nextcmd) });
     // SAFETY: `cmdinfo.cmdmod` is what `parse_cmdline` filled in.
-    result.mods = unsafe { parse_mods(&cmdinfo.cmdmod, arena) };
-
-    result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__magic;
-    result.magic = dict_of(
+    result.mods = Some(unsafe { parse_mods(&cmdinfo.cmdmod, arena) });
+    result.magic = Some(dict_of(
         arena,
         [
             (c"file", Object::boolean(cmdinfo.magic.file)),
             (c"bar", Object::boolean(cmdinfo.magic.bar)),
         ],
-    );
-
+    ));
     // The `:filter` pattern `parse_mods` copied out is freed here, not before.
     undo_cmdmod(&mut cmdinfo.cmdmod);
     result.reported(error)

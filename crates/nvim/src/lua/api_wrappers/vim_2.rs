@@ -16,6 +16,33 @@
 
 use super::*;
 
+/// The Lua binding for `nvim_get_current_tabpage`, as a `lua_CFunction`.
+///
+/// # Safety
+/// LuaJIT's contract: `lstate` is the running Lua state, with this
+/// binding's arguments on top of its stack and nothing of this frame's
+/// below them. The ABI is `C-unwind` because a refused argument ends in
+/// `lua_error`, which unwinds through this frame rather than returning.
+pub unsafe extern "C-unwind" fn nlua_api_nvim_get_current_tabpage(lstate: *mut lua_State) -> c_int {
+    /// Pop the arguments, call the API function, hand the result back.
+    /// Each argument that owns Lua references arms a guard, so every way
+    /// out releases exactly what was converted, in declaration order.
+    ///
+    /// # Safety
+    /// The dispatcher's contract, which is what every `unsafe` below rests
+    /// on: `lstate` is the running Lua state with this binding's arguments
+    /// on top, and `call` is the binding's own.
+    unsafe fn convert(lstate: *mut lua_State, _call: &mut Call) -> Result<(), Error> {
+        let _lstate = Restore::of(&active_lstate, lstate);
+        let ret = nvim_get_current_tabpage();
+        // SAFETY: as above.
+        unsafe { nlua_push_handle(lstate, ret, PUSH_SPECIAL) };
+        Ok(())
+    }
+    // SAFETY: `lstate` is the state Lua called this binding on.
+    unsafe { dispatch(lstate, c"nvim_get_current_tabpage", 0, 1, convert) }
+}
+
 /// The Lua binding for `nvim_get_current_win`, as a `lua_CFunction`.
 ///
 /// # Safety
@@ -61,7 +88,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_hl(lstate: *mut lua_State) -> 
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_2 = KeyDictArg::<KeyDict_get_highlight>::zeroed();
+        let mut arg_2 = KeyDictArg::<KeyDict_get_highlight>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_2, arena, err_param) }?;
         // SAFETY: as above.
@@ -128,7 +155,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_hl_ns(lstate: *mut lua_State) 
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_1 = KeyDictArg::<KeyDict_get_ns>::zeroed();
+        let mut arg_1 = KeyDictArg::<KeyDict_get_ns>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_1, arena, err_param) }?;
         let _lstate = Restore::of(&active_lstate, lstate);
@@ -192,7 +219,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_get_mark(lstate: *mut lua_State) -
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_2 = KeyDictArg::<KeyDict_empty>::zeroed();
+        let mut arg_2 = KeyDictArg::<KeyDict_empty>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_2, arena, err_param) }?;
         // SAFETY: as above.
@@ -705,7 +732,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_open_term(lstate: *mut lua_State) 
         if textlock.get() != 0 || expr_map_locked() {
             return Err(expr_map_locked_error());
         }
-        let mut arg_2 = KeyDictArg::<KeyDict_open_term>::zeroed();
+        let mut arg_2 = KeyDictArg::<KeyDict_open_term>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_2, arena, err_param) }?;
         // SAFETY: as above.
@@ -868,7 +895,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_select_popupmenu_item(
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_4 = KeyDictArg::<KeyDict_empty>::zeroed();
+        let mut arg_4 = KeyDictArg::<KeyDict_empty>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_4, arena, err_param) }?;
         // SAFETY: as above.
@@ -950,37 +977,4 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_set_current_dir(lstate: *mut lua_S
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
     unsafe { dispatch(lstate, c"nvim_set_current_dir", 1, 0, convert) }
-}
-
-/// The Lua binding for `nvim_set_current_line`, as a `lua_CFunction`.
-///
-/// # Safety
-/// LuaJIT's contract: `lstate` is the running Lua state, with this
-/// binding's arguments on top of its stack and nothing of this frame's
-/// below them. The ABI is `C-unwind` because a refused argument ends in
-/// `lua_error`, which unwinds through this frame rather than returning.
-pub unsafe extern "C-unwind" fn nlua_api_nvim_set_current_line(lstate: *mut lua_State) -> c_int {
-    /// Pop the arguments, call the API function, hand the result back.
-    /// Each argument that owns Lua references arms a guard, so every way
-    /// out releases exactly what was converted, in declaration order.
-    ///
-    /// # Safety
-    /// The dispatcher's contract, which is what every `unsafe` below rests
-    /// on: `lstate` is the running Lua state with this binding's arguments
-    /// on top, and `call` is the binding's own.
-    unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
-        let Call { arena, err_param } = call;
-        if textlock.get() != 0 || expr_map_locked() {
-            return Err(expr_map_locked_error());
-        }
-        // SAFETY: as above.
-        let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
-            .inspect_err(|_| *err_param = c"line".as_ptr().cast_mut())?;
-        let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_set_current_line(arg_1, arena) }?;
-        Ok(())
-    }
-    // SAFETY: `lstate` is the state Lua called this binding on.
-    unsafe { dispatch(lstate, c"nvim_set_current_line", 1, 0, convert) }
 }

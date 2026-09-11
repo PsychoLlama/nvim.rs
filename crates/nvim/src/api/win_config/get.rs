@@ -16,9 +16,9 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::{array_add, find_window_by_handle, set_key};
+use crate::api::private::helpers::{array_add, find_window_by_handle};
 use crate::winlayer::Live;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 
 // The enumerated keys' spellings, each indexed by the value it names. They
 // are the same literals `parse.rs` matches on the way in; upstream keeps
@@ -47,11 +47,6 @@ const FLOAT_ANCHOR_STR: [&CStr; 4] = [c"NW", c"NE", c"SW", c"SE"];
 /// [`AlignTextPos`]'s names, indexed by the value.
 const ALIGN_TEXT_STR: [&CStr; 3] = [c"left", c"center", c"right"];
 
-/// Mark `key` present in `config`'s optional-key set.
-fn set(config: &mut KeyDict_win_config, key: c_int) {
-    config.is_set__win_config_ = set_key(config.is_set__win_config_, key);
-}
-
 /// Put one of the two border texts -- its chunks and its position -- into
 /// `config`, as the keys `nvim_win_set_config` would take back.
 fn config_put_bordertext(
@@ -69,25 +64,12 @@ fn config_put_bordertext(
     // SAFETY: the chunks are the window's own, and `arena` is the caller's.
     let bordertext = Object::array(unsafe { virt_text_to_array(vt, true, arena) });
     let pos = String_0::from_cstr(ALIGN_TEXT_STR[align as usize]);
-    let (text_key, pos_key) = if footer {
-        (
-            KEYSET_OPTIDX_win_config__footer,
-            KEYSET_OPTIDX_win_config__footer_pos,
-        )
-    } else {
-        (
-            KEYSET_OPTIDX_win_config__title,
-            KEYSET_OPTIDX_win_config__title_pos,
-        )
-    };
-    config.is_set__win_config_ = set_key(config.is_set__win_config_, text_key);
-    config.is_set__win_config_ = set_key(config.is_set__win_config_, pos_key);
     if footer {
-        config.footer = bordertext;
-        config.footer_pos = pos;
+        config.footer = Some(bordertext);
+        config.footer_pos = Some(pos);
     } else {
-        config.title = bordertext;
-        config.title_pos = pos;
+        config.title = Some(bordertext);
+        config.title_pos = Some(pos);
     }
 }
 
@@ -137,7 +119,7 @@ pub unsafe fn nvim_win_get_config(
     win: WindowHandle,
     arena: *mut Arena,
 ) -> Result<KeyDict_win_config, Error> {
-    let mut rv: KeyDict_win_config = KEYDICT_INIT;
+    let mut rv = KeyDict_win_config::default();
     let Some(wp) = find_window_by_handle(win)? else {
         return Ok(rv);
     };
@@ -146,26 +128,18 @@ pub unsafe fn nvim_win_get_config(
     // which is what lets both stay usable.
     let config: WinCfg = unsafe { Live::new(&raw mut (*wp.raw()).w_config) };
 
-    set(&mut rv, KEYSET_OPTIDX_win_config__focusable);
-    rv.focusable = config.focusable;
-    set(&mut rv, KEYSET_OPTIDX_win_config__external);
-    rv.external = config.external;
-    set(&mut rv, KEYSET_OPTIDX_win_config__hide);
-    rv.hide = config.hide;
-    set(&mut rv, KEYSET_OPTIDX_win_config__mouse);
-    rv.mouse = config.mouse;
-    set(&mut rv, KEYSET_OPTIDX_win_config__style);
-    rv.style = String_0::from_cstr(WIN_STYLE_STR[config.style as usize]);
+    rv.focusable = Some(config.focusable);
+    rv.external = Some(config.external);
+    rv.hide = Some(config.hide);
+    rv.mouse = Some(config.mouse);
+    rv.style = Some(String_0::from_cstr(WIN_STYLE_STR[config.style as usize]));
 
     if wp.w_floating {
-        set(&mut rv, KEYSET_OPTIDX_win_config__width);
-        rv.width = Integer::from(config.width);
-        set(&mut rv, KEYSET_OPTIDX_win_config__height);
-        rv.height = Integer::from(config.height);
+        rv.width = Some(Integer::from(config.width));
+        rv.height = Some(Integer::from(config.height));
         if !config.external {
             if config.relative == kFloatRelativeWindow {
-                set(&mut rv, KEYSET_OPTIDX_win_config__win);
-                rv.win = config.window;
+                rv.win = Some(config.window);
                 if config.bufpos.lnum >= 0 {
                     let mut pos = arena_array(arena, 2);
                     let (lnum, col) = (config.bufpos.lnum, config.bufpos.col);
@@ -175,25 +149,19 @@ pub unsafe fn nvim_win_get_config(
                         array_add(&mut pos, Object::integer(Integer::from(lnum)));
                         array_add(&mut pos, Object::integer(Integer::from(col)));
                     }
-                    set(&mut rv, KEYSET_OPTIDX_win_config__bufpos);
-                    rv.bufpos = pos;
+                    rv.bufpos = Some(pos);
                 }
             }
-            set(&mut rv, KEYSET_OPTIDX_win_config__anchor);
             let anchor = usize::try_from(config.anchor).expect("an anchor is one of four");
-            rv.anchor = String_0::from_cstr(FLOAT_ANCHOR_STR[anchor]);
-            set(&mut rv, KEYSET_OPTIDX_win_config__row);
-            rv.row = config.row;
-            set(&mut rv, KEYSET_OPTIDX_win_config__col);
-            rv.col = config.col;
-            set(&mut rv, KEYSET_OPTIDX_win_config__zindex);
-            rv.zindex = Integer::from(config.zindex);
+            rv.anchor = Some(String_0::from_cstr(FLOAT_ANCHOR_STR[anchor]));
+            rv.row = Some(config.row);
+            rv.col = Some(config.col);
+            rv.zindex = Some(Integer::from(config.zindex));
         }
-        set(&mut rv, KEYSET_OPTIDX_win_config__border);
         if config.border {
             // SAFETY: `arena` is the caller's, and outlives the answer along
             // with the window's config.
-            rv.border = Object::array(unsafe { border_array(config, arena) });
+            rv.border = Some(Object::array(unsafe { border_array(config, arena) }));
             if config.title {
                 config_put_bordertext(&mut rv, config, kBorderTextTitle, arena);
             }
@@ -201,16 +169,13 @@ pub unsafe fn nvim_win_get_config(
                 config_put_bordertext(&mut rv, config, kBorderTextFooter, arena);
             }
         } else {
-            rv.border = Object::string(String_0::from_cstr(c"none"));
+            rv.border = Some(Object::string(String_0::from_cstr(c"none")));
         }
     } else if !config.external {
-        set(&mut rv, KEYSET_OPTIDX_win_config__width);
-        rv.width = Integer::from(wp.w_width);
-        set(&mut rv, KEYSET_OPTIDX_win_config__height);
-        rv.height = Integer::from(wp.w_height);
+        rv.width = Some(Integer::from(wp.w_width));
+        rv.height = Some(Integer::from(wp.w_height));
         let split = win_split_dir(wp);
-        set(&mut rv, KEYSET_OPTIDX_win_config__split);
-        rv.split = String_0::from_cstr(WIN_SPLIT_STR[split as usize]);
+        rv.split = Some(String_0::from_cstr(WIN_SPLIT_STR[split as usize]));
     }
 
     let rel = if wp.w_floating && !config.external {
@@ -218,11 +183,9 @@ pub unsafe fn nvim_win_get_config(
     } else {
         c""
     };
-    set(&mut rv, KEYSET_OPTIDX_win_config__relative);
-    rv.relative = String_0::from_cstr(rel);
+    rv.relative = Some(String_0::from_cstr(rel));
     if config._cmdline_offset < INT_MAX {
-        set(&mut rv, KEYSET_OPTIDX_win_config___cmdline_offset);
-        rv._cmdline_offset = Integer::from(config._cmdline_offset);
+        rv._cmdline_offset = Some(Integer::from(config._cmdline_offset));
     }
     Ok(rv)
 }

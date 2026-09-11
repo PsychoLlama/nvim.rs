@@ -54,16 +54,6 @@ pub(crate) const kColorIdxHex: c_int = -2;
 pub(crate) const kColorIdxFg: c_int = -3;
 pub(crate) const kColorIdxBg: c_int = -4;
 
-/// Keyset bit positions, from `api/keysets_defs.h`.
-pub(crate) const KEYSET_OPTIDX_highlight__bg: c_int = 1;
-pub(crate) const KEYSET_OPTIDX_highlight__fg: c_int = 2;
-pub(crate) const KEYSET_OPTIDX_highlight__sp: c_int = 3;
-pub(crate) const KEYSET_OPTIDX_highlight__update: c_int = 13;
-pub(crate) const KEYSET_OPTIDX_get_highlight__id: c_int = 1;
-pub(crate) const KEYSET_OPTIDX_get_highlight__link: c_int = 2;
-pub(crate) const KEYSET_OPTIDX_get_highlight__name: c_int = 3;
-pub(crate) const KEYSET_OPTIDX_get_highlight__create: c_int = 4;
-
 pub(crate) const e_group_has_settings_highlight_link_ignored: &CStr =
     c"E414: Group has settings, highlight link ignored";
 

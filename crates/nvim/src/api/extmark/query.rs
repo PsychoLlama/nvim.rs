@@ -146,15 +146,8 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
         error = err_bad_number(c"ns_id", ns_id);
         return rv.reported(error);
     }
-    let details: bool = opts.details;
-    let hl_name: bool = if has_key(
-        opts.is_set__get_extmark_,
-        KEYSET_OPTIDX_get_extmark__hl_name,
-    ) {
-        opts.hl_name as ::core::ffi::c_int
-    } else {
-        1
-    } != 0;
+    let details: bool = opts.details.unwrap_or(false);
+    let hl_name: bool = opts.hl_name.unwrap_or(true);
     let extmark: MTPair = extmark_from_id(b, ns_id as uint32_t, id as uint32_t);
     if extmark.start.pos.row < 0 as int32_t {
         return rv.reported(error);
@@ -188,42 +181,25 @@ pub unsafe fn nvim_buf_get_extmarks(
         error = err_bad_number(c"ns_id", ns_id);
         return rv.reported(error);
     }
-    let details: bool = opts.details;
-    let hl_name: bool = if has_key(
-        opts.is_set__get_extmarks_,
-        KEYSET_OPTIDX_get_extmarks__hl_name,
-    ) {
-        opts.hl_name as ::core::ffi::c_int
-    } else {
-        1
-    } != 0;
+    let details: bool = opts.details.unwrap_or(false);
+    let hl_name: bool = opts.hl_name.unwrap_or(true);
     let mut type_0: ExtmarkType = kExtmarkNone;
-    if has_key(opts.is_set__get_extmarks_, KEYSET_OPTIDX_get_extmarks__type) {
-        if unsafe { strequal(opts.type_0.data(), c"sign".as_ptr()) } {
-            type_0 = kExtmarkSign;
-        } else if unsafe { strequal(opts.type_0.data(), c"virt_text".as_ptr()) } {
-            type_0 = kExtmarkVirtText;
-        } else if unsafe { strequal(opts.type_0.data(), c"virt_lines".as_ptr()) } {
-            type_0 = kExtmarkVirtLines;
-        } else if unsafe { strequal(opts.type_0.data(), c"highlight".as_ptr()) } {
-            type_0 = kExtmarkHighlight;
-        } else if true {
-            let want = c"sign, virt_text, virt_lines or highlight";
-            let got = opts.type_0.data();
-            // SAFETY: the keyset's string names its own NUL-terminated bytes.
-            let got = unsafe { crate::cstr::at_opt(got) };
-            error = err_expected(c"type", want, got);
-            return rv.reported(error);
-        }
+    if let Some(named) = opts.type_0 {
+        // SAFETY: the keyset's string names its own NUL-terminated bytes.
+        let name = unsafe { crate::cstr::at_opt(named.data()) };
+        type_0 = match name.map(core::ffi::CStr::to_bytes) {
+            Some(b"sign") => kExtmarkSign,
+            Some(b"virt_text") => kExtmarkVirtText,
+            Some(b"virt_lines") => kExtmarkVirtLines,
+            Some(b"highlight") => kExtmarkHighlight,
+            _ => {
+                let want = c"sign, virt_text, virt_lines or highlight";
+                error = err_expected(c"type", want, name);
+                return rv.reported(error);
+            }
+        };
     }
-    let mut limit: Integer = if has_key(
-        opts.is_set__get_extmarks_,
-        KEYSET_OPTIDX_get_extmarks__limit,
-    ) {
-        opts.limit
-    } else {
-        -1 as Integer
-    };
+    let mut limit: Integer = opts.limit.unwrap_or(-1 as Integer);
     if limit == 0 as Integer {
         return rv.reported(error);
     } else if limit < 0 as Integer {
@@ -251,7 +227,7 @@ pub unsafe fn nvim_buf_get_extmarks(
         u_col,
         limit,
         type_0,
-        opts.overlap,
+        opts.overlap.unwrap_or(false),
     );
     rv = arena_array(
         arena,

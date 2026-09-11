@@ -85,7 +85,6 @@ pub struct KeySetLink {
     pub str: *mut ::core::ffi::c_char,
     pub ptr_off: size_t,
     pub type_0: ::core::ffi::c_int,
-    pub opt_index: ::core::ffi::c_int,
     pub is_hlgroup: bool,
 }
 pub type KeyValuePair = key_value_pair;
@@ -109,10 +108,6 @@ pub const kObjectTypeLuaRef: ObjectType = 7;
 pub const kObjectTypeBuffer: ObjectType = 8;
 pub const kObjectTypeWindow: ObjectType = 9;
 pub const kObjectTypeTabpage: ObjectType = 10;
-pub struct OptKeySet {
-    pub is_set_: OptionalKeys,
-}
-pub type OptionalKeys = uint64_t;
 pub type TabpageHandle = Handle;
 pub type WindowHandle = Handle;
 #[derive(Copy, Clone)]

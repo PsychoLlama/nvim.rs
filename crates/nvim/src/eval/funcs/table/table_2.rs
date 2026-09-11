@@ -16,9 +16,15 @@
 #[allow(unused_imports)]
 use super::*;
 
-/// This file's run of the builtin table (173 rows), spliced in by
+/// This file's run of the builtin table (170 rows), spliced in by
 /// the parent.
 pub(super) const PART: &[EvalFuncDef] = &[
+    builtin(
+        c"writefile",
+        Arity::Between(2, 3),
+        BaseArg::At(1),
+        Some(f_writefile),
+    ),
     builtin(
         c"getqflist",
         Arity::Between(0, 1),
@@ -953,23 +959,4 @@ pub(super) const PART: &[EvalFuncDef] = &[
         Some(f_assert_match),
     ),
     api(c"nvim_ui_send", 1, 22),
-    builtin(
-        c"sign_unplace",
-        Arity::Between(1, 2),
-        BaseArg::At(1),
-        Some(f_sign_unplace),
-    ),
-    api(c"nvim__id_dict", 1, 37),
-    builtin(
-        c"timer_stopall",
-        Arity::Exact(0),
-        BaseArg::Never,
-        Some(f_timer_stopall),
-    ),
-    builtin(
-        c"getchangelist",
-        Arity::Between(0, 1),
-        BaseArg::At(1),
-        Some(f_getchangelist),
-    ),
 ];

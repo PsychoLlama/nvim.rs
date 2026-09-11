@@ -17,7 +17,7 @@
 use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
-pub(super) const PART: [VimOption; 80] = [
+pub(super) const PART: [VimOption; 79] = [
     // 'aleph'
     VimOption {
         fullname: name(c"aleph"),
@@ -971,18 +971,6 @@ pub(super) const PART: [VimOption; 80] = [
         scope_idx: scope_idx(kGlobalOptEdcompatible, kWinOptInvalid, kBufOptInvalid),
         var: OptVar::OwnDefault,
         immutable: true,
-        ..BLANK
-    },
-    // 'emoji'
-    VimOption {
-        fullname: name(c"emoji"),
-        shortname: name(c"emo"),
-        flags: kOptFlagRedrAll | kOptFlagUIOption,
-        scope_flags: GLOBAL,
-        scope_idx: scope_idx(kGlobalOptEmoji, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_emoji),
-        opt_did_set_cb: Some(did_set_emoji),
-        def_val: boolean(true),
         ..BLANK
     },
 ];

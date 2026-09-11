@@ -36,14 +36,8 @@ pub unsafe fn nvim_create_augroup(
     let opts = unsafe { Live::<KeyDict_create_augroup>::new(opts) };
     let mut error = Error::none();
     let augroup_name_0: *mut ::core::ffi::c_char = name.data();
-    let clear_autocmds: bool = if opts.is_set__create_augroup_ as ::core::ffi::c_ulonglong
-        & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_augroup__clear
-        != 0 as ::core::ffi::c_ulonglong
-    {
-        ::core::ffi::c_int::from(opts.clear)
-    } else {
-        1
-    } != 0;
+    // An augroup the caller says nothing about is cleared.
+    let clear_autocmds: bool = opts.clear.unwrap_or(true);
     let _sctx = api_set_sctx(channel_id);
     let augroup: ::core::ffi::c_int = unsafe { augroup_add(augroup_name_0) };
     if augroup == AUGROUP_ERROR as ::core::ffi::c_int {

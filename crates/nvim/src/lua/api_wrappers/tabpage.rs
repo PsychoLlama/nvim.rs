@@ -37,7 +37,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_open_tabpage(lstate: *mut lua_Stat
         if textlock.get() != 0 || expr_map_locked() {
             return Err(expr_map_locked_error());
         }
-        let mut arg_3 = KeyDictArg::<KeyDict_tabpage_config>::zeroed();
+        let mut arg_3 = KeyDictArg::<KeyDict_tabpage_config>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_3, arena, err_param) }?;
         // SAFETY: as above.

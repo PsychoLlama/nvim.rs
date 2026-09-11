@@ -16,6 +16,7 @@ use super::{
     nlua_pop_integer, nlua_pop_luaref, nlua_pop_object, nlua_pop_string, nlua_push_array,
     nlua_push_dict, nlua_push_object, nlua_push_string, nlua_push_type_idx, nlua_push_val_idx,
 };
+use crate::api::private::helpers::keyset_field_is_set;
 use crate::api_error;
 use crate::highlight_group::syn_check_group;
 use crate::lua::executor::nlua_pushref;
@@ -27,10 +28,10 @@ use crate::lua::ffi::{
 use crate::message_fmt::c_str_len;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
-    Object, OptKeySet, OptionalKeys, String_0, kErrorTypeValidation, kObjectTypeArray,
-    kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
-    kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
-    lua_Integer, lua_Number, lua_State, size_t,
+    Object, String_0, kErrorTypeValidation, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
+    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, lua_Integer,
+    lua_Number, lua_State, size_t,
 };
 use ::libc::abort;
 
@@ -91,6 +92,15 @@ pub unsafe fn nlua_pop_keydict(
     err_opt: *mut *mut c_char,
     arena: *mut Arena,
 ) -> Result<(), Error> {
+    /// Record the value the pop produced, which is also what records that
+    /// the caller named the key. Defined out here so that its own lines are
+    /// not counted as unchecked code; every expansion is inside the region
+    /// below.
+    macro_rules! store {
+        ($at:expr, $ty:ty, $value:expr) => {
+            *$at.cast::<Option<$ty>>() = Some($value)
+        };
+    }
     unsafe {
         if lua_type(lstate, -1) != LUA_TTABLE {
             // Upstream writes `lua_pop(L, -1)` here, which expands to
@@ -112,17 +122,13 @@ pub unsafe fn nlua_pop_keydict(
                 lua_pop(lstate, 3);
                 return Err(api_error!(kErrorTypeValidation, "invalid key: {key}"));
             }
-            if (*field).opt_index >= 0 {
-                let ks = retval.cast::<OptKeySet>();
-                (*ks).is_set_ |= (1_u64 << (*field).opt_index) as OptionalKeys;
-            }
-
             let mem = retval.cast::<c_char>().add((*field).ptr_off);
             // Each arm stores what it popped and answers whether it could;
             // the field's own name is what a refusal is reported against.
+            // Storing `Some` is what records that the caller named the key.
             let popped: Result<(), Error> = (|| {
                 match (*field).type_0 as ObjectTypeInt {
-                    T_ANY => *mem.cast::<Object>() = nlua_pop_object(lstate, true, arena)?,
+                    T_ANY => store!(mem, Object, nlua_pop_object(lstate, true, arena)?),
                     T_INTEGER => {
                         // A highlight-group field takes the group's *name* as
                         // well as its id.
@@ -130,24 +136,25 @@ pub unsafe fn nlua_pop_keydict(
                             let mut name_len: size_t = 0;
                             let name = lua_tolstring(lstate, -1, &raw mut name_len);
                             lua_pop(lstate, 1);
-                            *mem.cast::<Integer>() = if name_len > 0 {
+                            let id = if name_len > 0 {
                                 syn_check_group(name, name_len) as Integer
                             } else {
                                 0
                             };
+                            store!(mem, Integer, id);
                         } else {
-                            *mem.cast::<Integer>() = nlua_pop_integer(lstate, arena)?;
+                            store!(mem, Integer, nlua_pop_integer(lstate, arena)?);
                         }
                     }
-                    T_BOOLEAN => *mem.cast::<Boolean>() = nlua_pop_boolean_strict(lstate)?,
-                    T_STRING => *mem.cast::<String_0>() = nlua_pop_string(lstate, arena)?,
-                    T_FLOAT => *mem.cast::<Float>() = nlua_pop_float(lstate, arena)?,
+                    T_BOOLEAN => store!(mem, Boolean, nlua_pop_boolean_strict(lstate)?),
+                    T_STRING => store!(mem, String_0, nlua_pop_string(lstate, arena)?),
+                    T_FLOAT => store!(mem, Float, nlua_pop_float(lstate, arena)?),
                     T_BUFFER | T_WINDOW | T_TABPAGE => {
-                        *mem.cast::<Handle>() = nlua_pop_handle(lstate, arena)?;
+                        store!(mem, Handle, nlua_pop_handle(lstate, arena)?);
                     }
-                    T_ARRAY => *mem.cast::<Array>() = nlua_pop_array(lstate, arena)?,
-                    T_DICT => *mem.cast::<ApiDict>() = nlua_pop_dict(lstate, false, arena)?,
-                    T_LUAREF => *mem.cast::<LuaRef>() = nlua_pop_luaref(lstate, arena)?,
+                    T_ARRAY => store!(mem, Array, nlua_pop_array(lstate, arena)?),
+                    T_DICT => store!(mem, ApiDict, nlua_pop_dict(lstate, false, arena)?),
+                    T_LUAREF => store!(mem, LuaRef, nlua_pop_luaref(lstate, arena)?),
                     _ => abort(),
                 }
                 Ok(())
@@ -177,6 +184,15 @@ pub unsafe fn nlua_push_keydict(
     value: *mut c_void,
     table: *const KeySetLink,
 ) {
+    /// The field, which the presence test says is `Some`; the default is
+    /// there to spell the arm's type, not because it can be reached.
+    /// Defined out here so that its own lines are not counted as unchecked
+    /// code; every expansion is inside the region below.
+    macro_rules! field {
+        ($at:expr, $ty:ty, $absent:expr) => {
+            (*$at.cast::<Option<$ty>>()).unwrap_or($absent)
+        };
+    }
     unsafe {
         lua_createtable(lstate, 0, 0);
         let mut i: size_t = 0;
@@ -184,29 +200,27 @@ pub unsafe fn nlua_push_keydict(
             let field = table.add(i);
             i = i.wrapping_add(1);
 
-            // A field with an `opt_index` is only present when its bit is on;
-            // one without is always there.
-            if (*field).opt_index >= 0 {
-                let ks = value.cast::<OptKeySet>();
-                if (*ks).is_set_ & (1_u64 << (*field).opt_index) == 0 {
-                    continue;
-                }
-            }
-
+            // A key the caller never named is not an entry of the table.
             let mem = value.cast::<c_char>().add((*field).ptr_off);
+            if !keyset_field_is_set(mem.cast(), (*field).type_0) {
+                continue;
+            }
             lua_pushstring(lstate, (*field).str);
             match (*field).type_0 as ObjectTypeInt {
-                T_ANY => nlua_push_object(lstate, mem.cast::<Object>(), 0),
-                T_INTEGER => lua_pushinteger(lstate, *mem.cast::<Integer>() as lua_Integer),
-                T_BUFFER | T_WINDOW | T_TABPAGE => {
-                    lua_pushinteger(lstate, *mem.cast::<Handle>() as lua_Integer);
+                T_ANY => {
+                    let mut object = field!(mem, Object, Object::Nil);
+                    nlua_push_object(lstate, &raw mut object, 0);
                 }
-                T_FLOAT => lua_pushnumber(lstate, *mem.cast::<Float>()),
-                T_BOOLEAN => lua_pushboolean(lstate, *mem.cast::<Boolean>() as c_int),
-                T_STRING => nlua_push_string(lstate, *mem.cast::<String_0>(), 0),
-                T_ARRAY => nlua_push_array(lstate, *mem.cast::<Array>(), 0),
-                T_DICT => nlua_push_dict(lstate, *mem.cast::<ApiDict>(), 0),
-                T_LUAREF => nlua_pushref(lstate, *mem.cast::<LuaRef>()),
+                T_INTEGER => lua_pushinteger(lstate, field!(mem, Integer, 0) as lua_Integer),
+                T_BUFFER | T_WINDOW | T_TABPAGE => {
+                    lua_pushinteger(lstate, field!(mem, Handle, 0) as lua_Integer);
+                }
+                T_FLOAT => lua_pushnumber(lstate, field!(mem, Float, 0.0)),
+                T_BOOLEAN => lua_pushboolean(lstate, c_int::from(field!(mem, Boolean, false))),
+                T_STRING => nlua_push_string(lstate, field!(mem, String_0, String_0::NULL), 0),
+                T_ARRAY => nlua_push_array(lstate, field!(mem, Array, Array::EMPTY), 0),
+                T_DICT => nlua_push_dict(lstate, field!(mem, ApiDict, ApiDict::EMPTY), 0),
+                T_LUAREF => nlua_pushref(lstate, field!(mem, LuaRef, 0)),
                 _ => abort(),
             }
             lua_rawset(lstate, -3);

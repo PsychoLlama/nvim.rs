@@ -122,22 +122,23 @@ pub(crate) unsafe fn add_search_pattern(
     let entry = ShadaEntry {
         can_free_entry: false,
         timestamp: pat.timestamp,
+        // Every key is named here, so the entry a collector builds reads
+        // the same way as one the parser filled in over its defaults.
         data: ShadaEntryData::SearchPattern(KeyDict__shada_search_pat {
-            is_set___shada_search_pat_: 0,
-            magic: pat.magic,
-            smartcase: !pat.no_scs,
-            has_line_offset: !is_substitute_pattern && pat.off.line,
-            place_cursor_at_end: !is_substitute_pattern && pat.off.end,
-            is_last_used: last_used,
-            is_substitute_pattern,
-            highlighted: last_used && search_highlighted,
-            search_backward: !is_substitute_pattern && pat.off.dir as c_int == '?' as c_int,
+            magic: Some(pat.magic),
+            smartcase: Some(!pat.no_scs),
+            has_line_offset: Some(!is_substitute_pattern && pat.off.line),
+            place_cursor_at_end: Some(!is_substitute_pattern && pat.off.end),
+            is_last_used: Some(last_used),
+            is_substitute_pattern: Some(is_substitute_pattern),
+            highlighted: Some(last_used && search_highlighted),
+            search_backward: Some(!is_substitute_pattern && pat.off.dir as c_int == '?' as c_int),
             offset: if is_substitute_pattern {
                 defaults.offset
             } else {
-                pat.off.off as Integer
+                Some(pat.off.off as Integer)
             },
-            pat: unsafe { cstr_as_string(pat.pat) },
+            pat: Some(unsafe { cstr_as_string(pat.pat) }),
         }),
         additional_data: pat.additional_data,
     };
@@ -146,7 +147,7 @@ pub(crate) unsafe fn add_search_pattern(
     // `!is_substitute_pattern &&` above produces; assert it rather than
     // spelling the branch out twice.
     debug_assert!(
-        !defaults.has_line_offset && !defaults.place_cursor_at_end,
+        defaults.has_line_offset == Some(false) && defaults.place_cursor_at_end == Some(false),
         "shada: a search pattern's offset defaults are not false"
     );
 }

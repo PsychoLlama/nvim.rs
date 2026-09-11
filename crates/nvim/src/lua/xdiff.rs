@@ -31,9 +31,8 @@ use crate::lua::ffi::{
 };
 use crate::memory::strequal;
 use crate::types::{
-    Arena, Error, KeyDict_xdl_diff, LineNr, Object, OptionalKeys, String_0, int64_t,
-    kErrorTypeException, lua_Integer, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, size_t,
-    xdemitcb_t, xdemitconf_t, xpparam_t,
+    Arena, Error, KeyDict_xdl_diff, LineNr, Object, int64_t, kErrorTypeException, lua_Integer,
+    lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
@@ -113,21 +112,6 @@ struct HunkContext {
     iwhite: bool,
 }
 
-pub const KEYDICT_INIT: KeyDict_xdl_diff = KeyDict_xdl_diff {
-    is_set__xdl_diff_: 0 as OptionalKeys,
-    on_hunk: 0,
-    result_type: String_0::NULL,
-    algorithm: String_0::NULL,
-    ctxlen: 0,
-    interhunkctxlen: 0,
-    linematch: Object::Nil,
-    ignore_whitespace: false,
-    ignore_whitespace_change: false,
-    ignore_whitespace_change_at_eol: false,
-    ignore_cr_at_eol: false,
-    ignore_blank_lines: false,
-    indent_heuristic: false,
-};
 use crate::api_error;
 use crate::message_fmt::c_str;
 
@@ -357,7 +341,7 @@ unsafe fn process_xdl_diff_opts(
     params: &mut xpparam_t,
     linematch: &mut int64_t,
 ) -> (Mode, Option<Error>) {
-    let mut opts: KeyDict_xdl_diff = KEYDICT_INIT;
+    let mut opts = KeyDict_xdl_diff::default();
     let mut err_param: *mut c_char = ptr::null_mut::<c_char>();
     // SAFETY: the caller's state and table; `opts` is a live keydict and
     // owns whatever the pop puts in it, which is freed at the end.
@@ -377,17 +361,13 @@ unsafe fn process_xdl_diff_opts(
     let (mode, why) = unsafe { apply_opts(lstate, &opts, cfg, params, linematch) };
 
     // SAFETY: the keydict owns these; `opts` is not read again.
-    unsafe {
-        api_free_string(opts.result_type);
-        api_free_string(opts.algorithm);
-        api_free_luaref(opts.on_hunk);
+    for string in [opts.result_type, opts.algorithm].into_iter().flatten() {
+        unsafe { api_free_string(string) };
+    }
+    if let Some(on_hunk) = opts.on_hunk {
+        unsafe { api_free_luaref(on_hunk) };
     }
     (mode, why.or(popped.err()))
-}
-
-/// Whether the optional key at bit `optidx` was given.
-fn is_set(opts: &KeyDict_xdl_diff, optidx: c_int) -> bool {
-    opts.is_set__xdl_diff_ & (1 << optidx) != 0
 }
 
 /// The body of [`process_xdl_diff_opts`], split out so the keydict is freed
@@ -395,9 +375,6 @@ fn is_set(opts: &KeyDict_xdl_diff, optidx: c_int) -> bool {
 ///
 /// # Safety
 /// `lstate` must be live; `opts` must be a populated keydict.
-// The `KEYSET_OPTIDX_*` constants below are spelled the way apigen names the
-// keyset's mask bits, so the lint is answered here rather than file-wide.
-#[allow(non_upper_case_globals)]
 unsafe fn apply_opts(
     lstate: *mut lua_State,
     opts: &KeyDict_xdl_diff,
@@ -405,22 +382,13 @@ unsafe fn apply_opts(
     params: &mut xpparam_t,
     linematch: &mut int64_t,
 ) -> (Mode, Option<Error>) {
-    // The bit index of each optional key in `is_set__xdl_diff_`, as apigen
-    // names them. Function-local so they stay out of the FFI golden.
-    const KEYSET_OPTIDX_xdl_diff__ctxlen: c_int = 1;
-    const KEYSET_OPTIDX_xdl_diff__on_hunk: c_int = 2;
-    const KEYSET_OPTIDX_xdl_diff__algorithm: c_int = 3;
-    const KEYSET_OPTIDX_xdl_diff__linematch: c_int = 4;
-    const KEYSET_OPTIDX_xdl_diff__result_type: c_int = 5;
-    const KEYSET_OPTIDX_xdl_diff__interhunkctxlen: c_int = 6;
-
     let mut had_result_type_indices = false;
     // SAFETY: `result_type`/`algorithm` are NUL-terminated or null, which is
     // what `strequal` takes.
-    if is_set(opts, KEYSET_OPTIDX_xdl_diff__result_type)
-        && !unsafe { strequal(c"unified".as_ptr(), opts.result_type.data()) }
+    if let Some(result_type) = opts.result_type
+        && !unsafe { strequal(c"unified".as_ptr(), result_type.data()) }
     {
-        if unsafe { strequal(c"indices".as_ptr(), opts.result_type.data()) } {
+        if unsafe { strequal(c"indices".as_ptr(), result_type.data()) } {
             had_result_type_indices = true;
         } else {
             let why = Error::validation(c"not a valid result_type");
@@ -429,8 +397,8 @@ unsafe fn apply_opts(
     }
 
     // SAFETY: as above.
-    if is_set(opts, KEYSET_OPTIDX_xdl_diff__algorithm)
-        && !unsafe { strequal(c"myers".as_ptr(), opts.algorithm.data()) }
+    if let Some(named) = opts.algorithm
+        && !unsafe { strequal(c"myers".as_ptr(), named.data()) }
     {
         // SAFETY: as above.
         let algorithm = unsafe {
@@ -440,7 +408,7 @@ unsafe fn apply_opts(
                 (c"histogram", XDF_HISTOGRAM_DIFF),
             ]
             .into_iter()
-            .find(|(name, _)| strequal(name.as_ptr(), opts.algorithm.data()))
+            .find(|(name, _)| strequal(name.as_ptr(), named.data()))
         };
         match algorithm {
             Some((_, flag)) => params.flags |= flag,
@@ -451,14 +419,14 @@ unsafe fn apply_opts(
         }
     }
 
-    if is_set(opts, KEYSET_OPTIDX_xdl_diff__ctxlen) {
-        cfg.ctxlen = opts.ctxlen as c_long;
+    if let Some(ctxlen) = opts.ctxlen {
+        cfg.ctxlen = ctxlen as c_long;
     }
-    if is_set(opts, KEYSET_OPTIDX_xdl_diff__interhunkctxlen) {
-        cfg.interhunkctxlen = opts.interhunkctxlen as c_long;
+    if let Some(interhunkctxlen) = opts.interhunkctxlen {
+        cfg.interhunkctxlen = interhunkctxlen as c_long;
     }
-    if is_set(opts, KEYSET_OPTIDX_xdl_diff__linematch) {
-        match opts.linematch {
+    if let Some(given) = opts.linematch {
+        match given {
             Object::Boolean(on) => *linematch = if on { int64_t::MAX } else { 0 },
             Object::Integer(n) => *linematch = n,
             _ => {
@@ -479,16 +447,16 @@ unsafe fn apply_opts(
         (opts.ignore_blank_lines, XDF_IGNORE_BLANK_LINES),
         (opts.indent_heuristic, XDF_INDENT_HEURISTIC),
     ] {
-        if given {
+        if given.unwrap_or(false) {
             params.flags |= flag;
         }
     }
 
-    if is_set(opts, KEYSET_OPTIDX_xdl_diff__on_hunk) {
+    if let Some(on_hunk) = opts.on_hunk {
         // SAFETY: `lstate` is live; the callback is left on the stack for
         // `call_on_hunk_cb` to copy.
         let is_function = unsafe {
-            nlua_pushref(lstate, opts.on_hunk);
+            nlua_pushref(lstate, on_hunk);
             lua_type(lstate, -1) == LUA_TFUNCTION
         };
         let why = (!is_function).then(|| Error::validation(c"on_hunk is not a function"));
@@ -732,26 +700,5 @@ mod tests {
             lnuma += finer.count_a;
             lnumb += finer.count_b;
         }
-    }
-
-    /// The keydict's optional-key bitfield is read bit by bit, and the
-    /// initializer says nothing was given.
-    #[test]
-    fn an_optional_key_is_one_bit_of_the_keydict() {
-        assert!((0..8).all(|bit| !is_set(&KEYDICT_INIT, bit)));
-        // The six `KEYSET_OPTIDX_xdl_diff__*` values `apply_opts` names.
-        for optidx in 1..=6 {
-            let mut opts = KEYDICT_INIT;
-            opts.is_set__xdl_diff_ = 1 << optidx;
-            assert!(is_set(&opts, optidx));
-            assert!((0..8).filter(|&b| b != optidx).all(|b| !is_set(&opts, b)));
-        }
-        // Bit 0 is not one of the six, and reading it must not spill into
-        // its neighbour.
-        let mut opts = KEYDICT_INIT;
-        opts.is_set__xdl_diff_ = 0b101;
-        assert!(is_set(&opts, 0));
-        assert!(!is_set(&opts, 1));
-        assert!(is_set(&opts, 2));
     }
 }

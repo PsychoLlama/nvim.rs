@@ -52,9 +52,7 @@ pub unsafe fn nvim_open_win(
     if !parsed {
         return (0 as WindowHandle).reported(error);
     }
-    let keys_set = keys.is_set__win_config_;
-    let is_split = has_key(keys_set, KEYSET_OPTIDX_win_config__split)
-        || has_key(keys_set, KEYSET_OPTIDX_win_config__vertical);
+    let is_split = keys.split.is_some() || keys.vertical.is_some();
     let mut rv: WindowHandle = 0;
     // Read before the config is handed to the window: whichever branch
     // below runs moves it, and all three are wanted afterwards.
@@ -67,9 +65,10 @@ pub unsafe fn nvim_open_win(
     let wp: Option<Win>;
     let mut tp = Some(TabPage::current());
     debug_assert!(Win::current_or_none().is_some(), "curwin != NULL");
-    let mut parent: Option<Win> = (keys.win == 0).then(Win::current);
+    let parent_handle = keys.win.unwrap_or(0);
+    let mut parent: Option<Win> = (parent_handle == 0).then(Win::current);
     '_cleanup: {
-        if keys.win > 0 {
+        if parent_handle > 0 {
             let found = match find_window_by_handle(fconfig.window) {
                 Ok(Some(found)) => found,
                 Ok(None) => break '_cleanup,
@@ -97,10 +96,8 @@ pub unsafe fn nvim_open_win(
             }
             // `vertical` without `split` picks the side from 'splitright' and
             // 'splitbelow'.
-            if has_key(keys_set, KEYSET_OPTIDX_win_config__vertical)
-                && !has_key(keys_set, KEYSET_OPTIDX_win_config__split)
-            {
-                fconfig.split = if keys.vertical {
+            if keys.vertical.is_some() && keys.split.is_none() {
+                fconfig.split = if keys.vertical.unwrap_or(false) {
                     if p_spr.get() != 0 {
                         kWinSplitRight
                     } else {

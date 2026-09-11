@@ -40,7 +40,6 @@ pub unsafe fn nvim_buf_set_extmark(
     let mut opts = unsafe { Opts::new(opts) };
     let mut id: uint32_t;
     let mut line2: ::core::ffi::c_int;
-    let mut did_end_line: bool;
     let strict: bool;
     let mut col2: ColNr;
     let mut virt_lines_flags: ::core::ffi::c_int;
@@ -86,40 +85,26 @@ pub unsafe fn nvim_buf_set_extmark(
                 error = err_bad_number(c"ns_id", ns_id);
             } else {
                 id = 0 as uint32_t;
-                if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__id) {
-                    if !(opts.id > 0 as Integer) {
+                if let Some(given) = opts.id {
+                    if !(given > 0 as Integer) {
                         let want = c"positive Integer";
                         error = err_expected(c"id", want, None);
                         break '_error;
                     }
-                    id = opts.id as uint32_t;
+                    id = given as uint32_t;
                 }
                 line2 = -1 as ::core::ffi::c_int;
-                did_end_line = false;
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__end_line,
-                ) {
-                    if has_key(opts.is_set__set_extmark_, 10 as ::core::ffi::c_int) {
+                if let Some(end_line) = opts.end_line {
+                    if opts.end_row.is_some() {
                         let why = c"cannot use both 'end_row' and 'end_line'";
                         error = Error::validation(why);
                         break '_error;
                     }
-                    let end_line = opts.end_line;
-                    opts.end_row = end_line;
-                    did_end_line = true;
+                    opts.end_row = Some(end_line);
                 }
-                strict = if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__strict) {
-                    opts.strict as ::core::ffi::c_int
-                } else {
-                    1
-                } != 0;
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__end_row,
-                ) || did_end_line as ::core::ffi::c_int != 0
-                {
-                    let val: Integer = opts.end_row;
+                strict = opts.strict.unwrap_or(true);
+                // `end_line` wrote `end_row` above, so one test covers both.
+                if let Some(val) = opts.end_row {
                     if !(val >= 0 as Integer
                         && !(val > b.line_count() as Integer && strict as ::core::ffi::c_int != 0))
                     {
@@ -129,11 +114,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     line2 = val as ::core::ffi::c_int;
                 }
                 col2 = -1 as ColNr;
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__end_col,
-                ) {
-                    let mut val_0: Integer = opts.end_col;
+                if let Some(mut val_0) = opts.end_col {
                     if !(val_0 >= -1 as Integer && val_0 <= MAXCOL as ::core::ffi::c_int as Integer)
                     {
                         error = err_out_of_range(c"end_col");
@@ -144,12 +125,9 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                     col2 = val_0 as ::core::ffi::c_int as ColNr;
                 }
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__hl_group,
-                ) {
+                if let Some(given_hl_group) = opts.hl_group {
                     's_293: {
-                        if let Object::Array(arr) = opts.hl_group {
+                        if let Object::Array(arr) = given_hl_group {
                             if arr.size >= 1 as size_t {
                                 hl.hl_id = match unsafe {
                                     object_to_hl_id(
@@ -185,7 +163,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                         } else {
                             hl.hl_id = match unsafe {
-                                object_to_hl_id(opts.hl_group, c"hl_group".as_ptr())
+                                object_to_hl_id(given_hl_group, c"hl_group".as_ptr())
                             } {
                                 Ok(id) => id,
                                 Err(e) => {
@@ -197,10 +175,10 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                     has_hl = hl.hl_id > 0 as ::core::ffi::c_int;
                 }
-                sign.hl_id = opts.sign_hl_group as ::core::ffi::c_int;
-                sign.cursorline_hl_id = opts.cursorline_hl_group as ::core::ffi::c_int;
-                sign.number_hl_id = opts.number_hl_group as ::core::ffi::c_int;
-                sign.line_hl_id = opts.line_hl_group as ::core::ffi::c_int;
+                sign.hl_id = opts.sign_hl_group.unwrap_or(0) as ::core::ffi::c_int;
+                sign.cursorline_hl_id = opts.cursorline_hl_group.unwrap_or(0) as ::core::ffi::c_int;
+                sign.number_hl_id = opts.number_hl_group.unwrap_or(0) as ::core::ffi::c_int;
+                sign.line_hl_id = opts.line_hl_group.unwrap_or(0) as ::core::ffi::c_int;
                 if sign.hl_id != 0
                     || sign.cursorline_hl_id != 0
                     || sign.number_hl_id != 0
@@ -210,17 +188,13 @@ pub unsafe fn nvim_buf_set_extmark(
                         | kSHIsSign as ::core::ffi::c_int)
                         as uint16_t;
                 }
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__conceal,
-                ) {
+                if let Some(conceal) = opts.conceal {
                     hl.flags = (hl.flags as ::core::ffi::c_int | kSHConceal as ::core::ffi::c_int)
                         as uint16_t;
                     has_hl = true;
-                    if opts.conceal.len() > 0 as size_t {
+                    if conceal.len() > 0 as size_t {
                         let mut ch: ::core::ffi::c_int = 0;
-                        hl.conceal_char =
-                            unsafe { utfc_ptr2schar(opts.conceal.data(), &raw mut ch) };
+                        hl.conceal_char = unsafe { utfc_ptr2schar(conceal.data(), &raw mut ch) };
                         if !(hl.conceal_char != 0 && vim_isprintc(ch) as ::core::ffi::c_int != 0) {
                             let why = c"conceal char has to be printable";
                             error = Error::validation(why);
@@ -228,16 +202,13 @@ pub unsafe fn nvim_buf_set_extmark(
                         }
                     }
                 }
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__conceal_lines,
-                ) {
+                if let Some(conceal_lines) = opts.conceal_lines {
                     hl.flags = (hl.flags as ::core::ffi::c_int
                         | kSHConcealLines as ::core::ffi::c_int)
                         as uint16_t;
                     has_hl = true;
-                    if opts.conceal_lines.len() > 0 as size_t
-                        && !(unsafe { *opts.conceal_lines.data() } as ::core::ffi::c_int
+                    if conceal_lines.len() > 0 as size_t
+                        && !(unsafe { *conceal_lines.data() } as ::core::ffi::c_int
                             == '\0' as ::core::ffi::c_int)
                     {
                         let why = c"conceal_lines has to be an empty string";
@@ -245,12 +216,9 @@ pub unsafe fn nvim_buf_set_extmark(
                         break '_error;
                     }
                 }
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__virt_text,
-                ) {
+                if let Some(given) = opts.virt_text {
                     let width = &raw mut virt_text.width;
-                    match unsafe { parse_virt_text(opts.virt_text, width) } {
+                    match unsafe { parse_virt_text(given, width) } {
                         Ok(text) => *virt_text.data.text_mut() = text,
                         Err(e) => {
                             error = e;
@@ -258,11 +226,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         }
                     }
                 }
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__virt_text_pos,
-                ) {
-                    let str: String_0 = opts.virt_text_pos;
+                if let Some(str) = opts.virt_text_pos {
                     if unsafe { strequal(c"eol".as_ptr(), str.data()) } {
                         virt_text.pos = kVPosEndOfLine;
                     } else if unsafe { strequal(c"overlay".as_ptr(), str.data()) } {
@@ -279,34 +243,27 @@ pub unsafe fn nvim_buf_set_extmark(
                         break '_error;
                     }
                 }
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__virt_text_win_col,
-                ) {
-                    virt_text.col = opts.virt_text_win_col as ::core::ffi::c_int;
+                if let Some(win_col) = opts.virt_text_win_col {
+                    virt_text.col = win_col as ::core::ffi::c_int;
                     virt_text.pos = kVPosWinCol;
                 }
                 hl.flags = (hl.flags as ::core::ffi::c_int
-                    | if opts.hl_eol as ::core::ffi::c_int != 0 {
+                    | if opts.hl_eol.unwrap_or(false) {
                         kSHHlEol as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     }) as uint16_t;
                 virt_text.flags = (virt_text.flags as ::core::ffi::c_int
-                    | ((if opts.virt_text_hide as ::core::ffi::c_int != 0 {
+                    | ((if opts.virt_text_hide.unwrap_or(false) {
                         kVTHide as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
-                    }) | (if opts.virt_text_repeat_linebreak as ::core::ffi::c_int != 0 {
+                    }) | (if opts.virt_text_repeat_linebreak.unwrap_or(false) {
                         kVTRepeatLinebreak as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     }))) as uint8_t;
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__hl_mode,
-                ) {
-                    let str_0: String_0 = opts.hl_mode;
+                if let Some(str_0) = opts.hl_mode {
                     if unsafe { strequal(c"replace".as_ptr(), str_0.data()) } {
                         virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int as uint8_t;
                     } else if unsafe { strequal(c"combine".as_ptr(), str_0.data()) } {
@@ -327,16 +284,12 @@ pub unsafe fn nvim_buf_set_extmark(
                         break '_error;
                     }
                 }
-                virt_lines_flags = if opts.virt_lines_leftcol as ::core::ffi::c_int != 0 {
+                virt_lines_flags = if opts.virt_lines_leftcol.unwrap_or(false) {
                     kVLLeftcol as ::core::ffi::c_int
                 } else {
                     0 as ::core::ffi::c_int
                 };
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__virt_lines_overflow,
-                ) {
-                    let str_1: String_0 = opts.virt_lines_overflow;
+                if let Some(str_1) = opts.virt_lines_overflow {
                     if unsafe { strequal(c"scroll".as_ptr(), str_1.data()) } {
                         virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
                     } else if !unsafe { strequal(c"trunc".as_ptr(), str_1.data()) } && true {
@@ -346,11 +299,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                 }
                 's_785: {
-                    if has_key(
-                        opts.is_set__set_extmark_,
-                        KEYSET_OPTIDX_set_extmark__virt_lines,
-                    ) {
-                        let a: Array = opts.virt_lines;
+                    if let Some(a) = opts.virt_lines {
                         let mut j: size_t = 0 as size_t;
                         loop {
                             if j >= a.size {
@@ -393,32 +342,26 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                 }
                 virt_lines.flags = (virt_lines.flags as ::core::ffi::c_int
-                    | if opts.virt_lines_above as ::core::ffi::c_int != 0 {
+                    | if opts.virt_lines_above.unwrap_or(false) {
                         kVTLinesAbove as ::core::ffi::c_int
                     } else {
                         0 as ::core::ffi::c_int
                     }) as uint8_t;
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__priority,
-                ) {
-                    if !(opts.priority >= 0 as Integer && opts.priority <= 65535 as Integer) {
+                if let Some(priority) = opts.priority {
+                    if !(priority >= 0 as Integer && priority <= 65535 as Integer) {
                         error = err_out_of_range(c"priority");
                         break '_error;
                     }
-                    hl.priority = opts.priority as DecorPriority;
-                    sign.priority = opts.priority as DecorPriority;
-                    virt_text.priority = opts.priority as DecorPriority;
-                    virt_lines.priority = opts.priority as DecorPriority;
+                    hl.priority = priority as DecorPriority;
+                    sign.priority = priority as DecorPriority;
+                    virt_text.priority = priority as DecorPriority;
+                    virt_lines.priority = priority as DecorPriority;
                 }
-                if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__sign_text,
-                ) {
+                if let Some(sign_text) = opts.sign_text {
                     sign.text[0 as ::core::ffi::c_int as usize] = 0 as ScreenChar;
                     if unsafe {
                         init_sign_text(
-                            opts.sign_text.data(),
+                            sign_text.data(),
                             &raw mut sign.text as *mut ScreenChar,
                             false,
                         )
@@ -432,36 +375,29 @@ pub unsafe fn nvim_buf_set_extmark(
                         | kSHIsSign as ::core::ffi::c_int)
                         as uint16_t;
                 }
-                right_gravity = if has_key(
-                    opts.is_set__set_extmark_,
-                    KEYSET_OPTIDX_set_extmark__right_gravity,
-                ) {
-                    opts.right_gravity as ::core::ffi::c_int
-                } else {
-                    1
-                } != 0;
+                right_gravity = opts.right_gravity.unwrap_or(true);
                 if line2 == -1 as ::core::ffi::c_int
                     && col2 == -1 as ::core::ffi::c_int
-                    && has_key(opts.is_set__set_extmark_, 30 as ::core::ffi::c_int)
+                    && opts.end_right_gravity.is_some()
                 {
                     let why = c"cannot set end_right_gravity without end_row or end_col";
                     error = Error::validation(why);
                 } else {
                     len = 0 as ColNr;
-                    if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__spell) {
+                    if let Some(spell) = opts.spell {
                         hl.flags = (hl.flags as ::core::ffi::c_int
-                            | if opts.spell as ::core::ffi::c_int != 0 {
+                            | if spell {
                                 kSHSpellOn as ::core::ffi::c_int
                             } else {
                                 kSHSpellOff as ::core::ffi::c_int
                             }) as uint16_t;
                         has_hl = true;
                     }
-                    if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__url) {
-                        url = unsafe { string_to_cstr(opts.url) };
+                    if let Some(given) = opts.url {
+                        url = unsafe { string_to_cstr(given) };
                         has_hl = true;
                     }
-                    if opts.ui_watched {
+                    if opts.ui_watched.unwrap_or(false) {
                         hl.flags = (hl.flags as ::core::ffi::c_int
                             | kSHUIWatched as ::core::ffi::c_int)
                             as uint16_t;
@@ -484,7 +420,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             }
                             line = b.line_count() as Integer;
                         } else if line < b.line_count() as Integer {
-                            len = (if opts.ephemeral as ::core::ffi::c_int != 0 {
+                            len = (if opts.ephemeral.unwrap_or(false) {
                                 MAXCOL as ::core::ffi::c_int
                             } else {
                                 unsafe { b.line_len(line as LineNr + 1) }
@@ -506,7 +442,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             if line2 >= 0 as ::core::ffi::c_int
                                 && (line2 as LineNr) < b.line_count()
                             {
-                                len = (if opts.ephemeral as ::core::ffi::c_int != 0 {
+                                len = (if opts.ephemeral.unwrap_or(false) {
                                     MAXCOL as ::core::ffi::c_int
                                 } else {
                                     unsafe { b.line_len(line2 as LineNr + 1) }
@@ -526,7 +462,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         } else if line2 >= 0 as ::core::ffi::c_int {
                             col2 = 0 as ::core::ffi::c_int as ColNr;
                         }
-                        if opts.ephemeral as ::core::ffi::c_int != 0
+                        if opts.ephemeral.unwrap_or(false)
                             && !unsafe { DecorStateRef::current() }.win.is_null()
                             && unsafe { (*DecorStateRef::current().win).w_buffer } == b.raw()
                         {
@@ -537,17 +473,12 @@ pub unsafe fn nvim_buf_set_extmark(
                                 col2 = c as ColNr;
                             }
                             let mut subpriority: DecorPriority = 0 as DecorPriority;
-                            if has_key(
-                                opts.is_set__set_extmark_,
-                                KEYSET_OPTIDX_set_extmark___subpriority,
-                            ) {
-                                if !(opts._subpriority >= 0 as Integer
-                                    && opts._subpriority <= 65535 as Integer)
-                                {
+                            if let Some(given) = opts._subpriority {
+                                if !(given >= 0 as Integer && given <= 65535 as Integer) {
                                     error = err_out_of_range(c"_subpriority");
                                     break '_error;
                                 }
-                                subpriority = opts._subpriority as DecorPriority;
+                                subpriority = given as DecorPriority;
                             }
                             if virt_text.data.text().size != 0 {
                                 // SAFETY: inside a decoration provider, so the
@@ -593,7 +524,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                     )
                                 };
                             }
-                        } else if opts.ephemeral {
+                        } else if opts.ephemeral.unwrap_or(false) {
                             let why =
                                 c"cannot set emphemeral mark outside of a decoration provider";
                             error = Error::exception(why);
@@ -631,7 +562,8 @@ pub unsafe fn nvim_buf_set_extmark(
                                 }
                             }
                             if has_hl_multiple {
-                                let Object::Array(arr_0) = opts.hl_group else {
+                                let Object::Array(arr_0) = opts.hl_group.unwrap_or(Object::Nil)
+                                else {
                                     unreachable!("`has_hl_multiple` is set only under an Array")
                                 };
                                 let mut i_0: size_t = arr_0.size.wrapping_sub(1 as size_t);
@@ -650,7 +582,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                         let mut sh_0: DecorSignHighlight =
                                             DECOR_SIGN_HIGHLIGHT_INIT;
                                         sh_0.hl_id = hl_id_0;
-                                        sh_0.flags = (if opts.hl_eol as ::core::ffi::c_int != 0 {
+                                        sh_0.flags = (if opts.hl_eol.unwrap_or(false) {
                                             kSHHlEol as ::core::ffi::c_int
                                         } else {
                                             0 as ::core::ffi::c_int
@@ -704,16 +636,9 @@ pub unsafe fn nvim_buf_set_extmark(
                                     decor,
                                     decor_flags,
                                     right_gravity,
-                                    opts.end_right_gravity,
-                                    if has_key(
-                                        opts.is_set__set_extmark_,
-                                        KEYSET_OPTIDX_set_extmark__undo_restore,
-                                    ) {
-                                        opts.undo_restore as ::core::ffi::c_int
-                                    } else {
-                                        1
-                                    } == 0,
-                                    opts.invalidate,
+                                    opts.end_right_gravity.unwrap_or(false),
+                                    !opts.undo_restore.unwrap_or(true),
+                                    opts.invalidate.unwrap_or(false),
                                 )
                             };
                             if error.is_set() {

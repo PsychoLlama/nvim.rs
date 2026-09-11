@@ -19,7 +19,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{
-    api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle, has_key,
+    api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle,
 };
 use crate::autocmd::{
     aucmd_prepbuf, aucmd_restbuf, block_autocmds, do_filetype_autocmd, has_event, unblock_autocmds,
@@ -84,20 +84,13 @@ unsafe fn option_target(
     opts: *mut KeyDict_option,
     name: *mut c_char,
 ) -> Result<OptionTarget, Error> {
-    // `opts`' keys, by their index in its `is_set` mask. Function-local so
-    // that they cannot collide in the flat namespace `tools/ffigen` renders
-    // module-level constants into.
-    const OPTIDX_BUF: c_int = 1;
-    const OPTIDX_WIN: c_int = 2;
-    const OPTIDX_SCOPE: c_int = 3;
-    const OPTIDX_FILETYPE: c_int = 4;
-
     // SAFETY: `opts` is the caller's, per this function's contract.
-    let set = move |key| unsafe { has_key((*opts).is_set__option_, key) };
+    let (given_scope, given_win, given_buf, given_filetype) =
+        unsafe { ((*opts).scope, (*opts).win, (*opts).buf, (*opts).filetype) };
     let mut opt_flags = OptionSetFlags::NONE;
-    if set(OPTIDX_SCOPE) {
+    if let Some(given) = given_scope {
         // SAFETY: as above; `scope` is a NUL-terminated key of `opts`.
-        let scope = unsafe { CStr::from_ptr((*opts).scope.data()) };
+        let scope = unsafe { CStr::from_ptr(given.data()) };
         opt_flags = match scope.to_bytes() {
             b"local" => OptionSetFlags::LOCAL,
             b"global" => OptionSetFlags::GLOBAL,
@@ -107,28 +100,28 @@ unsafe fn option_target(
 
     let mut scope = kOptScopeGlobal;
     let mut from = ptr::null_mut::<c_void>();
-    if set(OPTIDX_WIN) {
+    if let Some(handle) = given_win {
         scope = kOptScopeWin;
-        // SAFETY: the handle is an integer.
-        let win = unsafe { find_window_by_handle((*opts).win) }?;
+        let win = find_window_by_handle(handle)?;
         from = win.map_or(ptr::null_mut(), |w| w.raw().cast());
     }
-    if set(OPTIDX_BUF) {
-        if set(OPTIDX_SCOPE) && opt_flags == OptionSetFlags::GLOBAL {
+    if let Some(handle) = given_buf {
+        if given_scope.is_some() && opt_flags == OptionSetFlags::GLOBAL {
             let why = c"cannot use both global 'scope' and 'buf'";
             return Err(Error::validation(why));
         }
         opt_flags = OptionSetFlags::LOCAL;
         scope = kOptScopeBuf;
-        // SAFETY: as the window lookup above.
-        let buf = unsafe { find_buffer_by_handle((*opts).buf) }?;
+        let buf = find_buffer_by_handle(handle)?;
         from = buf.map_or(ptr::null_mut(), |b| b.raw().cast());
     }
-    if set(OPTIDX_FILETYPE) && (set(OPTIDX_BUF) || set(OPTIDX_SCOPE) || set(OPTIDX_WIN)) {
+    if given_filetype.is_some()
+        && (given_buf.is_some() || given_scope.is_some() || given_win.is_some())
+    {
         let why = c"cannot use 'filetype' with 'scope', 'buf' or 'win'";
         return Err(Error::validation(why));
     }
-    if set(OPTIDX_WIN) && set(OPTIDX_BUF) {
+    if given_win.is_some() && given_buf.is_some() {
         return Err(Error::validation(c"cannot use both 'buf' and 'win'"));
     }
 
@@ -166,11 +159,8 @@ unsafe fn option_target(
         ));
     }
 
-    // SAFETY: `opts` is the caller's; the key borrows its bytes.
-    let filetype = match set(OPTIDX_FILETYPE) {
-        true => unsafe { (*opts).filetype.data() },
-        false => ptr::null_mut(),
-    };
+    // The key borrows `opts`' own bytes.
+    let filetype = given_filetype.map_or(ptr::null_mut(), |ft| ft.data());
     Ok(OptionTarget {
         opt_idx,
         opt_flags,

@@ -119,23 +119,14 @@ pub unsafe fn msg_progress(
     trunc: bool,
 ) -> *mut c_char {
     let mut opts = KeyDict_echo_opts {
-        is_set__echo_opts_: 0,
-        err: false,
-        verbose: false,
-        _truncate: false,
-        kind: static_cstring(c"progress"),
-        id: Object::string(unsafe { cstr_as_string(id) }),
+        kind: Some(static_cstring(c"progress")),
+        id: Some(Object::string(unsafe { cstr_as_string(id) })),
         // Not `static_cstring(c"")`: upstream leaves this field zeroed,
         // so `title.data` is null rather than a pointer to "".
-        title: String_0::from_raw_parts(ptr::null_mut(), 0),
-        status: unsafe { cstr_as_string(status) },
-        percent: 0,
-        source: static_cstring(c"nvim"),
-        data: ApiDict {
-            size: 0,
-            capacity: 0,
-            items: ptr::null_mut(),
-        },
+        title: Some(String_0::from_raw_parts(ptr::null_mut(), 0)),
+        status: Some(unsafe { cstr_as_string(status) }),
+        source: Some(static_cstring(c"nvim")),
+        ..KeyDict_echo_opts::default()
     };
 
     // Under ext_messages the UI keeps the untruncated text, so history

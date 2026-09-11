@@ -659,7 +659,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_text_height(lstate: *mut lua_S
     /// on top, and `call` is the binding's own.
     unsafe fn convert(lstate: *mut lua_State, call: &mut Call) -> Result<(), Error> {
         let Call { arena, err_param } = call;
-        let mut arg_2 = KeyDictArg::<KeyDict_win_text_height>::zeroed();
+        let mut arg_2 = KeyDictArg::<KeyDict_win_text_height>::unset();
         // SAFETY: as above.
         unsafe { pop_keydict(lstate, &mut arg_2, arena, err_param) }?;
         // SAFETY: as above.

@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{dict_put, has_key};
+use crate::api::private::helpers::dict_put;
 use crate::winlayer::Buf;
 use crate::winlayer::Live;
 
@@ -41,37 +41,25 @@ pub unsafe fn nvim_buf_attach(
     };
     let mut cb: BufUpdateCallbacks = BUF_UPDATE_CALLBACKS_INIT;
     if channel_id == LUA_INTERNAL_CALL {
-        if has_key(opts.is_set__buf_attach_, KEYSET_OPTIDX_buf_attach__on_lines) {
-            cb.on_lines = opts.on_lines;
-            opts.on_lines = LUA_NOREF as LuaRef;
+        // The callbacks move into the registration, so the keyset gives up
+        // each reference it hands over.
+        if let Some(reference) = opts.on_lines.take() {
+            cb.on_lines = reference;
         }
-        if has_key(opts.is_set__buf_attach_, KEYSET_OPTIDX_buf_attach__on_bytes) {
-            cb.on_bytes = opts.on_bytes;
-            opts.on_bytes = LUA_NOREF as LuaRef;
+        if let Some(reference) = opts.on_bytes.take() {
+            cb.on_bytes = reference;
         }
-        if has_key(
-            opts.is_set__buf_attach_,
-            KEYSET_OPTIDX_buf_attach__on_changedtick,
-        ) {
-            cb.on_changedtick = opts.on_changedtick;
-            opts.on_changedtick = LUA_NOREF as LuaRef;
+        if let Some(reference) = opts.on_changedtick.take() {
+            cb.on_changedtick = reference;
         }
-        if has_key(
-            opts.is_set__buf_attach_,
-            KEYSET_OPTIDX_buf_attach__on_detach,
-        ) {
-            cb.on_detach = opts.on_detach;
-            opts.on_detach = LUA_NOREF as LuaRef;
+        if let Some(reference) = opts.on_detach.take() {
+            cb.on_detach = reference;
         }
-        if has_key(
-            opts.is_set__buf_attach_,
-            KEYSET_OPTIDX_buf_attach__on_reload,
-        ) {
-            cb.on_reload = opts.on_reload;
-            opts.on_reload = LUA_NOREF as LuaRef;
+        if let Some(reference) = opts.on_reload.take() {
+            cb.on_reload = reference;
         }
-        cb.utf_sizes = opts.utf_sizes;
-        cb.preview = opts.preview;
+        cb.utf_sizes = opts.utf_sizes.unwrap_or(false);
+        cb.preview = opts.preview.unwrap_or(false);
     }
     Ok(buf_updates_register(b, channel_id, cb, send_buffer))
 }

@@ -46,21 +46,37 @@ pub unsafe fn nvim_echo(
     let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { EchoOpts::new(opts) };
+    // The keys, with every one the caller left out reading as its default:
+    // no text, no percentage, no dictionary.
+    let no_string = String_0::NULL;
+    let (err, verbose, truncate) = (
+        opts.err.unwrap_or(false),
+        opts.verbose.unwrap_or(false),
+        opts._truncate.unwrap_or(false),
+    );
+    let (title, status, source) = (
+        opts.title.unwrap_or(no_string),
+        opts.status.unwrap_or(no_string),
+        opts.source.unwrap_or(no_string),
+    );
+    let percent = opts.percent.unwrap_or(0);
+    let data = opts.data.unwrap_or(ApiDict::EMPTY);
+    let given_id = opts.id.unwrap_or(Object::Nil);
     let mut id = Object::integer(-1);
     let mut hl_msg = EMPTY_HL_MESSAGE;
     // SAFETY: the caller's chunk array, and `hl_msg` is this frame's own.
-    if let Err(e) = unsafe { parse_hl_msg(&mut hl_msg, chunks, opts.err) } {
+    if let Err(e) = unsafe { parse_hl_msg(&mut hl_msg, chunks, err) } {
         // SAFETY: the message this frame just built and nothing else owns.
         unsafe { hl_msg_free(hl_msg) };
         return Err(e);
     }
 
-    let mut kind: *mut c_char = opts.kind.data();
-    if opts.verbose {
+    let mut kind: *mut c_char = opts.kind.unwrap_or(no_string).data();
+    if verbose {
         // SAFETY: paired with the `verbose_leave` below.
         unsafe { verbose_enter() };
     } else if kind.is_null() {
-        kind = if opts.err {
+        kind = if err {
             c"echoerr".as_ptr().cast_mut()
         } else if history {
             c"echomsg".as_ptr().cast_mut()
@@ -75,12 +91,12 @@ pub unsafe fn nvim_echo(
 
     // The progress keys belong to `kind='progress'` and to nothing else, and
     // each of them has its own range.
-    let has_progress_keys = !opts.status.is_empty()
-        || !opts.title.is_empty()
-        || opts.percent != 0
-        || opts.data.size != 0
-        || !opts.source.is_empty();
-    let echo_id = opts.id.as_integer();
+    let has_progress_keys = !status.is_empty()
+        || !title.is_empty()
+        || percent != 0
+        || data.size != 0
+        || !source.is_empty();
+    let echo_id = given_id.as_integer();
     // SAFETY: the keyset's strings are NUL-terminated, and `error` is this
     // frame's own slot.
     let rejected = unsafe {
@@ -91,16 +107,16 @@ pub unsafe fn nvim_echo(
                 "Conflict: title/source/status/percent/data not allowed with kind='{kind}'"
             );
             true
-        } else if is_progress && !status_named(opts.status) {
+        } else if is_progress && !status_named(status) {
             let names = c"success|failed|running|cancel";
             // SAFETY: the keyset's string names its own NUL-terminated bytes.
-            let got = crate::cstr::at_opt(opts.status.data());
+            let got = crate::cstr::at_opt(status.data());
             error = err_expected(c"status", names, got);
             true
-        } else if is_progress && !(0..=100).contains(&opts.percent) {
+        } else if is_progress && !(0..=100).contains(&percent) {
             error = err_out_of_range(c"percent");
             true
-        } else if is_progress && opts.source.is_empty() {
+        } else if is_progress && source.is_empty() {
             error = err_required(c"opts.source");
             true
         } else if let Some(id) = echo_id.filter(|&id| !msg_id_exists(id)) {
@@ -113,16 +129,15 @@ pub unsafe fn nvim_echo(
 
     if !rejected {
         let mut msg_data = MessageData {
-            source: opts.source,
-            percent: opts.percent,
-            title: opts.title,
-            status: opts.status,
-            data: opts.data,
+            source,
+            percent,
+            title,
+            status,
+            data,
         };
         let save_nwr = need_wait_return.get();
         let save_lines_left = lines_left.get();
         let save_msg_didany = msg_didany.get();
-        let truncate = opts._truncate;
         let no_prompt = truncate.then(Suppress::wait_return);
         if truncate {
             lines_left.set(0 as ::core::ffi::c_int);
@@ -133,11 +148,11 @@ pub unsafe fn nvim_echo(
         // message is the one built above.
         id = unsafe {
             msg_multihl(
-                opts.id,
+                given_id,
                 hl_msg.clone(),
                 kind,
                 history,
-                opts.err,
+                err,
                 &raw mut msg_data,
                 &raw mut needs_clear,
             )
@@ -149,7 +164,7 @@ pub unsafe fn nvim_echo(
             drop(no_prompt);
             need_wait_return.set(save_nwr);
         }
-        if opts.verbose {
+        if verbose {
             // SAFETY: paired with the `verbose_enter` above.
             unsafe {
                 verbose_leave();

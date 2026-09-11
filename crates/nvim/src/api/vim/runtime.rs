@@ -194,14 +194,16 @@ pub unsafe fn nvim__get_runtime(
     let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.
     let opts = unsafe { Live::new(opts) };
+    let should_source = opts.do_source.unwrap_or(false);
+    let is_lua = opts.is_lua.unwrap_or(false);
     let deferred_safe = nlua_is_deferred_safe();
-    if opts.do_source && !deferred_safe {
+    if should_source && !deferred_safe {
         error = Error::validation(c"'do_source' used in fast callback");
         return Array::EMPTY.reported(error);
     }
     // SAFETY: `pat` is the caller's array and `arena` its own.
-    let res: Array = unsafe { runtime_get_named(opts.is_lua, pat, all, arena) };
-    if opts.do_source {
+    let res: Array = unsafe { runtime_get_named(is_lua, pat, all, arena) };
+    if should_source {
         for i in 0..res.size {
             // SAFETY: `res` is the array `runtime_get_named` just built, of
             // `size` Strings.

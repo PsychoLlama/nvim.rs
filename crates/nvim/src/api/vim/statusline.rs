@@ -21,7 +21,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::{Reported, has_key};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{Bad, err_expected, err_invalid};
 use crate::api_error;
 use crate::statusline::{
@@ -113,7 +113,7 @@ pub unsafe fn nvim_eval_statusline(
         opt: (kOptInvalid, OptionSetFlags::NONE),
         fillchar: ctx.fillchar,
         maxwidth: ctx.maxwidth,
-        hl: if opts.highlights {
+        hl: if opts.highlights.unwrap_or(false) {
             HlDest::Runs
         } else {
             HlDest::Discard
@@ -155,44 +155,41 @@ impl Context {
         statuscol: &mut StatusCol,
         sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
     ) -> Result<Context, Error> {
+        let (use_winbar, use_tabline) = (
+            opts.use_winbar.unwrap_or(false),
+            opts.use_tabline.unwrap_or(false),
+        );
         let mut fillchar = 0 as ScreenChar;
-        if has_key(
-            opts.is_set__eval_statusline_,
-            KEYSET_OPTIDX_eval_statusline__fillchar,
-        ) {
+        if let Some(given) = opts.fillchar {
             // A fill character is one whole character, however wide.
             // SAFETY: a checked API string.
             let single = unsafe {
-                *opts.fillchar.data() != 0
-                    && utfc_ptr2len(opts.fillchar.data()) as size_t == opts.fillchar.len()
+                *given.data() != 0 && utfc_ptr2len(given.data()) as size_t == given.len()
             };
             if !single {
                 return Err(err_expected(c"fillchar", c"single character", None));
             }
             let mut c = 0;
             // SAFETY: as above. TODO(bfredl): actually check c is single width.
-            fillchar = unsafe { utfc_ptr2schar(opts.fillchar.data(), &raw mut c) };
+            fillchar = unsafe { utfc_ptr2schar(given.data(), &raw mut c) };
         }
 
-        let mut use_bools = c_int::from(opts.use_winbar) + c_int::from(opts.use_tabline);
-        let win = if opts.use_tabline {
+        let mut use_bools = c_int::from(use_winbar) + c_int::from(use_tabline);
+        let winid = opts.winid.unwrap_or(0);
+        let win = if use_tabline {
             Win::current_or_none()
         } else {
             // The lookup's own refusal is thrown away: upstream overwrites
             // it with the message below.
-            find_window_by_handle(opts.winid).unwrap_or_default()
+            find_window_by_handle(winid).unwrap_or_default()
         };
         let Some(win) = win else {
-            let winid = opts.winid;
             return Err(api_error!(kErrorTypeException, "unknown winid {winid}"));
         };
 
         let mut statuscol_lnum = 0;
-        if has_key(
-            opts.is_set__eval_statusline_,
-            KEYSET_OPTIDX_eval_statusline__use_statuscol_lnum,
-        ) {
-            statuscol_lnum = opts.use_statuscol_lnum as c_int;
+        if let Some(lnum) = opts.use_statuscol_lnum {
+            statuscol_lnum = lnum as c_int;
             if !(statuscol_lnum > 0 && statuscol_lnum as LineNr <= win.buffer().line_count()) {
                 let key = c"use_statuscol_lnum".as_ptr();
                 let why = c"out of range".as_ptr();
@@ -214,22 +211,19 @@ impl Context {
             // SAFETY: a live window and a line of its buffer.
             (stc_hl_id, scl_hl_id) =
                 unsafe { statuscol_state(win, statuscol_lnum, statuscol, sattrs) };
-        } else if fillchar == 0 && !opts.use_tabline {
-            fillchar = if opts.use_winbar {
+        } else if fillchar == 0 && !use_tabline {
+            fillchar = if use_winbar {
                 win.w_p_fcs_chars.wbr
             } else {
                 fillchar_status_of(win).1
             };
         }
 
-        let maxwidth = if has_key(
-            opts.is_set__eval_statusline_,
-            KEYSET_OPTIDX_eval_statusline__maxwidth,
-        ) {
-            opts.maxwidth as c_int
+        let maxwidth = if let Some(given) = opts.maxwidth {
+            given as c_int
         } else if statuscol_lnum != 0 {
             win.col_off()
-        } else if opts.use_tabline || (!opts.use_winbar && stl_is_global()) {
+        } else if use_tabline || (!use_winbar && stl_is_global()) {
             Columns.get()
         } else {
             win.w_width
@@ -313,8 +307,8 @@ fn highlight_dicts(
 ) -> Array {
     let mut values = arena_array(arena, runs_len + 1);
     // For the tab line the default group belongs to no window.
-    let ctxwin = (!opts.use_tabline).then_some(ctx.win);
-    let dfltname = get_default_stl_hl(ctxwin, opts.use_winbar, ctx.stc_hl_id);
+    let ctxwin = (!opts.use_tabline.unwrap_or(false)).then_some(ctx.win);
+    let dfltname = get_default_stl_hl(ctxwin, opts.use_winbar.unwrap_or(false), ctx.stc_hl_id);
 
     // If the first character has no highlight of its own, the default one
     // opens the list.
@@ -340,7 +334,7 @@ fn highlight_dicts(
     let mut user_group = [0 as c_char; 15]; // "User" + "2147483647" + NUL
     for run in runs.iter() {
         let grpname = if run.userhl == 0 {
-            get_default_stl_hl(ctxwin, opts.use_winbar, ctx.stc_hl_id)
+            get_default_stl_hl(ctxwin, opts.use_winbar.unwrap_or(false), ctx.stc_hl_id)
         } else if run.userhl < 0 {
             syn_id2name(-run.userhl)
         } else {
@@ -404,9 +398,9 @@ pub unsafe fn nvim__complete_set(
         error = Error::exception(c"completeopt option does not include popup");
         return rv.reported(error);
     }
-    if has_key(opts.is_set__complete_set_, KEYSET_OPTIDX_complete_set__info) {
+    if let Some(info) = opts.info {
         // SAFETY: a checked API string.
-        let win = unsafe { pum_set_info(index as c_int, opts.info.data()) };
+        let win = unsafe { pum_set_info(index as c_int, info.data()) };
         if let Some(win) = win {
             put(&mut rv, c"winid", Object::window(win.handle));
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));

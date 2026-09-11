@@ -31,15 +31,9 @@ use crate::ui::{ui_default_colors_set, ui_mode_info_set};
 
 use super::command::sourcing_lnum;
 use super::{
-    KEYSET_OPTIDX_highlight__bg, KEYSET_OPTIDX_highlight__fg, KEYSET_OPTIDX_highlight__sp,
-    KEYSET_OPTIDX_highlight__update, SG_LINK, group, highlight_attr_set_all, hl_has_settings,
-    kColorIdxHex, kColorIdxNone, name_to_color, with_group,
+    SG_LINK, group, highlight_attr_set_all, hl_has_settings, kColorIdxHex, kColorIdxNone,
+    name_to_color, with_group,
 };
-
-/// Whether the caller set key `bit` of `Dict(highlight)`.
-fn has_key(dict: &KeyDict_highlight, bit: c_int) -> bool {
-    dict.is_set__highlight_ & (1u64 << bit) != 0
-}
 
 /// Applies `attrs` (and `link_id`, if any) to the group with id `id`.
 ///
@@ -59,7 +53,7 @@ pub(crate) unsafe fn set_hl_group(
     let is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
 
     // Return if "default" was used and the group already has settings.
-    if is_default && hl_has_settings(id, true) && !dict.force {
+    if is_default && hl_has_settings(id, true) && !dict.force.unwrap_or(false) {
         return;
     }
 
@@ -89,7 +83,7 @@ pub(crate) unsafe fn set_hl_group(
         entry.rgb_sp = attrs.rgb_sp_color;
     });
 
-    let update = has_key(dict, KEYSET_OPTIDX_highlight__update) && dict.update;
+    let update = dict.update.unwrap_or(false);
     let entry = group(id);
     // The colour *spellings*: what `:highlight` will print back. A name
     // becomes its table index, a number `kColorIdxHex`, and an absent key
@@ -99,17 +93,17 @@ pub(crate) unsafe fn set_hl_group(
     let spellings = [
         (
             entry.rgb_fg,
-            pick(dict, KEYSET_OPTIDX_highlight__fg, dict.fg, dict.foreground),
+            pick(dict.fg, dict.foreground),
             linked.map(|g| g.rgb_fg_idx),
         ),
         (
             entry.rgb_bg,
-            pick(dict, KEYSET_OPTIDX_highlight__bg, dict.bg, dict.background),
+            pick(dict.bg, dict.background),
             linked.map(|g| g.rgb_bg_idx),
         ),
         (
             entry.rgb_sp,
-            pick(dict, KEYSET_OPTIDX_highlight__sp, dict.sp, dict.special),
+            pick(dict.sp, dict.special),
             linked.map(|g| g.rgb_sp_idx),
         ),
     ];
@@ -205,7 +199,8 @@ pub(crate) unsafe fn set_hl_group(
 const KEEP: c_int = c_int::MIN;
 
 /// The long key wins only if the short one was not given, which is how
-/// `fg`/`foreground` and their two siblings pair up.
-fn pick(dict: &KeyDict_highlight, bit: c_int, short: Object, long: Object) -> Object {
-    if has_key(dict, bit) { short } else { long }
+/// `fg`/`foreground` and their two siblings pair up. Neither given is a nil
+/// object: "the caller named no colour".
+fn pick(short: Option<Object>, long: Option<Object>) -> Object {
+    short.or(long).unwrap_or(Object::Nil)
 }

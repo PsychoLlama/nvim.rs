@@ -11,7 +11,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, has_key};
+use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{
     Bad, err_bad_number, err_bad_value, err_expected, err_invalid,
 };
@@ -157,15 +157,16 @@ pub unsafe fn create_user_command(
             failed = Some(err_bad_value(what, unsafe { name.as_cstr() }));
             break '_err;
         }
-        let is_set = opts.is_set__user_command_;
-        if has_key(is_set, KEYSET_OPTIDX_user_command__range)
-            && has_key(is_set, KEYSET_OPTIDX_user_command__count)
-        {
+        // Every key, with the one the caller left out reading as nil.
+        let nil = Object::Nil;
+        let (given_nargs, given_range, given_count) = (opts.nargs, opts.range, opts.count);
+        let (given_addr, given_complete, given_preview) = (opts.addr, opts.complete, opts.preview);
+        if given_range.is_some() && given_count.is_some() {
             failed = Some(Error::validation(c"Cannot use both 'range' and 'count'"));
             break '_err;
         }
 
-        if let Some(nargs) = opts.nargs.as_integer() {
+        if let Some(nargs) = given_nargs.unwrap_or(nil).as_integer() {
             match nargs {
                 0 => {}
                 1 => argt |= ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG,
@@ -174,7 +175,7 @@ pub unsafe fn create_user_command(
                     break '_err;
                 }
             }
-        } else if let Some(nargs) = opts.nargs.as_string() {
+        } else if let Some(nargs) = given_nargs.unwrap_or(nil).as_string() {
             let value = nargs.data();
             if nargs.len() > 1 {
                 // SAFETY: the keyset's string is NUL-terminated.
@@ -194,22 +195,22 @@ pub unsafe fn create_user_command(
                     break '_err;
                 }
             }
-        } else if has_key(is_set, KEYSET_OPTIDX_user_command__nargs) {
+        } else if given_nargs.is_some() {
             failed = Some(err_invalid(c"nargs", Bad::Unsaid));
             break '_err;
         }
 
-        if has_key(is_set, KEYSET_OPTIDX_user_command__complete) && argt == ExArgt::NONE {
+        if given_complete.is_some() && argt == ExArgt::NONE {
             failed = Some(Error::validation(c"'complete' used without 'nargs'"));
             break '_err;
         }
 
-        if let Some(range) = opts.range.as_boolean() {
+        if let Some(range) = given_range.unwrap_or(nil).as_boolean() {
             if range {
                 argt |= ExArgt::RANGE;
                 addr_type_arg = CmdAddr::Lines;
             }
-        } else if let Some(range) = opts.range.as_string() {
+        } else if let Some(range) = given_range.unwrap_or(nil).as_string() {
             // SAFETY: an API string is NUL-terminated, so byte 0 is readable.
             let percent = unsafe { *range.data() } as u8 == b'%';
             if !(percent && range.len() == 1) {
@@ -218,34 +219,34 @@ pub unsafe fn create_user_command(
             }
             argt |= ExArgt::RANGE | ExArgt::DFLALL;
             addr_type_arg = CmdAddr::Lines;
-        } else if let Some(range) = opts.range.as_integer() {
+        } else if let Some(range) = given_range.unwrap_or(nil).as_integer() {
             argt |= ExArgt::RANGE | ExArgt::ZEROR;
             def = range;
             addr_type_arg = CmdAddr::Lines;
-        } else if has_key(is_set, KEYSET_OPTIDX_user_command__range) {
+        } else if given_range.is_some() {
             failed = Some(err_invalid(c"range", Bad::Unsaid));
             break '_err;
         }
 
-        if let Some(count) = opts.count.as_boolean() {
+        if let Some(count) = given_count.unwrap_or(nil).as_boolean() {
             if count {
                 argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
                 addr_type_arg = CmdAddr::Other;
                 def = 0;
             }
-        } else if let Some(count) = opts.count.as_integer() {
+        } else if let Some(count) = given_count.unwrap_or(nil).as_integer() {
             argt |= ExArgt::COUNT | ExArgt::ZEROR | ExArgt::RANGE;
             addr_type_arg = CmdAddr::Other;
             def = count;
-        } else if has_key(is_set, KEYSET_OPTIDX_user_command__count) {
+        } else if given_count.is_some() {
             failed = Some(err_invalid(c"count", Bad::Unsaid));
             break '_err;
         }
 
-        if has_key(is_set, KEYSET_OPTIDX_user_command__addr) {
-            let Some(addr) = opts.addr.as_string() else {
+        if let Some(given) = given_addr {
+            let Some(addr) = given.as_string() else {
                 let expected = api_typename(kObjectTypeString);
-                let actual = api_typename(opts.addr.kind());
+                let actual = api_typename(given.kind());
                 failed = Some(err_expected(c"addr", expected, Some(actual)));
                 break '_err;
             };
@@ -266,21 +267,21 @@ pub unsafe fn create_user_command(
             }
         }
 
-        if opts.bang {
+        if opts.bang.unwrap_or(false) {
             argt |= ExArgt::BANG;
         }
-        if opts.bar {
+        if opts.bar.unwrap_or(false) {
             argt |= ExArgt::TRLBAR;
         }
-        if opts.register_ {
+        if opts.register_.unwrap_or(false) {
             argt |= ExArgt::REGSTR;
         }
-        if opts.keepscript {
+        if opts.keepscript.unwrap_or(false) {
             argt |= ExArgt::KEEPSCRIPT;
         }
         // An unsupplied `force` defaults to true: `nvim_create_user_command`
         // replaces an existing command unless told otherwise.
-        force = !has_key(is_set, KEYSET_OPTIDX_user_command__force) || opts.force;
+        force = opts.force.unwrap_or(true);
 
         // Everything above reports through `err` without stopping, so a
         // failure that fell through to here still has to skip the rest.
@@ -288,13 +289,13 @@ pub unsafe fn create_user_command(
             break '_err;
         }
 
-        if let Some(complete) = opts.complete.as_luaref() {
+        if let Some(complete) = given_complete.unwrap_or(nil).as_luaref() {
             context = ExpandContext::UserLua;
             compl_luaref = complete;
             // The reference is this call's now, so the keyset must not free
             // it a second time.
-            opts.complete = Object::LuaRef(LUA_NOREF);
-        } else if let Some(complete) = opts.complete.as_string() {
+            opts.complete = Some(Object::LuaRef(LUA_NOREF));
+        } else if let Some(complete) = given_complete.unwrap_or(nil).as_string() {
             let value = complete.data();
             let vallen = complete.len() as ::core::ffi::c_int;
             // SAFETY: `complete` is the caller's string, NUL-terminated with
@@ -307,30 +308,30 @@ pub unsafe fn create_user_command(
                 failed = Some(err_bad_value(c"complete", unsafe { complete.as_cstr() }));
                 break '_err;
             }
-        } else if has_key(is_set, KEYSET_OPTIDX_user_command__complete) {
+        } else if given_complete.is_some() {
             let expected = c"Function or String";
             failed = Some(err_expected(c"complete", expected, None));
             break '_err;
         }
 
-        if has_key(is_set, KEYSET_OPTIDX_user_command__preview) {
-            let Some(preview) = opts.preview.as_luaref() else {
+        if let Some(given) = given_preview {
+            let Some(preview) = given.as_luaref() else {
                 let expected = api_typename(kObjectTypeLuaRef);
-                let actual = api_typename(opts.preview.kind());
+                let actual = api_typename(given.kind());
                 failed = Some(err_expected(c"preview", expected, Some(actual)));
                 break '_err;
             };
             argt |= ExArgt::PREVIEW;
             preview_luaref = preview;
             // As `complete`: the reference is this call's now.
-            opts.preview = Object::LuaRef(LUA_NOREF);
+            opts.preview = Some(Object::LuaRef(LUA_NOREF));
         }
 
         if let Some(body) = cmd.as_luaref() {
             // SAFETY: `body` is a registry index rather than a pointer, and
             // the object still holds the caller's own reference to it.
             luaref = unsafe { api_new_luaref(body) };
-            rep = match opts.desc.as_string() {
+            rep = match opts.desc.unwrap_or(nil).as_string() {
                 Some(desc) => desc.data().cast_const(),
                 None => c"".as_ptr(),
             };
@@ -420,7 +421,7 @@ pub unsafe fn nvim_buf_get_commands(
 ) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     // SAFETY: `opts` is the caller's keydict, live for the call.
-    let builtin = unsafe { (*opts).builtin };
+    let builtin = unsafe { (*opts).builtin }.unwrap_or(false);
     if buf == -1 {
         if builtin {
             error = Error::validation(c"builtin=true not implemented");

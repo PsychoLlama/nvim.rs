@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::{Reported, dict_put, has_key};
+use crate::api::private::helpers::{Reported, dict_put};
 use crate::api::private::validate::err_bad_value;
 use crate::cstr;
 
@@ -37,17 +37,11 @@ pub unsafe fn nvim_get_context(
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    let mut types: Array = Array {
+    let types: Array = unsafe { (*opts).types }.unwrap_or(Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
-    };
-    if has_key(
-        unsafe { (*opts).is_set__context_ },
-        KEYSET_OPTIDX_context__types,
-    ) {
-        types = unsafe { (*opts).types };
-    }
+    });
     let mut int_types: ::core::ffi::c_int = if types.size > 0 as size_t {
         0 as ::core::ffi::c_int
     } else {
