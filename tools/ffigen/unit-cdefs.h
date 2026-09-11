@@ -3035,6 +3035,7 @@ static const int MAX_MAPHASH = 256;
 static const int MAX_MCO = 6;
 static const int MAX_NUMBERWIDTH = 20;
 static const int MAX_PATTERNS = 256;
+static const int MAX_PRIORITY = 65535;
 static const int MAX_REGSUB_NESTING = 4;
 static const int MAX_REPEATED_BACK = 4;
 static const int MAX_REPEATED_FORWARD = 2;

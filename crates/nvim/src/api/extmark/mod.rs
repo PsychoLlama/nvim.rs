@@ -8,7 +8,7 @@ use crate::api::private::helpers::{
 };
 use crate::charset::{transstr, vim_isprintc};
 use crate::decoration::{
-    clear_virtlines, clear_virttext, decor_free, decor_put_sh, decor_put_vt, decor_range_add_sh,
+    clear_virtlines, clear_virttext, decor_put_sh, decor_put_vt, decor_range_add_sh,
     decor_range_add_virt, decor_sh_from_inline, decor_to_dict_legacy, hl_group_name, kHlModeBlend,
     kHlModeCombine, kHlModeReplace, kHlModeUnknown, kVLLeftcol, kVLScroll, kVPosEndOfLine,
     kVPosEndOfLineRightAlign, kVPosInline, kVPosOverlay, kVPosRightAlign, kVPosWinCol, kVTHide,
@@ -23,7 +23,7 @@ use crate::marktree::key::{
 };
 use crate::marktree::mt_inspect;
 use crate::mbyte::{mb_string2cells, utfc_ptr2schar};
-use crate::memory::{strequal, xfree};
+use crate::memory::xfree;
 use crate::r#move::changed_window_setting;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::sign::init_sign_text;

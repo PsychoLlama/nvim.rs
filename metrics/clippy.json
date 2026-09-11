@@ -4,7 +4,6 @@
     "crates/nvim/src/api/buffer/text.rs": 2,
     "crates/nvim/src/api/command/cmd.rs": 3,
     "crates/nvim/src/api/deprecated/lines.rs": 1,
-    "crates/nvim/src/api/extmark/set.rs": 4,
     "crates/nvim/src/api/vim/echo.rs": 1,
     "crates/nvim/src/api/win_config/border.rs": 1,
     "crates/nvim/src/api/win_config/parse.rs": 6,

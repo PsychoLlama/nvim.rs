@@ -796,43 +796,45 @@ pub unsafe fn set_var_lval(
         return;
     }
 
-    'notify: {
-        if !lval.ll_newkey.is_null() {
-            // The key has to be added to the Dictionary first.
-            if !op.is_null() && unsafe { *op } != b'=' as c_char {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let ll_newkey = unsafe { c_str(lval.ll_newkey) };
-                semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
-                return;
-            }
-            // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
-            let target = unsafe { Tv::new(lval.ll_tv).dict_or_null() };
-            if unsafe { tv_dict_wrong_func_name(target, result, lval.ll_newkey) } != 0 {
-                return;
-            }
-            let di = unsafe { tv_dict_item_alloc(lval.ll_newkey) };
-            if unsafe { tv_dict_add(target, di) }.is_err() {
-                unsafe { tv_dict_item_free(di) };
-                return;
-            }
-            // SAFETY: `di` belongs to the Dict; its typval is the target.
-            lval.ll_tv = unsafe { &raw mut (*di).di_tv };
-            lval.ll_lock = di_lock(di);
-        } else {
-            if watched {
-                // SAFETY: `oldtv` is this frame's separate record of the old value.
-                unsafe { tv_copy(&*lval.ll_tv, &mut oldtv) };
-            }
-            if !op.is_null() && unsafe { *op } != b'=' as c_char {
-                // `+=` and friends modify in place; there is nothing to
-                // assign afterwards.
-                // SAFETY: `ll_tv` is the live target and `result` the caller's value.
-                let _ = unsafe { eexe_mod_op(lval.ll_tv, result, op) };
-                break 'notify;
-            }
-            unsafe { tv_clear(&mut *lval.ll_tv) };
+    // Whether the value still has to be stored: `+=` and friends modify the
+    // target in place and leave nothing to assign.
+    let assign;
+    if !lval.ll_newkey.is_null() {
+        // The key has to be added to the Dictionary first.
+        if !op.is_null() && unsafe { *op } != b'=' as c_char {
+            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            let ll_newkey = unsafe { c_str(lval.ll_newkey) };
+            semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
+            return;
         }
+        // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
+        let target = unsafe { Tv::new(lval.ll_tv).dict_or_null() };
+        if unsafe { tv_dict_wrong_func_name(target, result, lval.ll_newkey) } != 0 {
+            return;
+        }
+        let di = unsafe { tv_dict_item_alloc(lval.ll_newkey) };
+        if unsafe { tv_dict_add(target, di) }.is_err() {
+            unsafe { tv_dict_item_free(di) };
+            return;
+        }
+        // SAFETY: `di` belongs to the Dict; its typval is the target.
+        (lval.ll_tv, lval.ll_lock) = unsafe { (&raw mut (*di).di_tv, di_lock(di)) };
+        assign = true;
+    } else {
+        if watched {
+            // SAFETY: this frame's separate record of the old value.
+            unsafe { tv_copy(&*lval.ll_tv, &mut oldtv) };
+        }
+        assign = op.is_null() || unsafe { *op } == b'=' as c_char;
+        if assign {
+            unsafe { tv_clear(&mut *lval.ll_tv) };
+        } else {
+            // SAFETY: the live target and the caller's value.
+            let _ = unsafe { eexe_mod_op(lval.ll_tv, result, op) };
+        }
+    }
 
+    if assign {
         if copy {
             unsafe { tv_copy(result, &mut *lval.ll_tv) };
         } else {
@@ -843,8 +845,7 @@ pub unsafe fn set_var_lval(
             *target = (*result).take();
         }
         // Upstream leaves the assigned value unlocked, by hand on one branch
-        // and through `tv_copy` on the other; the lock is the slot's.
-        // SAFETY: `ll_lock` is that slot's lock.
+        // and through `tv_copy` on the other; the lock is the slot's own.
         unsafe { *lval.ll_lock = VarLock::Unlocked };
     }
 
