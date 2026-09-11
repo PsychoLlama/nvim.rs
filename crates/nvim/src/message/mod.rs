@@ -240,8 +240,14 @@ pub const DLG_BUTTON_SEP: c_uint = 10;
 pub const BELL: ::core::ffi::c_int = '\u{7}' as ::core::ffi::c_int;
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false);
-static msg_ext_kind: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
+/// The kind the message being composed carries, **owned**.
+///
+/// The kind outlives the call that set it -- it is read again when the
+/// message is flushed to the UI or copied into the history -- so this keeps
+/// its own copy rather than the caller's pointer. `nvim_echo`'s `kind` lives
+/// in a keyset that dies with the call, which is how a borrowed kind became
+/// a use-after-free.
+static msg_ext_kind: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static msg_ext_trigger: GlobalCell<*const ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
 static msg_ext_id: GlobalCell<Object> = GlobalCell::new(Object::Integer(1 as Integer));
@@ -477,7 +483,12 @@ pub unsafe fn msg_multihl(
         } else {
             unsafe { msg_multiline(chunk.text, chunk.hl_id, true, false, &raw mut need_clear) };
         }
-        debug_assert!(!ui_has(kUIMessages) || kind.is_null() || msg_ext_kind.get() == kind);
+        debug_assert!(
+            !ui_has(kUIMessages)
+                || kind.is_null()
+                // SAFETY: `kind` is the caller's NUL-terminated string.
+                || msg_ext_kind.with(|held| held.as_bytes() == unsafe { cstr::bytes_at(kind) })
+        );
     }
 
     let kept = history && hl_msg.size != 0;

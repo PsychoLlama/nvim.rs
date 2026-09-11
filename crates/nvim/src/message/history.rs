@@ -116,11 +116,14 @@ pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data:
         unsafe { xmalloc(::core::mem::size_of::<MessageHistoryEntry>()) }.cast();
     unsafe { (*entry).msg = msg };
     unsafe { (*entry).temp = temp };
-    let kind = if msg_ext_kind.get().is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { xstrdup(msg_ext_kind.get()) }
-    };
+    let kind = msg_ext_kind.with(|kind| {
+        if kind.is_null() {
+            ptr::null_mut()
+        } else {
+            // SAFETY: a non-null kind is NUL-terminated.
+            unsafe { xstrdup(kind.data()) }
+        }
+    });
     unsafe { (*entry).kind = kind };
     unsafe { (*entry).prev = msg_hist_last.get() };
     unsafe { (*entry).next = ptr::null_mut() };
@@ -147,19 +150,6 @@ pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data:
     unsafe { msg_hist_clear(msg_hist_max.get()) };
 }
 
-/// Forget a message kind that is about to be freed.
-///
-/// `msg_ext_kind` holds the kind **by pointer**, and `:messages` points it at
-/// a history entry's own copy while replaying that entry (see
-/// [`msg_hist_show`]). Freeing the copy while the pointer still names it
-/// leaves the next message reading freed memory for its kind -- which
-/// [`msg_hist_add_multihl`] duplicates straight back into the new entry.
-fn forget_kind(kind: *const c_char) {
-    if msg_ext_kind.get() == kind {
-        msg_ext_kind.set(ptr::null());
-    }
-}
-
 /// Unlink `entry` from the list and free it.
 ///
 /// # Safety
@@ -179,7 +169,6 @@ unsafe fn msg_hist_free_msg(entry: *mut MessageHistoryEntry) {
         msg_hist_temp.set(unsafe { (*entry).next });
     }
     unsafe { hl_msg_free((*entry).msg.clone()) };
-    forget_kind(unsafe { (*entry).kind }.cast_const());
     unsafe { xfree((*entry).kind.cast()) };
     unsafe { xfree(entry.cast()) };
 }

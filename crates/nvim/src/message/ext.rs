@@ -23,14 +23,17 @@ use core::ptr;
 
 /// Start a new message of kind `msg_kind`, flushing whatever preceded it.
 ///
+/// The kind is **copied**: it is read again when the message is flushed or
+/// enters the history, which can be long after the caller's string is gone.
+///
 /// # Safety
-/// `msg_kind` must be null or a C string that outlives the message -- the
-/// kind is stored by pointer, not copied.
+/// `msg_kind` must be null or a valid C string.
 pub unsafe fn msg_ext_set_kind(msg_kind: *const c_char) {
     // Flush before setting the kind, so the previous message is emitted
     // under the kind it was written with.
     unsafe { msg_ext_ui_flush() };
-    msg_ext_kind.set(msg_kind);
+    // SAFETY: the caller's promise.
+    msg_ext_kind.set(unsafe { cstr_to_string(msg_kind) });
     // An appended message continues the previous one's column run.
     if !msg_ext_append.get() {
         redir_col.set(0);
@@ -110,7 +113,7 @@ pub(crate) fn msg_ext_init_chunks() -> Array {
 /// Only that the emitter statics are in a consistent state.
 pub unsafe fn msg_ext_ui_flush() {
     if !ui_has(kUIMessages) {
-        msg_ext_kind.set(ptr::null());
+        msg_ext_kind.set(String_0::NULL);
         return;
     }
     if msg_ext_skip_flush.get() {
@@ -133,7 +136,7 @@ pub unsafe fn msg_ext_ui_flush() {
     };
     ui_call_msg_show(
         // SAFETY: both are null or NUL-terminated protocol names.
-        unsafe { cstr_to_string(msg_ext_kind.get()) },
+        msg_ext_kind.with(String_0::clone),
         shown,
         msg_ext_overwrite.get(),
         to_ui_history,
@@ -173,7 +176,7 @@ pub unsafe fn msg_ext_ui_flush() {
     msg_ext_overwrite.set(false);
     msg_ext_history.set(false);
     msg_ext_append.set(false);
-    msg_ext_kind.set(ptr::null());
+    msg_ext_kind.set(String_0::NULL);
     // Only claim the next id if nothing else took it in the meantime. An id
     // the caller supplied is a `String`, not an `Integer`, and never matches.
     if msg_ext_id.with(|id| id.as_integer()) == Some(msg_id_next.get()) {

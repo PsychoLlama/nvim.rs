@@ -18,15 +18,12 @@ use core::ptr;
 
 /// The `msg_ext` kind a verbose message carries.
 ///
-/// [`verbose_enter`] compares `msg_ext_kind` against this **by pointer** to
-/// recognise a verbose section it is already inside. The C got that identity
-/// from its compiler pooling two occurrences of the same string literal, so
-/// this is one named constant rather than two literals: the guard then holds
-/// by construction instead of by codegen.
+/// [`verbose_enter`] compares `msg_ext_kind` against this to recognise a
+/// verbose section it is already inside.
 const VERBOSE_KIND: &CStr = c"verbose";
 
 /// The message kind in force when the current verbose section started.
-static pre_verbose_kind: GlobalCell<*const c_char> = GlobalCell::new(ptr::null());
+static pre_verbose_kind: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 
 /// The `'verbosefile'` handle, opened lazily by [`verbose_open`].
 static verbose_fd: GlobalCell<*mut FILE> = GlobalCell::new(ptr::null_mut());
@@ -182,8 +179,8 @@ pub unsafe fn verbose_enter() {
     // Don't set the verbose kind if message continuity is wanted, as with
     // last_set_msg().
     if !msg_ext_skip_verbose.get() {
-        if msg_ext_kind.get() != VERBOSE_KIND.as_ptr() {
-            pre_verbose_kind.set(msg_ext_kind.get());
+        if msg_ext_kind.with(|kind| kind.as_bytes() != VERBOSE_KIND.to_bytes()) {
+            pre_verbose_kind.set(msg_ext_kind.with(String_0::clone));
         }
         unsafe { msg_ext_set_kind(VERBOSE_KIND.as_ptr()) };
     }
@@ -202,9 +199,10 @@ pub unsafe fn verbose_leave() {
             msg_silent.set(0);
         }
     }
-    if !pre_verbose_kind.get().is_null() {
-        unsafe { msg_ext_set_kind(pre_verbose_kind.get()) };
-        pre_verbose_kind.set(ptr::null());
+    let previous = pre_verbose_kind.take();
+    if !previous.is_null() {
+        // SAFETY: an owned, NUL-terminated kind.
+        unsafe { msg_ext_set_kind(previous.data()) };
     }
 }
 

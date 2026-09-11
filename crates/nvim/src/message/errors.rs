@@ -445,7 +445,7 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
     keep_msg.set(ptr::null_mut());
     keep_msg_hl_id.set(if hl { HLF_W } else { 0 });
 
-    if msg_ext_kind.get().is_null() {
+    if msg_ext_kind.with(String_0::is_null) {
         unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
     }
     if unsafe { msg_ptr(message, keep_msg_hl_id.get()) } && msg_scrolled.get() == 0 {
