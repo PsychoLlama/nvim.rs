@@ -78,6 +78,11 @@ impl OptStr {
     /// The pair must still name live bytes -- it is `Copy`, so a value
     /// released through [`optval_free`] leaves copies of itself behind.
     pub(crate) unsafe fn as_bytes<'a>(&self) -> &'a [u8] {
+        // An option variable that has never been set is a null pointer,
+        // which no slice may be built over even at zero length.
+        if self.data().is_null() {
+            return &[];
+        }
         // SAFETY: the caller's promise.
         unsafe { core::slice::from_raw_parts(self.data().cast::<u8>(), self.len()) }
     }
@@ -184,10 +189,17 @@ pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVa
         // A *borrow* of the option variable's own buffer, which is what
         // makes `optval_free` of this value free the variable's string --
         // the protocol `set_option_varp`'s `free_oldval` relies on.
-        OptSlot::String(var) => OptVal::String(OptStr::from_raw_parts(
-            unsafe { *var },
-            unsafe { cstr::bytes_at(*var) }.len(),
-        )),
+        OptSlot::String(var) => {
+            let data = unsafe { *var };
+            // An option variable that has never been set is a null pointer,
+            // which is the empty value rather than a string of no bytes.
+            let len = if data.is_null() {
+                0
+            } else {
+                unsafe { cstr::bytes_at(data) }.len()
+            };
+            OptVal::String(OptStr::from_raw_parts(data, len))
+        }
     };
     // The C read the row's declared type and stamped it on the payload; the
     // slot answers the same thing, so this is where the two are tied.

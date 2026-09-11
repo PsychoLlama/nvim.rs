@@ -277,8 +277,10 @@ fn push_chunk(msg: &mut HlMessage, chunk: HlMessageChunk) {
         // this function made last time.
         msg.items = unsafe { xrealloc(msg.items.cast(), bytes) }.cast();
     }
-    // SAFETY: the grow above left room for one more chunk.
-    unsafe { *msg.items.add(msg.size) = chunk };
+    // SAFETY: the grow above left room for one more chunk, which is
+    // *uninitialised* -- a plain assignment would release whatever the
+    // allocator left in the slot's owning string.
+    unsafe { msg.items.add(msg.size).write(chunk) };
     msg.size += 1;
 }
 

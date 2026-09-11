@@ -118,8 +118,7 @@ pub unsafe fn nlua_pop_object(
                         }
                         let mut len: size_t = 0;
                         let s = lua_tolstring(lstate, -2, &raw mut len);
-                        let key =
-                            String_0::from_bytes(core::slice::from_raw_parts(s.cast::<u8>(), len));
+                        let key = String_0::from_raw_bytes(s, len);
                         // The entry's own value slot is what the next frame
                         // fills in. The address survives the pushes that
                         // follow because the dictionary was sized for every

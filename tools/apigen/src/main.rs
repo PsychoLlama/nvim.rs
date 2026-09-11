@@ -2488,7 +2488,7 @@ unsafe fn push_keydict<K: KeySet>(lstate: *mut lua_State, value: *mut K) {
 // -- argument guards -------------------------------------------------------
 
 /// A `LuaRef` argument, which puts the reference the conversion took out of
-/// the registry back when the binding leaves. An `Object` needs no such
+/// the registry back when the binding leaves. An API value needs no such
 /// guard: it owns what it names.
 struct LuaRefArg {
     value: LuaRef,

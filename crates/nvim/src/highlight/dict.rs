@@ -40,11 +40,13 @@ pub const HLATTRS_DICT_SIZE: size_t = 24;
 
 /// Appends `key: value`, with the key copied out of the literal.
 ///
-/// Every caller reserves [`HLATTRS_DICT_SIZE`] entries up front, which is the
-/// most this file can write; overrunning that is a bug here rather than
-/// anything a user can provoke, so it is an assert rather than a growth.
+/// Every caller reserves what it is going to write up front -- at least
+/// [`HLATTRS_DICT_SIZE`], and more where it also writes keys of its own --
+/// so a push that has to grow means a reservation is wrong. Growing is
+/// correct rather than the heap overwrite upstream's `PUT_C` performed, so
+/// that is a debug check rather than a panic.
 pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
-    assert!(dict.len() < HLATTRS_DICT_SIZE, "highlight dict overflow");
+    debug_assert!(dict.len() < dict.capacity(), "highlight dict overflow");
     dict.insert(String_0::from_cstr(key), value);
 }
 

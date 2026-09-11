@@ -176,7 +176,7 @@ pub unsafe fn nlua_pop_string(
         debug_assert!(!data.is_null());
         // The copy has to happen before the pop: the bytes are the Lua
         // string's own and the collector may take them afterwards.
-        let ret = String_0::from_bytes(core::slice::from_raw_parts(data.cast::<u8>(), len));
+        let ret = String_0::from_raw_bytes(data, len);
         lua_pop(lstate, 1);
         Ok(ret)
     }

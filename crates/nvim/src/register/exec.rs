@@ -72,9 +72,8 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> Result<(), Failed> {
         };
         unsafe { *tmp.add(tmplen) = NUL as c_char };
         unsafe { xfree(p as *mut c_void) };
-        unsafe { xfree((*pp).data() as *mut c_void) };
-        // SAFETY: `tmp` is this block's own, NUL-terminated above; the old
-        // string was freed by hand just before.
+        // SAFETY: `tmp` is this block's own, NUL-terminated above; the
+        // assignment releases the line it replaces.
         unsafe { *pp = String_0::from_owned_parts(tmp, tmplen) };
     } else {
         // SAFETY: `reg` is a live register. It is emptied and then given a
@@ -83,8 +82,9 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> Result<(), Failed> {
         unsafe { (*reg).additional_data = ::core::ptr::null_mut() };
         unsafe { (*reg).y_array = xmalloc(::core::mem::size_of::<String_0>()) as *mut String_0 };
         // SAFETY: `p` is the caller's allocation, NUL-terminated, which the
-        // register takes over.
-        unsafe { *(*reg).y_array = String_0::from_owned_parts(p, plen) };
+        // register takes over. The slot is `xmalloc`'s, so it is written
+        // rather than assigned into: there is nothing there to release.
+        unsafe { (*reg).y_array.write(String_0::from_owned_parts(p, plen)) };
         unsafe { (*reg).y_size = 1 };
         unsafe { (*reg).y_type = kMTCharWise };
     }

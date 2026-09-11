@@ -67,7 +67,9 @@ unsafe extern "C" fn nlua_print_event(argv: *mut *mut c_void) {
             items: xrealloc(ptr::null_mut(), size_of::<HlMessageChunk>() * 8)
                 .cast::<HlMessageChunk>(),
         };
-        *msg.items = chunk;
+        // The block is `xrealloc`'s, so the chunk is *written* into it: a
+        // plain assignment would release whatever the allocator left there.
+        msg.items.write(chunk);
 
         let mut needs_clear = false;
         msg_multihl(

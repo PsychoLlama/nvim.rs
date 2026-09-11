@@ -87,7 +87,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         let data = luaL_checklstring(lstate, 3, &raw mut key_len);
         // Copied out of the Lua state: the key outlives the value below,
         // which runs Lua and may collect the string it came from.
-        let key = String_0::from_bytes(core::slice::from_raw_parts(data.cast::<u8>(), key_len));
+        let key = String_0::from_raw_bytes(data, key_len);
 
         let del = lua_gettop(lstate) < 4 || lua_type(lstate, 4) == LUA_TNIL;
 

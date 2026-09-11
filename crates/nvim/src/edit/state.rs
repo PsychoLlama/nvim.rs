@@ -171,9 +171,6 @@ fn insert_enter(s: &mut InsertState) {
     // not to the text that was typed.
     let inserted = unsafe { get_inserted() };
     new_insert_skip.set(inserted.len() as c_int);
-    if !inserted.data().is_null() {
-        unsafe { xfree(inserted.data() as *mut ::core::ffi::c_void) };
-    }
     old_indent.set(0);
 
     // The mode ends when `ins_esc` says so: a count means the whole

@@ -124,7 +124,7 @@ unsafe fn term_write(
     // SAFETY: `buf` holds `size` readable bytes, and `chan` is the
     // terminal's channel.
     unsafe {
-        let text = String_0::from_bytes(core::slice::from_raw_parts(buf.cast::<u8>(), size));
+        let text = String_0::from_raw_bytes(buf, size);
         args.push(Object::integer((*chan).id as Integer));
         args.push(Object::buffer(terminal_buf((*chan).term)));
         args.push(Object::string(text));

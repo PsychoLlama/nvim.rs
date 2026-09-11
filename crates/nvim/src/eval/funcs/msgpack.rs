@@ -117,11 +117,13 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let data = unsafe { packer_take_string(&packer) };
     if args.len() > 1 && unsafe { strequal(arg_string(&mut numbuf, &args[1]), c"B".as_ptr()) } {
         // The Blob adopts the packer's allocation as-is, capacity and
-        // all; nothing copies.
+        // all; nothing copies, so the string gives the block up rather than
+        // releasing it on the way out.
         let b: *mut Blob = blob_alloc_ret(result);
-        unsafe { (*b).bv_ga.ga_data = data.data() as *mut c_void };
-        unsafe { (*b).bv_ga.ga_len = data.len() as c_int };
-        unsafe { (*b).bv_ga.ga_maxlen = packer.capacity() as c_int };
+        let (len, maxlen) = (data.len() as c_int, packer.capacity() as c_int);
+        unsafe { (*b).bv_ga.ga_data = data.into_raw() as *mut c_void };
+        unsafe { (*b).bv_ga.ga_len = len };
+        unsafe { (*b).bv_ga.ga_maxlen = maxlen };
     } else {
         let l = list_alloc_ret(result, kListLenMayKnow as isize);
         unsafe { encode_list_write(l as *mut c_void, data.data(), data.len()) };

@@ -250,7 +250,7 @@ unsafe fn parse_border_array(arr: &Array) -> Result<Slots, Error> {
         // SAFETY: `i` is below the array's own size.
         let item = &arr[i];
         // SAFETY: an item of a live array.
-        let (string, hl_id) = unsafe { parse_border_item(&item.clone()) }?;
+        let (string, hl_id) = unsafe { parse_border_item(item) }?;
         // SAFETY: a live API string.
         if !string.is_empty() && unsafe { mb_string2cells_len(string.data(), string.len()) } > 1 {
             return Err(err_border(c"only one-cell chars", None));
@@ -286,7 +286,7 @@ unsafe fn parse_border_array(arr: &Array) -> Result<Slots, Error> {
 ///
 /// # Safety
 /// `fconfig` must be writable and `style` a live API object.
-pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig) -> Result<(), Error> {
+pub unsafe fn parse_border_style(style: &Object, fconfig: *mut WinConfig) -> Result<(), Error> {
     // The config is written a field at a time rather than through one
     // long-lived `&mut`: everything below can re-enter the editor, which owns
     // it. That is what `WinCfg` is -- a `Live<WinConfig>` reborrowing per
@@ -369,7 +369,7 @@ pub unsafe fn parse_winborder(
         Object::string(unsafe { cstr_to_string(border_opt) })
     };
     // SAFETY: the caller's config, and the object just built.
-    unsafe { parse_border_style(style, fconfig) }.map(|()| true)
+    unsafe { parse_border_style(&style, fconfig) }.map(|()| true)
 }
 
 /// The eight comma-separated cells of a `'winborder'` value, or `None` when

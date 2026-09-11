@@ -200,11 +200,13 @@ pub unsafe fn nlua_funcref_str(ref_0: LuaRef, arena: *mut Arena) -> *mut c_char 
                         ar.linedefined,
                     );
                     xfree(src.cast::<c_void>());
-                    return str.data();
+                    // The caller frees the rendering, so the string gives
+                    // its block up rather than releasing it here.
+                    return str.into_raw();
                 }
             }
         }
-        arena_printf(arena, c"<Lua %d>".as_ptr(), ref_0).data()
+        arena_printf(arena, c"<Lua %d>".as_ptr(), ref_0).into_raw()
     }
 }
 

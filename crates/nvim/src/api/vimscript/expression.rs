@@ -110,10 +110,7 @@ pub unsafe fn nvim_parse_expression(
         // SAFETY: the parser's message is NUL-terminated and `arg` names
         // `arg_len` bytes of the expression.
         unsafe {
-            let arg = String_0::from_bytes(core::slice::from_raw_parts(
-                east.err.arg.cast::<u8>(),
-                east.err.arg_len as size_t,
-            ));
+            let arg = String_0::from_raw_bytes(east.err.arg, east.err.arg_len as size_t);
             let msg = cstr_to_string(east.err.msg);
             err_dict.insert(String_0::from_cstr(c"message"), Object::string(msg));
             err_dict.insert(String_0::from_cstr(c"arg"), Object::string(arg));
@@ -345,9 +342,9 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
     // The string body is the node's; the answer gets a copy, since the node
     // itself is about to go.
     let string_body = |value: *mut c_char, size: size_t| {
-        // SAFETY: the node owns `size` readable bytes at `value`.
-        let bytes = unsafe { core::slice::from_raw_parts(value.cast::<u8>(), size) };
-        Object::string(String_0::from_bytes(bytes))
+        // SAFETY: the node owns `size` readable bytes at `value`, or names
+        // none at all -- an unterminated string literal has no body.
+        Object::string(unsafe { String_0::from_raw_bytes(value, size) })
     };
 
     let type_name = east_node_type_tab.with(|tab| tab[type_0 as usize]);

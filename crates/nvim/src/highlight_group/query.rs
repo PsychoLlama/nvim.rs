@@ -67,8 +67,9 @@ unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int, _arena: *mut A
         })
     };
 
-    // SAFETY: the arena hands out `HLATTRS_DICT_SIZE + 1` writable entries.
-    *hl = ApiDict::with_capacity(HLATTRS_DICT_SIZE + 1);
+    // `default` and `link`, then the rgb pass, then the `cterm` sub-dict
+    // the second pass fills: what this function can write, reserved once.
+    *hl = ApiDict::with_capacity(HLATTRS_DICT_SIZE + 3);
     if attr.rgb_ae_attr.has(HlAttrFlags::DEFAULT) {
         put(hl, c"default", Object::boolean(true));
     }

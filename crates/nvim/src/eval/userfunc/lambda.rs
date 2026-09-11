@@ -64,7 +64,7 @@ fn get_lambda_name(into: &mut [c_char; LAMBDA_NAME_LEN]) -> String_0 {
     };
     // SAFETY: `snprintf` wrote `len` bytes of the caller's array, which the
     // answer copies.
-    String_0::from_bytes(unsafe { slice::from_raw_parts(buf.cast::<u8>(), len) })
+    unsafe { String_0::from_raw_bytes(buf, len) }
 }
 
 /// Allocate a `UserFunc` for a function called `name`, whose name lives in the

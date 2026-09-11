@@ -109,6 +109,22 @@ impl String_0 {
         unsafe { String_0::from_owned_parts(data.cast(), bytes.len()) }
     }
 
+    /// A copy of `size` bytes at `data`, NUL-terminated, owned by the
+    /// answer. A null `data` -- which is how the editor spells "no value"
+    /// wherever it carries a pointer and a length -- answers the null
+    /// string, since no slice may be built over one.
+    ///
+    /// # Safety
+    ///
+    /// `data` must be null, or point at `size` readable bytes.
+    pub unsafe fn from_raw_bytes(data: *const c_char, size: size_t) -> Self {
+        if data.is_null() {
+            return String_0::NULL;
+        }
+        // SAFETY: the caller's promise, and `data` is not null.
+        Self::from_bytes(unsafe { slice::from_raw_parts(data.cast::<u8>(), size) })
+    }
+
     /// A copy of `str`'s bytes, stopping at its terminator.
     pub fn from_cstr(str: &CStr) -> Self {
         Self::from_bytes(str.to_bytes())
@@ -184,7 +200,7 @@ pub(crate) unsafe fn cstr_to_string(str: *const c_char) -> String_0 {
 /// `buf` must point at `size` readable bytes.
 pub(crate) unsafe fn cbuf_to_string(buf: *const c_char, size: size_t) -> String_0 {
     // SAFETY: `buf` has `size` readable bytes.
-    String_0::from_bytes(unsafe { slice::from_raw_parts(buf.cast::<u8>(), size) })
+    unsafe { String_0::from_raw_bytes(buf, size) }
 }
 
 /// A copy of `str`'s bytes, stopping at a terminator within `maxsize` bytes
@@ -197,7 +213,7 @@ pub(crate) unsafe fn cstrn_to_string(str: *const c_char, maxsize: size_t) -> Str
     // SAFETY: the caller's promise.
     let len = unsafe { strnlen(str, maxsize) };
     // SAFETY: as above; `len` is at most `maxsize`.
-    String_0::from_bytes(unsafe { slice::from_raw_parts(str.cast::<u8>(), len) })
+    unsafe { String_0::from_raw_bytes(str, len) }
 }
 
 /// A NUL-terminated copy of `str`'s bytes, owned by the caller.

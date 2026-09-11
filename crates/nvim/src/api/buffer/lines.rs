@@ -438,7 +438,7 @@ unsafe fn push_linestr(
         let mut str: String_0 = String_0::NULL;
         if len > 0 as size_t {
             // SAFETY: the caller's promise about `s` and `len`.
-            str = String_0::from_bytes(unsafe { core::slice::from_raw_parts(s.cast::<u8>(), len) });
+            str = unsafe { String_0::from_raw_bytes(s, len) };
             if replace_nl {
                 let (nl, nul) = ('\n' as ::core::ffi::c_char, NUL as ::core::ffi::c_char);
                 // SAFETY: `str` names its own bytes.

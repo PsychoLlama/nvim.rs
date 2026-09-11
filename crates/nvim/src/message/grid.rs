@@ -66,7 +66,7 @@ pub(crate) unsafe fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
     // reads; `schar_get` writes at most `MAX_SCHAR_SIZE` bytes plus a NUL.
     let sep = unsafe {
         let size = schar_get(sep.as_mut_ptr(), Win::current().w_p_fcs_chars.msgsep);
-        String_0::from_bytes(core::slice::from_raw_parts(sep.as_ptr().cast::<u8>(), size))
+        String_0::from_raw_bytes(sep.as_ptr(), size)
     };
     ui_call_msg_set_pos(
         grid.handle.into(),

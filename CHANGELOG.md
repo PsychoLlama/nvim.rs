@@ -47,6 +47,13 @@ and this project adheres to [CalVer](https://calver.org/).
   an empty `'winborder'` no longer clears a window's border, title and footer
   settings, and `nvim_buf_set_text`/`nvim_buf_get_text` no longer swallow the
   reason they refused.
+- Rewrote the API's value model: a `String`, `Array` or `Dict` an API method
+  takes or answers now owns its own storage and releases it when it goes out
+  of scope, rather than living in a per-request arena that was thrown away
+  wholesale. That retires the hand-written free, copy and
+  release-the-Lua-references walks the arena could not do itself, and with
+  them the question of whether a given answer was the caller's to free.
+  Behaviour is unchanged.
 - Rewrote how an API function receives its option dictionary: a key the
   caller did not name is now absent rather than present-and-zero beside a
   bitmask saying so, across every `nvim_*` method that takes one and the

@@ -158,6 +158,22 @@ pub(crate) unsafe fn bytes_at<'a>(p: *const c_char) -> &'a [u8] {
     unsafe { CStr::from_ptr(p) }.to_bytes()
 }
 
+/// [`bytes_at`] where the pointer may be absent: a null `p` answers the
+/// empty slice rather than walking it.
+///
+/// The C this replaces used `String`'s null spelling for "no value", and a
+/// consumer that reads `size` bytes cannot tell the two apart.
+///
+/// # Safety
+/// [`at_opt`]'s contract.
+pub(crate) unsafe fn bytes_at_or_empty<'a>(p: *const c_char) -> &'a [u8] {
+    if p.is_null() {
+        return &[];
+    }
+    // SAFETY: caller's contract, and `p` is not null.
+    unsafe { bytes_at(p) }
+}
+
 /// The first `n` bytes of the string at `p`, stopping at its terminator --
 /// which is exactly the span `strncmp(p, _, n)` compares.
 ///

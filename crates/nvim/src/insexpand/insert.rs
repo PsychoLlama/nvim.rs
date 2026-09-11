@@ -222,7 +222,6 @@ pub fn ins_compl_delete(new_leader: bool) {
         }
         while Win::current().w_cursor.lnum > compl_lnum.get() {
             if unsafe { ml_delete(Win::current().w_cursor.lnum) }.is_err() {
-                unsafe { xfree(remaining.data().cast::<c_void>()) };
                 return;
             }
             unsafe { deleted_lines_mark(Win::current().w_cursor.lnum, 1) };
@@ -234,7 +233,6 @@ pub fn ins_compl_delete(new_leader: bool) {
 
     if Win::current().w_cursor.col > col {
         if unsafe { stop_arrow() }.is_err() {
-            unsafe { xfree(remaining.data().cast::<c_void>()) };
             return;
         }
         backspace_until_column(col);
@@ -245,7 +243,6 @@ pub fn ins_compl_delete(new_leader: bool) {
         orig_col = Win::current().w_cursor.col;
         unsafe { ins_str(remaining.data(), remaining.len()) };
         Win::current().w_cursor.col = orig_col;
-        unsafe { xfree(remaining.data().cast::<c_void>()) };
     }
 
     // TODO(vim): is this sufficient for redrawing?  Redrawing everything

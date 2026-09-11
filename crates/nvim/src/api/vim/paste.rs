@@ -147,8 +147,11 @@ pub unsafe fn nvim_put(
         return ().reported(error);
     }
     let bytes = lines.len().wrapping_mul(::core::mem::size_of::<String_0>());
-    // SAFETY: `arena` is the caller's, and outlives the register below.
+    // SAFETY: `arena` is the caller's, and outlives the register below. The
+    // block is zeroed: a slot the walk below assigns into has to hold a
+    // releasable string, and all-zero is the null one.
     reg.y_array = unsafe { arena_alloc(arena, bytes, true) }.cast::<String_0>();
+    unsafe { reg.y_array.write_bytes(0, lines.len()) };
     reg.y_size = lines.len();
     for i in 0..lines.len() {
         // SAFETY: `lines` names its own `size` items.

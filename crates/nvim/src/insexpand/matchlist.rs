@@ -706,8 +706,7 @@ pub(crate) unsafe fn sort_compl_match_list(compare: MergeSortCompareFunc) {
 /// `match_0` is already unlinked from the list, or the whole list is going
 /// at once, and nothing else holds it.
 pub(crate) unsafe fn ins_compl_item_free(mut match_0: Cm) {
-    // SAFETY: the text is this match's own allocation.
-    unsafe { xfree(match_0.cp_str.data().cast::<c_void>()) };
+    // The text is this match's own, and the assignment releases it.
     match_0.cp_str = String_0::NULL;
     if match_0.cp_flags & CP_FREE_FNAME != 0 {
         // SAFETY: `CP_FREE_FNAME` says the file name is this match's own.

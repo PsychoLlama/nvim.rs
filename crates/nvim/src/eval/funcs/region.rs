@@ -373,7 +373,9 @@ pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             unsafe { block_def2str(&bd) }
         };
         debug_assert!(!text.data().is_null());
-        unsafe { tv_list_append_allocated_string(result.list_or_null(), text.data()) };
+        // The list takes the block over, so the string gives it up rather
+        // than releasing it here.
+        unsafe { tv_list_append_allocated_string(result.list_or_null(), text.into_raw()) };
     }
 }
 

@@ -774,10 +774,13 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
             )
             .cast::<ShadaEntry>()
         };
+        // The slot is `xrealloc`'s, so the entry is *written* into it: a
+        // plain assignment would release whatever the allocator left there.
         unsafe {
-            *(*filemarks)
+            (*filemarks)
                 .additional_marks
-                .add((*filemarks).additional_marks_size - 1) = entry
+                .add((*filemarks).additional_marks_size - 1)
+                .write(entry)
         };
         return;
     }

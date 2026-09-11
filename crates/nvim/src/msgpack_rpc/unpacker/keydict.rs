@@ -366,5 +366,6 @@ unsafe fn fail(message: &core::ffi::CStr, key: String_0) -> *mut c_char {
     // gigabytes of it into an error message. `len_as_int` says so instead.
     let (fmt, arena) = (message.as_ptr(), core::ptr::null_mut());
     let (precision, bytes) = (crate::narrow::len_as_int(key.len()), key.data());
-    unsafe { arena_printf(arena, fmt, precision, bytes) }.data()
+    // The caller frees the message.
+    unsafe { arena_printf(arena, fmt, precision, bytes) }.into_raw()
 }

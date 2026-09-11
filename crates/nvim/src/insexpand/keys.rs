@@ -213,10 +213,8 @@ pub(crate) unsafe fn ins_compl_set_original_text(str: *mut c_char, len: size_t) 
         first.prev().filter(|prev| prev.is_original())
     };
     if let Some(mut m) = original {
-        // SAFETY: the old text is this match's own allocation, and `str` is
-        // readable for `len` bytes -- the caller's promise.
-        unsafe { xfree(m.cp_str.data().cast::<c_void>()) };
-        // SAFETY: as above.
+        // The assignment releases the text the match already had.
+        // SAFETY: `str` is readable for `len` bytes -- the caller's promise.
         m.cp_str = unsafe { cbuf_to_string(str, len) };
     }
 }

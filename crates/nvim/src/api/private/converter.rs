@@ -65,8 +65,6 @@ struct ObjectSink {
     /// Containers already opened, innermost last, with the value most recently
     /// converted on top of them.
     stack: Vec<Object>,
-    /// The key `conv_dict_after_key` converted, waiting for its value.
-    pending_key: Option<String_0>,
 }
 
 impl ObjectSink {
@@ -96,16 +94,24 @@ impl ObjectSink {
         array.push(item);
     }
 
-    /// Move the key and the value on top of the stack into the dictionary
-    /// below them.
-    fn close_dict_item(&mut self) {
-        let value = self.take_top();
-        let key = self.pending_key.take().expect("a key precedes its value");
+    /// The dictionary the walk is currently filling.
+    fn open_dict(&mut self) -> &mut ApiDict {
         let Some(Object::Dict(dict)) = self.stack.last_mut() else {
             unreachable!("the walk is inside a dictionary");
         };
-        debug_assert!(dict.len() < dict.capacity());
-        dict.insert(key, value);
+        dict
+    }
+
+    /// Move the value on top of the stack into the entry its key opened.
+    ///
+    /// The key was appended with a nil value when it converted, which is
+    /// what keeps one *stack* of half-built entries rather than one pending
+    /// key: a dictionary nested inside another's value would overwrite a
+    /// single slot.
+    fn close_dict_item(&mut self) {
+        let value = self.take_top();
+        let dict = self.open_dict();
+        dict.last_mut().expect("a key precedes its value").value = value;
     }
 }
 
@@ -260,7 +266,7 @@ impl TypvalSink for ObjectSink {
         Flow::Go
     }
 
-    /// The key waits in the sink until its value arrives.
+    /// The key claims its entry now and the value that follows fills it in.
     ///
     /// # Safety
     ///
@@ -271,8 +277,9 @@ impl TypvalSink for ObjectSink {
         let key = key
             .into_string()
             .unwrap_or_else(|| String_0::from_cstr(INVALID_KEY));
-        debug_assert!(self.pending_key.is_none());
-        self.pending_key = Some(key);
+        let dict = self.open_dict();
+        debug_assert!(dict.len() < dict.capacity());
+        dict.insert(key, Object::Nil);
     }
 
     /// # Safety

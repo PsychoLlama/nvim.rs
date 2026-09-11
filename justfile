@@ -90,6 +90,21 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
+# Fail if `TypVal`'s or `Object`'s drop shim grew a cleanup path.
+#
+# Both types release themselves -- an iterative walk that takes each owning
+# payload out of its slot -- so every payload they hold sits in a
+# `ManuallyDrop` and the compiler appends nothing after `Drop::drop`. Give
+# one of them a field the compiler *does* drop and `drop_in_place` grows a
+# landing pad, which stops the shim being a tail call and stops it inlining
+# at the hundreds of sites that drop a value; that is worth ~0.5 % on four
+# of the five benches, and nothing in the source or the suites shows it.
+#
+# Reads the shipped shape, so it wants a `--release` binary: the argument
+# defaults to `target/release/nvim` and `just build-release` makes one.
+drop-glue binary='target/release/nvim':
+  scripts/drop-glue.py {{ binary }}
+
 # A/B two nvim binaries on one whole-binary bench, e.g.
 # `just bench-ab scrbench /tmp/a/nvim /tmp/b/nvim`. The bench is a name from
 # test/benchmark/ab (evalbench, inbench, mlbench, scrbench, spellbench);

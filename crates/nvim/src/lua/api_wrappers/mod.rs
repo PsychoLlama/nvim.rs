@@ -185,7 +185,7 @@ use crate::types::{
     KeyDict_highlight, KeyDict_keymap, KeyDict_ns_opts, KeyDict_open_term, KeyDict_option,
     KeyDict_redraw, KeyDict_runtime, KeyDict_set_decoration_provider, KeyDict_set_extmark,
     KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config, KeyDict_win_text_height,
-    KeySetLink, LuaRef, Object, lua_State,
+    KeySetLink, LuaRef, lua_State,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -308,7 +308,7 @@ unsafe fn push_keydict<K: KeySet>(lstate: *mut lua_State, value: *mut K) {
 // -- argument guards -------------------------------------------------------
 
 /// A `LuaRef` argument, which puts the reference the conversion took out of
-/// the registry back when the binding leaves. An `Object` needs no such
+/// the registry back when the binding leaves. An API value needs no such
 /// guard: it owns what it names.
 struct LuaRefArg {
     value: LuaRef,

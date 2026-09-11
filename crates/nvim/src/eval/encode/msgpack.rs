@@ -41,11 +41,17 @@ struct MsgpackSink<'a> {
 }
 
 impl MsgpackSink<'_> {
-    /// A string as msgpack's `String_0` sees it: pointer and length, no NUL.
+    /// The bytes to pack: a pointer and a length, with the walk's null
+    /// pointer for an empty value read as no bytes rather than as a slice
+    /// over nothing.
     ///
     /// # Safety
-    /// `data` must point at `size` readable bytes.
+    /// `data` must be null -- and then `size` zero -- or point at `size`
+    /// readable bytes.
     unsafe fn buf<'a>(data: *mut c_char, size: size_t) -> &'a [u8] {
+        if data.is_null() {
+            return &[];
+        }
         // SAFETY: the caller's promise.
         unsafe { core::slice::from_raw_parts(data.cast::<u8>(), size) }
     }

@@ -89,10 +89,11 @@ impl Payload {
         mpack_str(name.to_bytes(), &mut self.buf);
     }
 
-    /// What has been packed so far. Valid until this is dropped.
-    fn packed(&self) -> String_0 {
-        // SAFETY: the buffer is this payload's own `packer_string_buffer`.
-        unsafe { packer_take_string(&self.buf) }
+    /// What has been packed so far, borrowed: the payload goes on owning
+    /// the block, and releases it when it drops.
+    fn packed(&self) -> &[u8] {
+        // SAFETY: the buffer is this payload's own, holding `used` bytes.
+        unsafe { core::slice::from_raw_parts(self.buf.start().cast::<u8>(), self.buf.used()) }
     }
 }
 
@@ -208,7 +209,8 @@ pub(crate) unsafe fn shada_pack_entry(
     mpack_uint64(unsafe { (*packer).cursor_mut() }, entry.timestamp);
     if !packed.is_empty() {
         mpack_uint64(unsafe { (*packer).cursor_mut() }, packed.len() as uint64_t);
-        unsafe { mpack_raw(packed.data(), packed.len(), &mut *packer) };
+        // SAFETY: the bytes are the payload's, live until it drops below.
+        unsafe { mpack_raw(packed.as_ptr().cast(), packed.len(), &mut *packer) };
     }
 
     if unsafe { (*packer).anyint } != 0 {
@@ -252,7 +254,7 @@ unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut
     );
     mpack_uint(sbuf.cursor_mut(), history.histtype as uint32_t);
     // SAFETY: the entry's string is NUL-terminated.
-    mpack_bin(unsafe { cstr::bytes_at(history.string) }, sbuf);
+    mpack_bin(unsafe { cstr::bytes_at_or_empty(history.string) }, sbuf);
     if is_search {
         mpack_uint(sbuf.cursor_mut(), history.sep as uint8_t as uint32_t);
     }
@@ -277,7 +279,7 @@ unsafe fn pack_variable(
         2 + is_blob as uint32_t + unsafe { additional_data_len(entry.additional_data) },
     );
     // SAFETY: the variable's name is NUL-terminated.
-    let varname = unsafe { cstr::bytes_at(global_var.name) };
+    let varname = unsafe { cstr::bytes_at_or_empty(global_var.name) };
     mpack_bin(varname, sbuf);
 
     // What `encode_vim_to_msgpack` calls the value in its complaints.
@@ -317,7 +319,7 @@ unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut Pa
         1 + unsafe { additional_data_len(entry.additional_data) },
     );
     // SAFETY: the substitution text is NUL-terminated.
-    mpack_bin(unsafe { cstr::bytes_at(sub.sub) }, sbuf);
+    mpack_bin(unsafe { cstr::bytes_at_or_empty(sub.sub) }, sbuf);
     unsafe { dump_additional_data(entry.additional_data, sbuf) };
 }
 
@@ -399,7 +401,10 @@ unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Paylo
 
     payload.key(c"f");
     // SAFETY: the mark's file name is NUL-terminated.
-    mpack_bin(unsafe { cstr::bytes_at(mark.fname) }, &mut payload.buf);
+    mpack_bin(
+        unsafe { cstr::bytes_at_or_empty(mark.fname) },
+        &mut payload.buf,
+    );
     if mark.mark.lnum != default.mark.lnum {
         payload.key(c"l");
         mpack_integer(payload.buf.cursor_mut(), mark.mark.lnum as Integer);
@@ -486,7 +491,10 @@ unsafe fn pack_buffer_list(list: ShadaBufferList, payload: &mut Payload) {
 
         payload.key(c"f");
         // SAFETY: the buffer's file name is NUL-terminated.
-        mpack_bin(unsafe { cstr::bytes_at(buffer.fname) }, &mut payload.buf);
+        mpack_bin(
+            unsafe { cstr::bytes_at_or_empty(buffer.fname) },
+            &mut payload.buf,
+        );
         if buffer.pos.lnum != default.lnum {
             payload.key(c"l");
             mpack_uint64(payload.buf.cursor_mut(), buffer.pos.lnum as uint64_t);

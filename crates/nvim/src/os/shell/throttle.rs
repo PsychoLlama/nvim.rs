@@ -176,7 +176,7 @@ unsafe extern "C" fn out_data_event(argv: *mut *mut c_void) {
         let mut need_clear = true;
         msg_multiline(
             // SAFETY: the caller's buffer holds `count` readable bytes.
-            String_0::from_bytes(core::slice::from_raw_parts(text.cast::<u8>(), count)),
+            String_0::from_raw_bytes(text, count),
             hl,
             false,
             false,

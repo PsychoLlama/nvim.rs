@@ -127,6 +127,10 @@ unsafe fn append_to_register(curr: *mut YankReg, reg: *mut YankReg, yank_type: M
             // so nothing there is released.
             new_ptr.add(i).write((*curr).y_array.add(i).read());
         }
+        // The slots the appended lines go into are `xmalloc`'s too, and the
+        // walk below *assigns* into them: zero is the null string, which is
+        // what makes that assignment release nothing.
+        new_ptr.add(old).write_bytes(0, (*reg).y_size);
         xfree((*curr).y_array as *mut c_void);
         (*curr).y_array = new_ptr;
         old

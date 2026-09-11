@@ -57,3 +57,11 @@ Tests only run local, not in CI. Any failure, even out of scope, is your respons
   is optimized); read the numbers as a dev-profile comparison, and build
   `--release` with `codegen-units = 1` by hand for anything that has to hold
   against a shipped binary.
+- `just drop-glue [binary]` — fails if `drop_in_place::<TypVal>` or
+  `drop_in_place::<Object>` in a **release** binary has a cleanup path. Both
+  types release themselves, so their payloads are `ManuallyDrop` and the
+  compiler must append nothing; a payload it drops instead gives the shim a
+  landing pad, which stops it being a tail call and stops it inlining at the
+  hundreds of sites that drop a value. Worth ~0.5 % on four of the five
+  benches, and neither the source nor the suites show it. Run it whenever a
+  value type gains a field.

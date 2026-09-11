@@ -327,6 +327,12 @@ unsafe fn str_to_reg(
     // the lines it already has plus the new ones; the field is updated to the
     // block `xrealloc` answered before anything reads it again.
     let pp = unsafe { xrealloc((*y_ptr).y_array as *mut c_void, room) } as *mut String_0;
+    // The slots past what the register already holds are `xrealloc`'s, so
+    // they are zeroed into null strings: a slot the walk below assigns into
+    // has to hold something releasable.
+    // SAFETY: `pp` has `y_size + newlines` slots and the first `y_size` are
+    // the register's own.
+    unsafe { pp.add(y_size).write_bytes(0, newlines) };
     // SAFETY: as above.
     unsafe { (*y_ptr).y_array = pp };
 
@@ -410,15 +416,12 @@ unsafe fn str_to_reg(
             }
             let s_len = extra.wrapping_add(line_len);
             if append {
-                // SAFETY: the old line's text has just been copied into `s`,
-                // and the array slot is overwritten below.
-                unsafe { xfree((*pp.add(lnum)).data() as *mut c_void) };
                 append = false;
             }
-            // SAFETY: `lnum` is inside the array `xrealloc` sized above, and
-            // `s` is an allocation of `s_len` bytes plus a NUL.
-            // SAFETY: `s` is that allocation, NUL-terminated at `s_len`, and
-            // the slot it goes into was zeroed by `xcalloc`.
+            // SAFETY: `lnum` is inside the array sized above, `s` is an
+            // allocation of `s_len` bytes plus a NUL, and the slot holds
+            // either the line this one is appending to or a null string --
+            // the assignment releases it either way.
             unsafe { *pp.add(lnum) = String_0::from_owned_parts(s, s_len) };
             // A NUL in the text is how the editor spells a newline.
             // SAFETY: `s` holds those `s_len` bytes.

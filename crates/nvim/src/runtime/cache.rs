@@ -452,8 +452,7 @@ fn runtime_search_path_build() -> RuntimeSearchPath {
         };
         // SAFETY: `copy_option_part` filled `buflen` bytes of the buffer
         // `cur_entry` points into.
-        let the_entry =
-            String_0::from_bytes(unsafe { slice::from_raw_parts(cur_entry.cast::<u8>(), buflen) });
+        let the_entry = unsafe { String_0::from_raw_bytes(cur_entry, buflen) };
         pack_used.insert(the_entry.as_bytes().into(), 0);
         pack_entries.push(the_entry);
     }

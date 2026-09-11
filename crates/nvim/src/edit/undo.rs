@@ -165,8 +165,6 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
     if did_restart_edit.get() == 0 || added > 0 {
         unsafe { last_insert_slot().replace(inserted) };
         last_insert_skip.set(if added < 0 { 0 } else { new_insert_skip.get() });
-    } else {
-        unsafe { xfree(inserted.data().cast::<::core::ffi::c_void>()) };
     }
 
     if !arrow_used.get() && !end_insert_pos.is_null() {

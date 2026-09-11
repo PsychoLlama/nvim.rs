@@ -210,11 +210,13 @@ impl Reading {
             }
         }
 
-        // The pattern takes the entry's string and extra data over.
+        // The pattern takes the entry's string and extra data over, so the
+        // string gives its block up rather than releasing it here.
         let text = pat.pat.take().unwrap_or(String_0::NULL);
+        let patlen = text.len();
         let spat = SearchPattern {
-            pat: text.data(),
-            patlen: text.len(),
+            pat: text.into_raw(),
+            patlen,
             magic: flag(pat.magic, default.magic),
             no_scs: !flag(pat.smartcase, default.smartcase),
             timestamp: entry.timestamp,
