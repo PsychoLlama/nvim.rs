@@ -230,7 +230,7 @@ pub(crate) unsafe fn shada_pack_entry(
 fn pack_header(header: &ApiDict, sbuf: &mut PackerBuffer) {
     mpack_map(sbuf.cursor_mut(), header.len() as uint32_t);
     for item in header {
-        mpack_str(item.key.as_bytes(), sbuf);
+        mpack_str(item.key.bytes(), sbuf);
         match &item.value {
             Object::String(s) => mpack_bin(s.as_bytes(), sbuf),
             Object::Integer(n) => mpack_integer(sbuf.cursor_mut(), *n),

@@ -193,7 +193,7 @@ pub unsafe fn channel_info(id: uint64_t) -> ApiDict {
 
     // id, stream, mode, and up to six more from the branches below.
     let mut info = ApiDict::with_capacity(9);
-    let mut push = |key: &CStr, value: Object| info.insert(String_0::from_cstr(key), value);
+    let mut push = |key: &CStr, value: Object| info.insert(key, value);
 
     // SAFETY: `chan` is a live channel; the transport reads below are guarded
     // by its `streamtype`.

@@ -645,7 +645,7 @@ pub unsafe fn get_client_info(chan: *mut Channel, key: *const c_char) -> *const 
     let key = unsafe { CStr::from_ptr(key) };
     for item in info {
         if let Some(value) = item.value.as_string()
-            && item.key.as_cstr() == key
+            && item.key.as_c_str() == key
         {
             return value.data();
         }

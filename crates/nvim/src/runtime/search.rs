@@ -500,23 +500,17 @@ pub fn runtime_inspect() -> Array {
         let item = unsafe { *path.items.add(i) };
         let mut entry = ApiDict::with_capacity(5);
         // SAFETY: `item.path` is the entry's own NUL-terminated directory.
-        entry.insert(
-            String_0::from_cstr(c"path"),
-            string_obj(unsafe { cstr_to_string(item.path) }),
-        );
+        entry.insert(c"path", string_obj(unsafe { cstr_to_string(item.path) }));
         if item.after {
-            entry.insert(String_0::from_cstr(c"after"), boolean_obj(true));
+            entry.insert(c"after", boolean_obj(true));
         }
         if item.pack_inserted {
-            entry.insert(String_0::from_cstr(c"pack_inserted"), boolean_obj(true));
+            entry.insert(c"pack_inserted", boolean_obj(true));
         }
         if let Some(has_lua) = item.has_lua {
-            entry.insert(String_0::from_cstr(c"has_lua"), boolean_obj(has_lua));
+            entry.insert(c"has_lua", boolean_obj(has_lua));
         }
-        entry.insert(
-            String_0::from_cstr(c"pos_in_rtp"),
-            integer_obj(item.pos_in_rtp as Integer),
-        );
+        entry.insert(c"pos_in_rtp", integer_obj(item.pos_in_rtp as Integer));
         rv.push(dict_obj(entry));
     }
     rv

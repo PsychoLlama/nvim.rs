@@ -48,16 +48,12 @@ use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
-    ApiDict, Array, Blob, BoolVarValue, DictItem, Float, Integer, KeyValuePair, Object, String_0,
-    TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer,
-    kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil,
-    kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull, size_t,
+    ApiDict, Array, Blob, BoolVarValue, DictItem, DictKey, Float, Integer, KeyValuePair, Object,
+    String_0, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
+    kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
+    kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull,
+    size_t,
 };
-
-/// The key a dictionary entry gets when its key did not convert to a string.
-/// Unreachable through the walk, whose dictionary keys are always strings, but
-/// upstream writes it rather than assert, so it is here too.
-const INVALID_KEY: &CStr = c"__INVALID_KEY__";
 
 /// The `From<&TypVal> for Object` sink: upstream's `EncodedData`.
 #[derive(Default)]
@@ -266,21 +262,29 @@ impl TypvalSink for ObjectSink {
         Flow::Go
     }
 
-    /// The key claims its entry now and the value that follows fills it in.
+    /// The key claims its entry, and the value that follows fills it in.
+    ///
+    /// The key never becomes an `Object`: a [`DictKey`] copies a short one --
+    /// which an API key almost always is -- into the entry itself, where a
+    /// `String_0` would be an `xmalloc` and an `xfree` per key, and half of
+    /// the allocations a conversion makes are keys.
+    ///
+    fn conv_dict_key(&mut self, key: &[u8]) -> Flow {
+        let dict = self.open_dict();
+        debug_assert!(dict.len() < dict.capacity());
+        dict.insert(DictKey::new(key), Object::Nil);
+        Flow::Go
+    }
+
+    /// Nothing: [`Self::conv_dict_key`] already claimed the entry, and this
+    /// sink refuses specials, so the `[key, value]` pair walk -- the only
+    /// other caller -- never runs.
     ///
     /// # Safety
     ///
     /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {
-        let key = self.take_top();
-        let key = key
-            .into_string()
-            .unwrap_or_else(|| String_0::from_cstr(INVALID_KEY));
-        let dict = self.open_dict();
-        debug_assert!(dict.len() < dict.capacity());
-        dict.insert(key, Object::Nil);
-    }
+    unsafe fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {}
 
     /// # Safety
     ///
@@ -422,7 +426,7 @@ fn object_to_vim(value: Object, tv: &mut TypVal, take_luaref: bool) {
                 // SAFETY: a key is a NUL-terminated name, and `di` is the
                 // item just allocated for it.
                 unsafe {
-                    let di: *mut DictItem = tv_dict_item_alloc(key.data());
+                    let di: *mut DictItem = tv_dict_item_alloc(key.as_ptr());
                     object_to_vim(value, &mut (*di).di_tv, take_luaref);
                     let _ = tv_dict_add(dict, di);
                 }

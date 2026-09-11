@@ -34,7 +34,7 @@ use super::{
 /// Append `key: value` to the dictionary.
 ///
 fn push(dict: &mut ApiDict, key: &'static core::ffi::CStr, value: Object) {
-    dict.insert(String_0::from_cstr(key), value);
+    dict.insert(key, value);
 }
 
 /// A `String` value naming one of the option table's static strings.
@@ -93,7 +93,7 @@ pub(crate) unsafe fn get_all_vimoptions() -> ApiDict {
         // SAFETY: `curbuf`/`curwin` are live.
         let opt_dict = unsafe { vimoption2dict(opt_idx, scope, buf, win) };
         // SAFETY: the option table's names are static C strings.
-        let key = unsafe { cstr_to_string(get_option(opt_idx).fullname) };
+        let key = unsafe { crate::cstr::bytes_at(get_option(opt_idx).fullname) };
         retval.insert(key, Object::dict(opt_dict));
     }
     retval

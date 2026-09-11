@@ -177,7 +177,7 @@ pub(crate) unsafe fn mode_style_array() -> Array {
         // Upstream sizes for three keys plus the nine cursor ones, so a
         // cursor-only entry ("sm", "t") leaves one slot unused.
         let mut dic = ApiDict::with_capacity(if for_cursor { 12 } else { 3 });
-        let mut put = |key, value| dic.insert(String_0::from_cstr(key), value);
+        let mut put = |key, value| dic.insert(key, value);
         // SAFETY: both are static literals the table ships with; nothing
         // ever writes either field.
         let full_name = unsafe { cstr_to_string(cur.full_name) };

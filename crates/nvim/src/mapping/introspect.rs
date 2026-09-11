@@ -63,7 +63,7 @@ impl Filling {
     /// C's `PUT_C`: append `key: value`.
     fn put(&mut self, key: &'static CStr, value: Object) {
         debug_assert!(self.0.len() < MAPARG_DICT_KEYS);
-        self.0.insert(String_0::from_cstr(key), value);
+        self.0.insert(key, value);
     }
 
     /// The finished dict.

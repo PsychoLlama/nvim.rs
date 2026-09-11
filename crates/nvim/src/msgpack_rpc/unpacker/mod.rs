@@ -35,8 +35,9 @@ use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
-    ApiDict, ApiDispatchFn, Array, Error, Integer, KeyValuePair, MessageType, Object, String_0,
-    Unpacker, mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb, size_t,
+    ApiDict, ApiDispatchFn, Array, DictKey, Error, Integer, KeyValuePair, MessageType, Object,
+    String_0, Unpacker, mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb,
+    size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
 use ::libc::abort;
@@ -160,7 +161,7 @@ fn dict_object(capacity: size_t) -> Object {
     Object::dict(ApiDict::from(
         (0..capacity)
             .map(|_| KeyValuePair {
-                key: String_0::NULL,
+                key: DictKey::EMPTY,
                 value: Object::Nil,
             })
             .collect::<Vec<_>>(),
@@ -171,7 +172,7 @@ fn dict_object(capacity: size_t) -> Object {
 /// key that has not been read yet — the key slot beside it.
 struct Destination {
     result: *mut Object,
-    key_location: *mut String_0,
+    key_location: *mut DictKey,
 }
 
 /// Resolves a node's destination from its parent.
@@ -276,21 +277,28 @@ unsafe extern "C-unwind" fn api_parse_enter(parser: *mut mpack_parser_t, node: *
 
     match tok.type_0 {
         TOKEN_BIN | TOKEN_STR => {
-            // One byte over length: the API hands out NUL-terminated strings
-            // even though it carries the length beside them.
             let len = tok.length as size_t;
-            // SAFETY: `xmallocz` hands back `len + 1` writable bytes with the
-            // terminator already written, which the string takes over.
-            let str = unsafe { String_0::from_owned_parts(xmallocz(len).cast::<c_char>(), len) };
-            // The node's back-pointer is where its chunks will write, which
-            // is the string's own block -- so it is taken before the string
-            // moves into its slot.
-            let mem = str.data();
-            if key_location.is_null() {
+            // A key's bytes may live inside the entry, so its back-pointer is
+            // taken *after* the key has reached its slot; a string's block is
+            // its own either way, so its pointer survives the move.
+            let mem = if key_location.is_null() {
+                // One byte over length: the API hands out NUL-terminated
+                // strings even though it carries the length beside them.
+                // SAFETY: `xmallocz` hands back `len + 1` writable bytes with
+                // the terminator already written, which the string takes over.
+                let str = unsafe { String_0::from_owned_parts(xmallocz(len).cast(), len) };
+                let mem = str.data();
+                // SAFETY: the destination named a live `Object`.
                 unsafe { *result = Object::string(str) };
+                mem
             } else {
-                unsafe { *key_location = str };
-            }
+                // SAFETY: the destination named a live key, which
+                // `dict_object` left empty.
+                unsafe { *key_location = DictKey::zeroed(len) };
+                // SAFETY: as above, and the key is in its slot now.
+                unsafe { (*key_location).bytes_mut().as_mut_ptr().cast() }
+            };
+            // SAFETY: `node` is the live node being entered.
             unsafe { (*node).data[0].p = mem.cast::<c_void>() };
         }
         TOKEN_EXT => {

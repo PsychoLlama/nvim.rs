@@ -35,7 +35,6 @@ use crate::api::private::helpers::cstr_to_string;
 use crate::highlight::{HLATTRS_DICT_SIZE, hl_get_url, hlattrs2dict, syn_attr2entry};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::narrow::number_as_int;
-use crate::types::String_0;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::{kUIHlState, kUIPopupmenu, kUIWildmenu};
 use crate::types::{ApiDict, Arena, Array, HlAttrs, Integer, Object, RemoteUI};
@@ -73,10 +72,7 @@ pub unsafe fn remote_ui_hl_attr_define(
         hlattrs2dict(&mut cterm, None, rgb_attrs, false, false);
         if rgb_attrs.url >= 0 {
             let url = hl_get_url(rgb_attrs.url.cast_unsigned());
-            rgb.insert(
-                String_0::from_cstr(c"url"),
-                Object::string(cstr_to_string(url)),
-            );
+            rgb.insert(c"url", Object::string(cstr_to_string(url)));
         }
     }
 

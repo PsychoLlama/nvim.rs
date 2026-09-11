@@ -736,7 +736,7 @@ pub(crate) unsafe fn read_object(o: *const Object) -> Obj {
             let mut entries: Vec<(Vec<u8>, Obj)> = d
                 .iter()
                 .map(|kv| {
-                    (kv.key.as_bytes().to_vec(), unsafe {
+                    (kv.key.bytes().to_vec(), unsafe {
                         read_object(&raw const kv.value)
                     })
                 })

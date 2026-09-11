@@ -423,10 +423,10 @@ pub unsafe fn nvim_win_text_height(
         all += end_fill;
     }
     // SAFETY: `rv` is the four-slot arena block allocated above.
-    rv.insert(String_0::from_cstr(c"all"), Object::integer(all));
-    rv.insert(String_0::from_cstr(c"fill"), Object::integer(fill));
+    rv.insert(c"all", Object::integer(all));
+    rv.insert(c"fill", Object::integer(fill));
     let end_row = Object::integer(Integer::from(end_lnum - 1));
-    rv.insert(String_0::from_cstr(c"end_row"), end_row);
-    rv.insert(String_0::from_cstr(c"end_vcol"), Object::integer(end_vcol));
+    rv.insert(c"end_row", end_row);
+    rv.insert(c"end_vcol", Object::integer(end_vcol));
     Ok(rv)
 }

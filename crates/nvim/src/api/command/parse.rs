@@ -150,7 +150,7 @@ fn addr_type_name(addr_type: CmdAddr) -> &'static CStr {
 fn dict_of<const N: usize>(entries: [(&'static CStr, Object); N]) -> ApiDict {
     let mut dict = ApiDict::with_capacity(N);
     for (key, value) in entries {
-        dict.insert(String_0::from_cstr(key), value);
+        dict.insert(key, value);
     }
     dict
 }

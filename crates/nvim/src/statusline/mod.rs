@@ -41,7 +41,6 @@
 pub(crate) mod state;
 use crate::types::CAR;
 use crate::types::NL;
-use crate::types::String_0;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -552,7 +551,7 @@ pub(crate) fn stl_is_global() -> bool {
 /// same expression that decides how many keys it puts; the debug assertion
 /// inside catches a mismatch.
 pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
-    dict.insert(String_0::from_cstr(key), value);
+    dict.insert(key, value);
 }
 
 /// C's `ADD_C`. See [`put`].

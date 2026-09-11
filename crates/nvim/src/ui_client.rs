@@ -283,7 +283,7 @@ unsafe fn api_version() -> ApiDict {
     assert!(!metadata.is_empty(), "API metadata is empty");
     for entry in metadata {
         // SAFETY: a dictionary key is a NUL-terminated string.
-        if unsafe { strequal(entry.key.data(), c"version".as_ptr()) } {
+        if unsafe { strequal(entry.key.as_ptr(), c"version".as_ptr()) } {
             // Copied: the metadata this walked is released on the way out.
             return entry
                 .value

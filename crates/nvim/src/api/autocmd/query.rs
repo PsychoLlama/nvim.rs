@@ -302,26 +302,25 @@ pub unsafe fn nvim_get_autocmds(
                                     let d_group =
                                         unsafe { Object::integer((*ap).group as Integer) };
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info.insert(String_0::from_cstr(c"group"), d_group);
+                                    autocmd_info.insert(c"group", d_group);
                                     // SAFETY: `augroup_name` answers a C string
                                     // for a group this pattern belongs to.
                                     let name = unsafe { cstr_to_string(augroup_name((*ap).group)) };
                                     let d_group_name = Object::string(name);
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info
-                                        .insert(String_0::from_cstr(c"group_name"), d_group_name);
+                                    autocmd_info.insert(c"group_name", d_group_name);
                                 }
                                 if unsafe { (*ac).id } > 0 as int64_t {
                                     // SAFETY: a live pointer the code around it already holds.
                                     let d_id = unsafe { Object::integer((*ac).id) };
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info.insert(String_0::from_cstr(c"id"), d_id);
+                                    autocmd_info.insert(c"id", d_id);
                                 }
                                 if !unsafe { (*ac).desc }.is_null() {
                                     let d_desc =
                                         unsafe { Object::string(cstr_to_string((*ac).desc)) };
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info.insert(String_0::from_cstr(c"desc"), d_desc);
+                                    autocmd_info.insert(c"desc", d_desc);
                                 }
                                 if !unsafe { (*ac).handler_cmd }.is_null() {
                                     // SAFETY: a live pointer the code around it already holds.
@@ -329,11 +328,11 @@ pub unsafe fn nvim_get_autocmds(
                                         Object::string(cstr_to_string((*ac).handler_cmd))
                                     };
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info.insert(String_0::from_cstr(c"command"), d_command);
+                                    autocmd_info.insert(c"command", d_command);
                                 } else {
                                     let d_command = Object::string(String_0::NULL);
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info.insert(String_0::from_cstr(c"command"), d_command);
+                                    autocmd_info.insert(c"command", d_command);
                                     let cb: *mut Callback = unsafe { &raw mut (*ac).handler_fn };
                                     // SAFETY: `cb` is this command's callback.
                                     match unsafe { &*cb } {
@@ -341,29 +340,20 @@ pub unsafe fn nvim_get_autocmds(
                                             let luaref = *luaref;
                                             // SAFETY: the reference the row owns.
                                             if unsafe { nlua_ref_is_function(luaref) } {
-                                                // SAFETY: a static C string.
-                                                let key =
-                                                    unsafe { cstr_to_string(c"callback".as_ptr()) };
-                                                // SAFETY: as above.
+                                                // SAFETY: the reference the row owns.
                                                 let value = unsafe {
                                                     Object::luaref(api_new_luaref(luaref))
                                                 };
-                                                // SAFETY: the dict is this call's own.
-                                                autocmd_info.insert(key, value);
+                                                autocmd_info.insert(c"callback", value);
                                             }
                                         }
                                         Callback::Funcref(_) | Callback::Partial(_) => {
-                                            // SAFETY: a static C string.
-                                            let key =
-                                                unsafe { cstr_to_string(c"callback".as_ptr()) };
                                             // SAFETY: `cb` is this command's
                                             // callback and `arena` the caller's.
                                             let name = unsafe {
                                                 cstr_to_string(callback_to_string(cb, arena))
                                             };
-                                            let value = Object::string(name);
-                                            // SAFETY: the dict is this call's own.
-                                            autocmd_info.insert(key, value);
+                                            autocmd_info.insert(c"callback", Object::string(name));
                                         }
                                         // A row with neither a command nor a
                                         // handler cannot exist.
@@ -373,34 +363,32 @@ pub unsafe fn nvim_get_autocmds(
                                 let d_pattern =
                                     unsafe { Object::string(cstr_to_string((*ap).pat)) };
                                 // SAFETY: the collection is this call's own.
-                                autocmd_info.insert(String_0::from_cstr(c"pattern"), d_pattern);
+                                autocmd_info.insert(c"pattern", d_pattern);
                                 // SAFETY: `event_nr2name` answers a static C string.
                                 let name = unsafe { cstr_to_string(event_nr2name(event)) };
                                 let d_event = Object::string(name);
                                 // SAFETY: the collection is this call's own.
-                                autocmd_info.insert(String_0::from_cstr(c"event"), d_event);
+                                autocmd_info.insert(c"event", d_event);
                                 // SAFETY: a live pointer the code around it already holds.
                                 let d_once = unsafe { Object::boolean((*ac).once) };
                                 // SAFETY: the collection is this call's own.
-                                autocmd_info.insert(String_0::from_cstr(c"once"), d_once);
+                                autocmd_info.insert(c"once", d_once);
                                 if unsafe { (*ap).buflocal_nr } != 0 {
                                     let d_buflocal = Object::boolean(true);
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info
-                                        .insert(String_0::from_cstr(c"buflocal"), d_buflocal);
+                                    autocmd_info.insert(c"buflocal", d_buflocal);
                                     let d_buf =
                                         unsafe { Object::integer((*ap).buflocal_nr as Integer) };
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info.insert(String_0::from_cstr(c"buf"), d_buf);
+                                    autocmd_info.insert(c"buf", d_buf);
                                     let d_buffer =
                                         unsafe { Object::integer((*ap).buflocal_nr as Integer) };
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info.insert(String_0::from_cstr(c"buffer"), d_buffer);
+                                    autocmd_info.insert(c"buffer", d_buffer);
                                 } else {
                                     let d_buflocal = Object::boolean(false);
                                     // SAFETY: the collection is this call's own.
-                                    autocmd_info
-                                        .insert(String_0::from_cstr(c"buflocal"), d_buflocal);
+                                    autocmd_info.insert(c"buflocal", d_buflocal);
                                 }
                                 // `kv_push`, whose growth step c2rust expanded inline.
                                 autocmd_list.push(Object::dict(autocmd_info));

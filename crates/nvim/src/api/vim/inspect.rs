@@ -87,7 +87,7 @@ pub unsafe fn nvim__stats() -> ApiDict {
     let mut rv: ApiDict = ApiDict::with_capacity(entries.len());
     for (key, value) in entries {
         // SAFETY: `rv` is the dict the arena just sized for these six keys.
-        rv.insert(String_0::from_cstr(key), value);
+        rv.insert(key, value);
     }
     rv
 }

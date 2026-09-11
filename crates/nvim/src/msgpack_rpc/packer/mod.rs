@@ -509,7 +509,7 @@ pub unsafe fn mpack_object_inner(
                 mpack_check_buffer(packer);
                 // SAFETY: `entry` is that live entry of the dictionary.
                 unsafe {
-                    mpack_str((*entry).key.as_bytes(), packer);
+                    mpack_str((*entry).key.bytes(), packer);
                     current = &raw mut (*entry).value;
                 }
                 if container_idx >= len {

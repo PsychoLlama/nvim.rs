@@ -39,12 +39,7 @@ pub unsafe fn nvim_exec2(
     // Heap-allocated rather than arena-allocated: the caller frees this
     // dictionary key by key, so the key is a copy too.
     let mut result: ApiDict = ApiDict::with_capacity(1);
-    // SAFETY: `result` was sized for exactly this pair, and the key is a
-    // fresh copy the caller takes over with it.
-    unsafe {
-        let key = cstr_to_string(c"output".as_ptr());
-        result.insert(key, Object::string(output));
-    }
+    result.insert(c"output", Object::string(output));
     Ok(result)
 }
 

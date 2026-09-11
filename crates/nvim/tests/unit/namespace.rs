@@ -24,9 +24,7 @@ use super::support::{Sandbox, editor_lock};
 /// The caller holds the editor lock.
 unsafe fn namespace_names() -> Vec<Vec<u8>> {
     let dict = nvim_get_namespaces();
-    dict.iter()
-        .map(|item| item.key.as_bytes().to_vec())
-        .collect()
+    dict.iter().map(|item| item.key.bytes().to_vec()).collect()
 }
 
 /// `nvim_create_namespace` interns the name and hands back a monotone id;

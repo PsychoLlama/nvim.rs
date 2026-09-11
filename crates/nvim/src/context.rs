@@ -282,7 +282,7 @@ unsafe fn array_to_string(array: Array) -> Result<String_0, Error> {
 
 /// Append one `key: [bytes...]` entry to a dict.
 fn put_array(rv: &mut ApiDict, key: &CStr, array: Array) {
-    rv.insert(String_0::from_cstr(key), Object::array(array));
+    rv.insert(key, Object::array(array));
 }
 
 /// The dict form of a context: each blob as an array of byte-strings, plus
@@ -322,7 +322,7 @@ pub unsafe fn ctx_from_dict(dict: ApiDict, ctx: *mut Context) -> Result<c_int, E
         let Some(array) = value.into_array() else {
             continue;
         };
-        match key.as_bytes() {
+        match key.bytes() {
             b"regs" => {
                 types |= kCtxRegs as c_int;
                 ctx.regs = unsafe { array_to_string(array) }?;

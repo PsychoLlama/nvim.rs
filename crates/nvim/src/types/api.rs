@@ -132,15 +132,18 @@ impl ApiDict {
 
     /// Append `key: value`. Nothing checks for a duplicate key: the API's
     /// dictionaries are built from sources that cannot produce one.
-    pub fn insert(&mut self, key: String_0, value: Object) {
-        self.0.push(KeyValuePair { key, value });
+    pub fn insert(&mut self, key: impl Into<DictKey>, value: Object) {
+        self.0.push(KeyValuePair {
+            key: key.into(),
+            value,
+        });
     }
 
     /// The value under `key`, by a linear scan -- these dictionaries are
     /// tens of entries at most.
     pub fn get(&self, key: &[u8]) -> Option<&Object> {
         self.iter()
-            .find(|pair| pair.key.as_bytes() == key)
+            .find(|pair| pair.key.bytes() == key)
             .map(|pair| &pair.value)
     }
 
@@ -258,12 +261,19 @@ pub const kObjectTypeTabpage: ObjectType = 10;
 pub type TabpageHandle = Handle;
 pub type WindowHandle = Handle;
 /// One entry of an [`ApiDict`]: an owned key and an owned value.
+///
+/// The key is a [`DictKey`], not a [`String_0`]: an API key is a short
+/// identifier almost without exception, and a `String_0` is an `xmalloc` and
+/// an `xfree` for every one of them. The same inline-or-boxed shape a
+/// Vimscript dictionary item's key has, for the same reason, and the type is
+/// free to differ because `key_value_pair` has no C image -- `tools/ffigen`
+/// declares it opaque.
 // The type keeps upstream's spelling; `KeyValuePair` is the alias the tree
 // uses and `tools/ffigen` reads this name off the C header it mirrors.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug)]
 pub struct key_value_pair {
-    pub key: String_0,
+    pub key: DictKey,
     pub value: Object,
 }
 /// An API value: one of eleven kinds, each carrying its own payload.

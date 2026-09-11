@@ -100,10 +100,10 @@ pub unsafe fn nvim_get_namespaces() -> ApiDict {
     namespace_ids.with(|ids| {
         let mut retval: ApiDict = ApiDict::with_capacity(ids.len() as size_t);
         for (name, id) in ids.entries() {
-            // SAFETY: `ns_key` terminated the key, and `cstr_to_string`
+            // SAFETY: `ns_key` terminated the key, and `bytes_at`
             // re-measures it -- so a name with an interior NUL is answered
             // truncated, as it was when the key was a `String_0`.
-            let key = unsafe { cstr_to_string(name.as_ptr().cast::<::core::ffi::c_char>()) };
+            let key = unsafe { crate::cstr::bytes_at(name.as_ptr().cast::<::core::ffi::c_char>()) };
             let value = Object::integer(*id as Integer);
             // SAFETY: `retval` is this call's own dict.
             retval.insert(key, value);

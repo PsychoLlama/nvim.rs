@@ -7,7 +7,7 @@
 //! it, and the object walker is checked end to end through a string buffer.
 
 use neovim::msgpack_rpc::packer::{format, mpack_object, packer_string_buffer, packer_take_string};
-use neovim::types::{ApiDict, Array, KeyValuePair, Object, PackerBuffer, String_0};
+use neovim::types::{ApiDict, Array, DictKey, KeyValuePair, Object, PackerBuffer, String_0};
 
 #[test]
 fn booleans_are_one_byte() {
@@ -254,17 +254,17 @@ fn packs_deeply_nested_single_element_arrays() {
 fn packs_a_nested_object() {
     // { "a": [1, 2], "b": { "c": true } }
     let inner = vec![KeyValuePair {
-        key: String_0::from_bytes(b"c"),
+        key: DictKey::new(b"c"),
         value: Object::Boolean(true),
     }];
     let list = vec![Object::Integer(1), Object::Integer(2)];
     let entries = vec![
         KeyValuePair {
-            key: String_0::from_bytes(b"a"),
+            key: DictKey::new(b"a"),
             value: array(list),
         },
         KeyValuePair {
-            key: String_0::from_bytes(b"b"),
+            key: DictKey::new(b"b"),
             value: dict(inner),
         },
     ];

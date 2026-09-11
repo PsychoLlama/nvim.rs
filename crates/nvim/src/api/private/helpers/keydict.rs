@@ -19,7 +19,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use super::{api_object_to_bool, api_typename, cstr_to_string, object_to_hl_id};
+use super::{api_object_to_bool, api_typename, object_to_hl_id};
 use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::cstr;
@@ -121,9 +121,9 @@ pub(crate) unsafe fn api_dict_to_keydict(
     for KeyValuePair { key, value: given } in dict {
         // SAFETY: `hashy` is the generated lookup for `retval`'s type, and
         // `key` names its own bytes.
-        let field = unsafe { hashy.expect("non-null function pointer")(key.data(), key.len()) };
+        let field = unsafe { hashy.expect("non-null function pointer")(key.as_ptr(), key.len()) };
         if field.is_null() {
-            let name = key.as_cstr().to_string_lossy();
+            let name = key.as_c_str().to_string_lossy();
             return Err(api_error!(kErrorTypeValidation, "Invalid key: '{name}'"));
         }
         // SAFETY: the lookup answered a row of the generated table, which is
@@ -152,7 +152,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 let mut hl_id = 0;
                 if !given.is_nil() {
                     // SAFETY: `key` is a NUL-terminated name.
-                    hl_id = unsafe { object_to_hl_id(&given, key.data()) }?;
+                    hl_id = unsafe { object_to_hl_id(&given, key.as_ptr()) }?;
                 }
                 // SAFETY: the row says an `Option<Integer>` lives at `mem`.
                 unsafe { *mem.cast::<Option<Integer>>() = Some(Integer::from(hl_id)) };
@@ -220,7 +220,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                 unsafe { *mem.cast::<Option<Handle>>() = Some(number_as_int(handle)) };
             }
             kObjectTypeLuaRef => {
-                let name = key.as_cstr().to_string_lossy();
+                let name = key.as_c_str().to_string_lossy();
                 return Err(api_error!(
                     kErrorTypeValidation,
                     "Invalid key: '{name}' is only allowed from Lua"
@@ -297,7 +297,8 @@ pub(crate) unsafe fn api_keydict_to_dict(
             _ => unsafe { abort() },
         };
         // SAFETY: the row's name is a static C string.
-        rv.insert(unsafe { cstr_to_string(field.str) }, val);
+        // SAFETY: the row's name is a static C string.
+        rv.insert(unsafe { cstr::bytes_at(field.str) }, val);
     }
     rv
 }

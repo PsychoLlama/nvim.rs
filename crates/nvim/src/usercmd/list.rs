@@ -261,7 +261,7 @@ fn dict_of<const N: usize>(
     // written, and this is the only thing that writes to it.
     for (key, value) in entries {
         if let Some(value) = value {
-            dict.insert(String_0::from_cstr(key), value);
+            dict.insert(key, value);
         }
     }
     dict
@@ -279,7 +279,7 @@ pub(crate) unsafe fn commands_array(buffer: Option<Buf>) -> ApiDict {
     let mut rv = ApiDict::with_capacity(cmds.len());
     for cmd in cmds {
         // SAFETY: module contract -- the command's name is NUL-terminated.
-        let (d, name) = unsafe { (describe(cmd), cstr_to_string(cmd.uc_name)) };
+        let (d, name) = unsafe { (describe(cmd), cstr::bytes_at(cmd.uc_name)) };
         rv.insert(name, Object::dict(d));
     }
     rv

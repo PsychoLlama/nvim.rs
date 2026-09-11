@@ -207,7 +207,8 @@ pub unsafe fn nvim_ui_attach(
     for option in &options {
         // SAFETY: `raw` is live, and the value lives as long as the
         // caller's dictionary.
-        let set = unsafe { ui_set_option(raw, true, option.key.clone(), option.value.clone()) };
+        let name = String_0::from_bytes(option.key.bytes());
+        let set = unsafe { ui_set_option(raw, true, name, option.value.clone()) };
         if let Err(e) = set {
             // Nothing has been published yet, so the half-configured UI
             // can simply be dropped. `term_name` is the only owned

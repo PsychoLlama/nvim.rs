@@ -51,7 +51,6 @@ use crate::highlight_group::{
 };
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::types::String_0;
 use crate::types::{ApiDict, Array, HlAttrs, HlEntry, HlKind, Integer, Object, RemoteUI, uint32_t};
 use crate::ui::ui_call_hl_attr_define;
 use cache::AttrCache;
@@ -726,7 +725,7 @@ unsafe fn name_object(name: *const c_char) -> Object {
 
 /// Appends `key: value`, with the key copied out of the literal.
 fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
-    dict.insert(String_0::from_cstr(key), value);
+    dict.insert(key, value);
 }
 
 #[cfg(test)]

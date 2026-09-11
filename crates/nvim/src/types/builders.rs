@@ -22,7 +22,7 @@
 )]
 
 use super::{
-    ApiDict, Array, BufferHandle, Float, Integer, LuaRef, Object, String_0, TabpageHandle,
+    ApiDict, Array, BufferHandle, DictKey, Float, Integer, LuaRef, Object, String_0, TabpageHandle,
     WindowHandle,
 };
 use core::ffi::CStr;
@@ -135,12 +135,12 @@ impl<const N: usize> DictBuf<N> {
     /// Appends `key: value`, with `key` a literal. Dict keys in generated
     /// calls always are; a computed key wants [`Self::insert_string`].
     pub fn insert(&mut self, key: &'static CStr, value: Object) -> &mut Self {
-        self.insert_string(String_0::from_cstr(key), value)
+        self.insert_string(key, value)
     }
 
     /// [`Self::insert`] for a key the caller built, whose bytes the
-    /// dictionary takes over.
-    pub fn insert_string(&mut self, key: String_0, value: Object) -> &mut Self {
+    /// dictionary copies.
+    pub fn insert_string(&mut self, key: impl Into<DictKey>, value: Object) -> &mut Self {
         assert!(self.0.len() < N, "DictBuf overflow");
         self.0.insert(key, value);
         self
@@ -184,7 +184,7 @@ mod tests {
         opts.insert(c"verbose", Object::boolean(true));
         let entry = opts.object();
         assert_eq!(
-            entry.as_dict().map(|d| d[0].key.as_bytes()),
+            entry.as_dict().map(|d| d[0].key.bytes()),
             Some(&b"verbose"[..])
         );
 

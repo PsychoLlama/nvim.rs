@@ -101,7 +101,7 @@ pub unsafe fn nvim_get_mode(arena: *mut Arena) -> ApiDict {
     let blocked: bool = input_blocking();
     // SAFETY: `modestr` is the NUL-padded buffer filled just above.
     let mode = unsafe { cstr_to_string(modestr) };
-    rv.insert(String_0::from_cstr(c"mode"), Object::string(mode));
-    rv.insert(String_0::from_cstr(c"blocking"), Object::boolean(blocked));
+    rv.insert(c"mode", Object::string(mode));
+    rv.insert(c"blocking", Object::boolean(blocked));
     rv
 }

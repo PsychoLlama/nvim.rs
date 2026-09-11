@@ -798,7 +798,7 @@ pub fn ui_array() -> Array {
             ("stdout_tty", Object::boolean(ui.stdout_tty)),
         ];
         for (key, value) in fixed {
-            info.insert(String_0::from(key), value);
+            info.insert(key, value);
         }
         for widget in 0..kUIExtCount as usize {
             let name = ext_name(widget);
@@ -808,12 +808,12 @@ pub fn ui_array() -> Array {
             if !private || ui.ui_ext[widget] {
                 let on = Object::boolean(ui.ui_ext[widget]);
                 // SAFETY: `name` is one of the static protocol names.
-                let key = unsafe { cstr_to_string(name.cast_mut()) };
+                let key = unsafe { cstr::bytes_at(name) };
                 info.insert(key, on);
             }
         }
         let id = Object::integer(ui.channel_id as Integer);
-        info.insert(String_0::from("chan"), id);
+        info.insert("chan", id);
 
         all_uis.push(Object::dict(info));
     }

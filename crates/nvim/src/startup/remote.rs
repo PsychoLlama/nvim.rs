@@ -80,7 +80,7 @@ fn bad_reply_type(key: &CStr) -> ! {
 /// Read one key of the reply dict, checking its type first.
 fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
     let pair = &dict[index];
-    (pair.key.as_cstr(), &pair.value)
+    (pair.key.as_c_str(), &pair.value)
 }
 
 /// Hand the rest of the command line to the server named by `--server`.

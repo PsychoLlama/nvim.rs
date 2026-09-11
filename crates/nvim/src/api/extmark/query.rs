@@ -87,32 +87,29 @@ unsafe fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: b
                         == 0) as ::core::ffi::c_int as size_t,
                 ),
         );
-        dict.insert(
-            String_0::from_cstr(c"ns_id"),
-            Object::integer(start.ns as Integer),
-        );
+        dict.insert(c"ns_id", Object::integer(start.ns as Integer));
         let d_right_gravity = Object::boolean(mt_right(start));
         // SAFETY: the collection is this call's own.
-        dict.insert(String_0::from_cstr(c"right_gravity"), d_right_gravity);
+        dict.insert(c"right_gravity", d_right_gravity);
         if mt_paired(start) {
             let d_end_row = Object::integer(extmark.end_pos.row as Integer);
             // SAFETY: the collection is this call's own.
-            dict.insert(String_0::from_cstr(c"end_row"), d_end_row);
+            dict.insert(c"end_row", d_end_row);
             let d_end_col = Object::integer(extmark.end_pos.col as Integer);
             // SAFETY: the collection is this call's own.
-            dict.insert(String_0::from_cstr(c"end_col"), d_end_col);
+            dict.insert(c"end_col", d_end_col);
             let gravity = Object::boolean(extmark.end_right_gravity);
             // SAFETY: `dict` is this call's own.
-            dict.insert(String_0::from_cstr(c"end_right_gravity"), gravity);
+            dict.insert(c"end_right_gravity", gravity);
         }
         if mt_no_undo(start) {
-            dict.insert(String_0::from_cstr(c"undo_restore"), Object::boolean(false));
+            dict.insert(c"undo_restore", Object::boolean(false));
         }
         if mt_invalidate(start) {
-            dict.insert(String_0::from_cstr(c"invalidate"), Object::boolean(true));
+            dict.insert(c"invalidate", Object::boolean(true));
         }
         if mt_invalid(start) {
-            dict.insert(String_0::from_cstr(c"invalid"), Object::boolean(true));
+            dict.insert(c"invalid", Object::boolean(true));
         }
         unsafe { decor_to_dict_legacy(&mut dict, mt_decor(start), hl_name) };
         rv.push(Object::dict(dict));

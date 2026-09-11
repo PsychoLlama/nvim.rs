@@ -95,11 +95,7 @@ pub unsafe fn decode_cursor_entry(args: &ApiDict) -> CursorEntry {
         let mut entry = shape_entry(SHAPE_IDX_N);
         for i in 0..args.len() {
             let item = &args[i];
-            let key = if item.key.data().is_null() {
-                b"".as_slice()
-            } else {
-                CStr::from_ptr(item.key.data()).to_bytes()
-            };
+            let key = item.key.bytes();
             // A value of the wrong kind keeps the default, the same as a
             // key nobody recognised; the transpile read the union arm the
             // *key* named and would have dereferenced whatever was there.

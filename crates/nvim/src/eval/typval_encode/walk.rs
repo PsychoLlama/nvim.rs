@@ -651,9 +651,7 @@ unsafe fn walk<S: TypvalSink>(
                     *todo_slot = todo;
                 }
                 let key = unsafe { tv_dict_item_key(di) };
-                walk_hook!(unsafe {
-                    sink.conv_str_string(None, key.cast_mut(), cstr::bytes_at(key).len())
-                });
+                walk_hook!(sink.conv_dict_key(unsafe { cstr::bytes_at(key) }));
                 unsafe { sink.conv_dict_after_key(Some(dictp)) };
                 tv = di_tv(di);
             }

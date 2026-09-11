@@ -183,6 +183,7 @@ pub struct caller_scope {
 /// funccall's twelve fixed variables, a buffer's `b:changedtick`, a scope's
 /// own entry.  It costs nothing: the tag lands in the tail padding either
 /// way (asserted below).
+#[derive(Clone)]
 #[repr(u8)]
 pub enum DictKey {
     /// Up to [`DictKey::INLINE_MAX`] bytes plus the NUL, in the item itself.
@@ -270,6 +271,69 @@ impl DictKey {
             DictKey::Heap(boxed) => boxed,
         };
         ::core::ffi::CStr::from_bytes_with_nul(with_nul).expect("a key is NUL-terminated once")
+    }
+    /// A key of `len` bytes, every one of them NUL, and a pointer the
+    /// caller may write those `len` bytes through.
+    ///
+    /// For the decoders that learn a key's length from a header and then
+    /// receive its bytes in chunks: the storage is the key's own from the
+    /// start, so a message that ends early leaves a short key rather than a
+    /// dangling one.
+    pub fn zeroed(len: usize) -> Self {
+        if len <= Self::INLINE_MAX {
+            DictKey::Inline {
+                len: uint8_t::try_from(len).expect("an inline key is at most 21 bytes"),
+                bytes: [0; Self::INLINE_CAP],
+            }
+        } else {
+            DictKey::Heap(vec![0; len + 1].into_boxed_slice())
+        }
+    }
+
+    /// The key's bytes, writable, without the terminating NUL. Pairs with
+    /// [`zeroed`](Self::zeroed); the NUL past them is not writable through
+    /// this.
+    pub fn bytes_mut(&mut self) -> &mut [uint8_t] {
+        match self {
+            DictKey::Inline { len, bytes } => &mut bytes[..usize::from(*len)],
+            DictKey::Heap(boxed) => {
+                let end = boxed.len() - 1;
+                &mut boxed[..end]
+            }
+        }
+    }
+}
+
+impl PartialEq for DictKey {
+    /// Byte equality, whichever arm each side is in.
+    fn eq(&self, other: &Self) -> bool {
+        self.bytes() == other.bytes()
+    }
+}
+
+impl Eq for DictKey {}
+
+impl ::core::fmt::Debug for DictKey {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        ::core::fmt::Debug::fmt(&self.bytes().escape_ascii().to_string(), f)
+    }
+}
+
+impl From<&::core::ffi::CStr> for DictKey {
+    fn from(key: &::core::ffi::CStr) -> Self {
+        Self::new(key.to_bytes())
+    }
+}
+
+impl From<&[uint8_t]> for DictKey {
+    fn from(key: &[uint8_t]) -> Self {
+        Self::new(key)
+    }
+}
+
+impl From<&str> for DictKey {
+    fn from(key: &str) -> Self {
+        Self::new(key.as_bytes())
     }
 }
 

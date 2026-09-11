@@ -150,7 +150,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
             unsafe { syn_get_final_id(id) }
         };
         // SAFETY: a group's name is a NUL-terminated string.
-        let key = unsafe { cstr_to_string(group(named).name.as_ptr()) };
+        let key = unsafe { crate::cstr::bytes_at(group(named).name.as_ptr()) };
         rv.insert(key, Object::dict(attrs));
     }
     Ok(rv)

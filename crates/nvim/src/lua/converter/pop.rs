@@ -13,6 +13,7 @@
 
 use crate::semsg;
 use core::ffi::{c_int, c_void};
+use core::slice;
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, LuaTableProps, TYPE_IDX_VALUE, nlua_pop_object};
 use crate::api::private::helpers::api_typename;
@@ -26,9 +27,9 @@ use crate::lua::ffi::{
 use crate::lua::state::nlua_global_refs;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Error, Float, Handle, Integer, LuaRef, ObjectType, String_0,
-    kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
-    lua_Number, lua_State, size_t,
+    ApiDict, Arena, Array, Boolean, DictKey, Error, Float, Handle, Integer, LuaRef, ObjectType,
+    String_0, kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
+    kObjectTypeNil, lua_Number, lua_State, size_t,
 };
 use ::libc::memchr;
 
@@ -383,15 +384,18 @@ unsafe fn nlua_pop_dict_unchecked(
             }
             // The key is popped from a copy, so lua_next still has its own.
             lua_pushvalue(lstate, -2);
-            let pair = match nlua_pop_string(lstate, arena) {
-                Ok(key) => nlua_pop_object(lstate, ref_0, arena).map(|value| (key, value)),
-                Err(e) => {
-                    lua_pop(lstate, 1);
-                    Err(e)
-                }
-            };
-            let (key, value) = match pair {
-                Ok(pair) => pair,
+            // A dictionary key, not a value: it copies into the entry
+            // itself when it is short, which an API key nearly always is,
+            // where `nlua_pop_string` would be an `xmalloc` per key. The
+            // copy precedes the pop, since the bytes are the Lua string's.
+            // The type was checked above, so this cannot fail.
+            let mut key_len: size_t = 0;
+            let key_data = lua_tolstring(lstate, -1, &raw mut key_len);
+            debug_assert!(!key_data.is_null());
+            let key = DictKey::new(slice::from_raw_parts(key_data.cast::<u8>(), key_len));
+            lua_pop(lstate, 1);
+            let value = match nlua_pop_object(lstate, ref_0, arena) {
+                Ok(value) => value,
                 Err(e) => {
                     lua_pop(lstate, 3);
                     return Err(e);

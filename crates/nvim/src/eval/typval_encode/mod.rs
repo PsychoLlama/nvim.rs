@@ -330,6 +330,21 @@ pub(crate) trait TypvalSink {
     ) -> Flow {
         unsafe { self.conv_string(tv, buf, len) }
     }
+    /// A dictionary key, which is always a plain byte string.
+    ///
+    /// Split from [`Self::conv_str_string`] so that a sink whose keys are not
+    /// values -- the API's, whose key is a field of the entry rather than an
+    /// object on the stack -- can take the bytes without building one. The
+    /// default is what every other sink wants: a key is a string like any
+    /// other, and [`Self::conv_dict_after_key`] moves it into place.
+    ///
+    /// The bytes belong to the dictionary and are borrowed for the call.
+    fn conv_dict_key(&mut self, key: &[u8]) -> Flow {
+        // SAFETY: the slice is live for the call, which is all
+        // `conv_str_string` asks of the buffer.
+        unsafe { self.conv_str_string(None, key.as_ptr().cast::<c_char>().cast_mut(), key.len()) }
+    }
+
     /// A special `ext` value.
     ///
     /// `buf` is the walk's, and the walk frees it — *unless* the hook returns

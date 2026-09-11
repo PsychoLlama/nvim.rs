@@ -100,10 +100,7 @@ pub unsafe fn nvim_parse_expression(
     // the one promise `dict_put`/`array_add` ask for is this function's own
     // invariant -- stated here once rather than at every call site.
     // SAFETY: as above.
-    ret.insert(
-        String_0::from_cstr(c"len"),
-        Object::integer(consumed as Integer),
-    );
+    ret.insert(c"len", Object::integer(consumed as Integer));
 
     if !east.err.msg.is_null() {
         let mut err_dict: ApiDict = ApiDict::with_capacity(2);
@@ -112,9 +109,9 @@ pub unsafe fn nvim_parse_expression(
         unsafe {
             let arg = String_0::from_raw_bytes(east.err.arg, east.err.arg_len as size_t);
             let msg = cstr_to_string(east.err.msg);
-            err_dict.insert(String_0::from_cstr(c"message"), Object::string(msg));
-            err_dict.insert(String_0::from_cstr(c"arg"), Object::string(arg));
-            ret.insert(String_0::from_cstr(c"error"), Object::dict(err_dict));
+            err_dict.insert(c"message", Object::string(msg));
+            err_dict.insert(c"arg", Object::string(arg));
+            ret.insert(c"error", Object::dict(err_dict));
         }
     }
 
@@ -135,7 +132,7 @@ pub unsafe fn nvim_parse_expression(
             }
         }
         // SAFETY: as above.
-        ret.insert(String_0::from_cstr(c"highlight"), Object::array(hl_arr));
+        ret.insert(c"highlight", Object::array(hl_arr));
     }
     // The vector `colors` describes is either its inline array or one heap
     // block; only the second has anything to free.
@@ -154,7 +151,7 @@ pub unsafe fn nvim_parse_expression(
     // caller's.
     unsafe { convert_ast(&raw mut east.root, &raw mut ast) };
     // SAFETY: as above.
-    ret.insert(String_0::from_cstr(c"ast"), ast);
+    ret.insert(c"ast", ast);
     debug_assert!(ret.len() == ret.capacity(), "ret.len() == ret.capacity()");
 
     // SAFETY: the walk freed every node it rendered and NULLed its slot, so
@@ -253,10 +250,7 @@ unsafe fn convert_ast(root_p: *mut *mut ExprASTNode, out: *mut Object) {
             }
             // SAFETY: `ret_node` names the dictionary the slot holds.
             let node_dict: &mut ApiDict = unsafe { &mut *ret_node };
-            node_dict.insert(
-                String_0::from_cstr(c"children"),
-                Object::array(children_array),
-            );
+            node_dict.insert(c"children", Object::array(children_array));
             let last = node_dict.len() - 1;
             let slot = node_dict[last]
                 .value
@@ -332,7 +326,7 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
     // rather than at each of the fifteen call sites below.
     let put = |dict: &mut ApiDict, key: &'static CStr, value: Object| {
         // SAFETY: as above.
-        dict.insert(String_0::from_cstr(key), value);
+        dict.insert(key, value);
     };
     // The three name tables hold static C strings.
     let table_name = |name: *const c_char| {

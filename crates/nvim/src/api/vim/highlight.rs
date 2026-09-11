@@ -116,10 +116,8 @@ pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
 pub unsafe fn nvim_get_color_map() -> ApiDict {
     let mut colors: ApiDict = ApiDict::with_capacity(COLOR_NAMES.len() as size_t);
     for entry in &COLOR_NAMES {
-        let name = String_0::from_cstr(entry.name);
         let color = Object::integer(entry.color as Integer);
-        // SAFETY: `colors` is the arena block sized for every colour name.
-        colors.insert(name, color);
+        colors.insert(entry.name, color);
     }
     colors
 }

@@ -20,6 +20,7 @@
 )]
 
 use core::ffi::CStr;
+use core::slice;
 
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, nlua_traverse_table};
 use crate::eval::typval_encode::InlineStack;
@@ -32,7 +33,7 @@ use crate::lua::ffi::{
 use crate::lua::state::nlua_global_refs;
 use crate::narrow::{float_as_i64, len_as_int};
 use crate::types::{
-    ApiDict, Arena, Array, Error, Object, String_0, kObjectTypeArray, kObjectTypeDict,
+    ApiDict, Arena, Array, DictKey, Error, Object, String_0, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeNil, lua_Number, lua_State, size_t,
 };
 use ::libc::abort;
@@ -118,7 +119,11 @@ pub unsafe fn nlua_pop_object(
                         }
                         let mut len: size_t = 0;
                         let s = lua_tolstring(lstate, -2, &raw mut len);
-                        let key = String_0::from_raw_bytes(s, len);
+                        // The key copies the Lua string's bytes -- into the
+                        // entry itself when they are short, which an API key
+                        // nearly always is.
+                        debug_assert!(!s.is_null());
+                        let key = DictKey::new(slice::from_raw_parts(s.cast::<u8>(), len));
                         // The entry's own value slot is what the next frame
                         // fills in. The address survives the pushes that
                         // follow because the dictionary was sized for every
@@ -160,7 +165,7 @@ pub unsafe fn nlua_pop_object(
                     LUA_TSTRING => {
                         let mut len: size_t = 0;
                         let s = lua_tolstring(lstate, -1, &raw mut len);
-                        let bytes = core::slice::from_raw_parts(s.cast::<u8>(), len);
+                        let bytes = slice::from_raw_parts(s.cast::<u8>(), len);
                         *cur.obj = Object::string(String_0::from_bytes(bytes));
                         break 'converted;
                     }

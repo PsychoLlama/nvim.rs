@@ -25,7 +25,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::autocmd::{aucmd_defer, has_event};
 use crate::buffer::{buf_is_prompt, buflist_new, find_buf};
@@ -215,15 +214,15 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: Buf) {
     // before it returns. `buffer` is the caller's live buffer.
     let items: Vec<KeyValuePair> = vec![
         key_value_pair {
-            key: String_0::from_cstr(c"name"),
+            key: c"name".into(),
             value: Object::string(String_0::from_bytes(&[mark_str[0].cast_unsigned()])),
         },
         key_value_pair {
-            key: String_0::from_cstr(c"line"),
+            key: c"line".into(),
             value: Object::Integer(Integer::from(pos.lnum)),
         },
         key_value_pair {
-            key: unsafe { cstr_to_string(c"col".as_ptr()) },
+            key: c"col".into(),
             value: Object::Integer(Integer::from(pos.col)),
         },
     ];

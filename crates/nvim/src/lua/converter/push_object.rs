@@ -128,7 +128,9 @@ pub unsafe fn nlua_push_dict(lstate: *mut lua_State, dict: &mut ApiDict, flags: 
             lua_setmetatable(lstate, -2);
         }
         for entry in dict.iter_mut() {
-            nlua_push_string(lstate, &entry.key, flags);
+            // The key is never the null string, so it needs none of
+            // `nlua_push_string`'s care about one.
+            lua_pushlstring(lstate, entry.key.as_ptr(), entry.key.len());
             nlua_push_object(lstate, &raw mut entry.value, flags);
             lua_rawset(lstate, -3);
         }

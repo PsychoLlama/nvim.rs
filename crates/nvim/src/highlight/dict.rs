@@ -24,7 +24,6 @@ use crate::api_error;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
-use crate::types::String_0;
 use crate::types::{
     ApiDict, Boolean, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
     KeyDict_highlight_cterm, Object, int16_t, int32_t, kErrorTypeException, kErrorTypeValidation,
@@ -47,7 +46,7 @@ pub const HLATTRS_DICT_SIZE: size_t = 24;
 /// that is a debug check rather than a panic.
 pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
     debug_assert!(dict.len() < dict.capacity(), "highlight dict overflow");
-    dict.insert(String_0::from_cstr(key), value);
+    dict.insert(key, value);
 }
 
 /// Gets the highlight description of attribute id `attr_id` as a dict.

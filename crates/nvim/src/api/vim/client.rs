@@ -54,16 +54,16 @@ pub unsafe fn nvim_set_client_info(
     attributes: ApiDict,
 ) {
     let mut info: ApiDict = ApiDict::with_capacity(5);
-    info.insert(String_0::from_cstr(c"name"), Object::string(name));
+    info.insert(c"name", Object::string(name));
     // A client that did not say which major version it speaks is version 0.
-    let has_major = version.iter().any(|pair| pair.key.as_bytes() == b"major");
+    let has_major = version.iter().any(|pair| pair.key.bytes() == b"major");
     if !has_major {
-        version.insert(String_0::from_cstr(c"major"), Object::integer(0 as Integer));
+        version.insert(c"major", Object::integer(0 as Integer));
     }
-    info.insert(String_0::from_cstr(c"version"), Object::dict(version));
-    info.insert(String_0::from_cstr(c"type"), Object::string(type_0));
-    info.insert(String_0::from_cstr(c"methods"), Object::dict(methods));
-    info.insert(String_0::from_cstr(c"attributes"), Object::dict(attributes));
+    info.insert(c"version", Object::dict(version));
+    info.insert(c"type", Object::string(type_0));
+    info.insert(c"methods", Object::dict(methods));
+    info.insert(c"attributes", Object::dict(attributes));
     // SAFETY: `info` is this frame's own, and the copy the channel keeps is
     // owned rather than borrowed from the arena.
     unsafe { rpc_set_client_info(channel_id, info.clone()) };

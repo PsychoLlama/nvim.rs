@@ -119,27 +119,27 @@ pub unsafe fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
     // SAFETY: a live pointer the code around it already holds.
     let d_flush_count = Object::integer(b.flush_count as Integer);
     // SAFETY: the collection is this call's own.
-    rv.insert(String_0::from_cstr(c"flush_count"), d_flush_count);
+    rv.insert(c"flush_count", d_flush_count);
     // SAFETY: a live pointer the code around it already holds.
     let d_current_lnum = Object::integer(b.b_ml.cached_lnum() as Integer);
     // SAFETY: the collection is this call's own.
-    rv.insert(String_0::from_cstr(c"current_lnum"), d_current_lnum);
+    rv.insert(c"current_lnum", d_current_lnum);
     // SAFETY: a live pointer the code around it already holds.
     let d_line_dirty = Object::boolean(b.b_ml.line_is_dirty());
     // SAFETY: the collection is this call's own.
-    rv.insert(String_0::from_cstr(c"line_dirty"), d_line_dirty);
+    rv.insert(c"line_dirty", d_line_dirty);
     // SAFETY: a live pointer the code around it already holds.
     let d_dirty_bytes = Object::integer(b.deleted_bytes as Integer);
     // SAFETY: the collection is this call's own.
-    rv.insert(String_0::from_cstr(c"dirty_bytes"), d_dirty_bytes);
+    rv.insert(c"dirty_bytes", d_dirty_bytes);
     // SAFETY: a live pointer the code around it already holds.
     let d_dirty_bytes2 = Object::integer(b.deleted_bytes2 as Integer);
     // SAFETY: the collection is this call's own.
-    rv.insert(String_0::from_cstr(c"dirty_bytes2"), d_dirty_bytes2);
+    rv.insert(c"dirty_bytes2", d_dirty_bytes2);
     let total = buf_meta_total(buffer, kMTMetaLines);
     let d_virt_blocks = Object::integer(total as Integer);
     // SAFETY: the collection is this call's own.
-    rv.insert(String_0::from_cstr(c"virt_blocks"), d_virt_blocks);
+    rv.insert(c"virt_blocks", d_virt_blocks);
     let tip = buffer;
     if let Some(uhp) = tip
         .header(tip.b_u_curhead)
@@ -147,7 +147,7 @@ pub unsafe fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
     {
         let d_uhp_extmark_size = Object::integer(uhp.uh_extmark.size as Integer);
         // SAFETY: the collection is this call's own.
-        rv.insert(String_0::from_cstr(c"uhp_extmark_size"), d_uhp_extmark_size);
+        rv.insert(c"uhp_extmark_size", d_uhp_extmark_size);
     }
     Ok(rv)
 }

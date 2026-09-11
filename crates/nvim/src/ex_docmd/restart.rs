@@ -62,8 +62,7 @@ fn dict_of<const N: usize>(items: [KeyValuePair; N]) -> ApiDict {
 /// A `key = value` entry for a borrowed `ApiDict`.
 fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
     key_value_pair {
-        // SAFETY: the key is a `'static` C string literal.
-        key: cstr_to_string(key.as_ptr()),
+        key: key.into(),
         value,
     }
 }
