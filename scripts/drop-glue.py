@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """Fail if a value type's drop shim grew a cleanup path.
 
-`TypVal` and `Object` release themselves: both walk their tree iteratively
-and take each owning payload out of its slot by hand, so every payload they
-hold sits in a `ManuallyDrop` and the compiler appends nothing after
-`Drop::drop` returns.
+`TypVal` and `Object` release themselves: each walks its tree iteratively and
+takes every owning payload out of its slot by hand, so the payloads sit in a
+`ManuallyDrop` and the compiler appends nothing after `Drop::drop` returns.
 
-Give one of them a field the compiler *does* drop and `drop_in_place` grows
-a landing pad -- the fields have to be released if `Drop::drop` unwinds --
-and a shim with one is neither a tail call nor small enough to inline. That
-cost 0.5 % on four of the five benches once (see
-`~/agents/context/.../p30-11-drop-policy.md`); it is invisible in the source
-and invisible to every test, so this reads the shim instead.
+Give one of them a field the compiler *does* drop and `core::ptr::drop_glue`
+grows a landing pad -- the fields have to be released if `Drop::drop` unwinds
+-- and a shim with one is neither a tail call nor small enough to inline at
+the hundreds of sites that drop a value. That was worth ~0.5 % on four of the
+five benches once (see the phase-30 notes on the drop policy); it is
+invisible in the source and invisible to every suite, so this reads the shim.
 
     just drop-glue                      # over target/release/nvim
     scripts/drop-glue.py path/to/nvim   # over a binary you built
 
-The signal is a call to `_Unwind_Resume`, which is what a cleanup path ends
-with, plus `__gxx_personality`/`rust_eh_personality` in the same body. A
-shim that is a bare jump table and a tail call has neither.
+The signal is a call to `_Unwind_Resume`, which is how a cleanup path ends. A
+shim the compiler inlined everywhere emits no symbol at all, which is the
+*best* outcome and is reported as such -- but the type's `Drop` impl must
+still be there, or the guard is watching a type that no longer has one.
 """
 
 import pathlib
@@ -29,11 +29,10 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parent.parent
 DEFAULT_BINARY = REPO / "target/release/nvim"
 
-# The shims that must stay clean. Each entry is (label, regex over the
-# demangled symbol name).
+# Each row is (label, the type's path as `nm -C` spells it).
 WATCHED = [
-    ("TypVal", re.compile(r"drop_in_place<.*\bTypVal>$")),
-    ("Object", re.compile(r"drop_in_place<.*\bObject>$")),
+    ("TypVal", "neovim::types::typval::TypVal"),
+    ("Object", "neovim::types::api::Object"),
 ]
 
 UNWIND = re.compile(rb"_Unwind_Resume")
@@ -49,13 +48,20 @@ def symbols(binary: pathlib.Path):
     ).stdout
     for line in out.splitlines():
         parts = line.split(maxsplit=3)
-        if len(parts) != 4:
-            continue
-        addr, size, _kind, name = parts
-        try:
-            yield int(addr, 16), int(size, 16), name
-        except ValueError:
-            continue
+        if len(parts) == 4:
+            addr, size, _kind, name = parts
+            try:
+                yield int(addr, 16), int(size, 16), name
+            except ValueError:
+                continue
+        elif len(parts) == 3:
+            # A symbol `nm` knows no size for; the disassembly below needs
+            # one, so it is not a shim this can read.
+            addr, _kind, name = parts
+            try:
+                yield int(addr, 16), 0, name
+            except ValueError:
+                continue
 
 
 def disassemble(binary: pathlib.Path, addr: int, size: int) -> bytes:
@@ -79,38 +85,40 @@ def main() -> int:
         print(f"drop-glue: {binary} does not exist; build it first", file=sys.stderr)
         return 2
 
-    found = {label: [] for label, _ in WATCHED}
-    for addr, size, name in symbols(binary):
-        for label, pattern in WATCHED:
-            if pattern.search(name):
-                found[label].append((addr, size, name))
-
+    table = list(symbols(binary))
     failed = False
-    for label, _ in WATCHED:
-        shims = found[label]
-        if not shims:
-            # A missing shim is a *failure*: either the type stopped having a
-            # destructor (in which case this guard needs rewriting) or the
-            # symbol was inlined away everywhere and there is nothing to
-            # check, which the release build has never done.
-            print(f"drop-glue: no drop_in_place shim for {label}", file=sys.stderr)
+    for label, path in WATCHED:
+        glue = f"core::ptr::drop_glue::<{path}>"
+        impl = f"<{path} as core::ops::drop::Drop>::drop"
+        shims = [row for row in table if row[2] == glue]
+        has_impl = any(row[2] == impl for row in table)
+
+        if not has_impl:
+            # Either the type stopped having a destructor -- in which case
+            # this guard is watching the wrong thing and needs rewriting --
+            # or the name moved.
+            print(f"drop-glue: no Drop impl for {label} ({impl})", file=sys.stderr)
             failed = True
             continue
+
+        if not shims:
+            print(f"drop-glue: {label}'s shim is inlined everywhere")
+            continue
+
         for addr, size, name in shims:
             body = disassemble(binary, addr, size)
             if UNWIND.search(body):
                 print(
-                    f"drop-glue: {name} has a cleanup path "
-                    f"(it calls _Unwind_Resume).\n"
-                    f"  A payload the compiler drops after Drop::drop gives the shim\n"
-                    f"  a landing pad, which stops it being a tail call and stops it\n"
-                    f"  inlining. Hold the payload in a ManuallyDrop and release it\n"
-                    f"  from the type's own Drop.",
+                    f"drop-glue: {name} has a cleanup path (it calls _Unwind_Resume).\n"
+                    "  A payload the compiler drops after Drop::drop gives the shim a\n"
+                    "  landing pad, which stops it being a tail call and stops it\n"
+                    "  inlining. Hold the payload in a ManuallyDrop and release it from\n"
+                    "  the type's own Drop.",
                     file=sys.stderr,
                 )
                 failed = True
             else:
-                print(f"drop-glue: {label} shim clean ({size} bytes)")
+                print(f"drop-glue: {label}'s shim is clean ({size} bytes)")
     return 1 if failed else 0
 
 
