@@ -627,6 +627,12 @@ mod tests {
     mod l {
         use super::*;
 
+        /// Exclusive use of the collector's registries, which every case
+        /// below allocates into. See [`crate::eval::gc::serial`].
+        pub(super) fn serial() -> crate::eval::gc::serial::Held {
+            crate::eval::gc::serial::lock()
+        }
+
         /// A count the case wrote, as the `int` this family indexes by.
         fn index(n: usize) -> ::core::ffi::c_int {
             ::core::ffi::c_int::try_from(n).expect("a short list")
@@ -744,6 +750,7 @@ mod tests {
 
     #[test]
     fn removing_an_item_after_the_watcher_leaves_it_where_it_was() {
+        let _serial = l::serial();
         let list = l::counted(5);
         let lw = l::watch(list, 1);
         l::remove(list, 3);
@@ -754,6 +761,7 @@ mod tests {
 
     #[test]
     fn removing_an_item_before_the_watcher_keeps_it_on_the_same_item() {
+        let _serial = l::serial();
         let list = l::counted(5);
         let lw = l::watch(list, 3);
         l::remove(list, 1);
@@ -766,6 +774,7 @@ mod tests {
 
     #[test]
     fn removing_the_watched_item_lands_the_watcher_on_the_next_one() {
+        let _serial = l::serial();
         let list = l::counted(5);
         let lw = l::watch(list, 2);
         l::remove(list, 2);
@@ -777,6 +786,7 @@ mod tests {
 
     #[test]
     fn removing_the_watched_last_item_pushes_the_watcher_off_the_end() {
+        let _serial = l::serial();
         let list = l::counted(3);
         let lw = l::watch(list, 2);
         l::remove(list, 2);
@@ -790,6 +800,7 @@ mod tests {
         // What ends a `:for` loop whose body appends to the list it is
         // walking: the cursor is already past the end, and nothing puts it
         // back.
+        let _serial = l::serial();
         let list = l::counted(2);
         let lw = l::watch(list, 1);
         l::remove(list, 1);
@@ -802,6 +813,7 @@ mod tests {
 
     #[test]
     fn removing_a_run_around_the_watcher_lands_it_after_the_run() {
+        let _serial = l::serial();
         let list = l::counted(7);
         let lws = [l::watch(list, 0), l::watch(list, 3), l::watch(list, 6)];
         l::remove_run(list, 2, 4);
@@ -816,6 +828,7 @@ mod tests {
 
     #[test]
     fn inserting_before_the_watcher_keeps_it_on_the_same_item() {
+        let _serial = l::serial();
         let list = l::counted(4);
         let lw = l::watch(list, 2);
         l::insert(list, 90, 1);
@@ -826,6 +839,7 @@ mod tests {
 
     #[test]
     fn inserting_after_the_watcher_leaves_it_where_it_was() {
+        let _serial = l::serial();
         let list = l::counted(4);
         let lw = l::watch(list, 1);
         l::insert(list, 90, 3);
@@ -836,6 +850,7 @@ mod tests {
 
     #[test]
     fn inserting_at_the_watched_item_pushes_the_watcher_up() {
+        let _serial = l::serial();
         let list = l::counted(4);
         let lw = l::watch(list, 1);
         l::insert(list, 90, 1);
@@ -847,6 +862,7 @@ mod tests {
 
     #[test]
     fn moving_the_watched_run_to_another_list_lands_the_watcher_after_it() {
+        let _serial = l::serial();
         let list = l::counted(6);
         let tgt = l::counted(0);
         let lws = [l::watch(list, 1), l::watch(list, 4)];

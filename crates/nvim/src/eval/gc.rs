@@ -91,6 +91,8 @@ impl<T> Registry<T> {
     }
 
     fn insert(&mut self, at: NonNull<T>) -> RootId {
+        #[cfg(test)]
+        serial::assert_held();
         let idx = match self.holes.pop() {
             Some(idx) => {
                 self.slots[idx as usize] = Some(at);
@@ -107,6 +109,8 @@ impl<T> Registry<T> {
 
     fn remove(&mut self, id: RootId) {
         let Some(idx) = id.index() else { return };
+        #[cfg(test)]
+        serial::assert_held();
         debug_assert!(self.slots[idx].is_some(), "a root removed twice");
         self.slots[idx] = None;
         self.holes.push(
@@ -171,4 +175,65 @@ pub(crate) fn dict_at(idx: usize) -> Option<NonNull<Dict>> {
 /// API call names it.
 pub fn rooted_lists() -> Vec<*mut List> {
     live_lists.with(|reg| reg.slots.iter().flatten().map(|l| l.as_ptr()).collect())
+}
+
+/// The registries are process-wide, and `cargo test` runs a binary's cases in
+/// parallel threads.
+///
+/// The editor itself is single-threaded -- that is what [`GlobalCell`]'s
+/// whole contract rests on -- so a registry that two threads edit at once is
+/// not a bug in the registry, it is a case that forgot it is sharing the
+/// editor with nine others. Two of them growing [`Registry::slots`] at the
+/// same time tore the hole list, and the case that noticed reported it as
+/// "a root removed twice" somewhere else entirely.
+///
+/// So a case that allocates a list or a dictionary takes [`serial::lock`]
+/// first, and holding it *is* being the main thread for as long as the guard
+/// lives. [`serial::assert_held`] makes forgetting it a deterministic
+/// failure in the case that forgot rather than a flake in whichever case was
+/// running beside it.
+#[cfg(test)]
+pub(crate) mod serial {
+    use std::cell::Cell;
+    use std::sync::{Mutex, MutexGuard};
+
+    static REGISTRIES: Mutex<()> = Mutex::new(());
+
+    thread_local! {
+        /// Whether this thread is the one holding [`REGISTRIES`]. A
+        /// thread-local flag rather than the guard's own identity because
+        /// [`assert_held`] is called from inside the locked region, where
+        /// asking the mutex would deadlock.
+        static HELD: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// Exclusive use of the registries for as long as the guard lives.
+    ///
+    /// Poisoning is ignored: a panicking case has already reported its own
+    /// failure, and a second report of it in every case that follows is
+    /// noise.
+    pub(crate) fn lock() -> Held {
+        let guard = REGISTRIES.lock().unwrap_or_else(|e| e.into_inner());
+        HELD.set(true);
+        Held(guard)
+    }
+
+    /// What [`lock`] hands back; see there.
+    pub(crate) struct Held(
+        #[expect(dead_code, reason = "held for its lock")] MutexGuard<'static, ()>,
+    );
+
+    impl Drop for Held {
+        fn drop(&mut self) {
+            HELD.set(false);
+        }
+    }
+
+    /// Panic unless this thread holds [`lock`].
+    pub(crate) fn assert_held() {
+        assert!(
+            HELD.get(),
+            "a test that allocates or frees a container must hold `gc::serial::lock()`"
+        );
+    }
 }
