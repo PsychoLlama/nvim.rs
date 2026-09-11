@@ -7,11 +7,13 @@
 //! tree is finite and shallow enough to recurse over.
 //!
 //! The sink assembles its answer on a stack of half-built `Object`s, one
-//! entry per open container plus the value being converted. A container is
-//! sized up front — `conv_list_start` reserves exactly the list's length —
-//! and every item is pushed into the reservation, so a container that ends
-//! up a different size than the walk announced is a `debug_assert`, not a
-//! write past an allocation.
+//! entry per *open container* — a converted value goes straight into the
+//! container below it rather than onto the stack of its own, so a leaf is
+//! moved once instead of twice and the walk's "between items" hooks have
+//! nothing to do. A container is sized up front — `conv_list_start`
+//! reserves exactly the list's length — and every item is pushed into the
+//! reservation, so a container that ends up a different size than the walk
+//! announced is a `debug_assert`, not a write past an allocation.
 //!
 //! **Which direction owns what.** An `Object` owns its tree, so converting
 //! *from* a borrowed value copies (a Lua reference is retained) and
@@ -56,14 +58,24 @@ use crate::types::{
 };
 
 /// The `From<&TypVal> for Object` sink: upstream's `EncodedData`.
-#[derive(Default)]
 struct ObjectSink {
-    /// Containers already opened, innermost last, with the value most recently
-    /// converted on top of them.
+    /// The containers the walk has opened and not yet closed, innermost
+    /// last. A converted value is not on it: it goes straight into the
+    /// innermost container, or -- with nothing open -- into [`Self::root`].
     stack: Vec<Object>,
+    /// The whole answer, once the walk is done.
+    root: Object,
 }
 
 impl ObjectSink {
+    /// A sink with nothing open and nothing converted.
+    fn new() -> Self {
+        Self {
+            stack: Vec::new(),
+            root: Object::Nil,
+        }
+    }
+
     /// A string object over `len` bytes at `data`, copied.
     ///
     /// # Safety
@@ -74,20 +86,27 @@ impl ObjectSink {
         Object::string(String_0::from_bytes(bytes))
     }
 
-    /// Take the value on top of the stack, leaving the container it belongs to
-    /// exposed: upstream's `kv_pop(edata->stack)`.
-    fn take_top(&mut self) -> Object {
-        self.stack.pop().expect("the walk pushed a value")
-    }
-
-    /// Move the value on top of the stack into the array below it.
-    fn close_list_item(&mut self) {
-        let item = self.take_top();
-        let Some(Object::Array(array)) = self.stack.last_mut() else {
-            unreachable!("the walk is inside an array");
-        };
-        debug_assert!(array.len() < array.capacity());
-        array.push(item);
+    /// Put a finished value where it belongs: the next slot of the innermost
+    /// open array, the entry the last key opened in the innermost open
+    /// dictionary, or the answer itself.
+    ///
+    /// A dictionary's key claims its entry with a nil value when it
+    /// converts, so the value that follows *fills* rather than appends --
+    /// which is what keeps a *stack* of half-built entries rather than one
+    /// pending key, since a dictionary nested inside another's value would
+    /// overwrite a single slot.
+    fn emit(&mut self, value: Object) {
+        match self.stack.last_mut() {
+            Some(Object::Array(array)) => {
+                debug_assert!(array.len() < array.capacity());
+                array.push(value);
+            }
+            Some(Object::Dict(dict)) => {
+                dict.last_mut().expect("a key precedes its value").value = value;
+            }
+            Some(_) => unreachable!("only a container is left open"),
+            None => self.root = value,
+        }
     }
 
     /// The dictionary the walk is currently filling.
@@ -98,16 +117,10 @@ impl ObjectSink {
         dict
     }
 
-    /// Move the value on top of the stack into the entry its key opened.
-    ///
-    /// The key was appended with a nil value when it converted, which is
-    /// what keeps one *stack* of half-built entries rather than one pending
-    /// key: a dictionary nested inside another's value would overwrite a
-    /// single slot.
-    fn close_dict_item(&mut self) {
-        let value = self.take_top();
-        let dict = self.open_dict();
-        dict.last_mut().expect("a key precedes its value").value = value;
+    /// Close the innermost container and hand it to whatever holds it.
+    fn close(&mut self) {
+        let done = self.stack.pop().expect("the walk opened a container");
+        self.emit(done);
     }
 }
 
@@ -116,23 +129,23 @@ impl TypvalSink for ObjectSink {
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_object_convert_one_value()";
 
     fn conv_nil(&mut self, _tv: Option<&mut TypVal>) {
-        self.stack.push(Object::Nil);
+        self.emit(Object::Nil);
     }
 
     fn conv_bool(&mut self, _tv: Option<&mut TypVal>, num: bool) {
-        self.stack.push(Object::Boolean(num));
+        self.emit(Object::Boolean(num));
     }
 
     fn conv_number(&mut self, _tv: Option<&mut TypVal>, num: i64) {
-        self.stack.push(Object::Integer(num as Integer));
+        self.emit(Object::Integer(num as Integer));
     }
 
     fn conv_unsigned_number(&mut self, _tv: Option<&mut TypVal>, num: u64) {
-        self.stack.push(Object::Integer(num.cast_signed()));
+        self.emit(Object::Integer(num.cast_signed()));
     }
 
     fn conv_float(&mut self, _tv: Option<&mut TypVal>, flt: Float) -> Flow {
-        self.stack.push(Object::Float(flt));
+        self.emit(Object::Float(flt));
         Flow::Go
     }
 
@@ -149,7 +162,7 @@ impl TypvalSink for ObjectSink {
         debug_assert!(len == 0 || !buf.is_null());
         // SAFETY: the walk hands over `len` readable bytes.
         let obj = unsafe { Self::cbuf_to_obj(if len != 0 { buf } else { c"".as_ptr() }, len) };
-        self.stack.push(obj);
+        self.emit(obj);
         Flow::Go
     }
 
@@ -167,7 +180,7 @@ impl TypvalSink for ObjectSink {
         _len: size_t,
         _ext_type: i8,
     ) -> Flow {
-        self.stack.push(Object::Nil);
+        self.emit(Object::Nil);
         Flow::Go
     }
 
@@ -188,7 +201,7 @@ impl TypvalSink for ObjectSink {
             };
             Self::cbuf_to_obj(data, len)
         };
-        self.stack.push(obj);
+        self.emit(obj);
     }
 
     /// A funcref that is really a Lua function goes back as a `LuaRef`;
@@ -219,7 +232,7 @@ impl TypvalSink for ObjectSink {
                 Some(api_new_luaref((*fp).uf_luaref))
             }
         };
-        self.stack.push(match luaref {
+        self.emit(match luaref {
             Some(luaref) => Object::LuaRef(luaref),
             None => Object::Nil,
         });
@@ -227,7 +240,7 @@ impl TypvalSink for ObjectSink {
     }
 
     fn conv_empty_list(&mut self, _tv: Option<&mut TypVal>) {
-        self.stack.push(Object::array(Array::EMPTY));
+        self.emit(Object::array(Array::EMPTY));
     }
 
     /// # Safety
@@ -235,7 +248,7 @@ impl TypvalSink for ObjectSink {
     /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
     /// it is standing on.
     unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
-        self.stack.push(Object::dict(ApiDict::EMPTY));
+        self.emit(Object::dict(ApiDict::EMPTY));
     }
 
     /// Reserve the whole array now; the items push into the reservation.
@@ -245,16 +258,15 @@ impl TypvalSink for ObjectSink {
         Flow::Go
     }
 
-    fn conv_list_between_items(&mut self, _tv: Option<&mut TypVal>) {
-        self.close_list_item();
-    }
+    /// Nothing: an item goes into the array as it converts.
+    fn conv_list_between_items(&mut self, _tv: Option<&mut TypVal>) {}
 
     fn conv_list_end(&mut self, _tv: Option<&mut TypVal>) {
-        self.close_list_item();
         debug_assert!(matches!(
             self.stack.last(),
             Some(Object::Array(a)) if a.len() == a.capacity()
         ));
+        self.close();
     }
 
     fn conv_dict_start(&mut self, _tv: Option<&mut TypVal>, len: size_t) -> Flow {
@@ -290,20 +302,18 @@ impl TypvalSink for ObjectSink {
     ///
     /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
-        self.close_dict_item();
-    }
+    unsafe fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {}
 
     /// # Safety
     ///
     /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
     /// it is standing on.
     unsafe fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
-        self.close_dict_item();
         debug_assert!(matches!(
             self.stack.last(),
             Some(Object::Dict(d)) if d.len() == d.capacity()
         ));
+        self.close();
     }
 
     /// An `Object` tree is acyclic, so a container that references itself
@@ -319,7 +329,7 @@ impl TypvalSink for ObjectSink {
         _conv_type: ConvType,
         _path: &ConvPath,
     ) -> Flow {
-        self.stack.push(Object::Nil);
+        self.emit(Object::Nil);
         Flow::Go
     }
 }
@@ -346,16 +356,17 @@ impl From<TypVal> for Object {
 
 /// Convert a Vimscript value to an API `Object`, recursively.
 fn vim_to_object(value: &TypVal) -> Object {
-    let mut sink = ObjectSink::default();
+    let mut sink = ObjectSink::new();
     // SAFETY: the caller's typval, walked by a sink that cannot fail on any
     // value a live one can hold.
     let name = c"vim_to_object argument";
     let converted = unsafe { encode_typval_read(&mut sink, value, name) };
     debug_assert!(converted);
-    debug_assert!(sink.stack.len() == 1);
-    // Only a `VAR_UNKNOWN` leaves the stack empty, which upstream calls
-    // impossible and then reads its stack's uninitialised first slot for.
-    sink.stack.pop().unwrap_or(Object::Nil)
+    debug_assert!(sink.stack.is_empty());
+    // A `VAR_UNKNOWN` emits nothing, which upstream calls impossible and
+    // then reads its stack's uninitialised first slot for; the answer is
+    // `Object::Nil` here.
+    sink.root
 }
 
 impl From<Object> for TypVal {
