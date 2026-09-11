@@ -52,76 +52,120 @@ macro_rules! hl {
 }
 pub(super) use hl;
 
-/// The payload of a token, read back as the member its type selects.
+/// The payload of a token, read back as the arm its type selects.
 ///
-/// The parser does read the *wrong* member in two places, and both are
-/// deliberate: an invalid option token is asked for `opt.scope` and an
-/// invalid comparison for `cmp.ccs`, over bytes the lexer wrote as `err`.
-/// The C does the same — `values::option` and `operators::comparison` both
-/// have a `kExprLexInvalid` arm that then reads on regardless — so these
-/// answer whatever the union happens to hold, exactly as it did.
+/// The parser does ask for the *wrong* arm in two places, and both are
+/// deliberate: an invalid option token is asked for its scope and an invalid
+/// comparison for its case strategy, over a payload the lexer wrote as an
+/// error. `values::option` and `operators::comparison` each have a
+/// `kExprLexInvalid` arm that then reads on regardless, and the answer
+/// reaches the highlight list. The C reads a union member the error did not
+/// cover, which is the zeroes `blank_token` left -- except for the option
+/// scope, which an error *does* leave standing and
+/// [`LexExprTokenError::opt_scope`] therefore carries. So a mismatched arm
+/// answers its zero here, which is the same value.
 impl LexExprToken {
     /// `+=`, `-=`, `.=` or plain `=`.
     pub(super) fn assignment_type(&self) -> ExprAssignmentType {
-        // SAFETY: reading a `Copy` member of a `repr(C)` union of `Copy`
-        // members is a reinterpretation of initialised bytes, never a
-        // dereference. Every accessor below carries the same reasoning.
-        unsafe { self.data.ass.type_0 }
+        match self.data {
+            LexExprTokenData::Assignment(ass) => ass.type_0,
+            _ => kExprAsgnPlain,
+        }
     }
 
-    /// A number literal's base and whether it is a float.
+    /// A number literal's value and the base its prefix named.
     pub(super) fn number(&self) -> LexExprTokenNumber {
-        unsafe { self.data.num }
-    }
-
-    /// A float literal's value. Only meaningful when `number().is_float`.
-    pub(super) fn number_float(&self) -> Float {
-        unsafe { self.data.num.val.floating }
-    }
-
-    /// An integer literal's value. Only meaningful when `!number().is_float`.
-    pub(super) fn number_integer(&self) -> UVarNumber {
-        unsafe { self.data.num.val.integer }
+        match self.data {
+            LexExprTokenData::Number(num) => num,
+            _ => LexExprTokenNumber {
+                val: LexExprTokenNumberValue::Integer(0),
+                base: 0,
+            },
+        }
     }
 
     /// What an invalid token was trying to be, and why it is not.
     pub(super) fn error(&self) -> LexExprTokenError {
-        unsafe { self.data.err }
+        match self.data {
+            LexExprTokenData::Error(err) => err,
+            _ => LexExprTokenError {
+                type_0: kExprLexInvalid,
+                msg: ::core::ptr::null(),
+                opt_scope: kExprOptScopeUnspecified,
+            },
+        }
     }
 
     /// An identifier's scope and whether it is an autoload name.
     pub(super) fn variable(&self) -> LexExprTokenVar {
-        unsafe { self.data.var }
+        match self.data {
+            LexExprTokenData::Var(var) => var,
+            _ => LexExprTokenVar {
+                scope: kExprVarScopeMissing,
+                autoload: false,
+            },
+        }
     }
 
     /// An option's name, its length and its scope.
+    ///
+    /// An *invalid* option token answers the scope its `&g:` prefix named,
+    /// with no name: see the note above.
     pub(super) fn option(&self) -> LexExprTokenOption {
-        unsafe { self.data.opt }
+        let scope = match self.data {
+            LexExprTokenData::Option(opt) => return opt,
+            LexExprTokenData::Error(err) => err.opt_scope,
+            _ => kExprOptScopeUnspecified,
+        };
+        LexExprTokenOption {
+            name: ::core::ptr::null(),
+            len: 0,
+            scope,
+        }
     }
 
     /// Whether a string literal reached its closing quote.
     pub(super) fn string_is_closed(&self) -> bool {
-        unsafe { self.data.str.closed }
+        match self.data {
+            LexExprTokenData::Str(str) => str.closed,
+            _ => false,
+        }
     }
 
     /// A register token's register name.
     pub(super) fn register_name(&self) -> ::core::ffi::c_int {
-        unsafe { self.data.reg.name }
+        match self.data {
+            LexExprTokenData::Register(reg) => reg.name,
+            _ => 0,
+        }
     }
 
     /// Whether a bracket, brace or parenthesis closes rather than opens.
     pub(super) fn is_closing(&self) -> bool {
-        unsafe { self.data.brc.closing }
+        match self.data {
+            LexExprTokenData::Brace(brc) => brc.closing,
+            _ => false,
+        }
     }
 
     /// Which of `*`, `/` and `%` this is.
     pub(super) fn multiplication_type(&self) -> ExprLexMulType {
-        unsafe { self.data.mul.type_0 }
+        match self.data {
+            LexExprTokenData::Multiplication(mul) => mul.type_0,
+            _ => kExprLexMulMul,
+        }
     }
 
     /// A comparison's operator, case-comparison strategy and inversion.
     pub(super) fn comparison(&self) -> LexExprTokenComparison {
-        unsafe { self.data.cmp }
+        match self.data {
+            LexExprTokenData::Comparison(cmp) => cmp,
+            _ => LexExprTokenComparison {
+                type_0: kExprCmpEqual,
+                ccs: kCCStrategyUseOption,
+                inv: false,
+            },
+        }
     }
 }
 
@@ -222,13 +266,7 @@ impl ExprParser {
                 start: ParserPosition { line: 0, col: 0 },
                 len: 0,
                 type_0: kExprLexMissing,
-                data: LexExprTokenData {
-                    cmp: LexExprTokenComparison {
-                        type_0: kExprCmpEqual,
-                        ccs: kCCStrategyUseOption,
-                        inv: false,
-                    },
-                },
+                data: LexExprTokenData::Blank,
             },
             highlighted_prev_spacing: false,
             lambda_node: ::core::ptr::null_mut::<ExprASTNode>(),
@@ -237,13 +275,7 @@ impl ExprParser {
                 start: ParserPosition { line: 0, col: 0 },
                 len: 0,
                 type_0: kExprLexMissing,
-                data: LexExprTokenData {
-                    cmp: LexExprTokenComparison {
-                        type_0: kExprCmpEqual,
-                        ccs: kCCStrategyUseOption,
-                        inv: false,
-                    },
-                },
+                data: LexExprTokenData::Blank,
             },
             tok_type: kExprLexMissing,
             is_invalid: false,

@@ -778,16 +778,16 @@ mod lexer {
         ParserPosition, ParserState,
     };
     use neovim::viml::parser::expressions::{
-        LexExprToken, LexExprTokenType, ccs_tab, eltkn_cmp_type_tab, expr_asgn_type_tab,
-        kELFlagAllowFloat, kELFlagForbidEOC, kELFlagForbidScope, kELFlagIsNotCmp, kELFlagPeek,
-        kExprLexAnd, kExprLexArrow, kExprLexAssignment, kExprLexBracket, kExprLexColon,
-        kExprLexComma, kExprLexComparison, kExprLexDot, kExprLexDoubleQuotedString, kExprLexEOC,
-        kExprLexEnv, kExprLexFigureBrace, kExprLexInvalid, kExprLexMinus, kExprLexMissing,
-        kExprLexMulDiv, kExprLexMulMod, kExprLexMulMul, kExprLexMultiplication, kExprLexNot,
-        kExprLexNumber, kExprLexOption, kExprLexOr, kExprLexParenthesis, kExprLexPlainIdentifier,
-        kExprLexPlus, kExprLexQuestion, kExprLexRegister, kExprLexSingleQuotedString,
-        kExprLexSpacing, kExprOptScopeGlobal, kExprOptScopeLocal, kExprOptScopeUnspecified,
-        viml_pexpr_next_token,
+        LexExprToken, LexExprTokenData, LexExprTokenNumberValue, LexExprTokenType, ccs_tab,
+        eltkn_cmp_type_tab, expr_asgn_type_tab, kELFlagAllowFloat, kELFlagForbidEOC,
+        kELFlagForbidScope, kELFlagIsNotCmp, kELFlagPeek, kExprLexAnd, kExprLexArrow,
+        kExprLexAssignment, kExprLexBracket, kExprLexColon, kExprLexComma, kExprLexComparison,
+        kExprLexDot, kExprLexDoubleQuotedString, kExprLexEOC, kExprLexEnv, kExprLexFigureBrace,
+        kExprLexInvalid, kExprLexMinus, kExprLexMissing, kExprLexMulDiv, kExprLexMulMod,
+        kExprLexMulMul, kExprLexMultiplication, kExprLexNot, kExprLexNumber, kExprLexOption,
+        kExprLexOr, kExprLexParenthesis, kExprLexPlainIdentifier, kExprLexPlus, kExprLexQuestion,
+        kExprLexRegister, kExprLexSingleQuotedString, kExprLexSpacing, kExprOptScopeGlobal,
+        kExprOptScopeLocal, kExprOptScopeUnspecified, viml_pexpr_next_token,
     };
     use neovim::viml::parser::parser::{
         PARSER_STATE_INIT, parser_simple_get_line, reader_line, viml_parser_destroy,
@@ -1073,74 +1073,75 @@ mod lexer {
         (Some(Bytes(line[start.col..end].to_vec())), None)
     }
 
-    /// `eltkn2lua`'s payload half: the union member the token's type selects.
+    /// `eltkn2lua`'s payload half: the arm the token's type selects.
+    ///
+    /// Keyed on the *type name* rather than on the arm, because a token may
+    /// carry an arm its type does not name -- `!` alone is a `Not` holding
+    /// an assignment -- and the spec reports nothing for those.
     ///
     /// # Safety
     /// `tkn` must be a token the lexer answered, still describing a live line.
     unsafe fn payload(kind: &str, tkn: &LexExprToken) -> Tkd {
-        // SAFETY: the caller's obligation; each arm reads only the member its
-        // own type selects, which is the invariant the lexer maintains.
-        unsafe {
-            match kind {
-                "Comparison" => Tkd::Cmp {
-                    kind: cmp_name(tkn.data.cmp.type_0),
-                    ccs: ccs_name(tkn.data.cmp.ccs),
-                    inv: tkn.data.cmp.inv,
-                },
-                "Multiplication" => Tkd::Mul(match tkn.data.mul.type_0 {
+        match (kind, tkn.data) {
+            ("Comparison", LexExprTokenData::Comparison(cmp)) => Tkd::Cmp {
+                kind: cmp_name(cmp.type_0),
+                ccs: ccs_name(cmp.ccs),
+                inv: cmp.inv,
+            },
+            ("Multiplication", LexExprTokenData::Multiplication(mul)) => {
+                Tkd::Mul(match mul.type_0 {
                     kExprLexMulMul => "Mul",
                     kExprLexMulDiv => "Div",
                     kExprLexMulMod => "Mod",
                     other => panic!("unknown multiplication type {other}"),
-                }),
-                "Bracket" | "FigureBrace" | "Parenthesis" => Tkd::Brc {
-                    closing: tkn.data.brc.closing,
-                },
-                "Register" => Tkd::Reg {
-                    name: intchar(tkn.data.reg.name),
-                },
-                "SingleQuotedString" | "DoubleQuotedString" => Tkd::Str {
-                    closed: tkn.data.str.closed,
-                },
-                "Option" => Tkd::Opt {
-                    scope: match tkn.data.opt.scope {
-                        kExprOptScopeUnspecified => "Unspecified",
-                        kExprOptScopeGlobal => "Global",
-                        kExprOptScopeLocal => "Local",
-                        other => panic!("unknown option scope {other}"),
-                    },
-                    name: Bytes(
-                        slice::from_raw_parts(tkn.data.opt.name.cast::<u8>(), tkn.data.opt.len)
-                            .to_vec(),
-                    ),
-                },
-                "PlainIdentifier" => Tkd::Var {
-                    scope: intchar(tkn.data.var.scope as c_int),
-                    autoload: tkn.data.var.autoload,
-                },
-                "Number" => {
-                    let base = tkn.data.num.base;
-                    if tkn.data.num.is_float {
-                        Tkd::Flt {
-                            base,
-                            val: tkn.data.num.val.floating,
-                        }
-                    } else {
-                        Tkd::Int {
-                            base,
-                            val: tkn.data.num.val.integer,
-                        }
-                    }
-                }
-                "Assignment" => Tkd::Asgn(asgn_name(tkn.data.ass.type_0)),
-                "Invalid" => Tkd::Err(
-                    CStr::from_ptr(tkn.data.err.msg)
-                        .to_str()
-                        .expect("error messages are ASCII")
-                        .to_owned(),
-                ),
-                _ => Tkd::None,
+                })
             }
+            ("Bracket" | "FigureBrace" | "Parenthesis", LexExprTokenData::Brace(brc)) => Tkd::Brc {
+                closing: brc.closing,
+            },
+            ("Register", LexExprTokenData::Register(reg)) => Tkd::Reg {
+                name: intchar(reg.name),
+            },
+            ("SingleQuotedString" | "DoubleQuotedString", LexExprTokenData::Str(str)) => {
+                Tkd::Str { closed: str.closed }
+            }
+            ("Option", LexExprTokenData::Option(opt)) => Tkd::Opt {
+                scope: match opt.scope {
+                    kExprOptScopeUnspecified => "Unspecified",
+                    kExprOptScopeGlobal => "Global",
+                    kExprOptScopeLocal => "Local",
+                    other => panic!("unknown option scope {other}"),
+                },
+                // SAFETY: the caller's obligation: the name points into a
+                // line the parser is still holding.
+                name: Bytes(
+                    unsafe { slice::from_raw_parts(opt.name.cast::<u8>(), opt.len) }.to_vec(),
+                ),
+            },
+            ("PlainIdentifier", LexExprTokenData::Var(var)) => Tkd::Var {
+                scope: intchar(var.scope as c_int),
+                autoload: var.autoload,
+            },
+            ("Number", LexExprTokenData::Number(num)) => match num.val {
+                LexExprTokenNumberValue::Floating(val) => Tkd::Flt {
+                    base: num.base,
+                    val,
+                },
+                LexExprTokenNumberValue::Integer(val) => Tkd::Int {
+                    base: num.base,
+                    val,
+                },
+            },
+            ("Assignment", LexExprTokenData::Assignment(ass)) => Tkd::Asgn(asgn_name(ass.type_0)),
+            ("Invalid", LexExprTokenData::Error(err)) => Tkd::Err(
+                // SAFETY: every error message is a static NUL-terminated
+                // string.
+                unsafe { CStr::from_ptr(err.msg) }
+                    .to_str()
+                    .expect("error messages are ASCII")
+                    .to_owned(),
+            ),
+            _ => Tkd::None,
         }
     }
 

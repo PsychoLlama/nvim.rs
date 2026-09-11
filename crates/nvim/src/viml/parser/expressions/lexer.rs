@@ -81,16 +81,18 @@ fn str2nr(bytes: &[u8], what: Str2NrBases) -> (UVarNumber, c_int, size_t) {
 /// A token that has consumed nothing, positioned at `start`.
 ///
 /// The C's partial initializer (`LexExprToken ret = { .type = ..., .start =
-/// ... }`) zeroes the entire union. Filling in only one variant would leave
-/// the tail of the larger ones as stack garbage, which the parser later reads
-/// through — `opt.scope` for an invalid option token, for one.
+/// ... }`) zeroes the entire union, and a scanner that then fills in one
+/// member leaves the rest of the larger ones zeroed — which the parser reads
+/// back in the two places [`LexExprTokenData`] describes. Carrying no
+/// payload at all says the same thing, and the accessors answer the same
+/// zeroes for it.
 fn blank_token(start: ParserPosition) -> LexExprToken {
-    // SAFETY: every variant of the union is plain data whose all-zero form is
-    // valid: a null `*const c_char`, `false`, and the zero of each enum.
-    let mut ret: LexExprToken = unsafe { ::core::mem::zeroed() };
-    ret.start = start;
-    ret.type_0 = kExprLexInvalid;
-    ret
+    LexExprToken {
+        start,
+        len: 0,
+        type_0: kExprLexInvalid,
+        data: LexExprTokenData::Blank,
+    }
 }
 
 /// Scale `num` by `base` raised to `exponent`, by repeated squaring.
@@ -145,26 +147,38 @@ fn base_for_prefix(prefix: c_int) -> uint8_t {
     }
 }
 
-/// The case-sensitivity marker a comparison operator may end with.
+/// Consume the case-sensitivity marker a comparison operator may end with,
+/// and answer the strategy it names.
 ///
 /// The C tests `strchr("?#", c)`, which also answers non-NULL for the
 /// terminating NUL: a NUL byte here is consumed as a strategy of zero, which
 /// is what `kCCStrategyUseOption` is anyway. Only the token's length differs,
 /// and it differs in the C too.
-fn scan_ccs(ret: &mut LexExprToken, line: &[u8]) {
+///
+/// `!` and `=` reach this with no comparison to put the answer in, and the
+/// C writes it into the union regardless; only the length it consumes is
+/// read back, so those callers drop it.
+fn scan_ccs(ret: &mut LexExprToken, line: &[u8]) -> ExprCaseCompareStrategy {
     if ret.len < line.len() && matches!(line[ret.len], b'?' | b'#' | b'\0') {
-        ret.data.cmp.ccs = ExprCaseCompareStrategy::from(line[ret.len]);
+        let ccs = ExprCaseCompareStrategy::from(line[ret.len]);
         ret.len += 1;
+        ccs
     } else {
-        ret.data.cmp.ccs = kCCStrategyUseOption;
+        kCCStrategyUseOption
     }
 }
 
 /// Report that `&` was not followed by an option name.
-fn option_name_missing(ret: &mut LexExprToken) {
+///
+/// `scope` is what the `&g:` prefix named, which the highlight still covers:
+/// see [`LexExprTokenError::opt_scope`].
+fn option_name_missing(ret: &mut LexExprToken, scope: ExprOptScope) {
     ret.type_0 = kExprLexInvalid;
-    ret.data.err.type_0 = kExprLexOption;
-    ret.data.err.msg = translate(c"E112: Option name missing: %.*s");
+    ret.data = LexExprTokenData::Error(LexExprTokenError {
+        type_0: kExprLexOption,
+        msg: translate(c"E112: Option name missing: %.*s"),
+        opt_scope: scope,
+    });
 }
 
 /// A number literal: an integer in whichever base its prefix names, or a
@@ -218,7 +232,7 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         }
     }
     // TODO(ZyX-I): detect overflows
-    if is_float {
+    let val = if is_float {
         // Vim used to call string2float, i.e. strtod(), which is
         // locale-dependent and takes no length. This is uClibc's approach
         // instead: accumulate the digits ignoring the decimal point, then use
@@ -245,15 +259,14 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         } else {
             exp_part = exp_part.wrapping_sub(frac_size as UVarNumber);
         }
-        ret.data.num.val.floating = scale_number(significand, 10, exp_part, exp_negative);
+        LexExprTokenNumberValue::Floating(scale_number(significand, 10, exp_part, exp_negative))
     } else {
         let (value, prefix, len) = str2nr(line, Str2NrBases::ALL);
         ret.len = len;
-        ret.data.num.val.integer = value;
         base = base_for_prefix(prefix);
-    }
-    ret.data.num.base = base;
-    ret.data.num.is_float = is_float;
+        LexExprTokenNumberValue::Integer(value)
+    };
+    ret.data = LexExprTokenData::Number(LexExprTokenNumber { val, base });
 }
 
 /// A name: a variable or function, possibly scoped (`g:foo`) or autoloaded
@@ -261,25 +274,31 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
 /// like one.
 fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
     let schar = line[0];
-    ret.data.var.scope = kExprVarScopeMissing;
-    ret.data.var.autoload = false;
+    let mut scope = kExprVarScopeMissing;
+    let mut autoload = false;
     ret.type_0 = kExprLexPlainIdentifier;
     ret.len = scan_while(line, ret.len, |b| ascii_isident(b.into()));
     if flags & kELFlagIsNotCmp as c_int == 0
         && ((ret.len == 2 && &line[..2] == b"is") || (ret.len == 5 && &line[..5] == b"isnot"))
     {
         ret.type_0 = kExprLexComparison;
-        ret.data.cmp.type_0 = kExprCmpIdentical;
-        ret.data.cmp.inv = ret.len == 5;
-        scan_ccs(ret, line);
-    } else if ret.len == 1
+        let inv = ret.len == 5;
+        let ccs = scan_ccs(ret, line);
+        ret.data = LexExprTokenData::Comparison(LexExprTokenComparison {
+            type_0: kExprCmpIdentical,
+            ccs,
+            inv,
+        });
+        return;
+    }
+    if ret.len == 1
         && line.len() > 1
         && VAR_SCOPES.contains(&ExprVarScope::from(schar))
         && line[1] == b':'
         && flags & kELFlagForbidScope as c_int == 0
     {
         ret.len += 1;
-        ret.data.var.scope = ExprVarScope::from(schar);
+        scope = ExprVarScope::from(schar);
         ret.type_0 = kExprLexPlainIdentifier;
         // The scan above stopped at the first `#` so that `is#` could be read
         // as a comparison; from here autoload characters belong to the name.
@@ -290,14 +309,15 @@ fn scan_identifier(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         ret.len = scan_while(line, ret.len, |b| {
             ascii_isident(b.into()) || b == AUTOLOAD_CHAR
         });
-        ret.data.var.autoload = line[2..ret.len].contains(&AUTOLOAD_CHAR);
+        autoload = line[2..ret.len].contains(&AUTOLOAD_CHAR);
     } else if line.len() > ret.len && line[ret.len] == AUTOLOAD_CHAR {
-        ret.data.var.autoload = true;
+        autoload = true;
         ret.type_0 = kExprLexPlainIdentifier;
         ret.len = scan_while(line, ret.len, |b| {
             ascii_isident(b.into()) || b == AUTOLOAD_CHAR
         });
     }
+    ret.data = LexExprTokenData::Var(LexExprTokenVar { scope, autoload });
 }
 
 /// `&&`, or an option name with an optional `g:`/`l:` scope.
@@ -308,37 +328,40 @@ fn scan_option(ret: &mut LexExprToken, line: &[u8]) {
         return;
     }
     if line.len() == 1 || !line[1].is_ascii_alphabetic() {
-        option_name_missing(ret);
+        option_name_missing(ret, kExprOptScopeUnspecified);
         return;
     }
     ret.type_0 = kExprLexOption;
-    let name_at: size_t =
+    let (name_at, scope): (size_t, ExprOptScope) =
         if line.len() > 2 && line[2] == b':' && OPT_SCOPES.contains(&ExprOptScope::from(line[1])) {
             ret.len += 2;
-            ret.data.opt.scope = ExprOptScope::from(line[1]);
-            3
+            (3, ExprOptScope::from(line[1]))
         } else {
-            ret.data.opt.scope = kExprOptScopeUnspecified;
-            1
+            (1, kExprOptScopeUnspecified)
         };
     let name = &line[name_at..];
-    ret.data.opt.name = name.as_ptr().cast::<c_char>();
-    if name.len() >= 4 && name[0] == b't' && name[1] == b'_' {
+    let name_len = if name.len() >= 4 && name[0] == b't' && name[1] == b'_' {
         // `t_XY`: a termcap option, whose name is always two bytes after the
         // prefix whether or not they are letters.
-        ret.data.opt.len = 4;
         ret.len += 4;
+        4
     } else {
         let name_len = scan_while(name, 0, |b| b.is_ascii_alphabetic());
-        ret.data.opt.len = name_len;
         if name_len == 0 {
-            // Overwrites the union that `opt` was just written into, exactly
-            // as the C's `OPTNAMEMISS` does.
-            option_name_missing(ret);
-        } else {
-            ret.len += name_len;
+            // Replaces the payload `opt` would have had, exactly as the C's
+            // `OPTNAMEMISS` does — keeping the scope, which is the one thing
+            // the C's union leaves standing.
+            option_name_missing(ret, scope);
+            return;
         }
-    }
+        ret.len += name_len;
+        name_len
+    };
+    ret.data = LexExprTokenData::Option(LexExprTokenOption {
+        name: name.as_ptr().cast::<c_char>(),
+        len: name_len,
+        scope,
+    });
 }
 
 /// A single-quoted string, which ends at the first `'` that is not doubled.
@@ -355,7 +378,7 @@ fn scan_single_quoted(ret: &mut LexExprToken, line: &[u8]) {
         }
         ret.len += 1;
     }
-    ret.data.str.closed = closed;
+    ret.data = LexExprTokenData::Str(LexExprTokenString { closed });
 }
 
 /// A double-quoted string, which ends at the first `"` that is not escaped.
@@ -372,37 +395,50 @@ fn scan_double_quoted(ret: &mut LexExprToken, line: &[u8]) {
         }
         ret.len += 1;
     }
-    ret.data.str.closed = closed;
+    ret.data = LexExprTokenData::Str(LexExprTokenString { closed });
 }
 
 /// `!` and `=`: unary not, assignment, and the (in)equality and regex-match
 /// comparisons the two of them begin.
 fn scan_bang_or_equals(ret: &mut LexExprToken, line: &[u8]) {
     let schar = line[0];
+    let inv = schar == b'!';
     if line.len() == 1 {
-        ret.type_0 = if schar == b'!' {
-            kExprLexNot
-        } else {
-            kExprLexAssignment
-        };
-        ret.data.ass.type_0 = kExprAsgnPlain;
+        ret.type_0 = if inv { kExprLexNot } else { kExprLexAssignment };
+        ret.data = LexExprTokenData::Assignment(LexExprTokenAssignment {
+            type_0: kExprAsgnPlain,
+        });
         return;
     }
-    ret.type_0 = kExprLexComparison;
-    ret.data.cmp.inv = schar == b'!';
-    if line[1] == b'=' {
-        ret.data.cmp.type_0 = kExprCmpEqual;
+    let comparison = if line[1] == b'=' {
         ret.len += 1;
+        Some(kExprCmpEqual)
     } else if line[1] == b'~' {
-        ret.data.cmp.type_0 = kExprCmpMatches;
         ret.len += 1;
-    } else if schar == b'!' {
-        ret.type_0 = kExprLexNot;
+        Some(kExprCmpMatches)
     } else {
-        ret.type_0 = kExprLexAssignment;
-        ret.data.ass.type_0 = kExprAsgnPlain;
+        None
+    };
+    match comparison {
+        Some(type_0) => {
+            ret.type_0 = kExprLexComparison;
+            let ccs = scan_ccs(ret, line);
+            ret.data = LexExprTokenData::Comparison(LexExprTokenComparison { type_0, ccs, inv });
+        }
+        // `!?` and `!#`: the marker is consumed, nothing reads it back, and
+        // the token's length is what the consumption was for.
+        None if inv => {
+            ret.type_0 = kExprLexNot;
+            scan_ccs(ret, line);
+        }
+        None => {
+            ret.type_0 = kExprLexAssignment;
+            scan_ccs(ret, line);
+            ret.data = LexExprTokenData::Assignment(LexExprTokenAssignment {
+                type_0: kExprAsgnPlain,
+            });
+        }
     }
-    scan_ccs(ret, line);
 }
 
 /// `<` and `>`, with or without a trailing `=`.
@@ -412,14 +448,37 @@ fn scan_ordering(ret: &mut LexExprToken, line: &[u8]) {
     if has_eq_sign {
         ret.len += 1;
     }
-    scan_ccs(ret, line);
+    let ccs = scan_ccs(ret, line);
     let inv = line[0] == b'<';
-    ret.data.cmp.inv = inv;
-    ret.data.cmp.type_0 = if inv ^ has_eq_sign {
-        kExprCmpGreaterOrEqual
-    } else {
-        kExprCmpGreater
-    };
+    ret.data = LexExprTokenData::Comparison(LexExprTokenComparison {
+        type_0: if inv ^ has_eq_sign {
+            kExprCmpGreaterOrEqual
+        } else {
+            kExprCmpGreater
+        },
+        ccs,
+        inv,
+    });
+}
+
+/// An opening or closing bracket, brace or parenthesis.
+fn brace(closing: bool) -> LexExprTokenData {
+    LexExprTokenData::Brace(LexExprTokenBrace { closing })
+}
+
+/// One of the augmented assignments, or plain `=`.
+fn assignment(type_0: ExprAssignmentType) -> LexExprTokenData {
+    LexExprTokenData::Assignment(LexExprTokenAssignment { type_0 })
+}
+
+/// An invalid token: what it was trying to be, and the message saying why it
+/// is not. No option scope was read, so none is carried.
+fn lex_error(type_0: LexExprTokenType, msg: &'static CStr) -> LexExprTokenData {
+    LexExprTokenData::Error(LexExprTokenError {
+        type_0,
+        msg: translate(msg),
+        opt_scope: kExprOptScopeUnspecified,
+    })
 }
 
 /// Scan one token out of `line`, the input from the cursor to the end of the
@@ -436,26 +495,28 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
     match schar {
         b'(' | b')' => {
             ret.type_0 = kExprLexParenthesis;
-            ret.data.brc.closing = schar == b')';
+            ret.data = brace(schar == b')');
         }
         b'[' | b']' => {
             ret.type_0 = kExprLexBracket;
-            ret.data.brc.closing = schar == b']';
+            ret.data = brace(schar == b']');
         }
         b'{' | b'}' => {
             ret.type_0 = kExprLexFigureBrace;
-            ret.data.brc.closing = schar == b'}';
+            ret.data = brace(schar == b'}');
         }
         b'?' => ret.type_0 = kExprLexQuestion,
         b':' => ret.type_0 = kExprLexColon,
         b',' => ret.type_0 = kExprLexComma,
         b'*' | b'/' | b'%' => {
             ret.type_0 = kExprLexMultiplication;
-            ret.data.mul.type_0 = match schar {
-                b'*' => kExprLexMulMul,
-                b'/' => kExprLexMulDiv,
-                _ => kExprLexMulMod,
-            };
+            ret.data = LexExprTokenData::Multiplication(LexExprTokenMultiplication {
+                type_0: match schar {
+                    b'*' => kExprLexMulMul,
+                    b'/' => kExprLexMulDiv,
+                    _ => kExprLexMulMod,
+                },
+            });
         }
         b' ' | b'\t' => {
             ret.type_0 = kExprLexSpacing;
@@ -467,8 +528,10 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         0x01..=0x08 | 0x0b..=0x1a => {
             ret.type_0 = kExprLexInvalid;
             ret.len = scan_while(line, ret.len, |b| b < b' ');
-            ret.data.err.type_0 = kExprLexSpacing;
-            ret.data.err.msg = translate(c"E15: Invalid control character present in input: %.*s");
+            ret.data = lex_error(
+                kExprLexSpacing,
+                c"E15: Invalid control character present in input: %.*s",
+            );
         }
         b'0'..=b'9' => scan_number(&mut ret, line, flags),
         b'$' => {
@@ -479,12 +542,13 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         b'&' => scan_option(&mut ret, line),
         b'@' => {
             ret.type_0 = kExprLexRegister;
-            if line.len() > 1 {
+            let name = if line.len() > 1 {
                 ret.len += 1;
-                ret.data.reg.name = c_int::from(line[1]);
+                c_int::from(line[1])
             } else {
-                ret.data.reg.name = -1;
-            }
+                -1
+            };
+            ret.data = LexExprTokenData::Register(LexExprTokenRegister { name });
         }
         b'\'' => scan_single_quoted(&mut ret, line),
         b'"' => scan_double_quoted(&mut ret, line),
@@ -497,7 +561,7 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
             } else if line.len() > 1 && line[1] == b'=' {
                 ret.len += 1;
                 ret.type_0 = kExprLexAssignment;
-                ret.data.ass.type_0 = kExprAsgnSubtract;
+                ret.data = assignment(kExprAsgnSubtract);
             } else {
                 ret.type_0 = kExprLexMinus;
             }
@@ -511,7 +575,7 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
             if line.len() > 1 && line[1] == b'=' {
                 ret.len += 1;
                 ret.type_0 = kExprLexAssignment;
-                ret.data.ass.type_0 = augmented;
+                ret.data = assignment(augmented);
             } else {
                 ret.type_0 = plain;
             }
@@ -520,8 +584,7 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         b'\0' | b'\n' => {
             if flags & kELFlagForbidEOC as c_int != 0 {
                 ret.type_0 = kExprLexInvalid;
-                ret.data.err.msg = translate(c"E15: Unexpected EOC character: %.*s");
-                ret.data.err.type_0 = kExprLexSpacing;
+                ret.data = lex_error(kExprLexSpacing, c"E15: Unexpected EOC character: %.*s");
             } else {
                 ret.type_0 = kExprLexEOC;
             }
@@ -534,8 +597,7 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
                 // Note: `<C-r>=1 | 2<CR>` yields 1 in Vim, with no error at
                 // all. That is deliberately not what happens here.
                 ret.type_0 = kExprLexInvalid;
-                ret.data.err.msg = translate(c"E15: Unexpected EOC character: %.*s");
-                ret.data.err.type_0 = kExprLexOr;
+                ret.data = lex_error(kExprLexOr, c"E15: Unexpected EOC character: %.*s");
             } else {
                 ret.type_0 = kExprLexEOC;
             }
@@ -543,8 +605,10 @@ fn scan(line: &[u8], start: ParserPosition, flags: c_int) -> LexExprToken {
         _ => {
             ret.len = first_char_len(line);
             ret.type_0 = kExprLexInvalid;
-            ret.data.err.type_0 = kExprLexPlainIdentifier;
-            ret.data.err.msg = translate(c"E15: Unidentified character: %.*s");
+            ret.data = lex_error(
+                kExprLexPlainIdentifier,
+                c"E15: Unidentified character: %.*s",
+            );
         }
     }
     ret

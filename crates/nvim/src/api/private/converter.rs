@@ -41,8 +41,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::eval::decode::decode_string;
 use crate::eval::typval::{
-    DictSlot, TV_INITIAL_VALUE, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
-    tv_list_append_owned_tv,
+    DictSlot, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
 };
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
 use crate::eval::userfunc::FuncFlags;
@@ -50,8 +49,8 @@ use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
-    ApiDict, Array, Blob, BoolVarValue, DictItem, DictKey, Float, Integer, KeyValuePair, Object,
-    String_0, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
+    ApiDict, Array, Blob, BoolVarValue, DictItem, DictKey, Float, Integer, KeyValuePair, ListItem,
+    Object, String_0, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull,
     size_t,
@@ -374,9 +373,7 @@ impl From<Object> for TypVal {
     /// every Lua reference below it moves into the funcref that names it,
     /// rather than a second reference being made.
     fn from(value: Object) -> Self {
-        let mut tv = TV_INITIAL_VALUE;
-        object_to_vim(value, &mut tv, true);
-        tv
+        object_to_vim(value, true)
     }
 }
 
@@ -384,9 +381,7 @@ impl From<&Object> for TypVal {
     /// [`From<Object>`](TypVal::from) over a borrow: the object keeps its
     /// Lua references and the answer gets its own.
     fn from(value: &Object) -> Self {
-        let mut tv = TV_INITIAL_VALUE;
-        object_to_vim(value.clone(), &mut tv, false);
-        tv
+        object_to_vim(value.clone(), false)
     }
 }
 
@@ -397,52 +392,48 @@ impl From<&Object> for TypVal {
 /// direction, where `value` is already a clone and the clone's reference is
 /// the one being handed over -- so the flag is `false` and the clone's
 /// reference is released with it).
-fn object_to_vim(value: Object, tv: &mut TypVal, take_luaref: bool) {
+fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
     match value.kind() {
-        kObjectTypeNil => tv.write_special(kSpecialVarNull),
+        kObjectTypeNil => TypVal::Special(kSpecialVarNull),
         kObjectTypeBoolean => {
             let on = value.as_boolean().expect("the tag says Boolean");
-            tv.write_boolean(if on { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue);
+            TypVal::Bool(if on { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue)
         }
+        kObjectTypeInteger => TypVal::Number(value.as_integer().expect("the tag says Integer")),
         // A handle is an integer with a wire type of its own; Vimscript has
         // no separate notion of one.
-        kObjectTypeInteger => tv.write_number(value.as_integer().expect("the tag says Integer")),
         kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
-            tv.write_number(value.as_handle().expect("the tag says a handle"));
+            TypVal::Number(value.as_handle().expect("the tag says a handle"))
         }
-        kObjectTypeFloat => tv.write_float(value.as_float().expect("the tag says Float")),
+        kObjectTypeFloat => TypVal::Float(value.as_float().expect("the tag says Float")),
         kObjectTypeString => {
             let str = value.into_string().expect("the tag says String");
             // SAFETY: the string names `len` readable bytes.
-            *tv = unsafe { decode_string(str.data(), str.len(), false, false) };
+            unsafe { decode_string(str.data(), str.len(), false, false) }
         }
         kObjectTypeArray => {
             let array = value.into_array().expect("the tag says Array");
-            let list = tv_list_alloc(array.len().cast_signed());
-            let into = list.as_ptr();
+            let mut list = tv_list_alloc(array.len().cast_signed());
             for item in array {
-                let mut li_tv: TypVal = TV_INITIAL_VALUE;
-                object_to_vim(item, &mut li_tv, take_luaref);
-                // SAFETY: `into` is the list just allocated, and `li_tv` is
-                // this frame's.
-                unsafe { tv_list_append_owned_tv(into, li_tv) };
+                list.lv_items
+                    .push(ListItem::new(object_to_vim(item, take_luaref)));
             }
-            tv.write_list(Some(list));
+            TypVal::list(Some(list))
         }
         kObjectTypeDict => {
             let pairs = value.into_dict().expect("the tag says Dict");
-            let dict_held = tv_dict_alloc();
-            let dict = dict_held.as_ptr();
+            let dict = tv_dict_alloc();
             for KeyValuePair { key, value } in pairs {
+                let item_tv = object_to_vim(value, take_luaref);
                 // SAFETY: a key is a NUL-terminated name, and `di` is the
                 // item just allocated for it.
                 unsafe {
                     let di: *mut DictItem = tv_dict_item_alloc(key.as_ptr());
-                    object_to_vim(value, &mut (*di).di_tv, take_luaref);
-                    let _ = tv_dict_add(dict, di);
+                    (*di).di_tv = item_tv;
+                    let _ = tv_dict_add(dict.as_ptr(), di);
                 }
             }
-            tv.write_dict(Some(dict_held));
+            TypVal::dict(Some(dict))
         }
         kObjectTypeLuaRef => {
             let reference = if take_luaref {
@@ -454,10 +445,8 @@ fn object_to_vim(value: Object, tv: &mut TypVal, take_luaref: bool) {
                 unsafe { api_new_luaref(borrowed) }
             };
             // SAFETY: `register_luafunc` answers a NUL-terminated name owned
-            // by the registry.
-            let name = unsafe { register_luafunc(reference) };
-            // SAFETY: `name` is that name.
-            tv.write_func_name(unsafe { xstrdup(name) });
+            // by the registry, and `xstrdup` copies it.
+            TypVal::Func(unsafe { xstrdup(register_luafunc(reference)) })
         }
         // `kind()` answers one of the eleven above.
         _ => unreachable!("an Object carries one of the eleven tags"),

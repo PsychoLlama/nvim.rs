@@ -119,92 +119,92 @@ pub struct LexExprToken {
     pub type_0: LexExprTokenType,
     pub data: LexExprTokenData,
 }
-/// A lexed token's payload, read back as the member `LexExprToken::type_0`
-/// selects -- and, in two places, as a member it does not.
+/// A lexed token's payload: the arm `LexExprToken::type_0` names, or
+/// [`Blank`](LexExprTokenData::Blank) for the types that carry nothing.
 ///
-/// **This union cannot become an enum.** `values::option` asks an invalid
-/// option token for `opt.scope` and `operators::comparison` asks an invalid
-/// comparison for `cmp.ccs`, over bytes the lexer wrote as `err`; neither
-/// offset is covered by that write, so the answer is whatever the frame last
-/// held, and both answers reach the highlight list
-/// `nvim_parse_expression` hands back. The C reads the same bytes. An enum
-/// would have to invent a value, which is a different observable behaviour;
-/// see the note above the accessors in `parse.rs`, and
-/// `blank_token`'s `mem::zeroed`, which is load-bearing for the same reason.
+/// The C is a union, and the parser reads the *wrong* member of it twice --
+/// `values::option` asks an invalid option token for `opt.scope`, and
+/// `operators::comparison` asks an invalid comparison for `cmp.ccs`, over
+/// bytes the lexer wrote as `err`. Both answers reach the highlight list
+/// `nvim_parse_expression` hands back, so both are behaviour. Neither is
+/// garbage, though: the whole union starts zeroed (`blank_token`), `err`
+/// covers only its first two members, and the one write that survives it is
+/// the option scope -- which is why [`LexExprTokenError`] names that scope
+/// outright. Every other arm answers its zero, which is what the C reads
+/// there. See the accessors in `parse.rs`.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union LexExprTokenData {
-    pub cmp: LexExprTokenComparison,
-    pub mul: LexExprTokenMultiplication,
-    pub brc: LexExprTokenBrace,
-    pub reg: LexExprTokenRegister,
-    pub str: LexExprTokenString,
-    pub opt: LexExprTokenOption,
-    pub var: LexExprTokenVar,
-    pub err: LexExprTokenError,
-    pub num: LexExprTokenNumber,
-    pub ass: LexExprTokenAssignment,
+pub enum LexExprTokenData {
+    /// No payload: a token whose type says everything about it, and what
+    /// every token starts as.
+    Blank,
+    Comparison(LexExprTokenComparison),
+    Multiplication(LexExprTokenMultiplication),
+    Brace(LexExprTokenBrace),
+    Register(LexExprTokenRegister),
+    Str(LexExprTokenString),
+    Option(LexExprTokenOption),
+    Var(LexExprTokenVar),
+    Error(LexExprTokenError),
+    Number(LexExprTokenNumber),
+    Assignment(LexExprTokenAssignment),
 }
 
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenAssignment {
     pub type_0: ExprAssignmentType,
 }
+/// A number literal: its value, and the base its prefix named -- which is
+/// what decides how much of the token the `NumberPrefix` highlight covers.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenNumber {
     pub val: LexExprTokenNumberValue,
     pub base: uint8_t,
-    pub is_float: bool,
 }
-/// A number literal's value, read back as `LexExprTokenNumber::is_float`
-/// selects. Nested inside [`LexExprTokenData`], so it keeps that union's
-/// keep: a member of a union has to be plain data, and reading a *stale*
-/// discriminant is exactly what the outer union's two deliberate cross-arm
-/// reads do.
+/// A number literal's value.  The C pairs a union with the `is_float` flag
+/// that selects it; the flag *is* the tag here.
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union LexExprTokenNumberValue {
-    pub floating: Float,
-    pub integer: UVarNumber,
+pub enum LexExprTokenNumberValue {
+    Integer(UVarNumber),
+    Floating(Float),
 }
+/// What an invalid token was trying to be, and why it is not.
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenError {
     pub type_0: LexExprTokenType,
     pub msg: *const ::core::ffi::c_char,
+    /// The scope an invalid *option* token had already read out of `&g:`
+    /// before its name turned out to be missing.
+    ///
+    /// The C keeps this by accident -- `err` overwrites the first two
+    /// members of the union and `opt.scope` is the third, so the scope
+    /// stands -- and `values::option` reads it back to decide whether to
+    /// highlight a scope prefix. Carried rather than left to the layout.
+    pub opt_scope: ExprOptScope,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenVar {
     pub scope: ExprVarScope,
     pub autoload: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenOption {
     pub name: *const ::core::ffi::c_char,
     pub len: size_t,
     pub scope: ExprOptScope,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenString {
     pub closed: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenRegister {
     pub name: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenBrace {
     pub closing: bool,
 }
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenMultiplication {
     pub type_0: ExprLexMulType,
 }
@@ -213,7 +213,6 @@ pub const kExprLexMulMod: ExprLexMulType = 2;
 pub const kExprLexMulDiv: ExprLexMulType = 1;
 pub const kExprLexMulMul: ExprLexMulType = 0;
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct LexExprTokenComparison {
     pub type_0: ExprComparisonType,
     pub ccs: ExprCaseCompareStrategy,

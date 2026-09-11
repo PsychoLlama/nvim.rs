@@ -377,14 +377,13 @@ pub(super) unsafe fn parse_quoted_string(
     token: LexExprToken,
     is_invalid: bool,
 ) {
+    let closed = size_t::from(token.string_is_closed());
     // SAFETY: `token` came from this parser, so `start.line` indexes a line
-    // the reader is still holding and `start.col + len` is inside it. Reading
-    // `str.closed` is reading the variant the token's type names.
-    let (line, closed, colors) = unsafe {
+    // the reader is still holding and `start.col + len` is inside it.
+    let (line, colors) = unsafe {
         let pline = *(*pstate).reader.lines.items.add(token.start.line);
         (
             slice::from_raw_parts(pline.data.cast::<uint8_t>(), pline.size),
-            size_t::from(token.data.str.closed),
             !(*pstate).colors.is_null(),
         )
     };

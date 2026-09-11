@@ -144,32 +144,28 @@ pub(super) fn number(p: &mut ExprParser) -> Flow {
         );
         p.hl_token(hl!(p, IdentifierKey));
         node
-    } else if p.cur_token.number().is_float {
-        let node = p.new_node(kExprNodeFloat);
-        set_node_data(
-            node,
-            ExprNodeData::Float(ExprNodeFloat {
-                value: p.cur_token.number_float(),
-            }),
-        );
-        p.hl_token(hl!(p, Float));
-        node
     } else {
-        let node = p.new_node(kExprNodeInteger);
-        set_node_data(
-            node,
-            ExprNodeData::Integer(ExprNodeInteger {
-                value: p.cur_token.number_integer(),
-            }),
-        );
-        let prefix_length = base_to_prefix_length[p.cur_token.number().base as usize] as size_t;
-        p.hl_at(p.cur_token.start, prefix_length, hl!(p, NumberPrefix));
-        p.hl_at(
-            shifted_pos(p.cur_token.start, prefix_length),
-            p.cur_token.len.wrapping_sub(prefix_length),
-            hl!(p, Number),
-        );
-        node
+        let number = p.cur_token.number();
+        match number.val {
+            LexExprTokenNumberValue::Floating(value) => {
+                let node = p.new_node(kExprNodeFloat);
+                set_node_data(node, ExprNodeData::Float(ExprNodeFloat { value }));
+                p.hl_token(hl!(p, Float));
+                node
+            }
+            LexExprTokenNumberValue::Integer(value) => {
+                let node = p.new_node(kExprNodeInteger);
+                set_node_data(node, ExprNodeData::Integer(ExprNodeInteger { value }));
+                let prefix_length = base_to_prefix_length[number.base as usize] as size_t;
+                p.hl_at(p.cur_token.start, prefix_length, hl!(p, NumberPrefix));
+                p.hl_at(
+                    shifted_pos(p.cur_token.start, prefix_length),
+                    p.cur_token.len.wrapping_sub(prefix_length),
+                    hl!(p, Number),
+                );
+                node
+            }
+        }
     };
     p.want_node = kENodeOperator;
     set_slot_node(p.top_node_p, node);

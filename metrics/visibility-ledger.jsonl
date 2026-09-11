@@ -651,6 +651,8 @@
 {"path":"neovim::undo::format::*","kind":"glob","file":"crates/nvim/src/undo/format.rs","tests":["crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::undo::format::UF_START_MAGIC","kind":"const","file":"crates/nvim/src/undo/format.rs","tests":["crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::viml::parser::expressions::LexExprToken","kind":"struct","file":"crates/nvim/src/viml/parser/expressions/mod.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
+{"path":"neovim::viml::parser::expressions::LexExprTokenData","kind":"enum","file":"crates/nvim/src/viml/parser/expressions/mod.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
+{"path":"neovim::viml::parser::expressions::LexExprTokenNumberValue","kind":"enum","file":"crates/nvim/src/viml/parser/expressions/mod.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
 {"path":"neovim::viml::parser::expressions::LexExprTokenType","kind":"type","file":"crates/nvim/src/viml/parser/expressions/mod.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
 {"path":"neovim::viml::parser::expressions::ccs_tab","kind":"static","file":"crates/nvim/src/viml/parser/expressions/ast.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
 {"path":"neovim::viml::parser::expressions::east_node_type_tab","kind":"static","file":"crates/nvim/src/viml/parser/expressions/ast.rs","tests":["crates/nvim/tests/unit/expressions.rs"]}
