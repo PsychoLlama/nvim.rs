@@ -271,7 +271,7 @@ visibility-ledger *args:
   @scripts/visibility-ledger.py {{ args }}
 
 # Regenerate the ratchet baseline (metrics/ratchet.json): per-file
-# unchecked-line / static mut / #[no_mangle] / variadic / GlobalCell-ptr
+# unchecked-statement / static mut / #[no_mangle] / variadic / GlobalCell-ptr
 # counts, file sizes (1k-line cap, current offenders grandfathered), the size
 # of the crate's `pub` surface, and a count from each ledger may only shrink.
 # `--check` compares against the committed baseline instead.

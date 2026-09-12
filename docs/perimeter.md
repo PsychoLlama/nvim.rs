@@ -1,20 +1,21 @@
 # The unsafe perimeter
 
-The tree carries ~71k lines of unchecked code, and reading that as one number
-is misleading: some of it is transpiled editor logic that safe Rust will
-eventually replace, and some of it is the seam where this program meets a C
-library, the operating system, or raw memory — code that will still be
+The tree carries some 42,000 statements of unchecked code, and reading that as
+one number is misleading: some of it is transpiled editor logic that safe Rust
+will eventually replace, and some of it is the seam where this program meets a
+C library, the operating system, or raw memory — code that will still be
 `unsafe` when the migration is finished, because the thing on the other side
 cannot be rewritten from here.
 
 The **perimeter** is that second part, named explicitly. What is left over is
 the migration's debt, counted by the ratchet as
-`unsafe_lines_outside_perimeter` and shrink-only like every other metric. That
+`unsafe_stmts_outside_perimeter` and shrink-only like every other metric. That
 number is the one to drive to zero.
 
-Today: **12,686** unchecked lines inside the perimeter (136 files),
-**42,811** outside it (863 files, of 1,348 measured). It was 138,877 when
-this file was written, at the end of phase 23's slice 15.
+Today: **7,585** unchecked statements inside the perimeter (136 files),
+**34,732** outside it (863 files, of 1,348 measured). It was 138,877 when this
+file was written, at the end of phase 23's slice 15 — in _lines_, which is what
+this metric counted until phase 31 changed the unit to statements.
 
 ## What qualifies
 
@@ -51,23 +52,23 @@ should move out of the module rather than be carved out of the list.
 
 | module                     | files | unchecked | why, and what would retire it                                                                                                                     |
 | -------------------------- | ----: | --------: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lua/`                     |    59 |     6,508 | LuaJIT's C API: a `lua_State`, its stack and the registry, plus luv and lpeg. Retires with the embedded interpreter, not before.                  |
-| `lua/treesitter/`          |    10 |     1,908 | (inside `lua/`, listed for its own reason) the tree-sitter C library — parsers, trees, queries and cursors are opaque C objects with C lifetimes. |
-| `mpack/lmpack/`            |     3 |       899 | libmpack-lua: a Lua C module, so every value it moves crosses the `lua_State` stack.                                                              |
-| `cjson/lua_cjson/`         |     3 |       292 | lua-cjson: a Lua C module, same stack.                                                                                                            |
-| `event/`                   |    11 |       969 | libuv: the loop, streams, timers, signals and processes are C objects registered by address.                                                      |
-| `os/`                      |    21 |     2,419 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                               |
-| `vterm/`                   |    11 |       292 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                          |
-| `terminal/`                |     7 |       254 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                           |
-| `tui/`                     |    14 |     1,236 | The terminal: libuv tty handles, termkey's parser, the terminfo entry unibilium hands back.                                                       |
-| `xdiff/`                   |     1 |        40 | libxdiff, vendored: `mmfile_t` and the emit callbacks keep their C layout because the engine's interface is C.                                    |
-| `allocator.rs`             |     1 |        38 | The global allocator: malloc/realloc/free.                                                                                                        |
-| `memory/`                  |     2 |       141 | `xmalloc` and the arena — the floor under every owned type in the tree.                                                                           |
+| `lua/`                     |    56 |     3,555 | LuaJIT's C API: a `lua_State`, its stack and the registry, plus luv and lpeg. Retires with the embedded interpreter, not before.                  |
+| `lua/treesitter/`          |    10 |       874 | (inside `lua/`, listed for its own reason) the tree-sitter C library — parsers, trees, queries and cursors are opaque C objects with C lifetimes. |
+| `mpack/lmpack/`            |     3 |       528 | libmpack-lua: a Lua C module, so every value it moves crosses the `lua_State` stack.                                                              |
+| `cjson/lua_cjson/`         |     3 |       178 | lua-cjson: a Lua C module, same stack.                                                                                                            |
+| `event/`                   |    11 |       562 | libuv: the loop, streams, timers, signals and processes are C objects registered by address.                                                      |
+| `os/`                      |    21 |     1,306 | The operating system: libc and libuv syscalls, the PTY, the shell, the environment.                                                               |
+| `vterm/`                   |    11 |       283 | libvterm, ported with its C ABI intact — the callbacks it takes and the symbols it exports are that library's interface.                          |
+| `terminal/`                |     7 |       206 | The emulator's glue: a PTY on one side, libvterm's `extern "C"` callbacks on the other.                                                           |
+| `tui/`                     |    14 |       585 | The terminal: libuv tty handles, termkey's parser, the terminfo entry unibilium hands back.                                                       |
+| `xdiff/`                   |     1 |         8 | libxdiff, vendored: `mmfile_t` and the emit callbacks keep their C layout because the engine's interface is C.                                    |
+| `allocator.rs`             |     1 |        21 | The global allocator: malloc/realloc/free.                                                                                                        |
+| `memory/`                  |     2 |       113 | `xmalloc` and the arena — the floor under every owned type in the tree.                                                                           |
 | `global_cell.rs`           |     1 |         9 | The checked wrapper over c2rust's mutable statics; the raw static is touched here so it is nowhere else.                                          |
-| `winlayer.rs`, `winlayer/` |     2 |        26 | The window/buffer/position handles: constructing one is the unsafe step, dereferencing it is not.                                                 |
-| `memfile/`                 |     2 |       400 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                          |
+| `winlayer.rs`, `winlayer/` |     3 |        28 | The window/buffer/position handles: constructing one is the unsafe step, dereferencing it is not.                                                 |
+| `memfile/`                 |     2 |       203 | The swap file's page store — the only thing that hands out the address of a `.swp` page.                                                          |
 
-Paths are relative to `crates/nvim/src/`. Counts are `unsafe_lines` from
+Paths are relative to `crates/nvim/src/`. Counts are `unsafe_stmts` from
 `metrics/ratchet.json` and drift as work lands; the list, not the table, is
 the contract.
 
@@ -76,14 +77,18 @@ the contract.
 `PERIMETER` in `scripts/ratchet.py` is the list, one entry per row above, each
 carrying its reason. Four things follow from it:
 
-- **`unsafe_lines_outside_perimeter`** — the tree's unchecked lines minus the
-  perimeter's — is recorded in `metrics/ratchet.json` and may only shrink.
+- **`unsafe_stmts_outside_perimeter`** — the tree's unchecked statements minus
+  the perimeter's — is recorded in `metrics/ratchet.json` and may only shrink.
+  A region is charged by what it _does_: every `;`-terminated statement, every
+  block's tail expression and every `match` arm, at every depth, minimum one.
+  Splitting `unsafe { a; b; c }` into three regions is not progress; deleting
+  an operation is.
 - **The list is self-pruning.** `check_perimeter` fails the run when an entry
-  has no file with unchecked lines behind it, so a module that finishes,
+  has no file with unchecked code behind it, so a module that finishes,
   moves or disappears has to leave the list in the same commit. A module
   reaching zero is the outcome the list is for, and it has to say so.
 - **The perimeter cannot silently grow.** It needs no check of its own for
-  that: every file's `unsafe_lines` is already ratcheted individually, a
+  that: every file's `unsafe_stmts` is already ratcheted individually, a
   brand-new file included, so unchecked code appearing inside the perimeter is
   a violation exactly as it is outside — and moving an unsafe file into a
   perimeter module shows up as a new path at full size.
@@ -91,8 +96,8 @@ carrying its reason. Four things follow from it:
 - **The "Today" line above is written, not typed.** `sync_perimeter_doc`
   rewrites its five numbers from the same measurement, and the `--check` form
   fails when they are stale. Hand-maintained, all five drifted — the line
-  claimed 48,358 lines outside against a real 47,002 — and a number in prose
-  that nothing checks is a number nobody can cite.
+  claimed 48,358 outside against a real 47,002 — and a number in prose that
+  nothing checks is a number nobody can cite.
 
 To add an entry: put the path and its reason in `PERIMETER`, add the row here,
 run `just refresh`, and justify it in the commit message. The number this
@@ -128,7 +133,7 @@ else. Three rules about that line:
   the difference visible while reading the file rather than the list.
 - **Every other file carries it bare.** There is no reason to write, because
   the count is the reason: those files are the migration's debt, the same
-  population `unsafe_lines_outside_perimeter` measures, and each one that
+  population `unsafe_stmts_outside_perimeter` measures, and each one that
   finishes drops the allow for a `forbid` and the total falls by one. The
   exception is the dozen non-perimeter files exporting a C symbol somebody
   else resolves: they name their `metrics/abi-ledger.jsonl` rows, because the

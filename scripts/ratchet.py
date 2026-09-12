@@ -7,30 +7,42 @@ Rust source file (crates/*/src/**/*.rs plus the crate-root .rs files;
 integration tests under crates/*/tests are not migration surface and stay
 unmeasured, as they were when they lived at the repo root):
 
-  unsafe_lines  lines of *code* the compiler is not checking: the lines
-              spanned by an `unsafe {}` block, by an `unsafe extern` block,
-              or by the body of an `unsafe fn` in a file that has not
-              adopted #![deny(unsafe_op_in_unsafe_fn)] (there the body is
-              implicitly unsafe throughout, which is exactly what the metric
-              is about). Spans are unioned, so a nested block never counts
-              twice, and blank/comment-only lines are excluded, so a SAFETY
-              comment is free and a rewrite is never penalised for
-              explaining itself. `unsafe impl`/`unsafe trait` cost their
-              header line — an unchecked promise with nowhere else to book
-              it. An `unsafe fn` *type* (a function pointer) costs nothing:
-              the obligation is paid where it is called.
+  unsafe_stmts  statements of *code* the compiler is not checking: the
+              statements inside an `unsafe {}` block, inside an `unsafe
+              extern` block, or in the body of an `unsafe fn` in a file that
+              has not adopted #![deny(unsafe_op_in_unsafe_fn)] (there the body
+              is implicitly unsafe throughout, which is exactly what the
+              metric is about). A region is charged by what it *does*: every
+              `;`-terminated statement, every block's tail expression and
+              every `match` arm, at every depth, minimum one. A nested
+              `unsafe {}` inside a charged region costs nothing; `unsafe
+              impl`/`unsafe trait` and a bodyless declaration cost one — an
+              unchecked promise with nowhere else to book it. An `unsafe fn`
+              *type* (a function pointer) costs nothing: the obligation is
+              paid where it is called. A comment is free, so a SAFETY note
+              costs nothing, and so is layout: a call rustfmt wrapped over
+              four lines is one statement, as it was on one.
 
-              This metric used to count `unsafe {}` *blocks*, and blocks and
-              the goal diverge on exactly the change the migration wants
-              most. Splitting a 700-line transpiled body into fifteen
-              functions with narrow blocks books fifteen units where there
-              was one: edit.rs went 89 -> 104 blocks across phase 15 while
-              its clippy count went 33 -> 0. Lines-of-unchecked-code moves
-              the right way for every shape: narrowing a block lowers it,
-              deleting unsafe code lowers it, adopting the deny and wrapping
-              a body is neutral, and adding unchecked code raises it. It is
-              also the number that states the goal — phase by phase, how
-              much of the editor the compiler still cannot vouch for.
+              This metric counted *lines* until phase 31, and lines are
+              gameable in the one direction that matters: `unsafe { a; b; c }`
+              spread over five lines cost 5 and the same three calls in three
+              one-line regions cost 3, so splitting a region scored as
+              progress while the tree did exactly as much unchecked work as
+              before. Statements price the work. Counting only a region's
+              *top level* would be wrong the other way round — it prices
+              `unsafe { loop { ..fifty lines.. } }` at 1, and the c2rust
+              blanket a phase of work removed would come back free — so the
+              charge recurses.
+
+              Before lines it counted `unsafe {}` *blocks*, which diverged
+              from the goal on exactly the change the migration wants most:
+              splitting a 700-line transpiled body into fifteen functions
+              with narrow blocks booked fifteen units where there was one
+              (edit.rs went 89 -> 104 blocks across phase 15 while its clippy
+              count went 33 -> 0). The statement charge keeps lines' answer to
+              that — narrowing a region lowers it, deleting unchecked code
+              lowers it, adopting the deny and wrapping a body is neutral —
+              and adds the one lines got wrong.
 
   static_mut  occurrences of "static mut "
   no_mangle   occurrences of "#[unsafe(no_mangle)]"
@@ -112,7 +124,7 @@ unmeasured, as they were when they lived at the repo root):
               written would have forced a split of the *production* code that
               nothing about the production code justified.
 
-              Nothing else is exempt. `unsafe_lines`, `missing_safety_doc`,
+              Nothing else is exempt. `unsafe_stmts`, `missing_safety_doc`,
               `cell_ptr` and the rest are still counted inside a test module,
               because unchecked code in a test is still unchecked code and a
               test is a fine place to be pushed away from writing it. Only
@@ -246,8 +258,8 @@ plus these whole-tree metrics, which are not per-file:
                     still declares a cell, so a deleted global cannot leave a
                     stale entry propping the floor up.
 
-  unsafe_lines_outside_perimeter
-                    `unsafe_lines` restricted to files that are *not* on the
+  unsafe_stmts_outside_perimeter
+                    `unsafe_stmts` restricted to files that are *not* on the
                     unsafe perimeter (PERIMETER, below) — the tree's unchecked
                     code minus the part that is expected to stay unchecked.
                     This is the migration's debt number: the total says how
@@ -282,7 +294,7 @@ plus these whole-tree metrics, which are not per-file:
                     leave the list in the same commit — the discipline
                     CELL_PTR_KEEPERS already uses. It cannot silently *grow*
                     either, and needs no check of its own for that: every
-                    file's `unsafe_lines` is already ratcheted individually,
+                    file's `unsafe_stmts` is already ratcheted individually,
                     a new file included, so unchecked code appearing inside
                     the perimeter is a violation exactly as it is outside.
 
@@ -362,7 +374,7 @@ plus these whole-tree metrics, which are not per-file:
                         hoisted under `types/`, whose layout belongs to
                         libuv, libvterm, libtermkey, LuaJIT or libc. Not
                         debt -- but ratcheted anyway, the way a perimeter
-                        module's `unsafe_lines` are, so a new one is visible.
+                        module's `unsafe_stmts` are, so a new one is visible.
                       repr_c_editor_state  `#[repr(C)]` everywhere else
                         outside PERIMETER: this tree's own aggregates, which
                         is transpiler residue except where a codec, a
@@ -467,7 +479,7 @@ plus these whole-tree metrics, which are not per-file:
                         reads outside `winlayer`, which is the module whose
                         job it is to turn those globals into handles. The
                         same outside-a-home shape as
-                        `unsafe_lines_outside_perimeter`: the reads inside
+                        `unsafe_stmts_outside_perimeter`: the reads inside
                         the home are the implementation, the ones outside are
                         the debt.
 
@@ -913,7 +925,7 @@ CELL_DECL = r"\bstatic\s+{}\s*:\s*(?:GlobalCell|SharedCell)\b"
 
 # The unsafe perimeter: the modules whose unchecked code is expected to
 # outlive the migration, because removing it would mean rewriting something
-# this tree does not own. `unsafe_lines_outside_perimeter` is the tree's
+# this tree does not own. `unsafe_stmts_outside_perimeter` is the tree's
 # unchecked lines minus these; docs/perimeter.md carries the prose. An entry
 # is a directory prefix (trailing `/`) or one exact path, and every entry must
 # have a file with unchecked lines behind it or `check_perimeter` fails --
@@ -1056,7 +1068,7 @@ VOCABULARY = {
 REPR_C = re.compile(r"#\[repr\(\s*C\s*[,)]")
 
 # The same, but counted only in files *outside* a home — the shape
-# `unsafe_lines_outside_perimeter` established. name -> (needle, home).
+# `unsafe_stmts_outside_perimeter` established. name -> (needle, home).
 VOCABULARY_OUTSIDE = {
     "repr_c_editor_state": (REPR_C, {**PERIMETER, **FOREIGN_ABI_TYPES}),
     "curwin_raw": (re.compile(r"\bcur(?:win|buf|tab)\s*\.\s*get\(\)"), WINLAYER),
@@ -1065,7 +1077,7 @@ VOCABULARY_OUTSIDE = {
 # in a foreign ABI's type file is that library's layout, not this tree's, so
 # it is not the same number as the residue and must not share a total with
 # it — but it is still ratcheted, exactly as a perimeter module's
-# `unsafe_lines` still are, so a new one has to say why.
+# `unsafe_stmts` still are, so a new one has to say why.
 VOCABULARY_INSIDE = {
     "repr_c_ffi_types": (REPR_C, FOREIGN_ABI_TYPES),
 }
@@ -1413,7 +1425,7 @@ CFG_TEST_MOD = re.compile(
 )
 
 # Metrics computed from the source rather than counted with a needle.
-DERIVED = ("unsafe_lines", "missing_safety_doc")
+DERIVED = ("unsafe_stmts", "missing_safety_doc")
 
 # `accessor().field = value` and its compound-assignment forms, which is a
 # silent no-op when `accessor` answers by value. Nullary on purpose: that is
@@ -1938,20 +1950,72 @@ def matching_brace(masked, open_at):
     return len(masked) - 1
 
 
-def unsafe_lines(masked, deny):
-    """Lines of code the compiler is not checking. See the module docs."""
-    starts = [0, *(m.end() for m in re.finditer("\n", masked))]
+# A `{` that opens a *struct literal* rather than a block: an UpperCamel head
+# (or `Self`) immediately before it. `Pos { lnum, col }` inside a region is one
+# expression, not a block with a tail, and charging it as a block would price
+# every initialiser twice. A SCREAMING_CASE constant before the brace
+# (`if flag == LOCAL {`) is deliberately not matched -- it is an `if`, and its
+# block's tail is real -- which is why the head must carry a lower-case letter.
+STRUCT_LITERAL = re.compile(r"(?:\bSelf|\b[A-Z][A-Za-z0-9_]*[a-z][A-Za-z0-9_]*)\s*$")
 
-    def lineno(offset):
-        """0-based line holding `offset`."""
-        return bisect_right(starts, offset) - 1
 
-    # Lines whose masked content is blank hold no code: comments (SAFETY
-    # notes included) and empty lines inside a block are free.
-    code_lines = {i for i, line in enumerate(masked.splitlines()) if line.strip()}
+def statements(body):
+    """How many statements a region's body holds, counted at every depth.
 
-    covered = set()
+    A region is charged by what it *does*, not by how it is laid out: each
+    `;`-terminated statement, each block's tail expression and each `match`
+    arm is one unit, wherever it sits. A multi-line call is one, a closure's
+    statements are the caller's (they are inside the region), and an empty
+    region is one -- a region that does nothing is still a promise.
+
+    Counting only the top level would be wrong in the one direction that
+    matters: `unsafe { loop { ..fifty lines.. } }` would price at 1, and the
+    c2rust blanket a phase of work removed would come back free.
+
+    `Ident {` with an UpperCamel head is a struct literal and not a block, so
+    its fields are not a tail expression to charge for.
+    """
+    charge = 0
+    # One frame per open brace: [is a block, holds an expression not yet
+    # charged, is a `match`'s arm list]. The outermost frame is the region
+    # body itself.
+    stack = [[True, False, False]]
+    i, n = 0, len(body)
+    while i < n:
+        char = body[i]
+        if char == "{":
+            block = not STRUCT_LITERAL.search(body, max(0, i - 64), i)
+            stack.append([block, False, False])
+        elif char == "}":
+            frame = stack.pop() if len(stack) > 1 else stack[0]
+            if frame[0] and frame[1] and not frame[2]:
+                charge += 1  # the block's tail expression
+            stack[-1][1] = True  # ... and the block is one itself
+        elif char == ";":
+            charge += 1
+            stack[-1][1] = False
+        elif body.startswith("=>", i):
+            charge += 1  # a match arm
+            stack[-1][2] = True  # ... and the arms are not a tail expression
+            i += 1
+        elif not char.isspace():
+            stack[-1][1] = True
+        i += 1
+    if stack[0][1] and not stack[0][2]:
+        charge += 1  # the region's own tail expression
+    return max(charge, 1)
+
+
+def unsafe_stmts(masked, deny):
+    """Statements of code the compiler is not checking. See the module docs."""
+    charge = 0
+    # Everything up to here is inside a region already charged: a nested
+    # `unsafe {}` costs nothing, and neither do the blocks of an `unsafe fn`
+    # body charged whole in a file without the deny.
+    charged_until = -1
     for match in UNSAFE_WORD.finditer(masked):
+        if match.start() < charged_until:
+            continue
         at = WHITESPACE.match(masked, match.end()).end()
         word = IDENT_AT.match(masked, at)
         keyword = word.group(0) if word else ""
@@ -1962,14 +2026,14 @@ def unsafe_lines(masked, deny):
             after = WHITESPACE.match(masked, word.end()).end()
             follows = IDENT_AT.match(masked, after)
             if after < len(masked) and masked[after] == "{":
-                body_at = after  # `unsafe extern "C" { ... }`
+                body_at = after  # `unsafe extern "C" { ... }`: its declarations
             elif follows and follows.group(0) == "fn":
                 word = follows  # `unsafe extern "C" fn ...`
                 keyword = "fn"
             else:
                 continue
         elif keyword in ("impl", "trait"):
-            covered.add(lineno(match.start()))
+            charge += 1  # an unchecked promise with nowhere else to book it
             continue
         elif keyword != "fn":
             continue  # `unsafe(no_mangle)` and friends: not a region
@@ -1983,13 +2047,14 @@ def unsafe_lines(masked, deny):
             brace = masked.find("{", named)
             semi = masked.find(";", named)
             if brace < 0 or 0 <= semi < brace:
-                covered.add(lineno(match.start()))  # a bodyless declaration
+                charge += 1  # a bodyless declaration
                 continue
             body_at = brace
 
-        span = range(lineno(match.start()), lineno(matching_brace(masked, body_at)) + 1)
-        covered.update(span)
-    return len(covered & code_lines)
+        close = matching_brace(masked, body_at)
+        charge += statements(masked[body_at + 1 : close])
+        charged_until = close
+    return charge
 
 
 def test_module_lines(masked):
@@ -2038,7 +2103,7 @@ def has_safety_doc(lines, at):
 def unsafe_fn_items(masked):
     """The offset of the `unsafe` keyword of every `unsafe fn` *item*.
 
-    Walks the same `unsafe` keyword occurrences `unsafe_lines` does and keeps
+    Walks the same `unsafe` keyword occurrences `unsafe_stmts` does and keeps
     the ones that introduce a *function* — a definition or a bodyless
     declaration, never a function-pointer type (`unsafe fn(..)`, whose
     obligation is paid where it is called) and never a declaration inside an
@@ -2106,7 +2171,7 @@ def measure():
         counts.update(
             (name, len(rx.findall(masked))) for name, rx in COUNTED_RE.items()
         )
-        counts["unsafe_lines"] = unsafe_lines(masked, DENY_UNSAFE_OP in masked)
+        counts["unsafe_stmts"] = unsafe_stmts(masked, DENY_UNSAFE_OP in masked)
         counts["missing_safety_doc"] = missing_safety_doc(text, masked)
         counts["lines"] = len(text.splitlines()) - len(test_module_lines(masked))
         stats[str(path.relative_to(ROOT))] = counts
@@ -2185,8 +2250,8 @@ def in_perimeter(file):
 
 def perimeter_lines(stats):
     """(unchecked lines inside the perimeter, unchecked lines outside it)."""
-    inside = sum(c["unsafe_lines"] for f, c in stats.items() if in_perimeter(f))
-    return inside, sum(c["unsafe_lines"] for c in stats.values()) - inside
+    inside = sum(c["unsafe_stmts"] for f, c in stats.items() if in_perimeter(f))
+    return inside, sum(c["unsafe_stmts"] for c in stats.values()) - inside
 
 
 def check_perimeter(stats):
@@ -2202,7 +2267,7 @@ def check_perimeter(stats):
         entry
         for entry in PERIMETER
         if not any(
-            counts["unsafe_lines"] and in_perimeter_entry(file, entry)
+            counts["unsafe_stmts"] and in_perimeter_entry(file, entry)
             for file, counts in stats.items()
         )
     ):
@@ -2237,14 +2302,14 @@ def perimeter_today(stats):
     `just fmt` unchanged and `--check` can compare the two literally.
     """
     inside, outside = perimeter_lines(stats)
-    counted = [c for c in stats.values() if c["unsafe_lines"]]
+    counted = [c for c in stats.values() if c["unsafe_stmts"]]
     inside_files = sum(
         1
         for file, counts in stats.items()
-        if counts["unsafe_lines"] and in_perimeter(file)
+        if counts["unsafe_stmts"] and in_perimeter(file)
     )
     return (
-        f"Today: **{inside:,}** unchecked lines inside the perimeter "
+        f"Today: **{inside:,}** unchecked statements inside the perimeter "
         f"({inside_files} files),\n"
         f"**{outside:,}** outside it ({len(counted) - inside_files} files, "
         f"of {len(stats):,} measured)."
@@ -2485,7 +2550,7 @@ def whole_tree(stats, tree, sites):
     """The name-keyed whole-tree counts. See the doc block."""
     return {
         **cell_ptr_partition(stats, tree),
-        "unsafe_lines_outside_perimeter": perimeter_lines(stats)[1],
+        "unsafe_stmts_outside_perimeter": perimeter_lines(stats)[1],
         "cell_copy_owner": sum(
             len(CELL_COPY_OWNER_RE.findall(m)) for m in tree.values()
         ),
@@ -2604,7 +2669,7 @@ WHOLE_TREE_LABEL = {
     "cell_ptr_keepers": "cell_ptr sites on a ruled multi-site keeper",
     "cell_ptr_accessors": "one-per-cell acquire-once cell_ptr sites",
     "cell_copy_owner": "get() copies of a Copy global owning a pointer",
-    "unsafe_lines_outside_perimeter": "unchecked lines outside the unsafe perimeter",
+    "unsafe_stmts_outside_perimeter": "unchecked statements outside the unsafe perimeter",
     # The C vocabulary, in the order the phases retire it.
     "c_int_returns": "`-> c_int` status-code returns",
     "ok_fail": "OK/FAIL returns and comparisons",
@@ -2724,7 +2789,7 @@ def summary(stats, counts, without_deny, without_casts, allowing):
         f"{counts['cell_ptr_keepers']} keeper cell_ptr sites",
         f"{counts['cell_ptr_accessors']} acquire-once cell_ptr sites",
         f"{counts['cell_copy_owner']} Copy-owner get()s",
-        f"{counts['unsafe_lines_outside_perimeter']} unchecked lines outside the "
+        f"{counts['unsafe_stmts_outside_perimeter']} unchecked statements outside the "
         f"perimeter ({perimeter_lines(stats)[0]} inside)",
         f"{without_deny} files without forbid(unsafe_code) or "
         "deny(unsafe_op_in_unsafe_fn)",
@@ -2737,41 +2802,88 @@ def summary(stats, counts, without_deny, without_casts, allowing):
 
 
 # Scanner cases, checked on every run (a few hundred microseconds against a
-# ~20 MB tree read). A silent regression in mask()/unsafe_lines() would
+# ~20 MB tree read). A silent regression in mask()/unsafe_stmts() would
 # corrupt every number the ratchet enforces, so this is not opt-in.
 SELF_TEST = [
-    # (source, expected unsafe_lines in a file without the deny)
-    ("fn f() {\n    unsafe {\n        g();\n    }\n}\n", 3),
+    # (source, expected unsafe_stmts in a file without the deny)
+    ("fn f() {\n    unsafe {\n        g();\n    }\n}\n", 1),
     ("fn f() {\n    let x = unsafe { *p };\n}\n", 1),
-    # Comments and blank lines inside a block are free.
-    ("fn f() {\n    unsafe {\n        // SAFETY: fine.\n\n        g();\n    }\n}\n", 3),
+    # Comments and blank lines inside a region are free.
+    ("fn f() {\n    unsafe {\n        // SAFETY: fine.\n\n        g();\n    }\n}\n", 1),
+    # ... and so is layout: a call rustfmt wrapped over four lines is one
+    # statement, which is the whole point of charging statements.
+    (
+        "fn f() {\n    unsafe {\n        g(\n            a,\n            b,\n        );\n    }\n}\n",
+        1,
+    ),
+    # Three statements cost three however they are spread, and splitting the
+    # region into three regions does not change that.
+    ("fn f() {\n    unsafe {\n        a();\n        b();\n        c();\n    }\n}\n", 3),
+    ("fn f() {\n    unsafe { a() };\n    unsafe { b() };\n    unsafe { c() };\n}\n", 3),
+    ("fn f() {\n    unsafe { (*p).a = 1; (*p).b = 2 }\n}\n", 2),
+    # A nested block's statements are charged too -- top-level-only counting
+    # would price a wrapped-up transpiled body at 1.
+    (
+        "fn f() {\n    unsafe {\n        loop {\n            a();\n            b();\n        }\n    }\n}\n",
+        3,
+    ),
+    # A closure's body is inside the region.
+    (
+        "fn f() {\n    unsafe {\n        g(|x| {\n            a(x);\n            b(x)\n        })\n    }\n}\n",
+        3,
+    ),
+    # Each `match` arm is a statement; the arms' own blocks charge on top.
+    (
+        "fn f() {\n    unsafe {\n        match k {\n            A => a(),\n            B => b(),\n        }\n    }\n}\n",
+        3,
+    ),
+    # A struct literal is one expression, not a block with a tail.
+    (
+        "fn f() {\n    unsafe {\n        Pos {\n            lnum: 1,\n            col: 2,\n        }\n    }\n}\n",
+        1,
+    ),
+    (
+        "fn f() {\n    unsafe {\n        Self {\n            n: 1,\n        }\n    }\n}\n",
+        1,
+    ),
+    # ... but a SCREAMING_CASE constant before a brace is an `if`, and its
+    # block's tail is real.
+    (
+        "fn f() {\n    unsafe {\n        if k == LOCAL {\n            a()\n        }\n    }\n}\n",
+        2,
+    ),
+    # An empty region still promises something.
+    ("fn f() {\n    unsafe {}\n}\n", 1),
     # Prose and strings never count.
     ("/// An unsafe fn would need one.\n/// unsafe { }\nfn f() {}\n", 0),
     ('fn f() {\n    let s = "unsafe { g(); }";\n}\n', 0),
     ('fn f() {\n    let s = r#"unsafe {"#;\n}\n', 0),
     ("/* unsafe { /* nested */ } */\nfn f() {}\n", 0),
     # A brace in a char literal must not desynchronise the scanner.
-    ("fn f() {\n    unsafe {\n        g('{');\n    }\n    h();\n}\n", 3),
+    ("fn f() {\n    unsafe {\n        g('{');\n    }\n    h();\n}\n", 1),
     # ... and neither must an escaped one. `'\\'` ends at its own quote; a
     # scanner that reads the second backslash as an escape runs on to the
     # next quote in the file and eats every brace in between.
-    ("fn f() {\n    unsafe {\n        g('\\\\');\n    }\n    h('x');\n}\n", 3),
-    ("fn f() {\n    unsafe {\n        g('\\'');\n    }\n    h('x');\n}\n", 3),
-    ("fn f() {\n    unsafe {\n        g('\\u{1b}');\n    }\n    h('x');\n}\n", 3),
+    ("fn f() {\n    unsafe {\n        g('\\\\');\n    }\n    h('x');\n}\n", 1),
+    ("fn f() {\n    unsafe {\n        g('\\'');\n    }\n    h('x');\n}\n", 1),
+    ("fn f() {\n    unsafe {\n        g('\\u{1b}');\n    }\n    h('x');\n}\n", 1),
     ("fn f<'a>(x: &'a u8) {}\n", 0),
     # An unsafe fn body is implicitly unsafe throughout without the deny.
-    ("unsafe fn f() {\n    g();\n}\n", 3),
-    ('unsafe extern "C" fn f() {\n    g();\n}\n', 3),
+    ("unsafe fn f() {\n    g();\n}\n", 1),
+    ('unsafe extern "C" fn f() {\n    g();\n}\n', 1),
     ("trait T {\n    unsafe fn f();\n}\n", 1),
-    # Nested blocks are unioned, not summed.
-    ("unsafe fn f() {\n    unsafe {\n        g();\n    }\n}\n", 5),
+    # A nested region inside a charged one is not charged again: the body is
+    # one statement, and the block it holds is that statement.
+    ("unsafe fn f() {\n    unsafe {\n        g();\n    }\n}\n", 2),
     # Declarations, promises, types.
     ("unsafe impl Sync for X {}\n", 1),
     ("unsafe trait T {}\n", 1),
     ('type F = unsafe extern "C" fn(u8);\n', 0),
     ("struct S(Option<unsafe fn(u8)>);\n", 0),
     ('#[unsafe(no_mangle)]\npub extern "C" fn f() {}\n', 0),
-    ('unsafe extern "C" {\n    static x: u8;\n}\n', 3),
+    # An `unsafe extern` block costs its declarations.
+    ('unsafe extern "C" {\n    static x: u8;\n}\n', 1),
+    ('unsafe extern "C" {\n    static x: u8;\n    fn g(n: u8);\n}\n', 2),
 ]
 # (source, expected extern_abi) — the needle is a regex over masked source,
 # so it needs its own cases: masking has already erased the ABI string by the
@@ -2874,7 +2986,7 @@ SELF_TEST_TEST_MODULE = [
 SELF_TEST_DENY = [
     # With the deny, a body's own blocks state its unsafe surface.
     ("unsafe fn f() {\n    g();\n}\n", 0),
-    ("unsafe fn f() {\n    unsafe {\n        g();\n    }\n}\n", 3),
+    ("unsafe fn f() {\n    unsafe {\n        g();\n    }\n}\n", 1),
 ]
 # (source, expected number of by-value accessor writes)
 SELF_TEST_PLACE_WRITE = [
@@ -3104,15 +3216,15 @@ SELF_TEST_PERIMETER = [
     ("crates/nvim/src/global_cell.rs.orig", False),
     ("crates/nvim/src/memory.rs", False),
 ]
-# (stats, expected (inside, outside)). The split is over `unsafe_lines`
+# (stats, expected (inside, outside)). The split is over `unsafe_stmts`
 # alone, and a file with none contributes to neither side.
 SELF_TEST_PERIMETER_SPLIT = [
     (
         {
-            "crates/nvim/src/lua/ffi.rs": {"unsafe_lines": 150},
-            "crates/nvim/src/memfile/mod.rs": {"unsafe_lines": 400},
-            "crates/nvim/src/memline/mod.rs": {"unsafe_lines": 183},
-            "crates/nvim/src/types/memline.rs": {"unsafe_lines": 0},
+            "crates/nvim/src/lua/ffi.rs": {"unsafe_stmts": 150},
+            "crates/nvim/src/memfile/mod.rs": {"unsafe_stmts": 400},
+            "crates/nvim/src/memline/mod.rs": {"unsafe_stmts": 183},
+            "crates/nvim/src/types/memline.rs": {"unsafe_stmts": 0},
         },
         (550, 183),
     ),
@@ -3519,11 +3631,11 @@ SELF_TEST_INSTRUMENTS = [
 
 def self_test():
     for source, expected in SELF_TEST:
-        got = unsafe_lines(mask(source), False)
-        assert got == expected, f"unsafe_lines={got}, want {expected}, for {source!r}"
+        got = unsafe_stmts(mask(source), False)
+        assert got == expected, f"unsafe_stmts={got}, want {expected}, for {source!r}"
     for source, expected in SELF_TEST_DENY:
-        got = unsafe_lines(mask(source), True)
-        assert got == expected, f"unsafe_lines={got}, want {expected}, for {source!r}"
+        got = unsafe_stmts(mask(source), True)
+        assert got == expected, f"unsafe_stmts={got}, want {expected}, for {source!r}"
     for source, expected in SELF_TEST_SAFETY_DOC:
         got = missing_safety_doc(source, mask(source))
         assert got == expected, (
@@ -3643,7 +3755,7 @@ def self_test():
     for case, expected in SELF_TEST_PERIMETER_CHECK:
         stats = {
             (entry + "x.rs" if entry.endswith("/") else entry): {
-                "unsafe_lines": 0 if case == "zero" and entry == probe else 1
+                "unsafe_stmts": 0 if case == "zero" and entry == probe else 1
             }
             for entry in PERIMETER
             if not (case == "drop" and entry == probe)

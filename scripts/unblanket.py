@@ -2,9 +2,9 @@
 """Delete the blanket `unsafe {` / `}` c2rust wrapped each body in.
 
 Phase 23's S6-S9 dissolve those blankets: `metrics/ratchet.json`'s
-`unsafe_lines` counts *lines of code inside an `unsafe` region*, so one
-blanket costs the whole function body whether it holds one unsafe operation
-or fifty. This script does the mechanical half -- remove the block, dedent
+`unsafe_stmts` counts *statements inside an `unsafe` region*, at every depth,
+so one blanket costs every statement of the function body whether it holds
+one unsafe operation or fifty. This script does the mechanical half -- remove the block, dedent
 its body by four -- and then `cargo check` lists the residue, which the
 author wraps tightly, one operation at a time, with a SAFETY note.
 
