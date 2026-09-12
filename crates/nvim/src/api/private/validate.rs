@@ -16,8 +16,7 @@
 //! `api_set_error` calls behind the same four doc comments. They are all this
 //! file now.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

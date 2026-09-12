@@ -407,7 +407,7 @@ pub(crate) unsafe fn buf_copy_options(buffer: Buf, flags: c_int) {
     // Before the defaults exist there is nothing to copy: `main` makes
     // the first buffer that early.
     if p_cpo.get().is_null() {
-        unsafe { check_buf_options(buffer) };
+        check_buf_options(buffer);
         return;
     }
 
@@ -659,7 +659,7 @@ pub(crate) unsafe fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_p_initialized = true;
     }
 
-    unsafe { check_buf_options(buffer) };
+    check_buf_options(buffer);
     if did_isk {
         unsafe { buf_init_chartab(buffer, false) };
     }

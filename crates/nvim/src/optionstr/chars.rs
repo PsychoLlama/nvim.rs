@@ -730,10 +730,7 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
 
 /// The option-table callback for both options and both scopes: which of the
 /// four cases this is comes from the variable being set.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
     let (mut win, varp, idx, flags, errbuf, errbuflen) = (
         args.os_win,
         args.os_varp.string_var(),
@@ -784,10 +781,7 @@ fn field_name(tab: &'static [Field], idx: c_int) -> *mut c_char {
 /// Called after something other than `:set` changed what the screen can
 /// render — a new 'encoding', say — and reports which of the two options
 /// the new state conflicts with.
-///
-/// # Safety
-/// Reads the editor's window list.
-pub unsafe fn check_chars_options() -> Option<&'static CStr> {
+pub fn check_chars_options() -> Option<&'static CStr> {
     let check = |wp, value, what, apply| {
         // SAFETY: a live window and a C string; no message is wanted.
         if unsafe { set_chars_option(wp, value, what, apply, ptr::null_mut(), 0) }.is_none() {

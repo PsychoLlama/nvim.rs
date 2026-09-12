@@ -289,7 +289,6 @@ count	callee	no_raw	defs	def
 11	arg	1	1	crates/nvim/src/ui_client.rs
 11	auto_format	1	1	crates/nvim/src/textformat/auto.rs
 11	call_func	0	1	crates/nvim/src/eval/userfunc/dispatch.rs
-11	did_set_str_generic	1	1	crates/nvim/src/optionstr/flags.rs
 11	dispatch_fast	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 11	do_ecmd	0	1	crates/nvim/src/ex_cmds/ecmd/mod.rs
 11	encode_tv2string	0	1	crates/nvim/src/eval/encode/mod.rs
@@ -952,8 +951,6 @@ count	callee	no_raw	defs	def
 4	channel_connect	0	1	crates/nvim/src/channel/open.rs
 4	channel_job_start	0	1	crates/nvim/src/channel/open.rs
 4	charsize_fast_impl	0	1	crates/nvim/src/plines/mod.rs
-4	check_buf_options	1	1	crates/nvim/src/optionstr/check.rs
-4	check_chars_options	1	1	crates/nvim/src/optionstr/chars.rs
 4	check_colorcolumn	0	1	crates/nvim/src/window/snapshot.rs
 4	check_luafunc_name	0	1	crates/nvim/src/eval/name.rs
 4	check_overwrite	0	1	crates/nvim/src/ex_cmds/write.rs
@@ -1976,11 +1973,9 @@ count	callee	no_raw	defs	def
 2	delete_fold_markers	1	1	crates/nvim/src/fold/marker.rs
 2	delete_var	0	1	crates/nvim/src/eval/vars/lifecycle.rs
 2	deref_wordnode	0	1	crates/nvim/src/spellfile/wordtree.rs
-2	derive_breakat_flags	1	1	crates/nvim/src/optionstr/display.rs
 2	dict_arg	0	1	crates/nvim/src/sign/vimscript.rs
 2	dict_lookup	0	1	crates/nvim/src/terminal/mod.rs
 2	dict_to_hlattrs	1	1	crates/nvim/src/ui_client.rs
-2	did_set_titleiconstring	1	1	crates/nvim/src/optionstr/statusline.rs
 2	did_set_vartabs	0	1	crates/nvim/src/optionstr/buffer.rs
 2	diff_check_sanity	0	1	crates/nvim/src/diff/block.rs
 2	diff_file	0	1	crates/nvim/src/diff/engine.rs
@@ -3545,9 +3540,7 @@ count	callee	no_raw	defs	def
 1	dict_check_writable	0	1	crates/nvim/src/api/private/helpers/vimdict.rs
 1	did_set_cb	0	0	
 1	did_set_global_chars_option	0	1	crates/nvim/src/optionstr/chars.rs
-1	did_set_isopt	1	1	crates/nvim/src/optionstr/buffer.rs
 1	did_set_opt_flags	0	1	crates/nvim/src/optionstr/flags.rs
-1	did_set_optexpr	1	1	crates/nvim/src/optionstr/complete.rs
 1	did_set_option	0	1	crates/nvim/src/option/set.rs
 1	diff_check_unchanged	0	1	crates/nvim/src/diff/block.rs
 1	diff_equal_entry	0	1	crates/nvim/src/diff/compare.rs

@@ -335,7 +335,7 @@ pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
     let saved = CELL_WIDTHS.with_mut(|t| core::mem::replace(t, table));
 
     // The new widths must not conflict with 'listchars' or 'fillchars'.
-    let error = unsafe { check_chars_options() };
+    let error = check_chars_options();
     if let Some(error) = error {
         emsg(gettext(error));
         CELL_WIDTHS.with_mut(|t| *t = saved);

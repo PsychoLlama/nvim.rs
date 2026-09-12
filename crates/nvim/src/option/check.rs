@@ -146,7 +146,7 @@ pub(crate) fn didset_options() {
     // The two callbacks these stand in for read no frame at all, and the
     // startup sweep has none to give.
     let _ = derive_cedit_key();
-    unsafe { derive_breakat_flags() };
+    derive_breakat_flags();
     unsafe { didset_window_options(Win::current(), true) };
 }
 

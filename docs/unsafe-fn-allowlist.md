@@ -49,5 +49,6 @@ The phase exit is `unsafe_fns_without_raw_params` = 0 with this list as the
 floor. Adding a row lowers the count, so a row is a claim a reviewer reads:
 the bar is the four classes above and nothing softer.
 
-| item | file | why the type system cannot hold it |
-| ---- | ---- | ---------------------------------- |
+| item                     | file                                  | why the type system cannot hold it                                                                         |
+| ------------------------ | ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `Matches::with_capacity` | `crates/nvim/src/optionstr/expand.rs` | `cap:` the array it allocates is sized for `capacity` entries and [`Matches::push`] bounds-checks nothing. |

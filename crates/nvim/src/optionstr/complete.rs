@@ -42,10 +42,7 @@ const CPT_WITH_ARGUMENT: &CStr = c"ksF";
 /// with a backslash — and because a part longer than the scratch buffer is
 /// simply cut there and the remainder checked as if it were the next part,
 /// which is upstream's behaviour and is preserved.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
     let (buf, buflen) = errbuf(args);
     // SAFETY: the frame's C string value, walked to its terminator.
     let mut p = unsafe { *varp(args) };
@@ -124,10 +121,7 @@ pub unsafe fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
 ///
 /// The order is kept as a base-10 number, one digit per column, which is
 /// what the menu drawing code reads.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
     const COLUMNS: [(&CStr, c_int); 3] = [
         (c"abbr", CPT_ABBR as c_int),
         (c"kind", CPT_KIND as c_int),
@@ -173,9 +167,7 @@ pub unsafe fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
     None
 }
 
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
     let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     let value = if local {
@@ -201,10 +193,7 @@ pub unsafe fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
 
 /// A 'helpfile' the user chose overrides `$VIM`/`$VIMRUNTIME`, so the ones
 /// nvim derived for itself are dropped and re-derived from it.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_helpfile(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_helpfile(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: unsets this process's own environment variables.
     if didset_vim.get() {
         unsafe { vim_unsetenv_ext(c"VIM".as_ptr()) };
@@ -217,10 +206,7 @@ pub unsafe fn did_set_helpfile(_args: &mut OptSet) -> Option<&CStr> {
 
 /// 'helplang' is a comma-separated list of two-letter language codes, which
 /// is checked by position rather than by parsing.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_helplang(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_helplang(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the option's own C string value; each test below is reached
     // only once the byte before it is known not to be the terminator.
     let mut s = p_hlg.get();
@@ -253,10 +239,7 @@ pub fn did_set_mkspellmem(_args: &mut OptSet) -> Option<&CStr> {
 /// A `s:`-prefixed name is resolved to its script-local spelling now, while
 /// the script that set the option is still on the stack; the option's value
 /// is rewritten in place with the answer.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_optexpr(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_optexpr(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's own variable; `get_scriptlocal_funcname` returns
     // a fresh allocation or null, and the old value is freed here.
     let varp = varp(args);
@@ -268,16 +251,12 @@ pub unsafe fn did_set_optexpr(args: &mut OptSet) -> Option<&CStr> {
     None
 }
 
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_spellcapcheck(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spellcapcheck(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's window and its syntax block.
     unsafe { compile_cap_prog(win(args).w_s) }
 }
 
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_spellfile(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spellfile(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
     if !unsafe { valid_spellfile(*varp(args)) } {
         return invalid();
@@ -285,9 +264,7 @@ pub unsafe fn did_set_spellfile(args: &mut OptSet) -> Option<&CStr> {
     did_set_spell_option()
 }
 
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_spelllang(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spelllang(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
     if !valid_spelllang(unsafe { CStr::from_ptr(*varp(args)) }) {
         return invalid();
@@ -299,10 +276,7 @@ pub unsafe fn did_set_spelllang(args: &mut OptSet) -> Option<&CStr> {
 ///
 /// The window's mask lives in its *syntax block*, which a diff or preview
 /// window may share with another window.
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_spelloptions(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spelloptions(args: &mut OptSet) -> Option<&CStr> {
     let (mut wp, opt_flags, new) = (win(args), args.os_flags, args.os_newval);
     let value = new
         .as_string()
@@ -326,9 +300,7 @@ pub unsafe fn did_set_spelloptions(args: &mut OptSet) -> Option<&CStr> {
     None
 }
 
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_spellsuggest(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spellsuggest(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: re-reads the option's own value.
     if unsafe { spell_check_sps() }.is_err() {
         return invalid();
@@ -336,9 +308,7 @@ pub unsafe fn did_set_spellsuggest(_args: &mut OptSet) -> Option<&CStr> {
     None
 }
 
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_tagcase(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_tagcase(args: &mut OptSet) -> Option<&CStr> {
     let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     let value = if local { buf.b_p_tc } else { p_tc.get() };

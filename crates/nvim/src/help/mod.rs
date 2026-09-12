@@ -655,7 +655,7 @@ pub(crate) unsafe fn prepare_help_buffer() {
     let isk = c"!-~,^*,^|,^\",192-255";
     if !unsafe { cstr::eq(Buf::current().b_p_isk, isk.as_ptr()) } {
         set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
-        unsafe { check_buf_options(Buf::current()) };
+        check_buf_options(Buf::current());
         unsafe { buf_init_chartab(Buf::current(), false) };
     }
 

@@ -138,10 +138,7 @@ pub(crate) unsafe fn did_set_opt_flags(
 
 /// The table callback for every option whose whole check is "is each word
 /// one of the accepted ones".
-///
-/// # Safety
-/// `args` points at the option table's call frame.
-pub unsafe fn did_set_str_generic(args: &mut OptSet) -> Option<&'static CStr> {
+pub fn did_set_str_generic(args: &mut OptSet) -> Option<&'static CStr> {
     let (idx, varp) = (args.os_idx, args.os_varp.string_var());
     if unsafe { check_str_opt(idx, varp) }.is_err() {
         Some(e_invarg)

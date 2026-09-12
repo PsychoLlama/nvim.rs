@@ -125,10 +125,7 @@ pub(crate) unsafe fn illegal_char_after_chr<'a>(
 }
 
 /// Give every string option of a buffer the empty string in place of a null.
-///
-/// # Safety
-/// `buffer` points at a live buffer.
-pub unsafe fn check_buf_options(mut buffer: Buf) {
+pub fn check_buf_options(mut buffer: Buf) {
     // SAFETY: the caller's buffer; each field is one of its `char *`
     // options, and `parse_cino` re-derives the 'cinoptions' cache from the
     // string this just made non-null.

@@ -157,7 +157,7 @@ pub unsafe fn schar_cache_clear() {
     // The char options kept their original strings, so their parsed
     // ScreenChar values can be regenerated against the clean cache. Cell
     // widths have not changed, so this cannot fail.
-    if unsafe { check_chars_options() }.is_some() {
+    if check_chars_options().is_some() {
         unsafe { abort() };
     }
 }
