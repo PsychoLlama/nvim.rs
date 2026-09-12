@@ -307,10 +307,7 @@ struct Walk {
 impl Walk {
     /// Advance to the next line, closing included files that have been
     /// read to the end. Answers false when there is nothing left.
-    ///
-    /// # Safety
-    /// The current buffer must be valid.
-    unsafe fn next_line(&mut self) -> bool {
+    fn next_line(&mut self) -> bool {
         // When reading an included file and hitting end-of-file,
         // close it and continue in the file that included it.
         while self.files.depth() >= 0
@@ -353,10 +350,7 @@ impl Walk {
 
     /// Read the line after the current one, for the "add the next word
     /// too" half of insert-mode completion. Answers false at the end.
-    ///
-    /// # Safety
-    /// The current buffer must be valid.
-    unsafe fn read_following_line(&mut self) -> bool {
+    fn read_following_line(&mut self) -> bool {
         if self.files.depth() < 0 {
             if self.lnum >= self.end_lnum {
                 return false;
@@ -625,7 +619,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
         // Get the next line: from the current buffer below depth 0,
         // otherwise from the included file. Give up when past the
         // last line.
-        if !unsafe { walk.read_following_line() } {
+        if !walk.read_following_line() {
             return After::Resume(p);
         }
 
@@ -693,10 +687,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
 }
 
 /// List the match (ACTION_SHOW_ALL).
-///
-/// # Safety
-/// As [`handle_include`].
-unsafe fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
+fn list_match(walk: &mut Walk, kind: c_int, action: c_int) {
     walk.found = true;
     if !walk.did_show {
         gotocmdline(true); // cursor at the status line
@@ -889,7 +880,7 @@ pub unsafe fn find_pattern_in_path(
                 let after = if action == ACTION_EXPAND {
                     unsafe { expand_match(&mut walk, startp, &mut dir) }
                 } else if action == ACTION_SHOW_ALL {
-                    unsafe { list_match(&mut walk, kind, action) };
+                    list_match(&mut walk, kind, action);
                     After::NextLine
                 } else {
                     count -= 1;
@@ -930,7 +921,7 @@ pub unsafe fn find_pattern_in_path(
         if got_int.get() || ins_compl_interrupted() {
             break;
         }
-        if !unsafe { walk.next_line() } {
+        if !walk.next_line() {
             break;
         }
     }

@@ -170,12 +170,7 @@ pub(crate) fn syn_stack_apply_changes(mut buffer: Buf) {
 /// An entry below the change is not thrown away: it is moved by the number of
 /// inserted or deleted lines and given an `sst_change_lnum`, which records the
 /// line that has to be re-parsed before the entry can be trusted again.
-///
-/// # Safety
-///
-/// `block` must be an initialized `SynBlockRef` whose pointer fields point at
-/// live data for the call.
-unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buffer: Buf) {
+fn syn_stack_apply_changes_block(mut block: SynBlockRef, buffer: Buf) {
     let mut prev = ::core::ptr::null_mut::<SynState>();
     let mut p = block.b_sst_first;
     while !p.is_null() {

@@ -532,7 +532,7 @@ pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
             // `z=`: suggest corrections.
             Ok(b'=') => {
                 if !check_clear_op(ca.op()) {
-                    unsafe { spell_suggest(ca.count0) };
+                    spell_suggest(ca.count0);
                 }
                 None
             }

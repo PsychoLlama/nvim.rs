@@ -44,10 +44,7 @@ type StepFn = unsafe fn(&mut Pos) -> c_int;
 /// followed by end of line, or by a space or tab -- two of them when
 /// 'cpoptions' has `J` -- with any number of `)`, `]`, `"` and `'` in
 /// between. A paragraph or section boundary ends one as well.
-///
-/// # Safety
-/// There must be a current buffer and window.
-pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
+pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
     let mut noskip = false; // do not skip blanks
     let mut pos = Win::current().w_cursor;
     let step: StepFn = if dir as c_int == FORWARD as c_int {
@@ -80,7 +77,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             } else if dir as c_int == FORWARD as c_int
                 && pos.col == 0
                 // SAFETY: `pos.lnum` is a line of the current buffer.
-                && unsafe { starts_para(pos.lnum, NUL, false) }
+                && starts_para(pos.lnum, NUL, false)
             {
                 // At the start of a paragraph or section, going forward:
                 // the next line is the answer.
@@ -136,7 +133,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 // SAFETY: as above.
                 let mut c = unsafe { gchar_pos(&raw mut pos) };
                 // SAFETY: `pos.lnum` is a line of the current buffer.
-                if c == NUL || (pos.col == 0 && unsafe { starts_para(pos.lnum, NUL, false) }) {
+                if c == NUL || (pos.col == 0 && starts_para(pos.lnum, NUL, false)) {
                     if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
                         pos.lnum += 1;
                     }
@@ -240,20 +237,14 @@ pub(crate) unsafe fn find_first_blank(posp: *mut Pos) {
 
 /// Skip `count`/2 sentences and `count`/2 runs of the white space between
 /// them, starting on whichever of the two `at_start_sent` says.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-unsafe fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
+fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
     loop {
         let this = count;
         count -= 1;
         if this == 0 {
             break;
         }
-        // SAFETY, throughout: the caller guarantees a current window whose
-        // cursor is on a line of the current buffer, and each of these leaves
-        // it on one for the next.
-        let _ = unsafe { findsent(FORWARD, 1) };
+        let _ = findsent(FORWARD, 1);
         if at_start_sent {
             unsafe { find_first_blank(Win::current().cursor().raw()) };
         }
@@ -272,10 +263,7 @@ unsafe fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
 /// from the bottom of [`current_sent`] when the object it computed turned out
 /// to be empty -- `is` on a single space before a sentence, which would
 /// otherwise never move.
-///
-/// # Safety
-/// There must be a current line and Visual mode must be active.
-unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Pos) {
+fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Pos) {
     if lt(start_pos, visual_anchor()) {
         // The cursor is at the start of the Visual area. Work out where
         // that is: in the white space before a sentence, inside one or
@@ -293,12 +281,12 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut 
             unsafe { incl(&mut pos) };
         }
         if !at_start_sent {
-            let _ = unsafe { findsent(BACKWARD, 1) };
+            let _ = findsent(BACKWARD, 1);
             if equalpos(Win::current().w_cursor, start_pos) {
                 at_start_sent = true; // exactly at the start of a sentence
             } else {
                 // Inside a sentence: go to its end, the next one's start.
-                let _ = unsafe { findsent(FORWARD, 1) };
+                let _ = findsent(FORWARD, 1);
             }
         }
         if include {
@@ -315,7 +303,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut 
             }
             let c = gchar_cursor();
             if !at_start_sent || (!include && !ascii_iswhite(c)) {
-                let _ = unsafe { findsent(BACKWARD, 1) };
+                let _ = findsent(BACKWARD, 1);
             }
             at_start_sent = !at_start_sent;
         }
@@ -337,7 +325,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut 
                 unsafe { incl(&mut pos) };
             }
             if at_start_sent {
-                let _ = unsafe { findsent(BACKWARD, 1) }; // inside the sentence
+                let _ = findsent(BACKWARD, 1); // inside the sentence
             } else {
                 Win::current().w_cursor = start_pos; // in the white space
             }
@@ -345,7 +333,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut 
         if include {
             count *= 2; // `as` gets twice as much as `is`
         }
-        unsafe { findsent_forward(count, at_start_sent) };
+        findsent_forward(count, at_start_sent);
         // SAFETY: 'selection' is a NUL-terminated option string.
         if c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int {
             Win::current().w_cursor.col += 1;
@@ -362,14 +350,11 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut 
 pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Result<(), Failed> {
     let mut start_pos = Win::current().w_cursor;
     let mut pos = start_pos;
-    // SAFETY, throughout: the caller guarantees a current window whose cursor
-    // is on a line of the current buffer; `pos` and `start_pos` are copies of
-    // it moved only by `incl`/`decl`, so they stay positions of the buffer.
-    let _ = unsafe { findsent(FORWARD, 1) }; // the start of the next sentence
+    let _ = findsent(FORWARD, 1); // the start of the next sentence
 
     // A Visual area bigger than one character is extended, not replaced.
     if visual_active() && !equalpos(start_pos, visual_anchor()) {
-        unsafe { extend_sentences(count, include, start_pos, pos) };
+        extend_sentences(count, include, start_pos, pos);
         return Ok(());
     }
 
@@ -382,7 +367,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
     if start_blank {
         unsafe { find_first_blank(&raw mut start_pos) }; // back to the first blank
     } else {
-        let _ = unsafe { findsent(BACKWARD, 1) };
+        let _ = findsent(BACKWARD, 1);
         start_pos = Win::current().w_cursor;
     }
 
@@ -394,7 +379,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
         count
     };
     if ncount > 0 {
-        unsafe { findsent_forward(ncount, true) };
+        findsent_forward(ncount, true);
     } else {
         unsafe { decl(&mut Win::current().cursor()) };
     }
@@ -416,7 +401,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
     if visual_active() {
         // Don't get stuck with `is` on a single space before a sentence.
         if equalpos(start_pos, Win::current().w_cursor) {
-            unsafe { extend_sentences(count, include, start_pos, pos) };
+            extend_sentences(count, include, start_pos, pos);
             return Ok(());
         }
         // SAFETY: 'selection' is a NUL-terminated option string.

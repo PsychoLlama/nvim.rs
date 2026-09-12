@@ -92,7 +92,7 @@ pub(crate) fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool
         byte_at(after, skip::white(after)) == NUL as u8
     };
     let ends_a_comment = leader.len > 0 && unsafe { leader.has_flag(COM_END) };
-    nothing_but_leader || ends_a_comment || unsafe { starts_para(lnum, NUL, false) }
+    nothing_but_leader || ends_a_comment || starts_para(lnum, NUL, false)
 }
 
 /// Whether line `lnum` ends in a white character. An empty line does not.

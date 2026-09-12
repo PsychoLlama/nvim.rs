@@ -72,15 +72,15 @@ impl FindTags {
             Some(unsafe { self.help_match(tagp, margs) })
         } else if name_only && self.get_searchpat {
             self.get_searchpat = false;
-            unsafe { self.search_pattern_match(tagp) }
+            self.search_pattern_match(tagp)
         } else if name_only {
             // If wanted, read the line again to get the long form too.
             if State.get() & MODE_INSERT != 0 {
                 self.get_searchpat = p_sft.get() != 0;
             }
-            Some(unsafe { name_match(tagp) })
+            Some(name_match(tagp))
         } else {
-            Some(unsafe { self.whole_match(bucket) })
+            Some(self.whole_match(bucket))
         };
 
         if let Some(mfp) = mfp {
@@ -134,10 +134,7 @@ impl FindTags {
     ///
     /// Answers `None` when there is no pattern to take, which is how a
     /// line addressed by number reads.
-    ///
-    /// # Safety
-    /// `tagp.command` must point into the line buffer.
-    unsafe fn search_pattern_match(&self, tagp: &TagParts) -> Option<Match> {
+    fn search_pattern_match(&self, tagp: &TagParts) -> Option<Match> {
         // SAFETY: the caller's promise; the walk stops at the line's NUL.
         let mut end = tagp.command;
         if unsafe { *end } == b'/' as c_char {
@@ -162,10 +159,7 @@ impl FindTags {
     /// The fields are separated by 0x02 rather than NUL because the key
     /// duplicates are found by ends at the first NUL; the caller puts them
     /// back. The bucket is stored one higher so that it is never a NUL.
-    ///
-    /// # Safety
-    /// The line buffer must be NUL-terminated.
-    unsafe fn whole_match(&self, bucket: usize) -> Match {
+    fn whole_match(&self, bucket: usize) -> Match {
         // SAFETY: the caller's promise.
         let line = unsafe { CStr::from_ptr(self.lbuf.as_ptr()) }.to_bytes();
         let fname = self.tag_fname.bytes();
@@ -182,10 +176,7 @@ impl FindTags {
 }
 
 /// Just the tag's name, for a caller that only wants the names.
-///
-/// # Safety
-/// `tagp`'s name must lie in the line buffer.
-unsafe fn name_match(tagp: &TagParts) -> Match {
+fn name_match(tagp: &TagParts) -> Match {
     // SAFETY: the caller's promise.
     let len = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as usize;
     let mut mfp = Match::zeroed(len + 2);

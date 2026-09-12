@@ -80,11 +80,7 @@ pub(super) fn read_charflags_section(spl: &mut Spl) -> SplResult<()> {
 
 /// `SN_PREFCOND`: one condition per prefix id, compiled to a regexp
 /// anchored at the start of what precedes the prefix.
-///
-/// # Safety
-///
-/// `slang` must be a language whose `sl_prefprog` is free to be replaced.
-pub(super) unsafe fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
+pub(super) fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     // Both counts below take the end of the file as `-1` and let the range
     // test reject it: a truncated `SN_PREFCOND` is a *format* error, which
     // `test_spellfile.vim` pins.
@@ -257,11 +253,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResul
 }
 
 /// `SN_WORDS`: NUL-separated common words.
-///
-/// # Safety
-///
-/// `slang` must be a language whose `sl_wordcount` table is initialised.
-pub(super) unsafe fn read_words_section(
+pub(super) fn read_words_section(
     spl: &mut Spl,
     slang: &mut SpellLang,
     len: c_int,
@@ -331,15 +323,7 @@ fn byte_in_flags(flags: &[u8], c: u8) -> bool {
 ///
 /// The flag string is turned into a regexp as it is read: each flag becomes
 /// a branch, `/` separates the parts a compound may be built from.
-///
-/// # Safety
-///
-/// `slang` must be a language whose compound fields are free to be replaced.
-pub(super) unsafe fn read_compound(
-    spl: &mut Spl,
-    slang: &mut SpellLang,
-    len: c_int,
-) -> SplResult<()> {
+pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) -> SplResult<()> {
     let mut todo = len;
     if todo < 2 {
         return Err(SpellReadError::Format);

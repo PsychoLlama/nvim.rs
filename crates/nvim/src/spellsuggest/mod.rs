@@ -542,7 +542,7 @@ unsafe fn spell_find_suggest(
             spell_suggest_timeout.set(unsafe { atoi(bufp.add(8)) });
         } else if !did_intern {
             // The internal method runs at most once.
-            unsafe { spell_suggest_intern(su, interactive) };
+            spell_suggest_intern(su, interactive);
             do_combine = sps_flags.get() & SPS_DOUBLE != 0;
             did_intern = true;
         }
@@ -556,20 +556,15 @@ unsafe fn spell_find_suggest(
 }
 
 /// Run the internal search, in whichever form [`sps_flags`] asks for.
-///
-/// # Safety
-///
-/// `su` must be valid and the current window must have its languages
-/// loaded.
-unsafe fn spell_suggest_intern(mut su: Sug, interactive: bool) {
+fn spell_suggest_intern(mut su: Sug, interactive: bool) {
     suggest_load_files();
 
     // 1. Special cases, such as a repeated word: "the the" -> "the".
-    unsafe { suggest_try_special(su) };
+    suggest_try_special(su);
 
     // 2. Inserting, deleting, swapping and changing letters, `REP`
     //    items from the `.aff` file, and splitting the word in two.
-    unsafe { suggest_try_change(su) };
+    suggest_try_change(su);
 
     // Give the top scorers a sound-a-like score to interleave on.
     if sps_flags.get() & SPS_DOUBLE != 0 {
@@ -588,7 +583,7 @@ unsafe fn spell_suggest_intern(mut su: Sug, interactive: bool) {
         // they are much faster and usually enough; only if too little
         // turns up is a wider search worth its time. `sl_sounddone`
         // keeps the passes from redoing each other's work.
-        unsafe { suggest_try_soundalike_prep() };
+        suggest_try_soundalike_prep();
         su.su_maxscore = SCORE_SFMAX1;
         su.su_sfmaxscore = SCORE_MAXINIT * 3;
         unsafe { suggest_try_soundalike(su.raw()) };
@@ -600,7 +595,7 @@ unsafe fn spell_suggest_intern(mut su: Sug, interactive: bool) {
             unsafe { suggest_try_soundalike(su.raw()) };
         }
         su.su_maxscore = su.su_sfmaxscore;
-        unsafe { suggest_try_soundalike_finish() };
+        suggest_try_soundalike_finish();
     }
 
     // Interrupted searches still show what they found. `got_int` is
@@ -638,11 +633,7 @@ unsafe fn spell_find_cleanup(su: Sug) {
 ///
 /// There is only one: a word typed twice, "the the", whose suggestion is
 /// the word once.
-///
-/// # Safety
-///
-/// `su` must be valid.
-unsafe fn suggest_try_special(mut su: Sug) {
+fn suggest_try_special(mut su: Sug) {
     // SAFETY: the caller guarantees `su`; the terminator planted in
     // `su_fbadword` is inside the buffer and is put back straight away.
     let fbadword = su.su_fbadword() as *mut c_char;
@@ -674,12 +665,7 @@ unsafe fn suggest_try_special(mut su: Sug) {
 
 /// Find suggestions by adding, removing and swapping letters, in every
 /// language the window has loaded.
-///
-/// # Safety
-///
-/// `su` must be valid and the current window must have its languages
-/// loaded.
-unsafe fn suggest_try_change(su: Sug) {
+fn suggest_try_change(su: Sug) {
     // SAFETY: the caller guarantees `su` and the window's spell state;
     // `fword` is `MAXWLEN` and every write into it is told so.
     // The walk rewrites the case-folded bad word in place (for `REP`

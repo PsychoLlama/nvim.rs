@@ -178,18 +178,16 @@ unsafe fn scan(
             if got_int.get() || out_of_time() {
                 break;
             }
-            let outcome = unsafe {
-                step(
-                    rex,
-                    thislist,
-                    nextlist,
-                    &mut listidx,
-                    run,
-                    curc,
-                    &mut clen,
-                    &mut go_to_nextline,
-                )
-            };
+            let outcome = step(
+                rex,
+                thislist,
+                nextlist,
+                &mut listidx,
+                run,
+                curc,
+                &mut clen,
+                &mut go_to_nextline,
+            );
             match outcome {
                 Step::Dead => {}
                 Step::Matched => {
@@ -201,7 +199,7 @@ unsafe fn scan(
                     return;
                 }
                 add => {
-                    if !unsafe { deliver(rex, thislist, nextlist, &mut listidx, run, clen, add) } {
+                    if !deliver(rex, thislist, nextlist, &mut listidx, run, clen, add) {
                         nfa_match.set(NFA_TOO_EXPENSIVE);
                         return;
                     }
@@ -219,7 +217,7 @@ unsafe fn scan(
         } else {
             // At the end of a line: carry on only if something still
             // wants the next one.
-            if !go_to_nextline && !unsafe { sub_match_spans_lines(rex) } {
+            if !go_to_nextline && !sub_match_spans_lines(rex) {
                 return;
             }
             reg_nextline(rex);
@@ -246,11 +244,7 @@ fn out_of_time() -> bool {
 }
 
 /// Does the lookaround being matched still have input left on a later line?
-///
-/// # Safety
-///
-/// The match context must be live.
-unsafe fn sub_match_spans_lines(rex: Rex) -> bool {
+fn sub_match_spans_lines(rex: Rex) -> bool {
     let endp = nfa_endp.get();
     // SAFETY: `nfa_endp` is null or the stopping point of the lookaround
     // being matched, which outlives it.
@@ -262,12 +256,7 @@ unsafe fn sub_match_spans_lines(rex: Rex) -> bool {
 /// A thread carrying a postponed lookaround has to settle it first: the
 /// lookaround is run here, once whatever came after it has proved itself.
 /// Returns false when the lists could not grow.
-///
-/// # Safety
-///
-/// Every pointer must belong to the running match, and `*listidx` index
-/// `thislist`.
-unsafe fn deliver(
+fn deliver(
     rex: Rex,
     thislist: &mut ThreadList,
     nextlist: &mut ThreadList,

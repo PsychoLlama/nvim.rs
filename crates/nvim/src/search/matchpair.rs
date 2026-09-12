@@ -704,10 +704,7 @@ impl Walk {
 
     /// Look at the character under `pos` and decide whether it is the
     /// match, keeping the "am I inside a string?" state up to date.
-    ///
-    /// # Safety
-    /// As [`Walk::step_back`].
-    unsafe fn match_char(&mut self, target: &Target, cpo_match: bool, cpo_bsl: bool) -> Step {
+    fn match_char(&mut self, target: &Target, cpo_match: bool, cpo_bsl: bool) -> Step {
         let col = self.pos.col;
         let c = {
             let line = self.lines.line(self.pos.lnum);
@@ -900,7 +897,7 @@ unsafe fn find_match(
             walk.start_in_quotes = Some(false);
         }
 
-        match unsafe { walk.match_char(&target, cpo_match, cpo_bsl) } {
+        match walk.match_char(&target, cpo_match, cpo_bsl) {
             Step::Next => continue,
             Step::Found(pos) => return Some(pos),
             Step::Nothing => return None,

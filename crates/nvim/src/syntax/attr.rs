@@ -392,7 +392,7 @@ unsafe fn scan_patterns(
         }
 
         // The first column of the match.
-        let pos = unsafe { syn_add_start_off(scan.offsets, &regmatch, SPO_MS_OFF, -1) };
+        let pos = syn_add_start_off(scan.offsets, &regmatch, SPO_MS_OFF, -1);
         if pos.lnum > current_lnum.get() {
             // Must have used the end of the match in a following line,
             // which we cannot handle.
@@ -414,9 +414,9 @@ unsafe fn scan_patterns(
         }
 
         let mut endpos = regmatch.endpos[0];
-        let mut hl_startpos = unsafe { syn_add_start_off(scan.offsets, &regmatch, SPO_HS_OFF, -1) };
+        let mut hl_startpos = syn_add_start_off(scan.offsets, &regmatch, SPO_HS_OFF, -1);
         // The region start defaults to the end of the start match.
-        let eos_pos = unsafe { syn_add_end_off(scan.offsets, &regmatch, SPO_RS_OFF, 0) };
+        let eos_pos = syn_add_end_off(scan.offsets, &regmatch, SPO_RS_OFF, 0);
 
         // Grab the external submatches before they get overwritten. The
         // reference count does not change.
@@ -446,8 +446,8 @@ unsafe fn scan_patterns(
         } else if scan.ty == SPTYPE_MATCH {
             // For a "match" the size must be > 0 once the end offset has
             // been added -- except when syncing.
-            hl_endpos = unsafe { syn_add_end_off(scan.offsets, &regmatch, SPO_HE_OFF, 0) };
-            endpos = unsafe { syn_add_end_off(scan.offsets, &regmatch, SPO_ME_OFF, 0) };
+            hl_endpos = syn_add_end_off(scan.offsets, &regmatch, SPO_HE_OFF, 0);
+            endpos = syn_add_end_off(scan.offsets, &regmatch, SPO_ME_OFF, 0);
             if endpos.lnum == current_lnum.get() && endpos.col + c_int::from(syncing) < startcol {
                 // An empty match: may need to try again in the next column.
                 if regmatch.startpos[0].col == regmatch.endpos[0].col {

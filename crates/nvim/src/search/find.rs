@@ -80,11 +80,8 @@ impl Searcher {
     }
 
     /// Run the pattern against line `lnum` from column `col`.
-    ///
-    /// # Safety
-    /// `lnum` must be a line of `self.buf`.
     #[inline(always)]
-    unsafe fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
+    fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
         unsafe {
             vim_regexec_multi(
                 &raw mut self.regmatch,
@@ -208,7 +205,7 @@ impl Searcher {
             if unsafe { *line.offset(matchcol as isize) } as c_int == NUL {
                 return false;
             }
-            *nmatched = unsafe { self.exec(lnum, matchcol) };
+            *nmatched = self.exec(lnum, matchcol);
             if *nmatched == 0 {
                 return false;
             }
@@ -270,7 +267,7 @@ impl Searcher {
                 unsafe { self.step_over(line, found.start.col) }
             };
             if unsafe { *line.offset(matchcol as isize) } as c_int == NUL || {
-                *nmatched = unsafe { self.exec(lnum + found.start.lnum, matchcol) };
+                *nmatched = self.exec(lnum + found.start.lnum, matchcol);
                 *nmatched == 0
             } {
                 // A search that timed out did find a match, but it may
@@ -516,7 +513,7 @@ pub unsafe fn searchit(
                 } else {
                     0
                 };
-                let mut nmatched = unsafe { s.exec(lnum, col) };
+                let mut nmatched = s.exec(lnum, col);
                 // vim_regexec_multi() may clear "regprog".
                 if s.regmatch.regprog.is_null() {
                     break 'lines;

@@ -315,8 +315,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     }
     free(window.w_lines);
     for i in 0..window.w_tagstacklen {
-        // SAFETY: an entry of the window's own tag stack.
-        unsafe { tagstack_clear_entry(&mut window.w_tagstack[i as usize]) };
+        tagstack_clear_entry(&mut window.w_tagstack[i as usize]);
     }
     free(window.w_localdir);
     free(window.w_prevdir);

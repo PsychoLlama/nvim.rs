@@ -86,10 +86,7 @@ impl Counted {
 
     /// Whether the remembered numbers still describe the current buffer,
     /// pattern and cursor position.
-    ///
-    /// # Safety
-    /// Reads the current buffer and the remembered pattern.
-    unsafe fn still_holds(&self, cursor_pos: Pos) -> bool {
+    fn still_holds(&self, cursor_pos: Pos) -> bool {
         let live = last_used_pattern();
         self.chgtick as VarNumber == buf_get_changedtick(Buf::current())
             // The null test suppresses clang's "NULL passed as
@@ -204,10 +201,7 @@ pub(crate) unsafe fn cmdline_search_stat(
 /// the next match and `?` the previous one. With `recompute` the numbers
 /// are always counted afresh. The count gives up after `maxcount` matches
 /// or `timeout` milliseconds, saying so in `Stat::incomplete`.
-///
-/// # Safety
-/// Runs a search over the current buffer.
-unsafe fn update_search_stat(
+fn update_search_stat(
     dirc: c_int,
     pos: Pos,
     cursor_pos: Pos,
@@ -233,7 +227,7 @@ unsafe fn update_search_stat(
         (dirc == '?' as c_int && lt(c.at, pos)) || (dirc == '/' as c_int && lt(pos, c.at));
 
     // If anything relevant changed, the count has to be recomputed.
-    if !unsafe { c.still_holds(cursor_pos) }
+    if !c.still_holds(cursor_pos)
         || wraparound
         || c.cur < 0
         || (maxcount > 0 && c.cur > maxcount)
@@ -446,7 +440,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             break 'the_end;
         }
 
-        let stat = unsafe { update_search_stat(0, pos, pos, recompute, maxcount, timeout) };
+        let stat = update_search_stat(0, pos, pos, recompute, maxcount, timeout);
         // SAFETY: `result` is the caller's return value, a dictionary this
         // function itself allocated above.
         let dict = result.dict_or_null();

@@ -160,7 +160,7 @@ pub(crate) fn ins_s_left() {
         if !end_change {
             append_to_redobuff_char(Key::SLeft.code());
         }
-        let _ = unsafe { bck_word(1, false, false) };
+        let _ = bck_word(1, false, false);
         Win::current().w_set_curswant = true;
     } else {
         beep_cursor();
@@ -221,7 +221,7 @@ pub(crate) fn ins_s_right() {
         if !end_change {
             append_to_redobuff_char(Key::SRight.code());
         }
-        let _ = unsafe { fwd_word(1, false, false) };
+        let _ = fwd_word(1, false, false);
         Win::current().w_set_curswant = true;
     } else {
         beep_cursor();

@@ -375,7 +375,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         Ok(b'h' | b'H' | CTRL_H) => unsafe { nv_g_select(cmd_arg) },
         // `gn`/`gN`: select the next/previous match of the last search.
         Ok(b'N' | b'n') => {
-            if unsafe { current_search(ca.count1, nchar == 'n' as c_int) }.is_err() {
+            if current_search(ca.count1, nchar == 'n' as c_int).is_err() {
                 clear_op_beep(op);
             }
         }
@@ -407,7 +407,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
             op.motion_type = kMTCharWise;
             Win::current().w_set_curswant = true;
             op.inclusive = true;
-            if unsafe { bckend_word(ca.count1, nchar == 'E' as c_int, false) }.is_err() {
+            if bckend_word(ca.count1, nchar == 'E' as c_int, false).is_err() {
                 clear_op_beep(op);
             }
         }

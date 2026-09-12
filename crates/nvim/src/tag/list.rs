@@ -75,7 +75,7 @@ pub(crate) unsafe fn print_tag_list(
     msg_start();
     msg_str_hl(gettext(c"  # pri kind tag"), HLF_T, false);
     msg_clr_eos();
-    unsafe { advance_to_files(taglen) };
+    advance_to_files(taglen);
     msg_str_hl(gettext(c"file\n"), HLF_T, false);
 
     'each: for i in 0..num_matches {
@@ -85,7 +85,7 @@ pub(crate) unsafe fn print_tag_list(
         let entry = unsafe { *matches.offset(i as isize) };
         unsafe { parse_match(entry, &mut tagp) };
 
-        let current = !new_tag && unsafe { is_current(i, use_tagstack) };
+        let current = !new_tag && is_current(i, use_tagstack);
         unsafe { print_entry_head(i, entry, &tagp, current, taglen) };
         if msg_col.get() > 0 {
             msg_putchar('\n' as c_int);
@@ -99,7 +99,7 @@ pub(crate) unsafe fn print_tag_list(
         let command_end = if tagp.command_end.is_null() {
             unsafe { command_text_end(tagp.command) }
         } else {
-            if !unsafe { print_extra_fields(&tagp) } {
+            if !print_extra_fields(&tagp) {
                 break 'each;
             }
             tagp.command_end
@@ -120,10 +120,7 @@ pub(crate) unsafe fn print_tag_list(
 }
 
 /// Whether entry `i` is the match currently jumped to.
-///
-/// # Safety
-/// `curwin` must be live.
-unsafe fn is_current(i: c_int, use_tagstack: bool) -> bool {
+fn is_current(i: c_int, use_tagstack: bool) -> bool {
     if g_do_tagpreview.get() != 0 && i == ptag_entry_handle().position().0 {
         return true;
     }
@@ -176,7 +173,7 @@ unsafe fn print_entry_head(
     // SAFETY: as above.
     msg_display_bytes(unsafe { cstr::slice_at(tagp.tagname, len) }, HLF_T, false);
     msg_putchar(' ' as c_int);
-    unsafe { advance_to_files(taglen) };
+    advance_to_files(taglen);
 
     let fname = unsafe { tag_full_fname(tagp) };
     if !fname.is_null() {
@@ -188,10 +185,7 @@ unsafe fn print_entry_head(
 /// Print the `field:value` pairs after a tag's command.
 ///
 /// Answers `false` when the user interrupted, which ends the listing.
-///
-/// # Safety
-/// `tagp.command_end` must be non-NULL and point into the match.
-unsafe fn print_extra_fields(tagp: &TagParts) -> bool {
+fn print_extra_fields(tagp: &TagParts) -> bool {
     // SAFETY: the caller's promise; every scan stops at a line ending or
     // the terminator.
     // Past the `;"` and the separator after it.
@@ -334,10 +328,7 @@ unsafe fn command_text_end(command: *const c_char) -> *const c_char {
 ///
 /// A `taglen` of `MAXCOL` means the names were too wide to line up, so the
 /// file goes on a line of its own.
-///
-/// # Safety
-/// Message output must be in progress.
-unsafe fn advance_to_files(taglen: c_int) {
+fn advance_to_files(taglen: c_int) {
     if taglen == MAXCOL as c_int {
         msg_putchar('\n' as c_int);
         msg_advance(24);

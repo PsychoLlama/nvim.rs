@@ -81,11 +81,7 @@ unsafe fn has_sound_tree(slang: *mut SpellLang) -> bool {
 }
 
 /// Prepare the per-language table of soundfolds already handled.
-///
-/// # Safety
-///
-/// The current window must have its languages loaded.
-pub(super) unsafe fn suggest_try_soundalike_prep() {
+pub(super) fn suggest_try_soundalike_prep() {
     // SAFETY: by the contract above, the window's languages are loaded.
     for lp in unsafe { crate::spellsuggest::window_langs() } {
         // SAFETY: `lp` came out of the window's language list, so
@@ -131,11 +127,7 @@ pub(super) unsafe fn suggest_try_soundalike(su: *mut SugInfo) {
 }
 
 /// Release the per-language table of soundfolds already handled.
-///
-/// # Safety
-///
-/// The current window must have its languages loaded.
-pub(super) unsafe fn suggest_try_soundalike_finish() {
+pub(super) fn suggest_try_soundalike_finish() {
     // SAFETY: by the contract above, the window's languages are loaded.
     for lp in unsafe { crate::spellsuggest::window_langs() } {
         let slang = lp.lp_slang;

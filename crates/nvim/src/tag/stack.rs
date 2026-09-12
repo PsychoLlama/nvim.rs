@@ -112,8 +112,7 @@ impl TagStack {
     /// Drop every entry from `len` on, leaving the index alone.
     pub(crate) fn truncate(&mut self, len: usize) {
         for item in &mut self.entries()[len..] {
-            // SAFETY: an entry in use owns its name and user data.
-            unsafe { tagstack_clear_entry(item) };
+            tagstack_clear_entry(item);
         }
         // `len` is no larger than the count it replaces.
         self.win.w_tagstacklen = len as c_int;
@@ -122,8 +121,7 @@ impl TagStack {
     /// Drop the oldest entry, shifting the rest down to free the top.
     fn shift(&mut self) {
         let entries = self.entries();
-        // SAFETY: entry 0 is in use, so it owns its name and user data.
-        unsafe { tagstack_clear_entry(&mut entries[0]) };
+        tagstack_clear_entry(&mut entries[0]);
         entries.rotate_left(1);
         // The count was at least one.
         self.win.w_tagstacklen -= 1;
@@ -211,11 +209,7 @@ impl TagStack {
 }
 
 /// Free what one stack entry owns, and forget it.
-///
-/// # Safety
-/// The entry's `tagname` and `user_data` must be NULL or allocations the
-/// entry owns.
-pub unsafe fn tagstack_clear_entry(item: &mut Taggy) {
+pub fn tagstack_clear_entry(item: &mut Taggy) {
     // SAFETY: the caller promises both fields are ours to free.
     unsafe { xfree(item.tagname.cast()) };
     unsafe { xfree(item.user_data.cast()) };

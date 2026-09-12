@@ -275,8 +275,7 @@ unsafe fn read_spl(
             if len < 0 {
                 break;
             }
-            // SAFETY: `slang` is live for the whole read.
-            unsafe { read_section(spl, slang, id, flags, len) }
+            read_section(spl, slang, id, flags, len)
         };
 
         match res {
@@ -297,11 +296,7 @@ unsafe fn read_spl(
 }
 
 /// Dispatch one section by its id.
-///
-/// # Safety
-///
-/// `slang` must be live for as long as the section readers hold it.
-unsafe fn read_section(
+fn read_section(
     spl: &mut Spl,
     slang: &mut SpellLang,
     id: c_int,
@@ -321,8 +316,7 @@ unsafe fn read_section(
             let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
             slang.sl_midword = owned_cstr(text);
         }
-        // SAFETY: the caller's language, and `vim_regcomp` is the editor's.
-        SN_PREFCOND => unsafe { read_prefcond_section(spl, slang) }?,
+        SN_PREFCOND => read_prefcond_section(spl, slang)?,
         SN_REP => read_rep_section(spl, &mut slang.sl_rep, &mut slang.sl_rep_first)?,
         SN_REPSAL => read_rep_section(spl, &mut slang.sl_repsal, &mut slang.sl_repsal_first)?,
         SN_SAL => read_sal_section(spl, slang)?,
@@ -332,13 +326,11 @@ unsafe fn read_section(
             // SAFETY: the language's hash table is its own.
             unsafe { set_map_str(slang, trim_nul(&text)) };
         }
-        // SAFETY: `count_common_word` takes the language by pointer.
-        SN_WORDS => unsafe { read_words_section(spl, slang, len) }?,
+        SN_WORDS => read_words_section(spl, slang, len)?,
         SN_SUGFILE => slang.sl_sugtime = spl.get8ctime().unwrap_or(-1),
         SN_NOSPLITSUGS => slang.sl_nosplitsugs = true,
         SN_NOCOMPOUNDSUGS => slang.sl_nocompoundsugs = true,
-        // SAFETY: the caller's language, and `vim_regcomp` is the editor's.
-        SN_COMPOUND => unsafe { read_compound(spl, slang, len) }?,
+        SN_COMPOUND => read_compound(spl, slang, len)?,
         SN_NOBREAK => slang.sl_nobreak = true,
         SN_SYLLABLE => {
             let text = spl.read_string(len as usize).map_err(|_| Stop::Silent)?;
@@ -459,7 +451,7 @@ unsafe fn load_sug(spl: &mut Spl, slang: &mut SpellLang) {
     }
 
     // SAFETY: the language is live.
-    if unsafe { read_sug_body(spl, slang) }.is_ok() {
+    if read_sug_body(spl, slang).is_ok() {
         return;
     }
     // SAFETY: the loaded language's own file name.
@@ -470,11 +462,7 @@ unsafe fn load_sug(spl: &mut Spl, slang: &mut SpellLang) {
 }
 
 /// The sound-fold tree and the word-number lines behind it.
-///
-/// # Safety
-///
-/// The language must be live; a spell buffer is opened into it.
-unsafe fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
+fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     spell_read_tree(spl, &mut slang.sl_sound_tree, false, 0)?;
 
     slang.sl_sugbuf = open_spellbuf().map_or(core::ptr::null_mut(), Buf::raw);

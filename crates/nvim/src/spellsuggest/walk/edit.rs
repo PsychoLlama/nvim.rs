@@ -58,12 +58,8 @@ impl Walk<'_> {
     ///
     /// Runs on into [`Walk::plain`] rather than going back round the
     /// driver loop, exactly as the C fell through.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees and bad word must be valid.
     #[inline(always)]
-    pub(super) unsafe fn end_nul(&mut self) {
+    pub(super) fn end_nul(&mut self) {
         let level = self.depth as usize;
         let saved = WordFlags::from_bits(self.stack[level].saved_badflags.into());
         unsafe { (*self.su).su_badflags = saved };
@@ -78,9 +74,7 @@ impl Walk<'_> {
             return;
         }
         self.stack[level].state = State::Plain;
-        // SAFETY: the trees and the bad word are valid by the contract
-        // above, which is all `plain` asks for.
-        unsafe { self.plain() };
+        self.plain();
     }
 
     /// Take one byte of this node: add it to the good word and go a level
@@ -89,12 +83,8 @@ impl Walk<'_> {
     ///
     /// This state is its own successor: each round takes one more byte,
     /// until the node runs out.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees and bad word must be valid.
     #[inline(always)]
-    pub(super) unsafe fn plain(&mut self) {
+    pub(super) fn plain(&mut self) {
         let level = self.depth as usize;
         let node = self.stack[level].node;
 
@@ -139,8 +129,7 @@ impl Walk<'_> {
             && byte == self.fword_at(self.stack[level].del_idx as usize);
         let allowed = newscore == 0
             || (self.stack[level].bad_idx >= self.stack[level].change_from && !undoing_a_delete);
-        // SAFETY: `su` is the caller's suggestion state.
-        if !allowed || !unsafe { self.try_deeper(newscore) } {
+        if !allowed || !self.try_deeper(newscore) {
             return;
         }
 
@@ -176,9 +165,7 @@ impl Walk<'_> {
 
         self.stack[child].char_idx += 1;
         if self.stack[child].char_idx == self.stack[child].char_len {
-            // SAFETY: `depth` is still the level the character was added
-            // at, which is what `settle_character` asks for.
-            unsafe { self.settle_character() };
+            self.settle_character();
             // Starting a new character.
             self.stack[child].char_len = 0;
         }
@@ -187,12 +174,8 @@ impl Walk<'_> {
     /// The last byte of a `tword` character has arrived: correct the
     /// position in the bad word and apply whatever discount the character
     /// as a whole has earned.
-    ///
-    /// # Safety
-    ///
-    /// `self.depth` must be the level the character was added at.
     #[inline(always)]
-    unsafe fn settle_character(&mut self) {
+    fn settle_character(&mut self) {
         let level = self.depth as usize;
         let char_start = self.stack[level].bad_char_start as usize;
         let good_char = self.stack[level].good_len as usize - self.stack[level].char_len as usize;
@@ -256,12 +239,8 @@ impl Walk<'_> {
     ///
     /// Runs on into [`Walk::ins_prep`] when there was nothing to delete,
     /// exactly as the C fell through.
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
     #[inline(always)]
-    pub(super) unsafe fn delete(&mut self) {
+    pub(super) fn delete(&mut self) {
         let level = self.depth as usize;
 
         if self.stack[level].char_len > 0 {
@@ -288,8 +267,7 @@ impl Walk<'_> {
             SCORE_DEL
         };
 
-        // SAFETY: as above, and `su` is the caller's suggestion state.
-        if !(self.fword_at(bad_idx) != NUL && unsafe { self.try_deeper(newscore) }) {
+        if !(self.fword_at(bad_idx) != NUL && self.try_deeper(newscore)) {
             self.ins_prep();
             return;
         }
@@ -357,12 +335,8 @@ impl Walk<'_> {
     ///
     /// This state is its own successor: each round inserts the next byte
     /// of the node instead.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees and bad word must be valid.
     #[inline(always)]
-    pub(super) unsafe fn insert(&mut self) {
+    pub(super) fn insert(&mut self) {
         let level = self.depth as usize;
         let node = self.stack[level].node;
 
@@ -399,11 +373,7 @@ impl Walk<'_> {
         // Skip a byte equal to the bad word's: accepting it, which
         // STATE_PLAIN already did, is always better.
         //
-        // SAFETY: `bad_idx` is a position inside the bad word, and `su` is
-        // the caller's suggestion state.
-        if byte == self.fword_at(self.stack[level].bad_idx as usize)
-            || !unsafe { self.try_deeper(newscore) }
-        {
+        if byte == self.fword_at(self.stack[level].bad_idx as usize) || !self.try_deeper(newscore) {
             return;
         }
 

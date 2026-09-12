@@ -58,11 +58,7 @@ impl Walk<'_> {
     }
 
     /// Swap two characters of the bad word: "12" -> "21".
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
-    pub(super) unsafe fn swap(&mut self) {
+    pub(super) fn swap(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
 
@@ -109,8 +105,7 @@ impl Walk<'_> {
             return;
         }
 
-        // SAFETY: `su` is the caller's suggestion state.
-        if !unsafe { self.try_deeper(SCORE_SWAP) } {
+        if !self.try_deeper(SCORE_SWAP) {
             // If this swap is out of reach then SWAP3 is too.
             self.stack[level].state = State::RepIni;
             return;
@@ -129,11 +124,7 @@ impl Walk<'_> {
 
     /// Undo the swap -- "21" -> "12" -- and go straight on to try swapping
     /// two characters over a third, as the C fell through.
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
-    pub(super) unsafe fn un_swap(&mut self) {
+    pub(super) fn un_swap(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
         // The two characters are the ones `swap` wrote, so their lengths
@@ -149,16 +140,11 @@ impl Walk<'_> {
         // `swap3` names its own successor on every path, so there is
         // nothing to set here.
         //
-        // SAFETY: the bad word is valid by the contract above.
-        unsafe { self.swap3() };
+        self.swap3();
     }
 
     /// Swap two characters over a third: "123" -> "321".
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
-    pub(super) unsafe fn swap3(&mut self) {
+    pub(super) fn swap3(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
 
@@ -188,8 +174,7 @@ impl Walk<'_> {
             return;
         }
 
-        // SAFETY: `su` is the caller's suggestion state.
-        if !unsafe { self.try_deeper(SCORE_SWAP3) } {
+        if !self.try_deeper(SCORE_SWAP3) {
             self.stack[level].state = State::RepIni;
             return;
         }
@@ -209,11 +194,7 @@ impl Walk<'_> {
 
     /// Undo the three-character swap -- "321" -> "123" -- and go on to
     /// rotate the three left: "123" -> "231".
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
-    pub(super) unsafe fn un_swap3(&mut self) {
+    pub(super) fn un_swap3(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
 
@@ -240,8 +221,7 @@ impl Walk<'_> {
             return;
         }
 
-        // SAFETY: `su` is the caller's suggestion state.
-        if !unsafe { self.try_deeper(SCORE_SWAP3) } {
+        if !self.try_deeper(SCORE_SWAP3) {
             self.stack[level].state = State::RepIni;
             return;
         }
@@ -263,11 +243,7 @@ impl Walk<'_> {
 
     /// Undo the left rotation -- "231" -> "123" -- and go on to rotate the
     /// three right: "123" -> "312".
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
-    pub(super) unsafe fn un_rot3l(&mut self) {
+    pub(super) fn un_rot3l(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
 
@@ -282,8 +258,7 @@ impl Walk<'_> {
         word.copy_within(..moved_len, last_len);
         encode_char(last, word);
 
-        // SAFETY: `su` is the caller's suggestion state.
-        if !unsafe { self.try_deeper(SCORE_SWAP3) } {
+        if !self.try_deeper(SCORE_SWAP3) {
             self.stack[level].state = State::RepIni;
             return;
         }
@@ -305,11 +280,7 @@ impl Walk<'_> {
 
     /// Undo the right rotation -- "312" -> "123" -- and go straight on to
     /// the `REP` items, as the C fell through.
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
-    pub(super) unsafe fn un_rot3r(&mut self) {
+    pub(super) fn un_rot3r(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
 
@@ -326,8 +297,6 @@ impl Walk<'_> {
 
         // `rep_ini` names its own successor on every path.
         //
-        // SAFETY: the walk's trees and bad word are valid by the contract
-        // above.
-        unsafe { self.rep_ini() };
+        self.rep_ini();
     }
 }

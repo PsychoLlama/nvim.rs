@@ -682,7 +682,7 @@ pub(crate) unsafe fn nv_brace(cmd_arg: *mut CmdArg) {
     ca.op().use_reg_one = true;
     ca.op().inclusive = false;
     Win::current().w_set_curswant = true;
-    if unsafe { findsent(ca.arg as Direction, ca.count1) }.is_err() {
+    if findsent(ca.arg as Direction, ca.count1).is_err() {
         clear_op_beep(ca.op());
         return;
     }
@@ -761,7 +761,7 @@ pub(crate) unsafe fn nv_bck_word(cmd_arg: *mut CmdArg) {
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     Win::current().w_set_curswant = true;
-    if unsafe { bck_word(ca.count1, ca.arg != 0, false) }.is_err() {
+    if bck_word(ca.count1, ca.arg != 0, false).is_err() {
         clear_op_beep(ca.op());
     } else {
         unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
@@ -797,9 +797,9 @@ pub(crate) unsafe fn nv_wordcmd(cmd_arg: *mut CmdArg) {
     ca.op().motion_type = kMTCharWise;
     Win::current().w_set_curswant = true;
     let moved = if word_end {
-        unsafe { end_word(ca.count1, ca.arg != 0, cw_on_word, false) }
+        end_word(ca.count1, ca.arg != 0, cw_on_word, false)
     } else {
-        unsafe { fwd_word(ca.count1, ca.arg != 0, ca.op().op_type != OpType::Nop) }
+        fwd_word(ca.count1, ca.arg != 0, ca.op().op_type != OpType::Nop)
     };
     if lt(startpos, Win::current().w_cursor) {
         unsafe { adjust_cursor(ca.oap) };

@@ -213,7 +213,7 @@ fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol: ColNr)
     }
 
     // Add the offset to the skip pattern's match.
-    let pos = unsafe { syn_add_end_off(offsets, &regmatch, SPO_ME_OFF, 1) };
+    let pos = syn_add_end_off(offsets, &regmatch, SPO_ME_OFF, 1);
     if pos.lnum > startpos.lnum {
         // The skip pattern goes on to the next line, so there is no match
         // with an end pattern in this line.
@@ -251,11 +251,11 @@ fn end_positions(best_idx: c_int, best: &RegMMatch, startpos: LPos) -> RegionEnd
     // Match from the start pattern to the end pattern, corrected for the
     // end pattern's match and highlight offsets. Neither may end before
     // the start.
-    let mut m_endpos = unsafe { syn_add_end_off(offsets, best, SPO_ME_OFF, 1) };
+    let mut m_endpos = syn_add_end_off(offsets, best, SPO_ME_OFF, 1);
     if m_endpos.lnum == startpos.lnum && m_endpos.col < startpos.col {
         m_endpos.col = startpos.col;
     }
-    let mut eoe_pos = unsafe { syn_add_end_off(offsets, best, SPO_HE_OFF, 1) };
+    let mut eoe_pos = syn_add_end_off(offsets, best, SPO_HE_OFF, 1);
     if eoe_pos.lnum == startpos.lnum && eoe_pos.col < startpos.col {
         eoe_pos.col = startpos.col;
     }
@@ -328,12 +328,7 @@ pub(crate) fn limit_pos_zero(pos: &mut LPos, limit: LPos) {
 ///
 /// `extra` is added when the offset is measured from the *start* of the match
 /// (`me=s+1`), which is how "one past" is spelled for a region's end.
-///
-/// # Safety
-///
-/// `spp` must be an initialized `PatOffsets` whose pointer fields point at
-/// live data for the call.
-pub(crate) unsafe fn syn_add_end_off(
+pub(crate) fn syn_add_end_off(
     spp: PatOffsets,
     regmatch: &RegMMatch,
     idx: c_int,
@@ -367,12 +362,7 @@ pub(crate) unsafe fn syn_add_end_off(
 /// offset is measured from the match *end* rather than its start, and a
 /// position past the last line is clamped to the end of the last line instead
 /// of to column 0.
-///
-/// # Safety
-///
-/// `spp` must be an initialized `PatOffsets` whose pointer fields point at
-/// live data for the call.
-pub(crate) unsafe fn syn_add_start_off(
+pub(crate) fn syn_add_start_off(
     spp: PatOffsets,
     regmatch: &RegMMatch,
     idx: c_int,

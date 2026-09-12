@@ -250,10 +250,7 @@ pub unsafe fn current_block(
 
 /// Whether the cursor is inside a `<aaa>` tag, or with `end_tag` a `</aaa>`
 /// one. A self-closing `<aaa/>` is neither.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-unsafe fn in_html_tag(end_tag: bool) -> bool {
+fn in_html_tag(end_tag: bool) -> bool {
     // SAFETY: on the main thread with a current buffer, so this hands back
     // the NUL-terminated cursor line; the cursor's column indexes into it.
     let line = get_cursor_line_ptr();
@@ -379,14 +376,14 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         // all `in_html_tag` needs; `get_cursor_pos_ptr` hands back a pointer
         // into that NUL-terminated line and `inc_cursor`/`dec_cursor` report
         // running off its ends themselves.
-        if unsafe { in_html_tag(false) } {
+        if in_html_tag(false) {
             // On a start tag: move to its `>`.
             while unsafe { *get_cursor_pos_ptr() } as c_int != '>' as c_int {
                 if inc_cursor() < 0 {
                     break;
                 }
             }
-        } else if unsafe { in_html_tag(true) } {
+        } else if in_html_tag(true) {
             // On an end tag: move to just before it.
             while unsafe { *get_cursor_pos_ptr() } as c_int != '<' as c_int {
                 if dec_cursor() < 0 {

@@ -494,7 +494,7 @@ unsafe fn handle_line(
     }
 
     if is_info_keyword(items[0].to_bytes()) && items.len() > 1 {
-        unsafe { append_info(spin, items) };
+        append_info(spin, items);
         return true;
     }
 
@@ -676,7 +676,7 @@ unsafe fn handle_line(
 
     // The two-item form of REP/REPSAL is the count line.
     if is_aff_rule(items, c"REP", 2) || is_aff_rule(items, c"REPSAL", 2) {
-        if !unsafe { is_digit_byte(first_byte(items[1]) as c_char) } {
+        if !is_digit_byte(first_byte(items[1]) as c_char) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
             smsg!(0, "Expected REP(SAL) count in {fname} line {}", lnum);
@@ -696,7 +696,7 @@ unsafe fn handle_line(
 
     if is_aff_rule(items, c"SAL", 3) {
         if st.do_sal {
-            unsafe { handle_sal(spin, items) };
+            handle_sal(spin, items);
         }
         return true;
     }
@@ -749,11 +749,7 @@ fn item_number(item: &CStr) -> c_int {
 }
 
 /// Is this byte a digit, by the C library's classification?
-///
-/// # Safety
-///
-/// None beyond reading the locale table.
-pub(super) unsafe fn is_digit_byte(c: c_char) -> bool {
+pub(super) fn is_digit_byte(c: c_char) -> bool {
     // SAFETY: the index is a byte value, which the table covers.
     unsafe {
         *(*__ctype_b_loc()).offset(c as uint8_t as c_int as isize) as c_int

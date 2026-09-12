@@ -46,11 +46,7 @@ impl Walk<'_> {
     ///
     /// `newscore` is what the word cost so far; a split adds its own
     /// penalty to it.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees and bad word must be valid.
-    pub(super) unsafe fn try_split_or_compound(
+    pub(super) fn try_split_or_compound(
         &mut self,
         flags: WordFlags,
         bad_word_ends: bool,
@@ -77,8 +73,7 @@ impl Walk<'_> {
             < unsafe { (*self.su).su_badlen }
             && !self.soundfold;
 
-        // SAFETY: the walk's language is valid by the contract above.
-        let mut try_compound = unsafe { self.may_compound(flags) };
+        let mut try_compound = self.may_compound(flags);
         if try_compound {
             let comp_len = self.stack[level].comp_len as usize;
             self.compflags[comp_len] = ((flags.bits() as u32) >> 24) as u8;
@@ -108,15 +103,13 @@ impl Walk<'_> {
         }
 
         if !try_compound && (!bad_word_ends || !good_word_ends) {
-            // SAFETY: the walk's state is valid by the contract above.
-            match unsafe { self.split_penalty(flags, newscore) } {
+            match self.split_penalty(flags, newscore) {
                 None => return,
                 Some(score) => newscore = score,
             }
         }
 
-        // SAFETY: `su` is the caller's, as above.
-        if !unsafe { self.try_deeper(newscore) } {
+        if !self.try_deeper(newscore) {
             return;
         }
         self.go_deeper(newscore);
@@ -140,8 +133,7 @@ impl Walk<'_> {
         self.stack[child].split_off = self.stack[child].good_len;
         self.stack[child].split_bad_idx = self.stack[child].bad_idx;
 
-        // SAFETY: the bad word is valid by the contract above.
-        unsafe { self.skip_split_character(try_compound, bad_word_ends, good_word_ends) };
+        self.skip_split_character(try_compound, bad_word_ends, good_word_ends);
 
         // Compounding keeps collecting flags; splitting may start
         // compounding over from here.
@@ -182,11 +174,7 @@ impl Walk<'_> {
 
     /// Do the language's compounding rules allow this word to be glued to
     /// the next one?
-    ///
-    /// # Safety
-    ///
-    /// The walk's language must be valid.
-    unsafe fn may_compound(&mut self, flags: WordFlags) -> bool {
+    fn may_compound(&mut self, flags: WordFlags) -> bool {
         let level = self.depth as usize;
         let split_off = self.stack[level].split_off as usize;
         let this_word_len =
@@ -208,18 +196,14 @@ impl Walk<'_> {
                 || (self.stack[level].comp_len as c_int + 1
                     - self.stack[level].comp_split as c_int)
                     < unsafe { (*self.slang).sl_compmax })
-            && unsafe { self.can_be_compound(((flags.bits() as u32) >> 24) as c_int) }
+            && self.can_be_compound(((flags.bits() as u32) >> 24) as c_int)
     }
 
     /// What a split costs, and whether it is allowed at all.
     ///
     /// Returns `None` when the words collected so far could not stand as
     /// separate words, which ends this NUL byte's turn.
-    ///
-    /// # Safety
-    ///
-    /// The walk's state must be valid.
-    unsafe fn split_penalty(&mut self, flags: WordFlags, mut newscore: c_int) -> Option<c_int> {
+    fn split_penalty(&mut self, flags: WordFlags, mut newscore: c_int) -> Option<c_int> {
         let level = self.depth as usize;
 
         // Splitting means the words so far have to be valid on their
@@ -279,11 +263,7 @@ impl Walk<'_> {
     /// A non-word character at the split point is replaced by the space,
     /// and when the bad word ends the character is kept instead: it is
     /// copied into `preword` so that it survives into the suggestion.
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
-    unsafe fn skip_split_character(
+    fn skip_split_character(
         &mut self,
         try_compound: bool,
         bad_word_ends: bool,
@@ -332,11 +312,7 @@ impl Walk<'_> {
     ///
     /// This also checks the `COMPOUNDRULE` lines, but only when they carry
     /// no wildcards -- with wildcards a partial sequence says nothing.
-    ///
-    /// # Safety
-    ///
-    /// The walk's language must be valid.
-    unsafe fn can_be_compound(&mut self, flag: c_int) -> bool {
+    fn can_be_compound(&mut self, flag: c_int) -> bool {
         let level = self.depth as usize;
         let comp_len = self.stack[level].comp_len as usize;
         let comp_split = self.stack[level].comp_split as usize;

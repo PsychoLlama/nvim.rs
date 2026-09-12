@@ -57,11 +57,7 @@ use core::ptr;
 impl Walk<'_> {
     /// At the start of a node: deal with the NUL bytes, which mean the
     /// good word may end here.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees and bad word must be valid.
-    pub(super) unsafe fn node_start(&mut self) {
+    pub(super) fn node_start(&mut self) {
         let level = self.depth as usize;
         let entry_state = self.stack[level].state;
 
@@ -73,9 +69,7 @@ impl Walk<'_> {
         let at = node + self.stack[level].child as SpellIdx; // the current byte
 
         if self.stack[level].prefix_depth == PFD_PREFIXTREE {
-            // SAFETY: the trees and the bad word are valid by the contract
-            // above, which is all `prefix_tree_node` asks for.
-            unsafe { self.prefix_tree_node(entry_state, node_len, at) };
+            self.prefix_tree_node(entry_state, node_len, at);
             return;
         }
 
@@ -91,9 +85,7 @@ impl Walk<'_> {
             return;
         }
 
-        // SAFETY: `at` is a NUL child of this node, and the trees and bad
-        // word are valid by the contract above.
-        unsafe { self.word_end(at) };
+        self.word_end(at);
     }
 
     /// The same state, but inside the postponed-prefix tree.
@@ -103,11 +95,7 @@ impl Walk<'_> {
     /// move into `preword` with the case they had in the bad word, and the
     /// caps type for the rest of the bad word becomes the one the word
     /// after the prefix is judged by.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees and bad word must be valid.
-    unsafe fn prefix_tree_node(&mut self, entry_state: State, node_len: c_int, at: SpellIdx) {
+    fn prefix_tree_node(&mut self, entry_state: State, node_len: c_int, at: SpellIdx) {
         let level = self.depth as usize;
 
         // Skip over the NUL bytes; they are used just below.
@@ -202,11 +190,7 @@ impl Walk<'_> {
 
     /// A word ends at this NUL byte: check it over and, if the bad word
     /// ends too, offer it.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees and bad word must be valid.
-    unsafe fn word_end(&mut self, at: SpellIdx) {
+    fn word_end(&mut self, at: SpellIdx) {
         let level = self.depth as usize;
         self.stack[level].child += 1; // eat one NUL byte
 
@@ -233,8 +217,7 @@ impl Walk<'_> {
         };
         self.tword[self.stack[level].good_len as usize] = NUL as c_char;
 
-        // SAFETY: the walk's trees are valid by the contract above.
-        if !unsafe { self.prefix_allows_word(&mut flags) } {
+        if !self.prefix_allows_word(&mut flags) {
             return;
         }
 
@@ -253,8 +236,8 @@ impl Walk<'_> {
             // SAFETY: `slang` is the language of the walk's own trees, and
             // the two helpers want no more than the contract above.
             if unsafe { (*self.slang).sl_nobreak } {
-                if unsafe { self.nobreak_previous_word_matches() } {
-                    unsafe { self.suggest_previous_word() };
+                if self.nobreak_previous_word_matches() {
+                    self.suggest_previous_word();
                     return;
                 }
             } else {
@@ -326,24 +309,17 @@ impl Walk<'_> {
             && self.stack[level].bad_idx >= self.stack[level].change_from
             && compound_ok
         {
-            // SAFETY: everything `offer_word` reads is this walk's own
-            // state or the caller's bad word.
-            newscore = unsafe { self.offer_word(newscore) };
+            newscore = self.offer_word(newscore);
         }
 
-        // SAFETY: the walk's state is valid by the contract above.
-        unsafe { self.try_split_or_compound(flags, bad_word_ends, good_word_ends, newscore) };
+        self.try_split_or_compound(flags, bad_word_ends, good_word_ends, newscore);
     }
 
     /// Check the postponed prefix in front of this word, if there is one.
     ///
     /// Returns false when the prefix cannot be used with the word, which
     /// ends this NUL byte's turn. A rare prefix makes the whole word rare.
-    ///
-    /// # Safety
-    ///
-    /// The walk's trees must be valid.
-    unsafe fn prefix_allows_word(&mut self, flags: &mut WordFlags) -> bool {
+    fn prefix_allows_word(&mut self, flags: &mut WordFlags) -> bool {
         let level = self.depth as usize;
         if self.stack[level].prefix_depth > PFD_NOTSPECIAL
             || self.stack[level].flags & FLAG_PREFIX_OK != 0
@@ -401,11 +377,7 @@ impl Walk<'_> {
 
     /// For a `NOBREAK` language: did the word before this one come through
     /// unchanged?
-    ///
-    /// # Safety
-    ///
-    /// The walk's bad word must be valid.
-    unsafe fn nobreak_previous_word_matches(&mut self) -> bool {
+    fn nobreak_previous_word_matches(&mut self) -> bool {
         let level = self.depth as usize;
         let taken = self.stack[level].bad_idx as c_int - self.stack[level].split_bad_idx as c_int;
         if taken != self.stack[level].good_len as c_int - self.stack[level].split_off as c_int {
@@ -426,11 +398,7 @@ impl Walk<'_> {
     /// If this word was corrected too, then what has to be checked is
     /// whether a correct word follows -- which is what the rest of the
     /// walk goes on to do.
-    ///
-    /// # Safety
-    ///
-    /// The walk's state must be valid.
-    unsafe fn suggest_previous_word(&mut self) {
+    fn suggest_previous_word(&mut self) {
         let level = self.depth as usize;
         let preword_len = self.stack[level].preword_len as usize;
         self.preword[preword_len] = NUL as c_char;
@@ -637,11 +605,7 @@ impl Walk<'_> {
     ///
     /// Returns the score the walk carries on with, which the non-word
     /// penalty may have raised.
-    ///
-    /// # Safety
-    ///
-    /// The walk's state must be valid.
-    unsafe fn offer_word(&mut self, mut newscore: c_int) -> c_int {
+    fn offer_word(&mut self, mut newscore: c_int) -> c_int {
         let level = self.depth as usize;
 
         if self.soundfold {

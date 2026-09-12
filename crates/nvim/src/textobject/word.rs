@@ -88,10 +88,7 @@ fn back_in_line() {
 ///
 /// With `eol`, the last word stops at end of line, which is what an operator
 /// wants: `dw` on the last word of a line must not eat the newline.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed> {
+pub fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed> {
     Win::current().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -153,10 +150,7 @@ pub unsafe fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(),
 ///
 /// With `stop`, a cursor already on the start of a word moves one word less,
 /// which is what makes `cb` from mid-word do the right thing.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), Failed> {
+pub fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), Failed> {
     Win::current().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -214,10 +208,7 @@ pub unsafe fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Resul
 /// (Real vi's `e` crosses a blank line and lands on the *first* character of
 /// the next non-blank line, while `E` does not. That looks like a bug and is
 /// not reproduced here -- upstream says so too.)
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-pub unsafe fn end_word(
+pub fn end_word(
     mut count: c_int,
     bigword: bool,
     mut stop: bool,
@@ -292,10 +283,7 @@ pub unsafe fn end_word(
 /// `Err` when the start of the file was reached.
 ///
 /// With `eol`, an end of line stops the motion.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed> {
+pub fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), Failed> {
     Win::current().w_cursor.coladd = 0;
     cls_bigword.set(bigword);
     loop {
@@ -387,14 +375,14 @@ pub unsafe fn current_word(
         // Starting on white space that is to be included (" word"), or
         // off white space that is not ("word"): find the end of the word.
         if (cls() == 0) == include {
-            unsafe { end_word(1, bigword, true, true) }?;
+            end_word(1, bigword, true, true)?;
         } else {
             // Starting off white space that is to be included
             // ("word   "), or on white space that is not ("   "): find
             // the start of the next word. Landing in the first column of
             // the next line (a single-character word) means backing up to
             // the end of this one.
-            let _ = unsafe { fwd_word(1, bigword, true) };
+            let _ = fwd_word(1, bigword, true);
             if Win::current().w_cursor.col == 0 {
                 unsafe { decl(&mut Win::current().cursor()) };
             } else {
@@ -428,9 +416,9 @@ pub unsafe fn current_word(
                 return Err(Failed);
             }
             if include != (cls() != 0) {
-                unsafe { bck_word(1, bigword, true) }?;
+                bck_word(1, bigword, true)?;
             } else {
-                unsafe { bckend_word(1, bigword, true) }?;
+                bckend_word(1, bigword, true)?;
                 unsafe { incl(&mut Win::current().cursor()) };
             }
         } else {
@@ -439,7 +427,7 @@ pub unsafe fn current_word(
                 return Err(Failed);
             }
             if include != (cls() == 0) {
-                if unsafe { fwd_word(1, bigword, true) }.is_err() && count > 1 {
+                if fwd_word(1, bigword, true).is_err() && count > 1 {
                     return Err(Failed);
                 }
                 // An end just past a newline must not include the first
@@ -448,7 +436,7 @@ pub unsafe fn current_word(
                 if unsafe { oneleft() }.is_err() {
                     inclusive = false;
                 }
-            } else if unsafe { end_word(1, bigword, true, true) }.is_err() {
+            } else if end_word(1, bigword, true, true).is_err() {
                 return Err(Failed);
             }
         }

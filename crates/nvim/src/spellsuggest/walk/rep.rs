@@ -29,11 +29,7 @@ impl Walk<'_> {
     /// so where in the list to start.
     ///
     /// Runs on into [`Walk::rep`], as the C fell through.
-    ///
-    /// # Safety
-    ///
-    /// The walk's language and bad word must be valid.
-    pub(super) unsafe fn rep_ini(&mut self) {
+    pub(super) fn rep_ini(&mut self) {
         let level = self.depth as usize;
 
         // Skip quickly when there are no REP items and this is not the
@@ -68,8 +64,7 @@ impl Walk<'_> {
         }
 
         self.stack[level].state = State::Rep;
-        // SAFETY: as above.
-        unsafe { self.rep() };
+        self.rep();
     }
 
     /// Try the `REP` items in turn until one matches, replacing the text
@@ -77,11 +72,7 @@ impl Walk<'_> {
     ///
     /// This state is its own successor: [`State::RepUndo`] puts the bad
     /// word back and returns here for the next item.
-    ///
-    /// # Safety
-    ///
-    /// The walk's language and bad word must be valid.
-    pub(super) unsafe fn rep(&mut self) {
+    pub(super) fn rep(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
         // SAFETY: the language is valid by the contract above and stays
@@ -97,10 +88,7 @@ impl Walk<'_> {
                 self.stack[level].child = items.len() as i16;
                 break;
             }
-            if !self.fword[bad_idx..].starts_with(&item.from)
-                // SAFETY: `su` is the caller's suggestion state.
-                || !unsafe { self.try_deeper(SCORE_REP) }
-            {
+            if !self.fword[bad_idx..].starts_with(&item.from) || !self.try_deeper(SCORE_REP) {
                 continue;
             }
 
@@ -135,11 +123,7 @@ impl Walk<'_> {
 
     /// Put the text a `REP` item replaced back, and go on to the next
     /// item.
-    ///
-    /// # Safety
-    ///
-    /// The walk's language and bad word must be valid.
-    pub(super) unsafe fn rep_undo(&mut self) {
+    pub(super) fn rep_undo(&mut self) {
         let level = self.depth as usize;
         let bad_idx = self.stack[level].bad_idx as usize;
         // `child` still points just past the item that was applied.

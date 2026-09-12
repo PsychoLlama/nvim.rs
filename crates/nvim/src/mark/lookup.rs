@@ -248,7 +248,7 @@ pub unsafe fn mark_get_motion(
             BACKWARD
         };
         // SAFETY: the editor's globals are live.
-        if unsafe { findsent(dir as Direction, 1) }.is_ok() {
+        if findsent(dir as Direction, 1).is_ok() {
             // SAFETY: as above.
             mark = unsafe { pos_to_mark(buffer, fmp, winh.w_cursor) };
         }

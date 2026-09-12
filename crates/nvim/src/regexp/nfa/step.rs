@@ -131,13 +131,8 @@ fn copy_both_off(rex: Rex, to: &mut RegSubs, from: &RegSubs) {
 ///
 /// `clen` is the character's encoded length, which a couple of arms adjust,
 /// and `go_to_nextline` is set by the arm that steps over a line break.
-///
-/// # Safety
-///
-/// Every pointer must belong to the running match; `*listidx` must index
-/// `thislist`.
 #[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn step(
+pub(crate) fn step(
     rex: Rex,
     thislist: &mut ThreadList,
     nextlist: &ThreadList,
@@ -171,7 +166,7 @@ pub(crate) unsafe fn step(
         Ok(NfaOp::EndInvisible | NfaOp::EndInvisibleNeg | NfaOp::EndPattern) => {
             // The lookaround's own match has to end exactly where the
             // outer match asked it to.
-            if !unsafe { at_sub_match_end(rex) } {
+            if !at_sub_match_end(rex) {
                 return Step::Dead;
             }
             // A negated lookaround discards what it captured: it only
@@ -197,16 +192,14 @@ pub(crate) unsafe fn step(
             | NfaOp::StartInvisibleBeforeFirst
             | NfaOp::StartInvisibleBeforeNeg
             | NfaOp::StartInvisibleBeforeNegFirst,
-        ) => unsafe { start_lookaround(rex, thislist, idx, listidx, run) },
+        ) => start_lookaround(rex, thislist, idx, listidx, run),
 
-        Ok(NfaOp::StartPattern) => unsafe {
-            start_pattern(rex, thislist, nextlist, idx, run, *clen)
-        },
+        Ok(NfaOp::StartPattern) => start_pattern(rex, thislist, nextlist, idx, run, *clen),
 
         Ok(NfaOp::Bol) => Step::zero_width(rex.at_bol(), out),
         Ok(NfaOp::Eol) => Step::zero_width(curc == NUL, out),
-        Ok(NfaOp::Bow) => Step::zero_width(unsafe { at_word_start(rex, curc) }, out),
-        Ok(NfaOp::Eow) => Step::zero_width(unsafe { at_word_end(rex) }, out),
+        Ok(NfaOp::Bow) => Step::zero_width(at_word_start(rex, curc), out),
+        Ok(NfaOp::Eow) => Step::zero_width(at_word_end(rex), out),
         Ok(NfaOp::Bof) => Step::zero_width(
             rex.lnum() == 0 && rex.at_bol() && (!rex.multi() || rex.reg_firstlnum() == 1),
             out,
@@ -357,11 +350,7 @@ fn spanning(out: *mut NfaState, bytelen: c_int, clen: c_int) -> Step {
 }
 
 /// Is the input where the lookaround that is running was told to stop?
-///
-/// # Safety
-///
-/// The match context must be live.
-unsafe fn at_sub_match_end(rex: Rex) -> bool {
+fn at_sub_match_end(rex: Rex) -> bool {
     let endp = nfa_endp.get();
     // SAFETY: `nfa_endp` is null or the caller's stopping point, which lives
     // for the whole of the lookaround it was set for.
@@ -369,11 +358,7 @@ unsafe fn at_sub_match_end(rex: Rex) -> bool {
 }
 
 /// `\<`: a keyword character with something that is not one in front of it.
-///
-/// # Safety
-///
-/// The match context must be live.
-unsafe fn at_word_start(rex: Rex, curc: c_int) -> bool {
+fn at_word_start(rex: Rex, curc: c_int) -> bool {
     if curc == NUL {
         return false;
     }
@@ -384,11 +369,7 @@ unsafe fn at_word_start(rex: Rex, curc: c_int) -> bool {
 }
 
 /// `\>`: a keyword character behind the position and something else at it.
-///
-/// # Safety
-///
-/// The match context must be live.
-unsafe fn at_word_end(rex: Rex) -> bool {
+fn at_word_end(rex: Rex) -> bool {
     if rex.at_bol() {
         return false;
     }
@@ -454,11 +435,7 @@ unsafe fn collection_matches(rex: Rex, start: *mut NfaState, curc: c_int, clen: 
 /// A lookaround: run its pattern as a match of its own, either now or —
 /// when the loop would rather try the cheaper rest of the pattern first —
 /// postponed as a `NfaPim` carried along with the thread.
-///
-/// # Safety
-///
-/// Every pointer must belong to the running match.
-unsafe fn start_lookaround(
+fn start_lookaround(
     rex: Rex,
     thislist: &mut ThreadList,
     idx: usize,
@@ -536,11 +513,7 @@ unsafe fn start_lookaround(
 }
 
 /// `\@>`: like a lookahead, except that what it matched is consumed.
-///
-/// # Safety
-///
-/// Every pointer must belong to the running match.
-unsafe fn start_pattern(
+fn start_pattern(
     rex: Rex,
     thislist: &mut ThreadList,
     nextlist: &ThreadList,

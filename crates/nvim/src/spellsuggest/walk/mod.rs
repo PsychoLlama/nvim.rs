@@ -311,7 +311,7 @@ pub(super) unsafe fn suggest_trie_walk(
 ) {
     // SAFETY: the caller guarantees the pointers and the loaded trees.
     let mut walk = unsafe { Walk::new(su, langp, fword, soundfold) };
-    unsafe { walk.run() };
+    walk.run();
 }
 
 impl Walk<'_> {
@@ -383,48 +383,33 @@ impl Walk<'_> {
 
     /// Run every state of every level until the stack empties or the user
     /// interrupts.
-    ///
-    /// # Safety
-    ///
-    /// The walk must have been set up by [`Walk::new`].
     #[inline(always)]
-    unsafe fn run(&mut self) {
+    fn run(&mut self) {
         while self.depth >= 0 && !got_int.get() {
-            // SAFETY: the walk's pointers are the ones `new` was given and
-            // the tree indices stay inside the trees.
-            unsafe { self.step() };
+            self.step();
         }
     }
 
     /// Run the current level's current state once.
-    ///
-    /// # Safety
-    ///
-    /// `self.depth` must be a live level.
     #[inline(always)]
-    unsafe fn step(&mut self) {
-        // SAFETY: every handler reads the language's trees at indices the
-        // trees' own child counts bound, and the bad word within the
-        // buffer the caller supplied. The whole match is one dispatch: a
-        // live level is what each of the arms below asks for, and the
-        // contract above is what supplies it.
+    fn step(&mut self) {
         match self.stack[self.depth as usize].state {
-            State::Start | State::NoPrefix => unsafe { self.node_start() },
+            State::Start | State::NoPrefix => self.node_start(),
             State::SplitUndo => self.split_undo(),
-            State::EndNul => unsafe { self.end_nul() },
-            State::Plain => unsafe { self.plain() },
-            State::Del => unsafe { self.delete() },
+            State::EndNul => self.end_nul(),
+            State::Plain => self.plain(),
+            State::Del => self.delete(),
             State::InsPrep => self.ins_prep(),
-            State::Ins => unsafe { self.insert() },
-            State::Swap => unsafe { self.swap() },
-            State::UnSwap => unsafe { self.un_swap() },
-            State::Swap3 => unsafe { self.swap3() },
-            State::UnSwap3 => unsafe { self.un_swap3() },
-            State::UnRot3L => unsafe { self.un_rot3l() },
-            State::UnRot3R => unsafe { self.un_rot3r() },
-            State::RepIni => unsafe { self.rep_ini() },
-            State::Rep => unsafe { self.rep() },
-            State::RepUndo => unsafe { self.rep_undo() },
+            State::Ins => self.insert(),
+            State::Swap => self.swap(),
+            State::UnSwap => self.un_swap(),
+            State::Swap3 => self.swap3(),
+            State::UnSwap3 => self.un_swap3(),
+            State::UnRot3L => self.un_rot3l(),
+            State::UnRot3R => self.un_rot3r(),
+            State::RepIni => self.rep_ini(),
+            State::Rep => self.rep(),
+            State::RepUndo => self.rep_undo(),
             State::Final => self.leave_level(),
         }
     }
@@ -470,12 +455,8 @@ impl Walk<'_> {
     /// Would going one level deeper stay inside the stack and under the
     /// score ceiling? A change that cannot beat the worst suggestion
     /// already found is not worth trying.
-    ///
-    /// # Safety
-    ///
-    /// `self.su` must be valid.
     #[inline]
-    unsafe fn try_deeper(&self, score_add: c_int) -> bool {
+    fn try_deeper(&self, score_add: c_int) -> bool {
         // SAFETY: the caller guarantees `su`.
         self.depth < MAXWLEN as c_int - 1
             && self.stack[self.depth as usize].score + score_add < unsafe { (*self.su).su_maxscore }

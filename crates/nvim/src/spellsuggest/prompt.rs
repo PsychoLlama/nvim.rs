@@ -81,11 +81,7 @@ const ESC: c_int = 0x1b;
 ///
 /// In Visual mode the highlighted text is the bad word. A non-zero `count`
 /// picks that suggestion without asking.
-///
-/// # Safety
-///
-/// There must be a current window with a buffer.
-pub(crate) unsafe fn spell_suggest(count: c_int) {
+pub(crate) fn spell_suggest(count: c_int) {
     // SAFETY: the caller guarantees the window; `curwin` is re-read after
     // the body because autocommands may have moved it.
     let prev_cursor = Win::current().w_cursor;
@@ -99,18 +95,14 @@ pub(crate) unsafe fn spell_suggest(count: c_int) {
         Win::current().w_onebuf_opt.wo_spell = 1;
     }
 
-    unsafe { suggest_and_replace(count, prev_cursor, msg_scroll_save) };
+    suggest_and_replace(count, prev_cursor, msg_scroll_save);
 
     // Every way out of the body comes through here.
     Win::current().w_onebuf_opt.wo_spell = wo_spell_save;
 }
 
 /// The body of `z=`, with `'spell'` already on.
-///
-/// # Safety
-///
-/// As [`spell_suggest`], and `'spell'` must be on.
-unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
+fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     // SAFETY: the caller guarantees the window and its spell state; `line`
     // is owned here and outlives every pointer taken into it.
     if unsafe { *(*Win::current().w_s).b_p_spl } as c_int == NUL {
@@ -118,7 +110,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
         return;
     }
 
-    let Some(badlen) = (unsafe { move_to_bad_word(prev_cursor) }) else {
+    let Some(badlen) = move_to_bad_word(prev_cursor) else {
         return;
     };
 
@@ -174,11 +166,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
 /// Returns how much of the line the bad word covers, or 0 to let the spell
 /// checker decide; `None` means there is nothing to suggest for, and the
 /// beep has already been made.
-///
-/// # Safety
-///
-/// There must be a current window with a buffer and its spell state.
-unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
+fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     // SAFETY: the caller guarantees the window; the scan below stays
     // between the start of the cursor line and its terminator.
     if visual_active() {
@@ -336,16 +324,12 @@ unsafe fn show_suggestion(i: c_int, stp: &Suggest, badlen: c_int, badptr: *mut c
     }
 
     if p_verbose.get() > 0 {
-        unsafe { show_score(stp) };
+        show_score(stp);
     }
 }
 
 /// Append a suggestion's score, which `'verbose'` asks for.
-///
-/// # Safety
-///
-/// `stp` must be a live suggestion.
-unsafe fn show_score(stp: &Suggest) {
+fn show_score(stp: &Suggest) {
     // Each message gets a buffer of its own; upstream shares `IObuff`,
     // which the message machinery writes as it shows one.
     let mut line = [0 as c_char; IOSIZE as usize];

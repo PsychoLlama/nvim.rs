@@ -365,10 +365,7 @@ unsafe fn echo_search_cmd(
 ///
 /// Not done for a line offset, because then this would not be vi
 /// compatible; skipped when `pos.col` is near `MAXCOL` (a closed fold).
-///
-/// # Safety
-/// The current buffer must be the one `pos` addresses.
-unsafe fn back_off_start(pos: &mut Pos, off: i64) {
+fn back_off_start(pos: &mut Pos, off: i64) {
     let mut c = off;
     if off > 0 {
         while c != 0 {
@@ -401,10 +398,7 @@ unsafe fn back_off_start(pos: &mut Pos, off: i64) {
 ///
 /// Answers 2 when a *line* offset was added (which the caller reports back
 /// as "found, and the motion is linewise"), 1 otherwise.
-///
-/// # Safety
-/// The current buffer must be the one `pos` addresses.
-unsafe fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
+fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
     if off.line {
         // Add the offset to the line number.
         let lnum = pos.lnum as i64 + off.off;
@@ -593,7 +587,7 @@ pub unsafe fn do_search(
 
             let off = search_offset();
             if !off.line && off.off != 0 && pos.col < MAXCOL - 2 {
-                unsafe { back_off_start(&mut pos, off.off) };
+                back_off_start(&mut pos, off.off);
             }
 
             // A ';'-chained leg always applies its offset, whatever
@@ -643,7 +637,7 @@ pub unsafe fn do_search(
             let mut has_offset = false;
             if options & SEARCH_NOOF == 0 || unsafe { chained(cmd.pat) } {
                 let org_pos = pos;
-                retval = unsafe { add_offset(&mut pos, search_offset()) };
+                retval = add_offset(&mut pos, search_offset());
                 has_offset = !equalpos(pos, org_pos);
             }
 
@@ -714,10 +708,7 @@ pub unsafe fn do_search(
 ///
 /// `'matchpairs'` is `"x:y,x:y"`: the opening character of each pair
 /// blinks in left-to-right mode and the closing one in right-to-left.
-///
-/// # Safety
-/// The current buffer must be valid.
-unsafe fn mps_shows_match(c: c_int) -> bool {
+fn mps_shows_match(c: c_int) -> bool {
     let rightleft = Win::current().w_onebuf_opt.wo_rl ^ p_ri.get() != 0;
     let mut p = Buf::current().b_p_mps;
     while unsafe { *p } as c_int != NUL {
@@ -738,12 +729,9 @@ unsafe fn mps_shows_match(c: c_int) -> bool {
 }
 
 /// Briefly show the match for the just-typed `c`, for `'showmatch'`.
-///
-/// # Safety
-/// Must be called with a valid current window and buffer.
-pub unsafe fn showmatch(c: c_int) {
+pub fn showmatch(c: c_int) {
     // Only show a match for characters in 'matchpairs'.
-    if !unsafe { mps_shows_match(c) } {
+    if !mps_shows_match(c) {
         return;
     }
 

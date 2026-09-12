@@ -301,8 +301,7 @@ pub fn did_set_spelloptions(args: &mut OptSet) -> Option<&CStr> {
 }
 
 pub fn did_set_spellsuggest(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: re-reads the option's own value.
-    if unsafe { spell_check_sps() }.is_err() {
+    if spell_check_sps().is_err() {
         return invalid();
     }
     None

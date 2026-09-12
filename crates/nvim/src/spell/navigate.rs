@@ -62,10 +62,7 @@ use crate::spell::SMT_ALL;
 
 /// Ask the decoration providers whether column `col` of line `lnum` is
 /// spell-checked, running the `_on_spell_nav` callbacks once per line.
-///
-/// # Safety
-/// `window` must be a live window and `state` the scan's own decoration state.
-unsafe fn decor_spell_nav_col(
+fn decor_spell_nav_col(
     window: Win,
     lnum: LineNr,
     decor_lnum: &mut LineNr,
@@ -227,8 +224,7 @@ pub unsafe fn spell_move_to(
                     let no_plain_buffer =
                         unsafe { (*window.w_s).b_p_spo_flags } & kOptSpoFlagNoplainbuffer != 0;
                     let mut can_spell = !no_plain_buffer;
-                    let decor_says =
-                        unsafe { decor_spell_nav_col(window, lnum, &mut decor_lnum, col, decor) };
+                    let decor_says = decor_spell_nav_col(window, lnum, &mut decor_lnum, col, decor);
                     if decor_says == Some(true) {
                         can_spell = true;
                     } else if decor_says == Some(false) {

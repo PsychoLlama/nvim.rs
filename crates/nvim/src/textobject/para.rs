@@ -146,10 +146,7 @@ fn inmacro(opt: &[u8], s: &[u8]) -> bool {
 ///
 /// `para` is `{` or `}` to ask about sections only; `both` also stops at a
 /// `}` in column 0.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub unsafe fn starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
+pub fn starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
     let mut lines = Lines::current();
     let line = lines.line(lnum);
     let first = byte_at(line, 0);
@@ -353,8 +350,7 @@ fn line_is_white(lnum: LineNr) -> bool {
 
 /// [`starts_para`] for a line of the current buffer.
 fn line_starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
-    // SAFETY: as above -- the line number is `ml_get`'s to check.
-    unsafe { starts_para(lnum, para, both) }
+    starts_para(lnum, para, both)
 }
 
 #[cfg(test)]

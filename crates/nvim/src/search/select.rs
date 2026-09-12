@@ -43,10 +43,7 @@ struct Match {
 /// case the second starts from the far end of the buffer.
 ///
 /// Answers `None` when the pattern is not there at all.
-///
-/// # Safety
-/// The current window and buffer must be valid.
-unsafe fn search_around(
+fn search_around(
     mut pos: Pos,
     count: c_int,
     forward: bool,
@@ -120,10 +117,7 @@ unsafe fn search_around(
 ///
 /// Used while an operator is pending and in Visual mode: the match becomes
 /// the Visual area.
-///
-/// # Safety
-/// The current window and buffer must be valid.
-pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
+pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
     let save_visual = visual_anchor();
 
     // Correct the cursor when 'selection' is exclusive.
@@ -161,7 +155,7 @@ pub unsafe fn current_search(count: c_int, forward: bool) -> Result<(), Failed> 
         return Err(Failed); // pattern not found
     }
 
-    let found = unsafe { search_around(pos, count, forward, skip_first_backward, zero_width != 0) };
+    let found = search_around(pos, count, forward, skip_first_backward, zero_width != 0);
     let Some(found) = found else {
         Win::current().w_cursor = orig_pos;
         if visual_active() {

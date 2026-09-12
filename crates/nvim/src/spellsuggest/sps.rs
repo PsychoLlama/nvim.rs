@@ -44,11 +44,7 @@ fn is_timeout_value(value: &[u8]) -> bool {
 ///
 /// Answers `Err` for a value the option should not take, having put both
 /// back to their defaults.
-///
-/// # Safety
-///
-/// `'spellsuggest'` must hold a NUL-terminated string.
-pub(crate) unsafe fn spell_check_sps() -> Result<(), Failed> {
+pub(crate) fn spell_check_sps() -> Result<(), Failed> {
     // SAFETY: the caller guarantees the option; `buf` is `MAXPATHL`, which
     // is what `copy_option_part` is told it may fill.
     let mut buf = [0 as c_char; MAXPATHL as usize];

@@ -46,10 +46,7 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 ///
 /// The value can be a function name, `function(<name>)`, `funcref(<name>)`
 /// or a lambda. Answers NULL, or the error message for an invalid one.
-///
-/// # Safety
-/// `args` must describe the option being set.
-pub unsafe fn did_set_tagfunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_tagfunc(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the caller's promise; the new value is a NUL-terminated
     // option string and `os_buf` is the buffer it applies to.
     let mut buf = args.os_buf;
@@ -76,10 +73,7 @@ pub unsafe fn did_set_tagfunc(args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// Mark the global `'tagfunc'` callback so the collector keeps it.
-///
-/// # Safety
-/// Must be called from a garbage-collection sweep.
-pub unsafe fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
+pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
     // SAFETY: the caller's promise.
     unsafe { set_ref_in_callback(global_tagfunc(), copy_id, ptr::null_mut(), ptr::null_mut()) }
 }

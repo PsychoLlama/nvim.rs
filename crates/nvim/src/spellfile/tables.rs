@@ -30,11 +30,7 @@ use super::aff::{AffState, first_byte, is_digit_byte, item_ptr};
 use super::{MAXWLEN, SpellInfo};
 
 /// Append `KEYWORD value` to the text `:spellinfo` shows.
-///
-/// # Safety
-///
-/// As [`handle_line`].
-pub(super) unsafe fn append_info(spin: &mut SpellInfo, items: &[&CStr]) {
+pub(super) fn append_info(spin: &mut SpellInfo, items: &[&CStr]) {
     let old = if spin.si_info.is_null() {
         0
     } else {
@@ -115,8 +111,7 @@ pub(super) unsafe fn add_rep_entry(
     } else {
         &mut spin.si_rep
     };
-    // SAFETY: two NUL-terminated strings of this call's own.
-    unsafe { add_fromto(out, &from, &to) };
+    add_fromto(out, &from, &to);
 }
 
 /// `MAP`: a group of characters that count as near-equivalent.
@@ -135,7 +130,7 @@ pub(super) unsafe fn handle_map(
         // The first MAP line is the number of groups.
         st.found_map = true;
         // SAFETY: reading the locale table.
-        if !unsafe { is_digit_byte(first_byte(items[1]) as c_char) } {
+        if !is_digit_byte(first_byte(items[1]) as c_char) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
             smsg!(0, "Expected MAP count in {fname} line {}", lnum);
@@ -173,11 +168,7 @@ fn chars_of(bytes: &[u8]) -> impl Iterator<Item = c_int> + '_ {
 }
 
 /// `SAL`: either a sound-folding setting or one folding rule.
-///
-/// # Safety
-///
-/// As [`handle_line`].
-pub(super) unsafe fn handle_sal(spin: &mut SpellInfo, items: &[&CStr]) {
+pub(super) fn handle_sal(spin: &mut SpellInfo, items: &[&CStr]) {
     let slot = match items[1].to_bytes() {
         b"followup" => Some(&mut spin.si_followup),
         b"collapse_result" => Some(&mut spin.si_collapse),
@@ -190,16 +181,11 @@ pub(super) unsafe fn handle_sal(spin: &mut SpellInfo, items: &[&CStr]) {
     }
     // "_" means the rule deletes what it matched.
     let to = if items[2] == c"_" { c"" } else { items[2] };
-    // SAFETY: the items are live NUL-terminated strings.
-    unsafe { add_fromto(&mut spin.si_sal, items[1], to) };
+    add_fromto(&mut spin.si_sal, items[1], to);
 }
 
 /// Add a case-folded from/to pair to one of the substitution tables.
-///
-/// # Safety
-///
-/// Main thread; the current window must be live.
-pub(super) unsafe fn add_fromto(out: &mut Vec<RepItem>, from: &CStr, to: &CStr) {
+pub(super) fn add_fromto(out: &mut Vec<RepItem>, from: &CStr, to: &CStr) {
     // SAFETY: the caller promises the strings; `word` is MAXWLEN, the
     // bound `spell_casefold` is given.
     let folded = |s: &CStr| -> Box<[u8]> {
