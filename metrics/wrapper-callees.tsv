@@ -154,7 +154,7 @@ count	callee	no_raw	defs	def
 20	try_enter	0	1	crates/nvim/src/api/private/helpers/mod.rs
 20	vim_iswordc	1	1	crates/nvim/src/charset/mod.rs
 19	api_free_luaref	1	1	crates/nvim/src/lua/executor/refs.rs
-19	arena_mem_free	1	1	crates/nvim/src/memory/arena.rs
+19	arena_mem_free	0	1	crates/nvim/src/memory/arena.rs
 19	channel_decref	0	1	crates/nvim/src/channel/mod.rs
 19	concat_str	0	1	crates/nvim/src/strings/mod.rs
 19	convert_setup	0	1	crates/nvim/src/mbyte/convert.rs
@@ -1159,7 +1159,7 @@ count	callee	no_raw	defs	def
 3	apply_pre	0	1	crates/nvim/src/bufwrite/autocmds.rs
 3	arg_augroup_get	0	1	crates/nvim/src/autocmd/groups.rs
 3	arg_autocmd_flag_get	0	1	crates/nvim/src/autocmd/define.rs
-3	as_filter	1	1	crates/nvim/src/marktree/iter.rs
+3	as_filter	0	1	crates/nvim/src/marktree/iter.rs
 3	as_g_operator	0	1	crates/nvim/src/normal/operator.rs
 3	assign	0	1	crates/nvim/src/eval/forloop.rs
 3	augroup_del	0	1	crates/nvim/src/autocmd/groups.rs
@@ -3826,11 +3826,11 @@ count	callee	no_raw	defs	def
 1	marktree_get_altpos	0	0	
 1	marktree_itr_current	0	0	
 1	marktree_itr_get	0	0	
-1	marktree_itr_get_filter	1	1	crates/nvim/src/marktree/iter.rs
+1	marktree_itr_get_filter	0	1	crates/nvim/src/marktree/iter.rs
 1	marktree_itr_get_overlap	0	0	
-1	marktree_itr_next_filter	1	1	crates/nvim/src/marktree/iter.rs
+1	marktree_itr_next_filter	0	1	crates/nvim/src/marktree/iter.rs
 1	marktree_itr_set_node	0	0	
-1	marktree_itr_step_out_filter	1	1	crates/nvim/src/marktree/iter.rs
+1	marktree_itr_step_out_filter	0	1	crates/nvim/src/marktree/iter.rs
 1	marktree_itr_step_overlap	0	0	
 1	marktree_lookup_ns	0	0	
 1	match_buflines	0	1	crates/nvim/src/quickfix/vimgrep.rs

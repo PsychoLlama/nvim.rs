@@ -611,7 +611,9 @@ plus these whole-tree metrics, which are not per-file:
                         *signature* — parameters and return type both, joined
                         the way `raw_ptr_params` joins them, so a list rustfmt
                         wrapped still reads as one — carries no `*mut`/
-                        `*const` and no `CPtr` bound, is not `extern "C"` (the
+                        `*const`, no `CPtr` bound and no `type X = *mut ...`
+                        alias (collected tree-wide: a name is not a hiding
+                        place), is not `extern "C"` (the
                         ABI is the contract), and whose name is not a row in
                         docs/unsafe-fn-allowlist.md. The keyword left behind
                         after a phase retyped the parameters: the body is
@@ -2207,7 +2209,34 @@ IMPL_HEAD = re.compile(
 # pointer whose contract is a row on the allowlist, not a parameter the needle
 # can see for itself.
 RAW_IN_SIGNATURE = re.compile(r"\*\s*(?:mut|const)\b|\bimpl\s+CPtr\b|:\s*CPtr\b")
+# A `type` alias whose right-hand side *is* a raw pointer. The needle reads a
+# signature as text, so a name like `MetaFilter` (`= *const uint32_t`) hides a
+# pointer from it as completely as a `CPtr` bound does, and four marktree entry
+# points spent a slice on the allowlist for it. The names are collected
+# tree-wide and then count as raw wherever a signature spells one. One level is
+# enough: no alias in the tree is written in terms of another, and a chain
+# would want a fixpoint rather than a second pass.
+RAW_ALIAS = re.compile(
+    r"\btype\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*=\s*\*\s*(?:mut|const)\b"
+)
 FN_WORD = re.compile(r"\bfn\b")
+
+
+def raw_aliases(tree):
+    """Every `type X = *mut/*const ...` name in the tree."""
+    return frozenset(
+        match.group(1)
+        for masked in tree.values()
+        for match in RAW_ALIAS.finditer(masked)
+    )
+
+
+def signature_has_raw(text, aliases):
+    """Whether a signature shows a raw pointer, spelled out or behind a name."""
+    if RAW_IN_SIGNATURE.search(text):
+        return True
+    return any(word in aliases for word in IDENT_AT.findall(text))
+
 
 # One `unsafe fn` item: its name, the type whose `impl` block holds it (None
 # for a free function), the file, and the two properties the needle asks about.
@@ -2288,7 +2317,7 @@ def impl_spans(masked):
         yield brace, matching_brace(masked, brace), match.group(1)
 
 
-def unsafe_fn_defs(masked, file):
+def unsafe_fn_defs(masked, file, aliases=frozenset()):
     """An `UnsafeFn` per `unsafe fn` item in one file.
 
     The signature is `fn_signatures`' -- `fn` through the end of the return
@@ -2312,7 +2341,7 @@ def unsafe_fn_defs(masked, file):
             sig.name,
             owner,
             file,
-            bool(RAW_IN_SIGNATURE.search(sig.text)),
+            signature_has_raw(sig.text, aliases),
             "extern" in masked[at : sig.start],
         )
 
@@ -2330,8 +2359,9 @@ def unsafe_fn_index(tree):
     reaches when the spelling drops the type.
     """
     index = collections.defaultdict(list)
+    aliases = raw_aliases(tree)
     for file, masked in tree.items():
-        for item in unsafe_fn_defs(masked, file):
+        for item in unsafe_fn_defs(masked, file, aliases):
             index[unsafe_fn_key(item)].append(item)
             if item.owner:
                 index[item.name].append(item)
@@ -2383,11 +2413,11 @@ def unsafe_fn_allowlist():
     return allow
 
 
-def unsafe_fns_without_raw(masked, file, allow):
+def unsafe_fns_without_raw(masked, file, allow, aliases=frozenset()):
     """`unsafe fn`s the needle counts in one file. See the doc block."""
     return sum(
         not (item.has_raw or item.extern) and unsafe_fn_key(item) not in allow
-        for item in unsafe_fn_defs(masked, file)
+        for item in unsafe_fn_defs(masked, file, aliases)
     )
 
 
@@ -2774,6 +2804,7 @@ def instrument_sites(tree, sources, wrappers=None):
     sites = {name: collections.Counter() for name in INSTRUMENT_KEYS}
     sites["wrappers"] = wrappers if wrappers is not None else wrapper_scan(tree)[0]
     allow = unsafe_fn_allowlist()
+    aliases = raw_aliases(tree)
     consts = {}
     tops, tested = set(), set()
     for file, masked in tree.items():
@@ -2795,7 +2826,7 @@ def instrument_sites(tree, sources, wrappers=None):
                 sites[name][file] = found
         if found := sum(1 for _ in unsafe_fn_items(masked)):
             sites["unsafe_fns"][file] = found
-        if found := unsafe_fns_without_raw(masked, file, allow):
+        if found := unsafe_fns_without_raw(masked, file, allow, aliases):
             sites["unsafe_fns_without_raw_params"][file] = found
         if found := sum(
             1 for m in CHAR_AS_C_INT.finditer(source) if masked[m.start(1)] == "a"
@@ -3620,6 +3651,54 @@ SELF_TEST_NO_RAW_CHECK = [
     ({"a.rs": "impl S {\n    unsafe fn f(&self) {\n    }\n}\n"}, ("f",), True),
 ]
 
+# (tree, expected unsafe_fns_without_raw_params over the whole tree). An alias
+# for a raw pointer counts as one wherever a signature spells it, and the
+# alias may be declared in another file than the function that takes it.
+SELF_TEST_RAW_ALIAS = [
+    # No alias in sight: the parameter is a plain name.
+    ({"a.rs": "unsafe fn f(m: MetaFilter) {\n}\n"}, 1),
+    # ... declared next door, it is a pointer.
+    (
+        {
+            "t.rs": "pub type MetaFilter = *const uint32_t;\n",
+            "a.rs": "unsafe fn f(m: MetaFilter) {\n}\n",
+        },
+        0,
+    ),
+    # The return type is part of the signature here too.
+    (
+        {
+            "t.rs": "type ArenaMem = *mut ConsumedBlk;\n",
+            "a.rs": "unsafe fn f(n: usize) -> ArenaMem {\n}\n",
+        },
+        0,
+    ),
+    # An alias for something that is not a pointer stays invisible.
+    (
+        {
+            "t.rs": "pub type LineNr = i64;\n",
+            "a.rs": "unsafe fn f(l: LineNr) {\n}\n",
+        },
+        1,
+    ),
+    # A generic alias is still an alias.
+    (
+        {
+            "t.rs": "pub type Slot<T> = *mut T;\n",
+            "a.rs": "unsafe fn f(s: Slot<u8>) {\n}\n",
+        },
+        0,
+    ),
+    # A prefix of an alias is a different name.
+    (
+        {
+            "t.rs": "pub type Meta = *const u8;\n",
+            "a.rs": "unsafe fn f(m: MetaFilter) {\n}\n",
+        },
+        1,
+    ),
+]
+
 
 # (path, whether the perimeter claims it). A directory entry claims its
 # subtree and nothing else; an exact-path entry claims exactly itself.
@@ -4162,6 +4241,16 @@ def self_test():
         assert got == expected, (
             f"unsafe_fns_without_raw_params={got}, want {expected}, "
             f"for {source!r} with {allow!r}"
+        )
+    for sources, expected in SELF_TEST_RAW_ALIAS:
+        tree = {f: mask(text) for f, text in sources.items()}
+        aliases = raw_aliases(tree)
+        got = sum(
+            unsafe_fns_without_raw(masked, f, set(), aliases)
+            for f, masked in tree.items()
+        )
+        assert got == expected, (
+            f"unsafe_fns_without_raw_params={got}, want {expected}, for {sources!r}"
         )
     for sources, allow, expected in SELF_TEST_NO_RAW_CHECK:
         index = unsafe_fn_index({f: mask(text) for f, text in sources.items()})
