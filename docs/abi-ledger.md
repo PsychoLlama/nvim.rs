@@ -30,7 +30,7 @@ An exported symbol is a frozen signature and a frozen name. It pins the type
 its arguments are spelled in, it survives every rename the module around it
 gets, and it keeps a `#[unsafe(no_mangle)]` — an unsafe attribute — in a file
 that would otherwise be able to say `#![forbid(unsafe_code)]`. Eighteen of the
-1,011 `#![allow(unsafe_code)]` files in the tree name their ledger rows as the
+1,005 `#![allow(unsafe_code)]` files in the tree name their ledger rows as the
 reason they cannot.
 
 So the rule is the same one `docs/perimeter.md` applies to unchecked code: a
