@@ -235,6 +235,24 @@ ffigen *args:
 keycodes-lua *args:
   @scripts/gen-keycodes-lua.py {{ args }}
 
+# Refuse a commit carrying generated output instead of source: a path that is
+# gitignored yet staged anyway (i.e. force-added), a blob over 512 KB at a path
+# that wasn't already that large, or more than 4 MB of newly added files in one
+# commit. It names no specific artifact: .gitignore is where a shape gets
+# named, and the force-added rule turns that list into a gate, so the fix for
+# one that slips through is a .gitignore entry rather than a rule here.
+#
+# Runs as the first pre-commit hook (.gitconfig): it reads the index, costs
+# milliseconds, and nothing else about a commit matters if it has a build
+# directory in it.
+#
+# `--range <range>` asks the same questions of every blob a push would send,
+# e.g. `just artifact-guard --range origin/main..HEAD`. It walks objects rather
+# than diff endpoints, so an artifact that was committed and then deleted a few
+# commits later still shows up -- deleting it never got it out of the pack.
+artifact-guard *args:
+  @scripts/artifact-guard.py {{ args }}
+
 # Regenerate the ABI ledger (metrics/abi-ledger.jsonl): classifies every
 # #[no_mangle] export by who resolves it by name. `--check` diffs against the
 # committed ledger instead of writing.

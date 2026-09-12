@@ -4,6 +4,13 @@
 # Order matters and is the order below: fmt-check rewrites the worktree (treefmt
 # always writes; --fail-on-change only adds the exit code), and the ratchet reads
 # both ledgers. `just refresh` regenerates all of it in that same order.
+# artifact-guard leads: it reads the index rather than the worktree and costs
+# milliseconds, and there is no point formatting or measuring a commit that has
+# a core dump in it.
+[hook "artifact-guard"]
+  event = pre-commit
+  command = just artifact-guard
+
 [hook "fmt-check"]
   event = pre-commit
   command = just fmt-check
