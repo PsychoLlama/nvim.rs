@@ -39,7 +39,7 @@ use crate::semsg;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     Callback, CallbackReader, ChannelPart, EvalFuncData, GArray, List, ListItem, TypVal, VAR_DICT,
-    VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, kBoolVarTrue, uint64_t,
+    VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kBoolVarTrue, uint64_t,
 };
 use crate::winlayer::buffers;
 
@@ -83,11 +83,10 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    // SAFETY: the caller's promise about `args`.
-    let argv = args;
-    if argv[0].v_type() != VAR_STRING
-        || (argv[1].v_type() != VAR_LIST && argv[1].v_type() != VAR_UNKNOWN)
-    {
+    // The arguments are optional: `rpcstart('prog')` gives one argument, so
+    // the second slot is *absent* rather than a `VAR_UNKNOWN` terminator.
+    let given = args.get(1);
+    if args[0].v_type() != VAR_STRING || given.is_some_and(|a| a.v_type() != VAR_LIST) {
         // Wrong argument types.
         emsg_static(e_invarg);
         return;
@@ -95,9 +94,10 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut args_list: *mut List = core::ptr::null_mut();
     let mut argsl = 0;
-    if argv[1].v_type() == VAR_LIST {
+    if let Some(given) = given {
+        // The guard above leaves only `VAR_LIST` here.
         // SAFETY: a `VAR_LIST` holds a live list or NULL.
-        args_list = argv[1].list_or_null();
+        args_list = given.list_or_null();
         argsl = unsafe { tv_list_len(args_list) };
         // Assert that all list items are strings.
         for (i, arg) in unsafe { items(args_list) }.enumerate() {
@@ -113,7 +113,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     // SAFETY: a `VAR_STRING` holds a NUL-terminated string or NULL.
-    let prog = argv[0].string_or_null();
+    let prog = args[0].string_or_null();
     if prog.is_null() || unsafe { *prog } == 0 {
         emsg_static(e_api_spawn_failed);
         return;
@@ -177,16 +177,14 @@ pub fn f_rpcstop(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
         return;
     }
 
-    // SAFETY: the caller's promise about `args`.
-    let argv = args;
-    if argv[0].v_type() != VAR_NUMBER {
+    if args[0].v_type() != VAR_NUMBER {
         // Wrong argument types.
         emsg_static(e_invarg);
         return;
     }
 
     // SAFETY: a `VAR_NUMBER` holds its number inline.
-    let id = argv[0].number_or_zero() as uint64_t;
+    let id = args[0].number_or_zero() as uint64_t;
     // If called with a job, stop it; otherwise close the channel.
     // SAFETY: `find_job` only looks the id up.
     if !unsafe { find_job(id, false) }.is_null() {

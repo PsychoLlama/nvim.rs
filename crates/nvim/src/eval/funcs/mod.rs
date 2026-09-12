@@ -259,17 +259,55 @@ mod arity_audit {
         &masked[open..end]
     }
 
-    /// Every `args[<literal>]` in `body`.
+    /// Every `<slice>[<literal>]` in `body`, where `<slice>` is `args` or a
+    /// local bound straight to it.
+    ///
+    /// The alias matters: `f_rpcstart` wrote `let argv = args;` and then
+    /// `argv[1]`, which a needle spelled `args[` cannot see, and the call
+    /// that omits the optional argument panicked for a whole phase before
+    /// the differential battery found it.
     fn indices(body: &str) -> Vec<usize> {
         let mut found = Vec::new();
-        for (at, _) in body.match_indices("args[") {
-            let rest = &body[at + "args[".len()..];
-            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
-            if !digits.is_empty() && rest[digits.len()..].starts_with(']') {
-                found.push(digits.parse().expect("a run of digits"));
+        for name in ["args".to_string()].into_iter().chain(aliases(body)) {
+            let needle = format!("{name}[");
+            for (at, _) in body.match_indices(&needle) {
+                // A longer identifier ending in `args` is not this slice.
+                if body[..at]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+                {
+                    continue;
+                }
+                let rest = &body[at + needle.len()..];
+                let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+                if !digits.is_empty() && rest[digits.len()..].starts_with(']') {
+                    found.push(digits.parse().expect("a run of digits"));
+                }
             }
         }
         found
+    }
+
+    /// The locals `body` binds straight to `args` -- `let x = args;`, with
+    /// or without a `mut`, and nothing else on the right-hand side.
+    fn aliases(body: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for (at, _) in body.match_indices("= args;") {
+            let head = body[..at].trim_end();
+            let Some(name) = head.rsplit(|c: char| c.is_whitespace()).next() else {
+                continue;
+            };
+            let before = head[..head.len() - name.len()].trim_end();
+            let binder = before.rsplit(|c: char| c.is_whitespace()).next();
+            if !name.is_empty()
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && matches!(binder, Some("let") | Some("mut"))
+            {
+                out.push(name.to_string());
+            }
+        }
+        out
     }
 
     /// Every builtin's body identifier and the smallest argument count the
