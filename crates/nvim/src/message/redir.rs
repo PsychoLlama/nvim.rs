@@ -37,11 +37,7 @@ static verbose_did_open: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static redir_col: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Is `'verbosefile'` set to anything?
-///
-/// # Safety
-/// Only that `p_vfile` holds a valid string, which the option code
-/// guarantees.
-unsafe fn verbosefile_set() -> bool {
+fn verbosefile_set() -> bool {
     unsafe { *p_vfile.get() != 0 }
 }
 
@@ -50,9 +46,9 @@ unsafe fn verbosefile_set() -> bool {
 /// # Safety
 /// `s` must be a valid C string.
 pub unsafe fn verb_msg(s: *const c_char) -> c_int {
-    unsafe { verbose_enter() };
+    verbose_enter();
     let n = unsafe { msg_keep(s, 0, false, false) as c_int };
-    unsafe { verbose_leave() };
+    verbose_leave();
     n
 }
 
@@ -72,12 +68,11 @@ pub(crate) fn redir_write(bytes: &[u8]) {
     }
     // If 'verbosefile' is set prepare for writing in that file.
     // SAFETY: `p_vfile` holds a valid option string.
-    if unsafe { verbosefile_set() } && verbose_fd.get().is_null() {
-        // SAFETY: as above.
-        let _ = unsafe { verbose_open() };
+    if verbosefile_set() && verbose_fd.get().is_null() {
+        let _ = verbose_open();
     }
     // SAFETY: as above.
-    if !unsafe { redirecting() } {
+    if !redirecting() {
         return;
     }
 
@@ -156,12 +151,9 @@ pub(crate) fn redir_write(bytes: &[u8]) {
 }
 
 /// Is anything teeing the message stream?
-///
-/// # Safety
-/// Only that `p_vfile` holds a valid string.
-pub unsafe fn redirecting() -> bool {
+pub fn redirecting() -> bool {
     !redir_fd.get().is_null()
-        || unsafe { verbosefile_set() }
+        || verbosefile_set()
         || redir_reg.get() != 0
         || redir_vname.get()
         || !capture_ga.get().is_null()
@@ -169,11 +161,8 @@ pub unsafe fn redirecting() -> bool {
 
 /// Before giving a verbose message. Must always be paired with
 /// [`verbose_leave`].
-///
-/// # Safety
-/// Only that `p_vfile` holds a valid string.
-pub unsafe fn verbose_enter() {
-    if unsafe { verbosefile_set() } {
+pub fn verbose_enter() {
+    if verbosefile_set() {
         msg_silent.set(msg_silent.get() + 1);
     }
     // Don't set the verbose kind if message continuity is wanted, as with
@@ -189,11 +178,8 @@ pub unsafe fn verbose_enter() {
 
 /// After giving a verbose message. Must always be paired with
 /// [`verbose_enter`].
-///
-/// # Safety
-/// Only that `p_vfile` holds a valid string.
-pub unsafe fn verbose_leave() {
-    if unsafe { verbosefile_set() } {
+pub fn verbose_leave() {
+    if verbosefile_set() {
         msg_silent.set(msg_silent.get() - 1);
         if msg_silent.get() < 0 {
             msg_silent.set(0);
@@ -208,33 +194,24 @@ pub unsafe fn verbose_leave() {
 
 /// [`verbose_enter`], and scroll rather than overwrite when the message is
 /// going to be displayed.
-///
-/// # Safety
-/// See [`verbose_enter`].
-pub unsafe fn verbose_enter_scroll() {
-    unsafe { verbose_enter() };
-    if !unsafe { verbosefile_set() } {
+pub fn verbose_enter_scroll() {
+    verbose_enter();
+    if !verbosefile_set() {
         // Always scroll up, don't overwrite.
         msg_scroll.set(1);
     }
 }
 
 /// [`verbose_leave`], and leave the command line below a displayed message.
-///
-/// # Safety
-/// See [`verbose_leave`].
-pub unsafe fn verbose_leave_scroll() {
-    unsafe { verbose_leave() };
-    if !unsafe { verbosefile_set() } {
+pub fn verbose_leave_scroll() {
+    verbose_leave();
+    if !verbosefile_set() {
         cmdline_row.set(msg_row.get());
     }
 }
 
 /// `'verbosefile'` changed: stop writing to the old one.
-///
-/// # Safety
-/// Only that no other thread is using the handle.
-pub unsafe fn verbose_stop() {
+pub fn verbose_stop() {
     if !verbose_fd.get().is_null() {
         unsafe { fclose(verbose_fd.get()) };
         verbose_fd.set(ptr::null_mut());
@@ -243,10 +220,7 @@ pub unsafe fn verbose_stop() {
 }
 
 /// Open `'verbosefile'` for appending, once.
-///
-/// # Safety
-/// Only that `p_vfile` holds a valid string.
-pub unsafe fn verbose_open() -> Result<(), Failed> {
+pub fn verbose_open() -> Result<(), Failed> {
     if verbose_fd.get().is_null() && !verbose_did_open.get() {
         // Only give the error message once.
         verbose_did_open.set(true);

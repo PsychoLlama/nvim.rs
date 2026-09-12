@@ -760,14 +760,13 @@ fn spell_message(spin: &SpellInfo, text: &CStr) {
         return;
     }
     let quiet = spin.si_verbose == 0;
-    // SAFETY: `text` is NUL-terminated and `msg` copies what it keeps.
     if quiet {
-        unsafe { verbose_enter() };
+        verbose_enter();
     }
     msg(text, 0);
     unsafe { ui_flush() };
     if quiet {
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 }
 

@@ -435,7 +435,7 @@ fn syn_add_group(name: &[u8]) -> c_int {
             && !ascii_isdigit(c)
             && !matches!(byte, b'_' | b'.' | b'@' | b'-')
         {
-            unsafe { msg_source(HLF_W) };
+            msg_source(HLF_W);
             emsg(gettext(e_highlight_group_name_invalid_char));
             return 0;
         }

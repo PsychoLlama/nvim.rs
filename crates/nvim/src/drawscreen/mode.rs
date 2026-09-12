@@ -57,8 +57,8 @@ pub fn showmode() -> c_int {
     let mut length = 0;
 
     // A message that has not been flushed must not become part of this one.
-    unsafe { msg_ext_ui_flush() };
-    unsafe { msg_grid_validate() };
+    msg_ext_ui_flush();
+    msg_grid_validate();
 
     let do_mode = p_smd.get() != 0
         && msg_silent.get() == 0
@@ -76,13 +76,13 @@ pub fn showmode() -> c_int {
         let nwr_save = need_wait_return.get();
 
         // Wait a bit before overwriting an important message.
-        unsafe { msg_check_for_delay(false) };
+        msg_check_for_delay(false);
 
         let mut need_clear = clear_cmdline.get();
         if clear_cmdline.get() && cmdline_row.get() < Rows.get() - 1 {
             // Resets `clear_cmdline`, which is why `need_clear` was read
             // first.
-            unsafe { msg_clr_cmdline() };
+            msg_clr_cmdline();
         }
 
         msg_pos_mode();
@@ -220,7 +220,7 @@ pub fn showmode() -> c_int {
 
         mode_displayed.set(true);
         if need_clear || clear_cmdline.get() || redraw_mode.get() {
-            unsafe { msg_clr_eos() };
+            msg_clr_eos();
         }
         msg_didout.set(false); // this message may be overwritten
         length = msg_col.get();
@@ -230,14 +230,14 @@ pub fn showmode() -> c_int {
         need_wait_return.set(nwr_save); // never ask for hit-return for this
     } else if clear_cmdline.get() && msg_silent.get() == 0 {
         // Resets `clear_cmdline`.
-        unsafe { msg_clr_cmdline() };
+        msg_clr_cmdline();
     } else if redraw_mode.get() {
         msg_pos_mode();
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
     }
 
     // Also handles clearing the showmode when it was empty or disabled.
-    unsafe { msg_ext_flush_showmode() };
+    msg_ext_flush_showmode();
 
     // In Visual mode the size of the selection is redrawn.
     if visual_active() {
@@ -276,14 +276,14 @@ pub fn clearmode() {
     let save_msg_row = msg_row.get();
     let save_msg_col = msg_col.get();
 
-    unsafe { msg_ext_ui_flush() };
+    msg_ext_ui_flush();
     msg_pos_mode();
     // The recording indicator outlives the mode message.
     if reg_recording.get() != 0 {
         recording_mode(HLF_CM);
     }
-    unsafe { msg_clr_eos() };
-    unsafe { msg_ext_flush_showmode() };
+    msg_clr_eos();
+    msg_ext_flush_showmode();
 
     msg_col.set(save_msg_col);
     msg_row.set(save_msg_row);

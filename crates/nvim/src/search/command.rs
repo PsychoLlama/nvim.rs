@@ -349,7 +349,7 @@ unsafe fn echo_search_cmd(
         }
 
         msg_display(echo.buf.as_cstr(), 0, false);
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
         msg_check();
         gotocmdline(false);
         unsafe { ui_flush() };

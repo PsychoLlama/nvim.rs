@@ -79,10 +79,7 @@ pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 
 /// Insert `key`, and — where `end_row` is non-negative — the end key that makes
 /// it a range.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_put(
+pub fn marktree_put(
     b: &mut MarkTree,
     mut key: MTKey,
     end_row: c_int,
@@ -98,8 +95,7 @@ pub unsafe fn marktree_put(
     if end_row >= 0 {
         key.flags |= MtFlags::PAIRED;
     }
-    // SAFETY: `b` is a live tree, and `key` is the caller's to insert.
-    unsafe { marktree_put_key(b, key) };
+    marktree_put_key(b, key);
     if end_row < 0 {
         return;
     }
@@ -112,17 +108,13 @@ pub unsafe fn marktree_put(
         row: end_row,
         col: end_col,
     };
-    // SAFETY: as above.
-    unsafe { marktree_put_key(b, end_key) };
+    marktree_put_key(b, end_key);
 
     let mut itr = MarkTreeIter::default();
     let mut end_itr = MarkTreeIter::default();
-    // SAFETY: `b` is live and the key was just inserted, so this finds it.
-    unsafe { marktree_lookup(b, mt_lookup_key(key), Some(&mut itr)) };
-    // SAFETY: as above, for the end key.
-    unsafe { marktree_lookup(b, mt_lookup_key(end_key), Some(&mut end_itr)) };
-    // SAFETY: `b` is live and both iterators are positioned in it.
-    unsafe { marktree_intersect_pair(b, mt_lookup_key(key), &mut itr, &end_itr, false) };
+    marktree_lookup(b, mt_lookup_key(key), Some(&mut itr));
+    marktree_lookup(b, mt_lookup_key(end_key), Some(&mut end_itr));
+    marktree_intersect_pair(b, mt_lookup_key(key), &mut itr, &end_itr, false);
 }
 
 /// Insert one already-built key, splitting a full node on the way down.
@@ -131,10 +123,7 @@ pub unsafe fn marktree_put(
 /// starts at level zero, so the tail it never uses is wasted for a tree that
 /// stays under one node. Upstream does the same; nothing depends on it beyond
 /// `marktree_free_node` not caring which size a node was.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_put_key(b: &mut MarkTree, mut k: MTKey) {
+pub fn marktree_put_key(b: &mut MarkTree, mut k: MTKey) {
     k.flags |= MtFlags::REAL; // let's be real.
     if b.root.is_null() {
         // SAFETY: `b` is a live tree, which is all `marktree_alloc_node` wants.
@@ -209,10 +198,7 @@ impl Lasti {
 /// `rev` says the caller intends to keep iterating backwards and deleting keys
 /// before this one. Iterating forward is the recommended strategy and passes
 /// false.
-///
-/// # Safety
-/// `b` must be a live tree and `itr` positioned on one of its keys.
-pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> uint64_t {
+pub fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> uint64_t {
     let mut adjustment = 0;
     // SAFETY: a positioned iterator names a live node of `b`.
     let cur = unsafe { Node::new(itr.x) };
@@ -227,18 +213,15 @@ pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bo
     if mt_paired(raw) && !raw.flags.has(MtFlags::ORPHANED) {
         other = mt_lookup_key_side(raw, !mt_end(raw));
         let mut other_itr = MarkTreeIter::default();
-        // SAFETY: `b` is live; the lookup positions `other_itr` in it.
-        unsafe { marktree_lookup(b, other, Some(&mut other_itr)) };
+        marktree_lookup(b, other, Some(&mut other_itr));
         // SAFETY: the lookup left `other_itr` on a live node of `b`.
         let onode = unsafe { Node::new(other_itr.x) };
         onode.update_key(other_itr.i as usize, |k| k.flags |= MtFlags::ORPHANED);
         if mt_start(raw) {
             let mut this_itr = *itr; // a copy, because this one is mutated
-            // SAFETY: `b` is live and both iterators are positioned in it.
-            unsafe { marktree_intersect_pair(b, id, &mut this_itr, &other_itr, true) };
+            marktree_intersect_pair(b, id, &mut this_itr, &other_itr, true);
         } else {
-            // SAFETY: as above.
-            unsafe { marktree_intersect_pair(b, other, &mut other_itr, itr, true) };
+            marktree_intersect_pair(b, other, &mut other_itr, itr, true);
         }
     }
 
@@ -248,8 +231,7 @@ pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bo
         if rev {
             ::std::process::abort();
         }
-        // SAFETY: `b` is live and `itr` is positioned in it.
-        unsafe { marktree_itr_prev(b, itr) };
+        marktree_itr_prev(b, itr);
         adjustment = -1;
     }
 
@@ -317,8 +299,7 @@ pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bo
         // there; otherwise the leaf may need one of its own.
         if mt_end(cur.key(curi)) && !did_bubble {
             let pi = x.pseudo_index(0); // note: sloppy pseudo-index
-            // SAFETY: `b` is a live tree.
-            let pi_start = unsafe { pseudo_index_for_id(b, start_id, true) };
+            let pi_start = pseudo_index_for_id(b, start_id, true);
             if pi_start > 0 && pi_start < pi {
                 intersect_node(x, start_id);
             }
@@ -437,18 +418,15 @@ pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bo
     }
 
     if !itr.x.is_null() && itr_dirty {
-        // SAFETY: `b` is live and `itr` names a live node of it.
-        unsafe { marktree_itr_fix_pos(b, itr) };
+        marktree_itr_fix_pos(b, itr);
     }
 
     // BONUS STEP: leave the iterator on the key after the deleted one.
     if adjustment == -1 {
         // Tricky: we stand at the hole in the previous leaf, and the internal
         // key is now the one we stole, so skip that one as well.
-        // SAFETY: `b` is live and `itr` is positioned in it.
-        unsafe { marktree_itr_next(b, itr) };
-        // SAFETY: as above.
-        unsafe { marktree_itr_next(b, itr) };
+        marktree_itr_next(b, itr);
+        marktree_itr_next(b, itr);
     } else if !itr.x.is_null() {
         // SAFETY: a non-null `itr.x` names a live node of `b`.
         let node = unsafe { Node::new(itr.x) };
@@ -456,8 +434,7 @@ pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bo
             // We deleted the last key of a leaf node; go to the internal key
             // after it.
             debug_assert!(node.is_leaf(), "itr->x->level == 0");
-            // SAFETY: as above.
-            unsafe { marktree_itr_next(b, itr) };
+            marktree_itr_next(b, itr);
         }
     }
 
@@ -466,10 +443,7 @@ pub unsafe fn marktree_del_itr(b: &mut MarkTree, itr: &mut MarkTreeIter, rev: bo
 
 /// Re-count the meta kinds of the key under the iterator, up to the root, after
 /// a consumer edited its flags in place.
-///
-/// # Safety
-/// `b` must be a live tree and `itr` positioned on one of its keys.
-pub unsafe fn marktree_revise_meta(b: &mut MarkTree, itr: &mut MarkTreeIter, old_key: MTKey) {
+pub fn marktree_revise_meta(b: &mut MarkTree, itr: &mut MarkTreeIter, old_key: MTKey) {
     // SAFETY: a positioned iterator names a live node of `b`.
     let x = unsafe { Node::new(itr.x) };
     let meta_old = meta_describe_key(old_key);
@@ -491,7 +465,8 @@ pub unsafe fn marktree_revise_meta(b: &mut MarkTree, itr: &mut MarkTreeIter, old
 /// Drop every mark and every node, leaving the tree as it was born.
 ///
 /// # Safety
-/// `b` must be a live tree, and nothing may name its nodes afterwards.
+/// Every node of the tree is freed: no [`Node`] or [`MarkTreeIter`] taken
+/// out of it may be used afterwards.
 pub unsafe fn marktree_clear(b: &mut MarkTree) {
     if !b.root.is_null() {
         // SAFETY: a non-null root is a live node of `b`.
@@ -514,8 +489,8 @@ pub unsafe fn marktree_clear(b: &mut MarkTree) {
 /// Free `x` and everything below it.
 ///
 /// # Safety
-/// `b` must be a live tree and `x` one of its nodes, detached from anything
-/// that outlives the call.
+/// `x` and everything under it are freed, so `x` must already be detached
+/// from the tree and no [`Node`] or [`MarkTreeIter`] may still name it.
 pub unsafe fn marktree_free_subtree(b: &mut MarkTree, x: Node) {
     if !x.is_leaf() {
         for i in 0..=x.key_count() {
@@ -575,10 +550,7 @@ fn move_within_leaf(x: Node, itr: &MarkTreeIter, mut key: MTKey, mut newpos: MTP
 ///
 /// The iterator is invalid after the call unless the mark stayed put within its
 /// own leaf.
-///
-/// # Safety
-/// `b` must be a live tree and `itr` positioned on one of its keys.
-pub unsafe fn marktree_move(b: &mut MarkTree, itr: &mut MarkTreeIter, row: c_int, col: c_int) {
+pub fn marktree_move(b: &mut MarkTree, itr: &mut MarkTreeIter, row: c_int, col: c_int) {
     // SAFETY: a positioned iterator names a live node of `b`.
     let x = unsafe { Node::new(itr.x) };
     let mut key = x.key(itr.i as usize);
@@ -587,43 +559,29 @@ pub unsafe fn marktree_move(b: &mut MarkTree, itr: &mut MarkTreeIter, row: c_int
         return;
     }
 
-    // SAFETY: `b` is live and `itr` is positioned in it.
-    let other = unsafe { marktree_del_itr(b, itr, false) };
+    let other = marktree_del_itr(b, itr, false);
     key.pos = newpos;
-    // SAFETY: `b` is a live tree.
-    unsafe { marktree_put_key(b, key) };
+    marktree_put_key(b, key);
     if other != 0 {
-        // SAFETY: `b` is live and `key` was just re-inserted into it.
-        unsafe { marktree_restore_pair(b, key) };
+        marktree_restore_pair(b, key);
     }
     itr.x = ptr::null_mut(); // the put may have invalidated it
 }
 
 /// The key with this `(ns, id, end)`, or `MT_INVALID_KEY`.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_lookup_ns(
+pub fn marktree_lookup_ns(
     b: &mut MarkTree,
     ns: uint32_t,
     id: uint32_t,
     end: bool,
     itr: Option<&mut MarkTreeIter>,
 ) -> MTKey {
-    // SAFETY: `b` is live; the iterator is optional and is written, not read.
-    unsafe { marktree_lookup(b, mt_lookup_id(ns, id, end), itr) }
+    marktree_lookup(b, mt_lookup_id(ns, id, end), itr)
 }
 
 /// The key with this lookup handle, or `MT_INVALID_KEY`. `itr`, where given, is
 /// left on the key — or emptied when there is none.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_lookup(
-    b: &mut MarkTree,
-    id: uint64_t,
-    itr: Option<&mut MarkTreeIter>,
-) -> MTKey {
+pub fn marktree_lookup(b: &mut MarkTree, id: uint64_t, itr: Option<&mut MarkTreeIter>) -> MTKey {
     // SAFETY: `b` is live, so `id2node` answers null or one of its live nodes.
     let Some(n) = (unsafe { Node::from_ptr(id2node(b, id)) }) else {
         if let Some(itr) = itr {
@@ -633,9 +591,7 @@ pub unsafe fn marktree_lookup(
     };
     for i in 0..n.key_count() {
         if mt_lookup_key(n.key(i)) == id {
-            // SAFETY: `b` is live, `n` is one of its nodes and holds a key at
-            // `i`; `itr` is null or the caller's iterator.
-            return unsafe { marktree_itr_set_node(b, itr, n, i as c_int) };
+            return marktree_itr_set_node(b, itr, n, i as c_int);
         }
     }
     // The id map named a node that does not hold the key, so the tree is

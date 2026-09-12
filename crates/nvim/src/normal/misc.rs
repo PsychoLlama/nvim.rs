@@ -129,7 +129,7 @@ pub(crate) unsafe fn nv_colon(cmd_arg: *mut CmdArg) {
         compute_cmdrow();
     }
     let cmd_result = if is_lua {
-        unsafe { map_execute_lua(true, false) }
+        map_execute_lua(true, false)
     } else {
         let getline: LineGetter = if is_cmdkey {
             Some(getcmdkeycmd)
@@ -368,7 +368,7 @@ pub(crate) unsafe fn nv_esc(cmd_arg: *mut CmdArg) {
 pub(crate) unsafe fn nv_paste(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    unsafe { paste_repeat(ca.count1) };
+    paste_repeat(ca.count1);
 }
 
 /// The synthetic key that stands for "the event loop has work": run it, then

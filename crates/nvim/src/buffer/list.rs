@@ -455,8 +455,7 @@ fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) -> Buf {
         err(tr(c"W14: Warning: List of file names overflow"));
         if emsg_silent.get() == 0 && !in_assert_fails.get() {
             // Make sure it is noticed.
-            // SAFETY: a plain delay over the message machinery.
-            unsafe { msg_delay(3001 as uint64_t, true) };
+            msg_delay(3001 as uint64_t, true);
         }
         top_file_num.set(1);
     }

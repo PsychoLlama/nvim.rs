@@ -70,11 +70,8 @@ const DAMAGE_INIT: MTDamageMap = MTDamageMap {
 // -- the iterator, which iter.rs still addresses by raw pointer --------------
 
 /// The key an iterator is parked on, still relative to its node.
-///
-/// # Safety
-/// `itr` must be positioned — `x` non-null — in a live tree.
 #[inline]
-unsafe fn rawkey(itr: &MarkTreeIter) -> MTKey {
+fn rawkey(itr: &MarkTreeIter) -> MTKey {
     // SAFETY: the caller promises `itr` is positioned in a live tree.
     unsafe { Node::new(itr.x) }.key(itr.i as usize)
 }
@@ -97,8 +94,7 @@ fn itr_get_ext(
     last: bool,
     oldbase: Option<&mut [MTPos; MT_MAX_DEPTH]>,
 ) {
-    // SAFETY: `b` is a live tree and this is what positions `itr` in it.
-    unsafe { marktree_itr_get_ext(b, p, itr, last, true, oldbase, None) };
+    marktree_itr_get_ext(b, p, itr, last, true, oldbase, None);
 }
 
 /// Step to the next key, optionally skipping over whole subtrees and recording
@@ -109,14 +105,12 @@ fn itr_next_skip(
     skip: bool,
     oldbase: Option<&mut [MTPos; MT_MAX_DEPTH]>,
 ) {
-    // SAFETY: `b` is a live tree and `itr` is positioned in it.
-    unsafe { marktree_itr_next_skip(b, itr, skip, false, oldbase, None) };
+    marktree_itr_next_skip(b, itr, skip, false, oldbase, None);
 }
 
 /// Step to the next key.
 fn itr_next(b: &mut MarkTree, itr: &mut MarkTreeIter) {
-    // SAFETY: `b` is a live tree and `itr` is positioned in it.
-    unsafe { marktree_itr_next(b, itr) };
+    marktree_itr_next(b, itr);
 }
 
 /// Park `itr` on key `i` of node `n`, which the damage map recorded earlier in
@@ -130,9 +124,7 @@ fn itr_set_node(b: &mut MarkTree, itr: &mut MarkTreeIter, n: *mut MTNode, i: c_i
 
 /// Find the mark `id` and park `itr` on it, or leave `itr.x` null.
 fn lookup(b: &mut MarkTree, id: uint64_t, itr: &mut MarkTreeIter) {
-    // SAFETY: `b` is a live tree; a lookup only writes the iterator it is
-    // handed, and answers a null `x` when there is no such mark.
-    unsafe { marktree_lookup(b, id, Some(itr)) };
+    marktree_lookup(b, id, Some(itr));
 }
 
 /// Record — or, with `delete`, retract — the nodes the range `id` covers.
@@ -143,8 +135,7 @@ fn intersect_pair(
     end_itr: &MarkTreeIter,
     delete: bool,
 ) {
-    // SAFETY: `b` is a live tree and both iterators are positioned in it.
-    unsafe { marktree_intersect_pair(b, id, itr, end_itr, delete) };
+    marktree_intersect_pair(b, id, itr, end_itr, delete);
 }
 
 // -- the damage map ----------------------------------------------------------
@@ -253,10 +244,7 @@ fn swap_keys(b: &mut MarkTree, itr1: &MarkTreeIter, itr2: &MarkTreeIter, damage:
 
 /// Apply a text change to every mark at or after `start_line`, `start_col`,
 /// and answer whether any of them moved.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_splice(
+pub fn marktree_splice(
     b: &mut MarkTree,
     start_line: int32_t,
     start_col: c_int,
@@ -297,8 +285,7 @@ pub unsafe fn marktree_splice(
     };
 
     if may_delete {
-        // SAFETY: `itr` was just positioned in `b`, and is not past the end.
-        let (ipos, key) = unsafe { (marktree_itr_pos(&itr), rawkey(&itr)) };
+        let (ipos, key) = (marktree_itr_pos(&itr), rawkey(&itr));
         if !pos_leq(old_extent, ipos)
             || (old_extent.row == ipos.row && old_extent.col == ipos.col && !mt_right(key))
         {
@@ -335,14 +322,10 @@ pub unsafe fn marktree_splice(
                 }
 
                 if mt_right(x.key(i)) {
-                    // SAFETY: `may_delete` means the lookup above positioned
-                    // `enditr` in `b`; stepping back leaves it positioned.
-                    while !same_key(&itr, &enditr) && mt_right(unsafe { rawkey(&enditr) }) {
-                        // SAFETY: as above.
-                        unsafe { marktree_itr_prev(b, &mut enditr) };
+                    while !same_key(&itr, &enditr) && mt_right(rawkey(&enditr)) {
+                        marktree_itr_prev(b, &mut enditr);
                     }
-                    // SAFETY: as above.
-                    if !mt_right(unsafe { rawkey(&enditr) }) {
+                    if !mt_right(rawkey(&enditr)) {
                         swap_keys(b, &itr, &enditr, &mut damage);
                     } else {
                         // Past the right edge: `break 'collapse` leaves the
@@ -516,36 +499,29 @@ pub fn marktree_move_region(
 
     let mut saved: Vec<MTKey> = Vec::new();
     while !itr.x.is_null() {
-        // SAFETY: the loop guard checked `itr` is still positioned in `b`.
-        let mut k = unsafe { marktree_itr_current(&mut itr) };
+        let mut k = marktree_itr_current(&mut itr);
         if !pos_leq(k.pos, end) || (k.pos.row == end.row && k.pos.col == end.col && mt_right(k)) {
             break;
         }
         relative(start, &mut k.pos);
         saved.push(k);
-        // SAFETY: `b` is live and `itr` is positioned on one of its keys;
-        // deleting leaves it on the next one.
-        unsafe { marktree_del_itr(b, &mut itr, false) };
+        marktree_del_itr(b, &mut itr, false);
     }
 
-    // SAFETY: `b` is a live tree; the extents are plain numbers.
-    unsafe { marktree_splice(b, start.row, start.col, size.row, size.col, 0, 0) };
+    marktree_splice(b, start.row, start.col, size.row, size.col, 0, 0);
     let new = MTPos {
         row: new_row,
         col: new_col,
     };
-    // SAFETY: as above.
-    unsafe { marktree_splice(b, new.row, new.col, 0, 0, size.row, size.col) };
+    marktree_splice(b, new.row, new.col, 0, 0, size.row, size.col);
 
     for mut item in saved {
         unrelative(new, &mut item.pos);
-        // SAFETY: `b` is a live tree.
-        unsafe { marktree_put_key(b, item) };
+        marktree_put_key(b, item);
         if mt_paired(item) {
             // The other end might be later in `saved`; this bails out safely
             // then, and runs again for it.
-            // SAFETY: as above.
-            unsafe { marktree_restore_pair(b, item) };
+            marktree_restore_pair(b, item);
         }
     }
 }

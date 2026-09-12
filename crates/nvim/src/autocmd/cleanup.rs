@@ -152,7 +152,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
             {
                 unsafe { aucmd_del(ac) };
                 if p_verbose.get() >= 6 {
-                    unsafe { verbose_enter() };
+                    verbose_enter();
                     // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
                     let arg0 = unsafe { c_str(event_nr2name(event)) };
                     smsg!(
@@ -160,7 +160,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
                         "auto-removing autocommand: {arg0} <buffer={}>",
                         buffer.handle
                     );
-                    unsafe { verbose_leave() };
+                    verbose_leave();
                 }
             }
             i = i.wrapping_add(1);

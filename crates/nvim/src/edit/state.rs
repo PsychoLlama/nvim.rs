@@ -47,9 +47,7 @@ fn insert_enter(s: &mut InsertState) {
     did_restart_edit.set(restart_edit.get());
     // Sleep before redrawing; needed for `CTRL-O :` that ends in an error
     // message.
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode is entered with.
-    unsafe { msg_check_for_delay(true) };
+    msg_check_for_delay(true);
     // Set Insstart_orig to Insstart.
     update_Insstart_orig.set(true);
 
@@ -76,7 +74,7 @@ fn insert_enter(s: &mut InsertState) {
 
     // Record the command that started the insert, so `.` repeats it.
     if s.cmdchar != NUL && restart_edit.get() == 0 {
-        unsafe { reset_redobuff() };
+        reset_redobuff();
         append_to_redobuff_number(s.count);
         if s.cmdchar == 'V' as c_int || s.cmdchar == 'v' as c_int {
             // `gR` and `gr`.

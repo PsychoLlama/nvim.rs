@@ -74,7 +74,7 @@ pub(crate) unsafe fn print_tag_list(
     unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
     msg_start();
     msg_str_hl(gettext(c"  # pri kind tag"), HLF_T, false);
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     unsafe { advance_to_files(taglen) };
     msg_str_hl(gettext(c"file\n"), HLF_T, false);
 

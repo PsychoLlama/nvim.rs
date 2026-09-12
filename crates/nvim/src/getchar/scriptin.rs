@@ -76,7 +76,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
         curscript.set(curscript.get() - 1);
         return;
     }
-    unsafe { save_typebuf() };
+    save_typebuf();
 
     if !directly {
         return;
@@ -113,10 +113,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
 }
 
 /// Close the innermost script and put back the typeahead it displaced.
-///
-/// # Safety
-/// A script must be open.
-pub(crate) unsafe fn closescript() {
+pub(crate) fn closescript() {
     debug_assert!(curscript.get() >= 0);
     // SAFETY (this body): `curscript` names an open entry of the stack.
     unsafe { free_typebuf() };
@@ -162,7 +159,7 @@ pub unsafe fn open_scriptin(scriptin_name: *mut c_char) -> bool {
         curscript.set(curscript.get() - 1);
         return false;
     }
-    unsafe { save_typebuf() };
+    save_typebuf();
     true
 }
 
@@ -173,13 +170,8 @@ pub fn using_script() -> c_int {
 
 /// Called just before a blocking wait, so after waiting `'updatetime'` for a
 /// character to arrive.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn before_blocking() {
-    // SAFETY (this body): reads the script stack and syncs the editor's own
-    // state.
-    unsafe { updatescript(0) };
+pub fn before_blocking() {
+    updatescript(0);
     if may_garbage_collect.get() {
         unsafe { garbage_collect(false) };
     }
@@ -191,10 +183,7 @@ pub unsafe fn before_blocking() {
 /// `c == 0` means "we have been waiting a while", which syncs unconditionally
 /// and is where the idle fsync happens; otherwise the sync waits until
 /// `'updatecount'` characters have been typed.
-///
-/// # Safety
-/// Callable at any time.
-pub(crate) unsafe fn updatescript(c: c_int) {
+pub(crate) fn updatescript(c: c_int) {
     /// Characters typed since the last sync.
     static count: GlobalCell<c_int> = GlobalCell::new(0);
 

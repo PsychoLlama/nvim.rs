@@ -269,7 +269,7 @@ pub(crate) fn command_line_enter(
                 && (s.firstc == '/' as ::core::ffi::c_int || s.firstc == '?' as ::core::ffi::c_int),
         );
 
-        unsafe { msg_grid_validate() };
+        msg_grid_validate();
 
         redir_off.set(true); // don't redirect the typed command
         if !cmd_silent.get() {

@@ -437,9 +437,7 @@ fn show_through_ui(clear: bool) {
 /// screen line, then blank the rest of them.
 fn draw_on_last_line(clear: bool) {
     let sc = showcmd_buf.get();
-    // SAFETY: the message view is the message grid and `showcmd_row` is its
-    // last row; `grid_line_puts` bounds itself to the line it was started on.
-    unsafe { msg_grid_validate() };
+    msg_grid_validate();
     let showcmd_row = Rows.get() - 1;
     unsafe { grid_line_start(msg_grid_view(), showcmd_row) };
     let attr = unsafe { *hl_attr_active.get().offset(HLF_MSG as isize) };

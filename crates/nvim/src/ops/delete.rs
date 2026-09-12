@@ -141,7 +141,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
         }
 
         let n = Buf::current().line_count() as c_int - old_lcount as c_int;
-        unsafe { msgmore(n) };
+        msgmore(n);
     } else if !op_virtual() {
         // Operating on an empty region is an error when 'cpoptions'
         // contains 'E' (Vi compatible).

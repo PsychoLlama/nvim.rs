@@ -51,15 +51,12 @@ const KEY_U: c_int = b'u' as c_int;
 
 /// Call this after prompting the user: avoids a hit-return message and a
 /// delay.
-///
-/// # Safety
-/// Only that the grids are initialised.
-pub unsafe fn msg_end_prompt() {
+pub fn msg_end_prompt() {
     need_wait_return.set(false);
     emsg_on_display.set(false);
     cmdline_row.set(msg_row.get());
     msg_col.set(0);
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     lines_left.set(-1);
 }
 
@@ -67,10 +64,7 @@ pub unsafe fn msg_end_prompt() {
 ///
 /// `redraw` is 1 to redraw the whole screen `UPD_NOT_VALID`, 0 for a normal
 /// redraw, and -1 for none at all.
-///
-/// # Safety
-/// Only that the editor is in a state where it can read a key.
-pub unsafe fn wait_return(redraw: c_int) {
+pub fn wait_return(redraw: c_int) {
     if redraw == 1 {
         redraw_all_later(UPD_NOT_VALID);
     }
@@ -134,14 +128,14 @@ pub unsafe fn wait_return(redraw: c_int) {
         // With 'cmdheight' zero we need to scroll the first line of
         // msg_grid onto the screen.
         if p_ch.get() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
-            unsafe { msg_grid_validate() };
-            unsafe { msg_scroll_up(false, true) };
+            msg_grid_validate();
+            msg_scroll_up(false, true);
             msg_scrolled.set(msg_scrolled.get() + 1);
             cmdline_row.set(Rows.get() - 1);
         }
 
         if msg_flags.get() & kOptMoptFlagHitEnter.cast_signed() != 0 {
-            unsafe { hit_return_msg(true) };
+            hit_return_msg(true);
             loop {
                 // Remember "got_int": if it is set vgetc() probably
                 // answers CTRL-C, and we need to loop then.
@@ -175,7 +169,7 @@ pub unsafe fn wait_return(redraw: c_int) {
                     ) {
                         if msg_scrolled.get() > Rows.get() {
                             // scroll back to show older messages
-                            unsafe { do_more_prompt(c) };
+                            do_more_prompt(c);
                         } else {
                             msg_didout.set(false);
                             c = Key::Ignore.code();
@@ -187,7 +181,7 @@ pub unsafe fn wait_return(redraw: c_int) {
                             got_int.set(false);
                         } else if c != Key::Ignore.code() {
                             c = Key::Ignore.code();
-                            unsafe { hit_return_msg(false) };
+                            hit_return_msg(false);
                         }
                     } else if msg_scrolled.get() > Rows.get() - 2
                         && matches!(
@@ -234,7 +228,7 @@ pub unsafe fn wait_return(redraw: c_int) {
             } else if !has_char(c"\r\n ", c) && c != Ctrl_C && c != KEY_Q {
                 // Put the character back in the typeahead buffer. Not the
                 // stuff buffer, because lmaps wouldn't work.
-                unsafe { ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true) };
+                ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
                 do_redraw.set(true); // need a redraw even though there is typeahead
             }
         } else {
@@ -267,7 +261,7 @@ pub unsafe fn wait_return(redraw: c_int) {
     did_wait_return.set(true);
     emsg_on_display.set(false); // can delete error message now
     lines_left.set(-1); // reset lines_left at next msg_start()
-    unsafe { reset_last_sourcing() };
+    reset_last_sourcing();
     if !keep_msg.get().is_null()
         && unsafe { vim_strsize(keep_msg.get()) }
             >= (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get()
@@ -289,10 +283,7 @@ pub unsafe fn wait_return(redraw: c_int) {
 ///
 /// `newline_sb` is set when starting a new line should add it to the
 /// scrollback.
-///
-/// # Safety
-/// Only that the grids are initialised.
-pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
+pub(crate) fn hit_return_msg(newline_sb: bool) {
     let save_p_more = p_more.get();
     if !newline_sb {
         p_more.set(0);
@@ -307,7 +298,7 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
     let prompt = gettext(c"Press ENTER or type command to continue");
     msg_str_hl(prompt, HLF_R, false);
     if msg_use_printf() == 0 {
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
     }
     p_more.set(save_p_more);
 }
@@ -317,10 +308,7 @@ pub(crate) unsafe fn hit_return_msg(newline_sb: bool) {
 /// `typed_char` is the key that got us here, or NUL to prompt for one.
 /// Answers true when the user answered a `:confirm` dialog rather than
 /// scrolling.
-///
-/// # Safety
-/// Only that the scrollback list and the grids are well formed.
-pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
+pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
     static entered: GlobalCell<bool> = GlobalCell::new(false);
     let mut used_typed_char = typed_char;
     let old_state = State.get();
@@ -350,7 +338,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
     State.set(MODE_ASKMORE);
     setmouse();
     if typed_char == NUL {
-        unsafe { msg_moremsg(false) };
+        msg_moremsg(false);
     }
 
     'more: loop {
@@ -419,7 +407,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                 }
                 _ => {
                     // Any other key: show the full prompt and ask again.
-                    unsafe { msg_moremsg(true) };
+                    msg_moremsg(true);
                     continue 'more;
                 }
             }
@@ -491,7 +479,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
         } else {
             // Scroll forwards.
             if cmdline_row.get() >= Rows.get() && !ui_has(kUIMessages) {
-                unsafe { msg_scroll_up(true, false) };
+                msg_scroll_up(true, false);
                 msg_scrolled.set(msg_scrolled.get() + 1);
             }
             while toscroll > 0 && !mp_last.is_null() {
@@ -501,8 +489,8 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
                     msg_scrolled_at_flush.set(msg_scrolled_at_flush.get() - 1);
                     msg_grid_scroll_discount.set(msg_grid_scroll_discount.get() + 1);
                 }
-                unsafe { msg_scroll_up(true, false) };
-                unsafe { inc_msg_scrolled() };
+                msg_scroll_up(true, false);
+                inc_msg_scrolled();
                 clear_msg_area(Rows.get() - 2, Rows.get() - 1, 0, Columns.get());
                 mp_last = unsafe { disp_sb_line(Rows.get() - 2, mp_last) };
                 toscroll -= 1;
@@ -515,7 +503,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
             break;
         }
         clear_msg_area(Rows.get() - 1, Rows.get(), 0, Columns.get());
-        unsafe { msg_moremsg(false) };
+        msg_moremsg(false);
     }
 
     // Clear the --More-- message.
@@ -536,10 +524,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
 }
 
 /// Write the `--More--` prompt, with its key legend when `full` is set.
-///
-/// # Safety
-/// Only that the grids are initialised.
-pub(crate) unsafe fn msg_moremsg(full: bool) {
+pub(crate) fn msg_moremsg(full: bool) {
     let attr = unsafe { hl_combine_attr(hl_attr(HLF_MSG as c_int), hl_attr(HLF_M as c_int)) };
     unsafe { grid_line_start(msg_grid_view(), Rows.get() - 1) };
     let mut len = unsafe { grid_line_puts(0, gettext(c"-- More --").as_ptr(), -1, attr) };
@@ -553,18 +538,15 @@ pub(crate) unsafe fn msg_moremsg(full: bool) {
 }
 
 /// The screen was cleared under a prompt: write it again.
-///
-/// # Safety
-/// Only that the grids are initialised.
-pub unsafe fn repeat_message() {
+pub fn repeat_message() {
     if ui_has(kUIMessages) {
         return;
     }
     if State.get() == MODE_ASKMORE {
-        unsafe { msg_moremsg(true) }; // display --MORE-- message again
+        msg_moremsg(true); // display --MORE-- message again
         msg_row.set(Rows.get() - 1);
     } else if State.get() & MODE_CMDLINE != 0 && !confirm_msg.get().is_null() {
-        unsafe { display_confirm_msg() }; // display ":confirm" message again
+        display_confirm_msg(); // display ":confirm" message again
         msg_row.set(Rows.get() - 1);
     } else if State.get() == MODE_EXTERNCMD {
         ui_cursor_goto(msg_row.get(), msg_col.get()); // put cursor back
@@ -573,18 +555,15 @@ pub unsafe fn repeat_message() {
             // Avoid drawing the "hit-enter" prompt below the last line.
             msg_didout.set(false);
             msg_col.set(0);
-            unsafe { msg_clr_eos() };
+            msg_clr_eos();
         }
-        unsafe { hit_return_msg(false) };
+        hit_return_msg(false);
         msg_row.set(Rows.get() - 1);
     }
 }
 
 /// Give the user time to see a message, unless the UI shows them itself.
-///
-/// # Safety
-/// Only that the editor can pump the event loop here.
-pub unsafe fn msg_delay(ms: uint64_t, ignoreinput: bool) {
+pub fn msg_delay(ms: uint64_t, ignoreinput: bool) {
     if ui_has(kUIMessages) {
         return;
     }
@@ -603,17 +582,14 @@ pub unsafe fn msg_delay(ms: uint64_t, ignoreinput: bool) {
 }
 
 /// Pause after an error message, so it is not scrolled away unseen.
-///
-/// # Safety
-/// As [`msg_delay`].
-pub unsafe fn msg_check_for_delay(check_msg_scroll: bool) {
+pub fn msg_check_for_delay(check_msg_scroll: bool) {
     if (emsg_on_display.get() || (check_msg_scroll && msg_scroll.get() != 0))
         && !did_wait_return.get()
         && emsg_silent.get() == 0
         && !in_assert_fails.get()
         && !ui_has(kUIMessages)
     {
-        unsafe { msg_delay(1006, true) };
+        msg_delay(1006, true);
         emsg_on_display.set(false);
         if check_msg_scroll {
             msg_scroll.set(0);

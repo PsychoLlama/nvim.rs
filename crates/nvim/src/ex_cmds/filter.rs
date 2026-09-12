@@ -558,7 +558,7 @@ unsafe fn do_filter(
         Win::current().w_cursor = cursor_save;
         drop(no_prompt.take());
         // SAFETY: message state.
-        unsafe { wait_return(0) };
+        wait_return(0);
     }
 
     cmdmod.with_mut(|mods| mods.cmod_flags = save_cmod_flags);

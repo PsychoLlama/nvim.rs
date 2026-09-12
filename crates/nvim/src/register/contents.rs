@@ -205,8 +205,7 @@ unsafe fn init_write_reg(
 ) -> *mut YankReg {
     // SAFETY: `valid_yank_reg` only looks the name up.
     if !unsafe { valid_yank_reg(name, true) } {
-        // SAFETY: reports the name, which is all it reads.
-        unsafe { emsg_invreg(name) };
+        emsg_invreg(name);
         return ::core::ptr::null_mut();
     }
     // `get_yank_register` moves `""`, which a write to a *named* register

@@ -203,7 +203,7 @@ pub(crate) unsafe fn command_line_execute(
                 )
             };
         } else {
-            unsafe { map_execute_lua(false, false) };
+            map_execute_lua(false, false);
         }
         // If the window changed, the incremental search state is invalid.
         if s.is_state.winid != Win::current().handle {
@@ -399,7 +399,7 @@ pub(crate) unsafe fn command_line_execute(
 
             if !cmd_silent.get() {
                 if !ui_has(kUICmdline) {
-                    unsafe { msg_cursor_goto(msg_row.get(), 0) };
+                    msg_cursor_goto(msg_row.get(), 0);
                 }
                 unsafe { ui_flush() };
             }

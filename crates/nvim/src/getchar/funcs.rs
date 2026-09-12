@@ -46,10 +46,7 @@ struct GetcharOpts {
 ///
 /// Answers `None` when an argument was rejected — the caller must then leave
 /// `result` alone, which is what upstream's `called_emsg` comparison decides.
-///
-/// # Safety
-/// `args` must be a valid argument vector.
-unsafe fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
+fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
     let mut numbuf = NumBuf::new();
     let mut opts = GetcharOpts {
         allow_number,
@@ -103,10 +100,7 @@ unsafe fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpt
 ///
 /// `argvars[0]` decides how: absent or -1 blocks, 1 only peeks, 0 takes a key
 /// if one is there. Keys nothing can act on are skipped.
-///
-/// # Safety
-/// `args` must be a valid argument vector.
-unsafe fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
+fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
     let mut error = false;
     loop {
         if cursor == CursorFlag::Msg || (cursor == CursorFlag::Default && msg_col.get() > 0) {
@@ -187,13 +181,8 @@ fn set_mouse_vars() {
 }
 
 /// `getchar()` and `getcharstr()`.
-///
-/// # Safety
-/// `args` and `result` must be a valid argument vector and return slot.
-pub(crate) unsafe fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number: bool) {
-    // SAFETY (this body): as [`getchar_opts`] -- a live argument vector and a
-    // writable `result`; the scratch buffers are this frame's own.
-    let Some(opts) = (unsafe { getchar_opts(args, allow_number) }) else {
+pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number: bool) {
+    let Some(opts) = getchar_opts(args, allow_number) else {
         return;
     };
 
@@ -203,7 +192,7 @@ pub(crate) unsafe fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_
     let raw_key = Keys::unmapped_with_codes();
     let unsimplified = (!opts.simplify).then(|| Suppress::counter(&no_reduce_keys));
 
-    let n = unsafe { getchar_read(args, opts.cursor) };
+    let n = getchar_read(args, opts.cursor);
 
     drop(raw_key);
     drop(unsimplified);
@@ -254,15 +243,13 @@ pub(crate) unsafe fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_
 ///
 /// The eval function table holds it as a `VimLFunc` pointer.
 pub fn f_getchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY (this body): the Vimscript call convention, passed straight
-    // through.
-    unsafe { getchar_common(args, result, true) };
+    getchar_common(args, result, true);
 }
 
 /// The `getcharstr()` Vimscript function.
 pub fn f_getcharstr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
-    unsafe { getchar_common(args, result, false) };
+    getchar_common(args, result, false);
 }
 
 /// The `getcharmod()` Vimscript function: the modifiers of the last key.

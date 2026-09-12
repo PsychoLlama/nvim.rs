@@ -34,7 +34,8 @@ pub enum PastePhase {
 /// in the content are escaped.
 ///
 /// # Safety
-/// `str` must be a valid string when `phase` is [`PastePhase::Chunk`].
+/// On [`PastePhase::Chunk`], `str`'s `data` is read for `size` bytes; a
+/// [`String_0`] does not keep them alive.
 pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0, crlf: bool) {
     if State.get() & MODE_CMDLINE != 0 {
         return;
@@ -53,10 +54,7 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
         };
         if need_redo {
             if phase == PastePhase::Start && State.get() & MODE_INSERT == 0 {
-                // SAFETY (this body): the arena and the array builder are this
-                // frame's own, and every string put in them is either a static
-                // or an allocation this frame owns.
-                unsafe { reset_redobuff() };
+                reset_redobuff();
             }
             redobuff().add_char(c);
         }
@@ -112,24 +110,19 @@ pub unsafe fn paste_store(channel_id: uint64_t, phase: PastePhase, str: String_0
 
 /// Read a paste stored by [`paste_store`] back out of the typeahead and
 /// replay it `count` times.
-///
-/// # Safety
-/// Callable at any time; reads from the typeahead until `K_PASTE_END`.
-pub unsafe fn paste_repeat(count: c_int) {
+pub fn paste_repeat(count: c_int) {
     let mut pasted = Vec::<u8>::new();
     let mut aborted = false;
 
     let unmapped = Keys::unmapped();
     got_int.set(false);
     while !aborted {
-        // SAFETY (this body): the stored paste is this module's own `Array`,
-        // and the arena is this frame's.
-        let first = unsafe { vgetorpeek(true) } as u8;
+        let first = vgetorpeek(true) as u8;
         if c_int::from(first) == K_SPECIAL {
             // Undo the escaping `paste_store` applied, except that the
             // bytes of a real key code go back in as they came out.
-            let second = unsafe { vgetorpeek(true) } as u8;
-            let third = unsafe { vgetorpeek(true) } as u8;
+            let second = vgetorpeek(true) as u8;
+            let third = vgetorpeek(true) as u8;
             let key = key_unescape(second, third);
             match Key::try_from(key) {
                 Ok(Key::PasteEnd) => break,

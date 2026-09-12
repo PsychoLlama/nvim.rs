@@ -35,12 +35,10 @@ use crate::types::{DictKey, Failed, Refcount};
 /// literal, so the only obligation left is `body`'s, which is its own.
 fn verbose_report(body: impl FnOnce()) {
     let _no_prompt = Suppress::wait_return();
-    // SAFETY: the scroll frame is the message module's own state, and the
-    // terminator is a NUL-terminated literal.
-    unsafe { verbose_enter_scroll() };
+    verbose_enter_scroll();
     body();
     msg_str(c"\n");
-    unsafe { verbose_leave_scroll() };
+    verbose_leave_scroll();
 }
 
 /// Call the user function `func`.

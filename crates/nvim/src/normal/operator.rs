@@ -194,7 +194,7 @@ pub(crate) unsafe fn nv_dot(cmd_arg: *mut CmdArg) {
     // The insert half is only replayed when insert mode was left by a
     // command rather than by an arrow key, which ends the change.
     let repeat_insert = restart_edit.get() != 0 && !arrow_used.get();
-    if unsafe { start_redo(ca.count0, repeat_insert) }.is_err() {
+    if start_redo(ca.count0, repeat_insert).is_err() {
         clear_op_beep(ca.op());
     }
 }

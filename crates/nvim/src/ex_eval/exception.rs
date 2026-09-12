@@ -477,7 +477,7 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
     // While debugging the messages have to be displayed.
     let loud = debugging.then(Allow::messages);
     if !debugging {
-        unsafe { verbose_enter() };
+        verbose_enter();
     }
     let no_prompt = Suppress::wait_return();
     if debug_break_level.get() > 0 || unsafe { *p_vfile.get() } == NUL as c_char {
@@ -496,7 +496,7 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
     drop(no_prompt);
     drop(loud);
     if !debugging {
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 }
 
@@ -759,11 +759,11 @@ unsafe fn report_if_verbose(action: PendingAction, pending: c_int, value: *mut c
     let quiet = debug_break_level.get() <= 0;
     // SAFETY: caller contract.
     if quiet {
-        unsafe { verbose_enter() };
+        verbose_enter();
     }
     unsafe { report_pending(action, pending, value) };
     if quiet {
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 }
 

@@ -284,8 +284,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
                 msg_str(c"  ");
             }
         });
-        // SAFETY: the message buffers again.
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
         msg_end();
     }
 }

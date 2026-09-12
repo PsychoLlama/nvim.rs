@@ -488,8 +488,7 @@ pub(super) fn send_mouse_event(term: Term, c: c_int) -> bool {
     // Hand the event back for normal mode, then rewind the typeahead so
     // that terminal mode ends before it is read.
     let (c, mods) = (vgetc_char.get(), vgetc_mod_mask.get());
-    // SAFETY: pushes one key back onto the editor's own typeahead.
-    let len = unsafe { ins_char_typebuf(c, mods, true) };
+    let len = ins_char_typebuf(c, mods, true);
     if KeyTyped.get() {
         ungetchars(len); // rewind over the key just pushed
     }

@@ -34,10 +34,7 @@ static REDO_AT: GlobalCell<*const u8> = GlobalCell::new(ptr::null());
 /// Move the current redo buffer to `old_redobuff` and start a fresh one.
 ///
 /// The previous contents are what `CTRL-O .` in Insert mode repeats.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn reset_redobuff() {
+pub fn reset_redobuff() {
     if block_redo.get() {
         return;
     }
@@ -48,10 +45,7 @@ pub unsafe fn reset_redobuff() {
 }
 
 /// Discard the redo buffer and put the previous one back.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn cancel_redo() {
+pub fn cancel_redo() {
     if block_redo.get() {
         return;
     }
@@ -59,7 +53,7 @@ pub unsafe fn cancel_redo() {
     unsafe { redobuff().free() };
     redobuff().set(old_redobuff().take());
     start_stuff();
-    while unsafe { read_readbuffers(true) } != NUL {}
+    while read_readbuffers(true) != NUL {}
 }
 
 /// Move both redo buffers into `save_redo`, leaving a *copy* of the current
@@ -338,10 +332,7 @@ unsafe fn copy_redo(old_redo: bool) {
 /// With `old_redo` set the last command but one is repeated instead of the
 /// last one, which is what `CTRL-O .` in Insert mode wants. Answers `Err`
 /// when there is nothing to redo.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
+pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
     // Position the cursor; give up if there is nothing to redo.
     // SAFETY (this body): the redo buffer's chain is live for the whole of
     // this body, and `buf` is this frame's own array.
@@ -399,10 +390,7 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
 /// Repeat the last insert (`R`, `o`, `O`, `a`, `A`, `i` or `I`) by stuffing
 /// the redo buffer into `readbuf2`. Answers `Err` when there is nothing to
 /// repeat.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn start_redo_ins() -> Result<(), Failed> {
+pub fn start_redo_ins() -> Result<(), Failed> {
     // SAFETY (this body): as [`start_redo`].
     if unsafe { read_redo(true, false) } == FAIL {
         return Err(Failed);

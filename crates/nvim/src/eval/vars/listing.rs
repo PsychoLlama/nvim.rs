@@ -314,7 +314,7 @@ unsafe fn list_one_var_a(
         msg_str(c"()");
     }
     if is_first {
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
         unsafe { *first = 0 };
     }
 }

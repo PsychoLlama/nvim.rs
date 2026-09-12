@@ -102,12 +102,12 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegP
     {
         regexp_engine.set(BACKTRACKING_ENGINE as c_int);
         if p_verbose.get() > 0 as OptInt {
-            unsafe { verbose_enter() };
+            verbose_enter();
             let note = c"Switching to backtracking RE engine for pattern: ".as_ptr();
             // SAFETY: the translation of a static message.
             msg_str(unsafe { gettext_ptr(note) });
             msg_str(unsafe { cstr::at(expr) });
-            unsafe { verbose_leave() };
+            verbose_leave();
         }
         let regcomp = bt_regengine.regcomp.expect("non-null function pointer");
         prog = unsafe { regcomp(expr as *mut uint8_t, re_flags) };
@@ -151,12 +151,12 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
     let save_p_re = p_re.get();
     p_re.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose.get() > 0 as OptInt {
-        unsafe { verbose_enter() };
+        verbose_enter();
         msg_str(gettext(
             c"Switching to backtracking RE engine for pattern: ",
         ));
         msg_str(unsafe { cstr::at(pat) });
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
     if extmatch {
         // A buffer match may be a syntax match, whose `\z(` groups have

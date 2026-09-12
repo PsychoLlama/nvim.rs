@@ -101,11 +101,9 @@ pub fn vgetc() -> c_int {
             // either null or a fresh allocation, which is ours to free.
             unsafe { xfree(getcmdkeycmd(NUL, ptr::null_mut(), 0, false).cast()) };
         } else if c == Key::Lua.code() {
-            // SAFETY: callable at any time; it only reads the typeahead.
-            unsafe { map_execute_lua(false, true) };
+            map_execute_lua(false, true);
         } else if c == Key::PasteStart.code() {
-            // SAFETY: callable at any time; it only reads the typeahead.
-            unsafe { paste_repeat(0) };
+            paste_repeat(0);
         }
         c = Key::Ignore.code();
     }
@@ -134,7 +132,7 @@ fn vgetc_from_typeahead() -> c_int {
     /// SAFETY: `vgetorpeek` is callable at any time; it reads the editor's
     /// own typeahead and needs nothing from this caller.
     fn next_byte() -> c_int {
-        unsafe { vgetorpeek(true) }
+        vgetorpeek(true)
     }
 
     mod_mask.set(ModMask::NONE);
@@ -207,10 +205,8 @@ fn vgetc_from_typeahead() -> c_int {
             && !is_mouse_key(c)
         {
             mod_mask.set(ModMask::NONE);
-            // SAFETY: `ins_char_typebuf` is callable at any time.
-            let len = unsafe { ins_char_typebuf(c, ModMask::NONE, false) };
-            // SAFETY: as above.
-            unsafe { ins_char_typebuf(ESC, ModMask::NONE, false) };
+            let len = ins_char_typebuf(c, ModMask::NONE, false);
+            ins_char_typebuf(ESC, ModMask::NONE, false);
             // K_SPECIAL KS_MODIFIER ModMask::ALT takes three more bytes.
             let old_len = len + 3;
             ungetchars(old_len);
@@ -330,9 +326,7 @@ pub fn vpeekc() -> c_int {
     if can_get_old_char() {
         old_char.get()
     } else {
-        // SAFETY: `vgetorpeek` is callable at any time, and without
-        // `advance` it does not even wait for input.
-        unsafe { vgetorpeek(false) }
+        vgetorpeek(false)
     }
 }
 

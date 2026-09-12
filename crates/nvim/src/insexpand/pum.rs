@@ -747,8 +747,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
         return;
     }
     if edit_submode_extra.get().is_null() {
-        // SAFETY: the editor exists and this runs on its own thread.
-        unsafe { msg_clr_cmdline() };
+        msg_clr_cmdline();
     } else if p_smd.get() == 0 {
         msg_hist_off.set(true);
         let attr = if (edit_submode_highl.get() as c_uint) < HLF_COUNT as c_uint {

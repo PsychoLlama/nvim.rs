@@ -183,7 +183,7 @@ pub fn do_exmode() {
                 // A bare Return already scrolled; print over that line
                 // rather than under it.
                 if ex_pressedreturn.get() {
-                    unsafe { msg_scroll_flush() };
+                    msg_scroll_flush();
                     msg_row.set(prev_msg_row);
                     if prev_msg_row == Rows.get() - 1 {
                         msg_row.set(msg_row.get() - 1);
@@ -191,7 +191,7 @@ pub fn do_exmode() {
                 }
                 msg_col.set(0);
                 unsafe { print_line_no_prefix(Win::current().w_cursor.lnum, false, false) };
-                unsafe { msg_clr_eos() };
+                msg_clr_eos();
             }
         } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
             // Return on the last line: there is nothing to print.
@@ -219,7 +219,7 @@ pub fn do_exmode() {
 /// `cmd` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn msg_verbose_cmd(lnum: LineNr, cmd: *mut c_char) {
     let _no_prompt = Suppress::wait_return();
-    unsafe { verbose_enter_scroll() };
+    verbose_enter_scroll();
     if lnum == 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let cmd = unsafe { c_str(cmd) };
@@ -232,7 +232,7 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: LineNr, cmd: *mut c_char) {
     if msg_silent.get() == 0 {
         msg_str(c"\n");
     }
-    unsafe { verbose_leave_scroll() };
+    verbose_leave_scroll();
 }
 
 /// Enter a `do_cmdline` call, refusing to nest past 'maxfuncdepth'.

@@ -260,7 +260,7 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
     let fmt = fmt.as_ptr();
     unsafe { vim_snprintf(out, IOSIZE as usize, fmt, sug.su_badlen, sug.su_badptr) };
     msg_str(unsafe { cstr::at(out) });
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     msg_putchar('\n' as c_int);
 
     msg_scroll.set(1);
@@ -424,7 +424,7 @@ unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
     unsafe { strcat(newline, sug.su_badptr.offset(stp.st_orglen as isize)) };
 
     // Redo is a change-word command.
-    unsafe { reset_redobuff() };
+    reset_redobuff();
     unsafe { append_to_redobuff(c"ciw".as_ptr()) };
     // SAFETY: the replacement starts at `col` in `newline` and is that many
     // bytes long, all of them inside the buffer sized above.

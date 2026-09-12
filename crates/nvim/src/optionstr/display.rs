@@ -205,7 +205,7 @@ pub fn did_set_display(args: &mut OptSet) -> Option<&CStr> {
     // changes whether the message area is its own grid.
     // SAFETY: both read the editor's own state.
     unsafe { init_chartab() };
-    unsafe { msg_grid_validate() };
+    msg_grid_validate();
     None
 }
 
@@ -253,8 +253,7 @@ pub fn did_set_keymodel(args: &mut OptSet) -> Option<&CStr> {
 }
 
 pub fn did_set_messagesopt(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: reads the option's own value.
-    if unsafe { messagesopt_changed() }.is_err() {
+    if messagesopt_changed().is_err() {
         return invalid();
     }
     None

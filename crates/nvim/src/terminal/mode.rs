@@ -594,8 +594,7 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
     }
     match Key::try_from(mod_key) {
         Ok(Key::PasteStart) => {
-            // SAFETY: replays the paste the editor has buffered.
-            unsafe { paste_repeat(1) };
+            paste_repeat(1);
             return 1;
         }
         Ok(Key::Event) => {
@@ -617,8 +616,7 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
             return 1;
         }
         Ok(Key::Lua) => {
-            // SAFETY: runs the Lua callback the key carries.
-            unsafe { map_execute_lua(false, false) };
+            map_execute_lua(false, false);
             return 1;
         }
         Ok(Key::Ignore | Key::Nop) => return 1,

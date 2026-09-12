@@ -124,7 +124,7 @@ pub(crate) unsafe fn showmatches_oneline(
     }
     if msg_col.get() > 0 {
         // When not wrapped around.
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
         msg_putchar('\n' as c_int);
     }
 }
@@ -265,7 +265,7 @@ pub unsafe fn showmatches(
 
         if expand.xp_context == ExpandContext::TagsListFiles {
             msg_str_hl(gettext(c"tagname"), HLF_T, false);
-            unsafe { msg_clr_eos() };
+            msg_clr_eos();
             msg_advance(maxlen - 3);
             msg_str_hl(gettext(c" kind file\n"), HLF_T, false);
         }

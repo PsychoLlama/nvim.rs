@@ -31,7 +31,7 @@ use core::ptr;
 pub unsafe fn msg_ext_set_kind(msg_kind: *const c_char) {
     // Flush before setting the kind, so the previous message is emitted
     // under the kind it was written with.
-    unsafe { msg_ext_ui_flush() };
+    msg_ext_ui_flush();
     // SAFETY: the caller's promise.
     msg_ext_kind.set(unsafe { cstr_to_string(msg_kind) });
     // An appended message continues the previous one's column run.
@@ -41,11 +41,8 @@ pub unsafe fn msg_ext_set_kind(msg_kind: *const c_char) {
 }
 
 /// Mark the next message as continuing the last one rather than replacing it.
-///
-/// # Safety
-/// Only that the emitter statics are in a consistent state.
-pub unsafe fn msg_ext_set_append(append: bool) {
-    unsafe { msg_ext_ui_flush() };
+pub fn msg_ext_set_append(append: bool) {
+    msg_ext_ui_flush();
     msg_ext_append.set(append);
 }
 
@@ -54,7 +51,7 @@ pub unsafe fn msg_ext_set_append(append: bool) {
 /// # Safety
 /// As [`msg_ext_set_kind`]: `trigger` is stored by pointer.
 pub unsafe fn msg_ext_set_trigger(trigger: *const c_char) {
-    unsafe { msg_ext_ui_flush() };
+    msg_ext_ui_flush();
     msg_ext_trigger.set(trigger);
 }
 
@@ -62,10 +59,7 @@ pub unsafe fn msg_ext_set_trigger(trigger: *const c_char) {
 ///
 /// Each chunk is `[attr, text, hl_id]`, which is what the `msg_show` UI event
 /// carries.
-///
-/// # Safety
-/// Only that the emitter statics are in a consistent state.
-pub(crate) unsafe fn msg_ext_emit_chunk() {
+pub(crate) fn msg_ext_emit_chunk() {
     if msg_ext_chunks.with(Option::is_none) {
         // The first chunk of the session starts the column over, as the
         // null-pointer check upstream's `msg_ext_init_chunks` guards did.
@@ -108,10 +102,7 @@ pub(crate) fn msg_ext_init_chunks() -> Array {
 ///
 /// Without `ext_messages` this only clears the pending kind: the text went to
 /// the grid as it was written.
-///
-/// # Safety
-/// Only that the emitter statics are in a consistent state.
-pub unsafe fn msg_ext_ui_flush() {
+pub fn msg_ext_ui_flush() {
     if !ui_has(kUIMessages) {
         msg_ext_kind.set(String_0::NULL);
         return;
@@ -120,7 +111,7 @@ pub unsafe fn msg_ext_ui_flush() {
         return;
     }
 
-    unsafe { msg_ext_emit_chunk() };
+    msg_ext_emit_chunk();
     if msg_ext_chunks.with(|chunks| chunks.as_ref().is_none_or(|chunks| chunks.is_empty())) {
         return;
     }
@@ -186,17 +177,14 @@ pub unsafe fn msg_ext_ui_flush() {
 }
 
 /// Emit the pending showmode/showcmd/ruler text as its own event.
-///
-/// # Safety
-/// Only that the emitter statics are in a consistent state.
-pub unsafe fn msg_ext_flush_showmode() {
+pub fn msg_ext_flush_showmode() {
     // One trailing empty event after the mode text goes away, so the UI
     // knows to clear what it drew.
     static clear: GlobalCell<bool> = GlobalCell::new(false);
     let pending = msg_ext_last_attr.get() != -1;
     if ui_has(kUIMessages) && (pending || clear.get()) {
         clear.set(pending);
-        unsafe { msg_ext_emit_chunk() };
+        msg_ext_emit_chunk();
         ui_call_msg_showmode(msg_ext_init_chunks());
     }
 }

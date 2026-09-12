@@ -531,8 +531,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
             }
         }
 
-        // SAFETY: main thread, reporting how many lines went in.
-        unsafe { msgmore(put.nr_lines) };
+        msgmore(put.nr_lines);
         Win::current().w_set_curswant = true;
 
         // Don't leave the cursor after the NUL.

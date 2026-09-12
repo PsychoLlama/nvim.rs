@@ -385,8 +385,7 @@ pub unsafe fn do_execreg(
         || regname == '#' as c_int
         || !unsafe { valid_yank_reg(regname, false) }
     {
-        // SAFETY: reports the name; nothing of the caller's is dereferenced.
-        unsafe { emsg_invreg(regname) };
+        emsg_invreg(regname);
         return Err(Failed);
     }
     execreg_lastc.set(regname);

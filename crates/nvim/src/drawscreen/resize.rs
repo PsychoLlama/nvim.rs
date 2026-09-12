@@ -67,8 +67,7 @@ pub fn default_grid_alloc() -> bool {
 
 /// Blank the screen and mark everything on it for redraw.
 pub fn screenclear() {
-    // SAFETY: the screen grid and the message grid, on the main thread.
-    unsafe { msg_check_for_delay(false) };
+    msg_check_for_delay(false);
 
     if !default_grid_ref().is_allocated() || starting.get() == NO_SCREEN {
         return;
@@ -106,7 +105,7 @@ pub fn screenclear() {
     compute_cmdrow();
     msg_row.set(cmdline_row.get()); // put the cursor on the last line for messages
     msg_col.set(0);
-    unsafe { msg_reset_scroll() }; // can't scroll back
+    msg_reset_scroll(); // can't scroll back
     msg_didany.set(false);
     msg_didout.set(false);
 
@@ -115,7 +114,7 @@ pub fn screenclear() {
         && msg_grid_ref().is_allocated()
     {
         msg_grid_ref().invalidate();
-        unsafe { msg_grid_validate() };
+        msg_grid_validate();
         msg_grid_invalid.set(false);
         clear_cmdline.set(true);
     }
@@ -236,10 +235,10 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
                 let _ = update_screen();
             }
             if msg_grid_ref().is_allocated() {
-                unsafe { msg_grid_validate() };
+                msg_grid_validate();
             }
             ui_comp_set_screen_valid(true);
-            unsafe { repeat_message() };
+            repeat_message();
         } else {
             if Win::current().w_onebuf_opt.wo_scb != 0 {
                 do_check_scrollbind(true);

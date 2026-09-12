@@ -67,7 +67,8 @@ struct Partial {
 /// removed.
 ///
 /// # Safety
-/// Callable at any time; `typebuf` must have room for three more bytes.
+/// The typeahead must have room for three more bytes: this pushes an
+/// `<Esc>` back into it without growing it first.
 unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
     let deleted = mode_displayed.get();
     if deleted {
@@ -142,10 +143,7 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
 
 /// Show the partially matched keys with `'showcmd'` while we wait for the
 /// rest of a mapping.
-///
-/// # Safety
-/// Callable at any time.
-unsafe fn show_partial_key(at: CursorAt) -> Partial {
+fn show_partial_key(at: CursorAt) -> Partial {
     let tb = typeahead();
     let mut partial = Partial {
         showcmd_idx: 0,
@@ -180,8 +178,7 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
         }
         while partial.showcmd_idx < tb.len() {
             let byte = tb.byte(partial.showcmd_idx) as u8;
-            // SAFETY: appends one byte to the showcmd rendering.
-            unsafe { add_byte_to_showcmd(byte) };
+            add_byte_to_showcmd(byte);
             partial.showcmd_idx += 1;
         }
         win.w_wcol = old_wcol;
@@ -202,10 +199,7 @@ unsafe fn show_partial_key(at: CursorAt) -> Partial {
 }
 
 /// Take back what [`show_partial_key`] drew.
-///
-/// # Safety
-/// `partial` must be what the matching [`show_partial_key`] answered.
-unsafe fn unshow_partial_key(partial: &Partial) {
+fn unshow_partial_key(partial: &Partial) {
     if partial.showcmd_idx != 0 {
         pop_showcmd();
     }
@@ -240,10 +234,7 @@ fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
 }
 
 /// Everything that got read after a CTRL-C, and the key to answer with.
-///
-/// # Safety
-/// Callable at any time.
-unsafe fn interrupted(advance: bool) -> c_int {
+fn interrupted(advance: bool) -> c_int {
     let tb = typeahead();
     // Flush all input.
     // SAFETY (this body): the typeahead's own storage, and the room left in
@@ -259,7 +250,7 @@ unsafe fn interrupted(advance: bool) -> c_int {
     } else {
         Ctrl_C
     };
-    unsafe { flush_buffers(FLUSH_INPUT) }; // flush all typeahead
+    flush_buffers(FLUSH_INPUT); // flush all typeahead
 
     if advance {
         // Record this character too; it may be needed to get out of
@@ -275,10 +266,7 @@ unsafe fn interrupted(advance: bool) -> c_int {
 ///
 /// Answers the byte to hand out, or a negative value when the input script
 /// ended and the caller should start over.
-///
-/// # Safety
-/// Callable at any time; may block waiting for input.
-unsafe fn read_from_typeahead(
+fn read_from_typeahead(
     advance: bool,
     timedout: &mut bool,
     mapdepth: &mut c_int,
@@ -302,7 +290,7 @@ unsafe fn read_from_typeahead(
 
         let mut keylen = 0;
         if got_int.get() {
-            return unsafe { interrupted(advance) };
+            return interrupted(advance);
         } else if !typeahead().is_empty() {
             // Check for a mapping in the typeahead.
             match unsafe { handle_mapping(&raw mut keylen, timedout, mapdepth) } as MapResult {
@@ -431,7 +419,7 @@ unsafe fn read_from_typeahead(
         }
 
         let partial = if !tb.is_empty() && advance && !exmode_active.get() {
-            unsafe { show_partial_key(at) }
+            show_partial_key(at)
         } else {
             Partial {
                 showcmd_idx: 0,
@@ -448,7 +436,7 @@ unsafe fn read_from_typeahead(
         let wait_tb_len = tb.len();
         c = unsafe { inchar(tb.tail(), tb.room(), wait_time_for(advance, keylen)) };
 
-        unsafe { unshow_partial_key(&partial) };
+        unshow_partial_key(&partial);
 
         if c < 0 {
             continue; // end of the input script reached
@@ -482,10 +470,7 @@ unsafe fn read_from_typeahead(
 /// Mappings are checked when the global `no_mapping` is zero. Only one byte of
 /// a multibyte character comes back, and a `K_SPECIAL` may be escaped — two
 /// more bytes have to be fetched then.
-///
-/// # Safety
-/// Callable at any time; may block waiting for input when `advance` is set.
-pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
+pub(crate) fn vgetorpeek(advance: bool) -> c_int {
     // This function does not work well when called recursively, which can
     // happen because `add_to_showcmd` uses `char_avail`, and because a UI
     // callback that writes to the screen can raise a `wait_return`. Using
@@ -519,9 +504,7 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
             }
             c
         } else {
-            // SAFETY (this body): the input stack's own state; nothing here
-            // holds a pointer across a call that can re-enter it.
-            unsafe { read_readbuffers(advance) }
+            read_readbuffers(advance)
         };
 
         let c = if c != NUL && !got_int.get() {
@@ -537,7 +520,7 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
             }
             c
         } else {
-            unsafe { read_from_typeahead(advance, &mut timedout, &mut mapdepth, &mut mode_deleted) }
+            read_from_typeahead(advance, &mut timedout, &mut mapdepth, &mut mode_deleted)
         };
 
         // With `advance` false, don't loop on NULs.
@@ -568,7 +551,7 @@ pub(crate) unsafe fn vgetorpeek(advance: bool) -> c_int {
     if timedout && c == ESC {
         // When recording there is no timeout. Add an <Ignore> after the
         // ESC so that it cannot form a key code with what follows.
-        unsafe { gotchars_ignore() };
+        gotchars_ignore();
     }
 
     c
@@ -620,7 +603,7 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
             // EOF, or some error. Careful: closescript() frees
             // typebuf.tb_buf and buf may point inside it, so buf must not
             // be used after this.
-            unsafe { closescript() };
+            closescript();
             if got_int.get() {
                 // Reading the script was interrupted: answer an ESC to
                 // get back to Normal mode.

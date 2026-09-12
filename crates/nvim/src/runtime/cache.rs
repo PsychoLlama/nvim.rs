@@ -192,12 +192,11 @@ pub(crate) unsafe fn do_in_cached_path(
     cookie: *mut c_void,
 ) -> c_int {
     if p_verbose.get() > 10 && !name.is_null() {
-        // SAFETY: `name` is NUL-terminated.
-        unsafe { verbose_enter() };
+        verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let name = unsafe { c_str(name) };
         smsg!(0, "Searching for \"{name}\" in runtime path");
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 
     let visitor = Visitor { callback, cookie };
@@ -256,11 +255,11 @@ pub(crate) unsafe fn do_in_cached_path(
                 "runtime path"
             );
         } else if p_verbose.get() > 1 {
-            unsafe { verbose_enter() };
+            verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };
             smsg!(0, "not found in runtime path: \"{name}\"");
-            unsafe { verbose_leave() };
+            verbose_leave();
         }
     }
 
@@ -602,9 +601,7 @@ pub fn runtime_search_path_validate() {
         return;
     }
     if runtime_search_path_ref.get().is_null() {
-        // SAFETY: nothing is borrowing the old path, so it can go. The UI
-        // flush is upstream's guard against recursion through a UI callback.
-        unsafe { msg_ext_ui_flush() };
+        msg_ext_ui_flush();
         unsafe { runtime_search_path_free(runtime_search_path.get()) };
     }
     runtime_search_path.set(runtime_search_path_build());

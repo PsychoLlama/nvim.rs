@@ -99,11 +99,11 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
             let namep = unsafe { xmalloc(sourcing_name_len) }.cast::<::core::ffi::c_char>();
             unsafe { snprintf(namep, sourcing_name_len, s.as_ptr(), name, (*ap).pat) };
             if p_verbose.get() >= 8 {
-                unsafe { verbose_enter() };
+                verbose_enter();
                 // SAFETY: `namep` is the NUL-terminated name just built.
                 let namep = unsafe { c_str(namep) };
                 smsg!(0, "Executing {namep}");
-                unsafe { verbose_leave() };
+                verbose_leave();
             }
 
             // Point the execution stack at this autocommand.
@@ -250,9 +250,7 @@ pub unsafe fn getnextac(
     let mut oneshot = unsafe { (*ac).once };
 
     if p_verbose.get() >= 9 {
-        // SAFETY: `aucmd_handler_to_string` answers an allocated
-        // NUL-terminated string this owns and frees below.
-        unsafe { verbose_enter_scroll() };
+        verbose_enter_scroll();
         let handler_str = unsafe { aucmd_handler_to_string(ac) };
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let shown = unsafe { c_str(handler_str) };
@@ -260,7 +258,7 @@ pub unsafe fn getnextac(
         // Don't overwrite this either.
         msg_str(c"\n");
         unsafe { xfree(handler_str.cast::<::core::ffi::c_void>()) };
-        unsafe { verbose_leave_scroll() };
+        verbose_leave_scroll();
     }
 
     // `autocmd_nested` has to be set before any Lua runs, or a nested

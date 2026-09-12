@@ -229,7 +229,7 @@ pub unsafe fn get_user_input(
         if !lastnl.is_null() {
             p = unsafe { lastnl.offset(1) };
             msg_start();
-            unsafe { msg_clr_eos() };
+            msg_clr_eos();
             // SAFETY: `p` was found inside the prompt, so the span is
             // readable.
             let head = unsafe { cstr::slice_at(prompt, p.offset_from(prompt).cast_unsigned()) };

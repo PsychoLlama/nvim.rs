@@ -197,8 +197,7 @@ fn split_ins(
         // The message area is one line shorter now.
         msg_row.set(Rows.get() - 1);
         msg_col.set(sc_col.get());
-        // SAFETY: clears the message area.
-        unsafe { msg_clr_eos_force() };
+        msg_clr_eos_force();
         comp_col();
         msg_row.set(Rows.get() - 1);
         msg_col.set(0);

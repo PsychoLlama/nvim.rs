@@ -85,10 +85,9 @@ pub(crate) unsafe fn adjust_clipboard_name(
         // complain the first time. `redirecting` walks the message state,
         // so it is asked outside the cell borrow.
         let st = CLIPBOARD.get();
-        // SAFETY: main-thread editor call.
         let warn = st.batch_change_count <= 1
             && !quiet
-            && (!st.didwarn || (explicit_cb_reg && !unsafe { redirecting() }));
+            && (!st.didwarn || (explicit_cb_reg && !redirecting()));
         if warn {
             CLIPBOARD.with_mut(|st| st.didwarn = true);
             // Do not use emsg here: it may interrupt other logic.

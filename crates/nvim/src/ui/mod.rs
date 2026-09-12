@@ -270,9 +270,9 @@ pub unsafe fn ui_refresh() {
                 tp.tp_ch_used = had_message as _;
             }
         }
-        unsafe { msg_scroll_flush() };
+        msg_scroll_flush();
     }
-    unsafe { msg_ui_refresh() };
+    msg_ui_refresh();
 
     if ui_active() == 0 {
         return;
@@ -406,7 +406,7 @@ pub unsafe fn vim_beep(val: core::ffi::c_uint) {
         }
     }
     if has_char(unsafe { cstr::at(p_debug.get()) }, 'e' as c_int) {
-        unsafe { msg_source(HLF_W) };
+        msg_source(HLF_W);
         msg(gettext(c"Beep!"), HLF_W);
     }
 }
@@ -660,9 +660,9 @@ pub unsafe fn ui_flush() {
     if textlock.get() == 0 && expr_map_lock.get() == 0 {
         // Both can run Lua handlers, which the locks exist to keep out.
         cmdline_ui_flush();
-        unsafe { msg_ext_ui_flush() };
+        msg_ext_ui_flush();
     }
-    unsafe { msg_scroll_flush() };
+    msg_scroll_flush();
 
     if pending_cursor_update.get() {
         ui_call_grid_cursor_goto(

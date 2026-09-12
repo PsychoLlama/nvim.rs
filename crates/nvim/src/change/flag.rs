@@ -68,16 +68,16 @@ pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
     if msg_row.get() == Rows.get() - 1 {
         msg_col.set(col);
     }
-    unsafe { msg_source(HLF_W) };
+    msg_source(HLF_W);
     unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
     // SAFETY: the translation of a static message.
     msg_str_hl(unsafe { gettext_ptr(W_READONLY) }, HLF_W, true);
     unsafe { set_vim_var_string(Vv::Warningmsg, gettext_ptr(W_READONLY).as_ptr(), -1) };
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     msg_end();
     if msg_silent.get() == 0 && !silent_mode.get() && ui_active() != 0 {
         // Give the user time to think about it.
-        unsafe { msg_delay(1002, true) };
+        msg_delay(1002, true);
     }
     buffer.b_did_warn = true;
     // Don't redraw and erase the message.
@@ -121,9 +121,8 @@ pub unsafe fn changed(buffer: Buf) {
                 && !in_assert_fails.get()
                 && !ui_has(kUIMessages)
             {
-                // SAFETY: waiting on the message just shown.
-                unsafe { msg_delay(2002, true) };
-                unsafe { wait_return(c_int::from(true)) };
+                msg_delay(2002, true);
+                wait_return(c_int::from(true));
                 msg_scroll.set(save_msg_scroll);
             } else {
                 need_wait_return.set(save_need_wait_return);

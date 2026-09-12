@@ -102,8 +102,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
         // SAFETY: a plain copy of the mapping's script context.
         unsafe { last_set_msg(mp.m_script_ctx) };
     }
-    // SAFETY: a message primitive that reads nothing of ours.
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
 }
 
 /// Translate a mapping's internal LHS into the external form `:map` and

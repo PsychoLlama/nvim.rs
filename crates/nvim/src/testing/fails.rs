@@ -264,8 +264,7 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
     drop(no_prompt);
     need_wait_return.set(false);
     emsg_on_display.set(false);
-    // SAFETY: the two allocations belong to this call.
-    unsafe { msg_reset_scroll() };
+    msg_reset_scroll();
     lines_left.set(Rows.get());
     unsafe { xfree(emsg_assert_fails_msg.get().cast()) };
     emsg_assert_fails_msg.set(ptr::null_mut());

@@ -107,7 +107,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
 
         // One byte at a time; no translation to be done.
         for i in 0..buflen {
-            unsafe { updatescript(c_int::from(key.buf[i])) };
+            updatescript(c_int::from(key.buf[i]));
         }
 
         // `ins_char_typebuf` can ask for the bytes it puts back to be
@@ -146,10 +146,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
 ///
 /// Used after a timed-out `<Esc>` so that the ESC cannot combine with
 /// whatever is typed next into a key code.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn gotchars_ignore() {
+pub fn gotchars_ignore() {
     let nop = [K_SPECIAL as u8, KS_EXTRA as u8, KE_IGNORE as u8];
     on_key_ignore_len.set(on_key_ignore_len.get() + 3);
     // SAFETY (this body): a fixed three-byte `K_IGNORE` sequence.
@@ -158,10 +155,7 @@ pub unsafe fn gotchars_ignore() {
 
 /// Add one byte to `'showcmd'` for a partially matched mapping, and show the
 /// key once all of its bytes are in.
-///
-/// # Safety
-/// Callable at any time.
-pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
+pub(crate) fn add_byte_to_showcmd(byte: u8) {
     let mut ch = [0 as c_char; MB_MAXCHAR];
     /// What `add_byte_to_showcmd` has half a key of, between calls.
     static state: GlobalCell<GotcharsState> = GlobalCell::new(GotcharsState::new());

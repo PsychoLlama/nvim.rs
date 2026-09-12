@@ -634,7 +634,7 @@ impl Jump {
                     let s2 = gettext(c"E435: Couldn't find tag, just guessing!");
                     msg(s2, 0);
                     if msg_scrolled.get() == 0 && msg_silent.get() == 0 {
-                        unsafe { msg_delay(1010, true) };
+                        msg_delay(1010, true);
                     }
                 }
                 OK
@@ -806,7 +806,7 @@ impl Pattern {
         // When the command did something that is not allowed, make
         // sure the error message can be seen.
         if secure.get() == 2 {
-            unsafe { wait_return(1) };
+            wait_return(1);
         }
         secure.set(save_secure);
     }

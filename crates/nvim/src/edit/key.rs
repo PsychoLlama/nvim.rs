@@ -241,7 +241,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
         Ok(Key::Select | Key::Ignore) => Next::Continue,
 
         Ok(Key::PasteStart) => {
-            unsafe { paste_repeat(1) };
+            paste_repeat(1);
             Next::CheckPum
         }
         Ok(Key::Event) => {
@@ -273,7 +273,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
             Next::CheckPum
         }
         Ok(Key::Lua) => {
-            unsafe { map_execute_lua(false, false) };
+            map_execute_lua(false, false);
             Next::CheckPum
         }
 

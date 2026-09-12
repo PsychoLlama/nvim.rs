@@ -87,7 +87,7 @@ pub(crate) fn store_sb_text(run: &[u8], hl_id: c_int, sb_col: &mut c_int, finish
 
 /// Finished showing messages: clear the scroll-back text on the next one.
 pub fn may_clear_sb_text() {
-    unsafe { msg_ext_ui_flush() }; // ensure messages until now are emitted
+    msg_ext_ui_flush(); // ensure messages until now are emitted
     do_clear_sb_text.set(SB_CLEAR_ALL);
     do_clear_hist_temp.set(true);
 }
@@ -167,8 +167,8 @@ pub fn show_sb_text() {
     if mp.is_null() || unsafe { (*mp).sb_prev }.is_null() {
         unsafe { vim_beep(kOptBoFlagMess as c_uint) };
     } else {
-        unsafe { do_more_prompt(c_int::from(b'G')) };
-        unsafe { wait_return(0) };
+        do_more_prompt(c_int::from(b'G'));
+        wait_return(0);
     }
 }
 

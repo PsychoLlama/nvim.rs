@@ -93,7 +93,7 @@ pub unsafe fn do_dialog(
             }
             _ if c == b':' as c_int && ex_cmd != 0 => {
                 retval = dfltbutton;
-                unsafe { ins_char_typebuf(b':' as c_int, ModMask::NONE, false) };
+                ins_char_typebuf(b':' as c_int, ModMask::NONE, false);
                 break;
             }
             _ => {
@@ -127,7 +127,7 @@ pub unsafe fn do_dialog(
     State.set(old_state);
     setmouse();
     drop(no_prompt);
-    unsafe { msg_end_prompt() };
+    msg_end_prompt();
 
     retval
 }
@@ -226,7 +226,7 @@ unsafe fn msg_show_console_dialog(
     let mut has_hotkey = [false; HAS_HOTKEY_LEN];
     let hotk = unsafe { console_dialog_alloc(message, buttons, &mut has_hotkey) };
     unsafe { copy_confirm_hotkeys(buttons, dfltbutton, &has_hotkey, hotk) };
-    unsafe { display_confirm_msg() };
+    display_confirm_msg();
     hotk
 }
 
@@ -313,10 +313,7 @@ unsafe fn copy_confirm_hotkeys(
 }
 
 /// Display the `:confirm` message. Also called when the screen is resized.
-///
-/// # Safety
-/// Only that [`confirm_msg`] is null or a valid C string.
-pub(crate) unsafe fn display_confirm_msg() {
+pub(crate) fn display_confirm_msg() {
     // Avoid that 'q' at the more prompt truncates the message here.
     let _in_use = Suppress::counter(&confirm_msg_used);
     if !confirm_msg.get().is_null() {

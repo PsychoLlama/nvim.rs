@@ -183,7 +183,7 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Option<&CStr> {
     }
     if unsafe { !cstr::eq_bytes(p_enc.get(), b"utf-8") } {
         let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
-        unsafe { msg_source(HLF_W) };
+        msg_source(HLF_W);
         msg(gettext(warning), HLF_W);
         unsafe { set_vim_var_string(Vv::Warningmsg, gettext(warning).as_ptr(), -1 as ptrdiff_t) };
     }

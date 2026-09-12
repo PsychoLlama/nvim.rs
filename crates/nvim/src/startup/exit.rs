@@ -199,7 +199,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         no_wait_return.set(0);
         // NB: upstream notes this may itself call getout(0) and clobber
         // `exitval`.
-        unsafe { wait_return(0) };
+        wait_return(0);
     }
 
     if p_title.get() != 0 && unsafe { *p_titleold.get() } as c_int != NUL {

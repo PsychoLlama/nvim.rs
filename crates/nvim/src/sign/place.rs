@@ -269,8 +269,7 @@ unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum:
 
     let tree = tree_of(buffer);
     while !itr.x.is_null() {
-        // SAFETY: the iterator is positioned in this buffer's live tree.
-        let mark = unsafe { marktree_itr_current(&mut itr) };
+        let mark = marktree_itr_current(&mut itr);
         if row != 0 && mark.pos.row > row {
             break;
         }

@@ -63,10 +63,7 @@ fn iat(itr: &MarkTreeIter, lvl: c_int, q: c_int) -> c_int {
 /// keeps a range spanning a million lines out of a million nodes' sets.
 ///
 /// `itr` is left wherever the walk ended; `end_itr` is only read.
-///
-/// # Safety
-/// `b` must be a live tree and both iterators positioned in it.
-pub unsafe fn marktree_intersect_pair(
+pub fn marktree_intersect_pair(
     b: &mut MarkTree,
     id: uint64_t,
     itr: &mut MarkTreeIter,
@@ -111,24 +108,17 @@ pub unsafe fn marktree_intersect_pair(
                 intersect_node(covered, id);
             }
         }
-        // SAFETY: `b` is live and `itr` is positioned in it; neither optional
-        // out-parameter is wanted.
-        unsafe { marktree_itr_next_skip(b, itr, skip, true, None, None) };
+        marktree_itr_next_skip(b, itr, skip, true, None, None);
     }
 }
 
 /// Re-record the intersections for the pair `key` belongs to, after one of its
 /// halves has been re-inserted.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_restore_pair(b: &mut MarkTree, key: MTKey) {
+pub fn marktree_restore_pair(b: &mut MarkTree, key: MTKey) {
     let mut itr = MarkTreeIter::default();
     let mut end_itr = MarkTreeIter::default();
-    // SAFETY: `b` is live; a lookup only writes the iterator it is handed.
-    unsafe { marktree_lookup(b, mt_lookup_key_side(key, false), Some(&mut itr)) };
-    // SAFETY: as above.
-    unsafe { marktree_lookup(b, mt_lookup_key_side(key, true), Some(&mut end_itr)) };
+    marktree_lookup(b, mt_lookup_key_side(key, false), Some(&mut itr));
+    marktree_lookup(b, mt_lookup_key_side(key, true), Some(&mut end_itr));
     if itr.x.is_null() || end_itr.x.is_null() {
         // The other end is waiting to be restored later; this runs again for it.
         return;
@@ -139,8 +129,7 @@ pub unsafe fn marktree_restore_pair(b: &mut MarkTree, key: MTKey) {
     end.update_key(end_itr.i as usize, |k| k.flags.clear(MtFlags::ORPHANED));
 
     let id = mt_lookup_key_side(key, false);
-    // SAFETY: `b` is live and both iterators are positioned in it.
-    unsafe { marktree_intersect_pair(b, id, &mut itr, &end_itr, false) };
+    marktree_intersect_pair(b, id, &mut itr, &end_itr, false);
 }
 
 /// An ordering key for where the mark `id` sits in the tree, or zero if there
@@ -148,10 +137,7 @@ pub unsafe fn marktree_restore_pair(b: &mut MarkTree, key: MTKey) {
 ///
 /// With `sloppy`, two keys in the same *leaf* share an index; the callers that
 /// pass it only need to know which side of a node boundary the mark is on.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn pseudo_index_for_id(b: &mut MarkTree, id: uint64_t, sloppy: bool) -> uint64_t {
+pub fn pseudo_index_for_id(b: &mut MarkTree, id: uint64_t, sloppy: bool) -> uint64_t {
     // SAFETY: `b` is live, so `id2node` answers null or one of its live nodes.
     let Some(n) = (unsafe { Node::from_ptr(id2node(b, id)) }) else {
         return 0;
@@ -174,30 +160,14 @@ pub unsafe fn pseudo_index_for_id(b: &mut MarkTree, id: uint64_t, sloppy: bool) 
 
 /// Where the other half of `mark`'s pair sits, or `mark`'s own position if it
 /// is unpaired.
-///
-/// # Safety
-/// As [`marktree_get_alt`].
-pub unsafe fn marktree_get_altpos(
-    b: &mut MarkTree,
-    mark: MTKey,
-    itr: Option<&mut MarkTreeIter>,
-) -> MTPos {
-    // SAFETY: the caller's promise, passed straight on.
-    unsafe { marktree_get_alt(b, mark, itr) }.pos
+pub fn marktree_get_altpos(b: &mut MarkTree, mark: MTKey, itr: Option<&mut MarkTreeIter>) -> MTPos {
+    marktree_get_alt(b, mark, itr).pos
 }
 
 /// The other half of `mark`'s pair, or `mark` itself if it is unpaired.
-///
-/// # Safety
-/// `b` must be a live tree and `mark` a key read out of it.
-pub unsafe fn marktree_get_alt(
-    b: &mut MarkTree,
-    mark: MTKey,
-    itr: Option<&mut MarkTreeIter>,
-) -> MTKey {
+pub fn marktree_get_alt(b: &mut MarkTree, mark: MTKey, itr: Option<&mut MarkTreeIter>) -> MTKey {
     if mt_paired(mark) {
-        // SAFETY: `b` is live; the iterator is optional and is written, not read.
-        unsafe { marktree_lookup_ns(b, mark.ns, mark.id, !mt_end(mark), itr) }
+        marktree_lookup_ns(b, mark.ns, mark.id, !mt_end(mark), itr)
     } else {
         mark
     }

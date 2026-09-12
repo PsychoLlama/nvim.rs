@@ -266,7 +266,7 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
         }
     }
 
-    unsafe { msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false) };
+    msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false);
     msg_grid_invalid.set(false);
     if was_invalidated {
         // Only the message area was invalid, not the floats.
@@ -424,7 +424,7 @@ pub fn update_screen() -> Result<(), Failed> {
     }
 
     if clear_cmdline.get() {
-        unsafe { msg_check_for_delay(false) };
+        msg_check_for_delay(false);
     }
 
     // Force a redraw when the width of the number column changed.
@@ -548,7 +548,7 @@ pub fn update_screen() -> Result<(), Failed> {
     if STILL_MAY_INTRO.get() {
         unsafe { intro_message(false) };
     }
-    unsafe { repeat_message() };
+    repeat_message();
 
     unsafe { decor_providers_invoke_end() };
 

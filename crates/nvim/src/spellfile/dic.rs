@@ -185,7 +185,7 @@ pub(super) unsafe fn spell_read_dic(
                 unsafe { vim_snprintf(buf, room, fmt.as_ptr(), lnum, count, w) };
                 msg_start();
                 msg_display_elided(unsafe { cstr::at(message.as_mut_ptr()) }, 0);
-                unsafe { msg_clr_eos() };
+                msg_clr_eos();
                 msg_didout.set(false);
                 msg_col.set(0);
                 unsafe { ui_flush() };

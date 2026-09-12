@@ -119,7 +119,7 @@ pub(crate) unsafe fn stop_arrow() -> Result<(), Failed> {
             orig_line_count.set(Buf::current().b_ml.ml_line_count);
             vr_lines_changed.set(1);
         }
-        unsafe { reset_redobuff() };
+        reset_redobuff();
         unsafe { append_to_redobuff(c"1i".as_ptr()) }; // pretend we start an insertion
         new_insert_skip.set(2);
     } else if ins_need_undo.get() && save_cursor_line().is_ok() {

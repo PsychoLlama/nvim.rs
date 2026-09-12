@@ -672,7 +672,7 @@ unsafe fn report_unwritten(buffer: Buf) {
     // prevent.
     if shown && msg_didany.get() {
         let _prompt = Allow::wait_return();
-        unsafe { wait_return(0) };
+        wait_return(0);
     }
 }
 
@@ -710,8 +710,7 @@ pub(crate) unsafe fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Fai
         )
     };
     if Buf::current_raw() != old_curbuf {
-        // SAFETY: module contract.
-        unsafe { msg_source(HLF_W) };
+        msg_source(HLF_W);
         msg(
             c"Warning: Entered other buffer unexpectedly (check autocommands)",
             0,

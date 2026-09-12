@@ -39,9 +39,7 @@ pub unsafe fn getcmdkeycmd(
     let unmapped = Keys::unmapped(); // no mapping for these characters
     got_int.set(false);
     while c1 != NUL && !aborted {
-        // SAFETY (this body): every byte appended comes from the typeahead,
-        // which `vgetorpeek` has already validated.
-        if unsafe { vgetorpeek(false) } == NUL {
+        if vgetorpeek(false) == NUL {
             // An incomplete <Cmd> is an error: there is not much the user
             // could do from this state.
             emsg(gettext(e_cmd_mapping_must_end_with_cr));
@@ -50,10 +48,10 @@ pub unsafe fn getcmdkeycmd(
         }
 
         // One character at a time, three bytes for a special key.
-        c1 = unsafe { vgetorpeek(true) };
+        c1 = vgetorpeek(true);
         if c1 == K_SPECIAL {
-            let second = unsafe { vgetorpeek(true) };
-            let third = unsafe { vgetorpeek(true) };
+            let second = vgetorpeek(true);
+            let third = vgetorpeek(true);
             if second == KS_MODIFIER {
                 cmod = third;
                 continue;
@@ -101,10 +99,7 @@ pub unsafe fn getcmdkeycmd(
 /// With `may_repeat` the reference is remembered so that `.` can run it
 /// again; with `discard` the keys are read but nothing is called. Answers
 /// false only when reading the reference was aborted.
-///
-/// # Safety
-/// Callable at any time; reads from the typeahead.
-pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
+pub fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
     let mut line = Vec::<u8>::new();
     let mut c1 = -1;
     let mut aborted = false;
@@ -112,9 +107,7 @@ pub unsafe fn map_execute_lua(may_repeat: bool, discard: bool) -> bool {
     let unmapped = Keys::unmapped();
     got_int.set(false);
     while c1 != NUL && !aborted {
-        // SAFETY (this body): the typeahead holds the `<Lua>` key's decimal
-        // reference, and `err` is this frame's own slot.
-        c1 = unsafe { vgetorpeek(true) };
+        c1 = vgetorpeek(true);
         if got_int.get() {
             aborted = true;
         } else if c1 == '\r' as c_int || c1 == '\n' as c_int {

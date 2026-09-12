@@ -24,10 +24,7 @@ use core::ptr;
 ///
 /// `'langmap'` only applies to *typed* keys, and `'langremap'` decides
 /// whether it also applies to the result of a mapping.
-///
-/// # Safety
-/// Callable at any time.
-unsafe fn langmap_adjust(c: c_int, condition: bool) -> c_int {
+fn langmap_adjust(c: c_int, condition: bool) -> c_int {
     // Upstream's operand order, short-circuiting exactly as the macro
     // does. Evaluating `typeahead().maplen()` up front would be pure, but it
     // is a call in the innermost loop of the mapping match and this
@@ -99,10 +96,7 @@ pub(crate) unsafe fn put_string_in_typebuf(
 
 /// Whether the typeahead starts with a key that Insert-mode completion uses,
 /// including the form with a Ctrl modifier.
-///
-/// # Safety
-/// Callable at any time.
-pub(crate) unsafe fn at_ins_compl_key() -> bool {
+pub(crate) fn at_ins_compl_key() -> bool {
     let tb = typeahead();
     let mut c = tb.byte(0);
 
@@ -122,10 +116,7 @@ pub(crate) unsafe fn at_ins_compl_key() -> bool {
 ///
 /// Looks at offsets 0 through `max_offset - 1`. Answers how many bytes the
 /// replacement occupies, 0 when nothing changed, or -1 on failure.
-///
-/// # Safety
-/// Callable at any time.
-pub(crate) unsafe fn check_simplify_modifier(max_offset: c_int) -> c_int {
+pub(crate) fn check_simplify_modifier(max_offset: c_int) -> c_int {
     // Terminal mode wants the full modifiers, so that the key can be
     // encoded for the child process.
     if State.get() & MODE_TERMINAL != 0 || no_reduce_keys.get() > 0 {
@@ -232,15 +223,10 @@ unsafe fn search_maphash(
     let nolmaplen = if tb_c1 == K_SPECIAL {
         2
     } else {
-        // SAFETY (this body): every `m_keys` read is inside the entry's own
-        // NUL-terminated LHS, whose length is `m_keylen`, and `timedout` is
-        // readable by the caller's promise.
-        tb_c1 = unsafe {
-            langmap_adjust(
-                tb_c1,
-                State.get() & (MODE_CMDLINE | MODE_INSERT) == 0 && get_real_state() != MODE_SELECT,
-            )
-        };
+        tb_c1 = langmap_adjust(
+            tb_c1,
+            State.get() & (MODE_CMDLINE | MODE_INSERT) == 0 && get_real_state() != MODE_SELECT,
+        );
         0
     };
 
@@ -307,7 +293,7 @@ unsafe fn search_maphash(
                         // into the key would not produce another
                         // character, so that 'langmap' behaves the same
                         // in different terminals and GUIs.
-                        c2 = unsafe { langmap_adjust(c2, true) };
+                        c2 = langmap_adjust(c2, true);
                     }
                     modifiers = ModMask::NONE;
                     modifier_next = false;
@@ -454,7 +440,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
         } else {
             setcursor();
         }
-        unsafe { flush_buffers(FLUSH_MINIMAL) };
+        flush_buffers(FLUSH_MINIMAL);
         unsafe { *mapdepth = 0 }; // for the next one
         return map_result_fail as c_int;
     }
@@ -642,7 +628,7 @@ pub(crate) unsafe fn handle_mapping(
         && !(p_paste.get() != 0 && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0)
         && !(State.get() == MODE_HITRETURN && (tb_c1 == CAR || tb_c1 == ' ' as c_int))
         && State.get() != MODE_ASKMORE
-        && !unsafe { at_ins_compl_key() };
+        && !at_ins_compl_key();
 
     let mut mp: Option<Mb> = None;
     let mut mp_match_len = 0;
@@ -665,7 +651,7 @@ pub(crate) unsafe fn handle_mapping(
                 // to decide whether to simplify.
                 keylen = KEYLEN_PART_KEY;
             } else {
-                keylen = unsafe { check_simplify_modifier(max_mlen + 1) };
+                keylen = check_simplify_modifier(max_mlen + 1);
                 if keylen < 0 {
                     return map_result_fail as c_int; // ins_typebuf() failed
                 }

@@ -61,7 +61,7 @@ impl Cell {
         let mut col = (arg_number_chk(&args[1], None) as c_int).wrapping_sub(1);
         // Legacy tests read printed messages back with screenchar(), so
         // the pending message scroll has to reach the grid first.
-        unsafe { msg_scroll_flush() };
+        msg_scroll_flush();
         let grid = unsafe { GridRef::new(ui_comp_get_grid_at_coord(row, col)) };
         row -= grid.comp_row;
         col -= grid.comp_col;

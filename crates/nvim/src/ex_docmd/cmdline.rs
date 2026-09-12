@@ -765,7 +765,7 @@ pub unsafe fn do_cmdline(
             // `msg_start` above cleared 'msg_didout'; the `wait_return`
             // here must not overwrite whatever was shown before it.
             msg_didout.set(msg_didout.get() || msg_didout_before_start);
-            unsafe { wait_return(0) };
+            wait_return(0);
         }
     }
 

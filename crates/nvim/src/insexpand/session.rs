@@ -341,7 +341,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
         ctrl_x_mode.set(CTRL_X_NORMAL);
         edit_submode.set(ptr::null_mut());
         if !shortmess(ShmFlag::COMPLETIONMENU) {
-            unsafe { msg_clr_cmdline() };
+            msg_clr_cmdline();
         }
         return Err(Failed);
     }

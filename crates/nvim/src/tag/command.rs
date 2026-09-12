@@ -857,7 +857,7 @@ impl DoTag {
             unsafe { give_warning(buf, ignored_case, true) };
         }
         if ignored_case && msg_scrolled.get() == 0 && msg_silent.get() == 0 {
-            unsafe { msg_delay(1007, true) };
+            msg_delay(1007, true);
         }
     }
 

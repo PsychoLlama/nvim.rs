@@ -53,14 +53,14 @@ pub fn msg_start() {
         // Halfway an `:echo` and getting an (error) message: clear any
         // text the command left.
         need_clr_eos.set(false);
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
     }
 
     // With 'cmdheight' 0 the first line of msg_grid has to be scrolled in
     // over the screen.
     if p_ch.get() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
-        unsafe { msg_grid_validate() };
-        unsafe { msg_scroll_up(false, true) };
+        msg_grid_validate();
+        msg_scroll_up(false, true);
         msg_scrolled.set(msg_scrolled.get() + 1);
         cmdline_row.set(Rows.get() - 1);
     }
@@ -87,7 +87,7 @@ pub fn msg_start() {
         msg_didout.set(false);
     }
     if ui_has(kUIMessages) {
-        unsafe { msg_ext_ui_flush() };
+        msg_ext_ui_flush();
     }
     // When redirecting, may need to start a new line.
     if !did_return {
@@ -157,8 +157,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
     // Print nothing under `:silent`, or for an empty message.
     if msg_silent.get() != 0 || bytes.is_empty() {
         if bytes.is_empty() && whole_message && ui_has(kUIMessages) {
-            // SAFETY: main-thread editor call.
-            unsafe { msg_ext_ui_flush() }; // ensure messages until now are emitted
+            msg_ext_ui_flush(); // ensure messages until now are emitted
             ui_call_msg_show(
                 String_0::from_cstr(c"empty"),
                 EMPTY_ARRAY,
@@ -210,8 +209,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
 fn msg_bytes_to_ui(bytes: &[u8], hl_id: c_int, attr: c_int) {
     if attr as ScreenAttr != msg_ext_last_attr.get() {
         // Colour changed: end the chunk and start another.
-        // SAFETY: main-thread editor call.
-        unsafe { msg_ext_emit_chunk() };
+        msg_ext_emit_chunk();
         msg_ext_last_attr.set(attr as ScreenAttr);
         msg_ext_last_hl_id.set(hl_id);
     }
@@ -259,8 +257,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     let print_attr =
         // SAFETY: `hl_attr_active` points at the active attribute table.
         unsafe { hl_combine_attr(*hl_attr_active.get().offset(HLF_MSG as isize), attr) };
-    // SAFETY: main-thread editor call.
-    unsafe { msg_grid_validate() };
+    msg_grid_validate();
     cmdline_was_last_drawn.set(redrawing_cmdline.get());
 
     // The text being shown, which is not always the caller's: the pager can
@@ -302,14 +299,11 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
             }
             if !recurse {
                 if open_row >= 0 {
-                    // SAFETY: a line is open, so the batch is live.
-                    unsafe { msg_line_flush() };
+                    msg_line_flush();
                     open_row = -1;
                 }
-                // SAFETY: main-thread editor calls.
-                unsafe { msg_scroll_up(true, false) };
-                // SAFETY: as above.
-                unsafe { inc_msg_scrolled() };
+                msg_scroll_up(true, false);
+                inc_msg_scrolled();
                 need_wait_return.set(true); // may need wait_return() in main()
                 redraw_cmdline.set(true);
                 if cmdline_row.get() > 0 && !exmode_active.get() {
@@ -326,7 +320,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                     && !exmode_active.get()
                 {
                     // SAFETY: main-thread editor call.
-                    if unsafe { do_more_prompt(NUL) } {
+                    if do_more_prompt(NUL) {
                         // The pager jumped ahead to the dialog buttons, so
                         // the rest of the caller's text is not shown and
                         // nothing of it is left to store.
@@ -350,8 +344,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
         let byte = text[at];
         if msg_row.get() != open_row && (byte >= 0x20 || c_int::from(byte) == TAB) {
             if open_row >= 0 {
-                // SAFETY: a line is open, so the batch is live.
-                unsafe { msg_line_flush() };
+                msg_line_flush();
             }
             // SAFETY: main-thread editor call.
             unsafe { grid_line_start(msg_grid_view(), msg_row.get()) };
@@ -424,11 +417,9 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     }
 
     if open_row >= 0 {
-        // SAFETY: a line is open, so the batch is live.
-        unsafe { msg_line_flush() };
+        msg_line_flush();
     }
-    // SAFETY: main-thread editor call.
-    unsafe { msg_cursor_goto(msg_row.get(), msg_col.get()) };
+    msg_cursor_goto(msg_row.get(), msg_col.get());
     store(&text[stored..at], &mut sb_col, false);
     msg_check();
 }
@@ -513,14 +504,14 @@ pub fn msg_end() -> bool {
     // means the window has to be redrawn -- but not while abandoning the
     // file or editing the command line.
     if !exiting.get() && need_wait_return.get() && State.get() & MODE_CMDLINE == 0 {
-        unsafe { wait_return(0) };
+        wait_return(0);
         return false;
     }
     // NOTE: ui_flush() used to be called here. It had to be removed, as it
     // inhibited substantial performance improvements. Relevant callers are
     // assumed to invoke ui_flush() before going into CPU busywork, or
     // restricted event processing after displaying a message to the user.
-    unsafe { msg_ext_ui_flush() };
+    msg_ext_ui_flush();
     true
 }
 

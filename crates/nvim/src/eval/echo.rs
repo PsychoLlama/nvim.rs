@@ -106,7 +106,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
         if args.skip == 0 {
             if atstart {
                 atstart = false;
-                unsafe { msg_ext_set_append(args.cmdidx == CmdIdx::echon) };
+                msg_ext_set_append(args.cmdidx == CmdIdx::echon);
                 // SAFETY: the kind is a NUL-terminated literal.
                 unsafe { msg_ext_set_kind(c"echo".as_ptr()) };
                 if args.cmdidx == CmdIdx::echo {
@@ -139,7 +139,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
     args.nextcmd = unsafe { check_nextcmd(arg) };
     // SAFETY: `evalarg` is this frame's and `ea` the caller's `ExArg`.
     unsafe { clear_evalarg(&raw mut evalarg, ea) };
-    unsafe { msg_ext_set_append(false) };
+    msg_ext_set_append(false);
 
     if args.skip != 0 {
         return;
@@ -149,7 +149,7 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
         // A bare `:echo` still has to produce an (empty) message.
         msg_bytes(b"", 0, false);
     } else if need_clear {
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
     }
     if args.cmdidx == CmdIdx::echo {
         msg_end();
@@ -312,7 +312,7 @@ pub unsafe fn last_set_msg(script_ctx: ScriptCtx) {
     }
     let p = get_scriptname(script_ctx, true);
     msg_ext_skip_verbose.set(true);
-    unsafe { verbose_enter() };
+    verbose_enter();
     msg_str(gettext(c"\n\tLast set from "));
     msg_str(&p);
     if script_ctx.sc_lnum > 0 as LineNr {
@@ -323,5 +323,5 @@ pub unsafe fn last_set_msg(script_ctx: ScriptCtx) {
         // SAFETY: the hint is a NUL-terminated literal.
         msg_str(gettext(c" (run Nvim with -V1 for more details)"));
     }
-    unsafe { verbose_leave() };
+    verbose_leave();
 }

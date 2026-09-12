@@ -337,11 +337,11 @@ unsafe fn add_tag_field(
     // line repeats is dropped rather than replacing the first.
     if !unsafe { tv_dict_find(dict, field_name, -1) }.is_null() {
         if p_verbose.get() > 0 {
-            unsafe { verbose_enter() };
+            verbose_enter();
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
             let field_name = unsafe { c_str(field_name) };
             smsg!(0, "Duplicate field name: {field_name}");
-            unsafe { verbose_leave() };
+            verbose_leave();
         }
         return Err(Failed);
     }

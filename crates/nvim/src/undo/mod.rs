@@ -142,13 +142,11 @@ pub(crate) fn verbosely(automatic: bool, say: impl FnOnce()) {
         return;
     }
     if automatic {
-        // SAFETY: nothing here holds a borrow of the message state.
-        unsafe { verbose_enter() };
+        verbose_enter();
     }
     say();
     if automatic {
-        // SAFETY: as above.
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 }
 

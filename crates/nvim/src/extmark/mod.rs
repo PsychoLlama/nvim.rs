@@ -140,18 +140,15 @@ fn itr_rawkey(itr: &mut MarkTreeIter) -> &mut MTKey {
 }
 
 fn tree_put(tree: &mut MarkTree, key: MTKey, end_row: c_int, end_col: c_int, end_right: bool) {
-    // SAFETY: a live tree, and a key the caller has filled in.
-    unsafe { marktree_put(tree, key, end_row, end_col, end_right) }
+    marktree_put(tree, key, end_row, end_col, end_right)
 }
 
 fn tree_del_itr(tree: &mut MarkTree, itr: &mut MarkTreeIter, rev: bool) -> uint64_t {
-    // SAFETY: a live tree and an iterator positioned in it.
-    unsafe { marktree_del_itr(tree, itr, rev) }
+    marktree_del_itr(tree, itr, rev)
 }
 
 fn tree_lookup(tree: &mut MarkTree, id: uint64_t, itr: Option<&mut MarkTreeIter>) -> MTKey {
-    // SAFETY: a live tree; the iterator is optional and is written, not read.
-    unsafe { marktree_lookup(tree, id, itr) }
+    marktree_lookup(tree, id, itr)
 }
 
 fn tree_lookup_ns(
@@ -161,29 +158,23 @@ fn tree_lookup_ns(
     end: bool,
     itr: Option<&mut MarkTreeIter>,
 ) -> MTKey {
-    // SAFETY: as [`tree_lookup`].
-    unsafe { marktree_lookup_ns(tree, ns, id, end, itr) }
+    marktree_lookup_ns(tree, ns, id, end, itr)
 }
 
 fn tree_get_alt(tree: &mut MarkTree, mark: MTKey, itr: Option<&mut MarkTreeIter>) -> MTKey {
-    // SAFETY: as [`tree_lookup`]; `mark` is a key read out of this tree.
-    unsafe { marktree_get_alt(tree, mark, itr) }
+    marktree_get_alt(tree, mark, itr)
 }
 
 fn tree_get_altpos(tree: &mut MarkTree, mark: MTKey, itr: Option<&mut MarkTreeIter>) -> MTPos {
-    // SAFETY: as [`tree_get_alt`].
-    unsafe { marktree_get_altpos(tree, mark, itr) }
+    marktree_get_altpos(tree, mark, itr)
 }
 
 fn tree_move(tree: &mut MarkTree, itr: &mut MarkTreeIter, row: c_int, col: c_int) {
-    // SAFETY: a live tree and an iterator positioned in it.
-    unsafe { marktree_move(tree, itr, row, col) }
+    marktree_move(tree, itr, row, col)
 }
 
 fn tree_revise_meta(tree: &mut MarkTree, itr: &mut MarkTreeIter, old_key: MTKey) {
-    // SAFETY: a live tree and an iterator positioned in it; `old_key` is the
-    // key as it read before the caller edited its flags in place.
-    unsafe { marktree_revise_meta(tree, itr, old_key) }
+    marktree_revise_meta(tree, itr, old_key)
 }
 
 fn tree_clear(tree: &mut MarkTree) {
@@ -199,12 +190,9 @@ fn tree_splice(
     new_row: c_int,
     new_col: c_int,
 ) -> bool {
-    // SAFETY: a live tree; the extents are plain numbers.
-    unsafe {
-        marktree_splice(
-            tree, start.row, start.col, old_row, old_col, new_row, new_col,
-        )
-    }
+    marktree_splice(
+        tree, start.row, start.col, old_row, old_col, new_row, new_col,
+    )
 }
 
 fn tree_move_region(
@@ -221,16 +209,13 @@ fn tree_move_region(
 }
 
 fn itr_get(tree: &mut MarkTree, row: int32_t, col: c_int, itr: &mut MarkTreeIter) -> bool {
-    // SAFETY: a live tree and an iterator this positions in it.
-    unsafe { marktree_itr_get(tree, row, col, itr) }
+    marktree_itr_get(tree, row, col, itr)
 }
 
 /// `marktree_itr_get_ext` with the two arguments this family never varies:
 /// no `oldbase` out-parameter and no metadata filter.
 fn itr_get_ext(tree: &mut MarkTree, p: MTPos, itr: &mut MarkTreeIter) -> bool {
-    // SAFETY: as [`itr_get`]; both optional out-parameters are NULL, which
-    // the callee tests for.
-    unsafe { marktree_itr_get_ext(tree, p, itr, false, false, None, None) }
+    marktree_itr_get_ext(tree, p, itr, false, false, None, None)
 }
 
 fn itr_get_overlap(tree: &mut MarkTree, row: c_int, col: c_int, itr: &mut MarkTreeIter) -> bool {
@@ -238,20 +223,16 @@ fn itr_get_overlap(tree: &mut MarkTree, row: c_int, col: c_int, itr: &mut MarkTr
 }
 
 fn itr_step_overlap(tree: &mut MarkTree, itr: &mut MarkTreeIter, pair: &mut MTPair) -> bool {
-    // SAFETY: a live tree, an iterator `marktree_itr_get_overlap` positioned,
-    // and a pair the callee writes.
-    unsafe { marktree_itr_step_overlap(tree, itr, pair) }
+    marktree_itr_step_overlap(tree, itr, pair)
 }
 
 /// The key the iterator is on, or `MT_INVALID_KEY` (row -1) past the end.
 fn itr_current(itr: &mut MarkTreeIter) -> MTKey {
-    // SAFETY: the callee tests `itr->x` for NULL itself.
-    unsafe { marktree_itr_current(itr) }
+    marktree_itr_current(itr)
 }
 
 fn itr_next(tree: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
-    // SAFETY: a live tree and an iterator positioned in it.
-    unsafe { marktree_itr_next(tree, itr) }
+    marktree_itr_next(tree, itr)
 }
 
 // ---------------------------------------------------------------------------

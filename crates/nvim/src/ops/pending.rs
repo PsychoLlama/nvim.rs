@@ -303,7 +303,7 @@ fn record_operator_redo(cmd_arg: Cmd, op: Op, redo_yank: bool) {
         // When several lines were typed, repeating is not possible.
         let line = repeat_cmdline.get();
         if line.is_null() {
-            unsafe { reset_redobuff() };
+            reset_redobuff();
         } else {
             if cmd_arg.cmdchar == ':' as c_int {
                 unsafe { append_to_redobuff_literally(line, -1) };
@@ -664,7 +664,7 @@ fn run_operator(
     fn refuse() {
         // SAFETY: neither touches anything but editor-wide state.
         unsafe { vim_beep(kOptBoFlagOperator as ::core::ffi::c_uint) };
-        unsafe { cancel_redo() };
+        cancel_redo();
     }
 
     // SAFETY: every operator below is handed the same live `OpArg` and the

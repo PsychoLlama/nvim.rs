@@ -269,7 +269,7 @@ pub unsafe fn put_on_cmdline(
         draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         // Avoid clearing the rest of the line too often.
         if cmdline_row.get() != row_before || cc.overstrike != 0 {
-            unsafe { msg_clr_eos() };
+            msg_clr_eos();
         }
         msg_no_more.set(false);
     }
@@ -360,8 +360,8 @@ pub fn redrawcmd() {
 
     // With 'incsearch' there may be no command line while redrawing.
     if !cc.in_use() {
-        unsafe { msg_cursor_goto(cmdline_row.get(), 0) };
-        unsafe { msg_clr_eos() };
+        msg_cursor_goto(cmdline_row.get(), 0);
+        msg_clr_eos();
         return;
     }
 
@@ -375,7 +375,7 @@ pub fn redrawcmd() {
     // fit.
     msg_no_more.set(true);
     draw_cmdline(0, cc.len());
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     msg_no_more.set(false);
 
     cc.cmdspos = cmd_screencol(cc.cmdpos);
@@ -422,7 +422,7 @@ pub fn cursorcmd() {
     msg_col.set(cmdspos % Columns.get());
     msg_row.set(msg_row.get().min(Rows.get() - 1));
 
-    unsafe { msg_cursor_goto(msg_row.get(), msg_col.get()) };
+    msg_cursor_goto(msg_row.get(), msg_col.get());
 }
 
 /// Move the screen cursor to the start of the command line, clearing the
@@ -436,7 +436,7 @@ pub fn gotocmdline(clr: bool) {
     msg_col.set(0);
     if clr {
         // Clear the bottom line(s); this resets clear_cmdline.
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
     }
-    unsafe { msg_cursor_goto(cmdline_row.get(), 0) };
+    msg_cursor_goto(cmdline_row.get(), 0);
 }

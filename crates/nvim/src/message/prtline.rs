@@ -209,7 +209,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
         }
         emit(sc, hl_id, &mut col);
     }
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
 }
 
 /// Put one cell on the message area.

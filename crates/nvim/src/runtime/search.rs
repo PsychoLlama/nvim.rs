@@ -316,12 +316,11 @@ pub(crate) unsafe fn expand_name_patterns(
             )
         };
         if p_verbose.get() > 10 {
-            // SAFETY: `buf` now holds the NUL-terminated candidate.
-            unsafe { verbose_enter() };
+            verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let buf = unsafe { c_str(buf) };
             smsg!(0, "Searching for \"{buf}\"");
-            unsafe { verbose_leave() };
+            verbose_leave();
         }
         let mut pats = [buf];
         // SAFETY: a one-element pattern array; `gen_expand_wildcards` only
@@ -337,8 +336,7 @@ pub(crate) unsafe fn expand_name_patterns(
 /// # Safety
 /// All three must be NUL-terminated; `prefix` may be empty but not null.
 unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const c_char) {
-    // SAFETY: the caller's NUL-terminated strings, formatted by `vim_snprintf`.
-    unsafe { verbose_enter() };
+    verbose_enter();
     if unsafe { *prefix } != 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
         let (name, prefix, path) = unsafe { (c_str(name), c_str(prefix), c_str(path)) };
@@ -351,7 +349,7 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
         let (name, path) = unsafe { (c_str(name), c_str(path)) };
         smsg!(0, "Searching for \"{name}\" in \"{path}\"");
     }
-    unsafe { verbose_leave() };
+    verbose_leave();
 }
 
 /// Find the patterns in `name` in all directories in `path` and invoke
@@ -454,11 +452,11 @@ pub unsafe fn do_in_path(
             let (basepath, name) = unsafe { (c_str(basepath.as_ptr()), c_str(name)) };
             semsg!("E919: Directory not found in '{basepath}': \"{name}\"");
         } else if p_verbose.get() > 1 {
-            unsafe { verbose_enter() };
+            verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (basepath, name) = unsafe { (c_str(basepath.as_ptr()), c_str(name)) };
             smsg!(0, "not found in '{basepath}': \"{name}\"");
-            unsafe { verbose_leave() };
+            verbose_leave();
         }
     }
 

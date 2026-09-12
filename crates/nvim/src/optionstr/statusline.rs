@@ -309,9 +309,8 @@ pub fn did_set_shortmess(args: &mut OptSet) -> Option<&CStr> {
 }
 
 pub fn did_set_verbosefile(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: closes and reopens this process's own log file.
-    unsafe { verbose_stop() };
-    if c_int::from(unsafe { *p_vfile.get() }) != NUL && unsafe { verbose_open() }.is_err() {
+    verbose_stop();
+    if c_int::from(unsafe { *p_vfile.get() }) != NUL && verbose_open().is_err() {
         return invalid();
     }
     None

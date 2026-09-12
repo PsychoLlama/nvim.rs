@@ -170,7 +170,7 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> Result<(), Faile
     };
 
     if p_verbose.get() > 1 {
-        unsafe { verbose_enter() };
+        verbose_enter();
         let note = |wanted: c_uint, text: &'static CStr| {
             if flags as c_uint & wanted != 0 {
                 gettext(text).to_string_lossy()
@@ -191,7 +191,7 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> Result<(), Faile
             0,
             "Reading ShaDa file \"{name}\"{info}{marks}{oldfiles}{failed}"
         );
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 
     if of_ret != 0 {
@@ -414,11 +414,11 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
     };
 
     if p_verbose.get() > 1 {
-        unsafe { verbose_enter() };
+        verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname.as_ptr()) };
         smsg!(0, "Writing ShaDa file \"{fname}\"");
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 
     let sw_ret = unsafe { shada_write(&raw mut sd_writer, reader) };

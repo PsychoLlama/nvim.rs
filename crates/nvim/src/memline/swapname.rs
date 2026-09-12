@@ -503,7 +503,7 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
     // file, and a "simalt ~x" in the vimrc must not answer the prompt
     // below.
     got_int.set(false);
-    unsafe { flush_buffers(FLUSH_TYPEAHEAD) };
+    flush_buffers(FLUSH_TYPEAHEAD);
 
     if swap_exists_action.get() != SEA_NONE {
         push_tr(&mut msg, c"Swap file \"");
@@ -526,7 +526,7 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
         // Compensate for the missing "Delete it" button.
         choice = choice.wrapping_add((running && choice >= 4) as SwapExistsChoice);
         // Pretend the screen did not scroll; it needs a redraw anyway.
-        unsafe { msg_reset_scroll() };
+        msg_reset_scroll();
     } else {
         let mut need_clear = false;
         unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };

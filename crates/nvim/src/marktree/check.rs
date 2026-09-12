@@ -46,10 +46,7 @@ use crate::types::{
 use super::{NULL, marktree_del_itr, marktree_lookup, marktree_lookup_ns, marktree_put};
 
 /// Check every invariant of the whole tree, aborting on the first violation.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_check(b: &mut MarkTree) {
+pub fn marktree_check(b: &mut MarkTree) {
     // SAFETY: `b` is a live tree, so its root is null or one of its live nodes.
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
         debug_assert!(b.n_keys == 0 as size_t, "b->n_keys == 0");
@@ -158,45 +155,34 @@ fn check_node(
 /// for each start of a pair, intersect the nodes between the two halves as if
 /// the pair had just been inserted; then compare each node's rebuilt set
 /// against the one that was moved aside.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_check_intersections(b: &mut MarkTree) -> bool {
+pub fn marktree_check_intersections(b: &mut MarkTree) -> bool {
     // SAFETY: `b` is a live tree, so its root is null or one of its live nodes.
     let Some(root) = (unsafe { Node::from_ptr(b.root) }) else {
         return true;
     };
     let mut checked: Records = id_map();
-    // SAFETY: `root` is a live node of `b`.
-    unsafe { recurse_nodes(root, &mut checked) };
+    recurse_nodes(root, &mut checked);
     let mut itr = MarkTreeIter::default();
-    // SAFETY: `b` is a live tree and this is what positions `itr` in it.
-    unsafe { marktree_itr_first(b, &mut itr) };
+    marktree_itr_first(b, &mut itr);
     loop {
-        // SAFETY: `itr` is positioned in `b`, or empty.
-        let mark = unsafe { marktree_itr_current(&mut itr) };
+        let mark = marktree_itr_current(&mut itr);
         if mark.pos.row < 0 {
             break;
         }
         if mt_start(mark) {
             let mut end_itr = MarkTreeIter::default();
             let end_id = mt_lookup_id(mark.ns, mark.id, true);
-            // SAFETY: `b` is live; a lookup only writes the iterator it is
-            // handed, and answers a negative row when there is no such mark.
-            let k = unsafe { marktree_lookup(b, end_id, Some(&mut end_itr)) };
+            let k = marktree_lookup(b, end_id, Some(&mut end_itr));
             if k.pos.row >= 0 {
                 // A copy, because intersecting walks the start iterator.
                 let mut start_itr = itr;
                 let id = mt_lookup_key(mark);
-                // SAFETY: `b` is live and both iterators are positioned in it.
-                unsafe { marktree_intersect_pair(b, id, &mut start_itr, &end_itr, false) };
+                marktree_intersect_pair(b, id, &mut start_itr, &end_itr, false);
             }
         }
-        // SAFETY: `b` is live and `itr` is positioned in it.
-        unsafe { marktree_itr_next(b, &mut itr) };
+        marktree_itr_next(b, &mut itr);
     }
-    // SAFETY: `root` is live and `checked` holds what its subtree intersected.
-    let status = unsafe { recurse_nodes_compare(root, &checked) };
+    let status = recurse_nodes_compare(root, &checked);
     // SAFETY: the values are the buffers `recurse_nodes` allocated, and
     // nothing names them afterwards; the table itself drops here.
     for &record in checked.values() {
@@ -208,10 +194,7 @@ pub unsafe fn marktree_check_intersections(b: &mut MarkTree) -> bool {
 /// Record `x`'s intersection set in `checked` and empty it, for the whole
 /// subtree, so the walk that rebuilds the sets can be compared against the
 /// record.
-///
-/// # Safety
-/// `x` must be a live node.
-unsafe fn recurse_nodes(x: Node, checked: &mut Records) {
+fn recurse_nodes(x: Node, checked: &mut Records) {
     let set = x.intersection();
     if !set.is_empty() {
         // The recorded copy is terminated with a sentinel no id can equal.
@@ -231,18 +214,14 @@ unsafe fn recurse_nodes(x: Node, checked: &mut Records) {
     }
     if !x.is_leaf() {
         for i in 0..=x.key_count() {
-            // SAFETY: a live node's children are live.
-            unsafe { recurse_nodes(x.child(i), checked) };
+            recurse_nodes(x.child(i), checked);
         }
     }
 }
 
 /// Does `x`'s rebuilt intersection set match what [`recurse_nodes`] recorded
 /// for it? Recurses over the whole subtree.
-///
-/// # Safety
-/// `checked` must be the table [`recurse_nodes`] filled, `x` a live node.
-unsafe fn recurse_nodes_compare(x: Node, checked: &Records) -> bool {
+fn recurse_nodes_compare(x: Node, checked: &Records) -> bool {
     let recorded = checked
         .get(&x.as_ptr().cast_const())
         .copied()
@@ -274,8 +253,7 @@ unsafe fn recurse_nodes_compare(x: Node, checked: &Records) -> bool {
     }
     if !x.is_leaf() {
         for i in 0..=x.key_count() {
-            // SAFETY: a live node's children are live.
-            if !unsafe { recurse_nodes_compare(x.child(i), checked) } {
+            if !recurse_nodes_compare(x.child(i), checked) {
                 return false;
             }
         }
@@ -296,10 +274,7 @@ pub struct MarkEnd {
 ///
 /// `end` is `None` for a point mark; the sentinel row the tree itself uses for
 /// one does not escape into the callers.
-///
-/// # Safety
-/// `b` must be a live tree.
-pub unsafe fn marktree_put_test(
+pub fn marktree_put_test(
     b: &mut MarkTree,
     ns: uint32_t,
     id: uint32_t,
@@ -326,8 +301,7 @@ pub unsafe fn marktree_put_test(
         col: -1,
         right_gravity: false,
     });
-    // SAFETY: `b` is a live tree.
-    unsafe { marktree_put(b, key, end.row, end.col, end.right_gravity) };
+    marktree_put(b, key, end.row, end.col, end.right_gravity);
 }
 
 /// `mt_right` where the unit suite can reach it.
@@ -336,18 +310,11 @@ pub fn mt_right_test(key: MTKey) -> bool {
 }
 
 /// Delete both halves of the pair `(ns, id)`.
-///
-/// # Safety
-/// `b` must be a live tree holding that pair.
-pub unsafe fn marktree_del_pair_test(b: &mut MarkTree, ns: uint32_t, id: uint32_t) {
+pub fn marktree_del_pair_test(b: &mut MarkTree, ns: uint32_t, id: uint32_t) {
     let mut itr = MarkTreeIter::default();
-    // SAFETY: `b` is live; a lookup only writes the iterator it is handed.
-    unsafe { marktree_lookup_ns(b, ns, id, false, Some(&mut itr)) };
-    // SAFETY: `b` is live and `itr` is positioned in it.
-    let other = unsafe { marktree_del_itr(b, &mut itr, false) };
+    marktree_lookup_ns(b, ns, id, false, Some(&mut itr));
+    let other = marktree_del_itr(b, &mut itr, false);
     debug_assert!(other != 0, "other");
-    // SAFETY: `b` is live; a lookup only writes the iterator it is handed.
-    unsafe { marktree_lookup(b, other, Some(&mut itr)) };
-    // SAFETY: `b` is live and `itr` is positioned in it.
-    unsafe { marktree_del_itr(b, &mut itr, false) };
+    marktree_lookup(b, other, Some(&mut itr));
+    marktree_del_itr(b, &mut itr, false);
 }

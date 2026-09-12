@@ -382,8 +382,7 @@ pub unsafe fn msg_multiline(
             msg_display_part(&bytes[chunk..at], hl_id, hist);
             // SAFETY: the caller's contract -- `need_clear` is writable.
             if c_int::from(bytes[at]) != TAB && unsafe { *need_clear } {
-                // SAFETY: main-thread editor call.
-                unsafe { msg_clr_eos() };
+                msg_clr_eos();
                 // SAFETY: as above.
                 unsafe { *need_clear = false };
             }
@@ -456,7 +455,7 @@ pub unsafe fn msg_multihl(
 
     let no_prompt = Suppress::wait_return();
     msg_start();
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     let mut need_clear = false;
     let mut hl_msg_updated = false;
     if !kind.is_null() {
@@ -571,7 +570,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
         msg_display(unsafe { cstr::at(s) }, hl_id, false);
     }
     if need_clear {
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
     }
 
     let mut retval = true;
@@ -824,10 +823,7 @@ pub fn messaging() -> bool {
 
 /// Report "N more lines" / "N fewer lines" after an edit, if `'report'`
 /// allows it.
-///
-/// # Safety
-/// Only that the message statics are consistent.
-pub unsafe fn msgmore(n: c_int) {
+pub fn msgmore(n: c_int) {
     // The report is assembled here and copied by `msg`/`set_keep_msg`, so
     // it wants a buffer of its own rather than the shared `msg_buf` an
     // autocmd reached from either could overwrite mid-assembly.

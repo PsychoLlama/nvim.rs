@@ -356,9 +356,7 @@ pub(crate) fn to_message(text: String, capacity: usize) -> CString {
 /// are suppressed -- which is why the message arrives as a closure.
 #[doc(hidden)]
 pub(crate) fn report_emsg(message: impl FnOnce() -> String) -> bool {
-    // SAFETY: reads message-state globals; main thread, like every message
-    // call. Checked before formatting so a suppressed error costs nothing.
-    if unsafe { emsg_not_now() } {
+    if emsg_not_now() {
         return true;
     }
     emsg(&to_message(message(), SEMSG_ERRBUF_LEN))
@@ -398,8 +396,7 @@ pub(crate) fn emsg_text(text: String) -> bool {
 /// under the `ext_messages` kind `kind`.
 #[doc(hidden)]
 pub(crate) fn report_emsg_multiline(kind: &CStr, message: impl FnOnce() -> String) -> bool {
-    // SAFETY: as [`report_emsg`].
-    if unsafe { emsg_not_now() } {
+    if emsg_not_now() {
         return true;
     }
     emsg_multiline_text(&to_message(message(), SEMSG_MULTILINE_ERRBUF_LEN), kind)

@@ -612,7 +612,7 @@ pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
         }
         emsg_silent.set((emsg_silent.get() - cm.cmod_did_esilent).max(0));
         msg_scroll.set(cm.cmod_save_msg_scroll);
-        if unsafe { redirecting() } {
+        if redirecting() {
             msg_col.set(0);
         }
         cm.cmod_save_msg_silent = 0;

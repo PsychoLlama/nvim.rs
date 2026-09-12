@@ -90,7 +90,7 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
     }
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     old_line_count = Buf::current().b_ml.ml_line_count - old_line_count;
-    unsafe { msgmore(old_line_count as c_int) };
+    msgmore(old_line_count as c_int);
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `']` mark goes at the end of it.

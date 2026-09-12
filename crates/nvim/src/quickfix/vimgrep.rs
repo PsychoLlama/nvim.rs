@@ -196,7 +196,7 @@ unsafe fn display_fname(fname: *mut c_char) {
         msg_display(unsafe { cstr::at(truncated) }, 0, false);
         unsafe { xfree(truncated.cast()) };
     }
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     msg_didout.set(false);
     msg_nowait.set(true);
     msg_col.set(0);

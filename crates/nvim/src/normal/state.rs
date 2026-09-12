@@ -421,9 +421,9 @@ pub(crate) fn normal_redraw_mode_message() {
     unsafe { ui_cursor_shape() };
     unsafe { ui_flush() };
     if msg_scroll.get() != 0 || emsg_on_display.get() {
-        unsafe { msg_delay(1003, true) };
+        msg_delay(1003, true);
     }
-    unsafe { msg_delay(3003, false) };
+    msg_delay(3003, false);
     State.set(save_state);
     msg_scroll.set(0);
     emsg_on_display.set(false);
@@ -432,14 +432,13 @@ pub(crate) fn normal_redraw_mode_message() {
 /// File timestamps and a pending "Press ENTER", once the stuff buffer runs
 /// dry.
 fn normal_check_stuff_buffer() {
-    // SAFETY (throughout): all three are global editor state.
     if stuff_empty() {
         did_check_timestamps.set(false);
         if need_check_timestamps.get() {
             check_timestamps(0);
         }
         if need_wait_return.get() {
-            unsafe { wait_return(0) };
+            wait_return(0);
         }
     }
 }

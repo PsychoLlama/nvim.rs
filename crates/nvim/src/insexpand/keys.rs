@@ -375,7 +375,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     compl_started.set(false);
     compl_matches.set(0);
     if !shortmess(ShmFlag::COMPLETIONMENU) {
-        unsafe { msg_clr_cmdline() }; // necessary for "noshowmode"
+        msg_clr_cmdline(); // necessary for "noshowmode"
     }
     ctrl_x_mode.set(CTRL_X_NORMAL);
     compl_enter_selects.set(false);

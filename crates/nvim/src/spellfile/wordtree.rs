@@ -491,7 +491,7 @@ pub(super) unsafe fn tree_add_word(
         if spin.si_verbose != 0 {
             msg_start();
             msg_str(gettext(MSG_COMPRESSING));
-            unsafe { msg_clr_eos() };
+            msg_clr_eos();
             msg_didout.set(false);
             msg_col.set(0);
             unsafe { ui_flush() };

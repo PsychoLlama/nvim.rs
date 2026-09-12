@@ -180,7 +180,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     msg_row.set(Rows.get() - 1);
     lines_left.set(Rows.get());
     msg_scroll.set(1);
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
 
     let list = args[0].list_or_null();
     let len = unsafe { tv_list_len(list) } as usize;

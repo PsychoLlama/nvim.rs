@@ -504,11 +504,11 @@ impl FindTags {
             return;
         }
         if p_verbose.get() >= 5 {
-            unsafe { verbose_enter() };
+            verbose_enter();
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
             let tag_fname = unsafe { c_str(self.tag_fname.as_ptr()) };
             smsg!(0, "Searching tags file {tag_fname}");
-            unsafe { verbose_leave() };
+            verbose_leave();
         }
         self.did_open = true;
         self.state = Reading::Start;

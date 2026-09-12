@@ -526,7 +526,8 @@ pub unsafe fn get_recorded() -> *mut c_char {
 /// The contents of the redo buffer as one string, with `K_SPECIAL` escaped.
 ///
 /// # Safety
-/// Callable at any time; the answer owns its bytes.
+/// The answer owns its bytes — an `xmalloc`ed `char *` behind the
+/// [`String_0`] — and the caller has to free it.
 pub unsafe fn get_inserted() -> String_0 {
     // SAFETY (this body): as [`get_recorded`] -- the answer owns its bytes.
     let (data, size) = unsafe { redobuff().contents(false) };
@@ -562,10 +563,7 @@ fn write_int(out: &mut [u8; 32], n: c_int) -> usize {
 
 /// One byte from the read buffers, `readbuf1` first. No translation is done,
 /// so `K_SPECIAL` is still escaped.
-///
-/// # Safety
-/// Callable at any time.
-pub(crate) unsafe fn read_readbuffers(advance: bool) -> c_int {
+pub(crate) fn read_readbuffers(advance: bool) -> c_int {
     // SAFETY (this body): the two read buffers are statics, and nothing holds
     // a pointer into the block a read may free.
     let c = unsafe { readbuf1().read(advance) };
@@ -604,16 +602,13 @@ pub fn typeahead_noflush(c: c_int) {
 /// `FLUSH_INPUT` additionally drains everything the OS has for us, which is
 /// what a CTRL-C wants: an escape sequence arrives one byte at a time and
 /// leaving half of it behind would make the rest read as literal keys.
-///
-/// # Safety
-/// Callable at any time; may block briefly reading input.
-pub unsafe fn flush_buffers(flush_typeahead: FlushBuffers) {
+pub fn flush_buffers(flush_typeahead: FlushBuffers) {
     init_typebuf();
 
     start_stuff();
     // SAFETY (this body): the typeahead is initialised just above, and
     // `inchar` is given its own storage and the room left in it.
-    while unsafe { read_readbuffers(true) } != NUL {}
+    while read_readbuffers(true) != NUL {}
 
     if flush_typeahead == FLUSH_INPUT {
         // Drain what the OS has for us as well, before the typeahead's
@@ -629,8 +624,7 @@ pub unsafe fn flush_buffers(flush_typeahead: FlushBuffers) {
 /// Safe: the only promise is that the editor exists.
 pub fn beep_flush() {
     if emsg_silent.get() == 0 {
-        // SAFETY (this body): both callees only read the editor's own state.
-        unsafe { flush_buffers(FLUSH_MINIMAL) };
+        flush_buffers(FLUSH_MINIMAL);
         unsafe { vim_beep(kOptBoFlagError as c_uint) };
     }
 }

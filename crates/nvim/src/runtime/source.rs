@@ -486,8 +486,7 @@ unsafe fn open_script(cookie: &mut SourceCookie, fname_exp: *mut c_char, check_o
 unsafe fn verbose_source_msg(plain: &'static CStr, numbered: &'static CStr, fname: *const c_char) {
     let name = sourcing_name();
     let lnum = sourcing_lnum() as int64_t;
-    // SAFETY: the caller's contract on the two formats.
-    unsafe { verbose_enter() };
+    verbose_enter();
     // SAFETY: the caller's NUL-terminated file name.
     let fname = unsafe { c_str(fname) };
     if name.is_null() {
@@ -495,7 +494,7 @@ unsafe fn verbose_source_msg(plain: &'static CStr, numbered: &'static CStr, fnam
     } else {
         let _: bool = report_msg(0, || tr_c!(numbered, lnum, fname));
     }
-    unsafe { verbose_leave() };
+    verbose_leave();
 }
 
 /// Find or create the `ScriptItem` this source runs under.  A brand-new
@@ -821,8 +820,7 @@ unsafe fn source_bracket(
     estack_pop();
     if p_verbose.get() > 1 {
         let resumed = sourcing_name();
-        // SAFETY: both messages take a NUL-terminated name.
-        unsafe { verbose_enter() };
+        verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(req.fname) };
         smsg!(0, "finished sourcing {fname}");
@@ -831,7 +829,7 @@ unsafe fn source_bracket(
             let resumed = unsafe { c_str(resumed) };
             smsg!(0, "continuing in {resumed}");
         }
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
     if !time_log.is_null() {
         let mut label = [0 as c_char; IOSIZE as usize];

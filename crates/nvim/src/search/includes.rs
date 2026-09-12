@@ -464,11 +464,11 @@ unsafe fn handle_include(
         };
         unsafe { msg_trunc(progress.as_mut_ptr(), true, HLF_R) };
     } else if p_verbose.get() >= 5 {
-        unsafe { verbose_enter() };
+        verbose_enter();
         // SAFETY: a static, translated message and a NUL-terminated name.
         let name = unsafe { c_str(name) };
         smsg!(0, "Searching included file {name}");
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 }
 

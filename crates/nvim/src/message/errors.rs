@@ -39,20 +39,14 @@ static last_sourcing_lnum: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Forget where the last error came from, so the next one names its source
 /// again.
-///
-/// # Safety
-/// Only that nothing else holds the stored name.
-pub unsafe fn reset_last_sourcing() {
+pub fn reset_last_sourcing() {
     unsafe { xfree(last_sourcing_name.get().cast()) };
     last_sourcing_name.set(ptr::null_mut());
     last_sourcing_lnum.set(0);
 }
 
 /// Is the innermost script/function a different one from the last error's?
-///
-/// # Safety
-/// Only that the exec stack is well formed.
-unsafe fn other_sourcing_name() -> bool {
+fn other_sourcing_name() -> bool {
     if exestack_has_name() {
         if !last_sourcing_name.get().is_null() {
             return !unsafe { cstr::eq(sourcing_top().es_name, last_sourcing_name.get()) };
@@ -73,7 +67,7 @@ fn exestack_has_name() -> bool {
 /// # Safety
 /// Only that the exec stack is well formed.
 unsafe fn get_emsg_source() -> *mut c_char {
-    if !exestack_has_name() || !unsafe { other_sourcing_name() } {
+    if !exestack_has_name() || !other_sourcing_name() {
         return ptr::null_mut();
     }
     let tofree = estack_sfile(ESTACK_NONE);
@@ -99,7 +93,7 @@ unsafe fn get_emsg_lnum() -> *mut c_char {
     // Show the source of the error, but not if it is the same as the last
     // time.
     if sourcing_top().es_name.is_null()
-        || !(unsafe { other_sourcing_name() } || sourcing_top().es_lnum != last_sourcing_lnum.get())
+        || !(other_sourcing_name() || sourcing_top().es_lnum != last_sourcing_lnum.get())
         || sourcing_top().es_lnum == 0
     {
         return ptr::null_mut();
@@ -112,10 +106,7 @@ unsafe fn get_emsg_lnum() -> *mut c_char {
 }
 
 /// Display the source of an error message, if it has not been shown already.
-///
-/// # Safety
-/// Only that the exec stack is well formed.
-pub unsafe fn msg_source(hl_id: c_int) {
+pub fn msg_source(hl_id: c_int) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
     if recursive.get() {
         return;
@@ -138,12 +129,12 @@ pub unsafe fn msg_source(hl_id: c_int) {
 
     // Remember the source name and line number, so we can tell when
     // the message changes.
-    if sourcing_top().es_name.is_null() || unsafe { other_sourcing_name() } {
+    if sourcing_top().es_name.is_null() || other_sourcing_name() {
         unsafe { xfree(last_sourcing_name.get().cast()) };
         last_sourcing_name.set(ptr::null_mut());
         if !sourcing_top().es_name.is_null() {
             last_sourcing_name.set(unsafe { xstrdup(sourcing_top().es_name) });
-            if !unsafe { redirecting() } {
+            if !redirecting() {
                 msg_putchar_hl(b'\n' as c_int, hl_id);
             }
         }
@@ -153,10 +144,7 @@ pub unsafe fn msg_source(hl_id: c_int) {
 }
 
 /// Is this a bad time to show an error?
-///
-/// # Safety
-/// Only that `'debug'` holds a valid string.
-pub(crate) unsafe fn emsg_not_now() -> bool {
+pub(crate) fn emsg_not_now() -> bool {
     (emsg_off.get() > 0
         && !has_char(unsafe { cstr::at(p_debug.get()) }, b'm' as c_int)
         && !has_char(unsafe { cstr::at(p_debug.get()) }, b't' as c_int))
@@ -177,7 +165,7 @@ pub unsafe fn emsg_multiline(
     hl_id: c_int,
     multiline: bool,
 ) -> bool {
-    if unsafe { emsg_not_now() } {
+    if emsg_not_now() {
         return true;
     }
     called_emsg.set(called_emsg.get() + 1);
@@ -285,7 +273,7 @@ pub unsafe fn emsg_multiline(
         if p_eb.get() != 0 {
             beep_flush();
         } else {
-            unsafe { flush_buffers(FLUSH_MINIMAL) };
+            flush_buffers(FLUSH_MINIMAL);
         }
         did_emsg.set(did_emsg.get() + 1);
     }
@@ -301,7 +289,7 @@ pub unsafe fn emsg_multiline(
     // source line and the error arrive as one ext_messages event.
     let save_msg_skip_flush = msg_ext_skip_flush.get();
     msg_ext_skip_flush.set(true);
-    unsafe { msg_source(hl_id) };
+    msg_source(hl_id);
     msg_nowait.set(false); // wait for this msg
     let rv = unsafe { msg_keep(s, hl_id, false, multiline) };
     msg_ext_skip_flush.set(save_msg_skip_flush);
@@ -324,10 +312,7 @@ pub(crate) unsafe fn emsg_ptr(s: *const c_char) -> bool {
 }
 
 /// "E354: Invalid register name" for register `name`.
-///
-/// # Safety
-/// Only that `name` is a character code.
-pub unsafe fn emsg_invreg(name: c_int) {
+pub fn emsg_invreg(name: c_int) {
     let display = transchar_buf(None, name);
     unsafe { crate::semsg!("E354: Invalid register name: '{}'", c_str(display.as_ptr())) };
 }
@@ -348,7 +333,7 @@ pub const SEMSG_MULTILINE_ERRBUF_LEN: size_t = 8192;
 pub(crate) unsafe fn iemsg_ptr(s: *const c_char) {
     // SAFETY: reads message-state globals on the main thread, as every
     // message call does.
-    if unsafe { emsg_not_now() } {
+    if emsg_not_now() {
         return;
     }
     // SAFETY: the caller's contract.
@@ -357,9 +342,7 @@ pub(crate) unsafe fn iemsg_ptr(s: *const c_char) {
 
 /// An internal error: same as [`emsg`], but skipped when errors are off.
 pub fn iemsg(s: &CStr) {
-    // SAFETY: reads message-state globals on the main thread, as every
-    // message call does.
-    if unsafe { emsg_not_now() } {
+    if emsg_not_now() {
         return;
     }
     emsg(s);

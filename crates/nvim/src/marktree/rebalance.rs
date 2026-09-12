@@ -84,8 +84,7 @@ fn rekey(b: &mut MarkTree, x: Node, i: usize) {
 /// Every caller here only needs to know which side of a moving node boundary
 /// the mark is on.
 fn sloppy_index(b: &mut MarkTree, id: uint64_t) -> uint64_t {
-    // SAFETY: `b` is a live tree.
-    unsafe { pseudo_index_for_id(b, id, true) }
+    pseudo_index_for_id(b, id, true)
 }
 
 /// Storage for a set that lives no longer than one rebalancing step. Keep it

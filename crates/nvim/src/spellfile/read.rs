@@ -174,24 +174,20 @@ unsafe fn load_spl(
             let fname = unsafe { c_str(fname) };
             semsg!("E484: Can't open file {fname}");
         } else if p_verbose.get() > 2 as OptInt {
-            // SAFETY: the verbose sink, and the caller's path.
-            unsafe { verbose_enter() };
+            verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
             smsg!(0, "E484: Can't open file {fname}");
-            // SAFETY: paired with the enter above.
-            unsafe { verbose_leave() };
+            verbose_leave();
         }
         return false;
     };
     if p_verbose.get() > 2 as OptInt {
-        // SAFETY: the verbose sink, and the caller's path.
-        unsafe { verbose_enter() };
+        verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         smsg!(0, "Reading spell file \"{fname}\"");
-        // SAFETY: paired with the enter above.
-        unsafe { verbose_leave() };
+        verbose_leave();
     }
 
     let lp = if old_lp.is_null() {

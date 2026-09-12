@@ -222,15 +222,13 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     if p_verbose.get() > 3 as OptInt {
         // SAFETY: `argv` is the NULL-terminated vector built above.
         let cmdstr = unsafe { shell_argv_to_str(argv) };
-        // SAFETY: the scroll bracket is the message area's own.
-        unsafe { verbose_enter_scroll() };
+        verbose_enter_scroll();
         // SAFETY: the format takes the one NUL-terminated `cmdstr`.
         let shown = unsafe { c_str(cmdstr) };
         smsg!(0, "Executing command: \"{shown}\"");
         // SAFETY: the literal is NUL-terminated.
         msg_str(c"\n\n");
-        // SAFETY: this closes the bracket opened above.
-        unsafe { verbose_leave_scroll() };
+        verbose_leave_scroll();
         // SAFETY: `cmdstr` is the owned rendering.
         unsafe { xfree(cmdstr as *mut c_void) };
     }

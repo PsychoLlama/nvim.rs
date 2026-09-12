@@ -74,8 +74,7 @@ pub unsafe fn nvim_echo(
 
     let mut kind: *mut c_char = opts.kind.as_ref().unwrap_or(&no_string).data();
     if verbose {
-        // SAFETY: paired with the `verbose_leave` below.
-        unsafe { verbose_enter() };
+        verbose_enter();
     } else if kind.is_null() {
         kind = if err {
             c"echoerr".as_ptr().cast_mut()
@@ -166,11 +165,8 @@ pub unsafe fn nvim_echo(
             need_wait_return.set(save_nwr);
         }
         if verbose {
-            // SAFETY: paired with the `verbose_enter` above.
-            unsafe {
-                verbose_leave();
-                verbose_stop();
-            }
+            verbose_leave();
+            verbose_stop();
         }
         if is_progress {
             // SAFETY: `msg_data` is this frame's own, live for the call.

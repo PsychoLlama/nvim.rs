@@ -569,10 +569,7 @@ pub unsafe fn ins_typebuf(
 /// Used for a character `vgetc` handed out and the caller then decided not to
 /// consume. With `on_key_ignore` the bytes are not reported to `vim.on_key()`.
 /// Answers how many bytes went in.
-///
-/// # Safety
-/// Callable at any time.
-pub unsafe fn ins_char_typebuf(c: c_int, modifiers: ModMask, on_key_ignore: bool) -> c_int {
+pub fn ins_char_typebuf(c: c_int, modifiers: ModMask, on_key_ignore: bool) -> c_int {
     // Room for the modifier prefix plus a K_SPECIAL-escaped character.
     let mut buf = [0 as c_char; MB_MAXBYTES * 3 + 4];
     // SAFETY (this body): `buf` is this frame's own array, sized for the
@@ -671,10 +668,7 @@ pub fn may_sync_undo() {
 /// fresh one carries on from: both callers have just *moved* the old
 /// typeahead out, so the counter is no longer in the cell to be read, and a
 /// snapshot taken before the swap still has to compare unequal afterwards.
-///
-/// # Safety
-/// The current buffers must already have been saved or freed.
-pub(crate) unsafe fn alloc_typebuf(was: c_int) {
+pub(crate) fn alloc_typebuf(was: c_int) {
     TYPEBUF.with_mut(|tb| {
         // SAFETY: `xmalloc` either answers an allocation or aborts.
         (tb.buf, tb.noremap) = unsafe {
@@ -733,17 +727,13 @@ pub(crate) unsafe fn free_typebuf() {
 
 /// Put the current typeahead aside for the script `:source!` is about to
 /// read, and start a fresh one.
-///
-/// # Safety
-/// `curscript` must name an open script.
-pub(crate) unsafe fn save_typebuf() {
+pub(crate) fn save_typebuf() {
     debug_assert!(curscript.get() >= 0);
     init_typebuf();
     let saved = typeahead().take();
     let was = saved.change_cnt();
     SAVED_TYPEBUF.with_mut(|slots| slots[curscript.get() as usize] = saved);
-    // SAFETY: the typeahead was just moved into `SAVED_TYPEBUF`.
-    unsafe { alloc_typebuf(was) };
+    alloc_typebuf(was);
 }
 
 /// Put back the typeahead [`save_typebuf`] displaced for script `script`.

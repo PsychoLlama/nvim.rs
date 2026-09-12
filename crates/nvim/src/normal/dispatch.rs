@@ -327,7 +327,7 @@ unsafe fn read_composing_tail(s: *mut NormalState) {
     drop(mapped);
     // The keys are recorded for a redo, not fed through undo syncing.
     let _no_sync = Suppress::undo_sync();
-    unsafe { gotchars_ignore() };
+    gotchars_ignore();
 }
 
 /// Read the second (and sometimes third) character of a command.
@@ -637,7 +637,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
         && visual_select()
         && (vim_isprintc(ns.c) || ns.c == NL || ns.c == CAR || ns.c == Key::Kenter.code())
     {
-        let len = unsafe { ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true) };
+        let len = ins_char_typebuf(vgetc_char.get(), vgetc_mod_mask.get(), true);
         if KeyTyped.get() {
             ungetchars(len);
         }
@@ -793,8 +793,7 @@ pub(crate) fn prep_redo_num2(
     cmd4: c_int,
     cmd5: c_int,
 ) {
-    // SAFETY: all of these append to the redo buffer, which grows itself.
-    unsafe { reset_redobuff() };
+    reset_redobuff();
     if regname != 0 {
         append_to_redobuff_char('"' as c_int);
         append_to_redobuff_char(regname);

@@ -334,10 +334,10 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
         if !mesg2.is_empty() {
             msg_str_hl(mesg2, HLF_W, true);
         }
-        unsafe { msg_clr_eos() };
+        msg_clr_eos();
         msg_end();
         if emsg_silent.get() == 0 && !in_assert_fails.get() && !ui_has(kUIMessages) {
-            unsafe { msg_delay(1004, true) }; // give the user some time to think about it
+            msg_delay(1004, true); // give the user some time to think about it
             redraw_cmdline.set(false); // don't redraw and erase the message
         }
     }

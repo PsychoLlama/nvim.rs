@@ -267,7 +267,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
             if cpo_has(CpoFlag::REPLCNT) {
                 State.set(State.get() & !REPLACE_FLAG);
             }
-            let _ = unsafe { start_redo_ins() };
+            let _ = start_redo_ins();
             if single_char_insert {
                 unsafe { stuff_redo_readbuf(ESC_STR.as_ptr()) }; // no ESC in the redo buffer
             }

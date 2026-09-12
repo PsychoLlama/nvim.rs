@@ -578,8 +578,7 @@ pub unsafe fn redraw_ruler() {
         } else if DID_RULER_COL.get() > 0 {
             msg_col.set(DID_RULER_COL.get());
             msg_row.set(Rows.get() - 1);
-            // SAFETY: clears the message area of the screen.
-            unsafe { msg_clr_eos() };
+            msg_clr_eos();
         }
         DID_RULER_COL.set(-1);
         return;

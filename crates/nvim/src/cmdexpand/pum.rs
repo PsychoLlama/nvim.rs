@@ -393,7 +393,7 @@ pub(crate) unsafe fn redraw_wildmenu(
                 // Put the wildmenu just above the command line.  If there
                 // is no room, scroll the screen one line up.
                 if cmdline_row.get() == Rows.get() - 1 {
-                    unsafe { msg_scroll_up(false, false) };
+                    msg_scroll_up(false, false);
                     msg_scrolled.set(msg_scrolled.get() + 1);
                 } else {
                     cmdline_row.set(cmdline_row.get() + 1);

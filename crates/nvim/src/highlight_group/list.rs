@@ -296,7 +296,7 @@ unsafe fn highlight_list_two(cnt: c_int, id: c_int) {
     // The index is 0 or 9, both inside.
     let at = (cnt / 11) as usize;
     msg_str_hl(cstr::in_bytes(&FRAMES[at..]), id, false);
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     unsafe { ui_flush() };
     // TODO(justinmk): is this delay needed? ":hi" seems to work without it.
     os_delay(if cnt == 99 { 40 } else { cnt as u64 * 50 }, false);

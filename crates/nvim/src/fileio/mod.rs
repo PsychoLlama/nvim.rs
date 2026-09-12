@@ -224,7 +224,7 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
     }
     if msg_scroll.get() == 0 {
         // Wait a bit when overwriting an error message.
-        unsafe { msg_check_for_delay(false) };
+        msg_check_for_delay(false);
     }
     msg_start();
     if prev_msg_col != 0 && msg_col.get() == 0 {
@@ -241,7 +241,7 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
         // May truncate the message to avoid a hit-return prompt.
         msg_display(unsafe { cstr::at(msg_may_trunc(false, io)) }, 0, false);
     }
-    unsafe { msg_clr_eos() };
+    msg_clr_eos();
     msg_scrolled_ign.set(false);
 }
 /// From the buffer's line count before this read and the bytes read since,

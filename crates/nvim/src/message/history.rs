@@ -103,7 +103,7 @@ pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
 /// `msg` must own its chunks.
 pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data: *mut MessageData) {
     if do_clear_hist_temp.get() {
-        unsafe { msg_hist_clear_temp() };
+        msg_hist_clear_temp();
         do_clear_hist_temp.set(false);
     }
 
@@ -147,7 +147,7 @@ pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data:
     msg_hist_last.set(entry);
     msg_ext_history.set(true);
 
-    unsafe { msg_hist_clear(msg_hist_max.get()) };
+    msg_hist_clear(msg_hist_max.get());
 }
 
 /// Unlink `entry` from the list and free it.
@@ -176,10 +176,7 @@ unsafe fn msg_hist_free_msg(entry: *mut MessageHistoryEntry) {
 /// Delete the oldest messages until `keep` non-temporary ones remain.
 ///
 /// `keep` of zero empties the list, temporary entries included.
-///
-/// # Safety
-/// Only that the history list is well formed.
-unsafe fn msg_hist_clear(keep: c_int) {
+fn msg_hist_clear(keep: c_int) {
     while msg_hist_len.get() > keep || (keep == 0 && !msg_hist_first.get().is_null()) {
         msg_hist_len
             .set(msg_hist_len.get() - c_int::from(!unsafe { (*msg_hist_first.get()).temp }));
@@ -188,10 +185,7 @@ unsafe fn msg_hist_clear(keep: c_int) {
 }
 
 /// Drop every temporary (`g<`-only) entry.
-///
-/// # Safety
-/// Only that the history list is well formed.
-unsafe fn msg_hist_clear_temp() {
+fn msg_hist_clear_temp() {
     while !msg_hist_temp.get().is_null() {
         let next = unsafe { (*msg_hist_temp.get()).next };
         if unsafe { (*msg_hist_temp.get()).temp } {
@@ -213,10 +207,7 @@ unsafe fn at_opt(p: *const c_char, word: &CStr, digit: bool) -> bool {
 /// `'messagesopt'` was set: validate it and adopt it.
 ///
 /// Answers `Err` without changing anything if the value is not usable.
-///
-/// # Safety
-/// Only that `p_mopt` holds a valid string.
-pub unsafe fn messagesopt_changed() -> Result<(), Failed> {
+pub fn messagesopt_changed() -> Result<(), Failed> {
     let mut flags = 0;
     let mut wait = 0;
     let mut history = 0;
@@ -274,7 +265,7 @@ pub unsafe fn messagesopt_changed() -> Result<(), Failed> {
     progress_msg_target.set(progress_target);
 
     msg_hist_max.set(history);
-    unsafe { msg_hist_clear(msg_hist_max.get()) };
+    msg_hist_clear(msg_hist_max.get());
 
     Ok(())
 }
@@ -320,7 +311,7 @@ pub unsafe fn ex_messages(args: *mut ExArg) {
         } else {
             0
         };
-        unsafe { msg_hist_clear(keep) };
+        msg_hist_clear(keep);
         return;
     }
     if unsafe { *(*args).arg } != 0 {
@@ -355,7 +346,7 @@ pub unsafe fn ex_messages(args: *mut ExArg) {
                 // SAFETY: `p` is a live history entry.
                 entries.push(unsafe { entry_to_event(p) });
             }
-            if unsafe { redirecting() } || !ui_has(kUIMessages) {
+            if redirecting() || !ui_has(kUIMessages) {
                 // Under ext_messages the text has already gone to the UI
                 // above; this pass exists only to feed the redirection, so
                 // silence the display half of it.  `ui_has` is asked twice,

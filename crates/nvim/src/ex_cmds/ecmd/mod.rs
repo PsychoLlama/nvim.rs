@@ -751,8 +751,7 @@ unsafe fn report_file_info() {
     }
     if msg_scroll.get() == 0 {
         // wait a bit when overwriting an error msg
-        // SAFETY: caller's contract.
-        unsafe { msg_check_for_delay(false) };
+        msg_check_for_delay(false);
     }
     // SAFETY: as above.
     say::start();

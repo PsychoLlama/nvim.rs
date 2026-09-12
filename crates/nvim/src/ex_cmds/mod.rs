@@ -494,14 +494,12 @@ pub(crate) mod say {
 
     /// [`msg_clr_eos`]: clear from the message position to the end.
     pub(crate) fn clear_eos() {
-        // SAFETY: as above.
-        unsafe { msg_clr_eos() }
+        msg_clr_eos()
     }
 
     /// [`msgmore`]: "N more lines" / "N fewer lines".
     pub(crate) fn more(n: c_int) {
-        // SAFETY: as above.
-        unsafe { msgmore(n) }
+        msgmore(n)
     }
 }
 pub const SID_NONE: ::core::ffi::c_int = -6 as ::core::ffi::c_int;

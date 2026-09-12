@@ -123,8 +123,7 @@ impl<'a> Cursor<'a> {
     /// Position the walk at the first mark at or after (`row`, `col`).
     pub fn seek(&mut self, row: int32_t, col: c_int) -> bool {
         let (tree, itr) = self.parts();
-        // SAFETY: a live tree; this is what positions the iterator in it.
-        unsafe { marktree_itr_get(tree, row, col, itr) }
+        marktree_itr_get(tree, row, col, itr)
     }
 
     /// [`Cursor::seek`], descending only into subtrees `filter` wants and
@@ -162,9 +161,7 @@ impl<'a> Cursor<'a> {
             end_right_gravity: false,
         };
         let (tree, itr) = self.parts();
-        // SAFETY: a live tree with the iterator positioned in it by
-        // `seek_overlap`, which is what the type of `self` promises.
-        let more = unsafe { marktree_itr_step_overlap(tree, itr, &mut pair) };
+        let more = marktree_itr_step_overlap(tree, itr, &mut pair);
         more.then_some(pair)
     }
 
@@ -181,16 +178,14 @@ impl<'a> Cursor<'a> {
     /// once it has run off the end.
     pub fn current(&mut self) -> MTKey {
         let itr = self.parts().1;
-        // SAFETY: the iterator is positioned in a live tree, or empty.
-        unsafe { marktree_itr_current(itr) }
+        marktree_itr_current(itr)
     }
 
     /// Step to the next mark. Not `Iterator::next` — a cursor answers
     /// "is there one" and leaves the mark itself to [`current`](Self::current).
     pub fn step(&mut self) -> bool {
         let (tree, itr) = self.parts();
-        // SAFETY: a live tree with the iterator positioned in it.
-        unsafe { marktree_itr_next(tree, itr) }
+        marktree_itr_next(tree, itr)
     }
 
     /// Step to the next mark `filter` wants, giving up at (`stop_row`,
@@ -211,8 +206,7 @@ impl<'a> Cursor<'a> {
     /// when it is unpaired. Does not move the walk.
     pub fn altpos(&mut self, mark: MTKey) -> MTPos {
         let tree = self.parts().0;
-        // SAFETY: a live tree, and `mark` was read out of it.
-        unsafe { marktree_get_altpos(tree, mark, None) }
+        marktree_get_altpos(tree, mark, None)
     }
 }
 

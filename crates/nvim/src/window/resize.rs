@@ -516,8 +516,7 @@ pub fn command_height() {
     if msg_scrolled.get() == 0 && full_screen.get() {
         let mut grid = default_gridview();
         if !ui_has(kUIMessages) {
-            // SAFETY: makes sure the message grid exists before it is cleared.
-            unsafe { msg_grid_validate() };
+            msg_grid_validate();
             grid = msg_grid_view();
         }
         // SAFETY: a live grid, and a row range inside the screen.
