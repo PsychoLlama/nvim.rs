@@ -105,8 +105,7 @@ fn parse_cindent_options(buffer: Buf) {
 
 /// Populate `*local-additions*` in `help.txt`.
 fn collect_local_additions() {
-    // SAFETY: reads the runtime path and the current buffer.
-    unsafe { get_local_additions() };
+    get_local_additions();
 }
 
 fn empty_buffer(buffer: Buf) -> bool {

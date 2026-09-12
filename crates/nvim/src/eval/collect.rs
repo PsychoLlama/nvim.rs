@@ -259,7 +259,7 @@ pub fn garbage_collect(testing: bool) -> bool {
     // function call arguments, if v:testing is set
     abort = abort || set_ref_in_func_args(copy_id);
     abort = abort || garbage_collect_vimvars(copy_id);
-    abort = abort || unsafe { set_ref_in_quickfix(copy_id) };
+    abort = abort || set_ref_in_quickfix(copy_id);
 
     // 2. Free what nothing marked — but only if every root was seen.
     if abort {

@@ -396,11 +396,7 @@ struct Outcome {
 /// Whether the swap file the buffer has is one that already existed, i.e.
 /// not the `.swp` this load made — in which case the dummy buffer is
 /// unloaded rather than kept, so that the swap file is not left behind.
-///
-/// # Safety
-///
-/// `buffer` must be a live buffer.
-unsafe fn existing_swapfile(buffer: Buf) -> bool {
+fn existing_swapfile(buffer: Buf) -> bool {
     if buffer.b_ml.ml_mfp.is_null() {
         return false;
     }
@@ -536,7 +532,7 @@ unsafe fn keep_or_drop_dummy(
         }
         if out.first_match_buf != Some(buffer)
             || search.flags & VGR_NOJUMP as c_int != 0
-            || unsafe { existing_swapfile(buffer) }
+            || existing_swapfile(buffer)
         {
             unsafe { unload_dummy_buffer(buffer, dirname_start) };
             // Keeping the buffer, remove the dummy flag.

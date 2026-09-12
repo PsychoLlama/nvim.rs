@@ -50,11 +50,7 @@ use core::ffi::{c_char, c_int, c_void};
 /// already in effect, or -1 when unknown.
 ///
 /// The caller must have set 'scrolloff' to zero.
-///
-/// # Safety
-/// `window` and `tabpage` are live; `window` belongs to `tabpage`. Main thread: this makes
-/// `window` current for the duration of the option writers.
-pub(crate) unsafe fn put_view(
+pub(crate) fn put_view(
     out: SessionFile,
     window: Win,
     tabpage: TabPage,
@@ -100,13 +96,13 @@ pub(crate) unsafe fn put_view(
 
     // Edit the file, unless the `:next` above already did.
     if add_edit && (!did_next || window.w_arg_idx_invalid) {
-        match unsafe { put_edit(out, window, opts) } {
+        match put_edit(out, window, opts) {
             Some(keep_cursor) => do_cursor &= keep_cursor,
             None => return false,
         }
     }
 
-    if window.w_alt_fnum != 0 && !unsafe { put_alternate(out, window, opts) } {
+    if window.w_alt_fnum != 0 && !put_alternate(out, window, opts) {
         return false;
     }
 
@@ -117,7 +113,7 @@ pub(crate) unsafe fn put_view(
         return false;
     }
 
-    if !unsafe { put_local_options(out, window, opts) } {
+    if !put_local_options(out, window, opts) {
         return false;
     }
 
@@ -132,7 +128,7 @@ pub(crate) unsafe fn put_view(
     }
 
     // The cursor goes last: creating folds moves it.
-    if do_cursor && !unsafe { put_cursor(out, window) } {
+    if do_cursor && !put_cursor(out, window) {
         return false;
     }
 
@@ -150,15 +146,12 @@ pub(crate) unsafe fn put_view(
 /// Write the command that loads `window`'s file. Answers whether the cursor
 /// position is still worth restoring afterwards -- an empty buffer has no
 /// position -- or `None` when a write failed.
-///
-/// # Safety
-/// `window` is live.
-unsafe fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<bool> {
+fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<bool> {
     // SAFETY: caller contract; `fname_esc` is owned and freed on every path.
     let buffer = window.buffer();
     let fname_esc = unsafe { ses_escape_fname(ses_get_fname(buffer, opts)) };
     let outcome = if buf_is_help(window.buffer_or_none()) {
-        unsafe { put_help_edit(out, window) }.then_some(true)
+        put_help_edit(out, window).then_some(true)
     } else if !buffer.b_ffname.is_null()
         && (!buf_is_nofilename(window.buffer_or_none()) || !buffer.terminal.is_null())
     {
@@ -193,10 +186,7 @@ unsafe fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<b
 /// A help window: create an empty `'buftype'=help` buffer and let `:help`
 /// re-use both it and the window, which sets the options a help buffer needs
 /// even when "options" is not in 'sessionoptions'.
-///
-/// # Safety
-/// `window` is live.
-unsafe fn put_help_edit(out: SessionFile, window: Win) -> bool {
+fn put_help_edit(out: SessionFile, window: Win) -> bool {
     // SAFETY: caller contract; a tag stack entry's name is NUL-terminated.
     let curtag = if 0 < window.w_tagstackidx && window.w_tagstackidx <= window.w_tagstacklen {
         window.w_tagstack[(window.w_tagstackidx - 1) as usize].tagname
@@ -211,10 +201,7 @@ unsafe fn put_help_edit(out: SessionFile, window: Win) -> bool {
 
 /// Write `balt` for the window's alternate file, when a session is being
 /// written and the alternate buffer is one a restore could find again.
-///
-/// # Safety
-/// `window` is live.
-unsafe fn put_alternate(out: SessionFile, window: Win, opts: SessionOpts) -> bool {
+fn put_alternate(out: SessionFile, window: Win, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `find_buf` answers a live buffer or null.
     let alt = find_buf(window.w_alt_fnum);
     let restorable = alt.is_some_and(|b| {
@@ -228,8 +215,7 @@ unsafe fn put_alternate(out: SessionFile, window: Win, opts: SessionOpts) -> boo
     let Some(alt) = alt.filter(|_| wanted) else {
         return true;
     };
-    // SAFETY: a live buffer, and a live session file.
-    out.puts(c"balt ") && unsafe { ses_fname(out, alt, opts, true) }
+    out.puts(c"balt ") && ses_fname(out, alt, opts, true)
 }
 
 /// Write the window's local options or, when options are not wanted at all,
@@ -237,10 +223,7 @@ unsafe fn put_alternate(out: SessionFile, window: Win, opts: SessionOpts) -> boo
 ///
 /// The writers read `curwin`/`curbuf`, so the window has to be made current
 /// for the duration. Nothing between the two assignments runs Vimscript.
-///
-/// # Safety
-/// `window` is live.
-unsafe fn put_local_options(out: SessionFile, window: Win, opts: SessionOpts) -> bool {
+fn put_local_options(out: SessionFile, window: Win, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `curwin`/`curbuf` are restored before
     // returning either way.
     let saved = switch_to(window);
@@ -261,10 +244,7 @@ unsafe fn put_local_options(out: SessionFile, window: Win, opts: SessionOpts) ->
 /// Restore the cursor line -- both in the file and relative to the top of
 /// the window -- and then the column. `G` is deliberately not used: it would
 /// change the jumplist.
-///
-/// # Safety
-/// `window` is live.
-unsafe fn put_cursor(out: SessionFile, window: Win) -> bool {
+fn put_cursor(out: SessionFile, window: Win) -> bool {
     // SAFETY: caller contract.
     let height = window.w_view_height;
     let lnum = window.w_cursor.lnum;

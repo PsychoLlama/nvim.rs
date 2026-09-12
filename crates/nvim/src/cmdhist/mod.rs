@@ -307,11 +307,7 @@ fn del_history_idx(histype: c_int, num: c_int) -> bool {
 /// The history type named by a string argument, [`HIST_INVALID`] when the
 /// typval is not a string (which is where `tv_get_string_chk` reports its
 /// own error).
-///
-/// # Safety
-///
-/// `arg` must be a valid typval.
-unsafe fn arg_histtype(arg: &TypVal) -> HistoryType {
+fn arg_histtype(arg: &TypVal) -> HistoryType {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; a non-null result is a NUL-terminated string
     // owned by the typval, which outlives the lookup.
@@ -329,12 +325,11 @@ unsafe fn arg_histtype(arg: &TypVal) -> HistoryType {
 pub fn f_histadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; the result starts out 0.
     result.write_number(0);
-    // SAFETY: reads the 'secure'/sandbox globals.
     if check_secure() {
         return;
     }
     // SAFETY: eval-function contract.
-    let histype = unsafe { arg_histtype(&args[0]) };
+    let histype = arg_histtype(&args[0]);
     if histype == HIST_INVALID {
         return;
     }
@@ -416,7 +411,7 @@ pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// "histnr()" function
 pub fn f_histnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
-    let histype = unsafe { arg_histtype(&args[0]) };
+    let histype = arg_histtype(&args[0]);
     let n = if histype == HIST_INVALID {
         HIST_INVALID
     } else {

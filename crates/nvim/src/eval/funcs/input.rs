@@ -142,15 +142,13 @@ static INPUTSECRET: GlobalCell<bool> = GlobalCell::new(false);
 
 /// `input({prompt} [, {text} [, {completion}]])`, or the options-Dict form.
 pub fn f_input(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the dispatcher's argument array and return value.
-    unsafe { get_user_input(args, result, false, INPUTSECRET.get()) };
+    get_user_input(args, result, false, INPUTSECRET.get());
 }
 
 /// `inputdialog()` — as `input()`, but cancelling answers the third
 /// argument rather than an empty string.
 pub fn f_inputdialog(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the dispatcher's argument array and return value.
-    unsafe { get_user_input(args, result, true, INPUTSECRET.get()) };
+    get_user_input(args, result, true, INPUTSECRET.get());
 }
 
 /// `inputsecret({prompt} [, {text}])`

@@ -108,13 +108,9 @@ pub fn cmdline_pum_remove(defer_redraw: bool) {
     compl_match_arraysize.set(0);
 }
 
-/// # Safety
-///
-/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn cmdline_pum_cleanup(cclp: Cc) {
+pub(crate) fn cmdline_pum_cleanup(cclp: Cc) {
     cmdline_pum_remove(false);
-    unsafe { wildmenu_cleanup(cclp) };
+    wildmenu_cleanup(cclp);
 }
 
 /// The current cmdline completion pattern.

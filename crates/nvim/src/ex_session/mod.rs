@@ -278,10 +278,7 @@ fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> *mut c_char {
 }
 
 /// Write `buffer`'s name, and a newline when `add_eol`.
-///
-/// # Safety
-/// `buffer` is a live buffer.
-unsafe fn ses_fname(out: SessionFile, buffer: Buf, opts: SessionOpts, add_eol: bool) -> bool {
+fn ses_fname(out: SessionFile, buffer: Buf, opts: SessionOpts, add_eol: bool) -> bool {
     let name = ses_get_fname(buffer, opts);
     let put = unsafe { ses_put_fname(out, name) };
     put && (!add_eol || out.eol())
@@ -326,10 +323,7 @@ unsafe fn ses_put_fname(out: SessionFile, name: *mut c_char) -> bool {
 /// Write an argument list: the `cmd` that selects which one, `%argdel` to
 /// empty it, then one `$argadd` per entry. Entries with no name are skipped
 /// (which only happens out of memory).
-///
-/// # Safety
-/// Every entry's name is NUL-terminated and stays alive for the call.
-unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[ArgEntry], fullname: bool) -> bool {
+fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[ArgEntry], fullname: bool) -> bool {
     if !out.puts(cmd) || !out.eol() || !out.line(c"%argdel") {
         return false;
     }
@@ -588,7 +582,7 @@ unsafe fn write_rc(
             failed |= unsafe { !write_session(out, fname) };
         } else {
             let (win, tab) = (Win::current(), TabPage::current());
-            failed |= unsafe { !put_view(out, win, tab, !using_vdir, opts, -1) };
+            failed |= !put_view(out, win, tab, !using_vdir, opts, -1);
         }
         if !out.line(c"let &g:so = s:so_save | let &g:siso = s:siso_save") {
             failed = true;

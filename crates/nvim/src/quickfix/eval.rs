@@ -39,11 +39,7 @@ pub(super) fn global_qftf() -> *mut Callback {
 
 /// Whether a value can hold a reference at all. Numbers, strings and floats
 /// own nothing, so the collector never has to walk into one.
-///
-/// # Safety
-///
-/// `tv` must be a live value.
-unsafe fn holds_references(tv: &TypVal) -> bool {
+fn holds_references(tv: &TypVal) -> bool {
     // SAFETY: the caller's value.
     !matches!((*tv).v_type(), VAR_NUMBER | VAR_STRING | VAR_FLOAT)
 }
@@ -107,11 +103,7 @@ unsafe fn mark_quickfix_ctx(qi: *mut QfInfo, copy_id: c_int) -> bool {
 
 /// Mark everything the quickfix stack and every location list stack hold,
 /// so that the garbage collector does not free it.
-///
-/// # Safety
-///
-/// The editor must be initialised.
-pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
+pub fn set_ref_in_quickfix(copy_id: c_int) -> bool {
     // SAFETY: the stacks and window lists are only read.
     let ql = QfStack::Global.raw();
     if unsafe { mark_quickfix_ctx(ql, copy_id) }
@@ -143,11 +135,7 @@ pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
 
 /// The body of `getqflist()` and `getloclist()`: with no `what` argument the
 /// answer is the list of entries, otherwise the dictionary `what` asks for.
-///
-/// # Safety
-///
-/// `result` must be live.
-unsafe fn get_qf_loc_list(
+fn get_qf_loc_list(
     is_qf: bool,
     window: Option<Win>,
     what_arg: Option<&TypVal>,
@@ -182,14 +170,12 @@ unsafe fn get_qf_loc_list(
 
 /// `getloclist({winnr} [, {what}])`.
 pub fn f_getloclist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's argument array holds at least two values.
-    unsafe { get_qf_loc_list(false, find_win_by_nr_or_id(&args[0]), args.get(1), result) };
+    get_qf_loc_list(false, find_win_by_nr_or_id(&args[0]), args.get(1), result);
 }
 
 /// `getqflist([{what}])`.
 pub fn f_getqflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's argument array holds at least one value.
-    unsafe { get_qf_loc_list(true, None, args.first(), result) }
+    get_qf_loc_list(true, None, args.first(), result)
 }
 
 /// The body of `setqflist()` and `setloclist()`: a list of entries, an

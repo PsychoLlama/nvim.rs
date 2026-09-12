@@ -315,13 +315,7 @@ pub(crate) fn do_incsearch_highlighting(
 }
 
 /// Do the `'incsearch'` preview, if it is wanted here.
-///
-/// # Safety
-///
-/// `s` must still be live: the incremental-search state it names is the
-/// caller's own, and nothing may have left the command line since it was
-/// taken.
-pub(crate) unsafe fn may_do_incsearch_highlighting(
+pub(crate) fn may_do_incsearch_highlighting(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
     mut s: Is,
@@ -337,7 +331,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 
     if !do_incsearch_highlighting(firstc, &mut search_delim, s, &mut skiplen, &mut patlen) {
         restore_last_search_pattern();
-        unsafe { finish_incsearch_highlighting(false, s, true) };
+        finish_incsearch_highlighting(false, s, true);
         return;
     }
 
@@ -498,13 +492,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 /// `*c`.
 ///
 /// Answers `Ok` when the caller should treat the key as unchanged.
-///
-/// # Safety
-///
-/// `s` must still be live: the incremental-search state it names is the
-/// caller's own, and nothing may have left the command line since it was
-/// taken.
-pub(crate) unsafe fn may_add_char_to_search(
+pub(crate) fn may_add_char_to_search(
     firstc: ::core::ffi::c_int,
     c: &mut ::core::ffi::c_int,
     s: Is,
@@ -571,17 +559,7 @@ pub(crate) unsafe fn may_add_char_to_search(
 
 /// Undo the preview: put the cursor and the view back where the command line
 /// found them, and clear the match highlight.
-///
-/// # Safety
-///
-/// `s` must still be live: the incremental-search state it names is the
-/// caller's own, and nothing may have left the command line since it was
-/// taken.
-pub(crate) unsafe fn finish_incsearch_highlighting(
-    gotesc: bool,
-    mut s: Is,
-    call_update_screen: bool,
-) {
+pub(crate) fn finish_incsearch_highlighting(gotesc: bool, mut s: Is, call_update_screen: bool) {
     if !s.did_incsearch {
         return;
     }
@@ -620,13 +598,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
 ///
 /// Answers `Ok` when there was no incremental search to move, `Err`
 /// otherwise (which is what tells the key loop the line did not change).
-///
-/// # Safety
-///
-/// `s` must still be live: the incremental-search state it names is the
-/// caller's own, and nothing may have left the command line since it was
-/// taken.
-pub(crate) unsafe fn may_do_command_line_next_incsearch(
+pub(crate) fn may_do_command_line_next_incsearch(
     firstc: ::core::ffi::c_int,
     count: ::core::ffi::c_int,
     mut s: Is,

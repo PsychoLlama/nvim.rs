@@ -697,7 +697,7 @@ fn write_one_buffer(
     } else {
         let bufref = BufRef::of(buffer);
         if unsafe { handle_mkdir_p_arg(args, buffer.b_fname) }.is_err()
-            || unsafe { buf_write_all(buffer, args.forceit != 0) }.is_err()
+            || buf_write_all(buffer, args.forceit != 0).is_err()
         {
             *error += 1;
         }
@@ -819,17 +819,15 @@ pub unsafe fn getfile(
 
     // Don't wait for the autowrite message. Released at two exits.
     let mut no_prompt = other.then(Suppress::wait_return);
-    // SAFETY: `curbuf` is the live current buffer.
     if other
         && !forceit
         && Buf::current().b_nwindows == 1
         && !buf_hide(Buf::current())
         && curbuf_is_changed()
-        && unsafe { autowrite(Buf::current(), forceit) }.is_err()
+        && autowrite(Buf::current(), forceit).is_err()
     {
         if p_confirm.get() != 0 && p_write.get() != 0 {
-            // SAFETY: as above.
-            unsafe { dialog_changed(Buf::current(), false) };
+            dialog_changed(Buf::current(), false);
         }
         if curbuf_is_changed() {
             drop(no_prompt.take());

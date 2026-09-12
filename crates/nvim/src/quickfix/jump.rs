@@ -96,7 +96,7 @@ unsafe fn qf_jump_edit_buffer(
     let opened = if qf_ptr.qf_type == 1 {
         // A help file: `do_ecmd` sets 'buftype', `readfile` sets
         // 'readonly'.
-        if !unsafe { can_abandon(Buf::current(), forceit != 0) } {
+        if !can_abandon(Buf::current(), forceit != 0) {
             no_write_message();
             return Jumped::Restore;
         }

@@ -186,12 +186,7 @@ pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int)
     // An `<expr>` evaluation can redefine -- and so free -- the abbreviation,
     // which is why nothing below reads `mp` once it has run; the stored text
     // is only borrowed on the path where no Vimscript runs at all.
-    let evaluated = if expr {
-        // SAFETY: `mp` is still linked — nothing above can have run Vimscript.
-        unsafe { eval_map_expr(mp, c) }
-    } else {
-        None
-    };
+    let evaluated = if expr { eval_map_expr(mp, c) } else { None };
     if let Some(s) = if expr {
         evaluated.as_ref()
     } else {
@@ -223,10 +218,7 @@ pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int)
 ///
 /// Careful: after this `mp` is invalid if the mapping was deleted.  `c` is
 /// NUL, or the typed character for an abbreviation.
-///
-/// # Safety
-/// `mp` must be a live mapblock, and `curwin` a live window.
-pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
+pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     let luaref = mp.luaref();
     // Remove the escaping of K_SPECIAL: `m_str` is in the format used for
     // typeahead, not the one the expression is written in.  `vim_unescape_ks`

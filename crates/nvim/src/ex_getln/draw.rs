@@ -90,7 +90,7 @@ pub(crate) unsafe fn correct_screencol(
 /// — or stars, when `cmdline_star` is set.
 pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
     let mut cc = Cc::current();
-    if !cc.in_use() || !unsafe { color_cmdline(cc) } {
+    if !cc.in_use() || !color_cmdline(cc) {
         return;
     }
 

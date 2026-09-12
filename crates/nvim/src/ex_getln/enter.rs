@@ -437,7 +437,7 @@ pub(crate) fn command_line_enter(
             // A previous cmdline_pum_remove() may have deferred redraw.
             pum_check_clear();
         }
-        unsafe { wildmenu_cleanup(cc) };
+        wildmenu_cleanup(cc);
         s.did_wild_list = false;
         s.wim_index = 0;
 
@@ -445,7 +445,7 @@ pub(crate) fn command_line_enter(
         cc.xpc = ::core::ptr::null_mut::<Expand>();
         clear_cmdline_orig();
 
-        unsafe { finish_incsearch_highlighting(s.gotesc, s.is_state(), false) };
+        finish_incsearch_highlighting(s.gotesc, s.is_state(), false);
 
         if cc.in_use() {
             // Put the line in the history buffer (":" and "=" only when

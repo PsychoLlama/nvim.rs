@@ -487,7 +487,7 @@ pub(crate) unsafe fn ex_endtry(args: *mut ExArg) {
         // Script termination is unaffected, since "trylevel" is
         // decremented only after `emsg` has been called.
         if did_throw.get() {
-            unsafe { discard_current_exception() };
+            discard_current_exception();
         }
         // Report eap->errmsg even if there already was an error.
         did_emsg.set(0);
@@ -693,7 +693,7 @@ pub(crate) unsafe fn leave_cleanup(csp: *mut Cleanup) {
         // If an error was about to become an exception when
         // `enter_cleanup` was called, free the message list.
         if !msg_list.get().is_null() {
-            unsafe { free_global_msglist() };
+            free_global_msglist();
         }
         return;
     }

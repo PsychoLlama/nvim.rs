@@ -539,11 +539,7 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
 /// Free entry `idx`'s name and close the gap it leaves. The caller fixes
 /// `w_arg_idx` itself: `:argdelete` and `:argdedupe` disagree about where a
 /// cursor sitting on the removed entry should land.
-///
-/// # Safety
-///
-/// `idx` must be an entry of the current window's argument list.
-unsafe fn remove_arg(idx: c_int) {
+fn remove_arg(idx: c_int) {
     // SAFETY: caller contract -- `idx` names an entry, which owns its name.
     let gone = unsafe { cur_arglist() }.remove(as_count(idx));
     unsafe { xfree(gone.ae_fname.cast()) };
@@ -566,9 +562,7 @@ unsafe fn delete_matching_args(regmatch: *mut RegMatch) -> bool {
             continue;
         }
         didone = true;
-        // SAFETY: `i` is in range; the removal shifts the tail down one
-        // slot, so `i` stays put to re-examine what moved into it.
-        unsafe { remove_arg(i) };
+        remove_arg(i);
         if cur_arg_idx() > i {
             set_cur_arg_idx(cur_arg_idx() - 1);
         }

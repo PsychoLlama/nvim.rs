@@ -83,10 +83,7 @@ impl Filling {
 /// The arena here is this call's own scratch: `str2special_arena` and the
 /// mode buffer are intermediates the dictionary copies out of, so the whole
 /// chain is released before the answer leaves.
-///
-/// # Safety
-/// `mp` must be a live mapblock.
-pub(crate) unsafe fn mapblock_fill_dict(
+pub(crate) fn mapblock_fill_dict(
     mp: Mb,
     lhsrawalt: Option<&MapStr>,
     buffer_value: c_int,
@@ -184,10 +181,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
 }
 
 /// The body of `maparg()` and `mapcheck()`: `exact` is what tells them apart.
-///
-/// # Safety
-/// The Vimscript call convention: `args` is a live argument vector.
-unsafe fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
+fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise — `result` is the writable answer slot.
     let mut ret = unsafe { Live::new(result) };
@@ -338,15 +332,12 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `maparg()`.
 pub fn f_maparg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY (this body): the Vimscript call convention, passed straight
-    // through.
-    unsafe { get_maparg(args, result, true) }
+    get_maparg(args, result, true)
 }
 
 /// `mapcheck()`.
 pub fn f_mapcheck(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY (this body): as [`f_maparg`].
-    unsafe { get_maparg(args, result, false) }
+    get_maparg(args, result, false)
 }
 
 /// The mode a mode-shortname string names, and how much of it was consumed.
@@ -382,10 +373,7 @@ pub(crate) unsafe fn parse_shortname_mode(mode: &String_0) -> (c_int, bool, *mut
 ///
 /// `buf` is the buffer whose local mappings to report, or `None` for the
 /// global ones.
-///
-/// # Safety
-/// The mapping tables must be live.
-pub unsafe fn keymap_array(mode: String_0, buffer: Option<Buf>) -> Array {
+pub fn keymap_array(mode: String_0, buffer: Option<Buf>) -> Array {
     // SAFETY: the caller's promise — `mode` is a live API string.
     let (int_mode, is_abbrev, _) = unsafe { parse_shortname_mode(&mode) };
     let buffer_value = buffer.map_or(0, |buf| buf.handle as c_int);

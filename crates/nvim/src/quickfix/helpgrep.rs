@@ -30,11 +30,7 @@ const HELP_FILES: &[u8] = br"doc/*.\(txt\|??x\)";
 /// there is one, and otherwise a fresh stack — which the caller is told
 /// about through `new_ll`, because it has to free it again if nothing ends
 /// up pointing at it.
-///
-/// # Safety
-///
-/// There must be a current window.
-unsafe fn hgr_get_ll(new_ll: &mut bool) -> Qi {
+fn hgr_get_ll(new_ll: &mut bool) -> Qi {
     // SAFETY: the caller's promise -- a current window.
     let wp = if is_help_buffer(Win::current()) {
         Some(Win::current())
@@ -219,7 +215,7 @@ pub unsafe fn ex_helpgrep(args: *mut ExArg) {
 
     let mut new_qi = false;
     if is_loclist_cmd(args.cmdidx) {
-        qi = unsafe { hgr_get_ll(&mut new_qi) };
+        qi = hgr_get_ll(&mut new_qi);
     }
 
     incr_quickfix_busy();

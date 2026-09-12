@@ -118,18 +118,15 @@ fn forget_jumps(win: Win, fnum: c_int) {
     mark_jumplist_forget_file(win, fnum);
 }
 fn may_abandon(buffer: Buf, forceit: bool) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { can_abandon(buffer, forceit) }
+    can_abandon(buffer, forceit)
 }
 
 /// The "save changes?" dialog. Re-enters, and may free the buffer.
 fn ask_about_changes(buffer: Buf) {
-    // SAFETY: a live buffer; `false` is upstream's `checkall`.
-    unsafe { dialog_changed(buffer, false) };
+    dialog_changed(buffer, false);
 }
 fn ask_about_terminal(buffer: Buf) -> bool {
-    // SAFETY: a live buffer with a live terminal.
-    unsafe { dialog_close_terminal(buffer) }
+    dialog_close_terminal(buffer)
 }
 fn terminal_alive(buffer: Buf) -> bool {
     // SAFETY: a live terminal, the caller having ruled out null.

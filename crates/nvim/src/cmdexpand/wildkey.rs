@@ -68,12 +68,7 @@ pub(crate) unsafe fn wildmenu_translate_key(
 }
 
 /// Delete characters on the command line, from `from` to the current position.
-///
-/// # Safety
-///
-/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
-/// for the call.
-unsafe fn cmdline_del(mut cclp: Cc, from: c_int) {
+fn cmdline_del(mut cclp: Cc, from: c_int) {
     debug_assert!(cclp.cmdpos <= cclp.len());
     // +1 for the NUL.
     unsafe {
@@ -144,7 +139,7 @@ unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, expand: *mut Expa
         }
     }
     if i > 0 {
-        unsafe { cmdline_del(cclp, i) };
+        cmdline_del(cclp, i);
     }
     expand.xp_context = ExpandContext::Nothing;
     recomplete()
@@ -205,7 +200,7 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: *mut Expa
             && at(j - 2) == b'.' as c_char
             && (vim_ispathsep(at(j - 3) as c_int) || j == start + 2)
         {
-            unsafe { cmdline_del(cclp, j - 2) };
+            cmdline_del(cclp, j - 2);
             return recomplete();
         }
         return key;
@@ -248,10 +243,10 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, expand: *mut Expa
     if j > 0 {
         // TODO(tarruda): this is only for DOS/Unix systems - need to put
         // in machine-specific stuff here and in UPSEG.
-        unsafe { cmdline_del(cclp, j) };
+        cmdline_del(cclp, j);
         unsafe { put_on_cmdline(UPSEG_TAIL.as_ptr().cast_mut(), 3, false) };
     } else if cclp.cmdpos > i {
-        unsafe { cmdline_del(cclp, i) };
+        cmdline_del(cclp, i);
     }
 
     // Now complete in the new directory.
@@ -286,12 +281,7 @@ pub(crate) unsafe fn wildmenu_process_key(cclp: Cc, key: c_int, expand: *mut Exp
 /// Which of the three ways it went up decides how it comes down: it either
 /// scrolled the command line, borrowed the status line by forcing
 /// `'laststatus'`, or drew over the last window's existing status line.
-///
-/// # Safety
-///
-/// `cclp` must be an initialized `Cc` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn wildmenu_cleanup(cclp: Cc) {
+pub(crate) fn wildmenu_cleanup(cclp: Cc) {
     if p_wmnu.get() == 0 || wild_menu_showing.get() == 0 {
         return;
     }

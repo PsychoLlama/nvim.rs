@@ -143,12 +143,7 @@ enum Label {
 ///
 /// Answers true if [`super::draw::draw_cmdline`] may proceed, false if there
 /// is nothing for it to do.
-///
-/// # Safety
-///
-/// `colored_ccline` must be an initialized `Cc` whose pointer fields point at
-/// live data for the call.
-pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
+pub(crate) fn color_cmdline(colored_ccline: Cc) -> bool {
     let mut numbuf = NumBuf::new();
     let mut printed_errmsg = false;
 

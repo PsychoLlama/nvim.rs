@@ -790,8 +790,7 @@ fn search_path(pat: *mut c_char, len: size_t, kind: c_int, skip_comments: bool, 
 
 /// Open the quickfix entry under the cursor in a new split.
 fn view_quickfix_result() {
-    // SAFETY: reads the quickfix list of the current window.
-    unsafe { qf_view_result(true) };
+    qf_view_result(true);
 }
 
 /// `semsg(_(fmt), n)`, for the one error that names a buffer number.

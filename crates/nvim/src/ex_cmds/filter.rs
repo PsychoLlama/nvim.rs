@@ -104,9 +104,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
         // ":!" -- the shell may look at the files on disk, so 'autowriteall'
         // gets to put them there first.  Don't scroll here.
         msg_scroll.set(0);
-        // SAFETY: main thread; writing every changed buffer is re-entrant but
-        // holds no state of ours.
-        unsafe { autowrite_all() };
+        autowrite_all();
         msg_scroll.set(scroll_save);
     }
 

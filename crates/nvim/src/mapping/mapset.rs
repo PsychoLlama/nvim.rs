@@ -196,7 +196,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let unmap_lhs = MAPTYPE_UNMAP_LHS as c_int;
     let cur = Buf::current();
     // SAFETY: as above.
-    unsafe { buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur) };
+    buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur);
     drop(unmap_args);
 
     let mut mp_result: [*mut MapBlock; 2] = [ptr::null_mut(); 2];
@@ -378,12 +378,7 @@ pub unsafe fn modify_keymap(
             MAPTYPE_MAP as c_int
         };
 
-        // SAFETY: `target_buf` is the live buffer `find_buffer_by_handle`
-        // answered.
-        let answer = unsafe {
-            let target = target_buf;
-            buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev, target)
-        };
+        let answer = buf_do_map(maptype_val, &parsed_args, mode_val, is_abbrev, target_buf);
         // The four "already exists" texts hold a `%s`, so their literals are
         // written out here rather than shared with `domap`'s copies, which
         // still hand them to a `printf`.

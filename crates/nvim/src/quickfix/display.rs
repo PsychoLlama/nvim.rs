@@ -485,11 +485,7 @@ fn numbered(name: &[u8], nr: c_int) -> CString {
 
 /// Open the entry under the cursor in the quickfix window, in a new window
 /// when `split`.
-///
-/// # Safety
-///
-/// Must be called from a quickfix or location list window.
-pub unsafe fn qf_view_result(split: bool) {
+pub fn qf_view_result(split: bool) {
     let in_ll_window = is_ll_window(Win::current());
     // SAFETY: a location list window always references a live stack, which
     // is what `is_ll_window` just established.

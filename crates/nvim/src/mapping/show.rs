@@ -29,10 +29,7 @@ static EXPAND_BUFFER: GlobalCell<bool> = GlobalCell::new(false);
 /// Print one mapping in `:map`'s four columns: modes, LHS, flags, RHS.
 ///
 /// `local` marks a buffer-local mapping with `@`.
-///
-/// # Safety
-/// `mp` must be a live mapblock.
-pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
+pub(crate) fn showmap(mp: Mb, local: bool) {
     let rhs = &mp.m_rhs;
     let filtered = message_filtered(mp.m_keys.as_cstr())
         && message_filtered(rhs.str.as_cstr())

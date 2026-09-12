@@ -142,8 +142,7 @@ pub(crate) unsafe fn cause_errthrow(
         if unsafe { (*current_exception.get()).type_0 } == ET_INTERRUPT {
             got_int.set(false);
         }
-        // SAFETY: as above.
-        unsafe { discard_current_exception() };
+        discard_current_exception();
     }
 
     // Prepare the throw: everything but the finally clauses is aborted until
@@ -223,10 +222,7 @@ unsafe fn free_msglist(l: *mut MsgList) {
 }
 
 /// Free the global `*msg_list` and clear it.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn free_global_msglist() {
+pub(crate) fn free_global_msglist() {
     // SAFETY: module contract.
     unsafe { free_msglist(*msg_list.get()) };
     unsafe { *msg_list.get() = ptr::null_mut() };
@@ -282,7 +278,7 @@ pub(crate) unsafe fn do_intthrow(cstack: *mut CondStack) -> bool {
             return false;
         }
         // Otherwise it replaces the user or error exception.
-        unsafe { discard_current_exception() };
+        discard_current_exception();
     }
     if unsafe {
         throw_exception(
@@ -545,10 +541,7 @@ pub(super) unsafe fn discard_exception(excp: *mut Exception, was_finished: bool)
 }
 
 /// Discard the exception currently being thrown.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn discard_current_exception() {
+pub(crate) fn discard_current_exception() {
     if !current_exception.get().is_null() {
         // SAFETY: module contract.
         unsafe { discard_exception(current_exception.get(), false) };

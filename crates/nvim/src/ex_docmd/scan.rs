@@ -214,7 +214,7 @@ pub(crate) fn skip_grep_pat(ea: Ea) -> *mut c_char {
         || cmdidx == CmdIdx::lvimgrep
         || cmdidx == CmdIdx::vimgrepadd
         || cmdidx == CmdIdx::lvimgrepadd
-        || unsafe { grep_internal(ea.cmdidx) };
+        || grep_internal(ea.cmdidx);
     if byte(ea.arg) == NUL || !is_grep {
         return ea.arg;
     }

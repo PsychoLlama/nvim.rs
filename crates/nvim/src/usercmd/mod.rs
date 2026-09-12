@@ -182,10 +182,7 @@ impl Scope {
 }
 
 /// A command's name.
-///
-/// # Safety
-/// As [`ucmd_list`]: `cmd` must be a live entry of one of the tables.
-pub(crate) unsafe fn ucmd_name(cmd: &UserCmd) -> &[u8] {
+pub(crate) fn ucmd_name(cmd: &UserCmd) -> &[u8] {
     // SAFETY: caller contract; `uc_name` is NUL-terminated for the life of
     // the entry.
     unsafe { CStr::from_ptr(cmd.uc_name).to_bytes() }
@@ -229,8 +226,7 @@ pub(crate) unsafe fn find_ucmd(
         let cmds = unsafe { scope.list() };
         let mut exact = false;
         for (j, uc) in cmds.iter().enumerate() {
-            // SAFETY: module contract.
-            let name = unsafe { ucmd_name(uc) };
+            let name = ucmd_name(uc);
             let (k, at_nul) = match_prefix(typed, name);
             // A match up to a digit means there may be another command
             // *including* the digit that should be preferred.
@@ -393,8 +389,7 @@ pub(crate) unsafe fn uc_add_command(
     let mut replacing = false;
     // SAFETY: module contract; the borrow ends with the walk.
     for cmd in unsafe { table.list() } {
-        // SAFETY: module contract.
-        match new_name.cmp(unsafe { ucmd_name(cmd) }) {
+        match new_name.cmp(ucmd_name(cmd)) {
             Ordering::Equal => {
                 replacing = true;
                 break;
@@ -626,11 +621,9 @@ pub(crate) unsafe fn ex_command(args: *mut ExArg) {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn ex_comclear(_args: *mut ExArg) {
-    // SAFETY: module contract.
-    unsafe { uc_clear(Table::Global) };
+    uc_clear(Table::Global);
     if let Some(buffer) = Buf::current_or_none() {
-        // SAFETY: module contract.
-        unsafe { uc_clear(Table::Buffer(buffer)) };
+        uc_clear(Table::Buffer(buffer));
     }
 }
 
@@ -658,10 +651,7 @@ unsafe fn free_ucmd(mut cmd: UserCmd) {
 /// The entries are moved out first and released afterwards: `free_ucmd`
 /// re-enters Lua, so it must not run with the table borrowed, and a table
 /// that has been emptied cannot free the same entry twice.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn uc_clear(table: Table) {
+pub(crate) fn uc_clear(table: Table) {
     // `mem::take` cannot re-enter.
     let cmds = table.with_mut(mem::take);
     for cmd in cmds {
@@ -702,8 +692,7 @@ pub(crate) unsafe fn ex_delcommand(args: *mut ExArg) {
         };
         idx = 0;
         for cmd in cmds {
-            // SAFETY: module contract.
-            res = wanted.cmp(unsafe { ucmd_name(cmd) });
+            res = wanted.cmp(ucmd_name(cmd));
             if res != Ordering::Greater {
                 break;
             }

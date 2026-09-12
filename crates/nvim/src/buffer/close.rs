@@ -135,11 +135,7 @@ fn free_extmarks(buffer: Buf) {
 }
 
 fn free_user_commands(buffer: Buf) {
-    // SAFETY: a live buffer. `uc_clear` leaves the table empty and usable,
-    // which is what the buffers that outlive this -- `:bdel`'s, and the
-    // `curbuf` `buflist_new` reuses -- need.
-    // SAFETY: module contract.
-    unsafe { uc_clear(Table::Buffer(buffer)) };
+    uc_clear(Table::Buffer(buffer));
 }
 
 fn free_garray(ga: &mut GArray) {

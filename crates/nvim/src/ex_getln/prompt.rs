@@ -87,17 +87,7 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
 /// either a single `{opts}` dict or up to three positional arguments, whose
 /// third means completion for `input()` and the cancel value for
 /// `inputdialog()`.
-///
-/// # Safety
-///
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn get_user_input(
-    args: &[TypVal],
-    result: &mut TypVal,
-    inputdialog: bool,
-    secret: bool,
-) {
+pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, secret: bool) {
     (*result).write_string(::core::ptr::null_mut::<::core::ffi::c_char>());
 
     if cmdpreview.get() {

@@ -469,11 +469,7 @@ pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
 }
 
 /// Process the `'quickfixtextfunc'` option value.
-///
-/// # Safety
-///
-/// Called by the option code with a live `OptSet`.
-pub unsafe fn did_set_quickfixtextfunc(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_quickfixtextfunc(_args: &mut OptSet) -> Option<&CStr> {
     let (value, cb) = (p_qftf.get(), global_qftf());
     // SAFETY: the option's own value and its callback slot.
     if unsafe { option_set_callback_func(value, cb) }.is_err() {

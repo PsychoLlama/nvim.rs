@@ -94,11 +94,7 @@ pub(crate) unsafe fn ex_bunload(args: *mut ExArg) {
 /// Answers `true` when the quit must be abandoned. An autocommand can
 /// close the window, lock the buffer or start a text operation, so both
 /// events are followed by the same three-part re-validation.
-///
-/// # Safety
-/// `window` must be a live window on entry. It need not survive the call: the
-/// autocommands may close it, which is what `quit_was_cancelled` is for.
-pub(crate) unsafe fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -> bool {
+pub(crate) fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -> bool {
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
     if byte(get_vim_var_str(Vv::Exitreason)) == NUL {
@@ -178,8 +174,7 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
         return;
     }
     let wp = wp.expect("`:quit` resolves to a window");
-    // SAFETY: `wp` is the window this `:quit` resolved to.
-    if unsafe { before_quit_autocmds(wp, false, args.forceit != 0) } {
+    if before_quit_autocmds(wp, false, args.forceit != 0) {
         return;
     }
 
@@ -190,20 +185,18 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
     // The three refusals: unsaved changes in this buffer, files left in
     // the argument list, unsaved changes anywhere else.
     if !buf_hide(wp.buffer())
-        && unsafe {
-            check_changed(
-                wp.buffer(),
-                (if p_awa.get() != 0 {
-                    CCGD_AW as c_int
-                } else {
-                    0
-                }) | (if args.forceit != 0 {
-                    CCGD_FORCEIT as c_int
-                } else {
-                    0
-                }) | CCGD_EXCMD as c_int,
-            )
-        }
+        && check_changed(
+            wp.buffer(),
+            (if p_awa.get() != 0 {
+                CCGD_AW as c_int
+            } else {
+                0
+            }) | (if args.forceit != 0 {
+                CCGD_FORCEIT as c_int
+            } else {
+                0
+            }) | CCGD_EXCMD as c_int,
+        )
         || check_more(true, args.forceit != 0) == FAIL
         || only_one_window() && check_changed_any(args.forceit != 0, true)
     {
@@ -280,8 +273,7 @@ pub unsafe fn before_quit_all(args: *mut ExArg) -> Result<(), Failed> {
         text_locked_msg();
         return Err(Failed);
     }
-    // SAFETY: `curwin` is set from startup to exit.
-    if unsafe { before_quit_autocmds(Win::current(), true, args.forceit != 0) } {
+    if before_quit_autocmds(Win::current(), true, args.forceit != 0) {
         return Err(Failed);
     }
     Ok(())
@@ -383,9 +375,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     if need_hide && !buffer.is_some_and(buf_hide) && forceit == 0 {
         if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0 {
             let bufref = BufRef::of_opt(buffer);
-            // SAFETY: a live buffer; the dialog may wipe it, which is what
-            // the reference above is for.
-            unsafe { dialog_changed(buffer.expect("checked above"), false) };
+            dialog_changed(buffer.expect("checked above"), false);
             // The dialog may have wiped the buffer, or written it.
             buffer = bufref.get();
             if buffer.is_some_and(buf_is_changed) {
@@ -628,7 +618,7 @@ pub(crate) unsafe fn ex_hide(args: *mut ExArg) {
 pub(crate) unsafe fn ex_stop(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if args.forceit == 0 {
-        unsafe { autowrite_all() };
+        autowrite_all();
     }
     may_trigger_vim_suspend_resume(true);
     ui_call_suspend();
@@ -655,10 +645,8 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
         exiting.set(true);
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
-    if (args.cmdidx == CmdIdx::wq || curbuf_is_changed())
-        && do_write(&mut args).is_err()
-        // SAFETY: `curwin` is set from startup to exit.
-        || unsafe { before_quit_autocmds(Win::current(), false, args.forceit != 0) }
+    if (args.cmdidx == CmdIdx::wq || curbuf_is_changed()) && do_write(&mut args).is_err()
+        || before_quit_autocmds(Win::current(), false, args.forceit != 0)
         || check_more(true, args.forceit != 0) == FAIL
         || only_one_window() && check_changed_any(args.forceit != 0, false)
     {
@@ -701,8 +689,7 @@ fn buf_hide(buffer: Buf) -> bool {
 
 /// `check_changed_any()` as checked code.
 fn check_changed_any(hidden: bool, unload: bool) -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ex_cmds2::check_changed_any(hidden, unload) }
+    crate::ex_cmds2::check_changed_any(hidden, unload)
 }
 
 /// `check_more()` as checked code.

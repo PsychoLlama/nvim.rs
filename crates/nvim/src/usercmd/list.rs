@@ -132,8 +132,7 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
                 interrupted = true;
                 break;
             }
-            // SAFETY: module contract.
-            unsafe { list_one(cmd, scope, name_len) };
+            list_one(cmd, scope, name_len);
             line_breakcheck();
             if got_int.get() {
                 interrupted = true;
@@ -151,10 +150,7 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
 }
 
 /// One command's row, from the flag column to the definition.
-///
-/// # Safety
-/// Module contract.
-unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
+fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
     let mut middle = [0 as c_char; IOSIZE as usize];
     let a = cmd.uc_argt;
     // The flag column is right-aligned in four cells.
@@ -176,7 +172,7 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
 
     msg_display(unsafe { cstr::at(cmd.uc_name) }, HLF_D, false);
     // The name column is 17 wide; a longer name pushes the rest left.
-    let mut len = unsafe { ucmd_name(cmd) }.len() + 4;
+    let mut len = ucmd_name(cmd).len() + 4;
     if len < 21 {
         // Field padding spaces   12345678901234567
         static SPACES: &[u8] = b"                 \0";
@@ -268,10 +264,7 @@ fn dict_of<const N: usize>(
 
 /// `nvim_get_commands()`: every user command of `buffer`, or every global one
 /// when `buffer` is null, as a map from name to description.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn commands_array(buffer: Option<Buf>) -> ApiDict {
+pub(crate) fn commands_array(buffer: Option<Buf>) -> ApiDict {
     let table = buffer.map_or(Table::Global, Table::Buffer);
     // SAFETY: caller contract; nothing below adds or removes a command.
     let cmds = unsafe { table.list() };
@@ -286,10 +279,7 @@ pub(crate) unsafe fn commands_array(buffer: Option<Buf>) -> ApiDict {
 
 /// One command as the API describes it. The key order is upstream's and is
 /// what the wire format carries.
-///
-/// # Safety
-/// Module contract.
-unsafe fn describe(cmd: &UserCmd) -> ApiDict {
+fn describe(cmd: &UserCmd) -> ApiDict {
     let a = cmd.uc_argt;
     // SAFETY: module contract; the entry owns each reference, and
     // `api_new_luaref` takes a fresh one for the caller to own.

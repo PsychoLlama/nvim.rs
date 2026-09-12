@@ -13,12 +13,7 @@ use crate::cstr;
 
 /// Send `cmdline_show` for one command line: its content as
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
-///
-/// # Safety
-///
-/// `line` must be an initialized `Cc` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
+pub(crate) fn ui_ext_cmdline_show(line: Cc) {
     let mut content: Array;
     if cmdline_star.get() != 0 {
         // Obscured (`inputsecret()`): one '*' per *character*.
@@ -212,8 +207,7 @@ pub fn cmdline_ui_flush() {
             line.redraw_state = kCmdRedrawNone;
             if redraw_state == kCmdRedrawAll {
                 cmdline_was_last_drawn.set(true);
-                // SAFETY: a live command line, from `cmdline_at`.
-                unsafe { ui_ext_cmdline_show(line) };
+                ui_ext_cmdline_show(line);
             } else if redraw_state == kCmdRedrawPos && cmdline_was_last_drawn.get() {
                 ui_call_cmdline_pos(line.cmdpos as Integer, line.level as Integer);
             }

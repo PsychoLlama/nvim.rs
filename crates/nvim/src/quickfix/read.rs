@@ -191,18 +191,13 @@ impl Reader {
 
     /// Read the next line from whichever source this is, strip its trailing
     /// newline and any byte-order mark.
-    ///
-    /// # Safety
-    ///
-    /// The source must still be live: the file open, the buffer loaded, the
-    /// Vimscript value not yet freed.
-    unsafe fn next_line(&mut self) -> Status {
+    fn next_line(&mut self) -> Status {
         let status = match self.source {
             // SAFETY: forwarded from the caller.
             Source::File(fd) => unsafe { self.read_file(fd) },
-            Source::Buffer { .. } => unsafe { self.read_buffer() },
-            Source::List(..) => unsafe { self.read_list() },
-            Source::Text(_) => unsafe { self.read_text() },
+            Source::Buffer { .. } => self.read_buffer(),
+            Source::List(..) => self.read_list(),
+            Source::Text(_) => self.read_text(),
             Source::Unusable => Status::Fail,
         };
         if status != Status::Ok {
@@ -218,11 +213,7 @@ impl Reader {
     }
 
     /// One line from a Vimscript string, up to and including its newline.
-    ///
-    /// # Safety
-    ///
-    /// The string must be NUL-terminated and still allocated.
-    unsafe fn read_text(&mut self) -> Status {
+    fn read_text(&mut self) -> Status {
         let Source::Text(at) = self.source else {
             unreachable!()
         };
@@ -247,11 +238,7 @@ impl Reader {
 
     /// One line from a Vimscript list. Entries that are not strings are
     /// skipped.
-    ///
-    /// # Safety
-    ///
-    /// The list items must still be allocated.
-    unsafe fn read_list(&mut self) -> Status {
+    fn read_list(&mut self) -> Status {
         let Source::List(list, mut at) = self.source else {
             unreachable!()
         };
@@ -275,11 +262,7 @@ impl Reader {
     }
 
     /// One line of the buffer range.
-    ///
-    /// # Safety
-    ///
-    /// The buffer must be loaded.
-    unsafe fn read_buffer(&mut self) -> Status {
+    fn read_buffer(&mut self) -> Status {
         let Source::Buffer { buf, lnum, last } = self.source else {
             unreachable!()
         };
@@ -571,7 +554,7 @@ unsafe fn read_lines(qfl: *mut QfList, reader: &mut Reader, efm: &mut Efm) -> bo
     got_int.set(false);
     // SAFETY: forwarded from the caller.
     while !got_int.get() {
-        match unsafe { reader.next_line() } {
+        match reader.next_line() {
             Status::EndOfInput => break,
             Status::Ok => {}
             _ => return false,

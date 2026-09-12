@@ -78,7 +78,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
         return false;
     }
     // SAFETY: the global variable dict is live on the main thread.
-    if opts.has(kOptSsopFlagGlobals) && !unsafe { store_session_globals(out) } {
+    if opts.has(kOptSsopFlagGlobals) && !store_session_globals(out) {
         return false;
     }
 
@@ -114,7 +114,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     // Put every buffer into the buffer list, very early, so that loading the
     // session cannot disturb their order.
     // SAFETY: the buffer list is live.
-    if !unsafe { put_buffer_list(out, only_save_windows) } {
+    if !put_buffer_list(out, only_save_windows) {
         return false;
     }
 
@@ -152,7 +152,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     let mut restore_height_width = false;
     // SAFETY: the tab page and window lists are live; `put_tabs` runs no
     // Vimscript, so nothing can change them under it.
-    if !unsafe { put_tabs(out, &mut restore_height_width) } {
+    if !put_tabs(out, &mut restore_height_width) {
         return false;
     }
 
@@ -233,10 +233,7 @@ unsafe fn put_cd(out: SessionFile, dirnow: *mut c_char) -> bool {
 }
 
 /// One `badd +<lnum> <name>` per buffer worth restoring.
-///
-/// # Safety
-/// The buffer list is live.
-unsafe fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
+fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
     let opts = SessionOpts::Session;
     // SAFETY: caller contract; each buffer's window info is its own kvec.
     for buf in buffers() {
@@ -251,9 +248,7 @@ unsafe fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
             } else {
                 unsafe { (**buf.b_wininfo.items).wi_mark.mark.lnum as int64_t }
             };
-            if !out.write(format_args!("badd +{lnum} "))
-                || !unsafe { ses_fname(out, buf, opts, true) }
-            {
+            if !out.write(format_args!("badd +{lnum} ")) || !ses_fname(out, buf, opts, true) {
                 return false;
             }
         }
@@ -264,10 +259,7 @@ unsafe fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
 /// The per-tab-page pass: the window layout, the sizes, and one
 /// [`put_view`] per window. When "tabpages" is not in 'sessionoptions' this
 /// does the current tab page only.
-///
-/// # Safety
-/// The tab page and window lists are live.
-unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
+fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
     let opts = SessionOpts::Session;
     let with_tabs = opts.has(kOptSsopFlagTabpages);
 
@@ -324,7 +316,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
                     return false;
                 }
                 need_tabnext = false;
-                if !out.puts(c"edit ") || !unsafe { ses_fname(out, buffer, opts, true) } {
+                if !out.puts(c"edit ") || !ses_fname(out, buffer, opts, true) {
                     return false;
                 }
                 if !window.w_arg_idx_invalid {
@@ -342,7 +334,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             && (!out.line(c"let s:save_splitbelow = &splitbelow")
                 || !out.line(c"let s:save_splitright = &splitright")
                 || !out.line(c"set splitbelow splitright")
-                || !unsafe { ses_win_rec(out, tab_topframe) }
+                || !ses_win_rec(out, tab_topframe)
                 || !out.line(c"let &splitbelow = s:save_splitbelow")
                 || !out.line(c"let &splitright = s:save_splitright"))
         {
@@ -389,7 +381,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             }
             *restore_height_width = true;
         }
-        if nr > 1 && !unsafe { ses_winsizes(out, restore_size, tab) } {
+        if nr > 1 && !ses_winsizes(out, restore_size, tab) {
             return false;
         }
 
@@ -405,16 +397,14 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
         // Each window's view.
         for window in windows_in_tab(tab) {
             if ses_do_win(window) {
-                if !unsafe {
-                    put_view(
-                        out,
-                        window,
-                        tab,
-                        window.raw() != edited_win,
-                        opts,
-                        cur_arg_idx,
-                    )
-                } {
+                if !put_view(
+                    out,
+                    window,
+                    tab,
+                    window.raw() != edited_win,
+                    opts,
+                    cur_arg_idx,
+                ) {
                     return false;
                 }
                 if nr > 1 && !out.line(c"wincmd w") {
@@ -435,7 +425,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
         }
         // And restore the sizes again: jumping around gives the current
         // window a minimum size the others may not have.
-        if nr > 1 && !unsafe { ses_winsizes(out, restore_size, tab) } {
+        if nr > 1 && !ses_winsizes(out, restore_size, tab) {
             return false;
         }
 
@@ -450,10 +440,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
 /// The window sizes for one tab page, as arithmetic against `&lines` and
 /// `&columns`. When a window was omitted the numbers would not add up, so
 /// the sizes are just equalised instead.
-///
-/// # Safety
-/// `tab` is a live tab page.
-unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bool {
+fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bool {
     if !restore_size || !SessionOpts::Session.has(kOptSsopFlagWinsize) {
         return out.line(c"wincmd =");
     }
@@ -492,10 +479,7 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bo
 
 /// Write the splits that recreate the windows of frame `fr`, recursively.
 /// Afterwards the last window in the frame is the current one.
-///
-/// # Safety
-/// Main thread; the buffers of `fr`'s windows are live.
-unsafe fn ses_win_rec(out: SessionFile, fr: FrameRef) -> bool {
+fn ses_win_rec(out: SessionFile, fr: FrameRef) -> bool {
     if fr.fr_layout == FR_LEAF {
         return true;
     }
@@ -504,11 +488,9 @@ unsafe fn ses_win_rec(out: SessionFile, fr: FrameRef) -> bool {
     // Find the first frame that is not skipped, then create a window for
     // each one after it -- the first window is already there.
     let mut count = 0;
-    // SAFETY: caller contract, for every `ses_do_frame` below.
-    let mut frc = unsafe { ses_skipframe(fr.child()) };
+    let mut frc = ses_skipframe(fr.child());
     while let Some(current) = frc {
-        // SAFETY: as above.
-        frc = unsafe { ses_skipframe(current.next()) };
+        frc = ses_skipframe(current.next());
         if frc.is_none() {
             break;
         }
@@ -531,14 +513,10 @@ unsafe fn ses_win_rec(out: SessionFile, fr: FrameRef) -> bool {
     }
 
     // Then recurse into each window of this column or row.
-    // SAFETY: as above.
-    frc = unsafe { ses_skipframe(fr.child()) };
+    frc = ses_skipframe(fr.child());
     while let Some(current) = frc {
-        // SAFETY: as above.
-        unsafe {
-            ses_win_rec(out, current);
-            frc = ses_skipframe(current.next());
-        }
+        ses_win_rec(out, current);
+        frc = ses_skipframe(current.next());
         if frc.is_some() && !out.line(c"wincmd w") {
             return false;
         }
@@ -547,37 +525,26 @@ unsafe fn ses_win_rec(out: SessionFile, fr: FrameRef) -> bool {
 }
 
 /// The first frame at or after `fr` holding a window worth saving.
-///
-/// # Safety
-/// Main thread; the buffers of `fr`'s windows are live.
-unsafe fn ses_skipframe(fr: Option<FrameRef>) -> Option<FrameRef> {
+fn ses_skipframe(fr: Option<FrameRef>) -> Option<FrameRef> {
     let mut frc = fr;
-    // SAFETY: caller contract.
-    while let Some(current) = frc.filter(|frc| !unsafe { ses_do_frame(*frc) }) {
+    while let Some(current) = frc.filter(|frc| !ses_do_frame(*frc)) {
         frc = current.next();
     }
     frc
 }
 
 /// Whether frame `fr` holds a window worth saving anywhere below it.
-///
-/// # Safety
-/// Main thread; the buffers of `fr`'s windows are live.
-unsafe fn ses_do_frame(fr: FrameRef) -> bool {
+fn ses_do_frame(fr: FrameRef) -> bool {
     match fr.win() {
         Some(win) => ses_do_win(win),
-        // SAFETY: as above.
-        None => fr.children().any(|child| unsafe { ses_do_frame(child) }),
+        None => fr.children().any(ses_do_frame),
     }
 }
 
 /// Write the `g:` variables 'sessionoptions' calls sessionable: the Number,
 /// String and Float ones whose name says they belong in a session (an
 /// uppercase first letter and a lowercase one after it).
-///
-/// # Safety
-/// Main thread; the global variable dict is live.
-unsafe fn store_session_globals(out: SessionFile) -> bool {
+fn store_session_globals(out: SessionFile) -> bool {
     // SAFETY: caller contract -- the global variable dictionary is live, so
     // the walk of it is ordinary code.
     let globals = unsafe { &mut *get_globvar_dict() };

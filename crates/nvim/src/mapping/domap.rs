@@ -56,10 +56,7 @@ fn abbrev_lhs_ok(lhs: &MapStr) -> bool {
 
 /// Whether a *global* mapping already claims exactly these keys in any of
 /// `mode`, which is what makes a new `<unique>` buffer-local one fail.
-///
-/// # Safety
-/// The global tables must be live.
-unsafe fn global_map_exists(mode: c_int, lhs: &[u8], is_abbrev: bool) -> bool {
+fn global_map_exists(mode: c_int, lhs: &[u8], is_abbrev: bool) -> bool {
     let clashes = |mp: Mb| {
         if got_int.get() {
             return Some(false);
@@ -77,16 +74,7 @@ unsafe fn global_map_exists(mode: c_int, lhs: &[u8], is_abbrev: bool) -> bool {
 ///
 /// Without `has_lhs` every entry in `mode` is shown; with it, every entry
 /// whose LHS and `lhs` agree as far as the shorter of the two.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-unsafe fn show_buffer_local(
-    buffer: Buf,
-    mode: c_int,
-    lhs: &[u8],
-    has_lhs: bool,
-    is_abbrev: bool,
-) -> bool {
+fn show_buffer_local(buffer: Buf, mode: c_int, lhs: &[u8], has_lhs: bool, is_abbrev: bool) -> bool {
     let mut did_local = false;
     let list = |mp: Mb| {
         if got_int.get() {
@@ -95,8 +83,7 @@ unsafe fn show_buffer_local(
         let show =
             !mp.m_simplified && mp.m_mode & mode != 0 && (!has_lhs || agrees(mp.keys(), lhs));
         if show {
-            // SAFETY: `mp` is an entry of the buffer's live table.
-            unsafe { showmap(mp, true) };
+            showmap(mp, true);
             did_local = true;
         }
         None
@@ -119,16 +106,7 @@ fn agrees(a: &[u8], b: &[u8]) -> bool {
 /// The old RHS bundle is released here — by the assignment, not by hand — and
 /// the twin link is cut, because the pair is no longer two spellings of one
 /// mapping.
-///
-/// # Safety
-/// `mp` must be a live mapblock whose mode bits are already cleared.
-unsafe fn reuse_mapblock(
-    mp: Mb,
-    args: &MapArguments,
-    noremap: c_int,
-    mode: c_int,
-    simplified: bool,
-) {
+fn reuse_mapblock(mp: Mb, args: &MapArguments, noremap: c_int, mode: c_int, simplified: bool) {
     let mut mp = mp;
     let alt = mp.m_alt;
     if !alt.is_null() {
@@ -165,10 +143,7 @@ unsafe fn reuse_mapblock(
 /// Answers 0 on success, or 1 for invalid arguments, 2 for no match, 5 for a
 /// `<unique>` clash and 6 for a buffer-local `<unique>` entry clashing with a
 /// global one.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub(crate) unsafe fn buf_do_map(
+pub(crate) fn buf_do_map(
     mut maptype: c_int,
     args: &MapArguments,
     mode: c_int,
@@ -280,8 +255,7 @@ pub(crate) unsafe fn buf_do_map(
                 && has_lhs
                 && has_rhs
                 && !is_unmap
-                // SAFETY: the global tables are live.
-                && unsafe { global_map_exists(mode, lhs, is_abbrev) };
+                && global_map_exists(mode, lhs, is_abbrev);
             if clash {
                 retval = 6;
                 break 'theend;
@@ -289,8 +263,7 @@ pub(crate) unsafe fn buf_do_map(
 
             // When listing global mappings, also list buffer-local ones.
             if map_table != buf_table && !has_rhs && !is_unmap {
-                // SAFETY: `buffer` is live.
-                did_local = unsafe { show_buffer_local(buffer, mode, lhs, has_lhs, is_abbrev) };
+                did_local = show_buffer_local(buffer, mode, lhs, has_lhs, is_abbrev);
             }
 
             // Find a matching entry. For :unmap we may loop twice: once
@@ -345,8 +318,7 @@ pub(crate) unsafe fn buf_do_map(
                             if !has_lhs {
                                 // Show all entries.
                                 if !entry.m_simplified {
-                                    // SAFETY: `entry` is a live mapblock.
-                                    unsafe { showmap(entry, map_table != global_map_heads()) };
+                                    showmap(entry, map_table != global_map_heads());
                                     did_it = true;
                                 }
                                 break 'entry;
@@ -388,8 +360,7 @@ pub(crate) unsafe fn buf_do_map(
                             } else if !has_rhs {
                                 // Show the matching entry.
                                 if !entry.m_simplified {
-                                    // SAFETY: `entry` is a live mapblock.
-                                    unsafe { showmap(entry, map_table != global_map_heads()) };
+                                    showmap(entry, map_table != global_map_heads());
                                     did_it = true;
                                 }
                             } else if n != lhs.len() {
@@ -407,17 +378,13 @@ pub(crate) unsafe fn buf_do_map(
                                 // A new rhs for an existing entry.
                                 entry.m_mode &= !mode; // remove mode bits
                                 if entry.m_mode == 0 && !did_it {
-                                    // SAFETY: `entry` is a live mapblock whose
-                                    // mode bits were just cleared.
-                                    unsafe {
-                                        reuse_mapblock(
-                                            entry,
-                                            args,
-                                            noremap,
-                                            mode,
-                                            keyround1_simplified,
-                                        );
-                                    }
+                                    reuse_mapblock(
+                                        entry,
+                                        args,
+                                        noremap,
+                                        mode,
+                                        keyround1_simplified,
+                                    );
                                     mp_result[keyround - 1] = entry.raw();
                                     did_it = true;
                                 }
@@ -542,8 +509,7 @@ pub unsafe fn do_map(maptype: c_int, arg: *mut c_char, mode: c_int, is_abbrev: b
     // SAFETY: the caller's promise — `arg` is live and NUL-terminated.
     let mut result = unsafe { str_to_mapargs(arg, is_unmap, &mut args) };
     if result == 0 {
-        // SAFETY: `curbuf` is live.
-        result = unsafe { buf_do_map(maptype, &args, mode, is_abbrev, Buf::current()) };
+        result = buf_do_map(maptype, &args, mode, is_abbrev, Buf::current());
     }
     result
 }
@@ -584,8 +550,7 @@ pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: b
     }
     args.buffer = buffer;
 
-    // SAFETY: `curbuf` is live.
-    unsafe { buf_do_map(noremap, &args, mode, false, Buf::current()) };
+    buf_do_map(noremap, &args, mode, false, Buf::current());
 }
 
 /// `:map`, `:abbrev` and every prefixed variant of either, from the command
@@ -615,8 +580,7 @@ unsafe fn do_exmap(args: *mut ExArg, isabbrev: bool) {
         emsg(gettext(e_invarg)); // invalid arguments
         return;
     }
-    // SAFETY: `curbuf` is live.
-    let answer = unsafe { buf_do_map(maptype, &parsed, mode, isabbrev, Buf::current()) };
+    let answer = buf_do_map(maptype, &parsed, mode, isabbrev, Buf::current());
     let lhs = parsed.lhs.as_ptr();
     match answer {
         1 => {

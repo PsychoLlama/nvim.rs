@@ -141,11 +141,7 @@ unsafe fn first_entry_in_buf(qfl: *mut QfList, bnr: c_int) -> Option<At> {
 ///
 /// The entries of a list are in line order, so the run of entries sharing a
 /// line is contiguous.
-///
-/// # Safety
-///
-/// `at.entry` must be a live entry.
-unsafe fn first_entry_on_line(mut at: At) -> At {
+fn first_entry_on_line(mut at: At) -> At {
     // SAFETY: forwarded from the caller.
     while !got_int.get() && !unsafe { (*at.entry).qf_prev.is_null() } {
         let prev = unsafe { (*at.entry).qf_prev };
@@ -163,11 +159,7 @@ unsafe fn first_entry_on_line(mut at: At) -> At {
 }
 
 /// The last entry on the same line of the same file as `at`.
-///
-/// # Safety
-///
-/// `at.entry` must be a live entry.
-unsafe fn last_entry_on_line(mut at: At) -> At {
+fn last_entry_on_line(mut at: At) -> At {
     // SAFETY: forwarded from the caller.
     while !got_int.get() && !unsafe { (*at.entry).qf_next.is_null() } {
         let next = unsafe { (*at.entry).qf_next };
@@ -259,7 +251,7 @@ unsafe fn entry_before_pos(bnr: c_int, pos: *const Pos, linewise: bool, mut at: 
     }
     if linewise {
         // Entries on one line count as one, so answer the first.
-        at = unsafe { first_entry_on_line(at) };
+        at = first_entry_on_line(at);
     }
     Some(at)
 }
@@ -287,11 +279,7 @@ unsafe fn closest_entry(
 
 /// The number of the `n`th entry of the same file below `at`, or of the
 /// last one there is.
-///
-/// # Safety
-///
-/// `at.entry` must be a live entry.
-unsafe fn nth_entry_below(mut at: At, n: LineNr, linewise: bool) -> c_int {
+fn nth_entry_below(mut at: At, n: LineNr, linewise: bool) -> c_int {
     // SAFETY: forwarded from the caller.
     let mut left = n;
     while left > 0 && !got_int.get() {
@@ -299,7 +287,7 @@ unsafe fn nth_entry_below(mut at: At, n: LineNr, linewise: bool) -> c_int {
         let first_nr = at.nr;
         if linewise {
             // Treat all the entries on one line of this file as one.
-            at = unsafe { last_entry_on_line(at) };
+            at = last_entry_on_line(at);
         }
         let next = unsafe { (*at.entry).qf_next };
         if next.is_null() || unsafe { (*next).qf_fnum } != unsafe { (*at.entry).qf_fnum } {
@@ -318,11 +306,7 @@ unsafe fn nth_entry_below(mut at: At, n: LineNr, linewise: bool) -> c_int {
 
 /// The number of the `n`th entry of the same file above `at`, or of the
 /// first one there is.
-///
-/// # Safety
-///
-/// `at.entry` must be a live entry.
-unsafe fn nth_entry_above(mut at: At, n: LineNr, linewise: bool) -> c_int {
+fn nth_entry_above(mut at: At, n: LineNr, linewise: bool) -> c_int {
     // SAFETY: forwarded from the caller.
     let mut left = n;
     while left > 0 && !got_int.get() {
@@ -336,7 +320,7 @@ unsafe fn nth_entry_above(mut at: At, n: LineNr, linewise: bool) -> c_int {
             nr: at.nr - 1,
         };
         if linewise {
-            at = unsafe { first_entry_on_line(at) };
+            at = first_entry_on_line(at);
         }
     }
     at.nr
@@ -365,9 +349,9 @@ unsafe fn nth_adjacent_entry(
     // in the same file.
     if n - 1 > 0 {
         if dir == FORWARD {
-            return unsafe { nth_entry_below(at, n - 1, linewise) };
+            return nth_entry_below(at, n - 1, linewise);
         }
-        return unsafe { nth_entry_above(at, n - 1, linewise) };
+        return nth_entry_above(at, n - 1, linewise);
     }
     at.nr
 }

@@ -156,7 +156,7 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     if called_emsg.get() > called_emsg_before && did_emsg.get() != 0 {
         timer.emsg_count += 1;
         if did_throw.get() {
-            unsafe { discard_current_exception() };
+            discard_current_exception();
         }
     }
     did_emsg.set(save_did_emsg);

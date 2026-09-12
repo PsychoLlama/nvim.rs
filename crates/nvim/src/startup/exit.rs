@@ -180,7 +180,7 @@ pub fn getout(mut exitval: c_int) -> ! {
             cur = buf.next();
         }
 
-        unsafe { with_autocmds_unblocked(AutoEvent::VimLeavePre) };
+        with_autocmds_unblocked(AutoEvent::VimLeavePre);
     }
 
     if !p_shada.get().is_null() && unsafe { *p_shada.get() } as c_int != NUL {
@@ -189,7 +189,7 @@ pub fn getout(mut exitval: c_int) -> ! {
     }
 
     if v_dying.get() <= 1 {
-        unsafe { with_autocmds_unblocked(AutoEvent::VimLeave) };
+        with_autocmds_unblocked(AutoEvent::VimLeave);
     }
 
     profile_dump();
@@ -218,12 +218,7 @@ pub fn getout(mut exitval: c_int) -> ! {
 ///
 /// `deathtrap()` blocks autocommands on the way in, but `VimLeavePre` and
 /// `VimLeave` are exactly the two the user still expects to see.
-///
-/// # Safety
-///
-/// `event` must be an initialized `AutoEvent` whose pointer fields point at
-/// live data for the call.
-unsafe fn with_autocmds_unblocked(event: AutoEvent) {
+fn with_autocmds_unblocked(event: AutoEvent) {
     // SAFETY: the block counter and the autocommand tables are global.
     let blocked = is_autocmd_blocked();
     if blocked {

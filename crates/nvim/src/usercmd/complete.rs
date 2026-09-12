@@ -224,8 +224,7 @@ pub(crate) unsafe fn get_user_commands(_expand: *mut Expand, idx: c_int) -> *mut
     let Some(cmd) = global.get(idx - local.len()) else {
         return ptr::null_mut();
     };
-    // SAFETY: module contract.
-    let shadowed = unsafe { local.iter().any(|l| ucmd_name(l) == ucmd_name(cmd)) };
+    let shadowed = local.iter().any(|l| ucmd_name(l) == ucmd_name(cmd));
     if shadowed {
         c"".as_ptr().cast_mut()
     } else {

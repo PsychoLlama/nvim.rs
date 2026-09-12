@@ -410,11 +410,7 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
 
 /// Build the `digraph_getlist()` result: user digraphs, plus the effective
 /// defaults when `list_all` is given.
-///
-/// # Safety
-///
-/// `result` must be a valid return-value slot.
-unsafe fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
+fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
     let user_len = USER_DIGRAPHS.with(|user| user.len());
     let capacity = (tables::DEFAULT_DIGRAPHS.len() + user_len) as isize;
     // SAFETY: `result` is a valid return slot, so the list it is given owns
@@ -458,12 +454,7 @@ fn next_char(s: &[u8]) -> (c_int, &[u8]) {
 
 /// The string value of `arg`, `None` when the typval is not one (which is
 /// where `tv_get_string_buf_chk` reports its own error).
-///
-/// # Safety
-///
-/// `arg` must be a valid typval, and `buf` — the scratch space a non-string
-/// value is rendered into — must outlive the returned slice.
-unsafe fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut [c_char; 65]) -> Option<&'a [u8]> {
+fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut [c_char; 65]) -> Option<&'a [u8]> {
     // SAFETY: caller contract; the result is null or a NUL-terminated string
     // owned by the typval or by `buf`, both of which outlive the borrow.
     let s = unsafe { tv_get_string_buf_chk(arg, buf.as_mut_ptr()) };
@@ -491,20 +482,14 @@ fn digraph_chars(chars: Option<&[u8]>) -> Option<(c_int, c_int)> {
 /// Shared body of `digraph_set()` and `digraph_setlist()`. The digraph
 /// argument is only read once the characters check out, so a bad pair
 /// reports its own error and nothing else.
-///
-/// # Safety
-///
-/// Both arguments must be valid typvals.
-unsafe fn digraph_set_common(argchars: &TypVal, argdigraph: &TypVal) -> bool {
+fn digraph_set_common(argchars: &TypVal, argdigraph: &TypVal) -> bool {
     let mut buf_chars = [0 as c_char; 65];
-    // SAFETY: caller contract; `buf_chars` outlives the borrow.
-    let chars = unsafe { tv_string(argchars, &mut buf_chars) };
+    let chars = tv_string(argchars, &mut buf_chars);
     let Some((char1, char2)) = digraph_chars(chars) else {
         return false;
     };
     let mut buf_digraph = [0 as c_char; 65];
-    // SAFETY: caller contract; `buf_digraph` outlives the borrow.
-    let Some(digraph) = (unsafe { tv_string(argdigraph, &mut buf_digraph) }) else {
+    let Some(digraph) = tv_string(argdigraph, &mut buf_digraph) else {
         return false;
     };
     let (n, rest) = next_char(digraph);
@@ -562,32 +547,25 @@ pub fn f_digraph_getlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
         return;
     }
     let list_all = !args.is_empty() && tv_get_bool(&args[0]) != 0 as VarNumber;
-    // SAFETY: caller contract.
-    unsafe { digraph_getlist_common(list_all, result) };
+    digraph_getlist_common(list_all, result);
 }
 
 /// `digraph_set()`.
 pub fn f_digraph_set(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: caller contract; `digraph_set()` takes two arguments.
-    let set = unsafe { digraph_set_common(&args[0], &args[1]) };
+    let set = digraph_set_common(&args[0], &args[1]);
     set_bool_ret(result, set);
 }
 
 /// `digraph_setlist()`.
 pub fn f_digraph_setlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: caller contract.
-    let set = unsafe { digraph_setlist_common(&args[0]) };
+    let set = digraph_setlist_common(&args[0]);
     set_bool_ret(result, set);
 }
 
 /// Body of `digraph_setlist()`: the argument must be a list of two-item
 /// `[chars, digraph]` lists. Stops at the first bad entry, keeping the
 /// digraphs registered before it.
-///
-/// # Safety
-///
-/// `arg` must be a valid typval.
-unsafe fn digraph_setlist_common(arg: &TypVal) -> bool {
+fn digraph_setlist_common(arg: &TypVal) -> bool {
     // SAFETY: caller contract; the list is only read once its type is known.
     let pl = {
         if (*arg).v_type() != VAR_LIST {
@@ -609,7 +587,7 @@ unsafe fn digraph_setlist_common(arg: &TypVal) -> bool {
         }
         // SAFETY: a live list of exactly two items.
         let pair = unsafe { tv_list_items(l) };
-        if !unsafe { digraph_set_common(&pair[0].li_tv, &pair[1].li_tv) } {
+        if !digraph_set_common(&pair[0].li_tv, &pair[1].li_tv) {
             return false;
         }
     }
@@ -701,8 +679,7 @@ pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
     // SAFETY: caller contract; the line getter was just checked to be the
     // sourcing one, and `buf`'s entry list was just emptied.
     unsafe { read_keymap_entries(args, buf) };
-    // SAFETY: the entries just read own two NUL-terminated strings each.
-    unsafe { apply_keymap_entries(buf) };
+    apply_keymap_entries(buf);
     p_cpo.set(save_cpo);
     buf.b_kmap_state |= KEYMAP_LOADED as int16_t;
     status_redraw_curbuf();
@@ -750,11 +727,7 @@ unsafe fn read_keymap_entries(args: *mut ExArg, mut buffer: Buf) {
 }
 
 /// Make every entry of `buffer`'s keymap a buffer-local language mapping.
-///
-/// # Safety
-///
-/// `buffer` must be a valid buffer.
-unsafe fn apply_keymap_entries(buffer: Buf) {
+fn apply_keymap_entries(buffer: Buf) {
     // SAFETY: the caller's buffer. The commands are built before any of them
     // runs, so `do_map` cannot be reading the list it is driven by.
     let cmds: Vec<Vec<u8>> = buffer
@@ -826,12 +799,7 @@ fn keymap_unload() {
 /// The keymap name to show in the status line ('statusline' `%k`/`%K` and
 /// the mode message): `b:keymap_name`, the 'keymap' value, or "lang".
 /// `None` unless language mappings are active for `window`'s buffer.
-///
-/// # Safety
-///
-/// `window` and its buffer must be valid; curwin/curbuf are restored before
-/// returning.
-pub unsafe fn keymap_str(window: Win) -> Option<CString> {
+pub fn keymap_str(window: Win) -> Option<CString> {
     // SAFETY: caller contract -- a live window whose buffer is valid.
     let buf = window.buffer();
     if buf.b_p_iminsert != B_IMODE_LMAP {

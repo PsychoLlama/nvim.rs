@@ -211,7 +211,7 @@ pub(crate) unsafe fn ex_help(args: *mut ExArg) {
     unsafe { free_wild(num_matches, matches) };
 
     // SAFETY: the window list is live on the main thread; `tag` is owned.
-    if let Some(opened) = unsafe { enter_help_window() } {
+    if let Some(opened) = enter_help_window() {
         restart_edit.set(0);
         // Restore KeyTyped: setting 'filetype=help' may have reset it,
         // and `do_tag` needs it to open folds under the cursor.
@@ -324,10 +324,7 @@ struct HelpWindow {
 /// Make a help window current, splitting one off if there is none. `None`
 /// means the split failed or the 'helpfile' could not be opened, in which
 /// case a message has already been shown.
-///
-/// # Safety
-/// Main thread; the window list is live. Runs autocommands.
-unsafe fn enter_help_window() -> Option<HelpWindow> {
+fn enter_help_window() -> Option<HelpWindow> {
     let mut opened = HelpWindow {
         empty_fnum: 0,
         alt_fnum: 0,
@@ -642,10 +639,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
 /// Force the options a help buffer needs. Called whenever one starts being
 /// edited, because a user autocommand may have changed them since the last
 /// time.
-///
-/// # Safety
-/// Main thread; `curbuf` and `curwin` are live.
-pub(crate) unsafe fn prepare_help_buffer() {
+pub(crate) fn prepare_help_buffer() {
     Buf::current().b_help = true;
     set_option_direct(kOptBuftype, cstr_optval(c"help"), OptionSetFlags::LOCAL, 0);
 
@@ -686,10 +680,7 @@ pub(crate) unsafe fn prepare_help_buffer() {
 }
 
 /// Populate `*local-additions*` in `help.txt`.
-///
-/// # Safety
-/// Runs Lua: main thread only.
-pub(crate) unsafe fn get_local_additions() {
+pub(crate) fn get_local_additions() {
     let mut err = Error::none();
     // SAFETY: a static chunk, no arguments, and our own error slot.
     let chunk = String_0::from_cstr(c"return require'vim._core.help'.local_additions()");

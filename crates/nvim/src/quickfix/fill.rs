@@ -309,11 +309,7 @@ unsafe fn call_qftf_func(
 ///
 /// Answers false if a line would not delete, which would otherwise loop
 /// forever.
-///
-/// # Safety
-///
-/// `curbuf` must be the quickfix buffer.
-unsafe fn clear_qf_buffer() -> bool {
+fn clear_qf_buffer() -> bool {
     // SAFETY: forwarded from the caller.
     // No undo information is stored — the quickfix buffer is usually
     // not modifiable — so the undo stack is cleaned up instead, or an
@@ -336,11 +332,7 @@ unsafe fn clear_qf_buffer() -> bool {
 
 /// Set the options a freshly filled quickfix buffer wants, and tell the
 /// autocommands about it.
-///
-/// # Safety
-///
-/// `curbuf` must be the quickfix buffer.
-unsafe fn finish_qf_buffer() {
+fn finish_qf_buffer() {
     // SAFETY: forwarded from the caller.
     // Set 'filetype' to "qf" each time after filling the buffer. This
     // resembles reading a file into a buffer, which is more logical
@@ -412,7 +404,7 @@ pub(crate) unsafe fn qf_fill_buffer(
             unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
             return;
         }
-        if !unsafe { clear_qf_buffer() } {
+        if !clear_qf_buffer() {
             return;
         }
     }
@@ -486,7 +478,7 @@ pub(crate) unsafe fn qf_fill_buffer(
     check_lnums(true);
 
     if rewriting {
-        unsafe { finish_qf_buffer() };
+        finish_qf_buffer();
     }
 
     // Restore KeyTyped, setting 'filetype' may reset it.

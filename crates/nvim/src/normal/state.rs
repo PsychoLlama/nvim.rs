@@ -583,7 +583,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
     normal_check_stuff_buffer();
     unsafe { normal_check_interrupt(ns.raw()) };
     if did_throw.get() && ex_normal_busy.get() == 0 {
-        unsafe { discard_current_exception() };
+        discard_current_exception();
     }
     if !exmode_active.get() {
         msg_scroll.set(0);

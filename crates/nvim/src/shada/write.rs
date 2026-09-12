@@ -246,14 +246,14 @@ impl Writing {
             data: ShadaEntryData::Header(header.dict()),
             additional_data: core::ptr::null_mut(),
         };
-        unsafe { self.pack(&entry, 0) }
+        self.pack(&entry, 0)
     }
 
     /// The list of files this Nvim has buffers for, so that a later start
     /// can reopen them.
     fn write_buflist(&mut self) -> ShaDaWriteResult {
         let entry = shada_get_buflist(&self.removable_bufs);
-        let ret = unsafe { self.pack(&entry, 0) };
+        let ret = self.pack(&entry, 0);
         unsafe { xfree(entry.data.buffer_list().buffers.cast()) };
         ret
     }
@@ -295,7 +295,7 @@ impl Writing {
                 }),
                 additional_data: core::ptr::null_mut(),
             };
-            let ret = unsafe { self.pack(&entry, self.limits.max_kbyte) };
+            let ret = self.pack(&entry, self.limits.max_kbyte);
             tv_clear(&mut vartv);
             tv_clear(&mut entry.data.variable_mut().value);
             if ret == kSDWriteFailed {
@@ -547,7 +547,7 @@ impl Writing {
             unsafe { &raw mut (*wms).replacement },
         ] {
             let entry = unsafe { &mut *entry };
-            if !entry.data.is_missing() && unsafe { self.pack_freeing(entry) } == kSDWriteFailed {
+            if !entry.data.is_missing() && self.pack_freeing(entry) == kSDWriteFailed {
                 return kSDWriteFailed;
             }
         }
@@ -637,7 +637,7 @@ impl Writing {
         let entries = entries.cast::<ShadaEntry>();
         for i in 0..N {
             let entry = unsafe { &mut *entries.add(i) };
-            if !entry.data.is_missing() && unsafe { self.pack_freeing(entry) } == kSDWriteFailed {
+            if !entry.data.is_missing() && self.pack_freeing(entry) == kSDWriteFailed {
                 return kSDWriteFailed;
             }
         }
@@ -661,22 +661,12 @@ impl Writing {
     }
 
     /// Write one entry that `wms` owns, and release it.
-    ///
-    /// # Safety
-    ///
-    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-    /// live data for the call.
-    unsafe fn pack_freeing(&mut self, entry: &mut ShadaEntry) -> ShaDaWriteResult {
+    fn pack_freeing(&mut self, entry: &mut ShadaEntry) -> ShaDaWriteResult {
         unsafe { shada_pack_pfreed_entry(&raw mut self.packer, entry, self.limits.max_kbyte) }
     }
 
     /// Write one entry that belongs to the caller.
-    ///
-    /// # Safety
-    ///
-    /// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-    /// live data for the call.
-    unsafe fn pack(&mut self, entry: &ShadaEntry, max_kbyte: size_t) -> ShaDaWriteResult {
+    fn pack(&mut self, entry: &ShadaEntry, max_kbyte: size_t) -> ShaDaWriteResult {
         unsafe { shada_pack_entry(&raw mut self.packer, entry, max_kbyte) }
     }
 

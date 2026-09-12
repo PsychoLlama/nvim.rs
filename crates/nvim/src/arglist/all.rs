@@ -82,11 +82,7 @@ fn next_window_to_walk(window: Win) -> Option<Win> {
 /// them (and the window is therefore a candidate for closing). On the way it
 /// records how good a candidate `window` is for becoming the new current window,
 /// and adopts the argument list into it.
-///
-/// # Safety
-///
-/// `aall` must be the live state and `window` a valid window holding `buffer`.
-unsafe fn arg_index_for_window(
+fn arg_index_for_window(
     aall: &mut ArgAllState,
     mut window: Win,
     buffer: Buf,
@@ -169,12 +165,7 @@ unsafe fn arg_index_for_window(
 /// last window, which is re-used for the first argument instead. Answers the
 /// window the walk continues from, which is the top again when an
 /// autocommand invalidated it.
-///
-/// # Safety
-///
-/// `aall` must be the live state, `window` a valid window holding `buffer`, and
-/// `wpnext` the window the walk would continue to, if there is one.
-unsafe fn close_unused_window(
+fn close_unused_window(
     aall: &mut ArgAllState,
     window: Win,
     buffer: Buf,
@@ -195,8 +186,7 @@ unsafe fn close_unused_window(
         // `buffer` is live until the autowrite -- which is exactly what the
         // re-check afterwards is for.
         let bufref = BufRef::of(buffer);
-        // SAFETY: as above; this may fire autocommands.
-        let _ = unsafe { autowrite(buffer, false) };
+        let _ = autowrite(buffer, false);
         // `win_valid` and `BufRef::valid` are the questions to ask after one.
         let survived = win_valid(window.id()) && bufref.valid();
         if !survived {
@@ -225,24 +215,16 @@ unsafe fn close_unused_window(
 /// Close every window of the current tab page whose buffer is not in the
 /// argument list, recording in `w_arg_idx` which argument each surviving
 /// window holds.
-///
-/// # Safety
-///
-/// `aall` must be the live state.
-unsafe fn close_unused_windows_in_tab(
-    aall: &mut ArgAllState,
-    old_curwin: Win,
-    old_curtab: TabPage,
-) {
+fn close_unused_windows_in_tab(aall: &mut ArgAllState, old_curwin: Win, old_curtab: TabPage) {
     let mut next = first_window_to_walk();
     while let Some(mut wp) = next {
         let wpnext = next_window_to_walk(wp);
         let buf = wp.buffer();
-        let i = unsafe { arg_index_for_window(aall, wp, buf, old_curwin, old_curtab) };
+        let i = arg_index_for_window(aall, wp, buf, old_curwin, old_curtab);
         wp.w_arg_idx = i;
         next = if i == aall.opened_len && !aall.keep_tabs {
             // SAFETY: as above.
-            unsafe { close_unused_window(aall, wp, buf, wpnext) }
+            close_unused_window(aall, wp, buf, wpnext)
         } else {
             wpnext
         };
@@ -251,11 +233,7 @@ unsafe fn close_unused_windows_in_tab(
 
 /// Close all the windows holding files that are not in the argument list —
 /// over every tab page when `:tab` was used.
-///
-/// # Safety
-///
-/// `aall` must be the live state.
-unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
+fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
     let old_curwin = Win::current();
     let old_curtab = TabPage::current();
     if aall.had_tab > 0 {
@@ -272,7 +250,7 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
         // can free it, and that is what the check after them asks about.
         let tpnext = TabPage::current().next().map(TabPage::id);
         // SAFETY: as above.
-        unsafe { close_unused_windows_in_tab(aall, old_curwin, old_curtab) };
+        close_unused_windows_in_tab(aall, old_curwin, old_curtab);
         // Without the ":tab" modifier only do the current tab page.
         let (false, Some(tpnext)) = (aall.had_tab == 0, tpnext) else {
             break;
@@ -319,11 +297,7 @@ fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool {
 
 /// Split a window — or re-use the first one — and edit argument `i` in it.
 /// Answers `Err` when the split failed, after which nothing more is opened.
-///
-/// # Safety
-///
-/// `aall` must be the live state and `i` an index into its argument list.
-unsafe fn open_window_for_arg(
+fn open_window_for_arg(
     aall: &mut ArgAllState,
     i: c_int,
     count: c_int,
@@ -373,11 +347,7 @@ unsafe fn open_window_for_arg(
 }
 
 /// Open up to `count` windows for the files in `aall.alist`.
-///
-/// # Safety
-///
-/// `aall` must be the live state.
-unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
+fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
     // ":tab drop file" should re-use an empty window, so that "--remote-tab"
     // does not leave an empty tab page when it runs locally.
     let tab_drop_empty_window = aall.keep_tabs
@@ -406,8 +376,7 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
             }
             false
         } else if split_ret.is_ok() {
-            // SAFETY: caller contract.
-            split_ret = unsafe { open_window_for_arg(aall, i, count, tab_drop_empty_window) };
+            split_ret = open_window_for_arg(aall, i, count, tab_drop_empty_window);
             split_ret.is_err()
         } else {
             false
@@ -461,7 +430,7 @@ fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // switching to another buffer.
     // SAFETY: the state is this frame's and the list is locked.
     reset_visual_and_resel();
-    unsafe { arg_all_close_unused_windows(&mut aall) };
+    arg_all_close_unused_windows(&mut aall);
     // ARGCOUNT may have changed while doing that, because of autocommands,
     // so the count is against the recorded length.
     let count = if count > aall.opened_len || count <= 0 {
@@ -475,7 +444,7 @@ fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     let last_curwin = Win::current().id();
     let last_curtab = TabPage::current().id();
     win_enter(lastwin_nofloating(None), false);
-    unsafe { arg_all_open_windows(&mut aall, count) };
+    arg_all_open_windows(&mut aall, count);
     // Remove the "lock" on the argument list.
     unsafe { alist_unlink(aall.alist) };
     ARGLIST_LOCKED.set(prev_arglist_locked);

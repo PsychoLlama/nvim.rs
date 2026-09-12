@@ -221,22 +221,20 @@ pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
     // The flag changes what the swap-file machinery does with what it
     // finds, and is read from several modules.
     recoverymode.set(true);
-    let unsaved = unsafe {
-        check_changed(
-            Buf::current(),
-            (if p_awa.get() != 0 {
-                CCGD_AW as c_int
+    let unsaved = check_changed(
+        Buf::current(),
+        (if p_awa.get() != 0 {
+            CCGD_AW as c_int
+        } else {
+            0
+        }) | CCGD_MULTWIN as c_int
+            | (if args.forceit != 0 {
+                CCGD_FORCEIT as c_int
             } else {
                 0
-            }) | CCGD_MULTWIN as c_int
-                | (if args.forceit != 0 {
-                    CCGD_FORCEIT as c_int
-                } else {
-                    0
-                })
-                | CCGD_EXCMD as c_int,
-        )
-    };
+            })
+            | CCGD_EXCMD as c_int,
+    );
     if !unsaved
         && (byte(args.arg) == NUL
             || unsafe { setfname(Buf::current(), args.arg, ptr::null_mut(), true) }.is_ok())

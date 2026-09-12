@@ -27,12 +27,7 @@ use crate::winlayer::Buf;
 ///
 /// Answers [`KeyOutcome::GotoNormalMode`] when erasing emptied a bare `:`
 /// line, which leaves the command line altogether.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
+pub(crate) fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
     let mut cc = Cc::current();
     if s.c == Key::Kdel.code() {
         s.c = Key::Del.code();
@@ -98,12 +93,7 @@ pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
 
 /// Handle CTRL-^: toggle the use of the language `:lmap` mappings and/or the
 /// Input Method.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
+pub(crate) fn command_line_toggle_langmap(s: Cls) {
     let b_im_ptr = if s.b_im_ptr_buf.is_some_and(buf_valid) {
         s.b_im_ptr
     } else {
@@ -136,12 +126,7 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
 }
 
 /// Handle CTRL-R: insert the contents of a numbered or named register.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
+pub(crate) fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
     let mut cc = Cc::current();
     let save_new_cmdpos = new_cmdpos.get();
 
@@ -204,12 +189,7 @@ pub(crate) unsafe fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
 }
 
 /// Handle a left or right mouse click: put the cursor where it landed.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn command_line_left_right_mouse(mut s: Cls) {
+pub(crate) fn command_line_left_right_mouse(mut s: Cls) {
     let mut cc = Cc::current();
     s.ignore_drag_release = s.c == Key::Leftrelease.code() || s.c == Key::Rightrelease.code();
 
@@ -237,19 +217,14 @@ pub(crate) unsafe fn command_line_left_right_mouse(mut s: Cls) {
 /// C's `break` out of that switch: the key was not handled specially — or its
 /// handler asked for it to be treated as ordinary text — and falls through to
 /// the abbreviation check and then to inserting it into the line.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
+fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
     let mut cc = Cc::current();
     match Key::try_from(s.c) {
         Ok(Key::Bs | Key::Del | Key::Kdel) | Err(NotAKey(Ctrl_H | Ctrl_W)) => {
-            Some(match unsafe { command_line_erase_chars(s) } {
-                KeyOutcome::NotChanged => unsafe { command_line_not_changed(s) },
+            Some(match command_line_erase_chars(s) {
+                KeyOutcome::NotChanged => command_line_not_changed(s),
                 KeyOutcome::GotoNormalMode => 0, // back to cmd mode
-                KeyOutcome::Changed => unsafe { command_line_changed(s) },
+                KeyOutcome::Changed => command_line_changed(s),
             })
         }
 
@@ -259,12 +234,12 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             may_trigger_modechanged();
             status_redraw_curbuf();
             redraw_statuslines();
-            Some(unsafe { command_line_not_changed(s) })
+            Some(command_line_not_changed(s))
         }
 
         Err(NotAKey(Ctrl_HAT)) => {
-            unsafe { command_line_toggle_langmap(s) };
-            Some(unsafe { command_line_not_changed(s) })
+            command_line_toggle_langmap(s);
+            Some(command_line_not_changed(s))
         }
 
         Err(NotAKey(Ctrl_U)) => {
@@ -280,7 +255,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 s.is_state.search_start = s.is_state.save_cursor;
             }
             redrawcmd();
-            Some(unsafe { command_line_changed(s) })
+            Some(command_line_changed(s))
         }
 
         // Reached if 'wildchar' is not ESC, or when ESC was typed twice.
@@ -292,7 +267,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 || (getln_interrupted_highlight.get() && s.c == Ctrl_C)
             {
                 getln_interrupted_highlight.set(false);
-                return Some(unsafe { command_line_not_changed(s) });
+                return Some(command_line_not_changed(s));
             }
 
             // Will drop the command line after putting it in the history.
@@ -300,10 +275,10 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             Some(0) // back to cmd mode
         }
 
-        Err(NotAKey(Ctrl_R)) => Some(match unsafe { command_line_insert_reg(s) } {
+        Err(NotAKey(Ctrl_R)) => Some(match command_line_insert_reg(s) {
             KeyOutcome::GotoNormalMode => 0, // back to cmd mode
-            KeyOutcome::Changed => unsafe { command_line_changed(s) },
-            KeyOutcome::NotChanged => unsafe { command_line_not_changed(s) },
+            KeyOutcome::Changed => command_line_changed(s),
+            KeyOutcome::NotChanged => command_line_not_changed(s),
         }),
 
         Err(NotAKey(Ctrl_D)) => {
@@ -332,12 +307,12 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 }
             }
             cc.cmdspos = cmd_screencol(cc.cmdpos);
-            Some(unsafe { command_line_not_changed(s) })
+            Some(command_line_not_changed(s))
         }
 
         Ok(Key::Left | Key::SLeft | Key::CLeft) => {
             if cc.cmdpos == 0 {
-                return Some(unsafe { command_line_not_changed(s) });
+                return Some(command_line_not_changed(s));
             }
             loop {
                 cc.cmdpos -= 1;
@@ -360,14 +335,14 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             if cc.special_char as ::core::ffi::c_int != NUL {
                 putcmdline(cc.special_char, cc.special_shift);
             }
-            Some(unsafe { command_line_not_changed(s) })
+            Some(command_line_not_changed(s))
         }
 
         // Ignore a mouse event or an open_cmdwin() result.
-        Ok(Key::Ignore) => Some(unsafe { command_line_not_changed(s) }),
+        Ok(Key::Ignore) => Some(command_line_not_changed(s)),
 
         // Ignore the mouse.
-        Ok(Key::Middledrag | Key::Middlerelease) => Some(unsafe { command_line_not_changed(s) }),
+        Ok(Key::Middledrag | Key::Middlerelease) => Some(command_line_not_changed(s)),
 
         Ok(Key::Middlemouse) => {
             cmdline_paste(
@@ -380,7 +355,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 true,
             );
             redrawcmd();
-            Some(unsafe { command_line_changed(s) })
+            Some(command_line_changed(s))
         }
 
         // Three C arms with a FALLTHROUGH between each pair: the
@@ -400,7 +375,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 && s.c != Key::Rightmouse.code()
                 && s.ignore_drag_release
             {
-                return Some(unsafe { command_line_not_changed(s) });
+                return Some(command_line_not_changed(s));
             }
             // Return on a left click above a number prompt.
             if s.c != Key::Rightmouse.code()
@@ -410,8 +385,8 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 unsafe { *cc.mouse_used = true };
                 return Some(0);
             }
-            unsafe { command_line_left_right_mouse(s) };
-            Some(unsafe { command_line_not_changed(s) })
+            command_line_left_right_mouse(s);
+            Some(command_line_not_changed(s))
         }
 
         // The mouse scroll wheel and the alternate buttons are ignored
@@ -429,20 +404,20 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             | Key::X2release
             | Key::Mousemove
             | Key::Select,
-        ) => Some(unsafe { command_line_not_changed(s) }),
+        ) => Some(command_line_not_changed(s)),
 
         // Beginning of the command line.
         Ok(Key::Home | Key::Khome | Key::SHome | Key::CHome) | Err(NotAKey(Ctrl_B)) => {
             cc.cmdpos = 0;
             cc.cmdspos = cmd_startcol();
-            Some(unsafe { command_line_not_changed(s) })
+            Some(command_line_not_changed(s))
         }
 
         // End of the command line.
         Ok(Key::End | Key::Kend | Key::SEnd | Key::CEnd) | Err(NotAKey(Ctrl_E)) => {
             cc.cmdpos = cc.len();
             cc.cmdspos = cmd_screencol(cc.cmdpos);
-            Some(unsafe { command_line_not_changed(s) })
+            Some(command_line_not_changed(s))
         }
 
         Err(NotAKey(Ctrl_A)) => {
@@ -450,26 +425,26 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             if cmdline_pum_active() {
                 // As Ctrl-A completes all the matches, close the popup
                 // menu if there is one.
-                unsafe { cmdline_pum_cleanup(cc) };
+                cmdline_pum_cleanup(cc);
             }
             if s.next_wild(WildMode::All, WildOpts::NONE) == FAIL {
                 return None;
             }
             s.xpc.xp_context = ExpandContext::Nothing;
             s.did_wild_list = false;
-            Some(unsafe { command_line_changed(s) })
+            Some(command_line_changed(s))
         }
 
         Err(NotAKey(Ctrl_L)) => {
             let (firstc, is_state) = (s.firstc, s.is_state());
-            if unsafe { may_add_char_to_search(firstc, &mut s.c, is_state) }.is_ok() {
-                return Some(unsafe { command_line_not_changed(s) });
+            if may_add_char_to_search(firstc, &mut s.c, is_state).is_ok() {
+                return Some(command_line_not_changed(s));
             }
             // Completion: the longest common part.
             if s.next_wild(WildMode::Longest, WildOpts::NONE) == FAIL {
                 return None;
             }
-            Some(unsafe { command_line_changed(s) })
+            Some(command_line_changed(s))
         }
 
         // Ctrl_N/Ctrl_P are the next/previous match while completing, and
@@ -494,7 +469,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 if s.next_wild(wild_type, WildOpts::NONE) == FAIL {
                     return None;
                 }
-                return Some(unsafe { command_line_changed(s) });
+                return Some(command_line_changed(s));
             }
 
             if cmdline_pum_active()
@@ -513,27 +488,25 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 if s.next_wild(wild_type, WildOpts::NONE) == FAIL {
                     return None;
                 }
-                Some(unsafe { command_line_changed(s) })
+                Some(command_line_changed(s))
             } else {
                 Some(match unsafe { command_line_browse_history(s.raw()) } {
                     KeyOutcome::Changed => {
                         s.did_hist_navigate = true;
-                        unsafe { command_line_changed(s) }
+                        command_line_changed(s)
                     }
                     KeyOutcome::GotoNormalMode => 0,
-                    KeyOutcome::NotChanged => unsafe { command_line_not_changed(s) },
+                    KeyOutcome::NotChanged => command_line_not_changed(s),
                 })
             }
         }
 
         // Next (CTRL-G) or previous (CTRL-T) 'incsearch' match.
         Err(NotAKey(Ctrl_G | Ctrl_T)) => {
-            if unsafe {
-                may_do_command_line_next_incsearch(s.firstc, s.count, s.is_state(), s.c == Ctrl_G)
-            }
-            .is_err()
+            if may_do_command_line_next_incsearch(s.firstc, s.count, s.is_state(), s.c == Ctrl_G)
+                .is_err()
             {
-                return Some(unsafe { command_line_not_changed(s) });
+                return Some(command_line_not_changed(s));
             }
             None
         }
@@ -573,7 +546,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
                 return None;
             }
             redrawcmd();
-            Some(unsafe { command_line_not_changed(s) })
+            Some(command_line_not_changed(s))
         }
 
         // CTRL-_: switch language mode.
@@ -581,7 +554,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
             if p_ari.get() == 0 {
                 return None;
             }
-            Some(unsafe { command_line_not_changed(s) })
+            Some(command_line_not_changed(s))
         }
 
         _ => {
@@ -604,11 +577,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
     }
 }
 
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
+pub(crate) fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
     // One character, its own buffer: `put_on_cmdline` reaches the message
     // machinery, which writes upstream's shared `IObuff`.
     let mut ch = [0 as ::core::ffi::c_char; MB_MAXCHAR + 1];
@@ -617,7 +586,7 @@ pub(crate) unsafe fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
     // For all other keys, just put it onto the cmdline and exit — which is
     // the C's `goto end`.
     if !(cc.one_key && s.c != ESC && s.c != Ctrl_C) {
-        if let Some(rc) = unsafe { command_line_dispatch_key(s) } {
+        if let Some(rc) = command_line_dispatch_key(s) {
             return rc;
         }
 
@@ -632,7 +601,7 @@ pub(crate) unsafe fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
                 s.c
             }) || s.c == Ctrl_RSB)
         {
-            return unsafe { command_line_changed(s) };
+            return command_line_changed(s);
         }
     }
 
@@ -648,6 +617,6 @@ pub(crate) unsafe fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
     if cc.one_key {
         0
     } else {
-        unsafe { command_line_changed(s) }
+        command_line_changed(s)
     }
 }

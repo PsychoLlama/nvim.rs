@@ -500,7 +500,7 @@ pub(crate) unsafe fn nv_down(cmd_arg: *mut CmdArg) {
     // than "move down".
     if ca.cmdchar == CAR {
         if buf_is_quickfix(current_buf()) {
-            unsafe { qf_view_result(false) };
+            qf_view_result(false);
             return;
         }
         if cmdwin_type.get() != 0 {

@@ -300,7 +300,7 @@ pub fn handle_did_throw() {
     // caught.
     estack_push(ETYPE_EXCEPT, exception.throw_name, exception.throw_lnum);
     exception.throw_name = ptr::null_mut();
-    unsafe { discard_current_exception() };
+    discard_current_exception();
 
     // `:silent!` makes even an uncaught exception non-fatal.
     if emsg_silent.get() == 0 {

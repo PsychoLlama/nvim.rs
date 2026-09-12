@@ -487,8 +487,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
             // SAFETY: a non-null `m_alt` is this mapping's live twin.
             save_keys.push(unsafe { (*alt).keys() }.to_vec());
         }
-        // SAFETY: `mp` is still linked -- nothing above evaluated Vimscript.
-        let mut map_str = unsafe { eval_map_expr(mp, NUL) };
+        let mut map_str = eval_map_expr(mp, NUL);
 
         if map_str.as_ref().is_none_or(MapStr::is_empty) {
             if prev_did_emsg != did_emsg.get() {

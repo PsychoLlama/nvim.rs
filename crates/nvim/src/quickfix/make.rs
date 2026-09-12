@@ -19,11 +19,7 @@ use std::ffi::CString;
 /// True when `:grep` is to be run by `:vimgrep`, which is what `'grepprg'`
 /// set to `internal` asks for. Only the `:grep` family can say it; `:make`
 /// always runs a shell command.
-///
-/// # Safety
-///
-/// Reads the current buffer's options, so there must be one.
-pub unsafe fn grep_internal(cmdidx: CmdIdx) -> bool {
+pub fn grep_internal(cmdidx: CmdIdx) -> bool {
     if !matches!(
         cmdidx,
         CmdIdx::grep | CmdIdx::lgrep | CmdIdx::grepadd | CmdIdx::lgrepadd
@@ -106,7 +102,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
     // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
-    if unsafe { grep_internal(args.cmdidx) } {
+    if grep_internal(args.cmdidx) {
         unsafe { ex_vimgrep(args.raw()) };
         return;
     }
@@ -128,7 +124,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
 
     let wp = is_loclist_cmd(args.cmdidx).then(Win::current);
 
-    unsafe { autowrite_all() };
+    autowrite_all();
     let fname = unsafe { get_mef_name() };
     if fname.is_null() {
         return;

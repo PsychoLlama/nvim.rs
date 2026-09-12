@@ -117,15 +117,12 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
         }
     }
 
-    // SAFETY: module contract.
-    let may_run = unsafe {
-        !list.changes_buffer()
-            || buf_hide(Buf::current())
-            || !check_changed(
-                Buf::current(),
-                CCGD_AW | if forceit { CCGD_FORCEIT } else { 0 } | CCGD_EXCMD,
-            )
-    };
+    let may_run = !list.changes_buffer()
+        || buf_hide(Buf::current())
+        || !check_changed(
+            Buf::current(),
+            CCGD_AW | if forceit { CCGD_FORCEIT } else { 0 } | CCGD_EXCMD,
+        );
     if may_run {
         // SAFETY: module contract.
         unsafe { listdo_walk(args, list) };

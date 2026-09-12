@@ -258,8 +258,7 @@ impl Env {
 
     /// `%k`: the active `'keymap'`, in angle brackets.
     pub(super) fn keymap(&self, text: &mut Vec<u8>) {
-        // SAFETY: a live window.
-        let Some(name) = (unsafe { keymap_str(self.win) }) else {
+        let Some(name) = keymap_str(self.win) else {
             return;
         };
         let name = name.as_bytes();

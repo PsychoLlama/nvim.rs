@@ -89,7 +89,7 @@ pub unsafe fn replace_makeprg(
     let is_make = idx == CmdIdx::make || idx == CmdIdx::lmake;
     // `grep_internal` means 'grepprg' is `internal`, which is not a
     // program at all.
-    if !(is_make || is_grep) || unsafe { grep_internal(args.cmdidx) } {
+    if !(is_make || is_grep) || grep_internal(args.cmdidx) {
         return arg;
     }
 

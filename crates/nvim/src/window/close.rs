@@ -11,8 +11,7 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -452,12 +451,10 @@ fn buf_is_valid(window: Win) -> bool {
 
 /// Whether `buffer` may be abandoned, saying why it may not.
 fn may_abandon(buffer: Buf, forceit: bool) -> bool {
-    // SAFETY: a live buffer.
-    unsafe { can_abandon(buffer, forceit) }
+    can_abandon(buffer, forceit)
 }
 
 /// Put up the "Save changes?" dialogue for `buffer`, and act on the answer.
 fn ask_about_changes(buffer: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { dialog_changed(buffer, false) };
+    dialog_changed(buffer, false);
 }

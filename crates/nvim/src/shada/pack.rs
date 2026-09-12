@@ -160,31 +160,31 @@ pub(crate) unsafe fn shada_pack_entry(
             Ok(())
         }
         ShadaEntryData::HistoryEntry(history) => {
-            unsafe { pack_history(entry, *history, sbuf) };
+            pack_history(entry, *history, sbuf);
             Ok(())
         }
-        ShadaEntryData::Variable(var) => unsafe { pack_variable(entry, var, sbuf) },
+        ShadaEntryData::Variable(var) => pack_variable(entry, var, sbuf),
         ShadaEntryData::SubString(sub) => {
-            unsafe { pack_sub_string(entry, *sub, sbuf) };
+            pack_sub_string(entry, *sub, sbuf);
             Ok(())
         }
         ShadaEntryData::SearchPattern(pattern) => {
-            unsafe { pack_search_pattern(entry, pattern, &mut payload) };
+            pack_search_pattern(entry, pattern, &mut payload);
             Ok(())
         }
         ShadaEntryData::GlobalMark(mark)
         | ShadaEntryData::LocalMark(mark)
         | ShadaEntryData::Jump(mark)
         | ShadaEntryData::Change(mark) => {
-            unsafe { pack_mark(entry, *mark, &mut payload) };
+            pack_mark(entry, *mark, &mut payload);
             Ok(())
         }
         ShadaEntryData::Register(reg) => {
-            unsafe { pack_register(entry, *reg, &mut payload) };
+            pack_register(entry, *reg, &mut payload);
             Ok(())
         }
         ShadaEntryData::BufferList(list) => {
-            unsafe { pack_buffer_list(*list, &mut payload) };
+            pack_buffer_list(*list, &mut payload);
             Ok(())
         }
     };
@@ -241,12 +241,7 @@ fn pack_header(header: &ApiDict, sbuf: &mut PackerBuffer) {
 
 /// One history line: the history it belongs to, its text, and — for search
 /// history only — the character the search was started with.
-///
-/// # Safety
-///
-/// `history` must be an initialized `ShadaHistoryItem` whose pointer fields
-/// point at live data for the call.
-unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut PackerBuffer) {
+fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut PackerBuffer) {
     let is_search = history.histtype as c_int == HIST_SEARCH;
     mpack_array(
         sbuf.cursor_mut(),
@@ -263,12 +258,7 @@ unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut
 
 /// One global variable. A Blob is packed as binary like a String, so it
 /// carries a trailing type tag to tell the two apart when read back.
-///
-/// # Safety
-///
-/// `global_var` must be an initialized `ShadaGlobalVar` whose pointer fields
-/// point at live data for the call.
-unsafe fn pack_variable(
+fn pack_variable(
     entry: &ShadaEntry,
     global_var: &ShadaGlobalVar,
     sbuf: &mut PackerBuffer,
@@ -308,12 +298,7 @@ unsafe fn pack_variable(
 }
 
 /// The last `:substitute` replacement string.
-///
-/// # Safety
-///
-/// `sub` must be an initialized `ShadaSubString` whose pointer fields point
-/// at live data for the call.
-unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut PackerBuffer) {
+fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut PackerBuffer) {
     mpack_array(
         sbuf.cursor_mut(),
         1 + unsafe { additional_data_len(entry.additional_data) },
@@ -327,12 +312,7 @@ unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut Pa
 /// written only when it differs from the default, and then always as the
 /// *negation* of that default — a flag that is present is by definition not
 /// the default value.
-///
-/// # Safety
-///
-/// `pattern` must be an initialized `KeyDict__shada_search_pat` whose pointer
-/// fields point at live data for the call.
-unsafe fn pack_search_pattern(
+fn pack_search_pattern(
     entry: &ShadaEntry,
     pattern: &KeyDict__shada_search_pat,
     payload: &mut Payload,
@@ -384,12 +364,7 @@ unsafe fn pack_search_pattern(
 
 /// A global mark, local mark, jump or change: a file name and a position in
 /// it, plus the mark's letter for the two kinds that have one.
-///
-/// # Safety
-///
-/// `mark` must be an initialized `ShadaFileMark` whose pointer fields point
-/// at live data for the call.
-unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Payload) {
+fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Payload) {
     let default = default_filemark(entry.kind());
 
     let size = 1 // the file name is always there
@@ -428,12 +403,7 @@ unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Paylo
 }
 
 /// One register: its lines, its name, and how it is put back.
-///
-/// # Safety
-///
-/// `reg` must be an initialized `ShadaRegister` whose pointer fields point at
-/// live data for the call.
-unsafe fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Payload) {
+fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Payload) {
     let default = DEFAULT_REGISTER;
 
     let size = 2 // the contents and the name are always there
@@ -473,12 +443,7 @@ unsafe fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Pa
 /// The buffer list: one map per buffer, each a file name and the cursor
 /// position in it. The position's defaults are the same for every buffer,
 /// so they come from `DEFAULT_POS` rather than from an entry type.
-///
-/// # Safety
-///
-/// `list` must be an initialized `ShadaBufferList` whose pointer fields point
-/// at live data for the call.
-unsafe fn pack_buffer_list(list: ShadaBufferList, payload: &mut Payload) {
+fn pack_buffer_list(list: ShadaBufferList, payload: &mut Payload) {
     let default = DEFAULT_POS;
     mpack_array(payload.buf.cursor_mut(), list.size as uint32_t);
     for i in 0..list.size {

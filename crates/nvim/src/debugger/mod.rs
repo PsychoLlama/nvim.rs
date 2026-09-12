@@ -761,7 +761,7 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
             return false;
         }
         unsafe { set_oldval(Some(&mut *previous)) };
-        unsafe { set_newval(None) };
+        set_newval(None);
         unsafe { tv_free(previous.as_mut()) };
         unsafe { (*breakpoint).dbg_val = ptr::null_mut() };
         return true;
@@ -769,7 +769,7 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
 
     if previous.is_null() {
         // First evaluation: the baseline, with no old value to show.
-        unsafe { set_oldval(None) };
+        set_oldval(None);
         unsafe { (*breakpoint).dbg_val = tv };
         unsafe { set_newval(Some(&mut *tv)) };
         return true;
@@ -795,20 +795,14 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
 
 /// Record the "before" value the prompt banner prints, freeing whatever an
 /// earlier change left. A null typval renders as the empty value.
-///
-/// # Safety
-/// `tv` must be null or a live typval.
-unsafe fn set_oldval(tv: Option<&mut TypVal>) {
+fn set_oldval(tv: Option<&mut TypVal>) {
     // SAFETY: caller contract; the cell owns what it holds.
     unsafe { xfree(debug_oldval.get().cast()) };
     debug_oldval.set(unsafe { typval_tostring(tv.map(|tv| &*tv), true) });
 }
 
 /// [`set_oldval`] for the "after" value.
-///
-/// # Safety
-/// As [`set_oldval`].
-unsafe fn set_newval(tv: Option<&mut TypVal>) {
+fn set_newval(tv: Option<&mut TypVal>) {
     // SAFETY: as `set_oldval`.
     unsafe { xfree(debug_newval.get().cast()) };
     debug_newval.set(unsafe { typval_tostring(tv.map(|tv| &*tv), true) });

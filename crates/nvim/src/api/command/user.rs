@@ -432,13 +432,11 @@ pub unsafe fn nvim_buf_get_commands(
             error = Error::validation(c"builtin=true not implemented");
             return ApiDict::EMPTY.reported(error);
         }
-        // SAFETY: `arena` is the caller's.
-        return unsafe { commands_array(None) }.reported(error);
+        return commands_array(None).reported(error);
     }
     let b = find_buffer_by_handle(buf)?;
     let (false, Some(b)) = (builtin, b) else {
         return Ok(ApiDict::EMPTY);
     };
-    // SAFETY: `arena` is the caller's.
-    unsafe { commands_array(Some(b)) }.reported(error)
+    commands_array(Some(b)).reported(error)
 }

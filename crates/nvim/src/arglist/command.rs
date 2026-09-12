@@ -194,8 +194,7 @@ unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
         | CCGD_EXCMD as c_int
         | flag_if(!other, CCGD_MULTWIN)
         | flag_if(forceit, CCGD_FORCEIT);
-    // SAFETY: `check_changed` only reads the buffer, and may prompt.
-    !unsafe { check_changed(Buf::current(), flags) }
+    !check_changed(Buf::current(), flags)
 }
 
 /// Edit argument `argn`. A `:s…` command splits a window first; `:tab` opens
@@ -288,7 +287,7 @@ pub unsafe fn ex_next(args: *mut ExArg) {
     // SAFETY: curbuf is valid; `check_changed` only reads it and may prompt.
     let flags = CCGD_AW as c_int | CCGD_EXCMD as c_int | flag_if(forceit, CCGD_FORCEIT);
     let buffer = Buf::current();
-    let blocked = unsafe { !buf_hide(buffer) && !is_snext && check_changed(buffer, flags) };
+    let blocked = !buf_hide(buffer) && !is_snext && check_changed(buffer, flags);
     if blocked {
         return;
     }
@@ -328,8 +327,7 @@ pub fn ex_argdedupe(_args: *mut ExArg) {
                 j += 1;
                 continue;
             }
-            // SAFETY: `j` is in range.
-            unsafe { remove_arg(j) };
+            remove_arg(j);
             let idx = cur_arg_idx();
             if idx == j {
                 set_cur_arg_idx(i);

@@ -464,12 +464,7 @@ pub(crate) fn shift_within<T>(list: &mut [T], src: core::ops::Range<usize>, dest
 /// Put `entry` into a jump or change list kept oldest-first, dropping the
 /// oldest item if it is full. `same` recognises an entry the list already
 /// holds, which is then not inserted at all.
-///
-/// # Safety
-///
-/// `entry` must be an initialized `ShadaEntry` whose pointer fields point at
-/// live data for the call.
-unsafe fn insert_mark_list(
+fn insert_mark_list(
     list: &mut [ShadaEntry],
     size: &mut size_t,
     mut entry: ShadaEntry,
@@ -755,11 +750,9 @@ unsafe fn merge_file_mark(wms: *mut WriteMergerState, mut entry: ShadaEntry) {
         let mark = change.mark;
         let changes = unsafe { &mut (*filemarks).changes };
         let changes_size = unsafe { &mut (*filemarks).changes_size };
-        unsafe {
-            insert_mark_list(changes, changes_size, entry, |existing| {
-                marks_equal(existing.data.filemark().mark, mark)
-            })
-        };
+        insert_mark_list(changes, changes_size, entry, |existing| {
+            marks_equal(existing.data.filemark().mark, mark)
+        });
         return;
     }
 

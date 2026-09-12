@@ -49,12 +49,7 @@ const fn wildmenu_gesture(c: ::core::ffi::c_int) -> Option<WildMode> {
 ///
 /// - `CTRL-\ CTRL-N` or `CTRL-\ CTRL-G` goes to Normal mode.
 /// - `CTRL-\ e` prompts for an expression.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
+fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
     let mut cc = Cc::current();
     s.c = {
         let _raw = Keys::unmapped_with_codes();
@@ -122,12 +117,7 @@ unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
 
 /// Free the expanded names and take the wildmenu down.  `c` is the key that
 /// ended it, or -1 when no key did.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: ::core::ffi::c_int) {
+pub(crate) fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: ::core::ffi::c_int) {
     if cmdline_pum_active() {
         if c != -1 {
             s.skip_pum_redraw = s.skip_pum_redraw
@@ -151,7 +141,7 @@ pub(crate) unsafe fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: :
         s.xpc.xp_context = ExpandContext::Nothing;
     }
     s.wim_index = 0;
-    unsafe { wildmenu_cleanup(Cc::current()) };
+    wildmenu_cleanup(Cc::current());
 }
 
 /// The key loop's `state_execute` callback: one key, dispatched.  Installed
@@ -180,7 +170,7 @@ pub(crate) unsafe fn command_line_execute(
     // an <expr> mapping), clean up the wildmenu completion state so that
     // stale completion data is not used.
     if cc.cmdbuff_replaced && s.xpc.xp_numfiles > 0 {
-        unsafe { command_line_end_wildmenu(s, false, -1) };
+        command_line_end_wildmenu(s, false, -1);
     }
     cc.cmdbuff_replaced = false;
 
@@ -211,11 +201,11 @@ pub(crate) unsafe fn command_line_execute(
         }
         // Re-apply 'incsearch' highlighting in case it was cleared.
         if Win::current().w_display_tick > display_tick_saved && s.is_state.did_incsearch {
-            unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };
+            may_do_incsearch_highlighting(s.firstc, s.count, s.is_state());
         }
         // If f_setcmdline() changed the cmdline, treat it as such.
         if cc.cmdbuff_replaced {
-            unsafe { command_line_changed(s) };
+            command_line_changed(s);
         }
 
         // nvim_select_popupmenu_item() can be called from the handling of
@@ -225,7 +215,7 @@ pub(crate) unsafe fn command_line_execute(
                 s.next_wild(WildMode::PumWant, WildOpts::NONE);
                 if pum_want.get().finish {
                     s.next_wild(WildMode::Apply, WildOpts::NO_BEEP);
-                    unsafe { command_line_end_wildmenu(s, false, s.c) };
+                    command_line_end_wildmenu(s, false, s.c);
                 }
             }
             pum_ext_want_done();
@@ -343,7 +333,7 @@ pub(crate) unsafe fn command_line_execute(
 
     // Free the expanded names when finished walking through the matches.
     if end_wildmenu {
-        unsafe { command_line_end_wildmenu(s, key_is_wc, s.c) };
+        command_line_end_wildmenu(s, key_is_wc, s.c);
     }
 
     if p_wmnu.get() != 0 {
@@ -353,9 +343,9 @@ pub(crate) unsafe fn command_line_execute(
     // CTRL-\ CTRL-N or CTRL-\ CTRL-G goes to Normal mode, CTRL-\ e
     // prompts for an expression.
     if s.c == Ctrl_BSL {
-        match unsafe { command_line_handle_ctrl_bsl(s) } {
-            CtrlBsl::Changed => return unsafe { command_line_changed(s) },
-            CtrlBsl::NotChanged => return unsafe { command_line_not_changed(s) },
+        match command_line_handle_ctrl_bsl(s) {
+            CtrlBsl::Changed => return command_line_changed(s),
+            CtrlBsl::NotChanged => return command_line_not_changed(s),
             CtrlBsl::GotoNormalMode => return 0, // back to cmd mode
             // The backslash key was not processed by
             // command_line_handle_ctrl_bsl().
@@ -394,7 +384,7 @@ pub(crate) unsafe fn command_line_execute(
             // now.
             s.gotesc = false;
             if ccheck_abbr(s.c + ABBR_OFF) {
-                return unsafe { command_line_changed(s) };
+                return command_line_changed(s);
             }
 
             if !cmd_silent.get() {
@@ -418,10 +408,10 @@ pub(crate) unsafe fn command_line_execute(
         let res = unsafe { command_line_wildchar_complete(s.raw()) };
         drop(quiet_bell);
         if res == KeyOutcome::Changed {
-            return unsafe { command_line_changed(s) };
+            return command_line_changed(s);
         }
         if s.c == Key::Wild.code() {
-            return unsafe { command_line_not_changed(s) };
+            return command_line_not_changed(s);
         }
     }
 
@@ -444,7 +434,7 @@ pub(crate) unsafe fn command_line_execute(
         }
         s.next_wild(WildMode::Prev, WildOpts::NONE);
         s.next_wild(WildMode::Prev, WildOpts::NONE);
-        return unsafe { command_line_changed(s) };
+        return command_line_changed(s);
     }
 
     if s.c == NUL || s.c == Key::Zero.code() {
@@ -461,12 +451,12 @@ pub(crate) unsafe fn command_line_execute(
             init_incsearch_state(s.is_state());
         }
         if KeyTyped.get() || vpeekc() == NUL {
-            unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };
+            may_do_incsearch_highlighting(s.firstc, s.count, s.is_state());
         }
-        return unsafe { command_line_not_changed(s) };
+        return command_line_not_changed(s);
     }
 
-    unsafe { command_line_handle_key(s) }
+    command_line_handle_key(s)
 }
 
 pub(crate) fn may_trigger_cursormovedc(s: Cls) {
@@ -482,18 +472,13 @@ pub(crate) fn may_trigger_cursormovedc(s: Cls) {
 /// Incremental searches for `/` and `?` only search and redraw here if
 /// something changed in the past; [`command_line_changed`] is what runs when
 /// the line itself did change.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn command_line_not_changed(mut s: Cls) -> ::core::ffi::c_int {
+pub(crate) fn command_line_not_changed(mut s: Cls) -> ::core::ffi::c_int {
     may_trigger_cursormovedc(s);
     s.prev_cmdpos = Cc::current().cmdpos;
     if !s.is_state.incsearch_postponed {
         return 1;
     }
-    unsafe { command_line_changed(s) }
+    command_line_changed(s)
 }
 
 /// Trigger the `CmdlineChanged` autocommands.
@@ -526,12 +511,7 @@ pub(crate) fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
 
 /// A key changed the command line: show the `'inccommand'` preview or the
 /// `'incsearch'` highlighting, and fire `CmdlineChanged`.
-///
-/// # Safety
-///
-/// `s` must be an initialized `Cls` whose pointer fields point at live data
-/// for the call.
-pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
+pub(crate) fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
     let cc = Cc::current();
     let prev_cmdpreview = cmdpreview.get();
     let preview_shown = s.firstc == ':' as ::core::ffi::c_int
@@ -549,7 +529,7 @@ pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
             let _ = update_screen(); // clear the 'inccommand' preview
         }
         if s.xpc.xp_context == ExpandContext::Nothing && (KeyTyped.get() || vpeekc() == NUL) {
-            unsafe { may_do_incsearch_highlighting(s.firstc, s.count, s.is_state()) };
+            may_do_incsearch_highlighting(s.firstc, s.count, s.is_state());
         }
     }
 

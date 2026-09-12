@@ -308,10 +308,7 @@ unsafe fn script_host_do_range(name: &CStr, args: *mut ExArg) {
 /// Write `buffer` if 'autowrite' or 'autowriteall' is set.
 ///
 /// Careful: autocommands may make `buffer` invalid.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed> {
+pub(crate) fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed> {
     if !(p_aw.get() != 0 || p_awa.get() != 0)
         || p_write.get() == 0
         // never autowrite a "nofile" or "nowrite" buffer
@@ -322,7 +319,7 @@ pub(crate) unsafe fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed>
         return Err(Failed);
     }
     let bufref = BufRef::of(buffer);
-    let r = unsafe { buf_write_all(buffer, forceit) };
+    let r = buf_write_all(buffer, forceit);
 
     // The write can succeed and still leave the buffer changed, e.g. on
     // a conversion error. That is a failure.
@@ -333,10 +330,7 @@ pub(crate) unsafe fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed>
 }
 
 /// Flush every buffer except the ones that are readonly or never written.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn autowrite_all() {
+pub(crate) fn autowrite_all() {
     if !(p_aw.get() != 0 || p_awa.get() != 0) || p_write.get() == 0 {
         return;
     }
@@ -347,7 +341,7 @@ pub(crate) unsafe fn autowrite_all() {
     while let Some(b) = cur {
         if buf_is_changed(b) && b.b_p_ro == 0 && !buf_is_dontwrite(Some(b)) {
             let bufref = BufRef::of(b);
-            let _ = unsafe { buf_write_all(b, false) };
+            let _ = buf_write_all(b, false);
             if !bufref.valid() {
                 cur = first_buffer();
             }
@@ -358,20 +352,15 @@ pub(crate) unsafe fn autowrite_all() {
 
 /// Whether `buffer` was changed and so cannot be abandoned. `flags` is a set of
 /// the `CCGD_*` values.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn check_changed(buffer: Buf, flags: c_int) -> bool {
+pub(crate) fn check_changed(buffer: Buf, flags: c_int) -> bool {
     let forceit = flags & CCGD_FORCEIT != 0;
     // SAFETY: module contract, here and at every `unsafe` below.
     let bufref = BufRef::of(buffer);
 
-    let blocked = unsafe {
-        !forceit
-            && buf_is_changed(buffer)
-            && (flags & CCGD_MULTWIN != 0 || buffer.b_nwindows <= 1)
-            && (flags & CCGD_AW == 0 || autowrite(buffer, forceit).is_err())
-    };
+    let blocked = !forceit
+        && buf_is_changed(buffer)
+        && (flags & CCGD_MULTWIN != 0 || buffer.b_nwindows <= 1)
+        && (flags & CCGD_AW == 0 || autowrite(buffer, forceit).is_err());
     if !blocked {
         return false;
     }
@@ -400,7 +389,7 @@ pub(crate) unsafe fn check_changed(buffer: Buf, flags: c_int) -> bool {
     if !bufref.valid() {
         return false;
     }
-    unsafe { dialog_changed(buffer, count > 1) };
+    dialog_changed(buffer, count > 1);
     if !bufref.valid() {
         return false;
     }
@@ -410,10 +399,7 @@ pub(crate) unsafe fn check_changed(buffer: Buf, flags: c_int) -> bool {
 /// Ask what to do about abandoning the changed buffer `buffer`. The caller must
 /// have checked 'write' first. `checkall` offers to deal with every changed
 /// buffer at once.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn dialog_changed(mut buffer: Buf, checkall: bool) {
+pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // `check_overwrite` needs an ExArg; upstream hands it an all-zero one.
     let mut ea = ExArg::default();
@@ -441,7 +427,7 @@ pub(crate) unsafe fn dialog_changed(mut buffer: Buf, checkall: bool) {
         let target = buffer;
         if unsafe { check_overwrite(&mut ea, target, buffer.b_fname, buffer.b_ffname, false) }.is_ok()
             // didn't hit Cancel
-            && unsafe { buf_write_all(buffer, false) }.is_ok()
+            && buf_write_all(buffer, false).is_ok()
         {
             return;
         }
@@ -456,7 +442,7 @@ pub(crate) unsafe fn dialog_changed(mut buffer: Buf, checkall: bool) {
     } else if ret == VIM_NO as c_int {
         unchanged(buffer, true, false);
     } else if ret == VIM_ALL as c_int {
-        unsafe { write_all_writable() };
+        write_all_writable();
     } else if ret == VIM_DISCARDALL as c_int {
         for buf2 in buffers() {
             unchanged(buf2, true, false);
@@ -466,10 +452,7 @@ pub(crate) unsafe fn dialog_changed(mut buffer: Buf, checkall: bool) {
 
 /// The "Save All" answer: write every modified buffer that can be written.
 /// Readonly ones are skipped, since those need confirming individually.
-///
-/// # Safety
-/// Module contract.
-unsafe fn write_all_writable() {
+fn write_all_writable() {
     let mut ea = ExArg::default();
     // SAFETY: module contract. As in `autowrite_all`, a write's
     // autocommands can delete the buffer being walked.
@@ -484,7 +467,7 @@ unsafe fn write_all_writable() {
                 .is_ok()
             {
                 // didn't hit Cancel
-                let _ = unsafe { buf_write_all(target, false) };
+                let _ = buf_write_all(target, false);
             }
             if !bufref.valid() {
                 cur = first_buffer();
@@ -495,10 +478,7 @@ unsafe fn write_all_writable() {
 }
 
 /// Ask whether to close the terminal buffer `buffer`.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn dialog_close_terminal(buffer: Buf) -> bool {
+pub(crate) fn dialog_close_terminal(buffer: Buf) -> bool {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes.
     let name = if buffer.b_fname.is_null() {
@@ -521,25 +501,19 @@ pub(crate) unsafe fn dialog_close_terminal(buffer: Buf) -> bool {
 
 /// Whether `buffer` can be abandoned -- by hiding it, autowriting it or
 /// unloading it.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn can_abandon(buffer: Buf, forceit: bool) -> bool {
+pub(crate) fn can_abandon(buffer: Buf, forceit: bool) -> bool {
     let hidden = buf_hide(buffer);
     hidden
         || !buf_is_changed(buffer)
         || buffer.b_nwindows > 1
-        || unsafe { autowrite(buffer, forceit) }.is_ok()
+        || autowrite(buffer, forceit).is_ok()
         || forceit
 }
 
 /// The buffers to ask about, most interesting first: the current buffer, the
 /// current tab page's, the other tab pages', then everything else. Each
 /// buffer number appears once.
-///
-/// # Safety
-/// Module contract, and there is at least one buffer.
-unsafe fn changed_check_order() -> Vec<c_int> {
+fn changed_check_order() -> Vec<c_int> {
     fn push_unique(nrs: &mut Vec<c_int>, nr: c_int) {
         if !nrs.contains(&nr) {
             nrs.push(nr);
@@ -570,15 +544,12 @@ unsafe fn changed_check_order() -> Vec<c_int> {
 ///
 /// `hidden` checks only hidden buffers. `unload` unloads the buffer rather
 /// than hiding it, which is what `:q!` wants.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
+pub(crate) fn check_changed_any(hidden: bool, unload: bool) -> bool {
     if first_buffer().is_none() {
         return false;
     }
     let mut found = None;
-    for nr in unsafe { changed_check_order() } {
+    for nr in changed_check_order() {
         let Some(buf) = find_buf(nr) else { continue };
         if hidden && buf.b_nwindows != 0 || !buf_is_changed(buf) {
             continue;
@@ -587,7 +558,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
         // Try auto-writing the buffer. If that fails but the buffer no
         // longer exists it is not changed, and that is fine.
         let flags = if p_awa.get() != 0 { CCGD_AW } else { 0 } | CCGD_MULTWIN | CCGD_ALLBUF;
-        if unsafe { check_changed(buf, flags) } {
+        if check_changed(buf, flags) {
             // Didn't save -- still changed, if it is still there at all.
             found = bufref.get();
             if found.is_some() {
@@ -602,7 +573,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     exiting.set(false);
     // With ":confirm" the dialog was the message; do not add an error.
     if !(p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) {
-        unsafe { report_unwritten(culprit) };
+        report_unwritten(culprit);
     }
 
     // Try to find a window that already shows the buffer.
@@ -634,10 +605,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
 
 /// The "you have not written this" error for [`check_changed_any`], plus the
 /// `wait_return` that keeps it readable when a redraw is about to follow.
-///
-/// # Safety
-/// Module contract.
-unsafe fn report_unwritten(buffer: Buf) {
+fn report_unwritten(buffer: Buf) {
     // `wait_return` is a no-op while `vgetc` is busy (Quit used from a window
     // menu); make sure the message does not scroll up then.
     if vgetc_busy.get() > 0 {
@@ -686,10 +654,7 @@ pub(crate) fn check_fname() -> Result<(), Failed> {
 }
 
 /// Write out the whole of `buffer`.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
+pub(crate) fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
     let old_curbuf = Buf::current_raw();
     // SAFETY: module contract.
     let retval = unsafe {
@@ -889,7 +854,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     let mut split = false;
     if !buf_hide(Buf::current()) {
         let _no_emsg = Suppress::emsg();
-        split = unsafe { check_changed(Buf::current(), CCGD_AW | CCGD_EXCMD) };
+        split = check_changed(Buf::current(), CCGD_AW | CCGD_EXCMD);
     }
 
     // Fake a ":sfirst" or ":first" to edit the first argument.

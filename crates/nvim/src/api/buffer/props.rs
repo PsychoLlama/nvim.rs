@@ -46,7 +46,7 @@ pub unsafe fn nvim_buf_get_keymap(buf: BufferHandle, mode: String_0) -> Result<A
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Array::EMPTY);
     };
-    Ok(unsafe { keymap_array(mode, Some(b)) })
+    Ok(keymap_array(mode, Some(b)))
 }
 
 /// # Safety

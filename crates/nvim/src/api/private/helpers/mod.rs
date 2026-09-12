@@ -181,8 +181,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
     if got_int.get() {
         // An interrupt outranks anything that was thrown along the way.
         if did_throw.get() {
-            // SAFETY: `did_throw` says there is a current exception.
-            unsafe { discard_current_exception() };
+            discard_current_exception();
         }
         caught = Some(Error::exception(c"Keyboard interrupt"));
         got_int.set(false);
@@ -197,8 +196,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
         // SAFETY: the message is a NUL-terminated string.
         let text = unsafe { cstr::at(msg) };
         caught = Some(Error::from_message(kErrorTypeException, text));
-        // SAFETY: the list has been rendered into the answer.
-        unsafe { free_global_msglist() };
+        free_global_msglist();
         if should_free {
             // SAFETY: `msg` is the allocation `get_exception_string` made.
             unsafe { xfree(msg.cast()) };
@@ -223,8 +221,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState) -> Result<(), Error> {
                 api_error!(kErrorTypeException, "{name}: {value}")
             });
         }
-        // SAFETY: the exception has been rendered into the answer.
-        unsafe { discard_current_exception() };
+        discard_current_exception();
     }
 
     // SAFETY: `tstate` is what the matching `try_enter` filled in.

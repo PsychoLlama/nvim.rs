@@ -325,7 +325,7 @@ pub(crate) unsafe fn do_ecmd(
             ccgd |= CCGD_EXCMD as c_int;
         }
         // SAFETY: as above.
-        if must_ask && unsafe { check_changed(Buf::current(), ccgd) } {
+        if must_ask && check_changed(Buf::current(), ccgd) {
             if fnum == 0 && other_file && !ffname.is_null() {
                 let lnum = state.newlnum.max(0);
                 // SAFETY: the names are live.
@@ -369,7 +369,7 @@ pub(crate) unsafe fn do_ecmd(
         let buf = Buf::current_raw();
         // SAFETY: `curbuf` is live.
         if flags.has(EcmdFlags::SET_HELP) || keep_help_flag.get() {
-            unsafe { prepare_help_buffer() };
+            prepare_help_buffer();
         } else if !Buf::current().b_help {
             // Don't make a buffer listed if it's a help buffer.  Useful when
             // using CTRL-O to go back to a help file.

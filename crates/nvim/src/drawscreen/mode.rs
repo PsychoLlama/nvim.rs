@@ -164,7 +164,7 @@ pub fn showmode() -> c_int {
                 if State.get() & MODE_LANGMAP != 0 {
                     if Win::current().w_onebuf_opt.wo_arab != 0 {
                         put_translated(c" Arabic");
-                    } else if let Some(keymap_name) = unsafe { keymap_str(Win::current()) } {
+                    } else if let Some(keymap_name) = keymap_str(Win::current()) {
                         let buf = keymap.as_mut_ptr();
                         let plen = unsafe {
                             vim_snprintf(
