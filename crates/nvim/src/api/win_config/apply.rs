@@ -130,9 +130,7 @@ impl Relayout {
                 return Err(Error::exception(c"Cannot split a floating window"));
             }
             if win_tp != parent_tp {
-                // SAFETY: `win` is a live window and `win_tp` the tab page
-                // it was just found on.
-                unsafe { win_can_move_tp(win, expect_tab(win_tp)) }?;
+                win_can_move_tp(win, expect_tab(win_tp))?;
             }
         }
         check_split_disallowed_err(win)?;
@@ -479,9 +477,7 @@ impl Refloat {
     /// Leave the tab page the window is on, when it is the current window,
     /// and check that both tab pages survived the autocommands.
     fn leave_tab(&mut self) -> Result<(), Refusal> {
-        // SAFETY: the window is live for as long as this record, and
-        // `win_tp` the tab page it was just found on.
-        let allowed = unsafe { win_can_move_tp(self.win, expect_tab(self.win_tp)) };
+        let allowed = win_can_move_tp(self.win, expect_tab(self.win_tp));
         allowed.map_err(Refusal::AsIs)?;
         self.altwin = win_find_altwin(self.win, expect_tab(self.win_tp));
         debug_assert!(self.altwin.is_some(), "altwin");
@@ -507,8 +503,7 @@ impl Refloat {
             return Err(Refusal::Restore(why));
         }
         if self.win_tp != self.parent_tp {
-            // SAFETY: as above.
-            let allowed = unsafe { win_can_move_tp(self.win, expect_tab(self.win_tp)) };
+            let allowed = win_can_move_tp(self.win, expect_tab(self.win_tp));
             allowed.map_err(Refusal::Restore)?;
         }
         self.altwin = win_find_altwin(self.win, expect_tab(self.win_tp));

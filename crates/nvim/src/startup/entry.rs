@@ -345,7 +345,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let use_remote_ui = embedded_mode.get() && !headless_mode.get();
     if use_remote_ui {
         time_msg_at(c"waiting for UI");
-        unsafe { remote_ui_wait_for_attach() };
+        remote_ui_wait_for_attach();
         time_msg_at(c"done waiting for UI");
         first_win().w_prev_height = first_win().w_height;
     }

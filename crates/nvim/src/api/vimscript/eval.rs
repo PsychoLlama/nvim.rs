@@ -56,10 +56,8 @@ impl Drop for RecursionGuard {
 }
 
 /// # Safety
-///
 /// `expr` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn nvim_eval(expr: String_0) -> Result<Object, Error> {
     static recursive: GlobalCell<c_int> = GlobalCell::new(0);
     let mut evalarg = EVALARG_EVALUATE;
@@ -157,11 +155,9 @@ unsafe fn call_function_with(
 }
 
 /// # Safety
-///
 /// `fn_0` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `args` must be a well-formed API array, its `size`
-/// elements initialized. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
+/// elements initialized.
 pub unsafe fn nvim_call_function(fn_0: String_0, args: Array) -> Result<Object, Error> {
     // SAFETY: `fn_0`/`args`/`arena` are the caller's; a null self dictionary
     // means a plain function call.
@@ -169,12 +165,10 @@ pub unsafe fn nvim_call_function(fn_0: String_0, args: Array) -> Result<Object, 
 }
 
 /// # Safety
-///
 /// `dict` must be a well-formed API object the caller owns for the call. `mut
-/// fn_0` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `args` must be a well-formed API array, its `size`
-/// elements initialized. `arena` must point at a live arena, which the memory
-/// this answers with is taken from and must outlive.
+/// fn_0` must be a well-formed API string: `size` readable bytes with a NUL at
+/// `data[size]`. `args` must be a well-formed API array, its `size` elements
+/// initialized.
 pub unsafe fn nvim_call_dict_function(
     dict: Object,
     mut fn_0: String_0,

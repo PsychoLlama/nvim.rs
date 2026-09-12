@@ -237,10 +237,8 @@ pub unsafe fn nvim_replace_termcodes(
 }
 
 /// # Safety
-///
 /// `mode` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn nvim_get_keymap(mode: String_0) -> Array {
     unsafe { keymap_array(mode, None) }
 }

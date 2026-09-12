@@ -19,9 +19,8 @@ use crate::api::private::validate::{err_bad_number, err_bad_value};
 use crate::narrow::number_as_int;
 
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
     // SAFETY: these take a highlight-group id rather than a pointer.
     let known = unsafe { syn_get_final_id(number_as_int(hl_id)) } != 0;
@@ -35,10 +34,8 @@ pub unsafe fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict,
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn nvim_get_hl_by_name(name: String_0, rgb: Boolean) -> Result<ApiDict, Error> {
     let error;
     // SAFETY: `name` is the caller's NUL-terminated group name.

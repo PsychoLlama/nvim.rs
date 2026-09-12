@@ -36,7 +36,8 @@ use core::ptr;
 /// The windows of `tabpage`, oldest first.
 ///
 /// # Safety
-/// `arena` must be the caller's, and live for as long as the answer is.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
     let mut rv = Array::EMPTY;
     let Some(tab) = find_tab_by_handle(tabpage)?.filter(|&t| valid_tabpage(t.id())) else {
@@ -57,7 +58,7 @@ pub unsafe fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Er
 /// The tab-scoped variable `name`.
 ///
 /// # Safety
-/// `name` must point at its own bytes, and `arena` must be the caller's.
+/// `name` must point at its own bytes.
 pub unsafe fn nvim_tabpage_get_var(
     tabpage: TabpageHandle,
     name: String_0,

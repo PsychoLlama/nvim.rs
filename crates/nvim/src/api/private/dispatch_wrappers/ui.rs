@@ -116,9 +116,7 @@ pub unsafe fn handle_nvim_ui_pum_set_bounds(
     let Some(arg_4) = as_float(args[3].take()) else {
         return Err(wrong_type(4, c"nvim_ui_pum_set_bounds", c"Float"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_ui_pum_set_bounds(channel_id, arg_1, arg_2, arg_3, arg_4) }?;
+    nvim_ui_pum_set_bounds(channel_id, arg_1, arg_2, arg_3, arg_4)?;
     Ok(Object::Nil)
 }
 
@@ -151,9 +149,7 @@ pub unsafe fn handle_nvim_ui_pum_set_height(
     let Some(arg_1) = as_integer(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_ui_pum_set_height", c"Integer"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_ui_pum_set_height(channel_id, arg_1) }?;
+    nvim_ui_pum_set_height(channel_id, arg_1)?;
     Ok(Object::Nil)
 }
 
@@ -291,9 +287,7 @@ pub unsafe fn handle_nvim_ui_try_resize(
     let Some(arg_2) = as_integer(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_ui_try_resize", c"Integer"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_ui_try_resize(channel_id, arg_1, arg_2) }?;
+    nvim_ui_try_resize(channel_id, arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -332,9 +326,7 @@ pub unsafe fn handle_nvim_ui_try_resize_grid(
     let Some(arg_3) = as_integer(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_ui_try_resize_grid", c"Integer"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_ui_try_resize_grid(channel_id, arg_1, arg_2, arg_3) }?;
+    nvim_ui_try_resize_grid(channel_id, arg_1, arg_2, arg_3)?;
     Ok(Object::Nil)
 }
 

@@ -20,11 +20,9 @@ use crate::api::private::helpers::{
 };
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `value` must be a well-formed API object the caller owns
-/// for the call. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// for the call.
 pub unsafe fn buffer_set_var(
     buffer: BufferHandle,
     name: String_0,
@@ -40,10 +38,8 @@ pub unsafe fn buffer_set_var(
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn buffer_del_var(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
@@ -54,11 +50,9 @@ pub unsafe fn buffer_del_var(buffer: BufferHandle, name: String_0) -> Result<Obj
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `value` must be a well-formed API object the caller owns
-/// for the call. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// for the call.
 pub unsafe fn window_set_var(
     window: WindowHandle,
     name: String_0,
@@ -73,10 +67,8 @@ pub unsafe fn window_set_var(
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn window_del_var(window: WindowHandle, name: String_0) -> Result<Object, Error> {
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
@@ -87,11 +79,9 @@ pub unsafe fn window_del_var(window: WindowHandle, name: String_0) -> Result<Obj
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `value` must be a well-formed API object the caller owns
-/// for the call. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// for the call.
 pub unsafe fn tabpage_set_var(
     tabpage: TabpageHandle,
     name: String_0,
@@ -106,10 +96,8 @@ pub unsafe fn tabpage_set_var(
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<Object, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
@@ -120,11 +108,9 @@ pub unsafe fn tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `value` must be a well-formed API object the caller owns
-/// for the call. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// for the call.
 pub unsafe fn vim_set_var(name: String_0, value: Object) -> Result<Object, Error> {
     let vars = get_globvar_dict();
     // SAFETY: as `buffer_set_var`, for the global dictionary.
@@ -132,10 +118,8 @@ pub unsafe fn vim_set_var(name: String_0, value: Object) -> Result<Object, Error
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn vim_del_var(name: String_0) -> Result<Object, Error> {
     let vars = get_globvar_dict();
     // SAFETY: as `vim_set_var`.

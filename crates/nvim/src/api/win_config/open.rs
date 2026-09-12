@@ -365,10 +365,7 @@ pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c
 }
 
 /// Whether `window` may be moved to tab page `tabpage`, answering why not.
-///
-/// # Safety
-/// `window` must be a live window and `tabpage` a live tab page.
-pub(crate) unsafe fn win_can_move_tp(window: Win, tabpage: TabPage) -> Result<(), Error> {
+pub(crate) fn win_can_move_tp(window: Win, tabpage: TabPage) -> Result<(), Error> {
     let w = window;
     let other_tab = if tabpage == TabPage::current() {
         ::core::ptr::null_mut::<Tabpage>()

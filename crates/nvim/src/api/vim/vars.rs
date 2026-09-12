@@ -31,7 +31,8 @@ fn cursor_line() -> (BufferHandle, Integer) {
 /// The line the cursor is on.
 ///
 /// # Safety
-/// `arena` must be the caller's, and live for as long as the answer is.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_get_current_line() -> Result<String_0, Error> {
     let (buf, lnum) = cursor_line();
     // SAFETY: `arena` is the caller's, and the pair names the cursor's line.
@@ -62,7 +63,7 @@ pub unsafe fn nvim_del_current_line(arena: *mut Arena) -> Result<(), Error> {
 /// is not there yet.
 ///
 /// # Safety
-/// `name` must name its own bytes and `arena` must be the caller's.
+/// `name` must name its own bytes.
 pub unsafe fn nvim_get_var(name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     // SAFETY: the caller's promise about `name`.
@@ -134,7 +135,7 @@ pub unsafe fn nvim_del_var(name: String_0) -> Result<(), Error> {
 /// The `v:` variable `name`.
 ///
 /// # Safety
-/// `name` must name its own bytes and `arena` must be the caller's.
+/// `name` must name its own bytes.
 pub unsafe fn nvim_get_vvar(name: String_0) -> Result<Object, Error> {
     // SAFETY: the caller's promise; `v:` is live from startup to exit and
     // `error` is this frame's own slot.

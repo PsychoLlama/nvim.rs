@@ -76,7 +76,8 @@ fn config_put_bordertext(
 /// cell, or a `[char, highlight]` pair for a cell that carries one.
 ///
 /// # Safety
-/// `arena` must be the caller's, and outlive the answer along with `fconfig`.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 unsafe fn border_array(fconfig: WinCfg) -> Array {
     let mut border = Array::with_capacity(8);
     for i in 0..8 {
@@ -113,7 +114,8 @@ unsafe fn border_array(fconfig: WinCfg) -> Array {
 /// `win`'s configuration, as the dictionary `nvim_open_win` would take.
 ///
 /// # Safety
-/// `arena` must be the caller's, and live for as long as the answer is.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Error> {
     let mut rv = KeyDict_win_config::default();
     let Some(wp) = find_window_by_handle(win)? else {

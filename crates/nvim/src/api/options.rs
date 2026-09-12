@@ -262,10 +262,7 @@ fn static_option(text: &'static CStr) -> OptVal {
 }
 
 /// Take the scratch buffer `do_ft_buf` made back out of existence.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-unsafe fn wipe_ft_buf(mut buffer: Buf) {
+fn wipe_ft_buf(mut buffer: Buf) {
     block_autocmds();
     let bufref = BufRef::of(buffer);
     close_windows(buffer, false);
@@ -375,7 +372,8 @@ pub unsafe fn nvim_set_option_value(
 /// Every option's metadata, keyed by name.
 ///
 /// # Safety
-/// `arena` must be the caller's, and live for as long as the answer is.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_get_all_options_info() -> ApiDict {
     // SAFETY: `arena` is the caller's, per this function's contract.
     unsafe { get_all_vimoptions() }

@@ -23,10 +23,8 @@ use crate::types::Failed;
 use crate::winlayer::Buf;
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn nvim_buf_get_var(buf: BufferHandle, name: String_0) -> Result<Object, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Object::Nil);
@@ -42,10 +40,8 @@ pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
 }
 
 /// # Safety
-///
 /// `mode` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn nvim_buf_get_keymap(buf: BufferHandle, mode: String_0) -> Result<Array, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Array::EMPTY);

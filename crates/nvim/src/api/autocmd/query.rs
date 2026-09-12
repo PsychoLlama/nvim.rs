@@ -264,8 +264,7 @@ fn matches_pattern(ap: &AutoPat, filters: &[&::core::ffi::CStr]) -> bool {
 /// One command, as the Dict `nvim_get_autocmds` reports it.
 ///
 /// # Safety
-/// A `Partial` handler's pointer must name a live partial, and `arena` must
-/// be the caller's.
+/// A `Partial` handler's pointer must name a live partial.
 unsafe fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict {
     // Every C string read below is either a row's own or a static name, so
     // each `cstr_to_string` copies out of a live one.

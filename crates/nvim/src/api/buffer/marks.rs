@@ -88,10 +88,8 @@ pub unsafe fn nvim_buf_set_mark(
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Error> {
     let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.

@@ -110,9 +110,8 @@ pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
 }
 
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_get_color_map() -> ApiDict {
     let mut colors: ApiDict = ApiDict::with_capacity(COLOR_NAMES.len() as size_t);
     for entry in &COLOR_NAMES {

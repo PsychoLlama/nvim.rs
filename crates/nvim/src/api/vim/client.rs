@@ -21,9 +21,8 @@ use crate::api::private::helpers::Reported;
 use crate::cstr;
 
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_get_api_info(channel_id: uint64_t) -> Array {
     let mut rv: Array = Array::with_capacity(2 as size_t);
     debug_assert!(
@@ -36,15 +35,12 @@ pub unsafe fn nvim_get_api_info(channel_id: uint64_t) -> Array {
 }
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `mut version` must be a well-formed API dictionary, its
 /// `size` entries initialized. `type_0` must be a well-formed API string:
-/// `size` readable bytes with a NUL at `data[size]`. `methods` must be a
-/// well-formed API dictionary, its `size` entries initialized. `attributes`
-/// must be a well-formed API dictionary, its `size` entries initialized.
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// `size` readable bytes with a NUL at `data[size]`. `methods` must be a well-
+/// formed API dictionary, its `size` entries initialized. `attributes` must be
+/// a well-formed API dictionary, its `size` entries initialized.
 pub unsafe fn nvim_set_client_info(
     channel_id: uint64_t,
     name: String_0,
@@ -85,9 +81,8 @@ pub fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<()
 }
 
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_get_chan_info(channel_id: uint64_t, mut chan: Integer) -> ApiDict {
     if chan < 0 as Integer {
         return ApiDict::EMPTY;
@@ -103,17 +98,15 @@ pub unsafe fn nvim_get_chan_info(channel_id: uint64_t, mut chan: Integer) -> Api
 }
 
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_list_chans() -> Array {
     unsafe { channel_all_info() }
 }
 
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_list_uis() -> Array {
     ui_array()
 }

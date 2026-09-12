@@ -69,7 +69,8 @@ pub fn nvim_win_set_buf(win: WindowHandle, buf: BufferHandle) -> Result<(), Erro
 /// `win`'s cursor, as a `[line, column]` pair.
 ///
 /// # Safety
-/// `arena` must be the caller's, and live for as long as the answer is.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Array::EMPTY);
@@ -165,7 +166,7 @@ pub fn nvim_win_set_width(win: WindowHandle, width: Integer) -> Result<(), Error
 /// The window-scoped variable `name`.
 ///
 /// # Safety
-/// `name` must point at its own bytes, and `arena` must be the caller's.
+/// `name` must point at its own bytes.
 pub unsafe fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Object, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Object::Nil);
@@ -206,7 +207,8 @@ pub unsafe fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), 
 /// `win`'s top-left corner, as a `[row, column]` pair of screen cells.
 ///
 /// # Safety
-/// `arena` must be the caller's, and live for as long as the answer is.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_win_get_position(win: WindowHandle) -> Result<Array, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Array::EMPTY);

@@ -32,9 +32,8 @@ pub unsafe fn buffer_insert(
 }
 
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn buffer_get_line(buffer: BufferHandle, index: Integer) -> Result<String_0, Error> {
     let index = convert_index(index as int64_t) as Integer;
     let no_lua = ::core::ptr::null_mut::<lua_State>();
@@ -82,9 +81,8 @@ pub unsafe fn buffer_del_line(
 }
 
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn buffer_get_line_slice(
     buffer: BufferHandle,
     start: Integer,

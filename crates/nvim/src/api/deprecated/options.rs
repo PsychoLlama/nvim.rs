@@ -24,10 +24,8 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_void};
 
 /// # Safety
-///
 /// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `arena` must point at a live arena, which the memory this
-/// answers with is taken from and must outlive.
+/// at `data[size]`.
 pub unsafe fn nvim_get_option_info(name: String_0) -> Result<ApiDict, Error> {
     let (buf, win) = (Buf::current(), Win::current());
     // SAFETY: `name` is the caller's, the two globals name the current

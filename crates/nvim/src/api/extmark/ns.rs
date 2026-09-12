@@ -95,7 +95,8 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
 }
 
 /// # Safety
-/// `arena` is null or this call's own arena.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 pub unsafe fn nvim_get_namespaces() -> ApiDict {
     namespace_ids.with(|ids| {
         let mut retval: ApiDict = ApiDict::with_capacity(ids.len() as size_t);

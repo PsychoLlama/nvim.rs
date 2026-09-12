@@ -1666,7 +1666,6 @@ count	callee	no_raw	defs	def
 3	walk	0	3	
 3	while_closes_do	1	1	crates/nvim/src/indent_c/recog.rs
 3	wildmenu_cleanup	1	1	crates/nvim/src/cmdexpand/wildkey.rs
-3	win_can_move_tp	1	1	crates/nvim/src/api/win_config/open.rs
 3	win_grid_alloc	1	1	crates/nvim/src/grid/mod.rs
 3	win_layer	1	1	crates/nvim/src/ui_compositor/mod.rs
 3	win_line	0	1	crates/nvim/src/drawline/mod.rs
@@ -2421,7 +2420,6 @@ count	callee	no_raw	defs	def
 2	nvim_tabpage_list_wins	1	1	crates/nvim/src/api/tabpage.rs
 2	nvim_tabpage_set_var	1	1	crates/nvim/src/api/tabpage.rs
 2	nvim_ui_attach	1	1	crates/nvim/src/api/ui/mod.rs
-2	nvim_ui_try_resize	1	1	crates/nvim/src/api/ui/mod.rs
 2	nvim_win_del_var	1	1	crates/nvim/src/api/window.rs
 2	nvim_win_get_config	1	1	crates/nvim/src/api/win_config/get.rs
 2	nvim_win_get_cursor	1	1	crates/nvim/src/api/window.rs
@@ -3116,7 +3114,6 @@ count	callee	no_raw	defs	def
 1	append_to_redobuff_keys	0	1	crates/nvim/src/getchar/redo.rs
 1	append_to_register	0	1	crates/nvim/src/register/yank.rs
 1	append_virt_lines	1	1	crates/nvim/src/decoration/query.rs
-1	apply_argopt	1	1	crates/nvim/src/api/command/cmd.rs
 1	apply_autocmds_retval	0	1	crates/nvim/src/autocmd/fire.rs
 1	apply_buffer_list	1	1	crates/nvim/src/shada/read.rs
 1	apply_entry	0	1	crates/nvim/src/undo/apply/entry.rs
@@ -4106,11 +4103,8 @@ count	callee	no_raw	defs	def
 1	nvim_get_api_info	1	1	crates/nvim/src/api/vim/client.rs
 1	nvim_set_client_info	1	1	crates/nvim/src/api/vim/client.rs
 1	nvim_set_decoration_provider	0	1	crates/nvim/src/api/extmark/decor.rs
-1	nvim_ui_pum_set_bounds	1	1	crates/nvim/src/api/ui/mod.rs
-1	nvim_ui_pum_set_height	1	1	crates/nvim/src/api/ui/mod.rs
 1	nvim_ui_set_option	1	1	crates/nvim/src/api/ui/mod.rs
 1	nvim_ui_term_event	1	1	crates/nvim/src/api/events.rs
-1	nvim_ui_try_resize_grid	1	1	crates/nvim/src/api/ui/mod.rs
 1	offer_to_handlers	1	1	crates/nvim/src/ui/callbacks.rs
 1	on_put	0	0	
 1	on_scrollback_option_changed	0	1	crates/nvim/src/terminal/refresh.rs
@@ -4400,7 +4394,6 @@ count	callee	no_raw	defs	def
 1	remote_ui_put	0	1	crates/nvim/src/api/ui/events.rs
 1	remote_ui_raw_line	0	1	crates/nvim/src/api/ui/line.rs
 1	remote_ui_set_title	0	0	
-1	remote_ui_wait_for_attach	1	1	crates/nvim/src/api/ui/mod.rs
 1	remove_bom	0	1	crates/nvim/src/mbyte/encoding/mod.rs
 1	remove_old_matches	1	1	crates/nvim/src/insexpand/matchlist.rs
 1	rename_with_tmp	0	1	crates/nvim/src/fileio/names.rs
@@ -4686,7 +4679,6 @@ count	callee	no_raw	defs	def
 1	stuff_readbuf_one_line	0	1	crates/nvim/src/getchar/buffers.rs
 1	stuff_redo_readbuf	0	1	crates/nvim/src/getchar/buffers.rs
 1	stuff_yank	0	1	crates/nvim/src/register/exec.rs
-1	style_slots	1	1	crates/nvim/src/api/win_config/border.rs
 1	sub_joining_lines	0	1	crates/nvim/src/ex_cmds/subst/parse.rs
 1	sub_match_spans_lines	1	1	crates/nvim/src/regexp/nfa/matcher.rs
 1	sub_parse_flags	0	1	crates/nvim/src/ex_cmds/subst/parse.rs

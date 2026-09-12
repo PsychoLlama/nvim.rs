@@ -159,11 +159,7 @@ pub fn remote_ui_disconnect(channel_id: u64, send_error_exit: bool) -> Result<()
 ///
 /// Used at startup by `--embed` without `--headless`, where the editor must
 /// not draw anything until it knows the terminal size.
-///
-/// # Safety
-///
-/// The main loop must be running.
-pub unsafe fn remote_ui_wait_for_attach() {
+pub fn remote_ui_wait_for_attach() {
     let loop_0 = main_loop.ptr();
     // SAFETY: the caller's promise -- the main loop is running, so its
     // event queue is live.
@@ -344,15 +340,7 @@ pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char) -> Re
 }
 
 /// Reports that this UI's window is now `width` by `height` cells.
-///
-/// # Safety
-///
-/// The editor must be running.
-pub unsafe fn nvim_ui_try_resize(
-    channel_id: u64,
-    width: Integer,
-    height: Integer,
-) -> Result<(), Error> {
+pub fn nvim_ui_try_resize(channel_id: u64, width: Integer, height: Integer) -> Result<(), Error> {
     let ui = get_ui_or_err(channel_id)?;
     if width <= 0 || height <= 0 {
         return Err(Error::validation(c"Expected width > 0 and height > 0"));
@@ -543,11 +531,7 @@ fn wrong_type(name: &CStr, expected: ObjectType, value: Object) -> Error {
 }
 
 /// Resizes one grid, for a UI with `ext_multigrid`.
-///
-/// # Safety
-///
-/// The editor must be running.
-pub unsafe fn nvim_ui_try_resize_grid(
+pub fn nvim_ui_try_resize_grid(
     channel_id: u64,
     grid: Integer,
     width: Integer,
@@ -557,19 +541,14 @@ pub unsafe fn nvim_ui_try_resize_grid(
     if grid == DEFAULT_GRID_HANDLE {
         // The default grid is the screen, so resizing it is a window
         // resize like any other.
-        // SAFETY: the editor is running, per this function's contract.
-        return unsafe { nvim_ui_try_resize(channel_id, width, height) };
+        return nvim_ui_try_resize(channel_id, width, height);
     }
     let (grid, width, height) = (grid as Handle, width as c_int, height as c_int);
     ui_grid_resize(grid, width, height)
 }
 
 /// Tells the editor how many lines this UI's popupmenu can show.
-///
-/// # Safety
-///
-/// The editor must be running.
-pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Error> {
+pub fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result<(), Error> {
     let ui = get_ui_or_err(channel_id)?;
     if height <= 0 {
         return Err(Error::validation(c"Expected pum height > 0"));
@@ -587,11 +566,7 @@ pub unsafe fn nvim_ui_pum_set_height(channel_id: u64, height: Integer) -> Result
 
 /// Tells the editor where this UI drew its popupmenu, so that `pumvisible()`
 /// and the completion logic can reason about the screen area it covers.
-///
-/// # Safety
-///
-/// The editor must be running.
-pub unsafe fn nvim_ui_pum_set_bounds(
+pub fn nvim_ui_pum_set_bounds(
     channel_id: u64,
     width: Float,
     height: Float,

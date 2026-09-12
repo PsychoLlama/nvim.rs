@@ -183,8 +183,7 @@ unsafe fn prepare_cmd(
     // SAFETY: `ea` is resolved and `args` holds only Strings.
     unsafe { build_cmdline_str(cmdline, ea, cmdinfo, args) };
     ea.cmdlinep = cmdline;
-    // SAFETY: `ea.arg` now points into `*cmdline`.
-    unsafe { apply_argopt(ea) }?;
+    apply_argopt(ea)?;
     if ea.argt.has(ExArgt::CMDARG) && ea.usefilter == 0 {
         // SAFETY: as above.
         ea.do_ecmd_cmd = unsafe { getargcmd(&raw mut ea.arg) };
@@ -199,9 +198,8 @@ unsafe fn prepare_cmd(
 /// [`prepare_cmd`].
 ///
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bool>, Error> {
     let Some(name) = cmd.cmd.as_ref() else {
         return Err(err_required(c"cmd"));
@@ -306,9 +304,8 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bo
 /// `Ok(true)` means the one argument was consumed as the command's count.
 ///
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 unsafe fn collect_args(given: &Array, ea: &mut ExArg, args: &mut Array) -> Result<bool, Error> {
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
@@ -668,10 +665,7 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Resu
 }
 
 /// Consume any leading `++opt` arguments off the rendered command line.
-///
-/// # Safety
-/// `ea.arg` must point into a live NUL-terminated command line.
-unsafe fn apply_argopt(ea: &mut ExArg) -> Result<(), Error> {
+fn apply_argopt(ea: &mut ExArg) -> Result<(), Error> {
     if !ea.argt.has(ExArgt::ARGOPT) {
         return Ok(());
     }
@@ -694,9 +688,8 @@ unsafe fn apply_argopt(ea: &mut ExArg) -> Result<(), Error> {
 /// Run the prepared command, capturing its messages when asked.
 ///
 /// # Safety
-///
-/// `arena` must point at a live arena, which the memory this answers with is
-/// taken from and must outlive.
+/// The answer's storage is the api's own: the caller frees whatever this hands
+/// back.
 unsafe fn run_cmd(
     channel_id: uint64_t,
     ea: &mut ExArg,

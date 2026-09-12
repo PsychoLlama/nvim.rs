@@ -32,11 +32,9 @@ struct ConvFrame {
 }
 
 /// # Safety
-///
 /// `expr` must be a well-formed API string: `size` readable bytes with a NUL
 /// at `data[size]`. `flags` must be a well-formed API string: `size` readable
-/// bytes with a NUL at `data[size]`. `arena` must point at a live arena,
-/// which the memory this answers with is taken from and must outlive.
+/// bytes with a NUL at `data[size]`.
 pub unsafe fn nvim_parse_expression(
     expr: String_0,
     flags: String_0,

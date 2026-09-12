@@ -163,10 +163,7 @@ fn corner_gap(chars: &[BorderChar; 8], before: usize, after: usize, corner: usiz
 }
 
 /// The eight cells and the eight highlight ids a named style asks for.
-///
-/// # Safety
-/// The highlight tables must be initialised.
-unsafe fn style_slots(style: &BorderStyle) -> Slots {
+fn style_slots(style: &BorderStyle) -> Slots {
     let mut hl_ids = [0; 8];
     if style.shadow {
         let (shadow, deep) = (c"FloatShadow", c"FloatShadowThrough");
@@ -312,9 +309,7 @@ pub unsafe fn parse_border_style(style: &Object, fconfig: *mut WinConfig) -> Res
             // SAFETY: the keyset's string is NUL-terminated.
             return Err(err_bad_value(c"border", str.as_cstr()));
         };
-        // SAFETY: the editor's highlight tables are initialised by the time
-        // any window can be configured.
-        Some(unsafe { style_slots(style) })
+        Some(style_slots(style))
     } else {
         // Neither an Array nor a String names a border; upstream leaves the
         // slots alone and does not diagnose it either.
