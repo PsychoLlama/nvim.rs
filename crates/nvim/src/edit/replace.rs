@@ -107,9 +107,9 @@ fn del_char_after_col(limit_col: c_int) -> bool {
         if unsafe { *get_cursor_pos_ptr() } as c_int == NUL || Win::current().w_cursor.col == ecol {
             return false;
         }
-        let _ = unsafe { del_bytes(ecol - Win::current().w_cursor.col, false, true) };
+        let _ = del_bytes(ecol - Win::current().w_cursor.col, false, true);
     } else {
-        let _ = unsafe { del_char(false) };
+        let _ = del_char(false);
     }
     true
 }
@@ -285,14 +285,14 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
             // spaces it padded with have to come off again.
             Win::current().w_cursor.col += ins_len;
             while vcol > orig_vcols && gchar_cursor() == ' ' as c_int {
-                let _ = unsafe { del_char(false) };
+                let _ = del_char(false);
                 orig_vcols += 1;
             }
             Win::current().w_cursor.col -= ins_len;
         }
 
         // Mark the buffer changed and prepare for displaying.
-        unsafe { changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col) };
+        changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col);
     } else if cc == 0 {
         del_char_after_col(limit_col);
     }

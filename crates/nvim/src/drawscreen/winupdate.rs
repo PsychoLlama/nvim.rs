@@ -845,7 +845,7 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
         lnum >= anchor_lnum
     } {
         pos.lnum = lnum;
-        pos.col = unsafe { ml_get_buf_len(win.buffer(), lnum) };
+        pos.col = ml_get_buf_len(win.buffer(), lnum);
         let mut end = 0;
         unsafe {
             getvvcol(

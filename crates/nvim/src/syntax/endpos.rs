@@ -219,7 +219,7 @@ fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol: ColNr)
         // with an end pattern in this line.
         return Skipped::PastLine;
     }
-    let line_len = unsafe { ml_get_buf_len(syn_buffer(), startpos.lnum) };
+    let line_len = ml_get_buf_len(syn_buffer(), startpos.lnum);
 
     // Take care of an empty match or a negative offset.
     let col = if pos.col <= matchcol {
@@ -379,7 +379,7 @@ pub(crate) fn syn_add_start_off(
     let (lnum, col) = if base.lnum > syn_buf_line_count() {
         // A "\n" at the end of the pattern may take us below the last line.
         let lnum = syn_buf_line_count();
-        (lnum, unsafe { ml_get_buf_len(syn_buffer(), lnum) })
+        (lnum, ml_get_buf_len(syn_buffer(), lnum))
     } else {
         (base.lnum, base.col)
     };
@@ -426,8 +426,7 @@ pub(crate) fn syn_getcurline() -> *mut c_char {
 
 /// Length of the current line of the syntax buffer.
 pub(crate) fn syn_getcurline_len() -> ColNr {
-    // SAFETY: as [`syn_getcurline`].
-    unsafe { ml_get_buf_len(syn_buffer(), current_lnum.get()) }
+    ml_get_buf_len(syn_buffer(), current_lnum.get())
 }
 
 /// The byte at `col` of the line being parsed.

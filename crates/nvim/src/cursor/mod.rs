@@ -216,10 +216,7 @@ pub fn getviscol() -> ColNr {
 }
 
 /// Like [`getviscol`], but for an arbitrary position in the cursor's line.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn getviscol2(col: ColNr, coladd: ColNr) -> ColNr {
+pub fn getviscol2(col: ColNr, coladd: ColNr) -> ColNr {
     let win = Win::current();
     let mut pos = Pos {
         lnum: win.cursor().lnum(),
@@ -231,12 +228,9 @@ pub unsafe fn getviscol2(col: ColNr, coladd: ColNr) -> ColNr {
 
 /// Move the cursor to virtual column `wcol`, inserting the spaces needed to
 /// land there exactly. Answers whether the column was reached.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn coladvance_force(wcol: ColNr) -> bool {
+pub fn coladvance_force(wcol: ColNr) -> bool {
     let win = Win::current();
-    let reached = unsafe { coladvance2(win, win.cursor(), true, false, wcol) };
+    let reached = coladvance2(win, win.cursor(), true, false, wcol);
     if wcol == MAXCOL {
         win.invalidate_virtcol();
     } else {
@@ -249,9 +243,7 @@ pub unsafe fn coladvance_force(wcol: ColNr) -> bool {
 /// allows. Answers whether the column was reached.
 pub fn coladvance(win: Win, wcol: ColNr) -> bool {
     let cursor = win.cursor();
-    // SAFETY: a window's cursor names a line of its own buffer -- the
-    // invariant `check_cursor` maintains and every caller here leans on.
-    let reached = unsafe { coladvance2(win, cursor, false, win.virtual_active(), wcol) };
+    let reached = coladvance2(win, cursor, false, win.virtual_active(), wcol);
     // The cached virtual column is only good if the cursor did not land on a
     // tab, whose width depends on where it starts rather than on `wcol`.
     if wcol == MAXCOL || !reached {
@@ -271,16 +263,7 @@ pub fn coladvance(win: Win, wcol: ColNr) -> bool {
 /// cursor past the end of the line or inside a tab; `finetune` lets the
 /// cursor stop part-way into a wide character. Answers whether `wcol_arg`
 /// was reached.
-///
-/// # Safety
-/// `pos` must name a line of `win`'s buffer.
-unsafe fn coladvance2(
-    win: Win,
-    pos: PosRef,
-    addspaces: bool,
-    finetune: bool,
-    wcol_arg: ColNr,
-) -> bool {
+fn coladvance2(win: Win, pos: PosRef, addspaces: bool, finetune: bool, wcol_arg: ColNr) -> bool {
     // Inserting the spaces edits the buffer, which only the current window
     // may do.
     debug_assert!(
@@ -424,12 +407,8 @@ unsafe fn pad_line(
 
 /// Set `pos` to the position at virtual column `wcol` in its own line,
 /// without editing the buffer. Answers whether the column was reached.
-///
-/// # Safety
-/// `pos` must name a line of `win`'s buffer.
-pub unsafe fn getvpos(win: Win, pos: PosRef, wcol: ColNr) -> bool {
-    // SAFETY: the caller's promise, forwarded.
-    unsafe { coladvance2(win, pos, false, win.virtual_active(), wcol) }
+pub fn getvpos(win: Win, pos: PosRef, wcol: ColNr) -> bool {
+    coladvance2(win, pos, false, win.virtual_active(), wcol)
 }
 
 /// Move the cursor one character forward; see `inc`.
@@ -621,10 +600,7 @@ pub fn gchar_cursor() -> c_int {
 }
 
 /// The character before the cursor, or -1 at the start of the line.
-///
-/// # Safety
-/// The current window and buffer must be valid.
-pub unsafe fn char_before_cursor() -> c_int {
+pub fn char_before_cursor() -> c_int {
     let col = Win::current().cursor().col();
     if col == 0 {
         return -1;
@@ -638,11 +614,7 @@ pub unsafe fn char_before_cursor() -> c_int {
 }
 
 /// Overwrite the byte under the cursor.
-///
-/// # Safety
-/// The current window and buffer must be valid, and the cursor's column must
-/// lie within the line.
-pub unsafe fn pchar_cursor(c: c_char) {
+pub fn pchar_cursor(c: c_char) {
     let cursor = Win::current().cursor();
     unsafe {
         *Buf::current()

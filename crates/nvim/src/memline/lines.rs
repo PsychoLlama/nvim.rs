@@ -261,7 +261,7 @@ pub unsafe fn ml_get_pos(pos: *const Pos) -> *mut ::core::ffi::c_char {
 /// Safe: as [`ml_get`] -- the editor exists, and the line number is
 /// clamped.
 pub fn ml_get_len(lnum: LineNr) -> ColNr {
-    unsafe { ml_get_buf_len(Buf::current(), lnum) }
+    ml_get_buf_len(Buf::current(), lnum)
 }
 
 /// Length of the text after position `pos`, excluding the NUL.
@@ -273,10 +273,7 @@ pub unsafe fn ml_get_pos_len(pos: *mut Pos) -> ColNr {
 }
 
 /// Length of line `lnum` of `buffer`, excluding the NUL.
-///
-/// # Safety
-/// `buffer` must point at a buffer.
-pub unsafe fn ml_get_buf_len(buffer: Buf, lnum: LineNr) -> ColNr {
+pub fn ml_get_buf_len(buffer: Buf, lnum: LineNr) -> ColNr {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = buffer;
@@ -326,7 +323,7 @@ unsafe fn ml_append_flush(
     }
     if b.b_ml.cached_lnum() != 0 {
         // This may invoke ml_append_int in turn.
-        unsafe { ml_flush_line(buffer, false) };
+        ml_flush_line(buffer, false);
     }
     unsafe { ml_append_int(buffer, lnum, line, len, flags) }
 }
@@ -525,7 +522,7 @@ pub unsafe fn ml_replace_buf_len(
     };
 
     if b.b_ml.cached_lnum() != lnum {
-        unsafe { ml_flush_line(buffer, false) }; // another line is buffered, flush it
+        ml_flush_line(buffer, false); // another line is buffered, flush it
     }
     if b.update_callbacks.size != 0 {
         unsafe { ml_add_deleted_len_buf(buffer, ml_get_buf(buffer, lnum), -1) };
@@ -539,7 +536,7 @@ pub unsafe fn ml_replace_buf_len(
     if noalloc {
         // Upstream note: a bit of a hack, but replacing lines in a loop
         // is common and a scratch allocation per line is a lot of noise.
-        unsafe { ml_flush_line(buffer, true) };
+        ml_flush_line(buffer, true);
     }
     Ok(())
 }
@@ -547,39 +544,27 @@ pub unsafe fn ml_replace_buf_len(
 /// Delete line `lnum` of `buffer`.
 ///
 /// The caller should probably also call `changed_lines`.
-///
-/// # Safety
-/// `buffer` must point at a buffer holding line `lnum`.
-pub unsafe fn ml_delete_buf(buffer: Buf, lnum: LineNr, message: bool) -> Result<(), Failed> {
-    unsafe { ml_flush_line(buffer, false) };
-    unsafe { ml_delete_int(buffer, lnum, if message { ML_DEL_MESSAGE } else { 0 }) }
+pub fn ml_delete_buf(buffer: Buf, lnum: LineNr, message: bool) -> Result<(), Failed> {
+    ml_flush_line(buffer, false);
+    ml_delete_int(buffer, lnum, if message { ML_DEL_MESSAGE } else { 0 })
 }
 
 /// Delete line `lnum` of the current buffer.
-///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_delete(lnum: LineNr) -> Result<(), Failed> {
-    unsafe { ml_delete_flags(lnum, 0) }
+pub fn ml_delete(lnum: LineNr) -> Result<(), Failed> {
+    ml_delete_flags(lnum, 0)
 }
 
 /// [`ml_delete`] taking `ML_DEL_` flags.
-///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_delete_flags(lnum: LineNr, flags: ::core::ffi::c_int) -> Result<(), Failed> {
-    unsafe { ml_flush_line(Buf::current(), false) };
+pub fn ml_delete_flags(lnum: LineNr, flags: ::core::ffi::c_int) -> Result<(), Failed> {
+    ml_flush_line(Buf::current(), false);
     if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count {
         return Err(Failed);
     }
-    unsafe { ml_delete_int(Buf::current(), lnum, flags) }
+    ml_delete_int(Buf::current(), lnum, flags)
 }
 
 /// Set the [`DB_MARKED`] bit on line `lnum`.
-///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_setmarked(lnum: LineNr) {
+pub fn ml_setmarked(lnum: LineNr) {
     if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count || Buf::current().b_ml.ml_mfp.is_null()
     {
         return; // invalid line number
@@ -599,10 +584,7 @@ pub unsafe fn ml_setmarked(lnum: LineNr) {
 
 /// The first line with its [`DB_MARKED`] bit set, clearing the bit. Zero when
 /// there is none left.
-///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_firstmarked() -> LineNr {
+pub fn ml_firstmarked() -> LineNr {
     if Buf::current().b_ml.ml_mfp.is_null() {
         return 0;
     }
@@ -632,10 +614,7 @@ pub unsafe fn ml_firstmarked() -> LineNr {
 }
 
 /// Clear every [`DB_MARKED`] bit.
-///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn ml_clearmarked() {
+pub fn ml_clearmarked() {
     if Buf::current().b_ml.ml_mfp.is_null() {
         return; // nothing to do
     }
@@ -686,11 +665,7 @@ pub unsafe fn ml_flush_deleted_bytes(
 ///
 /// Returns 1 when it moved to the next line, 2 when it moved onto the NUL at
 /// the end of a line, -1 at the end of the file, and 0 otherwise.
-///
-/// # Safety
-/// Must run on the main thread; `pos` must be a position in the current
-/// buffer.
-pub unsafe fn inc(pos: &mut Pos) -> ::core::ffi::c_int {
+pub fn inc(pos: &mut Pos) -> ::core::ffi::c_int {
     // While searching, the position may be set to the end of a line.
     if pos.col != MAXCOL as ::core::ffi::c_int {
         let p = unsafe { ml_get_pos(pos) };
@@ -717,13 +692,10 @@ pub unsafe fn inc(pos: &mut Pos) -> ::core::ffi::c_int {
 }
 
 /// [`inc`], but skipping the NUL at the end of a non-empty line.
-///
-/// # Safety
-/// As [`inc`].
-pub unsafe fn incl(pos: &mut Pos) -> ::core::ffi::c_int {
-    let mut r = unsafe { inc(pos) };
+pub fn incl(pos: &mut Pos) -> ::core::ffi::c_int {
+    let mut r = inc(pos);
     if r >= 1 && pos.col != 0 {
-        r = unsafe { inc(pos) };
+        r = inc(pos);
     }
     r
 }
@@ -732,11 +704,7 @@ pub unsafe fn incl(pos: &mut Pos) -> ::core::ffi::c_int {
 ///
 /// Returns 1 when it moved to the previous line, -1 at the start of the file,
 /// and 0 otherwise.
-///
-/// # Safety
-/// Must run on the main thread; `pos` must be a position in the current
-/// buffer.
-pub unsafe fn dec(pos: &mut Pos) -> ::core::ffi::c_int {
+pub fn dec(pos: &mut Pos) -> ::core::ffi::c_int {
     pos.coladd = 0;
     if pos.col == MAXCOL as ::core::ffi::c_int {
         // Past the end of the line.
@@ -764,13 +732,10 @@ pub unsafe fn dec(pos: &mut Pos) -> ::core::ffi::c_int {
 }
 
 /// [`dec`], but skipping the NUL at the end of a non-empty line.
-///
-/// # Safety
-/// As [`dec`].
-pub unsafe fn decl(pos: &mut Pos) -> ::core::ffi::c_int {
-    let mut r = unsafe { dec(pos) };
+pub fn decl(pos: &mut Pos) -> ::core::ffi::c_int {
+    let mut r = dec(pos);
     if r == 1 && pos.col != 0 {
-        r = unsafe { dec(pos) };
+        r = dec(pos);
     }
     r
 }

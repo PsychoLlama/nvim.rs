@@ -266,8 +266,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
                 dec_cursor();
                 did_exclusive_adj = true;
             } else if !vis_empty {
-                // SAFETY: the anchor is a position of the current buffer.
-                unsafe { with_visual_anchor(|anchor| dec(anchor)) };
+                with_visual_anchor(dec);
                 did_exclusive_adj = true;
             }
             vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);

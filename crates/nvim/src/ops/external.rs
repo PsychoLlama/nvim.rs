@@ -124,10 +124,7 @@ pub unsafe fn did_set_operatorfunc(_args: &mut OptSet) -> Option<&CStr> {
 }
 
 /// Mark the 'operatorfunc' callback with `copy_id` so the collector keeps it.
-///
-/// # Safety
-/// Called from the garbage collector, with the eval heap consistent.
-pub unsafe fn set_ref_in_opfunc(copy_id: c_int) -> bool {
+pub fn set_ref_in_opfunc(copy_id: c_int) -> bool {
     let (ht, list) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
     // SAFETY: the caller's promise -- the eval heap is consistent.
     unsafe { set_ref_in_callback(global_opfunc(), copy_id, ht, list) }
@@ -161,7 +158,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     Buf::current().b_op_end = op.end;
     if op.motion_type != kMTLineWise && !op.inclusive {
         // Exclude the end position.
-        unsafe { decl(&mut Buf::current().b_op_end) };
+        decl(&mut Buf::current().b_op_end);
     }
 
     let kind = match op.motion_type {

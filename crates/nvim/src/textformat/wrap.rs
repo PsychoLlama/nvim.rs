@@ -332,7 +332,7 @@ pub fn internal_format(
         let cc = gchar_cursor();
         if ascii_iswhite(cc) {
             save_char = cc as c_char;
-            unsafe { pchar_cursor('x' as c_char) };
+            pchar_cursor('x' as c_char);
         }
     }
 
@@ -520,7 +520,7 @@ pub fn internal_format(
 
     if save_char as c_int != NUL {
         // Put the space after the cursor back.
-        unsafe { pchar_cursor(save_char) };
+        pchar_cursor(save_char);
     }
     win.w_onebuf_opt.wo_lbr = has_lbr;
 

@@ -169,7 +169,7 @@ pub(crate) unsafe fn nv_page(cmd_arg: *mut CmdArg) {
             goto_tabpage(ca.count0);
         }
     } else {
-        unsafe { pagescroll(ca.arg as Direction, ca.count1, false) };
+        pagescroll(ca.arg as Direction, ca.count1, false);
     }
 }
 
@@ -202,7 +202,7 @@ pub(crate) unsafe fn nv_halfpage(cmd_arg: *mut CmdArg) {
             BACKWARD as c_int
         };
         // A count here also sets 'scroll', which `pagescroll` does.
-        unsafe { pagescroll(dir as Direction, ca.count0, true) };
+        pagescroll(dir as Direction, ca.count0, true);
     }
 }
 

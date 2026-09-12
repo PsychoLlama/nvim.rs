@@ -246,7 +246,7 @@ pub(crate) unsafe fn readfile(
                 }
                 // Delete the lines read so far.
                 while lnum > from {
-                    let _ = unsafe { ml_delete(lnum) };
+                    let _ = ml_delete(lnum);
                     lnum -= 1;
                 }
                 file_rewind = false;
@@ -803,7 +803,7 @@ pub(crate) unsafe fn readfile(
         if !recoverymode.get() {
             // The last line, which came from the empty buffer, has to go.
             if how.newfile && wasempty && !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                let _ = unsafe { ml_delete(Buf::current().b_ml.ml_line_count) };
+                let _ = ml_delete(Buf::current().b_ml.ml_line_count);
                 linecnt -= 1;
             }
             Buf::current().deleted_bytes = 0;
@@ -823,7 +823,7 @@ pub(crate) unsafe fn readfile(
                 fold_update_all(Win::current());
             } else if linecnt != 0 {
                 // At least one line was appended.
-                unsafe { appended_lines_mark(from, linecnt) };
+                appended_lines_mark(from, linecnt);
             }
 
             if got_int.get() {

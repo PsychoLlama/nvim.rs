@@ -592,7 +592,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     let pid = unsafe { (*channel_proc(chan)).pid };
     let mut buf = Buf::current();
     buf.b_p_swf = 0;
-    if buf.b_ml.ml_mfp.is_null() && unsafe { ml_open(buf) }.is_err() {
+    if buf.b_ml.ml_mfp.is_null() && ml_open(buf).is_err() {
         unsafe { proc_stop(channel_proc(chan)) };
         unsafe { channel_decref(chan) };
         return;

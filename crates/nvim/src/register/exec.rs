@@ -38,7 +38,7 @@ use crate::types::{Failed, NUL};
 /// `p` must be an allocated, NUL-terminated string.
 unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> Result<(), Failed> {
     // SAFETY: `valid_yank_reg` only looks the name up.
-    if regname != 0 && !unsafe { valid_yank_reg(regname, true) } {
+    if regname != 0 && !valid_yank_reg(regname, true) {
         // SAFETY: `p` is the allocated string this function took over.
         unsafe { xfree(p as *mut c_void) };
         return Err(Failed);
@@ -141,10 +141,7 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
 ///
 /// Answers `Err` for an invalid register name, or when the recording
 /// produced nothing.
-///
-/// # Safety
-/// Runs arbitrary autocommands (RecordingEnter/RecordingLeave).
-pub unsafe fn do_record(c: c_int) -> Result<(), Failed> {
+pub fn do_record(c: c_int) -> Result<(), Failed> {
     /// Which register the recording in progress goes into; kept across
     /// the two calls because `reg_recording` is cleared before the store.
     static regname: GlobalCell<c_int> = GlobalCell::new(0);
@@ -221,8 +218,7 @@ unsafe fn put_in_typebuf(
     silent: c_int,
 ) -> Result<(), Failed> {
     let mut retval = Ok(());
-    // SAFETY: main thread, writing the typeahead buffer.
-    unsafe { put_reedit_in_typebuf(silent) };
+    put_reedit_in_typebuf(silent);
 
     // Pushed backwards: the `<CR>` first, then the text, then the `:`.
     if colon {
@@ -262,10 +258,7 @@ unsafe fn put_in_typebuf(
 ///
 /// `restart_edit` holds the mode as a key: `i`/`a`/`R`, or `V` for Virtual
 /// Replace, which is two keys.
-///
-/// # Safety
-/// Writes the typeahead buffer; main thread only.
-unsafe fn put_reedit_in_typebuf(silent: c_int) {
+fn put_reedit_in_typebuf(silent: c_int) {
     if restart_edit.get() == NUL {
         return;
     }
@@ -362,15 +355,7 @@ unsafe fn is_continuation_comment(p: *const c_char) -> bool {
 /// `colon` wraps every line in `:`/`<CR>`, which is what `:@a` wants; `addcr`
 /// adds a final `<CR>` even to a charwise register; `silent` keeps the
 /// queued text out of `'showcmd'`.
-///
-/// # Safety
-/// May run arbitrary Vimscript through the `"=` register.
-pub unsafe fn do_execreg(
-    regname: c_int,
-    colon: c_int,
-    addcr: c_int,
-    silent: c_int,
-) -> Result<(), Failed> {
+pub fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> Result<(), Failed> {
     let mut regname = regname;
     if regname == '@' as c_int {
         // `@@` repeats the last `@`.
@@ -380,11 +365,7 @@ pub unsafe fn do_execreg(
         }
         regname = execreg_lastc.get();
     }
-    // SAFETY: `valid_yank_reg` only looks the name up.
-    if regname == '%' as c_int
-        || regname == '#' as c_int
-        || !unsafe { valid_yank_reg(regname, false) }
-    {
+    if regname == '%' as c_int || regname == '#' as c_int || !valid_yank_reg(regname, false) {
         emsg_invreg(regname);
         return Err(Failed);
     }
@@ -467,8 +448,7 @@ pub unsafe fn do_execreg(
         return Err(Failed);
     }
     let remap = if colon != 0 { REMAP_NONE } else { REMAP_YES };
-    // SAFETY: main thread, writing the typeahead buffer.
-    unsafe { put_reedit_in_typebuf(silent) };
+    put_reedit_in_typebuf(silent);
 
     // The typeahead buffer is a stack, so the register goes in last line
     // first.
@@ -552,7 +532,7 @@ pub unsafe fn insert_reg(
         return Err(Failed);
     }
     // SAFETY: `valid_yank_reg` only looks the name up.
-    if regname != NUL && !unsafe { valid_yank_reg(regname, false) } {
+    if regname != NUL && !valid_yank_reg(regname, false) {
         return Err(Failed);
     }
 
@@ -644,10 +624,7 @@ pub unsafe fn insert_reg(
 }
 
 /// CTRL-R on the command line: insert register `regname` there.
-///
-/// # Safety
-/// May run arbitrary Vimscript.
-pub unsafe fn cmdline_paste_reg(regname: c_int, literally_arg: bool, remcr: bool) -> bool {
+pub fn cmdline_paste_reg(regname: c_int, literally_arg: bool, remcr: bool) -> bool {
     let literally = literally_arg || is_literal_register(regname);
     // SAFETY: main thread; every register name answers a live register.
     let reg = unsafe { get_yank_register(regname, YREG_PASTE) };

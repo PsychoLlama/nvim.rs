@@ -348,7 +348,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         do_check_scrollbind(true);
     }
     if Win::current().w_onebuf_opt.wo_crb != 0 {
-        unsafe { do_check_cursorbind() };
+        do_check_cursorbind();
     }
     if s.count <= 1 {
         update_curswant();
@@ -373,7 +373,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         // Autocomplete: with a word character already before the cursor,
         // start completing without waiting for another key.
         if ins_compl_has_autocomplete() && !key_available() && Win::current().w_cursor.col > 0 {
-            s.c = unsafe { char_before_cursor() };
+            s.c = char_before_cursor();
             if vim_isprintc(s.c) {
                 ins_compl_enable_autocomplete();
                 ins_compl_init_get_longest();

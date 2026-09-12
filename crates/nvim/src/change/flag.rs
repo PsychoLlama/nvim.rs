@@ -110,8 +110,7 @@ pub unsafe fn changed(buffer: Buf) {
         if buffer.b_may_swap && !buf_is_dontwrite(Some(buffer)) {
             let save_need_wait_return = need_wait_return.get();
             need_wait_return.set(false);
-            // SAFETY: a live buffer.
-            unsafe { ml_open_file(buffer) };
+            ml_open_file(buffer);
 
             // ml_open_file() can produce an ATTENTION message. Wait two
             // seconds so the user reads it, and call wait_return() here

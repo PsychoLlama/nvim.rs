@@ -43,10 +43,7 @@ use crate::types::{CmdArg, Direction, OpArg};
 
 /// A mouse click in Insert mode: place the cursor, then get Insert mode's own
 /// bookkeeping back in order around the move.
-///
-/// # Safety
-/// `c` must be a mouse key code.
-pub(crate) unsafe fn ins_mouse(c: c_int) {
+pub(crate) fn ins_mouse(c: c_int) {
     let old_curwin = Win::current();
 
     undisplay_dollar();
@@ -108,8 +105,7 @@ pub(crate) unsafe fn do_mousescroll(cmd_arg: *mut CmdArg) {
         if State.get() & MODE_NORMAL != 0 && shift_or_ctrl {
             // Whole page up or down.
             let dir = if arg != 0 { FORWARD } else { BACKWARD } as Direction;
-            // SAFETY: scrolls the current window.
-            unsafe { pagescroll(dir, 1, false) };
+            pagescroll(dir, 1, false);
             return;
         }
         let count = if shift_or_ctrl {

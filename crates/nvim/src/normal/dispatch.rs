@@ -524,7 +524,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             && (ns.idx < 0 || nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_KEEPREG == 0)
         {
             unsafe { clearop(&raw mut ns.oa) };
-            unsafe { set_reg_var(get_default_register_name()) };
+            set_reg_var(get_default_register_name());
         }
         if ns.old_mapped_len > 0 {
             ns.old_mapped_len = typeahead().maplen();
@@ -541,7 +541,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     msg_nowait.set(false);
 
     if finish_op.get() || did_visual_op {
-        unsafe { set_reg_var(get_default_register_name()) };
+        set_reg_var(get_default_register_name());
     }
     let prev_finish_op = finish_op.get();
     if ns.oa.op_type == OpType::Nop {
@@ -569,7 +569,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     }
     if Win::current().w_onebuf_opt.wo_crb != 0 && ns.toplevel {
         validate_cursor(Win::current());
-        unsafe { do_check_cursorbind() };
+        do_check_cursorbind();
     }
 
     // A command may have asked for insert mode or for Select mode to be

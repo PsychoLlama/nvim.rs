@@ -273,12 +273,8 @@ fn get_undolevel(buffer: Buf) -> OptInt {
 /// The undo header takes a *copy* of the marks, and two owners of one
 /// `additional_data` allocation is one too many; the header's copies are the
 /// ones that keep it, so the buffer's give it up.
-///
-/// # Safety
-///
-/// `fmarks` points at [`NMARKS`] live marks.
 #[inline]
-unsafe fn zero_fmark_additional_data(fmarks: &mut [FileMark; NMARKS as usize]) {
+fn zero_fmark_additional_data(fmarks: &mut [FileMark; NMARKS as usize]) {
     for mark in fmarks {
         // SAFETY: this module's own allocation, dropped exactly once.
         unsafe { xfree(mark.additional_data.cast()) };
@@ -322,23 +318,19 @@ pub fn u_savecommon(
     let size: LineNr = bot - top - 1;
     if b.b_u_synced {
         // A boundary: this change starts an undo header of its own.
-        // SAFETY: a live current window.
-        if !unsafe { start_new_header(b) } {
+        if !start_new_header(b) {
             return Ok(());
         }
     } else {
         if get_undolevel(buffer) < 0 {
             return Ok(());
         }
-        // SAFETY: a live current window.
-        if size == 1 && unsafe { extend_last_entry(b, top, bot, newbot) } {
+        if size == 1 && extend_last_entry(b, top, bot, newbot) {
             return Ok(());
         }
         u_getbot(buffer);
     }
-    // SAFETY: a live current window, and a newest header to record against —
-    // either the one just started or the one being extended.
-    unsafe { record_entry(b, top, size, bot, newbot, reload) }
+    record_entry(b, top, size, bot, newbot, reload)
 }
 
 /// Starts a new undo header for the change about to be made, trimming the
@@ -346,11 +338,7 @@ pub fn u_savecommon(
 ///
 /// Answers whether there is a header now: undo turned off for this buffer
 /// makes none, and the branch the cursor was on goes instead.
-///
-/// # Safety
-///
-/// `b` is a live buffer, and there is a live current window.
-unsafe fn start_new_header(mut b: Buf) -> bool {
+fn start_new_header(mut b: Buf) -> bool {
     let buf = b;
     b.b_new_change = true;
 
@@ -445,8 +433,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
         } else {
             0
         };
-    // SAFETY: the buffer's own marks; the header takes the copies over.
-    unsafe { zero_fmark_additional_data(&mut b.b_namedm) };
+    zero_fmark_additional_data(&mut b.b_namedm);
     uhp.uh_namedm = b.b_namedm.clone();
     uhp.uh_visual = b.b_visual;
     b.b_u_newhead = link;
@@ -462,11 +449,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
 ///
 /// Only the ten newest entries are looked at: this is a fast path for typing,
 /// not a search.
-///
-/// # Safety
-///
-/// `b` is a live buffer, and there is a live current window.
-unsafe fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bool {
+fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bool {
     // SAFETY: a live buffer, by the contract above.
     let mut uep = u_get_headentry(b);
     let Some(mut newhead) = b.header(b.b_u_newhead) else {
@@ -545,12 +528,7 @@ unsafe fn set_entry_bottom(
 
 /// Builds the entry that holds the saved lines and hangs it off the newest
 /// header.
-///
-/// # Safety
-///
-/// `b` is a live buffer holding lines `top + 1 ..= top + size`, and there is
-/// a newest header to record against.
-unsafe fn record_entry(
+fn record_entry(
     mut b: Buf,
     top: LineNr,
     size: LineNr,

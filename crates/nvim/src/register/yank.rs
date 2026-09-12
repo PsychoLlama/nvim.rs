@@ -521,7 +521,7 @@ pub unsafe fn op_yank(op: *mut OpArg, message: bool) -> bool {
     // SAFETY: the caller promises `op` describes a region of the buffer.
     let regname = unsafe { (*op).regname };
     // SAFETY: main thread, reading the register store.
-    if regname != 0 && !unsafe { valid_yank_reg(regname, true) } {
+    if regname != 0 && !valid_yank_reg(regname, true) {
         beep_flush();
         return false;
     }

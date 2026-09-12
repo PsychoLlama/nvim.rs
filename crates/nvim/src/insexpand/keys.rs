@@ -160,7 +160,7 @@ pub fn ins_compl_addleader(c: c_int) {
         buf[cc as usize] = NUL as c_char;
         unsafe { ins_char_bytes(buf.as_mut_ptr(), cc as size_t) };
     } else {
-        unsafe { ins_char(c) };
+        ins_char(c);
     }
 
     // If we didn't complete finding matches we must search again.

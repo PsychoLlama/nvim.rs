@@ -77,10 +77,7 @@ struct Saved {
 /// forwards (`FORWARD`) and update the screen, moving the cursor with it and
 /// -- for the half-page CTRL-D/CTRL-U -- not revealing lines past the end of
 /// the buffer. Answers `FAIL` when neither the viewport nor the cursor moved.
-///
-/// # Safety
-/// The current window must be valid.
-pub unsafe fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
+pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
     let win = Win::current();
     let saved = Saved {
         buflen: win.buffer().line_count(),
@@ -220,10 +217,7 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
 
 /// Give every 'cursorbind' window in this tab page the current window's cursor
 /// position, adjusted for 'diff' where the two buffers disagree.
-///
-/// # Safety
-/// The editor's window list must be valid.
-pub unsafe fn do_check_cursorbind() {
+pub fn do_check_cursorbind() {
     static prev_curwin: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut::<Window>());
     static prev_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
         lnum: 0,

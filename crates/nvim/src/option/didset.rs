@@ -581,7 +581,7 @@ pub(crate) fn did_set_swapfile(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let buf = unsafe { Frame::read(args) }.buf;
     if buf.b_p_swf != 0 && p_uc.get() != 0 {
-        unsafe { ml_open_file(buf) };
+        ml_open_file(buf);
     } else {
         mf_close_file(buf, true);
     }
@@ -664,7 +664,7 @@ pub(crate) fn did_set_undolevels(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) fn did_set_updatecount(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer list is the editor's.
     if p_uc.get() != 0 && unsafe { Frame::read(args) }.old_number() == 0 {
-        unsafe { ml_open_files() };
+        ml_open_files();
     }
     None
 }

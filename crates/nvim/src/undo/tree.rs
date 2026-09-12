@@ -265,11 +265,7 @@ pub fn u_clearline(mut buffer: Buf) {
 }
 
 /// `U`: swap the current line against the one `u_saveline` kept.
-///
-/// # Safety
-///
-/// Called from the editor's main loop, with a current buffer and window.
-pub unsafe fn u_undoline() {
+pub fn u_undoline() {
     // SAFETY: a live current buffer and window.
     if Buf::current().b_u_line_ptr.is_null()
         || Buf::current().b_u_line_lnum > Buf::current().b_ml.ml_line_count
@@ -296,7 +292,7 @@ pub unsafe fn u_undoline() {
         ptr_len as ColNr,
         kExtmarkUndo,
     );
-    unsafe { changed_bytes(Buf::current().b_u_line_lnum, 0) };
+    changed_bytes(Buf::current().b_u_line_lnum, 0);
     unsafe { xfree(Buf::current().b_u_line_ptr as *mut c_void) };
     Buf::current().b_u_line_ptr = oldp;
     let t: ColNr = Buf::current().b_u_line_colnr;

@@ -611,7 +611,7 @@ impl LineSetup {
             self.nextline_idx = 0;
             return;
         }
-        let line_len = unsafe { ml_get_buf_len(window.buffer(), lnum) } as usize;
+        let line_len = ml_get_buf_len(window.buffer(), lnum) as usize;
         if line_len < SPELL_LOOKAHEAD {
             // Short line: use all of it, then move the next line's start
             // up against it.
@@ -650,7 +650,7 @@ impl LineSetup {
             self.extra_check = true;
         }
         if window.w_p_lcs_chars.trail != 0 {
-            let mut trailcol = unsafe { ml_get_buf_len(window.buffer(), lnum) };
+            let mut trailcol = ml_get_buf_len(window.buffer(), lnum);
             while trailcol > 0
                 && ascii_iswhite(
                     unsafe { *self.ptr.offset(trailcol as isize - 1) } as ::core::ffi::c_int

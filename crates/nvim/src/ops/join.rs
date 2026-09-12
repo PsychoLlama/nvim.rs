@@ -156,10 +156,7 @@ impl JoinPlan {
 /// the callers -- backspace over a line break, and the charwise delete in
 /// `op_delete` -- that must not have comment leaders removed underneath them.
 /// `setmark` false leaves `'[`/`']` to the caller.
-///
-/// # Safety
-/// The cursor line plus `count - 1` must exist in the current buffer.
-pub unsafe fn do_join(
+pub fn do_join(
     count: size_t,
     insert_space: bool,
     save_undo: bool,
@@ -429,7 +426,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
     // number is kept.
     let joined_lnum = Win::current().w_cursor.lnum;
     Win::current().w_cursor.lnum += 1;
-    unsafe { del_lines(count as LineNr - 1, false) };
+    del_lines(count as LineNr - 1, false);
     Win::current().w_cursor.lnum = joined_lnum;
     drop(splice);
     Buf::current().deleted_bytes2 = 0;

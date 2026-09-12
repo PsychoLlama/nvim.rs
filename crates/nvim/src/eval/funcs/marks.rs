@@ -100,7 +100,7 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let Some(wp) = find_tabwin(args.first(), args.get(1)) else {
         return;
     };
-    unsafe { cleanup_jumplist(wp, true) };
+    cleanup_jumplist(wp, true);
     let entries = tv_list_alloc(wp.w_jumplistlen as isize);
     let l = entries.as_ptr();
     unsafe { tv_list_append_list(out, Some(entries)) };

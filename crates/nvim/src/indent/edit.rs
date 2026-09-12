@@ -292,7 +292,7 @@ pub fn ins_try_si(c: c_int) {
                 && win.w_cursor.lnum > 1
                 && !si_should_shift_back());
             if shift {
-                unsafe { shift_line(true, false, 1, true) };
+                shift_line(true, false, 1, true);
             }
         }
     }
@@ -325,14 +325,12 @@ fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: 
     if State.get() & VREPLACE_FLAG != 0 {
         State.set(MODE_INSERT);
     }
-    unsafe {
-        shift_line(
-            type_0 == INDENT_DEC as c_int,
-            round != 0,
-            1,
-            call_changed_bytes,
-        )
-    };
+    shift_line(
+        type_0 == INDENT_DEC as c_int,
+        round != 0,
+        1,
+        call_changed_bytes,
+    );
     State.set(save_state);
 }
 

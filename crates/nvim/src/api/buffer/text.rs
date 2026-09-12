@@ -49,7 +49,7 @@ pub unsafe fn nvim_buf_set_text(
         return Err(err_out_of_range(c"end_row"));
     }
     let mut str_at_start: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, start_row as LineNr) };
-    let len_at_start: ColNr = unsafe { ml_get_buf_len(b, start_row as LineNr) };
+    let len_at_start: ColNr = ml_get_buf_len(b, start_row as LineNr);
     str_at_start = unsafe { arena_memdupz(arena, str_at_start, len_at_start as size_t) };
     start_col = if start_col < 0 as Integer {
         len_at_start as Integer + start_col + 1 as Integer
@@ -60,7 +60,7 @@ pub unsafe fn nvim_buf_set_text(
         return Err(err_out_of_range(c"start_col"));
     }
     let mut str_at_end: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, end_row as LineNr) };
-    let len_at_end: ColNr = unsafe { ml_get_buf_len(b, end_row as LineNr) };
+    let len_at_end: ColNr = ml_get_buf_len(b, end_row as LineNr);
     str_at_end = unsafe { arena_memdupz(arena, str_at_end, len_at_end as size_t) };
     end_col = if end_col < 0 as Integer {
         len_at_end as Integer + end_col + 1 as Integer
@@ -88,8 +88,7 @@ pub unsafe fn nvim_buf_set_text(
         let mut i: int64_t = 1 as int64_t;
         while i < end_row - start_row {
             let lnum: int64_t = start_row as int64_t + i;
-            old_byte +=
-                (unsafe { ml_get_buf_len(b, lnum as LineNr) } + 1 as ::core::ffi::c_int) as BCount;
+            old_byte += (ml_get_buf_len(b, lnum as LineNr) + 1 as ::core::ffi::c_int) as BCount;
             i += 1;
         }
         old_byte += end_col as BCount + 1 as BCount;
@@ -257,19 +256,16 @@ impl Replacement {
         } else {
             0
         };
-        // SAFETY: the loaded buffer whose lines just moved.
-        unsafe {
-            mark_adjust_buf(
-                self.buffer,
-                self.start_row as LineNr,
-                self.end_row as LineNr - 1,
-                adjust,
-                extra as LineNr,
-                true,
-                kMarkAdjustApi,
-                kExtmarkNOOP,
-            );
-        }
+        mark_adjust_buf(
+            self.buffer,
+            self.start_row as LineNr,
+            self.end_row as LineNr - 1,
+            adjust,
+            extra as LineNr,
+            true,
+            kMarkAdjustApi,
+            kExtmarkNOOP,
+        );
         if visual_active() && b.raw() == Buf::current_raw() && !visual_mode().is_block() {
             let mut anchor = visual_anchor();
             // SAFETY: `anchor` is this frame's own position.
@@ -343,8 +339,7 @@ impl Replacement {
         let old_len: size_t = (self.end_row - self.start_row + 1) as size_t;
         let to_delete = old_len.saturating_sub(self.new_len);
         for _ in 0..to_delete {
-            // SAFETY: a loaded buffer, and a line that is still in it.
-            if unsafe { ml_delete_buf(b, self.start_row as LineNr, false) }.is_err() {
+            if ml_delete_buf(b, self.start_row as LineNr, false).is_err() {
                 return Err(Error::exception(c"Failed to delete line"));
             }
         }
@@ -439,7 +434,7 @@ unsafe fn fix_pos_col(
     let new_end_row: LineNr = start_row + new_rows - 1 as LineNr;
     if pos.lnum > new_end_row {
         pos.lnum = new_end_row;
-        let len: ColNr = unsafe { ml_get_buf_len(buffer, new_end_row) };
+        let len: ColNr = ml_get_buf_len(buffer, new_end_row);
         if pos.col < len {
             pos.col = len;
         }

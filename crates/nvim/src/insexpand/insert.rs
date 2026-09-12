@@ -221,10 +221,10 @@ pub fn ins_compl_delete(new_leader: bool) {
                 unsafe { cbuf_to_string(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t) };
         }
         while Win::current().w_cursor.lnum > compl_lnum.get() {
-            if unsafe { ml_delete(Win::current().w_cursor.lnum) }.is_err() {
+            if ml_delete(Win::current().w_cursor.lnum).is_err() {
                 return;
             }
-            unsafe { deleted_lines_mark(Win::current().w_cursor.lnum, 1) };
+            deleted_lines_mark(Win::current().w_cursor.lnum, 1);
             Win::current().w_cursor.lnum -= 1;
         }
         // Move cursor to end of line.

@@ -693,7 +693,7 @@ impl Buf {
     /// Bytes in line `lnum`, the terminating NUL excluded.
     #[inline(always)]
     pub fn line_len(self, lnum: LineNr) -> ColNr {
-        unsafe { ml_get_buf_len(self, lnum) }
+        ml_get_buf_len(self, lnum)
     }
 
     /// Step `pos` back off a trail byte, so it names a whole character.

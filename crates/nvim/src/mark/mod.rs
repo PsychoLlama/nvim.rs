@@ -143,10 +143,7 @@ pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([UNSET_
 
 /// Set named mark "c" at current cursor position.
 /// Answers `Ok` on success, `Err` if bad name given.
-///
-/// # Safety
-/// The editor's globals must be live, which they are from startup to exit.
-pub unsafe fn setmark(c: c_int) -> Result<(), Failed> {
+pub fn setmark(c: c_int) -> Result<(), Failed> {
     let (win, buf) = (Win::current(), Buf::current());
     let mut view = mark_view_make_at(win, win.w_cursor);
     // SAFETY: the cursor and the view live on the stack for the call, and
@@ -319,12 +316,8 @@ pub unsafe fn setmark_pos(
 
 /// Delete every entry referring to file "fnum" from both the jumplist and the
 /// tag stack.
-///
-/// # Safety
-/// `window` must be a live window.
-pub unsafe fn mark_forget_file(mut window: Win, fnum: c_int) {
-    // SAFETY: the caller promised a live window.
-    unsafe { mark_jumplist_forget_file(window, fnum) };
+pub fn mark_forget_file(mut window: Win, fnum: c_int) {
+    mark_jumplist_forget_file(window, fnum);
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..window.w_tagstacklen).rev() {
         if window.tag_mark(i).fnum() != fnum {
@@ -475,10 +468,7 @@ pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
 /// Check all file marks for a name that matches the file name in buf.
 /// May replace the name with an fnum.
 /// Used for marks that come from the .shada file.
-///
-/// # Safety
-/// `buffer` must be a live buffer, and the editor's window list must be live.
-pub unsafe fn fmarks_check_names(buffer: Buf) {
+pub fn fmarks_check_names(buffer: Buf) {
     let name = buffer.b_ffname;
     if name.is_null() {
         return;
@@ -630,8 +620,7 @@ pub unsafe fn mark_mb_adjustpos(buffer: Buf, pos: *mut Pos) {
     }
     // SAFETY: the caller promised a live buffer and a line of it.
     let p = unsafe { ml_get_buf(buffer, adjusted.lnum) };
-    if unsafe { *p } == NUL_BYTE || unsafe { ml_get_buf_len(buffer, adjusted.lnum) } < adjusted.col
-    {
+    if unsafe { *p } == NUL_BYTE || ml_get_buf_len(buffer, adjusted.lnum) < adjusted.col {
         adjusted.col = 0;
     } else {
         adjusted.col -= unsafe { utf_head_off(p, p.offset(adjusted.col as isize)) };

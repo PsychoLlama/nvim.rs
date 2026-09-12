@@ -185,7 +185,7 @@ pub fn garbage_collect(testing: bool) -> bool {
     // 'completefunc', 'omnifunc', 'thesaurusfunc', 'operatorfunc',
     // 'tagfunc' and 'findfunc' callbacks.
     abort = abort || set_ref_in_insexpand_funcs(copy_id);
-    abort = abort || unsafe { set_ref_in_opfunc(copy_id) };
+    abort = abort || set_ref_in_opfunc(copy_id);
     abort = abort || set_ref_in_tagfunc(copy_id);
     abort = abort || set_ref_in_findfunc(copy_id);
 

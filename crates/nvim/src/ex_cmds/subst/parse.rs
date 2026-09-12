@@ -148,8 +148,7 @@ pub(crate) unsafe fn sub_joining_lines(
         + 1 as LineNr
         + LineNr::from(args.line2 < Buf::current().b_ml.ml_line_count);
     if joined_lines_count > 1 as LineNr {
-        // SAFETY: the range is inside the buffer; message state is ready.
-        let _ = unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };
+        let _ = do_join(joined_lines_count as size_t, false, true, false, true);
         sub_nsubs.set(joined_lines_count - 1 as LineNr);
         sub_nlines.set(1 as LineNr);
         do_sub_msg(false);

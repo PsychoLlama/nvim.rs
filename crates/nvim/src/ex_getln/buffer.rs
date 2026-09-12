@@ -380,8 +380,7 @@ pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr:
     };
 
     if !got_special {
-        // SAFETY: a register name the check above accepted.
-        return unsafe { cmdline_paste_reg(regname, literally, remcr) };
+        return cmdline_paste_reg(regname, literally, remcr);
     }
 
     // Got the value of a special register in "arg".
@@ -439,8 +438,7 @@ fn char_at(p: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
 }
 
 fn is_yank_reg(regname: ::core::ffi::c_int) -> bool {
-    // SAFETY: reads the register tables.
-    unsafe { valid_yank_reg(regname, false) }
+    valid_yank_reg(regname, false)
 }
 
 /// `get_spec_reg()` for reading: fills `arg` and says whether it did.

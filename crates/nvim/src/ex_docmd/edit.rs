@@ -102,7 +102,7 @@ pub(crate) unsafe fn ex_print(args: *mut ExArg) {
 /// `args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_goto(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
-    unsafe { goto_byte(args.line2 as c_int) };
+    goto_byte(args.line2 as c_int);
 }
 
 /// `:syncbind` — line up every 'scrollbind' window at the same relative
@@ -451,15 +451,13 @@ pub(crate) unsafe fn ex_join(args: *mut ExArg) {
         }
         args.line2 += 1;
     }
-    let _ = unsafe {
-        do_join(
-            (args.line2 as ssize_t - args.line1 as ssize_t + 1) as size_t,
-            args.forceit == 0,
-            true,
-            true,
-            true,
-        )
-    };
+    let _ = do_join(
+        (args.line2 as ssize_t - args.line1 as ssize_t + 1) as size_t,
+        args.forceit == 0,
+        true,
+        true,
+        true,
+    );
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     unsafe { ex_may_print(args.raw()) };
 }
@@ -485,7 +483,7 @@ pub(crate) unsafe fn ex_at(args: *mut ExArg) {
     }
     // 'cpoptions' `e` makes `:@` run the register's last line
     // immediately rather than leaving it on the command line.
-    if unsafe { do_execreg(c, 1, cpo_has(CpoFlag::EXECBUF) as c_int, 1) }.is_err() {
+    if do_execreg(c, 1, cpo_has(CpoFlag::EXECBUF) as c_int, 1).is_err() {
         beep_flush();
         return;
     }
@@ -519,7 +517,7 @@ pub(crate) unsafe fn ex_undo(args: *mut ExArg) {
         if args.forceit != 0 {
             u_undo_and_forget(1, true);
         } else {
-            unsafe { u_undo(1) };
+            u_undo(1);
         }
         return;
     }
@@ -564,7 +562,7 @@ pub(crate) unsafe fn ex_undo(args: *mut ExArg) {
 ///
 /// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_redo(_args: *mut ExArg) {
-    unsafe { u_redo(1) };
+    u_redo(1);
 }
 
 /// `:earlier` and `:later` — a count of changes, of seconds (`s`, `m`,
@@ -731,12 +729,12 @@ pub(crate) unsafe fn ex_folddo(args: *mut ExArg) {
     let mut lnum = args.line1;
     while lnum <= args.line2 {
         if has_folding(Win::current(), lnum, None, None) as c_int == want_closed {
-            unsafe { ml_setmarked(lnum) };
+            ml_setmarked(lnum);
         }
         lnum += 1;
     }
     unsafe { global_exe(args.arg) };
-    unsafe { ml_clearmarked() };
+    ml_clearmarked();
 }
 
 /// `clear_oparg()` as checked code.
@@ -776,8 +774,7 @@ fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
 
 /// `u_undo_and_forget()` as checked code.
 fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::undo::u_undo_and_forget(count, do_buf_event) }
+    crate::undo::u_undo_and_forget(count, do_buf_event)
 }
 
 /// `ui_cursor_shape()` as checked code.
@@ -788,8 +785,7 @@ pub(super) fn ui_cursor_shape() {
 
 /// `undo_time()` as checked code.
 fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::undo::undo_time(step, sec, file, absolute) }
+    crate::undo::undo_time(step, sec, file, absolute)
 }
 
 /// `utfc_ptr2len()` as checked code.

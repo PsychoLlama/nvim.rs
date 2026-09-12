@@ -65,7 +65,7 @@ unsafe fn replay(cmd_arg: *mut CmdArg, regname: c_int) {
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     while ca.count1 != 0 && !got_int.get() {
         ca.count1 -= 1;
-        if unsafe { do_execreg(regname, 0, 0, 0) }.is_err() {
+        if do_execreg(regname, 0, 0, 0).is_err() {
             clear_op_beep(ca.op());
             break;
         }
@@ -99,7 +99,7 @@ pub(crate) unsafe fn nv_at(cmd_arg: *mut CmdArg) {
         return;
     }
     // `@=` prompts for an expression; a cancelled prompt does nothing.
-    if ca.nchar == '=' as c_int && unsafe { get_expr_register() } == NUL {
+    if ca.nchar == '=' as c_int && get_expr_register() == NUL {
         return;
     }
     unsafe { replay(cmd_arg, ca.nchar) };
@@ -132,7 +132,7 @@ pub(crate) unsafe fn nv_kundo(cmd_arg: *mut CmdArg) {
     if check_clear_op_quit(ca.op()) {
         return;
     }
-    unsafe { u_undo(ca.count1) };
+    u_undo(ca.count1);
     Win::current().w_set_curswant = true;
 }
 
@@ -151,7 +151,7 @@ pub(crate) unsafe fn nv_undo_line(cmd_arg: *mut CmdArg) {
     if check_clear_op_quit(ca.op()) {
         return;
     }
-    unsafe { u_undoline() };
+    u_undoline();
     Win::current().w_set_curswant = true;
 }
 
@@ -168,9 +168,9 @@ pub(crate) unsafe fn nv_regname(cmd_arg: *mut CmdArg) {
     }
     // `"=` prompts for the expression register's contents up front.
     if ca.nchar == '=' as c_int {
-        ca.nchar = unsafe { get_expr_register() };
+        ca.nchar = get_expr_register();
     }
-    if ca.nchar != NUL && unsafe { valid_yank_reg(ca.nchar, false) } {
+    if ca.nchar != NUL && valid_yank_reg(ca.nchar, false) {
         ca.op().regname = ca.nchar;
         // The count so far belongs to the command, not to the `"`.
         ca.opcount = ca.count0;
@@ -218,18 +218,13 @@ pub(crate) unsafe fn nv_redo_or_register(cmd_arg: *mut CmdArg) {
         if reg == '"' as c_int {
             reg = 0;
         }
-        VIsual_select_reg.set(if unsafe { valid_yank_reg(reg, true) } {
-            reg
-        } else {
-            0
-        });
+        VIsual_select_reg.set(if valid_yank_reg(reg, true) { reg } else { 0 });
         return;
     }
-    // SAFETY: `cmd_arg` is the caller's live command argument.
     if check_clear_op_quit(ca.op()) {
         return;
     }
-    unsafe { u_redo(ca.count1) };
+    u_redo(ca.count1);
     Win::current().w_set_curswant = true;
 }
 
@@ -325,7 +320,7 @@ pub(crate) unsafe fn nv_record(cmd_arg: *mut CmdArg) {
         }
         stuff_readbuf_char(ca.nchar);
         stuff_readbuf_char(-(253 + (KE_CMDWIN.cast_signed() << 8)));
-    } else if reg_executing.get() == 0 && unsafe { do_record(ca.nchar) }.is_err() {
+    } else if reg_executing.get() == 0 && do_record(ca.nchar).is_err() {
         clear_op_beep(ca.op());
     }
 }

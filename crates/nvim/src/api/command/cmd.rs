@@ -491,8 +491,7 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
     }
     // `:put`/`:iput` read the register, everything else writes it.
     let writing = !is_user_cmd(ea.cmdidx) && ea.cmdidx != CmdIdx::put && ea.cmdidx != CmdIdx::iput;
-    // SAFETY: `valid_yank_reg` reads only the register tables.
-    if !unsafe { valid_yank_reg(regname as c_int, writing) } {
+    if !valid_yank_reg(regname as c_int, writing) {
         // `%c` wrote the one byte, whatever it was.
         let byte = regname as u8;
         let reg = msg_bytes(core::slice::from_ref(&byte));

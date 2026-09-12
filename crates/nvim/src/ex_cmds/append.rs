@@ -157,13 +157,12 @@ pub unsafe fn ex_append(args: *mut ExArg) {
             // There are no marks below the inserted lines.
             appended_lines(lnum, 1);
         } else {
-            unsafe { appended_lines_mark(lnum, 1) };
+            appended_lines_mark(lnum, 1);
         }
         lnum += 1;
 
         if empty {
-            // SAFETY: the dummy line the buffer started with.
-            let _ = unsafe { ml_delete(2) };
+            let _ = ml_delete(2);
             empty = false;
         }
     }
@@ -287,19 +286,18 @@ pub unsafe fn ex_change(args: *mut ExArg) {
 
     let mut lnum = line2;
     while lnum >= line1 {
-        // SAFETY: `curbuf` is live and `line1` is a line of it.
         if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
             // Nothing left to delete.
             break;
         }
-        let _ = unsafe { ml_delete(line1) };
+        let _ = ml_delete(line1);
         lnum -= 1;
     }
 
     // Make sure the cursor is not beyond the end of the file now.
     // SAFETY: `curwin` is the live current window.
     check_cursor_lnum(Win::current());
-    unsafe { deleted_lines_mark(line1, line2 - lnum) };
+    deleted_lines_mark(line1, line2 - lnum);
     // ":append" on the line above the deleted lines.
     args.line2 = line1;
     // SAFETY: the command block is the one borrowed here.

@@ -75,8 +75,7 @@ fn read_file(
 
 /// Open the memline (and the swap file) for `buffer`.
 fn open_memline(buffer: Buf) -> Result<(), Failed> {
-    // SAFETY: a live buffer.
-    unsafe { ml_open(buffer) }
+    ml_open(buffer)
 }
 
 /// The mode bits of `fname`, negative when it cannot be stat'ed.

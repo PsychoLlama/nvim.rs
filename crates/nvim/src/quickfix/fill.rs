@@ -59,8 +59,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
     };
 
     let old_line_count = buf.b_ml.ml_line_count;
-    // SAFETY: a live buffer and a line number inside it.
-    let old_endcol = unsafe { ml_get_buf_len(buf, old_line_count) };
+    let old_endcol = ml_get_buf_len(buf, old_line_count);
     let old_bytecount = get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
 
     // A location list's window id goes to 'quickfixtextfunc'; it is the
@@ -94,8 +93,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
     unsafe { qf_fill_buffer(qf_get_curlist(qi.raw()), buf, old_last, qf_winid) };
 
     let new_line_count = buf.b_ml.ml_line_count;
-    // SAFETY: a live buffer and a line number inside it.
-    let new_endcol = unsafe { ml_get_buf_len(buf, new_line_count) };
+    let new_endcol = ml_get_buf_len(buf, new_line_count);
     let delta = new_line_count - old_line_count;
     if old_last.is_null() {
         let bytes = get_region_bytecount(buf, 1, new_line_count, 0, new_endcol);
@@ -321,7 +319,7 @@ unsafe fn clear_qf_buffer() -> bool {
     // not modifiable — so the undo stack is cleaned up instead, or an
     // autocommand could invalidate it.
     while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        if unsafe { ml_delete(1) }.is_err() {
+        if ml_delete(1).is_err() {
             unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
             return false;
         }
@@ -479,7 +477,7 @@ pub(crate) unsafe fn qf_fill_buffer(
         }
         if rewriting {
             // Delete the empty line which is now at the end.
-            let _ = unsafe { ml_delete(lnum + 1) };
+            let _ = ml_delete(lnum + 1);
         }
         release_scratch();
     }

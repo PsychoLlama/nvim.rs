@@ -194,8 +194,7 @@ unsafe fn global_mark(args: &ExArg, regmatch: *mut RegMMatch, kind: u8) -> c_int
             break;
         }
         if selects(kind, matched) {
-            // SAFETY: `lnum` is inside the range, so inside the buffer.
-            unsafe { ml_setmarked(lnum) };
+            ml_setmarked(lnum);
             ndone += 1;
         }
         line_breakcheck();
@@ -287,8 +286,7 @@ pub unsafe fn ex_global(args: *mut ExArg) {
             // SAFETY: `parsed.cmd` is a live C string.
             unsafe { global_exe(parsed.cmd) };
         }
-        // SAFETY: main thread, live buffer.
-        unsafe { ml_clearmarked() }; // clear rest of the marks
+        ml_clearmarked(); // clear rest of the marks
     }
     // SAFETY: the program `search_regcomp` produced, used for the last time.
     unsafe { vim_regfree(regmatch.regprog) };
@@ -320,8 +318,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     let old_lcount = Buf::current().b_ml.ml_line_count;
 
     while !got_int.get() {
-        // SAFETY: main thread, live buffer.
-        let lnum = unsafe { ml_firstmarked() };
+        let lnum = ml_firstmarked();
         if lnum == 0 as LineNr || global_busy.get() != 1 as c_int {
             break;
         }

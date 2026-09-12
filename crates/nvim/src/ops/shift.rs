@@ -63,7 +63,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
             // A line starting with '#' stays put when 'smartindent' or
             // 'cindent' says preprocessor lines keep column 0.
             let left = op.op_type == OpType::Lshift;
-            unsafe { shift_line(left, p_sr.get() != 0, amount, false) };
+            shift_line(left, p_sr.get() != 0, amount, false);
         }
         Win::current().w_cursor.lnum += 1;
     }
@@ -254,10 +254,7 @@ fn get_new_vts_indent(
 ///
 /// `round` is 'shiftround'. `call_changed_bytes` is false only for the callers
 /// that report the change themselves.
-///
-/// # Safety
-/// Operates on the cursor line of the current buffer.
-pub unsafe fn shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: bool) {
+pub fn shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: bool) {
     let sw_val = Buf::current().b_p_sw;
     let ts_val = Buf::current().b_p_ts;
     let vts_array = Buf::current().b_p_vts_array as *const c_int;
@@ -348,7 +345,7 @@ fn shift_block(op: Op, amount: c_int) {
     };
 
     let _ = unsafe { ml_replace(lnum, shifted.line, false) };
-    unsafe { changed_bytes(lnum, bd.textcol) };
+    changed_bytes(lnum, bd.textcol);
     let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
     let (buffer, row) = (Buf::current(), lnum as c_int - 1);
     extmark_splice_cols(buffer, row, at, old, new, kExtmarkUndo);

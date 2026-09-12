@@ -449,8 +449,7 @@ pub(crate) fn xfree_clear<T>(slot: &mut *mut T) {
 
 /// `ml_delete()` on the current buffer.
 pub(crate) fn delete_line(lnum: LineNr) {
-    // SAFETY: the caller has checked the line is in the current buffer.
-    let _ = unsafe { ml_delete(lnum) };
+    let _ = ml_delete(lnum);
 }
 
 /// `unchanged()`: clear `'modified'`, and with `ff` the file-format flags.

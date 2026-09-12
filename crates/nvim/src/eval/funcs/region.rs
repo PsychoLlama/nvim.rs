@@ -267,13 +267,11 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
 /// Validate one corner against the buffer, resolving `MAXCOL` to the end of
 /// its line.
 fn check_corner(buffer: Buf, p: &mut Pos) -> Option<()> {
-    // SAFETY: the caller's obligation; the line length is only read once
-    // the line number has been checked.
     if p.lnum < 1 || p.lnum > buffer.b_ml.ml_line_count {
         semsg!("E966: Invalid line number: {}", p.lnum);
         return None;
     }
-    let len = unsafe { ml_get_buf_len(buffer, p.lnum) };
+    let len = ml_get_buf_len(buffer, p.lnum);
     if p.col == MAXCOL as ColNr {
         p.col = len + 1;
     } else if p.col < 1 || p.col > len + 1 {

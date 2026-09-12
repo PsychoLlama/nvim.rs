@@ -696,7 +696,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
             );
         }
         if flags & SIN_CHANGED as c_int != 0 {
-            unsafe { changed_bytes(Win::current().w_cursor.lnum, 0) };
+            changed_bytes(Win::current().w_cursor.lnum, 0);
         }
         // Correct the saved cursor position if it is on this line.
         let saved = saved_cursor.get();

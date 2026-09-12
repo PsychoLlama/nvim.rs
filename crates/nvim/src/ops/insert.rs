@@ -129,7 +129,7 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
         } else {
             getviscol()
         };
-        unsafe { coladvance_force(wcol) };
+        coladvance_force(wcol);
         if op.op_type == OpType::Append {
             Win::current().w_cursor.col -= 1;
         }
@@ -168,7 +168,7 @@ fn move_cursor_for_append(op: Op, bd: &mut BlockDef) -> bool {
                 return false;
             }
             for _ in 0..bd.endspaces {
-                unsafe { ins_char(' ' as c_int) };
+                ins_char(' ' as c_int);
             }
             bd.textlen += bd.endspaces;
         }
@@ -211,7 +211,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
     // block to match. Only when the difference is not the indent's doing.
     if op.start.lnum == Buf::current().b_op_start_orig.lnum && bd.is_max == 0 && !did_indent {
         let orig = Buf::current().b_op_start_orig;
-        let t = unsafe { getviscol2(orig.col, orig.coladd) };
+        let t = getviscol2(orig.col, orig.coladd);
         let orig_at = Buf::current().b_op_start_orig.col + Buf::current().b_op_start_orig.coladd;
         let block_at = op.start.col + op.start.coladd;
 
@@ -351,7 +351,7 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
     if op.motion_type == kMTBlockWise {
         // Add the spaces before measuring the line's length.
         if op_virtual() && (Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL) {
-            unsafe { coladvance_force(getviscol()) };
+            coladvance_force(getviscol());
         }
         let mut lines = Lines::current();
         let firstline = lines.line(op.start.lnum);

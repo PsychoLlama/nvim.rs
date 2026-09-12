@@ -310,8 +310,7 @@ pub unsafe fn buflist_new(
     }
     buf_clear_file(buf);
     clrallmarks(buf, 0 as Timestamp);
-    // SAFETY: a live buffer; check the file marks for this file.
-    unsafe { fmarks_check_names(buf) };
+    fmarks_check_names(buf);
     // Init 'buflisted'.
     buf.b_p_bl = if flags & BLN_LISTED as c_int != 0 {
         1

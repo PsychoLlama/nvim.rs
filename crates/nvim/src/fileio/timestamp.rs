@@ -215,7 +215,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
         frombuf.make_current();
         let mut lnum = Buf::current().b_ml.ml_line_count;
         while lnum > 0 {
-            if unsafe { ml_delete(lnum) }.is_err() {
+            if ml_delete(lnum).is_err() {
                 // Oops! We could try putting back the saved lines, but
                 // that might fail again...
                 retval = FAIL;
@@ -587,7 +587,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
             // Open the memline.
             scratch.make_current();
             Win::current().w_buffer = scratch.raw();
-            saved = unsafe { ml_open(Buf::current()) };
+            saved = ml_open(Buf::current());
             buffer.make_current();
             Win::current().w_buffer = buffer.raw();
         }
@@ -626,7 +626,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 // Put the text back from the save buffer. First delete any
                 // lines that readfile() added.
                 while !buf_is_empty(Buf::current()) {
-                    if unsafe { ml_delete(buffer.b_ml.ml_line_count) }.is_err() {
+                    if ml_delete(buffer.b_ml.ml_line_count).is_err() {
                         break;
                     }
                 }

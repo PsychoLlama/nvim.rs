@@ -494,7 +494,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         time_msg_at(c"UIEnter autocommands");
     }
 
-    unsafe { set_reg_var(get_default_register_name()) };
+    set_reg_var(get_default_register_name());
 
     if Win::current().w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_scb != 0 {
         update_topline(Win::current());

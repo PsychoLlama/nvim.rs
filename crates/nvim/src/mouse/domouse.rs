@@ -860,8 +860,7 @@ fn multi_click(mut win: Win, op: Option<Oap>, is_click: bool, is_drag: bool, mod
             // When not found a match or when dragging: extend to include a
             // word.
             if lt(win.w_cursor, orig_cursor.get()) {
-                // SAFETY: the cursor is a live position in the current buffer.
-                unsafe { find_start_of_word(win.cursor()) };
+                find_start_of_word(win.cursor());
                 with_visual(find_end_of_word);
             } else {
                 with_visual(find_start_of_word);
@@ -875,8 +874,7 @@ fn multi_click(mut win: Win, op: Option<Oap>, is_click: bool, is_drag: bool, mod
                 if let Some(bytes) = under.filter(|_| sel_exclusive()) {
                     win.w_cursor.col += bytes;
                 }
-                // SAFETY: the cursor is a live position in the current buffer.
-                unsafe { find_end_of_word(win.cursor()) };
+                find_end_of_word(win.cursor());
             }
         }
         win.w_set_curswant = true;

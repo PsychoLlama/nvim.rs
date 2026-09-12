@@ -143,7 +143,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     // The unnamed register reports what it points at; every other one
     // reports whether it is what the unnamed register points at.
-    buf[0] = get_register_name(unsafe { get_unname_register() }) as c_char;
+    buf[0] = get_register_name(get_unname_register()) as c_char;
     buf[1] = NUL as c_char;
     if regname == b'"' as c_int {
         let _ = unsafe { tv_dict_add_str(dict, c"points_to".as_ptr(), 9, buf.as_ptr()) };
@@ -321,7 +321,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     result.write_number(0);
     if set_unnamed {
-        unsafe { op_reg_set_previous(regname) };
+        op_reg_set_previous(regname);
     }
 }
 

@@ -139,9 +139,9 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
     if visual_active() {
         // Searching further will extend the match.
         if forward {
-            unsafe { incl(&mut pos) };
+            incl(&mut pos);
         } else {
-            unsafe { decl(&mut pos) };
+            decl(&mut pos);
         }
     }
 
@@ -189,7 +189,7 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
         if forward && ltoreq(visual_anchor(), Win::current().w_cursor) {
             inc_cursor();
         } else if !forward && ltoreq(Win::current().w_cursor, visual_anchor()) {
-            with_visual_anchor(|anchor| unsafe { inc(anchor) });
+            with_visual_anchor(inc);
         }
     }
 

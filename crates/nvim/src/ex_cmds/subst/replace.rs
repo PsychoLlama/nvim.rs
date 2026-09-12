@@ -189,16 +189,13 @@ fn split_carriage_returns(st: &mut Sub, at: usize) {
                     ml_append(st.lnum - 1 as LineNr, line.as_ptr(), at as ColNr + 1, false)
                 };
                 line.drop_head(at + 1);
-                // SAFETY: the lines below `lnum` all move down by one.
-                unsafe {
-                    mark_adjust(
-                        st.lnum + 1 as LineNr,
-                        MAXLNUM,
-                        1 as LineNr,
-                        0 as LineNr,
-                        kExtmarkNOOP,
-                    )
-                };
+                mark_adjust(
+                    st.lnum + 1 as LineNr,
+                    MAXLNUM,
+                    1 as LineNr,
+                    0 as LineNr,
+                    kExtmarkNOOP,
+                );
                 if subflags.with(|flags| flags.do_ask) {
                     appended_lines(st.lnum - 1 as LineNr, 1 as LineNr);
                 } else {
@@ -398,20 +395,16 @@ fn delete_matched_lines(st: &mut Sub) -> bool {
     }
     let mut i = 0 as LineNr;
     while i < st.nmatch_tl {
-        // SAFETY: as above.
-        let _ = unsafe { ml_delete(st.lnum) };
+        let _ = ml_delete(st.lnum);
         i += 1;
     }
-    // SAFETY: as above.
-    unsafe {
-        mark_adjust(
-            st.lnum,
-            st.lnum + st.nmatch_tl - 1 as LineNr,
-            MAXLNUM,
-            -st.nmatch_tl,
-            kExtmarkNOOP,
-        )
-    };
+    mark_adjust(
+        st.lnum,
+        st.lnum + st.nmatch_tl - 1 as LineNr,
+        MAXLNUM,
+        -st.nmatch_tl,
+        kExtmarkNOOP,
+    );
     if subflags.with(|flags| flags.do_ask) {
         deleted_lines(st.lnum, st.nmatch_tl);
     }
@@ -473,8 +466,7 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
     // When asking, undo is saved each time, so the changed flag must be set
     // each time too.
     if subflags.with(|flags| flags.do_ask) {
-        // SAFETY: `lnum` is a line of the buffer.
-        unsafe { changed_bytes(st.lnum, 0 as ColNr) };
+        changed_bytes(st.lnum, 0 as ColNr);
     } else {
         if st.first_line == 0 as LineNr {
             st.first_line = st.lnum;

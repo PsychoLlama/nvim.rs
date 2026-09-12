@@ -217,7 +217,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
             | Key::X2drag
             | Key::X2release,
         ) => {
-            unsafe { ins_mouse(s.c) };
+            ins_mouse(s.c);
             Next::Continue
         }
         Ok(Key::Mousedown) => {
@@ -563,7 +563,7 @@ fn may_autocomplete_before_cursor(s: &mut InsertState) {
     if !(ins_compl_has_autocomplete() && !char_avail() && Win::current().w_cursor.col > 0) {
         return;
     }
-    s.c = unsafe { char_before_cursor() };
+    s.c = char_before_cursor();
     if printable(s.c) {
         start_autocomplete(s);
     }
@@ -620,7 +620,7 @@ fn insert_normal_char(s: &mut InsertState) {
                     if s.c == CAR || s.c == Key::Kenter.code() || s.c == NL {
                         ins_eol(s.c);
                     } else {
-                        unsafe { ins_char(s.c) };
+                        ins_char(s.c);
                     }
                     p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
                 }

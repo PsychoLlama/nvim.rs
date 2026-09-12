@@ -70,7 +70,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
                 op.end.col -= 1;
             }
         } else if !op.inclusive {
-            unsafe { dec(&mut op.end) };
+            dec(&mut op.end);
         }
 
         if pos.lnum == op.end.lnum {
@@ -86,7 +86,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
                 did_change |= unsafe { swapchars(op.op_type, &raw mut pos, len) } != 0;
                 // `inc` answers -1 at the end of the buffer; either exit
                 // leaves `pos` where the walk stopped.
-                if ltoreq(op.end, pos) || unsafe { inc(&mut pos) } == -1 {
+                if ltoreq(op.end, pos) || inc(&mut pos) == -1 {
                     break;
                 }
             }
@@ -195,7 +195,7 @@ pub unsafe fn swapchar(op_type: OpType, pos: *mut Pos) -> bool {
         let saved: Pos = Win::current().w_cursor;
         Win::current().w_cursor = unsafe { *pos };
         let _ = unsafe { del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false) };
-        unsafe { ins_char(nc) };
+        ins_char(nc);
         Win::current().w_cursor = saved;
     } else {
         unsafe { pbyte(*pos, nc) };

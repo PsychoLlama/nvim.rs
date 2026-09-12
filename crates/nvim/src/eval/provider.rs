@@ -453,8 +453,7 @@ pub fn prompt_invoke_callback() {
     // SAFETY: `lnum` is the buffer's last line, and the literal is
     // NUL-terminated.
     let _ = unsafe { ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as ColNr, false) };
-    // SAFETY: the line was just appended.
-    unsafe { appended_lines_mark(lnum, 1) };
+    appended_lines_mark(lnum, 1);
     Win::current().w_cursor.lnum = lnum + 1;
     Win::current().w_cursor.col = 0;
     Buf::current().b_prompt_start.mark.lnum = lnum + 1;

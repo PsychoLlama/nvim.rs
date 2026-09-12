@@ -103,8 +103,7 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool>
         // marker folding.
         let below = Win::current().w_cursor.lnum + 1;
         let max = MAXLNUM;
-        // SAFETY: the editor exists.
-        unsafe { mark_adjust(below, max, 1, 0, kExtmarkNOOP) };
+        mark_adjust(below, max, 1, 0, kExtmarkNOOP);
         return Some(true);
     }
 
@@ -117,7 +116,7 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool>
         vr_lines_changed.set(vr_lines_changed.get() + 1);
     }
     let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, p_extra, true) };
-    unsafe { changed_bytes(Win::current().w_cursor.lnum, 0) };
+    changed_bytes(Win::current().w_cursor.lnum, 0);
     Win::current().w_cursor.lnum -= 1;
     Some(false)
 }
@@ -228,7 +227,7 @@ unsafe fn truncate_old_line(
             mark_col_adjust(cur_lnum, cur_col + off, 1, -less_cols, 0);
         }
     } else {
-        unsafe { changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col) };
+        changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col);
     }
 }
 

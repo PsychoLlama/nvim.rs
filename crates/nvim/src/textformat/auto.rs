@@ -183,7 +183,7 @@ pub fn check_auto_format(end_insert: bool) {
     }
     if c != NUL {
         // The space is no longer at the end of the line: delete it.
-        let _ = unsafe { del_char(false) };
+        let _ = del_char(false);
         did_add_space.set(false);
     }
 }

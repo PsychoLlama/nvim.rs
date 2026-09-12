@@ -91,7 +91,7 @@ pub fn ml_recover(checkext: bool) {
         }
         // When called from main() the storage structure still needs
         // initialising.
-        if called_from_main && unsafe { ml_open(Buf::current()) }.is_err() {
+        if called_from_main && ml_open(Buf::current()).is_err() {
             getout(1);
         }
 
@@ -277,7 +277,7 @@ pub fn ml_recover(checkext: bool) {
 
         // Recovery is going ahead, so the buffer's current contents go.
         while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-            let _ = unsafe { ml_delete(1) };
+            let _ = ml_delete(1);
         }
 
         // Read the original file, to pick up 'fileformat', 'fileencoding'
@@ -339,7 +339,7 @@ pub fn ml_recover(checkext: bool) {
         while Buf::current().b_ml.ml_line_count > lnum
             && !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY)
         {
-            let _ = unsafe { ml_delete(Buf::current().b_ml.ml_line_count) };
+            let _ = ml_delete(Buf::current().b_ml.ml_line_count);
         }
         Buf::current().b_flags |= BufFlags::RECOVERED;
         check_cursor(Win::current());
@@ -363,7 +363,7 @@ pub fn ml_recover(checkext: bool) {
     // it, and the memory goes back.
     drop(owned_buf);
     if serious_error && called_from_main {
-        unsafe { ml_close(Buf::current(), 1) };
+        ml_close(Buf::current(), 1);
     } else {
         let (name, buf) = (Buf::current().b_fname, Buf::current_raw());
         let none = core::ptr::null_mut();
@@ -746,7 +746,7 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
         // SAFETY: a live buffer from the editor's own list, and the memfile
         // it owns.
         if !buf.b_ml.ml_mfp.is_null() && !unsafe { mf_fname(buf.b_ml.ml_mfp) }.is_null() {
-            unsafe { ml_flush_line(buf, false) }; // flush the buffered line
+            ml_flush_line(buf, false); // flush the buffered line
             unsafe { ml_find_line(buf, 0, ML_FLUSH as c_int) }; // flush the locked block
 
             if buf_is_changed(buf)
@@ -808,7 +808,7 @@ pub fn ml_preserve(mut buffer: Buf, message: bool, do_fsync: bool) {
     let got_int_save = got_int.get();
     got_int.set(false);
 
-    unsafe { ml_flush_line(buffer, false) }; // flush the buffered line
+    ml_flush_line(buffer, false); // flush the buffered line
     unsafe { ml_find_line(buffer, 0, ML_FLUSH as c_int) }; // flush the locked block
     let sync_flags = MFS_ALL as c_int | if do_fsync { MFS_FLUSH as c_int } else { 0 };
     // `ml_preserve` still answers OK/FAIL to its own callers, so the

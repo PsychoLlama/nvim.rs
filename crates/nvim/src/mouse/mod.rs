@@ -303,10 +303,7 @@ impl ClickDefs {
 /// Run `f` over line `lnum` of the current buffer, the terminating NUL
 /// included: a click may land on the position just past the last character,
 /// and [`mouse_class`] answers for the NUL there.
-///
-/// # Safety
-/// `lnum` must be a line of the current buffer.
-unsafe fn with_line<R>(lnum: LineNr, f: impl FnOnce(&[u8]) -> R) -> R {
+fn with_line<R>(lnum: LineNr, f: impl FnOnce(&[u8]) -> R) -> R {
     // SAFETY: the caller's promise; `ml_get_buf` answers a NUL-terminated
     // line of `ml_get_buf_len` bytes, so one byte more is still in bounds.
     let line = unsafe {
@@ -357,12 +354,8 @@ fn head_off(line: &[u8], idx: usize) -> c_int {
 }
 
 /// Move `pos` back to the start of the word it is in.
-///
-/// # Safety
-/// `pos` must be a live position in the current buffer.
-unsafe fn find_start_of_word(pos: PosRef) {
-    // SAFETY: the caller's promise.
-    unsafe { with_line(pos.lnum, |line| start_of_word(pos, line)) };
+fn find_start_of_word(pos: PosRef) {
+    with_line(pos.lnum, |line| start_of_word(pos, line));
 }
 
 fn start_of_word(mut pos: PosRef, line: &[u8]) {
@@ -378,12 +371,8 @@ fn start_of_word(mut pos: PosRef, line: &[u8]) {
 
 /// Move `pos` forward to the end of the word it is in.  When `'selection'` is
 /// "exclusive", to just after the word.
-///
-/// # Safety
-/// `pos` must be a live position in the current buffer.
-unsafe fn find_end_of_word(pos: PosRef) {
-    // SAFETY: the caller's promise.
-    unsafe { with_line(pos.lnum, |line| end_of_word(pos, line)) };
+fn find_end_of_word(pos: PosRef) {
+    with_line(pos.lnum, |line| end_of_word(pos, line));
 }
 
 fn end_of_word(mut pos: PosRef, line: &[u8]) {

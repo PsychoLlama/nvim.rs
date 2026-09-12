@@ -29,10 +29,7 @@ use crate::types::{Failed, NUL};
 ///
 /// Only for a one-byte character replacing a one-byte character; anything else
 /// changes the line's length and has to go through [`replace_character`].
-///
-/// # Safety
-/// `pos` must name a line of the current buffer.
-pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
+pub(crate) fn pbyte(mut pos: Pos, c: c_int) {
     debug_assert!(c <= c_int::from(u8::MAX));
     // SAFETY: the caller's promise -- `pos` names a line of the current
     // buffer, and the column is clamped to that line below before the write.
@@ -54,14 +51,10 @@ pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
 ///
 /// Goes through Replace mode's own insert so that a multi-byte character on
 /// either side is handled; leaves the cursor back on the replaced character.
-///
-/// # Safety
-/// The cursor must name a valid position in the current buffer.
-unsafe fn replace_character(c: c_int) {
+fn replace_character(c: c_int) {
     let saved = State.get();
     State.set(MODE_REPLACE);
-    // SAFETY: the caller's promise -- the cursor names a valid position.
-    unsafe { ins_char(c) };
+    ins_char(c);
     State.set(saved);
     // Back up onto the character just replaced.
     dec_cursor();
@@ -238,7 +231,7 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
         let len = after_p_len as ColNr;
         let _ = unsafe { ml_append(Win::current().w_cursor.lnum, after_p, len, false) };
         Win::current().w_cursor.lnum += 1;
-        unsafe { appended_lines_mark(Win::current().w_cursor.lnum, 1) };
+        appended_lines_mark(Win::current().w_cursor.lnum, 1);
         op.end.lnum += 1;
         unsafe { xfree(after_p as *mut c_void) };
     }
@@ -276,7 +269,7 @@ fn replace_chars(mut op: Op, c: c_int) {
             op.end.col -= 1;
         }
     } else if !op.inclusive {
-        unsafe { dec(&mut op.end) };
+        dec(&mut op.end);
     }
 
     while ltoreq(Win::current().w_cursor, op.end) {
@@ -293,7 +286,7 @@ fn replace_chars(mut op: Op, c: c_int) {
                 if Win::current().w_cursor.lnum == op.end.lnum {
                     op.end.col += new_byte_len - old_byte_len;
                 }
-                unsafe { replace_character(c) };
+                replace_character(c);
                 done = true;
             } else {
                 if under_cursor == TAB {
@@ -301,18 +294,16 @@ fn replace_chars(mut op: Op, c: c_int) {
                     // was in columns first.
                     let mut end_vcol = 0;
                     if Win::current().w_cursor.lnum == op.end.lnum {
-                        end_vcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
+                        end_vcol = getviscol2(op.end.col, op.end.coladd);
                     }
-                    unsafe { coladvance_force(getviscol()) };
+                    coladvance_force(getviscol());
                     if Win::current().w_cursor.lnum == op.end.lnum {
-                        // SAFETY: a live current window, and the operator's
-                        // end position in the cursor's own line.
-                        unsafe { getvpos(Win::current(), op.end(), end_vcol) };
+                        getvpos(Win::current(), op.end(), end_vcol);
                     }
                 }
                 // With `coladd` set the cursor may now be just past a TAB.
                 if gchar_cursor() != NUL {
-                    unsafe { pbyte(Win::current().w_cursor, c) };
+                    pbyte(Win::current().w_cursor, c);
                     done = true;
                 }
             }
@@ -347,18 +338,16 @@ fn replace_virtual_tail(op: Op, c: c_int) {
 
     // `op.end` has been trimmed, so it is effectively inclusive: the extra
     // +1 is what keeps the NUL byte from being trampled.
-    // SAFETY: the cursor is on `op.end.lnum`, a line of the current buffer,
-    // and `coladvance_force` fills it out to the column being replaced.
-    let endcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
-    unsafe { coladvance_force(endcol + 1) };
+    let endcol = getviscol2(op.end.col, op.end.coladd);
+    coladvance_force(endcol + 1);
     Win::current().w_cursor.col -= virtcols + 1;
     while virtcols >= 0 {
         if utf_char2len(c) > 1 {
-            unsafe { replace_character(c) };
+            replace_character(c);
         } else {
-            unsafe { pbyte(Win::current().w_cursor, c) };
+            pbyte(Win::current().w_cursor, c);
         }
-        if unsafe { inc(&mut Win::current().w_cursor) } == -1 {
+        if inc(&mut Win::current().w_cursor) == -1 {
             break;
         }
         virtcols -= 1;

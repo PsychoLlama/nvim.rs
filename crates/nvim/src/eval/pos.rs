@@ -138,7 +138,7 @@ pub unsafe fn var2fpos(
         let len = if charcol {
             unsafe { mb_charlen(ml_get_buf(bp, pos.lnum)) }
         } else {
-            unsafe { ml_get_buf_len(bp, pos.lnum) as c_int }
+            ml_get_buf_len(bp, pos.lnum) as c_int
         };
         // The column may be spelled `"$"`, meaning end of line.
         // SAFETY: `l` is a live List.
@@ -247,7 +247,7 @@ pub unsafe fn var2fpos(
             pos.col = if charcol {
                 unsafe { mb_charlen(ml_get_buf(bp, lnum)) }
             } else {
-                unsafe { ml_get_buf_len(bp, lnum) }
+                ml_get_buf_len(bp, lnum)
             };
         }
         return Some(pos);

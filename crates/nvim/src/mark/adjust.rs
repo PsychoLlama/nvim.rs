@@ -180,29 +180,23 @@ impl ColShift {
 /// Example: Delete lines 34 and 35: mark_adjust(34, 35, MAXLNUM, -2);
 /// Example: Insert two lines below 55: mark_adjust(56, MAXLNUM, 2, 0);
 /// or: mark_adjust(56, 55, MAXLNUM, 2);
-///
-/// # Safety
-/// The editor's globals must be live, which they are from startup to exit.
-pub unsafe fn mark_adjust(
+pub fn mark_adjust(
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
     amount_after: LineNr,
     op: ExtmarkOp,
 ) {
-    // SAFETY: forwarded from the caller; `curbuf` is live from startup.
-    unsafe {
-        mark_adjust_buf(
-            Buf::current(),
-            line1,
-            line2,
-            amount,
-            amount_after,
-            true,
-            kMarkAdjustNormal,
-            op,
-        )
-    };
+    mark_adjust_buf(
+        Buf::current(),
+        line1,
+        line2,
+        amount,
+        amount_after,
+        true,
+        kMarkAdjustNormal,
+        op,
+    );
 }
 
 /// mark_adjust_nofold() does the same as mark_adjust() but without adjusting
@@ -210,35 +204,26 @@ pub unsafe fn mark_adjust(
 /// This is only useful when folds need to be moved in a way different to
 /// calling fold_mark_adjust() with arguments line1, line2, amount, amount_after,
 /// for an example of why this may be necessary, see do_move().
-///
-/// # Safety
-/// As [`mark_adjust`].
-pub unsafe fn mark_adjust_nofold(
+pub fn mark_adjust_nofold(
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
     amount_after: LineNr,
     op: ExtmarkOp,
 ) {
-    // SAFETY: forwarded from the caller.
-    unsafe {
-        mark_adjust_buf(
-            Buf::current(),
-            line1,
-            line2,
-            amount,
-            amount_after,
-            false,
-            kMarkAdjustNormal,
-            op,
-        )
-    };
+    mark_adjust_buf(
+        Buf::current(),
+        line1,
+        line2,
+        amount,
+        amount_after,
+        false,
+        kMarkAdjustNormal,
+        op,
+    );
 }
 
-/// # Safety
-/// `buffer` must be a live buffer, and the editor's window and tab page lists
-/// must be live.
-pub unsafe fn mark_adjust_buf(
+pub fn mark_adjust_buf(
     mut buffer: Buf,
     line1: LineNr,
     line2: LineNr,

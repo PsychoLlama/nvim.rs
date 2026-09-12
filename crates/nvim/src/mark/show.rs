@@ -225,8 +225,7 @@ pub unsafe fn ex_delmarks(args: *mut ExArg) {
     let empty = c_int::from(unsafe { *arg }) == NUL;
 
     if empty && forceit {
-        // SAFETY: the editor's globals are live.
-        unsafe { delmarks_all(buf) };
+        delmarks_all(buf);
         return;
     }
     if forceit {
@@ -263,7 +262,7 @@ pub unsafe fn ex_delmarks(args: *mut ExArg) {
         if !(lower || digit || upper) {
             // SAFETY: `buf` and `gone` are live, and `rest` points inside the
             // NUL-terminated argument.
-            if !unsafe { delmarks_one(&mut buf, mark_name(here), &mut gone, timestamp) } {
+            if !delmarks_one(&mut buf, mark_name(here), &mut gone, timestamp) {
                 // SAFETY: as above.
                 let rest = unsafe { c_str(rest) };
                 semsg!("E475: Invalid argument: {rest}");
@@ -337,10 +336,7 @@ pub unsafe fn ex_delmarks(args: *mut ExArg) {
 }
 
 /// `:delmarks!` — every buffer-local mark, plus the tick family.
-///
-/// # Safety
-/// The editor's globals must be live.
-unsafe fn delmarks_all(buffer: Buf) {
+fn delmarks_all(buffer: Buf) {
     let mut gone = UNSET_POS;
     // Announced before the clearing, so an autocommand can still read the
     // buffer the mark was in. `'<`/`'>` are NOT announced and not cleared:
@@ -368,16 +364,7 @@ unsafe fn delmarks_all(buffer: Buf) {
 
 /// One non-alphanumeric `:delmarks` name. `false` means the name is not a
 /// mark at all, which is E474 in the caller.
-///
-/// # Safety
-/// `buffer` must be live, `gone` must point at a live position, and the editor's
-/// globals must be live.
-unsafe fn delmarks_one(
-    buffer: &mut Buf,
-    name: c_char,
-    gone: &mut Pos,
-    timestamp: Timestamp,
-) -> bool {
+fn delmarks_one(buffer: &mut Buf, name: c_char, gone: &mut Pos, timestamp: Timestamp) -> bool {
     // `:` and a space are accepted and do nothing: the prompt mark is not the
     // user's to delete, and a space is how `:delmarks a b` separates names.
     let lnum = match c_int::from(name) {

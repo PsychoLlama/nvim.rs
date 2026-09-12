@@ -84,7 +84,7 @@ pub fn os_exit(mut r: c_int) -> ! {
             unsafe { tcdrain(STDERR_FILENO) };
         }
     } else {
-        unsafe { ml_close_all(true) };
+        ml_close_all(true);
     }
 
     if used_stdin.get() {
@@ -286,7 +286,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
         os_exit(1);
     }
 
-    unsafe { ml_close_notmod() };
+    ml_close_notmod();
 
     for buf in buffers() {
         let memfile = buf.b_ml.ml_mfp;
@@ -302,7 +302,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
     }
 
     // Close the memfiles without deleting them.
-    unsafe { ml_close_all(false) };
+    ml_close_all(false);
 
     if !errmsg.is_null() {
         unsafe { fprintf(stderr, c"Nvim: Finished.\n".as_ptr()) };

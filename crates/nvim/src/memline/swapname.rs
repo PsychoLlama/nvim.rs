@@ -39,7 +39,7 @@ pub fn ml_setname(buffer: Buf) {
         // There is no swap file yet: with `'updatecount'` zero and
         // `'noswapfile'` there never was one. Help files get one now.
         if p_uc.get() != 0 && !cmdmod_has(CmdModFlags::NOSWAPFILE) {
-            unsafe { ml_open_file(buffer) };
+            ml_open_file(buffer);
         }
         return;
     }

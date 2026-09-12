@@ -605,9 +605,9 @@ pub unsafe fn do_searchpair(
         // over it so that the walk makes progress.
         if equalpos(pos, foundpos) {
             if dir == BACKWARD as c_int {
-                unsafe { decl(&mut pos) };
+                decl(&mut pos);
             } else {
-                unsafe { incl(&mut pos) };
+                incl(&mut pos);
             }
         }
         foundpos = pos;

@@ -126,8 +126,7 @@ pub(crate) fn reg_line(rex: Rex, lnum: LineNr, origin: LineOrigin) -> *mut c_cha
 pub(crate) fn reg_line_len(rex: Rex, lnum: LineNr, origin: LineOrigin) -> ColNr {
     match locate(lnum, origin.first(rex), origin.maxline(rex)) {
         Located::Before | Located::Past => 0,
-        // SAFETY: as `reg_line`.
-        Located::At(lnum) => unsafe { ml_get_buf_len(rex.reg_buf(), lnum) },
+        Located::At(lnum) => ml_get_buf_len(rex.reg_buf(), lnum),
     }
 }
 

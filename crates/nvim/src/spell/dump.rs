@@ -137,7 +137,7 @@ pub unsafe fn ex_spelldump(args: *mut ExArg) {
 
     // Drop the empty line the new buffer started with.
     if Buf::current().b_ml.ml_line_count > 1 {
-        let _ = unsafe { ml_delete(Buf::current().b_ml.ml_line_count) };
+        let _ = ml_delete(Buf::current().b_ml.ml_line_count);
     }
     redraw_later(Win::current(), UPD_NOT_VALID);
 }

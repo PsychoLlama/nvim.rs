@@ -463,7 +463,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         // `go`: to a byte offset in the buffer.
         Ok(b'o') => {
             op.inclusive = false;
-            unsafe { goto_byte(ca.count0) };
+            goto_byte(ca.count0);
         }
         // `gQ`: Ex mode.
         Ok(b'Q') => {
@@ -502,7 +502,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
                 } else {
                     ca.count1
                 };
-                unsafe { undo_time(count, false, false, false) };
+                undo_time(count, false, false, false);
             }
         }
         _ => clear_op_beep(op),

@@ -37,10 +37,7 @@ static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
 /// it got too long — careful, this can call `ml_find_line`),
 /// [`ML_CHNK_DELLINE`] (subtract `len`, possibly merging the chunk away) or
 /// [`ML_CHNK_UPDLINE`] (add `len` as a signed quantity).
-///
-/// # Safety
-/// `buffer` must point at a buffer.
-pub(crate) unsafe fn ml_updatechunk(buffer: Buf, line: LineNr, len_arg: c_int, updtype: c_int) {
+pub(crate) fn ml_updatechunk(buffer: Buf, line: LineNr, len_arg: c_int, updtype: c_int) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = buffer;
@@ -250,7 +247,7 @@ pub unsafe fn ml_find_line_or_offset(
     // does invalidate the cache for the time being.
     let can_cache = lnum != 0 && ffdos == 0 && b.b_ml.cached_lnum() == lnum;
     if lnum == 0 || b.b_ml.cached_lnum() < lnum || !no_ff {
-        unsafe { ml_flush_line(Buf::current(), false) };
+        ml_flush_line(Buf::current(), false);
     } else if can_cache && b.b_ml.cached_offset() > 0 {
         return b.b_ml.cached_offset() as c_int;
     }
@@ -374,12 +371,9 @@ pub unsafe fn ml_find_line_or_offset(
 }
 
 /// Move the cursor to byte `cnt` of the buffer.
-///
-/// # Safety
-/// Must run on the main thread, with a current buffer and window.
-pub unsafe fn goto_byte(cnt: c_int) {
+pub fn goto_byte(cnt: c_int) {
     let mut boff = cnt;
-    unsafe { ml_flush_line(Buf::current(), false) }; // the cached line may be dirty
+    ml_flush_line(Buf::current(), false); // the cached line may be dirty
     setpcmark();
     if boff != 0 {
         boff -= 1;

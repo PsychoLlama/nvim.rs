@@ -27,10 +27,7 @@ use crate::types::NUL;
 impl Put {
     /// Splice `count` copies of the register's single line into the buffer at
     /// `col`, once per line of a Visual selection.
-    ///
-    /// # Safety
-    /// `lnum`/`col` must be a valid position, and undo already saved.
-    pub(crate) unsafe fn charwise_one_line(&mut self, mut lnum: LineNr, mut col: ColNr) {
+    pub(crate) fn charwise_one_line(&mut self, mut lnum: LineNr, mut col: ColNr) {
         // SAFETY: a charwise register holds at least one line, so `y_array`'s
         // first string is there.
         let yanklen = unsafe { (*self.y_array).len() } as c_int;
@@ -132,8 +129,7 @@ impl Put {
                     invalidate_botline_win(Win::current());
                     Win::current().w_cursor.col += (totlen - 1) as ColNr;
                 }
-                // SAFETY: `lnum`/`col` is where the line changed.
-                unsafe { changed_bytes(lnum, col) };
+                changed_bytes(lnum, col);
                 let inserted = totlen as c_int;
                 let buffer = Buf::current();
                 extmark_splice_cols(buffer, lnum - 1, col, 0, inserted, kExtmarkUndo);
@@ -164,10 +160,7 @@ impl Put {
     ///
     /// Answers the line the second half ended up on, and how many bytes of
     /// the register's first line went onto the first half.
-    ///
-    /// # Safety
-    /// `lnum`/`col` must be a valid position.
-    unsafe fn split_line_for_charwise(&self, lnum: LineNr, col: ColNr) {
+    fn split_line_for_charwise(&self, lnum: LineNr, col: ColNr) {
         // The tail of the cursor line, with the register's *last* line in
         // front of it, becomes a new line below.
         //
@@ -209,10 +202,7 @@ impl Put {
 
     /// Reindent line `lnum` the way `]p` wants: keep the *relative* indent of
     /// the register's lines, but move the block as a whole to `orig_indent`.
-    ///
-    /// # Safety
-    /// `lnum` must be a valid line.
-    unsafe fn fix_indent(&self, lnum: LineNr, state: &mut FixIndent) {
+    fn fix_indent(&self, lnum: LineNr, state: &mut FixIndent) {
         let old_pos = Win::current().w_cursor;
         Win::current().w_cursor.lnum = lnum;
         // SAFETY: the caller promises `lnum` is a line of the buffer, so
@@ -235,11 +225,7 @@ impl Put {
     }
 
     /// The `'[` and `']` marks, and where the cursor ends up.
-    ///
-    /// # Safety
-    /// `lnum` must be the last line the put touched and `new_lnum` the line
-    /// the `']` mark belongs on.
-    unsafe fn multiline_marks(
+    fn multiline_marks(
         &self,
         lnum: LineNr,
         new_lnum: LineNr,
@@ -262,9 +248,7 @@ impl Put {
             kExtmarkNOOP
         };
         let from = Buf::current().b_op_start.lnum + LineNr::from(self.y_type == kMTCharWise);
-        // SAFETY: main thread, with a current buffer; the range runs from the
-        // put's first line to the end of the buffer.
-        unsafe { mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind) };
+        mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind);
 
         // SAFETY (both): a live buffer, and the range is the lines the put
         // just rewrote.
@@ -332,10 +316,7 @@ impl Put {
     }
 
     /// The linewise put, and the charwise put of more than one line.
-    ///
-    /// # Safety
-    /// `lnum`/`col` must be a valid position, and undo already saved.
-    pub(crate) unsafe fn multiline(&mut self, mut lnum: LineNr, col: ColNr, new_cursor: Pos) {
+    pub(crate) fn multiline(&mut self, mut lnum: LineNr, col: ColNr, new_cursor: Pos) {
         let mut new_lnum = new_cursor.lnum;
         let mut lendiff = 0;
         let mut indent_state = FixIndent {
@@ -356,8 +337,7 @@ impl Put {
                 let mut i: size_t = 0;
                 if self.y_type == kMTCharWise {
                     lnum = new_cursor.lnum;
-                    // SAFETY: `lnum`/`col` is the caller's valid position.
-                    unsafe { self.split_line_for_charwise(lnum, col) };
+                    self.split_line_for_charwise(lnum, col);
                     new_lnum += 1;
                     Win::current().w_cursor.lnum = lnum;
                     i = 1;
@@ -382,11 +362,10 @@ impl Put {
                         // Only the very last line's length is wanted, to see
                         // what the reindent took off it.
                         let measured = cnt == self.count && i == self.y_size.wrapping_sub(1);
-                        // SAFETY (all three): `lnum` is the line just added.
                         if measured {
                             lendiff = ml_get_len(lnum);
                         }
-                        unsafe { self.fix_indent(lnum, &mut indent_state) };
+                        self.fix_indent(lnum, &mut indent_state);
                         if measured {
                             lendiff -= ml_get_len(lnum);
                         }
@@ -428,9 +407,7 @@ impl Put {
             }
         }
 
-        // SAFETY: `lnum` is the last line the put touched and `new_lnum` the
-        // one the `']` mark belongs on.
-        unsafe { self.multiline_marks(lnum, new_lnum, new_cursor, col, lendiff) };
+        self.multiline_marks(lnum, new_lnum, new_cursor, col, lendiff);
     }
 }
 

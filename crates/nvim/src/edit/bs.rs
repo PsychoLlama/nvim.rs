@@ -76,7 +76,7 @@ pub(crate) fn ins_del() {
     if char_at_cursor() == NUL {
         // Delete the newline.
         let temp = Win::current().w_cursor.col;
-        if !can_bs(BsFlag::EOL) || unsafe { do_join(2, false, true, false, false) }.is_err() {
+        if !can_bs(BsFlag::EOL) || do_join(2, false, true, false, false).is_err() {
             beep_backspace();
         } else {
             Win::current().w_cursor.col = temp;
@@ -323,7 +323,7 @@ fn bs_join_line() -> bool {
             }
         }
 
-        let _ = unsafe { do_join(2, false, false, false, false) };
+        let _ = do_join(2, false, false, false, false);
         if temp == NUL && char_at_cursor() != NUL {
             cursor_forward();
         }
@@ -426,7 +426,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
         pull_insstart_orig_to_cursor();
 
         if State.get() & VREPLACE_FLAG != 0 {
-            unsafe { ins_char(' ' as c_int) };
+            ins_char(' ' as c_int);
         } else {
             unsafe { ins_str(c" ".as_ptr().cast_mut(), 1) };
             if State.get() & REPLACE_FLAG != 0 {
@@ -541,8 +541,7 @@ fn cursor_back() -> c_int {
 /// Delete the character under the cursor, leaving the cursor where it is.
 #[inline(always)]
 fn delete_one_char() -> Result<(), Failed> {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { del_char(false) }
+    del_char(false)
 }
 
 /// The character under the cursor, `NUL` at the end of the line.

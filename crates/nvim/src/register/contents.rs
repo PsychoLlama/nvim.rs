@@ -49,7 +49,7 @@ pub unsafe fn get_reg_type(regname: c_int, reg_width: *mut ColNr) -> MotionType 
     }
 
     // SAFETY: `valid_yank_reg` only looks the name up.
-    if regname != NUL && !unsafe { valid_yank_reg(regname, false) } {
+    if regname != NUL && !valid_yank_reg(regname, false) {
         return kMTUnknown;
     }
     // SAFETY: a valid register name, so this answers a live register.
@@ -110,8 +110,7 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
     if regname == '@' as c_int {
         regname = '"' as c_int; // `getreg('@')` means the unnamed register
     }
-    // SAFETY: `valid_yank_reg` only looks the name up.
-    if regname != NUL && !unsafe { valid_yank_reg(regname, false) } {
+    if regname != NUL && !valid_yank_reg(regname, false) {
         return ::core::ptr::null_mut();
     }
 
@@ -203,8 +202,7 @@ unsafe fn init_write_reg(
     old_y_previous: &mut *mut YankReg,
     must_append: bool,
 ) -> *mut YankReg {
-    // SAFETY: `valid_yank_reg` only looks the name up.
-    if !unsafe { valid_yank_reg(name, true) } {
+    if !valid_yank_reg(name, true) {
         emsg_invreg(name);
         return ::core::ptr::null_mut();
     }

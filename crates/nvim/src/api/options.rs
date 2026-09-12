@@ -202,8 +202,7 @@ unsafe fn do_ft_buf(
         let why = Error::exception(c"Could not create internal buffer");
         return (None, Err(why));
     };
-    // SAFETY: `ftbuf` is the buffer just created.
-    if unsafe { ml_open(ftbuf) }.is_err() {
+    if ml_open(ftbuf).is_err() {
         let why = Error::exception(c"Could not load internal buffer");
         return (Some(ftbuf), Err(why));
     }

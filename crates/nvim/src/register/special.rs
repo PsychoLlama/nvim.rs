@@ -37,10 +37,7 @@ use crate::types::NUL;
 /// Answers `'='` once it is stored, or `NUL` if the prompt was abandoned. An
 /// empty answer leaves the previous expression in place, so that `"=<CR>`
 /// repeats it.
-///
-/// # Safety
-/// Runs the command line, and so arbitrary autocommands.
-pub unsafe fn get_expr_register() -> c_int {
+pub fn get_expr_register() -> c_int {
     let new_line = getcmdline('=' as c_int, 0, 0, true);
     if new_line.is_null() {
         return NUL; // cancelled

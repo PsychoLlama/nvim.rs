@@ -558,11 +558,11 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
             1
         };
         if byte(ml_get(lnum)) == NUL && u_savedel(lnum, 1).is_ok() {
-            let _ = unsafe { ml_delete(lnum) };
+            let _ = ml_delete(lnum);
             if Win::current().w_cursor.lnum > 1 && Win::current().w_cursor.lnum >= lnum {
                 Win::current().w_cursor.lnum -= 1;
             }
-            unsafe { deleted_lines_mark(lnum, 1) };
+            deleted_lines_mark(lnum, 1);
         }
     }
     redraw_curbuf_later(UPD_VALID);

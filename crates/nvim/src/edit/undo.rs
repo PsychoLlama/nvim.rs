@@ -228,7 +228,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
                     Win::current().w_cursor.col -= 1;
                 }
                 cc = char_at_cursor();
-                if !ascii_iswhite(cc) || unsafe { del_char(true) }.is_err() {
+                if !ascii_iswhite(cc) || del_char(true).is_err() {
                     break;
                 }
             }

@@ -250,7 +250,7 @@ pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
     // SAFETY: the current window is live.
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
     if Win::current().w_onebuf_opt.wo_crb != 0 {
-        unsafe { do_check_cursorbind() };
+        do_check_cursorbind();
     }
     // Held for the whole prompt: `'cpoptions'` is read once, where the C
     // read it again at the release and would have gone out of step with

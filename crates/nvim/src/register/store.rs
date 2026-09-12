@@ -38,10 +38,7 @@ fn is_ascii_letter(c: c_int) -> bool {
 
 /// The index of the slot `""` currently points at, or -1 when nothing has
 /// been written yet.
-///
-/// # Safety
-/// Reads the register store; main thread only.
-pub unsafe fn get_unname_register() -> c_int {
+pub fn get_unname_register() -> c_int {
     if y_previous.get().is_null() {
         -1
     } else {
@@ -67,10 +64,7 @@ pub fn get_y_previous() -> *mut YankReg {
 /// With `writing`, the read-only registers (`"/ ". "% ": "=`) are rejected.
 /// 0 -- the default register -- is *not* handled here; the caller must check
 /// for it. The black hole `"_` counts as valid.
-///
-/// # Safety
-/// Reads 'comments'-independent globals only; main thread only.
-pub unsafe fn valid_yank_reg(regname: c_int, writing: bool) -> bool {
+pub fn valid_yank_reg(regname: c_int, writing: bool) -> bool {
     regname > 0 && (is_ascii_letter(regname) || ascii_isdigit(regname))
         || !writing && has_char(c"/.%:=", regname)
         || regname == '#' as c_int
@@ -83,10 +77,7 @@ pub unsafe fn valid_yank_reg(regname: c_int, writing: bool) -> bool {
 
 /// Which clipboard register an unnamed paste should use, or `NUL` when
 /// 'clipboard' does not ask for one (or no provider is available).
-///
-/// # Safety
-/// May call the clipboard provider, which runs Lua.
-pub unsafe fn get_default_register_name() -> c_int {
+pub fn get_default_register_name() -> c_int {
     let mut name = NUL;
     unsafe { clipboard::adjust_clipboard_name(&mut name, true, false) };
     name
@@ -188,10 +179,7 @@ pub unsafe fn op_reg_get(name: c_char) -> *const YankReg {
 /// Point `""` at the register named `name`.
 ///
 /// Answers false for a name with no slot.
-///
-/// # Safety
-/// Writes the register store; main thread only.
-pub unsafe fn op_reg_set_previous(name: c_char) -> bool {
+pub fn op_reg_set_previous(name: c_char) -> bool {
     let i = op_reg_index(c_int::from(name));
     if i == -1 {
         return false;
@@ -276,7 +264,7 @@ pub unsafe fn get_yank_register(regname: c_int, mode: c_int) -> *mut YankReg {
 /// `reg` must be writable. May run the clipboard provider.
 pub unsafe fn yank_register_mline(regname: c_int, reg: *mut *mut YankReg) -> bool {
     unsafe { *reg = ::core::ptr::null_mut() };
-    if regname != 0 && !unsafe { valid_yank_reg(regname, false) } {
+    if regname != 0 && !valid_yank_reg(regname, false) {
         return false;
     }
     if regname == '_' as c_int {
@@ -317,10 +305,7 @@ pub unsafe fn copy_register(name: c_int) -> *mut YankReg {
 ///
 /// With `y_append` the caller is appending to an uppercase register, so `""`
 /// is left where it is.
-///
-/// # Safety
-/// Writes the register store; main thread only.
-pub unsafe fn shift_delete_registers(y_append: bool) {
+pub fn shift_delete_registers(y_append: bool) {
     unsafe { free_register(get_y_register(9)) };
     for n in (2..=9).rev() {
         unsafe { *get_y_register(n) = *get_y_register(n - 1) };

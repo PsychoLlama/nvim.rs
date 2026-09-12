@@ -682,7 +682,7 @@ fn run_operator(
                 beep_flush();
             } else {
                 let count = op.line_count as size_t;
-                let _ = unsafe { do_join(count, op.op_type == OpType::Join, true, true, true) };
+                let _ = do_join(count, op.op_type == OpType::Join, true, true, true);
                 auto_format(false, true);
             }
         }

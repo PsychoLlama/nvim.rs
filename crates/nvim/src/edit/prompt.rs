@@ -91,13 +91,13 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
         if c_int::from(unsafe { *text }) == NUL {
             // The line is empty: the prompt *is* the line.
             let _ = unsafe { ml_replace(start().lnum, prompt, true) };
-            unsafe { inserted_bytes(start().lnum, 0, 0, prompt_len) };
+            inserted_bytes(start().lnum, 0, 0, prompt_len);
         } else {
             // The line holds something else, so the prompt goes on a new
             // last line.
             let lnum = Buf::current().b_ml.ml_line_count;
             let _ = unsafe { ml_append(lnum, prompt, 0, false) };
-            unsafe { appended_lines_mark(lnum, 1) };
+            appended_lines_mark(lnum, 1);
             set_start_lnum(Buf::current().b_ml.ml_line_count);
             Buf::current().b_prompt_append_new_line = true;
             // Like submitting: the undo history belonged to the old

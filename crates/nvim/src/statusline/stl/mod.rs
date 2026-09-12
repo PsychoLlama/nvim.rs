@@ -744,8 +744,7 @@ pub unsafe fn build_stl_str_hl(
     let line_ptr = buf.line(lnum).raw();
     // SAFETY: `ml_get_buf` answers a NUL-terminated line.
     let empty_line = unsafe { *line_ptr } == 0;
-    // SAFETY: as above.
-    let len = unsafe { ml_get_buf_len(buf, lnum) };
+    let len = ml_get_buf_len(buf, lnum);
     let byteval = if win.w_cursor.col > len {
         // The line may have changed since the cursor column was checked, or
         // the line number was adjusted above.

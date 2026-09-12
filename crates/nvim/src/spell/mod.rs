@@ -382,7 +382,7 @@ pub fn ex_spellrepall(_args: *mut ExArg) {
             let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, p, false) };
             let lnum = Win::current().w_cursor.lnum;
             let (was, now) = (repl_from_len as c_int, repl_to_len as c_int);
-            unsafe { inserted_bytes(lnum, col, was, now) };
+            inserted_bytes(lnum, col, was, now);
 
             if Win::current().w_cursor.lnum != prev_lnum {
                 sub_nlines.set(sub_nlines.get() + 1);

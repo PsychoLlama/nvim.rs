@@ -117,10 +117,7 @@ impl Put {
     /// sense, honouring 'virtualedit'.
     ///
     /// Answers the screen column the block lands at.
-    ///
-    /// # Safety
-    /// The cursor must be on a valid line.
-    unsafe fn block_start_col(&self) -> ColNr {
+    fn block_start_col(&self) -> ColNr {
         let c = gchar_cursor();
         let mut col: ColNr;
         let mut endcol2: ColNr = 0;
@@ -174,10 +171,7 @@ impl Put {
     /// `block_def` does.
     ///
     /// Answers false when the put must stop.
-    ///
-    /// # Safety
-    /// The cursor must be on a valid line or one past the end of the buffer.
-    unsafe fn blockwise_line(
+    fn blockwise_line(
         &mut self,
         i: size_t,
         col: ColNr,
@@ -290,19 +284,13 @@ impl Put {
     ///
     /// `lnum` is the line the put started on, kept for the `'[` mark and the
     /// redraw range.
-    ///
-    /// # Safety
-    /// The cursor must be on a valid line, and undo already saved.
-    pub(crate) unsafe fn blockwise(&mut self, lnum: LineNr) {
-        // SAFETY: the cursor is on a valid line.
-        let col = unsafe { self.block_start_col() };
+    pub(crate) fn blockwise(&mut self, lnum: LineNr) {
+        let col = self.block_start_col();
 
         let mut textcol: ColNr = 0;
         let mut totlen: size_t = 0;
         for i in 0..self.y_size {
-            // SAFETY: the cursor is on a line of the buffer, or one past its
-            // end, which is where the previous round left it.
-            if !unsafe { self.blockwise_line(i, col, &mut textcol, &mut totlen) } {
+            if !self.blockwise_line(i, col, &mut textcol, &mut totlen) {
                 break;
             }
         }

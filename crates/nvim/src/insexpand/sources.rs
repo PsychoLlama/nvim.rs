@@ -724,7 +724,7 @@ pub(crate) fn get_register_completion() {
     for i in 0..NUM_REGISTERS {
         let regname = get_register_name(i);
         // Skip an invalid or black hole register.
-        if !unsafe { valid_yank_reg(regname, false) } || regname == '_' as c_int {
+        if !valid_yank_reg(regname, false) || regname == '_' as c_int {
             continue;
         }
 
@@ -944,7 +944,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
                         unsafe { *pos = current_pos };
                         return Some(LineMatch {
                             ptr,
-                            len: unsafe { ml_get_buf_len(buffer, current_pos.lnum) } as c_int,
+                            len: ml_get_buf_len(buffer, current_pos.lnum) as c_int,
                             score: None,
                         });
                     }

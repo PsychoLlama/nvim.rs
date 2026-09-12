@@ -422,5 +422,5 @@ unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
     Win::current().w_cursor.col = col as ColNr;
     // SAFETY: the cursor is on the line just replaced.
     let lnum = Win::current().w_cursor.lnum;
-    unsafe { inserted_bytes(lnum, col as ColNr, stp.st_orglen, stp.st_wordlen) };
+    inserted_bytes(lnum, col as ColNr, stp.st_orglen, stp.st_wordlen);
 }

@@ -296,10 +296,7 @@ static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// pointer block and one data block holding a single empty line.
 ///
 /// No swap file is created here; [`ml_open_file`] does that later.
-///
-/// # Safety
-/// `buffer` must point at a buffer with no memline open.
-pub unsafe fn ml_open(mut buffer: Buf) -> Result<(), Failed> {
+pub fn ml_open(mut buffer: Buf) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = buffer;
@@ -436,15 +433,10 @@ unsafe fn ml_open_blocks(buffer: Buf, mfp: *mut MemFile, hp: &mut *mut BlockHdr)
 }
 
 /// Open a swap file for every buffer that could use one.
-///
-/// # Safety
-/// Must run on the main thread.
-pub unsafe fn ml_open_files() {
+pub fn ml_open_files() {
     for buf in buffers() {
         if buf.b_p_ro == 0 || buf.b_changed != 0 {
-            // SAFETY: a live buffer from the editor's own list, on the main
-            // thread as the caller promised.
-            unsafe { ml_open_file(buf) };
+            ml_open_file(buf);
         }
     }
 }
@@ -453,10 +445,7 @@ pub unsafe fn ml_open_files() {
 ///
 /// If no usable file name can be found the memfile keeps no name and
 /// remains memory-only, with no recovery possible.
-///
-/// # Safety
-/// `buffer` must point at a buffer.
-pub unsafe fn ml_open_file(buffer: Buf) {
+pub fn ml_open_file(buffer: Buf) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = buffer;
@@ -539,23 +528,17 @@ pub unsafe fn ml_open_file(buffer: Buf) {
 
 /// Create the swap file now, if one is still wanted and this is a writable
 /// file being opened or a read into an existing buffer.
-///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn check_need_swap(newfile: bool) {
+pub fn check_need_swap(newfile: bool) {
     // The swap dialog may prompt, and the user has to see it; E325 may
     // reset this again.
     let _loud = Allow::messages();
     if Buf::current().b_may_swap && (Buf::current().b_p_ro == 0 || !newfile) {
-        unsafe { ml_open_file(Buf::current()) };
+        ml_open_file(Buf::current());
     }
 }
 
 /// Close `buffer`'s memline, deleting the swap file if `del_file`.
-///
-/// # Safety
-/// `buffer` must point at a buffer.
-pub unsafe fn ml_close(buffer: Buf, del_file: ::core::ffi::c_int) {
+pub fn ml_close(buffer: Buf, del_file: ::core::ffi::c_int) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = buffer;
@@ -578,15 +561,9 @@ pub unsafe fn ml_close(buffer: Buf, del_file: ::core::ffi::c_int) {
 }
 
 /// Close every memline and memfile. Only used when exiting.
-///
-/// # Safety
-/// Must run on the main thread.
-pub unsafe fn ml_close_all(del_file: bool) {
+pub fn ml_close_all(del_file: bool) {
     for buf in buffers() {
-        // SAFETY: a live buffer from the editor's own list, on the main
-        // thread as the caller promised. `ml_close` drops the memline, not
-        // the buffer, so the link the walk reads next stays good.
-        unsafe { ml_close(buf, del_file as ::core::ffi::c_int) };
+        ml_close(buf, del_file as ::core::ffi::c_int);
     }
     spell_delete_wordlist(); // delete the internal wordlist
     vim_deltempdir(); // delete the temp directory that was created
@@ -594,15 +571,10 @@ pub unsafe fn ml_close_all(del_file: bool) {
 
 /// Close the memfile of every unmodified buffer. Only for use just before
 /// exiting.
-///
-/// # Safety
-/// Must run on the main thread.
-pub unsafe fn ml_close_notmod() {
+pub fn ml_close_notmod() {
     for buf in buffers() {
         if !buf_is_changed(buf) {
-            // SAFETY: a live buffer from the editor's own list, on the main
-            // thread as the caller promised.
-            unsafe { ml_close(buf, 1) };
+            ml_close(buf, 1);
         }
     }
 }

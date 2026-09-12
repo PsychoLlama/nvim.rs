@@ -115,8 +115,7 @@ fn may_change_buffer(forceit: bool) -> bool {
     check_can_set_curbuf_forceit(forceit as c_int)
 }
 fn forget_jumps(win: Win, fnum: c_int) {
-    // SAFETY: a live window.
-    unsafe { mark_jumplist_forget_file(win, fnum) };
+    mark_jumplist_forget_file(win, fnum);
 }
 fn may_abandon(buffer: Buf, forceit: bool) -> bool {
     // SAFETY: a live buffer.

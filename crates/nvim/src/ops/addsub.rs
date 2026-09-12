@@ -65,10 +65,7 @@ struct NrFormats {
 
 impl NrFormats {
     /// Read the current buffer's 'nrformats'.
-    ///
-    /// # Safety
-    /// The current buffer's option string must be valid.
-    unsafe fn current() -> Self {
+    fn current() -> Self {
         // SAFETY: the caller's promise -- 'nrformats' is a NUL-terminated
         // option string.
         let has = |c: u8| has_char(unsafe { cstr::at(Buf::current().b_p_nf) }, c_int::from(c));
@@ -195,7 +192,7 @@ fn addsub_line_span(mut op: Op, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
 
     // Charwise: the first and last lines are clipped to the region.
     if pos.lnum == op.start.lnum && !op.inclusive {
-        unsafe { dec(&mut op.end) };
+        dec(&mut op.end);
     }
     let mut length = Lines::current().line_len(pos.lnum);
     pos.col = 0;
@@ -227,7 +224,7 @@ pub unsafe fn do_addsub(
     // SAFETY: the caller's promise -- `pos` names a position of the current
     // buffer, so its line is a live NUL-terminated string.
     let mut pos = unsafe { PosRef::new(pos) };
-    let fmt = unsafe { NrFormats::current() };
+    let fmt = NrFormats::current();
     let visual = visual_active();
     let save_cursor = Win::current().w_cursor;
 
@@ -279,7 +276,7 @@ pub unsafe fn do_addsub(
             beep_flush();
         } else {
             let (startpos, endpos) = if is_alpha {
-                unsafe { bump_alpha_char(firstdigit, op_type, prenum1, col) }
+                bump_alpha_char(firstdigit, op_type, prenum1, col)
             } else {
                 let scan = Scan {
                     text: &text,
@@ -291,7 +288,7 @@ pub unsafe fn do_addsub(
                     was_positive,
                     blank_unsigned,
                 };
-                unsafe { replace_number(op_type, &mut length, prenum1, &fmt, scan) }
+                replace_number(op_type, &mut length, prenum1, &fmt, scan)
             };
             did_change = true;
 
@@ -437,10 +434,7 @@ fn minus_before(text: &[u8], col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Min
 /// and `z`/`Z`.
 ///
 /// Answers the `'[`/`']` positions.
-///
-/// # Safety
-/// The cursor must be on the line holding `col`.
-unsafe fn bump_alpha_char(
+fn bump_alpha_char(
     mut firstdigit: c_int,
     op_type: OpType,
     prenum1: LineNr,
@@ -469,9 +463,8 @@ unsafe fn bump_alpha_char(
 
     Win::current().w_cursor.col = col;
     let startpos = Win::current().w_cursor;
-    // SAFETY: the caller's promise -- the cursor is on the line holding `col`.
-    let _ = unsafe { del_char(false) };
-    unsafe { ins_char(firstdigit) };
+    let _ = del_char(false);
+    ins_char(firstdigit);
     let endpos = Win::current().w_cursor;
     Win::current().w_cursor.col = col;
     (startpos, endpos)
@@ -501,11 +494,7 @@ struct Scan<'a> {
 /// Replace the number at `scan.col` with the result of adding `prenum1`.
 ///
 /// Answers the `'[`/`']` positions.
-///
-/// # Safety
-/// `scan.text` must be a copy of the cursor's line, and the cursor must be
-/// on it.
-unsafe fn replace_number(
+fn replace_number(
     op_type: OpType,
     length: &mut c_int,
     prenum1: LineNr,
@@ -608,12 +597,12 @@ unsafe fn replace_number(
         if class & _ISalpha as ::core::ffi::c_ushort as c_int != 0 {
             HEX_UPPER.set(class & _ISupper as ::core::ffi::c_ushort as c_int != 0);
         }
-        let _ = unsafe { del_char(false) };
+        let _ = del_char(false);
         c = gchar_cursor();
     }
 
     let len = *length;
-    unsafe { render_number(n, pre, len, firstdigit, negative, visual, was_positive, fmt) };
+    render_number(n, pre, len, firstdigit, negative, visual, was_positive, fmt);
 
     let endpos = Win::current().w_cursor;
     if Win::current().w_cursor.col != 0 {
@@ -669,11 +658,8 @@ fn add_or_subtract(
 /// `length` is what is left of the original's width after the sign and the
 /// prefix, and is spent on leading zeros so that the number stays the same
 /// width -- except when it would then read as octal.
-///
-/// # Safety
-/// The cursor must be where the old number was deleted from.
 #[allow(clippy::too_many_arguments)]
-unsafe fn render_number(
+fn render_number(
     n: UVarNumber,
     pre: c_int,
     mut length: c_int,

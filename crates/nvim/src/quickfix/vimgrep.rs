@@ -318,13 +318,13 @@ unsafe fn match_buflines(
                 // Move past the match, and past one more column when the
                 // match was empty, so that the scan makes progress.
                 col = end.col + ColNr::from(col == end.col);
-                if col > unsafe { ml_get_buf_len(buffer, lnum) } {
+                if col > ml_get_buf_len(buffer, lnum) {
                     break;
                 }
             }
         } else {
             let line = unsafe { ml_get_buf(buffer, lnum) };
-            let linelen = unsafe { ml_get_buf_len(buffer, lnum) };
+            let linelen = ml_get_buf_len(buffer, lnum);
             // The pattern length is in bytes while the matcher fills one
             // position per *character*, so for a multibyte pattern the
             // position read below is one the matcher never wrote. It has

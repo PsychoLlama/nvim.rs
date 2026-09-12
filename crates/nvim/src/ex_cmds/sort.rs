@@ -667,8 +667,7 @@ fn sort_range(args: &mut ExArg) {
         // Delete the original lines if appending worked.
         if placed.done == count {
             for _ in 0..count {
-                // SAFETY: the range is still there, above the new lines.
-                let _ = unsafe { ml_delete(line1) };
+                let _ = ml_delete(line1);
             }
         } else {
             count = 0;
@@ -689,12 +688,11 @@ fn sort_range(args: &mut ExArg) {
 fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
     let lnum = placed.lnum;
     let deleted = count as LineNr - (lnum - line2);
-    // SAFETY: caller's contract.
     if deleted > 0 {
-        unsafe { mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, kExtmarkNOOP) };
+        mark_adjust(line2 - deleted, line2, MAXLNUM, -deleted, kExtmarkNOOP);
         say::more(-deleted);
     } else if deleted < 0 {
-        unsafe { mark_adjust(line2, MAXLNUM, -deleted, 0, kExtmarkNOOP) };
+        mark_adjust(line2, MAXLNUM, -deleted, 0, kExtmarkNOOP);
     }
 
     if placed.moved || deleted != 0 {
@@ -868,8 +866,7 @@ fn uniq_range(args: &mut ExArg) {
             }
 
             if delete_lnum > 0 {
-                // SAFETY: it is a line of the range.
-                let _ = unsafe { ml_delete(delete_lnum) };
+                let _ = ml_delete(delete_lnum);
                 i -= get_lnum - delete_lnum + 1;
                 count -= 1;
                 deleted += 1;
@@ -884,20 +881,17 @@ fn uniq_range(args: &mut ExArg) {
         }
 
         // Adjust marks for deleted lines and prepare for displaying.
-        // SAFETY: the range is the one just rewritten.
-        unsafe {
-            mark_adjust(
-                line2 - deleted,
-                line2,
-                MAXLNUM,
-                -deleted,
-                if change_occurred {
-                    kExtmarkUndo
-                } else {
-                    kExtmarkNOOP
-                } as ExtmarkOp,
-            )
-        };
+        mark_adjust(
+            line2 - deleted,
+            line2,
+            MAXLNUM,
+            -deleted,
+            if change_occurred {
+                kExtmarkUndo
+            } else {
+                kExtmarkNOOP
+            } as ExtmarkOp,
+        );
         say::more(-deleted);
         if change_occurred {
             changed_lines(Buf::current(), line1, 0, line2 + 1, -deleted, true);

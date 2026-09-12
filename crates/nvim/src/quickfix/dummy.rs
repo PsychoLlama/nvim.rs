@@ -85,7 +85,7 @@ pub(crate) unsafe fn load_dummy_buffer(
     unsafe { buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP).cast_signed()) };
 
     // Need to open the memfile before putting the buffer in a window.
-    if unsafe { ml_open(newbuf) }.is_ok() {
+    if ml_open(newbuf).is_ok() {
         // Make sure this buffer isn't wiped out by autocommands.
         newbuf.b_locked += 1;
         // Set curwin/curbuf to buf and save a few things.
@@ -96,7 +96,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         let _ = unsafe { setfname(Buf::current(), fname, ptr::null_mut(), false) };
 
         // Create swap file now to avoid the ATTENTION message.
-        unsafe { check_need_swap(true) };
+        check_need_swap(true);
 
         // Remove the "dummy" flag, otherwise autocommands may not
         // work.

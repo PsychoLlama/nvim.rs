@@ -66,10 +66,7 @@ pub(crate) struct Put {
 /// newlines and all, so the only way to reproduce it is to re-enter Insert
 /// mode and replay them: this stuffs a command into the read buffer and
 /// returns, and the main loop does the work.
-///
-/// # Safety
-/// The cursor must be on a valid line.
-unsafe fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint) {
+fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint) {
     let non_linewise_vis = visual_active() && !visual_mode().is_line();
 
     // A Visual selection is replaced (`c`); `PUT_LINE` opens its own line
@@ -195,10 +192,7 @@ impl Put {
     /// in two so that the text goes *between* the halves.
     ///
     /// Answers false when undo could not be saved.
-    ///
-    /// # Safety
-    /// The cursor must be on a valid line.
-    unsafe fn split_current_line(&mut self) -> bool {
+    fn split_current_line(&mut self) -> bool {
         // SAFETY: the cursor is on a valid line, which is what undo saves.
         if u_save_cursor().is_err() {
             return false;
@@ -250,10 +244,7 @@ impl Put {
     /// Save for undo and put the cursor where the text goes.
     ///
     /// Answers false when undo could not be saved.
-    ///
-    /// # Safety
-    /// The cursor must be on a valid line.
-    unsafe fn save_for_undo(&self) -> bool {
+    fn save_for_undo(&self) -> bool {
         if self.y_type == kMTBlockWise {
             let mut lnum = Win::current().w_cursor.lnum + self.y_size as LineNr + 1;
             lnum = lnum.min(Buf::current().b_ml.ml_line_count + 1);
@@ -299,10 +290,7 @@ impl Put {
     /// With 'virtualedit' "all", make the cursor a real position before the
     /// text goes in: break a tab into spaces, or pad out past the end of the
     /// line.
-    ///
-    /// # Safety
-    /// The cursor must be on a valid line.
-    unsafe fn make_room_for_virtualedit(&self) {
+    fn make_room_for_virtualedit(&self) {
         if self.ve_flags != kOptVeFlagAll as c_uint || self.y_type != kMTCharWise {
             return;
         }
@@ -320,13 +308,13 @@ impl Put {
                 Win::current().w_cursor.coladd > 0
             };
             if splits_tab {
-                unsafe { coladvance_force(viscol) };
+                coladvance_force(viscol);
             } else {
                 Win::current().w_cursor.coladd = 0;
             }
         } else if Win::current().w_cursor.coladd > 0 || gchar_cursor() == NUL {
             let to = getviscol() + c_int::from(self.dir == FORWARD);
-            unsafe { coladvance_force(to) };
+            coladvance_force(to);
         }
     }
 }
@@ -362,7 +350,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
 
     if regname == '.' as c_int && reg.is_null() {
         // SAFETY: the cursor is on a valid line.
-        unsafe { put_last_insert(dir, count, flags, ve_flags) };
+        put_last_insert(dir, count, flags, ve_flags);
         return;
     }
 
@@ -454,7 +442,7 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         if put.y_type == kMTLineWise {
             // SAFETY: the cursor is on a valid line.
             let split_failed =
-                put.flags & PUT_LINE_SPLIT as c_int != 0 && !unsafe { put.split_current_line() };
+                put.flags & PUT_LINE_SPLIT as c_int != 0 && !put.split_current_line();
             if split_failed {
                 break 'end;
             }
@@ -485,19 +473,16 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
         }
 
         // SAFETY: the cursor is on a valid line.
-        if !unsafe { put.save_for_undo() } {
+        if !put.save_for_undo() {
             break 'end;
         }
-        // SAFETY: as above.
-        unsafe { put.make_room_for_virtualedit() };
+        put.make_room_for_virtualedit();
 
         let mut lnum = Win::current().w_cursor.lnum;
         let mut col = Win::current().w_cursor.col;
 
         if put.y_type == kMTBlockWise {
-            // SAFETY: the cursor is on a valid line and `y_array` holds
-            // `y_size` NUL-terminated strings.
-            unsafe { put.blockwise(lnum) };
+            put.blockwise(lnum);
         } else {
             if put.y_type == kMTCharWise {
                 // For charwise text, FORWARD is BACKWARD on the next
@@ -522,12 +507,10 @@ pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int
             }
             let new_cursor = Win::current().w_cursor;
 
-            // SAFETY (both): `lnum`/`col` is a position of the buffer and
-            // undo has just been saved.
             if put.y_type == kMTCharWise && put.y_size == 1 {
-                unsafe { put.charwise_one_line(lnum, col) };
+                put.charwise_one_line(lnum, col);
             } else {
-                unsafe { put.multiline(lnum, col, new_cursor) };
+                put.multiline(lnum, col, new_cursor);
             }
         }
 

@@ -288,7 +288,7 @@ impl Reader {
         }
         // SAFETY: the caller's buffer is loaded and `lnum` is within it.
         let text = unsafe { ml_get_buf(buf, lnum) };
-        self.len = self.fit(unsafe { ml_get_buf_len(buf, lnum) } as usize);
+        self.len = self.fit(ml_get_buf_len(buf, lnum) as usize);
         unsafe { xstrlcpy(self.line(), text, self.len + 1) };
         self.source = Source::Buffer {
             buf,

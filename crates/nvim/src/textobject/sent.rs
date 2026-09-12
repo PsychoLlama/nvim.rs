@@ -76,7 +76,6 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 }
             } else if dir as c_int == FORWARD as c_int
                 && pos.col == 0
-                // SAFETY: `pos.lnum` is a line of the current buffer.
                 && starts_para(pos.lnum, NUL, false)
             {
                 // At the start of a paragraph or section, going forward:
@@ -87,8 +86,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 pos.lnum += 1;
                 break 'found;
             } else if dir as c_int == BACKWARD as c_int {
-                // SAFETY: as above.
-                unsafe { decl(&mut pos) };
+                decl(&mut pos);
             }
 
             // Back to the previous non-white, non-punctuation character.
@@ -100,8 +98,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                     break;
                 }
                 let mut tpos = pos;
-                // SAFETY: `tpos` is a position in the current buffer.
-                let moved = unsafe { decl(&mut tpos) };
+                let moved = decl(&mut tpos);
                 // The line is read only once `decl` has answered that `tpos`
                 // moved, so it is still in the buffer.
                 if moved == -1 || (dir == FORWARD && Lines::current().line(tpos.lnum).is_empty()) {
@@ -119,8 +116,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 {
                     break;
                 }
-                // SAFETY: as above.
-                unsafe { decl(&mut pos) };
+                decl(&mut pos);
             }
 
             // The line the search started on, so that a backward search
@@ -142,8 +138,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 if c == '.' as c_int || c == '!' as c_int || c == '?' as c_int {
                     let mut tpos = pos;
                     loop {
-                        // SAFETY: as above.
-                        c = unsafe { inc(&mut tpos) };
+                        c = inc(&mut tpos);
                         if c == -1 {
                             break;
                         }
@@ -169,7 +164,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                         pos = tpos;
                         // SAFETY: as above.
                         if unsafe { gchar_pos(&raw mut pos) } == NUL {
-                            unsafe { inc(&mut pos) }; // skip the NUL at end of line
+                            inc(&mut pos); // skip the NUL at end of line
                         }
                         break;
                     }
@@ -191,8 +186,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             let c = unsafe { gchar_pos(&raw mut pos) };
             c == ' ' as c_int || c == '\t' as c_int
         } {
-            // SAFETY: as above.
-            if unsafe { incl(&mut pos) } == -1 {
+            if incl(&mut pos) == -1 {
                 break;
             }
         }
@@ -249,7 +243,7 @@ fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
             unsafe { find_first_blank(Win::current().cursor().raw()) };
         }
         if count == 0 || at_start_sent {
-            unsafe { decl(&mut Win::current().cursor()) };
+            decl(&mut Win::current().cursor());
         }
         at_start_sent = !at_start_sent;
     }
@@ -269,16 +263,13 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         // that is: in the white space before a sentence, inside one or
         // just after it, or exactly at the start of one.
         let mut at_start_sent = true;
-        // SAFETY, throughout: `pos` and the cursor are positions of the
-        // current buffer, which the caller guarantees, and every step here
-        // leaves them as ones.
-        unsafe { decl(&mut pos) };
+        decl(&mut pos);
         while lt(pos, Win::current().w_cursor) {
             if !ascii_iswhite(unsafe { gchar_pos(&raw mut pos) }) {
                 at_start_sent = false;
                 break;
             }
-            unsafe { incl(&mut pos) };
+            incl(&mut pos);
         }
         if !at_start_sent {
             let _ = findsent(BACKWARD, 1);
@@ -311,8 +302,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         // The cursor is at the end of the Visual area: just before a
         // sentence, in or just before the white space in front of one, or
         // inside one.
-        // SAFETY: as above.
-        unsafe { incl(&mut pos) };
+        incl(&mut pos);
         let mut at_start_sent = true;
         if !equalpos(pos, Win::current().w_cursor) {
             // Not just before a sentence.
@@ -322,7 +312,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
                     at_start_sent = true;
                     break;
                 }
-                unsafe { incl(&mut pos) };
+                incl(&mut pos);
             }
             if at_start_sent {
                 let _ = findsent(BACKWARD, 1); // inside the sentence
@@ -361,7 +351,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
     // The cursor started on a blank: is it just before the start of the
     // next sentence?
     while ascii_iswhite(unsafe { gchar_pos(&raw mut pos) }) {
-        unsafe { incl(&mut pos) };
+        incl(&mut pos);
     }
     let start_blank = equalpos(pos, Win::current().w_cursor);
     if start_blank {
@@ -381,7 +371,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
     if ncount > 0 {
         findsent_forward(ncount, true);
     } else {
-        unsafe { decl(&mut Win::current().cursor()) };
+        decl(&mut Win::current().cursor());
     }
 
     if include {
@@ -391,7 +381,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
         if start_blank {
             unsafe { find_first_blank(Win::current().cursor().raw()) };
             if ascii_iswhite(unsafe { gchar_pos(Win::current().cursor().raw()) }) {
-                unsafe { decl(&mut Win::current().cursor()) };
+                decl(&mut Win::current().cursor());
             }
         } else if !ascii_iswhite(gchar_cursor()) {
             unsafe { find_first_blank(&raw mut start_pos) };
@@ -415,8 +405,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
     } else {
         // Include the newline after the sentence, if there is one.
-        // SAFETY: the cursor is on a line of the current buffer.
-        let inclusive = unsafe { incl(&mut Win::current().cursor()) } == -1;
+        let inclusive = incl(&mut Win::current().cursor()) == -1;
         // SAFETY: the caller guarantees `op` is a live operator argument.
         let op = unsafe { &mut *op };
         op.inclusive = inclusive;

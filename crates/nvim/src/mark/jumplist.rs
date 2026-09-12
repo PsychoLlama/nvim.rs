@@ -127,9 +127,7 @@ pub fn checkpcmark() {
 /// # Safety
 /// `win` must be a live window and the editor's globals must be live.
 pub unsafe fn get_jumplist(mut win: Win, mut count: c_int) -> *mut FileMark {
-    // SAFETY: the caller promised a live window.
-    // SAFETY: as above.
-    unsafe { cleanup_jumplist(win, true) };
+    cleanup_jumplist(win, true);
     if win.w_jumplistlen == 0 {
         return ptr::null_mut();
     }
@@ -201,10 +199,7 @@ pub fn get_changelist(buffer: Buf, win: Win, count: c_int) -> *mut FileMark {
 
 /// Remove every jump list entry referring to a given buffer.
 /// This function will also adjust the current jump list index.
-///
-/// # Safety
-/// `window` must be a live window.
-pub unsafe fn mark_jumplist_forget_file(mut window: Win, fnum: c_int) {
+pub fn mark_jumplist_forget_file(mut window: Win, fnum: c_int) {
     // SAFETY: the caller promised a live window.
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..window.w_jumplistlen).rev() {
@@ -236,10 +231,7 @@ pub unsafe fn mark_jumplist_forget_file(mut window: Win, fnum: c_int) {
 /// jumplist. They will be removed here for the specified window.
 /// When "loadfiles" is true first ensure entries have the "fnum" field set
 /// (this may be a bit slow).
-///
-/// # Safety
-/// `window` must be a live window and the editor's globals must be live.
-pub unsafe fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
+pub fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
     if loadfiles {
         // Every entry that still names its file by name gets its buffer
         // loaded, so that the duplicate test below can compare buffers.
@@ -316,10 +308,7 @@ pub unsafe fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
 }
 
 /// Copy the jumplist from window "from" to window "to".
-///
-/// # Safety
-/// Both windows must be live.
-pub unsafe fn copy_jumplist(from: Win, to: Win) {
+pub fn copy_jumplist(from: Win, to: Win) {
     // SAFETY: the caller promised two live windows.
     let (from, mut to) = (from, to);
     for i in 0..from.w_jumplistlen {
@@ -354,8 +343,7 @@ pub unsafe fn free_jumplist(mut window: Win) {
 pub unsafe fn ex_jumps(_args: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     let win = Win::current();
-    // SAFETY: as above.
-    unsafe { cleanup_jumplist(win, true) };
+    cleanup_jumplist(win, true);
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     msg_title(gettext(c"\n jump line  col file/text"));
     let mut i: c_int = 0;

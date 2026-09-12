@@ -221,9 +221,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
     if limit < term.sb.len() {
         let diff = term.sb.len() - limit;
         for _ in 0..diff {
-            // SAFETY: a live buffer, deleting the line the row that is
-            // about to be dropped was mirrored onto.
-            let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
+            let _ = ml_delete_buf(buffer, 1 as LineNr, false);
             term.sb.drop_oldest();
         }
         let diff = diff as LineNr;
@@ -244,8 +242,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
 unsafe fn mark_adjust_term(buffer: Buf, line1: LineNr, line2: LineNr, amount: LineNr) {
     let (end, after) = (MAXLNUM, true);
     let (mode, op) = (kMarkAdjustTerm, kExtmarkUndo);
-    // SAFETY: the caller's promise.
-    unsafe { mark_adjust_buf(buffer, line1, line2, end, amount, after, mode, op) };
+    mark_adjust_buf(buffer, line1, line2, end, amount, after, mode, op);
 }
 
 /// Mirror everything the scrollback gained or lost into the buffer's lines.
@@ -272,9 +269,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     let (height, width) = term.size();
 
     while deleted > 0 && buffer.line_count() > old_height as LineNr {
-        // SAFETY: a live buffer, deleting a line the scrollback no longer
-        // holds.
-        let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
+        let _ = ml_delete_buf(buffer, 1 as LineNr, false);
         deleted_lines_buf(buffer, 1 as LineNr, 1 as LineNr);
         deleted -= 1;
     }
@@ -297,8 +292,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     let max_line_count = (term.sb.len() as c_int + height) as LineNr;
     while buffer.line_count() > max_line_count {
         let last = buffer.line_count();
-        // SAFETY: a live buffer, deleting its own last line.
-        let _ = unsafe { ml_delete_buf(buffer, last, false) };
+        let _ = ml_delete_buf(buffer, last, false);
         deleted_lines_buf(buffer, buffer.line_count(), 1 as LineNr);
     }
 

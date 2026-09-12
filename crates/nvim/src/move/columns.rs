@@ -393,10 +393,7 @@ unsafe fn dict_add_nr(dict: *mut Dict, key: &CStr, value: c_int) {
 /// The character column that shows at virtual (screen) column `vcol`. The
 /// first column is one; for a multibyte character the column of its first
 /// byte is answered.
-///
-/// # Safety
-/// `window` must be a valid window and `lnum` a line of its buffer.
-unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
+fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
     // SAFETY: a live window and a line of its buffer.
     let offset = unsafe { vcol2col(win, lnum, vcol - 1, ::core::ptr::null_mut()) };
     let line = win.buffer().line(lnum);
@@ -438,8 +435,7 @@ pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     if error || screencol < 0 {
         return;
     }
-    // SAFETY: a live window and a line of its buffer.
-    let col = unsafe { virtcol2col(win, lnum, screencol) };
+    let col = virtcol2col(win, lnum, screencol);
     // SAFETY: the evaluator's calling convention.
     result.write_number(col as VarNumber);
 }

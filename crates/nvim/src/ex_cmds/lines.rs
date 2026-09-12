@@ -98,8 +98,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
 
     // The last line in the file now that the copies are in.
     let last_line = Buf::current().b_ml.ml_line_count;
-    // SAFETY: as above; the range is the one just copied.
-    unsafe { mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP) };
+    mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP);
     folds_frozen(|| {
         changed_lines(
             Buf::current(),
@@ -112,29 +111,24 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     });
 
     let (line_off, byte_off) = if dest >= line2 {
-        // SAFETY: the lines the move stepped over are still in the buffer.
-        unsafe { mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP) };
+        mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP);
         move_folds_in_windows(line1, line2, dest);
         set_op_range(dest - num_lines + 1, dest);
         (-num_lines, -extent_byte)
     } else {
-        // SAFETY: as above.
-        unsafe { mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP) };
+        mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP);
         move_folds_in_windows(dest + 1, line1 - 1, line2);
         set_op_range(dest + 1, dest + num_lines);
         (0, 0)
     };
 
-    // SAFETY: the tail of the buffer still holds the copies.
-    unsafe {
-        mark_adjust_nofold(
-            last_line - num_lines + 1,
-            last_line,
-            -(last_line - dest - extra),
-            0,
-            kExtmarkNOOP,
-        )
-    };
+    mark_adjust_nofold(
+        last_line - num_lines + 1,
+        last_line,
+        -(last_line - dest - extra),
+        0,
+        kExtmarkNOOP,
+    );
     folds_frozen(|| {
         changed_lines(
             Buf::current(),
@@ -153,8 +147,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     // SAFETY: the original range sits at `line1 + extra` now.
     u_save(line1 + extra - 1, line2 + extra + 1)?;
     for _ in line1..=line2 {
-        // SAFETY: as above; each delete pulls the next line into place.
-        let _ = unsafe { ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int) };
+        let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int);
     }
 
     if global_busy.get() == 0 && num_lines as OptInt > p_report.get() {
@@ -280,8 +273,7 @@ pub fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
         cursor.lnum += 1;
     }
 
-    // SAFETY: `count` lines were appended after `n`.
-    unsafe { appended_lines_mark(n, count) };
+    appended_lines_mark(n, count);
     if visual_active() {
         with_visual_anchor(|anchor| check_pos(Buf::current(), anchor));
     }

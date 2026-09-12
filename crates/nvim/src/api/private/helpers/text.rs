@@ -311,8 +311,7 @@ pub(crate) fn buf_get_text(
     // SAFETY: the caller's promise -- `buffer` is a loaded buffer, and `lnum`
     // is below `MAXLNUM`.
     let bufstr = unsafe { ml_get_buf(buffer, lnum as LineNr) };
-    // SAFETY: as above.
-    let line_length = unsafe { ml_get_buf_len(buffer, lnum as LineNr) } as int64_t;
+    let line_length = ml_get_buf_len(buffer, lnum as LineNr) as int64_t;
 
     let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
     let start_col = relative(start_col).clamp(0, line_length);

@@ -185,7 +185,7 @@ fn save_deleted_text(op: Op) -> bool {
     let mut did_yank = false;
 
     if op.regname != 0 {
-        if !unsafe { valid_yank_reg(op.regname, true) } {
+        if !valid_yank_reg(op.regname, true) {
             beep_flush();
             return false;
         }
@@ -199,7 +199,7 @@ fn save_deleted_text(op: Op) -> bool {
     // Into `"1`, shifting the number registers, when the delete contains a
     // line break or a specific operator was used (Vi compatible).
     if op.motion_type == kMTLineWise || op.line_count > 1 || op.use_reg_one {
-        unsafe { shift_delete_registers(is_append_register(op.regname)) };
+        shift_delete_registers(is_append_register(op.regname));
         reg = unsafe { get_y_register(1) };
         unsafe { op_yank_reg(op.raw(), false, reg, false) };
         did_yank = true;
@@ -302,10 +302,8 @@ fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
 ///
 /// `op` must be linewise.
 fn delete_whole_lines(op: Op) -> Result<(), UndoFailed> {
-    // SAFETY: the region is the current buffer's, and the cursor stays on a
-    // line of it throughout.
     if op.op_type != OpType::Change {
-        unsafe { del_lines(op.line_count, true) };
+        del_lines(op.line_count, true);
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         // `U` is not possible after `dd`.
         u_clearline(Buf::current());
@@ -317,7 +315,7 @@ fn delete_whole_lines(op: Op) -> Result<(), UndoFailed> {
     if op.line_count > 1 {
         let lnum = Win::current().w_cursor.lnum;
         Win::current().w_cursor.lnum += 1;
-        unsafe { del_lines(op.line_count - 1, true) };
+        del_lines(op.line_count - 1, true);
         Win::current().w_cursor.lnum = lnum;
     }
     u_save_cursor()?;
@@ -331,7 +329,7 @@ fn delete_whole_lines(op: Op) -> Result<(), UndoFailed> {
         beginline(BeginlineOpts::NONE);
     }
     // The rest of the line, leaving the cursor past its last character.
-    unsafe { truncate_line(0) };
+    truncate_line(0);
     if op.line_count > 1 {
         // `U` is not possible after `2cc`.
         u_clearline(Buf::current());
@@ -375,10 +373,10 @@ fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
         // end was in *columns* first.
         let mut endcol = 0;
         if op.line_count == 1 {
-            endcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
+            endcol = getviscol2(op.end.col, op.end.coladd);
         }
-        let startcol = unsafe { getviscol2(op.start.col, op.start.coladd) };
-        unsafe { coladvance_force(startcol) };
+        let startcol = getviscol2(op.start.col, op.start.coladd);
+        coladvance_force(startcol);
         op.start = Win::current().w_cursor;
         if op.line_count == 1 {
             Win::current().coladvance(endcol);
@@ -393,8 +391,8 @@ fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
         // Save the last line for undo.
         u_save(op.end.lnum - 1, op.end.lnum + 1)?;
         Win::current().w_cursor = op.end;
-        let endcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
-        unsafe { coladvance_force(endcol) };
+        let endcol = getviscol2(op.end.col, op.end.coladd);
+        coladvance_force(endcol);
         op.end = Win::current().w_cursor;
         Win::current().w_cursor = op.start;
     }
@@ -443,7 +441,7 @@ fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
     }
 
     let fixpos = op.op_type == OpType::Delete && !op.is_visual;
-    let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
+    let _ = del_bytes(n, !op_virtual(), fixpos);
     Ok(())
 }
 
@@ -471,20 +469,20 @@ fn delete_chars_across_lines(op: Op) -> Result<(), UndoFailed> {
     let deleted_bytes = spanned + BCount::from(op.inclusive);
 
     // From the cursor to the end of the line.
-    unsafe { truncate_line(1) };
+    truncate_line(1);
 
     let curpos = Win::current().w_cursor;
     Win::current().w_cursor.lnum += 1;
-    unsafe { del_lines(op.line_count - 2, false) };
+    del_lines(op.line_count - 2, false);
 
     // From the start of the last line up to the region's end.
     let n = op.end.col + 1 - c_int::from(!op.inclusive);
     Win::current().w_cursor.col = 0;
     let fixpos = op.op_type == OpType::Delete && !op.is_visual;
-    let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
+    let _ = del_bytes(n, !op_virtual(), fixpos);
 
     Win::current().w_cursor = curpos;
-    let _ = unsafe { do_join(2, false, false, false, false) };
+    let _ = do_join(2, false, false, false, false);
     drop(splice);
 
     let rows = op.line_count as c_int - 1;

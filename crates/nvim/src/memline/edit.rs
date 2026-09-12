@@ -157,7 +157,7 @@ pub(crate) unsafe fn ml_append_int(
     }
 
     // The line was inserted below `lnum`.
-    unsafe { ml_updatechunk(buffer, lnum + 1, len, ML_CHNK_ADDLINE) };
+    ml_updatechunk(buffer, lnum + 1, len, ML_CHNK_ADDLINE);
     Ok(())
 }
 
@@ -658,14 +658,7 @@ unsafe fn ml_split_pointer_block(
 ///
 /// `flags` is [`ML_DEL_MESSAGE`], which asks for "--No lines in buffer--" if
 /// the buffer ends up empty.
-///
-/// # Safety
-/// `buffer` must point at a buffer holding line `lnum`.
-pub(crate) unsafe fn ml_delete_int(
-    mut buffer: Buf,
-    lnum: LineNr,
-    flags: c_int,
-) -> Result<(), Failed> {
+pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = buffer;
@@ -761,7 +754,7 @@ pub(crate) unsafe fn ml_delete_int(
         b.b_ml.locked_has_moved();
     }
 
-    unsafe { ml_updatechunk(buffer, lnum, line_size, ML_CHNK_DELLINE) };
+    ml_updatechunk(buffer, lnum, line_size, ML_CHNK_DELLINE);
     Ok(())
 }
 

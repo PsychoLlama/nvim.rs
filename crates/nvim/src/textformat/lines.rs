@@ -201,11 +201,11 @@ fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: Line
         0
     };
     if strip > 0 {
-        let _ = unsafe { del_bytes(strip as ColNr, false, false) };
+        let _ = del_bytes(strip as ColNr, false, false);
         mark_col_adjust(Win::current().w_cursor.lnum, 0, 0, -(strip as ColNr), 0);
     }
     Win::current().w_cursor.lnum -= 1;
-    if unsafe { do_join(2 as size_t, true, false, false, false) }.is_err() {
+    if do_join(2 as size_t, true, false, false, false).is_err() {
         beep_flush();
         return false;
     }

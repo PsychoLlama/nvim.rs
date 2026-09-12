@@ -144,11 +144,7 @@ struct UndoDest {
 /// A negative `step` goes back in time. `sec` measures it in seconds, `file`
 /// in file writes, and `absolute` makes it the sequence number to jump to —
 /// `sec` is false then.
-///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
+pub fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
     if text_locked() {
         text_locked_msg();
         return;
@@ -172,15 +168,12 @@ pub unsafe fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
     };
     let mut did_undo = true;
     if dest.found || dest.target == 0 {
-        // SAFETY: a live current buffer and window.
-        unsafe { undo_up_to(&dest) };
+        undo_up_to(&dest);
         if dest.target > 0 {
-            // SAFETY: as above.
-            did_undo = unsafe { redo_down_to(&dest) };
+            did_undo = redo_down_to(&dest);
         }
     }
-    // SAFETY: as above.
-    unsafe { u_undo_end(did_undo, absolute, false) };
+    u_undo_end(did_undo, absolute, false);
 }
 
 /// Reads the counters off the buffer and turns `step` into an aim.
@@ -412,11 +405,7 @@ fn walk_to_target(
 }
 
 /// Undoes up the tree until the destination is reached, or CTRL-C.
-///
-/// # Safety
-///
-/// A live current buffer and window.
-unsafe fn undo_up_to(dest: &UndoDest) {
+fn undo_up_to(dest: &UndoDest) {
     while !got_int.get() {
         // The change warning first, for the reason `u_doit` gives.
         // SAFETY: a live current buffer, by the contract above.
@@ -433,9 +422,7 @@ unsafe fn undo_up_to(dest: &UndoDest) {
             break;
         }
         buf.b_u_curhead = uhp.link();
-        // SAFETY: a live current buffer and window, and `b_u_curhead` names
-        // the header we just resolved.
-        unsafe { u_undoredo(true, true) };
+        u_undoredo(true, true);
         if dest.target > 0 {
             uhp.uh_walk = dest.marks.nomark; // don't come back down here
         }
@@ -445,11 +432,7 @@ unsafe fn undo_up_to(dest: &UndoDest) {
 /// Redoes down the tree to the destination, taking the marked branch at every
 /// fork. Answers whether nothing was redone, which is what the message at the
 /// end reports as "before" rather than "after".
-///
-/// # Safety
-///
-/// A live current buffer and window.
-unsafe fn redo_down_to(dest: &UndoDest) -> bool {
+fn redo_down_to(dest: &UndoDest) -> bool {
     let mut did_undo = true;
     while !got_int.get() {
         // SAFETY: a live current buffer, by the contract above.
@@ -470,9 +453,7 @@ unsafe fn redo_down_to(dest: &UndoDest) -> bool {
             buf.b_u_seq_cur = dest.target - 1;
             break;
         }
-        // SAFETY: a live current buffer and window, and `b_u_curhead` names
-        // the header we just resolved.
-        unsafe { u_undoredo(false, true) };
+        u_undoredo(false, true);
         // Advance below the header just used; nothing below it means this
         // leaf is the new head.
         if uhp.uh_prev.is_none() {

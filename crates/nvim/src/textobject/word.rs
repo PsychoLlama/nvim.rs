@@ -384,7 +384,7 @@ pub unsafe fn current_word(
             // the end of this one.
             let _ = fwd_word(1, bigword, true);
             if Win::current().w_cursor.col == 0 {
-                unsafe { decl(&mut Win::current().cursor()) };
+                decl(&mut Win::current().cursor());
             } else {
                 let _ = unsafe { oneleft() };
             }
@@ -412,18 +412,18 @@ pub unsafe fn current_word(
         inclusive = true;
         if visual_active() && lt(Win::current().w_cursor, visual_anchor()) {
             // In Visual mode with the cursor at the start: move it back.
-            if unsafe { decl(&mut Win::current().cursor()) } == -1 {
+            if decl(&mut Win::current().cursor()) == -1 {
                 return Err(Failed);
             }
             if include != (cls() != 0) {
                 bck_word(1, bigword, true)?;
             } else {
                 bckend_word(1, bigword, true)?;
-                unsafe { incl(&mut Win::current().cursor()) };
+                incl(&mut Win::current().cursor());
             }
         } else {
             // Move the cursor forward one word and/or run of white space.
-            if unsafe { incl(&mut Win::current().cursor()) } == -1 {
+            if incl(&mut Win::current().cursor()) == -1 {
                 return Err(Failed);
             }
             if include != (cls() == 0) {

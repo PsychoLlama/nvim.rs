@@ -97,11 +97,7 @@ impl CursorPick {
 /// Applies the header at `b_u_curhead`: every entry's saved lines replace the
 /// buffer lines they cover, and those lines take their place in the entry, so
 /// that applying the same header again moves back.
-///
-/// # Safety
-///
-/// A live current buffer and window.
-pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
+pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     let mut buf = Buf::current();
     let Some(mut curhead) = buf.header(buf.b_u_curhead) else {
         return;
@@ -124,8 +120,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // The marks and visual area from before the move; they go into the header
     // at the end, swapped with the ones it was carrying.
-    // SAFETY: this module's own allocations, dropped exactly once.
-    unsafe { zero_fmark_additional_data(&mut buf.b_namedm) };
+    zero_fmark_additional_data(&mut buf.b_namedm);
     let saved_marks = buf.b_namedm.clone();
     let saved_visual = buf.b_visual;
     buf.b_op_start.lnum = buf.b_ml.ml_line_count;
@@ -204,8 +199,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         buf_updates_changedtick(buf);
     }
 
-    // SAFETY: a live buffer and a live header.
-    unsafe { swap_marks(buf, curhead, &saved_marks) };
+    swap_marks(buf, curhead, &saved_marks);
     if curhead.uh_visual.vi_start.lnum != 0 {
         buf.b_visual = curhead.uh_visual;
         curhead.uh_visual = saved_visual;
@@ -283,8 +277,7 @@ unsafe fn apply_entry(
             if buffer.b_ml.ml_line_count == 1 {
                 emptied = true;
             }
-            // SAFETY: that same line, which is still there.
-            let _ = unsafe { ml_delete(top + 1 + i) };
+            let _ = ml_delete(top + 1 + i);
         }
     }
     // Make sure the cursor is on a line that still exists.
@@ -313,8 +306,7 @@ unsafe fn apply_entry(
     if oldsize != newsize {
         let delta = newsize - oldsize;
         let maxlnum = MAXLNUM;
-        // SAFETY: a live current buffer.
-        unsafe { mark_adjust(top + 1, top + oldsize, maxlnum, delta, kExtmarkNOOP) };
+        mark_adjust(top + 1, top + oldsize, maxlnum, delta, kExtmarkNOOP);
         if buffer.b_op_start.lnum > top + oldsize {
             buffer.b_op_start.lnum += delta;
         }
@@ -354,11 +346,7 @@ unsafe fn apply_entry(
 
 /// Gives the buffer the named marks the header was carrying, and the header
 /// the ones the buffer had, so that it can put them back on the next move.
-///
-/// # Safety
-///
-/// A live buffer and a live header.
-unsafe fn swap_marks(mut buffer: Buf, mut curhead: Header, saved: &[FileMark; NMARKS as usize]) {
+fn swap_marks(mut buffer: Buf, mut curhead: Header, saved: &[FileMark; NMARKS as usize]) {
     for (i, saved) in saved.iter().enumerate() {
         if curhead.uh_namedm[i].mark.lnum != 0 {
             // SAFETY: a mark the buffer owns and is about to drop.

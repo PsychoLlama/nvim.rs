@@ -167,7 +167,7 @@ pub(crate) unsafe fn command_line_insert_reg(mut s: Cls) -> KeyOutcome {
             beep_flush();
             s.c = ESC;
         } else {
-            s.c = unsafe { get_expr_register() };
+            s.c = get_expr_register();
         }
     }
 

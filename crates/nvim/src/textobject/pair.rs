@@ -159,17 +159,12 @@ pub unsafe fn current_block(
     // whose condition never changes: the loop exists only for the retry.)
     if !include {
         loop {
-            // SAFETY: `start_pos` and the cursor are positions in the
-            // current buffer, which is what `incl`/`decl` step through;
-            // both report running off the first or last line themselves.
-            // `PosRef` derefs to the cursor alone, not the whole window.
-            unsafe { incl(&mut start_pos) };
+            incl(&mut start_pos);
             sol = Win::current().w_cursor.col == 0;
-            unsafe { decl(&mut Win::current().cursor()) };
-            // SAFETY: there is a current line with the cursor on it.
+            decl(&mut Win::current().cursor());
             while inindent(1) {
                 sol = true;
-                if unsafe { decl(&mut Win::current().cursor()) } != 0 {
+                if decl(&mut Win::current().cursor()) != 0 {
                     break;
                 }
             }
@@ -190,9 +185,7 @@ pub unsafe fn current_block(
                 break;
             }
             Win::current().w_cursor = old_start;
-            // SAFETY: as above -- the cursor is a position in the current
-            // buffer, and the searches take a null operator argument.
-            unsafe { decl(&mut Win::current().cursor()) };
+            decl(&mut Win::current().cursor());
             pos = unsafe { findmatch(ptr::null_mut(), what) };
             let Some(found) = pos else {
                 Win::current().w_cursor = old_pos;
@@ -213,12 +206,10 @@ pub unsafe fn current_block(
         // SAFETY: `p_sel` holds the NUL-terminated 'selection' value, set
         // before any mapping can run.
         if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
-            // SAFETY: the cursor is a position in the current buffer.
-            unsafe { inc(&mut Win::current().cursor()) };
+            inc(&mut Win::current().cursor());
         }
-        // SAFETY: there is a current line with the cursor on it.
         if sol && gchar_cursor() != NUL {
-            unsafe { inc(&mut Win::current().cursor()) }; // include the line break
+            inc(&mut Win::current().cursor()); // include the line break
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);
@@ -234,8 +225,7 @@ pub unsafe fn current_block(
         op.motion_type = kMTCharWise;
         op.inclusive = false;
         if sol {
-            // SAFETY: the cursor is a position in the current buffer.
-            unsafe { incl(&mut Win::current().cursor()) };
+            incl(&mut Win::current().cursor());
         } else if ltoreq(start_pos, Win::current().w_cursor) {
             // Include the character under the cursor.
             op.inclusive = true;
@@ -296,9 +286,7 @@ fn in_html_tag(end_tag: bool) -> bool {
     }
     // The matching `>` must not be preceded by a `/`.
     loop {
-        // SAFETY: `pos` is a position in the current buffer, which is what
-        // `inc` steps through; it reports the end of the buffer itself.
-        if unsafe { inc(&mut pos) } < 0 {
+        if inc(&mut pos) < 0 {
             return false;
         }
         // `inc` left `pos` on a character of the current buffer.
@@ -355,9 +343,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
     // SAFETY: `p_sel` holds the NUL-terminated 'selection' value, set before
     // any mapping can run.
     if !visual_active() || unsafe { *p_sel.get() } as c_int == 'e' as c_int {
-        // SAFETY: `old_end` is a position in the current buffer, which is
-        // what `decl` steps back through.
-        unsafe { decl(&mut old_end) }; // `old_end` is inclusive
+        decl(&mut old_end); // `old_end` is inclusive
     }
 
     // Starting on a `<aaa>` selects that block.

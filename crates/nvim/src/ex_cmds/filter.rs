@@ -470,36 +470,28 @@ unsafe fn do_filter(
                 // SAFETY: as above; the read appended after `line2`.
                 Buf::current().b_op_start.lnum = line2 + 1;
                 Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum;
-                unsafe { appended_lines_mark(line2, read_linecount as c_int) };
+                appended_lines_mark(line2, read_linecount as c_int);
             }
 
             if do_in {
-                if cmdmod_has(CmdModFlags::KEEPMARKS)
-                    // SAFETY: 'cpoptions' is a live option string.
-                    || !cpo_has(CpoFlag::REMMARK)
-                {
+                if cmdmod_has(CmdModFlags::KEEPMARKS) || !cpo_has(CpoFlag::REMMARK) {
                     // TODO(bfredl): Currently not active for extmarks. What
                     // would we do if columns don't match, assume added/deleted
                     // bytes at the end of each line?
-                    // SAFETY: the two ranges are lines of the current buffer.
                     if read_linecount >= linecount {
                         // move all marks from old lines to new lines
-                        unsafe { mark_adjust(line1, line2, linecount, 0, kExtmarkNOOP) };
+                        mark_adjust(line1, line2, linecount, 0, kExtmarkNOOP);
                     } else {
                         // move marks from old lines to new lines, delete
                         // marks that are in deleted lines
-                        unsafe {
-                            mark_adjust(
-                                line1,
-                                line1 + read_linecount - 1,
-                                linecount,
-                                0,
-                                kExtmarkNOOP,
-                            )
-                        };
-                        unsafe {
-                            mark_adjust(line1 + read_linecount, line2, MAXLNUM, 0, kExtmarkNOOP)
-                        };
+                        mark_adjust(
+                            line1,
+                            line1 + read_linecount - 1,
+                            linecount,
+                            0,
+                            kExtmarkNOOP,
+                        );
+                        mark_adjust(line1 + read_linecount, line2, MAXLNUM, 0, kExtmarkNOOP);
                     }
                 }
 
@@ -508,7 +500,7 @@ unsafe fn do_filter(
                 // SAFETY: the original range is still in the buffer, ahead of
                 // what the filter appended.
                 Win::current().w_cursor.lnum = line1;
-                unsafe { del_lines(linecount, true) };
+                del_lines(linecount, true);
                 Buf::current().b_op_start.lnum -= linecount;
                 Buf::current().b_op_end.lnum -= linecount;
                 // adjust last line for next write

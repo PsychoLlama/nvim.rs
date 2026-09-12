@@ -87,7 +87,7 @@ unsafe fn command_line_handle_ctrl_bsl(mut s: Cls) -> CtrlBsl {
         cc.cmdpos
     });
 
-    s.c = unsafe { get_expr_register() };
+    s.c = get_expr_register();
     if s.c == '=' as ::core::ffi::c_int {
         // Evaluate the expression. "textlock" avoids nasty things like
         // going to another buffer.

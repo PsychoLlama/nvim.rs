@@ -157,7 +157,7 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
             siemsg!("E315: ml_get: Invalid lnum: {}", lnum as int64_t);
             ml_get_recursive.set(0);
         }
-        unsafe { ml_flush_line(buffer, false) };
+        ml_flush_line(buffer, false);
         return unsafe { ml_get_placeholder(buffer, lnum) };
     }
 
@@ -167,7 +167,7 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
     // If it is the line handed out last time, it is already unpacked;
     // otherwise the one that was may need flushing first.
     if b.b_ml.cached_lnum() != lnum {
-        unsafe { ml_flush_line(buffer, false) };
+        ml_flush_line(buffer, false);
 
         // Find the data block holding the line. This also fills the
         // stack with the blocks from the root down and releases any
@@ -219,10 +219,7 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
 ///
 /// `noalloc` says the caller owns the line's memory and this must not free
 /// it; it is only ever set together with [`MlFlags::LINE_DIRTY`].
-///
-/// # Safety
-/// `buffer` must point at a buffer.
-pub(crate) unsafe fn ml_flush_line(mut buffer: Buf, noalloc: bool) {
+pub(crate) fn ml_flush_line(mut buffer: Buf, noalloc: bool) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = buffer;
@@ -298,7 +295,7 @@ unsafe fn ml_store_line(buffer: Buf, hp: *mut BlockHdr, lnum: LineNr, new_line: 
         let marked = unsafe { *db_index(dp).wrapping_offset(idx as isize) } & DB_MARKED != 0;
         let mark = if marked { ML_APPEND_MARK as c_int } else { 0 };
         let _ = unsafe { ml_append_int(buffer, lnum, new_line, new_len, mark) };
-        let _ = unsafe { ml_delete_int(buffer, lnum, 0) };
+        let _ = ml_delete_int(buffer, lnum, 0);
         return;
     }
 
@@ -336,7 +333,7 @@ unsafe fn ml_store_line(buffer: Buf, hp: *mut BlockHdr, lnum: LineNr, new_line: 
     b.b_ml.locked_has_moved();
     // The `extra == 0` case is already covered by the insert and delete.
     if extra != 0 {
-        unsafe { ml_updatechunk(buffer, lnum, extra, ML_CHNK_UPDLINE) };
+        ml_updatechunk(buffer, lnum, extra, ML_CHNK_UPDLINE);
     }
 }
 
@@ -420,7 +417,7 @@ pub(crate) unsafe fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) 
         if let Some(locked) = b.b_ml.unlock() {
             unsafe { mf_put(mfp, locked.hp, locked.dirty, locked.moved) };
             if locked.lineadd != 0 {
-                unsafe { ml_lineadd(buffer, locked.lineadd) };
+                ml_lineadd(buffer, locked.lineadd);
             }
         }
     }
@@ -557,9 +554,9 @@ pub(crate) unsafe fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) 
     // down were already adjusted for a line that will not be
     // inserted/deleted after all, so put them back.
     if action == ML_DELETE as c_int {
-        unsafe { ml_lineadd(buffer, 1) };
+        ml_lineadd(buffer, 1);
     } else if action == ML_INSERT as c_int {
-        unsafe { ml_lineadd(buffer, -1) };
+        ml_lineadd(buffer, -1);
     }
     b.b_ml.stack_clear();
     core::ptr::null_mut()
@@ -576,10 +573,7 @@ pub(crate) fn ml_add_stack(mut b: Buf) -> usize {
 ///
 /// This is the repair path: when an insert or delete fails part way down,
 /// the pointer blocks have already been updated for it.
-///
-/// # Safety
-/// `buffer` must point at a buffer whose memline is open.
-pub(crate) unsafe fn ml_lineadd(buffer: Buf, count: c_int) {
+pub(crate) fn ml_lineadd(buffer: Buf, count: c_int) {
     // SAFETY: the caller's buffer, and its whole stack.
     unsafe { ml_lineadd_depth(buffer, count, buffer.b_ml.stack_len()) }
 }

@@ -267,8 +267,7 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
         set_cur_arg_idx(old_arg_idx);
     } else if cmdidx != CmdIdx::argdo {
         // Like Vi: set the mark where the cursor is in the file.
-        // SAFETY: sets the `'` mark at the cursor.
-        let _ = unsafe { setmark('\'' as c_int) };
+        let _ = setmark('\'' as c_int);
     }
 }
 

@@ -155,12 +155,12 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
         if gchar_cursor() == NUL {
             // Past the end of the line: make room for the whole count and
             // then step back to where the replacing starts.
-            unsafe { coladvance_force(getviscol() + ca.count1) };
+            coladvance_force(getviscol() + ca.count1);
             Win::current().w_cursor.col -= ca.count1;
         } else if gchar_cursor() == TAB {
             // Land on the tab's first cell, not the cell of it the cursor
             // happens to be showing on.
-            unsafe { coladvance_force(getviscol()) };
+            coladvance_force(getviscol());
         }
     }
     // There have to be `count1` characters left on the line, counted both
@@ -188,7 +188,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
     }
     if literal != Ctrl_V && (ca.nchar == '\r' as c_int || ca.nchar == '\n' as c_int) {
         // Replacing with a line break splits the line, which is an insert.
-        let _ = unsafe { del_chars(ca.count1, 0) };
+        let _ = del_chars(ca.count1, 0);
         stuff_readbuf_char('\r' as c_int);
         stuff_readbuf_char(ESC);
         unsafe { invoke_edit(cmd_arg, 1, 'r' as c_int, 0) };
@@ -221,7 +221,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
             let from = Win::current().w_cursor.lnum + if ca.nchar == Ctrl_Y { -1 } else { 1 };
             let c = unsafe { ins_copychar(from) };
             if c != NUL {
-                unsafe { ins_char(c) };
+                ins_char(c);
             } else {
                 // Nothing there to copy: leave the character alone and
                 // step over it.
@@ -231,7 +231,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
             let bytes = &raw mut ca.nchar_composing as *mut c_char;
             unsafe { ins_char_bytes(bytes, ca.nchar_len as size_t) };
         } else {
-            unsafe { ins_char(ca.nchar) };
+            ins_char(ca.nchar);
         }
         State.set(old_state);
     }
@@ -669,7 +669,7 @@ pub(crate) unsafe fn nv_join(cmd_arg: *mut CmdArg) {
         ca.nchar,
     );
     // `gJ` arrives with `nchar` set and does not insert or remove spaces.
-    let _ = unsafe { do_join(ca.count0 as size_t, ca.nchar == NUL, true, true, true) };
+    let _ = do_join(ca.count0 as size_t, ca.nchar == NUL, true, true, true);
 }
 
 /// `p` and `P`.
@@ -817,8 +817,7 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
         }
     }
     if emptied && unsafe { *ml_get(Buf::current().b_ml.ml_line_count) } as c_int == NUL {
-        let _ =
-            unsafe { ml_delete_flags(Buf::current().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int) };
+        let _ = ml_delete_flags(Buf::current().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int);
         deleted_lines(Buf::current().b_ml.ml_line_count + 1, 1);
         if win.w_cursor.lnum > Buf::current().b_ml.ml_line_count {
             win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;

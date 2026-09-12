@@ -90,7 +90,7 @@ pub(crate) fn set_buffer_lines(
                 let old_len = len_as_int(unsafe { cstr::bytes_at(ml_get(lnum)) }.len());
                 if u_savesub(lnum).is_ok() && unsafe { ml_replace(lnum, line, true) }.is_ok() {
                     let new_len = len_as_int(unsafe { cstr::bytes_at(line) }.len());
-                    unsafe { inserted_bytes(lnum, 0, old_len, new_len) };
+                    inserted_bytes(lnum, 0, old_len, new_len);
                     if is_curbuf && lnum == Win::current().w_cursor.lnum {
                         check_cursor_col(Win::current());
                     }
@@ -109,7 +109,7 @@ pub(crate) fn set_buffer_lines(
         }
         unsafe { xfree(line.cast()) };
         if added > 0 {
-            unsafe { appended_lines_mark(append_lnum, added) };
+            appended_lines_mark(append_lnum, added);
             // Only the current window of the current buffer follows the
             // insertion; the others keep looking at the line they were on.
             for mut wp in tab_windows() {
@@ -288,7 +288,7 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         // Every delete takes the same line number: the lines below move
         // up.
         for _ in first..=last {
-            let _ = unsafe { ml_delete_flags(first, ML_DEL_MESSAGE) };
+            let _ = ml_delete_flags(first, ML_DEL_MESSAGE);
         }
         // Pull every cursor that was inside or after the deleted range
         // back onto a line that still exists.
@@ -304,7 +304,7 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
             }
         }
         check_cursor_col(Win::current());
-        unsafe { deleted_lines_mark(first, count) };
+        deleted_lines_mark(first, count);
         result.write_number(0);
     }
     if !is_curbuf {

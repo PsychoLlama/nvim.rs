@@ -361,11 +361,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
 }
 
 /// Changed bytes within a single line of the current buffer.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer. May trigger
-/// autocommands that reload it.
-pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
+pub fn changed_bytes(lnum: LineNr, col: ColNr) {
     changed_lines_redraw_buf(Buf::current(), lnum, lnum + 1, 0);
     changed_common(Buf::current(), lnum, col, lnum + 1, 0);
 
@@ -397,16 +393,12 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
 }
 
 /// [`changed_bytes`], plus the extmark splice for the bytes that came and went.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c_int) {
+pub fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c_int) {
     if curbuf_splice_pending.get() == 0 {
         let cb = Buf::current();
         extmark_splice_cols(cb, lnum - 1, start_col, old_col, new_col, kExtmarkUndo);
     }
-    // SAFETY: as above.
-    unsafe { changed_bytes(lnum, start_col) };
+    changed_bytes(lnum, start_col);
 }
 
 /// `count` lines were appended below line `lnum` of `buffer`.
@@ -422,14 +414,10 @@ pub fn appended_lines(lnum: LineNr, count: LineNr) {
 }
 
 /// [`appended_lines`], adjusting the marks first.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
+pub fn appended_lines_mark(lnum: LineNr, count: c_int) {
     let max = MAXLNUM;
     let cb = Buf::current();
-    // SAFETY: the current buffer is live and `lnum` is a line of it.
-    unsafe { mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo) };
+    mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo);
     changed_lines(cb, lnum + 1, 0, lnum + 1, count, true);
 }
 
@@ -449,18 +437,14 @@ pub fn deleted_lines(lnum: LineNr, count: LineNr) {
 ///
 /// Make sure the cursor is on a valid line before calling: a UI callback may
 /// be triggered to display it.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
+pub fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let made_empty = count > 0 && Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
     let cb = Buf::current();
     let last = lnum + count - 1;
     let max = MAXLNUM;
     // Deleting the whole buffer implicitly adds one empty line back.
     let back = -count + i32::from(made_empty);
-    // SAFETY: the current buffer is live and `lnum` is a line of it.
-    unsafe { mark_adjust(lnum, last, max, -count, kExtmarkNOOP) };
+    mark_adjust(lnum, last, max, -count, kExtmarkNOOP);
     extmark_adjust(cb, lnum, last, max, back, kExtmarkUndo);
     changed_lines(cb, lnum, 0, lnum + count, -count, true);
 }

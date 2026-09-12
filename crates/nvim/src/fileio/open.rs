@@ -303,7 +303,7 @@ pub(crate) unsafe fn open_source(
             // that we are editing this file. Not for a "nofile" or
             // "nowrite" buffer type.
             if !buf_is_dontwrite(current_buf()) {
-                unsafe { check_need_swap(how.newfile) };
+                check_need_swap(how.newfile);
                 // The SwapExists autocommand may mess things up.
                 if buffer_changed() {
                     unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
@@ -374,7 +374,7 @@ pub(crate) unsafe fn open_source(
     // Create a swap file now, so that other Nvims are warned that we
     // are editing this file. Not for a "nofile" or "nowrite" buffer.
     if !buf_is_dontwrite(current_buf()) {
-        unsafe { check_need_swap(how.newfile) };
+        check_need_swap(how.newfile);
         if !how.stdin && buffer_changed() {
             unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
             if !how.buffer {

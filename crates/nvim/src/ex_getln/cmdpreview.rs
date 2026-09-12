@@ -291,7 +291,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
                 u_sync(true);
             }
             // SAFETY: undoing `count` states of the buffer just entered.
-            if !unsafe { u_undo_and_forget(count, false) } {
+            if !u_undo_and_forget(count, false) {
                 // SAFETY: `abort` never returns.
                 unsafe { abort() };
             }

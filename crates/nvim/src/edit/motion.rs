@@ -279,7 +279,7 @@ pub(crate) fn ins_page(back: bool) {
 
     let mut tpos = Win::current().w_cursor;
     let dir = if back { BACKWARD } else { FORWARD };
-    if unsafe { pagescroll(dir, 1, false) } == OK {
+    if pagescroll(dir, 1, false) == OK {
         start_arrow_at(&mut tpos);
         can_cindent.set(true);
     } else {

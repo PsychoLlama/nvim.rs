@@ -109,13 +109,13 @@ pub(crate) fn ins_reg() {
         // Sync undo if the expression calls setline() or append(), so
         // that can be undone separately.
         u_sync_once.set(2);
-        regname = unsafe { get_expr_register() };
+        regname = get_expr_register();
         // The cursor may have been moved back a column.
         Win::current().w_cursor = curpos;
         check_cursor(Win::current());
     }
 
-    if regname == NUL || !unsafe { valid_yank_reg(regname, false) } {
+    if regname == NUL || !valid_yank_reg(regname, false) {
         beep(kOptBoFlagRegister as ::core::ffi::c_uint);
         need_redraw = true; // remove the `"`
     } else {

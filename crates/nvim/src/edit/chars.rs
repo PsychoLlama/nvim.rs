@@ -144,7 +144,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
             unsafe { ins_char_bytes(buf.as_mut_ptr(), cc as size_t) };
             append_to_redobuff_char(c);
         } else {
-            unsafe { ins_char(c) };
+            ins_char(c);
             if flags & INSCHAR_CTRLV as c_int != 0 {
                 redo_literal(c);
             } else {

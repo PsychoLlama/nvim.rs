@@ -162,7 +162,7 @@ pub unsafe fn nvim_buf_set_lines(
             };
             let mut i_0: size_t = 0 as size_t;
             while i_0 < to_delete {
-                if unsafe { ml_delete_buf(buffer, start as LineNr, false) }.is_err() {
+                if ml_delete_buf(buffer, start as LineNr, false).is_err() {
                     let why = c"Failed to delete line";
                     error = Error::exception(why);
                     break 's_382;
@@ -230,18 +230,16 @@ pub unsafe fn nvim_buf_set_lines(
             } else {
                 0 as LineNr
             };
-            unsafe {
-                mark_adjust_buf(
-                    buffer,
-                    start as LineNr,
-                    (end - 1 as Integer) as LineNr,
-                    adjust,
-                    extra as LineNr,
-                    true,
-                    kMarkAdjustApi,
-                    kExtmarkNOOP,
-                )
-            };
+            mark_adjust_buf(
+                buffer,
+                start as LineNr,
+                (end - 1 as Integer) as LineNr,
+                adjust,
+                extra as LineNr,
+                true,
+                kMarkAdjustApi,
+                kExtmarkNOOP,
+            );
             if visual_active() as ::core::ffi::c_int != 0
                 && Some(buffer) == Buf::current_or_none()
                 && visual_anchor().lnum >= start as LineNr
@@ -469,7 +467,7 @@ pub unsafe fn buf_collect_lines(
     while i < n {
         let lnum: LineNr = start + i as LineNr;
         let bufstr: *mut ::core::ffi::c_char = unsafe { ml_get_buf(buffer, lnum) };
-        let len: size_t = unsafe { ml_get_buf_len(buffer, lnum) } as size_t;
+        let len: size_t = ml_get_buf_len(buffer, lnum) as size_t;
         let at = start_idx + i as ::core::ffi::c_int;
         // SAFETY: `bufstr` holds `len` bytes, and `l`/`lstate` are the
         // caller's.

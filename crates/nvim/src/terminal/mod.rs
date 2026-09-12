@@ -328,9 +328,7 @@ pub(crate) unsafe fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> *
         // Not immutable: ml_delete_buf() mutates b_ml behind the pointer.
         #[allow(clippy::while_immutable_condition)]
         while !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
-            // SAFETY: a live buffer, deleting its own lines down to the one
-            // empty line `MlFlags::EMPTY` stands for.
-            let _ = unsafe { ml_delete_buf(buffer, 1 as LineNr, false) };
+            let _ = ml_delete_buf(buffer, 1 as LineNr, false);
         }
         deleted_lines_buf(buffer, 1 as LineNr, line_count);
     }

@@ -186,7 +186,7 @@ pub(crate) unsafe fn nv_mark(cmd_arg: *mut CmdArg) {
     if check_clear_op(ca.op()) {
         return;
     }
-    if unsafe { setmark(ca.nchar) }.is_err() {
+    if setmark(ca.nchar).is_err() {
         clear_op_beep(ca.op());
     }
 }

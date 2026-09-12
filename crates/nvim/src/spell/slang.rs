@@ -348,7 +348,7 @@ pub fn open_spellbuf() -> Option<Buf> {
 
     buf.b_spell = true;
     buf.b_p_swf = 1;
-    if unsafe { ml_open(buf) }.is_err() {
+    if ml_open(buf).is_err() {
         logmsg!(
             LOGLVL_ERR,
             c"open_spellbuf",
@@ -356,7 +356,7 @@ pub fn open_spellbuf() -> Option<Buf> {
             "Error opening a new memline"
         );
     }
-    unsafe { ml_open_file(buf) }; // create the swap file now
+    ml_open_file(buf); // create the swap file now
 
     Some(buf)
 }
@@ -366,7 +366,7 @@ pub fn close_spellbuf(buffer: Option<Buf>) {
     let Some(buffer) = buffer else {
         return;
     };
-    unsafe { ml_close(buffer, 1) };
+    ml_close(buffer, 1);
     // The free: `Buffer`'s destructor runs and the memory goes back.
     // SAFETY: `open_spellbuf` gave up this address and nothing else
     // takes it back -- `sl_sugbuf`/`si_spellbuf` are cleared right after

@@ -781,8 +781,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_wrow = oldp.w_wrow;
     newp.w_fraction = oldp.w_fraction;
     newp.w_prev_fraction_row = oldp.w_prev_fraction_row;
-    // SAFETY: two live windows.
-    unsafe { copy_jumplist(oldp, newp) };
+    copy_jumplist(oldp, newp);
     if flags & WSP_NEWLOC as c_int != 0 {
         // Don't copy the location list.
         newp.w_llist = ptr::null_mut::<QfInfo>();

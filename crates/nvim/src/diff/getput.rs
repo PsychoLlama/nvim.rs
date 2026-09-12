@@ -359,8 +359,7 @@ fn diffgetput(
             let mut added: c_int = 0;
             for _ in 0..count {
                 buf_empty = Buf::current().b_ml.ml_line_count == 1 as LineNr;
-                // SAFETY: the editor exists and `lnum` is a line of it.
-                if unsafe { ml_delete(lnum) }.is_ok() {
+                if ml_delete(lnum).is_ok() {
                     added -= 1;
                 }
             }
@@ -383,8 +382,7 @@ fn diffgetput(
                 added += 1;
                 if buf_empty && Buf::current().b_ml.ml_line_count == 2 as LineNr {
                     buf_empty = false;
-                    // SAFETY: the buffer holds the two lines just counted.
-                    let _ = unsafe { ml_delete(2 as LineNr) };
+                    let _ = ml_delete(2 as LineNr);
                 }
                 i += 1;
             }
@@ -414,8 +412,7 @@ fn diffgetput(
             let max = MAXLNUM as LineNr;
             let amount = added as LineNr;
             if added != 0 {
-                // SAFETY: the editor exists.
-                unsafe { mark_adjust(lnum, last, max, amount, kExtmarkNOOP) };
+                mark_adjust(lnum, last, max, amount, kExtmarkNOOP);
                 if Win::current().w_cursor.lnum >= lnum {
                     if Win::current().w_cursor.lnum >= lnum + count {
                         let moved = Win::current().w_cursor.lnum + amount;

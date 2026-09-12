@@ -41,47 +41,32 @@ pub use time::undo_time;
 
 /// `u` — undo, or, with `'cpoptions'` containing `u`, repeat the previous
 /// undo-or-redo the other way, as the original vi did.
-///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn u_undo(count: c_int) {
+pub fn u_undo(count: c_int) {
     let count = count_after_sync(count);
     if cpo_has(CpoFlag::UNDO) {
         undo_undoes.set(!undo_undoes.get());
     } else {
         undo_undoes.set(true);
     }
-    // SAFETY: as above.
-    unsafe { u_doit(count, false, true) };
+    u_doit(count, false, true);
 }
 
 /// CTRL-R — redo, or, with `'cpoptions'` containing `u`, repeat the previous
 /// undo-or-redo.
-///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn u_redo(count: c_int) {
+pub fn u_redo(count: c_int) {
     if !cpo_has(CpoFlag::UNDO) {
         undo_undoes.set(false);
     }
-    // SAFETY: a live current buffer and window, by the contract above.
-    unsafe { u_doit(count, false, true) };
+    u_doit(count, false, true);
 }
 
 /// Undo, then delete the branch that was undone, so that the change is gone
 /// rather than reachable again with CTRL-R. Moves the cursor as a plain undo
 /// would. Answers whether anything was undone.
-///
-/// # Safety
-///
-/// A live current buffer and window.
-pub unsafe fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
+pub fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
     let count = count_after_sync(count);
     undo_undoes.set(true);
-    // SAFETY: as above.
-    unsafe { u_doit(count, true, do_buf_event) };
+    u_doit(count, true, do_buf_event);
 
     let mut buf = Buf::current();
     let Some(mut forgotten) = buf.header(buf.b_u_curhead) else {
@@ -126,11 +111,7 @@ fn count_after_sync(count: c_int) -> c_int {
 }
 
 /// Undoes or redoes — whichever `undo_undoes` says — `startcount` times.
-///
-/// # Safety
-///
-/// A live current buffer and window.
-pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
+pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
     if !undo_allowed(Buf::current()) {
         return;
     }
@@ -171,9 +152,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
                 }
                 break;
             }
-            // SAFETY: a live current buffer and window, and `b_u_curhead`
-            // names a header.
-            unsafe { u_undoredo(true, do_buf_event) };
+            u_undoredo(true, do_buf_event);
         } else {
             if buf.b_u_curhead.is_none() || get_undolevel(buf) <= 0 {
                 // SAFETY: nothing here holds a borrow of editor state.
@@ -184,8 +163,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
                 }
                 break;
             }
-            // SAFETY: as for the undo arm above.
-            unsafe { u_undoredo(false, do_buf_event) };
+            u_undoredo(false, do_buf_event);
             // Advance for the next redo, and mark the end of the redoable
             // changes with `b_u_newhead`.
             if let Some(curhead) = buf.header(buf.b_u_curhead) {
@@ -197,8 +175,7 @@ pub(crate) unsafe fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) 
         }
         first = false;
     }
-    // SAFETY: a live current buffer and window.
-    unsafe { u_undo_end(undo_undoes.get(), false, quiet) };
+    u_undo_end(undo_undoes.get(), false, quiet);
 }
 
 // ---------------------------------------------------------------------------
@@ -219,11 +196,7 @@ fn undo_report(oldcount: c_int, newcount: c_int) -> (c_int, &'static CStr) {
 }
 
 /// Reports what a move through the tree did, and redraws what has to be.
-///
-/// # Safety
-///
-/// A live current buffer and window.
-pub(crate) unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
+pub(crate) fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     if fdo_flags.get() & kOptFdoFlagUndo as c_uint != 0 && KeyTyped.get() {
         fold_open_cursor();
     }

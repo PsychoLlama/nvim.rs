@@ -129,7 +129,7 @@ fn get_col(args: &[TypVal], result: &mut TypVal, charcol: bool) {
             // MAXCOL means "end of line"; past the last line there is
             // no line to measure, so it stays MAXCOL.
             col = if fp.lnum <= bp.b_ml.ml_line_count {
-                (unsafe { ml_get_buf_len(bp, fp.lnum) }) + 1
+                (ml_get_buf_len(bp, fp.lnum)) + 1
             } else {
                 END_OF_LINE
             };
@@ -206,7 +206,7 @@ pub fn f_virtcol(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             if fp.col < 0 {
                 fp.col = 0;
             } else {
-                let len = unsafe { ml_get_buf_len(bp, fp.lnum) };
+                let len = ml_get_buf_len(bp, fp.lnum);
                 if fp.col > len {
                     fp.col = len;
                 }

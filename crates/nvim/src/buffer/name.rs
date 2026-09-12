@@ -258,9 +258,7 @@ pub fn buf_name_changed(b: Buf) {
     }
     maketitle();
     status_redraw_all();
-    // SAFETY: a live buffer, whose named file marks and timestamp follow its
-    // name.
-    unsafe { fmarks_check_names(b) };
+    fmarks_check_names(b);
     ml_timestamp(b);
 }
 

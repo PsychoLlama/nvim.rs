@@ -48,10 +48,7 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
         && Win::current().w_cursor.col > 0
     {
         Win::current().w_cursor.col -= 1;
-        // SAFETY: every `unsafe` call in this function is an editor-wide
-        // routine whose only precondition is the live `curwin`/`curbuf`
-        // Insert mode runs with.
-        let _ = unsafe { del_char(false) };
+        let _ = del_char(false);
         if State.get() & REPLACE_FLAG != 0 {
             replace_pop_ins();
         }
@@ -308,7 +305,7 @@ fn tab_spaces_to_tabs() {
                 Buf::current().b_ml.line_was_replaced();
                 let old_len = walk_col(&pos, vreplace) - change_col;
                 let new_len = fpos.col - change_col;
-                unsafe { inserted_bytes(fpos.lnum, change_col, old_len, new_len) };
+                inserted_bytes(fpos.lnum, change_col, old_len, new_len);
             } else {
                 // SAFETY: the tail is NUL-terminated and moves down over the
                 // `i` spaces in front of it, terminator included.
@@ -445,6 +442,5 @@ fn tabstops(ts: *mut ColNr) -> c_int {
 /// Insert one space at the cursor, replacing a character in Replace mode.
 #[inline(always)]
 fn insert_space() {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { ins_char(' ' as c_int) }
+    ins_char(' ' as c_int)
 }

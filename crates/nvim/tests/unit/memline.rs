@@ -137,10 +137,8 @@ impl Swapped {
         // what `ml_open_file` refuses on, and a buffer made outside the
         // usual `:edit` path has not been given the option's value.
         buf.b_p_swf = 1;
-        unsafe {
-            ml_open(buf).expect("a memline");
-            ml_open_file(buf);
-        }
+        ml_open(buf).expect("a memline");
+        ml_open_file(buf);
         // SAFETY: the memline was just opened; appending after line `n`
         // puts each line at the end in turn.
         for (n, line) in LINES.iter().enumerate() {
@@ -158,8 +156,7 @@ impl Swapped {
         }
         // The buffer starts with one empty line, which the appends pushed
         // to the end; drop it so the line set is exactly `LINES`.
-        // SAFETY: the memline holds `LINES.len() + 1` lines.
-        unsafe { neovim::memline::ml_delete_buf(buf, LINES.len() as LineNr + 1, false) }
+        neovim::memline::ml_delete_buf(buf, LINES.len() as LineNr + 1, false)
             .expect("the empty line goes");
 
         ml_preserve(buf, false, true);

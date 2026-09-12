@@ -110,8 +110,7 @@ fn remember_last_cursor(win: Win) {
 
 /// Forget every mark and jump-list entry naming buffer `fnum` in `win`.
 fn forget_file(win: Win, fnum: c_int) {
-    // SAFETY: a live window.
-    unsafe { mark_forget_file(win, fnum) };
+    mark_forget_file(win, fnum);
 }
 
 fn detach_updates(buffer: Buf) {
@@ -173,19 +172,16 @@ fn drop_mark(mark: FileMark) {
 /// emptied buffer needs so a reload starts from a clean slate.
 fn forget_lines(buffer: Buf, count: LineNr) {
     let last = MAXLNUM;
-    // SAFETY: a live buffer.
-    unsafe {
-        mark_adjust_buf(
-            buffer,
-            1,
-            count,
-            last,
-            -count,
-            false,
-            kMarkAdjustNormal,
-            kExtmarkNoUndo,
-        )
-    };
+    mark_adjust_buf(
+        buffer,
+        1,
+        count,
+        last,
+        -count,
+        false,
+        kMarkAdjustNormal,
+        kExtmarkNoUndo,
+    );
 }
 
 fn free_undo(buffer: Buf) {
@@ -199,13 +195,11 @@ fn clear_syntax(syn: &mut SynBlock) {
 
 /// Close the memline and delete the swap file.
 fn close_memline(buffer: Buf) {
-    // SAFETY: a live buffer; `true` is upstream's `del_file`.
-    unsafe { ml_close(buffer, 1) };
+    ml_close(buffer, 1);
 }
 
 fn mark_lines_deleted(count: LineNr) {
-    // SAFETY: reads the current buffer, which the caller has just emptied.
-    unsafe { deleted_lines_mark(1 as LineNr, count as c_int) };
+    deleted_lines_mark(1 as LineNr, count as c_int);
 }
 
 fn free_entry(entry: *mut WinInfo) {
