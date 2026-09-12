@@ -741,11 +741,17 @@ mod tests {
     /// Twenty-four is what a `Vec` of them costs per item, against
     /// upstream's forty *plus* an `xmalloc` header per item -- which is
     /// where `tvbuild` and `tvlist` get their instructions back.
+    ///
+    /// Only the size and the alignment are pinned.  `ListItem` is
+    /// `repr(Rust)` and nothing reads its fields by offset -- the two
+    /// callers that need one ask `offset_of!` -- so where the compiler puts
+    /// `li_tv` is the compiler's business, and `-Zrandomize-layout` says so
+    /// by putting it somewhere else.
     #[test]
+    #[cfg(not(randomized_layout))]
     fn an_item_is_a_value_and_a_lock() {
         assert_eq!(::core::mem::size_of::<ListItem>(), 24);
         assert_eq!(::core::mem::align_of::<ListItem>(), 8);
-        assert_eq!(::core::mem::offset_of!(ListItem, li_tv), 0);
     }
 
     #[test]

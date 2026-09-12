@@ -122,6 +122,16 @@ non_upper_case_globals = "deny"
 # until the last `# Safety` section was written; it is a plain `warn` again,
 # which `-D warnings` makes a deny, so leave it that way. One style member stays
 # off, for a reason that does not retire with a rewrite:
+# `just randomize-layout` sets this alongside `-Zrandomize-layout`. The tree
+# holds a handful of const assertions that pin a `repr(Rust)` type's size --
+# memory budgets for what a dictionary item or a list item costs -- and the
+# compiler makes no such promise: randomizing the layout is exactly the
+# compiler exercising that freedom, so those guards stand down for that lane
+# and nowhere else.
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(randomized_layout)']
+
 [lints.clippy]
 # `tui/tui.rs`, `vterm/vterm.rs`, `tui/termkey/termkey.rs`,
 # `viml/parser/parser.rs` and `types/types.rs` are ports of upstream's

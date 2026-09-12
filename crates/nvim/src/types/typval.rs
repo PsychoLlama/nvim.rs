@@ -407,6 +407,7 @@ pub struct FuncCall {
 /// A funccall arrives `xcalloc`'d, so what a fixed variable's storage holds
 /// before it is used has to be a *valid* item: an all-zero `DictItem` is
 /// `VAR_UNKNOWN`, unlocked, unflagged, with the empty inline key.
+#[cfg(not(randomized_layout))]
 const _: () = {
     use crate::types::{DictItem, DictKey};
     assert!(

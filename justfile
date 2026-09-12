@@ -196,6 +196,22 @@ cargo-test *args:
 miri *args:
   MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib --tests {{ args }}
 
+# Run the cargo-test lane with the struct layouts shuffled, to catch code
+# that assumes a `repr(Rust)` type's field order or size. `seed` picks the
+# permutation; run at least two, since one seed proves nothing on its own.
+#
+# `--cfg randomized_layout` travels with it (declared in crates/nvim/
+# Cargo.toml): a handful of const assertions pin what a dictionary item or a
+# list item *costs*, which is a real budget for the shipped layout and a
+# false positive here -- randomizing the layout is the compiler taking the
+# freedom those asserts describe. They stand down for this lane only.
+#
+# Its own target dir, so it does not clobber a normal build.
+randomize-layout seed='1':
+  @CARGO_TARGET_DIR=target/randlayout-{{ seed }} \
+    RUSTFLAGS="-Zrandomize-layout -Zlayout-seed={{ seed }} --cfg randomized_layout" \
+    cargo test --lib --tests
+
 # Regenerate the committed msgpack-RPC dispatch wrappers
 # (crates/nvim/src/api/private/dispatch_wrappers/) from the `nvim_*`
 # signatures themselves plus tools/apigen/functions.txt, the attributes the

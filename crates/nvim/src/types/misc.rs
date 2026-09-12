@@ -337,6 +337,7 @@ impl From<&str> for DictKey {
     }
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = {
     assert!(::core::mem::size_of::<DictKey>() == 24);
     assert!(::core::mem::size_of::<DictItem>() == 48);
