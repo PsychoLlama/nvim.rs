@@ -505,7 +505,9 @@ impl WinLineVars {
     /// `vcol`, and drop it entirely once the list is exhausted.
     ///
     /// # Safety
-    /// `color_cols` must be null or point into a negative-terminated array.
+    /// [`WinLineVars::color_cols`] is a cursor into the window's
+    /// `w_p_cc_cols` array, which only its negative terminator ends: it must
+    /// be null, or point at an entry of an array that still holds one.
     #[inline]
     pub(crate) unsafe fn advance_color_col(&mut self, vcol: ::core::ffi::c_int) {
         // SAFETY: the caller's array, walked only while its entries are
@@ -529,7 +531,9 @@ impl WinLineVars {
     /// text does, so both go through here.
     ///
     /// # Safety
-    /// `window` must be live and `color_cols` null or negative-terminated.
+    /// [`WinLineVars::color_cols`] is a cursor into the window's
+    /// `w_p_cc_cols` array, which only its negative terminator ends: it must
+    /// be null, or point at an entry of an array that still holds one.
     #[inline]
     pub(crate) unsafe fn color_col_attr(
         &mut self,
@@ -550,10 +554,7 @@ impl WinLineVars {
     /// A compromise upstream made in vim/vim#7383: `CursorLine` is
     /// low-priority when it sets no foreground (so syntax colours survive it)
     /// and high-priority when it does.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(crate) unsafe fn apply_cursorline_highlight(&mut self, window: Win) {
+    pub(crate) fn apply_cursorline_highlight(&mut self, window: Win) {
         // SAFETY: the caller's window.
         self.cursorline_attr = unsafe { win_hl_attr(window, HLF_CUL) };
         let ae = syn_attr2entry(self.cursorline_attr);
@@ -572,10 +573,7 @@ impl WinLineVars {
     }
 
     /// Overlay `'cursorline'` onto the diff-mode line highlight.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(crate) unsafe fn set_line_attr_for_diff(&mut self, window: Win) {
+    pub(crate) fn set_line_attr_for_diff(&mut self, window: Win) {
         // SAFETY: the caller's window.
         self.line_attr = unsafe { win_hl_attr(window, self.diff_hlf) };
         if self.cursorline_attr != 0 {

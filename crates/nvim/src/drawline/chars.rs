@@ -29,13 +29,9 @@ use crate::types::NUL;
 
 impl Cells {
     /// Put the next character in [`Cells::cell_char`].
-    ///
-    /// # Safety
-    /// `window` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn next_char(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
-        // SAFETY: the caller's window and frame.
+    pub(super) fn next_char(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
         if wlv.extra_todo > 0 {
-            unsafe { self.char_from_extra(wlv, window) };
+            self.char_from_extra(wlv, window);
         } else if wlv.filler_todo > 0 {
             // Wait with reading text until the filler lines are done, but
             // still give the cell something to be.
@@ -45,15 +41,12 @@ impl Cells {
             // The fold text is already placed; skip the buffer line.
             self.cell_char = NUL as ScreenChar;
         } else {
-            unsafe { self.char_from_buffer(wlv, window, f) };
+            self.char_from_buffer(wlv, window, f);
         }
     }
 
     /// Take one cell from the run in [`WinLineVars::extra_todo`].
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn char_from_extra(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn char_from_extra(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window; `extra_text` is NUL-terminated whenever
         // `extra_fill` and `extra_last` are not set.
         if wlv.extra_fill != NUL as ScreenChar
@@ -157,15 +150,7 @@ impl Cells {
 
     /// Read the next character out of the buffer line and work out what it
     /// looks like on screen.
-    ///
-    /// # Safety
-    /// `window` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn char_from_buffer(
-        &mut self,
-        wlv: &mut WinLineVars,
-        window: Win,
-        f: &LineFrame,
-    ) {
+    pub(super) fn char_from_buffer(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
         // SAFETY: the caller's window and frame; `ptr` walks a NUL-terminated
         // buffer line.
         let mut prev_ptr: *mut ::core::ffi::c_char = self.ptr;
@@ -252,10 +237,10 @@ impl Cells {
         }
 
         if !vim_isprintc(self.char_code) {
-            unsafe { self.unprintable(wlv, window) };
+            self.unprintable(wlv, window);
         }
 
-        unsafe { self.conceal(wlv, window) };
+        self.conceal(wlv, window);
 
         if wlv.skip_cells > 0 && self.did_decrement_ptr {
             // The `>` is not being shown, so put the pointer back or the
@@ -292,7 +277,7 @@ impl Cells {
         let at = self.byte_col();
         if self.has_syntax && at > 0 {
             let prev_at = unsafe { prev_ptr.offset_from(self.line) };
-            unsafe { self.syntax_attr(wlv, window, f, at, &mut can_spell) };
+            self.syntax_attr(wlv, window, f, at, &mut can_spell);
             // The syntax walk may have re-fetched the line.
             *prev_ptr = unsafe { self.line.offset(prev_at) };
         }
@@ -323,16 +308,13 @@ impl Cells {
             wlv.char_attr = unsafe { hl_combine_attr(term_attr, wlv.char_attr) };
         }
 
-        unsafe { self.linebreak(wlv, window, c0) };
+        self.linebreak(wlv, window, c0);
         unsafe { self.listchars(wlv, window, *prev_ptr) };
     }
 
     /// Ask the syntax state machine for this character's attribute, and for
     /// whether it is in the `@Spell` cluster.
-    ///
-    /// # Safety
-    /// `window` must be live and `at`/`prev_at` byte indexes into the line.
-    pub(super) unsafe fn syntax_attr(
+    pub(super) fn syntax_attr(
         &mut self,
         wlv: &WinLineVars,
         mut window: Win,
@@ -369,7 +351,7 @@ impl Cells {
         }
 
         // A multi-line regexp may have invalidated the line.
-        unsafe { self.refetch_line(window, wlv.lnum, at) };
+        self.refetch_line(window, wlv.lnum, at);
 
         // No concealing past the end of the line: it would interfere with
         // the line highlighting.
@@ -492,15 +474,7 @@ impl Cells {
     /// `'linebreak'`: when this character is the last blank before a word that
     /// will not fit, pad out to the end of the row so the word starts on the
     /// next one.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn linebreak(
-        &mut self,
-        wlv: &mut WinLineVars,
-        window: Win,
-        c0: ::core::ffi::c_int,
-    ) {
+    pub(super) fn linebreak(&mut self, wlv: &mut WinLineVars, window: Win, c0: ::core::ffi::c_int) {
         // SAFETY: the caller's window and the loop's line pointers.
         if window.w_onebuf_opt.wo_lbr == 0 {
             return;

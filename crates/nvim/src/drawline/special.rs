@@ -24,10 +24,7 @@ use crate::types::NUL;
 impl Cells {
     /// Show the `'listchars'` "precedes" character in column zero of a row
     /// that starts part-way into the line.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn draw_precedes(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn draw_precedes(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
         let scrolled = if window.w_onebuf_opt.wo_wrap != 0 {
             let skipcol = window.w_skipcol;
@@ -70,10 +67,7 @@ impl Cells {
 
     /// Show the `'listchars'` "extends" character in the last column when the
     /// line goes on past the right edge.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn draw_extends(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn draw_extends(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lcs_ext = get_lcs_ext(window);
         if lcs_ext == NUL as ScreenChar
             || wlv.filler_todo > 0
@@ -116,10 +110,7 @@ impl Cells {
 
     /// Render `'foldtext'` into the scratch buffer and set up the `'fold'`
     /// fill that follows it.
-    ///
-    /// # Safety
-    /// `window` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn fold_text(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
+    pub(super) fn fold_text(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
         // SAFETY: the caller's window, frame and fold scratch.
         if self.draw_folded
             && self.has_foldtext
@@ -149,7 +140,7 @@ impl Cells {
             wlv.extra_last = NUL as ScreenChar;
             unsafe { *wlv.extra_text.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char };
             // Evaluating 'foldtext' may have freed the line.
-            unsafe { self.refetch_line(window, wlv.lnum, at) };
+            self.refetch_line(window, wlv.lnum, at);
         }
 
         // Fill the rest of the row with the 'fold' fillchar — after the
@@ -178,10 +169,7 @@ impl Cells {
 
     /// Invert one cell past the end of the text, for a Visual selection that
     /// includes the line break or an `'hlsearch'` match that ends there.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn highlight_at_eol(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn highlight_at_eol(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's match state.
         if self.cell_char != NUL as ScreenChar || self.eol_extra_cell != 0 {
             return;
@@ -234,19 +222,16 @@ impl Cells {
 
     /// A character that cannot be put on the screen as itself: a Tab, the NUL
     /// that ends the line, or something that shows as `^X` or `<xx>`.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn unprintable(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn unprintable(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the loop's line pointers.
         if self.char_code == TAB
             && (window.w_onebuf_opt.wo_list == 0 || window.w_p_lcs_chars.tab1 != 0)
         {
-            unsafe { self.tab(wlv, window) };
+            self.tab(wlv, window);
         } else if self.cell_char == NUL as ScreenChar && self.wants_eol_cell(wlv, window) {
-            unsafe { self.eol_cell(wlv, window) };
+            self.eol_cell(wlv, window);
         } else if self.cell_char != NUL as ScreenChar {
-            unsafe { self.escaped(wlv, window) };
+            self.escaped(wlv, window);
         } else if visual_active()
             && (visual_mode().is_block() || visual_mode().is_char())
             && virtual_active(window)
@@ -264,10 +249,7 @@ impl Cells {
     }
 
     /// Turn a Tab into the cells it occupies.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn tab(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn tab(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the scratch buffer, which is not
         // held across another `get_extra_buf`.
         let lcs = &window.w_p_lcs_chars;
@@ -403,10 +385,7 @@ impl Cells {
     }
 
     /// Draw an unprintable character in its `^X` or `<xx>` form.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn escaped(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn escaped(&mut self, wlv: &mut WinLineVars, window: Win) {
         // `transchar_buf` answers a static NUL-terminated buffer.
         wlv.escape_buf = transchar_buf(window.buffer_or_none(), self.char_code);
         wlv.extra_text = wlv.escape_buf.as_mut_ptr();
@@ -459,10 +438,7 @@ impl Cells {
 
     /// Draw the `'listchars'` "eol" character, or a highlighted blank standing
     /// for the line break.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn eol_cell(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn eol_cell(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
         // For a diff line the highlighting continues after the "$".
         if wlv.diff_hlf == HLF_NONE && wlv.line_attr == 0 && wlv.line_attr_lowprio == 0 {
@@ -492,10 +468,7 @@ impl Cells {
 
     /// Concealment: either replace the first character of a concealed run with
     /// one stand-in character, or drop the cell entirely.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn conceal(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn conceal(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's decoration state.
         let wants_conceal = window.w_onebuf_opt.wo_cole > 0
             && (window.raw() != Win::current_raw()

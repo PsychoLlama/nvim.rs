@@ -421,16 +421,8 @@ impl Cells {
 
     /// Re-fetch the line after something that could have freed it, keeping the
     /// read cursor where it was.
-    ///
-    /// # Safety
-    /// `window` must be a live window and `lnum` one of its buffer's lines.
     #[inline]
-    pub(super) unsafe fn refetch_line(
-        &mut self,
-        window: Win,
-        lnum: LineNr,
-        at: ::core::ffi::c_int,
-    ) {
+    pub(super) fn refetch_line(&mut self, window: Win, lnum: LineNr, at: ::core::ffi::c_int) {
         // SAFETY: the caller's window and line.
         self.line = unsafe { ml_get_buf(window.buffer(), lnum) };
         self.ptr = unsafe { self.line.offset(at as isize) };
@@ -452,12 +444,8 @@ impl Cells {
     /// (`perf stat -e instructions:u`, which repeats to 0.03 %): **2,834.1 M
     /// instructions without the attribute, 2,782.6 M with it, −1.8 %**. Adding
     /// it to [`Cells::new`] as well costs 5.8 M back, so it stays here only.
-    ///
-    /// # Safety
-    /// `window`, `buffer` and everything in `f` must be live, and `wlv` must be the
-    /// state the setup half filled in for this line.
     #[inline(always)]
-    pub(crate) unsafe fn run(
+    pub(crate) fn run(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
@@ -470,11 +458,11 @@ impl Cells {
             self.has_match_conc = 0;
             self.decor_conceal = 0;
             self.did_decrement_ptr = false;
-            unsafe { self.provider_chunk(window, wlv.lnum, wlv.decor) };
+            self.provider_chunk(window, wlv.lnum, wlv.decor);
 
             'row_full: {
                 if self.columns_todo {
-                    match unsafe { self.draw_columns(wlv, window, f) } {
+                    match self.draw_columns(wlv, window, f) {
                         Step::Done => break 'row,
                         Step::NextRow => continue 'row,
                         Step::RowFull => break 'row_full,
@@ -487,17 +475,15 @@ impl Cells {
                     && wlv.vcol >= self.left_curline_col
                     && wlv.vcol < self.right_curline_col
                 {
-                    unsafe { wlv.apply_cursorline_highlight(window) };
+                    wlv.apply_cursorline_highlight(window);
                 }
 
                 // Still showing the '$' of a change command: stop at the
                 // cursor.
                 if dollar_vcol.get() >= 0 && self.in_curline && wlv.vcol >= window.w_virtcol {
-                    wlv.col = unsafe {
-                        draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv)
-                    };
+                    wlv.col = draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv);
                     // Nothing after `col` is ours to clear.
-                    unsafe { wlv_put_linebuf(window, wlv, wlv.col, false, self.bg_attr, 0) };
+                    wlv_put_linebuf(window, wlv, wlv.col, false, self.bg_attr, 0);
                     // Pretend the window is finished, except that
                     // 'cursorcolumn' still wants the rest of it.
                     wlv.row = if window.w_onebuf_opt.wo_cuc != 0 {
@@ -521,37 +507,37 @@ impl Cells {
                         || unsafe { (*f.spv).spv_has_spell }
                         || self.extra_check)
                 {
-                    unsafe { self.cell_attributes(wlv, window) };
+                    self.cell_attributes(wlv, window);
                 }
 
-                unsafe { self.fold_text(wlv, window, f) };
-                unsafe { self.next_char(wlv, window, f) };
-                unsafe { self.correct_cursor_col(wlv, window) };
+                self.fold_text(wlv, window, f);
+                self.next_char(wlv, window, f);
+                self.correct_cursor_col(wlv, window);
                 self.apply_extra_attr(wlv);
-                unsafe { self.draw_precedes(wlv, window) };
-                unsafe { self.highlight_at_eol(wlv, window) };
+                self.draw_precedes(wlv, window);
+                self.highlight_at_eol(wlv, window);
 
                 if self.cell_char == NUL as ScreenChar {
-                    unsafe { self.finish_line(wlv, window, buffer, f) };
+                    self.finish_line(wlv, window, buffer, f);
                     break 'row;
                 }
 
-                unsafe { self.draw_extends(wlv, window) };
+                self.draw_extends(wlv, window);
                 unsafe { wlv.advance_color_col(wlv.hl_vcol()) };
-                unsafe { self.column_highlight(wlv, window) };
+                self.column_highlight(wlv, window);
                 self.apply_line_attr_lowprio(wlv);
                 if wlv.filler_todo <= 0 {
                     self.prev_vcol = wlv.vcol;
                 }
-                unsafe { self.store_cell(wlv, window) };
+                self.store_cell(wlv, window);
                 self.advance_vcol(wlv);
-                unsafe { self.peek_decor_past_edge(wlv, window) };
+                self.peek_decor_past_edge(wlv, window);
             }
 
-            if !unsafe { self.row_is_full(wlv, window) } {
+            if !self.row_is_full(wlv, window) {
                 continue 'row;
             }
-            if unsafe { self.finish_screen_line(wlv, window, buffer, f, grid) } == Step::Done {
+            if self.finish_screen_line(wlv, window, buffer, f, grid) == Step::Done {
                 break 'row;
             }
         }
@@ -573,21 +559,13 @@ impl Cells {
 
     /// Ask the decoration providers for the next chunk of the line once the
     /// read cursor has walked past what their last answer covered.
-    ///
-    /// # Safety
-    /// `window` must be a live window and `lnum` one of its buffer's lines.
-    pub(super) unsafe fn provider_chunk(
-        &mut self,
-        window: Win,
-        lnum: LineNr,
-        decor: DecorStateRef,
-    ) {
+    pub(super) fn provider_chunk(&mut self, window: Win, lnum: LineNr, decor: DecorStateRef) {
         if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
             return;
         }
         let at = self.byte_col();
-        self.decor_provider_end_col = unsafe { invoke_range_next(window, lnum, at, 100) };
-        unsafe { self.refetch_line(window, lnum, at) };
+        self.decor_provider_end_col = invoke_range_next(window, lnum, at, 100);
+        self.refetch_line(window, lnum, at);
         if !self.has_decor && decor_has_more_decorations(decor, lnum - 1) {
             self.has_decor = true;
             self.extra_check = true;
@@ -600,10 +578,7 @@ impl Cells {
     /// virtual column alone, so it is read off here as the loop reaches it —
     /// or, under `'virtualedit'`, at the end of the line, which the cursor may
     /// be past.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn correct_cursor_col(&mut self, wlv: &WinLineVars, mut window: Win) {
+    pub(super) fn correct_cursor_col(&mut self, wlv: &WinLineVars, mut window: Win) {
         if self.did_cursor_col
             || wlv.filler_todo > 0
             || !self.in_curline
@@ -625,10 +600,7 @@ impl Cells {
 
     /// Write the cell — or, when it is being concealed or skipped over, count
     /// it without writing anything.
-    ///
-    /// # Safety
-    /// `window` must be a live window and `off` inside the line buffers.
-    pub(super) unsafe fn store_cell(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn store_cell(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window; `off` is bounded by `view_width`.
         if wlv.filler_todo > 0 {
             // TODO(bfredl): the main render loop should get called with
@@ -739,10 +711,7 @@ impl Cells {
 
     /// At the right edge of a screen row, look for decorations that sit just
     /// past it.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn peek_decor_past_edge(&mut self, wlv: &WinLineVars, window: Win) {
+    pub(super) fn peek_decor_past_edge(&mut self, wlv: &WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's decoration state.
         if !self.has_decor || wlv.filler_todo > 0 || wlv.col < self.view_width {
             return;

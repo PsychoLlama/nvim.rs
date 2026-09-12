@@ -247,10 +247,7 @@ pub unsafe fn fill_foldcolumn(
 
 impl WinLineVars {
     /// Draw the `'foldcolumn'`, if there is one.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(crate) unsafe fn draw_foldcolumn(&mut self, window: Win) {
+    pub(crate) fn draw_foldcolumn(&mut self, window: Win) {
         let fdc = compute_foldcolumn(window, 0);
         if fdc <= 0 {
             return;
@@ -284,16 +281,7 @@ impl WinLineVars {
     /// `nrcol` means the sign goes in the *number* column (`'signcolumn'` is
     /// `number`), which is wider and is only ever asked for when there really
     /// is a sign — [`WinLineVars::draw_lnum_col`] tests that first.
-    ///
-    /// # Safety
-    /// `window` must be live and `sign_idx` a valid index into
-    /// [`WinLineVars::sattrs`].
-    pub(crate) unsafe fn draw_sign(
-        &mut self,
-        nrcol: bool,
-        window: Win,
-        sign_idx: ::core::ffi::c_int,
-    ) {
+    pub(crate) fn draw_sign(&mut self, nrcol: bool, window: Win, sign_idx: ::core::ffi::c_int) {
         // SAFETY: the caller's window and index.
         let sattr = self.sign_attrs[sign_idx as usize];
         let scl_attr = unsafe {
@@ -363,11 +351,8 @@ impl WinLineVars {
 /// With `'number'` and `'relativenumber'` both set, the cursor line shows its
 /// absolute number *left*-aligned instead — that is what makes it stand out
 /// from the relative numbers around it.
-///
-/// # Safety
-/// `window` must be a live window.
 #[inline]
-unsafe fn line_number_str(window: Win, lnum: LineNr, buf: &mut [::core::ffi::c_char; 32]) {
+fn line_number_str(window: Win, lnum: LineNr, buf: &mut [::core::ffi::c_char; 32]) {
     // SAFETY: the caller's window; `snprintf` is bounded by the array size.
     let (num, fmt) = if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu == 0 {
         (lnum, c"%*d ")
@@ -408,10 +393,7 @@ impl WinLineVars {
 
     /// The number-column attribute: the right `LineNr*` highlight with the
     /// highest-priority sign `numhl` combined in.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(crate) unsafe fn line_number_attr(&mut self, window: Win) -> ::core::ffi::c_int {
+    pub(crate) fn line_number_attr(&mut self, window: Win) -> ::core::ffi::c_int {
         let mut numhl_attr = self.sign_num_attr;
         if self.n_virt_lines - self.filler_todo < self.n_virt_below {
             // A virtual line belonging to the line above takes *its* sign
@@ -451,10 +433,7 @@ impl WinLineVars {
     /// Draw the number column: the absolute or relative line number on the
     /// first row of a buffer line, blanks on its continuation rows unless
     /// `'cpoptions'` contains "n".
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(crate) unsafe fn draw_lnum_col(&mut self, window: Win) {
+    pub(crate) fn draw_lnum_col(&mut self, window: Win) {
         let has_cpo_n = cpo_has(CpoFlag::NUMCOL);
         if window.w_onebuf_opt.wo_nu == 0 && window.w_onebuf_opt.wo_rnu == 0 {
             return;
@@ -479,12 +458,12 @@ impl WinLineVars {
             && first_row
             && self.filler_todo <= 0
         {
-            unsafe { self.draw_sign(true, window, 0) };
+            self.draw_sign(true, window, 0);
             return;
         }
 
         let width = number_width(window) + 1;
-        let attr = unsafe { self.line_number_attr(window) };
+        let attr = self.line_number_attr(window);
         let both = window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0;
         if !(first_row && (window.w_skipcol == 0 || self.row > 0 || both)) {
             // A continuation row, or the first row of a line whose top is
@@ -494,7 +473,7 @@ impl WinLineVars {
         }
 
         let mut buf: [::core::ffi::c_char; 32] = [0; 32];
-        unsafe { line_number_str(window, self.lnum, &mut buf) };
+        line_number_str(window, self.lnum, &mut buf);
         if window.w_skipcol > 0 && self.startrow == 0 {
             // Part of this line is scrolled off above: say so by filling
             // the number's padding with dashes.
@@ -630,7 +609,7 @@ impl WinLineVars {
                 },
             )
         };
-        let num_attr = unsafe { self.line_number_attr(window) };
+        let num_attr = self.line_number_attr(window);
         let mut cur_attr = num_attr;
         let mut fold_vcol: *const ColNr = ::core::ptr::null();
         let mut transbuf: [::core::ffi::c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
@@ -716,10 +695,7 @@ impl WinLineVars {
 
 impl WinLineVars {
     /// Indent a wrapped line's continuation row to match its first row.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(crate) unsafe fn handle_breakindent(&mut self, window: Win) {
+    pub(crate) fn handle_breakindent(&mut self, window: Win) {
         if window.w_onebuf_opt.wo_bri != 0
             && (self.row > self.startrow + self.filler_lines || self.need_showbreak)
         {
@@ -770,10 +746,7 @@ impl WinLineVars {
 
     /// Fill a filler line, and draw `'showbreak'` at the start of a wrapped
     /// line's continuation row.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(crate) unsafe fn handle_showbreak_and_filler(&mut self, window: Win) {
+    pub(crate) fn handle_showbreak_and_filler(&mut self, window: Win) {
         let remaining = window.w_view_width - self.off;
         if self.filler_todo > self.filler_lines - self.n_virt_lines {
             // A virtual line: its text is drawn by the decoration code, so

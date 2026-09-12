@@ -101,11 +101,7 @@ fn push_win_extmark(m: WinExtmark) {
 /// so the caller knows how much of the line buffer to flush. `wlv` carries the
 /// window row to report a `ui_watched` mark at and the decoration state the
 /// redraw is walking.
-///
-/// # Safety
-/// `window`/`buffer` must be live and [`WinLineVars::decor`] must hold the active
-/// ranges for its `row`.
-pub(crate) unsafe fn draw_virt_text(
+pub(crate) fn draw_virt_text(
     window: Win,
     buffer: Buf,
     col_off: ::core::ffi::c_int,
@@ -251,8 +247,8 @@ pub(crate) unsafe fn draw_virt_text(
 /// spaces are owed before the text resumes.
 ///
 /// # Safety
-/// `buffer` must be live, `vt`'s chunks must be live NUL-terminated strings, and
-/// the line buffers must be at least `max_col` wide.
+/// `vt`'s chunks are raw `char *`: each must point at NUL-terminated bytes
+/// that outlive the call. Nothing in [`VirtText`] says so.
 pub(crate) unsafe fn draw_virt_text_item(
     buffer: Buf,
     mut col: ::core::ffi::c_int,
@@ -376,10 +372,7 @@ impl WinLineVars {
     ///
     /// The character loop asks this to decide whether it may take its fast
     /// path to the end of the line.
-    ///
-    /// # Safety
-    /// [`WinLineVars::decor`] must hold this row's ranges.
-    pub(crate) unsafe fn has_more_inline_virt(&self, v: ptrdiff_t) -> bool {
+    pub(crate) fn has_more_inline_virt(&self, v: ptrdiff_t) -> bool {
         // SAFETY: the redraw's decoration state, threaded in `self`.
         if self.virt_inline_i < self.virt_inline.size {
             return true;
@@ -412,10 +405,7 @@ impl WinLineVars {
     /// Runs until something is loaded or there is nothing left: a chunk may be
     /// empty, and a chunk entirely left of the first visible column is dropped
     /// and the next one tried.
-    ///
-    /// # Safety
-    /// [`WinLineVars::decor`] must hold this row's ranges.
-    pub(crate) unsafe fn handle_inline_virtual_text(&mut self, v: ptrdiff_t, selected: bool) {
+    pub(crate) fn handle_inline_virtual_text(&mut self, v: ptrdiff_t, selected: bool) {
         // SAFETY: the redraw's decoration state, threaded in `self`;
         // `extra_text` borrows the chunk, which that state owns for the rest
         // of the redraw.

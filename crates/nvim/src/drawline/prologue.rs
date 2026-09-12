@@ -46,13 +46,13 @@ pub(crate) unsafe fn prepare_line(
 ) -> LineSetup {
     // SAFETY: the caller's window, spell state and line.
     let lnum = wlv.lnum;
-    let mut s = unsafe { LineSetup::new(window, wlv, concealed) };
+    let mut s = LineSetup::new(window, wlv, concealed);
 
     if col_rows == 0 && s.draw_text {
         // `extra_check` is the character loop's "nothing here needs the
         // slow path" test; every source of per-character work sets it.
         s.extra_check = window.w_onebuf_opt.wo_lbr != 0;
-        unsafe { s.start_syntax(window, lnum) };
+        s.start_syntax(window, lnum);
         s.check_decor_providers = true;
 
         // 'colorcolumn'; a terminal buffer never shows one.
@@ -66,22 +66,22 @@ pub(crate) unsafe fn prepare_line(
         if window.w_buffer == Win::current().w_buffer
             && let Some(sel) = visual_selection()
         {
-            unsafe { s.visual_area(wlv, window, sel) };
+            s.visual_area(wlv, window, sel);
         } else if highlight_match.get()
             && window.raw() == Win::current_raw()
             && !s.has_foldtext
             && lnum >= Win::current().w_cursor.lnum
             && lnum <= Win::current().w_cursor.lnum + search_match_lines.get()
         {
-            unsafe { s.incsearch_area(wlv, window) };
+            s.incsearch_area(wlv, window);
         }
     }
 
     s.bg_attr = unsafe { win_bg_attr(window) };
-    unsafe { s.diff_state(wlv, window) };
-    unsafe { s.filler_lines(wlv, window) };
-    unsafe { s.cursorline(wlv, window) };
-    unsafe { s.signs_and_statuscolumn(wlv, window) };
+    s.diff_state(wlv, window);
+    s.filler_lines(wlv, window);
+    s.cursorline(wlv, window);
+    s.signs_and_statuscolumn(wlv, window);
     s.line_attr_save = wlv.line_attr;
     s.line_attr_lowprio_save = wlv.line_attr_lowprio;
 
@@ -98,7 +98,7 @@ pub(crate) unsafe fn prepare_line(
     s.lcs_eol = window.w_p_lcs_chars.eol;
     s.lcs_prec_todo = window.w_p_lcs_chars.prec;
     if window.w_onebuf_opt.wo_list != 0 && !s.has_foldtext && s.draw_text {
-        unsafe { s.listchars_columns(window, lnum) };
+        s.listchars_columns(window, lnum);
     }
 
     // 'nowrap', or 'wrap' with a line scrolled sideways: advance to the
@@ -120,9 +120,8 @@ pub(crate) unsafe fn prepare_line(
 
     if s.check_decor_providers {
         let at = unsafe { s.ptr.offset_from(s.line) } as ::core::ffi::c_int;
-        s.decor_provider_end_col = unsafe {
-            decor_providers_setup(endrow - wlv.startrow, s.start_vcol == 0, lnum, at, window)
-        };
+        s.decor_provider_end_col =
+            decor_providers_setup(endrow - wlv.startrow, s.start_vcol == 0, lnum, at, window);
         // A provider is Lua and may have changed the buffer under us.
         s.line = unsafe { ml_get_buf(window.buffer(), lnum) };
         s.ptr = unsafe { s.line.offset(at as isize) };
@@ -178,10 +177,7 @@ pub(crate) unsafe fn prepare_line(
 impl LineSetup {
     /// The facts about the window and the line everything else is decided
     /// against, plus "nothing found yet" for the rest.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    unsafe fn new(window: Win, wlv: &WinLineVars, concealed: bool) -> Self {
+    fn new(window: Win, wlv: &WinLineVars, concealed: bool) -> Self {
         let has_fold = wlv.foldinfo.fi_level != 0 && wlv.foldinfo.fi_lines > 0;
         let has_foldtext = has_fold && unsafe { *window.w_onebuf_opt.wo_fdt } != 0;
         LineSetup {
@@ -256,10 +252,7 @@ impl LineSetup {
     ///
     /// An error raised while parsing disables syntax for the buffer rather
     /// than being reported once per redraw.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    unsafe fn start_syntax(&mut self, mut window: Win, lnum: LineNr) {
+    fn start_syntax(&mut self, mut window: Win, lnum: LineNr) {
         // SAFETY: the caller's window.
         if !syntax_present(window)
             || unsafe { (*window.w_s).b_syn_error }
@@ -283,10 +276,7 @@ impl LineSetup {
     }
 
     /// The inverted range for an active Visual selection.
-    ///
-    /// # Safety
-    /// `window` must be a live window showing the current buffer.
-    unsafe fn visual_area(&mut self, wlv: &mut WinLineVars, window: Win, sel: VisualSelection) {
+    fn visual_area(&mut self, wlv: &mut WinLineVars, window: Win, sel: VisualSelection) {
         let lnum = wlv.lnum;
         // Both ends by value: nothing here writes through either, and copying
         // the cursor keeps the ordering out of the unsafe region.
@@ -382,10 +372,7 @@ impl LineSetup {
     }
 
     /// The inverted range for `'incsearch'` and `:s///c`.
-    ///
-    /// # Safety
-    /// `window` must be the current window.
-    unsafe fn incsearch_area(&mut self, wlv: &mut WinLineVars, window: Win) {
+    fn incsearch_area(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lnum = wlv.lnum;
         if lnum == Win::current().w_cursor.lnum {
             unsafe {
@@ -427,10 +414,7 @@ impl LineSetup {
 
     /// Diff-mode state for this line: how many filler lines it needs above it
     /// and which diff highlight its text takes.
-    ///
-    /// # Safety
-    /// `self.line_changes` must be writable.
-    unsafe fn diff_state(&mut self, wlv: &mut WinLineVars, window: Win) {
+    fn diff_state(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: `linestatus` and `line_changes` are writable.
         let mut linestatus = 0;
         wlv.filler_lines =
@@ -469,10 +453,7 @@ impl LineSetup {
     }
 
     /// Count the filler lines above this one — diff filler plus virtual lines.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    unsafe fn filler_lines(&mut self, wlv: &mut WinLineVars, window: Win) {
+    fn filler_lines(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
         wlv.n_virt_lines = unsafe {
             decor_virt_lines(
@@ -494,10 +475,7 @@ impl LineSetup {
     }
 
     /// Apply `'cursorline'` to this line, if it is the cursor's.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    unsafe fn cursorline(&mut self, wlv: &mut WinLineVars, window: Win) {
+    fn cursorline(&mut self, wlv: &mut WinLineVars, window: Win) {
         if window.w_onebuf_opt.wo_cul == 0
             || window.w_p_culopt_flags as ::core::ffi::c_int
                 == kOptCuloptFlagNumber as ::core::ffi::c_int
@@ -517,17 +495,14 @@ impl LineSetup {
             // needs that row's margins.
             (self.left_curline_col, self.right_curline_col) = margin_columns_win(window);
         } else {
-            unsafe { wlv.apply_cursorline_highlight(window) };
+            wlv.apply_cursorline_highlight(window);
         }
         self.area_highlighting = true;
     }
 
     /// Collect the signs on this line, and either build the `'statuscolumn'`
     /// request or resolve the sign highlights the number column will use.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    unsafe fn signs_and_statuscolumn(&mut self, wlv: &mut WinLineVars, window: Win) {
+    fn signs_and_statuscolumn(&mut self, wlv: &mut WinLineVars, window: Win) {
         let mut sign_line_attr = 0;
         // TODO(bfredl, vigoux): line_attr should not take priority over
         // decoration.
@@ -664,10 +639,7 @@ impl LineSetup {
 
     /// Find the leading and trailing whitespace the `'listchars'` "lead" and
     /// "trail" marks apply to.
-    ///
-    /// # Safety
-    /// `window` must be a live window and [`LineSetup::line`] its line `lnum`.
-    unsafe fn listchars_columns(&mut self, window: Win, lnum: LineNr) {
+    fn listchars_columns(&mut self, window: Win, lnum: LineNr) {
         if window.w_p_lcs_chars.space != 0
             || !window.w_p_lcs_chars.multispace.is_null()
             || !window.w_p_lcs_chars.leadmultispace.is_null()
@@ -781,7 +753,7 @@ impl LineSetup {
         }
 
         if unsafe { (*spv).spv_has_spell } {
-            unsafe { self.spell_at_start_vcol(window, wlv.lnum) };
+            self.spell_at_start_vcol(window, wlv.lnum);
         }
     }
 
@@ -824,10 +796,7 @@ impl LineSetup {
     /// Work out whether the first character on screen is inside a badly
     /// spelled word, since the loop only ever starts a spell check at a word
     /// boundary.
-    ///
-    /// # Safety
-    /// `window` must be a live window and [`LineSetup::line`] its line `lnum`.
-    unsafe fn spell_at_start_vcol(&mut self, mut window: Win, lnum: LineNr) {
+    fn spell_at_start_vcol(&mut self, mut window: Win, lnum: LineNr) {
         // SAFETY: the caller's window and line.
         let linecol = unsafe { self.ptr.offset_from(self.line) } as ColNr;
         let mut spell_hlf: Hlf = HLF_COUNT;

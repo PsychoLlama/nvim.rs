@@ -240,7 +240,7 @@ pub unsafe fn win_line(
         nextline: nextline.as_mut_ptr(),
         fold_buf: fold_buf.as_mut_ptr(),
     };
-    unsafe { Cells::new(setup).run(&mut wlv, window, window.buffer(), &frame) }
+    Cells::new(setup).run(&mut wlv, window, window.buffer(), &frame)
 }
 
 /// How many bytes of the next line the spell checker joins onto this one, so
@@ -256,10 +256,7 @@ pub const SPWORDLEN: ::core::ffi::c_int = 150;
 ///
 /// It is also where the `<<<` marker goes on the first row when
 /// `'smoothscroll'` has taken part of the line off the top.
-///
-/// # Safety
-/// `window` must be a live window and the line buffers filled for it.
-unsafe fn wlv_put_linebuf(
+fn wlv_put_linebuf(
     window: Win,
     wlv: &WinLineVars,
     mut endcol: ::core::ffi::c_int,
@@ -352,10 +349,7 @@ unsafe fn wlv_put_linebuf(
 /// it assumes single-cell ASCII and ignores `'linebreak'`, `'breakindent'`
 /// and the rest. The character loop asks for more when it walks past what the
 /// answer covered.
-///
-/// # Safety
-/// `window` must be a live window and `lnum` one of its buffer's lines.
-unsafe fn decor_providers_setup(
+fn decor_providers_setup(
     rows_to_draw: ::core::ffi::c_int,
     draw_from_line_start: bool,
     lnum: LineNr,
@@ -376,17 +370,14 @@ unsafe fn decor_providers_setup(
     unsafe { decor_providers_invoke_line(window, lnum - 1) };
     validate_virtcol(window);
 
-    unsafe { invoke_range_next(window, lnum, col, rem_vcols + 1) }
+    invoke_range_next(window, lnum, col, rem_vcols + 1)
 }
 
 /// Drive the decoration providers over the next span of a line.
 ///
 /// Answers the byte column their answers now reach, or `INT_MAX` once the
 /// span runs to the end of the line.
-///
-/// # Safety
-/// `window` must be a live window and `lnum` one of its buffer's lines.
-unsafe fn invoke_range_next(
+fn invoke_range_next(
     window: Win,
     lnum: LineNr,
     begin_col: ColNr,

@@ -49,6 +49,9 @@ The phase exit is `unsafe_fns_without_raw_params` = 0 with this list as the
 floor. Adding a row lowers the count, so a row is a claim a reviewer reads:
 the bar is the four classes above and nothing softer.
 
-| item                     | file                                  | why the type system cannot hold it                                                                         |
-| ------------------------ | ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `Matches::with_capacity` | `crates/nvim/src/optionstr/expand.rs` | `cap:` the array it allocates is sized for `capacity` entries and [`Matches::push`] bounds-checks nothing. |
+| item                             | file                                   | why the type system cannot hold it                                                                                        |
+| -------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `Matches::with_capacity`         | `crates/nvim/src/optionstr/expand.rs`  | `cap:` the array it allocates is sized for `capacity` entries and [`Matches::push`] bounds-checks nothing.                |
+| `WinLineVars::advance_color_col` | `crates/nvim/src/drawline/state.rs`    | `field:` `color_cols` is a cursor into the window's `w_p_cc_cols`, walked until the array's negative terminator stops it. |
+| `WinLineVars::color_col_attr`    | `crates/nvim/src/drawline/state.rs`    | `field:` reads through the same `color_cols` cursor before it advances it.                                                |
+| `draw_virt_text_item`            | `crates/nvim/src/drawline/virttext.rs` | `field:` walks the raw `char *` of each of `vt`'s chunks, which nothing in `VirtText` keeps alive.                        |

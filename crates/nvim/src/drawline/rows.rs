@@ -24,10 +24,7 @@ impl Cells {
     /// Draw everything left of the text on this screen row: the fold, sign and
     /// number columns or `'statuscolumn'`, then `'breakindent'` and
     /// `'showbreak'`.
-    ///
-    /// # Safety
-    /// `window` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn draw_columns(
+    pub(super) fn draw_columns(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
@@ -80,29 +77,29 @@ impl Cells {
             }
             if self.draw_text {
                 // Evaluating 'statuscolumn' may have freed the line.
-                unsafe { self.refetch_line(window, wlv.lnum, at) };
+                self.refetch_line(window, wlv.lnum, at);
             }
         } else {
-            unsafe { wlv.draw_foldcolumn(window) };
+            wlv.draw_foldcolumn(window);
             // `w_scwidth` is zero when 'signcolumn' is "number".
             for sign_idx in 0..window.w_scwidth {
-                unsafe { wlv.draw_sign(false, window, sign_idx) };
+                wlv.draw_sign(false, window, sign_idx);
             }
-            unsafe { wlv.draw_lnum_col(window) };
+            wlv.draw_lnum_col(window);
         }
 
         self.text_start_col = wlv.off;
 
         if f.col_rows > 0 {
-            return unsafe { self.columns_only(wlv, window, f) };
+            return self.columns_only(wlv, window, f);
         }
 
         if !window.w_briopt_sbr {
-            unsafe { wlv.handle_breakindent(window) };
+            wlv.handle_breakindent(window);
         }
-        unsafe { wlv.handle_showbreak_and_filler(window) };
+        wlv.handle_showbreak_and_filler(window);
         if window.w_briopt_sbr {
-            unsafe { wlv.handle_breakindent(window) };
+            wlv.handle_breakindent(window);
         }
 
         wlv.col = wlv.off;
@@ -133,26 +130,20 @@ impl Cells {
     }
 
     /// Finish a row when only the info columns are being redrawn.
-    ///
-    /// # Safety
-    /// `window` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn columns_only(
+    pub(super) fn columns_only(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
         f: &LineFrame,
     ) -> Step {
-        // SAFETY: the caller's window and frame.
-        unsafe {
-            wlv_put_linebuf(
-                window,
-                wlv,
-                wlv.off.min(self.view_width),
-                false,
-                self.bg_attr,
-                0,
-            )
-        };
+        wlv_put_linebuf(
+            window,
+            wlv,
+            wlv.off.min(self.view_width),
+            false,
+            self.bg_attr,
+            0,
+        );
         // More rows are needed when 'statuscolumn' is drawn, when
         // LineNrAbove or LineNrBelow differ from LineNr, or while there is
         // still filler.
@@ -182,10 +173,7 @@ impl Cells {
     }
 
     /// Is the screen row full, with more of the line still to come?
-    ///
-    /// # Safety
-    /// `window` must be a live window and the loop's pointers readable.
-    pub(super) unsafe fn row_is_full(&self, wlv: &WinLineVars, window: Win) -> bool {
+    pub(super) fn row_is_full(&self, wlv: &WinLineVars, window: Win) -> bool {
         // SAFETY: the caller's window and the loop's own pointers.
         wlv.col >= self.view_width
             && (!self.has_foldtext || wlv.filler_todo > 0)
@@ -203,10 +191,7 @@ impl Cells {
     }
 
     /// Hand the finished screen row to the grid and set up the next one.
-    ///
-    /// # Safety
-    /// `window`, `buffer`, `f` and `grid` must be live.
-    pub(super) unsafe fn finish_screen_line(
+    pub(super) fn finish_screen_line(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
@@ -263,24 +248,21 @@ impl Cells {
                 )
             };
         } else if wlv.filler_todo <= 0 {
-            draw_col =
-                unsafe { draw_virt_text(window, buffer, self.text_start_col, draw_col, wlv) };
+            draw_col = draw_virt_text(window, buffer, self.text_start_col, draw_col, wlv);
         }
 
-        unsafe {
-            wlv_put_linebuf(
-                window,
-                wlv,
-                draw_col,
-                true,
-                self.bg_attr,
-                if wrap {
-                    SLF_WRAP as ::core::ffi::c_int
-                } else {
-                    0
-                },
-            )
-        };
+        wlv_put_linebuf(
+            window,
+            wlv,
+            draw_col,
+            true,
+            self.bg_attr,
+            if wrap {
+                SLF_WRAP as ::core::ffi::c_int
+            } else {
+                0
+            },
+        );
         if wrap {
             let mut current_row = wlv.row;
             let mut dummy_col = 0;
@@ -345,10 +327,7 @@ impl Cells {
     /// The text has run out: fill the rest of the row for `'cursorcolumn'`,
     /// `'colorcolumn'`, a whole-line highlight or a terminal, draw the virtual
     /// texts and hand the row to the grid.
-    ///
-    /// # Safety
-    /// `window`, `buffer` and `f` must be live.
-    pub(super) unsafe fn finish_line(
+    pub(super) fn finish_line(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
@@ -395,7 +374,7 @@ impl Cells {
             || wlv.diff_hlf != HLF_NONE
             || !unsafe { (*window.w_buffer).terminal }.is_null()
         {
-            unsafe { self.fill_past_eol(wlv, window, f) };
+            self.fill_past_eol(wlv, window, f);
         }
 
         if self.fold_vt.size > 0 {
@@ -411,20 +390,18 @@ impl Cells {
                 )
             };
         }
-        wlv.col = unsafe { draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv) };
+        wlv.col = draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv);
         // SLF_INC_VCOL fills grid->vcols[] with increasing columns, so
         // that "curswant" (or "coladd" under 'virtualedit') is right when
         // the user clicks past the end of the line.
-        unsafe {
-            wlv_put_linebuf(
-                window,
-                wlv,
-                wlv.col,
-                true,
-                self.bg_attr,
-                SLF_INC_VCOL as ::core::ffi::c_int,
-            )
-        };
+        wlv_put_linebuf(
+            window,
+            wlv,
+            wlv.col,
+            true,
+            self.bg_attr,
+            SLF_INC_VCOL as ::core::ffi::c_int,
+        );
         wlv.row += 1;
 
         // Record the cursor line's height while it is known, which saves a
@@ -438,15 +415,7 @@ impl Cells {
     }
 
     /// Draw the blanks past the end of the line that still carry a highlight.
-    ///
-    /// # Safety
-    /// `window` and `f` must be live.
-    pub(super) unsafe fn fill_past_eol(
-        &mut self,
-        wlv: &mut WinLineVars,
-        window: Win,
-        f: &LineFrame,
-    ) {
+    pub(super) fn fill_past_eol(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
         let mut line = linebuf();
         // SAFETY: the caller's window and frame.
         let mut rightmost_vcol = unsafe { get_rightmost_vcol(window, wlv.color_cols) };
@@ -455,7 +424,7 @@ impl Cells {
 
         if wlv.diff_hlf == HLF_TXD || wlv.diff_hlf == HLF_TXA {
             wlv.diff_hlf = HLF_CHD;
-            unsafe { wlv.set_line_attr_for_diff(window) };
+            wlv.set_line_attr_for_diff(window);
         }
         let diff_attr = if wlv.diff_hlf != HLF_NONE {
             unsafe { win_hl_attr(window, wlv.diff_hlf) }

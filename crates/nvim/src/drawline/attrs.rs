@@ -31,17 +31,13 @@ use crate::types::NUL;
 impl Cells {
     /// Work out what this cell takes from everything that is not the character
     /// itself: decorations, the Visual range, `'hlsearch'` and diff mode.
-    ///
-    /// # Safety
-    /// `window` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn cell_attributes(&mut self, wlv: &mut WinLineVars, window: Win) {
-        // SAFETY: the caller's window and frame.
+    pub(super) fn cell_attributes(&mut self, wlv: &mut WinLineVars, window: Win) {
         if wlv.extra_todo == 0 || !wlv.extra_is_virt_text {
             wlv.reset_extra_attr = false;
         }
 
         if self.has_decor && wlv.extra_todo == 0 {
-            unsafe { self.decorations_at(wlv, window) };
+            self.decorations_at(wlv, window);
         }
 
         // While inline virtual text is being drawn the real area
@@ -53,7 +49,7 @@ impl Cells {
         } else {
             self.area_attr
         };
-        if unsafe { self.area_starts_here(wlv) } {
+        if self.area_starts_here(wlv) {
             area = self.vi_attr;
             self.area_active = true;
         } else if area != 0
@@ -69,11 +65,11 @@ impl Cells {
         }
 
         if !self.has_foldtext && wlv.extra_todo == 0 {
-            unsafe { self.search_highlight(wlv, window) };
+            self.search_highlight(wlv, window);
         }
 
         if wlv.diff_hlf != HLF_NONE {
-            unsafe { self.diff_highlight(wlv, window) };
+            self.diff_highlight(wlv, window);
         }
 
         // Decide which of the highlight attributes to use.
@@ -109,10 +105,7 @@ impl Cells {
     /// character is double-width, so that inverting starts on its first half;
     /// or resuming after the cursor that "noinvcur" skipped, which is what
     /// `prev_vcol == fromcol_prev` says.
-    ///
-    /// # Safety
-    /// `ptr` and `extra_text` must be readable.
-    pub(super) unsafe fn area_starts_here(&self, wlv: &WinLineVars) -> bool {
+    pub(super) fn area_starts_here(&self, wlv: &WinLineVars) -> bool {
         // SAFETY: the loop's own pointers.
         wlv.vcol == wlv.fromcol
             || (wlv.vcol + 1 == wlv.fromcol
@@ -127,10 +120,7 @@ impl Cells {
 
     /// Run the decoration walk for this cell and feed the loop whatever inline
     /// virtual text starts here.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn decorations_at(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn decorations_at(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's decoration state.
         // The Visual-area test below is repeated here rather than shared,
         // because this one may not look inside `extra_text`.
@@ -194,10 +184,7 @@ impl Cells {
 
     /// Check for the start or end of an `'hlsearch'` or `:match` run, and for
     /// the insert-mode completion highlight.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn search_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn search_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's match state.
         let at = self.byte_col();
         self.search_attr = unsafe {
@@ -235,10 +222,7 @@ impl Cells {
 
     /// Move the diff highlight between "this line changed" and "this text
     /// changed" as the read cursor enters and leaves each changed range.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn diff_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn diff_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the diff answer for this line.
         let at = unsafe { self.ptr.offset_from(self.line) };
         let bufidx = usize::try_from(self.line_changes.bufidx)
@@ -282,7 +266,7 @@ impl Cells {
         {
             wlv.diff_hlf = HLF_CHD;
         }
-        unsafe { wlv.set_line_attr_for_diff(window) };
+        wlv.set_line_attr_for_diff(window);
     }
 
     /// Combine [`WinLineVars::extra_attr`] in, without overriding a Visual
@@ -310,10 +294,7 @@ impl Cells {
 
     /// Overlay `'cursorcolumn'` or `'colorcolumn'` on this cell, remembering
     /// what to put back afterwards.
-    ///
-    /// # Safety
-    /// `window` must be a live window.
-    pub(super) unsafe fn column_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
+    pub(super) fn column_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and 'colorcolumn' list.
         self.attr_before_vcol_hl = -1;
         if self.lnum_in_visual_area
