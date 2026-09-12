@@ -223,10 +223,10 @@ pub(crate) fn index_of(n: usize) -> ::core::ffi::c_int {
 /// destructor does by itself.  The count is now exactly the number of live
 /// holders, and there is no state in which a list is alive with none.
 ///
-/// [`Deref`] is [`Live`](crate::winlayer::Live)'s: the borrow lasts as long
-/// as the field access that asked for it and never spans a call, because the
-/// evaluator re-enters and the same list is reachable through a `*mut List`
-/// somewhere else at the same time.
+/// [`Deref`](core::ops::Deref) is [`Live`](crate::winlayer::Live)'s: the
+/// borrow lasts as long as the field access that asked for it and never
+/// spans a call, because the evaluator re-enters and the same list is
+/// reachable through a `*mut List` somewhere else at the same time.
 ///
 /// The two constructors are the two things a raw pointer can mean.  A handle
 /// is not null: `v:_null_list` is `TypVal::list(None)`, and every reader that
