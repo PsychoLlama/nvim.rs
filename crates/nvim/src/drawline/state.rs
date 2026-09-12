@@ -543,7 +543,7 @@ impl WinLineVars {
         // SAFETY: the caller's window and array.
         unsafe { self.advance_color_col(self.vcol) };
         if !self.color_cols.is_null() && self.vcol == unsafe { *self.color_cols } {
-            unsafe { hl_combine_attr(win_hl_attr(window, HLF_MC), attr) }
+            hl_combine_attr(win_hl_attr(window, HLF_MC), attr)
         } else {
             attr
         }
@@ -555,8 +555,7 @@ impl WinLineVars {
     /// low-priority when it sets no foreground (so syntax colours survive it)
     /// and high-priority when it does.
     pub(crate) fn apply_cursorline_highlight(&mut self, window: Win) {
-        // SAFETY: the caller's window.
-        self.cursorline_attr = unsafe { win_hl_attr(window, HLF_CUL) };
+        self.cursorline_attr = win_hl_attr(window, HLF_CUL);
         let ae = syn_attr2entry(self.cursorline_attr);
         if ae.rgb_fg_color == -1 as RgbValue && ae.cterm_fg_color == 0 {
             self.line_attr_lowprio = self.cursorline_attr;
@@ -566,7 +565,7 @@ impl WinLineVars {
         {
             // A quickfix window's current-entry highlight keeps its own
             // colours; CursorLine goes underneath it.
-            self.line_attr = unsafe { hl_combine_attr(self.cursorline_attr, self.line_attr) };
+            self.line_attr = hl_combine_attr(self.cursorline_attr, self.line_attr);
         } else {
             self.line_attr = self.cursorline_attr;
         }
@@ -574,18 +573,15 @@ impl WinLineVars {
 
     /// Overlay `'cursorline'` onto the diff-mode line highlight.
     pub(crate) fn set_line_attr_for_diff(&mut self, window: Win) {
-        // SAFETY: the caller's window.
-        self.line_attr = unsafe { win_hl_attr(window, self.diff_hlf) };
+        self.line_attr = win_hl_attr(window, self.diff_hlf);
         if self.cursorline_attr != 0 {
             self.line_attr = if self.line_attr_lowprio != 0 {
-                unsafe {
-                    hl_combine_attr(
-                        hl_combine_attr(self.cursorline_attr, self.line_attr),
-                        hl_get_underline(),
-                    )
-                }
+                hl_combine_attr(
+                    hl_combine_attr(self.cursorline_attr, self.line_attr),
+                    hl_get_underline(),
+                )
             } else {
-                unsafe { hl_combine_attr(self.line_attr, self.cursorline_attr) }
+                hl_combine_attr(self.line_attr, self.cursorline_attr)
             };
         }
     }

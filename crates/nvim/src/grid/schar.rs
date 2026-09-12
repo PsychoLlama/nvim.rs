@@ -151,7 +151,7 @@ pub unsafe fn schar_cache_clear_if_full() -> bool {
 /// # Safety
 /// Every live `ScreenChar` becomes meaningless; see [`schar_cache_clear_if_full`].
 pub unsafe fn schar_cache_clear() {
-    unsafe { decor_check_invalid_glyphs() };
+    decor_check_invalid_glyphs();
     unsafe { mh_clear(glyph_cache().hash()) };
 
     // The char options kept their original strings, so their parsed

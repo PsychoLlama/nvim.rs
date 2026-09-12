@@ -91,8 +91,7 @@ pub unsafe fn next_virt_text_chunk(
         if chunk.hl_id >= 0 {
             *attr = (*attr).max(0);
             if chunk.hl_id > 0 {
-                // SAFETY: the highlight tables are the editor's own.
-                *attr = unsafe { hl_combine_attr(*attr, syn_id2attr(chunk.hl_id)) };
+                *attr = hl_combine_attr(*attr, syn_id2attr(chunk.hl_id));
             }
         }
         *pos += 1;
@@ -234,9 +233,7 @@ pub unsafe fn decor_virt_lines(
                     let block = vt.lines();
                     virt_lines += len_as_int(block.size);
                     if let Some(lines) = lines.as_deref_mut() {
-                        // SAFETY: a live growable vector, and `block` is the
-                        // decoration's own live one.
-                        unsafe { append_virt_lines(lines, block) };
+                        append_virt_lines(lines, block);
                     }
                     if let (false, Some(num_below)) = (above, num_below.as_deref_mut()) {
                         *num_below += len_as_int(block.size);
@@ -263,10 +260,7 @@ impl Win {
 /// The entries are copied, not cloned: the `VirtText` inside each one is
 /// still owned by the decoration it came from, which is why the caller of
 /// [`decor_virt_lines`] must not free what it collects.
-///
-/// # Safety
-/// `dst` must be a live, growable `VirtLines`; `src`'s entries must be live.
-unsafe fn append_virt_lines(dst: &mut VirtLines, src: VirtLines) {
+fn append_virt_lines(dst: &mut VirtLines, src: VirtLines) {
     if src.size == 0 {
         return;
     }

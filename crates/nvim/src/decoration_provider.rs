@@ -356,7 +356,7 @@ pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
                 // returned 'false' or errored: skip the rest of this window
                 set_state(idx, kDecorProviderWinDisabled);
             }
-            unsafe { hl_check_ns() };
+            hl_check_ns();
         }
     }
     set_provider_running(false);
@@ -423,7 +423,7 @@ pub(crate) fn decor_providers_invoke_range(
         }
 
         drop(res);
-        unsafe { hl_check_ns() };
+        hl_check_ns();
     }
     set_provider_running(false);
 }
@@ -475,8 +475,7 @@ pub(crate) fn decor_provider_invalidate_hl() {
 
     if ns_hl_active.get() != 0 {
         ns_hl_active.set(-1);
-        // SAFETY: the editor's own highlight tables.
-        unsafe { hl_check_ns() };
+        hl_check_ns();
     }
 }
 

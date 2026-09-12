@@ -31,10 +31,7 @@ use super::*;
 use crate::winlayer::Buf;
 /// Create a fold from line "start" to line "end" (inclusive) in window `window`
 /// by adding markers.
-///
-/// # Safety
-/// `window` must have a live buffer, and `start`/`end` must be lines inside it.
-pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
+pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     let buf = window.buffer();
     if buf.b_p_ma == 0 {
         emsg(gettext(e_modifiable));
@@ -51,17 +48,14 @@ pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
             cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()),
         )
     };
-    unsafe { fold_add_marker(buf, start, open) };
-    unsafe { fold_add_marker(buf, end, close) };
+    fold_add_marker(buf, start, open);
+    fold_add_marker(buf, end, close);
     changed_lines(buf, start.lnum, 0, end.lnum, 0, false);
     buf_updates_send_changes(buf, start.lnum, num_changed, num_changed);
 }
 
 /// Add `marker` in 'commentstring' to position `pos`.
-///
-/// # Safety
-/// `buffer` must be a live buffer and `pos` a line inside it.
-pub(super) unsafe fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
+pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
     let lnum = pos.lnum;
     // 'commentstring', and where in it the marker's text goes.
     // SAFETY: the buffer's own option value, NUL-terminated.
@@ -128,20 +122,10 @@ pub(super) unsafe fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
 /// Delete the markers for a fold, causing it to be deleted.
 ///
 /// `lnum_off` — offset for fold.top()
-///
-/// # Safety
-/// `fold` must be one of `window`'s folds at `lnum_off`, and [`parse_marker`]
-/// must have run for `window`.
-pub(super) unsafe fn delete_fold_markers(
-    window: Win,
-    fold: FoldRef,
-    recursive: bool,
-    lnum_off: LineNr,
-) {
+pub(super) fn delete_fold_markers(window: Win, fold: FoldRef, recursive: bool, lnum_off: LineNr) {
     if recursive {
         for child in fold.nested().folds() {
-            // SAFETY: the caller's promise, one level down.
-            unsafe { delete_fold_markers(window, child, true, lnum_off + fold.top()) };
+            delete_fold_markers(window, child, true, lnum_off + fold.top());
         }
     }
     // SAFETY: the caller's promise, which includes `parse_marker` having run.
@@ -152,8 +136,8 @@ pub(super) unsafe fn delete_fold_markers(
             cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()),
         )
     };
-    unsafe { fold_del_marker(window.buffer(), fold.top() + lnum_off, open) };
-    unsafe { fold_del_marker(window.buffer(), fold.last() + lnum_off, close) };
+    fold_del_marker(window.buffer(), fold.top() + lnum_off, open);
+    fold_del_marker(window.buffer(), fold.last() + lnum_off, close);
 }
 
 /// Delete `marker` at the end of line `lnum`, and the 'commentstring' around
@@ -161,10 +145,7 @@ pub(super) unsafe fn delete_fold_markers(
 ///
 /// If the marker is not found, there is no error message.  Could be a missing
 /// close-marker.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub(super) unsafe fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
+pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
     if lnum > buffer.b_ml.ml_line_count {
         return;
     }
@@ -247,11 +228,7 @@ pub(super) fn parse_marker(window: Win) {
 /// Careful: This means you can't call this function twice on the same line.
 /// Doesn't use any caching.
 /// Sets flp->start when a start marker was found.
-///
-/// # Safety
-/// `line` must name a line inside its window's buffer, and [`parse_marker`]
-/// must have run for that window.
-pub(super) unsafe fn foldlevel_marker(line: FLine) {
+pub(super) fn foldlevel_marker(line: FLine) {
     let flp = line.raw();
     // SAFETY: the caller's promise -- a live window, and `parse_marker` has
     // written the two markers and their lengths.

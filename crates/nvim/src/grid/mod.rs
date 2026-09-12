@@ -203,10 +203,7 @@ pub(crate) fn default_gridview() -> GridView {
 ///
 /// Without `ext_multigrid` every window draws on `default_grid`, and the
 /// offsets turn window-relative positions into screen-relative ones.
-///
-/// # Safety
-/// `win_grid_alloc` must already have run for this view.
-pub unsafe fn grid_adjust(view: GridView, row_off: &mut c_int, col_off: &mut c_int) -> GridRef {
+pub fn grid_adjust(view: GridView, row_off: &mut c_int, col_off: &mut c_int) -> GridRef {
     *row_off += view.row_offset;
     *col_off += view.col_offset;
     // SAFETY: a view always names a live grid; the caller's promise is that
@@ -249,10 +246,7 @@ pub fn grid_alloc(grid: &mut ScreenGrid, rows: c_int, columns: c_int, copy: bool
 
 /// (Re)allocate a window's own grid if its size changed while in
 /// `ext_multigrid` mode, and update its size, offsets and handle regardless.
-///
-/// # Safety
-/// `window` must be live.
-pub unsafe fn win_grid_alloc(mut window: Win) {
+pub fn win_grid_alloc(mut window: Win) {
     let grid: *mut GridView = &raw mut window.w_grid;
     let grid_allocated: *mut ScreenGrid = &raw mut window.w_grid_alloc;
 

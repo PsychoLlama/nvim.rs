@@ -133,7 +133,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
         let mut id = 1;
         while id <= highlight_num_groups() && !got_int.get() {
             // TODO(brammool): only call when the group has attributes set
-            unsafe { highlight_list_one(id) };
+            highlight_list_one(id);
             id += 1;
         }
         return;
@@ -157,13 +157,13 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
             semsg!("E411: Highlight group not found: {shown}");
         } else {
             unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-            unsafe { highlight_list_one(id) };
+            highlight_list_one(id);
         }
         return;
     }
 
     if dolink {
-        unsafe { highlight_link(&mut line, forceit, init, dodefault) };
+        highlight_link(&mut line, forceit, init, dodefault);
         return;
     }
 
@@ -176,8 +176,8 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
             for id in 1..=highlight_num_groups() {
                 highlight_clear(id);
             }
-            unsafe { init_highlight(true, true) };
-            unsafe { highlight_changed() };
+            init_highlight(true, true);
+            highlight_changed();
             redraw_all_later(UPD_NOT_VALID);
             return;
         }
@@ -214,13 +214,13 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
         error: false,
     };
     if !doclear {
-        unsafe { state.run(&mut line) };
+        state.run(&mut line);
     }
 
     let mut did_highlight_changed = false;
     if !state.error && is_normal_group {
         // Every group may be using "bg" and/or "fg", which just moved.
-        unsafe { highlight_attr_set_all() };
+        highlight_attr_set_all();
 
         if !ui_has(kUILinegrid) && starting.get() == 0 {
             // Older UIs assume the screen is cleared after the Normal
@@ -234,7 +234,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
         did_highlight_changed = true;
         redraw_all_later(UPD_NOT_VALID);
     } else {
-        unsafe { set_hl_attr(id) };
+        set_hl_attr(id);
     }
     with_group(id, |entry| {
         entry.script_ctx = current_sctx.get();
@@ -266,10 +266,7 @@ pub(crate) fn sourcing_lnum() -> c_int {
 }
 
 /// `:highlight [default] link {from} {to}`.
-///
-/// # Safety
-/// See [`do_highlight`].
-unsafe fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
+fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
     // SAFETY: the caller's live line, and the editor's own tables.
     let from_at = line.at;
     let from = line.word_then_space();
@@ -352,9 +349,7 @@ struct KeyLoop {
 }
 
 impl KeyLoop {
-    /// # Safety
-    /// See [`do_highlight`].
-    unsafe fn run(&mut self, line: &mut Line) {
+    fn run(&mut self, line: &mut Line) {
         // SAFETY: the caller's live line, and the editor's own tables.
         while !line.at_end() {
             let key_at = line.at;
@@ -604,7 +599,7 @@ impl KeyLoop {
             with_group(self.id, |entry| entry.cterm_bg = color + 1);
             if self.is_normal_group {
                 cterm_normal_bg_color.set(color + 1);
-                unsafe { self.guess_background(color) };
+                self.guess_background(color);
             }
         }
         true
@@ -612,10 +607,7 @@ impl KeyLoop {
 
     /// A dark `Normal` background means `'background'` should be `dark`; fix
     /// it if the user has not said otherwise.
-    ///
-    /// # Safety
-    /// Sets an option, which can fire autocommands; main thread only.
-    unsafe fn guess_background(&self, color: c_int) {
+    fn guess_background(&self, color: c_int) {
         // SAFETY: main-thread option calls.
         if ui_rgb_attached() || color < 0 {
             return;

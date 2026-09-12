@@ -175,7 +175,7 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
 
     pc_row.set(win.w_wrow);
     pc_status.set(PutChar::Unset);
-    unsafe { grid_line_start(win.w_grid, pc_row.get()) };
+    grid_line_start(win.w_grid, pc_row.get());
     if win.w_onebuf_opt.wo_rl != 0 {
         pc_col.set(win.w_view_width - 1 - win.w_wcol);
         if unsafe { grid_line_getchar(pc_col.get(), ::core::ptr::null_mut()) } == NUL as ScreenChar
@@ -205,7 +205,7 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
     let mut buf: [c_char; MB_MAXCHAR + 1] = [0; MB_MAXCHAR + 1];
     let p = buf.as_mut_ptr();
     unsafe { grid_line_puts(pc_col.get(), p, utf_char2bytes(c, p), attr) };
-    unsafe { grid_line_flush() };
+    grid_line_flush();
 }
 
 /// Undo the previous [`edit_putchar`].
@@ -214,8 +214,6 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
 /// Must run with a live `curwin`.
 pub(crate) unsafe fn edit_unputchar() {
     let mut win = Win::current();
-    // SAFETY: `curwin` is live, and the line it is on is a line of its own
-    // buffer.
     match pc_status.get() {
         PutChar::Unset => {}
         // Half of a double-width character was overwritten and cannot be
@@ -226,9 +224,9 @@ pub(crate) unsafe fn edit_unputchar() {
         }
         PutChar::Left => redraw_win_line(win, win.w_cursor.lnum),
         PutChar::Set => {
-            unsafe { grid_line_start(win.w_grid, pc_row.get()) };
+            grid_line_start(win.w_grid, pc_row.get());
             grid_line_put_schar(pc_col.get(), pc_schar.get(), pc_attr.get());
-            unsafe { grid_line_flush() };
+            grid_line_flush();
         }
     }
 }

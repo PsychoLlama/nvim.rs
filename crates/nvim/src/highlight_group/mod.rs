@@ -87,10 +87,7 @@ pub(crate) static ATTR_NAMES: [(&CStr, HlAttrFlags); 18] = [
 /// `id` is the `User` group, `id_s` `StatusLine`, `id_alt` `StatusLineNC`.
 /// The scratch entry has to be a real group because `syn_id2attr` is asked
 /// for it — see [`highlight_changed`].
-///
-/// # Safety
-/// Reaches the attribute table; main thread only.
-unsafe fn combine_stl_hlt(
+fn combine_stl_hlt(
     id: c_int,
     id_s: c_int,
     id_alt: c_int,
@@ -143,18 +140,15 @@ unsafe fn combine_stl_hlt(
     }
 
     with_group(scratch, |entry| *entry = combined);
-    unsafe { set_hl_attr(scratch) };
-    unsafe { syn_id2attr(scratch) }
+    set_hl_attr(scratch);
+    syn_id2attr(scratch)
 }
 
 /// Resolves every builtin group into `highlight_attr[]`, and sets up
 /// `User1`..`User9`.
 ///
 /// Called when nvim starts and on the first redraw after any `:highlight`.
-///
-/// # Safety
-/// Adds groups, resolves attributes and emits UI events; main thread only.
-pub(crate) unsafe fn highlight_changed() {
+pub(crate) fn highlight_changed() {
     // `HLF_MSG`'s blend flag lives on the message grid; acquired once.
     let mut msg_grid = msg_grid_ref();
     // SAFETY (whole body): the editor's own tables and UI, on the main
@@ -173,14 +167,14 @@ pub(crate) unsafe fn highlight_changed() {
 
         let mut ns_id = -1;
         let mut final_id = id;
-        unsafe { syn_ns_get_final_id(&mut ns_id, &mut final_id) };
+        syn_ns_get_final_id(&mut ns_id, &mut final_id);
         if hlf == HLF_SNC {
             id_snc = final_id;
         } else if hlf == HLF_S {
             id_s = final_id;
         }
 
-        let attr = unsafe { hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE) };
+        let attr = hl_get_ui_attr(ns_id, hlf, final_id, hlf == HLF_INACTIVE);
         highlight_attr.with_mut(|attrs| attrs[hlf as usize] = attr);
         if attr == highlight_attr_last.with(|last| last[hlf as usize]) {
             continue;
@@ -208,9 +202,10 @@ pub(crate) unsafe fn highlight_changed() {
         let (user, stlnc) = if id == 0 {
             (0, 0)
         } else {
-            (unsafe { syn_id2attr(id) }, unsafe {
-                combine_stl_hlt(id, id_s, id_snc, hlcnt, i, HLF_SNC)
-            })
+            (
+                syn_id2attr(id),
+                combine_stl_hlt(id, id_s, id_snc, hlcnt, i, HLF_SNC),
+            )
         };
         highlight_user.with_mut(|table| table[i as usize] = user);
         highlight_stlnc.with_mut(|table| table[i as usize] = stlnc);

@@ -212,7 +212,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
             idx += 1;
             continue;
         }
-        unsafe { syn_list_header(did_header, 0, id, true) };
+        syn_list_header(did_header, 0, id, true);
         did_header = true;
         idx = put_item_patterns(first);
 
@@ -237,7 +237,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     // The link, if there is one.
     let link = highlight_link_id(id - 1);
     if link != 0 && (did_header || link_only) && !got_int.get() {
-        unsafe { syn_list_header(did_header, 0, id, true) };
+        syn_list_header(did_header, 0, id, true);
         msg_str_hl(c"links to", LIST_HL, false);
         msg_putchar(' ' as c_int);
         msg_display(
@@ -562,7 +562,7 @@ unsafe fn put_keyword(
     } else {
         unsafe { cstr::bytes_at(entry_to_key(kp)).len() as c_int }
     };
-    if unsafe { syn_list_header(did_header, outlen, id, force_newline) } {
+    if syn_list_header(did_header, outlen, id, force_newline) {
         *prev = KeywordOpts::none();
     }
 

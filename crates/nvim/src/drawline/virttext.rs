@@ -303,12 +303,12 @@ pub(crate) unsafe fn draw_virt_text_item(
         let mut through = false;
         let under = line.attrs_mut()[col as usize];
         let attr = match hl_mode {
-            kHlModeCombine => unsafe { hl_combine_attr(under, virt_attr) },
+            kHlModeCombine => hl_combine_attr(under, virt_attr),
             kHlModeBlend => {
                 // A space blends the cell underneath through, rather than
                 // painting over it.
                 through = unsafe { *draw_str } as ::core::ffi::c_int == ' ' as ::core::ffi::c_int;
-                unsafe { hl_blend_attrs(under, virt_attr, &mut through) }
+                hl_blend_attrs(under, virt_attr, &mut through)
             }
             _ => virt_attr,
         };

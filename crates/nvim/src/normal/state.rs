@@ -518,10 +518,9 @@ fn normal_check_safe_state() {
 }
 
 fn normal_check_folds() {
-    // SAFETY (throughout): reads and adjusts the current window's folds.
-    unsafe { fold_adjust_visual() };
+    fold_adjust_visual();
     if has_any_folding(Win::current()) != 0 && !char_avail() {
-        unsafe { fold_check_close() };
+        fold_check_close();
         if fdo_flags.get() & kOptFdoFlagAll as c_int as c_uint != 0 {
             fold_open_cursor();
         }

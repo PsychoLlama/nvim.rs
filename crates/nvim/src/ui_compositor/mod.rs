@@ -589,8 +589,7 @@ fn compose_into(
 
 /// C's `hl_blend_attrs`, as [`blend`] wants it.
 fn blend_attrs(back: ScreenAttr, front: ScreenAttr, thru: &mut bool) -> ScreenAttr {
-    // SAFETY: the attribute tables are the editor's own.
-    unsafe { hl_blend_attrs(back, front, thru) as ScreenAttr }
+    hl_blend_attrs(back, front, thru) as ScreenAttr
 }
 
 /// Paints an area in one of the `'redrawdebug'` colours, so the work the
@@ -603,8 +602,7 @@ fn compose_debug(rows: (Integer, Integer), cols: (Integer, Integer), syn_id: c_i
     let default = default_layer();
     endrow = endrow.min(default.rows.into());
     endcol = endcol.min(default.cols.into());
-    // SAFETY: the highlight tables are built before anything draws.
-    let attr = Integer::from(unsafe { syn_id2attr(syn_id) });
+    let attr = Integer::from(syn_id2attr(syn_id));
 
     if delay {
         debug_delay(endrow - startrow);

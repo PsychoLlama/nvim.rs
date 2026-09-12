@@ -341,11 +341,9 @@ fn anchor_to_window(
         ext_win_position(parent, validate);
     }
     let (mut row_off, mut col_off) = (0, 0);
-    // SAFETY: a live window and its own grid.
-    unsafe { win_grid_alloc(parent) };
+    win_grid_alloc(parent);
     let own = parent.w_grid;
-    // SAFETY: as above; `win_grid_alloc` has just run for this view.
-    *grid = unsafe { grid_adjust(own, &mut row_off, &mut col_off) }.raw();
+    *grid = grid_adjust(own, &mut row_off, &mut col_off).raw();
     *row += row_off as Float;
     *col += col_off as Float;
     if c.bufpos.lnum < 0 as LineNr {

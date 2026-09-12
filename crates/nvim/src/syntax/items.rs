@@ -253,7 +253,7 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
         spp.sp_cont_list.as_ptr()
     };
     sip.si_id = id;
-    unsafe { sip.si_attr = syn_id2attr(id) };
+    sip.si_attr = syn_id2attr(id);
     sip.si_trans_id = id;
     sip.si_cont_list = cont_list;
 

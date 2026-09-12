@@ -795,8 +795,7 @@ fn run_operator(
 
         OpType::Fold => {
             VIsual_reselect.set(0);
-            // SAFETY: a live current window, and the operator's own range.
-            unsafe { fold_create(Win::current(), op.start, op.end) };
+            fold_create(Win::current(), op.start, op.end);
         }
         OpType::Foldopen | OpType::Foldopenrec | OpType::Foldclose | OpType::Foldcloserec => {
             VIsual_reselect.set(0);
@@ -810,7 +809,7 @@ fn run_operator(
             VIsual_reselect.set(0);
             let recursive = c_int::from(op.op_type == OpType::Folddelrec);
             let (first, last, visual) = (op.start.lnum, op.end.lnum, op.is_visual);
-            unsafe { delete_fold(Win::current(), first, last, recursive, visual) };
+            delete_fold(Win::current(), first, last, recursive, visual);
         }
 
         OpType::NrAdd | OpType::NrSub => {

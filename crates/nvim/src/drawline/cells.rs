@@ -496,7 +496,7 @@ impl Cells {
 
                 self.draw_folded = self.has_fold && wlv.row == wlv.startrow + wlv.filler_lines;
                 if self.draw_folded && wlv.extra_todo == 0 {
-                    self.fold_attr = unsafe { win_hl_attr(window, HLF_FL) };
+                    self.fold_attr = win_hl_attr(window, HLF_FL);
                     wlv.char_attr = self.fold_attr;
                     self.decor_attr = 0;
                 }
@@ -712,37 +712,32 @@ impl Cells {
     /// At the right edge of a screen row, look for decorations that sit just
     /// past it.
     pub(super) fn peek_decor_past_edge(&mut self, wlv: &WinLineVars, window: Win) {
-        // SAFETY: the caller's window and the redraw's decoration state.
         if !self.has_decor || wlv.filler_todo > 0 || wlv.col < self.view_width {
             return;
         }
         if self.is_wrapped && wlv.extra_todo == 0 {
-            unsafe {
-                decor_redraw_col(
-                    window,
-                    self.byte_col(),
-                    -3,
-                    false,
-                    wlv.decor,
-                    self.decor_provider_end_col - 1,
-                )
-            };
+            decor_redraw_col(
+                window,
+                self.byte_col(),
+                -3,
+                false,
+                wlv.decor,
+                self.decor_provider_end_col - 1,
+            );
             // Where they go has to be decided again on the next row.
             self.decor_need_recheck = true;
         } else if !self.is_wrapped {
             // Without wrapping, "right_align" and "win_col" virtual texts
             // for the whole line still have to be placed.
             decor_recheck_draw_col(-1, true, wlv.decor);
-            unsafe {
-                decor_redraw_col(
-                    window,
-                    MAXCOL as ::core::ffi::c_int,
-                    -1,
-                    true,
-                    wlv.decor,
-                    self.decor_provider_end_col - 1,
-                )
-            };
+            decor_redraw_col(
+                window,
+                MAXCOL as ::core::ffi::c_int,
+                -1,
+                true,
+                wlv.decor,
+                self.decor_provider_end_col - 1,
+            );
         }
     }
 }

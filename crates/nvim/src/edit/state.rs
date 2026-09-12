@@ -227,7 +227,7 @@ fn trigger_insert_enter(cmdchar: c_int) {
 
     // Highlighting may have changed, e.g. for ModeMsg.
     if need_highlight_changed.get() {
-        unsafe { highlight_changed() };
+        highlight_changed();
     }
 
     // Make sure the cursor did not move.  `check_cursor_col` is still
@@ -325,7 +325,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         fold_open_cursor();
     }
     if !key_available() {
-        unsafe { fold_check_close() };
+        fold_check_close();
     }
     if buf_is_prompt(current_buf()) {
         init_prompt(s.cmdchar_todo);

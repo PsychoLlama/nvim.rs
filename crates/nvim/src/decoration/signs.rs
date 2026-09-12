@@ -128,10 +128,7 @@ fn sign_rank(priority: DecorPriority, id: uint32_t, add_id: c_int) -> impl Ord {
 
 /// Orders two signs on the same row, highest priority first. See
 /// [`sign_rank`].
-///
-/// # Safety
-/// Both items' `sh` must be live.
-pub unsafe fn sign_item_cmp(a: &SignItem, b: &SignItem) -> Ordering {
+pub fn sign_item_cmp(a: &SignItem, b: &SignItem) -> Ordering {
     // SAFETY: the caller's signs.
     let (sa, sb) = unsafe { (Sh::new(a.sh), Sh::new(b.sh)) };
     sign_rank(sa.priority, a.id, sa.sign_add_id).cmp(&sign_rank(sb.priority, b.id, sb.sign_add_id))
@@ -222,8 +219,7 @@ pub unsafe fn decor_redraw_signs(
     // A stable sort, and the comparator is a total order on distinct signs:
     // `sign_add_id` is handed out one per placement, so two entries can only
     // tie when they are the same sign.
-    // SAFETY: as above — the items are live store entries.
-    signs.sort_by(|a, b| unsafe { sign_item_cmp(a, b) });
+    signs.sort_by(sign_item_cmp);
 
     // SAFETY: the caller's out-parameter — null, or room for `wp`'s sign
     // column width, which `len` is at most.

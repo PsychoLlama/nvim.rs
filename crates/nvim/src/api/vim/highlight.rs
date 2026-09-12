@@ -56,9 +56,7 @@ pub unsafe fn nvim_set_hl(
     let update: bool = unsafe { (*val).update }.unwrap_or(false);
     let mut base: Option<&HlAttrs> = None;
     let base_attrs: HlAttrs;
-    if update
-        && let Some(attrs) = unsafe { hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None) }
-    {
+    if update && let Some(attrs) = hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None) {
         base_attrs = attrs;
         base = Some(&base_attrs);
     }
@@ -90,14 +88,14 @@ pub fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {
         return ().reported(error);
     }
     ns_hl_global.set(ns_id as NS);
-    unsafe { hl_check_ns() };
+    hl_check_ns();
     redraw_all_later(UPD_NOT_VALID);
     ().reported(error)
 }
 
 pub fn nvim_set_hl_ns_fast(ns_id: Integer) {
     ns_hl_fast.set(ns_id as NS);
-    unsafe { hl_check_ns() };
+    hl_check_ns();
 }
 
 /// # Safety

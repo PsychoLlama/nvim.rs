@@ -281,7 +281,7 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
     for i in 0..unsafe { (*entry).msg.size } {
         let chunk = unsafe { (*(*entry).msg.items.add(i)).clone() };
         let attr = if chunk.hl_id != 0 {
-            unsafe { syn_id2attr(chunk.hl_id) }
+            syn_id2attr(chunk.hl_id)
         } else {
             0
         };

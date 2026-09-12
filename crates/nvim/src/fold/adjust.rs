@@ -37,10 +37,7 @@ use crate::state::MODE_INSERT;
 /// Returns FAIL if not moved.
 ///
 /// `dir` — FORWARD or BACKWARD
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
+pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
     let mut retval: c_int = FAIL;
     checkupdate(Win::current());
     for _ in 0..count {
@@ -85,7 +82,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
                 // SAFETY: the current window is live, and `fold` is one of
                 // its own folds, `lnum_off` lines down the tree.
                 let (ul, ms) = (&mut use_level, &mut maybe_small);
-                let closed = unsafe { check_closed(Win::current(), fold, ul, level, ms, lnum_off) };
+                let closed = check_closed(Win::current(), fold, ul, level, ms, lnum_off);
                 if closed {
                     last = true;
                 }
@@ -141,10 +138,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
 }
 
 /// Adjust the Visual area to include any fold at the start or end completely.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn fold_adjust_visual() {
+pub fn fold_adjust_visual() {
     let win = Win::current();
     if !visual_active() || has_any_folding(win) == 0 {
         return;

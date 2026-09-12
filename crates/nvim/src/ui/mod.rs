@@ -466,7 +466,7 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     // Highlights are sent as definitions plus ids, unless this is the
     // first UI to want that, in which case the whole table is rebuilt and
     // resent by `highlight_use_hlstate` itself.
-    let sent = unsafe { (*ui).ui_ext[kUIHlState as usize] } && unsafe { highlight_use_hlstate() };
+    let sent = unsafe { (*ui).ui_ext[kUIHlState as usize] } && highlight_use_hlstate();
     if !sent {
         unsafe { ui_send_all_hls(ui) };
     }

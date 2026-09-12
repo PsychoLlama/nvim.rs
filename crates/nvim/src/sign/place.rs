@@ -181,8 +181,7 @@ pub(crate) unsafe fn sort_signs(signs: &mut [MTKey]) {
             SignItem { sh: sh1, id: a.id },
             SignItem { sh: sh2, id: b.id },
         );
-        // SAFETY: the caller's marks, whose sign items the store just named.
-        unsafe { sign_item_cmp(&ia, &ib) }
+        sign_item_cmp(&ia, &ib)
     });
 }
 

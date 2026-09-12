@@ -461,8 +461,7 @@ pub unsafe fn stl_alloc_click_defs(
 /// # Safety
 /// No other batch may be in progress; one [`paint_flush`] must follow.
 pub(crate) unsafe fn view_line_start(view: GridView, row: c_int) {
-    // SAFETY: the caller's promise.
-    unsafe { grid_line_start(view, row) };
+    grid_line_start(view, row);
 }
 
 /// Put one glyph in the open batch.
@@ -493,8 +492,7 @@ pub(crate) fn paint_fill(col: c_int, end_col: c_int, sc: ScreenChar, attr: c_int
 
 /// Close the batch, sending the line to the UI.
 pub(crate) fn paint_flush() {
-    // SAFETY: as [`paint_schar`].
-    unsafe { grid_line_flush() };
+    grid_line_flush();
 }
 
 /// Whether the screen may be redrawn right now -- C's `redrawing()`, which
@@ -529,14 +527,12 @@ pub(crate) fn hl_attr(hlf: c_int) -> c_int {
 /// The attribute `group` has in `win`, i.e. C's `win_hl_attr` -- [`hl_attr`]
 /// unless the window carries a `'winhighlight'` override.
 pub(crate) fn win_hl(win: Win, group: c_int) -> c_int {
-    // SAFETY: a live window and an `HLF_*` index.
-    unsafe { win_hl_attr(win, group) }
+    win_hl_attr(win, group)
 }
 
 /// Two attributes layered, i.e. C's `hl_combine_attr`.
 pub(crate) fn combine_attr(under: c_int, over: c_int) -> c_int {
-    // SAFETY: two resolved attribute ids.
-    unsafe { hl_combine_attr(under, over) }
+    hl_combine_attr(under, over)
 }
 
 /// Whether `'laststatus'` puts one status line at the bottom of the screen

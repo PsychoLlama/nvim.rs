@@ -77,7 +77,7 @@ pub(crate) unsafe fn prepare_line(
         }
     }
 
-    s.bg_attr = unsafe { win_bg_attr(window) };
+    s.bg_attr = win_bg_attr(window);
     s.diff_state(wlv, window);
     s.filler_lines(wlv, window);
     s.cursorline(wlv, window);
@@ -183,7 +183,7 @@ impl LineSetup {
         LineSetup {
             // First, because `win_hl_attr` hands out attribute ids in the
             // order it is asked for them.
-            conceal_attr: unsafe { win_hl_attr(window, HLF_CONCEAL) },
+            conceal_attr: win_hl_attr(window, HLF_CONCEAL),
             view_width: window.w_view_width,
             view_height: window.w_view_height,
             in_curline: window.raw() == Win::current_raw()
@@ -367,7 +367,7 @@ impl LineSetup {
 
         if wlv.fromcol >= 0 {
             self.area_highlighting = true;
-            self.vi_attr = unsafe { win_hl_attr(window, HLF_V) };
+            self.vi_attr = win_hl_attr(window, HLF_V);
         }
     }
 
@@ -409,7 +409,7 @@ impl LineSetup {
             wlv.tocol = wlv.fromcol + 1;
         }
         self.area_highlighting = true;
-        self.vi_attr = unsafe { win_hl_attr(window, HLF_I) };
+        self.vi_attr = win_hl_attr(window, HLF_I);
     }
 
     /// Diff-mode state for this line: how many filler lines it needs above it
@@ -533,21 +533,21 @@ impl LineSetup {
             };
         } else if wlv.sign_cul_attr > 0 {
             wlv.sign_cul_attr = if use_cursor_line_highlight(window, wlv.lnum) {
-                unsafe { syn_id2attr(wlv.sign_cul_attr) }
+                syn_id2attr(wlv.sign_cul_attr)
             } else {
                 0
             };
         }
         if wlv.sign_num_attr > 0 {
-            wlv.sign_num_attr = unsafe { syn_id2attr(wlv.sign_num_attr) };
+            wlv.sign_num_attr = syn_id2attr(wlv.sign_num_attr);
         }
         if sign_line_attr > 0 {
-            wlv.line_attr = unsafe { syn_id2attr(sign_line_attr) };
+            wlv.line_attr = syn_id2attr(sign_line_attr);
         }
 
         // The quickfix window highlights the entry the cursor is on.
         if is_qf_buffer(window) && qf_current_entry(window) == wlv.lnum {
-            wlv.line_attr = unsafe { win_hl_attr(window, HLF_QFL) };
+            wlv.line_attr = win_hl_attr(window, HLF_QFL);
         }
         if wlv.line_attr_lowprio != 0 || wlv.line_attr != 0 {
             self.area_highlighting = true;

@@ -47,8 +47,7 @@ pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool) -> Array {
         let mut groups = Array::with_capacity(if i < stack_end { stack_end - i + 1 } else { 0 });
         for chunk in &items[i..stack_end] {
             if chunk.hl_id >= 0 {
-                // SAFETY: `hl_id` is a resolved highlight id.
-                groups.push(unsafe { hl_group_name(chunk.hl_id, hl_name) });
+                groups.push(hl_group_name(chunk.hl_id, hl_name));
             }
         }
         let last = items[stack_end];
@@ -57,13 +56,11 @@ pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool) -> Array {
         chunk.push(Object::string(unsafe { cstr_to_string(last.text) }));
         if groups.is_empty() {
             if last.hl_id >= 0 {
-                // SAFETY: as above.
-                chunk.push(unsafe { hl_group_name(last.hl_id, hl_name) });
+                chunk.push(hl_group_name(last.hl_id, hl_name));
             }
         } else {
             if last.hl_id >= 0 {
-                // SAFETY: as above.
-                groups.push(unsafe { hl_group_name(last.hl_id, hl_name) });
+                groups.push(hl_group_name(last.hl_id, hl_name));
             }
             chunk.push(Object::array(groups));
         }

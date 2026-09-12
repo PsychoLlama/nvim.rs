@@ -62,11 +62,7 @@ struct Walk {
 ///
 /// The answer is what [`win_update`]'s tail compares against to decide whether
 /// the approximation it had been carrying was wrong.
-///
-/// # Safety
-/// `window` must be a live window, `buffer` its buffer, and `decor` and the
-/// search-highlight state must be set up for this redraw.
-pub(crate) unsafe fn draw_window_lines(
+pub(crate) fn draw_window_lines(
     mut window: Win,
     buffer: Buf,
     rg: &mut Regions,
@@ -117,20 +113,19 @@ pub(crate) unsafe fn draw_window_lines(
             // Remembered for the "the line did not fit" case below.
             w.srow = w.row;
 
-            if unsafe { line_needs_drawing(window, buffer, rg, &w) } {
-                if !unsafe { draw_one_line(window, buffer, rg, &mut w, cursorline_fi, spv, decor) }
-                {
+            if line_needs_drawing(window, buffer, rg, &w) {
+                if !draw_one_line(window, buffer, rg, &mut w, cursorline_fi, spv, decor) {
                     break;
                 }
             } else {
-                unsafe { skip_one_line(window, buffer, rg, &mut w, cursorline_fi, spv, decor) };
+                skip_one_line(window, buffer, rg, &mut w, cursorline_fi, spv, decor);
                 if w.row > window.w_view_height {
                     break;
                 }
             }
 
             if window.w_redr_statuscol {
-                unsafe { restart_for_statuscol(window, decor) };
+                restart_for_statuscol(window, decor);
                 continue 'restart;
             }
             if w.lnum > buffer.b_ml.ml_line_count {
@@ -160,7 +155,7 @@ pub(crate) unsafe fn draw_window_lines(
         window.w_filler_rows = 0;
 
         if !w.eof && !w.didline {
-            unsafe { draw_unfinished_last_line(window, &w) };
+            draw_unfinished_last_line(window, &w);
         } else {
             if w.eof {
                 // Filler text below the last line. `win_line` recognises
@@ -184,7 +179,7 @@ pub(crate) unsafe fn draw_window_lines(
                     };
                     if window.w_redr_statuscol {
                         w.eof = false;
-                        unsafe { restart_for_statuscol(window, decor) };
+                        restart_for_statuscol(window, decor);
                         continue 'restart;
                     }
                 }
@@ -192,7 +187,7 @@ pub(crate) unsafe fn draw_window_lines(
                 window.w_botline = w.lnum;
             }
 
-            unsafe { draw_end_of_buffer(window, buffer, rg, &w) };
+            draw_end_of_buffer(window, buffer, rg, &w);
         }
 
         break old_botline;
@@ -206,10 +201,7 @@ pub(crate) unsafe fn draw_window_lines(
 /// areas, the entry does not exist, the line straddles the first row a scroll
 /// invalidated, it is inside the changed range, or it is the cursor line coming
 /// or going.
-///
-/// # Safety
-/// `window` must be a live window and `buffer` its buffer.
-unsafe fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool {
+fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool {
     // SAFETY: the caller's window, buffer and `w_lines` array.
     if w.row < rg.top_end
         || (w.row >= rg.mid_start && w.row < rg.mid_end)
@@ -254,10 +246,7 @@ unsafe fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -
 ///
 /// Answers false when the walk must stop -- the line ran past the end of the
 /// window.
-///
-/// # Safety
-/// `window` must be a live window and `buffer` its buffer.
-unsafe fn draw_one_line(
+fn draw_one_line(
     window: Win,
     buffer: Buf,
     rg: &mut Regions,
@@ -294,7 +283,7 @@ unsafe fn draw_one_line(
         return true;
     }
 
-    unsafe { scroll_for_changed_lines(window, rg, w) };
+    scroll_for_changed_lines(window, rg, w);
 
     let wl = unsafe { window.w_lines.add(w.idx as usize) };
     if foldinfo.fi_lines == 0
@@ -414,10 +403,7 @@ unsafe fn draw_one_line(
 /// are, instead of being redrawn.
 ///
 /// Runs once per redraw, at the first line of the changed range.
-///
-/// # Safety
-/// `window` must be a live window.
-unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
+fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
     // SAFETY: the caller's window and its `w_lines` array.
     // Not when the change continues to the end, and not for changed lines
     // in a top area that was already scrolled for.
@@ -525,17 +511,14 @@ unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) 
     // Move the `w_lines[]` entries to match, unless the rest is being
     // redrawn anyway.
     if rg.mod_bot != MAXLNUM && i != j {
-        unsafe { move_line_entries(window, rg, w, i, j, new_rows) };
+        move_line_entries(window, rg, w, i, j, new_rows);
     }
 }
 
 /// Shift the `w_lines[]` entries after a changed range gained or lost lines.
 ///
 /// `i` is where the entries below the change start now, `j` where they belong.
-///
-/// # Safety
-/// `window` must be a live window.
-unsafe fn move_line_entries(
+fn move_line_entries(
     mut window: Win,
     rg: &mut Regions,
     w: &Walk,
@@ -590,10 +573,7 @@ unsafe fn move_line_entries(
 /// The text does not need redrawing, but the number column might: `'number'`
 /// below inserted or deleted lines, and `'relativenumber'` whenever the cursor
 /// moved to another line.
-///
-/// # Safety
-/// `window` must be a live window and `buffer` its buffer.
-unsafe fn skip_one_line(
+fn skip_one_line(
     window: Win,
     buffer: Buf,
     rg: &Regions,
@@ -644,10 +624,7 @@ unsafe fn skip_one_line(
 }
 
 /// Reset the walk state so the window is drawn again from its top line.
-///
-/// # Safety
-/// `window` must be a live window.
-unsafe fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
+fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
     // SAFETY: the caller's window and decoration state.
     window.w_redr_statuscol = false;
     window.w_lines_valid = 0;
@@ -657,12 +634,8 @@ unsafe fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
 }
 
 /// The last line did not fit in the window: say so, per `'display'`.
-///
-/// # Safety
-/// `window` must be a live window.
-unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
-    // SAFETY: the caller's window; the grid batch is opened and flushed here.
-    let at_attr = unsafe { hl_combine_attr(win_bg_attr(window), win_hl_attr(window, HLF_AT)) };
+fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
+    let at_attr = hl_combine_attr(win_bg_attr(window), win_hl_attr(window, HLF_AT));
 
     if w.lnum == window.w_topline {
         // A single line that does not fit. Do not overwrite it -- it can
@@ -680,7 +653,7 @@ unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
 
     if dy_flags.get() & kOptDyFlagTruncate != 0 {
         // "@@@" in the last screen line, and nothing else on it.
-        unsafe { grid_line_start(window.w_grid, window.w_view_height - 1) };
+        grid_line_start(window.w_grid, window.w_view_height - 1);
         grid_line_fill(
             0,
             window.w_view_width.min(3),
@@ -688,11 +661,11 @@ unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
             at_attr,
         );
         grid_line_fill(3, window.w_view_width, schar_from_ascii(b' '), at_attr);
-        unsafe { grid_line_flush() };
+        grid_line_flush();
     } else if dy_flags.get() & kOptDyFlagLastline != 0 {
         // "@@@" at the end of the last screen line, over the text. Four
         // cells when three would split a double-width character in half.
-        unsafe { grid_line_start(window.w_grid, window.w_view_height - 1) };
+        grid_line_start(window.w_grid, window.w_view_height - 1);
         let width = if unsafe {
             grid_line_getchar((window.w_view_width - 3).max(0), ::core::ptr::null_mut())
         } == 0
@@ -707,7 +680,7 @@ unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
             window.w_p_fcs_chars.lastline,
             at_attr,
         );
-        unsafe { grid_line_flush() };
+        grid_line_flush();
     } else {
         // A column of "@" down the rows the line would have taken.
         win_draw_end(
@@ -728,10 +701,7 @@ unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
 /// Where that starts is the interesting part: the rows a scroll left stale have
 /// to be covered even though no line was drawn over them, which is what
 /// `bot_scroll_start` records.
-///
-/// # Safety
-/// `window` must be a live window and `buffer` its buffer.
-unsafe fn draw_end_of_buffer(window: Win, buffer: Buf, rg: &Regions, w: &Walk) {
+fn draw_end_of_buffer(window: Win, buffer: Buf, rg: &Regions, w: &Walk) {
     // SAFETY: the caller's window and buffer.
     let mut lastline = rg.bot_scroll_start;
     if rg.mid_end >= w.row {
@@ -766,7 +736,7 @@ pub fn win_scroll_lines(window: Win, row: c_int, line_count: c_int) {
 
     let mut col = 0;
     let mut row_off = 0;
-    let grid = unsafe { grid_adjust(window.w_grid, &mut row_off, &mut col) };
+    let grid = grid_adjust(window.w_grid, &mut row_off, &mut col);
 
     // The bounds are the grid's rather than the window's because
     // `curs_columns` reaches here from outside `update_screen`, when the
@@ -822,21 +792,24 @@ pub fn win_draw_end(
     // upstream's order: it hands out attribute ids in call order, so
     // hoisting `hl` above the three margin groups would renumber them.
     for row in startrow..endrow {
-        unsafe { grid_line_start(window.w_grid, row) };
+        grid_line_start(window.w_grid, row);
 
         let mut n = 0;
         if draw_margin {
             if fdc > 0 {
-                n = grid_line_fill(n, view_width.min(n + fdc), schar_from_ascii(b' '), unsafe {
-                    win_hl_attr(window, HLF_FC)
-                });
+                n = grid_line_fill(
+                    n,
+                    view_width.min(n + fdc),
+                    schar_from_ascii(b' '),
+                    win_hl_attr(window, HLF_FC),
+                );
             }
             if scwidth > 0 {
                 n = grid_line_fill(
                     n,
                     view_width.min(n + scwidth * SIGN_WIDTH as c_int),
                     schar_from_ascii(b' '),
-                    unsafe { win_hl_attr(window, HLF_SC) },
+                    win_hl_attr(window, HLF_SC),
                 );
             }
             if (window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0)
@@ -847,21 +820,21 @@ pub fn win_draw_end(
                     n,
                     view_width.min(n + width),
                     schar_from_ascii(b' '),
-                    unsafe { win_hl_attr(window, HLF_N) },
+                    win_hl_attr(window, HLF_N),
                 );
             }
         }
 
-        let attr = unsafe { win_hl_attr(window, hl) };
+        let attr = win_hl_attr(window, hl);
         if n < view_width {
             grid_line_put_schar(n, c1, attr);
             n += 1;
         }
-        grid_line_clear_end(n, view_width, unsafe { win_bg_attr(window) }, attr);
+        grid_line_clear_end(n, view_width, win_bg_attr(window), attr);
 
         if window.w_onebuf_opt.wo_rl != 0 {
             grid_line_mirror(view_width);
         }
-        unsafe { grid_line_flush() };
+        grid_line_flush();
     }
 }

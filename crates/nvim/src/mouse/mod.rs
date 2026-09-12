@@ -513,9 +513,7 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
     };
 
     let (mut start_row, mut start_col) = (0, 0);
-    // SAFETY: a live window whose view has been allocated; `grid_adjust`
-    // writes the two offsets and answers the grid the view draws on.
-    let gp = unsafe { grid_adjust(win.w_grid, &mut start_row, &mut start_col) };
+    let gp = grid_adjust(win.w_grid, &mut start_row, &mut start_col);
     let (handle, drawn, rows, cols) = (gp.handle, gp.is_allocated(), gp.rows, gp.cols);
     let (row, col) = (pos.row + start_row, pos.col + start_col);
     if handle != pos.grid || !drawn || row < 0 || row >= rows || col < 0 || col >= cols {

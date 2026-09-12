@@ -161,13 +161,9 @@ pub struct LineAttrs {
 /// Begin a batch on `row` of `view`.
 ///
 /// Must be matched with a [`grid_line_flush`] before moving to another line.
-///
-/// # Safety
-/// `view` must be live and no other batch may be in progress.
-pub unsafe fn grid_line_start(view: GridView, mut row: c_int) {
+pub fn grid_line_start(view: GridView, mut row: c_int) {
     let mut col = 0;
-    // SAFETY: the caller's promise, for both calls.
-    let grid = unsafe { grid_adjust(view, &mut row, &mut col) };
+    let grid = grid_adjust(view, &mut row, &mut col);
     screengrid_line_start(grid, row, col);
 }
 
@@ -390,10 +386,7 @@ pub fn linebuf_mirror(firstp: &mut c_int, lastp: &mut c_int, clearp: &mut c_int,
 }
 
 /// End the batch and send the line to the UI.
-///
-/// # Safety
-/// A batch must be in progress.
-pub unsafe fn grid_line_flush() {
+pub fn grid_line_flush() {
     let mut b = batch();
     // Ended here, whether or not there turns out to be anything to send.
     let grid = b.grid.take();
@@ -429,10 +422,7 @@ pub unsafe fn grid_line_flush() {
 /// Flush the batch, but only if it is on a row the grid really has.
 ///
 /// A stopgap until message.c has been refactored to behave.
-///
-/// # Safety
-/// A batch must be in progress.
-pub unsafe fn grid_line_flush_if_valid_row() {
+pub fn grid_line_flush_if_valid_row() {
     let mut b = batch();
     if b.row < 0 || b.row >= b.grid.expect("a batch is in progress").rows {
         if rdb_flags.get() & kOptRdbFlagInvalid != 0 {
@@ -441,14 +431,11 @@ pub unsafe fn grid_line_flush_if_valid_row() {
         b.grid = None;
         return;
     }
-    unsafe { grid_line_flush() };
+    grid_line_flush();
 }
 
 /// Clear a rectangle of `grid` to `attr`.
-///
-/// # Safety
-/// `grid` must be live and no batch may be in progress.
-pub unsafe fn grid_clear(
+pub fn grid_clear(
     view: GridView,
     start_row: c_int,
     end_row: c_int,
@@ -458,7 +445,7 @@ pub unsafe fn grid_clear(
 ) {
     let mut row = start_row;
     while row < end_row {
-        unsafe { grid_line_start(view, row) };
+        grid_line_start(view, row);
         let mut b = batch();
         end_col = end_col.min(b.maxcol);
         if b.row >= b.grid.expect("a batch is in progress").rows || start_col >= end_col {
@@ -467,7 +454,7 @@ pub unsafe fn grid_clear(
             return;
         }
         grid_line_clear_end(start_col, end_col, attr, 0);
-        unsafe { grid_line_flush() };
+        grid_line_flush();
         row += 1;
     }
 }
@@ -719,11 +706,11 @@ pub unsafe fn grid_put_linebuf(
 
     if attrs.bg != 0 {
         for cell in &mut line.attrs_mut()[at(col)..at(endcol)] {
-            *cell = unsafe { hl_combine_attr(attrs.bg, *cell) };
+            *cell = hl_combine_attr(attrs.bg, *cell);
         }
     }
 
-    let clear_attr = unsafe { hl_combine_attr(attrs.bg, attrs.clear) };
+    let clear_attr = hl_combine_attr(attrs.bg, attrs.clear);
     let mut on_grid = grid.cells_mut(off_to, span_width);
     let copied = copy_changed_cells(&line, &mut on_grid, col, endcol);
     let mut start_dirty = copied.dirty.start;

@@ -284,16 +284,12 @@ pub fn highlight_init() {
 
 /// Turns on `ext_hlstate` bookkeeping. Answers whether the tables had to be
 /// rebuilt — everything already in them was recorded without provenance.
-///
-/// # Safety
-/// Rebuilds the highlight tables and forces a redraw; main thread only.
-pub unsafe fn highlight_use_hlstate() -> bool {
+pub fn highlight_use_hlstate() -> bool {
     if HLSTATE_ACTIVE.get() {
         return false;
     }
     HLSTATE_ACTIVE.set(true);
-    // SAFETY: the editor's own tables.
-    unsafe { clear_hl_tables(true) };
+    clear_hl_tables(true);
     true
 }
 
@@ -301,10 +297,7 @@ pub unsafe fn highlight_use_hlstate() -> bool {
 ///
 /// Answers 0 — the empty attribute set — when the table is full and cannot be
 /// rebuilt, which is the only way this fails.
-///
-/// # Safety
-/// May rebuild the highlight tables and emit a UI event; main thread only.
-pub(crate) unsafe fn get_attr_entry(mut entry: HlEntry) -> c_int {
+pub(crate) fn get_attr_entry(mut entry: HlEntry) -> c_int {
     // Set while the table is being rebuilt from inside this function, so that
     // a rebuild triggered by the rebuild gives up instead of recursing.
     static REBUILDING: GlobalCell<bool> = GlobalCell::new(false);
@@ -334,8 +327,7 @@ pub(crate) unsafe fn get_attr_entry(mut entry: HlEntry) -> c_int {
             return 0;
         }
         REBUILDING.set(true);
-        // SAFETY: as above.
-        unsafe { clear_hl_tables(true) };
+        clear_hl_tables(true);
         REBUILDING.set(false);
         if entry.kind == kHlCombine {
             // The ids this entry combines are gone, so it means nothing now.
@@ -345,8 +337,7 @@ pub(crate) unsafe fn get_attr_entry(mut entry: HlEntry) -> c_int {
     };
 
     // A new id: tell the UIs what it looks like.
-    // SAFETY: main-thread call against the attribute table.
-    let inspect = unsafe { hl_inspect(id) };
+    let inspect = hl_inspect(id);
     // Internally there is one attribute set for cterm and rgb;
     // `remote_ui_hl_attr_define` is where they part company.
     ui_call_hl_attr_define(Integer::from(id), entry.attr, entry.attr, inspect);
@@ -365,7 +356,7 @@ pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
     // ever did this stops rather than reading past the end.
     let mut i = 1;
     while i < ATTRS.with(AttrTable::len) {
-        let inspect = unsafe { hl_inspect(i as c_int) };
+        let inspect = hl_inspect(i as c_int);
         let attr = ATTRS.with(|attrs| attrs.at(i as c_int)).attr;
         unsafe { remote_ui_hl_attr_define(ui, i as Integer, attr, attr, inspect) };
         i += 1;
@@ -382,10 +373,7 @@ pub unsafe fn ui_send_all_hls(ui: *mut RemoteUI) {
 /// Attributes that are entirely unset answer 0 rather than an entry of their
 /// own — but only in the global namespace, where "unset" and "not defined in
 /// this namespace" are the same thing.
-///
-/// # Safety
-/// As [`get_attr_entry`].
-pub unsafe fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int {
+pub fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int {
     // TODO(bfredl): should we do this unconditionally
     let anything_set = at_en.cterm_fg_color != 0
         || at_en.cterm_bg_color != 0
@@ -404,30 +392,22 @@ pub unsafe fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int
         id1: idx,
         id2: ns_id,
     };
-    // SAFETY: the caller's editor state.
-    unsafe { get_attr_entry(entry) }
+    get_attr_entry(entry)
 }
 
 /// `attr` with `'winblend'` applied, unless it carries a `blend=` of its own
 /// — an explicit `blend=` on the group wins over the window's.
-///
-/// # Safety
-/// `attr` must be an id this table handed out; main thread only.
-pub unsafe fn hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int {
+pub fn hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int {
     let mut entry = ATTRS.with(|attrs| attrs.at(attr));
     if entry.attr.hl_blend != -1 || winbl <= 0 {
         return attr;
     }
     entry.attr.hl_blend = winbl;
-    // SAFETY: the caller's editor state.
-    unsafe { get_attr_entry(entry) }
+    get_attr_entry(entry)
 }
 
 /// The id for plain `HlAttrFlags::UNDERLINE`, which is what a URL is drawn with.
-///
-/// # Safety
-/// As [`get_attr_entry`].
-pub unsafe fn hl_get_underline() -> c_int {
+pub fn hl_get_underline() -> c_int {
     let mut attrs = HLATTRS_INIT;
     attrs.cterm_ae_attr = HlAttrFlags::UNDERLINE;
     attrs.rgb_ae_attr = HlAttrFlags::UNDERLINE;
@@ -437,8 +417,7 @@ pub unsafe fn hl_get_underline() -> c_int {
         id1: 0,
         id2: 0,
     };
-    // SAFETY: the caller's editor state.
-    unsafe { get_attr_entry(entry) }
+    get_attr_entry(entry)
 }
 
 /// `attr` combined with an entry carrying `url`.
@@ -459,9 +438,8 @@ pub unsafe fn hl_add_url(attr: c_int, url: *const c_char) -> c_int {
         id1: 0,
         id2: 0,
     };
-    // SAFETY: the caller's editor state.
-    let with_url = unsafe { get_attr_entry(entry) };
-    unsafe { hl_combine_attr(attr, with_url) }
+    let with_url = get_attr_entry(entry);
+    hl_combine_attr(attr, with_url)
 }
 
 /// The URL at `index`. Panics on an index no entry ever stored (upstream
@@ -474,18 +452,14 @@ pub fn hl_get_url(index: uint32_t) -> *const c_char {
 }
 
 /// The id for attributes a `:terminal` program asked for directly.
-///
-/// # Safety
-/// As [`get_attr_entry`].
-pub unsafe fn hl_get_term_attr(attrs: HlAttrs) -> c_int {
+pub fn hl_get_term_attr(attrs: HlAttrs) -> c_int {
     let entry = HlEntry {
         attr: attrs,
         kind: kHlTerminal,
         id1: 0,
         id2: 0,
     };
-    // SAFETY: the caller's editor state.
-    unsafe { get_attr_entry(entry) }
+    get_attr_entry(entry)
 }
 
 /// Empties every attribute table, invalidating every id in existence.
@@ -493,10 +467,7 @@ pub unsafe fn hl_get_term_attr(attrs: HlAttrs) -> c_int {
 /// With `reinit` the table is put back into a usable state and everything on
 /// screen is recomputed; without it this is the free-all-memory path, which
 /// also drops the namespace definitions.
-///
-/// # Safety
-/// Forces a full redraw; main thread only.
-pub unsafe fn clear_hl_tables(reinit: bool) {
+pub fn clear_hl_tables(reinit: bool) {
     URLS.with_mut(UrlTable::clear);
     ATTRS.with_mut(AttrTable::clear);
     COMBINE.with_mut(AttrCache::clear);
@@ -508,9 +479,8 @@ pub unsafe fn clear_hl_tables(reinit: bool) {
     highlight_init();
     // No group's attribute matches its remembered one any more.
     highlight_attr_last.set([-1; HLF_COUNT as usize]);
-    // SAFETY: the editor's own tables.
-    unsafe { highlight_attr_set_all() };
-    unsafe { highlight_changed() };
+    highlight_attr_set_all();
+    highlight_changed();
     screen_invalidate_highlights();
 }
 
@@ -533,10 +503,7 @@ fn hl_combine_ae(char_ae: HlAttrFlags, prim_ae: HlAttrFlags) -> HlAttrFlags {
 /// character's own attributes are the base and the special ones override.
 /// Memoised, because the screen asks per cell and there tend to be a lot of
 /// spelling mistakes.
-///
-/// # Safety
-/// Both ids must be ones this table handed out; main thread only.
-pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
+pub fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
     if char_attr == 0 {
         return prim_attr;
     } else if prim_attr == 0 {
@@ -605,8 +572,7 @@ pub unsafe fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
         id1: char_attr,
         id2: prim_attr,
     };
-    // SAFETY: the caller's editor state.
-    let id = unsafe { get_attr_entry(entry) };
+    let id = get_attr_entry(entry);
     if id > 0 {
         COMBINE.with_mut(|cache| cache.insert(char_attr, prim_attr, id));
     }
@@ -633,17 +599,12 @@ pub fn syn_attr2entry(attr: c_int) -> HlAttrs {
 /// an array of `{ kind, hi_name, ui_name, id }` dicts, innermost first.
 ///
 /// Empty unless some UI asked for `ext_hlstate`.
-///
-/// # Safety
-/// Main thread only. Nothing is taken from `_arena` any more: the answer
-/// owns its entries.
-pub unsafe fn hl_inspect(attr: c_int) -> Array {
+pub fn hl_inspect(attr: c_int) -> Array {
     if !HLSTATE_ACTIVE.get() {
         return Array::EMPTY;
     }
     let mut ret = Array::with_capacity(hl_inspect_size(attr));
-    // SAFETY: `ret` was sized by the same walk that fills it.
-    unsafe { hl_inspect_impl(&mut ret, attr) };
+    hl_inspect_impl(&mut ret, attr);
     ret
 }
 
@@ -662,10 +623,7 @@ fn hl_inspect_size(attr: c_int) -> usize {
 }
 
 /// Appends `attr`'s provenance to `arr`.
-///
-/// # Safety
-/// Main thread only.
-unsafe fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
+fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
     let Some(entry) = ATTRS.with(|attrs| attrs.live(attr)) else {
         return;
     };
@@ -703,8 +661,8 @@ unsafe fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
         }
         kHlCombine | kHlBlend | kHlBlendThrough => {
             // Combination is associative, so flatten it to an array.
-            unsafe { hl_inspect_impl(arr, entry.id1) };
-            unsafe { hl_inspect_impl(arr, entry.id2) };
+            hl_inspect_impl(arr, entry.id1);
+            hl_inspect_impl(arr, entry.id2);
             return;
         }
         // kHlUnknown and kHlInvalid: nothing to say about the entry.

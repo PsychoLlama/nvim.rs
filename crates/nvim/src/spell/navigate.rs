@@ -69,14 +69,13 @@ fn decor_spell_nav_col(
     col: c_int,
     state: DecorStateRef,
 ) -> Option<bool> {
-    // SAFETY: the caller's window and state; the callbacks run Lua.
     if *decor_lnum != lnum {
         decor_redraw_reset(window, state);
         decor_providers_invoke_spell(window, lnum as c_int - 1, col, lnum as c_int - 1, -1);
         decor_redraw_line(window, lnum as c_int - 1, state);
         *decor_lnum = lnum;
     }
-    unsafe { decor_redraw_col(window, col, 0, false, state, MAXCOL as c_int) };
+    decor_redraw_col(window, col, 0, false, state, MAXCOL as c_int);
     state.spell
 }
 

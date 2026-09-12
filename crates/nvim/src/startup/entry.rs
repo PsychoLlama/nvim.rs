@@ -328,7 +328,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     msg_scroll.set(1);
     no_wait_return.set(1);
-    unsafe { init_highlight(true, false) };
+    init_highlight(true, false);
     ui_comp_syn_init();
     time_msg_at(c"init highlight");
 

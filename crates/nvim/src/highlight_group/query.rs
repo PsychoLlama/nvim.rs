@@ -36,18 +36,13 @@ const NO_DICT: ApiDict = ApiDict::EMPTY;
 /// Answers false — leaving `hl` alone — for a group the namespace says
 /// nothing about, and for a table entry that was created by a lookup and
 /// never given settings.
-///
-/// # Safety
-/// Reaches the group and namespace tables; main thread only. Nothing is
-/// taken from `_arena` any more: the dict owns its entries.
-unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
+fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
     let entry = group(hl_id);
     let mut ns = ns_id;
-    // SAFETY: the editor's own tables.
     let link = if ns_id == 0 {
         entry.link
     } else {
-        unsafe { ns_get_hl(&mut ns, hl_id, true, entry.set != 0) }
+        ns_get_hl(&mut ns, hl_id, true, entry.set != 0)
     };
     if link == -1 {
         return false;
@@ -58,14 +53,11 @@ unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int) -> bool {
     }
 
     ns = ns_id;
-    // SAFETY: as above.
-    let attr = unsafe {
-        syn_attr2entry(if ns_id == 0 {
-            entry.attr
-        } else {
-            ns_get_hl(&mut ns, hl_id, false, entry.set != 0)
-        })
-    };
+    let attr = syn_attr2entry(if ns_id == 0 {
+        entry.attr
+    } else {
+        ns_get_hl(&mut ns, hl_id, false, entry.set != 0)
+    });
 
     // `default` and `link`, then the rgb pass, then the `cterm` sub-dict
     // the second pass fills: what this function can write, reserved once.
@@ -125,14 +117,8 @@ pub(crate) unsafe fn ns_get_hl_defs(
             return Err(Error::validation(c"Highlight id out of bounds"));
         }
         let mut attrs = NO_DICT;
-        // SAFETY: a live group id.
-        let id = if link {
-            id
-        } else {
-            unsafe { syn_get_final_id(id) }
-        };
-        // SAFETY: the caller's arena.
-        unsafe { hlgroup2dict(&mut attrs, ns_id, id) };
+        let id = if link { id } else { syn_get_final_id(id) };
+        hlgroup2dict(&mut attrs, ns_id, id);
         return Ok(attrs);
     }
 
@@ -141,14 +127,10 @@ pub(crate) unsafe fn ns_get_hl_defs(
     let mut rv = ApiDict::with_capacity(groups);
     for id in 1..=highlight_num_groups() {
         let mut attrs = NO_DICT;
-        if !unsafe { hlgroup2dict(&mut attrs, ns_id, id) } {
+        if !hlgroup2dict(&mut attrs, ns_id, id) {
             continue;
         }
-        let named = if link {
-            id
-        } else {
-            unsafe { syn_get_final_id(id) }
-        };
+        let named = if link { id } else { syn_get_final_id(id) };
         // SAFETY: a group's name is a NUL-terminated string.
         let key = unsafe { crate::cstr::bytes_at(group(named).name.as_ptr()) };
         rv.insert(key, Object::dict(attrs));

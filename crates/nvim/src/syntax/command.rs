@@ -218,7 +218,7 @@ pub(crate) fn syn_cmd_on(args: &mut ExArg, _syncing: c_int) {
 pub(crate) fn syn_cmd_reset(args: &mut ExArg, _syncing: c_int) {
     args.nextcmd = unsafe { check_nextcmd(args.arg) };
     if args.skip == 0 {
-        unsafe { init_highlight(true, true) };
+        init_highlight(true, true);
     }
 }
 

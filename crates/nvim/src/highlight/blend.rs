@@ -53,14 +53,10 @@ pub fn clear_caches() {
 }
 
 /// [`clear_caches`], plus the redraw that makes it visible.
-///
-/// # Safety
-/// Reaches the current window and the highlight tables; main thread only.
-pub unsafe fn hl_invalidate_blends() {
+pub fn hl_invalidate_blends() {
     clear_caches();
-    // SAFETY: the editor's own globals.
-    unsafe { highlight_changed() };
-    unsafe { update_window_hl(Win::current(), true) };
+    highlight_changed();
+    update_window_hl(Win::current(), true);
 }
 
 /// The attribute set `front_attr` blended over `back_attr`.
@@ -69,17 +65,14 @@ pub unsafe fn hl_invalidate_blends() {
 /// side uninitialised (a negative id), or a front set with no `blend=`
 /// percentage — in which case `through` is also cleared, telling the
 /// compositor the cell below is hidden after all.
-///
-/// # Safety
-/// Reads the attribute table; main thread only.
-pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut bool) -> c_int {
+pub fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut bool) -> c_int {
     // An uninitialised background cell has nothing to show through.
     if front_attr < 0 || back_attr < 0 {
         return front_attr;
     }
     // SAFETY: the attribute table is the editor's own.
     let front_raw = syn_attr2entry(front_attr);
-    let front = unsafe { get_colors_force(front_raw) };
+    let front = get_colors_force(front_raw);
     let ratio = front.hl_blend;
     if ratio <= 0 {
         *through = false;
@@ -93,7 +86,7 @@ pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut 
     }
 
     let back_raw = syn_attr2entry(back_attr);
-    let back = unsafe { get_colors_force(back_raw) };
+    let back = get_colors_force(back_raw);
     let mut blended = if *through {
         blend_through(ratio, back, back_raw, front)
     } else {
@@ -119,8 +112,7 @@ pub unsafe fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: &mut 
         id1: back_attr,
         id2: front_attr,
     };
-    // SAFETY: the caller's editor state.
-    let id = unsafe { get_attr_entry(entry) };
+    let id = get_attr_entry(entry);
     if id > 0 {
         cache.with_mut(|c| c.insert(back_attr, front_attr, id));
     }
@@ -171,10 +163,7 @@ fn blend_over(ratio: c_int, back: HlAttrs, front: HlAttrs) -> HlAttrs {
 /// white-on-black `'background'` implies; special falls back to red. Cterm
 /// colours are left alone — they have their own 0-means-unset convention and
 /// [`cterm_blend`] resolves them itself.
-///
-/// # Safety
-/// Reads the `Normal` colours and `'background'`; main thread only.
-unsafe fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
+fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     // SAFETY: the editor's own globals; `p_bg` is a NUL-terminated option
     // string, never empty.
     let dark = unsafe { *p_bg.get() == b'd'.cast_signed() };

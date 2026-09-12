@@ -131,10 +131,7 @@ impl ValueBuf {
 ///
 /// Answers whether a header has been printed for this group by now, which is
 /// threaded through the whole of [`highlight_list_one`].
-///
-/// # Safety
-/// Writes to the message area; main thread only.
-unsafe fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool {
+fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool {
     if got_int.get() {
         return false;
     }
@@ -145,7 +142,7 @@ unsafe fn list_arg(id: c_int, didh: bool, value: ListValue, name: &CStr) -> bool
 
     // SAFETY: main-thread message calls with NUL-terminated strings.
     let width = unsafe { vim_strsize(text.as_ptr()) } + name.count_bytes() as c_int + 1;
-    unsafe { syn_list_header(didh, width, id, false) };
+    syn_list_header(didh, width, id, false);
     if !got_int.get() {
         if !name.is_empty() {
             msg_str_hl(name, HLF_D, false);
@@ -163,10 +160,7 @@ fn color(idx: c_int, value: c_int, buf: &mut HexBuf) -> ListValue<'_> {
 }
 
 /// Prints the group with id `id` the way `:highlight {group}` does.
-///
-/// # Safety
-/// Writes to the message area; main thread only.
-pub(crate) unsafe fn highlight_list_one(id: c_int) {
+pub(crate) fn highlight_list_one(id: c_int) {
     let entry = group(id);
     // SAFETY: the name is a live static string.
     if message_filtered(unsafe { cstr::at(entry.name.as_ptr().cast_mut()) }) {
@@ -191,11 +185,11 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
 
     let mut didh = false;
     for (value, name) in pairs {
-        didh = unsafe { list_arg(id, didh, value, name) };
+        didh = list_arg(id, didh, value, name);
     }
 
     if entry.link != 0 && !got_int.get() {
-        unsafe { syn_list_header(didh, 0, id, true) };
+        syn_list_header(didh, 0, id, true);
         didh = true;
         msg_str_hl(c"links to", HLF_D, false);
         msg_putchar(' ' as c_int);
@@ -203,7 +197,7 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
     }
 
     if !didh {
-        unsafe { list_arg(id, didh, ListValue::Text(Some(c"cleared")), c"") };
+        list_arg(id, didh, ListValue::Text(Some(c"cleared")), c"");
     }
     if p_verbose.get() > 0 {
         last_set_msg(entry.script_ctx);
@@ -215,10 +209,7 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
 ///
 /// Answers whether a new line was started, which is what the caller passes
 /// back as `did_header` for the rest of the group.
-///
-/// # Safety
-/// Writes to the message area; main thread only.
-pub(crate) unsafe fn syn_list_header(
+pub(crate) fn syn_list_header(
     did_header: bool,
     outlen: c_int,
     id: c_int,
@@ -273,25 +264,19 @@ pub(crate) unsafe fn syn_list_header(
 }
 
 /// The `:highlight Ni...` easter egg: flashes `NI!` at the user.
-///
-/// # Safety
-/// Writes to the message area and flushes the UI; main thread only.
-unsafe fn highlight_list() {
+fn highlight_list() {
     // SAFETY: main-thread message calls.
     for i in (0..10).rev() {
-        unsafe { highlight_list_two(i, HLF_D) };
+        highlight_list_two(i, HLF_D);
     }
     for _ in 0..40 {
-        unsafe { highlight_list_two(99, 0) };
+        highlight_list_two(99, 0);
     }
 }
 
 /// One frame of it: a slice of `"N \x08I \x08!  \x08"` chosen by `cnt`, which
 /// is either 0..9 (the first frame) or 99 (the last).
-///
-/// # Safety
-/// See [`highlight_list`].
-unsafe fn highlight_list_two(cnt: c_int, id: c_int) {
+fn highlight_list_two(cnt: c_int, id: c_int) {
     const FRAMES: &[u8] = b"N \x08I \x08!  \x08\0";
     // The index is 0 or 9, both inside.
     let at = (cnt / 11) as usize;
@@ -350,7 +335,7 @@ pub(crate) unsafe fn set_context_in_highlight_cmd(expand: *mut Expand, arg: *con
     // Past the group name.
     include_link.set(0);
     if unsafe { *arg.add(1) } == b'i' as c_char && unsafe { *arg } == b'N' as c_char {
-        unsafe { highlight_list() };
+        highlight_list();
     }
     if is_prefix(word(arg, p), b"link") || is_prefix(word(arg, p), b"clear") {
         unsafe { (*expand).xp_pattern = skipwhite(p) };

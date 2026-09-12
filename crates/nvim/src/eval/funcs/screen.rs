@@ -288,11 +288,7 @@ pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_syn_id_trans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the frame is live.
     let id = arg_number(&args[0]) as c_int;
-    result.write_number(if id > 0 {
-        unsafe { syn_get_final_id(id) }
-    } else {
-        0
-    } as VarNumber);
+    result.write_number(if id > 0 { syn_get_final_id(id) } else { 0 } as VarNumber);
 }
 
 /// `synconcealed({lnum}, {col})` — `[concealed, replacement, group]`.

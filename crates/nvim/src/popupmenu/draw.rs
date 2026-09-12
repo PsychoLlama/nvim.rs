@@ -114,7 +114,7 @@ unsafe fn pum_user_attr_combine(idx: c_int, item_type: c_int, attr: c_int) -> c_
     let item = &unsafe { pum_items() }[idx as usize];
     let user_attr = [item.pum_user_abbr_hlattr, item.pum_user_kind_hlattr][item_type as usize];
     if user_attr > 0 {
-        unsafe { hl_combine_attr(attr, user_attr) }
+        hl_combine_attr(attr, user_attr)
     } else {
         attr
     }
@@ -143,8 +143,8 @@ unsafe fn pum_compute_text_attrs(
     let win = Win::current();
     if unsafe { *text } == 0
         || (hlf != HLF_PSI as Hlf && hlf != HLF_PNI as Hlf)
-        || (unsafe { win_hl_attr(win, HLF_PMSI) } == unsafe { win_hl_attr(win, HLF_PSI) }
-            && unsafe { win_hl_attr(win, HLF_PMNI) } == unsafe { win_hl_attr(win, HLF_PNI) })
+        || (win_hl_attr(win, HLF_PMSI) == win_hl_attr(win, HLF_PSI)
+            && win_hl_attr(win, HLF_PMNI) == win_hl_attr(win, HLF_PNI))
     {
         return None;
     }
@@ -181,13 +181,11 @@ unsafe fn pum_compute_text_attrs(
     let mut matched: Option<c_int> = None;
     let mut matched_attr = |win| {
         *matched.get_or_insert_with(|| {
-            let a = unsafe {
-                hl_combine_attr(
-                    win_hl_attr(win, HLF_PMNI),
-                    win_hl_attr(win, if is_select { HLF_PMSI } else { HLF_PMNI }),
-                )
-            };
-            unsafe { hl_combine_attr(win_hl_attr(win, hlf as c_int), a) }
+            let a = hl_combine_attr(
+                win_hl_attr(win, HLF_PMNI),
+                win_hl_attr(win, if is_select { HLF_PMSI } else { HLF_PMNI }),
+            );
+            hl_combine_attr(win_hl_attr(win, hlf as c_int), a)
         })
     };
 
@@ -201,7 +199,7 @@ unsafe fn pum_compute_text_attrs(
     let mut matched_len: c_int = -1;
 
     while unsafe { *ptr } != 0 {
-        let mut new_attr = unsafe { win_hl_attr(win, hlf as c_int) };
+        let mut new_attr = win_hl_attr(win, hlf as c_int);
         if let Some(positions) = &matched_chars {
             if positions.contains(&char_pos) {
                 new_attr = matched_attr(win);
@@ -216,9 +214,9 @@ unsafe fn pum_compute_text_attrs(
             }
         }
 
-        new_attr = unsafe { hl_combine_attr(win_hl_attr(win, HLF_PNI), new_attr) };
+        new_attr = hl_combine_attr(win_hl_attr(win, HLF_PNI), new_attr);
         if user_hlattr > 0 {
-            new_attr = unsafe { hl_combine_attr(new_attr, user_hlattr) };
+            new_attr = hl_combine_attr(new_attr, user_hlattr);
         }
 
         let char_cells = unsafe { utf_ptr2cells(ptr) };
@@ -318,7 +316,7 @@ unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
     // Resolve the eight edges' highlight ids, PmenuBorder by default.
     for i in 0..8 {
         config.border_attr[i] = if config.border_hl_ids[i] != 0 {
-            unsafe { hl_get_ui_attr(-1, HLF_PBR, config.border_hl_ids[i], false) }
+            hl_get_ui_attr(-1, HLF_PBR, config.border_hl_ids[i], false)
         } else {
             unsafe { *hl_attr_active.get().offset(HLF_PBR as isize) }
         };
@@ -471,8 +469,7 @@ impl PumRow {
         // is NUL-terminated and stays live for the whole redraw.
         let win = Win::current();
         let hlf = self.hlfs[item_type as usize];
-        self.orig_attr =
-            unsafe { hl_combine_attr(win_hl_attr(win, HLF_PNI), win_hl_attr(win, hlf as c_int)) };
+        self.orig_attr = hl_combine_attr(win_hl_attr(win, HLF_PNI), win_hl_attr(win, hlf as c_int));
         let attr = if item_type < 2 {
             unsafe { pum_user_attr_combine(self.idx, item_type, self.orig_attr) }
         } else {
@@ -570,17 +567,15 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
         need_trunc: false,
         orig_attr: -1,
     };
-    let trunc_attr = unsafe { win_hl_attr(win, if selected { HLF_PSI } else { HLF_PNI }) };
+    let trunc_attr = win_hl_attr(win, if selected { HLF_PSI } else { HLF_PNI });
 
     screengrid_line_start(pum_grid_ref(), grid_row, 0);
 
     if style.extra_space {
-        let attr = unsafe {
-            hl_combine_attr(
-                win_hl_attr(win, HLF_PNI),
-                win_hl_attr(win, row.hlfs[0] as c_int),
-            )
-        };
+        let attr = hl_combine_attr(
+            win_hl_attr(win, HLF_PNI),
+            win_hl_attr(win, row.hlfs[0] as c_int),
+        );
         let col = if pum_rl.get() {
             style.col_off + 1
         } else {
@@ -700,7 +695,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
         };
         grid_line_put_schar(scrollbar_col, sc, attr);
     }
-    unsafe { grid_line_flush() };
+    grid_line_flush();
 }
 
 /// Redraw the popup menu, using `pum_first` and `pum_selected`.
@@ -819,8 +814,8 @@ pub unsafe fn pum_redraw() {
         } else {
             win.w_p_fcs_chars.trunc
         },
-        attr_scroll: unsafe { win_hl_attr(win, HLF_PSB) },
-        attr_thumb: unsafe { win_hl_attr(win, HLF_PST) },
+        attr_scroll: win_hl_attr(win, HLF_PSB),
+        attr_thumb: win_hl_attr(win, HLF_PST),
         border_scroll: if border.width > 0 && !config.shadow {
             border.scrollbar
         } else {

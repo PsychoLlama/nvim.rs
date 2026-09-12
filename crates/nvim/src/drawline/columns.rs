@@ -252,16 +252,14 @@ impl WinLineVars {
         if fdc <= 0 {
             return;
         }
-        let attr = unsafe {
-            win_hl_attr(
-                window,
-                if use_cursor_line_highlight(window, self.lnum) {
-                    HLF_CLF
-                } else {
-                    HLF_FC
-                },
-            )
-        };
+        let attr = win_hl_attr(
+            window,
+            if use_cursor_line_highlight(window, self.lnum) {
+                HLF_CLF
+            } else {
+                HLF_FC
+            },
+        );
         let is_virt = self.filler_todo > 0;
         let cells = fold_column_cells(window, self.foldinfo, self.lnum, fdc, is_virt);
         for &(symbol, vcol) in cells.iter().take(fdc as usize) {
@@ -284,16 +282,14 @@ impl WinLineVars {
     pub(crate) fn draw_sign(&mut self, nrcol: bool, window: Win, sign_idx: ::core::ffi::c_int) {
         // SAFETY: the caller's window and index.
         let sattr = self.sign_attrs[sign_idx as usize];
-        let scl_attr = unsafe {
-            win_hl_attr(
-                window,
-                if use_cursor_line_highlight(window, self.lnum) {
-                    HLF_CLS
-                } else {
-                    HLF_SC
-                },
-            )
-        };
+        let scl_attr = win_hl_attr(
+            window,
+            if use_cursor_line_highlight(window, self.lnum) {
+                HLF_CLS
+            } else {
+                HLF_SC
+            },
+        );
 
         if sattr.text[0] == 0
             || self.row != self.startrow + self.filler_lines
@@ -318,20 +314,18 @@ impl WinLineVars {
         let attr = if self.sign_cul_attr != 0 {
             self.sign_cul_attr
         } else if sattr.hl_id != 0 {
-            unsafe { syn_id2attr(sattr.hl_id) }
+            syn_id2attr(sattr.hl_id)
         } else {
             0
         };
         // Blank the whole column first, then overwrite the two cells the
         // sign text occupies: in the number column the sign is drawn at
         // the right, with the extra width padding it on the left.
-        unsafe {
-            self.draw_col_fill(
-                schar_from_ascii(b' '),
-                fill,
-                hl_combine_attr(scl_attr, attr),
-            )
-        };
+        self.draw_col_fill(
+            schar_from_ascii(b' '),
+            fill,
+            hl_combine_attr(scl_attr, attr),
+        );
         let sign_pos = self.off - SIGN_WIDTH as ::core::ffi::c_int - nrcol as ::core::ffi::c_int;
         debug_assert!(sign_pos >= 0);
         let mut line = linebuf();
@@ -411,7 +405,7 @@ impl WinLineVars {
                     )
                 };
                 if self.prev_num_attr > 0 {
-                    self.prev_num_attr = unsafe { syn_id2attr(self.prev_num_attr) };
+                    self.prev_num_attr = syn_id2attr(self.prev_num_attr);
                 }
             }
             numhl_attr = self.prev_num_attr;
@@ -427,7 +421,7 @@ impl WinLineVars {
         } else {
             HLF_N
         };
-        unsafe { hl_combine_attr(win_hl_attr(window, hlf), numhl_attr) }
+        hl_combine_attr(win_hl_attr(window, hlf), numhl_attr)
     }
 
     /// Draw the number column: the absolute or relative line number on the
@@ -599,16 +593,14 @@ impl WinLineVars {
         // recorded for it. A `hlrec` entry marks where a new highlight
         // *starts*, so each pass draws the text up to it and then works
         // out the attribute the next stretch takes.
-        let scl_attr = unsafe {
-            win_hl_attr(
-                window,
-                if use_cursor_line_highlight(window, self.lnum) {
-                    HLF_CLS
-                } else {
-                    HLF_SC
-                },
-            )
-        };
+        let scl_attr = win_hl_attr(
+            window,
+            if use_cursor_line_highlight(window, self.lnum) {
+                HLF_CLS
+            } else {
+                HLF_SC
+            },
+        );
         let num_attr = self.line_number_attr(window);
         let mut cur_attr = num_attr;
         let mut fold_vcol: *const ColNr = ::core::ptr::null();
@@ -700,7 +692,7 @@ impl WinLineVars {
             && (self.row > self.startrow + self.filler_lines || self.need_showbreak)
         {
             let attr = if self.diff_hlf != HLF_NONE {
-                unsafe { win_hl_attr(window, self.diff_hlf) }
+                win_hl_attr(window, self.diff_hlf)
             } else {
                 0
             };
@@ -756,20 +748,17 @@ impl WinLineVars {
             self.draw_col_fill(schar_from_ascii(b' '), remaining, 0);
         } else if self.filler_todo > 0 {
             // A "deleted" diff line.
-            unsafe {
-                self.draw_col_fill(
-                    window.w_p_fcs_chars.diff,
-                    remaining,
-                    win_hl_attr(window, HLF_DED),
-                )
-            };
+            self.draw_col_fill(
+                window.w_p_fcs_chars.diff,
+                remaining,
+                win_hl_attr(window, HLF_DED),
+            );
         }
 
         let sbr = get_showbreak_value(window);
         if unsafe { *sbr } != NUL as ::core::ffi::c_char && self.need_showbreak {
             // 'showbreak' combined with 'cursorline', 'showbreak' winning.
-            let attr =
-                unsafe { hl_combine_attr(self.cursorline_attr, win_hl_attr(window, HLF_AT)) };
+            let attr = hl_combine_attr(self.cursorline_attr, win_hl_attr(window, HLF_AT));
             let vcol_before = self.vcol;
             let sbr_len = unsafe { cstr::bytes_at(sbr) }.len();
             unsafe { self.draw_col_buf(window, sbr, sbr_len, attr, ::core::ptr::null(), true) };

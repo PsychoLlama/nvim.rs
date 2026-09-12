@@ -53,10 +53,7 @@ fn getlevel_is_open_ended(getlevel: LevelGetter) -> bool {
 }
 
 /// Update the folding for window "wp", at least from lines "top" to "bot".
-///
-/// # Safety
-/// `win` must have a live buffer.
-pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineNr) {
+pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineNr) {
     if invalid_top.get() != 0 {
         // Already updating this window; the recursion would fight itself.
         return;
@@ -104,7 +101,7 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot
             let level = fold_level_win(win, top - 1);
             fline.lnum = top - 1;
             fline.lvl = level;
-            unsafe { foldlevel_marker(line) };
+            foldlevel_marker(line);
             fline.lvl = if fline.lvl > level {
                 level - (fline.lvl - fline.lvl_next)
             } else {
@@ -112,7 +109,7 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot
             };
         }
         fline.lnum = top;
-        unsafe { foldlevel_marker(line) };
+        foldlevel_marker(line);
     } else {
         fline.lnum = top;
         if foldmethod_is_expr(win) {
@@ -214,19 +211,15 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot
         if fline.lvl > 0 {
             invalid_top.set(fline.lnum);
             invalid_bot.set(end);
-            // SAFETY: `window_folds` answers the window's toplevel list,
-            // which is the list at level 1.
-            end = unsafe {
-                fold_update_computed_recurse(
-                    window_folds(win),
-                    1,
-                    start,
-                    line,
-                    getlevel,
-                    end,
-                    FD_LEVEL,
-                )
-            };
+            end = fold_update_computed_recurse(
+                window_folds(win),
+                1,
+                start,
+                line,
+                getlevel,
+                end,
+                FD_LEVEL,
+            );
             start = fline.lnum;
         } else {
             if fline.lnum == line_count() {
@@ -267,10 +260,7 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot
 ///
 /// Returns bot, which may have been increased for lines that also need to be
 /// updated as a result of a detected change in the fold.
-///
-/// # Safety
-/// `folds` must be the fold list at `level`.
-pub(super) unsafe fn fold_update_computed_recurse(
+pub(super) fn fold_update_computed_recurse(
     folds: FoldList,
     level: c_int,
     startlnum: LineNr,
@@ -531,9 +521,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
             let (inner, lvl) = (current.nested(), level + 1);
             let (from, to) = (startlnum2 - current.top(), bot - current.top());
             let flags = current.flags();
-            bot = unsafe {
-                fold_update_computed_recurse(inner, lvl, from, line, getlevel, to, flags)
-            };
+            bot = fold_update_computed_recurse(inner, lvl, from, line, getlevel, to, flags);
             // The recursion may have grown the array under us.
             let current = folds.at(i);
             fold = Some(current);
@@ -638,10 +626,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
 /// Doesn't use any caching.
 ///
 /// Returns a level of -1 if the foldlevel depends on surrounding lines.
-///
-/// # Safety
-/// `line` must name a line inside its window's buffer.
-pub(super) unsafe fn foldlevel_indent(line: FLine) {
+pub(super) fn foldlevel_indent(line: FLine) {
     let lnum = line.lnum() + line.off();
     // SAFETY: a live window has a live buffer, and `lnum` is inside it.
     let buf = line.win().buffer();
@@ -679,10 +664,7 @@ pub(super) fn foldlevel_diff(line: FLine) {
 /// Doesn't use any caching.
 ///
 /// Returns a level of -1 if the foldlevel depends on surrounding lines.
-///
-/// # Safety
-/// `line` must name a line inside its window's buffer.
-pub(super) unsafe fn foldlevel_expr(line: FLine) {
+pub(super) fn foldlevel_expr(line: FLine) {
     let lnum = line.lnum() + line.off();
     // The current window is restored below.
     let saved = switch_to(line.win());
@@ -753,10 +735,7 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
 
 /// Low level function to get the foldlevel for the "syntax" method.
 /// Doesn't use any caching.
-///
-/// # Safety
-/// `line` must name a line inside its window's buffer.
-pub(super) unsafe fn foldlevel_syntax(line: FLine) {
+pub(super) fn foldlevel_syntax(line: FLine) {
     let lnum = line.lnum() + line.off();
     line.set_lvl(syn_get_foldlevel(line.win(), lnum));
     line.set_start(0);

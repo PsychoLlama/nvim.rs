@@ -41,15 +41,7 @@ use super::{
 /// three things the parsed `HlAttrs` cannot carry: `force`, `update`, and the
 /// *spelling* of each colour, so that `:highlight` can print back the name it
 /// was given rather than a hex value.
-///
-/// # Safety
-/// Redraws and emits UI events; main thread only.
-pub(crate) unsafe fn set_hl_group(
-    id: c_int,
-    attrs: HlAttrs,
-    dict: &KeyDict_highlight,
-    link_id: c_int,
-) {
+pub(crate) fn set_hl_group(id: c_int, attrs: HlAttrs, dict: &KeyDict_highlight, link_id: c_int) {
     let is_default = attrs.rgb_ae_attr.has(HlAttrFlags::DEFAULT);
 
     // Return if "default" was used and the group already has settings.
@@ -167,7 +159,7 @@ pub(crate) unsafe fn set_hl_group(
         unsafe { nlua_set_sctx(&raw mut entry.script_ctx) };
     });
 
-    let attr = unsafe { hl_get_syn_attr(0, id, attrs) };
+    let attr = hl_get_syn_attr(0, id, attrs);
     with_group(id, |entry| entry.attr = attr);
 
     // 'Normal' is special.
@@ -182,7 +174,7 @@ pub(crate) unsafe fn set_hl_group(
         normal_bg.set(entry.rgb_bg);
         normal_sp.set(entry.rgb_sp);
         if changed {
-            unsafe { highlight_attr_set_all() };
+            highlight_attr_set_all();
         }
         ui_default_colors_set();
     } else if cursor_mode_uses_syn_id(id) {

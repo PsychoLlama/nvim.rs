@@ -254,8 +254,7 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.w_allbuf_opt.wo_siso = new_wp.w_onebuf_opt.wo_siso;
     new_wp.w_fraction = 0;
     new_wp.w_prev_fraction_row = -1;
-    // SAFETY: a freshly allocated window, whose `w_folds` is still zeroed.
-    unsafe { fold_init_win(new_wp) };
+    fold_init_win(new_wp);
     unblock_autocmds();
     // Up to 1000 can be picked by the user.
     new_wp.w_next_match_id = 1000;

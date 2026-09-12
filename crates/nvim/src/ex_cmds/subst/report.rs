@@ -312,20 +312,17 @@ pub(crate) fn show_sub(
     for &m in &preview_lines.subresults {
         if let Some(pv) = pv.as_mut() {
             let (p_start, p_end) = pv.add_match(orig_buf, m);
-            // SAFETY: the preview buffer and namespace are live.
-            unsafe {
-                bufhl_add_hl_pos_offset(
-                    pv.buf,
-                    cmdpreview_ns,
-                    hl_id,
-                    p_start,
-                    p_end,
-                    pv.col_width as ColNr,
-                )
-            };
+            bufhl_add_hl_pos_offset(
+                pv.buf,
+                cmdpreview_ns,
+                hl_id,
+                p_start,
+                p_end,
+                pv.col_width as ColNr,
+            );
         }
         let (start, end) = (m.start, m.end);
-        unsafe { bufhl_add_hl_pos_offset(orig_buf, cmdpreview_ns, hl_id, start, end, 0) };
+        bufhl_add_hl_pos_offset(orig_buf, cmdpreview_ns, hl_id, start, end, 0);
     }
 
     // SAFETY: the scratch and the saved option string are both ours.

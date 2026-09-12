@@ -679,7 +679,7 @@ pub fn update_topline_cursor() {
 pub(crate) unsafe fn ex_fold(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if fold_manual_allowed(true) != 0 {
-        unsafe { fold_create(Win::current(), range_start(args), range_end(args)) };
+        fold_create(Win::current(), range_start(args), range_end(args));
     }
 }
 

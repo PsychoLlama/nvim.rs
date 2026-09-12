@@ -519,10 +519,7 @@ pub unsafe fn clear_virtlines(lines: *mut VirtLines) {
 /// Replaces any sign or conceal character that the glyph cache no longer
 /// holds — called when the cache is rebuilt, since a `ScreenChar` is an index
 /// into it once the character is longer than four bytes.
-///
-/// # Safety
-/// Reaches the glyph cache; main thread only.
-pub unsafe fn decor_check_invalid_glyphs() {
+pub fn decor_check_invalid_glyphs() {
     for mut it in decor_items() {
         let width = if it.flags & kSHIsSign != 0 {
             SIGN_WIDTH as usize
@@ -553,10 +550,7 @@ pub unsafe fn decor_check_invalid_glyphs() {
 ///
 /// TODO(bfredl): make decoration powerful enough that this can be done with a
 /// single ephemeral decoration.
-///
-/// # Safety
-/// `buffer` must be live and the positions must be inside it.
-pub unsafe fn bufhl_add_hl_pos_offset(
+pub fn bufhl_add_hl_pos_offset(
     buffer: Buf,
     src_id: c_int,
     hl_id: c_int,
@@ -605,10 +599,7 @@ pub unsafe fn bufhl_add_hl_pos_offset(
 }
 
 /// Marks the screen lines `decor` affects as needing a redraw.
-///
-/// # Safety
-/// `buffer` must be live and `decor` must be its mark's decoration.
-pub unsafe fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline) {
+pub fn decor_redraw(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline) {
     // SAFETY: the caller's buffer and decoration.
     if !decor.ext {
         unsafe { decor_redraw_sh(buffer, row1, row2, decor_sh_from_inline(decor.data.hl)) };
@@ -661,10 +652,7 @@ pub fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSignHighl
 }
 
 /// Accounts for a decoration that has just been placed on rows `row..=row2`.
-///
-/// # Safety
-/// `buffer` must be live and `decor` must be its mark's decoration.
-pub unsafe fn buf_put_decor(buffer: Buf, decor: DecorInline, row: c_int, mut row2: c_int) {
+pub fn buf_put_decor(buffer: Buf, decor: DecorInline, row: c_int, mut row2: c_int) {
     if !decor.ext || row as LineNr >= buffer.b_ml.ml_line_count {
         return;
     }
@@ -679,10 +667,7 @@ pub unsafe fn buf_put_decor(buffer: Buf, decor: DecorInline, row: c_int, mut row
 
 /// Undoes [`buf_put_decor`] and schedules the redraw, freeing the decoration
 /// too when `free` says the mark is going away with it.
-///
-/// # Safety
-/// `buffer` must be live and `decor` must be its mark's decoration.
-pub unsafe fn buf_decor_remove(
+pub fn buf_decor_remove(
     buffer: Buf,
     row1: c_int,
     mut row2: c_int,
@@ -690,8 +675,7 @@ pub unsafe fn buf_decor_remove(
     decor: DecorInline,
     free: bool,
 ) {
-    // SAFETY: the caller's buffer and decoration.
-    unsafe { decor_redraw(buffer, row1, row2, col1, decor) };
+    decor_redraw(buffer, row1, row2, col1, decor);
     if decor.ext && (row1 as LineNr) < buffer.b_ml.ml_line_count {
         row2 = (buffer.b_ml.ml_line_count - 1).min(row2 as LineNr) as c_int;
         let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;

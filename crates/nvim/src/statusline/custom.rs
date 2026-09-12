@@ -132,8 +132,7 @@ impl Target {
         if draw_winbar {
             let local = !opt_is_empty(win.w_onebuf_opt.wo_wbr);
             let mut row = -1; // Row zero is the first row of text.
-            // SAFETY: a live window whose grid view is live.
-            canvas = unsafe { grid_adjust(win.w_grid, &mut row, &mut col) };
+            canvas = grid_adjust(win.w_grid, &mut row, &mut col);
             if row < 0 {
                 return None;
             }
@@ -199,8 +198,7 @@ impl Target {
             maxwidth -= col;
             if !in_status_line {
                 row = Rows.get() - 1;
-                // SAFETY: the message grid's view is live.
-                canvas = unsafe { grid_adjust(msg_grid_view(), &mut row, &mut col) };
+                canvas = grid_adjust(msg_grid_view(), &mut row, &mut col);
                 maxwidth -= 1; // Writing in the last column may scroll.
                 fillchar = schar_from_ascii(b' ');
                 group = HLF_MSG;
@@ -397,8 +395,7 @@ fn run_highlight(
     }
     if run.userhl < 0 {
         // A named group -- `%#Group#`, or the sign and fold columns' own.
-        // SAFETY: a group id the expander resolved.
-        let new_attr = unsafe { syn_id2attr(-run.userhl) };
+        let new_attr = syn_id2attr(-run.userhl);
         let attr = if run.item == Some(StlOpt::HighlightComb) {
             combine_attr(curattr, new_attr)
         } else {

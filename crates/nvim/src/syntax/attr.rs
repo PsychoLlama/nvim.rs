@@ -333,7 +333,7 @@ fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
             si.si_trans_id = outer.si_trans_id;
         }
     } else {
-        unsafe { si.si_attr = syn_id2attr(kw.id) };
+        si.si_attr = syn_id2attr(kw.id);
     }
     si.si_cont_list = ::core::ptr::null_mut();
     si.si_next_list = kw.next_list;

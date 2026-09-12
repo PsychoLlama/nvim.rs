@@ -22,15 +22,12 @@ use crate::narrow::number_as_int;
 /// The answer's storage is the api's own: the caller frees whatever this hands
 /// back.
 pub unsafe fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
-    // SAFETY: these take a highlight-group id rather than a pointer.
-    let known = unsafe { syn_get_final_id(number_as_int(hl_id)) } != 0;
+    let known = syn_get_final_id(number_as_int(hl_id)) != 0;
     if !known {
         return Err(err_bad_number(c"highlight id", hl_id));
     }
-    // SAFETY: as above.
-    let attrcode = unsafe { syn_id2attr(number_as_int(hl_id)) };
-    // SAFETY: `arena` is the caller's.
-    unsafe { hl_get_attr_by_id(Integer::from(attrcode), rgb) }
+    let attrcode = syn_id2attr(number_as_int(hl_id));
+    hl_get_attr_by_id(Integer::from(attrcode), rgb)
 }
 
 /// # Safety

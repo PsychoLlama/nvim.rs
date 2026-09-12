@@ -224,10 +224,7 @@ pub fn decor_range_at(state: DecorStateRef, i: c_int) -> *mut DecorRange {
 /// Called whenever a public API function adds or deletes marks, in case that
 /// happened in a callback the drawing code is inside: the marktree iterator
 /// `state` is holding cannot be trusted across a structural change.
-///
-/// # Safety
-/// `buffer` must be live or null.
-pub unsafe fn decor_state_invalidate(buffer: Buf) {
+pub fn decor_state_invalidate(buffer: Buf) {
     decor_state.with_mut(|state| {
         // SAFETY: `state.win` is a live window while a redraw is running.
         if let Some(win) = unsafe { Win::from_raw(state.win) } {
@@ -586,8 +583,7 @@ fn add_sh(
         || flags & (kSHConceal | kSHSpellOn | kSHSpellOff) as c_int != 0
     {
         if sh.hl_id != 0 {
-            // SAFETY: the highlight tables are the editor's own.
-            range.attr_id = unsafe { syn_id2attr(sh.hl_id) };
+            range.attr_id = syn_id2attr(sh.hl_id);
         }
         decor_range_insert(state, &mut range);
     }
@@ -659,10 +655,7 @@ pub fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: DecorStateRef
 /// walked to combine attributes and to drop the ranges that have ended; and
 /// `col_last` records how far the answer stays valid, which is what lets
 /// `decor_redraw_col` skip this entirely for most columns.
-///
-/// # Safety
-/// `window` must be live.
-pub unsafe fn decor_redraw_col_impl(
+pub fn decor_redraw_col_impl(
     window: Win,
     col: c_int,
     win_col: c_int,
@@ -779,8 +772,7 @@ pub unsafe fn decor_redraw_col_impl(
                 col_last = col_last.min(r.end_col - 1);
             }
             if r.attr_id > 0 {
-                // SAFETY: the highlight tables are the editor's own.
-                attr = unsafe { hl_combine_attr(attr, r.attr_id) };
+                attr = hl_combine_attr(attr, r.attr_id);
             }
             if r.kind == kDecorKindHighlight {
                 let sh = r.sh();
@@ -846,11 +838,8 @@ pub unsafe fn decor_redraw_col_impl(
 
 /// The attribute of the cell at `col`, answered from the cached one when the
 /// column has not passed the point the last answer holds to.
-///
-/// # Safety
-/// `window` must be live.
 #[inline(always)]
-pub unsafe fn decor_redraw_col(
+pub fn decor_redraw_col(
     window: Win,
     col: c_int,
     win_col: c_int,
@@ -861,8 +850,7 @@ pub unsafe fn decor_redraw_col(
     if col <= state.col_last {
         return state.current;
     }
-    // SAFETY: the caller's window.
-    unsafe { decor_redraw_col_impl(window, col, win_col, hidden, state, max_col_last) }
+    decor_redraw_col_impl(window, col, win_col, hidden, state, max_col_last)
 }
 
 /// Finishes the line: folds in the `hl_eol` highlights that colour past the
@@ -878,8 +866,7 @@ pub unsafe fn decor_redraw_eol(
 ) -> bool {
     // SAFETY: the caller's out-parameter.
     let eol_attr = unsafe { &mut *eol_attr };
-    // SAFETY: the caller's window.
-    unsafe { decor_redraw_col(window, MAXCOL, MAXCOL, false, state, MAXCOL) };
+    decor_redraw_col(window, MAXCOL, MAXCOL, false, state, MAXCOL);
     state.eol_col = eol_col;
 
     let mut has_virt_pos = false;
@@ -887,8 +874,7 @@ pub unsafe fn decor_redraw_eol(
         let r = state.range_at(i);
         has_virt_pos |= r.start_row == state.row && r.is_virt_pos();
         if r.kind == kDecorKindHighlight && r.sh().flags as c_int & kSHHlEol as c_int != 0 {
-            // SAFETY: the highlight tables are the editor's own.
-            *eol_attr = unsafe { hl_combine_attr(*eol_attr, r.attr_id) };
+            *eol_attr = hl_combine_attr(*eol_attr, r.attr_id);
         }
     }
     has_virt_pos

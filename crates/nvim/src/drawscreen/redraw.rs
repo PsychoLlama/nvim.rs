@@ -273,12 +273,12 @@ pub fn redraw_statuslines() {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
         if wp.w_redr_status {
-            unsafe { win_check_ns_hl(Some(wp)) };
+            win_check_ns_hl(Some(wp));
             unsafe { win_redr_winbar(wp) };
             unsafe { win_redr_status(wp) };
         }
     }
-    unsafe { win_check_ns_hl(None) };
+    win_check_ns_hl(None);
 
     if redraw_tabline.get() {
         unsafe { draw_tabline() };

@@ -218,8 +218,7 @@ fn attr_of(id: c_int) -> c_int {
     if id == 0 {
         return 0;
     }
-    // SAFETY: caller contract.
-    unsafe { syn_id2attr(id) }
+    syn_id2attr(id)
 }
 
 /// `vim_strchr(s + from, c)` as an offset into `s`. The parser only looks

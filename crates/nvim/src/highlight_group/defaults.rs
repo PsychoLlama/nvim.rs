@@ -505,10 +505,7 @@ static HIGHLIGHT_INIT_CMDLINE: [&CStr; 140] = [
 
 /// Defines the `Nvim*` command-line groups. `reset`/`init` mean what they do
 /// for [`do_highlight`].
-///
-/// # Safety
-/// Runs `:highlight` commands, which redraw; main thread only.
-pub(crate) unsafe fn syn_init_cmdline_highlight(reset: bool, init: bool) {
+pub(crate) fn syn_init_cmdline_highlight(reset: bool, init: bool) {
     for line in &HIGHLIGHT_INIT_CMDLINE {
         // SAFETY: the caller's obligation; the strings are static.
         unsafe { do_highlight(line.as_ptr(), reset, init) };
@@ -520,10 +517,7 @@ pub(crate) unsafe fn syn_init_cmdline_highlight(reset: bool, init: bool) {
 ///
 /// `both` includes the groups `'background'` does not affect;
 /// `reset` clears each group first.
-///
-/// # Safety
-/// Sources a colour scheme and runs `:highlight`; main thread only.
-pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
+pub(crate) fn init_highlight(both: bool, reset: bool) {
     let mut numbuf = NumBuf::new();
     /// Whether the `both == true` call from `main()` has happened. Before it
     /// has, nothing else is set up and its own run would overrule this one
@@ -560,7 +554,7 @@ pub(crate) unsafe fn init_highlight(both: bool, reset: bool) {
         unsafe { do_highlight(line.as_ptr(), reset, true) };
     }
 
-    unsafe { syn_init_cmdline_highlight(false, false) };
+    syn_init_cmdline_highlight(false, false);
 }
 
 /// Sources the colour scheme `name`, answering whether it worked.

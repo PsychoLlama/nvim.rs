@@ -40,8 +40,7 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
         changed_window_setting(window);
     }
     let old_row_offset = window.w_grid.row_offset;
-    // SAFETY: `window` is a live window.
-    unsafe { win_grid_alloc(window) };
+    win_grid_alloc(window);
     let flush = flush || window.w_lines_valid == 0 || window.w_grid.row_offset != old_row_offset;
     let status = statusline || winbar;
     if flush && status {

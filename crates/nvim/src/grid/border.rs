@@ -172,7 +172,7 @@ pub unsafe fn grid_draw_border(
                 *attrs.offset(2)
             });
         }
-        unsafe { grid_line_flush() };
+        grid_line_flush();
     }
 
     let mut i = 0;
@@ -180,7 +180,7 @@ pub unsafe fn grid_draw_border(
         if side(3) {
             unsafe { screengrid_line_start(grid, i + *adj.offset(0), 0) };
             grid_line_put_schar(0, chars[7], unsafe { *attrs.offset(7) });
-            unsafe { grid_line_flush() };
+            grid_line_flush();
         }
         if side(1) {
             // With no top edge, the first row's right cell is the corner.
@@ -192,7 +192,7 @@ pub unsafe fn grid_draw_border(
             unsafe { screengrid_line_start(grid, i + *adj.offset(0), 0) };
             let attr = unsafe { *attrs.add(ic) };
             grid_line_put_schar(icol + unsafe { *adj.offset(3) }, chars[ic], attr);
-            unsafe { grid_line_flush() };
+            grid_line_flush();
         }
         i += 1;
     }
@@ -234,6 +234,6 @@ pub unsafe fn grid_draw_border(
                 *attrs.offset(4)
             });
         }
-        unsafe { grid_line_flush() };
+        grid_line_flush();
     }
 }

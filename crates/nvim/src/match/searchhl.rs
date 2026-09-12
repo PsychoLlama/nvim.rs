@@ -136,7 +136,7 @@ pub(crate) unsafe fn init_search_hl(window: Win, search_hl: *mut MatchState) {
     search_hl.buf = window.w_buffer;
     search_hl.lnum = 0;
     search_hl.first_lnum = 0;
-    unsafe { search_hl.attr = win_hl_attr(window, HLF_L) };
+    search_hl.attr = win_hl_attr(window, HLF_L);
     // The time limit is set at the top level, for every window at once.
 }
 
@@ -527,7 +527,7 @@ pub(crate) unsafe fn update_search_hl(
                 }
                 // The match holding the cursor uses `CurSearch`.
                 if shl == search_hl && shl.has_cursor {
-                    unsafe { shl.attr_cur = win_hl_attr(window, HLF_LC) };
+                    shl.attr_cur = win_hl_attr(window, HLF_LC);
                     if shl.attr_cur != shl.attr {
                         search_hl_has_cursor_lnum.set(lnum);
                     }

@@ -147,11 +147,10 @@ pub fn msg_grid_validate() {
 
 /// Send the line being built to the UI, mirrored if `'rightleft'` applies.
 pub fn msg_line_flush() {
-    // SAFETY: the caller's promise -- a batch is open.
     if cmdmsg_rl.get() {
         grid_line_mirror(msg_grid_ref().cols);
     }
-    unsafe { grid_line_flush_if_valid_row() };
+    grid_line_flush_if_valid_row();
 }
 
 /// Put the cursor at `row`/`col` of the message area.
@@ -160,7 +159,7 @@ pub fn msg_cursor_goto(row: c_int, mut col: c_int) {
     if cmdmsg_rl.get() {
         col = Columns.get() - 1 - col;
     }
-    let grid = unsafe { grid_adjust(msg_grid_view(), &mut row, &mut col) };
+    let grid = grid_adjust(msg_grid_view(), &mut row, &mut col);
     ui_grid_cursor_goto(grid.handle, row, col);
 }
 

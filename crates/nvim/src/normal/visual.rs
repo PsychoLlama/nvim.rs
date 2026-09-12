@@ -638,7 +638,7 @@ pub(crate) fn n_start_visual_mode(c: c_int) {
         coladvance(Win::current(), Win::current().w_virtcol);
     }
     set_visual_anchor(Win::current().w_cursor);
-    unsafe { fold_adjust_visual() };
+    fold_adjust_visual();
     may_trigger_modechanged();
     setmouse();
     conceal_check_cursor_line();

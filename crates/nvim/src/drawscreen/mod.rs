@@ -215,10 +215,7 @@ pub fn redrawing() -> bool {
 /// used and marks everything that reached into them for a redraw. With
 /// multigrid the message grid is a grid of its own, so there is nothing on the
 /// default grid to repair -- which is what the `kUIMultigrid` test is for.
-///
-/// # Safety
-/// Called from [`update_screen`] with the screen grids allocated.
-unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
+fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
     // SAFETY: the screen and message grids, on the main thread.
     clear_cmdline.set(true);
 
@@ -284,13 +281,9 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
 ///
 /// Each buffer is done once however many windows show it, which is what the two
 /// `display_tick` stamps are for.
-///
-/// # Safety
-/// Called from [`update_screen`].
-unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
-    // SAFETY: walking the current tab page's window list on the main thread.
+fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
     for wp in winlayer::windows() {
-        unsafe { update_window_hl(wp, redr_type >= UPD_NOT_VALID || hl_changed) };
+        update_window_hl(wp, redr_type >= UPD_NOT_VALID || hl_changed);
 
         let mut buf = wp.buffer();
         if !buf.b_mod_set {
@@ -370,7 +363,7 @@ pub fn update_screen() -> Result<(), Failed> {
     }
 
     if msg_scrolled.get() != 0 || msg_grid_invalid.get() {
-        unsafe { restore_scrolled_messages(redr_type, is_stl_global) };
+        restore_scrolled_messages(redr_type, is_stl_global);
     }
 
     win_ui_flush(true);
@@ -380,7 +373,7 @@ pub fn update_screen() -> Result<(), Failed> {
 
     let mut hl_changed = false;
     if need_highlight_changed.get() {
-        unsafe { highlight_changed() };
+        highlight_changed();
         hl_changed = true;
     }
 
@@ -400,16 +393,14 @@ pub fn update_screen() -> Result<(), Failed> {
 
     // May need to clear space on the default grid for the message area.
     if redr_type == UPD_NOT_VALID && clear_cmdline.get() && !ui_has(kUIMessages) {
-        unsafe {
-            grid_clear(
-                default_gridview(),
-                Rows.get() - p_ch.get() as c_int,
-                Rows.get(),
-                0,
-                Columns.get(),
-                0,
-            )
-        };
+        grid_clear(
+            default_gridview(),
+            Rows.get() - p_ch.get() as c_int,
+            Rows.get(),
+            0,
+            Columns.get(),
+            0,
+        );
     }
 
     ui_comp_set_screen_valid(true);
@@ -418,7 +409,7 @@ pub fn update_screen() -> Result<(), Failed> {
 
     // The "start" callback may have changed highlights used by the global
     // elements.
-    if unsafe { win_check_ns_hl(None) } {
+    if win_check_ns_hl(None) {
         redraw_cmdline.set(true);
         redraw_tabline.set(true);
     }
@@ -455,18 +446,18 @@ pub fn update_screen() -> Result<(), Failed> {
     }
 
     if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
-        unsafe { update_window_hl(Win::current(), redr_type >= UPD_NOT_VALID) };
+        update_window_hl(Win::current(), redr_type >= UPD_NOT_VALID);
         for tp in winlayer::tabs() {
             if !tp.is_current()
                 && let Some(w) = tp.current_window()
             {
-                unsafe { update_window_hl(w, redr_type >= UPD_NOT_VALID) };
+                update_window_hl(w, redr_type >= UPD_NOT_VALID);
             }
         }
         unsafe { draw_tabline() };
     }
 
-    unsafe { update_buffer_state(redr_type, hl_changed) };
+    update_buffer_state(redr_type, hl_changed);
 
     // Top to bottom through the windows, redrawing the ones that need it.
     let mut did_one = false;
@@ -478,8 +469,8 @@ pub fn update_screen() -> Result<(), Failed> {
             wp.w_redr_type = UPD_NOT_VALID;
         }
 
-        unsafe { win_check_ns_hl(Some(wp)) };
-        unsafe { win_grid_alloc(wp) };
+        win_check_ns_hl(Some(wp));
+        win_grid_alloc(wp);
 
         if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
             unsafe {
@@ -520,13 +511,13 @@ pub fn update_screen() -> Result<(), Failed> {
     end_search_hl();
 
     if pum_drawn() && must_redraw_pum.get() {
-        unsafe { win_check_ns_hl(Win::current_or_none()) };
+        win_check_ns_hl(Win::current_or_none());
         unsafe { pum_redraw() };
     } else if State.get() & MODE_CMDLINE != 0 {
         unsafe { pum_check_clear() };
     }
 
-    unsafe { win_check_ns_hl(None) };
+    win_check_ns_hl(None);
 
     // Reset `b_mod_set`. Going through the windows is probably faster than
     // going through every buffer.
@@ -662,7 +653,7 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
         col = window.w_view_width - window.w_wcol - cells;
     }
 
-    let grid = unsafe { grid_adjust(window.w_grid, &mut row, &mut col) };
+    let grid = grid_adjust(window.w_grid, &mut row, &mut col);
     if !grid.is_unresolved() {
         ui_grid_cursor_goto(grid.handle, row, col);
     }

@@ -249,18 +249,15 @@ fn decor_remove(
     decor: DecorInline,
     free: bool,
 ) {
-    // SAFETY: a live buffer and a decoration read out of one of its marks.
-    unsafe { buf_decor_remove(buffer, row1, row2, col1, decor, free) }
+    buf_decor_remove(buffer, row1, row2, col1, decor, free)
 }
 
 fn put_decor(buffer: Buf, decor: DecorInline, row: c_int, row2: c_int) {
-    // SAFETY: as [`decor_remove`].
-    unsafe { buf_put_decor(buffer, decor, row, row2) }
+    buf_put_decor(buffer, decor, row, row2)
 }
 
 fn redraw_decor(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline) {
-    // SAFETY: as [`decor_remove`].
-    unsafe { decor_redraw(buffer, row1, row2, col1, decor) }
+    decor_redraw(buffer, row1, row2, col1, decor)
 }
 
 fn free_decor(decor: DecorInline) {
@@ -270,13 +267,11 @@ fn free_decor(decor: DecorInline) {
 }
 
 fn type_flags(decor: DecorInline) -> uint16_t {
-    // SAFETY: as [`free_decor`], and this only reads.
-    unsafe { decor_type_flags(decor) }
+    decor_type_flags(decor)
 }
 
 fn invalidate_decor_state(buffer: Buf) {
-    // SAFETY: a live buffer.
-    unsafe { decor_state_invalidate(buffer) }
+    decor_state_invalidate(buffer)
 }
 
 fn signcols_count_range(buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {

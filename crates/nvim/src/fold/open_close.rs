@@ -142,10 +142,7 @@ pub(super) fn new_fold_level_win(mut win: Win) {
 }
 
 /// Apply 'foldlevel' to all folds that don't contain the cursor.
-///
-/// # Safety
-/// The current window must be live.
-pub unsafe fn fold_check_close() {
+pub fn fold_check_close() {
     // SAFETY: 'foldclose' is a NUL-terminated option string.
     if unsafe { *p_fcl.get() } as c_int == NUL {
         return;
@@ -198,10 +195,7 @@ pub fn fold_manual_allowed(create: bool) -> c_int {
 }
 
 /// Create a fold from line "start" to line "end" (inclusive) in window `window`.
-///
-/// # Safety
-/// `window` must be a live window with a live buffer.
-pub unsafe fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
+pub fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
     // SAFETY: the caller's promise -- a live window.
     let mut win = window;
     let (start, end) = if start_pos.lnum > end_pos.lnum {
@@ -212,7 +206,7 @@ pub unsafe fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
     if foldmethod_is_marker(win) {
         // With 'foldmethod' = "marker" the fold lives in the buffer text.
         // SAFETY: the caller's promise.
-        unsafe { fold_create_markers(window, start, end) };
+        fold_create_markers(window, start, end);
         return;
     }
     checkupdate(win);
@@ -324,16 +318,7 @@ pub unsafe fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
 /// `end` — delete all folds from start to end when not 0
 /// `recursive` — delete recursively if true
 /// `had_visual` — true when Visual selection used
-///
-/// # Safety
-/// `window` must be a live window with a live buffer.
-pub unsafe fn delete_fold(
-    window: Win,
-    start: LineNr,
-    end: LineNr,
-    recursive: c_int,
-    had_visual: bool,
-) {
+pub fn delete_fold(window: Win, start: LineNr, end: LineNr, recursive: c_int, had_visual: bool) {
     let mut maybe_small = false;
     let mut level = 0;
     let mut lnum = start;
@@ -353,9 +338,7 @@ pub unsafe fn delete_fold(
         while let Ok(i) = folds.find(lnum - lnum_off) {
             let fold = folds.at(i);
             found = Some((folds, i, lnum_off));
-            // SAFETY: a live window, and one of its own folds.
-            if unsafe { check_closed(win, fold, &mut use_level, level, &mut maybe_small, lnum_off) }
-            {
+            if check_closed(win, fold, &mut use_level, level, &mut maybe_small, lnum_off) {
                 break;
             }
             folds = fold.nested();
@@ -377,11 +360,10 @@ pub unsafe fn delete_fold(
             // markers are gone from the buffer text.
             first_lnum = first_lnum.min(fold.top() + found_off);
             last_lnum = last_lnum.max(lnum);
-            // SAFETY: the caller's promise, and one of `window`'s own folds.
             if !did_one {
                 parse_marker(win);
             }
-            unsafe { delete_fold_markers(win, fold, recursive != 0, found_off) };
+            delete_fold_markers(win, fold, recursive != 0, found_off);
         }
         did_one = true;
         changed_window_setting(win);
@@ -561,10 +543,7 @@ pub(super) fn fold_open_nested(fold: FoldRef) {
 /// `maybe_smallp` — true: the outer fold had no `fd_small` answer yet
 /// `lnum_off` — line number offset for fold.top()
 /// Returns true if fold is closed
-///
-/// # Safety
-/// `window` must be a live window, and `fold` one of its folds at `lnum_off`.
-pub(super) unsafe fn check_closed(
+pub(super) fn check_closed(
     win: Win,
     fold: FoldRef,
     use_levelp: &mut bool,
@@ -589,7 +568,7 @@ pub(super) unsafe fn check_closed(
             fold.set_small(None);
         }
         // SAFETY: the caller's promise.
-        unsafe { check_small(win, fold, lnum_off) };
+        check_small(win, fold, lnum_off);
         if fold.small() == Some(true) {
             // 'foldminlines' vetoes it: too short to be worth drawing closed.
             closed = false;

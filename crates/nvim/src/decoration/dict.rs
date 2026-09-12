@@ -110,7 +110,7 @@ pub unsafe fn decor_to_dict_legacy(dict: &mut ApiDict, decor: DecorInline, hl_na
 
     let flags = sh_hl.flags as c_int;
     if sh_hl.hl_id != 0 {
-        unsafe { put(dict, c"hl_group", hl_group_name(sh_hl.hl_id, hl_name)) };
+        put(dict, c"hl_group", hl_group_name(sh_hl.hl_id, hl_name));
         let value = Object::boolean(flags & kSHHlEol as c_int != 0);
         put(dict, c"hl_eol", value);
         priority = i32::from(sh_hl.priority);
@@ -153,7 +153,7 @@ pub unsafe fn decor_to_dict_legacy(dict: &mut ApiDict, decor: DecorInline, hl_na
     }
 
     if sh_sign.flags as c_int & kSHIsSign as c_int != 0 {
-        unsafe { put_sign(dict, &mut sh_sign, hl_name) };
+        put_sign(dict, &mut sh_sign, hl_name);
         priority = i32::from(sh_sign.priority);
     }
 
@@ -223,10 +223,7 @@ unsafe fn put_virt_lines(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) 
 }
 
 /// The sign half of [`decor_to_dict_legacy`].
-///
-/// # Safety
-/// `sh` must be a live sign item.
-unsafe fn put_sign(dict: &mut ApiDict, sh: &mut DecorSignHighlight, hl_name: bool) {
+fn put_sign(dict: &mut ApiDict, sh: &mut DecorSignHighlight, hl_name: bool) {
     if sh.text[0] != 0 {
         let mut buf = [0 as c_char; SIGN_WIDTH as usize * MAX_SCHAR_SIZE as usize];
         unsafe { describe_sign_text(buf.as_mut_ptr(), sh.text.as_mut_ptr()) };
@@ -248,17 +245,14 @@ unsafe fn put_sign(dict: &mut ApiDict, sh: &mut DecorSignHighlight, hl_name: boo
         (c"cursorline_hl_group", sh.cursorline_hl_id),
     ] {
         if id != 0 {
-            unsafe { put(dict, key, hl_group_name(id, hl_name)) };
+            put(dict, key, hl_group_name(id, hl_name));
         }
     }
 }
 
 /// Which kinds of decoration `decor` carries, as the `kExtmark*` mask the
 /// marktree stores beside the mark.
-///
-/// # Safety
-/// `decor` must be live.
-pub unsafe fn decor_type_flags(decor: DecorInline) -> uint16_t {
+pub fn decor_type_flags(decor: DecorInline) -> uint16_t {
     // SAFETY: the caller's decoration.
     if !decor.ext {
         return if unsafe { decor.data.hl }.flags as c_int & kSHIsSign as c_int != 0 {
@@ -293,10 +287,7 @@ pub unsafe fn decor_type_flags(decor: DecorInline) -> uint16_t {
 
 /// A highlight group as the API reports it: its name when the caller asked
 /// for names, otherwise its id.
-///
-/// # Safety
-/// Reaches the group table; main thread only.
-pub unsafe fn hl_group_name(hl_id: c_int, hl_name: bool) -> Object {
+pub fn hl_group_name(hl_id: c_int, hl_name: bool) -> Object {
     if hl_name {
         // SAFETY: `syn_id2name` answers a static or table-owned string.
         Object::string(unsafe { cstr_to_string(syn_id2name(hl_id)) })

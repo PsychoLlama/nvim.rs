@@ -318,7 +318,7 @@ pub(crate) unsafe fn redraw_wildmenu(
 
     let mut group: Hlf = HLF_NONE;
     let fillchar = unsafe { fillchar_status(&raw mut group, Win::current()) };
-    let attr = unsafe { win_hl_attr(Win::current(), group as c_int) };
+    let attr = win_hl_attr(Win::current(), group as c_int);
 
     let mut len;
     if first_match.get() == 0 {
@@ -417,16 +417,14 @@ pub(crate) unsafe fn redraw_wildmenu(
 
         // Tricky: the wildmenu can be drawn either over a status line, or
         // at empty scrolled space in the message output.
-        unsafe {
-            grid_line_start(
-                if wild_menu_showing.get() == WM_SCROLLED {
-                    msg_grid_view()
-                } else {
-                    default_gridview()
-                },
-                row,
-            )
-        };
+        grid_line_start(
+            if wild_menu_showing.get() == WM_SCROLLED {
+                msg_grid_view()
+            } else {
+                default_gridview()
+            },
+            row,
+        );
 
         unsafe { grid_line_puts(0, buf, -1, attr) };
         if !selstart.is_null() && highlight {
@@ -443,7 +441,7 @@ pub(crate) unsafe fn redraw_wildmenu(
 
         grid_line_fill(clen, Columns.get(), fillchar, attr);
 
-        unsafe { grid_line_flush() };
+        grid_line_flush();
     }
 
     win_redraw_last_status(current_topframe());

@@ -45,7 +45,7 @@ pub(crate) unsafe fn ui_ext_cmdline_show(line: Cc) {
             item.push(Object::integer(if chunk.hl_id == 0 {
                 0
             } else {
-                unsafe { syn_id2attr(chunk.hl_id) as Integer }
+                syn_id2attr(chunk.hl_id) as Integer
             }));
 
             debug_assert!(chunk.end >= chunk.start);

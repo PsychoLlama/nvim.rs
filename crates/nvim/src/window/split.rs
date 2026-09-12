@@ -813,8 +813,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_tagstackidx = oldp.w_tagstackidx;
     newp.w_tagstacklen = oldp.w_tagstacklen;
     newp.w_changelistidx = oldp.w_changelistidx;
-    // SAFETY: `newp` is freshly allocated, so its fold list is still empty.
-    unsafe { copy_folding_state(oldp, newp) };
+    copy_folding_state(oldp, newp);
     // The options and the argument list, which `win_new_tabpage` also copies
     // on its own (upstream's `win_init_some`).
     newp.w_alist = oldp.w_alist;

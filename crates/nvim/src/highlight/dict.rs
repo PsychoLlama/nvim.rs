@@ -54,11 +54,7 @@ pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
 /// Answers an empty dict for id 0 (which is "no attributes at all"), and sets
 /// Refuses an id no [`get_attr_entry`](super::get_attr_entry) ever handed
 /// out.
-///
-/// # Safety
-/// `_arena` is null or a live arena. Nothing is taken from it any more: the
-/// answer owns its entries.
-pub unsafe fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
+pub fn hl_get_attr_by_id(attr_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
     let empty = ApiDict::EMPTY;
     if attr_id == 0 {
         return Ok(empty);

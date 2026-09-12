@@ -32,10 +32,7 @@ use super::*;
 use crate::types::Vv;
 
 /// "foldclosed()" and "foldclosedend()" functions
-///
-/// # Safety
-/// `args` and `result` must be live typvals.
-pub(super) unsafe fn foldclosed_both(args: &[TypVal], result: &mut TypVal, end: bool) {
+pub(super) fn foldclosed_both(args: &[TypVal], result: &mut TypVal, end: bool) {
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(&args[0])) };
     if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
@@ -53,14 +50,12 @@ pub(super) unsafe fn foldclosed_both(args: &[TypVal], result: &mut TypVal, end: 
 
 /// "foldclosed()" function
 pub fn f_foldclosed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's promise.
-    unsafe { foldclosed_both(args, result, false) };
+    foldclosed_both(args, result, false);
 }
 
 /// "foldclosedend()" function
 pub fn f_foldclosedend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's promise.
-    unsafe { foldclosed_both(args, result, true) };
+    foldclosed_both(args, result, true);
 }
 
 /// "foldlevel()" function

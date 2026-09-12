@@ -515,8 +515,7 @@ pub fn command_height() {
             msg_grid_validate();
             grid = msg_grid_view();
         }
-        // SAFETY: a live grid, and a row range inside the screen.
-        unsafe { grid_clear(grid, cmdline_row.get(), Rows.get(), 0, Columns.get(), 0) };
+        grid_clear(grid, cmdline_row.get(), Rows.get(), 0, Columns.get(), 0);
         msg_row.set(cmdline_row.get());
     }
     TabPage::current().tp_ch_used = p_ch.get();

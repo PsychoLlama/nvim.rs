@@ -45,11 +45,9 @@ use core::ffi::{c_char, c_int, c_uint};
 /// and the "current match" highlight actually differs from the others --
 /// otherwise nothing on screen would change.
 fn current_match_is_distinct() -> bool {
-    // SAFETY (throughout): `curwin` is the current window.
     p_hls.get() != 0
         && !no_hlsearch.get()
-        && unsafe { win_hl_attr(Win::current(), HLF_LC) }
-            != unsafe { win_hl_attr(Win::current(), HLF_L) }
+        && win_hl_attr(Win::current(), HLF_LC) != win_hl_attr(Win::current(), HLF_L)
 }
 
 /// `/` and `?`: read a pattern from the command line and search for it.

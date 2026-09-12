@@ -874,13 +874,11 @@ pub(crate) unsafe fn terminal_get_line_attributes(
                 hl_blend: -1,
                 url: -1,
             };
-            // SAFETY: reads the highlight tables, which are the editor's own.
-            attr_id = unsafe { hl_get_term_attr(resolved) };
+            attr_id = hl_get_term_attr(resolved);
         }
         // A hyperlink is its own attribute, layered over the colours.
         if cell.uri > 0 {
-            // SAFETY: as above.
-            attr_id = unsafe { hl_combine_attr(attr_id, cell.uri) };
+            attr_id = hl_combine_attr(attr_id, cell.uri);
         }
         // SAFETY: the caller's scratch array is `TERM_ATTRS_MAX` wide and
         // `width` was clamped to it.

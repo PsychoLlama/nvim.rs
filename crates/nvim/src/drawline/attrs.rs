@@ -74,15 +74,15 @@ impl Cells {
 
         // Decide which of the highlight attributes to use.
         self.attr_pri = if self.area_attr != 0 {
-            let pri = unsafe { hl_combine_attr(wlv.line_attr, self.area_attr) };
+            let pri = hl_combine_attr(wlv.line_attr, self.area_attr);
             if highlight_match.get() {
                 pri
             } else {
                 // Let search highlighting show through the Visual area.
-                unsafe { hl_combine_attr(self.search_attr, pri) }
+                hl_combine_attr(self.search_attr, pri)
             }
         } else if self.search_attr != 0 {
-            unsafe { hl_combine_attr(wlv.line_attr, self.search_attr) }
+            hl_combine_attr(wlv.line_attr, self.search_attr)
         } else if wlv.line_attr != 0
             && ((wlv.fromcol == -10 && wlv.tocol == MAXCOL as ::core::ffi::c_int)
                 || wlv.vcol < wlv.fromcol
@@ -95,8 +95,8 @@ impl Cells {
         } else {
             0
         };
-        self.attr_base = unsafe { hl_combine_attr(self.fold_attr, self.decor_attr) };
-        wlv.char_attr = unsafe { hl_combine_attr(self.attr_base, self.attr_pri) };
+        self.attr_base = hl_combine_attr(self.fold_attr, self.decor_attr);
+        wlv.char_attr = hl_combine_attr(self.attr_base, self.attr_pri);
     }
 
     /// Is this the cell the Visual or `'incsearch'` range starts at?
@@ -150,20 +150,18 @@ impl Cells {
             }
             self.decor_need_recheck = false;
         }
-        self.extmark_attr = unsafe {
-            decor_redraw_col(
-                window,
-                self.byte_col(),
-                if self.may_have_inline_virt {
-                    -3
-                } else {
-                    wlv.off
-                },
-                selected,
-                wlv.decor,
-                self.decor_provider_end_col - 1,
-            )
-        };
+        self.extmark_attr = decor_redraw_col(
+            window,
+            self.byte_col(),
+            if self.may_have_inline_virt {
+                -3
+            } else {
+                wlv.off
+            },
+            selected,
+            wlv.decor,
+            self.decor_provider_end_col - 1,
+        );
         if !self.may_have_inline_virt {
             return;
         }
@@ -215,7 +213,7 @@ impl Cells {
         {
             let ins_match_attr = ins_compl_col_range_attr(wlv.lnum, self.byte_col());
             if ins_match_attr > 0 {
-                self.search_attr = unsafe { hl_combine_attr(self.search_attr, ins_match_attr) };
+                self.search_attr = hl_combine_attr(self.search_attr, ins_match_attr);
             }
         }
     }
@@ -275,8 +273,7 @@ impl Cells {
         if wlv.n_attr <= 0 || self.search_attr_from_match {
             return;
         }
-        // SAFETY: `hl_combine_attr` only reads the attribute table.
-        wlv.char_attr = unsafe { hl_combine_attr(wlv.char_attr, wlv.extra_attr) };
+        wlv.char_attr = hl_combine_attr(wlv.char_attr, wlv.extra_attr);
         if !wlv.reset_extra_attr {
             return;
         }
@@ -309,10 +306,10 @@ impl Cells {
             && wlv.lnum != window.w_cursor.lnum
         {
             self.attr_before_vcol_hl = wlv.char_attr;
-            wlv.char_attr = unsafe { hl_combine_attr(win_hl_attr(window, HLF_CUC), wlv.char_attr) };
+            wlv.char_attr = hl_combine_attr(win_hl_attr(window, HLF_CUC), wlv.char_attr);
         } else if !wlv.color_cols.is_null() && wlv.hl_vcol() == unsafe { *wlv.color_cols } {
             self.attr_before_vcol_hl = wlv.char_attr;
-            wlv.char_attr = unsafe { hl_combine_attr(win_hl_attr(window, HLF_MC), wlv.char_attr) };
+            wlv.char_attr = hl_combine_attr(win_hl_attr(window, HLF_MC), wlv.char_attr);
         }
     }
 
@@ -354,6 +351,6 @@ impl Cells {
                 high = wlv.line_attr_lowprio;
             }
         }
-        wlv.char_attr = unsafe { hl_combine_attr(low, high) };
+        wlv.char_attr = hl_combine_attr(low, high);
     }
 }

@@ -76,12 +76,12 @@ impl Cells {
                 self.char_code = '>' as ::core::ffi::c_int;
                 self.char_len = 1;
                 self.cell_char = schar_from_ascii(b'>');
-                self.overflow_attr = unsafe { win_hl_attr(window, HLF_AT) };
+                self.overflow_attr = win_hl_attr(window, HLF_AT);
                 if wlv.cursorline_attr != 0 {
                     self.overflow_attr = if wlv.line_attr_lowprio != 0 {
-                        unsafe { hl_combine_attr(wlv.cursorline_attr, self.overflow_attr) }
+                        hl_combine_attr(wlv.cursorline_attr, self.overflow_attr)
                     } else {
-                        unsafe { hl_combine_attr(self.overflow_attr, wlv.cursorline_attr) }
+                        hl_combine_attr(self.overflow_attr, wlv.cursorline_attr)
                     };
                 }
             } else {
@@ -103,7 +103,7 @@ impl Cells {
                 self.char_code = ' ' as ::core::ffi::c_int;
                 self.char_len = 1;
                 wlv.n_attr += 1;
-                wlv.extra_attr = unsafe { win_hl_attr(window, HLF_AT) };
+                wlv.extra_attr = win_hl_attr(window, HLF_AT);
             }
         }
 
@@ -191,7 +191,7 @@ impl Cells {
             wlv.extra_last = NUL as ScreenChar;
             if self.area_attr == 0 && self.search_attr == 0 {
                 wlv.n_attr = wlv.extra_todo + 1;
-                wlv.extra_attr = unsafe { win_hl_attr(window, HLF_8) };
+                wlv.extra_attr = win_hl_attr(window, HLF_8);
                 self.attr_before_run = wlv.char_attr;
             }
         } else if self.char_len == 0 {
@@ -206,7 +206,7 @@ impl Cells {
             self.cell_char = schar_from_ascii(b'>');
             self.char_code = '>' as ::core::ffi::c_int;
             self.char_len = 1;
-            self.overflow_attr = unsafe { win_hl_attr(window, HLF_AT) };
+            self.overflow_attr = win_hl_attr(window, HLF_AT);
             self.ptr = unsafe { self.ptr.offset(-1) };
             self.did_decrement_ptr = true;
         } else if unsafe { *self.ptr } as ::core::ffi::c_int != NUL {
@@ -225,7 +225,7 @@ impl Cells {
             self.char_len = 1;
             if self.area_attr == 0 && self.search_attr == 0 {
                 wlv.n_attr = wlv.extra_todo + 1;
-                wlv.extra_attr = unsafe { win_hl_attr(window, HLF_AT) };
+                wlv.extra_attr = win_hl_attr(window, HLF_AT);
                 self.attr_before_run = wlv.char_attr;
             }
         }
@@ -284,19 +284,19 @@ impl Cells {
 
         if self.has_decor && at > 0 {
             // Extmarks take precedence over syntax.
-            self.decor_attr = unsafe { hl_combine_attr(self.decor_attr, self.extmark_attr) };
+            self.decor_attr = hl_combine_attr(self.decor_attr, self.extmark_attr);
             self.decor_conceal = wlv.decor.conceal;
             // The decoration only speaks when it has an opinion.
             can_spell = wlv.decor.spell.unwrap_or(can_spell);
         }
 
-        self.attr_base = unsafe { hl_combine_attr(self.fold_attr, self.decor_attr) };
-        wlv.char_attr = unsafe { hl_combine_attr(self.attr_base, self.attr_pri) };
+        self.attr_base = hl_combine_attr(self.fold_attr, self.decor_attr);
+        wlv.char_attr = hl_combine_attr(self.attr_base, self.attr_pri);
 
         unsafe { self.spell_at(wlv, window, f, *prev_ptr, can_spell) };
         if self.spell_attr != 0 {
-            self.attr_base = unsafe { hl_combine_attr(self.attr_base, self.spell_attr) };
-            wlv.char_attr = unsafe { hl_combine_attr(self.attr_base, self.attr_pri) };
+            self.attr_base = hl_combine_attr(self.attr_base, self.spell_attr);
+            wlv.char_attr = hl_combine_attr(self.attr_base, self.attr_pri);
         }
 
         if !unsafe { (*window.w_buffer).terminal }.is_null() {
@@ -305,7 +305,7 @@ impl Cells {
             } else {
                 0
             };
-            wlv.char_attr = unsafe { hl_combine_attr(term_attr, wlv.char_attr) };
+            wlv.char_attr = hl_combine_attr(term_attr, wlv.char_attr);
         }
 
         self.linebreak(wlv, window, c0);
@@ -591,7 +591,7 @@ impl Cells {
                 };
             }
             wlv.n_attr = 1;
-            wlv.extra_attr = unsafe { win_hl_attr(window, HLF_0) };
+            wlv.extra_attr = win_hl_attr(window, HLF_0);
             self.attr_before_run = wlv.char_attr;
             self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         }
@@ -624,7 +624,7 @@ impl Cells {
                 self.cell_char = lcs.space;
             }
             wlv.n_attr = 1;
-            wlv.extra_attr = unsafe { win_hl_attr(window, HLF_0) };
+            wlv.extra_attr = win_hl_attr(window, HLF_0);
             self.attr_before_run = wlv.char_attr;
             self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         }

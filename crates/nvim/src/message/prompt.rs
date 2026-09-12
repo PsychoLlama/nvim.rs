@@ -525,8 +525,8 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
 
 /// Write the `--More--` prompt, with its key legend when `full` is set.
 pub(crate) fn msg_moremsg(full: bool) {
-    let attr = unsafe { hl_combine_attr(hl_attr(HLF_MSG as c_int), hl_attr(HLF_M as c_int)) };
-    unsafe { grid_line_start(msg_grid_view(), Rows.get() - 1) };
+    let attr = hl_combine_attr(hl_attr(HLF_MSG as c_int), hl_attr(HLF_M as c_int));
+    grid_line_start(msg_grid_view(), Rows.get() - 1);
     let mut len = unsafe { grid_line_puts(0, gettext(c"-- More --").as_ptr(), -1, attr) };
     if full {
         let keys = c" SPACE/d/j: screen/page/line down, b/u/k: up, q: quit ";
@@ -534,7 +534,7 @@ pub(crate) fn msg_moremsg(full: bool) {
         len += unsafe { grid_line_puts(len, help.as_ptr(), -1, attr) };
     }
     grid_line_cursor_goto(len);
-    unsafe { grid_line_flush() };
+    grid_line_flush();
 }
 
 /// The screen was cleared under a prompt: write it again.

@@ -38,13 +38,11 @@ impl Cells {
         debug_assert!(wlv.off == 0);
 
         if cmdwin_win.get() == Some(window.id()) {
-            unsafe {
-                wlv.draw_col_fill(
-                    schar_from_ascii(cmdwin_type.get() as u8),
-                    1,
-                    win_hl_attr(window, HLF_AT),
-                )
-            };
+            wlv.draw_col_fill(
+                schar_from_ascii(cmdwin_type.get() as u8),
+                1,
+                win_hl_attr(window, HLF_AT),
+            );
         }
 
         if wlv.filler_todo > 0 {
@@ -110,16 +108,14 @@ impl Cells {
         if self.has_decor && wlv.row == wlv.startrow + wlv.filler_lines {
             // Hide virtual text over text hidden by 'nowrap' or
             // 'smoothscroll'.
-            unsafe {
-                decor_redraw_col(
-                    window,
-                    self.byte_col() - 1,
-                    wlv.off,
-                    true,
-                    wlv.decor,
-                    self.decor_provider_end_col - 1,
-                )
-            };
+            decor_redraw_col(
+                window,
+                self.byte_col() - 1,
+                wlv.off,
+                true,
+                wlv.decor,
+                self.decor_provider_end_col - 1,
+            );
         }
         if wlv.col >= self.view_width {
             wlv.off = self.view_width;
@@ -149,10 +145,8 @@ impl Cells {
         // still filler.
         let more_rows = wlv.row + 1 - wlv.startrow < f.col_rows
             && (unsafe { (*f.statuscol).draw }
-                || unsafe { win_hl_attr(window, HLF_LNA) }
-                    != unsafe { win_hl_attr(window, HLF_N) }
-                || unsafe { win_hl_attr(window, HLF_LNB) }
-                    != unsafe { win_hl_attr(window, HLF_N) });
+                || win_hl_attr(window, HLF_LNA) != win_hl_attr(window, HLF_N)
+                || win_hl_attr(window, HLF_LNB) != win_hl_attr(window, HLF_N));
         if !more_rows && wlv.filler_todo <= 0 {
             return Step::Done;
         }
@@ -216,7 +210,7 @@ impl Cells {
         // Fill the columns concealment pretended to use, so that
         // 'cursorline' still covers the whole row.
         if wlv.boguscols != 0 && (wlv.line_attr_lowprio != 0 || wlv.line_attr != 0) {
-            let attr = unsafe { hl_combine_attr(wlv.line_attr_lowprio, wlv.line_attr) };
+            let attr = hl_combine_attr(wlv.line_attr_lowprio, wlv.line_attr);
             while draw_col < self.view_width {
                 let at = wlv.off as usize;
                 line.chars_mut()[at] = schar_from_ascii(b' ');
@@ -266,7 +260,7 @@ impl Cells {
         if wrap {
             let mut current_row = wlv.row;
             let mut dummy_col = 0;
-            let mut current_grid = unsafe { grid_adjust(grid, &mut current_row, &mut dummy_col) };
+            let mut current_grid = grid_adjust(grid, &mut current_row, &mut dummy_col);
             // Force a redraw of the first column of the next line.
             let off = current_grid.row_start(current_row + 1);
             current_grid.set_attr(off, -1 as ScreenAttr);
@@ -419,19 +413,19 @@ impl Cells {
         let mut line = linebuf();
         // SAFETY: the caller's window and frame.
         let mut rightmost_vcol = unsafe { get_rightmost_vcol(window, wlv.color_cols) };
-        let cuc_attr = unsafe { win_hl_attr(window, HLF_CUC) };
-        let mc_attr = unsafe { win_hl_attr(window, HLF_MC) };
+        let cuc_attr = win_hl_attr(window, HLF_CUC);
+        let mc_attr = win_hl_attr(window, HLF_MC);
 
         if wlv.diff_hlf == HLF_TXD || wlv.diff_hlf == HLF_TXA {
             wlv.diff_hlf = HLF_CHD;
             wlv.set_line_attr_for_diff(window);
         }
         let diff_attr = if wlv.diff_hlf != HLF_NONE {
-            unsafe { win_hl_attr(window, wlv.diff_hlf) }
+            win_hl_attr(window, wlv.diff_hlf)
         } else {
             0
         };
-        let base_attr = unsafe { hl_combine_attr(wlv.line_attr_lowprio, diff_attr) };
+        let base_attr = hl_combine_attr(wlv.line_attr_lowprio, diff_attr);
         if base_attr != 0 || wlv.line_attr != 0 || !unsafe { (*window.w_buffer).terminal }.is_null()
         {
             // Something applies to the whole row, so there is no column to
@@ -448,9 +442,9 @@ impl Cells {
                 && wlv.hl_vcol() == window.w_virtcol
                 && wlv.lnum != window.w_cursor.lnum
             {
-                col_attr = unsafe { hl_combine_attr(col_attr, cuc_attr) };
+                col_attr = hl_combine_attr(col_attr, cuc_attr);
             } else if !wlv.color_cols.is_null() && wlv.hl_vcol() == unsafe { *wlv.color_cols } {
-                col_attr = unsafe { hl_combine_attr(col_attr, mc_attr) };
+                col_attr = hl_combine_attr(col_attr, mc_attr);
             }
             if !unsafe { (*window.w_buffer).terminal }.is_null()
                 && wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int
@@ -458,7 +452,7 @@ impl Cells {
                 col_attr =
                     unsafe { hl_combine_attr(col_attr, *f.term_attrs.offset(wlv.vcol as isize)) };
             }
-            col_attr = unsafe { hl_combine_attr(col_attr, wlv.line_attr) };
+            col_attr = hl_combine_attr(col_attr, wlv.line_attr);
 
             line.attrs_mut()[wlv.off as usize] = col_attr as ScreenAttr;
             // The vcols were filled by the loop in the caller.

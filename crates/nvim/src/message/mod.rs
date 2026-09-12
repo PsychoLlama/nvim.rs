@@ -290,9 +290,7 @@ fn hl_attr(hlf: ::core::ffi::c_int) -> ::core::ffi::c_int {
 fn clear_msg_area(top: c_int, bot: c_int, left: c_int, right: c_int) {
     let grid = msg_grid_view();
     let attr = hl_attr(HLF_MSG as c_int);
-    // SAFETY: `msg_grid_view` hands back the adjusted message grid, which is
-    // what every one of these calls cleared.
-    unsafe { grid_clear(grid, top, bot, left, right, attr) };
+    grid_clear(grid, top, bot, left, right, attr);
 }
 
 /// The innermost entry of the `:source`/function call stack, which is what

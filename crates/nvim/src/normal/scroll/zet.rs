@@ -276,7 +276,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
                 } else {
                     let lnum = win.w_cursor.lnum;
                     let deep = (nchar == 'D' as c_int) as c_int;
-                    unsafe { delete_fold(win, lnum, lnum, deep, false) };
+                    delete_fold(win, lnum, lnum, deep, false);
                 }
             }
         }
@@ -286,7 +286,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
                 clear_folding(win);
                 changed_window_setting(win);
             } else if foldmethod_is_marker(win) {
-                unsafe { delete_fold(win, 1, Buf::current().b_ml.ml_line_count, 1, false) };
+                delete_fold(win, 1, Buf::current().b_ml.ml_line_count, 1, false);
             } else {
                 let msg = c"E352: Cannot erase folds with current 'foldmethod'";
                 emsg(gettext(msg));
@@ -392,7 +392,7 @@ unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -
             } else {
                 BACKWARD as c_int
             };
-            if unsafe { fold_move_to(true, dir, ca.count1) } == 0 {
+            if fold_move_to(true, dir, ca.count1) == 0 {
                 clear_op_beep(ca.op());
             }
         }

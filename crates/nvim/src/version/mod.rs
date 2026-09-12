@@ -503,7 +503,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     } else {
         default_gridview()
     };
-    unsafe { grid_line_start(grid, row) };
+    grid_line_start(grid, row);
     let byte_at = |at: usize| unsafe { mesg.as_ptr().add(at) };
 
     let attr_of = |group: &CStr| unsafe { syn_id2attr(syn_name2id(group.as_ptr())) };
@@ -528,7 +528,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
             col += unsafe { grid_line_puts(col, byte_at(at), clen, attr) };
             at += clen as usize;
         }
-        unsafe { grid_line_flush() };
+        grid_line_flush();
         return;
     }
 
@@ -546,7 +546,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
             col += unsafe { grid_line_puts(col, byte_at(at), clen, attr) };
             at += clen as usize;
         }
-        unsafe { grid_line_flush() };
+        grid_line_flush();
         return;
     }
 
@@ -580,7 +580,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
         }
         at += len;
     }
-    unsafe { grid_line_flush() };
+    grid_line_flush();
 }
 
 /// `:intro` -- the intro screen on demand, until a key is pressed.

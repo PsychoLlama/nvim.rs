@@ -135,20 +135,16 @@ pub fn clear_ns_defs() {
 ///
 /// A `default` definition does not overwrite one the namespace already has,
 /// which is what `nvim_set_hl`'s `default = true` means.
-///
-/// # Safety
-/// Main thread only.
-pub unsafe fn ns_hl_def(
+pub fn ns_hl_def(
     ns_id: NS,
     hl_id: c_int,
     attrs: HlAttrs,
     link_id: c_int,
     dict: Option<&KeyDict_highlight>,
 ) {
-    // SAFETY: the editor's own tables.
     if ns_id == 0 {
         let dict = dict.expect("the global table needs the caller's dict");
-        unsafe { set_hl_group(hl_id, attrs, dict, link_id) };
+        set_hl_group(hl_id, attrs, dict, link_id);
         return;
     }
     let key = ColorKey {
@@ -166,7 +162,7 @@ pub unsafe fn ns_hl_def(
     let attr_id = if link_id > 0 {
         -1
     } else {
-        unsafe { hl_get_syn_attr(ns_id, hl_id, attrs) }
+        hl_get_syn_attr(ns_id, hl_id, attrs)
     };
     let item = ColorItem {
         attr_id,
@@ -193,10 +189,7 @@ pub unsafe fn ns_hl_def(
 /// caller resolves the link against the global table.
 ///
 /// `nodefault` skips definitions the namespace only supplied as a default.
-///
-/// # Safety
-/// Calls into Lua, which can re-enter the editor; main thread only.
-pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c_int {
+pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c_int {
     // Guards the `hl_def` callback against asking about itself.
     static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
@@ -264,7 +257,7 @@ pub unsafe fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: boo
         item.attr_id = if fallback {
             -1
         } else {
-            unsafe { hl_get_syn_attr(ns_id, hl_id, attrs) }
+            hl_get_syn_attr(ns_id, hl_id, attrs)
         };
         // The callback and `hl_get_syn_attr` both pump, so the provider
         // is resolved again rather than read through a stale pointer.
@@ -302,10 +295,7 @@ const UNSET: ColorItem = ColorItem {
 
 /// Re-resolves which namespace is active and points `hl_attr_active` at its
 /// table. Answers whether it changed, which is the caller's cue to redraw.
-///
-/// # Safety
-/// Reaches the namespace tables and the decoration providers; main thread.
-pub unsafe fn hl_check_ns() -> bool {
+pub fn hl_check_ns() -> bool {
     let ns = if ns_hl_fast.get() > 0 {
         ns_hl_fast.get()
     } else if ns_hl_win.get() >= 0 {
@@ -320,8 +310,7 @@ pub unsafe fn hl_check_ns() -> bool {
     ns_hl_active.set(ns);
     hl_attr_active.set(default_hl_attr_table());
     if ns > 0 {
-        // SAFETY: the editor's own tables.
-        unsafe { update_ns_hl(ns) };
+        update_ns_hl(ns);
         let table = NS_HL_ATTR.with(|tables| tables.get(&ns).map(NsHlTable::as_ptr));
         if let Some(table) = table {
             hl_attr_active.set(table);
@@ -333,12 +322,9 @@ pub unsafe fn hl_check_ns() -> bool {
 
 /// [`hl_check_ns`] for the window about to be drawn, or for the global
 /// elements when there is none.
-///
-/// # Safety
-/// `window` is null or a live window; main thread only.
-pub unsafe fn win_check_ns_hl(window: Option<Win>) -> bool {
+pub fn win_check_ns_hl(window: Option<Win>) -> bool {
     ns_hl_win.set(window.map_or(-1, |window| window.w_ns_hl));
-    unsafe { hl_check_ns() }
+    hl_check_ns()
 }
 
 /// The attributes of highlight group `hl_id` as namespace `ns_id` sees it,
@@ -347,17 +333,9 @@ pub unsafe fn win_check_ns_hl(window: Option<Win>) -> bool {
 /// `optional` is in/out and tracks whether the group was *explicitly* defined
 /// in the namespace: it goes in as the caller's expectation and comes back as
 /// what `syn_ns_id2attr` found.
-///
-/// # Safety
-/// Reaches the group tables; main thread only.
-pub unsafe fn hl_ns_get_attrs(
-    ns_id: c_int,
-    hl_id: c_int,
-    optional: Option<&mut bool>,
-) -> Option<HlAttrs> {
+pub fn hl_ns_get_attrs(ns_id: c_int, hl_id: c_int, optional: Option<&mut bool>) -> Option<HlAttrs> {
     let mut opt = optional.as_deref().copied().unwrap_or(true);
-    // SAFETY: the editor's own tables.
-    let syn_attr = unsafe { syn_ns_id2attr(ns_id, hl_id, &mut opt) };
+    let syn_attr = syn_ns_id2attr(ns_id, hl_id, &mut opt);
     if let Some(optional) = optional {
         *optional = opt;
     }
@@ -374,16 +352,12 @@ pub unsafe fn hl_ns_get_attrs(
 /// rather than an entry with no attributes — the distinction matters for
 /// `NormalNC` and `NormalFloat`, where "not defined" and "defined as
 /// nothing" mean different things to the drawing code.
-///
-/// # Safety
-/// Reaches the group tables and the popup menu; main thread only.
-pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool) -> c_int {
+pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool) -> c_int {
     let mut attrs = HLATTRS_INIT;
     let mut optional = optional;
     let mut available = false;
-    // SAFETY: the editor's own tables.
     if final_id > 0
-        && let Some(found) = unsafe { hl_ns_get_attrs(ns_id, final_id, Some(&mut optional)) }
+        && let Some(found) = hl_ns_get_attrs(ns_id, final_id, Some(&mut optional))
     {
         attrs = found;
         available = true;
@@ -409,22 +383,18 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
         id1: idx,
         id2: final_id,
     };
-    // SAFETY: the caller's editor state.
-    unsafe { get_attr_entry(entry) }
+    get_attr_entry(entry)
 }
 
 /// Brings `window`'s cached highlight state up to date: which namespace table it
 /// reads through, its `Normal`/`NormalNC` attributes, and its border.
 ///
 /// `invalid` forces the work even when the window has not asked for it.
-///
-/// # Safety
-/// `window` is a live window; main thread only.
-pub unsafe fn update_window_hl(mut window: Win, invalid: bool) {
+pub fn update_window_hl(mut window: Win, invalid: bool) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     // SAFETY: the caller's window and the editor's own tables.
     let ns_id = window.w_ns_hl;
-    unsafe { update_ns_hl(ns_id) };
+    update_ns_hl(ns_id);
     if ns_id != window.w_ns_hl_active || window.w_ns_hl_attr.is_null() {
         window.w_ns_hl_active = ns_id;
         let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(NsHlTable::as_ptr));
@@ -460,7 +430,7 @@ pub unsafe fn update_window_hl(mut window: Win, invalid: bool) {
     };
     if window.w_floating {
         let winbl = window.w_onebuf_opt.wo_winbl as c_int;
-        unsafe { window.w_hl_attr_normal = hl_apply_winblend(winbl, window.w_hl_attr_normal) };
+        window.w_hl_attr_normal = hl_apply_winblend(winbl, window.w_hl_attr_normal);
     }
 
     window.w_config.shadow = false;
@@ -469,11 +439,11 @@ pub unsafe fn update_window_hl(mut window: Win, invalid: bool) {
         for i in 0..8 {
             let id = window.w_config.border_hl_ids[i];
             let mut attr = if id != 0 {
-                unsafe { hl_get_ui_attr(ns_id, HLF_BORDER, id, false) }
+                hl_get_ui_attr(ns_id, HLF_BORDER, id, false)
             } else {
                 unsafe { *hl_def.add(HLF_BORDER as usize) }
             };
-            attr = unsafe { hl_apply_winblend(winbl, attr) };
+            attr = hl_apply_winblend(winbl, attr);
             if syn_attr2entry(attr).hl_blend > 0 {
                 window.w_config.shadow = true;
             }
@@ -497,17 +467,13 @@ pub unsafe fn update_window_hl(mut window: Win, invalid: bool) {
     };
     if window.w_floating {
         let winbl = window.w_onebuf_opt.wo_winbl as c_int;
-        unsafe { window.w_hl_attr_normalnc = hl_apply_winblend(winbl, window.w_hl_attr_normalnc) };
+        window.w_hl_attr_normalnc = hl_apply_winblend(winbl, window.w_hl_attr_normalnc);
     }
 }
 
 /// Rebuilds namespace `ns_id`'s builtin-group table, unless its provider says
 /// the cached one still stands.
-///
-/// # Safety
-/// Reaches the group tables, and through `hl_get_ui_attr` the Lua callbacks;
-/// main thread only.
-pub unsafe fn update_ns_hl(ns_id: c_int) {
+pub fn update_ns_hl(ns_id: c_int) {
     if ns_id <= 0 {
         return;
     }
@@ -538,10 +504,7 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
 }
 
 /// The attribute a window's background cells are drawn with.
-///
-/// # Safety
-/// `window` is a live window; main thread only.
-pub unsafe fn win_bg_attr(window: Win) -> c_int {
+pub fn win_bg_attr(window: Win) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     // SAFETY: the caller's window and the active namespace table.
     // A fast callback's namespace overrides the window's own cache.
@@ -565,11 +528,8 @@ pub unsafe fn win_bg_attr(window: Win) -> c_int {
 
 /// The attribute the window resolves builtin highlight group `hlf` to: its
 /// own namespace's table when one is active, otherwise the global one.
-///
-/// # Safety
-/// `window` is a live window; main thread only.
 #[inline]
-pub unsafe fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
+pub fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if
     // highlights are checked before the first redraw.

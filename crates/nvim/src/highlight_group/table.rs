@@ -236,11 +236,7 @@ pub(crate) fn highlight_clear(id: c_int) {
 
 /// Recomputes the attribute-table id of the group with id `id` after one of
 /// its settings changed.
-///
-/// # Safety
-/// Reaches the attribute table, which can rebuild itself and re-enter here;
-/// main thread only.
-pub(crate) unsafe fn set_hl_attr(id: c_int) {
+pub(crate) fn set_hl_attr(id: c_int) {
     // The unset value for an RGB colour is -1, but a group is created with
     // zeroes, so the colour index is what says whether one was ever set.
     let at_en = GROUPS.with(|table| {
@@ -272,8 +268,7 @@ pub(crate) unsafe fn set_hl_attr(id: c_int) {
 
     // Outside any borrow: this can rebuild the attribute table, which comes
     // back through `highlight_attr_set_all` into this very function.
-    // SAFETY: the editor's own tables.
-    let attr = unsafe { hl_get_syn_attr(0, id, at_en) };
+    let attr = hl_get_syn_attr(0, id, at_en);
     with_group(id, |group| group.attr = attr);
 
     // A cursor style may use this group; if so its attribute has changed.
@@ -284,10 +279,7 @@ pub(crate) unsafe fn set_hl_attr(id: c_int) {
 
 /// Recomputes every group's attributes, after the `Normal` colours moved:
 /// `guibg=fg` and friends are stored as an index and resolved here.
-///
-/// # Safety
-/// See [`set_hl_attr`].
-pub(crate) unsafe fn highlight_attr_set_all() {
+pub(crate) fn highlight_attr_set_all() {
     let mut id = 1;
     // The count is re-read every round because `set_hl_attr` can add groups.
     while id <= highlight_num_groups() {
@@ -304,8 +296,7 @@ pub(crate) unsafe fn highlight_attr_set_all() {
                 }
             }
         });
-        // SAFETY: the editor's own tables.
-        unsafe { set_hl_attr(id) };
+        set_hl_attr(id);
         id += 1;
     }
 }
@@ -372,7 +363,7 @@ pub(crate) unsafe fn syn_name2attr(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated name.
     match unsafe { syn_name2id(name) } {
         0 => 0,
-        id => unsafe { syn_id2attr(id) },
+        id => syn_id2attr(id),
     }
 }
 
@@ -474,14 +465,9 @@ fn syn_add_group(name: &[u8]) -> c_int {
 }
 
 /// The attribute-table id for the group with id `hl_id`, following links.
-///
-/// # Safety
-/// Resolves namespace overrides, which can run a Lua callback; main thread
-/// only.
-pub(crate) unsafe fn syn_id2attr(hl_id: c_int) -> c_int {
+pub(crate) fn syn_id2attr(hl_id: c_int) -> c_int {
     let mut optional = false;
-    // SAFETY: the editor's own tables.
-    unsafe { syn_ns_id2attr(-1, hl_id, &mut optional) }
+    syn_ns_id2attr(-1, hl_id, &mut optional)
 }
 
 /// [`syn_id2attr`] against a particular namespace.
@@ -489,12 +475,8 @@ pub(crate) unsafe fn syn_id2attr(hl_id: c_int) -> c_int {
 /// `optional` says the caller will accept "this namespace defines nothing",
 /// and is cleared if the namespace turns out to define the group as empty on
 /// purpose.
-///
-/// # Safety
-/// See [`syn_id2attr`].
-pub(crate) unsafe fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &mut bool) -> c_int {
-    // SAFETY: the editor's own tables.
-    if unsafe { syn_ns_get_final_id(&mut ns_id, &mut hl_id) } {
+pub(crate) fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &mut bool) -> c_int {
+    if syn_ns_get_final_id(&mut ns_id, &mut hl_id) {
         // The namespace defines the group to be empty; that is not optional.
         *optional = false;
     }
@@ -507,8 +489,7 @@ pub(crate) unsafe fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &
         return 0;
     }
     let group = group(hl_id);
-    // SAFETY: the editor's own tables.
-    let attr = unsafe { ns_get_hl(&mut ns_id, hl_id, false, group.set != 0) };
+    let attr = ns_get_hl(&mut ns_id, hl_id, false, group.set != 0);
     // An optional group falls through to nothing rather than to the global.
     if attr >= 0 || (*optional && ns_id > 0) {
         return attr;
@@ -520,10 +501,7 @@ pub(crate) unsafe fn syn_ns_id2attr(mut ns_id: NS, mut hl_id: c_int, optional: &
 ///
 /// Answers whether a namespace had something to say. `*hl_idp` is set to 0
 /// for an id outside the table — this is reachable from `eval`.
-///
-/// # Safety
-/// See [`syn_id2attr`].
-pub(crate) unsafe fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> bool {
+pub(crate) fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> bool {
     let mut hl_id = *hl_idp;
     let mut used = false;
 
@@ -538,8 +516,7 @@ pub(crate) unsafe fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> 
         // TODO(bfredl): when using "tmp" attribute (no link) the function
         // might be called twice. it needs be smart enough to remember attr
         // only to syn_id2attr time
-        // SAFETY: the editor's own tables.
-        let check = unsafe { ns_get_hl(ns_id, hl_id, true, group.set != 0) };
+        let check = ns_get_hl(ns_id, hl_id, true, group.set != 0);
         if check == 0 {
             // How dare! It broke the link.
             *hl_idp = hl_id;
@@ -562,13 +539,10 @@ pub(crate) unsafe fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> 
 
 /// The group id every `:highlight link` chain from `hl_id` ends at, in the
 /// namespace the current window has active.
-///
-/// # Safety
-/// See [`syn_id2attr`].
-pub(crate) unsafe fn syn_get_final_id(hl_id: c_int) -> c_int {
+pub(crate) fn syn_get_final_id(hl_id: c_int) -> c_int {
     let mut ns_id = Win::current().w_ns_hl_active;
     let mut hl_id = hl_id;
-    unsafe { syn_ns_get_final_id(&mut ns_id, &mut hl_id) };
+    syn_ns_get_final_id(&mut ns_id, &mut hl_id);
     hl_id
 }
 

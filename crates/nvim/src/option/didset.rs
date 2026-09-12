@@ -487,8 +487,7 @@ pub(crate) fn did_set_previewwindow(args: &mut OptSet) -> Option<&CStr> {
 
 /// 'pumblend': the blend of every highlight group is derived from it.
 pub(crate) fn did_set_pumblend(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: the highlight table and the popup menu are the editor's own.
-    unsafe { hl_invalidate_blends() };
+    hl_invalidate_blends();
     if pum_drawn() {
         unsafe { pum_redraw() };
     }

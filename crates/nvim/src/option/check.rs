@@ -152,8 +152,7 @@ pub(crate) fn didset_options() {
 /// The second startup sweep: what needs highlight groups, and the option
 /// values that are cached as parsed arrays.
 pub(crate) fn didset_options2() {
-    // SAFETY: `curwin`/`curbuf` are live by the time this runs.
-    unsafe { highlight_changed() };
+    highlight_changed();
     let win = Win::current();
     let no_err = ptr::null_mut::<c_char>();
     let fcs = win.w_onebuf_opt.wo_fcs;
@@ -379,7 +378,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
         if window.is_some() {
             let mut attrs: HlAttrs = HLATTRS_INIT;
             attrs.rgb_ae_attr |= HlAttrFlags::GLOBAL;
-            unsafe { ns_hl_def(ns_hl as NS, hl_id_link, attrs, hl_id, None) };
+            ns_hl_def(ns_hl as NS, hl_id_link, attrs, hl_id, None);
         }
         p = if unsafe { *comma } != 0 {
             unsafe { comma.add(1) }

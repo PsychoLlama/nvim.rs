@@ -47,7 +47,7 @@ pub fn msg_start() {
         need_fileinfo.set(false);
     }
     if need_highlight_changed.get() {
-        unsafe { highlight_changed() };
+        highlight_changed();
     }
     if need_clr_eos.get() || (p_ch.get() == 0 && redrawing_cmdline.get()) {
         // Halfway an `:echo` and getting an (error) message: clear any
@@ -239,13 +239,7 @@ fn msg_bytes_to_ui(bytes: &[u8], hl_id: c_int, attr: c_int) {
 /// both the scrollback capture and the pager — the text is already stored and
 /// the pager is what is asking for it.
 pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
-    let attr = if hl_id != 0 {
-        // SAFETY: a highlight id is looked up in the group table, which
-        // exists by the time anything is shown.
-        unsafe { syn_id2attr(hl_id) }
-    } else {
-        0
-    };
+    let attr = if hl_id != 0 { syn_id2attr(hl_id) } else { 0 };
     did_wait_return.set(false);
 
     if ui_has(kUIMessages) {
@@ -345,8 +339,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
             if open_row >= 0 {
                 msg_line_flush();
             }
-            // SAFETY: main-thread editor call.
-            unsafe { grid_line_start(msg_grid_view(), msg_row.get()) };
+            grid_line_start(msg_grid_view(), msg_row.get());
             open_row = msg_row.get();
         }
 

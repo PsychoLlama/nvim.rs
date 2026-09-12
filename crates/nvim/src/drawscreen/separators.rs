@@ -196,34 +196,32 @@ pub(crate) fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
 
 /// Draw the vertical separator right of window `window`.
 pub(crate) fn draw_vsep_win(window: Win) {
-    // SAFETY: a live window; the grid batch is opened and flushed per row.
     if window.w_vsep_width == 0 {
         return;
     }
-    let attr = unsafe { win_hl_attr(window, HLF_C) };
+    let attr = win_hl_attr(window, HLF_C);
     let col = win_endcol(window);
     let end_row = win_endrow(window);
     for row in (window.w_winrow)..end_row {
-        unsafe { grid_line_start(default_gridview(), row) };
+        grid_line_start(default_gridview(), row);
         grid_line_put_schar(col, window.w_p_fcs_chars.vert, attr);
-        unsafe { grid_line_flush() };
+        grid_line_flush();
     }
 }
 
 /// Draw the horizontal separator below window `window`.
 pub(crate) fn draw_hsep_win(window: Win) {
-    // SAFETY: a live window; the grid batch is opened and flushed here.
     if window.w_hsep_height == 0 {
         return;
     }
-    unsafe { grid_line_start(default_gridview(), win_endrow(window)) };
+    grid_line_start(default_gridview(), win_endrow(window));
     grid_line_fill(
         window.w_wincol,
         win_endcol(window),
         window.w_p_fcs_chars.horiz,
-        unsafe { win_hl_attr(window, HLF_C) },
+        win_hl_attr(window, HLF_C),
     );
-    unsafe { grid_line_flush() };
+    grid_line_flush();
 }
 
 /// The `'fillchars'` glyph for window `window`'s separators meeting at `corner`.
@@ -257,13 +255,11 @@ fn get_corner_sep_connector(window: Win, corner: WindowCorner) -> ScreenChar {
 /// `update_screen` runs this for every window *after* all the window updates, so
 /// that a connector is never overwritten by a neighbour's separator.
 pub(crate) fn draw_sep_connectors_win(window: Win) {
-    // SAFETY: a live window of the current layout; each grid batch is opened
-    // and flushed here.
     if global_stl_height() == 0 || !(window.w_hsep_height == 1 || window.w_vsep_width == 1) {
         return;
     }
 
-    let hl = unsafe { win_hl_attr(window, HLF_C) };
+    let hl = win_hl_attr(window, HLF_C);
 
     // Which edges of the screen the window is on. Left and top are decided
     // by walking out to the root without finding a preceding sibling in the
@@ -295,9 +291,9 @@ pub(crate) fn draw_sep_connectors_win(window: Win) {
         ),
     ] {
         if draw {
-            unsafe { grid_line_start(default_gridview(), row) };
+            grid_line_start(default_gridview(), row);
             grid_line_put_schar(col, get_corner_sep_connector(window, corner), hl);
-            unsafe { grid_line_flush() };
+            grid_line_flush();
         }
     }
 }

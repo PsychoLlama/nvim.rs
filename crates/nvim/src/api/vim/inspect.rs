@@ -229,13 +229,11 @@ pub unsafe fn nvim__inspect_cell(
     // SAFETY: `sc_buf` is the NUL-terminated cell buffer filled above.
     ret.push(Object::string(unsafe { cstr_to_string(sc_buf) }));
     let attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
-    // SAFETY: `arena` is this frame's own.
-    let hl = Object::dict(unsafe { hl_get_attr_by_id(attr as Integer, true) }?);
+    let hl = Object::dict(hl_get_attr_by_id(attr as Integer, true)?);
     // SAFETY: `ret` has room for the three items the arena sized it for.
     ret.push(hl);
-    if !unsafe { highlight_use_hlstate() } {
-        // SAFETY: `attr` is a resolved attribute id.
-        ret.push(Object::array(unsafe { hl_inspect(attr) }));
+    if !highlight_use_hlstate() {
+        ret.push(Object::array(hl_inspect(attr)));
     }
     ret.reported(error)
 }

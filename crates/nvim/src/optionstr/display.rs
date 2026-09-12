@@ -94,8 +94,7 @@ pub fn did_set_background(args: &mut OptSet) -> Option<&CStr> {
     }
 
     let dark = unsafe { *p_bg.get() } == b'd' as c_char;
-    // SAFETY: `init_highlight` reads the editor's own state.
-    unsafe { init_highlight(false, false) };
+    init_highlight(false, false);
 
     // SAFETY: reading the global that `init_highlight` may have changed,
     // and the editor's own variable dictionary.
@@ -120,7 +119,7 @@ pub fn did_set_background(args: &mut OptSet) -> Option<&CStr> {
         if p_bg.get().is_null() {
             p_bg.set(empty_option());
         }
-        unsafe { init_highlight(false, false) };
+        init_highlight(false, false);
     }
 
     // Terminal buffers pick their palette from the background.

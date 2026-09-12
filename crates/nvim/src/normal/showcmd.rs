@@ -439,7 +439,7 @@ fn draw_on_last_line(clear: bool) {
     let sc = showcmd_buf.get();
     msg_grid_validate();
     let showcmd_row = Rows.get() - 1;
-    unsafe { grid_line_start(msg_grid_view(), showcmd_row) };
+    grid_line_start(msg_grid_view(), showcmd_row);
     let attr = unsafe { *hl_attr_active.get().offset(HLF_MSG as isize) };
     let mut len = 0;
     if !clear {
@@ -451,5 +451,5 @@ fn draw_on_last_line(clear: bool) {
     // SAFETY: `pad` is ten spaces and a terminator, and `len` is at most ten.
     let tail = unsafe { pad.offset(len as isize) };
     unsafe { grid_line_puts(sc_col.get() + len, tail, -1, attr) };
-    unsafe { grid_line_flush() };
+    grid_line_flush();
 }

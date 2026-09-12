@@ -162,11 +162,7 @@ fn window_folds(mut window: Win) -> FoldList {
 }
 
 /// Copy the folding state from window `wp_from` to window `wp_to`.
-///
-/// # Safety
-/// `wp_to`'s fold list must be empty or uninitialised — `clone_fold_list`
-/// re-initialises it.
-pub unsafe fn copy_folding_state(mut wp_from: Win, mut wp_to: Win) {
+pub fn copy_folding_state(mut wp_from: Win, mut wp_to: Win) {
     wp_to.w_fold_manual = wp_from.w_fold_manual;
     wp_to.w_foldinvalid = wp_from.w_foldinvalid;
     // SAFETY: the caller's promise about `wp_to`; both fold lists live inside
@@ -302,17 +298,14 @@ pub fn has_folding_win(
             }
             first += fold.top();
             last += fold.top();
-            // SAFETY: a fold of the window's own tree.
-            had_folded = unsafe {
-                check_closed(
-                    win,
-                    fold,
-                    &mut use_level,
-                    level,
-                    &mut maybe_small,
-                    lnum - lnum_rel,
-                )
-            };
+            had_folded = check_closed(
+                win,
+                fold,
+                &mut use_level,
+                level,
+                &mut maybe_small,
+                lnum - lnum_rel,
+            );
             if had_folded {
                 last += fold.len() - 1;
                 break;
@@ -484,8 +477,7 @@ pub fn fold_update(window: Win, top: LineNr, bot: LineNr) {
         // caller was doing.
         let save_got_int = got_int.get();
         got_int.set(false);
-        // SAFETY: a live window with a live buffer.
-        unsafe { fold_update_computed(window, top, bot) };
+        fold_update_computed(window, top, bot);
         got_int.set(got_int.get() | save_got_int);
     }
 }
@@ -511,10 +503,7 @@ pub fn fold_update_all(mut win: Win) {
 }
 
 /// Init the fold info in a new window.
-///
-/// # Safety
-/// `new_win` must be a live window whose `w_folds` has not been initialised.
-pub unsafe fn fold_init_win(mut new_win: Win) {
+pub fn fold_init_win(mut new_win: Win) {
     // SAFETY: the caller's promise. This is the call that makes `w_folds` a
     // fold list, i.e. the one every `FoldList::new` leans on.
     unsafe { ga_init(&raw mut new_win.w_folds, size_of::<Fold>() as c_int, 10) };
@@ -709,10 +698,7 @@ fn deepest_nesting_of(folds: FoldList) -> c_int {
 /// depend on the window's width and 'wrap' too.
 ///
 /// `lnum_off` — offset for fold->top()
-///
-/// # Safety
-/// `fold` must be a fold of `window`'s tree at `lnum_off`.
-unsafe fn check_small(window: Win, fold: FoldRef, lnum_off: LineNr) {
+fn check_small(window: Win, fold: FoldRef, lnum_off: LineNr) {
     if fold.small().is_some() {
         return;
     }
