@@ -228,8 +228,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
 
     let mut wait_time: ProfTime = 0;
     if profiling {
-        // SAFETY: the profile clock is the editor's own.
-        wait_time = unsafe { prof_child_enter() };
+        wait_time = prof_child_enter();
     }
     let mut nread: size_t = 0;
     let mut res: *mut c_char = null_mut();
@@ -238,8 +237,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
     // standard input, and the two out-parameters are this frame's.
     let status = unsafe { os_system(argv, input, ilen, &raw mut res, &raw mut nread) };
     if profiling {
-        // SAFETY: paired with the `prof_child_enter` above.
-        unsafe { prof_child_exit(wait_time) };
+        prof_child_exit(wait_time);
     }
     // SAFETY: the child has read it, and the buffer is owned here.
     unsafe { xfree(input as *mut c_void) };

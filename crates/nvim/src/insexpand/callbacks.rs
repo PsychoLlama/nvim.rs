@@ -80,10 +80,7 @@ impl CompleteFuncCb {
 
     /// Mark what this callback references with `copy_id`, so the garbage
     /// collector leaves it alone. Answers whether to abort.
-    ///
-    /// # Safety
-    /// Runs the `set_ref_in_*` walk over a live typval graph.
-    pub(crate) unsafe fn set_ref(self, copy_id: c_int) -> bool {
+    pub(crate) fn set_ref(self, copy_id: c_int) -> bool {
         // SAFETY: the caller's promise; the slot is this cell's own.
         unsafe { set_ref_in_callback(self.slot(), copy_id, ptr::null_mut(), ptr::null_mut()) }
     }
@@ -545,9 +542,9 @@ pub unsafe fn set_ref_in_cpt_callbacks(
 /// Mark the global `'completefunc'`, `'omnifunc'` and `'thesaurusfunc'`
 /// callbacks with `copy_id` so they are not garbage collected.
 pub fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
-    let mut abort = unsafe { cfu_cb().set_ref(copy_id) };
-    abort = abort || unsafe { ofu_cb().set_ref(copy_id) };
-    abort = abort || unsafe { tsrfu_cb().set_ref(copy_id) };
+    let mut abort = cfu_cb().set_ref(copy_id);
+    abort = abort || ofu_cb().set_ref(copy_id);
+    abort = abort || tsrfu_cb().set_ref(copy_id);
     abort =
         abort || unsafe { set_ref_in_cpt_callbacks(cpt_cb().slots(), cpt_cb().count(), copy_id) };
     abort

@@ -531,7 +531,6 @@ pub unsafe fn insert_reg(
     if got_int.get() {
         return Err(Failed);
     }
-    // SAFETY: `valid_yank_reg` only looks the name up.
     if regname != NUL && !valid_yank_reg(regname, false) {
         return Err(Failed);
     }
@@ -539,9 +538,7 @@ pub unsafe fn insert_reg(
     if regname == '.' as c_int {
         // The last insert is re-inserted rather than stuffed, so that it
         // can be repeated.
-        // SAFETY: main thread; re-runs the last insert, which is among the
-        // Vimscript the caller allows.
-        return unsafe { stuff_inserted(NUL, 1, 1) };
+        return stuff_inserted(NUL, 1, 1);
     }
 
     let mut arg: *mut c_char = ::core::ptr::null_mut();
@@ -590,8 +587,7 @@ pub unsafe fn insert_reg(
                 // line, whose character count is what is deleted.
                 let _ = unsafe { del_chars(mb_charlen((*(*reg).y_array).data()), 1) };
                 let curpos = Win::current().w_cursor;
-                // SAFETY: main thread with a current window and buffer.
-                if unsafe { oneright() }.is_err() {
+                if oneright().is_err() {
                     dir = FORWARD;
                 }
                 Win::current().w_cursor = curpos;

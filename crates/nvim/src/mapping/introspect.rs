@@ -116,9 +116,7 @@ pub(crate) fn mapblock_fill_dict(
     };
 
     if rhs.luaref() != LUA_NOREF {
-        // SAFETY: the mapping's own reference, of which this takes a new one
-        // for the caller to own.
-        let luaref = unsafe { api_new_luaref(rhs.luaref()) };
+        let luaref = api_new_luaref(rhs.luaref());
         out.put(c"callback", Object::LuaRef(luaref));
     } else {
         // SAFETY: `orig_str` and `str` are the mapping's own NUL-terminated

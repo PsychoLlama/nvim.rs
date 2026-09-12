@@ -229,7 +229,7 @@ unsafe fn report_fails_mismatch(args: &[TypVal], cmd: *const c_char, mismatch: &
         4 => TypVal::String(emsg_assert_fails_context.get()),
         _ => TypVal::String(mismatch.actual),
     });
-    let mut ga = unsafe { prepare_assert_error() };
+    let mut ga = prepare_assert_error();
     let gap = &mut ga;
     unsafe {
         fill_assert_error(
@@ -304,7 +304,7 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     suppress_errthrow.set(false);
 
     if called_emsg.get() == called_emsg_before {
-        let mut ga = unsafe { prepare_assert_error() };
+        let mut ga = prepare_assert_error();
         ga_concat_lit(&mut ga, c"command did not fail: ");
         unsafe { assert_append_cmd_or_arg(&mut ga, args, cmd) };
         report_assert_error(&ga);

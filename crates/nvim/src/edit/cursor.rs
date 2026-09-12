@@ -66,10 +66,7 @@ pub(crate) fn beginline(flags: BeginlineOpts) {
 }
 
 /// Move one character right; answers `Err` at the end of the line.
-///
-/// # Safety
-/// Must run with a live `curwin` whose cursor is on a valid position.
-pub(crate) unsafe fn oneright() -> Result<(), Failed> {
+pub(crate) fn oneright() -> Result<(), Failed> {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
@@ -119,10 +116,7 @@ pub(crate) unsafe fn oneright() -> Result<(), Failed> {
 }
 
 /// Move one character left; answers `Err` at column 0.
-///
-/// # Safety
-/// Must run with a live `curwin` whose cursor is on a valid position.
-pub(crate) unsafe fn oneleft() -> Result<(), Failed> {
+pub(crate) fn oneleft() -> Result<(), Failed> {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and

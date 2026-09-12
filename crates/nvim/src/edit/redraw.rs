@@ -42,14 +42,7 @@ use crate::types::{CpoFlag, MB_MAXCHAR, NUL};
 ///
 /// `ready` means "not busy with something": with it false only the drawing
 /// happens, and none of the autocommands.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_redraw(ready: bool) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
+pub(crate) fn ins_redraw(ready: bool) {
     if char_avail() {
         return;
     }
@@ -71,7 +64,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         // An autocommand may call getcurpos(), so curswant has to be
         // correct first.
         update_curswant();
-        unsafe { ins_apply_autocmds(AutoEvent::CursorMovedI) };
+        ins_apply_autocmds(AutoEvent::CursorMovedI);
         last_cursormoved_win.set(Win::current_raw());
         last_cursormoved.set(Win::current().w_cursor);
     }
@@ -158,10 +151,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
 /// Used while handling CTRL-V, CTRL-K and friends, which have to show
 /// something at the cursor while they wait for the rest of the sequence.
 /// Nothing is stored in a buffer, so the next real redraw removes it.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
+pub(crate) fn edit_putchar(c: c_int, highlight: bool) {
     let mut win = Win::current();
     if !win.w_grid_alloc.is_allocated() && !default_grid_ref().is_allocated() {
         return;
@@ -209,10 +199,7 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
 }
 
 /// Undo the previous [`edit_putchar`].
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn edit_unputchar() {
+pub(crate) fn edit_unputchar() {
     let mut win = Win::current();
     match pc_status.get() {
         PutChar::Unset => {}
@@ -255,7 +242,7 @@ pub(crate) unsafe fn display_dollar(col_arg: ColNr) {
     win.w_cursor.col -= unsafe { utf_head_off(p, p.offset(col as isize)) };
     curs_columns(win, 0); // recompute w_wrow and w_wcol
     if win.w_wcol < win.w_view_width {
-        unsafe { edit_putchar('$' as c_int, false) };
+        edit_putchar('$' as c_int, false);
         dollar_vcol.set(win.w_virtcol);
     }
     win.w_cursor.col = save_col;
@@ -273,10 +260,7 @@ pub(crate) fn undisplay_dollar() {
 
 /// The value `w_virtcol` would have with 'list' off -- unless 'cpoptions'
 /// contains `L`, which says the option should be honoured after all.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn get_nolist_virtcol() -> ColNr {
+pub(crate) fn get_nolist_virtcol() -> ColNr {
     let mut win = Win::current();
     if win.w_buffer.is_null()
         || win.buffer().b_ml.ml_mfp.is_null()

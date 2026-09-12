@@ -177,8 +177,7 @@ pub unsafe fn nvim__get_runtime(
         error = Error::validation(c"'do_source' used in fast callback");
         return Array::EMPTY.reported(error);
     }
-    // SAFETY: `pat` is the caller's array and `arena` its own.
-    let res: Array = unsafe { runtime_get_named(is_lua, &pat, all) };
+    let res: Array = runtime_get_named(is_lua, &pat, all);
     if should_source {
         for i in 0..res.len() {
             // SAFETY: `res` is the array `runtime_get_named` just built, of

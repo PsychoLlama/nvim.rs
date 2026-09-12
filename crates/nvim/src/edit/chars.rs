@@ -52,10 +52,7 @@ const fn is_special(c: c_int) -> bool {
 /// passed straight through to `internal_format`, which also reads
 /// `INSCHAR_DO_COM` and `INSCHAR_COM_LIST`.  `second_indent` is the indent
 /// for a second line, if not negative.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
+pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
     let textwidth = comp_textwidth(flags & INSCHAR_FORMAT as c_int != 0);
     wrap_before_insert(c, flags, second_indent, textwidth);
 
@@ -93,7 +90,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         buf[0] = c as c_char;
         let mut i = 1;
         if textwidth > 0 {
-            virtcol = unsafe { get_nolist_virtcol() };
+            virtcol = get_nolist_virtcol();
         }
         // Stop when there is nothing more to take, on a special
         // character (a command key), when the buffer is full, at the
@@ -187,8 +184,7 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
     // Format with 'formatexpr' when it is set; use the internal
     // formatting when it is not, or when it answered non-zero.
     let mut do_internal = true;
-    let virtcol =
-        unsafe { get_nolist_virtcol() } + char2cells(if c != NUL { c } else { gchar_cursor() });
+    let virtcol = get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
 
     if unsafe { *Buf::current().b_p_fex } as c_int != NUL
         && flags & INSCHAR_NO_FEX as c_int == 0
@@ -307,7 +303,7 @@ pub(crate) fn do_insert_char_pre(c: c_int) -> *mut c_char {
     unsafe { set_vim_var_string(Vv::Char, buf.as_mut_ptr(), buflen as ptrdiff_t) };
 
     let mut res = ::core::ptr::null_mut();
-    if unsafe { ins_apply_autocmds(AutoEvent::InsertCharPre) } != 0
+    if ins_apply_autocmds(AutoEvent::InsertCharPre) != 0
         && !unsafe { cstr::eq(buf.as_mut_ptr(), get_vim_var_str(Vv::Char)) }
     {
         res = unsafe { xstrdup(get_vim_var_str(Vv::Char)) };

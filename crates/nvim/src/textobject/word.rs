@@ -386,7 +386,7 @@ pub unsafe fn current_word(
             if Win::current().w_cursor.col == 0 {
                 decl(&mut Win::current().cursor());
             } else {
-                let _ = unsafe { oneleft() };
+                let _ = oneleft();
             }
             if include {
                 include_white = true;
@@ -433,7 +433,7 @@ pub unsafe fn current_word(
                 // An end just past a newline must not include the first
                 // character of that line: put the cursor on the last
                 // character of the white space instead.
-                if unsafe { oneleft() }.is_err() {
+                if oneleft().is_err() {
                     inclusive = false;
                 }
             } else if end_word(1, bigword, true, true).is_err() {
@@ -452,7 +452,7 @@ pub unsafe fn current_word(
         // white space at the start of a line: that is indent.
         let pos = Win::current().w_cursor;
         Win::current().w_cursor = start_pos;
-        if unsafe { oneleft() }.is_ok() {
+        if oneleft().is_ok() {
             back_in_line();
             if cls() == 0 && Win::current().w_cursor.col > 0 {
                 if visual_active() {

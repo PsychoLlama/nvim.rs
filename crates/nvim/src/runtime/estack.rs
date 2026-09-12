@@ -409,11 +409,7 @@ pub fn stacktrace_create() -> Option<ListRef> {
 
 /// The path a frame's defining script was read from, or `""` when it has none
 /// (a `-c` argument, a modeline, Lua, ...).
-///
-/// # Safety
-///
-/// `sctx` must name a live script context.
-unsafe fn script_path(sctx: ScriptCtx) -> CString {
+fn script_path(sctx: ScriptCtx) -> CString {
     if sctx.sc_sid <= 0 {
         return c"".to_owned();
     }

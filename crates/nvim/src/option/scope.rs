@@ -311,11 +311,7 @@ pub(crate) fn option_scope_idx(opt_idx: OptIndex, scope: OptScope) -> ssize_t {
 
 /// The variable an explicit `:setglobal`/`:setlocal` reaches, given the
 /// buffer and window that stand for "local".
-///
-/// # Safety
-///
-/// `buffer` and `win` must be live.
-pub(crate) unsafe fn get_varp_scope_from(
+pub(crate) fn get_varp_scope_from(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     buffer: Buf,
@@ -376,7 +372,7 @@ pub(crate) unsafe fn get_varp_scope_from(
 /// [`get_varp_scope_from`] for the current buffer and window.
 pub(crate) fn get_varp_scope(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptSlot {
     let (buffer, win) = (Buf::current(), Win::current());
-    unsafe { get_varp_scope_from(opt_idx, opt_flags, buffer, win) }
+    get_varp_scope_from(opt_idx, opt_flags, buffer, win)
 }
 
 /// The variable the option reads from right now, for the given buffer and

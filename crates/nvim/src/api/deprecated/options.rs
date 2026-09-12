@@ -28,9 +28,7 @@ use core::ffi::{CStr, c_char, c_void};
 /// at `data[size]`.
 pub unsafe fn nvim_get_option_info(name: String_0) -> Result<ApiDict, Error> {
     let (buf, win) = (Buf::current(), Win::current());
-    // SAFETY: `name` is the caller's, the two globals name the current
-    // buffer and window, and `arena` is the caller's.
-    unsafe { get_vimoption(name, OptionSetFlags::GLOBAL, buf, win) }
+    get_vimoption(name, OptionSetFlags::GLOBAL, buf, win)
 }
 
 /// # Safety

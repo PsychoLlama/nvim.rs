@@ -376,7 +376,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         }
     }
 
-    unsafe { nlua_init_defaults() };
+    nlua_init_defaults();
     time_msg_at(c"init default mappings & autocommands");
 
     // `-u NONE` also turns the plugins off, unless `--clean` asked for

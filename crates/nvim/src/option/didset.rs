@@ -753,11 +753,7 @@ pub(crate) fn did_set_xhistory(args: &mut OptSet) -> Option<&CStr> {
 ///
 /// The recursion counter is what lets a syntax file set 'syntax' again (to
 /// include another one) without the outer pass being treated as a no-op.
-///
-/// # Safety
-///
-/// `buffer` must be a live buffer.
-pub(crate) unsafe fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
+pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
     static syn_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 
     let _syn_recursive = Depth::of(&syn_recursive);
@@ -777,11 +773,7 @@ pub(crate) unsafe fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
 ///
 /// Only the leading language name is used, and only the letters, digits and
 /// hyphens of it — the rest of the value is regions and file names.
-///
-/// # Safety
-///
-/// `win` must be a live window.
-pub(crate) unsafe fn do_spelllang_source(win: Win) {
+pub(crate) fn do_spelllang_source(win: Win) {
     let mut fname: [c_char; 200] = [0; 200];
 
     // SAFETY: the caller's window is live, and its 'spelllang' is a

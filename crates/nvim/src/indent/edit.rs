@@ -406,7 +406,7 @@ fn fix_replace_stack(mut start_col: c_int) {
         start_col -= 1;
     }
     while start_col < win.w_cursor.col as c_int {
-        unsafe { replace_push_nul() };
+        replace_push_nul();
         start_col += 1;
     }
 }

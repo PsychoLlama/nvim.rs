@@ -82,7 +82,7 @@ pub(crate) unsafe fn load_dummy_buffer(
     let newbufref = BufRef::of(newbuf);
 
     // Init the options.
-    unsafe { buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP).cast_signed()) };
+    buf_copy_options(newbuf, (BCO_ENTER | BCO_NOHELP).cast_signed());
 
     // Need to open the memfile before putting the buffer in a window.
     if ml_open(newbuf).is_ok() {

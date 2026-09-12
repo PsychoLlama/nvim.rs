@@ -43,10 +43,7 @@ unsafe fn full_name_of(p: *const c_char, force: bool) -> Name {
 
 /// Does `name` need a path separator adding before something else goes
 /// after it?
-///
-/// # Safety
-/// There is nothing to promise; `name` carries its own length.
-unsafe fn needs_separator(name: &Name) -> bool {
+fn needs_separator(name: &Name) -> bool {
     // SAFETY: a `Name` holds `len()` bytes and a terminator.
     unsafe { after_pathsep(name.as_ptr(), name.as_ptr().add(name.len())) == 0 }
 }
@@ -203,10 +200,7 @@ unsafe fn wildcard_tail(wc_part: *mut c_char) -> Result<Name, ()> {
 /// The fixed part of the path may name a directory, in which case it all
 /// belongs to the starting directory; otherwise its last component is a name
 /// pattern and moves to the front of the wildcards.
-///
-/// # Safety
-/// There must be a current buffer.
-unsafe fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
+fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
     let start_dir = ctx.start_dir.as_ref().expect("set above");
     // Create an absolute path.
     if start_dir.len() + ctx.fix_path.len() + 3 >= MAXPATHL as usize {
@@ -215,7 +209,7 @@ unsafe fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
     }
 
     let mut dir = start_dir.bytes().to_vec();
-    if unsafe { needs_separator(start_dir) } {
+    if needs_separator(start_dir) {
         dir.push(b'/');
     }
 
@@ -224,7 +218,7 @@ unsafe fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
     if unsafe { os_isdir(Name::from_bytes(&whole).as_ptr()) } {
         if !ctx.fix_path.is_empty() {
             dir.extend_from_slice(ctx.fix_path.bytes());
-            if unsafe { needs_separator(&ctx.fix_path) } {
+            if needs_separator(&ctx.fix_path) {
                 dir.push(b'/');
             }
         }
@@ -246,7 +240,7 @@ unsafe fn first_frame(ctx: &mut FindContext) -> Result<Name, ()> {
         dir.extend_from_slice(&ctx.fix_path.bytes()[..kept]);
         // The separator test is upstream's, and it asks about the whole
         // fixed part rather than the piece just written.
-        if unsafe { needs_separator(&ctx.fix_path) } {
+        if needs_separator(&ctx.fix_path) {
             dir.push(b'/');
         }
     }
@@ -379,7 +373,7 @@ pub(crate) unsafe fn vim_findfile_init(
         ctx.fix_path.clear();
     }
 
-    let frame = unsafe { first_frame(&mut ctx) };
+    let frame = first_frame(&mut ctx);
     let Ok(fix_path) = frame else {
         return ptr::null_mut();
     };

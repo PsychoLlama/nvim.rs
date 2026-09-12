@@ -97,19 +97,8 @@ pub(crate) unsafe fn set_last_insert(c: c_int) {
 /// end.
 ///
 /// `Err` -- with `E29` -- when there is nothing to insert.
-///
-/// # Safety
-/// Must run with a live `curwin`.
-pub(crate) unsafe fn stuff_inserted(
-    c: c_int,
-    mut count: c_int,
-    no_esc: c_int,
-) -> Result<(), Failed> {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
-    let mut insert = unsafe { get_last_insert() }; // text to be inserted
+pub(crate) fn stuff_inserted(c: c_int, mut count: c_int, no_esc: c_int) -> Result<(), Failed> {
+    let mut insert = get_last_insert(); // text to be inserted
     if insert.data().is_null() {
         emsg(gettext(e_noinstext));
         return Err(Failed);
@@ -172,10 +161,7 @@ pub(crate) unsafe fn stuff_inserted(
 ///
 /// A copy: both callers shorten what they get, and the stored text is not
 /// theirs to shorten.
-///
-/// # Safety
-/// Must run on the main thread.
-pub(crate) unsafe fn get_last_insert() -> String_0 {
+pub(crate) fn get_last_insert() -> String_0 {
     // SAFETY: the borrow does not outlive this body, which stores nothing.
     let all = unsafe { last_insert_slot().borrow() };
     if all.is_null() {
@@ -193,11 +179,7 @@ pub(crate) unsafe fn get_last_insert() -> String_0 {
 /// # Safety
 /// Must run on the main thread.
 pub(crate) unsafe fn get_last_insert_save() -> *mut c_char {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
-    let insert = unsafe { get_last_insert() };
+    let insert = get_last_insert();
     if insert.data().is_null() {
         return ::core::ptr::null_mut();
     }

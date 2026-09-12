@@ -316,18 +316,14 @@ pub(crate) unsafe fn ins_compl_add(
         && !ins_compl_preinsert_longest()
         && !ctrl_x_mode_thesaurus()
     {
-        // SAFETY: `match_0` is the node just linked in.
-        unsafe { ins_compl_longest_match(match_0) };
+        ins_compl_longest_match(match_0);
     }
     OK
 }
 
 /// [`ins_compl_add`] for the original text: the first match every completion
 /// starts with, taken from `compl_orig_text`.
-///
-/// # Safety
-/// `compl_orig_text` holds the text being completed.
-pub(crate) unsafe fn ins_compl_add_orig_text(flags: c_int) -> Result<(), Failed> {
+pub(crate) fn ins_compl_add_orig_text(flags: c_int) -> Result<(), Failed> {
     let text = compl_orig_text().data();
     let len = compl_orig_text().len() as c_int;
     // SAFETY: the caller's promise; the nulls say there is no file name, no
@@ -373,11 +369,7 @@ pub(crate) unsafe fn ins_compl_equal(match_0: Cm, str: *mut c_char, len: size_t)
 
 /// Shorten `compl_leader` to the longest prefix it shares with `match_0`, and
 /// put that prefix in the buffer.
-///
-/// # Safety
-/// A completion is running, so that the leader and the buffer text the
-/// insert touches are the ones this match belongs to.
-pub(crate) unsafe fn ins_compl_longest_match(match_0: Cm) {
+pub(crate) fn ins_compl_longest_match(match_0: Cm) {
     if compl_leader().is_unset() {
         // SAFETY: `cp_str` is this match's own string; a null arena asks
         // `copy_string` for a fresh allocation.
@@ -603,11 +595,7 @@ pub(crate) unsafe extern "C" fn compare_scores(a: *const c_void, b: *const c_voi
 
 /// Score every match against the leader (or, with no leader, against the
 /// original text).
-///
-/// # Safety
-/// A completion is running, so the leader and the original text belong to
-/// the list being scored.
-pub(crate) unsafe fn set_fuzzy_score() {
+pub(crate) fn set_fuzzy_score() {
     let Some(first) = first_match() else {
         return;
     };
@@ -628,8 +616,7 @@ pub(crate) unsafe fn set_fuzzy_score() {
 
     for mut comp in matches_from(Some(first)) {
         if use_leader {
-            // SAFETY: `comp` is a live node, and a completion is running.
-            pattern = unsafe { get_leader_for_startcol(comp, true) }.data();
+            pattern = get_leader_for_startcol(comp, true).data();
         }
         // SAFETY: both strings are NUL-terminated.
         let (str, pattern) = unsafe { (cstr::at(comp.cp_str.data()), cstr::at(pattern)) };
@@ -657,10 +644,7 @@ unsafe fn sort_nodes(head: *mut ComplItem, compare: MergeSortCompareFunc) -> *mu
 
 /// Sort the match list with `compare`, leaving the node holding the leader
 /// (the original text) where it is.
-///
-/// # Safety
-/// `compare` is `Some` and orders two live `ComplItem`s.
-pub(crate) unsafe fn sort_compl_match_list(compare: MergeSortCompareFunc) {
+pub(crate) fn sort_compl_match_list(compare: MergeSortCompareFunc) {
     let Some(mut first) = first_match() else {
         return;
     };
@@ -758,10 +742,7 @@ pub(crate) unsafe fn ins_compl_free() {
 }
 
 /// Reset everything a completion left behind, without freeing the list.
-///
-/// # Safety
-/// The editor exists; `v:completed_item` is set from this thread.
-pub unsafe fn ins_compl_clear() {
+pub fn ins_compl_clear() {
     compl_cont_status.set(0);
     compl_started.set(false);
     compl_matches.set(0);
@@ -783,19 +764,14 @@ pub unsafe fn ins_compl_clear() {
 }
 
 /// Score the matches and, unless `'completeopt'` says `nosort`, reorder them.
-///
-/// # Safety
-/// A completion is running.
-pub(crate) unsafe fn ins_compl_fuzzy_sort() {
+pub(crate) fn ins_compl_fuzzy_sort() {
     let cur_cot_flags = completeopt_flags();
 
-    // SAFETY: a completion is running -- the caller's promise.
-    unsafe { set_fuzzy_score() };
+    set_fuzzy_score();
     if cur_cot_flags & kOptCotFlagNosort != 0 {
         return;
     }
-    // SAFETY: `cp_compare_fuzzy` reads two live nodes' scores.
-    unsafe { sort_compl_match_list(Some(cp_compare_fuzzy)) };
+    sort_compl_match_list(Some(cp_compare_fuzzy));
 
     // Sorting reorders the items, so the shown one has to be reset.
     if cur_cot_flags & (kOptCotFlagNoinsert | kOptCotFlagNoselect) != kOptCotFlagNoinsert {

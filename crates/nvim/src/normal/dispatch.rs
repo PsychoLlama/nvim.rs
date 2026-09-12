@@ -589,7 +589,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             restart_VIsual_select.set(0);
         }
         if want_insert {
-            unsafe { edit(restart_edit.get(), false, 1) };
+            edit(restart_edit.get(), false, 1);
         }
     }
     // 2 means "next command", 1 means "this one"; the countdown is here.

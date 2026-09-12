@@ -93,7 +93,7 @@ pub(crate) fn ins_left() {
     hide_dollar();
 
     let mut tpos = Win::current().w_cursor;
-    if unsafe { oneleft() }.is_ok() {
+    if oneleft().is_ok() {
         start_arrow_changing(&mut tpos, end_change);
         if !end_change {
             append_to_redobuff_char(Key::Left.code());
@@ -181,7 +181,7 @@ pub(crate) fn ins_right() {
         }
         Win::current().w_set_curswant = true;
         if virtual_active(Win::current()) {
-            let _ = unsafe { oneright() };
+            let _ = oneright();
         } else {
             // SAFETY: the cursor is on a character of its line, so the
             // character there has a length.

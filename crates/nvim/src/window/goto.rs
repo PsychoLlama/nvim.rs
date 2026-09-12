@@ -305,8 +305,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     // may have to copy the buffer options when 'cpo' contains 'S'
     if window.w_buffer != Buf::current_raw() {
         let flags = BCO_ENTER as c_int | BCO_NOHELP as c_int;
-        // SAFETY: a live window's buffer.
-        unsafe { buf_copy_options(window.buffer(), flags) };
+        buf_copy_options(window.buffer(), flags);
     }
     if !curwin_invalid {
         prevwin.set(Win::current_or_none().map(Win::id)); // remember for CTRL-W p

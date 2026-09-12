@@ -374,8 +374,7 @@ pub unsafe fn nvim_set_option_value(
 /// The answer's storage is the api's own: the caller frees whatever this hands
 /// back.
 pub unsafe fn nvim_get_all_options_info() -> ApiDict {
-    // SAFETY: `arena` is the caller's, per this function's contract.
-    unsafe { get_all_vimoptions() }
+    get_all_vimoptions()
 }
 
 /// Option `name`'s metadata, as seen at whatever scope `opts` names.
@@ -402,6 +401,5 @@ pub unsafe fn nvim_get_option_info2(
         true => unsafe { Win::new(target.from.cast()) },
         false => Win::current(),
     };
-    // SAFETY: `buf` and `win` are live, and `name`/`arena` are the caller's.
-    unsafe { get_vimoption(name, target.opt_flags, buf, win) }
+    get_vimoption(name, target.opt_flags, buf, win)
 }

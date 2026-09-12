@@ -564,7 +564,7 @@ unsafe fn show_one(
         gotocmdline(true);
         *did_show = true;
     }
-    unsafe { showoneopt(opt_idx, opt_flags) };
+    showoneopt(opt_idx, opt_flags);
 
     // With 'verbose' set, say where the value came from — from the
     // script context of the scope the value is being read from.
@@ -597,7 +597,7 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> Resu
 
     // SAFETY: the caller's string.
     if unsafe { *arg } == NUL as c_char {
-        unsafe { showoptions(false, opt_flags) };
+        showoptions(false, opt_flags);
         did_show = true;
     }
     while unsafe { *arg } != NUL as c_char {
@@ -616,7 +616,7 @@ pub(crate) unsafe fn do_set(arg: *mut c_char, opt_flags: OptionSetFlags) -> Resu
                 ui_refresh_options();
                 redraw_all_later(UPD_CLEAR);
             } else {
-                unsafe { showoptions(true, opt_flags) };
+                showoptions(true, opt_flags);
                 did_show = true;
             }
         } else {

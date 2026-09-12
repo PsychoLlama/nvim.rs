@@ -516,34 +516,25 @@ pub fn runtime_inspect() -> Array {
 
 /// `nvim__get_runtime()`: the readable files named by `pat` along the cached
 /// search path.
-///
-/// # Safety
-/// The cache must be live.
-pub unsafe fn runtime_get_named(lua: bool, pat: &Array, all: bool) -> Array {
+pub fn runtime_get_named(lua: bool, pat: &Array, all: bool) -> Array {
     let mut ref_0: c_int = 0;
     // SAFETY: the reference is released below, before this frame ends.
     let path = unsafe { runtime_search_path_get_cached(&raw mut ref_0) };
     let mut buf = [0 as c_char; MAXPATHL as usize];
-    let rv = unsafe { runtime_get_named_common(lua, pat, all, path, &mut buf) };
+    let rv = runtime_get_named_common(lua, pat, all, path, &mut buf);
     unsafe { runtime_search_path_unref(path, &raw const ref_0) };
     rv
 }
 
 /// [`runtime_get_named`] for a worker thread, against the snapshot
 /// [`update_runtime_search_path_thread`] keeps for exactly this.
-///
-/// # Safety
-/// As [`runtime_get_named`]. Called off the main thread; nothing here may
-/// touch main-thread-only editor state.
-pub unsafe fn runtime_get_named_thread(lua: bool, pat: &Array, all: bool) -> Array {
+pub fn runtime_get_named_thread(lua: bool, pat: &Array, all: bool) -> Array {
     // TODO(bfredl): avoid contention between multiple worker threads?
     // SAFETY: the mutex is initialised by `runtime_init` before any thread
     // exists, and guards every access to the snapshot on both sides.
     unsafe { uv_mutex_lock(search_path_mutex()) };
     let mut buf = [0 as c_char; MAXPATHL as usize];
-    let rv = unsafe {
-        runtime_get_named_common(lua, pat, all, runtime_search_path_thread.get(), &mut buf)
-    };
+    let rv = runtime_get_named_common(lua, pat, all, runtime_search_path_thread.get(), &mut buf);
     unsafe { uv_mutex_unlock(search_path_mutex()) };
     rv
 }
@@ -573,10 +564,7 @@ unsafe fn dir_has_lua(item: *mut SearchPathItem, buf: &mut [c_char]) -> bool {
 }
 
 /// The shared body of [`runtime_get_named`] and its thread variant.
-///
-/// # Safety
-/// `path` must be a live search path.
-unsafe fn runtime_get_named_common(
+fn runtime_get_named_common(
     lua: bool,
     pat: &Array,
     all: bool,

@@ -238,14 +238,7 @@ pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
 }
 
 /// Call a Lua function stored as a Vimscript Funcref.
-///
-/// # Safety
-/// `lua_cb` must be a live reference.
-pub unsafe fn typval_exec_lua_callable(
-    lua_cb: LuaRef,
-    argvars: &[TypVal],
-    rettv: &mut TypVal,
-) -> c_int {
+pub fn typval_exec_lua_callable(lua_cb: LuaRef, argvars: &[TypVal], rettv: &mut TypVal) -> c_int {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(lstate, lua_cb);

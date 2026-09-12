@@ -107,8 +107,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
             }
         }
     } else {
-        // SAFETY: replays the last insert into the read buffer.
-        let _ = unsafe { stuff_inserted(command_start_char, count, false as c_int) };
+        let _ = stuff_inserted(command_start_char, count, false as c_int);
     }
 
     // The text goes in later, so the cursor cannot be moved past it here;

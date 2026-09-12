@@ -245,8 +245,7 @@ pub unsafe fn ex_display(args: *mut ExArg) {
     let special = |name, label, text, skip_esc| unsafe {
         dis_special(arg, name, label, text, skip_esc);
     };
-    // SAFETY: main thread; the answer owns its own copy of the text.
-    let insert = unsafe { get_last_insert() };
+    let insert = get_last_insert();
     special('.' as c_int, c"\n  c  \".   ".as_ptr(), insert.data(), true);
     special(
         ':' as c_int,

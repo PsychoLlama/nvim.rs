@@ -159,7 +159,7 @@ unsafe fn apply_new_indent(
     // the replace stack, for when BS deletes it.
     if replace_normal(State.get()) {
         for _ in 0..Win::current().w_cursor.col {
-            unsafe { replace_push_nul() };
+            replace_push_nul();
         }
     }
     *newcol += Win::current().w_cursor.col;
@@ -316,8 +316,8 @@ pub unsafe fn open_line(
         // A NL replaces the rest of the line, so everything past the
         // cursor goes on the replace stack. Twice, because BS over a NL
         // expects it.
-        unsafe { replace_push_nul() };
-        unsafe { replace_push_nul() };
+        replace_push_nul();
+        replace_push_nul();
         let p = unsafe { saved_line.offset(Win::current().w_cursor.col as isize) };
         unsafe { replace_push(p, cstr::bytes_at(p).len()) };
         unsafe { *p = NUL as c_char };
@@ -462,7 +462,7 @@ pub unsafe fn open_line(
         // non-blank. In Replace mode the blanks go on the replace stack,
         // preceded by a NUL, so BS can put them back.
         if replace_normal(State.get()) {
-            unsafe { replace_push_nul() }; // end of the extra blanks
+            replace_push_nul(); // end of the extra blanks
         }
         if Buf::current().b_p_ai != 0 || flags & OPENLINE_DELSPACES != 0 {
             while (c_int::from(unsafe { *p_extra }) == ' ' as c_int
@@ -533,7 +533,7 @@ pub unsafe fn open_line(
         // when BS deletes it.
         if replace_normal(State.get()) {
             while lead_len > 0 {
-                unsafe { replace_push_nul() };
+                replace_push_nul();
                 lead_len -= 1;
             }
         }

@@ -341,8 +341,7 @@ pub fn internal_format(
         let mut orig_col = 0;
         let mut did_do_comment = false;
 
-        let virtcol =
-            unsafe { get_nolist_virtcol() } + char2cells(if c != NUL { c } else { gchar_cursor() });
+        let virtcol = get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
         if virtcol <= textwidth {
             break;
         }

@@ -193,13 +193,7 @@ pub fn f_strlen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// `skipcc` folds a composing character into the base character it
 /// follows; without it each one counts on its own.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-unsafe fn strchar_common(args: &[TypVal], result: &mut TypVal, skipcc: bool) {
+fn strchar_common(args: &[TypVal], result: &mut TypVal, skipcc: bool) {
     let mut numbuf = NumBuf::new();
     let next_char: unsafe fn(*mut *const c_char) -> c_int = if skipcc {
         mb_ptr2char_adv
@@ -217,21 +211,21 @@ unsafe fn strchar_common(args: &[TypVal], result: &mut TypVal, skipcc: bool) {
 
 /// "strcharlen()" function: characters, composing characters folded in.
 pub fn f_strcharlen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { strchar_common(args, result, true) }
+    strchar_common(args, result, true)
 }
 
 /// "strchars()" function: characters, composing ones counted unless the
 /// optional `skipcc` argument says otherwise.
 pub fn f_strchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let skipcc = if args.len() > 1 {
-        match unsafe { strict_bool_arg(&args[1]) } {
+        match strict_bool_arg(&args[1]) {
             Some(flag) => flag,
             None => return,
         }
     } else {
         false
     };
-    unsafe { strchar_common(args, result, skipcc) };
+    strchar_common(args, result, skipcc);
 }
 
 /// "strdisplaywidth()" function: screen cells, tabs expanded against the

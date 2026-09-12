@@ -325,8 +325,7 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
     let mut first: *mut c_char = ptr::null_mut();
     let mut len: c_int = -1;
     for mut compl in matches_from(first_match()) {
-        // SAFETY: `compl` is a live node of the match list.
-        let leader = unsafe { get_leader_for_startcol(compl, true) };
+        let leader = get_leader_for_startcol(compl, true);
 
         // Apply 'smartcase' behavior during normal mode.
         if ctrl_x_mode_normal()

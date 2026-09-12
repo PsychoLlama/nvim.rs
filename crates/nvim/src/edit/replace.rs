@@ -139,11 +139,7 @@ pub(crate) unsafe fn replace_push(str: *mut c_char, len: size_t) {
 }
 
 /// Push a NUL, the separator between entries.
-///
-/// # Safety
-/// Must run with the replace stack initialised (it always is; the empty
-/// stack is a null pointer with zero capacity).
-pub(crate) unsafe fn replace_push_nul() {
+pub(crate) fn replace_push_nul() {
     // SAFETY: a static one-byte string, one byte of which is read.
     unsafe { replace_push(c"".as_ptr().cast_mut(), 1) }
 }

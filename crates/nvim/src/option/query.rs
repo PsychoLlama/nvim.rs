@@ -110,11 +110,7 @@ pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
 /// Parse 'cursorlineopt' into `window.w_p_culopt_flags`, from `val` or from the
 /// window's own value. `Err` for a value that does not parse; the flags are
 /// only stored on success.
-///
-/// # Safety
-///
-/// `val`, where given, must outlive the call.
-pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut window: Win) -> Result<(), Failed> {
+pub(crate) fn fill_culopt_flags(val: Option<&CStr>, mut window: Win) -> Result<(), Failed> {
     let mut p = match val {
         Some(val) => val.as_ptr().cast_mut(),
         None => window.w_onebuf_opt.wo_culopt,

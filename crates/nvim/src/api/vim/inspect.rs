@@ -68,8 +68,7 @@ pub fn nvim__id_float(flt: Float) -> Float {
 #[allow(non_snake_case)]
 pub unsafe fn nvim__stats() -> ApiDict {
     let stats = g_stats.get();
-    // SAFETY: the Lua state exists from startup to exit.
-    let lua_refcount = unsafe { nlua_get_global_ref_count() };
+    let lua_refcount = nlua_get_global_ref_count();
     let entries = [
         (c"fsync", Object::integer(stats.fsync)),
         (c"log_skip", Object::integer(stats.log_skip as Integer)),

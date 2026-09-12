@@ -37,7 +37,7 @@ pub(crate) unsafe fn ins_compl_insert_bytes(p: *mut c_char, mut len: c_int) {
 pub(crate) unsafe fn ins_compl_longest_insert(prefix: *mut c_char) {
     ins_compl_delete(false);
     unsafe { ins_compl_insert_bytes(prefix.offset(get_compl_len() as isize), -1) };
-    unsafe { ins_redraw(false) };
+    ins_redraw(false);
 }
 
 /// Insert the longest common prefix of the best fuzzy matches as `'longest'`.
@@ -137,8 +137,7 @@ pub(crate) fn ins_compl_update_shown_match() {
     clear_adjusted_leader();
     // Upstream dereferences `compl_shown_match` throughout without checking.
     let mut shown = shown_match().expect("a running completion has a shown match");
-    // SAFETY: `shown` is a live node of the match list.
-    let mut leader = unsafe { get_leader_for_startcol(shown, true) };
+    let mut leader = get_leader_for_startcol(shown, true);
 
     loop {
         // SAFETY: the leader is readable for its own length.
@@ -148,8 +147,7 @@ pub(crate) fn ins_compl_update_shown_match() {
         }
         shown = shown.next().expect("`leader_hides` checked the link");
         compl_shown_match.set(shown.raw());
-        // SAFETY: as above.
-        leader = unsafe { get_leader_for_startcol(shown, true) };
+        leader = get_leader_for_startcol(shown, true);
     }
 
     // If we didn't find it searching forward, and compl_shows_dir is
@@ -165,8 +163,7 @@ pub(crate) fn ins_compl_update_shown_match() {
             }
             shown = shown.prev().expect("`leader_hides` checked the link");
             compl_shown_match.set(shown.raw());
-            // SAFETY: as above.
-            leader = unsafe { get_leader_for_startcol(shown, true) };
+            leader = get_leader_for_startcol(shown, true);
         }
     }
 }
@@ -232,7 +229,7 @@ pub fn ins_compl_delete(new_leader: bool) {
     }
 
     if Win::current().w_cursor.col > col {
-        if unsafe { stop_arrow() }.is_err() {
+        if stop_arrow().is_err() {
             return;
         }
         backspace_until_column(col);
@@ -452,8 +449,7 @@ pub(crate) unsafe fn find_next_completion_match(
         }
 
         let shown = shown_match().expect("a running completion has a shown match");
-        // SAFETY: `shown` is a live node of the match list.
-        let leader = unsafe { get_leader_for_startcol(shown, false) };
+        let leader = get_leader_for_startcol(shown, false);
         // SAFETY: the leader is readable for its own length.
         let hidden = !shown.is_original()
             && !leader.data().is_null()
@@ -557,7 +553,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
             )
         };
         compl_used_match.set(false);
-        unsafe { compl_orig_extmarks().restore() };
+        compl_orig_extmarks().restore();
     } else if insert_match {
         if !compl_get_longest.get() || compl_used_match.get() {
             // None selected.
@@ -573,7 +569,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
         let shown_text = shown_match().map_or(ptr::null_mut(), |shown| shown.cp_str.data());
         // SAFETY: both are NUL-terminated or null, which `strequal` takes.
         if unsafe { strequal(shown_text, compl_orig_text().data()) } {
-            unsafe { compl_orig_extmarks().restore() };
+            compl_orig_extmarks().restore();
         }
     } else {
         compl_used_match.set(false);

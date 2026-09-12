@@ -60,8 +60,8 @@ pub(crate) fn ins_reg() {
     // with.
     if redrawing() && !char_avail() {
         // May need to redraw now that no more characters are available.
-        unsafe { ins_redraw(false) };
-        unsafe { edit_putchar('"' as c_int, true) };
+        ins_redraw(false);
+        edit_putchar('"' as c_int, true);
         add_to_showcmd_c(Ctrl_R);
     }
 
@@ -158,7 +158,7 @@ pub(crate) fn ins_reg() {
     // Remove the `"` if the register was empty.  Before `clear_showcmd`,
     // which emits an event that can also update the screen.
     if need_redraw || stuff_empty() {
-        unsafe { edit_unputchar() };
+        edit_unputchar();
     }
     clear_showcmd();
 
@@ -280,7 +280,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     }
 
     if !single_char_insert {
-        unsafe { ins_apply_autocmds(AutoEvent::InsertLeavePre) };
+        ins_apply_autocmds(AutoEvent::InsertLeavePre);
     }
 
     // When an auto-indent was removed, curswant stays after the indent.
@@ -311,7 +311,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
         if Win::current().w_cursor.coladd > 0
             || get_ve_flags(Win::current()) == kOptVeFlagAll as ::core::ffi::c_uint
         {
-            let _ = unsafe { oneleft() };
+            let _ = oneleft();
             if restart_edit.get() != NUL {
                 Win::current().w_cursor.coladd += 1;
             }
@@ -400,7 +400,7 @@ pub(crate) fn ins_insert(replace_state: c_int) {
     };
     // SAFETY: a static mode name, and `curwin`/`curbuf` are live.
     unsafe { set_vim_var_string(Vv::Insertmode, mode, 1) };
-    unsafe { ins_apply_autocmds(AutoEvent::InsertChange) };
+    ins_apply_autocmds(AutoEvent::InsertChange);
 
     if State.get() & REPLACE_FLAG != 0 {
         State.set(MODE_INSERT | State.get() & MODE_LANGMAP);

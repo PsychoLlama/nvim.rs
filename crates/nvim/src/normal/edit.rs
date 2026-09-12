@@ -219,7 +219,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
         if ca.nchar == Ctrl_E || ca.nchar == Ctrl_Y {
             // `r CTRL-E` and `r CTRL-Y` copy from the line below or above.
             let from = Win::current().w_cursor.lnum + if ca.nchar == Ctrl_Y { -1 } else { 1 };
-            let c = unsafe { ins_copychar(from) };
+            let c = ins_copychar(from);
             if c != NUL {
                 ins_char(c);
             } else {
@@ -624,7 +624,7 @@ pub(crate) unsafe fn invoke_edit(cmd_arg: *mut CmdArg, repl: c_int, cmd: c_int, 
     if ca.cmdchar != 'O' as c_int && ca.cmdchar != 'o' as c_int {
         Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
     }
-    if unsafe { edit(cmd, startln != 0, ca.count1) } {
+    if edit(cmd, startln != 0, ca.count1) {
         ca.retval |= CA_COMMAND_BUSY as c_int;
     }
     if restart_edit.get() == 0 {

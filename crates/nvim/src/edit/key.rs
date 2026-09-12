@@ -446,10 +446,7 @@ fn key_end_insert(s: &mut InsertState) -> Next {
 /// CTRL-A and CTRL-@: insert the previously inserted text, and for CTRL-@
 /// leave the mode afterwards.
 fn key_stuff_last_insert(s: &mut InsertState) -> Next {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // CTRL-A keeps Insert mode, so it asks for no trailing <Esc>.
-    if unsafe { stuff_inserted(NUL, 1, c_int::from(s.c == Ctrl_A)) }.is_err() && s.c != Ctrl_A {
+    if stuff_inserted(NUL, 1, c_int::from(s.c == Ctrl_A)).is_err() && s.c != Ctrl_A {
         return Next::Leave;
     }
     s.inserted_space = 0;
@@ -612,7 +609,7 @@ fn insert_normal_char(s: &mut InsertState) {
     if p_paste.get() == 0 {
         let str = do_insert_char_pre(s.c);
         if !str.is_null() {
-            if c_int::from(unsafe { *str }) != NUL && unsafe { stop_arrow() }.is_ok() {
+            if c_int::from(unsafe { *str }) != NUL && stop_arrow().is_ok() {
                 // Insert the new value of v:char literally.
                 let mut p = str;
                 while c_int::from(unsafe { *p }) != NUL {
@@ -645,7 +642,7 @@ fn insert_normal_char(s: &mut InsertState) {
         if Insstart_blank_vcol.get() == MAXCOL as ColNr
             && Win::current().w_cursor.lnum == Insstart.get().lnum
         {
-            Insstart_blank_vcol.set(unsafe { get_nolist_virtcol() });
+            Insstart_blank_vcol.set(get_nolist_virtcol());
         }
     }
 

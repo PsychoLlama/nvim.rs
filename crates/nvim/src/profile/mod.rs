@@ -246,7 +246,7 @@ pub unsafe fn ex_profile(args: *mut ExArg) {
         profile_dump();
         do_profiling.set(PROF_NONE);
         set_vim_var_nr(Vv::Profiling, 0 as VarNumber);
-        unsafe { profile_reset() };
+        profile_reset();
     } else if full == b"pause" {
         if do_profiling.get() == PROF_YES {
             PAUSE_TIME.set(profile_start());
@@ -268,10 +268,7 @@ pub unsafe fn ex_profile(args: *mut ExArg) {
 }
 
 /// Forget all profiling information (`:profile stop`).
-///
-/// # Safety
-/// Main-thread editor call; the script and function tables are live.
-unsafe fn profile_reset() {
+fn profile_reset() {
     for id in 1..=script_count() {
         // SAFETY: `1..=ga_len` are the live script ids.
         let si = unsafe { &mut *script_item(id) };
@@ -395,10 +392,7 @@ pub fn prof_input_end() {
 
 /// Whether a function defined in the current script should be profiled
 /// (the script was targeted by `:profile file` with `!`-forcing).
-///
-/// # Safety
-/// Main-thread editor call; the script table is live.
-pub unsafe fn prof_def_func() -> bool {
+pub fn prof_def_func() -> bool {
     let sid = current_sctx.get().sc_sid;
     // SAFETY: a positive `sc_sid` is a live script id.
     sid > 0 && unsafe { (*script_item(sid)).sn_pr_force }
@@ -438,24 +432,18 @@ pub unsafe fn func_do_profile(func: *mut UserFunc) {
 /// Prepare for entering a child (another script/function/shell command)
 /// whose time should not count towards the current one. Returns the wait
 /// time to pass to [`prof_child_exit`].
-///
-/// # Safety
-/// Main-thread editor call; the call stack and script table are live.
-pub unsafe fn prof_child_enter() -> ProfTime {
+pub fn prof_child_enter() -> ProfTime {
     // SAFETY: `get_current_funccal` answers with the live call frame or null,
     // and a frame's `fc_func` is the function being executed.
     if let Some(fc) = unsafe { profiled_funccal() } {
         unsafe { (*fc).fc_prof_child = profile_start() };
     }
-    unsafe { script_prof_save() }
+    script_prof_save()
 }
 
 /// Account the time spent in a child; pairs with [`prof_child_enter`],
 /// `wait` being its return value.
-///
-/// # Safety
-/// Main-thread editor call; the call stack and script table are live.
-pub unsafe fn prof_child_exit(wait: ProfTime) {
+pub fn prof_child_exit(wait: ProfTime) {
     // SAFETY: as [`prof_child_enter`].
     if let Some(fc) = unsafe { profiled_funccal() } {
         let fc = unsafe { &mut *fc };
@@ -466,7 +454,7 @@ pub unsafe fn prof_child_exit(wait: ProfTime) {
         func.uf_tm_children = profile_add(func.uf_tm_children, child);
         func.uf_tml_children = profile_add(func.uf_tml_children, child);
     }
-    unsafe { script_prof_restore(wait) };
+    script_prof_restore(wait);
 }
 
 /// The current call frame, when its function is being profiled.
@@ -569,10 +557,7 @@ pub unsafe fn profile_init(si: *mut ScriptItem) {
 
 /// Save the wait time when starting to invoke another script or function;
 /// returns the snapshot for [`script_prof_restore`].
-///
-/// # Safety
-/// Main-thread editor call; the script table is live.
-pub unsafe fn script_prof_save() -> ProfTime {
+pub fn script_prof_save() -> ProfTime {
     if let Some(si) = current_script() {
         let si = unsafe { &mut *si };
         if si.sn_prof_on {
@@ -588,10 +573,7 @@ pub unsafe fn script_prof_save() -> ProfTime {
 
 /// Count time spent in children after invoking another script or function;
 /// `wait` is what [`script_prof_save`] returned.
-///
-/// # Safety
-/// Main-thread editor call; the script table is live.
-pub unsafe fn script_prof_restore(wait: ProfTime) {
+pub fn script_prof_restore(wait: ProfTime) {
     let Some(si) = current_script() else {
         return;
     };
@@ -611,10 +593,7 @@ pub unsafe fn script_prof_restore(wait: ProfTime) {
 
 /// Called when starting to read a script line; the exestack lnum must be
 /// correct. See [`func_line_start`] for the execed dance.
-///
-/// # Safety
-/// Main-thread editor call; the script table and exestack are live.
-pub unsafe fn script_line_start() {
+pub fn script_line_start() {
     // SAFETY: `current_script` only answers with a live script item, and the
     // exestack is live while a script line is being read.
     let (si, lnum) = unsafe {
@@ -638,10 +617,7 @@ pub unsafe fn script_line_start() {
 }
 
 /// Called when actually executing a script line.
-///
-/// # Safety
-/// Main-thread editor call; the script table is live.
-pub unsafe fn script_line_exec() {
+pub fn script_line_exec() {
     let Some(si) = current_script() else {
         return;
     };
@@ -652,10 +628,7 @@ pub unsafe fn script_line_exec() {
 }
 
 /// Called when done with a script line.
-///
-/// # Safety
-/// Main-thread editor call; the script table is live.
-pub unsafe fn script_line_end() {
+pub fn script_line_end() {
     let Some(si) = current_script() else {
         return;
     };

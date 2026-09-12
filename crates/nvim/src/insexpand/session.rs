@@ -489,7 +489,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     did_si.set(false);
     can_si.set(false);
     can_si_back.set(false);
-    if unsafe { stop_arrow() }.is_err() {
+    if stop_arrow().is_err() {
         did_ai.set(save_did_ai);
         return Err(Failed);
     }
@@ -582,8 +582,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     if p_ic.get() != 0 {
         flags |= CP_ICASE;
     }
-    // SAFETY: `compl_orig_text` is the text being completed.
-    if unsafe { ins_compl_add_orig_text(flags) }.is_err() {
+    if ins_compl_add_orig_text(flags).is_err() {
         compl_pattern().clear();
         compl_orig_text().clear();
         compl_orig_extmarks().clear();
@@ -621,7 +620,7 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 
     if !compl_started.get() {
         ins_compl_start()?;
-    } else if insert_match && unsafe { stop_arrow() }.is_err() {
+    } else if insert_match && stop_arrow().is_err() {
         return Err(Failed);
     }
 

@@ -337,9 +337,7 @@ pub unsafe fn create_user_command(
         }
 
         if let Some(body) = cmd.as_luaref() {
-            // SAFETY: `body` is a registry index rather than a pointer, and
-            // the object still holds the caller's own reference to it.
-            luaref = unsafe { api_new_luaref(body) };
+            luaref = api_new_luaref(body);
             rep = match opts.desc.as_ref().and_then(Object::as_string) {
                 Some(desc) => desc.data().cast_const(),
                 None => c"".as_ptr(),

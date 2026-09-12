@@ -138,10 +138,7 @@ pub(crate) unsafe fn runtime_search_path_get_cached(ref_0: *mut c_int) -> Runtim
 }
 
 /// A deep copy of `src`, paths included.
-///
-/// # Safety
-/// `src` must be a live search path.
-unsafe fn copy_runtime_search_path(src: RuntimeSearchPath) -> RuntimeSearchPath {
+fn copy_runtime_search_path(src: RuntimeSearchPath) -> RuntimeSearchPath {
     // SAFETY: the caller's live path.
     let src = unsafe { src.as_slice() };
     let mut dst = Vec::with_capacity(src.len());
@@ -624,7 +621,7 @@ pub fn update_runtime_search_path_thread(force: bool) {
     // threads' reads; nothing between lock and unlock can block on them.
     unsafe { uv_mutex_lock(search_path_mutex()) };
     unsafe { runtime_search_path_free(runtime_search_path_thread.get()) };
-    runtime_search_path_thread.set(unsafe { copy_runtime_search_path(runtime_search_path.get()) });
+    runtime_search_path_thread.set(copy_runtime_search_path(runtime_search_path.get()));
     unsafe { uv_mutex_unlock(search_path_mutex()) };
     runtime_search_path_valid_thread.set(true);
 }

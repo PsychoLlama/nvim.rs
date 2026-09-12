@@ -164,8 +164,7 @@ pub unsafe fn callback_copy(dest: *mut Callback, src: *mut Callback) {
                 Callback::Funcref(xstrdup(*name))
             }
         }
-        // SAFETY: a registry index, not a pointer.
-        Callback::Lua(reference) => Callback::Lua(unsafe { api_new_luaref(*reference) }),
+        Callback::Lua(reference) => Callback::Lua(api_new_luaref(*reference)),
         Callback::None => Callback::None,
     };
     // SAFETY: as above.

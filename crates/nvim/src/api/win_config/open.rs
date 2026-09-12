@@ -95,8 +95,7 @@ impl Opening {
         }
         if self.style == kWinStyleMinimal {
             win_set_minimal_style(window);
-            // SAFETY: a live window.
-            unsafe { didset_window_options(window, true) };
+            didset_window_options(window, true);
             changed_window_setting(window);
         }
         Ok(window.handle)

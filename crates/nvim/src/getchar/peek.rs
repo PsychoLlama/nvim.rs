@@ -158,11 +158,8 @@ fn show_partial_key(at: CursorAt) -> Partial {
         // `edit_putchar` copies what it is given.
         if State.get() & MODE_INSERT != 0 && unsafe { ptr2cells(tb.at(tb.len() - 1).cast()) } == 1 {
             // This looks nice when typing a dead-character mapping.
-            // SAFETY: draws `last` into the text; reads nothing of ours.
-            unsafe {
-                edit_putchar(last, false);
-                setcursor(); // put the cursor back where it belongs
-            }
+            edit_putchar(last, false);
+            setcursor(); // put the cursor back where it belongs
             partial.showing = true;
         }
         // The showcmd area is drawn relative to the cursor position the
@@ -205,9 +202,7 @@ fn unshow_partial_key(partial: &Partial) {
     }
     if partial.showing {
         if State.get() & MODE_INSERT != 0 {
-            // SAFETY (this body): takes back what the matching
-            // `show_partial_key` drew; reads nothing of ours.
-            unsafe { edit_unputchar() };
+            edit_unputchar();
         }
         if State.get() & MODE_CMDLINE != 0 && cmdline_in_use() {
             unputcmdline();

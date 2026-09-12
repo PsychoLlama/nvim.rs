@@ -277,8 +277,7 @@ unsafe fn do_source_str_init(source: &mut SourceCookie, mut str: *const c_char) 
 /// `args` carries the range to run.
 pub unsafe fn cmd_source_buffer(args: *const ExArg, ex_lua: bool) {
     let req = SourceRequest::new(ptr::null_mut(), ptr::null(), args, ex_lua);
-    // SAFETY: the caller's contract.
-    unsafe { do_source_ext(&req) };
+    do_source_ext(&req);
 }
 
 /// Source `str` as Vimscript, under `traceback_name`.
@@ -308,8 +307,7 @@ pub unsafe fn do_source_str(str: *const c_char, mut traceback_name: *mut c_char)
         traceback_name = sname_buf.as_mut_ptr();
     }
     let req = SourceRequest::new(traceback_name, str, ptr::null(), false);
-    // SAFETY: the caller's contract.
-    unsafe { do_source_ext(&req) }
+    do_source_ext(&req)
 }
 
 /// Where a `do_source_ext` call reads its lines from.
@@ -551,10 +549,7 @@ unsafe fn profile_script_start(si: *mut ScriptItem) {
 ///
 /// The item is looked up again rather than carried across the run: sourcing
 /// can register more scripts, which reallocates the registry.
-///
-/// # Safety
-/// A script is on the execution stack and `current_sctx` still names it.
-unsafe fn profile_script_stop(wait_start: ProfTime) {
+fn profile_script_stop(wait_start: ProfTime) {
     let si = script_item(current_sctx.get().sc_sid);
     if unsafe { (*si).sn_prof_on } {
         unsafe { (*si).sn_pr_start = profile_end((*si).sn_pr_start) };
@@ -566,10 +561,7 @@ unsafe fn profile_script_stop(wait_start: ProfTime) {
 }
 
 /// Whether the current buffer is Lua by 'filetype' or by file name.
-///
-/// # Safety
-/// There is a current buffer.
-unsafe fn curbuf_is_lua() -> bool {
+fn curbuf_is_lua() -> bool {
     let buf = Buf::current();
     // SAFETY: the caller's contract.
     let ft_is_lua = unsafe { strequal(buf.b_p_ft, c"lua".as_ptr()) };
@@ -649,8 +641,7 @@ unsafe fn execute_source(
 ) -> *mut c_char {
     // SAFETY: the caller's contract; both executors read the cookie's lines
     // or the file, not the cookie itself.
-    if req.is(Origin::Buffer)
-        && (req.ex_lua || unsafe { curbuf_is_lua() } || unsafe { range_is_lua(req.eap) })
+    if req.is(Origin::Buffer) && (req.ex_lua || curbuf_is_lua() || unsafe { range_is_lua(req.eap) })
     {
         unsafe { nlua_exec_lines(&cookie.buflines, fname_exp) };
         return ptr::null_mut();
@@ -755,12 +746,7 @@ unsafe fn source_bracket(
         time_push()
     };
     let profiling = do_profiling.get() == PROF_YES;
-    // SAFETY: paired with the `prof_child_exit` below.
-    let wait_start = if profiling {
-        unsafe { prof_child_enter() }
-    } else {
-        0
-    };
+    let wait_start = if profiling { prof_child_enter() } else { 0 };
 
     // Don't use the calling function's local variables.
     let mut funccalp_entry = FuncCallEntry {
@@ -809,9 +795,8 @@ unsafe fn source_bracket(
     // SAFETY: the loaded cookie and this script's item.
     let firstline = unsafe { execute_source(req, cookie, si, *fname_exp) };
 
-    // SAFETY: `si` is still this script's, though the registry may have moved.
     if profiling && !si.is_null() {
-        unsafe { profile_script_stop(wait_start) };
+        profile_script_stop(wait_start);
     }
     if got_int.get() {
         emsg(gettext(e_interr));
@@ -853,7 +838,7 @@ unsafe fn source_bracket(
     // cookie is done being read from.
     unsafe { restore_funccal() };
     if profiling {
-        unsafe { prof_child_exit(wait_start) };
+        prof_child_exit(wait_start);
     }
     unsafe { finish_source(cookie, firstline) };
     if !req.is(Origin::Str) && trigger_source_post {
@@ -869,10 +854,7 @@ unsafe fn source_bracket(
 /// Answers FAIL when the file could not be opened, OK otherwise.  When a
 /// `ScriptItem` was found or created, `ret_sid` -- if given -- gets its ID,
 /// and a script that has one already is *not* run again.
-///
-/// # Safety
-/// The request's pointers are live for the call.
-unsafe fn do_source_ext(req: &SourceRequest) -> c_int {
+fn do_source_ext(req: &SourceRequest) -> c_int {
     let save_debug_break_level = debug_break_level.get();
     let mut cookie = SourceCookie::new();
     // SAFETY: the caller's contract.
@@ -906,6 +888,5 @@ pub unsafe fn do_source(
         ret_sid,
         ..SourceRequest::new(fname, ptr::null(), ptr::null(), false)
     };
-    // SAFETY: the caller's contract.
-    unsafe { do_source_ext(&req) }
+    do_source_ext(&req)
 }

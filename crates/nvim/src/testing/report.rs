@@ -57,10 +57,7 @@ pub(super) fn sourcing_lnum() -> LineNr {
 }
 
 /// A fresh error buffer, opened with the sourcing position: `script line N: `.
-///
-/// # Safety
-/// Called while a script or function is executing.
-pub(super) unsafe fn prepare_assert_error() -> Vec<u8> {
+pub(super) fn prepare_assert_error() -> Vec<u8> {
     let mut ga = Vec::<u8>::new();
     let gap = &mut ga;
     let sname = estack_sfile(ESTACK_NONE);
@@ -168,10 +165,7 @@ unsafe fn ga_concat_shorten_esc(gap: &mut Vec<u8>, str: *const c_char) {
 ///
 /// An empty string counts as no message, which is what lets every
 /// `assert_*()`'s optional `msg` argument be passed through unconditionally.
-///
-/// # Safety
-/// `gap` is open and `opt_msg_tv` is a live typval.
-unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
+fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: Option<&TypVal>) {
     let Some(msg) = opt_msg_tv else {
         return;
     };
@@ -273,9 +267,7 @@ pub(super) unsafe fn fill_assert_error(
         None => (exp_tv, got_tv),
     };
 
-    // SAFETY: the caller's garray and typvals; each `encode_tv2*` allocation
-    // is freed where it is made.
-    unsafe { append_opt_msg(gap, opt_msg_tv) };
+    append_opt_msg(gap, opt_msg_tv);
     ga_concat_lit(
         gap,
         match atype {

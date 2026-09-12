@@ -360,14 +360,7 @@ impl FindContext {
     /// Build the directory name this frame stands for and expand its first
     /// wildcard, answering where in `wc_path` the rest of the wildcards
     /// start.
-    ///
-    /// # Safety
-    /// There must be a current buffer.
-    unsafe fn expand(
-        &self,
-        frame: &mut StackFrame,
-        file_path: &mut Candidate,
-    ) -> Result<usize, TooLong> {
+    fn expand(&self, frame: &mut StackFrame, file_path: &mut Candidate) -> Result<usize, TooLong> {
         // Whether "**" should also expand to nothing here, which is
         // done by handing expand_wildcards a second pattern.
         let mut expand_empty = false;
@@ -487,10 +480,7 @@ impl FindContext {
     ///
     /// The name is left in `file_path`, shortened relative to the current
     /// directory when that is possible.
-    ///
-    /// # Safety
-    /// There must be a current buffer.
-    unsafe fn find_hit(
+    fn find_hit(
         &mut self,
         frame: &StackFrame,
         file_path: &mut Candidate,
@@ -530,11 +520,10 @@ impl FindContext {
                                 == unsafe { os_isdir(file_path.as_ptr()) }));
                 // If the file exists and we didn't already find it.
                 if exists
-                    && unsafe {
-                        self.visited
-                            .current()
-                            .add(&file_path.buf[..file_path.len], b"")
-                    }
+                    && self
+                        .visited
+                        .current()
+                        .add(&file_path.buf[..file_path.len], b"")
                 {
                     if path_with_url(file_path.as_cstr()) == 0 {
                         file_path.len = unsafe { simplify_filename(file_path.as_mut_ptr()) };
@@ -588,10 +577,7 @@ impl FindContext {
 
     /// Push every directory this frame expanded to, to be searched with the
     /// wildcards that are left.
-    ///
-    /// # Safety
-    /// The frame must have been expanded.
-    unsafe fn push_subdirs(&mut self, frame: &StackFrame, rest: usize) {
+    fn push_subdirs(&mut self, frame: &StackFrame, rest: usize) {
         let files = frame.files();
         for i in frame.files_cur..files.len() {
             let dir = unsafe { files.get(i) };
@@ -609,10 +595,7 @@ impl FindContext {
 
     /// `**` descends to the leaves of the tree: push every subdirectory
     /// again with the same wildcards, one level shallower.
-    ///
-    /// # Safety
-    /// The frame must have been expanded.
-    unsafe fn push_descent(&mut self, frame: &StackFrame) {
+    fn push_descent(&mut self, frame: &StackFrame) {
         let files = frame.files();
         for i in frame.files_cur..files.len() {
             let dir = unsafe { files.get(i) };
@@ -633,10 +616,7 @@ impl FindContext {
 
     /// Work the stack until something is found, it runs out, or a name grows
     /// too long.
-    ///
-    /// # Safety
-    /// There must be a current buffer.
-    unsafe fn search_downwards(&mut self, file_path: &mut Candidate) -> Down {
+    fn search_downwards(&mut self, file_path: &mut Candidate) -> Down {
         loop {
             // Check if the user wants to stop the search.
             os_breakcheck();
@@ -659,11 +639,10 @@ impl FindContext {
             // loop). Only needed for directories worked on for the first
             // time, hence the test on `files`.
             if frame.files.is_none()
-                && !unsafe {
-                    self.dir_visited
-                        .current()
-                        .add(frame.fix_path.bytes(), frame.wc_path.bytes())
-                }
+                && !self
+                    .dir_visited
+                    .current()
+                    .add(frame.fix_path.bytes(), frame.wc_path.bytes())
             {
                 continue;
             }
@@ -679,7 +658,7 @@ impl FindContext {
             // handles an array of paths and returns every expansion in
             // one array, which is how '**' expands to an empty string.
             let rest = if frame.files.is_none() {
-                match unsafe { self.expand(&mut frame, file_path) } {
+                match self.expand(&mut frame, file_path) {
                     Ok(rest) => rest,
                     Err(TooLong) => return Down::TooLong,
                 }
@@ -692,7 +671,7 @@ impl FindContext {
                 if rest == frame.wc_path.len() {
                     // No further wildcards to expand, so check for the
                     // final file now.
-                    match unsafe { self.find_hit(&frame, file_path) } {
+                    match self.find_hit(&frame, file_path) {
                         Err(TooLong) => return Down::TooLong,
                         Ok(Some(i)) => {
                             // Keep the dir, to examine the rest of its
@@ -706,7 +685,7 @@ impl FindContext {
                 } else {
                     // Still wildcards left, push the directories for
                     // further search.
-                    unsafe { self.push_subdirs(&frame, rest) };
+                    self.push_subdirs(&frame, rest);
                 }
                 frame.files_cur = 0;
                 frame.stage = 1;
@@ -715,7 +694,7 @@ impl FindContext {
             // If the wildcards contain '**' we have to descend till we
             // reach the leaves of the directory tree.
             if frame.wc_path.bytes().starts_with(b"**") {
-                unsafe { self.push_descent(&frame) };
+                self.push_descent(&frame);
             }
             // We are done with the current directory; dropping the frame
             // frees its file list.
@@ -727,10 +706,7 @@ impl FindContext {
     ///
     /// Answers false when the top of the tree, or a stop directory, has been
     /// reached.
-    ///
-    /// # Safety
-    /// There must be a start directory and a stop list.
-    unsafe fn step_up(
+    fn step_up(
         &mut self,
         path_end: &mut usize,
         file_path: &mut Candidate,
@@ -742,7 +718,7 @@ impl FindContext {
         // on the last character after that.
         let plen = *path_end + usize::from(start_dir.at(*path_end) != 0);
         // Is the last starting directory in the stop list?
-        if unsafe { ff_path_in_stoplist(start_dir, plen, stopdirs) } {
+        if ff_path_in_stoplist(start_dir, plen, stopdirs) {
             return Ok(false);
         }
 
@@ -815,7 +791,7 @@ pub(crate) unsafe fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
     let mut path_end = ctx.start_dir.as_ref().map_or(0, Name::len);
 
     loop {
-        match unsafe { ctx.search_downwards(&mut file_path) } {
+        match ctx.search_downwards(&mut file_path) {
             Down::Found => return file_path.take(),
             Down::TooLong => break,
             Down::Exhausted => {}
@@ -825,7 +801,7 @@ pub(crate) unsafe fn vim_findfile(search_ctx_arg: *mut c_void) -> *mut c_char {
         if ctx.start_dir.is_none() || ctx.stopdirs.is_none() || got_int.get() {
             break;
         }
-        match unsafe { ctx.step_up(&mut path_end, &mut file_path) } {
+        match ctx.step_up(&mut path_end, &mut file_path) {
             Ok(true) => {}
             Ok(false) | Err(TooLong) => break,
         }

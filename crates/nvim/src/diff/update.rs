@@ -492,10 +492,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
 /// Whether the built-in diff engine is what a recompute would use.
 ///
 /// `'diffexpr'` overrides `'diffopt'`'s `internal`.
-///
-/// # Safety
-/// The editor must be running.
-pub unsafe fn diff_internal() -> c_int {
+pub fn diff_internal() -> c_int {
     // SAFETY: `p_dex` is the `'diffexpr'` option string.
     let no_diffexpr = unsafe { *p_dex.get() } == 0;
     c_int::from(diff_flags.get() & DIFF_INTERNAL != 0 && no_diffexpr)
@@ -524,8 +521,7 @@ pub unsafe fn ex_diffupdate(args: *mut ExArg) {
         .find(|&i| !tp.tp_diffbuf[i as usize].is_null())
         .filter(|&idx_orig| (idx_orig + 1..DB_COUNT).any(|i| !tp.tp_diffbuf[i as usize].is_null()));
     if let Some(idx_orig) = first_two {
-        // SAFETY: the editor exists.
-        let internal = unsafe { diff_internal() };
+        let internal = diff_internal();
         let mut diffio = DiffIo {
             dio_orig: DIFFIN_INIT,
             dio_new: DIFFIN_INIT,

@@ -82,10 +82,7 @@ pub unsafe fn nlua_get_empty_dict_ref(lstate: *mut lua_State) -> LuaRef {
 
 /// How many references the main state is holding — what the functional tests
 /// assert against to catch a leak.
-///
-/// # Safety
-/// The main state must exist.
-pub unsafe fn nlua_get_global_ref_count() -> c_int {
+pub fn nlua_get_global_ref_count() -> c_int {
     unsafe { (*nlua_global_refs.get()).ref_count }
 }
 
@@ -181,10 +178,7 @@ pub unsafe fn nlua_pushref(lstate: *mut lua_State, ref_0: LuaRef) {
 }
 
 /// A second, independently owned reference to the same value.
-///
-/// # Safety
-/// The main state must exist.
-pub unsafe fn api_new_luaref(original_ref: LuaRef) -> LuaRef {
+pub fn api_new_luaref(original_ref: LuaRef) -> LuaRef {
     unsafe {
         if original_ref == LUA_NOREF {
             return LUA_NOREF;
@@ -199,10 +193,7 @@ pub unsafe fn api_new_luaref(original_ref: LuaRef) -> LuaRef {
 
 /// Whether `ref_0` refers to something callable — the check an api argument
 /// that may be either a callback or a value needs.
-///
-/// # Safety
-/// The main state must exist.
-pub unsafe fn nlua_ref_is_function(ref_0: LuaRef) -> bool {
+pub fn nlua_ref_is_function(ref_0: LuaRef) -> bool {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(lstate, ref_0);

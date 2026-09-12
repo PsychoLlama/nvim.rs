@@ -32,16 +32,11 @@ use crate::types::NUL;
 
 /// Handle a CTRL-V or CTRL-Q typed in Insert mode.
 pub(crate) fn ins_ctrl_v() {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
-    // May need to redraw now that no more characters are available.
-    unsafe { ins_redraw(false) };
+    ins_redraw(false);
 
     let mut did_putchar = false;
     if redrawing() && !char_avail() {
-        unsafe { edit_putchar('^' as c_int, true) };
+        edit_putchar('^' as c_int, true);
         did_putchar = true;
     }
     unsafe { append_to_redobuff(CTRL_V_STR.as_ptr()) };
@@ -52,7 +47,7 @@ pub(crate) fn ins_ctrl_v() {
     if did_putchar {
         // When the line fits in 'columns' the `^` is at the start of the
         // next line and the redraw will not have removed it.
-        unsafe { edit_unputchar() };
+        edit_unputchar();
     }
     clear_showcmd();
     insert_special(c, 1, 1);
@@ -197,7 +192,7 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
         );
         c = unsafe { *p.offset((len - 1) as isize) } as uint8_t as c_int;
         if len > 2 {
-            if unsafe { stop_arrow() }.is_err() {
+            if stop_arrow().is_err() {
                 return;
             }
             unsafe { *p.offset((len - 1) as isize) = NUL as c_char };
@@ -206,14 +201,13 @@ pub(crate) fn insert_special(mut c: c_int, mut allow_modmask: c_int, mut ctrlv: 
             ctrlv = 0;
         }
     }
-    if unsafe { stop_arrow() }.is_ok() {
+    if stop_arrow().is_ok() {
         let flags = if ctrlv != 0 {
             INSCHAR_CTRLV as c_int
         } else {
             0
         };
-        // SAFETY: `curwin`/`curbuf` are live for the whole session.
-        unsafe { insertchar(c, flags, -1) };
+        insertchar(c, flags, -1);
     }
 }
 
@@ -243,8 +237,8 @@ pub(crate) fn ins_digraph() -> c_int {
     let mut did_putchar = false;
     pc_status.set(PutChar::Unset);
     if redrawing() && !char_avail() {
-        unsafe { ins_redraw(false) };
-        unsafe { edit_putchar('?' as c_int, true) };
+        ins_redraw(false);
+        edit_putchar('?' as c_int, true);
         did_putchar = true;
         add_to_showcmd_c(Ctrl_K);
     }
@@ -256,7 +250,7 @@ pub(crate) fn ins_digraph() -> c_int {
     if did_putchar {
         // If the line fits in 'columns' the `?` is at the start of the
         // next line and the redraw will not have removed it.
-        unsafe { edit_unputchar() };
+        edit_unputchar();
     }
 
     if c < 0 || !mod_mask.get().is_empty() {
@@ -268,10 +262,10 @@ pub(crate) fn ins_digraph() -> c_int {
     if c != ESC {
         did_putchar = false;
         if redrawing() && !char_avail() {
-            unsafe { ins_redraw(false) };
+            ins_redraw(false);
             if char2cells(c) == 1 {
-                unsafe { ins_redraw(false) };
-                unsafe { edit_putchar(c, true) };
+                ins_redraw(false);
+                edit_putchar(c, true);
                 did_putchar = true;
             }
             add_to_showcmd_c(c);
@@ -282,7 +276,7 @@ pub(crate) fn ins_digraph() -> c_int {
             plain_vgetc()
         };
         if did_putchar {
-            unsafe { edit_unputchar() };
+            edit_unputchar();
         }
 
         if cc != ESC {
@@ -303,10 +297,7 @@ pub(crate) fn ins_digraph() -> c_int {
 /// is found by walking that line's characters, adding widths, until the
 /// cursor's virtual column is reached.  Answers NUL -- and beeps -- when the
 /// line does not exist or is too short.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
+pub(crate) fn ins_copychar(lnum: LineNr) -> c_int {
     if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count {
         vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
         return NUL;
@@ -360,7 +351,7 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
         return c;
     }
 
-    c = unsafe { ins_copychar(Win::current().w_cursor.lnum + if c == Ctrl_Y { -1 } else { 1 }) };
+    c = ins_copychar(Win::current().w_cursor.lnum + if c == Ctrl_Y { -1 } else { 1 });
     if c == NUL {
         return c;
     }

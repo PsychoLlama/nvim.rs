@@ -56,10 +56,7 @@ const LUA_DEBUG_INIT: lua_Debug = lua_Debug {
 };
 
 /// The Lua table `arg` came from, if it came from one at all.
-///
-/// # Safety
-/// `arg` must be a live typval.
-unsafe fn lua_table_ref(arg: &TypVal) -> LuaRef {
+fn lua_table_ref(arg: &TypVal) -> LuaRef {
     unsafe {
         match (*arg).v_type() {
             VAR_DICT => (*(*arg).dict_or_null()).lua_table_ref,
@@ -71,11 +68,8 @@ unsafe fn lua_table_ref(arg: &TypVal) -> LuaRef {
 
 /// Whether this dictionary or list is a *view* of a Lua table rather than a
 /// Vimscript value of its own.
-///
-/// # Safety
-/// `arg` must be a live typval.
-pub unsafe fn nlua_is_table_from_lua(arg: &TypVal) -> bool {
-    unsafe { lua_table_ref(arg) != LUA_NOREF }
+pub fn nlua_is_table_from_lua(arg: &TypVal) -> bool {
+    lua_table_ref(arg) != LUA_NOREF
 }
 
 /// If `arg` is a Lua table with a `__call` metamethod, register that

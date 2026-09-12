@@ -217,7 +217,7 @@ pub unsafe fn get_lambda_tv(
                 f.uf_scoped = ptr::null_mut();
             }
 
-            if unsafe { prof_def_func() } {
+            if prof_def_func() {
                 unsafe { func_do_profile(fp) };
             }
             if sandbox.get() != 0 {

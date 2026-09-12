@@ -644,7 +644,7 @@ impl Definition {
         }
 
         // SAFETY: as above.
-        if unsafe { prof_def_func() } {
+        if prof_def_func() {
             // SAFETY: as above.
             unsafe { func_do_profile(func) };
         }

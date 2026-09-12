@@ -116,9 +116,7 @@ impl Clone for Object {
             Object::String(str) => Object::string(String_0::clone(str)),
             Object::Array(array) => Object::array(Array::clone(array)),
             Object::Dict(dict) => Object::dict(ApiDict::clone(dict)),
-            // SAFETY: `self` holds a live registry reference, so the state
-            // it names is on the registry for the call.
-            Object::LuaRef(reference) => Object::LuaRef(unsafe { api_new_luaref(*reference) }),
+            Object::LuaRef(reference) => Object::LuaRef(api_new_luaref(*reference)),
             Object::Buffer(handle) => Object::Buffer(*handle),
             Object::Window(handle) => Object::Window(*handle),
             Object::Tabpage(handle) => Object::Tabpage(*handle),

@@ -58,7 +58,7 @@ pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c
     );
     unsafe { tv_dict_set_keys_readonly(v_event) };
 
-    unsafe { ins_apply_autocmds(AutoEvent::CompleteDone) };
+    ins_apply_autocmds(AutoEvent::CompleteDone);
     unsafe { restore_v_event(v_event, &raw mut save_v_event) };
 }
 
@@ -81,11 +81,7 @@ pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut ComplItem) -> DictRef {
 /// `fast` uses `fast_breakcheck()` instead of `os_breakcheck()`. Answers
 /// NOTDONE if the string is already in the list, OK if it was added, FAIL on
 /// error.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval, unaliased for the call.
-pub(crate) unsafe fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int {
+pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let word: *const c_char;
@@ -249,10 +245,7 @@ impl ComplOrigExtmarks {
     }
 
     /// Put the saved extmarks back, newest first.
-    ///
-    /// # Safety
-    /// The buffer they were taken from must still be current.
-    pub(crate) unsafe fn restore(self) {
+    pub(crate) fn restore(self) {
         // The count is read once and the buffer once per step, exactly as
         // upstream's `for (i = kv_size(v); i > 0; i--) kv_A(v, i - 1)` did:
         // `extmark_apply_undo` re-enters the marktree, and nothing there
@@ -288,7 +281,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     if ctrl_x_mode_not_default() {
         ins_compl_prep(' ' as c_int);
     }
-    unsafe { ins_compl_clear() };
+    ins_compl_clear();
     unsafe { ins_compl_free() };
     compl_get_longest.set(compl_longest);
 
@@ -310,8 +303,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     if p_ic.get() != 0 {
         flags |= CP_ICASE;
     }
-    // SAFETY: `compl_orig_text` is the text being completed.
-    if unsafe { ins_compl_add_orig_text(flags | CP_FAST) }.is_err() {
+    if ins_compl_add_orig_text(flags | CP_FAST).is_err() {
         return;
     }
 
@@ -372,9 +364,7 @@ pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The `complete_add()` function; a `VimLFunc` row in the builtin table.
 pub fn f_complete_add(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe {
-        (*result).write_number(ins_compl_add_tv(&args[0], kDirectionNotSet, false) as VarNumber)
-    };
+    (*result).write_number(ins_compl_add_tv(&args[0], kDirectionNotSet, false) as VarNumber);
 }
 
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.

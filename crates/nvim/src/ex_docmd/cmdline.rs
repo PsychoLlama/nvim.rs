@@ -283,7 +283,7 @@ pub unsafe fn do_cmdline(
             } else if do_profiling.get() == PROF_YES
                 && getline_equal(fgetline, cookie, Some(getsourceline))
             {
-                unsafe { script_line_end() };
+                script_line_end();
             }
 
             // Has the sourced file hit a `:finish`?
@@ -331,7 +331,7 @@ pub unsafe fn do_cmdline(
                 if getline_is_func {
                     unsafe { func_line_start(real_cookie) };
                 } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
-                    unsafe { script_line_start() };
+                    script_line_start();
                 }
             }
         }

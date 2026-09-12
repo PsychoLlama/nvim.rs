@@ -65,7 +65,7 @@ pub unsafe fn nvim_create_autocmd(
                         if !(luaref != -2 as ::core::ffi::c_int) {
                             error = err_bad_value(c"callback", c"<no value>");
                             break '_cleanup;
-                        } else if !unsafe { nlua_ref_is_function(luaref) } {
+                        } else if !nlua_ref_is_function(luaref) {
                             let bad = c"<not a function>".as_ptr();
                             // SAFETY: the value the keyset carried, live for this call.
                             error = err_bad_value(c"callback", unsafe { cstr::at(bad) });

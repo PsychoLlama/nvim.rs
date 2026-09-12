@@ -602,8 +602,7 @@ pub unsafe fn nvim_win_set_config(
 
     if fconfig.style == kWinStyleMinimal && old_style != fconfig.style {
         win_set_minimal_style(w);
-        // SAFETY: `w` is live.
-        unsafe { didset_window_options(w, true) };
+        didset_window_options(w, true);
         changed_window_setting(w);
     }
     if fconfig._cmdline_offset < INT_MAX {

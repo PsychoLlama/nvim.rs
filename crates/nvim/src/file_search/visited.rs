@@ -157,10 +157,7 @@ impl VisitedList {
     ///
     /// A file it cannot identify counts as already seen, which is how
     /// upstream keeps an unreadable name out of the results.
-    ///
-    /// # Safety
-    /// There is nothing to promise; both names carry their own length.
-    pub(crate) unsafe fn add(&mut self, fname: &[u8], wc_path: &[u8]) -> bool {
+    pub(crate) fn add(&mut self, fname: &[u8], wc_path: &[u8]) -> bool {
         // Owned copies first: the comparisons below walk to a
         // terminator, which a borrowed slice does not have.
         let fname = Name::from_bytes(fname);
@@ -294,10 +291,7 @@ pub(crate) unsafe fn ff_wc_equal(s1: *const c_char, s2: *const c_char) -> bool {
 /// A parent matches: `/home` stops a search whose start directory is
 /// `/home/rks`. The separator test is what keeps `/home/r` from matching
 /// `/home/rks`.
-///
-/// # Safety
-/// There must be a current buffer, for `'fileignorecase'`.
-pub(crate) unsafe fn ff_path_in_stoplist(path: &Name, path_len: usize, stopdirs: &[Name]) -> bool {
+pub(crate) fn ff_path_in_stoplist(path: &Name, path_len: usize, stopdirs: &[Name]) -> bool {
     // Eat up trailing path separators, except the first.
     let mut path_len = path_len;
     while path_len > 1 && vim_ispathsep(c_int::from(path.at(path_len - 1))) {

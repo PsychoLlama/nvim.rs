@@ -51,7 +51,7 @@ fn insert_enter(s: &mut InsertState) {
     // Set Insstart_orig to Insstart.
     update_Insstart_orig.set(true);
 
-    unsafe { ins_compl_clear() }; // clear stuff for CTRL-X mode
+    ins_compl_clear(); // clear stuff for CTRL-X mode
 
     // Trigger InsertEnter -- but not for `r<CR>` or `grx`.
     if s.cmdchar != 'r' as c_int && s.cmdchar != 'v' as c_int {
@@ -191,7 +191,7 @@ fn insert_enter(s: &mut InsertState) {
     pum_check_clear();
     fold_update_after_insert();
     if s.cmdchar != 'r' as c_int && s.cmdchar != 'v' as c_int && s.c != Ctrl_C {
-        unsafe { ins_apply_autocmds(AutoEvent::InsertLeave) };
+        ins_apply_autocmds(AutoEvent::InsertLeave);
     }
     did_cursorhold.set(false);
 
@@ -223,7 +223,7 @@ fn trigger_insert_enter(cmdchar: c_int) {
     // these editor-wide routines ask for.
     unsafe { set_vim_var_string(Vv::Insertmode, mode, 1) };
     unsafe { set_vim_var_string(Vv::Char, ::core::ptr::null(), -1) };
-    unsafe { ins_apply_autocmds(AutoEvent::InsertEnter) };
+    ins_apply_autocmds(AutoEvent::InsertEnter);
 
     // Highlighting may have changed, e.g. for ModeMsg.
     if need_highlight_changed.get() {
@@ -342,7 +342,7 @@ unsafe fn insert_check(state: *mut VimState) -> c_int {
         validate_cursor(Win::current());
     }
 
-    unsafe { ins_redraw(true) };
+    ins_redraw(true);
 
     if Win::current().w_onebuf_opt.wo_scb != 0 {
         do_check_scrollbind(true);
@@ -407,7 +407,7 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
     s.mincol = Win::current().w_wcol;
     validate_cursor_col(Win::current());
 
-    let vcol = unsafe { get_nolist_virtcol() };
+    let vcol = get_nolist_virtcol();
     let (ts, vts) = (Buf::current().b_p_ts, Buf::current().b_p_vts_array);
     let tabstop = unsafe { tabstop_at(vcol, ts, vts, false) };
     if Win::current().w_wcol < s.mincol - tabstop
@@ -478,7 +478,7 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
     // mode" the buffer wants, and CTRL-\ CTRL-O is a one-shot CTRL-O.
     // Anything else after CTRL-\ is put back and the CTRL-\ inserted.
     if s.c == Ctrl_BSL {
-        unsafe { ins_redraw(false) };
+        ins_redraw(false);
         s.c = {
             let _raw_key = Keys::unmapped_with_codes();
             plain_vgetc()
@@ -676,10 +676,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
 ///
 /// Not called recursively: for `i_CTRL-O` it returns and lets the caller
 /// handle the Normal-mode command, which is what the answer means.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
+pub(crate) fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
     if !Buf::current().terminal.is_null() {
         if ex_normal_busy.get() != 0 {
             // Do not enter terminal mode from `:normal`; ask for Insert
@@ -747,8 +744,7 @@ fn key_available() -> bool {
 /// Did the arrow-key check leave the insert in a state that can be undone?
 #[inline(always)]
 fn stop_arrow_ok() -> bool {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { stop_arrow().is_ok() }
+    stop_arrow().is_ok()
 }
 
 /// Does 'cinkeys' list `c` for `when`?  `line_is_white` says whether the

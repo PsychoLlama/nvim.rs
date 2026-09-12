@@ -285,12 +285,11 @@ unsafe fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict 
     if ac.handler_cmd.is_null() {
         info.insert(c"command", Object::string(String_0::NULL));
         match &ac.handler_fn {
-            // SAFETY: the registry reference the row owns.
-            Callback::Lua(luaref) => unsafe {
+            Callback::Lua(luaref) => {
                 if nlua_ref_is_function(*luaref) {
                     info.insert(c"callback", Object::luaref(api_new_luaref(*luaref)));
                 }
-            },
+            }
             handler @ (Callback::Funcref(_) | Callback::Partial(_)) => {
                 // SAFETY: the caller's promise about a partial, and `arena`.
                 let name = unsafe { cstr_to_string(callback_to_string(handler)) };

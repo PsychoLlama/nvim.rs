@@ -59,11 +59,7 @@ fn int_value(n: Integer) -> Object {
 }
 
 /// The info dictionary for one option, looked up by name.
-///
-/// # Safety
-///
-/// `name` must be a valid string; `buffer` and `win` must be live.
-pub(crate) unsafe fn get_vimoption(
+pub(crate) fn get_vimoption(
     name: String_0,
     opt_flags: OptionSetFlags,
     buffer: Buf,
@@ -76,22 +72,17 @@ pub(crate) unsafe fn get_vimoption(
         let name = name.as_cstr();
         return Err(err_bad_value(c"option (not found)", name));
     }
-    Ok(unsafe { vimoption2dict(opt_idx, opt_flags, buffer, win) })
+    Ok(vimoption2dict(opt_idx, opt_flags, buffer, win))
 }
 
 /// Every option's info dictionary, keyed by full name.
-///
-/// # Safety
-///
-/// `curbuf` and `curwin` must be live.
-pub(crate) unsafe fn get_all_vimoptions() -> ApiDict {
+pub(crate) fn get_all_vimoptions() -> ApiDict {
     // SAFETY: the arena is live, and it is asked for exactly `kOptCount`
     // pairs before any is pushed.
     let mut retval = ApiDict::with_capacity(kOptCount as size_t);
     for opt_idx in kOptAleph..kOptCount {
         let (scope, buf, win) = (OptionSetFlags::GLOBAL, Buf::current(), Win::current());
-        // SAFETY: `curbuf`/`curwin` are live.
-        let opt_dict = unsafe { vimoption2dict(opt_idx, scope, buf, win) };
+        let opt_dict = vimoption2dict(opt_idx, scope, buf, win);
         // SAFETY: the option table's names are static C strings.
         let key = unsafe { crate::cstr::bytes_at(get_option(opt_idx).fullname) };
         retval.insert(key, Object::dict(opt_dict));
@@ -124,11 +115,7 @@ fn last_set(opt_idx: OptIndex, opt_flags: OptionSetFlags, buffer: Buf, win: Win)
 }
 
 /// The thirteen keys `nvim_get_option_info` reports for one option.
-///
-/// # Safety
-///
-/// `buffer` and `win` must be live.
-pub(crate) unsafe fn vimoption2dict(
+pub(crate) fn vimoption2dict(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     buffer: Buf,

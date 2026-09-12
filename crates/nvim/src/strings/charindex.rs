@@ -72,13 +72,7 @@ fn code_point(bytes: &[u8], char_len: usize) -> c_int {
 ///
 /// `comp` is the `byteidxcomp()` spelling, which counts a composing
 /// character as one of its own.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-unsafe fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
+fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
     let mut numbuf = NumBuf::new();
     (*result).write_number(-1);
 
@@ -89,7 +83,7 @@ unsafe fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
     }
 
     let utf16idx = if args.len() > 2 {
-        match unsafe { strict_bool_arg(&args[2]) } {
+        match strict_bool_arg(&args[2]) {
             Some(flag) => flag,
             None => return,
         }
@@ -125,12 +119,12 @@ unsafe fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
 
 /// "byteidx()" function
 pub fn f_byteidx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { byteidx_common(args, result, false) }
+    byteidx_common(args, result, false)
 }
 
 /// "byteidxcomp()" function
 pub fn f_byteidxcomp(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { byteidx_common(args, result, true) }
+    byteidx_common(args, result, true)
 }
 
 /// "charidx()" function: the character index of a byte (or UTF-16) offset.
@@ -257,7 +251,7 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut nchar = unsafe { tv_get_number_chk(&args[1], &raw mut error) };
     if !error {
         if args.len() > 2 && args.len() > 3 {
-            match unsafe { strict_bool_arg(&args[3]) } {
+            match strict_bool_arg(&args[3]) {
                 Some(flag) => skipcc = flag,
                 None => return,
             }

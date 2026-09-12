@@ -317,7 +317,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     Buf::current().b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
 
     check_buf_options(Buf::current());
-    unsafe { check_win_options(Win::current()) };
+    check_win_options(Win::current());
     check_options();
     last_status(false);
     didset_options();

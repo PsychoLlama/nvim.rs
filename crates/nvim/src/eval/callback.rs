@@ -95,7 +95,7 @@ pub unsafe fn callback_from_typval(callback: *mut Callback, arg: &TypVal) -> boo
             Callback::Funcref(funcref)
         }
     // SAFETY: the caller's promise about `arg`.
-    } else if unsafe { nlua_is_table_from_lua(arg) } {
+    } else if nlua_is_table_from_lua(arg) {
         // SAFETY: as above; the table has a `__call`.
         let name = unsafe { nlua_register_table_as_callable(arg) };
         if name.is_null() {

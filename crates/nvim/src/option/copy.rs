@@ -133,12 +133,7 @@ fn dup_static(name: &CStr) -> *mut c_char {
 }
 
 /// Give a window's option values to a freshly split one.
-///
-/// # Safety
-///
-/// Both windows must be live, and `wp_to`'s option fields uninitialised or
-/// already released.
-pub(crate) unsafe fn win_copy_options(wp_from: Win, wp_to: Win) {
+pub(crate) fn win_copy_options(wp_from: Win, wp_to: Win) {
     // SAFETY: the caller's windows; naming a field of one reads nothing,
     // so the four addresses below are ordinary checked code.
     let one = (
@@ -151,7 +146,7 @@ pub(crate) unsafe fn win_copy_options(wp_from: Win, wp_to: Win) {
     );
     unsafe { copy_winopt(one.0, one.1) };
     unsafe { copy_winopt(all.0, all.1) };
-    unsafe { didset_window_options(wp_to, true) };
+    didset_window_options(wp_to, true);
 }
 
 /// A copy of a string option's value, sharing the unset string rather than
@@ -289,11 +284,7 @@ fn winopt_strings(wop: *mut WinOpt) -> [*mut *mut c_char; 23] {
 }
 
 /// Give a window's two option sets any string values they are still missing.
-///
-/// # Safety
-///
-/// `win` must be a live window.
-pub(crate) unsafe fn check_win_options(win: Win) {
+pub(crate) fn check_win_options(win: Win) {
     // SAFETY: the caller's window, whose two option sets the addresses
     // below name without reading it.
     unsafe { check_winopt(win_field!(win.raw(), w_onebuf_opt)) };
@@ -331,11 +322,7 @@ pub(crate) unsafe fn clear_winopt(wop: *mut WinOpt) {
 ///
 /// `valid_cursor` says whether the window's cursor position can be trusted;
 /// a window being created does not have one yet.
-///
-/// # Safety
-///
-/// `window` must be a live window.
-pub(crate) unsafe fn didset_window_options(window: Win, valid_cursor: bool) {
+pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     // SAFETY: the caller's window. The handle borrows it for the one field
     // access that asked and never across a call, so none of the callees
     // below is reached while a `&mut Window` is live.
@@ -352,7 +339,7 @@ pub(crate) unsafe fn didset_window_options(window: Win, valid_cursor: bool) {
     // null out-parameters say "report nothing", which each accepts.
     unsafe { check_colorcolumn(ptr::null_mut(), Some(window)) };
     unsafe { briopt_check(ptr::null_mut(), Some(window)) };
-    let _ = unsafe { fill_culopt_flags(None, w) };
+    let _ = fill_culopt_flags(None, w);
     // Read each value where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
     let fcs = w.w_onebuf_opt.wo_fcs;
@@ -393,11 +380,7 @@ fn copy_sctx(mut buffer: Buf, bv: BufOptIndex) {
 /// | — | no | no | yes | no |
 /// | — | no | no | no | yes |
 /// | no | yes | no | — | yes |
-///
-/// # Safety
-///
-/// `buffer` must be a live buffer.
-pub(crate) unsafe fn buf_copy_options(buffer: Buf, flags: c_int) {
+pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
     let mut did_isk = false;
     // SAFETY: the caller's buffer. Every field write below goes through
     // this handle, which borrows the buffer for the one access that asked

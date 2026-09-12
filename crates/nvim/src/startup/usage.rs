@@ -85,7 +85,7 @@ pub(crate) fn version() {
     // SAFETY: initialises the Lua state with no argv and writes a message.
     unsafe { nlua_init(ptr::null_mut(), 0, -1) };
     info_message.set(true);
-    unsafe { list_version() };
+    list_version();
     msg_putchar('\n' as c_int);
     msg_didout.set(false);
 }

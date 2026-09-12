@@ -95,10 +95,7 @@ pub(crate) fn check_spell_redraw() {
 /// new insertion here.
 ///
 /// `Err` when undo is impossible, in which case the caller must not insert.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn stop_arrow() -> Result<(), Failed> {
+pub(crate) fn stop_arrow() -> Result<(), Failed> {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     if arrow_used.get() {
@@ -270,10 +267,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
 ///
 /// Any change an autocommand makes belongs to an undo block of its own --
 /// except for `InsertLeave`, whose change is still part of the insert.
-///
-/// # Safety
-/// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_apply_autocmds(event: AutoEvent) -> c_int {
+pub(crate) fn ins_apply_autocmds(event: AutoEvent) -> c_int {
     let tick = buf_get_changedtick(Buf::current());
     let none = ::core::ptr::null_mut();
     let r =

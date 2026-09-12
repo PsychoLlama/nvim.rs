@@ -130,13 +130,10 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     b.b_last_changedtick = tick;
     b.b_last_changedtick_i = tick;
     b.b_last_changedtick_pum = tick;
-    // SAFETY: as above.
-    unsafe {
-        buf_copy_options(
-            buf.expect("a live handle"),
-            BCO_ENTER as ::core::ffi::c_int | BCO_NOHELP as ::core::ffi::c_int,
-        );
-    }
+    buf_copy_options(
+        buf.expect("a live handle"),
+        BCO_ENTER as ::core::ffi::c_int | BCO_NOHELP as ::core::ffi::c_int,
+    );
     if scratch {
         let local = OptionSetFlags::LOCAL;
         let hide = string_optval(c"hide");

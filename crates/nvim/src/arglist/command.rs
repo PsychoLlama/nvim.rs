@@ -76,7 +76,7 @@ fn list_args() {
     let items: Vec<&CStr> = (0..argcount())
         .map(|i| unsafe { CStr::from_ptr(arg_name(i)) })
         .collect();
-    unsafe { list_in_columns(&items, cur_arg_idx()) };
+    list_in_columns(&items, cur_arg_idx());
 }
 
 /// `:arglocal` with no argument: copy the global list into the window's own,

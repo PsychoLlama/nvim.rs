@@ -233,10 +233,7 @@ unsafe extern "C-unwind" fn nlua_common_free_all_mem(lstate: *mut lua_State) {
 
 /// `require('vim._core.defaults')`, run once the editor is far enough along
 /// to have options and mappings.
-///
-/// # Safety
-/// The main state must exist.
-pub unsafe fn nlua_init_defaults() {
+pub fn nlua_init_defaults() {
     unsafe {
         let lstate = global_lstate.get();
         debug_assert!(!lstate.is_null());

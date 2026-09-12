@@ -424,8 +424,7 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
                 value.into_luaref().expect("the tag says LuaRef")
             } else {
                 let borrowed = value.as_luaref().expect("the tag says LuaRef");
-                // SAFETY: a registry index, not a pointer.
-                unsafe { api_new_luaref(borrowed) }
+                api_new_luaref(borrowed)
             };
             // SAFETY: `register_luafunc` answers a NUL-terminated name owned
             // by the registry, and `xstrdup` copies it.

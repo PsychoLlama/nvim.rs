@@ -99,7 +99,7 @@ unsafe fn assert_equal_common(args: &[TypVal], atype: AssertType) -> c_int {
     if tv_equal(&args[0], &args[1], false) == (atype == AssertType::Equal) {
         return 0;
     }
-    let mut ga = unsafe { prepare_assert_error() };
+    let mut ga = prepare_assert_error();
     let expected = Some(&args[0]);
     unsafe { fill_assert_error(&mut ga, args.get(2), ptr::null(), expected, &args[1], atype) };
     report_assert_error(&ga);
@@ -123,7 +123,7 @@ unsafe fn assert_match_common(args: &[TypVal], atype: AssertType) -> c_int {
     {
         return 0;
     }
-    let mut ga = unsafe { prepare_assert_error() };
+    let mut ga = prepare_assert_error();
     let expected = Some(&args[0]);
     unsafe { fill_assert_error(&mut ga, args.get(2), ptr::null(), expected, &args[1], atype) };
     report_assert_error(&ga);
@@ -149,7 +149,7 @@ unsafe fn assert_bool(args: &[TypVal], is_true: bool) -> c_int {
     if number_ok || bool_ok {
         return 0;
     }
-    let mut ga = unsafe { prepare_assert_error() };
+    let mut ga = prepare_assert_error();
     unsafe {
         fill_assert_error(
             &mut ga,
@@ -198,7 +198,7 @@ unsafe fn assert_beeps(args: &[TypVal], no_beep: bool) -> c_int {
 
     let mut ret = 0;
     if called_vim_beep.get() == no_beep {
-        let mut ga = unsafe { prepare_assert_error() };
+        let mut ga = prepare_assert_error();
         ga_concat_lit(
             &mut ga,
             if no_beep {
@@ -356,7 +356,7 @@ unsafe fn assert_equalfile(args: &[TypVal]) -> c_int {
         return 0;
     }
 
-    let mut ga = unsafe { prepare_assert_error() };
+    let mut ga = prepare_assert_error();
     let gap = &mut ga;
     if args.len() > 2 {
         let tofree = unsafe { encode_tv2echo(&args[2], ptr::null_mut()) };
@@ -427,7 +427,7 @@ unsafe fn assert_inrange(args: &[TypVal]) -> c_int {
         };
     }
 
-    let mut ga = unsafe { prepare_assert_error() };
+    let mut ga = prepare_assert_error();
     unsafe {
         fill_assert_error(
             &mut ga,
@@ -483,12 +483,12 @@ pub(crate) fn f_assert_exception(args: &[TypVal], result: &mut TypVal, _fptr: Ev
     let error = unsafe { numbuf.string_chk(&args[0]) };
     let thrown = unsafe { cstr::at(get_vim_var_str(Vv::Exception)) };
     if thrown.is_empty() {
-        let mut ga = unsafe { prepare_assert_error() };
+        let mut ga = prepare_assert_error();
         ga_concat_lit(&mut ga, c"v:exception is not set");
         report_assert_error(&ga);
         result.write_number(1);
     } else if !error.is_null() && !has_bytes(thrown, unsafe { cstr::bytes_at(error) }) {
-        let mut ga = unsafe { prepare_assert_error() };
+        let mut ga = prepare_assert_error();
         unsafe {
             fill_assert_error(
                 &mut ga,
@@ -544,8 +544,7 @@ pub(crate) fn f_assert_notmatch(args: &[TypVal], result: &mut TypVal, _fptr: Eva
 /// `assert_report(msg)`: an unconditional failure.
 pub(crate) fn f_assert_report(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the evaluator's argument vector and return slot.
-    let mut ga = unsafe { prepare_assert_error() };
+    let mut ga = prepare_assert_error();
     unsafe { ga_concat_cstr(&mut ga, numbuf.string(&args[0])) };
     report_assert_error(&ga);
     result.write_number(1);

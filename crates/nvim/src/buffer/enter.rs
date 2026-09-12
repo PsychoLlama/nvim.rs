@@ -93,8 +93,7 @@ fn restore_winopts(buffer: Buf) {
 
 /// Copy the buffer-local option values into `buffer`.
 fn copy_options_into(buffer: Buf, flags: c_int) {
-    // SAFETY: a live buffer.
-    unsafe { buf_copy_options(buffer, flags) };
+    buf_copy_options(buffer, flags);
 }
 
 fn diff_add(buffer: Buf) {

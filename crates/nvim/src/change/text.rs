@@ -169,7 +169,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
         // Push the replaced bytes onto the replace stack so BS can put them
         // back. A multi-byte character goes on the other way around, so
         // that its first byte -- which carries the length -- pops first.
-        unsafe { replace_push_nul() };
+        replace_push_nul();
         unsafe { replace_push(oldp.add(col), oldlen) };
     }
 

@@ -366,28 +366,26 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 State.set(MODE_INSERT); // for open_line()
                 let smd_save = p_smd.get();
                 p_smd.set(0);
-                unsafe {
-                    insertchar(
-                        NUL,
-                        INSCHAR_FORMAT as c_int
-                            + if do_comments {
-                                INSCHAR_DO_COM as c_int
-                            } else {
-                                0
-                            }
-                            + if do_comments && do_comments_list {
-                                INSCHAR_COM_LIST as c_int
-                            } else {
-                                0
-                            }
-                            + if avoid_fex {
-                                INSCHAR_NO_FEX as c_int
-                            } else {
-                                0
-                            },
-                        second_indent,
-                    )
-                };
+                insertchar(
+                    NUL,
+                    INSCHAR_FORMAT as c_int
+                        + if do_comments {
+                            INSCHAR_DO_COM as c_int
+                        } else {
+                            0
+                        }
+                        + if do_comments && do_comments_list {
+                            INSCHAR_COM_LIST as c_int
+                        } else {
+                            0
+                        }
+                        + if avoid_fex {
+                            INSCHAR_NO_FEX as c_int
+                        } else {
+                            0
+                        },
+                    second_indent,
+                );
                 State.set(old_state);
                 p_smd.set(smd_save);
                 // `insertchar` can have run `:normal`, which updates the

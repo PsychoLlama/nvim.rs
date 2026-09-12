@@ -281,9 +281,7 @@ pub(crate) fn commands_array(buffer: Option<Buf>) -> ApiDict {
 /// what the wire format carries.
 fn describe(cmd: &UserCmd) -> ApiDict {
     let a = cmd.uc_argt;
-    // SAFETY: module contract; the entry owns each reference, and
-    // `api_new_luaref` takes a fresh one for the caller to own.
-    let luaref = |r: LuaRef| (r != LUA_NOREF).then(|| Object::luaref(unsafe { api_new_luaref(r) }));
+    let luaref = |r: LuaRef| (r != LUA_NOREF).then(|| Object::luaref(api_new_luaref(r)));
     // SAFETY: module contract; the three strings are NUL-terminated.
     let (name, definition) = unsafe { (cstr_to_string(cmd.uc_name), cstr_to_string(cmd.uc_rep)) };
     let complete_arg = if cmd.uc_compl_arg.is_null() {

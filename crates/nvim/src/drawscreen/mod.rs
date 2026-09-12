@@ -311,8 +311,7 @@ pub fn update_screen() -> Result<(), Failed> {
     // The intro message is shown until something else claims the screen.
     static STILL_MAY_INTRO: GlobalCell<bool> = GlobalCell::new(true);
 
-    // SAFETY: the whole screen pipeline, on the main thread.
-    if STILL_MAY_INTRO.get() && !unsafe { may_show_intro() } {
+    if STILL_MAY_INTRO.get() && !may_show_intro() {
         if let Some(win) = winlayer::first_window() {
             win.redraw_later(UPD_NOT_VALID);
         }
@@ -537,7 +536,7 @@ pub fn update_screen() -> Result<(), Failed> {
     }
 
     if STILL_MAY_INTRO.get() {
-        unsafe { intro_message(false) };
+        intro_message(false);
     }
     repeat_message();
 

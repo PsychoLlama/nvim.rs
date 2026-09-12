@@ -346,7 +346,7 @@ pub unsafe fn call_user_func(
         f.uf_tm_children = profile_zero();
     }
     if do_profiling_yes {
-        wait_start = unsafe { script_prof_save() };
+        wait_start = script_prof_save();
     }
 
     let save_current_sctx = current_sctx.get();
@@ -444,7 +444,7 @@ pub unsafe fn call_user_func(
     estack_pop();
     current_sctx.set(save_current_sctx);
     if do_profiling_yes {
-        unsafe { script_prof_restore(wait_start) };
+        script_prof_restore(wait_start);
     }
     drop(sandboxed);
 
@@ -493,7 +493,7 @@ pub(crate) unsafe fn call_user_func_check(
     // SAFETY: the caller's promise -- `func` is a live function.
     let f = unsafe { Uf::new(func) };
     if f.uf_flags.has(FuncFlags::LUAREF) {
-        return unsafe { typval_exec_lua_callable(f.uf_luaref, args, result) };
+        return typval_exec_lua_callable(f.uf_luaref, args, result);
     }
 
     if f.uf_flags.has(FuncFlags::RANGE) && !unsafe { (*funcexe).fe_doesrange }.is_null() {

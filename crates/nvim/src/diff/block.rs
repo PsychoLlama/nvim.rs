@@ -173,7 +173,7 @@ fn diff_mark_adjust_tp(
     amount: LineNr,
     amount_after: LineNr,
 ) {
-    if unsafe { diff_internal() } != 0 {
+    if diff_internal() != 0 {
         // The blocks will be recomputed before the next redraw, so
         // nothing below survives; `_update` also gets the folds redone.
         // The *marks* are still adjusted here, which `:%diffput` needs.

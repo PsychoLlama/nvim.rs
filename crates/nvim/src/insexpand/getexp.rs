@@ -906,10 +906,10 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
 
     if match_count > 0 && !ctrl_x_mode_spell() {
         if is_nearest_active() && !ins_compl_has_preinsert() {
-            unsafe { sort_compl_match_list(Some(cp_compare_nearest)) };
+            sort_compl_match_list(Some(cp_compare_nearest));
         }
         if cot_fuzzy() && ins_compl_leader_len() > 0 {
-            unsafe { ins_compl_fuzzy_sort() };
+            ins_compl_fuzzy_sort();
         }
     }
 

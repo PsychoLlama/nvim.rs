@@ -52,10 +52,7 @@ impl TrustAction {
 
 /// Call `vim.secure.trust{ action = ..., path|bufnr = ... }` and report
 /// what it says. `path` of `None` means the current buffer.
-///
-/// # Safety
-/// The global Lua state must be initialized: main thread, editor running.
-unsafe fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
+fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
     // SAFETY: the caller promises an initialized editor, so the global
     // state is live; `top` is what every path below unwinds the stack to.
     let (lstate, top) = unsafe {
@@ -160,7 +157,5 @@ pub unsafe fn ex_trust(eap: *mut ExArg) {
         let path = skipwhite(arg);
         (*path != 0).then(|| CStr::from_ptr(path.cast::<c_char>()))
     };
-    // SAFETY: `ex_trust` only runs from the command table, so the editor and
-    // its Lua state are up.
-    unsafe { nlua_trust(action, path) };
+    nlua_trust(action, path);
 }

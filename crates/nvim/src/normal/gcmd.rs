@@ -111,7 +111,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
     }
     coladvance(win, i);
     if to_first_non_blank {
-        while ascii_iswhite(gchar_cursor()) && unsafe { oneright() }.is_ok() {}
+        while ascii_iswhite(gchar_cursor()) && oneright().is_ok() {}
         win.w_valid.clear(WinValid::WCOL);
     }
     win.w_set_curswant = true;
@@ -207,7 +207,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
         update_curswant_force();
     }
     if to_last_non_blank {
-        while ascii_iswhite_or_nul(gchar_cursor()) && unsafe { oneleft() }.is_ok() {}
+        while ascii_iswhite_or_nul(gchar_cursor()) && oneleft().is_ok() {}
         win.w_valid.clear(WinValid::WCOL);
     }
 }

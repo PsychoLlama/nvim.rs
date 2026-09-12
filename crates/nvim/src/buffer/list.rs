@@ -174,8 +174,7 @@ fn fire_buf_event(event: AutoEvent, buffer: Buf) -> bool {
 }
 
 fn copy_options_into(buffer: Buf, flags: c_int) {
-    // SAFETY: a live buffer.
-    unsafe { buf_copy_options(buffer, flags) };
+    buf_copy_options(buffer, flags);
 }
 
 fn check_cursor_column(win: Win) {

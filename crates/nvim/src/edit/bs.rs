@@ -67,10 +67,7 @@ fn pull_insstart_orig_to_cursor() {
 /// At the end of a line that means joining the next one, which needs
 /// 'backspace' to contain `eol` just as a backspace over a line break does.
 pub(crate) fn ins_del() {
-    // SAFETY: every `unsafe` call in this function is an editor-wide routine
-    // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
-    // with.
-    if unsafe { stop_arrow() }.is_err() {
+    if stop_arrow().is_err() {
         return;
     }
     if char_at_cursor() == NUL {
@@ -139,10 +136,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
         beep_backspace();
         return false;
     }
-    // SAFETY: every `unsafe` call in this function is an editor-wide routine
-    // whose only precondition is the live `curwin`/`curbuf` Insert mode runs
-    // with.
-    if unsafe { stop_arrow() }.is_err() {
+    if stop_arrow().is_err() {
         return false;
     }
 
@@ -430,7 +424,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
         } else {
             unsafe { ins_str(c" ".as_ptr().cast_mut(), 1) };
             if State.get() & REPLACE_FLAG != 0 {
-                unsafe { replace_push_nul() };
+                replace_push_nul();
             }
         }
         space_vcol += 1;

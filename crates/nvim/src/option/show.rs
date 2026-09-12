@@ -74,11 +74,7 @@ fn all_options() -> impl Iterator<Item = OptIndex> {
 /// Two passes, because the short ones are laid out in columns and the long
 /// ones get a line each; the first pass collects everything that fits in a
 /// column, the second everything that does not.
-///
-/// # Safety
-///
-/// The current window and buffer must be live.
-pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
+pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
     let mut rendered = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the option table, the message area, and the current window
     // and buffer.
@@ -124,7 +120,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
             } else if option_has_type(opt_idx, kOptValTypeBoolean) {
                 1
             } else {
-                unsafe { option_value2string(opt_idx, opt_flags, &mut rendered) };
+                option_value2string(opt_idx, opt_flags, &mut rendered);
                 let fullname_len = unsafe { cstr::bytes_at(opt.fullname) }.len();
                 unsafe { fullname_len as c_int + vim_strsize(rendered.as_mut_ptr()) + 1 }
             };
@@ -153,7 +149,7 @@ pub(crate) unsafe fn showoptions(all: bool, opt_flags: OptionSetFlags) {
             let mut i = row as usize;
             while i < items.len() {
                 msg_advance(col);
-                unsafe { showoneopt(items[i], opt_flags) };
+                showoneopt(items[i], opt_flags);
                 col += INC;
                 i += rows as usize;
             }
@@ -184,11 +180,7 @@ pub(crate) fn ui_refresh_options() {
 }
 
 /// Write one option to the message area, the way `:set opt?` shows it.
-///
-/// # Safety
-///
-/// The current window and buffer must be live.
-pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
+pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // `:set` output is a message even under `-s`, which otherwise
     // suppresses everything.
     let save_silent = silent_mode.get();
@@ -223,7 +215,7 @@ pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
 
     if !boolean {
         msg_putchar('=' as c_int);
-        unsafe { option_value2string(opt_idx, opt_flags, &mut rendered) };
+        option_value2string(opt_idx, opt_flags, &mut rendered);
         if rendered[0] != NUL as c_char {
             msg_display(cstr::in_chars(&rendered), 0, false);
         }
@@ -540,11 +532,7 @@ unsafe fn put_string_value(
 }
 
 /// Render an option's value into `out`.
-///
-/// # Safety
-///
-/// The current window and buffer must be live.
-pub(crate) unsafe fn option_value2string(
+pub(crate) fn option_value2string(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     out: &mut [c_char; MAXPATHL as usize],

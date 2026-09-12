@@ -145,7 +145,7 @@ pub(crate) fn ins_tab() -> bool {
         } else {
             unsafe { ins_str(c" ".as_ptr().cast_mut(), 1) };
             if State.get() & REPLACE_FLAG != 0 {
-                unsafe { replace_push_nul() }; // no character was replaced
+                replace_push_nul(); // no character was replaced
             }
         }
         temp -= 1;
@@ -363,7 +363,7 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
 
     // Strange, but this is what the NL replaces in Replace mode.
     if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 {
-        unsafe { replace_push_nul() };
+        replace_push_nul();
     }
 
     // In 'virtualedit' past the end of the line, make the position real
@@ -409,15 +409,13 @@ fn walk_col(pos: &Pos, vreplace: bool) -> ColNr {
 /// be saved for undo, in which case nothing may be edited.
 #[inline(always)]
 fn stop_arrow_failed() -> bool {
-    // SAFETY: `curbuf` is live for the whole session.
-    unsafe { stop_arrow().is_err() }
+    stop_arrow().is_err()
 }
 
 /// The cursor's virtual column, as it would be with 'list' off.
 #[inline(always)]
 fn nolist_virtcol() -> ColNr {
-    // SAFETY: `curwin` is live for the whole session.
-    unsafe { get_nolist_virtcol() }
+    get_nolist_virtcol()
 }
 
 /// The effective 'shiftwidth' of the current buffer.

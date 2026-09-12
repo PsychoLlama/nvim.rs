@@ -103,7 +103,7 @@ pub(crate) fn ins_compl_new_leader() {
             cpt_compl_refresh();
         }
         if cot_fuzzy() {
-            unsafe { ins_compl_fuzzy_sort() };
+            ins_compl_fuzzy_sort();
         }
     } else {
         spell_bad_len.set(0); // need to redetect bad word
@@ -150,7 +150,7 @@ pub fn ins_compl_addleader(c: c_int) {
         ins_compl_delete(false);
     }
 
-    if unsafe { stop_arrow() }.is_err() {
+    if stop_arrow().is_err() {
         return;
     }
     let cc = utf_char2len(c);
@@ -298,7 +298,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         }
         // Only format when something was inserted.
         if !arrow_used.get() && !ins_need_undo_get() && c != Ctrl_E {
-            unsafe { insertchar(NUL, 0, -1) };
+            insertchar(NUL, 0, -1);
         }
         if prev_col > 0
             && unsafe { *get_cursor_line_ptr().offset(Win::current().w_cursor.col as isize) }
@@ -359,7 +359,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
                 };
             }
         }
-        unsafe { compl_orig_extmarks().restore() };
+        compl_orig_extmarks().restore();
         retval = true;
     }
 
@@ -369,7 +369,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     // upon the completion before clearing the info, and restore
     // ctrl_x_mode so that complete_info() can be used.
     ctrl_x_mode.set(prev_mode);
-    unsafe { ins_apply_autocmds(AutoEvent::CompleteDonePre) };
+    ins_apply_autocmds(AutoEvent::CompleteDonePre);
 
     unsafe { ins_compl_free() };
     compl_started.set(false);

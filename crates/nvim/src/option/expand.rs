@@ -606,7 +606,7 @@ pub(crate) unsafe fn expand_old_setting(
     let var = if IDX.get() == kOptInvalid {
         c"".as_ptr() as *mut c_char
     } else {
-        unsafe { option_value2string(IDX.get(), FLAGS.get(), &mut rendered) };
+        option_value2string(IDX.get(), FLAGS.get(), &mut rendered);
         rendered.as_mut_ptr()
     };
     unsafe { *(*matches) = escape_option_str_cmdline(var) };
@@ -636,7 +636,7 @@ pub(crate) unsafe fn expand_string_setting(
     };
 
     let mut rendered = [0 as c_char; MAXPATHL as usize];
-    unsafe { option_value2string(opt_idx, FLAGS.get(), &mut rendered) };
+    option_value2string(opt_idx, FLAGS.get(), &mut rendered);
     let escaped = unsafe { escape_option_str_cmdline(rendered.as_mut_ptr()) };
 
     let set_arg = unsafe { (*expand).xp_line.offset(START_COL.get() as isize) };
@@ -675,7 +675,7 @@ pub(crate) unsafe fn expand_setting_subtract(
         return unsafe { expand_old_setting(num_matches, matches) };
     }
     let (buf, win) = (Buf::current(), Win::current());
-    let varp = unsafe { get_varp_scope_from(opt_idx, FLAGS.get(), buf, win) };
+    let varp = get_varp_scope_from(opt_idx, FLAGS.get(), buf, win);
     let value = unsafe { *varp.string_var() };
     let flags = get_option(opt_idx).flags;
 

@@ -289,12 +289,7 @@ pub(crate) fn clear_adjusted_leader() {
 /// A source whose startcol is *before* `compl_col` matches text the leader
 /// does not contain, so the leader has that text prepended; the result is
 /// cached in `adjusted_leader`, which [`clear_adjusted_leader`] drops.
-///
-/// # Safety
-///
-/// `match_0` must be an initialized `Cm` whose pointer fields point at live
-/// data for the call.
-pub(crate) unsafe fn get_leader_for_startcol(match_0: Cm, cached: bool) -> ComplStr {
+pub(crate) fn get_leader_for_startcol(match_0: Cm, cached: bool) -> ComplStr {
     'theend: {
         if cpt_sources().is_unset() {
             break 'theend;
@@ -397,8 +392,7 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
     for mut comp in matches_from(first_match()) {
         comp.cp_in_match_array = false;
 
-        // SAFETY: `comp` is a live node of the list being drawn.
-        let leader = unsafe { get_leader_for_startcol(comp, true) };
+        let leader = get_leader_for_startcol(comp, true);
 
         // Apply 'smartcase' behaviour during normal mode.
         if ctrl_x_mode_normal()

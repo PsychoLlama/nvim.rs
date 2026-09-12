@@ -820,8 +820,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     // SAFETY: the argument list the two windows now share.
     unsafe { (*newp.w_alist).al_refcount.retain() };
     newp.w_arg_idx = oldp.w_arg_idx;
-    // SAFETY: two live windows.
-    unsafe { win_copy_options(oldp, newp) };
+    win_copy_options(oldp, newp);
     newp.w_winbar_height = oldp.w_winbar_height;
 }
 

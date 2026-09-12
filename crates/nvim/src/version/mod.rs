@@ -191,15 +191,12 @@ pub(crate) unsafe fn ex_version(args: *mut ExArg) {
     if !ui_has(kUIMessages) {
         msg_putchar(b'\n' as c_int);
     }
-    unsafe { list_version() };
+    list_version();
 }
 
 /// Print `s`, moving to the next line first if it would otherwise wrap, and
 /// bracketing it when `wrap` marks it as the current item.
-///
-/// # Safety
-/// The message machinery must be usable.
-unsafe fn version_msg_wrap(s: &CStr, wrap: bool) {
+fn version_msg_wrap(s: &CStr, wrap: bool) {
     // SAFETY: `s` is NUL-terminated by construction.
     let len = unsafe { vim_strsize(s.as_ptr()) } + if wrap { 2 } else { 0 };
     if !got_int.get()
@@ -222,21 +219,14 @@ unsafe fn version_msg_wrap(s: &CStr, wrap: bool) {
 }
 
 /// [`version_msg_wrap`] for a line that is not the current item.
-///
-/// # Safety
-/// The message machinery must be usable.
-unsafe fn version_msg(s: &CStr) {
-    // SAFETY: the caller's obligation.
-    unsafe { version_msg_wrap(s, false) }
+fn version_msg(s: &CStr) {
+    version_msg_wrap(s, false)
 }
 
 /// Print `items` in as many columns as `'columns'` affords, filling column
 /// by column, with `items[current]` in brackets. `:args` lists the argument
 /// list this way, with the current file bracketed.
-///
-/// # Safety
-/// The message machinery must be usable.
-pub(crate) unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
+pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
     // SAFETY: every item is NUL-terminated by construction.
     let count = items.len() as c_int;
     // The widest item, plus the gap that separates two columns.
@@ -250,7 +240,7 @@ pub(crate) unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
     // Too narrow even for one column: one item per line, wrapped.
     if Columns.get() < width {
         for (i, item) in items.iter().enumerate() {
-            unsafe { version_msg_wrap(item, i as c_int == current) };
+            version_msg_wrap(item, i as c_int == current);
             if msg_col.get() > 0 && (i as c_int) < count - 1 {
                 msg_putchar(b'\n' as c_int);
             }
@@ -300,10 +290,7 @@ pub(crate) unsafe fn list_in_columns(items: &[&CStr], current: c_int) {
 }
 
 /// Print the Lua runtime's own version string, which only it knows.
-///
-/// # Safety
-/// The Lua state and the message machinery must be usable.
-pub(crate) unsafe fn list_lua_version() {
+pub(crate) fn list_lua_version() {
     const CODE: &CStr = c"return ((jit and jit.version) and jit.version or _VERSION)";
 
     // SAFETY: the caller's obligation. `CODE` is borrowed, not owned, by the
@@ -320,10 +307,7 @@ pub(crate) unsafe fn list_lua_version() {
 
 /// The `:version` screen. `nvim -v` prints the same thing, and `nvim -V1 -v`
 /// (or `:verbose version`) adds the build and path details.
-///
-/// # Safety
-/// The message machinery must be usable.
-pub(crate) unsafe fn list_version() {
+pub(crate) fn list_version() {
     // SAFETY: the caller's obligation.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     msg_str(LONG_VERSION);
@@ -337,7 +321,7 @@ pub(crate) unsafe fn list_version() {
     .expect("version numbers hold no NUL");
     msg_str(&compat);
     msg_putchar(b'\n' as c_int);
-    unsafe { list_lua_version() };
+    list_lua_version();
 
     if p_verbose.get() > 0 as OptInt {
         msg_putchar(b'\n' as c_int);
@@ -350,10 +334,10 @@ pub(crate) unsafe fn list_version() {
             }
             msg_str(baseline.name);
         }
-        unsafe { version_msg(c"\n") };
-        unsafe { version_msg(translate(c"   system vimrc file: \"")) };
-        unsafe { version_msg(SYS_VIMRC_FILE) };
-        unsafe { version_msg(c"\"\n") };
+        version_msg(c"\n");
+        version_msg(translate(c"   system vimrc file: \""));
+        version_msg(SYS_VIMRC_FILE);
+        version_msg(c"\"\n");
         for (label, dir) in [
             (c"  fall-back for $VIM: \"", default_vim_dir.get()),
             (c" f-b for $VIMRUNTIME: \"", default_vimruntime_dir.get()),
@@ -361,9 +345,9 @@ pub(crate) unsafe fn list_version() {
             if unsafe { *dir } == 0 {
                 continue;
             }
-            unsafe { version_msg(translate(label)) };
+            version_msg(translate(label));
             unsafe { version_msg(CStr::from_ptr(dir)) };
-            unsafe { version_msg(c"\"\n") };
+            version_msg(c"\"\n");
         }
     }
 
@@ -374,15 +358,12 @@ pub(crate) unsafe fn list_version() {
     } else {
         c"\nRun \":verbose version\" for more info"
     };
-    unsafe { version_msg(more) };
+    version_msg(more);
 }
 
 /// Whether the intro screen is still what the window shows: an untouched
 /// first buffer in the first window, and `'shortmess'` permitting.
-///
-/// # Safety
-/// The editor's globals must be live.
-pub(crate) unsafe fn may_show_intro() -> bool {
+pub(crate) fn may_show_intro() -> bool {
     let empty = buf_is_empty(Buf::current());
     empty
         && Buf::current().b_fname.is_null()
@@ -453,10 +434,7 @@ fn news_line() -> CString {
 
 /// Draw the intro screen, unless the window is too small to hold it --
 /// `:intro` (`colon`) asks for it regardless.
-///
-/// # Safety
-/// The grid must be ready to draw on.
-pub(crate) unsafe fn intro_message(colon: bool) {
+pub(crate) fn intro_message(colon: bool) {
     // SAFETY: the caller's obligation.
     // Centre the block vertically, ignoring the line the empty entry
     // above the version costs.
@@ -482,7 +460,7 @@ pub(crate) unsafe fn intro_message(colon: bool) {
         };
         let row = top + i as c_int;
         if !mesg.is_empty() && row < Rows.get() - 1 {
-            unsafe { do_intro_line(row, mesg, colon, i < 3) };
+            do_intro_line(row, mesg, colon, i < 3);
         }
     }
 }
@@ -490,10 +468,7 @@ pub(crate) unsafe fn intro_message(colon: bool) {
 /// Draw one centred intro line, highlighting what it recognises: the logo's
 /// diagonals, the horizontal rules, the version banner, and the `:command`
 /// and `<key>` mentions in the instructions.
-///
-/// # Safety
-/// The grid must be ready to draw on.
-unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
+fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     let text = mesg.to_bytes();
     // SAFETY: `mesg` is NUL-terminated and `text.len()` bytes long, so every
     // pointer below stays within it.
@@ -589,7 +564,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
 /// The editor's globals must be live.
 pub(crate) unsafe fn ex_intro(_args: *mut ExArg) {
     screenclear();
-    unsafe { intro_message(true) };
+    intro_message(true);
     plain_vgetc();
 }
 

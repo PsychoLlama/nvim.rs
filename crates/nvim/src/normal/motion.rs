@@ -181,7 +181,7 @@ pub(crate) unsafe fn nv_screengo(
             && !vim_isprintc(c)
             && c > 255
         {
-            let _ = unsafe { oneright() };
+            let _ = oneright();
         }
         // Landed past the wanted column on a multi-cell character: keep
         // it only if more than half of it is before the wanted column.
@@ -338,7 +338,7 @@ pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
         let at_end = if past_line {
             unsafe { *get_cursor_pos_ptr() as c_int == NUL }
         } else {
-            unsafe { oneright().is_err() }
+            oneright().is_err()
         };
         if at_end {
             if wrap_flag != NUL
@@ -378,8 +378,7 @@ pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
         } else if past_line {
             win.w_set_curswant = true;
             if virtual_active(win) {
-                // SAFETY: the cursor is in its own line.
-                let _ = unsafe { oneright() };
+                let _ = oneright();
             } else {
                 // SAFETY: as above.
                 win.w_cursor.col += unsafe { utfc_ptr2len(get_cursor_pos_ptr()) };
@@ -426,7 +425,7 @@ pub(crate) unsafe fn nv_left(cmd_arg: *mut CmdArg) {
 
     let mut n = ca.count1;
     while n > 0 {
-        if unsafe { oneleft() }.is_err() {
+        if oneleft().is_err() {
             if wrap_flag != NUL
                 && has_char(unsafe { cstr::at(p_ww.get()) }, wrap_flag)
                 && win.w_cursor.lnum > 1

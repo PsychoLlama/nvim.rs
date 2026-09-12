@@ -324,10 +324,7 @@ impl StringBuf {
     }
 
     /// Append one byte.
-    ///
-    /// # Safety
-    /// As [`Self::extend`].
-    unsafe fn push(&mut self, byte: c_char) {
+    fn push(&mut self, byte: c_char) {
         unsafe {
             let sb = &mut self.0;
             if sb.size == sb.capacity {

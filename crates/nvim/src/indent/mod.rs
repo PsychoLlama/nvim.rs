@@ -259,7 +259,7 @@ pub fn get_sw_value(buffer: Buf) -> c_int {
 unsafe fn get_sw_value_pos(buffer: Buf, pos: *mut Pos, left: bool) -> c_int {
     let save_cursor = Win::current().w_cursor;
     unsafe { Win::current().w_cursor = *pos };
-    let sw_value = unsafe { get_sw_value_col(buffer, get_nolist_virtcol(), left) };
+    let sw_value = get_sw_value_col(buffer, get_nolist_virtcol(), left);
     Win::current().w_cursor = save_cursor;
     sw_value
 }

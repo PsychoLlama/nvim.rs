@@ -146,7 +146,7 @@ pub(crate) fn didset_options() {
     // startup sweep has none to give.
     let _ = derive_cedit_key();
     derive_breakat_flags();
-    unsafe { didset_window_options(Win::current(), true) };
+    didset_window_options(Win::current(), true);
 }
 
 /// The second startup sweep: what needs highlight groups, and the option

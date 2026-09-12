@@ -43,9 +43,8 @@ pub fn profile_dump() {
             Ok(file) => {
                 let mut fd = BufWriter::new(file);
                 // Like the C fprintf-based writer, I/O errors are ignored.
-                // SAFETY: main thread; the tables the dump walks are live.
-                let _ = unsafe { script_dump_profile(&mut fd) };
-                let _ = unsafe { func_dump_profile(&mut fd) };
+                let _ = script_dump_profile(&mut fd);
+                let _ = func_dump_profile(&mut fd);
             }
             Err(_) => {
                 crate::semsg!("E484: Can't open file {}", fname.to_string_lossy());
@@ -122,10 +121,7 @@ unsafe fn prof_sort_list(
 }
 
 /// Where a function was defined, as the report's `Defined:` line.
-///
-/// # Safety
-/// `func` is a live function-table entry with a non-zero `uf_script_ctx`.
-unsafe fn write_func_origin(fd: &mut dyn Write, func: &UserFunc) -> io::Result<()> {
+fn write_func_origin(fd: &mut dyn Write, func: &UserFunc) -> io::Result<()> {
     let p = get_scriptname(func.uf_script_ctx, true);
     write!(fd, "    Defined: ")?;
     fd.write_all(p.to_bytes())?;
@@ -134,10 +130,7 @@ unsafe fn write_func_origin(fd: &mut dyn Write, func: &UserFunc) -> io::Result<(
 }
 
 /// Per-function sections plus the sorted lists.
-///
-/// # Safety
-/// Main-thread editor call; the function table is live.
-unsafe fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
+fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
     // SAFETY: the caller's contract.
     let mut sorttab = unsafe { profiled_functions() };
     for &fp in &sorttab {
@@ -147,8 +140,7 @@ unsafe fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
         // SAFETY: as above.
         unsafe { write_func_name(fd, fp) }?;
         if f.uf_script_ctx.sc_sid != 0 {
-            // SAFETY: as above.
-            unsafe { write_func_origin(fd, f) }?;
+            write_func_origin(fd, f)?;
         }
         if f.uf_tm_count == 1 {
             writeln!(fd, "Called 1 time")?;
@@ -206,10 +198,7 @@ unsafe fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
 
 /// One script's source, annotated line by line with its counters. The read
 /// runs to the end of file so that trailing continuation lines are listed.
-///
-/// # Safety
-/// `si` is a live script item whose `sn_name` names the script's source.
-unsafe fn script_dump_source(fd: &mut dyn Write, si: &ScriptItem) -> io::Result<()> {
+fn script_dump_source(fd: &mut dyn Write, si: &ScriptItem) -> io::Result<()> {
     // SAFETY: `sn_name` is the NUL-terminated source path.
     let sfd = unsafe { os_fopen(si.sn_name, c"r".as_ptr()) };
     if sfd.is_null() {
@@ -256,10 +245,7 @@ unsafe fn script_dump_source(fd: &mut dyn Write, si: &ScriptItem) -> io::Result<
 
 /// Per-script sections: each profiled script's source lines annotated with
 /// their counters.
-///
-/// # Safety
-/// Main-thread editor call; the script table is live.
-unsafe fn script_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
+fn script_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
     for id in 1..=script_count() {
         // SAFETY: `1..=ga_len` are the live script ids.
         let si = unsafe { &*script_item(id) };
@@ -278,8 +264,7 @@ unsafe fn script_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
         writeln!(fd, "Total time: {}", profile_msg_str(si.sn_pr_total))?;
         writeln!(fd, " Self time: {}", profile_msg_str(si.sn_pr_self))?;
         write!(fd, "\ncount  total (s)   self (s)\n")?;
-        // SAFETY: as above.
-        unsafe { script_dump_source(fd, si) }?;
+        script_dump_source(fd, si)?;
         writeln!(fd)?;
     }
     Ok(())

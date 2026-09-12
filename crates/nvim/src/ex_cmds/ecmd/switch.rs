@@ -274,8 +274,7 @@ fn leave_for_buffer(
     buffer.b_locked += 1;
 
     if old_curbuf.is(Buf::current_or_none()) {
-        // SAFETY: a live buffer.
-        unsafe { buf_copy_options(buffer, BCO_ENTER as c_int) };
+        buf_copy_options(buffer, BCO_ENTER as c_int);
     }
 
     // A terminal buffer that is still running is hidden, never unloaded.

@@ -216,8 +216,7 @@ fn clear_window_folds(win: Win) {
 }
 
 fn didset_options(win: Win) {
-    // SAFETY: a live window; `false` is upstream's `valid_cursor`.
-    unsafe { didset_window_options(win, false) };
+    didset_window_options(win, false);
 }
 
 fn set_minimal_style(win: Win) {

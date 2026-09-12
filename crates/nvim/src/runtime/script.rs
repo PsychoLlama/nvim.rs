@@ -272,11 +272,7 @@ fn getline_is_source(fgetline: LineGetter) -> bool {
 
 /// The script-local functions defined in the script with id `sid`, as a list of
 /// their names.
-///
-/// # Safety
-///
-/// The global function table must be walkable, which it is outside a rehash.
-unsafe fn get_script_local_funcs(sid: ScriptId) -> ListRef {
+fn get_script_local_funcs(sid: ScriptId) -> ListRef {
     let functbl = func_tbl_get();
     // SAFETY: the process-wide function table, which outlives this walk, and
     // a fresh list with at most one entry per function.
@@ -437,7 +433,7 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
             let vars = unsafe { tv_dict_copy(ptr::null(), sv_dict, true, get_copy_id()) };
             let (key, klen) = (c"variables".as_ptr(), c"variables".count_bytes());
             let _ = unsafe { tv_dict_add_dict(d, key, klen, vars) };
-            let funcs = unsafe { get_script_local_funcs(sid as ScriptId) };
+            let funcs = get_script_local_funcs(sid as ScriptId);
             let (key, klen) = (c"functions".as_ptr(), c"functions".count_bytes());
             let _ = unsafe { tv_dict_add_list(d, key, klen, Some(funcs)) };
         }
@@ -509,8 +505,7 @@ pub unsafe fn getsourceline(
         unsafe { refresh_breakpoint(sp) };
     }
     if do_profiling.get() == PROF_YES {
-        // SAFETY: paired with the `script_line_start` below.
-        unsafe { script_line_end() };
+        script_line_end();
     }
     // Set the current sourcing line number.
     // SAFETY: as above.
@@ -519,8 +514,7 @@ pub unsafe fn getsourceline(
     // SAFETY: as above.
     let mut line = unsafe { next_line(sp) };
     if !line.is_null() && do_profiling.get() == PROF_YES {
-        // SAFETY: paired with the `script_line_end` above.
-        unsafe { script_line_start() };
+        script_line_start();
     }
 
     // Only concatenate lines starting with a `\` when 'cpoptions' does not

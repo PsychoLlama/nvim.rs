@@ -90,7 +90,7 @@ pub fn f_call(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             partial = args[0].partial_or_null();
             unsafe { partial_name(partial) }
         }
-        _ if unsafe { nlua_is_table_from_lua(&args[0]) } => {
+        _ if nlua_is_table_from_lua(&args[0]) => {
             owned = true;
             unsafe { nlua_register_table_as_callable(&args[0]) }
         }

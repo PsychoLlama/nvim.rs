@@ -681,7 +681,7 @@ pub(crate) unsafe fn profile_cmd(
     if getline_equal(fgetline, cookie, Some(get_func_line)) {
         unsafe { func_line_exec(getline_cookie(fgetline, cookie)) };
     } else if getline_equal(fgetline, cookie, Some(getsourceline)) {
-        unsafe { script_line_exec() };
+        script_line_exec();
     }
 }
 

@@ -319,10 +319,8 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
     unsafe { changed(buffer) };
 
     for win in windows() {
-        // SAFETY: the editor exists; the short circuit is upstream's.
-        let diffed = win.w_buffer == buffer.raw()
-            && win.w_onebuf_opt.wo_diff != 0
-            && unsafe { diff_internal() } != 0;
+        let diffed =
+            win.w_buffer == buffer.raw() && win.w_onebuf_opt.wo_diff != 0 && diff_internal() != 0;
         if diffed {
             TabPage::current().tp_diff_update = 1;
             diff_update_line(lnum);
@@ -507,11 +505,10 @@ pub fn changed_lines(
 ) {
     changed_lines_redraw_buf(buffer, lnum, lnume, xtra);
 
-    // SAFETY: the editor exists; the short circuit is upstream's.
     let diff_same_lines = xtra == 0
         && Win::current().w_onebuf_opt.wo_diff != 0
         && Win::current().w_buffer == buffer.raw()
-        && unsafe { diff_internal() } == 0;
+        && diff_internal() == 0;
     if diff_same_lines {
         // With the line count unchanged, mark_adjust() is never called, so
         // the other diff buffers still have to be marked for display.

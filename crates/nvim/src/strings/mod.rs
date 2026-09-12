@@ -30,11 +30,7 @@ pub use self::printf::*;
 ///
 /// Returns `None` after raising the error, which both callers turn into a
 /// silent `-1` result.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval, unaliased for the call.
-pub(crate) unsafe fn strict_bool_arg(tv: &TypVal) -> Option<bool> {
+pub(crate) fn strict_bool_arg(tv: &TypVal) -> Option<bool> {
     let mut error = false;
     let value = unsafe { tv_get_bool_chk(tv, &raw mut error) };
     if error {

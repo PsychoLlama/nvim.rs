@@ -396,7 +396,7 @@ pub unsafe fn apply_autocmds_group(
         let mut wait_time: ProfTime = 0;
         if do_profiling.get() == PROF_YES {
             // Doesn't count for the caller itself.
-            wait_time = unsafe { prof_child_enter() };
+            wait_time = prof_child_enter();
         }
 
         // Don't use the caller's function-local variables.
@@ -533,7 +533,7 @@ pub unsafe fn apply_autocmds_group(
         drop(sctx);
         unsafe { restore_funccal() };
         if do_profiling.get() == PROF_YES {
-            unsafe { prof_child_exit(wait_time) };
+            prof_child_exit(wait_time);
         }
         KeyTyped.set(save_key_typed);
         unsafe { xfree(fname.cast::<::core::ffi::c_void>()) };
