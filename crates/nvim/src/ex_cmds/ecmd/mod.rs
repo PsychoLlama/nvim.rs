@@ -392,10 +392,8 @@ pub(crate) unsafe fn do_ecmd(
         //  false     true        re-edit same file, nothing changes
         //  true      false       start editing new file, new buffer
         //  true      true        start editing in existing buffer (nothing)
-        if !other_file && !state.oldbuf {
-            if !reuse_current_buffer(&mut state) {
-                break 'theend;
-            }
+        if !other_file && !state.oldbuf && !reuse_current_buffer(&mut state) {
+            break 'theend;
         }
 
         // If we get here we are sure to start editing.  Assume success now.

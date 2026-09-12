@@ -466,10 +466,8 @@ pub(super) fn commit_line(st: &mut Sub) -> bool {
     // Reset the match data for the next line.
     st.line_matches.clear();
 
-    if st.nmatch_tl > 0 as LineNr {
-        if !delete_matched_lines(st) {
-            return false;
-        }
+    if st.nmatch_tl > 0 as LineNr && !delete_matched_lines(st) {
+        return false;
     }
 
     // When asking, undo is saved each time, so the changed flag must be set

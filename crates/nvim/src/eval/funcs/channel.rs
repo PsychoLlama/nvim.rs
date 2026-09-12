@@ -289,7 +289,7 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let call_args = trailing_args(args, 2);
 
-    let scope = (nesting != 0).then(|| ProviderScope::enter());
+    let scope = (nesting != 0).then(ProviderScope::enter);
 
     let chan_id = args[0].number_or_zero() as uint64_t;
     let method = arg_string(&mut numbuf, &args[1]);

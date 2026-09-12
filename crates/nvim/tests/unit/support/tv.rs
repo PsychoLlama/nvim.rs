@@ -168,7 +168,7 @@ impl Tv {
                     let di = unsafe { tv_dict_item_alloc(cstr(key.clone()).as_ptr()) };
                     let mut value_tv = unsafe { value.build_at(path) };
                     unsafe { tv_copy(&value_tv, &mut (*di).di_tv) };
-                    unsafe { tv_clear(&mut value_tv) };
+                    tv_clear(&mut value_tv);
                     let _ = unsafe { tv_dict_add(d, di) };
                 }
                 path.pop();

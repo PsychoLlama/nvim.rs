@@ -33,7 +33,7 @@ pub fn f_hasmapto(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         Some(tv) => unsafe { tv_get_string_buf(tv, buf.as_mut_ptr()) },
         None => c"nvo".as_ptr(),
     };
-    let number = |n: usize| args.get(n).map(|tv| tv_get_number(tv));
+    let number = |n: usize| args.get(n).map(tv_get_number);
     let abbr = number(2).is_some_and(|n| n != 0);
     // SAFETY: both strings are NUL-terminated, and `result` is the caller's
     // writable answer slot.
@@ -204,7 +204,7 @@ unsafe fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
 
     let mut buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: as above.
-    let number = |n: usize| args.get(n).map(|tv| tv_get_number(tv));
+    let number = |n: usize| args.get(n).map(tv_get_number);
     let abbr = number(2).is_some_and(|n| n != 0);
     let get_dict = number(3).is_some_and(|n| n != 0);
     let mut which: *mut c_char = match args.get(1) {

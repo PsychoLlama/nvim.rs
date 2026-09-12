@@ -204,7 +204,7 @@ fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) 
             if time_limit < 0 {
                 return 0;
             }
-            use_skip = args.get(4).is_some_and(|tv| eval_expr_valid_arg(tv));
+            use_skip = args.get(4).is_some_and(eval_expr_valid_arg);
         }
     }
     let mut tm = profile_setlimit(time_limit);
@@ -568,7 +568,7 @@ pub unsafe fn do_searchpair(
     if flags & SP_START != 0 {
         options |= SEARCH_START as c_int;
     }
-    let use_skip = skip.is_some_and(|s| eval_expr_valid_arg(s));
+    let use_skip = skip.is_some_and(eval_expr_valid_arg);
 
     let save_cursor = Win::current().w_cursor;
     let mut pos = save_cursor;

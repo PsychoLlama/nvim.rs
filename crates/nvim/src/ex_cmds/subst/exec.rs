@@ -440,10 +440,8 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
         };
 
         if no_more {
-            if st.new_line.is_some() {
-                if !commit_line(st) {
-                    break;
-                }
+            if st.new_line.is_some() && !commit_line(st) {
+                break;
             }
             if st.nmatch == -1 as c_int && !lastone {
                 // SAFETY: the program is compiled.

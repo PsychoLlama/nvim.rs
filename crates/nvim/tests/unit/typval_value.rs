@@ -456,7 +456,7 @@ impl Slot {
     /// # Safety
     /// As `tv_islocked`.
     unsafe fn islocked(&self) -> bool {
-        unsafe { tv_islocked(self.lock, &self.tv) }
+        tv_islocked(self.lock, &self.tv)
     }
 }
 
@@ -465,17 +465,14 @@ impl Slot {
 #[test]
 fn copying_an_unknown_value_is_an_internal_error() {
     let log = AllocLog::start();
-    // SAFETY: neither value owns anything.
-    unsafe {
-        let from = TypVal::Unknown;
-        let mut to = TypVal::Number(7);
-        check_emsg(
-            log.editor(),
-            || tv_copy(&from, &mut to),
-            Some("E685: Internal error: tv_copy(UNKNOWN)"),
-        );
-        assert_eq!(to.v_type(), VAR_UNKNOWN, "the type was still copied over");
-    }
+    let from = TypVal::Unknown;
+    let mut to = TypVal::Number(7);
+    check_emsg(
+        log.editor(),
+        || tv_copy(&from, &mut to),
+        Some("E685: Internal error: tv_copy(UNKNOWN)"),
+    );
+    assert_eq!(to.v_type(), VAR_UNKNOWN, "the type was still copied over");
 }
 
 // ----------------------------------------------------------- item_lock
@@ -1261,33 +1258,30 @@ fn getting_a_line_number_resolves_the_cursor() {
     let mut win = Win::current();
     let saved_cursor = win.w_cursor;
 
-    // SAFETY: every value is this case's own and owns nothing.
-    unsafe {
-        let number = cstr("100500");
-        let dot = cstr(".");
-        let mut rows = number_rows(&number);
-        // `lnum` answers -1 where `number` answers 0, and reads `"."` as
-        // the cursor's line — which is the row `number` has no twin for.
-        rows.insert(
-            2,
-            Row {
-                tv: ManuallyDrop::new(TypVal::String(dot.as_ptr().cast_mut())),
-                emsg: None,
-            },
-        );
-        let answers = [42, 100500, 46, -1, -1, -1, -1, -1, 0, 1, 0, -1];
+    let number = cstr("100500");
+    let dot = cstr(".");
+    let mut rows = number_rows(&number);
+    // `lnum` answers -1 where `number` answers 0, and reads `"."` as
+    // the cursor's line — which is the row `number` has no twin for.
+    rows.insert(
+        2,
+        Row {
+            tv: ManuallyDrop::new(TypVal::String(dot.as_ptr().cast_mut())),
+            emsg: None,
+        },
+    );
+    let answers = [42, 100500, 46, -1, -1, -1, -1, -1, 0, 1, 0, -1];
 
-        for (row, want) in rows.into_iter().zip(answers) {
-            win.w_cursor.lnum = 46;
-            let tv = row.tv;
+    for (row, want) in rows.into_iter().zip(answers) {
+        win.w_cursor.lnum = 46;
+        let tv = row.tv;
+        log.check(&[]);
+        let got = check_emsg(log.editor(), || tv_get_lnum(&tv), row.emsg);
+        assert_eq!(i64::from(got), want, "{}", tv.v_type());
+        if row.emsg.is_some() {
+            log.clear();
+        } else {
             log.check(&[]);
-            let got = check_emsg(log.editor(), || tv_get_lnum(&tv), row.emsg);
-            assert_eq!(i64::from(got), want, "{}", tv.v_type());
-            if row.emsg.is_some() {
-                log.clear();
-            } else {
-                log.check(&[]);
-            }
         }
     }
 
@@ -1299,68 +1293,65 @@ fn getting_a_line_number_resolves_the_cursor() {
 #[test]
 fn getting_a_float_accepts_only_numbers() {
     let log = AllocLog::start();
-    // SAFETY: every value is this case's own and owns nothing.
-    unsafe {
-        let number = cstr("100500");
-        let rows: [(ManuallyDrop<TypVal>, Option<&str>, f64); 11] = [
-            (ManuallyDrop::new(TypVal::Number(42)), None, 42.0),
-            (
-                ManuallyDrop::new(TypVal::String(number.as_ptr().cast_mut())),
-                Some("E892: Using a String as a Float"),
-                0.0,
-            ),
-            (ManuallyDrop::new(TypVal::Float(42.53)), None, 42.53),
-            (
-                ManuallyDrop::new(TypVal::Partial(ptr::null_mut())),
-                Some("E891: Using a Funcref as a Float"),
-                0.0,
-            ),
-            (
-                ManuallyDrop::new(TypVal::Func(ptr::null_mut())),
-                Some("E891: Using a Funcref as a Float"),
-                0.0,
-            ),
-            (
-                ManuallyDrop::new(tv::list_tv(None)),
-                Some("E893: Using a List as a Float"),
-                0.0,
-            ),
-            (
-                ManuallyDrop::new(tv::dict_tv(None)),
-                Some("E894: Using a Dictionary as a Float"),
-                0.0,
-            ),
-            (
-                ManuallyDrop::new(TypVal::Special(kSpecialVarNull)),
-                Some("E907: Using a special value as a Float"),
-                0.0,
-            ),
-            (
-                ManuallyDrop::new(TypVal::Bool(kBoolVarTrue)),
-                Some("E362: Using a boolean value as a Float"),
-                0.0,
-            ),
-            (
-                ManuallyDrop::new(TypVal::Bool(kBoolVarFalse)),
-                Some("E362: Using a boolean value as a Float"),
-                0.0,
-            ),
-            (
-                ManuallyDrop::new(TypVal::Unknown),
-                Some("E685: Internal error: tv_get_float(UNKNOWN)"),
-                0.0,
-            ),
-        ];
+    let number = cstr("100500");
+    let rows: [(ManuallyDrop<TypVal>, Option<&str>, f64); 11] = [
+        (ManuallyDrop::new(TypVal::Number(42)), None, 42.0),
+        (
+            ManuallyDrop::new(TypVal::String(number.as_ptr().cast_mut())),
+            Some("E892: Using a String as a Float"),
+            0.0,
+        ),
+        (ManuallyDrop::new(TypVal::Float(42.53)), None, 42.53),
+        (
+            ManuallyDrop::new(TypVal::Partial(ptr::null_mut())),
+            Some("E891: Using a Funcref as a Float"),
+            0.0,
+        ),
+        (
+            ManuallyDrop::new(TypVal::Func(ptr::null_mut())),
+            Some("E891: Using a Funcref as a Float"),
+            0.0,
+        ),
+        (
+            ManuallyDrop::new(tv::list_tv(None)),
+            Some("E893: Using a List as a Float"),
+            0.0,
+        ),
+        (
+            ManuallyDrop::new(tv::dict_tv(None)),
+            Some("E894: Using a Dictionary as a Float"),
+            0.0,
+        ),
+        (
+            ManuallyDrop::new(TypVal::Special(kSpecialVarNull)),
+            Some("E907: Using a special value as a Float"),
+            0.0,
+        ),
+        (
+            ManuallyDrop::new(TypVal::Bool(kBoolVarTrue)),
+            Some("E362: Using a boolean value as a Float"),
+            0.0,
+        ),
+        (
+            ManuallyDrop::new(TypVal::Bool(kBoolVarFalse)),
+            Some("E362: Using a boolean value as a Float"),
+            0.0,
+        ),
+        (
+            ManuallyDrop::new(TypVal::Unknown),
+            Some("E685: Internal error: tv_get_float(UNKNOWN)"),
+            0.0,
+        ),
+    ];
 
-        for (tv, emsg, want) in rows {
+    for (tv, emsg, want) in rows {
+        log.check(&[]);
+        let got = check_emsg(log.editor(), || tv_get_float(&tv), emsg);
+        assert_eq!(got, want, "{}", tv.v_type());
+        if emsg.is_some() {
+            log.clear();
+        } else {
             log.check(&[]);
-            let got = check_emsg(log.editor(), || tv_get_float(&tv), emsg);
-            assert_eq!(got, want, "{}", tv.v_type());
-            if emsg.is_some() {
-                log.clear();
-            } else {
-                log.check(&[]);
-            }
         }
     }
 }

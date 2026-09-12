@@ -104,9 +104,7 @@ impl Tree {
     fn put(&mut self, row: i32, col: i32, right: bool) -> u32 {
         self.next_id += 1;
         let id = self.next_id;
-        unsafe {
-            marktree_put_test(&mut self.tree, NS, id, at(row, col, right), None, false);
-        }
+        marktree_put_test(&mut self.tree, NS, id, at(row, col, right), None, false);
         self.shadow.push(Shadow {
             id,
             row,
@@ -121,16 +119,14 @@ impl Tree {
     fn put_pair(&mut self, row: i32, col: i32, end_row: i32, end_col: i32) -> u32 {
         self.next_id += 1;
         let id = self.next_id;
-        unsafe {
-            marktree_put_test(
-                &mut self.tree,
-                NS,
-                id,
-                at(row, col, false),
-                Some(at(end_row, end_col, true)),
-                false,
-            );
-        }
+        marktree_put_test(
+            &mut self.tree,
+            NS,
+            id,
+            at(row, col, false),
+            Some(at(end_row, end_col, true)),
+            false,
+        );
         self.shadow.push(Shadow {
             id,
             row,
@@ -152,7 +148,7 @@ impl Tree {
     fn put_pair_gravity(&mut self, start: MarkEnd, stop: MarkEnd) -> u32 {
         self.next_id += 1;
         let id = self.next_id;
-        unsafe { marktree_put_test(&mut self.tree, NS, id, start, Some(stop), false) };
+        marktree_put_test(&mut self.tree, NS, id, start, Some(stop), false);
         for half in [start, stop] {
             self.shadow.push(Shadow {
                 id,
@@ -169,9 +165,7 @@ impl Tree {
     fn put_meta(&mut self, row: i32, col: i32, right: bool, meta: bool) -> u32 {
         self.next_id += 1;
         let id = self.next_id;
-        unsafe {
-            marktree_put_test(&mut self.tree, NS, id, at(row, col, right), None, meta);
-        }
+        marktree_put_test(&mut self.tree, NS, id, at(row, col, right), None, meta);
         self.shadow.push(Shadow {
             id,
             row,
@@ -185,11 +179,9 @@ impl Tree {
     /// does when a provider revises a mark in place.
     fn move_half(&mut self, id: u32, end: bool, row: i32, col: i32) {
         let mut itr = zeroed_iter();
-        unsafe {
-            marktree_lookup_ns(&mut self.tree, NS, id, end, Some(&mut itr));
-            assert!(!itr.x.is_null(), "id {id} not found");
-            marktree_move(&mut self.tree, &mut itr, row, col);
-        }
+        marktree_lookup_ns(&mut self.tree, NS, id, end, Some(&mut itr));
+        assert!(!itr.x.is_null(), "id {id} not found");
+        marktree_move(&mut self.tree, &mut itr, row, col);
         let half = self
             .shadow
             .iter_mut()
@@ -203,8 +195,8 @@ impl Tree {
     /// The tree's own invariants, without the shadow walk -- for the cases
     /// whose marks the shadow model cannot describe.
     fn check_tree(&mut self) {
-        unsafe { marktree_check(&mut self.tree) };
-        assert!(unsafe { marktree_check_intersections(&mut self.tree) });
+        marktree_check(&mut self.tree);
+        assert!(marktree_check_intersections(&mut self.tree));
     }
 
     /// Every range covering (row, col), by id, sorted.
@@ -213,7 +205,7 @@ impl Tree {
         let mut pair: MTPair = unsafe { std::mem::zeroed() };
         let mut ids = Vec::new();
         if marktree_itr_get_overlap(&mut self.tree, row, col, &mut itr) {
-            while unsafe { marktree_itr_step_overlap(&mut self.tree, &mut itr, &mut pair) } {
+            while marktree_itr_step_overlap(&mut self.tree, &mut itr, &mut pair) {
                 ids.push(pair.start.id);
             }
         }
@@ -241,7 +233,7 @@ impl Tree {
             return seen;
         }
         loop {
-            let k: MTKey = unsafe { marktree_itr_current(&mut itr) };
+            let k: MTKey = marktree_itr_current(&mut itr);
             seen.push((k.id, k.pos.row, k.pos.col));
             if !unsafe {
                 marktree_itr_next_filter(&mut self.tree, &mut itr, stop.0, stop.1, filter.as_ptr())
@@ -255,33 +247,29 @@ impl Tree {
     /// Delete the mark with this id, through a lookup by namespace and id.
     fn del(&mut self, id: u32) {
         let mut itr = zeroed_iter();
-        unsafe {
-            marktree_lookup_ns(&mut self.tree, NS, id, false, Some(&mut itr));
-            marktree_del_itr(&mut self.tree, &mut itr, false);
-        }
+        marktree_lookup_ns(&mut self.tree, NS, id, false, Some(&mut itr));
+        marktree_del_itr(&mut self.tree, &mut itr, false);
         let at = self.shadow.iter().position(|s| s.id == id).unwrap();
         self.shadow.remove(at);
     }
 
     fn del_pair(&mut self, id: u32) {
-        unsafe { marktree_del_pair_test(&mut self.tree, NS, id) };
+        marktree_del_pair_test(&mut self.tree, NS, id);
         self.shadow.retain(|s| s.id != id);
     }
 
     /// The edit `marktree_splice` models: at `start`, `old` was replaced by
     /// `new`, both extents being (rows, cols) relative to the start.
     fn splice(&mut self, start: (i32, i32), old: (i32, i32), new: (i32, i32)) {
-        unsafe {
-            marktree_splice(&mut self.tree, start.0, start.1, old.0, old.1, new.0, new.1);
-        }
+        marktree_splice(&mut self.tree, start.0, start.1, old.0, old.1, new.0, new.1);
         shadow_splice(&mut self.shadow, start, old, new);
     }
 
     /// Assert the tree's own invariants and that an in-order walk matches the
     /// shadow. Answers the ids in tree order.
     fn check(&mut self) -> Vec<u32> {
-        unsafe { marktree_check(&mut self.tree) };
-        assert!(unsafe { marktree_check_intersections(&mut self.tree) });
+        marktree_check(&mut self.tree);
+        assert!(marktree_check_intersections(&mut self.tree));
 
         let mut expected = self.shadow.clone();
         expected.sort_by_key(|s| (s.row, s.col, s.right));
@@ -289,9 +277,9 @@ impl Tree {
         let mut itr = zeroed_iter();
         let mut seen: Vec<Shadow> = Vec::new();
         let mut order: Vec<u32> = Vec::new();
-        if unsafe { marktree_itr_first(&mut self.tree, &mut itr) } {
+        if marktree_itr_first(&mut self.tree, &mut itr) {
             loop {
-                let k: MTKey = unsafe { marktree_itr_current(&mut itr) };
+                let k: MTKey = marktree_itr_current(&mut itr);
                 seen.push(Shadow {
                     id: k.id,
                     row: k.pos.row,
@@ -299,7 +287,7 @@ impl Tree {
                     right: mt_right_test(k),
                 });
                 order.push(k.id);
-                if !unsafe { marktree_itr_next(&mut self.tree, &mut itr) } {
+                if !marktree_itr_next(&mut self.tree, &mut itr) {
                     break;
                 }
             }
@@ -326,8 +314,7 @@ impl Tree {
             if want.right {
                 continue;
             }
-            let k =
-                unsafe { marktree_lookup_ns(&mut self.tree, NS, want.id, false, Some(&mut itr)) };
+            let k = marktree_lookup_ns(&mut self.tree, NS, want.id, false, Some(&mut itr));
             assert_eq!(
                 (k.pos.row, k.pos.col),
                 (want.row, want.col),
@@ -519,17 +506,17 @@ fn an_iterator_positioned_by_coordinates_lands_on_the_first_mark_at_or_after_it(
     t.check();
 
     let mut itr = zeroed_iter();
-    unsafe { marktree_itr_get(&mut t.tree, 0, 0, &mut itr) };
-    let k = unsafe { marktree_itr_current(&mut itr) };
+    marktree_itr_get(&mut t.tree, 0, 0, &mut itr);
+    let k = marktree_itr_current(&mut itr);
     assert_eq!((k.pos.row, k.pos.col), (0, 5));
 
     // Between two marks: lands on the later one.
-    unsafe { marktree_itr_get(&mut t.tree, 1, 0, &mut itr) };
-    let k = unsafe { marktree_itr_current(&mut itr) };
+    marktree_itr_get(&mut t.tree, 1, 0, &mut itr);
+    let k = marktree_itr_current(&mut itr);
     assert_eq!((k.pos.row, k.pos.col), (2, 5));
 
     // Past the end: the iterator is exhausted.
-    unsafe { marktree_itr_get(&mut t.tree, 1 << 20, 0, &mut itr) };
+    marktree_itr_get(&mut t.tree, 1 << 20, 0, &mut itr);
     assert!(itr.x.is_null());
 }
 
@@ -537,7 +524,7 @@ fn an_iterator_positioned_by_coordinates_lands_on_the_first_mark_at_or_after_it(
 fn an_empty_tree_has_nothing_to_walk() {
     let mut t = Tree::new();
     let mut itr = zeroed_iter();
-    assert!(!unsafe { marktree_itr_first(&mut t.tree, &mut itr) });
+    assert!(!marktree_itr_first(&mut t.tree, &mut itr));
     assert_eq!(t.check(), Vec::<u32>::new());
 }
 
@@ -773,7 +760,7 @@ fn a_filtered_walk_visits_only_the_marked_keys() {
             },
             "no filtered mark at or after row {row}"
         );
-        let k = unsafe { marktree_itr_current(&mut itr) };
+        let k = marktree_itr_current(&mut itr);
         assert_eq!((k.pos.row, k.pos.col), (first_row, first_col), "from {row}");
     }
 
@@ -848,7 +835,7 @@ fn splicing_over_ranges_whose_ends_precede_their_starts() {
     ] {
         t.put_pair_gravity(at(row, 48, right), at(end_row, 48, false));
     }
-    assert!(unsafe { marktree_check_intersections(&mut t.tree) });
+    assert!(marktree_check_intersections(&mut t.tree));
     t.splice((48, 0), (139, 0), (0, 0));
-    assert!(unsafe { marktree_check_intersections(&mut t.tree) });
+    assert!(marktree_check_intersections(&mut t.tree));
 }
