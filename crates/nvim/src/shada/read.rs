@@ -120,7 +120,7 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
     if get_old_files && (oldfiles_list.is_null() || force) {
         let held = tv_list_alloc(kListLenUnknown as ptrdiff_t);
         oldfiles_list = held.as_ptr();
-        unsafe { set_vim_var_list(Vv::Oldfiles, Some(held)) };
+        set_vim_var_list(Vv::Oldfiles, Some(held));
     }
 
     let mut state = Reading {
@@ -642,7 +642,7 @@ pub(crate) unsafe fn shada_free_shada_entry(entry: *mut ShadaEntry) {
         ShadaEntryData::HistoryEntry(item) => unsafe { xfree(item.string.cast()) },
         ShadaEntryData::Variable(var) => {
             unsafe { xfree(var.name.cast()) };
-            unsafe { tv_clear(&mut var.value) };
+            tv_clear(&mut var.value);
         }
         ShadaEntryData::SubString(sub) => unsafe { xfree(sub.sub.cast()) },
         ShadaEntryData::BufferList(list) => {

@@ -174,7 +174,7 @@ pub(crate) unsafe fn nv_regname(cmd_arg: *mut CmdArg) {
         ca.op().regname = ca.nchar;
         // The count so far belongs to the command, not to the `"`.
         ca.opcount = ca.count0;
-        unsafe { set_reg_var(ca.op().regname) };
+        set_reg_var(ca.op().regname);
     } else {
         clear_op_beep(ca.op());
     }

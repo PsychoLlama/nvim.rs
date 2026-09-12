@@ -64,11 +64,7 @@ pub fn vgetc() -> c_int {
     // Garbage collection was requested by a previous `garbagecollect()`
     // and we are back at the top level.
     if may_garbage_collect.get() && want_garbage_collect.get() {
-        // SAFETY: `may_garbage_collect` *is* the editor's "no typval is held
-        // in a temporary" flag -- the normal-mode loop sets it only at the
-        // top level, and it is cleared again below -- which is exactly what
-        // `garbage_collect` asks of its caller.
-        unsafe { garbage_collect(false) };
+        garbage_collect(false);
     }
 
     let mut c;

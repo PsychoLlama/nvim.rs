@@ -599,7 +599,7 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
             unsafe { xstrdup(s) }
         }
     };
-    unsafe { tv_clear(&mut rettv) };
+    tv_clear(&mut rettv);
     text
 }
 

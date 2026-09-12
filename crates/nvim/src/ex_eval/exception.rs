@@ -571,7 +571,7 @@ unsafe fn set_exception_vars(excp: *mut Exception) {
     if excp.is_null() {
         unsafe { set_vim_var_string(Vv::Exception, ptr::null(), -1) };
         unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
-        unsafe { set_vim_var_list(Vv::Stacktrace, None) };
+        set_vim_var_list(Vv::Stacktrace, None);
         return;
     }
     unsafe { set_vim_var_string(Vv::Exception, (*excp).value, -1) };

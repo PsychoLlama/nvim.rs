@@ -282,7 +282,7 @@ pub unsafe fn ex_let_vars(
             // local.
             let rest_arg = unsafe { skipwhite(arg.add(1)) };
             arg = unsafe { ex_let_one(rest_arg, &mut ltv, false, is_const, c"]".as_ptr(), op) };
-            unsafe { tv_clear(&mut ltv) };
+            tv_clear(&mut ltv);
             if arg.is_null() {
                 return Err(Failed);
             }

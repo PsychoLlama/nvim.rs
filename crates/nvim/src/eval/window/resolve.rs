@@ -33,8 +33,7 @@ use crate::winlayer::last_used_tab;
 /// answers is a live typval -- which is `tv_get_number`'s only precondition.
 /// The same goes for the two below it.
 pub(crate) fn arg_number(args: &[TypVal], i: usize) -> VarNumber {
-    // SAFETY: `Args` promises a live typval at every index.
-    unsafe { tv_get_number(&args[i]) }
+    tv_get_number(&args[i])
 }
 
 /// Argument `i` as a Number, answering 0 for a value that has none.
@@ -46,8 +45,7 @@ pub(crate) fn arg_number_chk(args: &[TypVal], i: usize) -> VarNumber {
 /// The window argument `i` names: an id in any tab page, or a number in the
 /// current one.
 pub(crate) fn arg_win(args: &[TypVal], i: usize) -> Option<Win> {
-    // SAFETY: as [`arg_number`].
-    unsafe { find_win_by_nr_or_id(&args[i]) }
+    find_win_by_nr_or_id(&args[i])
 }
 
 /// The window with id `id`, in whichever tab page holds it.
@@ -69,10 +67,7 @@ pub fn win_and_tab_by_id(id: c_int) -> Option<(Win, TabPage)> {
 ///
 /// Number zero is the current window; a value at or above [`LOWEST_WIN_ID`] is
 /// taken as an id instead, but only within `tabpage`.
-///
-/// # Safety
-/// `vp` must point at a live typval.
-pub unsafe fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Win> {
+pub fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Win> {
     // SAFETY: the caller's obligation. A value that is not a number reports
     // and answers zero, which reads here as "the current window"; the
     // narrowing is upstream's and is what makes 0x1_0000_0000 read as 0.
@@ -96,30 +91,24 @@ pub unsafe fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Wi
 
 /// The window `vp` names: a window id in any tab page, or a window number in
 /// the current one.
-///
-/// # Safety
-/// `vp` must point at a live typval.
-pub unsafe fn find_win_by_nr_or_id(vp: &TypVal) -> Option<Win> {
+pub fn find_win_by_nr_or_id(vp: &TypVal) -> Option<Win> {
     // SAFETY: the caller's obligation.
     let nr = number_as_int(unsafe { tv_get_number_chk(vp, ptr::null_mut()) });
     if nr >= LOWEST_WIN_ID {
         // The second read is upstream's: `tv_get_number` where the test used
         // `tv_get_number_chk`, so a value that already reported does not
         // report twice.
-        return win_by_id(number_as_int(unsafe { tv_get_number(vp) }));
+        return win_by_id(number_as_int(tv_get_number(vp)));
     }
     // SAFETY: the caller's obligation.
-    unsafe { find_win_by_nr(vp, None) }
+    find_win_by_nr(vp, None)
 }
 
 /// The window `wvp` names within the tab page `tvp` names.
 ///
 /// An absent window argument answers the current window and never looks at the
 /// tab page; an absent tab page argument means the current one.
-///
-/// # Safety
-/// `wvp` and `tvp` must point at live typvals.
-pub unsafe fn find_tabwin(wvp: Option<&TypVal>, tvp: Option<&TypVal>) -> Option<Win> {
+pub fn find_tabwin(wvp: Option<&TypVal>, tvp: Option<&TypVal>) -> Option<Win> {
     // SAFETY: the caller's obligation.
     let Some(wvp) = wvp else {
         return Some(Win::current());
@@ -127,13 +116,13 @@ pub unsafe fn find_tabwin(wvp: Option<&TypVal>, tvp: Option<&TypVal>) -> Option<
     let tp = match tvp {
         None => Some(TabPage::current()),
         Some(tvp) => {
-            let n = number_as_int(unsafe { tv_get_number(tvp) });
+            let n = number_as_int(tv_get_number(tvp));
             // A negative tab page number is refused outright; zero reaches
             // `find_tabpage`, which reads it as the current tab page.
             (n >= 0).then(|| find_tabpage(n)).flatten()
         }
     };
-    unsafe { find_win_by_nr(wvp, Some(tp?)) }
+    find_win_by_nr(wvp, Some(tp?))
 }
 
 /// The tab page `nr` names, counting from one — the inverse of
@@ -144,10 +133,7 @@ fn tabpage_by_nr(nr: c_int) -> Option<TabPage> {
 
 /// Common code for `tabpagewinnr()` and `winnr()`: the number of the window
 /// `argvar` names within `tabpage`, or 0 when it names none.
-///
-/// # Safety
-/// `argvar` must point at a live typval.
-unsafe fn get_winnr(tabpage: TabPage, argvar: Option<&TypVal>) -> c_int {
+fn get_winnr(tabpage: TabPage, argvar: Option<&TypVal>) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut twin = tabpage.curwin();
     if let Some(argvar) = argvar {
@@ -279,7 +265,7 @@ pub fn f_win_id2tabwin(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// `win_id2win({winid})` — the window's number in the current tab page, or 0.
 pub fn f_win_id2win(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let tp = TabPage::current();
-    let id = number_as_int(unsafe { tv_get_number(&args[0]) });
+    let id = number_as_int(tv_get_number(&args[0]));
     let mut nr = 0;
     for wp in windows_in_tab(tp) {
         if wp.handle == id {
@@ -309,8 +295,7 @@ pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `win_gotoid({winid})` — 1 when the window was reached, 0 otherwise.
 pub fn f_win_gotoid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals and `curwin` is set.
-    let id = unsafe { number_as_int(tv_get_number(&args[0])) };
+    let id = number_as_int(tv_get_number(&args[0]));
     // SAFETY: `curwin` is set from startup to exit.
     if Win::current().handle == id {
         result.write_number(1);
@@ -332,8 +317,7 @@ pub fn f_win_gotoid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `winnr([{arg}])` — a window number in the current tab page.
 pub fn f_winnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals and `curtab` is set.
-    let nr = unsafe { get_winnr(TabPage::current(), args.first()) };
+    let nr = get_winnr(TabPage::current(), args.first());
     result.write_number(VarNumber::from(nr));
 }
 
@@ -372,7 +356,7 @@ pub fn f_tabpagewinnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     // SAFETY: the arguments are live typvals.
     let n = number_as_int(arg_number(args, 0));
     let nr = match find_tabpage(n) {
-        Some(tp) => unsafe { get_winnr(tp, args.get(1)) },
+        Some(tp) => get_winnr(tp, args.get(1)),
         None => 0,
     };
     result.write_number(VarNumber::from(nr));

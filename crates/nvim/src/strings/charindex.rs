@@ -155,9 +155,9 @@ pub fn f_charidx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut countcc = false;
     let mut utf16idx = false;
     if args.len() > 2 {
-        countcc = unsafe { tv_get_bool(&args[2]) } != 0;
+        countcc = tv_get_bool(&args[2]) != 0;
         if args.len() > 3 {
-            utf16idx = unsafe { tv_get_bool(&args[3]) } != 0;
+            utf16idx = tv_get_bool(&args[3]) != 0;
         }
     }
 
@@ -226,7 +226,7 @@ pub fn f_strutf16len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     if tv_check_for_string_arg(args, 0).is_err() || tv_check_for_opt_bool_arg(args, 1).is_err() {
         return;
     }
-    let countcc = args.len() > 1 && unsafe { tv_get_bool(&args[1]) } != 0;
+    let countcc = args.len() > 1 && tv_get_bool(&args[1]) != 0;
 
     let next_char: unsafe fn(*mut *const c_char) -> c_int = if countcc {
         mb_cptr2char_adv
@@ -276,7 +276,7 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     }
 
     let mut len: c_int = if args.len() > 2 {
-        let mut charlen = unsafe { tv_get_number(&args[2]) as c_int };
+        let mut charlen = tv_get_number(&args[2]) as c_int;
         let mut len = 0;
         while charlen > 0 && nbyte + len < slen as c_int {
             let off = nbyte + len;
@@ -327,7 +327,7 @@ pub fn f_strpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut len = if error {
         0
     } else if args.len() > 2 {
-        unsafe { tv_get_number(&args[2]) }
+        tv_get_number(&args[2])
     } else {
         slen - n // Default: everything from `n` on.
     };
@@ -383,9 +383,9 @@ pub fn f_utf16idx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut countcc = false;
     let mut charidx = false;
     if args.len() > 2 {
-        countcc = unsafe { tv_get_bool(&args[2]) } != 0;
+        countcc = tv_get_bool(&args[2]) != 0;
         if args.len() > 3 {
-            charidx = unsafe { tv_get_bool(&args[3]) } != 0;
+            charidx = tv_get_bool(&args[3]) != 0;
         }
     }
 

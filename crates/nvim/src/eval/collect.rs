@@ -104,10 +104,7 @@ fn hi2di(hi: &HashItem<DictEntry>) -> *mut DictItem {
 
 /// Mark one root's variable, with neither stack: the collector recurses
 /// into whatever it holds rather than deferring it to a caller's loop.
-///
-/// # Safety
-/// `tv` must be a live typval.
-unsafe fn mark_root(tv: &mut TypVal, copy_id: c_int) -> bool {
+fn mark_root(tv: &mut TypVal, copy_id: c_int) -> bool {
     // SAFETY: the caller's promise; the two nulls are what say "recurse".
     unsafe { set_ref_in_item(tv, copy_id, null_mut(), null_mut()) }
 }
@@ -131,11 +128,7 @@ unsafe fn mark_reader(reader: *mut CallbackReader, copy_id: c_int) -> bool {
 }
 
 /// Mark, then free. Answers whether anything was freed.
-///
-/// # Safety
-/// Called from a point where no typval is held in a Rust temporary — see
-/// the module docs; anything the marking pass cannot see is freed.
-pub unsafe fn garbage_collect(testing: bool) -> bool {
+pub fn garbage_collect(testing: bool) -> bool {
     let mut abort = false;
     if !testing {
         // Only once per request.
@@ -153,7 +146,7 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     // Variables in the previous_funccal list must not be freed unless
     // they are reachable *only* through it, so this goes first.
     abort = abort || set_ref_in_previous_funccal(copy_id);
-    abort = abort || unsafe { garbage_collect_scriptvars(copy_id) };
+    abort = abort || garbage_collect_scriptvars(copy_id);
 
     for buf in buffers() {
         // The addresses come off `Buf::raw`, never through `DerefMut`, so
@@ -221,7 +214,7 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         }
     }
 
-    unsafe { walk_shada_iterators() };
+    walk_shada_iterators();
 
     // tabpage-local variables
     for tp in tabs() {
@@ -233,7 +226,7 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         abort = abort || unsafe { mark_root(&mut *tpvar, copy_id) };
     }
 
-    abort = abort || unsafe { garbage_collect_globvars(copy_id) } != 0;
+    abort = abort || garbage_collect_globvars(copy_id) != 0;
     // function-local variables, then named functions (closures)
     abort = abort || set_ref_in_call_stack(copy_id);
     abort = abort || set_ref_in_functions(copy_id);
@@ -265,7 +258,7 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
 
     // function call arguments, if v:testing is set
     abort = abort || set_ref_in_func_args(copy_id);
-    abort = abort || unsafe { garbage_collect_vimvars(copy_id) };
+    abort = abort || garbage_collect_vimvars(copy_id);
     abort = abort || unsafe { set_ref_in_quickfix(copy_id) };
 
     // 2. Free what nothing marked — but only if every root was seen.
@@ -277,12 +270,9 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         }
         return false;
     }
-    // SAFETY: the marking pass above is complete, which is what
-    // `free_unref_items` and `free_unref_funccal` both rest on.
-    let did_free = unsafe { free_unref_items(copy_id) } != 0;
+    let did_free = free_unref_items(copy_id) != 0;
     // 3. Any funccal that can go now. May call back into here.
-    // SAFETY: as above.
-    let freed_funccal = unsafe { free_unref_funccal(copy_id, testing as c_int) };
+    let freed_funccal = free_unref_funccal(copy_id, testing as c_int);
     freed_funccal || did_free
 }
 
@@ -314,10 +304,7 @@ fn trim_exestack() {
 /// data" these carry used to hold typvals and no longer does. The walks
 /// are kept because they are what would have to change if it ever holds
 /// them again.
-///
-/// # Safety
-/// Called with the register and mark tables initialised.
-unsafe fn walk_shada_iterators() {
+fn walk_shada_iterators() {
     let mut reg_iter: *const c_void = null();
     loop {
         let mut reg = YankReg {
@@ -371,10 +358,7 @@ unsafe fn walk_shada_iterators() {
 /// dictionary's contents may hold the last reference to another one, so
 /// nothing may be *unlinked* until every unreachable value has been
 /// emptied.
-///
-/// # Safety
-/// Called only from `garbage_collect`, after a complete marking pass.
-pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
+pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
     /// Is this mark stale? The low bit is the previous-funccal flag and
     /// is not part of the comparison.
     fn stale(mark: c_int, copy_id: c_int) -> bool {
@@ -680,8 +664,7 @@ pub unsafe fn var_item_copy(
                 || unsafe { (*conv).vc_type } == CONV_NONE
                 || src.string_or_null().is_null();
             if plain {
-                // SAFETY: both typvals are the caller's.
-                unsafe { tv_copy(from, to) };
+                tv_copy(from, to);
             } else {
                 let (cv, s) = (conv as *mut VimConv, src.string_or_null());
                 // SAFETY: `s` is the source string and `cv` the conversion.
@@ -742,8 +725,7 @@ pub unsafe fn var_item_copy(
         // Number, Float, Funcref, partial, Boolean and Special copy by
         // value or by reference count.
         VAR_NUMBER | VAR_FLOAT | VAR_FUNC | VAR_PARTIAL | VAR_BOOL | VAR_SPECIAL => {
-            // SAFETY: both typvals are the caller's.
-            unsafe { tv_copy(from, to) };
+            tv_copy(from, to);
         }
         _ => {}
     }

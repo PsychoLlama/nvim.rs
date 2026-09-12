@@ -109,10 +109,7 @@ unsafe fn callable_name(tv: &TypVal) -> *mut c_char {
 /// Equal names, equal bound dictionaries and equal bound arguments. A name
 /// that is present but empty counts as absent, which is how a partial with
 /// no function compares against a null Funcref.
-///
-/// # Safety
-/// Both operands must be `VAR_FUNC` or `VAR_PARTIAL` typvals.
-pub(crate) unsafe fn func_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
+pub(crate) fn func_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     let s1 = unsafe { callable_name(tv1) };
     let s2 = unsafe { callable_name(tv2) };
     if s1.is_null() || s2.is_null() {
@@ -175,10 +172,7 @@ pub(crate) unsafe fn func_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
 /// the right one once `same_type` has held.
 ///
 /// Answers `None` after reporting and clearing `typ1`.
-///
-/// # Safety
-/// `typ1` must be a valid typval the caller has given up ownership of.
-unsafe fn compare_container(
+fn compare_container(
     typ1: &mut TypVal,
     op: ExprType,
     same_type: bool,
@@ -193,7 +187,7 @@ unsafe fn compare_container(
     } else if !same_type || (op != EXPR_EQUAL && op != EXPR_NEQUAL) {
         let message = if !same_type { wrong_type } else { wrong_op };
         emsg(gettext(message));
-        unsafe { tv_clear(typ1) };
+        tv_clear(typ1);
         None
     } else {
         Some(VarNumber::from(equal() == (op == EXPR_EQUAL)))
@@ -217,11 +211,7 @@ fn from_ordering(op: ExprType, i: c_int) -> VarNumber {
 }
 
 /// Evaluate `typ1 <op> typ2`, leaving the Number answer in `typ1`.
-///
-/// # Safety
-/// Both operands must be valid typvals; `typ1` is cleared either way and
-/// receives the result.
-pub(crate) unsafe fn typval_compare(
+pub(crate) fn typval_compare(
     typ1: &mut TypVal,
     typ2: &mut TypVal,
     op: ExprType,
@@ -243,7 +233,7 @@ pub(crate) unsafe fn typval_compare(
         let wrong_type = c"E977: Can only compare Blob with Blob";
         // SAFETY: a message constant is a NUL-terminated literal.
         let wrong_op = unsafe { CStr::from_ptr(e_invalblob.as_ptr()) };
-        let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
+        let cmp = compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op);
         match cmp {
             Some(n) => n,
             None => return Err(Failed),
@@ -255,7 +245,7 @@ pub(crate) unsafe fn typval_compare(
         let eq = || unsafe { tv_list_equal(l1, l2, ic) };
         let wrong_type = c"E691: Can only compare List with List";
         let wrong_op = c"E692: Invalid operation for List";
-        let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
+        let cmp = compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op);
         match cmp {
             Some(n) => n,
             None => return Err(Failed),
@@ -267,7 +257,7 @@ pub(crate) unsafe fn typval_compare(
         let eq = || unsafe { tv_dict_equal(d1, d2, ic) };
         let wrong_type = c"E735: Can only compare Dictionary with Dictionary";
         let wrong_op = c"E736: Invalid operation for Dictionary";
-        let cmp = unsafe { compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op) };
+        let cmp = compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op);
         match cmp {
             Some(n) => n,
             None => return Err(Failed),
@@ -275,7 +265,7 @@ pub(crate) unsafe fn typval_compare(
     } else if (*typ1).is_func() || (*typ2).is_func() {
         if op != EXPR_EQUAL && op != EXPR_NEQUAL && !type_is {
             emsg(gettext(c"E694: Invalid operation for Funcrefs"));
-            unsafe { tv_clear(typ1) };
+            tv_clear(typ1);
             return Err(Failed);
         }
         let equal = if t1 == VAR_PARTIAL && (*typ1).partial_or_null().is_null()
@@ -287,7 +277,7 @@ pub(crate) unsafe fn typval_compare(
         } else if !type_is || (t1 == VAR_FUNC && t2 == VAR_FUNC) {
             // `is` on two plain Funcrefs falls back to comparing names:
             // there is no object for them to be identical to.
-            unsafe { tv_equal(typ1, typ2, ic) }
+            tv_equal(typ1, typ2, ic)
         } else if t1 == VAR_PARTIAL && t2 == VAR_PARTIAL {
             (*typ1).partial_or_null() == (*typ2).partial_or_null()
         } else {
@@ -295,8 +285,8 @@ pub(crate) unsafe fn typval_compare(
         };
         VarNumber::from(equal != (op == EXPR_NEQUAL || op == EXPR_ISNOT))
     } else if (t1 == VAR_FLOAT || t2 == VAR_FLOAT) && op != EXPR_MATCH && op != EXPR_NOMATCH {
-        let f1: Float = unsafe { tv_get_float(typ1) };
-        let f2: Float = unsafe { tv_get_float(typ2) };
+        let f1: Float = tv_get_float(typ1);
+        let f2: Float = tv_get_float(typ2);
         // Not `from_ordering`: NaN is unordered, so every operator has to
         // ask the float comparison itself.
         VarNumber::from(match op {
@@ -311,8 +301,8 @@ pub(crate) unsafe fn typval_compare(
     } else if (t1 == VAR_NUMBER || t2 == VAR_NUMBER) && op != EXPR_MATCH && op != EXPR_NOMATCH {
         // Both coercions happen, in this order, whatever the operator —
         // each may report its own error.
-        let a = unsafe { tv_get_number(typ1) };
-        let b = unsafe { tv_get_number(typ2) };
+        let a = tv_get_number(typ1);
+        let b = tv_get_number(typ2);
         from_ordering(op, if a < b { -1 } else { c_int::from(a > b) })
     } else {
         let mut buf1: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
@@ -329,7 +319,7 @@ pub(crate) unsafe fn typval_compare(
 
     // SAFETY: the caller's promise -- `typ1` is a valid typval.
     let mut one = unsafe { Tv::new(typ1) };
-    unsafe { tv_clear(typ1) };
+    tv_clear(typ1);
     one.write_number(answer);
     Ok(())
 }

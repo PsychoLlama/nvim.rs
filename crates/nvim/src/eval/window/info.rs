@@ -15,10 +15,7 @@ use super::*;
 use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
 
 /// One `getwininfo()` entry.
-///
-/// # Safety
-/// `window` must be a live window whose buffer is live.
-unsafe fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
+fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
     // SAFETY: the caller's obligation. The dictionary is handed straight to
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the two closures add.
@@ -63,10 +60,7 @@ unsafe fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
 }
 
 /// One `gettabinfo()` entry.
-///
-/// # Safety
-/// `tabpage` must be a live tab page.
-unsafe fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
+fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
     // SAFETY: the caller's obligation; both containers are handed on rather
     // than freed here, so both stay alive for the appends below.
     // The keys go in in upstream's order: a dictionary's iteration order is

@@ -224,7 +224,7 @@ pub(crate) unsafe fn item_compare2(
     if sort_info.item_compare_func_err {
         res = ITEM_COMPARE_FAIL; // return value has wrong type
     }
-    unsafe { tv_clear(&mut rettv) };
+    tv_clear(&mut rettv);
 
     if res == 0 && !keep_zero {
         res = if unsafe { (*si1).idx } > unsafe { (*si2).idx } {
@@ -498,13 +498,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 ///
 /// `sortinfo` is saved and restored around the call because a user comparison
 /// function can itself call `sort()`.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval, unaliased for the call.
-/// `result` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub(crate) unsafe fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
+pub(crate) fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
     let first = unsafe { Tv::new(core::ptr::from_ref(&args[0]).cast_mut()) };
@@ -551,10 +545,10 @@ pub(crate) unsafe fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bo
 
 /// `sort()`.
 pub fn f_sort(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { do_sort_uniq(args, result, true) };
+    do_sort_uniq(args, result, true);
 }
 
 /// `uniq()`.
 pub fn f_uniq(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { do_sort_uniq(args, result, false) };
+    do_sort_uniq(args, result, false);
 }

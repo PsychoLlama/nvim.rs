@@ -477,7 +477,7 @@ pub(crate) unsafe fn expand_user_lua(
     let mut rettv = TV_INITIAL_VALUE;
     unsafe { nlua_call_user_expand_func(expand.raw(), &mut rettv) };
     if rettv.v_type() != VAR_LIST {
-        unsafe { tv_clear(&mut rettv) };
+        tv_clear(&mut rettv);
         return Err(Failed);
     }
 

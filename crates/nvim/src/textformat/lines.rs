@@ -147,7 +147,7 @@ pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int 
 
     set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
     set_vim_var_nr(Vv::Count, count as VarNumber);
-    unsafe { set_vim_var_char(c) };
+    set_vim_var_char(c);
 
     // Copy it: the option can be changed while it is running.
     let fex = unsafe { xstrdup(Buf::current().b_p_fex) };

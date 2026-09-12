@@ -124,11 +124,8 @@ pub unsafe fn restore_v_event(v_event: *mut Dict, sve: *mut SaveVEvent) {
 }
 
 /// Bring up the evaluator: the `v:` variables and the function table.
-///
-/// # Safety
-/// Called once, during startup.
-pub unsafe fn eval_init() {
-    unsafe { evalvars_init() };
+pub fn eval_init() {
+    evalvars_init();
     func_init();
 }
 
@@ -226,10 +223,7 @@ pub(crate) unsafe fn eval1_emsg(
 
 /// Is this typval usable as an expression argument at all? An unset value
 /// and an empty String are not.
-///
-/// # Safety
-/// `tv` must be valid.
-pub unsafe fn eval_expr_valid_arg(tv: &TypVal) -> bool {
+pub fn eval_expr_valid_arg(tv: &TypVal) -> bool {
     // SAFETY: the caller's promise -- the typval outlives the call, and it
     // is only read through here.
     let tv = unsafe { Tv::new(::core::ptr::from_ref(tv).cast_mut()) };
@@ -246,10 +240,7 @@ pub unsafe fn eval_expr_valid_arg(tv: &TypVal) -> bool {
 }
 
 /// Call the partial in `expr`.
-///
-/// # Safety
-/// `expr` must be a valid `VAR_PARTIAL`.
-pub(crate) unsafe fn eval_expr_partial(
+pub(crate) fn eval_expr_partial(
     expr: &TypVal,
     argv: &[TypVal],
     result: &mut TypVal,
@@ -272,10 +263,7 @@ pub(crate) unsafe fn eval_expr_partial(
 }
 
 /// Call the function `expr` names.
-///
-/// # Safety
-/// As `eval_expr_partial`.
-pub(crate) unsafe fn eval_expr_func(
+pub(crate) fn eval_expr_func(
     expr: &TypVal,
     argv: &[TypVal],
     result: &mut TypVal,
@@ -300,10 +288,7 @@ pub(crate) unsafe fn eval_expr_func(
 }
 
 /// Evaluate `expr` as an expression *string*, which must consume all of it.
-///
-/// # Safety
-/// `expr` and `result` must be valid.
-pub(crate) unsafe fn eval_expr_string(expr: &TypVal, result: &mut TypVal) -> Result<(), Failed> {
+pub(crate) fn eval_expr_string(expr: &TypVal, result: &mut TypVal) -> Result<(), Failed> {
     let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let mut s = unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) } as *mut c_char;
     if s.is_null() {
@@ -312,7 +297,7 @@ pub(crate) unsafe fn eval_expr_string(expr: &TypVal, result: &mut TypVal) -> Res
     s = unsafe { skipwhite(s) };
     unsafe { eval1_emsg(&raw mut s, result, null_mut()) }?;
     if unsafe { *skipwhite(s) } as c_int != NUL {
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let s = unsafe { c_str(s) };
         semsg!("E15: Invalid expression: \"{s}\"");
@@ -323,10 +308,7 @@ pub(crate) unsafe fn eval_expr_string(expr: &TypVal, result: &mut TypVal) -> Res
 
 /// Evaluate whatever `expr` holds — a partial, a Funcref, a function name
 /// or an expression string — with `argv` as its arguments.
-///
-/// # Safety
-/// `expr` must be valid.
-pub unsafe fn eval_expr_typval(
+pub fn eval_expr_typval(
     expr: &TypVal,
     want_func: bool,
     argv: &[TypVal],
@@ -336,12 +318,12 @@ pub unsafe fn eval_expr_typval(
     // read through here; each arm restates the same promise.
     let ty = expr;
     if ty.v_type() == VAR_PARTIAL {
-        return unsafe { eval_expr_partial(expr, argv, result) };
+        return eval_expr_partial(expr, argv, result);
     }
     if ty.v_type() == VAR_FUNC || want_func {
-        return unsafe { eval_expr_func(expr, argv, result) };
+        return eval_expr_func(expr, argv, result);
     }
-    unsafe { eval_expr_string(expr, result) }
+    eval_expr_string(expr, result)
 }
 
 /// `eval_expr_typval` with no arguments, answering the result's truth.
@@ -350,7 +332,7 @@ pub unsafe fn eval_expr_typval(
 /// `expr` and `error` must be valid.
 pub unsafe fn eval_expr_to_bool(expr: &TypVal, error: *mut bool) -> bool {
     let mut rettv = UNSET_TV;
-    if unsafe { eval_expr_typval(expr, false, &[], &mut rettv) }.is_err() {
+    if eval_expr_typval(expr, false, &[], &mut rettv).is_err() {
         unsafe { *error = true };
         return false;
     }
@@ -620,7 +602,7 @@ pub unsafe fn call_vim_function(
     }
 
     if ret.is_err() {
-        unsafe { tv_clear(result) };
+        tv_clear(result);
     }
     ret
 }
@@ -718,10 +700,7 @@ pub unsafe fn eval_foldexpr(window: Win, marker: *mut c_int) -> c_int {
 /// Run 'foldtext' for the window's current fold. A List comes back as an
 /// Object so the caller can keep its per-chunk highlighting; anything else
 /// is coerced to a String.
-///
-/// # Safety
-/// `window` must be valid.
-pub unsafe fn eval_foldtext(window: Win) -> Object {
+pub fn eval_foldtext(window: Win) -> Object {
     let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
     /// The empty String an error answers with.
@@ -778,8 +757,7 @@ pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
         // SAFETY: the item just appended is the List's last.
         unsafe { (*tv_list_last(l)).li_lock = VarLock::Fixed };
     }
-    // SAFETY: `v:argv` takes the List over.
-    unsafe { set_vim_var_list(Vv::Argv, Some(list)) };
+    set_vim_var_list(Vv::Argv, Some(list));
 }
 
 /// Render a typval for display, as `:echo` would. A null typval is the

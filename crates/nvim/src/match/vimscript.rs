@@ -89,7 +89,7 @@ unsafe fn matchadd_dict_arg(
 /// `clearmatches([win])`.
 pub(crate) fn f_clearmatches(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    if let Some(win) = unsafe { get_optional_window(args, 0) } {
+    if let Some(win) = get_optional_window(args, 0) {
         unsafe { clear_matches(win) };
     }
 }
@@ -97,7 +97,7 @@ pub(crate) fn f_clearmatches(args: &[TypVal], _result: &mut TypVal, _fptr: EvalF
 /// `getmatches([win])`.
 pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    let win = unsafe { get_optional_window(args, 0) };
+    let win = get_optional_window(args, 0);
     let l = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let Some(win) = win else {
         return;
@@ -156,7 +156,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    let win = unsafe { get_optional_window(args, 1) };
+    let win = get_optional_window(args, 1);
 
     result.write_number(-1);
     if args[0].v_type() != VAR_LIST {
@@ -368,7 +368,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
 /// `:3match`, or `["", ""]` when that one is not set.
 pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    let id = unsafe { tv_get_number(&args[0]) } as c_int;
+    let id = tv_get_number(&args[0]) as c_int;
     let is_excmd = (1..=3).contains(&id);
     // Any other id answers an empty list, not an error.
     let l = tv_list_alloc_ret(result, if is_excmd { 2 } else { 0 });
@@ -388,11 +388,11 @@ pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 /// `matchdelete(id [, win])`.
 pub(crate) fn f_matchdelete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    let win = unsafe { get_optional_window(args, 1) };
+    let win = get_optional_window(args, 1);
     let deleted = match win {
         None => -1,
         Some(win) => {
-            let id = unsafe { tv_get_number(&args[0]) } as c_int;
+            let id = tv_get_number(&args[0]) as c_int;
             unsafe { match_delete(win, id, true) as VarNumber }
         }
     };

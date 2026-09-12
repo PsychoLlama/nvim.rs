@@ -96,30 +96,23 @@ pub(super) type Li = Live<ListItem>;
 ///
 /// Argument `i` as a line number in the current buffer, reported and clamped.
 pub(super) fn arg_lnum(args: &[TypVal], i: usize) -> LineNr {
-    // SAFETY: as [`arg_number`].
-    unsafe { tv_get_lnum(&args[i]) }
+    tv_get_lnum(&args[i])
 }
 
 /// Argument `i` as a line number in `buffer`.
-///
-/// # Safety
-/// `buffer` is a live buffer or NULL.
-pub(super) unsafe fn arg_lnum_buf(args: &[TypVal], i: usize, buffer: Option<Buf>) -> LineNr {
-    // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
-    unsafe { tv_get_lnum_buf(&args[i], buffer) }
+pub(super) fn arg_lnum_buf(args: &[TypVal], i: usize, buffer: Option<Buf>) -> LineNr {
+    tv_get_lnum_buf(&args[i], buffer)
 }
 
 /// The buffer argument `i` names, or NULL -- the `bufnr()`-shaped spelling,
 /// which takes a number, a name or a pattern.
 pub(super) fn arg_buf(args: &[TypVal], i: usize, curtab_only: c_int) -> Option<Buf> {
-    // SAFETY: as [`arg_number`].
-    unsafe { tv_get_buf(&args[i], curtab_only) }
+    tv_get_buf(&args[i], curtab_only)
 }
 
 /// The buffer argument `i` names, reporting for a type that names none.
 pub(super) fn arg_buf_chk(args: &[TypVal], i: usize) -> Option<Buf> {
-    // SAFETY: as [`arg_number`].
-    unsafe { tv_get_buf_from_arg(&args[i]) }
+    tv_get_buf_from_arg(&args[i])
 }
 
 /// The editor state [`SavedBufferState::prepare`] saves so that
@@ -146,16 +139,12 @@ impl SavedBufferState {
     /// where they belong.
     ///
     /// MUST be undone with [`SavedBufferState::restore`].
-    ///
-    /// # Safety
-    /// `curwin`/`curbuf` must be set, which they are from startup to exit.
-    unsafe fn prepare(&mut self, buffer: Buf) {
+    fn prepare(&mut self, buffer: Buf) {
         self.save_visual_active = visual_active();
         set_visual_active(false);
         self.curwin_save = Win::current();
         buffer.make_current();
-        // SAFETY: `curbuf` was just set to the caller's live buffer.
-        unsafe { find_win_for_curbuf() };
+        find_win_for_curbuf();
         let current = Win::current();
         if current.w_buffer != buffer.raw() {
             // No existing window for this buffer. It is dangerous to have
@@ -169,10 +158,7 @@ impl SavedBufferState {
     }
 
     /// Undo what [`SavedBufferState::prepare`] did.
-    ///
-    /// # Safety
-    /// `self` must be the state `prepare` filled in.
-    unsafe fn restore(&mut self) {
+    fn restore(&mut self) {
         if self.using_aco {
             // SAFETY: the caller's obligation — `aco` is what `prepare` left.
             unsafe { aucmd_restbuf(&raw mut self.aco) };
@@ -186,10 +172,7 @@ impl SavedBufferState {
 }
 
 /// If there is a window for `curbuf`, make it the current window.
-///
-/// # Safety
-/// `curbuf` must be set, which it is from startup to exit.
-unsafe fn find_win_for_curbuf() {
+fn find_win_for_curbuf() {
     // The b_wininfo list holds the windows that recently contained the
     // buffer, so walking it is cheaper than walking every window. It can name
     // a window that has moved on, hence the second test.

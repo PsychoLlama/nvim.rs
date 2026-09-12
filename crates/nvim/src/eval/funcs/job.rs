@@ -630,7 +630,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
             // from under the terminal by a BufFilePost autocommand.
             buf.b_locked += 1;
             unsafe { set_buf_var(buf, c"terminal_job_id", (*chan).id as Integer) };
-            unsafe { set_buf_var(buf, c"terminal_job_pid", pid as Integer) };
+            set_buf_var(buf, c"terminal_job_pid", pid as Integer);
             buf.b_locked -= 1;
 
             if unsafe { terminal_live(chan) } {
@@ -653,10 +653,7 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 }
 
 /// Set one buffer-local variable to an Integer, discarding any refusal.
-///
-/// # Safety
-/// `buffer` is a live buffer.
-unsafe fn set_buf_var(buffer: Buf, name: &CStr, value: Integer) {
+fn set_buf_var(buffer: Buf, name: &CStr, value: Integer) {
     let value = Object::Integer(value);
     // SAFETY: the caller's obligation; the name is `'static`.
     let vars = buffer.b_vars;

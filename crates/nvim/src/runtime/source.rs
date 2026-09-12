@@ -196,8 +196,7 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut
             items.push(item);
             items.len() as ScriptId
         });
-        // SAFETY: the slot was pushed just above, so `added` is live.
-        unsafe { new_script_vars(added) };
+        new_script_vars(added);
     }
     let si = script_item(sid);
     // SAFETY: `si` is the item just registered, and it takes `name` over.

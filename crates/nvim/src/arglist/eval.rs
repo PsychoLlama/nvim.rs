@@ -30,10 +30,10 @@ unsafe fn selected_arglist(arg: Option<&TypVal>) -> Option<*mut ArgList> {
     let Some(arg) = arg else {
         return Some(win_alist(Win::current()));
     };
-    if arg.v_type() == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as VarNumber {
+    if arg.v_type() == VAR_NUMBER && tv_get_number(arg) == -1 as VarNumber {
         return Some(global_arglist());
     }
-    unsafe { find_win_by_nr_or_id(arg) }.map(win_alist)
+    find_win_by_nr_or_id(arg).map(win_alist)
 }
 
 /// "argc()" function
@@ -52,9 +52,7 @@ pub fn f_argidx(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// "arglistid()" function
 pub fn f_arglistid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: eval-function contract -- the caller's argument array, which
-    // holds both slots.
-    let found = unsafe { find_tabwin(args.first(), args.get(1)) };
+    let found = find_tabwin(args.first(), args.get(1));
     let id = match found {
         Some(wp) => {
             // SAFETY: a window the registry answered with, so it is live,

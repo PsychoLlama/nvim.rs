@@ -175,14 +175,7 @@ pub(crate) unsafe fn string_to_list(
 }
 
 /// The shared body of `system()` and `systemlist()`.
-///
-/// # Safety
-/// `args` must hold the builtin's arguments; `result` must be valid.
-pub(crate) unsafe fn get_system_output_as_rettv(
-    args: &[TypVal],
-    result: &mut TypVal,
-    retlist: bool,
-) {
+pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, retlist: bool) {
     let mut cmdbuf = NumBuf::new();
     let profiling = do_profiling.get() == PROF_YES;
     // SAFETY: the caller's promise -- `result` outlives the call.
@@ -268,8 +261,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         // when the second was given too.
         let mut keepempty = 0;
         if args.len() > 2 {
-            // SAFETY: as above.
-            keepempty = unsafe { tv_get_number(&args[2]) } as c_int;
+            keepempty = tv_get_number(&args[2]) as c_int;
         }
         // SAFETY: `res` holds `nread` readable bytes.
         ret.write_list(Some(unsafe { string_to_list(res, nread, keepempty != 0) }));
@@ -285,12 +277,12 @@ pub(crate) unsafe fn get_system_output_as_rettv(
 
 /// `system()`
 pub fn f_system(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { get_system_output_as_rettv(args, result, false) }
+    get_system_output_as_rettv(args, result, false)
 }
 
 /// `systemlist()`
 pub fn f_systemlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { get_system_output_as_rettv(args, result, true) }
+    get_system_output_as_rettv(args, result, true)
 }
 
 /// Write `c` at `dest` and answer the byte after it.

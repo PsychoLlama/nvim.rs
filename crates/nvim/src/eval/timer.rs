@@ -103,10 +103,7 @@ pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
 }
 
 /// Fill `result` with a List describing every live timer.
-///
-/// # Safety
-/// `result` must be valid.
-pub unsafe fn add_timer_info_all(result: &mut TypVal) {
+pub fn add_timer_info_all(result: &mut TypVal) {
     let live = timer_snapshot();
     // SAFETY: the caller's promise about `result`.
     tv_list_alloc_ret(result, live.len() as ptrdiff_t);
@@ -277,10 +274,7 @@ pub(crate) unsafe fn timer_decref(timer: *mut Timer) {
 }
 
 /// Stop every timer.
-///
-/// # Safety
-/// Called from the main thread, with every registered timer live.
-pub unsafe fn timer_stop_all() {
+pub fn timer_stop_all() {
     for timer in timer_snapshot() {
         // SAFETY: the caller's promise; the snapshot is taken while the
         // table is untouched, and `timer_stop` only queues the removal.
@@ -289,9 +283,6 @@ pub unsafe fn timer_stop_all() {
 }
 
 /// Shut the timers down at exit.
-///
-/// # Safety
-/// As [`timer_stop_all`].
-pub unsafe fn timer_teardown() {
-    unsafe { timer_stop_all() }
+pub fn timer_teardown() {
+    timer_stop_all()
 }

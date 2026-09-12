@@ -395,23 +395,12 @@ pub(crate) trait TypvalSink {
     /// value at all, that value is the slot, and it arrives as
     /// `DictSlot::Value`.  Handing a hook both would be handing it two
     /// writable paths to one typval.
-    ///
-    /// # Safety
-    /// `dictp`, when given, points at the slot the dictionary pointer lives
-    /// in, which an implementation may overwrite but must not free out from
-    /// under the walk.
-    unsafe fn conv_empty_dict(&mut self, dictp: Option<DictSlot>);
+    fn conv_empty_dict(&mut self, dictp: Option<DictSlot>);
 
     fn conv_list_start(&mut self, tv: Option<&mut TypVal>, len: c_int) -> Flow;
     /// Called with the frame just pushed for this list, which a sink may edit
     /// to make the walk skip its items.
-    ///
-    /// # Safety
-    /// The walk's contract on the value it is standing on, above. `frame` is the walk's own stack frame
-    /// for this list; editing it changes which items the walk visits, and
-    /// leaving it inconsistent with the list is what would desynchronise the
-    /// walk.
-    unsafe fn conv_real_list_after_start(
+    fn conv_real_list_after_start(
         &mut self,
         tv: Option<&mut TypVal>,
         frame: &mut ConvFrame,
@@ -428,11 +417,7 @@ pub(crate) trait TypvalSink {
 
     fn conv_dict_start(&mut self, tv: Option<&mut TypVal>, len: size_t) -> Flow;
     /// The dictionary counterpart of [`Self::conv_real_list_after_start`].
-    ///
-    /// # Safety
-    /// As [`Self::conv_real_list_after_start`] for `frame`, and as
-    /// [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_real_dict_after_start(
+    fn conv_real_dict_after_start(
         &mut self,
         dictp: Option<DictSlot>,
         frame: &mut ConvFrame,
@@ -447,19 +432,13 @@ pub(crate) trait TypvalSink {
         let _ = key;
         Flow::Go
     }
-    /// # Safety
-    /// As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_after_key(&mut self, dictp: Option<DictSlot>) {
+    fn conv_dict_after_key(&mut self, dictp: Option<DictSlot>) {
         let _ = dictp;
     }
-    /// # Safety
-    /// As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_between_items(&mut self, dictp: Option<DictSlot>) {
+    fn conv_dict_between_items(&mut self, dictp: Option<DictSlot>) {
         let _ = dictp;
     }
-    /// # Safety
-    /// As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_end(&mut self, dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self, dictp: Option<DictSlot>) {
         let _ = dictp;
     }
 

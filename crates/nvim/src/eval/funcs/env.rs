@@ -343,9 +343,7 @@ pub fn f_swapinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `swapname({buf})` — the swap file a buffer is using, if any.
 pub fn f_swapname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_empty(VAR_STRING);
-    // SAFETY: the buffer comes from the buffer list; the memfile and its
-    // name are checked before either is read.
-    let buf = unsafe { tv_get_buf(&args[0], 0) };
+    let buf = tv_get_buf(&args[0], 0);
     let memfile = buf.map(|b| b.b_ml.ml_mfp).filter(|mfp| !mfp.is_null());
     let name = memfile
         .map(|mfp| unsafe { mf_fname(mfp) })

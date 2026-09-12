@@ -41,10 +41,7 @@ type TypeBuf = [c_char; 67];
 /// Which register a builtin was asked about, or `None` if the argument was
 /// not a String. An omitted argument means `v:register`, and an empty name
 /// means the unnamed register.
-///
-/// # Safety
-/// `&args[0]` is a live typval.
-unsafe fn regname(args: &[TypVal]) -> Option<c_int> {
+fn regname(args: &[TypVal]) -> Option<c_int> {
     let mut numbuf = NumBuf::new();
     let name = if !args.is_empty() {
         let name = arg_string_chk(&mut numbuf, &args[0]);
@@ -63,8 +60,7 @@ unsafe fn regname(args: &[TypVal]) -> Option<c_int> {
 
 /// `getreg([{regname} [, 1 [, {list}]]])`.
 pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals.
-    let Some(regname) = (unsafe { regname(args) }) else {
+    let Some(regname) = regname(args) else {
         return;
     };
     // The two flag arguments are only read when a register was named:
@@ -98,9 +94,7 @@ pub fn f_getreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getregtype([{regname}])`.
 pub fn f_getregtype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
-    // SAFETY: the arguments are live typvals and `buf` outlives the call
-    // that fills it.
-    let Some(regname) = (unsafe { regname(args) }) else {
+    let Some(regname) = regname(args) else {
         return;
     };
     let mut reglen: ColNr = 0;
@@ -112,9 +106,7 @@ pub fn f_getregtype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `getreginfo([{regname}])`.
 pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals; `buf` outlives
-    // the two `tv_dict_add_str` calls that copy from it.
-    let Some(mut regname) = (unsafe { regname(args) }) else {
+    let Some(mut regname) = regname(args) else {
         return;
     };
     if regname == b'@' as c_int {
@@ -163,10 +155,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// The single-character String the three recording-state builtins return.
-///
-/// # Safety
-/// `result` is the dispatcher's cleared return value.
-unsafe fn return_register(regname: c_int, result: &mut TypVal) {
+fn return_register(regname: c_int, result: &mut TypVal) {
     let buf: [c_char; 2] = [regname as c_char, 0];
     // SAFETY: `buf` is NUL-terminated and outlives the copy.
     result.write_string(unsafe { xstrdup(buf.as_ptr()) });
@@ -174,20 +163,17 @@ unsafe fn return_register(regname: c_int, result: &mut TypVal) {
 
 /// `reg_executing()` — the register a macro is being played from.
 pub fn f_reg_executing(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the dispatcher's cleared return value.
-    unsafe { return_register(reg_executing.get(), &mut *result) };
+    return_register(reg_executing.get(), &mut *result);
 }
 
 /// `reg_recording()` — the register `q` is recording into.
 pub fn f_reg_recording(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the dispatcher's cleared return value.
-    unsafe { return_register(reg_recording.get(), &mut *result) };
+    return_register(reg_recording.get(), &mut *result);
 }
 
 /// `reg_recorded()` — the register the last recording went into.
 pub fn f_reg_recorded(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the dispatcher's cleared return value.
-    unsafe { return_register(reg_recorded.get(), &mut *result) };
+    return_register(reg_recorded.get(), &mut *result);
 }
 
 /// Read a register-type letter, advancing `cursor` past the width digits a

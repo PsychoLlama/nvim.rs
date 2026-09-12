@@ -168,11 +168,7 @@ impl TypvalSink for MsgpackSink<'_> {
         mpack_array(self.packer.cursor_mut(), 0);
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
         mpack_map(self.packer.cursor_mut(), 0);
     }
 
@@ -218,5 +214,5 @@ pub unsafe fn encode_vim_to_msgpack(
     let mut sink = MsgpackSink {
         packer: unsafe { &mut *packer },
     };
-    c_int::from(unsafe { encode_typval_read(&mut sink, tv, objname) })
+    c_int::from(encode_typval_read(&mut sink, tv, objname))
 }

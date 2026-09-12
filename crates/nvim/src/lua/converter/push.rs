@@ -247,12 +247,7 @@ impl TypvalSink for LuaSink {
     /// An empty table is ambiguous in Lua, so an empty dictionary carries a
     /// marker: the `vim.empty_dict()` metatable, or the `_TYPE` key when the
     /// caller asked for the special form.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
         if self.special {
             unsafe { nlua_create_typed_table(self.lstate, 0, 0, kObjectTypeDict) };
         } else {
@@ -295,20 +290,11 @@ impl TypvalSink for LuaSink {
 
     /// The key is already on the stack and the value has just landed on top of
     /// it, so one `rawset` closes the pair.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
         self.rawset();
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
         self.rawset();
     }
 

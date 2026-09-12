@@ -60,8 +60,7 @@ pub(crate) fn emsg_static(msg: &'static CStr) {
 /// exclusive borrow of the caller's own local is. Nothing it frees runs user
 /// code, so the borrow cannot be re-entered through.
 pub(crate) fn clear_local(tv: &mut TypVal) {
-    // SAFETY: an exclusive borrow of a live local.
-    unsafe { tv_clear(&mut *tv) };
+    tv_clear(&mut *tv);
 }
 
 /// Store `tv` in the variable `name`.

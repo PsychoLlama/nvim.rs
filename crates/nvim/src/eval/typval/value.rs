@@ -50,11 +50,7 @@ const TV_CSTRING: size_t = size_t::MAX - 1;
 /// fast path, and it is the one that matters, because with `Drop` live an
 /// explicit `tv_clear` followed by the value leaving scope is the ordinary
 /// case.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval, unaliased for the call.
-pub unsafe fn tv_clear(tv: &mut TypVal) {
+pub fn tv_clear(tv: &mut TypVal) {
     if tv.is_empty() {
         return;
     }
@@ -66,7 +62,7 @@ pub unsafe fn tv_clear(tv: &mut TypVal) {
     //
     // If that changes and the argument starts being used, translate it
     // where it is used.
-    let evn_ret = unsafe { encode_vim_to_nothing(tv, c"tv_clear() argument") };
+    let evn_ret = encode_vim_to_nothing(tv, c"tv_clear() argument");
     debug_assert!(evn_ret);
 }
 
@@ -177,9 +173,7 @@ impl Drop for TypVal {
         // and small enough that most of the sites that drop a value inline
         // it instead of calling it (796 out-of-line calls became 255).
         if !self.is_empty() {
-            // SAFETY: `self` is a live typval by construction, and the walk
-            // leaves it holding nothing.
-            unsafe { tv_clear(&mut *self) };
+            tv_clear(&mut *self);
         }
         // And nothing after it: the container payloads are held in a
         // `ManuallyDrop`, so the compiler appends no field glue to this and
@@ -192,13 +186,7 @@ impl Drop for TypVal {
 /// The raw-pointer spelling of [`Clone`]: the destination is **overwritten**,
 /// not assigned, because half the callers hand this a fresh `xmalloc`'d list
 /// item and the other half have just cleared the slot.
-///
-/// # Safety
-///
-/// `from` must point at an initialized typval. `to` must point at writable
-/// typval storage holding nothing that needs releasing, unaliased for the
-/// call.
-pub unsafe fn tv_copy(from: &TypVal, to: &mut TypVal) {
+pub fn tv_copy(from: &TypVal, to: &mut TypVal) {
     // SAFETY: the caller's promise: a live source and writable storage that
     // owes nothing, so the old bits are overwritten rather than released.
     let copy = (*from).clone();
@@ -297,12 +285,7 @@ pub unsafe fn tv_item_lock(
 
 /// Whether the slot `slot_lock`/`tv` names is locked, either as a slot or as
 /// the container it holds.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval, and `slot_lock` be the lock of
-/// the slot holding it.
-pub unsafe fn tv_islocked(slot_lock: VarLock, tv: &TypVal) -> bool {
+pub fn tv_islocked(slot_lock: VarLock, tv: &TypVal) -> bool {
     let val = tv;
     let container_lock = match val.v_type() {
         VAR_LIST => unsafe { tv_list_locked((*tv).list_or_null()) },
@@ -402,12 +385,7 @@ pub unsafe fn value_check_lock(
 ///
 /// Containers are compared structurally.  Two values of different types are
 /// never equal, except that a funcref and a partial may be.
-///
-/// # Safety
-///
-/// `tv1` must point at an initialized typval, unaliased for the call. `tv2`
-/// must point at an initialized typval, unaliased for the call.
-pub unsafe fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
+pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     // TODO(ZyX-I): Make this not recursive
     static recursive_cnt: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
@@ -452,7 +430,7 @@ pub unsafe fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
                 return false;
             }
             let _recursing = Depth::of(&recursive_cnt);
-            unsafe { func_equal(tv1, tv2, ic) }
+            func_equal(tv1, tv2, ic)
         }
         VAR_BLOB => unsafe { tv_blob_equal((*tv1).blob_or_null(), (*tv2).blob_or_null()) },
         VAR_NUMBER => a.as_number() == b.as_number(),

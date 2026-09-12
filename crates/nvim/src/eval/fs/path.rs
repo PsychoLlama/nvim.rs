@@ -184,9 +184,7 @@ pub fn f_isabsolutepath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
 pub fn f_pathshorten(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let trim_len = if args.len() > 1 {
-        // SAFETY: a live typval; `tv_get_number` reports its own error and
-        // reads as 0 for a type that has no number form.
-        (unsafe { tv_get_number(&args[1]) } as c_int).max(1)
+        (tv_get_number(&args[1]) as c_int).max(1)
     } else {
         1
     };

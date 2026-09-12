@@ -96,7 +96,7 @@ use report::{
 /// `args` has three slots.
 unsafe fn assert_equal_common(args: &[TypVal], atype: AssertType) -> c_int {
     // SAFETY: the caller's arguments.
-    if unsafe { tv_equal(&args[0], &args[1], false) } == (atype == AssertType::Equal) {
+    if tv_equal(&args[0], &args[1], false) == (atype == AssertType::Equal) {
         return 0;
     }
     let mut ga = unsafe { prepare_assert_error() };
@@ -391,9 +391,9 @@ unsafe fn assert_inrange(args: &[TypVal]) -> c_int {
     // SAFETY: the caller's arguments, and a scratch buffer `vim_snprintf`
     // never writes past.
     if (0..3).any(|i| args.get(i).is_some_and(|arg| arg.v_type() == VAR_FLOAT)) {
-        let lower = unsafe { tv_get_float(&args[0]) };
-        let upper = unsafe { tv_get_float(&args[1]) };
-        let actual: Float = unsafe { tv_get_float(&args[2]) };
+        let lower = tv_get_float(&args[0]);
+        let upper = tv_get_float(&args[1]);
+        let actual: Float = tv_get_float(&args[2]);
         // Written as upstream does, so a NaN — which compares false both
         // ways — is in range rather than out of it.
         if !(actual < lower || actual > upper) {
@@ -562,11 +562,10 @@ pub(crate) fn f_test_garbagecollect_now(
     _result: &mut TypVal,
     _fptr: EvalFuncData,
 ) {
-    // SAFETY: called from the evaluator on the main thread.
     if get_vim_var_nr(Vv::Testing) == 0 {
         emsg(gettext(E_TEST_GARBAGECOLLECT_NOW));
     } else {
-        unsafe { garbage_collect(true) };
+        garbage_collect(true);
     }
 }
 

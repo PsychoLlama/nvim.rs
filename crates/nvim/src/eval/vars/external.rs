@@ -160,7 +160,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
     // `v:val` is the bad word; it has no type of its own, so it has to
     // be added to the `v:` dictionary and taken out again.
     let mut save_val = TV_INITIAL_VALUE;
-    unsafe { prepare_vimvar(Vv::Val, &mut save_val) };
+    prepare_vimvar(Vv::Val, &mut save_val);
     unsafe { set_vim_var_string(Vv::Val, badword, -1) };
     let no_emsg = (p_verbose.get() == 0).then(Suppress::emsg);
     current_sctx.set(option_last_set(kOptSpellsuggest));
@@ -185,7 +185,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
 
     drop(no_emsg);
     unsafe { tv_clear(&mut *get_vim_var_tv(Vv::Val)) };
-    unsafe { restore_vimvar(Vv::Val, &mut save_val) };
+    restore_vimvar(Vv::Val, &mut save_val);
     current_sctx.set(saved_sctx);
 
     list

@@ -276,11 +276,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         self.gap.extend_from_slice(b"[]");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b"{}");
     }
 
@@ -302,27 +298,15 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b": ");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b", ");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
         self.gap.push(b'}');
     }
 
@@ -360,19 +344,13 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
 }
 
 /// Append `tv` to `gap` as the text `string()` answers.
-///
-/// # Safety
-/// `tv` must be a live typval and `objname` NUL-terminated.
-pub(crate) unsafe fn encode_vim_to_string(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
+pub(crate) fn encode_vim_to_string(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
     let mut sink = TextSink::<false> { gap };
-    unsafe { encode_typval_read(&mut sink, tv, objname) }
+    encode_typval_read(&mut sink, tv, objname)
 }
 
 /// Append `tv` to `gap` as the text `:echo` prints.
-///
-/// # Safety
-/// As [`encode_vim_to_string`].
-pub(crate) unsafe fn encode_vim_to_echo(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
+pub(crate) fn encode_vim_to_echo(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
     let mut sink = TextSink::<true> { gap };
-    unsafe { encode_typval_read(&mut sink, tv, objname) }
+    encode_typval_read(&mut sink, tv, objname)
 }

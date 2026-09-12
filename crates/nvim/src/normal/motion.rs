@@ -513,7 +513,7 @@ pub(crate) unsafe fn nv_down(cmd_arg: *mut CmdArg) {
         if buf_is_prompt(current_buf())
             && Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count
         {
-            unsafe { prompt_invoke_callback() };
+            prompt_invoke_callback();
             if restart_edit.get() == 0 {
                 restart_edit.set('a' as c_int);
             }

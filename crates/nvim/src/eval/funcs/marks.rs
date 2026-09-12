@@ -59,7 +59,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         // resolved as a buffer instead.
         vim_ignored.set(arg_number(&args[0]) as c_int);
         let _no_emsg = Suppress::emsg();
-        unsafe { tv_get_buf(&args[0], 0) }
+        tv_get_buf(&args[0], 0)
     };
     let Some(buf) = buf else {
         return;
@@ -97,7 +97,7 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // SAFETY throughout: the arguments and `result` are live typvals, and the jump
     // list is compacted before it is read so no entry is stale.
     let out = list_alloc_ret(result, kListLenMayKnow as isize);
-    let Some(wp) = (unsafe { find_tabwin(args.first(), args.get(1)) }) else {
+    let Some(wp) = find_tabwin(args.first(), args.get(1)) else {
         return;
     };
     unsafe { cleanup_jumplist(wp, true) };
@@ -127,7 +127,7 @@ pub fn f_getmarklist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         unsafe { get_global_marks(out) };
         return;
     }
-    let buf = unsafe { tv_get_buf(&args[0], 0) };
+    let buf = tv_get_buf(&args[0], 0);
     if buf.is_none() {
         return;
     }
@@ -143,7 +143,7 @@ pub fn f_gettagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let found = if args.is_empty() {
         unsafe { Win::from_raw(Win::current_raw()) }
     } else {
-        unsafe { find_win_by_nr_or_id(&args[0]) }
+        find_win_by_nr_or_id(&args[0])
     };
     let Some(wp) = found else {
         return;
@@ -155,9 +155,7 @@ pub fn f_gettagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 pub fn f_settagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
-    // SAFETY: the arguments are live typvals; after the check argument 1's
-    // union holds a Dict pointer, which may still be null.
-    let found = unsafe { find_win_by_nr_or_id(&args[0]) };
+    let found = find_win_by_nr_or_id(&args[0]);
     let Some(wp) = found.filter(|_| tv_check_for_dict_arg(args, 1).is_ok()) else {
         return;
     };

@@ -173,7 +173,7 @@ pub fn using_script() -> c_int {
 pub fn before_blocking() {
     updatescript(0);
     if may_garbage_collect.get() {
-        unsafe { garbage_collect(false) };
+        garbage_collect(false);
     }
 }
 

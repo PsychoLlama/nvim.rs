@@ -69,7 +69,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         }
         // An absent argument reads as upstream's empty slot did: E685, false.
         // SAFETY: as above.
-        is_abbr = unsafe { tv_get_bool(args.get(1).unwrap_or(&TypVal::Unknown)) } != 0;
+        is_abbr = tv_get_bool(args.get(1).unwrap_or(&TypVal::Unknown)) != 0;
         // SAFETY: as above.
         if tv_check_for_dict_arg(args, 2).is_err() {
             return;

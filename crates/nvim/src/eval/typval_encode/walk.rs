@@ -54,10 +54,7 @@ macro_rules! walk_hook {
 }
 
 /// Length of a `VAR_STRING`'s string, NULL reading as empty.
-///
-/// # Safety
-/// `tv` must point at a live `VAR_STRING` typval.
-pub(crate) unsafe fn tv_strlen(tv: &TypVal) -> size_t {
+pub(crate) fn tv_strlen(tv: &TypVal) -> size_t {
     // SAFETY: the caller's promise: a live VAR_STRING typval.
     let val = tv;
     debug_assert!(val.v_type() == VAR_STRING);
@@ -290,7 +287,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
             // SAFETY: the typval's own dictionary, live while the typval is.
             let d = unsafe { Dt::new(dict) };
             if dict.is_null() || d.dv_hashtab.ht_used == 0 {
-                unsafe { sink.conv_empty_dict(Some(DictSlot::Value(tv))) };
+                sink.conv_empty_dict(Some(DictSlot::Value(tv)));
             } else {
                 if S::ALLOW_SPECIALS
                     && let Some(flow) =
@@ -319,7 +316,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                     },
                 });
                 let dp = Some(dictp);
-                item_hook!(unsafe { sink.conv_real_dict_after_start(dp, stack.last_mut()) });
+                item_hook!(sink.conv_real_dict_after_start(dp, stack.last_mut()));
             }
         }
         VAR_UNKNOWN => {
@@ -480,7 +477,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             }
             let val_list = val.list_or_null();
             if val_list.is_null() || unsafe { tv_list_len(val_list) } == 0 {
-                unsafe { sink.conv_empty_dict(None) };
+                sink.conv_empty_dict(None);
                 return Ok(Some(Flow::Go));
             }
             // Every item has to be a two-element list, or this is not a
@@ -556,11 +553,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
 ///
 /// Returns whether the encode ran to completion; a sink that refuses a value
 /// has already reported why.
-///
-/// # Safety
-/// `objname` must point at a NUL-terminated name used only for error
-/// messages.
-pub(crate) unsafe fn encode_typval<S: TypvalSink>(
+pub(crate) fn encode_typval<S: TypvalSink>(
     sink: &mut S,
     top_tv: &mut TypVal,
     objname: &CStr,
@@ -573,10 +566,7 @@ pub(crate) unsafe fn encode_typval<S: TypvalSink>(
 /// The walk hands each hook a `&mut` of the slot it is standing on, so a
 /// sink that wrote through one would be writing through a shared borrow --
 /// which is why `S::WRITES_BACK` is asserted here rather than trusted.
-///
-/// # Safety
-/// As [`encode_typval`].
-pub(crate) unsafe fn encode_typval_read<S: TypvalSink>(
+pub(crate) fn encode_typval_read<S: TypvalSink>(
     sink: &mut S,
     top_tv: &TypVal,
     objname: &CStr,
@@ -629,11 +619,11 @@ unsafe fn walk<S: TypvalSink>(
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
                     d.dv_copy_id = saved_copyid;
-                    unsafe { sink.conv_dict_end(Some(dictp)) };
+                    sink.conv_dict_end(Some(dictp));
                     continue;
                 }
                 if todo != d.dv_hashtab.ht_used {
-                    unsafe { sink.conv_dict_between_items(Some(dictp)) };
+                    sink.conv_dict_between_items(Some(dictp));
                 }
                 while !d.dv_hashtab.slot(slot).is_kept() {
                     slot += 1;
@@ -652,7 +642,7 @@ unsafe fn walk<S: TypvalSink>(
                 }
                 let key = unsafe { tv_dict_item_key(di) };
                 walk_hook!(sink.conv_dict_key(unsafe { cstr::bytes_at(key) }));
-                unsafe { sink.conv_dict_after_key(Some(dictp)) };
+                sink.conv_dict_after_key(Some(dictp));
                 tv = di_tv(di);
             }
             Frame::List { list, at } => {
@@ -681,11 +671,11 @@ unsafe fn walk<S: TypvalSink>(
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
                     unsafe { tv_list_set_copyid(list, saved_copyid) };
-                    unsafe { sink.conv_dict_end(None) };
+                    sink.conv_dict_end(None);
                     continue;
                 };
                 if at > 0 {
-                    unsafe { sink.conv_dict_between_items(None) };
+                    sink.conv_dict_between_items(None);
                 }
                 let kv_pair = item.li_tv.list_or_null();
                 // SAFETY: a `[key, value]` pair, checked when the frame was
@@ -700,7 +690,7 @@ unsafe fn walk<S: TypvalSink>(
                 // by index.  It also stays *un*advanced across the key, so
                 // that an error raised there names this pair's index.
                 unsafe { convert_one_value(sink, &mut stack, key, copyid, objname) }?;
-                unsafe { sink.conv_dict_after_key(None) };
+                sink.conv_dict_after_key(None);
                 // Re-derived: the key's own walk may have edited the pair.
                 // SAFETY: as above.
                 tv = &raw mut unsafe { tv_list_items_mut(kv_pair) }[1].li_tv;
@@ -756,7 +746,7 @@ unsafe fn walk<S: TypvalSink>(
                                 part.field_ptr(::core::mem::offset_of!(Partial, pt_dict)),
                             );
                             if used == 0 {
-                                unsafe { sink.conv_empty_dict(Some(dictp)) };
+                                sink.conv_empty_dict(Some(dictp));
                                 continue;
                             }
                             let saved_copyid = frame_dict.dv_copy_id;
@@ -780,9 +770,7 @@ unsafe fn walk<S: TypvalSink>(
                                 },
                             });
                             let dp = Some(dictp);
-                            walk_hook!(unsafe {
-                                sink.conv_real_dict_after_start(dp, stack.last_mut())
-                            });
+                            walk_hook!(sink.conv_real_dict_after_start(dp, stack.last_mut()));
                         }
                     }
                     PartialStage::End => {

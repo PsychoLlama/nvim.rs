@@ -278,7 +278,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypV
 pub fn f_setloclist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least four values.
     result.write_number(-1);
-    if let Some(win) = unsafe { find_win_by_nr_or_id(&args[0]) } {
+    if let Some(win) = find_win_by_nr_or_id(&args[0]) {
         unsafe { set_qf_ll_list(Some(win), &args[1..], result) };
     }
 }

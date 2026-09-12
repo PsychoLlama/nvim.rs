@@ -55,12 +55,7 @@ fn arg_check(ok: bool, errmsg: *const ::core::ffi::c_char, idx: usize) -> Result
 
 /// Whether `tv` is a Number or a String, raising the type-specific error if
 /// not.
-///
-/// # Safety
-/// `tv` must point at an initialised value.
-/// Raising the error goes through the editor's message state, so the
-/// caller must be on the main thread.
-pub unsafe fn tv_check_str_or_nr(tv: &TypVal) -> bool {
+pub fn tv_check_str_or_nr(tv: &TypVal) -> bool {
     let message = match (*tv).v_type() {
         VAR_NUMBER | VAR_STRING => return true,
         VAR_FLOAT => c"E805: Expected a Number or a String, Float found",
@@ -82,12 +77,7 @@ pub unsafe fn tv_check_str_or_nr(tv: &TypVal) -> bool {
 }
 
 /// Whether `tv` has a Number value, raising the type-specific error if not.
-///
-/// # Safety
-/// `tv` must point at an initialised value.
-/// The message comes out of the global `num_errors` table, so the caller must
-/// be on the editor's main thread.
-pub unsafe fn tv_check_num(tv: &TypVal) -> bool {
+pub fn tv_check_num(tv: &TypVal) -> bool {
     match (*tv).v_type() {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
@@ -99,12 +89,7 @@ pub unsafe fn tv_check_num(tv: &TypVal) -> bool {
 }
 
 /// Whether `tv` has a String value, raising the type-specific error if not.
-///
-/// # Safety
-/// `tv` must point at an initialised value.
-/// The message comes out of the global `str_errors` table, so the caller must
-/// be on the editor's main thread.
-pub unsafe fn tv_check_str(tv: &TypVal) -> bool {
+pub fn tv_check_str(tv: &TypVal) -> bool {
     match (*tv).v_type() {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {

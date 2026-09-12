@@ -207,8 +207,7 @@ pub unsafe fn eval0(
 
     if ret.is_err() || end_error {
         if ret.is_ok() {
-            // SAFETY: the caller's promise -- `result` is valid.
-            unsafe { tv_clear(result) };
+            tv_clear(result);
         }
         // Stay quiet if something already reported, or if we are
         // unwinding from an exception.
@@ -333,7 +332,7 @@ pub(crate) unsafe fn eval1(
         let mut error = false;
         // SAFETY: `result` is the operand `eval2` just parsed.
         truthy = if op_falsy {
-            unsafe { tv2bool(result) }
+            tv2bool(result)
         } else {
             let n = unsafe { tv_get_number_chk(result, &raw mut error) };
             n != 0
@@ -341,8 +340,7 @@ pub(crate) unsafe fn eval1(
         // `??` keeps the left operand when it is truthy; `? :` never
         // does, and neither keeps it after an error.
         if error || !op_falsy || !truthy {
-            // SAFETY: as above.
-            unsafe { tv_clear(result) };
+            tv_clear(result);
         }
         if error {
             return Err(Failed);
@@ -368,7 +366,7 @@ pub(crate) unsafe fn eval1(
         if cur.byte() != b':' {
             emsg(gettext(c"E109: Missing ':' after '?'"));
             if evaluate && truthy {
-                unsafe { tv_clear(result) };
+                tv_clear(result);
             }
             used.eval_flags = orig_flags;
             return Err(Failed);
@@ -378,7 +376,7 @@ pub(crate) unsafe fn eval1(
         // SAFETY: as the first branch.
         if unsafe { eval1(arg, &mut var2, used.raw()) }.is_err() {
             if evaluate && truthy {
-                unsafe { tv_clear(result) };
+                tv_clear(result);
             }
             used.eval_flags = orig_flags;
             return Err(Failed);
@@ -441,7 +439,7 @@ unsafe fn eval_logical(
         let mut error = false;
         // SAFETY: `result` is the operand just parsed.
         truthy = unsafe { tv_get_number_chk(result, &raw mut error) } != 0;
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         if error {
             return Err(Failed);
         }
@@ -458,7 +456,7 @@ unsafe fn eval_logical(
             let mut error = false;
             // SAFETY: `var2` is the operand just parsed.
             truthy = unsafe { tv_get_number_chk(&var2, &raw mut error) } != 0;
-            unsafe { tv_clear(&mut var2) };
+            tv_clear(&mut var2);
             if error {
                 return Err(Failed);
             }
@@ -536,13 +534,12 @@ pub(crate) unsafe fn eval4(
     let mut var2 = UNSET_TV;
     // SAFETY: as above, with `var2` this frame's own.
     if unsafe { eval5(arg, &mut var2, evalarg) }.is_err() {
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         return Err(Failed);
     }
     if unsafe { evaluating(evalarg) } {
-        // SAFETY: both operands are typvals the levels just parsed.
-        let ret = unsafe { typval_compare(result, &mut var2, op, ic) };
-        unsafe { tv_clear(&mut var2) };
+        let ret = typval_compare(result, &mut var2, op, ic);
+        tv_clear(&mut var2);
         return ret;
     }
     Ok(())
@@ -577,12 +574,12 @@ pub(crate) unsafe fn eval5(
         let float_arith = op != b'.' && rv.v_type() == VAR_FLOAT;
         if !container_plus && !float_arith && evaluate {
             let ok = if concat {
-                unsafe { tv_check_str(result) }
+                tv_check_str(result)
             } else {
-                unsafe { tv_check_num(result) }
+                tv_check_num(result)
             };
             if !ok {
-                unsafe { tv_clear(result) };
+                tv_clear(result);
                 return Err(Failed);
             }
         }
@@ -592,25 +589,25 @@ pub(crate) unsafe fn eval5(
 
         let mut var2 = UNSET_TV;
         if unsafe { eval6(arg, &mut var2, evalarg, concat) }.is_err() {
-            unsafe { tv_clear(result) };
+            tv_clear(result);
             return Err(Failed);
         }
         if evaluate {
             let (blob2, list2) = (var2.v_type() == VAR_BLOB, var2.v_type() == VAR_LIST);
             let ok = if concat {
-                unsafe { eval_concat_str(result, &mut var2) }
+                eval_concat_str(result, &mut var2)
             } else if op == b'+' && rv.v_type() == VAR_BLOB && blob2 {
-                unsafe { eval_addblob(result, &mut var2) };
+                eval_addblob(result, &mut var2);
                 true
             } else if op == b'+' && rv.v_type() == VAR_LIST && list2 {
-                unsafe { eval_addlist(result, &mut var2) }
+                eval_addlist(result, &mut var2)
             } else {
-                unsafe { eval_addsub_number(result, &mut var2, op) }
+                eval_addsub_number(result, &mut var2, op)
             };
             if !ok {
                 return Err(Failed);
             }
-            unsafe { tv_clear(&mut var2) };
+            tv_clear(&mut var2);
         }
     }
 }
@@ -639,7 +636,7 @@ pub(crate) unsafe fn eval6(
         cur.skip(1);
         let mut var2 = UNSET_TV;
         unsafe { eval7(arg, &mut var2, evalarg, false) }?;
-        if evaluate && unsafe { !eval_multdiv_number(result, &mut var2, op) } {
+        if evaluate && !eval_multdiv_number(result, &mut var2, op) {
             return Err(Failed);
         }
     }
@@ -740,7 +737,7 @@ pub(crate) unsafe fn eval7(
                 cur.bump(1);
             } else if ret.is_ok() {
                 emsg(gettext(c"E110: Missing ')'"));
-                unsafe { tv_clear(result) };
+                tv_clear(result);
                 ret = Err(Failed);
             }
         }
@@ -839,7 +836,7 @@ pub(crate) unsafe fn eval7_leader(
     }
 
     if error {
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         ret = Err(Failed);
     } else {
         while end_leader > start_leader {
@@ -881,7 +878,7 @@ pub(crate) unsafe fn eval7_leader(
             }
         }
         let float = rv.v_type() == VAR_FLOAT;
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         if float {
             rv.write_float(f);
         } else {

@@ -265,7 +265,7 @@ fn array_to_string(array: Array) -> Result<String_0, Error> {
     );
     let (data, size) = sbuf.parts_mut();
     let converted = unsafe { encode_vim_list_to_buf(list_tv.list_or_null(), size, data) };
-    unsafe { tv_clear(&mut list_tv) };
+    tv_clear(&mut list_tv);
     match converted {
         true => Ok(sbuf),
         false => Err(Error::exception(

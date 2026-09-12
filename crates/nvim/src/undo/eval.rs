@@ -157,8 +157,7 @@ pub fn f_undotree(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
     tv_dict_alloc_ret(result);
     let raw = match args.first() {
-        // SAFETY: as above.
-        Some(tv) => unsafe { get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw) },
+        Some(tv) => get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw),
         None => Buf::current_raw(),
     };
     // SAFETY: the return value the contract gives us.

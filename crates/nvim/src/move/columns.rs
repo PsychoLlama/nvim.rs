@@ -371,7 +371,7 @@ unsafe fn alloc_dict_ret(result: &mut TypVal) -> *mut Dict {
 /// # Safety
 /// `args` must hold at least `n + 1` values.
 unsafe fn arg_number(args: &[TypVal], n: isize) -> VarNumber {
-    unsafe { tv_get_number(&args[n as usize]) }
+    tv_get_number(&args[n as usize])
 }
 
 /// `tv_dict_add_nr` with the key spelled as a C string literal.
@@ -424,7 +424,7 @@ pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     }
     // SAFETY: the evaluator's calling convention.
-    let Some(win) = (unsafe { find_win_by_nr_or_id(&args[0]) }) else {
+    let Some(win) = find_win_by_nr_or_id(&args[0]) else {
         return;
     };
     let mut error = false;

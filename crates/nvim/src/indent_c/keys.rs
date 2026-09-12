@@ -384,8 +384,7 @@ pub unsafe fn do_c_expr_indent() {
 /// when the line is out of range.
 pub fn f_cindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let pos = Win::current().w_cursor;
-    // SAFETY: the caller's promise -- `args` is the call's argument list.
-    let lnum = unsafe { tv_get_lnum(&args[0]) } as LineNr;
+    let lnum = tv_get_lnum(&args[0]) as LineNr;
     let amount = if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
         Win::current().w_cursor.lnum = lnum;
         // SAFETY: the cursor now sits on a line of the current buffer, and it

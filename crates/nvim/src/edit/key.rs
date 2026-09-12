@@ -426,8 +426,6 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
 
 /// `<Esc>` and CTRL-C: end input mode -- unless a window here wants them.
 fn key_end_insert(s: &mut InsertState) -> Next {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     if s.c == Ctrl_C && cmdwin_type.get() != 0 {
         // Close the command-line window.
         cmdwin_result.set(Key::Ignore.code());
@@ -435,7 +433,7 @@ fn key_end_insert(s: &mut InsertState) -> Next {
         s.nomove = true;
         return Next::Leave;
     }
-    if s.c == Ctrl_C && in_prompt_buf() && unsafe { invoke_prompt_interrupt() } {
+    if s.c == Ctrl_C && in_prompt_buf() && invoke_prompt_interrupt() {
         if !in_prompt_buf() {
             // The buffer changed to a non-prompt one; leave Insert mode.
             return Next::Leave;
@@ -512,7 +510,7 @@ fn key_eol(s: &mut InsertState) -> Next {
     }
     // In a prompt buffer it submits, unless Shift is held.
     if !mod_mask.get().has(ModMask::SHIFT) && in_prompt_buf() {
-        unsafe { prompt_invoke_callback() };
+        prompt_invoke_callback();
         if !in_prompt_buf() {
             // The callback turned this into an ordinary buffer.
             return Next::Leave;

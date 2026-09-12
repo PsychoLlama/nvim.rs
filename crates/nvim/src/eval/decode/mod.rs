@@ -47,11 +47,8 @@ pub(crate) const kMPExt: MessagePackType = 7;
 /// the `_TYPE` value is a reference to one of the shared, immutable lists
 /// `v:msgpack_types` is made of, not a copy of it.  The dictionary comes back
 /// with one reference on it.
-///
-/// # Safety
-/// `result` is writable and holds no value that needs clearing.
 #[inline]
-pub(crate) unsafe fn create_special_dict(result: &mut TypVal, type_: MessagePackType, val: TypVal) {
+pub(crate) fn create_special_dict(result: &mut TypVal, type_: MessagePackType, val: TypVal) {
     let dict_held = tv_dict_alloc();
     let dict = dict_held.as_ptr();
 
@@ -86,7 +83,7 @@ pub unsafe fn decode_create_map_special_dict(ret_tv: &mut TypVal, len: ptrdiff_t
     let list = tv_list_alloc(len);
     // A borrow of the list the special dictionary owns from here on.
     let into = list.as_ptr();
-    unsafe { create_special_dict(ret_tv, kMPMap, TypVal::list(Some(list))) };
+    create_special_dict(ret_tv, kMPMap, TypVal::list(Some(list)));
     into
 }
 

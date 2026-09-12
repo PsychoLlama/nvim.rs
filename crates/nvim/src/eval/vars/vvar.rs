@@ -78,10 +78,7 @@ fn vimvar_item(idx: Vv) -> *mut DictItem {
 /// `v:` dictionary if it is one of the two that are not normally there.
 ///
 /// Pairs with [`restore_vimvar`].
-///
-/// # Safety
-/// `idx` names a `v:` variable and `save_tv` is writable.
-pub unsafe fn prepare_vimvar(idx: Vv, save_tv: &mut TypVal) {
+pub fn prepare_vimvar(idx: Vv, save_tv: &mut TypVal) {
     // Written through the row's *value* rather than through the row: the
     // `v:` hashtab keeps a pointer to `di_key`, which is a member of
     // `VimVar`, and a write through a borrow of the whole row would
@@ -102,10 +99,7 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: &mut TypVal) {
 }
 
 /// Put back what [`prepare_vimvar`] saved.
-///
-/// # Safety
-/// As [`prepare_vimvar`], with the `save_tv` it filled.
-pub unsafe fn restore_vimvar(idx: Vv, save_tv: &mut TypVal) {
+pub fn restore_vimvar(idx: Vv, save_tv: &mut TypVal) {
     // Through the value, for [`prepare_vimvar`]'s reason.
     let mut tv = vimvar_val(idx);
     // SAFETY: the caller's obligation -- `save_tv` is the value the paired
@@ -125,10 +119,7 @@ pub unsafe fn restore_vimvar(idx: Vv, save_tv: &mut TypVal) {
 }
 
 /// Copy `tv` into `v:` variable `idx`.
-///
-/// # Safety
-/// `idx` names a `v:` variable and `tv` is a live value.
-pub unsafe fn set_vim_var_tv(idx: Vv, tv: &mut TypVal) {
+pub fn set_vim_var_tv(idx: Vv, tv: &mut TypVal) {
     let out = vimvar_val(idx).raw();
     // SAFETY: a live `v:` value, and the caller's obligation for `tv`.
     unsafe { tv_clear(&mut *out) };
@@ -216,11 +207,7 @@ pub fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
 }
 
 /// Set `v:char` to the character `c`.
-///
-/// # Safety
-/// Nothing; `utf_char2bytes` writes at most six bytes, so the NUL lands
-/// inside `buf`.
-pub unsafe fn set_vim_var_char(c: c_int) {
+pub fn set_vim_var_char(c: c_int) {
     let mut buf = [0 as c_char; 7];
     // SAFETY: `utf_char2bytes` writes at most six bytes into the local.
     let buflen = unsafe { utf_char2bytes(c, buf.as_mut_ptr()) };
@@ -249,10 +236,7 @@ pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
 }
 
 /// Set `v:` variable `idx` to `val`, which takes the handle over.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_list(idx: Vv, val: Option<ListRef>) {
+pub fn set_vim_var_list(idx: Vv, val: Option<ListRef>) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.write_list(val);
@@ -260,10 +244,7 @@ pub unsafe fn set_vim_var_list(idx: Vv, val: Option<ListRef>) {
 
 /// Set `v:` variable `idx` to `val`, which takes the handle over, and make
 /// its keys read-only.
-///
-/// # Safety
-/// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
+pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     let at = val
@@ -292,10 +273,7 @@ pub unsafe fn set_vim_var_partial(idx: Vv, val: *mut Partial) {
 }
 
 /// Set `v:register` to `c`, or to `"` for the unnamed register.
-///
-/// # Safety
-/// Nothing; `c` is a register name or 0.
-pub unsafe fn set_reg_var(c: c_int) {
+pub fn set_reg_var(c: c_int) {
     let regname = if c == 0 || c == b' ' as c_int {
         b'"' as c_char
     } else {
@@ -677,10 +655,7 @@ pub(crate) unsafe fn set_vvar_item(
 }
 
 /// Blank the six `v:option_*` variables the `OptionSet` autocommand reads.
-///
-/// # Safety
-/// Nothing.
-pub unsafe fn reset_v_option_vars() {
+pub fn reset_v_option_vars() {
     for idx in [
         Vv::OptionNew,
         Vv::OptionOld,

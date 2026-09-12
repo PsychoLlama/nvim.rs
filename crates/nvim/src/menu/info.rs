@@ -303,6 +303,5 @@ fn ends_of_command(p: CText) -> bool {
 }
 
 fn clear_menutrans_vars() {
-    // SAFETY: walks the global variable dict, which is always live.
-    unsafe { del_menutrans_vars() };
+    del_menutrans_vars();
 }

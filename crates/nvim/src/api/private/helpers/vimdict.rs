@@ -165,8 +165,7 @@ pub(crate) unsafe fn dict_set_var(
             unsafe { before_set_vvar(key.data(), di, &mut *new, true, watched, bad) }
         };
         if !accepted {
-            // SAFETY: `tv` is this frame's.
-            unsafe { tv_clear(&mut tv) };
+            tv_clear(&mut tv);
             if type_error {
                 let key = key.as_cstr().to_string_lossy();
                 return Err(api_error!(
@@ -193,7 +192,6 @@ pub(crate) unsafe fn dict_set_var(
             tv_clear(&mut oldtv);
         }
     }
-    // SAFETY: `tv` is this frame's.
-    unsafe { tv_clear(&mut tv) };
+    tv_clear(&mut tv);
     Ok(rv)
 }

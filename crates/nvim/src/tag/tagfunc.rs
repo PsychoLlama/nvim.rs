@@ -191,11 +191,11 @@ pub(crate) unsafe fn find_tagfunc_tags(
     }
     if rettv.as_special() == Some(kSpecialVarNull) {
         // "Read the tags files after all."
-        unsafe { tv_clear(&mut rettv) };
+        tv_clear(&mut rettv);
         return NOTDONE;
     }
     if rettv.v_type() != VAR_LIST || rettv.list_or_null().is_null() {
-        unsafe { tv_clear(&mut rettv) };
+        tv_clear(&mut rettv);
         tag_emsg(E_INVALID_RETURN);
         return FAIL;
     }
@@ -218,7 +218,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         result = OK;
     }
 
-    unsafe { tv_clear(&mut rettv) };
+    tv_clear(&mut rettv);
     *match_count = ntags;
     result
 }

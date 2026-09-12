@@ -300,7 +300,6 @@ pub fn f_diff_filler(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // not free: `diff_check_fill` can trigger a whole recompute, and it
     // already clamps at zero.
     //
-    // SAFETY: the caller's cells, and the current window is live.
-    let fill = diff_check_fill(Win::current(), unsafe { tv_get_lnum(&args[0]) });
+    let fill = diff_check_fill(Win::current(), tv_get_lnum(&args[0]));
     result.write_number(VarNumber::from(fill));
 }

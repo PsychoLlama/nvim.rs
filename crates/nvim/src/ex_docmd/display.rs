@@ -274,7 +274,7 @@ pub(crate) fn close_redir() {
     }
     redir_reg.set(0);
     if redir_vname.get() {
-        unsafe { var_redir_stop() };
+        var_redir_stop();
         redir_vname.set(false);
     }
 }

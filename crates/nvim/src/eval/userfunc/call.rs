@@ -377,7 +377,7 @@ pub unsafe fn call_user_func(
 
     // When the function was aborted because of an error, return -1.
     if (did_emsg.get() != 0 && f.uf_flags.has(FuncFlags::ABORT)) || rv.v_type() == VAR_UNKNOWN {
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         rv.write_number(-1);
     }
 

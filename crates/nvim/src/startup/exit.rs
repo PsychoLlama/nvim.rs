@@ -207,7 +207,7 @@ pub fn getout(mut exitval: c_int) -> ! {
     }
 
     if garbage_collect_at_exit.get() {
-        unsafe { garbage_collect(false) };
+        garbage_collect(false);
     }
 
     os_exit(exitval);

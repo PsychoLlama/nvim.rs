@@ -317,7 +317,7 @@ pub(crate) unsafe fn command_line_execute(
             || s.c == ESC))
         || s.c == Ctrl_C
     {
-        unsafe { set_vim_var_char(s.c) }; // set v:char
+        set_vim_var_char(s.c); // set v:char
         trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
         s.event_cmdlineleavepre_triggered = true;
         if (s.c == ESC || s.c == Ctrl_C) && wim_has(0, kOptWimFlagList) {

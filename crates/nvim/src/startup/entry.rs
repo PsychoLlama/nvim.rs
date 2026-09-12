@@ -137,7 +137,7 @@ pub(crate) fn event_teardown() -> bool {
     server_teardown();
     unsafe { channel_teardown() };
     unsafe { proc_teardown(main_loop.ptr()) };
-    unsafe { timer_teardown() };
+    timer_teardown();
     signal_teardown();
     terminal_teardown();
     unsafe { loop_close(main_loop.ptr(), true) }
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
     os_hint_priority();
     estack_init();
     cmdline_init();
-    unsafe { eval_init() };
+    eval_init();
     set_vim_var_nr(Vv::Starttime, os_realtime());
 
     let exename = if !argv0.get().is_null() {
@@ -422,7 +422,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         time_msg_at(c"reading ShaDa");
     }
     if get_vim_var_list(Vv::Oldfiles).is_null() {
-        unsafe { set_vim_var_list(Vv::Oldfiles, Some(tv_list_alloc(0))) };
+        set_vim_var_list(Vv::Oldfiles, Some(tv_list_alloc(0)));
     }
 
     unsafe { handle_quickfix(&raw mut params) };

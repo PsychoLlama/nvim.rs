@@ -297,7 +297,7 @@ unsafe fn call_qftf_func(
             answer = unsafe { ListRef::retained(rettv.list_or_null()) }
                 .map_or(ptr::null_mut(), ListRef::into_raw);
         }
-        unsafe { tv_clear(&mut rettv) };
+        tv_clear(&mut rettv);
     }
     drop(locked);
     drop(args);

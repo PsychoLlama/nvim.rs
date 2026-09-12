@@ -130,7 +130,7 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -
 
     if word.is_null() || (!empty && unsafe { *word } as c_int == NUL) {
         unsafe { free_cptext(cptext.as_ptr()) };
-        unsafe { tv_clear(&mut user_data) };
+        tv_clear(&mut user_data);
         return FAIL;
     }
 
@@ -148,7 +148,7 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -
     // word was already in the list) included, which the transpile read as
     // success and leaked.
     if status != OK {
-        unsafe { tv_clear(&mut user_data) };
+        tv_clear(&mut user_data);
     }
     status
 }

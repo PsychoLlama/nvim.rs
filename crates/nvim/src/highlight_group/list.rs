@@ -206,7 +206,7 @@ pub(crate) unsafe fn highlight_list_one(id: c_int) {
         unsafe { list_arg(id, didh, ListValue::Text(Some(c"cleared")), c"") };
     }
     if p_verbose.get() > 0 {
-        unsafe { last_set_msg(entry.script_ctx) };
+        last_set_msg(entry.script_ctx);
     }
 }
 

@@ -62,11 +62,7 @@ pub(crate) fn num_modulus(n1: VarNumber, n2: VarNumber) -> VarNumber {
 }
 
 /// `blob + blob`.
-///
-/// # Safety
-/// Both operands must be Blobs, which is what `eval5` checked before
-/// dispatching here.
-pub(crate) unsafe fn eval_addblob(tv1: &mut TypVal, tv2: &mut TypVal) {
+pub(crate) fn eval_addblob(tv1: &mut TypVal, tv2: &mut TypVal) {
     // SAFETY: the caller's promise -- both operands are Blobs, so each
     // union holds a live `Blob`, and `b` is a Blob of this call's own.
     let b1: *const Blob = (*tv1).blob_or_null();
@@ -97,27 +93,23 @@ pub(crate) unsafe fn eval_addblob(tv1: &mut TypVal, tv2: &mut TypVal) {
         }
         unsafe { (*b).bv_ga.ga_len = total as c_int };
     }
-    // SAFETY: `tv1` is the caller's, and `b` is the Blob just built.
-    unsafe { tv_clear(tv1) };
+    tv_clear(tv1);
     unsafe { tv_blob_set_ret(tv1, b) };
 }
 
 /// `list + list`. Clears both operands on failure, as every arithmetic
 /// helper here does — the caller has already given up ownership.
-///
-/// # Safety
-/// Both operands must be Lists.
-pub(crate) unsafe fn eval_addlist(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
+pub(crate) fn eval_addlist(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     let mut joined = TV_INITIAL_VALUE;
     // SAFETY: the caller's promise -- both operands are Lists, so each
     // union holds a live `List`, and `joined` is this frame's own.
     let (l1, l2) = ((*tv1).list_or_null(), (*tv2).list_or_null());
     if unsafe { tv_list_concat(l1, l2, &mut joined) }.is_err() {
-        unsafe { tv_clear(tv1) };
-        unsafe { tv_clear(tv2) };
+        tv_clear(tv1);
+        tv_clear(tv2);
         return false;
     }
-    unsafe { tv_clear(tv1) };
+    tv_clear(tv1);
     *tv1 = joined;
     true
 }
@@ -150,10 +142,7 @@ pub(crate) unsafe fn grow_string_tv(tv1: &mut TypVal, s2: *const c_char) -> bool
 }
 
 /// `..` (and `.`): the string concatenation `eval5` performs.
-///
-/// # Safety
-/// Both operands must be valid typvals the caller has given up ownership of.
-pub(crate) unsafe fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
+pub(crate) fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     let mut buf1: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let mut buf2: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     // SAFETY: the caller's promise -- both operands are valid typvals, and
@@ -162,8 +151,8 @@ pub(crate) unsafe fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool
     let s1 = unsafe { tv_get_string_buf(tv1, buf1.as_mut_ptr()) };
     let s2 = unsafe { tv_get_string_buf_chk(tv2, buf2.as_mut_ptr()) };
     if s2.is_null() {
-        unsafe { tv_clear(tv1) };
-        unsafe { tv_clear(tv2) };
+        tv_clear(tv1);
+        tv_clear(tv2);
         return false;
     }
     // `s2` is `buf2` or `tv2`'s own allocation, never `tv1`'s.
@@ -172,16 +161,13 @@ pub(crate) unsafe fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool
     }
     // `s1` may point into `buf1`, so build the result before clearing.
     let joined = unsafe { concat_str(s1, s2) };
-    unsafe { tv_clear(tv1) };
+    tv_clear(tv1);
     one.write_string(joined);
     true
 }
 
 /// `+` and `-` over Numbers and Floats.
-///
-/// # Safety
-/// Both operands must be valid typvals the caller has given up ownership of.
-pub(crate) unsafe fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> bool {
+pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> bool {
     let mut error = false;
     let mut n1: VarNumber = 0;
     let mut n2: VarNumber = 0;
@@ -200,8 +186,8 @@ pub(crate) unsafe fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: 
             // Only reachable for "list + non-list" or "blob + non-blob":
             // for anything else the caller returned before evaluating the
             // second operand.
-            unsafe { tv_clear(tv1) };
-            unsafe { tv_clear(tv2) };
+            tv_clear(tv1);
+            tv_clear(tv2);
             return false;
         }
         if two.v_type() == VAR_FLOAT {
@@ -214,8 +200,8 @@ pub(crate) unsafe fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: 
     } else {
         n2 = unsafe { tv_get_number_chk(tv2, &raw mut error) };
         if error {
-            unsafe { tv_clear(tv1) };
-            unsafe { tv_clear(tv2) };
+            tv_clear(tv1);
+            tv_clear(tv2);
             return false;
         }
         if one.v_type() == VAR_FLOAT {
@@ -228,7 +214,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: 
     // cleared value is `Unknown`, so `1.234 - 8` would take the integer
     // branch and answer -8.
     let use_float = one.v_type() == VAR_FLOAT || two.v_type() == VAR_FLOAT;
-    unsafe { tv_clear(tv1) };
+    tv_clear(tv1);
 
     if use_float {
         one.write_float(if op == b'+' { f1 + f2 } else { f1 - f2 });
@@ -243,10 +229,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: 
 }
 
 /// `*`, `/` and `%` over Numbers and Floats.
-///
-/// # Safety
-/// Both operands must be valid typvals the caller has given up ownership of.
-pub(crate) unsafe fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> bool {
+pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> bool {
     let mut error = false;
     let mut n1: VarNumber = 0;
     let mut n2: VarNumber = 0;
@@ -265,9 +248,9 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op:
     // Unlike the additive path this clears the left operand before
     // looking at the error, and clears the right one only on the branch
     // that read it.
-    unsafe { tv_clear(tv1) };
+    tv_clear(tv1);
     if error {
-        unsafe { tv_clear(tv2) };
+        tv_clear(tv2);
         return false;
     }
 
@@ -280,7 +263,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op:
         f2 = two.float_or_zero();
     } else {
         n2 = unsafe { tv_get_number_chk(tv2, &raw mut error) };
-        unsafe { tv_clear(tv2) };
+        tv_clear(tv2);
         if error {
             return false;
         }

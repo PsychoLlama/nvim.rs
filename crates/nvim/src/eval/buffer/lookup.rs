@@ -18,10 +18,7 @@ use crate::guard::Suppress;
 use crate::types::{VAR_NUMBER, VAR_STRING};
 
 /// The buffer `avar` names, by number or by exact name.
-///
-/// # Safety
-/// `avar` must point at a live typval.
-pub unsafe fn find_buffer(avar: &TypVal) -> Option<Buf> {
+pub fn find_buffer(avar: &TypVal) -> Option<Buf> {
     // SAFETY: the caller's obligation; a `VAR_STRING` holds a NUL-terminated
     // string or NULL.
     match (*avar).v_type() {
@@ -62,24 +59,19 @@ pub fn f_bufadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `bufexists({buf})`.
 pub fn f_bufexists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals.
-    let buf = unsafe { find_buffer(&args[0]) };
+    let buf = find_buffer(&args[0]);
     result.write_number(VarNumber::from(buf.is_some()));
 }
 
 /// `buflisted({buf})`.
 pub fn f_buflisted(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals, and the resolver answers a live
-    // buffer or NULL.
-    let listed = unsafe { find_buffer(&args[0]) }.is_some_and(|b| b.b_p_bl != 0);
+    let listed = find_buffer(&args[0]).is_some_and(|b| b.b_p_bl != 0);
     result.write_number(VarNumber::from(listed));
 }
 
 /// `bufload({buf})` — read the file in if the buffer is not loaded yet.
 pub fn f_bufload(args: &[TypVal], _unused: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals, and the resolver answers a live
-    // buffer or NULL.
-    let buf = unsafe { get_buf_arg(&args[0]) };
+    let buf = get_buf_arg(&args[0]);
     if buf.is_none() {
         return;
     }
@@ -93,19 +85,15 @@ pub fn f_bufload(args: &[TypVal], _unused: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `bufloaded({buf})`.
 pub fn f_bufloaded(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments are live typvals, and the resolver answers a live
-    // buffer or NULL.
-    let loaded = unsafe { find_buffer(&args[0]) }.is_some_and(|b| !b.b_ml.ml_mfp.is_null());
+    let loaded = find_buffer(&args[0]).is_some_and(|b| !b.b_ml.ml_mfp.is_null());
     result.write_number(VarNumber::from(loaded));
 }
 
 /// `bufname([{buf}])` — the buffer's short name, empty when it has none.
 pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
-    // SAFETY: the arguments are live typvals; `curbuf` is set and the resolver
-    // answers a live buffer or NULL.
     let buf = if !args.is_empty() {
-        unsafe { tv_get_buf_from_arg(&args[0]) }
+        tv_get_buf_from_arg(&args[0])
     } else {
         Some(Buf::current())
     };
@@ -121,11 +109,10 @@ pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
-    // SAFETY: the arguments are live typvals and `curbuf` is set.
     let mut buf: *mut Buffer = if args.is_empty() {
         Buf::current_raw()
     } else {
-        if !unsafe { tv_check_str_or_nr(&args[0]) } {
+        if !tv_check_str_or_nr(&args[0]) {
             return;
         }
         // The lookup itself must not report "no such buffer": a second

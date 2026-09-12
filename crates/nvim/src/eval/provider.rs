@@ -442,11 +442,7 @@ pub unsafe fn prompt_get_input(buffer: Option<Buf>) -> *mut c_char {
 
 /// The user pressed Enter in a prompt buffer: open the next line and hand
 /// what was typed to the buffer's callback.
-///
-/// # Safety
-/// Called from the prompt-buffer key handling, with a prompt buffer
-/// current.
-pub unsafe fn prompt_invoke_callback() {
+pub fn prompt_invoke_callback() {
     let lnum = Buf::current().line_count();
     // SAFETY: the current buffer is live.
     let user_input = unsafe { prompt_get_input(Buf::current_or_none()) };
@@ -486,10 +482,7 @@ pub unsafe fn prompt_invoke_callback() {
 
 /// CTRL-C in a prompt buffer. Answers whether the buffer had an interrupt
 /// callback at all.
-///
-/// # Safety
-/// As `prompt_invoke_callback`.
-pub unsafe fn invoke_prompt_interrupt() -> bool {
+pub fn invoke_prompt_interrupt() -> bool {
     if !Buf::current().b_prompt_interrupt.is_set() {
         return false;
     }

@@ -190,11 +190,7 @@ impl TypvalSink for JsonSink<'_> {
         self.gap.extend_from_slice(b"[]");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b"{}");
     }
 
@@ -219,7 +215,7 @@ impl TypvalSink for JsonSink<'_> {
     /// A special map may carry any typval as a key; JSON may not.
     ///
     fn special_dict_key_check(&mut self, key: &TypVal) -> Flow {
-        if unsafe { encode_check_json_key(key) } {
+        if encode_check_json_key(key) {
             Flow::Go
         } else {
             err(E474_INVALID_KEY);
@@ -227,27 +223,15 @@ impl TypvalSink for JsonSink<'_> {
         }
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b": ");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {
         self.gap.extend_from_slice(b", ");
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
         self.gap.push(b'}');
     }
 
@@ -273,11 +257,7 @@ impl TypvalSink for JsonSink<'_> {
 }
 
 /// Append `tv` to `gap` as JSON.
-///
-/// # Safety
-/// `gap` must be a live byte-item garray, `tv` a live typval and `objname`
-/// NUL-terminated.
-pub(crate) unsafe fn encode_vim_to_json(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
+pub(crate) fn encode_vim_to_json(gap: &mut Vec<u8>, tv: &TypVal, objname: &CStr) -> bool {
     let mut sink = JsonSink { gap };
-    unsafe { encode_typval_read(&mut sink, tv, objname) }
+    encode_typval_read(&mut sink, tv, objname)
 }

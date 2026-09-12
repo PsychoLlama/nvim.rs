@@ -560,12 +560,10 @@ pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `digraph_getlist()`.
 pub fn f_digraph_getlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: caller contract.
     if tv_check_for_opt_bool_arg(args, 0).is_err() {
         return;
     }
-    // SAFETY: caller contract; the optional argument was just type-checked.
-    let list_all = unsafe { !args.is_empty() && tv_get_bool(&args[0]) != 0 as VarNumber };
+    let list_all = !args.is_empty() && tv_get_bool(&args[0]) != 0 as VarNumber;
     // SAFETY: caller contract.
     unsafe { digraph_getlist_common(list_all, result) };
 }

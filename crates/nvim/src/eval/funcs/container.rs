@@ -389,7 +389,7 @@ fn index_blob(args: &[TypVal], result: &mut TypVal) {
         // The Blob branch never reads argument 3, so a Blob search is
         // always case-sensitive however 'ic' was spelled. Upstream is
         // the same; the flag only reaches the List branch.
-        if unsafe { tv_equal(&tv, &args[1], false) } {
+        if tv_equal(&tv, &args[1], false) {
             result.write_number(idx as VarNumber);
             return;
         }
@@ -427,7 +427,7 @@ fn index_list(args: &[TypVal], result: &mut TypVal) {
     // SAFETY: the caller's obligation: a live list.
     while at < unsafe { tv_list_items(l) }.len() {
         let item = &unsafe { tv_list_items(l) }[at];
-        if unsafe { tv_equal(&item.li_tv, &args[1], ic) } {
+        if tv_equal(&item.li_tv, &args[1], ic) {
             result.write_number(VarNumber::from(idx));
             return;
         }
@@ -469,8 +469,8 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
 
     let (mut save_val, mut save_key) = (NIL, NIL);
-    unsafe { prepare_vimvar(Vv::Val, &mut save_val) };
-    unsafe { prepare_vimvar(Vv::Key, &mut save_key) };
+    prepare_vimvar(Vv::Val, &mut save_val);
+    prepare_vimvar(Vv::Key, &mut save_key);
     let saved_did_emsg = did_emsg.get();
     did_emsg.set(0);
     result.write_number(if args[0].v_type() == VAR_BLOB {
@@ -478,8 +478,8 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         unsafe { indexof_list(args[0].list_or_null(), startidx, &args[1]) }
     });
-    unsafe { restore_vimvar(Vv::Key, &mut save_key) };
-    unsafe { restore_vimvar(Vv::Val, &mut save_val) };
+    restore_vimvar(Vv::Key, &mut save_key);
+    restore_vimvar(Vv::Val, &mut save_val);
     // As `printf()`: an error raised before this call survives, one
     // raised inside it does not.
     did_emsg.set(did_emsg.get() | saved_did_emsg);
@@ -488,10 +488,7 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// Evaluate `indexof()`'s predicate against the `v:key`/`v:val` already in
 /// place. A failed evaluation, and a result that is not coercible to a
 /// Bool, both read as "no match".
-///
-/// # Safety
-/// `expr` is a live String or Funcref typval.
-unsafe fn indexof_matches(expr: &TypVal) -> bool {
+fn indexof_matches(expr: &TypVal) -> bool {
     // SAFETY throughout: the caller's obligation; `argv` and `newtv` are locals that
     // outlive the evaluation, and `newtv` is cleared before returning.
     // A frame naming the two `v:` slots for the length of the call.
@@ -499,12 +496,12 @@ unsafe fn indexof_matches(expr: &TypVal) -> bool {
     argv.push_borrowed(unsafe { &*get_vim_var_tv(Vv::Key) });
     argv.push_borrowed(unsafe { &*get_vim_var_tv(Vv::Val) });
     let mut newtv = NIL;
-    if unsafe { eval_expr_typval(expr, false, argv.args(), &mut newtv) }.is_err() {
+    if eval_expr_typval(expr, false, argv.args(), &mut newtv).is_err() {
         return false;
     }
     let mut error = false;
     let found = unsafe { tv_get_bool_chk(&newtv, &raw mut error) };
-    unsafe { tv_clear(&mut newtv) };
+    tv_clear(&mut newtv);
     !error && found != 0
 }
 
@@ -526,7 +523,7 @@ unsafe fn indexof_blob(b: *mut Blob, startidx: VarNumber, expr: &TypVal) -> VarN
     for idx in start..unsafe { tv_blob_len(b) } as VarNumber {
         set_vim_var_nr(Vv::Key, idx);
         unsafe { set_vim_var_nr(Vv::Val, tv_blob_get(b, idx as c_int) as VarNumber) };
-        if unsafe { indexof_matches(expr) } {
+        if indexof_matches(expr) {
             return idx;
         }
         // A predicate that reported an error ends the search.
@@ -562,7 +559,7 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: &TypVal) -> VarN
         set_vim_var_nr(Vv::Key, idx);
         let item = &unsafe { tv_list_items(l) }[at];
         unsafe { tv_copy(&item.li_tv, &mut *get_vim_var_tv(Vv::Val)) };
-        let found = unsafe { indexof_matches(expr) };
+        let found = indexof_matches(expr);
         unsafe { tv_clear(&mut *get_vim_var_tv(Vv::Val)) };
         if found {
             return idx;

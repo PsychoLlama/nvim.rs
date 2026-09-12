@@ -22,10 +22,7 @@ use crate::types::{VAR_LIST, VAR_STRING};
 ///
 /// `result` ends 0 when every line went in and 1 otherwise, which is what all
 /// four builtins answer.
-///
-/// # Safety
-/// `buffer` must be a live buffer or NULL, and `lines`/`result` live typvals.
-pub(crate) unsafe fn set_buffer_lines(
+pub(crate) fn set_buffer_lines(
     buffer: Option<Buf>,
     lnum_arg: LineNr,
     append: bool,
@@ -48,7 +45,7 @@ pub(crate) unsafe fn set_buffer_lines(
     }
     let mut cob = SavedBufferState::new();
     if let (false, Some(buffer)) = (is_curbuf, buffer) {
-        unsafe { cob.prepare(buffer) };
+        cob.prepare(buffer);
     }
     let append_lnum: LineNr = if append {
         lnum - 1
@@ -128,15 +125,12 @@ pub(crate) unsafe fn set_buffer_lines(
         }
     }
     if !is_curbuf {
-        unsafe { cob.restore() };
+        cob.restore();
     }
 }
 
 /// `setbufline()` and `appendbufline()`, which differ only in `append`.
-///
-/// # Safety
-/// The arguments and `result` must be live typvals.
-unsafe fn buf_set_append_line(args: &[TypVal], result: &mut TypVal, append: bool) {
+fn buf_set_append_line(args: &[TypVal], result: &mut TypVal, append: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let Some(buf) = arg_buf(args, 0, 0) else {
@@ -145,17 +139,14 @@ unsafe fn buf_set_append_line(args: &[TypVal], result: &mut TypVal, append: bool
     };
     // The line number is resolved against the named buffer, and a bad one
     // reports; only then is anything written.
-    let lnum = unsafe { arg_lnum_buf(args, 1, Some(buf)) };
+    let lnum = arg_lnum_buf(args, 1, Some(buf));
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(Some(buf), lnum, append, &args[2], result) };
+        set_buffer_lines(Some(buf), lnum, append, &args[2], result);
     }
 }
 
 /// Lines `start..=end` of `buffer`, as a List or as one String.
-///
-/// # Safety
-/// `buffer` must be a live buffer or NULL, and `result` a live typval.
-unsafe fn get_buffer_lines(
+fn get_buffer_lines(
     buffer: Option<Buf>,
     mut start: LineNr,
     mut end: LineNr,
@@ -191,23 +182,20 @@ unsafe fn get_buffer_lines(
 }
 
 /// `getbufline()` when `retlist`, `getbufoneline()` otherwise.
-///
-/// # Safety
-/// The arguments and `result` must be live typvals.
-unsafe fn getbufline(args: &[TypVal], result: &mut TypVal, retlist: bool) {
+fn getbufline(args: &[TypVal], result: &mut TypVal, retlist: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf_chk(args, 0);
-    let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
+    let lnum = arg_lnum_buf(args, 1, buf);
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let end = if args.len() > 2 {
-        unsafe { arg_lnum_buf(args, 2, buf) }
+        arg_lnum_buf(args, 2, buf)
     } else {
         lnum
     };
-    unsafe { get_buffer_lines(buf, lnum, end, retlist, result) };
+    get_buffer_lines(buf, lnum, end, retlist, result);
 }
 
 /// `append({lnum}, {string/list})`.
@@ -216,20 +204,18 @@ pub fn f_append(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(Buf::current_or_none(), lnum, true, &args[1], result) };
+        set_buffer_lines(Buf::current_or_none(), lnum, true, &args[1], result);
     }
 }
 
 /// `appendbufline({buf}, {lnum}, {string/list})`.
 pub fn f_appendbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals.
-    unsafe { buf_set_append_line(args, result, true) };
+    buf_set_append_line(args, result, true);
 }
 
 /// `setbufline({buf}, {lnum}, {string/list})`.
 pub fn f_setbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals.
-    unsafe { buf_set_append_line(args, result, false) };
+    buf_set_append_line(args, result, false);
 }
 
 /// `setline({lnum}, {string/list})`.
@@ -238,7 +224,7 @@ pub fn f_setline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(Buf::current_or_none(), lnum, false, &args[1], result) };
+        set_buffer_lines(Buf::current_or_none(), lnum, false, &args[1], result);
     }
 }
 
@@ -252,19 +238,17 @@ pub fn f_getline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         (lnum, false)
     };
-    unsafe { get_buffer_lines(Buf::current_or_none(), lnum, end, retlist, result) };
+    get_buffer_lines(Buf::current_or_none(), lnum, end, retlist, result);
 }
 
 /// `getbufline({buf}, {lnum} [, {end}])`.
 pub fn f_getbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals.
-    unsafe { getbufline(args, result, true) };
+    getbufline(args, result, true);
 }
 
 /// `getbufoneline({buf}, {lnum})`.
 pub fn f_getbufoneline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the arguments and `result` are live typvals.
-    unsafe { getbufline(args, result, false) };
+    getbufline(args, result, false);
 }
 
 /// `deletebufline({buf}, {first} [, {last}])` — 0 when the lines went.
@@ -276,12 +260,12 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let Some(buf) = arg_buf(args, 0, 0) else {
         return;
     };
-    let first = unsafe { arg_lnum_buf(args, 1, Some(buf)) };
+    let first = arg_lnum_buf(args, 1, Some(buf));
     if did_emsg.get() > did_emsg_before {
         return;
     }
     let mut last = if args.len() > 2 {
-        unsafe { arg_lnum_buf(args, 2, Some(buf)) }
+        arg_lnum_buf(args, 2, Some(buf))
     } else {
         first
     };
@@ -292,7 +276,7 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let is_curbuf = Some(buf) == Buf::current_or_none();
     let mut cob = SavedBufferState::new();
     if !is_curbuf {
-        unsafe { cob.prepare(buf) };
+        cob.prepare(buf);
     }
     last = last.min(Buf::current().line_count());
     let count = last - first + 1;
@@ -324,6 +308,6 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         result.write_number(0);
     }
     if !is_curbuf {
-        unsafe { cob.restore() };
+        cob.restore();
     }
 }

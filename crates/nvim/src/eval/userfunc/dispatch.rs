@@ -122,7 +122,7 @@ pub unsafe fn func_call(
             }
             // Copy each argument, so that `v_lock` can be set to
             // VarLock::Fixed in the copy without changing the original list.
-            unsafe { tv_copy(&item.li_tv, argv.claim()) };
+            tv_copy(&item.li_tv, argv.claim());
             argc += 1;
         }
 
@@ -150,7 +150,7 @@ pub unsafe fn callback_call_retnr(callback: *mut Callback, args: &[TypVal]) -> V
         return -2;
     }
     let retval = unsafe { tv_get_number_chk(&rettv, ptr::null_mut()) };
-    unsafe { tv_clear(&mut rettv) };
+    tv_clear(&mut rettv);
     retval
 }
 

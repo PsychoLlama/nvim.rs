@@ -209,10 +209,7 @@ struct ProviderScope {
 }
 
 impl ProviderScope {
-    /// # Safety
-    /// Called only when `provider_call_nesting` is non-zero, so that
-    /// `provider_caller_scope` holds a live scope.
-    unsafe fn enter() -> Self {
+    fn enter() -> Self {
         // SAFETY throughout: the caller's obligation.
         let mut saved = ProviderScope {
             sctx: current_sctx.get(),
@@ -292,7 +289,7 @@ pub fn f_rpcrequest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let call_args = trailing_args(args, 2);
 
-    let scope = (nesting != 0).then(|| unsafe { ProviderScope::enter() });
+    let scope = (nesting != 0).then(|| ProviderScope::enter());
 
     let chan_id = args[0].number_or_zero() as uint64_t;
     let method = arg_string(&mut numbuf, &args[1]);

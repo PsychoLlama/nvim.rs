@@ -76,7 +76,7 @@ const CONV_NONE_INIT: VimConv = VimConv {
 pub fn f_char2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the arguments are live typvals.
-    if args.len() > 1 && !unsafe { tv_check_num(&args[1]) } {
+    if args.len() > 1 && !tv_check_num(&args[1]) {
         return;
     }
     result.write_number(unsafe { utf_ptr2char(arg_string(&mut numbuf, &args[0])) } as VarNumber);
@@ -129,8 +129,7 @@ pub fn f_keytrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `nr2char({number} [, {utf8}])`.
 pub fn f_nr2char(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut error = false;
-    // SAFETY: argument 1 is a live typval.
-    if args.len() > 1 && !unsafe { tv_check_num(&args[1]) } {
+    if args.len() > 1 && !tv_check_num(&args[1]) {
         return;
     }
     let num = arg_number_chk(&args[0], Some(&mut error));
@@ -190,15 +189,13 @@ pub fn f_repeat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the arguments are live typvals.
     let n = arg_number(&args[1]);
     match args[0].v_type() {
-        VAR_LIST => unsafe { repeat_list(args, result, n) },
-        VAR_BLOB => unsafe { repeat_blob(args, result, n) },
-        _ => unsafe { repeat_string(args, result, n) },
+        VAR_LIST => repeat_list(args, result, n),
+        VAR_BLOB => repeat_blob(args, result, n),
+        _ => repeat_string(args, result, n),
     }
 }
 
-/// # Safety
-/// Argument 0 is a live List typval and `result` is the cleared return value.
-unsafe fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
+fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     // SAFETY: the caller's obligation.
     let src = args[0].list_or_null();
     // The length hint is upstream's; a non-positive count contributes
@@ -210,9 +207,7 @@ unsafe fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     }
 }
 
-/// # Safety
-/// Argument 0 is a live Blob typval and `result` is the cleared return value.
-unsafe fn repeat_blob(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
+fn repeat_blob(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     // SAFETY throughout: the caller's obligation.
     blob_alloc_ret(result);
     let src: *mut Blob = args[0].blob_or_null();
@@ -244,9 +239,7 @@ unsafe fn repeat_blob(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     }
 }
 
-/// # Safety
-/// Argument 0 is a live typval and `result` is the cleared return value.
-unsafe fn repeat_string(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
+fn repeat_string(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     let mut numbuf = NumBuf::new();
     result.write_string(ptr::null_mut());
     if n <= 0 {

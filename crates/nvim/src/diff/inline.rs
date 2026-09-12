@@ -343,8 +343,7 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         lineoff: 0,
     };
     let cache_results = diff_flags.get() & ALL_INLINE_DIFF == 0;
-    // SAFETY: the caller's argument list.
-    let lnum = unsafe { tv_get_lnum(&args[0]) }.max(0);
+    let lnum = tv_get_lnum(&args[0]).max(0);
 
     let stale = !cache_results
         || lnum != prev_lnum.get()
@@ -390,8 +389,7 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     if hlID.get() == HLF_CHD || hlID.get() == HLF_TXD {
-        // SAFETY: `diff_hlID()` is declared with two arguments.
-        let col = unsafe { tv_get_number(&args[1]) } as c_int - 1;
+        let col = tv_get_number(&args[1]) as c_int - 1;
         if cache_results {
             hlID.set(if col >= change_start.get() && col < change_end.get() {
                 HLF_TXD

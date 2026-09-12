@@ -150,8 +150,7 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
         return;
     }
     entered.set(true);
-    // SAFETY: the caller's promise, plus a live current window.
-    let lnum = unsafe { tv_get_lnum(&args[0]) }.max(0);
+    let lnum = tv_get_lnum(&args[0]).max(0);
     let win = Win::current();
     let info = fold_info(win, lnum);
     if info.fi_lines > 0 {

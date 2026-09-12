@@ -15,10 +15,7 @@ use crate::buffer::buf_get_changedtick;
 use crate::types::{VAR_DICT, kListLenMayKnow};
 
 /// One `getbufinfo()` entry: a buffer's options, variables and attributes.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-unsafe fn get_buffer_info(buffer: Buf) -> DictRef {
+fn get_buffer_info(buffer: Buf) -> DictRef {
     // SAFETY: the caller's obligation. The dictionary is handed straight to
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the closure adds.

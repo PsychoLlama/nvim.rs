@@ -48,10 +48,7 @@ struct Cell {
 
 impl Cell {
     /// Resolve arguments 0 and 1.
-    ///
-    /// # Safety
-    /// `args` is a live call frame.
-    unsafe fn at(args: &[TypVal]) -> Cell {
+    fn at(args: &[TypVal]) -> Cell {
         // SAFETY throughout: the caller's obligation; the compositor always answers
         // with a live grid.
         // A coercion failure answers 0, which the -1 turns into an
@@ -79,10 +76,7 @@ impl Cell {
     }
 
     /// The cell's character, spelled out as UTF-8 and NUL-terminated.
-    ///
-    /// # Safety
-    /// `self` is on the grid.
-    unsafe fn text(&self) -> [c_char; NUMBUFLEN] {
+    fn text(&self) -> [c_char; NUMBUFLEN] {
         let mut buf = [0 as c_char; NUMBUFLEN];
         debug_assert!(NUMBUFLEN > MAX_SCHAR_SIZE as usize);
         // SAFETY: the caller has checked the bounds; `schar_get` writes at
@@ -95,9 +89,7 @@ impl Cell {
 /// `screenattr({row}, {col})` — the cell's highlight attribute, or -1 off
 /// the grid.
 pub fn f_screenattr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the frame is live; the attribute row is as long as the grid is
-    // wide, which the bounds check has established.
-    let cell = unsafe { Cell::at(args) };
+    let cell = Cell::at(args);
     result.write_number(if cell.on_grid() {
         let offset = cell.grid.cell_offset(cell.row, cell.col);
         cell.grid.attr_at(offset) as c_int
@@ -109,8 +101,7 @@ pub fn f_screenattr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `screenchar({row}, {col})` — the first codepoint in the cell, or -1 off
 /// the grid.
 pub fn f_screenchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the frame is live.
-    let cell = unsafe { Cell::at(args) };
+    let cell = Cell::at(args);
     result.write_number(if cell.on_grid() {
         unsafe { schar_get_first_codepoint(cell.schar()) }
     } else {
@@ -121,13 +112,12 @@ pub fn f_screenchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `screenchars({row}, {col})` — every codepoint in the cell, including the
 /// combining ones `screenchar()` drops.
 pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the frame is live and `result` is the cleared return value.
-    let cell = unsafe { Cell::at(args) };
+    let cell = Cell::at(args);
     let list = list_alloc_ret(result, kListLenMayKnow as isize);
     if !cell.on_grid() {
         return;
     }
-    let buf = unsafe { cell.text() };
+    let buf = cell.text();
     // The C walks with a do-while, so a cell whose text is empty still
     // reports one codepoint.
     let mut i = 0usize;
@@ -155,8 +145,7 @@ pub fn f_screenrow(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `screenstring({row}, {col})` — the cell's whole text, or "" off the grid.
 pub fn f_screenstring(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
-    // SAFETY: the frame is live and `result` now owns the duplicated string.
-    let cell = unsafe { Cell::at(args) };
+    let cell = Cell::at(args);
     if cell.on_grid() {
         result.write_string(unsafe { xstrdup(cell.text().as_ptr()) });
     }

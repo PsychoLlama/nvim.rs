@@ -662,15 +662,13 @@ impl BlobArg {
 /// Copy `from` into `to`, taking a reference to whatever it holds.
 #[inline(always)]
 pub(crate) fn copy_tv(from: &TypVal, to: &mut TypVal) {
-    // SAFETY: two live typvals.
-    unsafe { tv_copy(from, to) };
+    tv_copy(from, to);
 }
 
 /// Release whatever `tv` holds and leave it `VAR_UNKNOWN`.
 #[inline(always)]
 pub(crate) fn clear_tv(tv: &mut TypVal) {
-    // SAFETY: a live typval.
-    unsafe { tv_clear(tv) };
+    tv_clear(tv);
 }
 
 /// `tv` as a Number, setting `error` (and reporting one) if it is not.
@@ -696,8 +694,7 @@ pub(crate) fn number_arm(tv: &TypVal) -> VarNumber {
 /// Whether `a` and `b` are equal, `ic` ignoring case in strings.
 #[inline(always)]
 fn equal(a: &TypVal, b: &TypVal, ic: bool) -> bool {
-    // SAFETY: two live typvals; `tv_equal` only reads them.
-    unsafe { tv_equal(a, b, ic) }
+    tv_equal(a, b, ic)
 }
 
 /// The bytes of a String `tv`; empty for `v:_null_string`, and for anything
@@ -850,16 +847,14 @@ pub(crate) fn set_key_type(v_type: VarType) {
 #[inline(always)]
 pub(crate) fn save_vim_var(idx: Vv) -> TypVal {
     let mut save = UNKNOWN_TV;
-    // SAFETY: `idx` names a `v:` variable.
-    unsafe { prepare_vimvar(idx, &mut save) };
+    prepare_vimvar(idx, &mut save);
     save
 }
 
 /// Put back what [`save_vim_var`] took.
 #[inline(always)]
 pub(crate) fn restore_vim_var(idx: Vv, save: &mut TypVal) {
-    // SAFETY: `save` came from `save_vim_var` for that same variable.
-    unsafe { restore_vimvar(idx, save) };
+    restore_vimvar(idx, save);
 }
 
 /// Evaluate `expr` -- a Funcref, a partial or an expression string -- with
@@ -868,8 +863,7 @@ pub(crate) fn restore_vim_var(idx: Vv, save: &mut TypVal) {
 /// container being walked.
 #[inline(always)]
 pub(crate) fn eval_expr(expr: &TypVal, argv: &CallFrame<2>, newtv: &mut TypVal) -> bool {
-    // SAFETY: `expr` and `newtv` are the caller's live typvals.
-    unsafe { eval_expr_typval(expr, false, argv.args(), newtv) }.is_ok()
+    eval_expr_typval(expr, false, argv.args(), newtv).is_ok()
 }
 
 /// Run `cmd` as an Ex command line -- `foreach()`'s String arm, which is not

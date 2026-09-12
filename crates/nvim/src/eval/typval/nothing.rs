@@ -218,11 +218,7 @@ impl TypvalSink for NothingSink {
         drop(slot(tv).take_list());
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self, dictp: Option<DictSlot>) {
         // Upstream asserts the lvalue is a real one.  `None` is a special
         // map's `_VAL`, which cannot reach a sink that refuses specials.
         debug_assert!(dictp.is_some());
@@ -235,12 +231,7 @@ impl TypvalSink for NothingSink {
     /// Frame surgery: a list with another owner loses one reference and its
     /// frame is left looking drained, so the walk pops it without visiting a
     /// single item.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_real_list_after_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_real_list_after_start(
+    fn conv_real_list_after_start(
         &mut self,
         tv: Option<&mut TypVal>,
         frame: &mut ConvFrame,
@@ -270,12 +261,7 @@ impl TypvalSink for NothingSink {
     }
 
     /// The dictionary counterpart of [`Self::conv_real_list_after_start`].
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_real_dict_after_start`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_real_dict_after_start(
+    fn conv_real_dict_after_start(
         &mut self,
         dictp: Option<DictSlot>,
         frame: &mut ConvFrame,
@@ -293,11 +279,7 @@ impl TypvalSink for NothingSink {
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self, dictp: Option<DictSlot>) {
         if let Some(dictp) = dictp {
             unsafe { tv_dict_unref(dictp.get()) };
             unsafe { dictp.clear() };
@@ -327,10 +309,6 @@ impl TypvalSink for NothingSink {
 ///
 /// Answers whether the walk ran to completion, which for this sink is always
 /// true — it has no failing hook.
-///
-/// # Safety
-/// `tv` must point at a live typval, and `objname` be NUL-terminated.  Note
-/// that `objname` is never read: no hook here reports anything.
-pub(crate) unsafe fn encode_vim_to_nothing(tv: &mut TypVal, objname: &CStr) -> bool {
-    unsafe { encode_typval(&mut NothingSink, tv, objname) }
+pub(crate) fn encode_vim_to_nothing(tv: &mut TypVal, objname: &CStr) -> bool {
+    encode_typval(&mut NothingSink, tv, objname)
 }

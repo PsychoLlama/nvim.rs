@@ -61,17 +61,14 @@ const VARNUMBER_MAX: u64 = i64::MAX as u64;
 /// split across a four-element `{_TYPE: integer, _VAL: [sign, hi, mid, lo]}`
 /// list — one sign, then 2 + 31 + 31 bits — which is the same shape the
 /// msgpack encoder reads back.
-///
-/// # Safety
-/// `result` is writable and holds no value that needs clearing.
-unsafe fn positive_integer_to_special_typval(result: &mut TypVal, val: u64) {
+fn positive_integer_to_special_typval(result: &mut TypVal, val: u64) {
     if val <= VARNUMBER_MAX {
         unsafe { ptr::write(result, TypVal::Number(val as VarNumber)) };
         return;
     }
     let list = tv_list_alloc(4);
     let into = list.as_ptr();
-    unsafe { create_special_dict(result, kMPInteger, TypVal::list(Some(list))) };
+    create_special_dict(result, kMPInteger, TypVal::list(Some(list)));
     unsafe { tv_list_append_number(into, 1) };
     unsafe { tv_list_append_number(into, ((val >> 62) & 0x3) as VarNumber) };
     unsafe { tv_list_append_number(into, ((val >> 31) & 0x7fff_ffff) as VarNumber) };
@@ -247,7 +244,7 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
                 let mut item = unsafe { Di::new(d) };
                 item.di_tv.write_special(kSpecialVarNull);
             }
-            unsafe { tv_clear(result) };
+            tv_clear(result);
             unsafe { tv_dict_item_free(di) };
             return false;
         }
@@ -370,7 +367,7 @@ pub unsafe fn unpack_typval(
     let status = unsafe { mpack_parse_typval(parser, data, size) };
     if status != MPACK_OK {
         unsafe { typval_parser_error_free(parser) };
-        unsafe { tv_clear(ret) };
+        tv_clear(ret);
     }
     status
 }

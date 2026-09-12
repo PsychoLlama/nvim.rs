@@ -303,10 +303,7 @@ pub unsafe fn var_set_global(name: *const c_char, mut vartv: TypVal) {
 }
 
 /// The ":verbose" tail saying where something was last set.
-///
-/// # Safety
-/// Called with a script context from an option or a variable.
-pub unsafe fn last_set_msg(script_ctx: ScriptCtx) {
+pub fn last_set_msg(script_ctx: ScriptCtx) {
     if script_ctx.sc_sid == 0 {
         return;
     }

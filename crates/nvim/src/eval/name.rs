@@ -462,10 +462,7 @@ pub unsafe fn is_luafunc(partial: *mut Partial) -> bool {
 }
 
 /// Is this typval `v:lua`?
-///
-/// # Safety
-/// `tv` must be valid.
-pub(crate) unsafe fn tv_is_luafunc(tv: &mut TypVal) -> bool {
+pub(crate) fn tv_is_luafunc(tv: &mut TypVal) -> bool {
     unsafe { (*tv).v_type() == VAR_PARTIAL && is_luafunc((*tv).partial_or_null()) }
 }
 

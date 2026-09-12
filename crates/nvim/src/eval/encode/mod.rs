@@ -722,10 +722,7 @@ pub(crate) unsafe fn convert_to_json_string(
 /// A plain string may.  So may a `{'_TYPE': v:msgpack_types.string, '_VAL':
 /// [...]}` special dictionary, provided every part of its `_VAL` is a string
 /// — that is how a key holding a NUL is spelled.
-///
-/// # Safety
-/// `tv` must be live, as must anything it points at.
-pub unsafe fn encode_check_json_key(tv: &TypVal) -> bool {
+pub fn encode_check_json_key(tv: &TypVal) -> bool {
     if tv.v_type() == VAR_STRING {
         return true;
     }
@@ -788,8 +785,7 @@ unsafe fn finish_tv2(ga: Vec<u8>, len: *mut size_t) -> *mut c_char {
 /// `tv` must be live; `len` must be NULL or writable.
 pub unsafe fn encode_tv2string(tv: &TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
-    // SAFETY: the caller's promise about `tv`; `string()` never refuses.
-    let evs_ret = unsafe { encode_vim_to_string(&mut ga, tv, c"encode_tv2string() argument") };
+    let evs_ret = encode_vim_to_string(&mut ga, tv, c"encode_tv2string() argument");
     debug_assert!(evs_ret);
     did_echo_string_emsg.set(false);
     // SAFETY: the caller's promise about `len`.
@@ -813,7 +809,7 @@ pub unsafe fn encode_tv2echo(tv: &TypVal, len: *mut size_t) -> *mut c_char {
             ga.extend_from_slice(unsafe { cstr::bytes_at(s) });
         }
     } else {
-        let eve_ret = unsafe { encode_vim_to_echo(&mut ga, tv, c":echo argument") };
+        let eve_ret = encode_vim_to_echo(&mut ga, tv, c":echo argument");
         debug_assert!(eve_ret);
     }
     unsafe { finish_tv2(ga, len) }
@@ -825,8 +821,7 @@ pub unsafe fn encode_tv2echo(tv: &TypVal, len: *mut size_t) -> *mut c_char {
 /// As [`encode_tv2string`].
 pub unsafe fn encode_tv2json(tv: &TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
-    // SAFETY: the caller's promise about `tv`.
-    let evj_ret = unsafe { encode_vim_to_json(&mut ga, tv, c"encode_tv2json() argument") };
+    let evj_ret = encode_vim_to_json(&mut ga, tv, c"encode_tv2json() argument");
     if !evj_ret {
         ga.clear();
     }

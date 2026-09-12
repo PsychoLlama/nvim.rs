@@ -417,6 +417,6 @@ msg_putchar('\n' as ::core::ffi::c_int);
         // SAFETY: the command line's own chunk list, taken above.
         unsafe { (*ccline_colors).remember(id, text) };
     }
-    unsafe { tv_clear(&mut tv) };
+    tv_clear(&mut tv);
     ret
 }

@@ -99,8 +99,7 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
         msg_str(desc.as_cstr());
     }
     if p_verbose.get() > 0 {
-        // SAFETY: a plain copy of the mapping's script context.
-        unsafe { last_set_msg(mp.m_script_ctx) };
+        last_set_msg(mp.m_script_ctx);
     }
     msg_clr_eos();
 }

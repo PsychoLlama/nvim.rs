@@ -63,12 +63,12 @@ pub fn f_str2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut base = 10;
     let mut what = Str2NrBases::NONE;
     if args.len() > 1 {
-        base = unsafe { tv_get_number(&args[1]) as c_int };
+        base = tv_get_number(&args[1]) as c_int;
         if !matches!(base, 2 | 8 | 10 | 16) {
             emsg(gettext(e_invarg));
             return;
         }
-        if args.len() > 2 && unsafe { tv_get_bool(&args[2]) } != 0 {
+        if args.len() > 2 && tv_get_bool(&args[2]) != 0 {
             what |= Str2NrBases::QUOTE;
         }
     }
@@ -240,7 +240,7 @@ pub fn f_strdisplaywidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     let mut numbuf = NumBuf::new();
     let s = unsafe { numbuf.string(&args[0]) };
     let col = if args.len() > 1 {
-        unsafe { tv_get_number(&args[1]) as c_int }
+        tv_get_number(&args[1]) as c_int
     } else {
         0
     };

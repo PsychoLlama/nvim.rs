@@ -242,13 +242,8 @@ pub fn f_interrupt(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// The prompt buffer an accessor was asked about, or `None` for anything
 /// that is not one.
-///
-/// # Safety
-/// `arg` is a live typval.
-unsafe fn prompt_buffer(arg: &TypVal) -> Option<Buf> {
-    // SAFETY: the caller's obligation -- `tv_get_buf_from_arg` answers a live
-    // buffer or null.
-    let buf = unsafe { tv_get_buf_from_arg(arg) };
+fn prompt_buffer(arg: &TypVal) -> Option<Buf> {
+    let buf = tv_get_buf_from_arg(arg);
     buf.filter(|b| buf_is_prompt(Some(*b)))
 }
 
@@ -257,7 +252,7 @@ unsafe fn prompt_buffer(arg: &TypVal) -> Option<Buf> {
 pub fn f_prompt_getprompt(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
     // SAFETY: the frame is live and `result` owns the duplicate.
-    if let Some(buf) = unsafe { prompt_buffer(&args[0]) } {
+    if let Some(buf) = prompt_buffer(&args[0]) {
         result.write_string(unsafe { xstrdup(buf_prompt_text(buf)) });
     }
 }
@@ -267,7 +262,7 @@ pub fn f_prompt_getinput(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     result.write_string(ptr::null_mut());
     // SAFETY: the frame is live and `prompt_get_input` hands over an
     // allocation `result` then owns.
-    if let Some(buf) = unsafe { prompt_buffer(&args[0]) } {
+    if let Some(buf) = prompt_buffer(&args[0]) {
         result.write_string(unsafe { prompt_get_input(Some(buf)) });
     }
 }

@@ -53,7 +53,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     // reached below belongs to the argument's own list, and `concat_str`
     // hands back an owned string the typval takes over.
     let did_emsg_before = did_emsg.get();
-    let Some(buf) = (unsafe { tv_get_buf_from_arg(&args[0]) }) else {
+    let Some(buf) = tv_get_buf_from_arg(&args[0]) else {
         return;
     };
     if !buf_is_prompt(Some(buf)) {
@@ -99,11 +99,11 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
             unsafe { set_buffer_lines(Some(buf), lnum, false, &*itv, result) };
             if result.number_or_zero() == 0 {
                 unsafe { tv_list_remove_at(l, 0) };
-                unsafe { set_buffer_lines(Some(buf), lnum, true, lines, result) };
+                set_buffer_lines(Some(buf), lnum, true, lines, result);
             }
         } else {
             let fresh = buf.b_prompt_append_new_line;
-            unsafe { set_buffer_lines(Some(buf), lnum, fresh, lines, result) };
+            set_buffer_lines(Some(buf), lnum, fresh, lines, result);
         }
     }
     if result.number_or_zero() == 0 {
@@ -145,7 +145,7 @@ unsafe fn set_prompt_callback(args: &[TypVal], slot: impl Fn(&mut Buffer) -> *mu
     if check_secure() {
         return;
     }
-    let Some(mut buf) = (unsafe { tv_get_buf(&args[0], 0) }) else {
+    let Some(mut buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
     if !unsafe { callback_from_typval(&raw mut callback, &args[1]) } {
@@ -164,13 +164,10 @@ unsafe fn set_prompt_callback(args: &[TypVal], slot: impl Fn(&mut Buffer) -> *mu
 /// line is replaced.
 pub fn f_prompt_setprompt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the arguments are live typvals; every line index below is
-    // clamped into the buffer first, and `concat_str` hands back an owned
-    // string which `ml_replace_buf` takes over or which is freed here.
     if check_secure() {
         return;
     }
-    let Some(mut buf) = (unsafe { tv_get_buf(&args[0], 0) }) else {
+    let Some(mut buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
     let new_prompt = unsafe { numbuf.string(&args[1]) };

@@ -115,10 +115,7 @@ impl Drop for Echoed {
 
 /// The shared body of `match()`, `matchend()`, `matchlist()`, `matchstr()`
 /// and `matchstrpos()`.
-///
-/// # Safety
-/// `args` is the call frame and `result` its cleared return value.
-unsafe fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
+fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. Every pointer below either points
     // into an argument (which outlives the call), into `patbuf`, or into
@@ -421,7 +418,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         return;
     }
     let prev_did_emsg = did_emsg.get();
-    let buf = unsafe { tv_get_buf(&args[0], 0) };
+    let buf = tv_get_buf(&args[0], 0);
     let Some(buf) = buf else {
         // Only report the name when `tv_get_buf` was silent about it.
         if did_emsg.get() == prev_did_emsg {
@@ -440,7 +437,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let pat = arg_string(&mut patbuf, &args[1]);
 
     let did_emsg_before = did_emsg.get();
-    let mut slnum: LineNr = unsafe { tv_get_lnum_buf(&args[2], Some(buf)) };
+    let mut slnum: LineNr = tv_get_lnum_buf(&args[2], Some(buf));
     if did_emsg.get() > did_emsg_before {
         return;
     }
@@ -449,7 +446,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
-    let mut elnum: LineNr = unsafe { tv_get_lnum_buf(&args[3], Some(buf)) };
+    let mut elnum: LineNr = tv_get_lnum_buf(&args[3], Some(buf));
     if did_emsg.get() > did_emsg_before {
         return;
     }
@@ -460,7 +457,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     }
     elnum = elnum.min(buf.b_ml.ml_line_count);
 
-    let Some(submatches) = (unsafe { want_submatches(args, 4) }) else {
+    let Some(submatches) = want_submatches(args, 4) else {
         return;
     };
 
@@ -478,10 +475,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 /// The `{dict}` argument the two list-shaped matchers share: `submatches`
 /// must be a Boolean if it is there at all. `None` means the argument was
 /// rejected and the caller must stop.
-///
-/// # Safety
-/// `args` is the call frame.
-unsafe fn want_submatches(args: &[TypVal], i: usize) -> Option<bool> {
+fn want_submatches(args: &[TypVal], i: usize) -> Option<bool> {
     if args.len() <= i {
         return Some(false);
     }
@@ -503,32 +497,27 @@ unsafe fn want_submatches(args: &[TypVal], i: usize) -> Option<bool> {
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_match(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    // SAFETY: the frame's.
-    unsafe { find_some_match(args, result, kSomeMatch) }
+    find_some_match(args, result, kSomeMatch)
 }
 
 /// `matchend({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_matchend(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    // SAFETY: the frame's.
-    unsafe { find_some_match(args, result, kSomeMatchEnd) }
+    find_some_match(args, result, kSomeMatchEnd)
 }
 
 /// `matchlist({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_matchlist(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    // SAFETY: the frame's.
-    unsafe { find_some_match(args, result, kSomeMatchList) }
+    find_some_match(args, result, kSomeMatchList)
 }
 
 /// `matchstr({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_matchstr(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    // SAFETY: the frame's.
-    unsafe { find_some_match(args, result, kSomeMatchStr) }
+    find_some_match(args, result, kSomeMatchStr)
 }
 
 /// `matchstrpos({expr}, {pat} [, {start} [, {count}]])`.
 pub fn f_matchstrpos(args: &[TypVal], result: &mut TypVal, _f: EvalFuncData) {
-    // SAFETY: the frame's.
-    unsafe { find_some_match(args, result, kSomeMatchStrPos) }
+    find_some_match(args, result, kSomeMatchStrPos)
 }
 
 /// `matchstrlist({list}, {pat} [, {dict}])`.
@@ -558,7 +547,7 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     };
     // The `{dict}` is only read once the pattern compiled, as upstream
     // has it: a bad pattern is reported before a bad option.
-    let Some(submatches) = (unsafe { want_submatches(args, 2) }) else {
+    let Some(submatches) = want_submatches(args, 2) else {
         return;
     };
     let mut at = 0;
@@ -733,7 +722,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
                 });
             }
         }
-        unsafe { tv_clear(&mut rettv) };
+        tv_clear(&mut rettv);
         at += 1;
     }
     if found.is_empty() {
@@ -779,12 +768,7 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
 }
 
 /// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.
-///
-/// # Safety
-///
-/// `args` must point at an initialized typval. `result` must point at the
-/// caller's return slot: an initialized typval it owns and will clear.
-unsafe fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
+fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -880,11 +864,11 @@ unsafe fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool)
 
 /// `matchfuzzy()`: the items of a list that fuzzy match a pattern.
 pub(crate) fn f_matchfuzzy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { do_fuzzymatch(args, result, false) }
+    do_fuzzymatch(args, result, false)
 }
 
 /// `matchfuzzypos()`: as [`f_matchfuzzy`], plus where each match landed and
 /// what it scored.
 pub(crate) fn f_matchfuzzypos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { do_fuzzymatch(args, result, true) }
+    do_fuzzymatch(args, result, true)
 }

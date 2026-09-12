@@ -99,7 +99,7 @@ pub(crate) fn set_argf_var() {
         }
     }
     unsafe { tv_list_set_lock(list, VarLock::Fixed) };
-    unsafe { set_vim_var_list(Vv::Argf, Some(held)) };
+    set_vim_var_list(Vv::Argf, Some(held));
 }
 
 /// The first file argument, which is what decides whether `-r` lists the swap

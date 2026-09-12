@@ -780,7 +780,7 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
                 // SAFETY: the item just overwritten in `d1`.
                 let new = Some(unsafe { &*di_tv(di1) });
                 unsafe { tv_dict_watcher_notify(d1, key, new, Some(&oldtv)) };
-                unsafe { tv_clear(&mut oldtv) };
+                tv_clear(&mut oldtv);
             }
         }
     }

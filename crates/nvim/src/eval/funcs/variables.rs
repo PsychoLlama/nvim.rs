@@ -138,7 +138,7 @@ pub fn f_islocked(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         } else if !lv.ll_list.is_null() {
             // SAFETY: a resolved lvalue's own list and an index into it.
             let li = &unsafe { tv_list_items(lv.ll_list) }[lv.ll_li];
-            let locked = unsafe { tv_islocked(li.li_lock, &li.li_tv) };
+            let locked = tv_islocked(li.li_lock, &li.li_tv);
             result.write_number(locked as VarNumber);
         } else {
             let di = lv.ll_di;

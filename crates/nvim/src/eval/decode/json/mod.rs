@@ -312,7 +312,7 @@ pub unsafe fn json_decode_string(
         }
         ret = Err(Failed);
         while let Some(mut left) = dec.stack.pop() {
-            unsafe { tv_clear(&mut left.val) };
+            tv_clear(&mut left.val);
         }
     }
     ret

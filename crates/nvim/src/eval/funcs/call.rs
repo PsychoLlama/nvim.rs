@@ -205,10 +205,7 @@ unsafe fn get_list_line(
 ///
 /// `arg_off` is where this caller's arguments start, since `win_execute()`
 /// puts a window in front of them.
-///
-/// # Safety
-/// `args` is a dispatcher argument array and `result` its return value.
-pub unsafe fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
+pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     let mut numbuf = NumBuf::new();
     let cmd_idx = arg_off as usize;
     let silent_idx = cmd_idx + 1;
@@ -301,9 +298,7 @@ pub unsafe fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_in
 
 /// `execute({command} [, {silent}])`
 pub fn f_execute(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: this is the dispatcher's argument array, which is what
-    // `execute_common` needs.
-    unsafe { execute_common(args, result, 0) };
+    execute_common(args, result, 0);
 }
 
 /// `exists({expr})` — the sigil in front of the name picks the namespace.

@@ -20,12 +20,7 @@ use crate::types::Failed;
 use crate::types::NUL;
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
-///
-/// # Safety
-/// `argvars[0]` must be a `VAR_BLOB`; argvars` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub(crate) unsafe fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
+pub(crate) fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
     let blob = args[0].blob_or_null();
     tv_list_alloc_ret(result, unsafe { tv_blob_len(blob) } as ptrdiff_t);
     for i in 0..unsafe { tv_blob_len(blob) } {
@@ -38,22 +33,12 @@ pub(crate) unsafe fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
 }
 
 /// `items()` over a dictionary: a list of `[key, value]` pairs.
-///
-/// # Safety
-/// `argvars[0]` must be a `VAR_DICT`; argvars` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub(crate) unsafe fn tv_dict2items(args: &[TypVal], result: &mut TypVal) {
-    unsafe { tv_dict2list(args, result, kDict2ListItems) };
+pub(crate) fn tv_dict2items(args: &[TypVal], result: &mut TypVal) {
+    tv_dict2list(args, result, kDict2ListItems);
 }
 
 /// `items()` over a list: a list of `[index, value]` pairs.
-///
-/// # Safety
-/// `argvars[0]` must be a `VAR_LIST`; argvars` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub(crate) unsafe fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
+pub(crate) fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
     let l = args[0].list_or_null();
     tv_list_alloc_ret(result, unsafe { tv_list_len(l) } as ptrdiff_t);
     if l.is_null() {
@@ -69,13 +54,7 @@ pub(crate) unsafe fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
 }
 
 /// `items()` over a string: a list of `[index, character]` pairs.
-///
-/// # Safety
-/// `argvars[0]` must be a `VAR_STRING` whose value is null or
-/// NUL-terminated; argvars` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub(crate) unsafe fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
+pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
     let mut p = args[0].string_or_null().cast_const();
 
     tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
@@ -330,7 +309,7 @@ pub unsafe fn tv_dict_get_callback(
     unsafe { tv_copy(&(*di).di_tv, &mut tv) };
     unsafe { set_selfdict(&mut tv, d) };
     let res = unsafe { callback_from_typval(result, &tv) };
-    unsafe { tv_clear(&mut tv) };
+    tv_clear(&mut tv);
     res
 }
 
@@ -354,12 +333,7 @@ pub unsafe fn tv_dict_wrong_func_name(
 }
 
 /// The shared body of `keys()`, `values()` and `items()` over a dictionary.
-///
-/// # Safety
-/// `args` must point at the builtin's argument array, terminated by a
-/// `VAR_UNKNOWN`, and `result` at a writable `TypVal` holding no value
-/// yet.
-pub(crate) unsafe fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListType) {
+pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListType) {
     if tv_check_for_dict_arg(args, 0).is_err() {
         tv_list_alloc_ret(result, 0);
         return;
@@ -402,10 +376,10 @@ pub(crate) unsafe fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: Di
 /// `items()`: index/value pairs of a string, list, blob or dictionary.
 pub fn f_items(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     match args[0].v_type() {
-        VAR_STRING => unsafe { tv_string2items(args, result) },
-        VAR_LIST => unsafe { tv_list2items(args, result) },
-        VAR_BLOB => unsafe { tv_blob2items(args, result) },
-        VAR_DICT => unsafe { tv_dict2items(args, result) },
+        VAR_STRING => tv_string2items(args, result),
+        VAR_LIST => tv_list2items(args, result),
+        VAR_BLOB => tv_blob2items(args, result),
+        VAR_DICT => tv_dict2items(args, result),
         _ => {
             semsg!(
                 "E1225: List, Dictionary, Blob or String required for argument {}",
@@ -417,12 +391,12 @@ pub fn f_items(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `keys()`: the keys of a dictionary.
 pub fn f_keys(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { tv_dict2list(args, result, kDict2ListKeys) };
+    tv_dict2list(args, result, kDict2ListKeys);
 }
 
 /// `values()`: the values of a dictionary.
 pub fn f_values(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    unsafe { tv_dict2list(args, result, kDict2ListValues) };
+    tv_dict2list(args, result, kDict2ListValues);
 }
 
 /// `has_key()`: whether a dictionary has a key.

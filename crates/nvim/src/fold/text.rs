@@ -89,7 +89,7 @@ pub unsafe fn get_foldtext(
             let saved_sctx = current_sctx.get();
             current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
             let no_emsg = Suppress::emsg();
-            let obj: Object = unsafe { eval_foldtext(window) };
+            let obj: Object = eval_foldtext(window);
             match obj.kind() {
                 kObjectTypeArray => {
                     // A list of `[text, hl]` chunks: the caller draws them,

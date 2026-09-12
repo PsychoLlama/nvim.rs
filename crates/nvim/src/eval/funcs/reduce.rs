@@ -41,10 +41,7 @@ const fn number_tv(n: VarNumber) -> TypVal {
 }
 
 /// The shared body of `max()` and `min()`.
-///
-/// # Safety
-/// `tv` is a live argument typval and `result` the cleared return value.
-unsafe fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
+fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
     // SAFETY throughout: the caller's obligation; the container is only read, and the
     // dictionary walk is the C's own `TV_DICT_ITER`.
     let mut error = false;
@@ -102,14 +99,12 @@ unsafe fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
 
 /// `max({expr})`.
 pub fn f_max(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the argument is the frame's.
-    unsafe { max_min(&args[0], result, true) }
+    max_min(&args[0], result, true)
 }
 
 /// `min({expr})`.
 pub fn f_min(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the argument is the frame's.
-    unsafe { max_min(&args[0], result, false) }
+    max_min(&args[0], result, false)
 }
 
 /// What a fold arm owns, which the three arms genuinely disagree about.
@@ -149,10 +144,7 @@ const BLOB_CLEANUP: Cleanup = Cleanup {
 ///
 /// Returns `false` when the fold should stop — the call failed, or it
 /// reported an error of its own.
-///
-/// # Safety
-/// `expr` is a live callable typval and `result` the fold's accumulator.
-unsafe fn fold_step(
+fn fold_step(
     expr: &TypVal,
     result: &mut TypVal,
     item: &TypVal,
@@ -172,7 +164,7 @@ unsafe fn fold_step(
     if cleanup.blank_rettv {
         result.write_empty(VAR_UNKNOWN);
     }
-    let r = unsafe { eval_expr_typval(expr, true, argv.args(), result) };
+    let r = eval_expr_typval(expr, true, argv.args(), result);
     if cleanup.clear_acc {
         argv.own(0);
     }
@@ -183,10 +175,7 @@ unsafe fn fold_step(
 }
 
 /// `reduce()` over a List.
-///
-/// # Safety
-/// `args` is the call frame and `result` its cleared return value.
-unsafe fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
+fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // SAFETY: the caller's obligation; the list is locked against
     // modification for the whole fold and restored afterwards.
     let l = args[0].list_or_null();
@@ -194,7 +183,7 @@ unsafe fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // The accumulator starts as a copy of the initial value, or of the
     // first item when the call gave none.
     let mut at = if args.len() > 2 {
-        unsafe { tv_copy(&args[2], result) };
+        tv_copy(&args[2], result);
         0
     } else {
         // SAFETY: a live list, or NULL, which reads as empty.
@@ -202,7 +191,7 @@ unsafe fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
             semsg!("E998: Reduce of an empty {} with no initial value", "List");
             return;
         };
-        unsafe { tv_copy(&first.li_tv, result) };
+        tv_copy(&first.li_tv, result);
         1
     };
     // A null List is `v:_null_list`: nothing to fold, and nothing to
@@ -226,10 +215,7 @@ unsafe fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
 }
 
 /// `reduce()` over a String, one composed character at a time.
-///
-/// # Safety
-/// `args` is the call frame and `result` its cleared return value.
-unsafe fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
+fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. `p` walks a NUL-terminated string
     // owned by the argument, which the fold cannot modify.
@@ -259,7 +245,7 @@ unsafe fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
         let item = ManuallyDrop::new(unsafe { owned_str(p, len) });
         // SAFETY: `expr` is the caller's callback and `result` the running
         // accumulator; `item` is the character just measured.
-        if !unsafe { fold_step(expr, result, &item, STRING_CLEANUP, called_emsg_start) } {
+        if !fold_step(expr, result, &item, STRING_CLEANUP, called_emsg_start) {
             break;
         }
         p = unsafe { p.add(len as usize) };
@@ -267,10 +253,7 @@ unsafe fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
 }
 
 /// `reduce()` over a Blob, one byte at a time.
-///
-/// # Safety
-/// `args` is the call frame and `result` its cleared return value.
-unsafe fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
+fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // SAFETY: the caller's obligation; the blob is re-measured every pass,
     // as the C does, so a fold that shortens it cannot walk off the end.
     let b: *const Blob = args[0].blob_or_null();
@@ -279,7 +262,7 @@ unsafe fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
         if tv_check_for_number_arg(args, 2).is_err() {
             return;
         }
-        unsafe { tv_copy(&args[2], result) };
+        tv_copy(&args[2], result);
         0
     } else {
         if unsafe { tv_blob_len(b) } == 0 {
@@ -291,8 +274,7 @@ unsafe fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     };
     while i < unsafe { tv_blob_len(b) } {
         let item = number_tv(unsafe { tv_blob_get(b, i) } as VarNumber);
-        // SAFETY: as the String walk above; `i` is inside the Blob.
-        if !unsafe { fold_step(expr, result, &item, BLOB_CLEANUP, called_emsg_start) } {
+        if !fold_step(expr, result, &item, BLOB_CLEANUP, called_emsg_start) {
             return;
         }
         i += 1;
@@ -322,8 +304,8 @@ pub fn f_reduce(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let expr = &args[1];
     match ty {
-        VAR_LIST => unsafe { reduce_list(args, expr, result) },
-        VAR_STRING => unsafe { reduce_string(args, expr, result) },
-        _ => unsafe { reduce_blob(args, expr, result) },
+        VAR_LIST => reduce_list(args, expr, result),
+        VAR_STRING => reduce_string(args, expr, result),
+        _ => reduce_blob(args, expr, result),
     }
 }

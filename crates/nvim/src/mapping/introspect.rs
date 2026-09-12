@@ -33,7 +33,7 @@ pub fn f_hasmapto(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         Some(tv) => unsafe { tv_get_string_buf(tv, buf.as_mut_ptr()) },
         None => c"nvo".as_ptr(),
     };
-    let number = |n: usize| args.get(n).map(|tv| unsafe { tv_get_number(tv) });
+    let number = |n: usize| args.get(n).map(|tv| tv_get_number(tv));
     let abbr = number(2).is_some_and(|n| n != 0);
     // SAFETY: both strings are NUL-terminated, and `result` is the caller's
     // writable answer slot.
@@ -204,7 +204,7 @@ unsafe fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
 
     let mut buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: as above.
-    let number = |n: usize| args.get(n).map(|tv| unsafe { tv_get_number(tv) });
+    let number = |n: usize| args.get(n).map(|tv| tv_get_number(tv));
     let abbr = number(2).is_some_and(|n| n != 0);
     let get_dict = number(3).is_some_and(|n| n != 0);
     let mut which: *mut c_char = match args.get(1) {
@@ -290,12 +290,7 @@ unsafe fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
 pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let cpo = p_cpo.get();
-    // SAFETY: the Vimscript call convention — `args` is a live argument
-    // vector and `result` the writable answer slot.
-    // SAFETY: an argument is a live value.
-    let abbr = args
-        .first()
-        .is_some_and(|tv| unsafe { tv_get_bool(tv) } != 0);
+    let abbr = args.first().is_some_and(|tv| tv_get_bool(tv) != 0);
     // SAFETY: as above.
     tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
     let cur = Buf::current();

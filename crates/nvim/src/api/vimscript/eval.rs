@@ -93,8 +93,7 @@ pub unsafe fn nvim_eval(expr: String_0) -> Result<Object, Error> {
         // SAFETY: `rettv` is this frame's and `arena` the caller's.
         Ok(Ok(())) => Ok(Object::from(&rettv)),
     };
-    // SAFETY: `rettv` is this frame's.
-    unsafe { tv_clear(&mut rettv) };
+    tv_clear(&mut rettv);
     answer
 }
 
@@ -219,8 +218,7 @@ pub unsafe fn nvim_call_dict_function(
     // caller's.
     let rv = unsafe { call_in_dict(&mut fn_0, dict_given, args, self_dict, &rettv) };
     if mustfree {
-        // SAFETY: the evaluated value is this frame's.
-        unsafe { tv_clear(&mut rettv) };
+        tv_clear(&mut rettv);
     }
     rv
 }

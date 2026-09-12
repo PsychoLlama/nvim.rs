@@ -567,7 +567,7 @@ pub(crate) unsafe fn do_one_cmd(
             if unsafe { source_finished(fgetline, cookie) } {
                 unsafe { do_finish(&raw mut ea, true) };
             } else if getline_equal(fgetline, cookie, Some(get_func_line))
-                && unsafe { current_func_returned() } != 0
+                && current_func_returned() != 0
             {
                 unsafe { do_return(&raw mut ea, true, false, ptr::null_mut()) };
             }

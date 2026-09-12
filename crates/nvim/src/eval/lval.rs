@@ -268,14 +268,12 @@ pub(crate) unsafe fn get_lval_blob(
     lval.ll_n1 = if empty1 {
         0
     } else {
-        // SAFETY: `var1` is the caller's index expression.
-        unsafe { tv_get_number(var1) as c_int }
+        tv_get_number(var1) as c_int
     };
     let n1 = lval.ll_n1 as VarNumber;
     tv_blob_check_index(bloblen, n1, quiet)?;
     if lval.ll_range && !lval.ll_empty2 {
-        // SAFETY: `var2` is the caller's second index expression.
-        lval.ll_n2 = unsafe { tv_get_number(var2) as c_int };
+        lval.ll_n2 = tv_get_number(var2) as c_int;
         let n2 = lval.ll_n2 as VarNumber;
         tv_blob_check_range(bloblen, n1, n2, quiet)?;
     }
@@ -316,8 +314,7 @@ pub(crate) unsafe fn get_lval_list(
     let first = if empty1 {
         0
     } else {
-        // SAFETY: `var1` is the caller's index expression.
-        unsafe { tv_get_number(var1) as c_int }
+        tv_get_number(var1) as c_int
     };
     // SAFETY: `VAR_LIST` says the value holds a List, and
     // `rec` is the caller's record.
@@ -521,8 +518,7 @@ impl Subscripts<'_> {
         // SAFETY: the cursor walks the NUL-terminated name, and `var` and
         // `evalarg` are this walk's own.
         let evaluated = unsafe { eval1(self.cursor.raw(), var, &raw mut self.evalarg) };
-        // SAFETY: as above -- `var` is this walk's own.
-        (evaluated.is_ok() && unsafe { tv_check_str(var) }).then_some(())
+        (evaluated.is_ok() && tv_check_str(var)).then_some(())
     }
 
     /// The `: expr]` half of a `[n : m]`, with the cursor on the colon.

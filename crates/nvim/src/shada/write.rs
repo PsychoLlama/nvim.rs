@@ -275,7 +275,7 @@ impl Writing {
             }
 
             if !writable_value(&vartv) {
-                unsafe { tv_clear(&mut vartv) };
+                tv_clear(&mut vartv);
                 if var_iter.is_none() {
                     return kSDWriteSuccessful;
                 }
@@ -285,7 +285,7 @@ impl Writing {
             // The entry owns the copy it is built around; the value the
             // iterator handed over is this function's to release.
             let mut tgttv = TV_INITIAL_VALUE;
-            unsafe { tv_copy(&vartv, &mut tgttv) };
+            tv_copy(&vartv, &mut tgttv);
             let mut entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp,
@@ -296,8 +296,8 @@ impl Writing {
                 additional_data: core::ptr::null_mut(),
             };
             let ret = unsafe { self.pack(&entry, self.limits.max_kbyte) };
-            unsafe { tv_clear(&mut vartv) };
-            unsafe { tv_clear(&mut entry.data.variable_mut().value) };
+            tv_clear(&mut vartv);
+            tv_clear(&mut entry.data.variable_mut().value);
             if ret == kSDWriteFailed {
                 return kSDWriteFailed;
             }

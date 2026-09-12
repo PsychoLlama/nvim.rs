@@ -24,14 +24,7 @@ use crate::types::{
 use crate::winlayer::Win;
 
 /// The character index of byte index `byteidx` in a buffer line.
-///
-/// # Safety
-/// `buf` must be null or valid.
-pub unsafe fn buf_byteidx_to_charidx(
-    buffer: Option<Buf>,
-    mut lnum: LineNr,
-    byteidx: c_int,
-) -> c_int {
+pub fn buf_byteidx_to_charidx(buffer: Option<Buf>, mut lnum: LineNr, byteidx: c_int) -> c_int {
     let Some(buf) = buffer else {
         return -1;
     };
@@ -70,14 +63,7 @@ pub unsafe fn buf_byteidx_to_charidx(
 }
 
 /// The byte index of character index `charidx` in a buffer line.
-///
-/// # Safety
-/// `buf` must be null or valid.
-pub unsafe fn buf_charidx_to_byteidx(
-    buffer: Option<Buf>,
-    mut lnum: LineNr,
-    mut charidx: c_int,
-) -> c_int {
+pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, mut charidx: c_int) -> c_int {
     let Some(buf) = buffer else {
         return -1;
     };
@@ -222,8 +208,7 @@ pub unsafe fn var2fpos(
 
     if pos.lnum != 0 {
         if charcol {
-            // SAFETY: the buffer is live.
-            pos.col = unsafe { buf_byteidx_to_charidx(Some(bp), pos.lnum, pos.col) } as ColNr;
+            pos.col = buf_byteidx_to_charidx(Some(bp), pos.lnum, pos.col) as ColNr;
         }
         return Some(pos);
     }
@@ -345,8 +330,7 @@ pub unsafe fn list2fpos(
         } else {
             posp.lnum
         };
-        // SAFETY: `buf` is a live buffer with a memline.
-        n = unsafe { buf_charidx_to_byteidx(Some(buf), lnum, n) } + 1;
+        n = buf_charidx_to_byteidx(Some(buf), lnum, n) + 1;
     }
     posp.col = n as ColNr;
 

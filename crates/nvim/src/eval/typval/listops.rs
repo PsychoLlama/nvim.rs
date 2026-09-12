@@ -59,9 +59,7 @@ unsafe fn insert_item(l: *mut List, item: ListItem, at: InsertAt) {
 /// `tv` stays the caller's.
 pub unsafe fn tv_list_insert_tv(l: *mut List, tv: &TypVal, at: InsertAt) {
     let mut copy = TV_INITIAL_VALUE;
-    // SAFETY: the caller's promise: a value that is safe to copy, into this
-    // frame's own slot.
-    unsafe { tv_copy(tv, &mut copy) };
+    tv_copy(tv, &mut copy);
     unsafe { insert_item(l, ListItem::new(copy), at) };
 }
 
@@ -195,7 +193,7 @@ pub unsafe fn tv_list_copy(
                 return None;
             }
         } else {
-            unsafe { tv_copy(from, &mut value) };
+            tv_copy(from, &mut value);
         }
         unsafe { tv_list_append_owned_tv(into, value) };
     }
@@ -353,7 +351,7 @@ pub unsafe fn tv_list_equal(l1: *mut List, l2: *mut List, ic: bool) -> bool {
     for at in 0..unsafe { tv_list_items(l1) }.len() {
         // SAFETY: as above -- `at` is inside both lists.
         let (a, b) = unsafe { (&tv_list_items(l1)[at], &tv_list_items(l2)[at]) };
-        if !unsafe { tv_equal(&a.li_tv, &b.li_tv, ic) } {
+        if !tv_equal(&a.li_tv, &b.li_tv, ic) {
             return false;
         }
     }

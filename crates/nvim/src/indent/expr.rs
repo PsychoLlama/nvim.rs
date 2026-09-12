@@ -443,8 +443,7 @@ pub unsafe fn fix_indent() {
 
 /// `indent()`.
 pub fn f_indent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the caller's typvals, and there is a current buffer.
-    let lnum = unsafe { tv_get_lnum(&args[0]) };
+    let lnum = tv_get_lnum(&args[0]);
     result.write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
         get_indent_lnum(lnum) as VarNumber
     } else {
@@ -457,7 +456,7 @@ pub fn f_lispindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // line and put back.
     let mut win = Win::current();
     let pos = win.w_cursor;
-    let lnum = unsafe { tv_get_lnum(&args[0]) };
+    let lnum = tv_get_lnum(&args[0]);
     unsafe {
         (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
             win.w_cursor.lnum = lnum;

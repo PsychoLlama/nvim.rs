@@ -87,10 +87,7 @@ pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 
 /// The `{options}` dictionary `win_splitmove()` takes: the split flags and the
 /// size to give the moved window.
-///
-/// # Safety
-/// `opts` must be a live typval holding a non-null Dictionary.
-unsafe fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
+fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
     // SAFETY: the caller's obligation; `tv_dict_find` hands back a live entry
     // of the same dictionary or NULL.
     let d = (*opts).dict_or_null();
@@ -135,7 +132,7 @@ pub fn f_win_splitmove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         if tv_check_for_nonnull_dict_arg(args, 2).is_err() {
             return;
         }
-        unsafe { splitmove_options(&args[2]) }
+        splitmove_options(&args[2])
     } else {
         (0, 0)
     };

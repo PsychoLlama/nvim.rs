@@ -106,8 +106,7 @@ pub(crate) unsafe fn eval_func(
     }
     if evaluate && aborting() {
         if ret.is_ok() {
-            // SAFETY: the caller's promise -- `result` is valid.
-            unsafe { tv_clear(result) };
+            tv_clear(result);
         }
         ret = Err(Failed);
     }
@@ -163,7 +162,7 @@ pub(crate) unsafe fn call_func_rettv(
             funcname = functv.string_or_func_name();
             if funcname.is_null() || unsafe { *funcname } as c_int == NUL {
                 emsg(gettext(e_empty_function_name));
-                unsafe { tv_clear(&mut functv) };
+                tv_clear(&mut functv);
                 return Err(Failed);
             }
         }
@@ -192,8 +191,7 @@ pub(crate) unsafe fn call_func_rettv(
     let ret = unsafe { get_func_tv(funcname, namelen, result, arg, evalarg, exe) };
 
     if evaluate {
-        // SAFETY: `functv` is this frame's own copy of the callee.
-        unsafe { tv_clear(&mut functv) };
+        tv_clear(&mut functv);
     }
     ret
 }
@@ -233,7 +231,7 @@ pub(crate) unsafe fn eval_lambda(
                 semsg!("E107: Missing parentheses: {what}");
             }
         }
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         Err(Failed)
     } else {
         let basep = Some(&mut base);
@@ -242,7 +240,7 @@ pub(crate) unsafe fn eval_lambda(
     };
 
     if evaluate {
-        unsafe { tv_clear(&mut base) };
+        tv_clear(&mut base);
     }
     ret
 }
@@ -359,7 +357,7 @@ pub(crate) unsafe fn eval_method(
                 }
                 ret = Err(Failed);
             }
-            unsafe { tv_clear(&mut callee) };
+            tv_clear(&mut callee);
             unsafe { *paren = b'(' as c_char };
         }
 
@@ -400,7 +398,7 @@ pub(crate) unsafe fn eval_method(
     // Clear the Funcref afterwards, so that deleting it while its own
     // arguments are being evaluated is possible (test55).
     if evaluate {
-        unsafe { tv_clear(&mut base) };
+        tv_clear(&mut base);
     }
     // SAFETY: both are null or this call's own allocations.
     unsafe { xfree(tofree as *mut c_void) };

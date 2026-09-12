@@ -355,7 +355,7 @@ pub unsafe fn tv_dict_watcher_notify(
             let cb = wd.field_ptr(::core::mem::offset_of!(DictWatcher, callback));
             unsafe { callback_call(cb, argv.args(), &mut rettv) };
             wd.busy = false;
-            unsafe { tv_clear(&mut rettv) };
+            tv_clear(&mut rettv);
             if wd.needs_free {
                 any_needs_free = true;
             }

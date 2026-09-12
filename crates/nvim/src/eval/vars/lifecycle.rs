@@ -19,10 +19,7 @@ use crate::types::{DictKey, Refcount};
 
 /// Build the `g:` and `v:` scopes and fill the `v:` table.  Called once, at
 /// startup.
-///
-/// # Safety
-/// Called once, before anything reads a variable.
-pub unsafe fn evalvars_init() {
+pub fn evalvars_init() {
     unsafe { init_var_dict(get_globvar_dict(), globvar_scope_item(), VAR_DEF_SCOPE) };
     unsafe { init_var_dict(get_vimvar_dict(), vimvar_scope_item(), VAR_SCOPE) };
     unsafe { (*get_vimvar_dict()).dv_lock = VarLock::Fixed };
@@ -95,14 +92,12 @@ pub unsafe fn evalvars_init() {
     }
     eval_msgpack_type_lists.set(type_lists);
     unsafe { (*msgpack_types_dict).dv_lock = VarLock::Fixed };
-    unsafe { set_vim_var_dict(Vv::MsgpackTypes, Some(msgpack_types_dict_held)) };
+    set_vim_var_dict(Vv::MsgpackTypes, Some(msgpack_types_dict_held));
 
-    // SAFETY: `Vv` names a row of the table, and each value below is a live
-    // container this hands its reference to.
-    unsafe { set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed))) };
-    unsafe { set_vim_var_dict(Vv::Event, Some(tv_dict_alloc_lock(VarLock::Fixed))) };
+    set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed)));
+    set_vim_var_dict(Vv::Event, Some(tv_dict_alloc_lock(VarLock::Fixed)));
     let errors = Some(tv_list_alloc(kListLenUnknown as ptrdiff_t));
-    unsafe { set_vim_var_list(Vv::Errors, errors) };
+    set_vim_var_list(Vv::Errors, errors);
 
     // The `v:` variables that start out at a constant Number, the `v:t_*`
     // type codes `type()` answers with among them. Nothing here reads
@@ -144,30 +139,21 @@ pub unsafe fn evalvars_init() {
     unsafe { set_vim_var_partial(Vv::Lua, vvlua_partial) };
 
     // The default for v:register is not 0 but '"'.
-    unsafe { set_reg_var(0) };
+    set_reg_var(0);
 }
 
 /// Mark everything `g:` reaches as live, for the garbage collector.
-///
-/// # Safety
-/// Called from the collector, with `copy_id` its current mark.
-pub unsafe fn garbage_collect_globvars(copy_id: c_int) -> c_int {
+pub fn garbage_collect_globvars(copy_id: c_int) -> c_int {
     unsafe { set_ref_in_ht(get_globvar_ht(), copy_id, ptr::null_mut()) as c_int }
 }
 
 /// [`garbage_collect_globvars`] for `v:`.
-///
-/// # Safety
-/// As [`garbage_collect_globvars`].
-pub unsafe fn garbage_collect_vimvars(copy_id: c_int) -> bool {
+pub fn garbage_collect_vimvars(copy_id: c_int) -> bool {
     unsafe { set_ref_in_ht(get_vimvar_ht(), copy_id, ptr::null_mut()) }
 }
 
 /// [`garbage_collect_globvars`] for every script's `s:`.
-///
-/// # Safety
-/// As [`garbage_collect_globvars`].
-pub unsafe fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
+pub fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
     let mut abort = false;
     for i in 1..=script_count() {
         // SAFETY: a live script id, whose own scope dictionary this marks.
@@ -188,10 +174,7 @@ pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
 }
 
 /// Delete every `g:menutrans_*` variable, which `:menutranslate clear` does.
-///
-/// # Safety
-/// Nothing.
-pub unsafe fn del_menutrans_vars() {
+pub fn del_menutrans_vars() {
     let ht = get_globvar_ht();
     // The walk removes entries as it goes, so the table has to be locked
     // against the rehash that would otherwise move the slot array.
@@ -254,10 +237,7 @@ pub(crate) fn msgpack_type_list(type_: MessagePackType) -> *mut List {
 }
 
 /// Give script `id` its own `s:` scope.
-///
-/// # Safety
-/// `id` is a live script id whose `sn_vars` has not been set.
-pub unsafe fn new_script_vars(id: ScriptId) {
+pub fn new_script_vars(id: ScriptId) {
     let sv = unsafe { xcalloc(1, ::core::mem::size_of::<ScriptVar>()) } as *mut ScriptVar;
     unsafe { init_var_dict(&raw mut (*sv).sv_dict, &raw mut (*sv).sv_var, VAR_SCOPE) };
     unsafe { (*script_item(id)).sn_vars = sv };

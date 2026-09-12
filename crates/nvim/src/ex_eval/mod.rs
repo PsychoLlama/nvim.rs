@@ -265,7 +265,7 @@ pub(crate) unsafe fn ex_eval(args: *mut ExArg) {
     // SAFETY: module contract.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, args, (*args).skip != 0) };
     if unsafe { eval0((*args).arg, &mut tv, args, &raw mut evalarg) }.is_ok() {
-        unsafe { tv_clear(&mut tv) };
+        tv_clear(&mut tv);
     }
     unsafe { clear_evalarg(&raw mut evalarg, args) };
 }

@@ -294,7 +294,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
             // `wp` is overwritten even when the lookup fails: a
             // `getcurpos()` on a window that does not exist answers 0
             // for 'curswant' rather than the current window's.
-            wp = unsafe { find_win_by_nr_or_id(&args[0]) };
+            wp = find_win_by_nr_or_id(&args[0]);
             wp.map(|wp| wp.w_cursor)
         } else {
             Some(Win::current().w_cursor)
@@ -303,8 +303,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
             && charcol
         {
             let buffer = wp.and_then(Win::buffer_or_none);
-            // SAFETY: a live buffer, and a position the parser answered.
-            pos.col = unsafe { buf_byteidx_to_charidx(buffer, pos.lnum, pos.col) } as ColNr;
+            pos.col = buf_byteidx_to_charidx(buffer, pos.lnum, pos.col) as ColNr;
         }
         fp
     };
@@ -416,7 +415,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
         }
         let mut col = arg_number_chk(&args[1], None) as ColNr;
         if charcol {
-            col = unsafe { buf_charidx_to_byteidx(Buf::current_or_none(), lnum, col) } + 1;
+            col = buf_charidx_to_byteidx(Buf::current_or_none(), lnum, col) + 1;
         }
         let coladd = if args.len() > 2 {
             arg_number_chk(&args[2], None) as ColNr

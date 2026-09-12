@@ -391,7 +391,7 @@ pub(crate) fn command_line_enter(
 
         // Trigger CmdlineLeavePre autocommands if not already triggered.
         if !s.event_cmdlineleavepre_triggered {
-            unsafe { set_vim_var_char(s.c) }; // set v:char
+            set_vim_var_char(s.c); // set v:char
             trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CmdlineLeavePre);
         }
 
@@ -411,7 +411,7 @@ pub(crate) fn command_line_enter(
                     },
                 )
             };
-            unsafe { set_vim_var_char(s.c) }; // set v:char
+            set_vim_var_char(s.c); // set v:char
 
             // C's TRY_WRAP; the error is printed further below, to avoid
             // redraw issues.

@@ -434,8 +434,7 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
     let expr = unsafe { &mut *context.cast::<TypVal>() };
 
     let mut save_val = TV_INITIAL_VALUE;
-    // SAFETY: `Vv::Val` names a `v:` variable and `save_val` is a live local.
-    unsafe { prepare_vimvar(Vv::Val, &mut save_val) };
+    prepare_vimvar(Vv::Val, &mut save_val);
     set_val(name);
 
     // The callee only reads it, so the frame names the caller's string
@@ -444,8 +443,7 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
 
     let mut rettv = TV_INITIAL_VALUE;
     let mut retval = 0;
-    // SAFETY: `expr` is the caller's, and the frame is this one's.
-    let ran = unsafe { eval_expr_typval(expr, false, argv.args(), &mut rettv) };
+    let ran = eval_expr_typval(expr, false, argv.args(), &mut rettv);
     if ran.is_ok() {
         let mut error = false;
         // SAFETY: a live typval; the callee reports through `error`.
@@ -453,13 +451,11 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
         if error {
             retval = -1;
         }
-        // SAFETY: a live typval this call owns.
-        unsafe { tv_clear(&mut rettv) };
+        tv_clear(&mut rettv);
     }
 
     set_val(ptr::null());
-    // SAFETY: `save_val` came from `prepare_vimvar` for this same variable.
-    unsafe { restore_vimvar(Vv::Val, &mut save_val) };
+    restore_vimvar(Vv::Val, &mut save_val);
     retval
 }
 

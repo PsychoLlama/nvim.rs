@@ -572,13 +572,13 @@ unsafe fn show_one(
         return;
     }
     if varp == option_var(opt_idx) {
-        unsafe { last_set_msg(option_last_set(opt_idx)) };
+        last_set_msg(option_last_set(opt_idx));
     } else if option_has_scope(opt_idx, kOptScopeWin) {
         let at = option_scope_idx(opt_idx, kOptScopeWin) as usize;
-        unsafe { last_set_msg(Win::current().w_onebuf_opt.wo_script_ctx[at]) };
+        last_set_msg(Win::current().w_onebuf_opt.wo_script_ctx[at]);
     } else if option_has_scope(opt_idx, kOptScopeBuf) {
         let at = option_scope_idx(opt_idx, kOptScopeBuf) as usize;
-        unsafe { last_set_msg(Buf::current().b_p_script_ctx[at]) };
+        last_set_msg(Buf::current().b_p_script_ctx[at]);
     }
 }
 

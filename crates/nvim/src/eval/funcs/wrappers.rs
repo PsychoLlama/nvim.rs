@@ -57,9 +57,7 @@ use core::{ptr, slice};
 
 /// Argument `tv` as a Number, reporting for a value that has none.
 pub(crate) fn arg_number(tv: &TypVal) -> VarNumber {
-    // SAFETY: a reference is a live, initialised value, which is the whole
-    // of what the coercion asks for.
-    unsafe { tv_get_number(tv) }
+    tv_get_number(tv)
 }
 
 /// Argument `tv` as a Number.
@@ -74,8 +72,7 @@ pub(crate) fn arg_number_chk(tv: &TypVal, error: Option<&mut bool>) -> VarNumber
 
 /// Argument `tv` as a boolean Number: -1 when it has no numeric form.
 pub(crate) fn arg_bool(tv: &TypVal) -> VarNumber {
-    // SAFETY: as [`arg_number`].
-    unsafe { tv_get_bool(tv) }
+    tv_get_bool(tv)
 }
 
 /// Argument `tv` as a boolean Number, setting `error` when it has none.
@@ -87,8 +84,7 @@ pub(crate) fn arg_bool_chk(tv: &TypVal, error: &mut bool) -> VarNumber {
 /// Argument `tv` as a line number, resolving `"$"` and `"."` the way
 /// `line()` does.
 pub(crate) fn arg_lnum(tv: &TypVal) -> LineNr {
-    // SAFETY: as [`arg_number`].
-    unsafe { tv_get_lnum(tv) }
+    tv_get_lnum(tv)
 }
 
 /// Argument `tv` as a string, the empty string for a value that has none.
@@ -107,9 +103,7 @@ pub(crate) fn arg_string_chk(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
 
 /// Copy argument `tv` into `to`, taking a reference on what it points at.
 pub(crate) fn arg_copy(tv: &TypVal, to: &mut TypVal) {
-    // SAFETY: both are live values; `to` is the caller's cleared return
-    // value or its own local.
-    unsafe { tv_copy(tv, to) }
+    tv_copy(tv, to)
 }
 
 /// Make `result` a fresh List of `len` items, or of unknown length for one of
@@ -426,10 +420,7 @@ pub fn api_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
 
 /// The buffer a typval names: a buffer number, or a name matched as a
 /// pattern the way `:buffer` matches one.
-///
-/// # Safety
-/// `tv` is a live typval.
-pub unsafe fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
+pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     // SAFETY: the caller's obligation; the name is the string the typval
     // owns and outlives the match.
     if (*tv).v_type() == VAR_NUMBER {
@@ -463,34 +454,27 @@ pub unsafe fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
     // A name no buffer matches may still be a *file* name we know.
     match found {
         Some(buf) => Some(buf),
-        None => unsafe { find_buffer(tv) },
+        None => find_buffer(tv),
     }
 }
 
 /// [`tv_get_buf`] for a builtin's own `{buf}` argument: type-check it, then
 /// resolve it silently.
-///
-/// # Safety
-/// `tv` is a live typval.
-pub unsafe fn tv_get_buf_from_arg(tv: &TypVal) -> Option<Buf> {
-    // SAFETY: the caller's obligation.
-    if !unsafe { tv_check_str_or_nr(tv) } {
+pub fn tv_get_buf_from_arg(tv: &TypVal) -> Option<Buf> {
+    if !tv_check_str_or_nr(tv) {
         return None;
     }
     let _no_emsg = Suppress::emsg();
-    unsafe { tv_get_buf(tv, 0) }
+    tv_get_buf(tv, 0)
 }
 
 /// [`tv_get_buf`] for a builtin that must report a bad buffer itself.
-///
-/// # Safety
-/// `arg` is a live typval.
-pub unsafe fn get_buf_arg(arg: &TypVal) -> Option<Buf> {
+pub fn get_buf_arg(arg: &TypVal) -> Option<Buf> {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. The guard is what makes E158 the
     // *only* message this can produce.
     let no_emsg = Suppress::emsg();
-    let buf = unsafe { tv_get_buf(arg, 0) };
+    let buf = tv_get_buf(arg, 0);
     drop(no_emsg);
     if buf.is_none() {
         let what = unsafe { numbuf.string(arg) };
@@ -503,15 +487,11 @@ pub unsafe fn get_buf_arg(arg: &TypVal) -> Option<Buf> {
 
 /// The window a builtin's optional `{winid}` argument names, defaulting to
 /// the current one. Null after reporting E957.
-///
-/// # Safety
-/// `args` is a live call frame's argument array and `idx` is within it.
-pub unsafe fn get_optional_window(args: &[TypVal], idx: usize) -> Option<Win> {
+pub fn get_optional_window(args: &[TypVal], idx: usize) -> Option<Win> {
     let Some(arg) = args.get(idx) else {
         return Win::current_or_none();
     };
-    // SAFETY: the caller's obligation.
-    let win = unsafe { find_win_by_nr_or_id(arg) };
+    let win = find_win_by_nr_or_id(arg);
     if win.is_none() {
         emsg(gettext(e_invalwindow));
     }

@@ -438,7 +438,7 @@ pub fn shada_encode_gvars() -> String_0 {
             // The entry owns the copy it is built around; the value the
             // iterator handed over stays this function's to release.
             let mut tgttv = TV_INITIAL_VALUE;
-            unsafe { tv_copy(&vartv, &mut tgttv) };
+            tv_copy(&vartv, &mut tgttv);
             let mut entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: cur_timestamp,
@@ -450,9 +450,9 @@ pub fn shada_encode_gvars() -> String_0 {
             };
             let written = unsafe { shada_pack_entry(&raw mut packer, &entry, 0) };
             assert!(written != kSDWriteFailed, "shada: cannot pack a variable");
-            unsafe { tv_clear(&mut entry.data.variable_mut().value) };
+            tv_clear(&mut entry.data.variable_mut().value);
         }
-        unsafe { tv_clear(&mut vartv) };
+        tv_clear(&mut vartv);
         if var_iter.is_none() {
             return unsafe { packer_take_string(&packer) };
         }

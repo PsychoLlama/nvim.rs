@@ -510,7 +510,7 @@ unsafe fn qf_getprop_qftf(qfl: *mut QfList, retdict: *mut Dict) -> Result<(), Ke
     let mut tv = TV_INITIAL_VALUE;
     unsafe { callback_put(&raw mut (*qfl).qf_qftf_cb, &mut tv) };
     let status = unsafe { add_tv(retdict, "quickfixtextfunc", &mut tv) };
-    unsafe { tv_clear(&mut tv) };
+    tv_clear(&mut tv);
     status
 }
 

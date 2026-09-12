@@ -242,11 +242,7 @@ impl TypvalSink for ObjectSink {
         self.emit(Object::array(Array::EMPTY));
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_empty_dict`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_empty_dict(&mut self, _dictp: Option<DictSlot>) {
         self.emit(Object::dict(ApiDict::EMPTY));
     }
 
@@ -290,24 +286,11 @@ impl TypvalSink for ObjectSink {
     /// Nothing: [`Self::conv_dict_key`] already claimed the entry, and this
     /// sink refuses specials, so the `[key, value]` pair walk -- the only
     /// other caller -- never runs.
-    ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_after_key`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {}
+    fn conv_dict_after_key(&mut self, _dictp: Option<DictSlot>) {}
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_between_items`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {}
+    fn conv_dict_between_items(&mut self, _dictp: Option<DictSlot>) {}
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_dict_end`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
+    fn conv_dict_end(&mut self, _dictp: Option<DictSlot>) {
         debug_assert!(matches!(
             self.stack.last(),
             Some(Object::Dict(d)) if d.len() == d.capacity()
@@ -359,7 +342,7 @@ fn vim_to_object(value: &TypVal) -> Object {
     // SAFETY: the caller's typval, walked by a sink that cannot fail on any
     // value a live one can hold.
     let name = c"vim_to_object argument";
-    let converted = unsafe { encode_typval_read(&mut sink, value, name) };
+    let converted = encode_typval_read(&mut sink, value, name);
     debug_assert!(converted);
     debug_assert!(sink.stack.is_empty());
     // A `VAR_UNKNOWN` emits nothing, which upstream calls impossible and

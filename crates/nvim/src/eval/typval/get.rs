@@ -19,11 +19,7 @@ use crate::winlayer::Win;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
 /// numeric form.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval.
-pub unsafe fn tv_get_number(tv: &TypVal) -> VarNumber {
+pub fn tv_get_number(tv: &TypVal) -> VarNumber {
     let mut error = false;
     unsafe { tv_get_number_chk(tv, &raw mut error) }
 }
@@ -74,11 +70,7 @@ pub unsafe fn tv_get_number_chk(tv: &TypVal, ret_error: *mut bool) -> VarNumber 
 }
 
 /// `tv` as a boolean number: -1 when it has no numeric form.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval.
-pub unsafe fn tv_get_bool(tv: &TypVal) -> VarNumber {
+pub fn tv_get_bool(tv: &TypVal) -> VarNumber {
     unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) }
 }
 
@@ -94,11 +86,7 @@ pub unsafe fn tv_get_bool_chk(tv: &TypVal, ret_error: *mut bool) -> VarNumber {
 
 /// `tv` as a line number, resolving a non-Number such as `"$"` or `"."`
 /// through `var2fpos`.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval.
-pub unsafe fn tv_get_lnum(tv: &TypVal) -> LineNr {
+pub fn tv_get_lnum(tv: &TypVal) -> LineNr {
     let did_emsg_before = did_emsg.get();
     let mut lnum = unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) } as LineNr;
     if lnum <= 0 && did_emsg_before == did_emsg.get() && (*tv).v_type() != VAR_NUMBER {
@@ -113,11 +101,7 @@ pub unsafe fn tv_get_lnum(tv: &TypVal) -> LineNr {
 }
 
 /// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval.
-pub unsafe fn tv_get_lnum_buf(tv: &TypVal, buffer: Option<Buf>) -> LineNr {
+pub fn tv_get_lnum_buf(tv: &TypVal, buffer: Option<Buf>) -> LineNr {
     let val = tv;
     let s = val.string_or_null();
     if let Some(buffer) = buffer
@@ -132,11 +116,7 @@ pub unsafe fn tv_get_lnum_buf(tv: &TypVal, buffer: Option<Buf>) -> LineNr {
 
 /// `tv` as a float, raising an error and answering 0.0 for a value that has no
 /// float form.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval.
-pub unsafe fn tv_get_float(tv: &TypVal) -> Float {
+pub fn tv_get_float(tv: &TypVal) -> Float {
     let val = tv;
     let message = match val.v_type() {
         VAR_NUMBER => return val.number_or_zero() as Float,
@@ -277,11 +257,7 @@ pub unsafe fn tv_get_string_buf(
 }
 
 /// Truthiness of `tv`, as `if` and `while` ask for it.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval.
-pub unsafe fn tv2bool(tv: &TypVal) -> bool {
+pub fn tv2bool(tv: &TypVal) -> bool {
     match tv.v_type() {
         VAR_NUMBER => tv.number_or_zero() != 0,
         VAR_FLOAT => tv.float_or_zero() != 0.0,

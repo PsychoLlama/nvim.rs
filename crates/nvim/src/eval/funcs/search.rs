@@ -119,10 +119,7 @@ impl Drop for SavedWrapScan {
 ///
 /// Returns [`FORWARD`], [`BACKWARD`], or 0 for an error already reported.
 /// Sets the bits it recognises in `flags`, and may write 'wrapscan'.
-///
-/// # Safety
-/// `varp` is a live typval.
-unsafe fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
+fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
     let mut dir = FORWARD as c_int;
     // SAFETY: the caller's obligation; `nbuf` outlives the string
     // `tv_get_string_buf_chk` may park in it.
@@ -165,10 +162,7 @@ unsafe fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
 ///
 /// Answers the matched line (or the sub-pattern number under `p`), 0 for no
 /// match, and writes the one-based match position through `match_pos`.
-///
-/// # Safety
-/// `args` is a live call frame.
-unsafe fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) -> c_int {
+fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut c_int) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
@@ -182,7 +176,7 @@ unsafe fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut 
     // pointer and outlive it.
     let pat = arg_string(&mut numbuf, &args[0]);
     // May set 'wrapscan'.
-    let dir = unsafe { search_direction(args.get(1), flagsp) };
+    let dir = search_direction(args.get(1), flagsp);
     if dir == 0 {
         return 0;
     }
@@ -210,9 +204,7 @@ unsafe fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut 
             if time_limit < 0 {
                 return 0;
             }
-            use_skip = args
-                .get(4)
-                .is_some_and(|tv| unsafe { eval_expr_valid_arg(tv) });
+            use_skip = args.get(4).is_some_and(|tv| eval_expr_valid_arg(tv));
         }
     }
     let mut tm = profile_setlimit(time_limit);
@@ -310,8 +302,7 @@ unsafe fn search_cmn(args: &[TypVal], match_pos: Option<&mut Pos>, flagsp: &mut 
 /// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
 pub fn f_search(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut flags = 0;
-    // SAFETY: the frame is live.
-    result.write_number(unsafe { search_cmn(args, None, &mut flags) } as VarNumber);
+    result.write_number(search_cmn(args, None, &mut flags) as VarNumber);
 }
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
@@ -323,8 +314,7 @@ pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         coladd: 0,
     };
     let mut flags = 0;
-    // SAFETY: the frame is live and `result` is the cleared return value.
-    let n = unsafe { search_cmn(args, Some(&mut match_pos), &mut flags) };
+    let n = search_cmn(args, Some(&mut match_pos), &mut flags);
     let list = list_alloc_ret(result, 2 + (flags & SP_SUBPAT != 0) as isize);
     let (lnum, col) = if n > 0 {
         (match_pos.lnum as c_int, match_pos.col as c_int)
@@ -369,10 +359,7 @@ pub fn f_searchdecl(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// Shared by `searchpair()` and `searchpairpos()`: parse the arguments and
 /// hand them to [`do_searchpair`].
-///
-/// # Safety
-/// `args` is a live call frame.
-unsafe fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
+fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -396,7 +383,7 @@ unsafe fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int 
     }
 
     // May set 'wrapscan'.
-    let dir = unsafe { search_direction(args.get(3), &mut flags) };
+    let dir = search_direction(args.get(3), &mut flags);
     if dir == 0 {
         return 0;
     }
@@ -454,8 +441,7 @@ unsafe fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int 
 /// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
 /// [, {timeout}]]]])`
 pub fn f_searchpair(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: the frame is live.
-    result.write_number(unsafe { searchpair_cmn(args, None) } as VarNumber);
+    result.write_number(searchpair_cmn(args, None) as VarNumber);
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
@@ -468,7 +454,7 @@ pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let (mut lnum, mut col) = (0, 0);
     // SAFETY throughout: the frame is live and `result` is the cleared return value.
     let list = list_alloc_ret(result, 2);
-    if unsafe { searchpair_cmn(args, Some(&mut match_pos)) } > 0 {
+    if searchpair_cmn(args, Some(&mut match_pos)) > 0 {
         lnum = match_pos.lnum as c_int;
         col = match_pos.col as c_int;
     }
@@ -582,7 +568,7 @@ pub unsafe fn do_searchpair(
     if flags & SP_START != 0 {
         options |= SEARCH_START as c_int;
     }
-    let use_skip = skip.is_some_and(|s| unsafe { eval_expr_valid_arg(s) });
+    let use_skip = skip.is_some_and(|s| eval_expr_valid_arg(s));
 
     let save_cursor = Win::current().w_cursor;
     let mut pos = save_cursor;

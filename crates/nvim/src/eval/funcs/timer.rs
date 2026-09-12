@@ -153,10 +153,7 @@ fn proftime_from_halves(high: int32_t, low: int32_t) -> ProfTime {
 
 /// Read a `[high, low]` List back into a profile timestamp. `None` when the
 /// argument is not a two-element List of Numbers.
-///
-/// # Safety
-/// `arg` is a live typval from the call frame.
-unsafe fn list2proftime(arg: &TypVal) -> Option<ProfTime> {
+fn list2proftime(arg: &TypVal) -> Option<ProfTime> {
     if arg.v_type() != VAR_LIST || unsafe { tv_list_len(arg.list_or_null()) } != 2 {
         return None;
     }
@@ -172,12 +169,10 @@ unsafe fn list2proftime(arg: &TypVal) -> Option<ProfTime> {
 /// `reltime([{start} [, {end}]])` — a timestamp, an elapsed time, or the
 /// difference between two timestamps, as a `[high, low]` List.
 pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: the list entry points take the frame's return value, which is
-    // cleared and owned by the caller.
     let res = if args.is_empty() {
         profile_start()
     } else if args.len() <= 1 {
-        let Some(start) = (unsafe { list2proftime(&args[0]) }) else {
+        let Some(start) = list2proftime(&args[0]) else {
             return;
         };
         profile_end(start)
@@ -185,10 +180,10 @@ pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // Short-circuit as the C `||` does: a bad first argument means
         // the second is never read, so its own coercion errors do not
         // fire.
-        let Some(start) = (unsafe { list2proftime(&args[0]) }) else {
+        let Some(start) = list2proftime(&args[0]) else {
             return;
         };
-        let Some(end) = (unsafe { list2proftime(&args[1]) }) else {
+        let Some(end) = list2proftime(&args[1]) else {
             return;
         };
         profile_sub(end, start)
@@ -204,7 +199,7 @@ pub fn f_reltimestr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(ptr::null_mut());
     // SAFETY: `profile_msg` returns a pointer to its own static buffer,
     // which `xstrdup` copies before anything else can reuse it.
-    if let Some(tm) = unsafe { list2proftime(&args[0]) } {
+    if let Some(tm) = list2proftime(&args[0]) {
         result.write_string(unsafe { xstrdup(profile_msg(tm).as_ptr()) });
     }
 }
@@ -212,8 +207,7 @@ pub fn f_reltimestr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `reltimefloat({time})` — the elapsed time in seconds.
 pub fn f_reltimefloat(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_float(0.0);
-    // SAFETY: reads the argument through the frame.
-    if let Some(tm) = unsafe { list2proftime(&args[0]) } {
+    if let Some(tm) = list2proftime(&args[0]) {
         result.write_float((profile_signed(tm) as f64 / 1_000_000_000.0) as Float);
     }
 }
@@ -227,7 +221,7 @@ pub fn f_timer_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     if args.is_empty() {
-        unsafe { add_timer_info_all(result) };
+        add_timer_info_all(result);
         return;
     }
     let timer = find_timer_by_nr(arg_number(&args[0]));
@@ -314,6 +308,5 @@ pub fn f_timer_stop(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `timer_stopall()`.
 pub fn f_timer_stopall(_args: &[TypVal], _unused: &mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: walks the main-thread timer table.
-    unsafe { timer_stop_all() }
+    timer_stop_all()
 }

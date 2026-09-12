@@ -233,7 +233,7 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `setcmdpos()` function.
 pub fn f_setcmdpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let pos = unsafe { tv_get_number(&args[0]) } as ::core::ffi::c_int - 1;
+    let pos = tv_get_number(&args[0]) as ::core::ffi::c_int - 1;
     if pos >= 0 {
         result.write_number(set_cmdline_pos(pos) as VarNumber);
     }

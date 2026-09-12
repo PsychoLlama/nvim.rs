@@ -107,7 +107,7 @@ pub(crate) unsafe fn tv_blob_slice(
     }
 
     if n1 >= VarNumber::from(len) || n2 < 0 || n1 > n2 {
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         (*result).write_blob(::core::ptr::null_mut());
     } else {
         let new_blob = tv_blob_alloc();
@@ -120,7 +120,7 @@ pub(crate) unsafe fn tv_blob_slice(
             unsafe { tv_blob_set(new_blob, i - n1, tv_blob_get((*result).blob_or_null(), i)) };
             i += 1;
         }
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         unsafe { tv_blob_set_ret(result, new_blob) };
     }
 
@@ -153,7 +153,7 @@ pub(crate) unsafe fn tv_blob_index(
     }
 
     let v = unsafe { tv_blob_get((*result).blob_or_null(), idx as ::core::ffi::c_int) };
-    unsafe { tv_clear(result) };
+    tv_clear(result);
     (*result).write_number(VarNumber::from(v));
     Ok(())
 }

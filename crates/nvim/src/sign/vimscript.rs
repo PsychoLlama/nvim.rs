@@ -481,8 +481,7 @@ pub(crate) fn f_sign_jump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     let Some(group) = (unsafe { group_arg(&args[1], &mut numbuf) }) else {
         return;
     };
-    // SAFETY: as above.
-    let buf = unsafe { get_buf_arg(&args[2]) };
+    let buf = get_buf_arg(&args[2]);
     if buf.is_none() {
         return;
     }
@@ -557,14 +556,14 @@ unsafe fn sign_place_from_dict(
     let Some(buf_tv) = __v else {
         return -1;
     };
-    let buf = unsafe { get_buf_arg(buf_tv) };
+    let buf = get_buf_arg(buf_tv);
     if buf.is_none() {
         return -1;
     }
 
     let mut lnum: LineNr = 0;
     if let Some(tv) = unsafe { key(dict, "lnum") } {
-        lnum = unsafe { tv_get_lnum(tv) };
+        lnum = tv_get_lnum(tv);
         if lnum <= 0 {
             emsg(gettext(e_invarg));
             return -1;
@@ -681,7 +680,7 @@ unsafe fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: *mut Dict) -> 
 
     if !dict.is_null() {
         if let Some(tv) = unsafe { key(dict, "buffer") } {
-            buf = unsafe { get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw) };
+            buf = get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw);
             if buf.is_null() {
                 return -1;
             }

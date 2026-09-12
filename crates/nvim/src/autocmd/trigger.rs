@@ -292,7 +292,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                     let _ = unsafe {
                         tv_dict_add_tv(v_event, item.key.as_ptr(), item.key.len(), &mut tv)
                     };
-                    unsafe { tv_clear(&mut tv) };
+                    tv_clear(&mut tv);
                 } else {
                     err.clear();
                 }

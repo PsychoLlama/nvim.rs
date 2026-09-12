@@ -310,7 +310,7 @@ pub unsafe fn tv_list_slice_or_index(
             n2 = -1;
         }
         let l = unsafe { tv_list_slice((*result).list_or_null(), n1, n2) };
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         result.write_list(Some(l));
     } else {
         // copy the item to "var1" to avoid that freeing the list makes it
@@ -318,7 +318,7 @@ pub unsafe fn tv_list_slice_or_index(
         let mut var1 = TV_INITIAL_VALUE;
         let li = unsafe { tv_list_find((*result).list_or_null(), n1 as ::core::ffi::c_int) };
         unsafe { tv_copy(&(*li).li_tv, &mut var1) };
-        unsafe { tv_clear(result) };
+        tv_clear(result);
         *result = var1;
     }
     Ok(())
@@ -473,7 +473,7 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { ga_init(&raw mut ga, 1, 80) };
     let mut buf: [::core::ffi::c_char; 22] = [0; 22];
     for li in tv_list_iter(unsafe { l.as_ref() }) {
-        let n = unsafe { tv_get_number(&li.li_tv) };
+        let n = tv_get_number(&li.li_tv);
         let buflen = unsafe { utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) } as size_t;
         buf[buflen as usize] = '\0' as ::core::ffi::c_char;
         unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), buflen) };

@@ -464,9 +464,7 @@ fn err_path(fmt: &'static CStr, p: *const c_char) {
 /// Argument `i` as a Number, which is how `readblob()` reads its offset and
 /// size and `readfile()` its maximum line count.
 fn nr(args: &[TypVal], i: usize) -> int64_t {
-    // SAFETY: a live typval; `tv_get_number` reports its own error and reads
-    // as 0 for a type that has no number form.
-    unsafe { tv_get_number(&args[i]) }
+    tv_get_number(&args[i])
 }
 
 /// The body both builtins share.

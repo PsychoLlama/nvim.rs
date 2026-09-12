@@ -126,8 +126,7 @@ fn find_tab(n: c_int) -> Option<TabPage> {
 
 /// The window argument 0 names within `tabpage`, or NULL when there is none.
 fn find_win(args: &[TypVal], tabpage: Option<TabPage>) -> Option<Win> {
-    // SAFETY: a live typval; an absent tab page reads as the current one.
-    unsafe { find_win_by_nr(&args[0], tabpage) }
+    find_win_by_nr(&args[0], tabpage)
 }
 
 /// Change to `dir` in `scope`; false -- having reported -- when it fails.

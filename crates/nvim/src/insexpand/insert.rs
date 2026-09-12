@@ -249,7 +249,7 @@ pub fn ins_compl_delete(new_leader: bool) {
     // causes flicker, thus we can't do that.
     changed_cline_bef_curs(Win::current());
     // Clear v:completed_item.
-    unsafe { set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed))) };
+    set_vim_var_dict(Vv::CompletedItem, Some(tv_dict_alloc_lock(VarLock::Fixed)));
 }
 
 /// Insert a completion string that contains newlines, line by line.

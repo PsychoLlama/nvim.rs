@@ -241,7 +241,7 @@ unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
     // SAFETY: module contract; `uc_rep` is the entry's own string.
     msg_display_keys(unsafe { cstr::at(cmd.uc_rep) }, false, room);
     if p_verbose.get() > 0 {
-        unsafe { last_set_msg(cmd.uc_script_ctx) };
+        last_set_msg(cmd.uc_script_ctx);
     }
 }
 

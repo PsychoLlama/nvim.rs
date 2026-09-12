@@ -134,7 +134,7 @@ unsafe fn qf_add_entry_from_dict(
     unsafe { xfree(module.cast()) };
     unsafe { xfree(pattern.cast()) };
     unsafe { xfree(text.cast()) };
-    unsafe { tv_clear(&mut user_data) };
+    tv_clear(&mut user_data);
 
     if valid {
         *valid_entry = true;

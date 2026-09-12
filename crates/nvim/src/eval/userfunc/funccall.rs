@@ -101,10 +101,7 @@ impl FuncTable {
     }
 
     /// Drop the entry `hi`, which must be one this table answered.
-    ///
-    /// # Safety
-    /// `hi` must be a live item of this table.
-    pub(crate) unsafe fn remove(self, hi: Slot) {
+    pub(crate) fn remove(self, hi: Slot) {
         // SAFETY: the caller's item; the table is this crate's `static`.
         unsafe { hash_remove(self.0, hi) };
     }
@@ -176,7 +173,7 @@ unsafe fn free_funccal_contents(fc: *mut FuncCall) {
     unsafe { vars_clear(vars) };
     unsafe { vars_clear(avars) };
     for li in tv_list_iter_mut(unsafe { items.as_mut() }) {
-        unsafe { tv_clear(&mut li.li_tv) };
+        tv_clear(&mut li.li_tv);
     }
     unsafe { free_funccal(fc) };
 }
@@ -290,7 +287,7 @@ pub(crate) unsafe fn func_remove(func: *mut UserFunc) -> bool {
     if !hi.is_kept() {
         return false;
     }
-    unsafe { func_table().remove(hi) };
+    func_table().remove(hi);
     true
 }
 
@@ -534,17 +531,13 @@ unsafe fn can_free_funccal(fc: *mut FuncCall, copy_id: c_int) -> bool {
 
 /// Free every parked funccall the garbage collector did not reach.  This is
 /// what finally gives back the reference `create_funccal` took.
-///
-/// # Safety
-/// Called from the collector, with `copy_id` the mark just used.
-pub unsafe fn free_unref_funccal(copy_id: c_int, testing: c_int) -> bool {
+pub fn free_unref_funccal(copy_id: c_int, testing: c_int) -> bool {
     // SAFETY: the collector's own mark, and the parked list is this module's.
     let did_free =
         unsafe { unlink_parked_funccals(Sweep::All, |fc| can_free_funccal(fc, copy_id)) };
     if did_free {
         // Freeing a funccal may have made more items collectable.
-        // SAFETY: called from the collector, which is between marks.
-        unsafe { garbage_collect(testing != 0) };
+        garbage_collect(testing != 0);
     }
     did_free
 }
@@ -736,10 +729,7 @@ pub unsafe fn get_current_funccal_dict(ht: *mut DictTab) -> *mut Dict {
 /// Walk the chain of captured scopes a closure body can see, running `probe`
 /// on each in turn with `current_funccal` set to it, and stop at the first
 /// that answers.
-///
-/// # Safety
-/// A call is in progress and its function has a captured scope.
-unsafe fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Option<T> {
+fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Option<T> {
     // The scope a live call's function closed over, which is a live funccall
     // or null.
     //
@@ -797,7 +787,7 @@ pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, ht: *mut *mut DictTab) -
         }
         None
     };
-    unsafe { walk_scoped_funccals(probe) };
+    walk_scoped_funccals(probe);
     last
 }
 
@@ -832,7 +822,7 @@ pub unsafe fn find_var_in_scoped_ht(
         }
         None
     };
-    unsafe { walk_scoped_funccals(probe) }.unwrap_or(ptr::null_mut())
+    walk_scoped_funccals(probe).unwrap_or(ptr::null_mut())
 }
 
 /// Mark the parked funccalls with `copyID + 1`, so that the collector can

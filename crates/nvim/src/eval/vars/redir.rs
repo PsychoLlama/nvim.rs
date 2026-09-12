@@ -28,7 +28,7 @@ pub fn assert_error(message: &[u8]) {
     let tv = unsafe { Tv::new(get_vim_var_tv(Vv::Errors)) };
     if tv.v_type() != VAR_LIST || tv.list_or_null().is_null() {
         // Something replaced it; make sure `v:errors` is a List again.
-        unsafe { set_vim_var_list(Vv::Errors, Some(tv_list_alloc(1))) };
+        set_vim_var_list(Vv::Errors, Some(tv_list_alloc(1)));
     }
     // A message that was never appended to used to be a null `ga_data`, and
     // `tv_list_append_string` tells that apart from a zero-length buffer: the
@@ -113,7 +113,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
         }
         // Store no value; only clean up.
         redir_endp.set(ptr::null_mut());
-        unsafe { var_redir_stop() };
+        var_redir_stop();
         return Err(Failed);
     }
 
@@ -130,7 +130,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     unsafe { clear_lval(redir_lval.get()) };
     if called_emsg.get() > called_emsg_before {
         redir_endp.set(ptr::null_mut());
-        unsafe { var_redir_stop() };
+        var_redir_stop();
         return Err(Failed);
     }
     Ok(())
@@ -166,10 +166,7 @@ pub unsafe fn var_redir_str(value: *const c_char, value_len: c_int) {
 }
 
 /// Stop capturing and store what was collected.
-///
-/// # Safety
-/// Nothing; a call with no redirection running only frees.
-pub unsafe fn var_redir_stop() {
+pub fn var_redir_stop() {
     if !redir_lval.get().is_null() {
         // Collecting is over: take the buffer, so that a message emitted
         // from inside `set_var_lval` appends to a fresh one instead of
