@@ -347,14 +347,14 @@ unsafe fn parse_bordertext_pos(
     }
     const NAMES: [&CStr; 3] = [c"left", c"center", c"right"];
     // SAFETY: the caller's promise.
-    let Some(which) = (unsafe { smatch(&bordertext_pos, &NAMES) }) else {
+    let Some(which) = (unsafe { smatch(bordertext_pos, &NAMES) }) else {
         let name = if bordertext_type == kBorderTextTitle {
             c"title_pos"
         } else {
             c"footer_pos"
         };
         // SAFETY: as above.
-        unsafe { err_invalid_str(err, name, &bordertext_pos, true) };
+        unsafe { err_invalid_str(err, name, bordertext_pos, true) };
         return false;
     };
     *align = [kAlignLeft, kAlignCenter, kAlignRight][which];
@@ -408,7 +408,7 @@ pub(crate) unsafe fn parse_win_config(
             // NUL-terminated.
             if !unsafe { parse_float_relative(relative, &mut fconfig.relative) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"relative", &relative, true) };
+                unsafe { err_invalid_str(err, c"relative", relative, true) };
                 break '_fail;
             }
             if !(config.row.is_some() && config.col.is_some()) && config.bufpos.is_none() {
@@ -444,7 +444,7 @@ pub(crate) unsafe fn parse_win_config(
             // SAFETY: the caller's promise about the keyset's strings.
             if !unsafe { parse_config_split(split, &mut fconfig.split) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"split", &split, true) };
+                unsafe { err_invalid_str(err, c"split", split, true) };
                 break '_fail;
             }
         }
@@ -452,7 +452,7 @@ pub(crate) unsafe fn parse_win_config(
             // SAFETY: as above.
             if !unsafe { parse_float_anchor(anchor, &mut fconfig.anchor) } {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"anchor", &anchor, true) };
+                unsafe { err_invalid_str(err, c"anchor", anchor, true) };
                 break '_fail;
             }
         }
@@ -662,7 +662,7 @@ pub(crate) unsafe fn parse_win_config(
                 fconfig.style = kWinStyleMinimal;
             } else {
                 // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"style", &style, true) };
+                unsafe { err_invalid_str(err, c"style", style, true) };
                 break '_fail;
             }
         }

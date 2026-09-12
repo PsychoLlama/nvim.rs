@@ -376,9 +376,9 @@ unsafe fn collect_args(given: &Array, ea: &mut ExArg, args: &mut Array) -> Resul
     let argc_valid = match ea.argt.masked(arity) {
         v if v == arity => args.len() == 1,
         v if v == ExArgt::EXTRA | ExArgt::NOSPC => args.len() <= 1,
-        v if v == ExArgt::EXTRA | ExArgt::NEEDARG => args.len() >= 1,
+        v if v == ExArgt::EXTRA | ExArgt::NEEDARG => !args.is_empty(),
         v if v == ExArgt::EXTRA => true,
-        _ => args.len() == 0,
+        _ => args.is_empty(),
     };
     if !argc_valid {
         return Err(Error::validation(c"Wrong number of arguments"));
@@ -410,7 +410,7 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
             }
         }
         // One element gives both bounds.
-        if range.len() > 0 {
+        if !range.is_empty() {
             // SAFETY: both indices are in bounds.
             let last_idx = range.len() - 1;
             let (first, last) = (&range[0], &range[last_idx]);

@@ -181,7 +181,7 @@ pub(crate) unsafe fn remote_request(
     let mut should_exit: Option<bool> = None;
     let mut tabbed: Option<bool> = None;
     for i in 0..dict.len() {
-        let (key, value) = field(&dict, i);
+        let (key, value) = field(dict, i);
         match key.to_bytes() {
             b"errmsg" => {
                 let Some(text) = value.as_string() else {

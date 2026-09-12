@@ -114,7 +114,7 @@ impl OptStr {
     ///
     /// # Safety
     /// As [`OptStr::as_bytes`].
-    pub(crate) unsafe fn to_owned_string(&self) -> String_0 {
+    pub(crate) unsafe fn to_owned_string(self) -> String_0 {
         // SAFETY: the caller's promise.
         String_0::from_bytes(unsafe { self.as_bytes() })
     }

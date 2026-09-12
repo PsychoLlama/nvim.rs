@@ -100,7 +100,7 @@ pub unsafe fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args
         cursor_reset_style(tui);
         return;
     }
-    assert!(args.len() != 0, "mode_info_set with no modes");
+    assert!(!args.is_empty(), "mode_info_set with no modes");
     // SAFETY: the caller guarantees `args`.
     unsafe {
         for i in 0..args.len() {

@@ -184,7 +184,7 @@ fn style_slots(style: &BorderStyle) -> Slots {
 /// `item` must be a live API object.
 unsafe fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
     if let Object::Array(arr) = item {
-        if arr.len() == 0 || arr.len() > 2 {
+        if arr.is_empty() || arr.len() > 2 {
             return Err(err_border(c"1 or 2-item Array", None));
         }
         // A non-empty array has an item at index 0.

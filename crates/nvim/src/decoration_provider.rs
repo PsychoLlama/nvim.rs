@@ -402,7 +402,7 @@ pub(crate) fn decor_providers_invoke_range(
         if !status {
             // errored: skip the rest of this window
             set_state(idx, kDecorProviderWinDisabled);
-        } else if res.len() >= 1 {
+        } else if !res.is_empty() {
             match res[0] {
                 Object::Boolean(false) => set_state(idx, kDecorProviderWinDisabled),
                 Object::Boolean(true) => {}

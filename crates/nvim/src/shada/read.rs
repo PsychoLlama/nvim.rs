@@ -183,7 +183,7 @@ impl Reading {
         // parser fills those in, and a collector names every one of them, so
         // in practice nothing here falls back -- the defaults are what say
         // so.
-        let pat = unsafe { &mut *(&raw mut *entry.data.search_pattern_mut()) };
+        let pat = entry.data.search_pattern_mut();
         let default = DEFAULT_SEARCH_PATTERN;
         let flag = |set: Option<bool>, d: Option<bool>| set.or(d).unwrap_or(false);
         let is_sub = flag(pat.is_substitute_pattern, default.is_substitute_pattern);

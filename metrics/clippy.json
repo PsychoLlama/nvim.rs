@@ -2,15 +2,9 @@
   "files": {
     "crates/nvim/src/api/buffer/lines.rs": 1,
     "crates/nvim/src/api/buffer/text.rs": 2,
-    "crates/nvim/src/api/command/cmd.rs": 3,
-    "crates/nvim/src/api/deprecated/lines.rs": 1,
-    "crates/nvim/src/api/vim/echo.rs": 1,
-    "crates/nvim/src/api/win_config/border.rs": 1,
-    "crates/nvim/src/api/win_config/parse.rs": 6,
     "crates/nvim/src/autocmd/define.rs": 1,
     "crates/nvim/src/autocmd/fire.rs": 1,
     "crates/nvim/src/buffer_updates.rs": 1,
-    "crates/nvim/src/decoration_provider.rs": 1,
     "crates/nvim/src/drawline/mod.rs": 1,
     "crates/nvim/src/eval/funcs/search.rs": 1,
     "crates/nvim/src/extmark/get.rs": 1,
@@ -19,14 +13,8 @@
     "crates/nvim/src/extmark/undo.rs": 1,
     "crates/nvim/src/file_search/resolve.rs": 1,
     "crates/nvim/src/fileio/read.rs": 1,
-    "crates/nvim/src/highlight_group/query.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
-    "crates/nvim/src/option/value.rs": 1,
     "crates/nvim/src/search/command.rs": 1,
-    "crates/nvim/src/search/find.rs": 1,
-    "crates/nvim/src/shada/parse.rs": 1,
-    "crates/nvim/src/shada/read.rs": 1,
-    "crates/nvim/src/startup/remote.rs": 1,
-    "crates/nvim/src/tui/events.rs": 1
+    "crates/nvim/src/search/find.rs": 1
   }
 }

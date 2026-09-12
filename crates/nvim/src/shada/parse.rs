@@ -236,7 +236,8 @@ unsafe fn parse_register(
     // The contents array is the keyset's own either way.
     let contents = it.rc.take().unwrap_or(StringArray::EMPTY);
     let lines: &[String_0] = &contents;
-    let claim = (|| {
+
+    (|| {
         if !ok {
             malformed_entry_because(
                 c"E575: Error while reading ShaDa file: register entry at position %lu %s",
@@ -269,8 +270,7 @@ unsafe fn parse_register(
             reg.width = width as size_t;
         }
         Ok(0)
-    })();
-    claim
+    })()
 }
 
 /// One history line: `[type, text]`, plus a separator for search history.

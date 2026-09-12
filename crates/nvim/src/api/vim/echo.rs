@@ -94,7 +94,7 @@ pub unsafe fn nvim_echo(
     let has_progress_keys = !status.is_empty()
         || !title.is_empty()
         || percent != 0
-        || data.len() != 0
+        || !data.is_empty()
         || !source.is_empty();
     let echo_id = given_id.as_integer();
     // SAFETY: the keyset's strings are NUL-terminated, and `error` is this

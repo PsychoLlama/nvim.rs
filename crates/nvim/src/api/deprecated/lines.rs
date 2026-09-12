@@ -40,7 +40,7 @@ pub unsafe fn buffer_get_line(buffer: BufferHandle, index: Integer) -> Result<St
     // SAFETY: `arena` is the caller's; a null `lua_State` asks for the API
     // representation rather than a Lua one.
     let slice: Array = unsafe { nvim_buf_get_lines(0, buffer, index, index + 1, true, no_lua) }?;
-    if slice.len() == 0 {
+    if slice.is_empty() {
         return Ok(String_0::NULL);
     }
     // SAFETY: the array has an item, which the call above filled in.
