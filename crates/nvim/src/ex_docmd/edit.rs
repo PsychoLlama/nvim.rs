@@ -363,11 +363,11 @@ pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
     }
 
     if args.cmdidx == CmdIdx::r#move {
-        if unsafe { do_move(args.line1, args.line2, n) }.is_err() {
+        if do_move(args.line1, args.line2, n).is_err() {
             return;
         }
     } else {
-        unsafe { ex_copy(args.line1, args.line2, n) };
+        ex_copy(args.line1, args.line2, n);
     }
     u_clearline(Buf::current());
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
@@ -771,8 +771,7 @@ pub(super) fn ins_typebuf(
 
 /// `print_line()` as checked code.
 fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ex_cmds::print_line(lnum, use_number, list, first) }
+    crate::ex_cmds::print_line(lnum, use_number, list, first)
 }
 
 /// `u_undo_and_forget()` as checked code.

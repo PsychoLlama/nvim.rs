@@ -152,7 +152,7 @@ pub(crate) unsafe fn sub_joining_lines(
         let _ = unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };
         sub_nsubs.set(joined_lines_count - 1 as LineNr);
         sub_nlines.set(1 as LineNr);
-        unsafe { do_sub_msg(false) };
+        do_sub_msg(false);
         // SAFETY: the command block is the one borrowed here.
         unsafe { ex_may_print(&raw mut *args) };
     }

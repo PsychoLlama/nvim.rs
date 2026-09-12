@@ -91,16 +91,7 @@ fn prevcmd_is_set() -> bool {
 ///
 /// Bangs in the argument stand for the previously entered command, which this
 /// then remembers.
-///
-/// # Safety
-/// `args` must be the live Ex-command argument.
-pub unsafe fn do_bang(
-    addr_count: c_int,
-    args: &mut ExArg,
-    forceit: bool,
-    do_in: bool,
-    do_out: bool,
-) {
+pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, do_out: bool) {
     let (arg, line1, line2) = (args.arg, args.line1, args.line2);
     let scroll_save = msg_scroll.get();
     // Disallow shell commands in secure mode.
@@ -235,9 +226,7 @@ fn split_at_bang(text: &mut Vec<u8>, from: usize) -> Option<usize> {
 struct TempFile(*mut c_char);
 
 impl TempFile {
-    /// # Safety
-    /// Main thread; the temp directory must be available.
-    unsafe fn new() -> Option<TempFile> {
+    fn new() -> Option<TempFile> {
         let name = vim_tempname();
         (!name.is_null()).then_some(TempFile(name))
     }
@@ -343,13 +332,11 @@ unsafe fn do_filter(
         }
     } else {
         if do_in {
-            // SAFETY: main thread.
-            itmp = unsafe { TempFile::new() };
+            itmp = TempFile::new();
             no_tempname = itmp.is_none();
         }
         if !no_tempname && do_out {
-            // SAFETY: as above.
-            otmp = unsafe { TempFile::new() };
+            otmp = TempFile::new();
             no_tempname = otmp.is_none();
         }
         if no_tempname {
@@ -654,10 +641,7 @@ enum Shell {
 }
 
 /// Classify 'shell' by the tail of its invocation path.
-///
-/// # Safety
-/// Main thread; 'shell' must be a live option string.
-unsafe fn shell_kind() -> Shell {
+fn shell_kind() -> Shell {
     // SAFETY: caller's contract; a NULL length asks only for the tail.
     let tail = unsafe { cstr::bytes_at(invocation_path_tail(p_sh.get(), ptr::null_mut())) };
     if tail.starts_with(b"fish") {
@@ -676,17 +660,13 @@ unsafe fn shell_kind() -> Shell {
 /// Upstream sizes one `xmalloc`ed buffer up front and lets `append_redir`
 /// write into what is left over; the sink grows itself instead, so the
 /// arithmetic that had to predict the result's length is gone.
-///
-/// # Safety
-/// The 'shell' and 'shellredir' options must be live option strings.
-pub(crate) unsafe fn make_filter_cmd(
+pub(crate) fn make_filter_cmd(
     cmd: &CStr,
     itmp: Option<&CStr>,
     otmp: Option<&CStr>,
     do_in: bool,
 ) -> CString {
-    // SAFETY: caller's contract.
-    let shell = unsafe { shell_kind() };
+    let shell = shell_kind();
     let mut text = filter_cmd_text(
         shell,
         cmd.to_bytes(),
@@ -822,10 +802,7 @@ fn has_percent_s(opt: &[u8]) -> bool {
 }
 
 /// Print line `lnum`, without the leading newline `:print` puts out.
-///
-/// # Safety
-/// `lnum` must be a line of the current buffer.
-pub unsafe fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
+pub fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
     // SAFETY: `curwin` is the live current window.
     if Win::current().w_onebuf_opt.wo_nu != 0 || use_number {
         let mut numbuf: [c_char; 30] = [0; 30];
@@ -850,10 +827,7 @@ pub unsafe fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
 pub(crate) static global_need_msg_kind: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Print a text line.  Also in silent mode (`ex -s`).
-///
-/// # Safety
-/// `lnum` must be a line of the current buffer.
-pub unsafe fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
+pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
     let save_silent = silent_mode.get();
 
     // apply :filter /pat/
@@ -873,8 +847,7 @@ pub unsafe fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool
         say::putchar('\n' as c_int);
     }
 
-    // SAFETY: caller's contract.
-    unsafe { print_line_no_prefix(lnum, use_number, list) };
+    print_line_no_prefix(lnum, use_number, list);
     if save_silent {
         say::putchar('\n' as c_int);
         silent_mode.set(save_silent);

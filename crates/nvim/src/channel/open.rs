@@ -348,7 +348,7 @@ unsafe fn channel_proc_exit_cb(_proc: *mut Proc, status: c_int, data: *mut c_voi
     }
     // A UI client whose server died: try to reconnect before following it.
     if !exiting.get() && ui_client_channel_id.get() == unsafe { (*chan).id } {
-        unsafe { ui_client_attach_to_restarted_server() };
+        ui_client_attach_to_restarted_server();
         if ui_client_channel_id.get() == unsafe { (*chan).id } {
             exit_on_closed_chan(status);
         }

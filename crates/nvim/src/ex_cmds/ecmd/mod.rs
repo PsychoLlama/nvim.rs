@@ -349,9 +349,7 @@ pub(crate) unsafe fn do_ecmd(
         // If we are starting to edit another file, open a (new) buffer.
         // Otherwise we re-use the current buffer.
         if other_file {
-            // SAFETY: everything in the stage is the caller's or the editor's.
-            match unsafe { switch_to_other_buffer(&ecmd, &mut oldwin, &mut old_curbuf, &mut state) }
-            {
+            match switch_to_other_buffer(&ecmd, &mut oldwin, &mut old_curbuf, &mut state) {
                 Switch::Abandon => break 'theend,
                 Switch::Ready => {}
             }
@@ -395,8 +393,7 @@ pub(crate) unsafe fn do_ecmd(
         //  true      false       start editing new file, new buffer
         //  true      true        start editing in existing buffer (nothing)
         if !other_file && !state.oldbuf {
-            // SAFETY: `curbuf`/`curwin` are live.
-            if !unsafe { reuse_current_buffer(&mut state) } {
+            if !reuse_current_buffer(&mut state) {
                 break 'theend;
             }
         }
@@ -416,8 +413,7 @@ pub(crate) unsafe fn do_ecmd(
         check_arg_idx(Win::current());
 
         if !state.auto_buf {
-            // SAFETY: the editor's own state; `eap` is the caller's.
-            unsafe { enter_new_buffer(&ecmd, &mut old_curbuf, &mut state, &mut retval) };
+            enter_new_buffer(&ecmd, &mut old_curbuf, &mut state, &mut retval);
         }
 
         // Tell the diff stuff that this buffer is new and/or needs updating.
@@ -447,8 +443,7 @@ pub(crate) unsafe fn do_ecmd(
         // Did not read the file, need to show some info about the file.
         // Do this after setting the cursor.
         if state.oldbuf && !state.auto_buf {
-            // SAFETY: message state.
-            unsafe { report_file_info() };
+            report_file_info();
         }
 
         // SAFETY: `curbuf` is live and `command` the caller's.
@@ -550,10 +545,7 @@ unsafe fn resolve_target(
 /// so the reload can be undone, then empty it out.
 ///
 /// Answers false when an autocommand pulled the buffer out from under us.
-///
-/// # Safety
-/// `curbuf` and `curwin` must be the live current buffer and window.
-unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
+fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     set_last_cursor(Win::current());
     if state.newlnum == newlnum::LAST as LineNr || state.newlnum == newlnum::LASTL as LineNr {
         state.newlnum = Win::current().w_cursor.lnum;
@@ -620,11 +612,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
 
 /// Set the cursor and initialise the window, then read the file (or fire
 /// BufEnter/BufWinEnter when there is nothing to read).
-///
-/// # Safety
-/// The editor's window and buffer state must be live, and `old_curbuf` the
-/// bufref [`do_ecmd`] took on entry.
-unsafe fn enter_new_buffer(
+fn enter_new_buffer(
     args: &EcmdArgs,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
@@ -736,10 +724,7 @@ fn place_cursor(state: &Ecmd) {
 }
 
 /// The "file, N lines" line `:edit` prints when it did not read the file.
-///
-/// # Safety
-/// Message state, main thread.
-unsafe fn report_file_info() {
+fn report_file_info() {
     let msg_scroll_save = msg_scroll.get();
     // Obey the 'O' flag in 'cpoptions': overwrite any previous file message.
     if shortmess(ShmFlag::OVERALL)

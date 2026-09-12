@@ -301,7 +301,7 @@ unsafe fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
             buf.b_mod_tick_syn = display_tick.get();
         }
         if buf.b_mod_tick_decor < display_tick.get() {
-            unsafe { decor_providers_invoke_buf(buf) };
+            decor_providers_invoke_buf(buf);
             buf.b_mod_tick_decor = display_tick.get();
         }
     }
@@ -414,7 +414,7 @@ pub fn update_screen() -> Result<(), Failed> {
 
     ui_comp_set_screen_valid(true);
 
-    unsafe { decor_providers_start() };
+    decor_providers_start();
 
     // The "start" callback may have changed highlights used by the global
     // elements.
@@ -550,7 +550,7 @@ pub fn update_screen() -> Result<(), Failed> {
     }
     repeat_message();
 
-    unsafe { decor_providers_invoke_end() };
+    decor_providers_invoke_end();
 
     // Either the cmdline was cleared, not drawn, or the mode was drawn last.
     // This does not necessarily overwrite an external cmdline.

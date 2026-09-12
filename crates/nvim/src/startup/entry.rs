@@ -287,7 +287,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
     if ui_client_channel_id.get() != 0 {
         // This process is now a UI, not an editor; it does not return.
-        unsafe { ui_client_run() };
+        ui_client_run();
     }
     debug_assert!(
         ui_client_channel_id.get() == 0 && !use_builtin_ui,

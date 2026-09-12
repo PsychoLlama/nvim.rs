@@ -59,7 +59,7 @@ pub fn os_exit(mut r: c_int) -> ! {
     // SAFETY: shuts down the singleton UI, event loop and memfiles, in that
     // order, and never returns.
     if ui_client_channel_id.get() != 0 {
-        unsafe { ui_client_stop() };
+        ui_client_stop();
         if r == 0 {
             r = ui_client_exit_status.get();
         }
@@ -268,7 +268,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
 
     if ui_client_channel_id.get() != 0 {
         // Leave the alternate screen so the message below can be read.
-        unsafe { ui_client_stop() };
+        ui_client_stop();
     }
 
     if !errmsg.is_null() && unsafe { *errmsg } as c_int != NUL {

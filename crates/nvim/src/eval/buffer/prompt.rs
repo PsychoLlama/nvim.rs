@@ -70,7 +70,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         // The text so far on the prompt's last line, which the first item
         // of the new text is glued onto.
         let text: *const c_char = if lnum > 0 {
-            unsafe { buf.line(lnum) }.raw()
+            buf.line(lnum).raw()
         } else {
             c"".as_ptr()
         };
@@ -205,8 +205,8 @@ unsafe fn rewrite_prompt_line(mut buffer: Buf, new_prompt: *const c_char, new_pr
     }
     let prompt_lno = buffer.b_prompt_start.mark.lnum;
     let old_prompt = buf_prompt_text(buffer);
-    let old_line = unsafe { buffer.line(prompt_lno) }.raw();
-    let old_line_len = unsafe { buffer.line_len(prompt_lno) };
+    let old_line = buffer.line(prompt_lno).raw();
+    let old_line_len = buffer.line_len(prompt_lno);
     let old_prompt_len = len_as_int(unsafe { cstr::bytes_at(old_prompt) }.len());
     let mut cursor_col = Win::current().w_cursor.col;
     let prompt_col = buffer.b_prompt_start.mark.col;

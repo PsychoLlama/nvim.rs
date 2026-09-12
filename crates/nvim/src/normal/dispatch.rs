@@ -546,7 +546,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     let prev_finish_op = finish_op.get();
     if ns.oa.op_type == OpType::Nop {
         finish_op.set(false);
-        unsafe { may_trigger_modechanged() };
+        may_trigger_modechanged();
     }
     // The cursor shape says whether an operator is pending, and `r`/`gr`
     // change it while they wait.
@@ -584,7 +584,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         if restart_VIsual_select.get() == 1 {
             set_visual_select(true);
             VIsual_select_reg.set(0);
-            unsafe { may_trigger_modechanged() };
+            may_trigger_modechanged();
             showmode();
             restart_VIsual_select.set(0);
         }

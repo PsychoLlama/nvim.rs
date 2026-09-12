@@ -107,7 +107,6 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     loop {
         msg_scroll.set(1);
         need_wait_return.set(false);
-        // SAFETY: `curbuf` is live; `lnum` is a line of it, or zero.
         if Buf::current().b_p_ai != 0 {
             if append_indent.get() >= 0 {
                 indent = append_indent.replace(-1);
@@ -116,8 +115,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
             }
         }
 
-        // SAFETY: the command's argument and script cursor are live.
-        let Some(theline) = (unsafe { next_append_line(args, indent) }) else {
+        let Some(theline) = next_append_line(args, indent) else {
             break;
         };
         lines_left.set(Rows.get() - 1);
@@ -213,10 +211,7 @@ fn toggle_autoindent() {
 /// line's own `getline` callback.  `None` means the second source ran out,
 /// which upstream leaves the loop for *without* resetting `lines_left`;
 /// `Some(NULL)` is the callback saying the input ended.
-///
-/// # Safety
-/// `args.arg`, `args.nextcmd` and `args.cstack` must be live.
-unsafe fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
+fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
     let arg = args.arg;
     // SAFETY: caller's contract.
     if unsafe { *arg } == '|' as c_char {
@@ -399,15 +394,12 @@ pub unsafe fn ex_z(args: *mut ExArg) {
         if minus && i == lnum {
             rule_off();
         }
-        // SAFETY: `i` is a line of the current buffer.
-        unsafe {
-            print_line(
-                i,
-                flags & EXFLAG_NR != 0,
-                flags & EXFLAG_LIST != 0,
-                i == start,
-            )
-        };
+        print_line(
+            i,
+            flags & EXFLAG_NR != 0,
+            flags & EXFLAG_LIST != 0,
+            i == start,
+        );
         if minus && i == lnum {
             rule_off();
         }

@@ -313,10 +313,7 @@ unsafe fn flag_fallback(
 
 /// Read `:sort`'s flags and its optional pattern.  `None` means the command
 /// was rejected, with the reason already reported.
-///
-/// # Safety
-/// `args.arg` must be the command's NUL-terminated argument.
-unsafe fn parse_sort_flags(
+fn parse_sort_flags(
     args: &mut ExArg,
     spec: &mut SortSpec,
     regmatch: &mut RegMatch,
@@ -373,10 +370,7 @@ unsafe fn parse_sort_flags(
 
 /// Read `:uniq`'s flags and its optional pattern.  `None` means the command
 /// was rejected, with the reason already reported.
-///
-/// # Safety
-/// `args.arg` must be the command's NUL-terminated argument.
-unsafe fn parse_uniq_flags(
+fn parse_uniq_flags(
     args: &mut ExArg,
     mode: &mut UniqMode,
     use_match: &mut bool,
@@ -515,11 +509,7 @@ unsafe fn number_key(line: &mut [u8], start: ColNr, end: ColNr, spec: &SortSpec)
 /// `None` means the user interrupted the scan.  Doing the pattern match, the
 /// number conversion and the text key's one copy here is what keeps them out
 /// of the comparison.
-///
-/// # Safety
-/// The range must be lines of the current buffer, and nothing may change the
-/// buffer while the scan runs.
-unsafe fn collect_sort_keys(
+fn collect_sort_keys(
     line1: LineNr,
     line2: LineNr,
     spec: &SortSpec,
@@ -567,10 +557,7 @@ struct Placed {
 }
 
 /// Append the range's lines below it in the sorted order.
-///
-/// # Safety
-/// Every `lnum` in `sorted` must still be a line of the current buffer.
-unsafe fn append_sorted(
+fn append_sorted(
     sorted: &[SortLine],
     order: StringOrder,
     unique: bool,
@@ -644,10 +631,7 @@ pub unsafe fn ex_sort(args: *mut ExArg) {
 }
 
 /// `:sort`, with the command's argument block borrowed.
-///
-/// # Safety
-/// `args`'s range must be inside the current buffer.
-unsafe fn sort_range(args: &mut ExArg) {
+fn sort_range(args: &mut ExArg) {
     let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
 
     // Sorting one line is really quick!
@@ -664,14 +648,10 @@ unsafe fn sort_range(args: &mut ExArg) {
     let mut count = (line2 - line1) as size_t + 1;
 
     'sortend: {
-        // SAFETY: `args.arg` is the command's own argument.
-        let Some(order) = (unsafe { parse_sort_flags(args, &mut spec, &mut regmatch) }) else {
+        let Some(order) = parse_sort_flags(args, &mut spec, &mut regmatch) else {
             break 'sortend;
         };
-        // SAFETY: the range is inside the current buffer and the scan
-        // changes nothing.
-        let Some(mut sorted) = (unsafe { collect_sort_keys(line1, line2, &spec, &mut regmatch) })
-        else {
+        let Some(mut sorted) = collect_sort_keys(line1, line2, &spec, &mut regmatch) else {
             break 'sortend;
         };
 
@@ -679,8 +659,7 @@ unsafe fn sort_range(args: &mut ExArg) {
         sorted.sort_by(|l1, l2| compare_lines(order, l1, l2));
 
         // Insert the lines in the sorted order below the last one.
-        // SAFETY: the range is still there, above where the copies go.
-        let placed = unsafe { append_sorted(&sorted, order, spec.unique, forceit != 0, line2) };
+        let placed = append_sorted(&sorted, order, spec.unique, forceit != 0, line2);
         if placed.interrupted {
             break 'sortend;
         }
@@ -695,8 +674,7 @@ unsafe fn sort_range(args: &mut ExArg) {
             count = 0;
         }
 
-        // SAFETY: the range is the one just rewritten.
-        unsafe { finish_sort(line1, line2, count, &placed) };
+        finish_sort(line1, line2, count, &placed);
     }
 
     // SAFETY: the program is this command's own.
@@ -708,10 +686,7 @@ unsafe fn sort_range(args: &mut ExArg) {
 
 /// Adjust marks and extmarks for the lines `:sort` moved, and put the cursor
 /// on the first of them.
-///
-/// # Safety
-/// The range must be the one just rewritten.
-unsafe fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
+fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
     let lnum = placed.lnum;
     let deleted = count as LineNr - (lnum - line2);
     // SAFETY: caller's contract.
@@ -830,10 +805,7 @@ pub unsafe fn ex_uniq(args: *mut ExArg) {
 }
 
 /// `:uniq`, with the command's argument block borrowed.
-///
-/// # Safety
-/// `args`'s range must be inside the current buffer.
-unsafe fn uniq_range(args: &mut ExArg) {
+fn uniq_range(args: &mut ExArg) {
     let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
     let mut count = line2 - line1 + 1;
 
@@ -857,9 +829,7 @@ unsafe fn uniq_range(args: &mut ExArg) {
     let mut deleted = 0;
 
     'uniqend: {
-        let Some(order) =
-            (unsafe { parse_uniq_flags(args, &mut mode, &mut use_match, &mut regmatch) })
-        else {
+        let Some(order) = parse_uniq_flags(args, &mut mode, &mut use_match, &mut regmatch) else {
             break 'uniqend;
         };
 

@@ -134,9 +134,9 @@ pub unsafe fn ctx_save(ctx: *mut Context, flags: c_int) {
         ctx.gvars = shada_encode_gvars();
     }
     if flags & kCtxFuncs as c_int != 0 {
-        unsafe { ctx_save_funcs(ctx, false) };
+        ctx_save_funcs(ctx, false);
     } else if flags & kCtxSFuncs as c_int != 0 {
-        unsafe { ctx_save_funcs(ctx, true) };
+        ctx_save_funcs(ctx, true);
     }
 }
 
@@ -213,10 +213,7 @@ unsafe fn func_names() -> Vec<*const c_char> {
 /// Lambdas are skipped (they have no name to redefine), and with
 /// `scriptonly` so is everything but the script-local (`s:`) ones, whose
 /// names start with the `K_SPECIAL` byte.
-///
-/// # Safety
-/// Main-thread editor call; the function table is live.
-unsafe fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
+fn ctx_save_funcs(ctx: &mut Context, scriptonly: bool) {
     ctx.funcs = ARRAY_INIT;
     // SAFETY: the caller's contract; every name is NUL-terminated and alive
     // for the walk, and `cmd` is owned until `exec_impl` has copied it.
@@ -258,10 +255,7 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
 }
 
 /// Convert a `readfile()`-style array back to the msgpack blob it encodes.
-///
-/// # Safety
-/// Main-thread editor call.
-unsafe fn array_to_string(array: Array) -> Result<String_0, Error> {
+fn array_to_string(array: Array) -> Result<String_0, Error> {
     let mut sbuf = String_0::NULL;
     // `list_tv` owns the conversion result until `tv_clear`.
     let mut list_tv = TypVal::from(Object::array(array));
@@ -325,19 +319,19 @@ pub unsafe fn ctx_from_dict(dict: ApiDict, ctx: *mut Context) -> Result<c_int, E
         match key.bytes() {
             b"regs" => {
                 types |= kCtxRegs as c_int;
-                ctx.regs = unsafe { array_to_string(array) }?;
+                ctx.regs = array_to_string(array)?;
             }
             b"jumps" => {
                 types |= kCtxJumps as c_int;
-                ctx.jumps = unsafe { array_to_string(array) }?;
+                ctx.jumps = array_to_string(array)?;
             }
             b"bufs" => {
                 types |= kCtxBufs as c_int;
-                ctx.bufs = unsafe { array_to_string(array) }?;
+                ctx.bufs = array_to_string(array)?;
             }
             b"gvars" => {
                 types |= kCtxGVars as c_int;
-                ctx.gvars = unsafe { array_to_string(array) }?;
+                ctx.gvars = array_to_string(array)?;
             }
             b"funcs" => {
                 types |= kCtxFuncs as c_int;

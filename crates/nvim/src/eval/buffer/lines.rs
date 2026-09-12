@@ -185,7 +185,7 @@ unsafe fn get_buffer_lines(
     end = end.min(buffer.line_count());
     let list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
     for lnum in start..=end {
-        let (text, len) = unsafe { (buffer.line(lnum).raw(), buffer.line_len(lnum) as ssize_t) };
+        let (text, len) = (buffer.line(lnum).raw(), buffer.line_len(lnum) as ssize_t);
         unsafe { tv_list_append_string(list, text, len) };
     }
 }

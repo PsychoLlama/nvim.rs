@@ -135,7 +135,7 @@ pub(crate) unsafe fn restore_dbg_stuff(dsp: *mut SavedDebugState) {
 pub fn do_exmode() {
     exmode_active.set(true);
     State.set(MODE_NORMAL);
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
 
     // `:global` runs Ex mode for each line itself; there is no prompt
     // to give.
@@ -190,7 +190,7 @@ pub fn do_exmode() {
                     }
                 }
                 msg_col.set(0);
-                unsafe { print_line_no_prefix(Win::current().w_cursor.lnum, false, false) };
+                print_line_no_prefix(Win::current().w_cursor.lnum, false, false);
                 msg_clr_eos();
             }
         } else if ex_pressedreturn.get() && !ex_no_reprint.get() {

@@ -100,7 +100,7 @@ fn join_into(dst: &mut [u8], parts: &[&[u8]], sep: &[u8]) {
 /// The array's items really are `T`s, and `ga_data` really points at
 /// `ga_len` of them. An array that never grew has a null `ga_data` and must
 /// not reach here with a nonzero `ga_len`.
-unsafe fn items<T>(ga: &GArray) -> &[T] {
+unsafe fn typed_items<T>(ga: &GArray) -> &[T] {
     // SAFETY: the caller's promise. `ga_data` is null only for an untouched
     // array, whose `ga_len` is 0 -- and `from_raw_parts` rejects a null base
     // even then, which is why the callers test it first.
@@ -158,7 +158,7 @@ pub unsafe fn ga_clear_strings(gap: *mut GArray) {
     // and is null only when the array never grew.
     let ga = unsafe { &*gap };
     if !ga.ga_data.is_null() {
-        let strings: &[*mut c_void] = unsafe { items(ga) };
+        let strings: &[*mut c_void] = unsafe { typed_items(ga) };
         strings.iter().for_each(|&s| unsafe { xfree(s) });
     }
     unsafe { ga_clear(gap) };
@@ -275,7 +275,7 @@ pub unsafe fn ga_concat_strings(gap: *const GArray, sep: *const c_char) -> *mut 
     if ga.ga_len == 0 {
         return unsafe { xstrdup(c"".as_ptr()) };
     }
-    let strings: &[*const c_char] = unsafe { items(ga) };
+    let strings: &[*const c_char] = unsafe { typed_items(ga) };
     let parts: Vec<&[u8]> = strings.iter().map(|&s| unsafe { cbytes(s) }).collect();
     let sep = unsafe { cbytes(sep) };
     let len = joined_len(&parts, sep.len());

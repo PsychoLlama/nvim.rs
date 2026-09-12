@@ -77,10 +77,7 @@ fn report_forms(count_only: bool) -> [[&'static CStr; 2]; 2] {
 /// them and always reports.
 ///
 /// Returns true if a message was given.
-///
-/// # Safety
-/// Main thread, message state.
-pub unsafe fn do_sub_msg(count_only: bool) -> bool {
+pub fn do_sub_msg(count_only: bool) -> bool {
     // Only report substitutions when there were more than 'report' of them,
     // the command was typed by the user or more than one line changed, and
     // messages are not disabled.
@@ -145,10 +142,7 @@ struct PreviewBuf {
 impl PreviewBuf {
     /// Copy the lines `match` spans out of `orig_buf` into the preview
     /// buffer, and answer where the match sits in what was written.
-    ///
-    /// # Safety
-    /// Main thread; `self.buf` must be a real buffer.
-    unsafe fn add_match(&mut self, orig_buf: Buf, m: SubResult) -> (LPos, LPos) {
+    fn add_match(&mut self, orig_buf: Buf, m: SubResult) -> (LPos, LPos) {
         let mut p_start = LPos {
             lnum: 0 as LineNr,
             col: m.start.col,
@@ -180,9 +174,7 @@ impl PreviewBuf {
             if next_linenr == m.end.lnum {
                 p_end.lnum = self.linenr_preview + 1 as LineNr;
             }
-            // SAFETY: `next_linenr` is a line of `orig_buf`, or one past its
-            // last, which is the empty-line case.
-            unsafe { self.add_line(orig_buf, next_linenr) };
+            self.add_line(orig_buf, next_linenr);
             next_linenr += 1;
         }
         self.linenr_origbuf = m.end.lnum;
@@ -190,11 +182,7 @@ impl PreviewBuf {
     }
 
     /// Put `"|lnum| line"` into the scratch and append it to the preview.
-    ///
-    /// # Safety
-    /// Main thread; `lnum` must be one of `orig_buf`'s lines, or one past the
-    /// last.
-    unsafe fn add_line(&mut self, orig_buf: Buf, lnum: LineNr) {
+    fn add_line(&mut self, orig_buf: Buf, lnum: LineNr) {
         // SAFETY: caller's contract.
         let line = unsafe {
             if lnum == orig_buf.b_ml.ml_line_count + 1 as LineNr {
@@ -247,11 +235,7 @@ impl PreviewBuf {
 ///
 /// Returns 1 when only highlights were added and 2 when the preview window
 /// should be shown, which is what `cmdpreview_may_show` switches on.
-///
-/// # Safety
-/// Main thread; `cmdpreview_bufnr` must name the preview buffer when
-/// 'inccommand' is `split`.
-pub(crate) unsafe fn show_sub(
+pub(crate) fn show_sub(
     range: (LineNr, LineNr),
     old_cusr: Pos,
     preview_lines: &PreviewLines,
@@ -327,8 +311,7 @@ pub(crate) unsafe fn show_sub(
 
     for &m in &preview_lines.subresults {
         if let Some(pv) = pv.as_mut() {
-            // SAFETY: `orig_buf` is the buffer the matches were found in.
-            let (p_start, p_end) = unsafe { pv.add_match(orig_buf, m) };
+            let (p_start, p_end) = pv.add_match(orig_buf, m);
             // SAFETY: the preview buffer and namespace are live.
             unsafe {
                 bufhl_add_hl_pos_offset(
@@ -393,15 +376,12 @@ pub unsafe fn ex_substitute_preview(
     }
     // `do_sub` may move `args.arg`, which the caller still needs where it was.
     let save_arg = args.arg;
-    // SAFETY: main thread.
-    let retv = unsafe {
-        do_sub(
-            args,
-            profile_setlimit(p_rdt.get() as int64_t),
-            cmdpreview_ns,
-            cmdpreview_bufnr,
-        )
-    };
+    let retv = do_sub(
+        args,
+        profile_setlimit(p_rdt.get() as int64_t),
+        cmdpreview_ns,
+        cmdpreview_bufnr,
+    );
     args.arg = save_arg;
     retv
 }

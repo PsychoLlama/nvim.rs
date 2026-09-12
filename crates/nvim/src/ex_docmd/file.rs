@@ -673,8 +673,7 @@ fn buf_hide(buffer: Buf) -> bool {
 
 /// `do_bang()` as checked code.
 fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, do_out: bool) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_cmds::do_bang(addr_count, args, forceit, do_in, do_out) }
+    crate::ex_cmds::do_bang(addr_count, args, forceit, do_in, do_out)
 }
 
 /// `do_ecmd()` as checked code.

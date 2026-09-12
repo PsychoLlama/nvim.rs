@@ -217,5 +217,5 @@ pub(crate) unsafe fn highlight_changed() {
     }
     close_scratch(hlcnt);
 
-    unsafe { decor_provider_invalidate_hl() };
+    decor_provider_invalidate_hl();
 }

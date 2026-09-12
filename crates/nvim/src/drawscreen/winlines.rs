@@ -653,7 +653,7 @@ unsafe fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
     window.w_lines_valid = 0;
     window.w_valid.clear(WinValid::WCOL);
     decor_redraw_reset(window, decor);
-    unsafe { decor_providers_invoke_win(window, decor) };
+    decor_providers_invoke_win(window, decor);
 }
 
 /// The last line did not fit in the window: say so, per `'display'`.

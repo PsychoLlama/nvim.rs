@@ -296,8 +296,8 @@ unsafe fn coladvance2(
         || (visual_active() && !selection_is_old())
         || (win.ve_flags() & kOptVeFlagOnemore != 0 && wcol < MAXCOL);
     let buf = win.buffer();
-    let line = unsafe { buf.line(pos.lnum()) };
-    let linelen = unsafe { buf.line_len(pos.lnum()) };
+    let line = buf.line(pos.lnum());
+    let linelen = buf.line_len(pos.lnum());
 
     let mut idx;
     let mut col: ColNr = 0;
@@ -467,8 +467,7 @@ pub fn get_cursor_rel_lnum(win: Win, lnum: LineNr) -> LineNr {
 pub fn check_pos(buffer: Buf, pos: &mut Pos) {
     pos.lnum = pos.lnum.min(buffer.line_count());
     if pos.col > 0 {
-        // SAFETY: `lnum` was just clamped to a line the buffer has.
-        pos.col = pos.col.min(unsafe { buffer.line_len(pos.lnum) });
+        pos.col = pos.col.min(buffer.line_len(pos.lnum));
     }
 }
 
@@ -497,9 +496,7 @@ pub fn check_cursor_col(win: Win) {
     let oldcol = cursor.col();
     let oldcoladd = cursor.col() + cursor.coladd();
     let cur_ve_flags = win.ve_flags();
-    // SAFETY: a window's cursor names a line of its own buffer, which is what
-    // `check_cursor_lnum` -- the other half of `check_cursor` -- maintains.
-    let len = unsafe { buf.line_len(cursor.lnum()) };
+    let len = buf.line_len(cursor.lnum());
 
     let (col, snap) = checked_col(oldcol, len, || {
         State.get() & MODE_INSERT != 0
@@ -663,7 +660,7 @@ pub unsafe fn pchar_cursor(c: c_char) {
 /// `Win::current()`/`Buf::current()` carry. The answer is a raw pointer;
 /// reading through it is still the caller's business.
 pub fn get_cursor_line_ptr() -> *mut c_char {
-    unsafe { Buf::current().line(Win::current().cursor().lnum()).raw() }
+    Buf::current().line(Win::current().cursor().lnum()).raw()
 }
 
 /// The cursor's line, from the cursor onwards.
@@ -683,7 +680,7 @@ pub fn get_cursor_pos_ptr() -> *mut c_char {
 ///
 /// Safe: as [`get_cursor_line_ptr`].
 pub fn get_cursor_line_len() -> ColNr {
-    unsafe { Buf::current().line_len(Win::current().cursor().lnum()) }
+    Buf::current().line_len(Win::current().cursor().lnum())
 }
 
 /// The number of bytes from the cursor to the end of its line.
@@ -691,5 +688,5 @@ pub fn get_cursor_line_len() -> ColNr {
 /// Safe: as [`get_cursor_line_ptr`].
 pub fn get_cursor_pos_len() -> ColNr {
     let cursor = Win::current().cursor();
-    unsafe { Buf::current().line_len(cursor.lnum()) - cursor.col() }
+    Buf::current().line_len(cursor.lnum()) - cursor.col()
 }

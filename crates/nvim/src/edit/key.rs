@@ -245,7 +245,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
             Next::CheckPum
         }
         Ok(Key::Event) => {
-            unsafe { state_handle_k_event() };
+            state_handle_k_event();
             // If CTRL-G U was used, apply it to the next typed key.
             if dont_sync_undo.get() == KeepUndo::Now {
                 dont_sync_undo.set(KeepUndo::Armed);

@@ -80,14 +80,7 @@ struct Parsed {
 
 /// Split `/pattern/replacement/` off the argument, or take the previous
 /// pattern and replacement.
-///
-/// # Safety
-/// Main thread; `args.arg` and `args.cmd` must be live.
-unsafe fn read_pattern(
-    args: &mut ExArg,
-    cmdpreview_ns: c_int,
-    keeppatterns: bool,
-) -> Option<Parsed> {
+fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> Option<Parsed> {
     let mut cmd = args.arg;
     let mut which_pat = if args.cmdidx == CmdIdx::tilde {
         RE_LAST as c_int // use last used regexp
@@ -258,16 +251,12 @@ unsafe fn read_count(args: &mut ExArg, cmd: &mut *mut c_char) -> bool {
 /// Read the whole `:s` command line, answering None when the command is
 /// finished -- because it was refused, because it was only being parsed, or
 /// because the `\n` form turned it into a join.
-///
-/// # Safety
-/// Main thread; `args.arg` and `args.cmd` must be live.
-pub(super) unsafe fn parse_sub(
+pub(super) fn parse_sub(
     args: &mut ExArg,
     cmdpreview_ns: c_int,
     keeppatterns: bool,
 ) -> Option<SubSetup> {
-    // SAFETY: caller's contract.
-    let parsed = unsafe { read_pattern(args, cmdpreview_ns, keeppatterns) }?;
+    let parsed = read_pattern(args, cmdpreview_ns, keeppatterns)?;
     let Parsed {
         pat,
         patlen,

@@ -195,10 +195,7 @@ unsafe fn decor_provider_invoke(
 
 /// Tell every provider with an `_on_spell_nav` callback that the spell
 /// checker is looking at this span.
-///
-/// # Safety
-/// `window` must point to a live window.
-pub(crate) unsafe fn decor_providers_invoke_spell(
+pub(crate) fn decor_providers_invoke_spell(
     window: Win,
     start_row: c_int,
     start_col: c_int,
@@ -225,12 +222,7 @@ pub(crate) unsafe fn decor_providers_invoke_spell(
 }
 
 /// Ask every `_on_conceal_line` callback about `row`.
-///
-/// # Safety
-/// `window` must point to a live window.
-///
-/// @return whether a provider placed any marks in the callback.
-pub(crate) unsafe fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bool {
+pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bool {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     let keys = unsafe { (*window.w_buffer).b_marktree.n_keys };
     for idx in 0..provider_count() {
@@ -253,10 +245,7 @@ pub(crate) unsafe fn decor_providers_invoke_conceal_line(window: Win, row: c_int
 
 /// Start a redraw: run every `on_start` callback and put the providers that
 /// did not decline into the active state.
-///
-/// # Safety
-/// Runs Lua; main thread only.
-pub(crate) unsafe fn decor_providers_start() {
+pub(crate) fn decor_providers_start() {
     // SAFETY: the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
@@ -309,10 +298,7 @@ fn set_provider_running(running: bool) {
 
 /// Start a window: run every `on_win` callback. A provider that declines is
 /// skipped for the rest of this window.
-///
-/// # Safety
-/// `window` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_win(window: Win, state: DecorStateRef) {
+pub(crate) fn decor_providers_invoke_win(window: Win, state: DecorStateRef) {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     // This might change in the future; then this would need
     // `set_provider_running` just like "on_line" below.
@@ -353,10 +339,7 @@ pub(crate) unsafe fn decor_providers_invoke_win(window: Win, state: DecorStateRe
 }
 
 /// Run every `on_line` callback for one window row.
-///
-/// # Safety
-/// `window` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_line(window: Win, row: c_int) {
+pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
     // SAFETY: the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
     set_provider_running(true);
@@ -384,10 +367,7 @@ pub(crate) unsafe fn decor_providers_invoke_line(window: Win, row: c_int) {
 /// A callback may answer `false` to be skipped for the rest of the window, or
 /// a `(row, col)` pair saying "everything up to here is already decorated",
 /// which the next call for an earlier span skips on.
-///
-/// # Safety
-/// `window` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_range(
+pub(crate) fn decor_providers_invoke_range(
     window: Win,
     start_row: c_int,
     start_col: c_int,
@@ -449,10 +429,7 @@ pub(crate) unsafe fn decor_providers_invoke_range(
 }
 
 /// Run every `on_buf` callback for one buffer.
-///
-/// # Safety
-/// `buffer` must point to a live buffer; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_buf(buffer: Buf) {
+pub(crate) fn decor_providers_invoke_buf(buffer: Buf) {
     // SAFETY: the caller's buffer; the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
@@ -469,10 +446,7 @@ pub(crate) unsafe fn decor_providers_invoke_buf(buffer: Buf) {
 
 /// Finish a redraw: run every `on_end` callback, then free the decorations a
 /// callback asked to delete while they were still being drawn.
-///
-/// # Safety
-/// Runs Lua; main thread only.
-pub(crate) unsafe fn decor_providers_invoke_end() {
+pub(crate) fn decor_providers_invoke_end() {
     // SAFETY: the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
@@ -492,10 +466,7 @@ pub(crate) unsafe fn decor_providers_invoke_end() {
 ///
 /// Expensive! Should only be called by an already throttled validity check
 /// like `highlight_changed()` (throttled to the next redraw or mode change).
-///
-/// # Safety
-/// Reaches the highlight tables; main thread only.
-pub(crate) unsafe fn decor_provider_invalidate_hl() {
+pub(crate) fn decor_provider_invalidate_hl() {
     PROVIDERS.with_mut(|providers| {
         for p in providers.iter_mut() {
             p.hl_cached = false;

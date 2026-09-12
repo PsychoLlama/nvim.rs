@@ -104,7 +104,7 @@ fn insert_enter(s: &mut InsertState) {
     } else {
         State.set(MODE_INSERT);
     }
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
     stop_insert_mode.set(false);
 
     // The cursor needs positioning again when it is on a TAB, and when

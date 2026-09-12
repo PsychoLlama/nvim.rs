@@ -402,6 +402,6 @@ pub fn ex_spellrepall(_args: *mut ExArg) {
         let arg0 = unsafe { c_str(repl_from.get()) };
         semsg!("E753: Not found: {arg0}");
     } else {
-        unsafe { do_sub_msg(false) };
+        do_sub_msg(false);
     }
 }

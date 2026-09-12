@@ -184,7 +184,7 @@ pub unsafe fn ex_update(args: *mut ExArg) {
             && !Buf::current().b_ffname.is_null()
             && !unsafe { os_path_exists(Buf::current().b_ffname) })
     {
-        let _ = unsafe { do_write(args) };
+        let _ = do_write(args);
     }
 }
 
@@ -203,10 +203,9 @@ pub unsafe fn ex_write(args: *mut ExArg) {
 
     if args.usefilter != 0 {
         // input lines to shell command
-        // SAFETY: the command block is the one just borrowed.
-        unsafe { do_bang(1, args, false, true, false) };
+        do_bang(1, args, false, true, false);
     } else {
-        let _ = unsafe { do_write(args) };
+        let _ = do_write(args);
     }
 }
 
@@ -243,10 +242,7 @@ unsafe fn handle_mkdir_p_arg(args: &ExArg, fname: *mut c_char) -> Result<(), Fai
 /// when that argument is empty.  `args.append` appends instead of replacing.
 ///
 /// Answers `Err` for failure.
-///
-/// # Safety
-/// `args` must be the live Ex-command argument.
-pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
+pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     // check 'write' option
     if not_writing() {
         return Err(Failed);
@@ -299,13 +295,11 @@ pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     }
 
     if !other {
-        // SAFETY: `curbuf` is the current buffer.
-        if unsafe { cannot_write_curbuf(args) } {
+        if cannot_write_curbuf(args) {
             return Err(Failed);
         }
         (ffname, fname) = (Buf::current().b_ffname, Buf::current().b_fname);
-        // SAFETY: main thread, message state.
-        if !unsafe { confirm_partial_write(args) } {
+        if !confirm_partial_write(args) {
             return Err(Failed);
         }
     }
@@ -363,10 +357,7 @@ pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
 /// The reasons `:write` may not write the current buffer to its own file:
 /// readonly mode, no file name, an unwritable target, or a "nofile"/"nowrite"
 /// buffer that cannot be written implicitly.
-///
-/// # Safety
-/// Main thread, message state; `args.forceit` may be set by the dialog.
-unsafe fn cannot_write_curbuf(args: &mut ExArg) -> bool {
+fn cannot_write_curbuf(args: &mut ExArg) -> bool {
     let forceit = &raw mut args.forceit;
     // SAFETY: `curbuf` is the live current buffer, and `forceit` is the
     // borrowed command's own field. The whole chain is one region so the
@@ -381,10 +372,7 @@ unsafe fn cannot_write_curbuf(args: &mut ExArg) -> bool {
 }
 
 /// Writing less than the whole buffer needs a `!`, or the user's blessing.
-///
-/// # Safety
-/// Main thread, message state; `args.forceit` may be set by the dialog.
-unsafe fn confirm_partial_write(args: &mut ExArg) -> bool {
+fn confirm_partial_write(args: &mut ExArg) -> bool {
     if (args.line1 == 1 && args.line2 == Buf::current().b_ml.ml_line_count)
         || args.forceit != 0
         || args.append != 0
@@ -611,7 +599,7 @@ pub unsafe fn ex_wnext(args: *mut ExArg) {
     args.line1 = 1;
     args.line2 = Buf::current().b_ml.ml_line_count;
     // SAFETY: main thread; the command block is the one borrowed here.
-    if unsafe { do_write(args) }.is_ok() {
+    if do_write(args).is_ok() {
         unsafe { do_argfile(&raw mut *args, i) };
     }
 }
@@ -640,8 +628,7 @@ pub unsafe fn do_wqall(args: *mut ExArg) {
     // the head has to be re-read, and no iterator re-reads it.
     let mut cur = first_buffer();
     while let Some(buf) = cur {
-        // SAFETY: `buf` is a live buffer of the editor's own list.
-        match unsafe { write_one_buffer(args, buf, save_forceit, &mut error) } {
+        match write_one_buffer(args, buf, save_forceit, &mut error) {
             WriteAll::Stop => break,
             // The buffer was deleted under us.  Upstream restarts from
             // `firstbuf` and then takes the step below, so the first buffer
@@ -673,10 +660,7 @@ enum WriteAll {
 
 /// One step of `:wall`'s walk, counting every buffer it could not write into
 /// `error`.
-///
-/// # Safety
-/// Main thread; `buffer` must be a live buffer.
-unsafe fn write_one_buffer(
+fn write_one_buffer(
     args: &mut ExArg,
     buffer: Buf,
     save_forceit: c_int,

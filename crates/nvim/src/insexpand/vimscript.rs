@@ -342,7 +342,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
         show_pum(save_w_wrow, save_w_leftcol);
     }
 
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
     unsafe { ui_flush() };
 }
 

@@ -188,16 +188,11 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
     // stopping the terminal frees, and a re-attach can run after that.
     // SAFETY: the caller's promise.
     tui_term.set(unsafe { cstr_to_string(term) });
-    // SAFETY: as above; the description was just remembered.
-    unsafe { ui_client_reattach() };
+    ui_client_reattach();
 }
 
 /// Attaches with the terminal description the last attach remembered.
-///
-/// # Safety
-///
-/// A channel must be set.
-pub(crate) unsafe fn ui_client_reattach() {
+pub(crate) fn ui_client_reattach() {
     let (width, height, term, rgb) = (
         tui_width.get(),
         tui_height.get(),
@@ -238,7 +233,7 @@ pub(crate) unsafe fn ui_client_reattach() {
         )
     };
     ui_client_attached.set(true);
-    unsafe { log_startup_step(c"nvim_ui_attach") };
+    log_startup_step(c"nvim_ui_attach");
 
     // Tell the server who is drawing for it, which is what
     // `nvim_get_chan_info` reports and what `:checkhealth` reads.
@@ -257,7 +252,7 @@ pub(crate) unsafe fn ui_client_reattach() {
     client.push(Object::string(unsafe {
         cstr_to_string(c"nvim-tui".as_ptr())
     }));
-    client.push(Object::dict(unsafe { api_version() }));
+    client.push(Object::dict(api_version()));
     client.push(Object::string(unsafe { cstr_to_string(c"ui".as_ptr()) }));
     // A UI exposes no methods of its own.
     client.push(Object::array(Array::EMPTY));
@@ -269,15 +264,11 @@ pub(crate) unsafe fn ui_client_reattach() {
             client.array(),
         )
     };
-    unsafe { log_startup_step(c"nvim_set_client_info") };
+    log_startup_step(c"nvim_set_client_info");
 }
 
 /// This binary's own `version` dict, out of its API metadata.
-///
-/// # Safety
-///
-/// The API metadata must be initialised.
-unsafe fn api_version() -> ApiDict {
+fn api_version() -> ApiDict {
     let metadata = api_metadata();
     let metadata = metadata.as_dict().expect("API metadata is a dict");
     assert!(!metadata.is_empty(), "API metadata is empty");
@@ -296,22 +287,14 @@ unsafe fn api_version() -> ApiDict {
 }
 
 /// Notes in `--startuptime` that `step` has been sent.
-///
-/// # Safety
-///
-/// `step` must outlive the log entry.
-unsafe fn log_startup_step(step: &'static CStr) {
+fn log_startup_step(step: &'static CStr) {
     if !time_fd.get().is_null() {
         unsafe { time_msg(step.as_ptr(), core::ptr::null::<ProfTime>()) };
     }
 }
 
 /// Detaches from the server without stopping this process.
-///
-/// # Safety
-///
-/// A channel must be set.
-pub(crate) unsafe fn ui_client_detach() {
+pub(crate) fn ui_client_detach() {
     let (id, name, no_args) = (
         ui_client_channel_id.get(),
         c"nvim_ui_detach".as_ptr(),
@@ -324,11 +307,7 @@ pub(crate) unsafe fn ui_client_detach() {
 }
 
 /// Starts the TUI, attaches, and runs until the process exits.
-///
-/// # Safety
-///
-/// Must be called once, on the main thread, with a server channel set.
-pub(crate) unsafe fn ui_client_run() -> ! {
+pub(crate) fn ui_client_run() -> ! {
     // Published before the loop turns: a callback that runs during
     // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
     tui.set(unsafe { tui_start() });
@@ -356,11 +335,7 @@ pub(crate) unsafe fn ui_client_run() -> ! {
 }
 
 /// Stops drawing, on the way out.
-///
-/// # Safety
-///
-/// The TUI must have been started.
-pub(crate) unsafe fn ui_client_stop() {
+pub(crate) fn ui_client_stop() {
     ui_client_attached.set(false);
     if !unsafe { tui_is_stopped(tui.get()) } {
         unsafe { tui_stop(tui.get()) };
@@ -369,11 +344,7 @@ pub(crate) unsafe fn ui_client_stop() {
 
 /// Reports a new terminal size to the server, and remembers it for a
 /// re-attach.
-///
-/// # Safety
-///
-/// A channel must be set if this client is attached.
-pub(crate) unsafe fn ui_client_set_size(width: c_int, height: c_int) {
+pub(crate) fn ui_client_set_size(width: c_int, height: c_int) {
     if ui_client_attached.get() {
         let mut args = ArrayBuf::<2>::new();
         args.push(Object::integer(Integer::from(width)));
@@ -495,7 +466,7 @@ static EVENT_HANDLERS: [Handler; 27] = {
 /// # Safety
 ///
 /// `args` must be the array the decoder produced for this event.
-unsafe fn arg(args: &mut Array, index: usize, want: Option<ObjectType>) -> Option<Object> {
+unsafe fn take_arg(args: &mut Array, index: usize, want: Option<ObjectType>) -> Option<Object> {
     let value = args.get_mut(index)?;
     match want {
         Some(ty) if value.kind() != ty => None,
@@ -555,16 +526,16 @@ macro_rules! tag {
 /// declaration names.
 macro_rules! payload {
     (Boolean, $v:expr) => {
-        $v.as_boolean().expect("`arg` checked the tag")
+        $v.as_boolean().expect("`take_arg` checked the tag")
     };
     (Integer, $v:expr) => {
-        $v.as_integer().expect("`arg` checked the tag")
+        $v.as_integer().expect("`take_arg` checked the tag")
     };
     (String_0, $v:expr) => {
-        $v.into_string().expect("`arg` checked the tag")
+        $v.into_string().expect("`take_arg` checked the tag")
     };
     (Array, $v:expr) => {
-        $v.into_array().expect("`arg` checked the tag")
+        $v.into_array().expect("`take_arg` checked the tag")
     };
     (Dict, $v:expr) => {
         $v.into_dict().expect("`arg` checked the tag")
@@ -599,7 +570,7 @@ macro_rules! forward {
             let mut index = 0usize;
             let _ = (&mut args, &mut index);
             $(
-                let Some($arg) = (unsafe { arg(&mut args, index, tag!($ty)) }) else {
+                let Some($arg) = (unsafe { take_arg(&mut args, index, tag!($ty)) }) else {
                     return bad_event($event, cstr!(stringify!($wrapper)));
                 };
                 index += 1;
@@ -668,9 +639,9 @@ forward! {
 /// `args` must be the array the decoder produced for this event.
 pub(crate) unsafe fn ui_client_event_grid_resize(mut args: Array) {
     let (Some(grid), Some(width), Some(height)) = (
-        unsafe { arg(&mut args, 0, Some(kObjectTypeInteger)) },
-        unsafe { arg(&mut args, 1, Some(kObjectTypeInteger)) },
-        unsafe { arg(&mut args, 2, Some(kObjectTypeInteger)) },
+        unsafe { take_arg(&mut args, 0, Some(kObjectTypeInteger)) },
+        unsafe { take_arg(&mut args, 1, Some(kObjectTypeInteger)) },
+        unsafe { take_arg(&mut args, 2, Some(kObjectTypeInteger)) },
     ) else {
         return bad_event(c"grid_resize", c"ui_client_event_grid_resize");
     };
@@ -732,10 +703,10 @@ pub(crate) unsafe fn ui_client_event_raw_line(g: *mut GridLineEvent) {
 /// `args` must be the array the decoder produced for this event.
 pub(crate) unsafe fn ui_client_event_hl_attr_define(mut args: Array) {
     let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
-        unsafe { arg(&mut args, 0, Some(kObjectTypeInteger)) },
-        unsafe { arg(&mut args, 1, Some(kObjectTypeDict)) },
-        unsafe { arg(&mut args, 2, Some(kObjectTypeDict)) },
-        unsafe { arg(&mut args, 3, Some(kObjectTypeArray)) },
+        unsafe { take_arg(&mut args, 0, Some(kObjectTypeInteger)) },
+        unsafe { take_arg(&mut args, 1, Some(kObjectTypeDict)) },
+        unsafe { take_arg(&mut args, 2, Some(kObjectTypeDict)) },
+        unsafe { take_arg(&mut args, 3, Some(kObjectTypeArray)) },
     ) else {
         return bad_event(c"hl_attr_define", c"ui_client_event_hl_attr_define");
     };
@@ -795,7 +766,7 @@ unsafe fn dict_to_hlattrs(d: &ApiDict, rgb: bool) -> HlAttrs {
 ///
 /// `args` must be the array the decoder produced for this event.
 pub(crate) unsafe fn ui_client_event_error_exit(mut args: Array) {
-    let Some(status) = (unsafe { arg(&mut args, 0, Some(kObjectTypeInteger)) }) else {
+    let Some(status) = (unsafe { take_arg(&mut args, 0, Some(kObjectTypeInteger)) }) else {
         return bad_event(c"error_exit", c"ui_client_event_error_exit");
     };
     let status = status.as_integer().expect("`arg` checked the tag");
@@ -812,7 +783,7 @@ pub(crate) unsafe fn ui_client_event_error_exit(mut args: Array) {
 ///
 /// `args` must be the array the decoder produced for this event.
 pub(crate) unsafe fn ui_client_event_connect(mut args: Array) {
-    let Some(address) = (unsafe { arg(&mut args, 0, Some(kObjectTypeString)) }) else {
+    let Some(address) = (unsafe { take_arg(&mut args, 0, Some(kObjectTypeString)) }) else {
         return bad_event(c"connect", c"ui_client_event_connect");
     };
     let address = address.as_string().expect("`arg` checked the tag");
@@ -862,8 +833,7 @@ unsafe extern "C" fn channel_connect_event(argv: *mut *mut c_void) {
         os_exit(1);
     }
     ui_client_channel_id.set(chan);
-    // SAFETY: a channel is now set.
-    unsafe { ui_client_reattach() };
+    ui_client_reattach();
     let line = line!() as c_int;
     logmsg!(
         LOGLVL_INF,
@@ -919,11 +889,7 @@ pub(crate) unsafe fn ui_client_event_restart(args: Array) {
 ///
 /// Called once the old channel is gone, which is why this is separate from
 /// [`ui_client_event_restart`].
-///
-/// # Safety
-///
-/// Must run on the main thread with the old channel closed.
-pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
+pub(crate) fn ui_client_attach_to_restarted_server() {
     if !restart_pending.get() {
         return;
     }
@@ -931,11 +897,14 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
     // The arguments move out here, so the cell has nothing left to free and
     // dropping `args` at the end of the scope is the only free.
     let mut args = restart_args.take();
-    let address = unsafe { arg(&mut args.0, 0, Some(kObjectTypeString)) };
+    let address = unsafe { take_arg(&mut args.0, 0, Some(kObjectTypeString)) };
     match address {
         None => bad_event(c"restart", c"ui_client_attach_to_restarted_server"),
         Some(address) => {
-            let listen_addr = address.as_string().expect("`arg` checked the tag").data();
+            let listen_addr = address
+                .as_string()
+                .expect("`take_arg` checked the tag")
+                .data();
             let mut err = c"".as_ptr();
             let chan_id = unsafe {
                 channel_connect(
@@ -959,8 +928,7 @@ pub(crate) unsafe fn ui_client_attach_to_restarted_server() {
                 );
             } else {
                 ui_client_channel_id.set(chan_id);
-                // SAFETY: the channel is now set.
-                unsafe { ui_client_reattach() };
+                ui_client_reattach();
                 let line = line!() as c_int;
                 logmsg!(
                     LOGLVL_INF,

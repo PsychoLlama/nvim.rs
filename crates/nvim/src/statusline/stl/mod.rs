@@ -741,8 +741,7 @@ pub unsafe fn build_stl_str_hl(
 
     // Read the byte under the cursor now, in case an item needs it: cheaper
     // than copying the line.
-    // SAFETY: a live buffer and one of its lines.
-    let line_ptr = unsafe { buf.line(lnum) }.raw();
+    let line_ptr = buf.line(lnum).raw();
     // SAFETY: `ml_get_buf` answers a NUL-terminated line.
     let empty_line = unsafe { *line_ptr } == 0;
     // SAFETY: as above.

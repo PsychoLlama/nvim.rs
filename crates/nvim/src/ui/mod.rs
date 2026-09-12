@@ -677,7 +677,7 @@ pub unsafe fn ui_flush() {
 
     if pending_mode_info_update.get() {
         let mut arena: Arena = ARENA_EMPTY;
-        let style = unsafe { mode_style_array() };
+        let style = mode_style_array();
         let enabled = unsafe { *p_guicursor.get() } != 0;
         ui_call_mode_info_set(enabled as Boolean, style);
         unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
@@ -728,7 +728,7 @@ pub unsafe fn ui_cursor_shape_no_check_conceal() {
     if !full_screen.get() {
         return;
     }
-    let new_mode_idx = unsafe { cursor_get_mode_idx() };
+    let new_mode_idx = cursor_get_mode_idx();
     if new_mode_idx != ui_mode_idx.get() {
         ui_mode_idx.set(new_mode_idx);
         pending_mode_update.set(true);

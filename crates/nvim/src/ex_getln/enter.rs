@@ -342,7 +342,7 @@ pub(crate) fn command_line_enter(
             }
             err = Error::none();
         }
-        unsafe { may_trigger_modechanged() };
+        may_trigger_modechanged();
 
         init_history();
         s.hiscnt = get_hislen(); // an impossible history value
@@ -516,7 +516,7 @@ pub(crate) fn command_line_enter(
             cmdpreview.set(save_cmdpreview); // restore the preview state
             redraw_all_later(UPD_SOME_VALID);
         }
-        unsafe { may_trigger_modechanged() };
+        may_trigger_modechanged();
         setmouse();
         sb_text_end_cmdline();
     }
@@ -587,7 +587,7 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
     }
 
     // Trigger SafeState if nothing is pending.
-    unsafe { may_trigger_safestate(s.xpc.xp_numfiles <= 0) };
+    may_trigger_safestate(s.xpc.xp_numfiles <= 0);
 
     if cc.in_use() {
         s.prev_cmdbuff = unsafe { xstrdup(cc.text()) };

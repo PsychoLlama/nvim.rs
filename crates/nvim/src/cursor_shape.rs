@@ -164,11 +164,7 @@ fn clear_shape_table() {
 
 /// The whole table as the `mode_info_set` UI event carries it: one dict per
 /// mode, in table order.
-///
-/// # Safety
-/// Reaches the shape table and can run a namespace callback; main thread
-/// only.
-pub(crate) unsafe fn mode_style_array() -> Array {
+pub(crate) fn mode_style_array() -> Array {
     let mut all = Array::with_capacity(SHAPE_IDX_COUNT as size_t);
     for idx in 0..SHAPE_IDX_COUNT {
         let cur = shape_entry(idx);
@@ -202,16 +198,13 @@ pub(crate) unsafe fn mode_style_array() -> Array {
             put(c"blinkoff", Object::integer(cur.blinkoff.into()));
             put(c"hl_id", Object::integer(cur.id.into()));
             put(c"id_lm", Object::integer(cur.id_lm.into()));
-            // SAFETY: main-thread call. Resolving an id can run a namespace
-            // callback, which is why the entry was copied out first.
-            let attr = unsafe { attr_of(cur.id) };
+            let attr = attr_of(cur.id);
             put(c"attr_id", Object::integer(attr.into()));
             // Upstream reads `id_lm` back through a live pointer *after*
             // that call, so a callback that rewrote 'guicursor' would be
             // seen here and not two keys above. Kept.
             let id_lm = shape_entry(idx).id_lm;
-            // SAFETY: as above.
-            let attr_lm = unsafe { attr_of(id_lm) };
+            let attr_lm = attr_of(id_lm);
             put(c"attr_id_lm", Object::integer(attr_lm.into()));
         }
         all.push(Object::dict(dic));
@@ -221,10 +214,7 @@ pub(crate) unsafe fn mode_style_array() -> Array {
 
 /// The attribute a cursor highlight group resolves to; zero for "no group",
 /// which is not a group id.
-///
-/// # Safety
-/// Resolves namespace overrides, which can run a Lua callback.
-unsafe fn attr_of(id: c_int) -> c_int {
+fn attr_of(id: c_int) -> c_int {
     if id == 0 {
         return 0;
     }
@@ -276,13 +266,7 @@ unsafe fn digits_at(opt: *mut c_char, at: usize) -> (c_int, usize) {
 /// Two passes: the first rejects the value as a whole without writing
 /// anything, the second applies it. `what` is [`SHAPE_CURSOR`] or
 /// [`SHAPE_MOUSE`] and decides which modes are legal to name.
-///
-/// # Safety
-/// Reads the option's own value, which must be a live NUL-terminated
-/// string, and defines highlight groups; main thread only.
-///
-/// @returns an error message for an illegal option, null otherwise.
-pub(crate) unsafe fn parse_shape_opt(what: c_int) -> Option<&'static CStr> {
+pub(crate) fn parse_shape_opt(what: c_int) -> Option<&'static CStr> {
     // Set by a `ve` in the mode list, in either round.
     let mut found_ve = false;
 
@@ -513,10 +497,7 @@ pub(crate) fn cursor_is_block_during_visual(exclusive: bool) -> bool {
 
 /// Whether any mode's cursor is coloured by highlight group `syn_id`, and
 /// so needs the UI told when that group changes.
-///
-/// # Safety
-/// Reads the option's own value; main thread only.
-pub(crate) unsafe fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
+pub(crate) fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
     // SAFETY: an option value is a NUL-terminated string.
     if unsafe { *p_guicursor.get() } == 0 {
         return false;
@@ -528,10 +509,7 @@ pub(crate) unsafe fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
 }
 
 /// The entry describing the cursor for the mode the editor is in.
-///
-/// # Safety
-/// Reads the command line and the `'selection'` option; main thread only.
-pub(crate) unsafe fn cursor_get_mode_idx() -> ShapeIdx {
+pub(crate) fn cursor_get_mode_idx() -> ShapeIdx {
     let state = State.get();
     if state == MODE_SHOWMATCH {
         SHAPE_IDX_SM

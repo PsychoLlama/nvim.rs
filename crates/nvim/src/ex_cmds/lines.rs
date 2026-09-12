@@ -39,11 +39,7 @@ use core::ptr;
 /// `:move` -- move lines `line1`..`line2` to sit after line `dest`.
 ///
 /// Answers `Err` for failure.
-///
-/// # Safety
-/// The range and the destination must be lines of the current buffer, or one
-/// short of its first line.
-pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed> {
+pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed> {
     if dest >= line1 && dest < line2 {
         emsg(gettext(c"E134: Cannot move a range of lines into itself"));
         return Err(Failed);
@@ -118,13 +114,13 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     let (line_off, byte_off) = if dest >= line2 {
         // SAFETY: the lines the move stepped over are still in the buffer.
         unsafe { mark_adjust_nofold(line2 + 1, dest, -num_lines, 0, kExtmarkNOOP) };
-        unsafe { move_folds_in_windows(line1, line2, dest) };
+        move_folds_in_windows(line1, line2, dest);
         set_op_range(dest - num_lines + 1, dest);
         (-num_lines, -extent_byte)
     } else {
         // SAFETY: as above.
         unsafe { mark_adjust_nofold(dest + 1, line1 - 1, num_lines, 0, kExtmarkNOOP) };
-        unsafe { move_folds_in_windows(dest + 1, line1 - 1, line2) };
+        move_folds_in_windows(dest + 1, line1 - 1, line2);
         set_op_range(dest + 1, dest + num_lines);
         (0, 0)
     };
@@ -219,11 +215,7 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 
 /// Move the folds of `line1`..`line2` to `dest` in every window showing the
 /// current buffer -- a window on another tab page holds folds of its own.
-///
-/// # Safety
-/// The three line numbers must be a `:move` range of the current
-/// buffer.
-unsafe fn move_folds_in_windows(line1: LineNr, line2: LineNr, dest: LineNr) {
+fn move_folds_in_windows(line1: LineNr, line2: LineNr, dest: LineNr) {
     for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
         if unsafe { (*wp).w_buffer } == Buf::current_raw() {
@@ -245,11 +237,7 @@ pub(super) fn set_op_range(start: LineNr, end: LineNr) {
 }
 
 /// `:copy` and `:t` -- copy lines `line1`..`line2` to below line `n`.
-///
-/// # Safety
-/// The range and the destination must be lines of the current buffer, or one
-/// short of its first line.
-pub unsafe fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
+pub fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
     let count = line2 - line1 + 1;
     set_op_range(n + 1, n + count);
 

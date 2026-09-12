@@ -163,10 +163,7 @@ fn regsub_flags() -> c_int {
 /// in the replacement and are halved here.
 ///
 /// `at` is where the replacement starts in the rebuilt line.
-///
-/// # Safety
-/// Main thread; `st.new_line` must hold the rebuilt line.
-unsafe fn split_carriage_returns(st: &mut Sub, at: usize) {
+fn split_carriage_returns(st: &mut Sub, at: usize) {
     let mut line = st
         .new_line
         .take()
@@ -232,10 +229,7 @@ unsafe fn split_carriage_returns(st: &mut Sub, at: usize) {
 ///
 /// Returning early is upstream's `goto skip`: the expression failed, the
 /// command was aborted, or this is only a `:s///n` count.
-///
-/// # Safety
-/// Main thread; `st` must describe a live match.
-pub(super) unsafe fn build_replacement(
+pub(super) fn build_replacement(
     st: &mut Sub,
     _args: &SubArgs,
     current_match: &mut super::super::SubResult,
@@ -342,8 +336,7 @@ pub(super) unsafe fn build_replacement(
     // Remember the next character to be copied.
     st.copied = st.regmatch.endpos[0].col as usize;
 
-    // SAFETY: the buffer is live.
-    unsafe { st.adjust_sub_firstlnum() };
+    st.adjust_sub_firstlnum();
 
     // TODO(bfredl): this has some robustness issues, look into later.
     let start: LPos = st.regmatch.startpos[0];
@@ -358,8 +351,7 @@ pub(super) unsafe fn build_replacement(
 
     // Save the line number before processing newlines.
     let lnum_before_newlines = st.lnum;
-    // SAFETY: the replacement was just written into the rebuilt line.
-    unsafe { split_carriage_returns(st, start_col as usize) };
+    split_carriage_returns(st, start_col as usize);
 
     let new_endcol = st.new_line().len() as ColNr;
     current_match.end.col = new_endcol;
@@ -398,10 +390,7 @@ pub(super) unsafe fn build_replacement(
 /// appended to the rebuilt line, so the buffer does not need it.
 ///
 /// Answers false when undo could not be saved.
-///
-/// # Safety
-/// Main thread; `st.lnum` must be the rebuilt line.
-unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
+fn delete_matched_lines(st: &mut Sub) -> bool {
     st.lnum += 1;
     // SAFETY: the lines below `lnum` are the ones the match spanned.
     if u_savedel(st.lnum, st.nmatch_tl).is_err() {
@@ -436,10 +425,7 @@ unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
 /// substitutions on it produced.
 ///
 /// Answers false when undo could not be saved, which abandons the line.
-///
-/// # Safety
-/// Main thread; `st.new_line` must hold the rebuilt line.
-pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
+pub(super) fn commit_line(st: &mut Sub) -> bool {
     // Copy the rest of the line, the part that didn't match.  "matchcol" has
     // to be adjusted using the end of the line as reference, because the
     // substitute may have changed the number of characters; same for
@@ -481,8 +467,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     st.line_matches.clear();
 
     if st.nmatch_tl > 0 as LineNr {
-        // SAFETY: the rebuilt line is in the buffer.
-        if !unsafe { delete_matched_lines(st) } {
+        if !delete_matched_lines(st) {
             return false;
         }
     }

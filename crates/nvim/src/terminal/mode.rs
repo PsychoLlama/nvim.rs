@@ -366,8 +366,7 @@ pub(crate) fn terminal_enter() -> bool {
     // SAFETY: TermEnter against a live buffer; nothing of the terminal or
     // the session is borrowed across it.
     unsafe { apply_autocmds(AutoEvent::TermEnter, none, none, false, Some(buf)) };
-    // SAFETY: reports the mode change, which can run autocommands too.
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
     s.term.refcount.release();
     if s.term.buf_handle == 0 {
         s.close = true;
@@ -385,8 +384,7 @@ pub(crate) fn terminal_enter() -> bool {
     if !s.cursor_visible {
         ui_busy_stop();
     }
-    // SAFETY: re-reads `'guicursor'` now that terminal mode is over.
-    unsafe { parse_shape_opt(SHAPE_CURSOR) };
+    parse_shape_opt(SHAPE_CURSOR);
     unset_terminal_winopts(s);
     terminal_focus(s.term, false);
     let mut buf = current_buf();
@@ -600,8 +598,7 @@ unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
         Ok(Key::Event) => {
             // An event handler can close the terminal.
             s.term.refcount.retain();
-            // SAFETY: runs whatever the main loop had queued.
-            unsafe { state_handle_k_event() };
+            state_handle_k_event();
             s.term.refcount.release();
             if s.term.buf_handle == 0 {
                 s.close = true;

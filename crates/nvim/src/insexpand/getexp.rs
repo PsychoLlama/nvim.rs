@@ -902,7 +902,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         };
         compl_curr_match.set(next.unwrap_or(old).raw());
     }
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
 
     if match_count > 0 && !ctrl_x_mode_spell() {
         if is_nearest_active() && !ins_compl_has_preinsert() {

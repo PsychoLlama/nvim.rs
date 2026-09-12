@@ -194,10 +194,7 @@ impl Sub {
 
     /// After a multi-line match, continue in a copy of the *last* matched
     /// line -- upstream's `ADJUST_SUB_FIRSTLNUM`.
-    ///
-    /// # Safety
-    /// Main thread; the buffer must be live.
-    pub(super) unsafe fn adjust_sub_firstlnum(&mut self) {
+    pub(super) fn adjust_sub_firstlnum(&mut self) {
         if self.nmatch > 1 as c_int {
             self.sub_firstlnum += self.nmatch as LineNr - 1 as LineNr;
             self.load_firstline();
@@ -257,10 +254,7 @@ fn push_preview(preview_lines: &mut PreviewLines, current_match: SubResult) {
 /// preview's bookkeeping or the real replacement.
 ///
 /// Returning is upstream's `goto skip`.
-///
-/// # Safety
-/// Main thread; the state must describe a live match.
-unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
+fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
     // 1. A match of the empty string does not count, except for the first
     //    match.  This reproduces the strange vi behaviour, and also catches
     //    endless loops.
@@ -310,8 +304,7 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
     }
 
     if subflags.with(|flags| flags.do_ask) && args.cmdpreview_ns <= 0 as c_int {
-        // SAFETY: the state describes a live match.
-        match unsafe { ask_confirm(st) } {
+        match ask_confirm(st) {
             Confirm::Replace => {}
             Confirm::Skip | Confirm::Quit => return,
         }
@@ -343,8 +336,7 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
             current_match.end.lnum = st.sub_firstlnum + st.nmatch as LineNr - 1 as LineNr;
         }
         current_match.end.col = st.regmatch.endpos[0].col;
-        // SAFETY: the buffer is live.
-        unsafe { st.adjust_sub_firstlnum() };
+        st.adjust_sub_firstlnum();
         st.lnum += st.nmatch as LineNr - 1 as LineNr;
         return;
     }
@@ -352,8 +344,7 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
     // 3. Substitute the string.  During an 'inccommand' preview only do this
     //    if there is a replacement pattern.
     if args.cmdpreview_ns <= 0 as c_int || args.has_second_delim {
-        // SAFETY: the state describes a live match.
-        unsafe { build_replacement(st, args, current_match) };
+        build_replacement(st, args, current_match);
     }
 }
 
@@ -362,10 +353,7 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
 /// We already know we have when we are at the end of the line, except that a
 /// pattern like `bar\|\nfoo` may match at the NUL.  `lnum` can be below
 /// `line2` when there is a `\zs` in the pattern after a line break.
-///
-/// # Safety
-/// Main thread; the copied line and the compiled program must be live.
-unsafe fn is_last_match(st: &Sub) -> bool {
+fn is_last_match(st: &Sub) -> bool {
     if st.skip_match || got_int.get() || st.got_quit || st.lnum > st.line2 {
         return true;
     }
@@ -385,10 +373,7 @@ unsafe fn is_last_match(st: &Sub) -> bool {
 }
 
 /// Loop until there is nothing more to replace on this line.
-///
-/// # Safety
-/// Main thread; `st` must describe a line with at least one match.
-unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
+fn match_loop(st: &mut Sub, args: &SubArgs) {
     loop {
         let mut current_match = SubResult {
             start: LPos {
@@ -432,14 +417,12 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
         Win::current().w_cursor.lnum = st.lnum;
         st.do_again = false;
 
-        // SAFETY: the state describes a live match.
-        unsafe { match_one(st, args, &mut current_match) };
+        match_one(st, args, &mut current_match);
 
         // 4. Find the next match, if "g" was given.  Guard against an endless
         //    loop with patterns that match the empty string, e.g. ":s/$/pat/g"
         //    or ":s/[a-z]* /(&)/g" -- but ":s/\n/#/" is fine.
-        // SAFETY: the copied line and the program are live.
-        let lastone = unsafe { is_last_match(st) };
+        let lastone = is_last_match(st);
         st.nmatch = -1 as c_int;
 
         // Replace the line in the buffer when needed.  This is skipped when
@@ -458,8 +441,7 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
 
         if no_more {
             if st.new_line.is_some() {
-                // SAFETY: the rebuilt line and the buffer are live.
-                if !unsafe { commit_line(st) } {
+                if !commit_line(st) {
                     break;
                 }
             }
@@ -490,10 +472,7 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
 }
 
 /// Everything that happens for one line of the range that has a match.
-///
-/// # Safety
-/// Main thread; `st.lnum` must be a line of the current buffer.
-unsafe fn substitute_line(st: &mut Sub, args: &SubArgs) {
+fn substitute_line(st: &mut Sub, args: &SubArgs) {
     st.prev_matchcol = MAXCOL as ColNr;
     st.new_line = None;
     st.did_sub = false;
@@ -512,8 +491,7 @@ unsafe fn substitute_line(st: &mut Sub, args: &SubArgs) {
         st.got_match = true;
     }
 
-    // SAFETY: caller's contract.
-    unsafe { match_loop(st, args) };
+    match_loop(st, args);
 
     if st.did_sub {
         sub_nlines.set(sub_nlines.get() + 1);
@@ -527,10 +505,7 @@ unsafe fn substitute_line(st: &mut Sub, args: &SubArgs) {
 
 /// Check for a match on each line of the range.  Under a preview, stop once
 /// enough lines have been collected to fill the preview window.
-///
-/// # Safety
-/// Main thread; the range and the compiled program must be live.
-unsafe fn substitute_range(st: &mut Sub, args: &SubArgs) {
+fn substitute_range(st: &mut Sub, args: &SubArgs) {
     while st.lnum <= st.line2 && !st.got_quit {
         // SAFETY: main thread.
         if aborting() {
@@ -546,8 +521,7 @@ unsafe fn substitute_range(st: &mut Sub, args: &SubArgs) {
         // SAFETY: the program is compiled.
         st.nmatch = unsafe { regexec_at(&raw mut st.regmatch, st.lnum, 0 as ColNr) };
         if st.nmatch != 0 {
-            // SAFETY: `lnum` is a line of the buffer.
-            unsafe { substitute_line(st, args) };
+            substitute_line(st, args);
         }
         line_breakcheck();
         // SAFETY: a profile value we were handed.
@@ -560,10 +534,7 @@ unsafe fn substitute_range(st: &mut Sub, args: &SubArgs) {
 
 /// Report what happened, put the cursor and the marks where Vi would, and
 /// draw the preview if this was one.
-///
-/// # Safety
-/// Main thread; `st` and `args` must describe the command just run.
-unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
+fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     // SAFETY: the current buffer is live.
     Buf::current().deleted_bytes2 = 0 as size_t;
 
@@ -618,9 +589,8 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             // The report is only given for a real substitute, never for a
             // preview -- and upstream's `&&` means it is not even *computed*
             // for one.
-            // SAFETY: message state.
             if args.cmdpreview_ns <= 0 as c_int
-                && !unsafe { do_sub_msg(subflags.with(|flags| flags.do_count)) }
+                && !do_sub_msg(subflags.with(|flags| flags.do_count))
                 && subflags.with(|flags| flags.do_ask)
                 && p_ch.get() > 0 as OptInt
             {
@@ -630,15 +600,12 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             global_need_beginline.set(true);
         }
         if subflags.with(|flags| flags.do_print) {
-            // SAFETY: the cursor is on a line of the buffer.
-            unsafe {
-                print_line(
-                    Win::current().w_cursor.lnum,
-                    subflags.with(|flags| flags.do_number),
-                    subflags.with(|flags| flags.do_list),
-                    true,
-                )
-            };
+            print_line(
+                Win::current().w_cursor.lnum,
+                subflags.with(|flags| flags.do_number),
+                subflags.with(|flags| flags.do_list),
+                true,
+            );
         }
     } else if global_busy.get() == 0 {
         if got_int.get() {
@@ -696,17 +663,14 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         // SAFETY: a literal group name and its length.
         pre_hl_id.set(unsafe { syn_check_group(c"Substitute".as_ptr(), 10 as size_t) });
     }
-    // SAFETY: the preview namespace and buffer are the caller's.
-    unsafe {
-        show_sub(
-            args.range,
-            args.old_cursor,
-            &st.preview_lines,
-            pre_hl_id.get(),
-            args.cmdpreview_ns,
-            args.cmdpreview_bufnr,
-        )
-    }
+    show_sub(
+        args.range,
+        args.old_cursor,
+        &st.preview_lines,
+        pre_hl_id.get(),
+        args.cmdpreview_ns,
+        args.cmdpreview_bufnr,
+    )
 }
 
 /// Perform a substitution from line `args.line1` to line `args.line2` using
@@ -717,10 +681,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 /// `cmdpreview_ns` is the namespace to show 'inccommand' preview highlights
 /// in; `<= 0` means no preview.  Returns 0, 1 or 2 -- see
 /// `cmdpreview_may_show` for what they mean.
-///
-/// # Safety
-/// Main thread; `args` must be the live Ex-command argument.
-pub(crate) unsafe fn do_sub(
+pub(crate) fn do_sub(
     args: &mut ExArg,
     timeout: ProfTime,
     cmdpreview_ns: c_int,
@@ -735,8 +696,7 @@ pub(crate) unsafe fn do_sub(
     // SAFETY: the current window and buffer are live.
     let (old_cursor, old_line_count) = (Win::current().w_cursor, Buf::current().b_ml.ml_line_count);
 
-    // SAFETY: caller's contract.
-    let Some(setup) = (unsafe { parse_sub(args, cmdpreview_ns, keeppatterns) }) else {
+    let Some(setup) = parse_sub(args, cmdpreview_ns, keeppatterns) else {
         return 0 as c_int;
     };
     let SubSetup {
@@ -791,9 +751,8 @@ pub(crate) unsafe fn do_sub(
         line_matches: Vec::new(),
     };
 
-    // SAFETY: the range and the compiled program are live.
-    unsafe { substitute_range(&mut st, &args) };
-    unsafe { finish(&mut st, &args) }
+    substitute_range(&mut st, &args);
+    finish(&mut st, &args)
 }
 
 /// Required for undo to work for extmarks: save the cursor line once, before

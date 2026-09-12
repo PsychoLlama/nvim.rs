@@ -506,7 +506,7 @@ pub fn ins_compl_prep(c: c_int) -> bool {
         unsafe { do_autocmd_completedone(c, ctrl_x_mode.get(), ptr::null_mut()) };
     }
 
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
 
     // Reset continue_* if we left expansion mode; if we stay they'll be
     // (re)set properly in ins_complete().

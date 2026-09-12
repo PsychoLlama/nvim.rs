@@ -108,7 +108,7 @@ pub unsafe fn state_enter(s: *mut VimState) {
             continue;
         }
         loop {
-            let key = unsafe { next_key() };
+            let key = next_key();
             if key == Key::Event.code() {
                 // The queue is about to run arbitrary code, so anything the
                 // key-reading side was in the middle of has to be settled.
@@ -141,10 +141,7 @@ pub unsafe fn state_enter(s: *mut VimState) {
 /// The next key for [`state_enter`], which may be the pseudo-key `K_EVENT`:
 /// either the queue already has work, or waiting for input woke us with
 /// work and no key.
-///
-/// # Safety
-/// The editor must be initialized.
-unsafe fn next_key() -> c_int {
+fn next_key() -> c_int {
     loop {
         // SAFETY: the editor is initialized, so the typeahead buffer and the
         // main loop's queue are live.
@@ -174,10 +171,7 @@ unsafe fn next_key() -> c_int {
 
 /// Run everything the event queue is holding, unless input or an interrupt
 /// arrives first. What [`state_enter`]'s `K_EVENT` dispatches to.
-///
-/// # Safety
-/// The editor must be initialized.
-pub unsafe fn state_handle_k_event() {
+pub fn state_handle_k_event() {
     loop {
         // SAFETY: the main loop's queue is live, and an `Event` it answers
         // owns its own `argv`.
@@ -440,10 +434,7 @@ fn modechanged_pattern(old: &ModeName, new: &ModeName) -> [c_char; 2 * size_of::
 
 /// Fire `ModeChanged` if the mode string has changed since the last time
 /// this ran. Called from wherever a mode transition finishes.
-///
-/// # Safety
-/// The editor must be initialized.
-pub unsafe fn may_trigger_modechanged() {
+pub fn may_trigger_modechanged() {
     if !has_event(AutoEvent::ModeChanged) || got_int.get() {
         return;
     }
@@ -489,10 +480,7 @@ fn is_safe_now() -> bool {
 
 /// Fire `SafeState` when the editor has come to rest. `safe` is the caller's
 /// half of the answer: it knows whether *it* is in the middle of something.
-///
-/// # Safety
-/// The editor must be initialized.
-pub unsafe fn may_trigger_safestate(safe: bool) {
+pub fn may_trigger_safestate(safe: bool) {
     let is_safe = safe && is_safe_now();
     if was_safe.get() != is_safe {
         let what = if is_safe {

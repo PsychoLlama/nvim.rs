@@ -399,8 +399,7 @@ unsafe fn dict_add_nr(dict: *mut Dict, key: &CStr, value: c_int) {
 unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
     // SAFETY: a live window and a line of its buffer.
     let offset = unsafe { vcol2col(win, lnum, vcol - 1, ::core::ptr::null_mut()) };
-    // SAFETY: a live window and a line of its buffer.
-    let line = unsafe { win.buffer().line(lnum) };
+    let line = win.buffer().line(lnum);
     // SAFETY: `vcol2col` answers a byte index within the line.
     if unsafe { line.byte(offset) } != 0 {
         return offset + 1;

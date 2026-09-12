@@ -185,7 +185,7 @@ pub(crate) unsafe fn set_hl_group(
             unsafe { highlight_attr_set_all() };
         }
         ui_default_colors_set();
-    } else if unsafe { cursor_mode_uses_syn_id(id) } {
+    } else if cursor_mode_uses_syn_id(id) {
         // A cursor style uses this group; its attribute has changed.
         ui_mode_info_set();
     }

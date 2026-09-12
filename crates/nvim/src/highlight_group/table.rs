@@ -277,8 +277,7 @@ pub(crate) unsafe fn set_hl_attr(id: c_int) {
     with_group(id, |group| group.attr = attr);
 
     // A cursor style may use this group; if so its attribute has changed.
-    // SAFETY: main-thread UI call.
-    if unsafe { cursor_mode_uses_syn_id(id) } {
+    if cursor_mode_uses_syn_id(id) {
         ui_mode_info_set();
     }
 }

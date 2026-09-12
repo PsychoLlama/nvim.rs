@@ -273,8 +273,7 @@ unsafe extern "C" fn rpc_close_event(argv: *mut *mut c_void) {
     if ui_client_channel_id.get() != 0 && chan.id == ui_client_channel_id.get() {
         // A `--remote-ui` client whose server went away: try to reconnect
         // before giving up.
-        // SAFETY: reattaching runs entirely inside the ui client.
-        unsafe { ui_client_attach_to_restarted_server() };
+        ui_client_attach_to_restarted_server();
         if ui_client_channel_id.get() != chan.id {
             return;
         }

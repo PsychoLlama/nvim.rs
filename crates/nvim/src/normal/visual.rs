@@ -268,7 +268,7 @@ pub(crate) fn end_visual_mode() {
     }
     may_clear_cmdline();
     adjust_cursor_eol();
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
 }
 
 /// Leave Visual mode and forget the selection, so `gv` will not bring it back.
@@ -573,7 +573,7 @@ pub(crate) unsafe fn nv_visual(cmd_arg: *mut CmdArg) {
         } else {
             set_visual_mode(VisualMode::from_raw(ca.cmdchar));
             showmode();
-            unsafe { may_trigger_modechanged() };
+            may_trigger_modechanged();
         }
         redraw_curbuf_later(UPD_INVERTED);
     } else if ca.count0 > 0 && resel_VIsual_mode.get() != VisualMode::NONE {
@@ -639,7 +639,7 @@ pub(crate) fn n_start_visual_mode(c: c_int) {
     }
     set_visual_anchor(Win::current().w_cursor);
     unsafe { fold_adjust_visual() };
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
     setmouse();
     conceal_check_cursor_line();
     if p_smd.get() != 0 && msg_silent.get() == 0 {

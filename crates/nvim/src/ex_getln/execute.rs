@@ -192,7 +192,7 @@ pub(crate) unsafe fn command_line_execute(
 
     if s.c == Key::Event.code() || s.c == Key::Command.code() || s.c == Key::Lua.code() {
         if s.c == Key::Event.code() {
-            unsafe { state_handle_k_event() };
+            state_handle_k_event();
         } else if s.c == Key::Command.code() {
             let _ = unsafe {
                 do_cmdline(

@@ -326,7 +326,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     }
 
     State.set(MODE_NORMAL);
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
     if char_at_cursor() == TAB || buf_meta_total(Buf::current(), kMTMetaInline) > 0 {
@@ -407,7 +407,7 @@ pub(crate) fn ins_insert(replace_state: c_int) {
     } else {
         State.set(replace_state | State.get() & MODE_LANGMAP);
     }
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
     append_to_redobuff_char(Key::Ins.code());
     show_mode();
     unsafe { ui_cursor_shape() };

@@ -270,7 +270,7 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
     if finish_op.get() != was_finishing {
         unsafe { ui_cursor_shape() };
     }
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
 
     // With no operator and no register pending, the count starts over --
     // and `set_prevcount` remembers to publish it as v:prevcount.
@@ -514,8 +514,7 @@ fn normal_check_buffer_modified() {
 }
 
 fn normal_check_safe_state() {
-    // SAFETY: fires SafeState autocommands.
-    unsafe { may_trigger_safestate(!op_pending() && restart_edit.get() == 0) };
+    may_trigger_safestate(!op_pending() && restart_edit.get() == 0);
 }
 
 fn normal_check_folds() {

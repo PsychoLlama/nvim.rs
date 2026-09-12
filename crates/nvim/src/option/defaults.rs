@@ -533,9 +533,7 @@ pub(crate) fn set_init_3() {
         c"dash",
     ];
 
-    // SAFETY: 'shell' is a NUL-terminated option value, and `p` below is an
-    // owned copy of its trailing component.
-    unsafe { parse_shape_opt(SHAPE_CURSOR) };
+    parse_shape_opt(SHAPE_CURSOR);
 
     let do_srr = !option_was_set(kOptShellredir);
     let do_sp = !option_was_set(kOptShellpipe);

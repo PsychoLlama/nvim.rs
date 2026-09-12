@@ -152,7 +152,7 @@ pub(crate) fn win_update(window: Win) {
     // reaches the same state from the API side.
     let decor = unsafe { DecorStateRef::current() };
     decor_redraw_reset(window, decor);
-    unsafe { decor_providers_invoke_win(window, decor) };
+    decor_providers_invoke_win(window, decor);
 
     unsafe { add_suspended_terminal_note(buf, decor) };
 

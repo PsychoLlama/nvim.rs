@@ -679,28 +679,20 @@ impl Buf {
         crate::memline::Lines::in_buffer(self)
     }
 
-    /// # Safety
-    /// `lnum` must be a line of this buffer.
     #[inline(always)]
-    pub unsafe fn line(self, lnum: LineNr) -> Line {
+    pub fn line(self, lnum: LineNr) -> Line {
         Line(unsafe { ml_get_buf(self, lnum) })
     }
 
     /// [`Buf::line`], marking the line dirty so the caller may write to it.
-    ///
-    /// # Safety
-    /// `lnum` must be a line of this buffer.
     #[inline(always)]
-    pub unsafe fn line_mut(self, lnum: LineNr) -> Line {
+    pub fn line_mut(self, lnum: LineNr) -> Line {
         Line(unsafe { ml_get_buf_mut(self, lnum) })
     }
 
     /// Bytes in line `lnum`, the terminating NUL excluded.
-    ///
-    /// # Safety
-    /// `lnum` must be a line of this buffer.
     #[inline(always)]
-    pub unsafe fn line_len(self, lnum: LineNr) -> ColNr {
+    pub fn line_len(self, lnum: LineNr) -> ColNr {
         unsafe { ml_get_buf_len(self, lnum) }
     }
 

@@ -448,9 +448,7 @@ fn mouse_tab_close(c1: c_int) {
 /// Length of line `lnum` in screen cells, for horizontal scrolling.  The last
 /// character is deliberately not counted.
 fn scroll_line_len(win: Win, lnum: LineNr) -> ColNr {
-    // SAFETY: a live window, and a line of the buffer it shows -- so the walk
-    // below stays inside that NUL-terminated line.
-    let mut p = unsafe { win.buffer().line(lnum) }.raw();
+    let mut p = win.buffer().line(lnum).raw();
     let mut col: ColNr = 0;
     while unsafe { *p } != NUL as c_char {
         let numchar = unsafe { win_chartabsize(win, p, col) };

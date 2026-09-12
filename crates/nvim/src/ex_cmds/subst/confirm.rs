@@ -72,18 +72,12 @@ fn cpo_no_undo_sync() -> bool {
 }
 
 /// Ex mode's prompt: print the line, then a row of `^` under the match.
-///
-/// # Safety
-/// Main thread; `st` must describe a live match on `st.lnum`.
-unsafe fn prompt_exmode(st: &Sub) -> c_int {
-    // SAFETY: caller's contract.
-    unsafe {
-        print_line_no_prefix(
-            st.lnum,
-            subflags.with(|flags| flags.do_number),
-            subflags.with(|flags| flags.do_list),
-        )
-    };
+fn prompt_exmode(st: &Sub) -> c_int {
+    print_line_no_prefix(
+        st.lnum,
+        subflags.with(|flags| flags.do_number),
+        subflags.with(|flags| flags.do_list),
+    );
 
     let mut sc = 0 as ColNr;
     let mut ec = 0 as ColNr;
@@ -160,10 +154,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
 }
 
 /// The screen prompt: highlight the match, ask, then put everything back.
-///
-/// # Safety
-/// Main thread; `st` must describe a live match on `st.lnum`.
-unsafe fn prompt_visual(st: &Sub) -> c_int {
+fn prompt_visual(st: &Sub) -> c_int {
     let mut orig_line: *mut c_char = ptr::null_mut();
     let mut len_change = 0 as c_int;
     let save_p_lz = p_lz.get();
@@ -253,10 +244,7 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
 }
 
 /// Ask about this match, looping over the answers that only scroll.
-///
-/// # Safety
-/// Main thread; `st` must describe a live match on `st.lnum`.
-pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
+pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
     let mut typed = 0 as c_int;
     let save_state = State.get();
     // SAFETY: the current window is live.
@@ -271,13 +259,10 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
 
     // Loop until 'y', 'n', 'q', CTRL-E or CTRL-Y is typed.
     while subflags.with(|flags| flags.do_ask) {
-        // SAFETY: caller's contract.
-        typed = unsafe {
-            if exmode_active.get() {
-                prompt_exmode(st)
-            } else {
-                prompt_visual(st)
-            }
+        typed = if exmode_active.get() {
+            prompt_exmode(st)
+        } else {
+            prompt_visual(st)
         };
 
         need_wait_return.set(false); // no hit-return prompt

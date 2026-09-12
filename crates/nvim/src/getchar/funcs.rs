@@ -126,7 +126,7 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
                 };
                 if input_available() == 0 && !unsafe { multiqueue_empty((*main_loop.ptr()).events) }
                 {
-                    unsafe { state_handle_k_event() };
+                    state_handle_k_event();
                     continue;
                 }
             }

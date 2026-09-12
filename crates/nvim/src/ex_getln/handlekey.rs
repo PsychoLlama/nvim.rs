@@ -256,7 +256,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
         Ok(Key::Ins | Key::Kins) => {
             cc.overstrike = (cc.overstrike == 0) as ::core::ffi::c_int;
             unsafe { ui_cursor_shape() }; // may show a different cursor shape
-            unsafe { may_trigger_modechanged() };
+            may_trigger_modechanged();
             status_redraw_curbuf();
             redraw_statuslines();
             Some(unsafe { command_line_not_changed(s) })

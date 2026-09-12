@@ -58,13 +58,7 @@ pub(super) enum Switch {
 
 /// Make the target file's buffer the one the current window shows, firing
 /// BufLeave for the old one and closing it when it is no longer wanted.
-///
-/// # Safety
-/// The names and `args` must be live, and `old_curbuf` must be the bufref
-/// taken on entry to [`do_ecmd`]. `oldwin` is an out-parameter the caller
-/// re-checks with `win_valid` after the autocommands below, so it is a handle
-/// -- a [`Win`] would promise the liveness that check exists to doubt.
-pub(super) unsafe fn switch_to_other_buffer(
+pub(super) fn switch_to_other_buffer(
     args: &EcmdArgs,
     oldwin: &mut Option<WinId>,
     old_curbuf: &mut BufRef,
@@ -197,8 +191,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     // buffer was empty and has no file name, curbuf is returned by
     // buflist_new(), and there is nothing to do here.
     if buffer.raw() != Buf::current_raw() {
-        // SAFETY: the editor's own state.
-        match unsafe { leave_for_buffer(buffer, args, *oldwin, old_curbuf, state) } {
+        match leave_for_buffer(buffer, args, *oldwin, old_curbuf, state) {
             Switch::Abandon => return Switch::Abandon,
             Switch::Ready => {}
         }
@@ -208,13 +201,7 @@ pub(super) unsafe fn switch_to_other_buffer(
 
 /// Fire BufLeave for the buffer being left, close it if it is no longer
 /// wanted, and make `buffer` the current window's.
-///
-/// # Safety
-/// `buffer` must be different from the current buffer and `eap` may be NULL.
-/// `oldwin` is a handle on purpose: the autocommands below may close that
-/// window, and `win_valid_any_tab` is what asks -- a [`Win`] would have
-/// promised the liveness the check exists to doubt.
-unsafe fn leave_for_buffer(
+fn leave_for_buffer(
     mut buffer: Buf,
     args: &EcmdArgs,
     oldwin: Option<WinId>,

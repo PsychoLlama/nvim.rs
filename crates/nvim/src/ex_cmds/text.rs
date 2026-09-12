@@ -75,8 +75,7 @@ pub unsafe fn do_ascii(_args: *mut ExArg) {
         }
         // NL is stored as CR.
         let mac = c == CAR && get_fileformat(Buf::current()) == EOL_MAC;
-        // SAFETY: `c` came out of the buffer.
-        unsafe { describe_byte(c, if mac { NL } else { c }, &mut need_clear, &mut line) };
+        describe_byte(c, if mac { NL } else { c }, &mut need_clear, &mut line);
         // needed for overlong ascii?
         // SAFETY: as above.
         off += unsafe { utf_ptr2len(data) } as usize;
@@ -86,8 +85,7 @@ pub unsafe fn do_ascii(_args: *mut ExArg) {
     while off < len {
         // SAFETY: `off` is a character boundary short of the sequence's end.
         c = unsafe { utf_ptr2char(data.add(off)) };
-        // SAFETY: `c` came out of the buffer.
-        unsafe { describe_char(c, off > 0, &mut need_clear, &mut line) };
+        describe_char(c, off > 0, &mut need_clear, &mut line);
         // SAFETY: as above.
         off += unsafe { utf_ptr2len(data.add(off)) } as usize;
     }
@@ -104,10 +102,7 @@ pub unsafe fn do_ascii(_args: *mut ExArg) {
 ///
 /// `cval` is the value to report, which differs from `c` only for a CR in a
 /// 'fileformat' of "mac".
-///
-/// # Safety
-/// Message state must be started; `need_clear` must be live.
-unsafe fn describe_byte(
+fn describe_byte(
     c: c_int,
     cval: c_int,
     need_clear: &mut bool,
@@ -165,10 +160,7 @@ unsafe fn describe_byte(
 ///
 /// `spaced` asks for the separating space upstream writes before every
 /// character but the first.
-///
-/// # Safety
-/// Message state must be started; `need_clear` must be live.
-unsafe fn describe_char(
+fn describe_char(
     c: c_int,
     spaced: bool,
     need_clear: &mut bool,
@@ -293,7 +285,7 @@ pub unsafe fn ex_align(args: *mut ExArg) {
         // SAFETY: `lnum` is inside the range `u_save` just guarded, and
         // nothing in the body adds or removes a line.
         Win::current().w_cursor.lnum = lnum;
-        if let Some(new_indent) = unsafe { aligned_indent(cmdidx, indent, width) } {
+        if let Some(new_indent) = aligned_indent(cmdidx, indent, width) {
             // SAFETY: the cursor is on `lnum`.
             unsafe { set_indent(new_indent.max(0), 0) };
         }
@@ -308,15 +300,11 @@ pub unsafe fn ex_align(args: *mut ExArg) {
 
 /// The indent the cursor's line should get, or `None` for a blank line
 /// `:center`/`:right` skips.
-///
-/// # Safety
-/// The cursor must be on the line to measure.
-unsafe fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<c_int> {
+fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<c_int> {
     if cmdidx == CmdIdx::left {
         return Some(indent);
     }
-    // SAFETY: caller's contract.
-    let (linewidth, has_tab) = unsafe { linelen() };
+    let (linewidth, has_tab) = linelen();
     // SAFETY: as above.
     let len = linewidth - get_indent();
     if len <= 0 {
@@ -328,7 +316,7 @@ unsafe fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<
     }
     if has_tab {
         // SAFETY: as above.
-        return Some(unsafe { fit_right_indent(width - len, width) });
+        return Some(fit_right_indent(width - len, width));
     }
     Some(width - len)
 }
@@ -336,15 +324,12 @@ unsafe fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<
 /// `:right` on a line holding a TAB: the width the line ends up with is not a
 /// function of the indent alone, so upstream searches for the largest indent
 /// that still fits, one column at a time.
-///
-/// # Safety
-/// The cursor must be on the line being aligned.
-unsafe fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
+fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
     while indent > 0 {
         // SAFETY: caller's contract.
         unsafe { set_indent(indent, 0) };
         // SAFETY: as above.
-        if unsafe { linelen().0 } > width {
+        if linelen().0 > width {
             indent -= 1;
             continue;
         }
@@ -354,7 +339,7 @@ unsafe fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
             // SAFETY: as above.
             unsafe { set_indent(indent, 0) };
             // SAFETY: as above.
-            if unsafe { linelen().0 } > width {
+            if linelen().0 > width {
                 return indent - 1;
             }
         }
@@ -368,10 +353,7 @@ unsafe fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
 /// Upstream asks for the second answer through an out-parameter it passes
 /// NULL for when it does not want it; computing it costs a memchr, so this
 /// always answers both.
-///
-/// # Safety
-/// The cursor must be on a live line of the current buffer.
-unsafe fn linelen() -> (c_int, bool) {
+fn linelen() -> (c_int, bool) {
     // Get the line.  If it's empty bail out early (could be the empty string
     // for an unloaded buffer).
     let line = get_cursor_line_ptr();

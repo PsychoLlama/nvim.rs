@@ -168,7 +168,7 @@ pub(crate) unsafe fn nv_ctrlg(cmd_arg: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if visual_active() {
         set_visual_select(!visual_select());
-        unsafe { may_trigger_modechanged() };
+        may_trigger_modechanged();
         showmode();
     } else if !check_clear_op(ca.op()) {
         fileinfo(ca.count0, 0, true);
@@ -225,7 +225,7 @@ pub(crate) unsafe fn nv_ctrlo(cmd_arg: *mut CmdArg) {
     let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if visual_active() && visual_select() {
         set_visual_select(false);
-        unsafe { may_trigger_modechanged() };
+        may_trigger_modechanged();
         showmode();
         // 2 means "one command, then back to Select mode".
         restart_VIsual_select.set(2);
@@ -384,8 +384,7 @@ pub(crate) unsafe fn nv_event(cmd_arg: *mut CmdArg) {
     // holding values the marker cannot see.
     may_garbage_collect.set(false);
     let may_restart = restart_edit.get() != 0 || restart_VIsual_select.get() != 0;
-    // SAFETY: `cmd_arg` is the caller's live command argument.
-    unsafe { state_handle_k_event() };
+    state_handle_k_event();
     finish_op.set(false);
     if may_restart {
         // The callback may have left insert or Select mode pending, and

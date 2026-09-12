@@ -43,8 +43,7 @@ pub fn ins_ctrl_x() {
         edit_submode_pre.set(ptr::null_mut());
         redraw_mode.set(true);
     }
-    // SAFETY: the editor exists; this only reports the new mode.
-    unsafe { may_trigger_modechanged() };
+    may_trigger_modechanged();
 }
 
 pub fn ctrl_x_mode_none() -> bool {

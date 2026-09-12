@@ -55,8 +55,7 @@ impl Win {
     ///
     /// Runs Lua, which can place and delete marks.
     fn providers_conceal_line(self, row: c_int) -> bool {
-        // SAFETY: a live window.
-        unsafe { decor_providers_invoke_conceal_line(self, row) }
+        decor_providers_invoke_conceal_line(self, row)
     }
 }
 

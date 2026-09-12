@@ -205,8 +205,7 @@ unsafe fn win_linetabsize_col(
 /// # Safety
 /// `lnum` must be a line of `window`'s buffer.
 pub(crate) unsafe fn linetabsize(window: Win, lnum: LineNr) -> c_int {
-    // SAFETY: the caller's promise -- `lnum` is a line of the buffer.
-    let line = unsafe { window.buffer().line(lnum) };
+    let line = window.buffer().line(lnum);
     // SAFETY: as above.
     unsafe { win_linetabsize(window, lnum, line.raw(), MAXCOL) }
 }

@@ -210,8 +210,7 @@ pub fn did_set_display(args: &mut OptSet) -> Option<&CStr> {
 }
 
 pub fn did_set_guicursor(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: reads the option's own value.
-    let errmsg = unsafe { parse_shape_opt(SHAPE_CURSOR) };
+    let errmsg = parse_shape_opt(SHAPE_CURSOR);
     if errmsg.is_some() {
         return errmsg;
     }

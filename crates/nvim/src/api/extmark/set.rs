@@ -613,15 +613,7 @@ fn clamp(
     strict: bool,
     ephemeral: bool,
 ) -> Result<Range, Error> {
-    // SAFETY: `at` is a line of the buffer, which every caller below has
-    // just tested against its line count.
-    let line_len = |at: LineNr| -> ColNr {
-        if ephemeral {
-            MAXCOL
-        } else {
-            unsafe { b.line_len(at) }
-        }
-    };
+    let line_len = |at: LineNr| -> ColNr { if ephemeral { MAXCOL } else { b.line_len(at) } };
     if line < 0 {
         return Err(err_out_of_range(c"line"));
     }

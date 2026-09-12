@@ -110,10 +110,7 @@ struct GlobalPat {
 ///
 /// The closing delimiter is replaced by a NUL in place, so the pattern that
 /// comes back borrows `args`'s argument.
-///
-/// # Safety
-/// `args.arg` must be a live, writable Ex-command argument.
-unsafe fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
+fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
     let arg = args.arg;
     // SAFETY: an Ex-command argument is NUL-terminated, and nothing below
     // rewrites it before the last read of this borrow.
@@ -242,8 +239,7 @@ pub unsafe fn ex_global(args: *mut ExArg) {
         // SAFETY: `args.cmd` points at the command word.
         unsafe { *args.cmd as u8 }
     };
-    // SAFETY: `args.arg` is the command's own writable argument.
-    let Some(parsed) = (unsafe { global_pattern(args) }) else {
+    let Some(parsed) = global_pattern(args) else {
         return;
     };
 
@@ -357,8 +353,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     // report the number of extra or deleted lines.  Don't report those in the
     // edge case where the buffer we are in after execution is different from
     // the one we started in.
-    // SAFETY: message state; `curbuf` is live.
-    if !unsafe { do_sub_msg(false) } && Buf::current_raw() == old_buf {
+    if !do_sub_msg(false) && Buf::current_raw() == old_buf {
         say::more(Buf::current().b_ml.ml_line_count as c_int - old_lcount as c_int);
     }
 }

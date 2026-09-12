@@ -656,7 +656,7 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
     if (args.cmdidx == CmdIdx::wq || curbuf_is_changed())
-        && unsafe { do_write(&mut args) }.is_err()
+        && do_write(&mut args).is_err()
         // SAFETY: `curwin` is set from startup to exit.
         || unsafe { before_quit_autocmds(Win::current(), false, args.forceit != 0) }
         || check_more(true, args.forceit != 0) == FAIL

@@ -136,7 +136,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     }
 
     // SafeState, if nothing is pending.
-    unsafe { may_trigger_safestate(ready && !ins_compl_active() && !pum_visible()) };
+    may_trigger_safestate(ready && !ins_compl_active() && !pum_visible());
 
     unsafe { pum_check_clear() };
     show_cursor_info_later(false);

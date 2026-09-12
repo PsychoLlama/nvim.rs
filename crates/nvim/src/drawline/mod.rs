@@ -367,7 +367,7 @@ fn decor_providers_setup(
     };
 
     // Called here because the line pointer has to be invalidated anyway.
-    unsafe { decor_providers_invoke_line(window, lnum - 1) };
+    decor_providers_invoke_line(window, lnum - 1);
     validate_virtcol(window);
 
     invoke_range_next(window, lnum, col, rem_vcols + 1)
@@ -392,11 +392,11 @@ fn invoke_range_next(
         let mut end_col = begin_col + col_off;
         // Do not cut a character in half.
         end_col += unsafe { mb_off_next(line, line.offset(end_col as isize)) };
-        unsafe { decor_providers_invoke_range(window, lnum - 1, begin_col, lnum - 1, end_col) };
+        decor_providers_invoke_range(window, lnum - 1, begin_col, lnum - 1, end_col);
         validate_virtcol(window);
         end_col
     } else {
-        unsafe { decor_providers_invoke_range(window, lnum - 1, begin_col, lnum, 0) };
+        decor_providers_invoke_range(window, lnum - 1, begin_col, lnum, 0);
         validate_virtcol(window);
         ::core::ffi::c_int::MAX
     }
