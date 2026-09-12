@@ -435,7 +435,7 @@ pub(crate) fn command_line_enter(
             cmdline_pum_remove(false);
         } else {
             // A previous cmdline_pum_remove() may have deferred redraw.
-            unsafe { pum_check_clear() };
+            pum_check_clear();
         }
         unsafe { wildmenu_cleanup(cc) };
         s.did_wild_list = false;
@@ -599,7 +599,7 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
     }
 
     cursorcmd(); // set the cursor on the right spot
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
     1
 }
 

@@ -268,7 +268,7 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
     let was_finishing = finish_op.get();
     finish_op.set(ns.oa.op_type != OpType::Nop);
     if finish_op.get() != was_finishing {
-        unsafe { ui_cursor_shape() };
+        ui_cursor_shape();
     }
     may_trigger_modechanged();
 
@@ -418,8 +418,8 @@ pub(crate) fn normal_redraw_mode_message() {
         unsafe { xfree(copy.cast::<c_void>()) };
     }
     setcursor();
-    unsafe { ui_cursor_shape() };
-    unsafe { ui_flush() };
+    ui_cursor_shape();
+    ui_flush();
     if msg_scroll.get() != 0 || emsg_on_display.get() {
         msg_delay(1003, true);
     }

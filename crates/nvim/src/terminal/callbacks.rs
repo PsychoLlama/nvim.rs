@@ -219,8 +219,7 @@ unsafe extern "C" fn term_settermprop(
 }
 
 extern "C" fn term_bell(_data: *mut c_void) -> c_int {
-    // SAFETY: the editor's own beep, which takes no pointer.
-    unsafe { vim_beep(kOptBoFlagTerm as ::core::ffi::c_uint) };
+    vim_beep(kOptBoFlagTerm as ::core::ffi::c_uint);
     1
 }
 

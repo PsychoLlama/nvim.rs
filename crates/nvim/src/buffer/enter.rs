@@ -165,8 +165,7 @@ fn resize_terminal(term: *mut Terminal) {
 
 /// Whether the job behind terminal buffer `buffer` is still running.
 fn job_running(buffer: Buf) -> bool {
-    // SAFETY: reads the buffer's `'channel'` and looks it up.
-    unsafe { channel_job_running(buffer.b_p_channel as uint64_t) }
+    channel_job_running(buffer.b_p_channel as uint64_t)
 }
 
 /// Change to the directory of `fname`.

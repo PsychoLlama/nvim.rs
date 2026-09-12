@@ -102,7 +102,7 @@ pub fn cmdline_pum_active() -> bool {
 /// Remove the cmdline completion popup menu (if present) and free the list of
 /// items.
 pub fn cmdline_pum_remove(defer_redraw: bool) {
-    unsafe { pum_undisplay(!defer_redraw) };
+    pum_undisplay(!defer_redraw);
     unsafe { xfree(compl_match_array.get() as *mut c_void) };
     compl_match_array.set(ptr::null_mut());
     compl_match_arraysize.set(0);

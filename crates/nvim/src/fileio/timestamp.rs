@@ -173,7 +173,7 @@ pub fn check_timestamps(focus: c_int) -> c_int {
     if need_wait_return.get() && didit == 2 {
         // Make sure the message isn't overwritten.
         msg_str(c"\n");
-        unsafe { ui_flush() };
+        ui_flush();
     }
     didit
 }

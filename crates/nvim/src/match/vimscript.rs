@@ -90,7 +90,7 @@ unsafe fn matchadd_dict_arg(
 pub(crate) fn f_clearmatches(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
     if let Some(win) = get_optional_window(args, 0) {
-        unsafe { clear_matches(win) };
+        clear_matches(win);
     }
 }
 
@@ -192,7 +192,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         }
     }
 
-    unsafe { clear_matches(win) };
+    clear_matches(win);
     let mut match_add_failed = false;
     // By index: `match_add` runs no user code, but the dictionary lookups
     // below do reach the evaluator, and the list is the caller's own.
@@ -393,7 +393,7 @@ pub(crate) fn f_matchdelete(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
         None => -1,
         Some(win) => {
             let id = tv_get_number(&args[0]) as c_int;
-            unsafe { match_delete(win, id, true) as VarNumber }
+            match_delete(win, id, true) as VarNumber
         }
     };
     result.write_number(deleted);

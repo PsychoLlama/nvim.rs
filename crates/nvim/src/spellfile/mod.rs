@@ -764,7 +764,7 @@ fn spell_message(spin: &SpellInfo, text: &CStr) {
         verbose_enter();
     }
     msg(text, 0);
-    unsafe { ui_flush() };
+    ui_flush();
     if quiet {
         verbose_leave();
     }

@@ -646,8 +646,7 @@ unsafe fn report_unwritten(buffer: Buf) {
         msg_didout.set(false);
     }
     // SAFETY: module contract.
-    let shown = if !buffer.terminal.is_null()
-        && unsafe { channel_job_running(buffer.b_p_channel as uint64_t) }
+    let shown = if !buffer.terminal.is_null() && channel_job_running(buffer.b_p_channel as uint64_t)
     {
         unsafe {
             semsg!(

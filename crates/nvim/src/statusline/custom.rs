@@ -93,15 +93,7 @@ impl Target {
     ///
     /// Answers `None` when there is nothing to draw -- a winbar scrolled off
     /// the top, or a width of nothing.
-    ///
-    /// # Safety
-    /// A float's grid allocation must be live, which it is for as long as the
-    /// window is.
-    unsafe fn of(
-        win: Option<Win>,
-        draw_winbar: bool,
-        draw_ruler: bool,
-    ) -> Option<(Target, Source)> {
+    fn of(win: Option<Win>, draw_winbar: bool, draw_ruler: bool) -> Option<(Target, Source)> {
         let is_stl_global = stl_is_global();
         let floating = win.is_some_and(|w| w.w_floating) && !is_stl_global;
         // SAFETY: a floating window owns its grid allocation.
@@ -434,11 +426,7 @@ fn push_chunk(content: &mut Array, attr: c_int, text: &[c_char], group: c_int) {
 
 /// Redraw the status line, window bar, ruler or tab line of `window` -- null for
 /// `'tabline'`.
-///
-/// # Safety
-/// `window` must be null or a live window. Expanding the format re-enters the
-/// editor, so nothing may be held across this.
-pub(crate) unsafe fn win_redr_custom(
+pub(crate) fn win_redr_custom(
     window: Option<Win>,
     draw_winbar: bool,
     draw_ruler: bool,
@@ -451,18 +439,13 @@ pub(crate) unsafe fn win_redr_custom(
         return;
     }
     ENTERED.set(true);
-    // SAFETY: the caller's promise.
-    unsafe { draw_custom(window, draw_winbar, draw_ruler, ui_event) };
+    draw_custom(window, draw_winbar, draw_ruler, ui_event);
     ENTERED.set(false);
 }
 
 /// [`win_redr_custom`] without the recursion guard.
-///
-/// # Safety
-/// As [`win_redr_custom`].
-unsafe fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, ui_event: bool) {
-    // SAFETY: the caller's promise.
-    let Some((target, source)) = (unsafe { Target::of(window, draw_winbar, draw_ruler) }) else {
+fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, ui_event: bool) {
+    let Some((target, source)) = Target::of(window, draw_winbar, draw_ruler) else {
         return;
     };
     let (win, mut ewp) = (window, window.unwrap_or_else(Win::current));
@@ -516,11 +499,7 @@ unsafe fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, 
 }
 
 /// Redraw `window`'s window bar from `'winbar'`.
-///
-/// # Safety
-/// `window` must be a live window. This evaluates the option, so it re-enters
-/// the editor.
-pub unsafe fn win_redr_winbar(window: Win) {
+pub fn win_redr_winbar(window: Win) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // Reached recursively when the winbar contains an expression that
     // triggers a redraw.
@@ -533,8 +512,7 @@ pub unsafe fn win_redr_winbar(window: Win) {
         && is_redrawing()
         && (!opt_is_empty(p_wbr.get()) || !opt_is_empty(win.w_onebuf_opt.wo_wbr))
     {
-        // SAFETY: a live window; this evaluates the option.
-        unsafe { win_redr_custom(Some(window), true, false, false) };
+        win_redr_custom(Some(window), true, false, false);
     }
     ENTERED.set(false);
 }
@@ -548,10 +526,7 @@ static DID_RULER_COL: GlobalCell<c_int> = GlobalCell::new(-1);
 
 /// Redraw the ruler: `'rulerformat'` if it is set, else `line,col` and the
 /// relative position, right-aligned at `ru_col`.
-///
-/// # Safety
-/// The editor must be up. This evaluates `'rulerformat'`, so it re-enters.
-pub unsafe fn redraw_ruler() {
+pub fn redraw_ruler() {
     // The ruler belongs to the window it describes, unless that window has a
     // status line of its own to put it on -- then it is the last window's.
     let cur = Win::current();
@@ -596,8 +571,7 @@ pub unsafe fn redraw_ruler() {
     if !opt_is_empty(p_ruf.get())
         && (p_ch.get() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
     {
-        // SAFETY: a live window; this evaluates the option.
-        unsafe { win_redr_custom(Some(win), false, true, ui_has(kUIMessages)) };
+        win_redr_custom(Some(win), false, true, ui_has(kUIMessages));
         return;
     }
 
@@ -680,8 +654,7 @@ pub unsafe fn redraw_ruler() {
     }
     truncate_at_width(&mut buffer, this_ru_col, width);
 
-    // SAFETY: the message grid's view is live; the batch is flushed below.
-    unsafe { view_line_start(msg_grid_view(), Rows.get() - 1) };
+    view_line_start(msg_grid_view(), Rows.get() - 1);
     DID_RULER_COL.set(off + this_ru_col);
     let w = paint_cstr(DID_RULER_COL.get(), cstr::in_chars(&buffer), attr);
     paint_fill(DID_RULER_COL.get() + w, off + width, fillchar, attr);

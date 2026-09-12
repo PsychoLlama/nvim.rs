@@ -211,11 +211,7 @@ fn is_tui(ui: *mut RemoteUI) -> bool {
 /// only if every UI asked for it — a UI that cannot draw its own popup menu
 /// must be sent one drawn into the grid, and the others cannot be sent a
 /// different screen. [`ui_override`] opts out of the intersection.
-///
-/// # Safety
-///
-/// Not callable from the UI client process, which has no attach table.
-pub unsafe fn ui_refresh() {
+pub fn ui_refresh() {
     assert!(
         ui_client_channel_id.get() == 0,
         "the UI client has no UIs of its own"
@@ -291,7 +287,7 @@ pub unsafe fn ui_refresh() {
     p_lz.set(save_p_lz);
     ui_mode_info_set();
     pending_mode_update.set(true);
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
     pending_has_mouse.set(-1);
 }
 
@@ -326,7 +322,7 @@ pub unsafe fn ui_pum_get_pos(
 }
 
 extern "C" fn ui_refresh_event(_argv: *mut *mut core::ffi::c_void) {
-    unsafe { ui_refresh() };
+    ui_refresh();
 }
 
 /// Queues [`ui_refresh`] for after the current redraw.
@@ -378,11 +374,7 @@ pub fn ui_busy_stop() {
 }
 
 /// Beeps, unless `'belloff'` covers `val`.
-///
-/// # Safety
-///
-/// Reads `'debug'` and may emit a message.
-pub unsafe fn vim_beep(val: core::ffi::c_uint) {
+pub fn vim_beep(val: core::ffi::c_uint) {
     called_vim_beep.set(true);
     if emsg_silent.get() != 0 || in_assert_fails.get() {
         return;
@@ -413,11 +405,7 @@ pub unsafe fn vim_beep(val: core::ffi::c_uint) {
 
 /// Fires `UIEnter` once per attached UI. Startup's catch-up, for the UIs
 /// that attached before autocommands were running.
-///
-/// # Safety
-///
-/// Runs autocommands.
-pub unsafe fn do_autocmd_uienter_all() {
+pub fn do_autocmd_uienter_all() {
     for ui in each_ui() {
         do_autocmd_uienter(unsafe { (*ui).channel_id }, true);
     }
@@ -470,7 +458,7 @@ pub unsafe fn ui_attach_impl(ui: *mut RemoteUI, chanid: u64) {
     if !sent {
         unsafe { ui_send_all_hls(ui) };
     }
-    unsafe { ui_refresh() };
+    ui_refresh();
     do_autocmd_uienter(chanid, true);
 }
 
@@ -508,7 +496,7 @@ pub unsafe fn ui_set_ext_option(ui: *mut RemoteUI, ext: UIExtension, active: boo
     if ext < kUILinegrid {
         // An external widget changing changes the intersection, and every
         // UI has to be told the result rather than this one's request.
-        unsafe { ui_refresh() };
+        ui_refresh();
         return;
     }
     let name = ui_ext_names[ext as usize];
@@ -627,11 +615,7 @@ pub fn ui_current_col() -> c_int {
 ///
 /// Until a UI sees `flush` it is free to show nothing of what came before,
 /// so this is what makes a redraw visible.
-///
-/// # Safety
-///
-/// Not callable from the UI client process.
-pub unsafe fn ui_flush() {
+pub fn ui_flush() {
     assert!(
         ui_client_channel_id.get() == 0,
         "the UI client has no UIs of its own"
@@ -687,7 +671,7 @@ pub unsafe fn ui_flush() {
     // A cursor behind a floating window is reported as the "replace" shape,
     // which is the closest the protocol has to "do not draw one".
     static cursor_was_obscured: GlobalCell<bool> = GlobalCell::new(false);
-    let cursor_obscured = unsafe { ui_cursor_is_behind_floatwin() };
+    let cursor_obscured = ui_cursor_is_behind_floatwin();
     if (cursor_obscured != cursor_was_obscured.get() || pending_mode_update.get())
         && starting.get() == 0
     {
@@ -720,11 +704,7 @@ pub unsafe fn ui_flush() {
 
 /// Recomputes the cursor shape for the current mode, without disturbing
 /// `'conceallevel'`. For the paths that are about to redraw anyway.
-///
-/// # Safety
-///
-/// Reads the mode tables.
-pub unsafe fn ui_cursor_shape_no_check_conceal() {
+pub fn ui_cursor_shape_no_check_conceal() {
     if !full_screen.get() {
         return;
     }
@@ -737,19 +717,12 @@ pub unsafe fn ui_cursor_shape_no_check_conceal() {
 
 /// [`ui_cursor_shape_no_check_conceal`], plus the concealment recheck the
 /// cursor line needs when the mode changed.
-///
-/// # Safety
-///
-/// May redraw the cursor line.
-pub unsafe fn ui_cursor_shape() {
-    unsafe { ui_cursor_shape_no_check_conceal() };
+pub fn ui_cursor_shape() {
+    ui_cursor_shape_no_check_conceal();
     conceal_check_cursor_line();
 }
 
-/// # Safety
-///
-/// Reads the current window and the compositor's layout.
-unsafe fn ui_cursor_is_behind_floatwin() -> bool {
+fn ui_cursor_is_behind_floatwin() -> bool {
     if State.get() & MODE_CMDLINE != 0 || !ui_comp_should_draw() {
         return false;
     }

@@ -83,7 +83,7 @@ pub(super) unsafe fn receive_msgpack(
         let p = unsafe { chan.unpacker() };
         p.read_ptr = rbuf;
         p.read_size = c;
-        unsafe { parse_msgpack(chan) };
+        parse_msgpack(chan);
         // A rejected message leaves `read_size` meaningless; consuming
         // nothing keeps the buffer for the close path to report on.
         if p.state >= 0 {
@@ -105,26 +105,22 @@ pub(super) unsafe fn receive_msgpack(
 }
 
 /// Drains whole messages out of the unpacker and routes each one.
-///
-/// # Safety
-/// `chan` has been through [`rpc_start`] and its unpacker has been pointed at
-/// the bytes to decode.
-pub(super) unsafe fn parse_msgpack(chan: Chan) {
+pub(super) fn parse_msgpack(chan: Chan) {
     // SAFETY: the caller's channel and its decoder.
     let p = unsafe { chan.unpacker() };
     while unsafe { unpacker_advance(p) } {
         match p.type_0 {
             kMessageTypeRedrawEvent => {
-                unsafe { dispatch_redraw(p) };
+                dispatch_redraw(p);
                 unsafe { arena_mem_free(arena_finish(&raw mut p.arena)) };
             }
             kMessageTypeResponse => {
-                if !unsafe { complete_call(chan, p) } {
+                if !complete_call(chan, p) {
                     return;
                 }
             }
             _ => {
-                if !unsafe { dispatch_incoming(chan, p) } {
+                if !dispatch_incoming(chan, p) {
                     return;
                 }
             }
@@ -142,10 +138,7 @@ pub(super) unsafe fn parse_msgpack(chan: Chan) {
 ///
 /// `grid_line` is decoded straight into an event by the unpacker (it is by far
 /// the most frequent one), so it is offered first and separately.
-///
-/// # Safety
-/// `p` points at a live unpacker holding a decoded redraw event.
-unsafe fn dispatch_redraw(p: &mut Unpacker) {
+fn dispatch_redraw(p: &mut Unpacker) {
     if !ui_client_attached.get() {
         return;
     }
@@ -166,10 +159,7 @@ unsafe fn dispatch_redraw(p: &mut Unpacker) {
 ///
 /// Returns false when the response could not be placed, in which case the
 /// channel has been closed and decoding must stop.
-///
-/// # Safety
-/// `chan` is live and `p` is its decoder, holding a decoded response.
-unsafe fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
+fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
     let stack = &chan.rpc.call_stack;
     let frame = if chan.rpc.client_type == kClientTypeMsgpackRpc {
         stack.find(p.request_id)
@@ -214,10 +204,7 @@ unsafe fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
 /// Routes a request or notification to its handler.
 ///
 /// Returns false when the message was malformed and the channel was closed.
-///
-/// # Safety
-/// `chan` is live and `p` is its decoder, holding a decoded request.
-unsafe fn dispatch_incoming(chan: Chan, p: &mut Unpacker) -> bool {
+fn dispatch_incoming(chan: Chan, p: &mut Unpacker) -> bool {
     let req_id = (p.type_0 != kMessageTypeNotification).then_some(p.request_id);
     // SAFETY: the handler name is either null or a static string.
     unsafe { trace::log_call(trace::RECV, chan.id, req_id, p.handler.name) };
@@ -230,17 +217,13 @@ unsafe fn dispatch_incoming(chan: Chan, p: &mut Unpacker) -> bool {
         unsafe { chan_close_on_err(chan, why, LOGLVL_ERR) };
         return false;
     };
-    // SAFETY: the caller's channel and decoder.
-    unsafe { handle_request(chan, p, args) };
+    handle_request(chan, p, args);
     true
 }
 
 /// Decides where a request runs: here, on the channel's queue, or on the queue
 /// that is drained just before the editor blocks for input.
-///
-/// # Safety
-/// [`dispatch_incoming`]'s contract, and `args` is the decoded argument array.
-unsafe fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
+fn handle_request(chan: Chan, p: &mut Unpacker, args: Array) {
     debug_assert!(p.type_0 == kMessageTypeRequest || p.type_0 == kMessageTypeNotification);
 
     // The decoder could not resolve a handler, so `unpack_error` says why.

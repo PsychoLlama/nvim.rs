@@ -351,8 +351,7 @@ pub fn nvim_ui_try_resize(channel_id: u64, width: Integer, height: Integer) -> R
     ui.height = height as c_int;
     // The screen is the smallest attached UI, so one UI resizing can
     // change what every other one is sent.
-    // SAFETY: no borrow of the UI is held across the refresh.
-    unsafe { ui_refresh() };
+    ui_refresh();
     Ok(())
 }
 
@@ -409,8 +408,7 @@ unsafe fn ui_set_option(
         // Only the legacy protocol bakes the colour model into what it
         // is sent; a linegrid UI gets both and picks.
         if !init && !ui.ui_ext[kUILinegrid as usize] {
-            // SAFETY: no borrow of the UI is held across the refresh.
-            unsafe { ui_refresh() };
+            ui_refresh();
         }
         return Ok(());
     }

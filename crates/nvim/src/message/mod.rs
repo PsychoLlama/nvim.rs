@@ -385,8 +385,7 @@ pub unsafe fn msg_multiline(
                 unsafe { *need_clear = false };
             }
             if c_int::from(bytes[at]) == BELL {
-                // SAFETY: main-thread editor call.
-                unsafe { vim_beep(kOptBoFlagShell as c_uint) };
+                vim_beep(kOptBoFlagShell as c_uint);
             } else {
                 msg_putchar_hl(c_int::from(bytes[at]), hl_id);
             }

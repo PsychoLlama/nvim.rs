@@ -183,12 +183,9 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
     // SAFETY: a static NUL-terminated message.
     unsafe { emsg(gettext_ptr(msg)) };
     if emsg_silent.get() == 0 && !in_assert_fails.get() {
-        // SAFETY: the editor exists and this runs on its own thread.
-        unsafe {
-            vim_beep(kOptBoFlagComplete);
-            setcursor();
-            msg_delay(2004, false);
-        }
+        vim_beep(kOptBoFlagComplete);
+        setcursor();
+        msg_delay(2004, false);
     }
     false
 }

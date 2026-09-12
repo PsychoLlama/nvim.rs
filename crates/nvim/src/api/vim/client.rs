@@ -60,9 +60,7 @@ pub unsafe fn nvim_set_client_info(
     info.insert(c"type", Object::string(type_0));
     info.insert(c"methods", Object::dict(methods));
     info.insert(c"attributes", Object::dict(attributes));
-    // SAFETY: `info` is this frame's own, and the copy the channel keeps is
-    // owned rather than borrowed from the arena.
-    unsafe { rpc_set_client_info(channel_id, info.clone()) };
+    rpc_set_client_info(channel_id, info.clone());
 }
 
 // `nvim__chan_set_detach` is an API method's own name, published over msgpack-RPC.
@@ -94,14 +92,14 @@ pub unsafe fn nvim_get_chan_info(channel_id: uint64_t, mut chan: Integer) -> Api
         );
         chan = channel_id.cast_signed();
     }
-    unsafe { channel_info(chan.cast_unsigned()) }
+    channel_info(chan.cast_unsigned())
 }
 
 /// # Safety
 /// The answer's storage is the api's own: the caller frees whatever this hands
 /// back.
 pub unsafe fn nvim_list_chans() -> Array {
-    unsafe { channel_all_info() }
+    channel_all_info()
 }
 
 /// # Safety

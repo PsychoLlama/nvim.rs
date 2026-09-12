@@ -343,7 +343,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     }
 
     may_trigger_modechanged();
-    unsafe { ui_flush() };
+    ui_flush();
 }
 
 /// The `complete()` function; a `VimLFunc` row in the builtin table.

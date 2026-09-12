@@ -711,10 +711,7 @@ pub(crate) fn get_menu_mode_flag() -> c_int {
 
 /// Show the `PopUp` menu for the mode the editor is in -- `PopUpn` in
 /// Normal mode, `PopUpi` in Insert mode, and so on.
-///
-/// # Safety
-/// Must run from the main loop: the popup takes over key input.
-pub(crate) unsafe fn show_popupmenu() {
+pub(crate) fn show_popupmenu() {
     let menu_mode = get_menu_mode();
     if menu_mode == MENU_INDEX_INVALID {
         return;

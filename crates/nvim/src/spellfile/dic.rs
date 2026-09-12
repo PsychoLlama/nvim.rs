@@ -188,7 +188,7 @@ pub(super) unsafe fn spell_read_dic(
                 msg_clr_eos();
                 msg_didout.set(false);
                 msg_col.set(0);
-                unsafe { ui_flush() };
+                ui_flush();
             }
         }
 

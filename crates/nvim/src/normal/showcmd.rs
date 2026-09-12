@@ -390,7 +390,7 @@ pub(crate) fn display_showcmd() {
         if clear {
             Win::current().w_redr_status = true;
         } else {
-            unsafe { win_redr_status(Win::current()) };
+            win_redr_status(Win::current());
             setcursor();
         }
         return;
@@ -399,8 +399,7 @@ pub(crate) fn display_showcmd() {
         if clear {
             redraw_tabline.set(true);
         } else {
-            // SAFETY: redraws the tab line and puts the cursor back.
-            unsafe { draw_tabline() };
+            draw_tabline();
             setcursor();
         }
         return;

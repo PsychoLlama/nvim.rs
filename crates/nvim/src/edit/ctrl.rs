@@ -336,7 +336,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     }
 
     setmouse();
-    unsafe { ui_cursor_shape() }; // may show a different cursor shape
+    ui_cursor_shape(); // may show a different cursor shape
 
     // While recording, and for CTRL-O, the new mode has to be displayed;
     // otherwise the mode message is removed.
@@ -410,7 +410,7 @@ pub(crate) fn ins_insert(replace_state: c_int) {
     may_trigger_modechanged();
     append_to_redobuff_char(Key::Ins.code());
     show_mode();
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
 }
 
 /// CTRL-O: leave Insert mode for exactly one Normal-mode command.
@@ -469,6 +469,5 @@ fn get_key() -> c_int {
 /// Beep, or flash, for the 'belloff' reason `flag`.
 #[inline(always)]
 fn beep(flag: ::core::ffi::c_uint) {
-    // SAFETY: the bell only reads options.
-    unsafe { vim_beep(flag) }
+    vim_beep(flag)
 }

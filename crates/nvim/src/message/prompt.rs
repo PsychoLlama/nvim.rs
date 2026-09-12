@@ -273,7 +273,7 @@ pub fn wait_return(redraw: c_int) {
 
     if tmp_state == MODE_SETWSIZE {
         // got resize event while in vgetc()
-        unsafe { ui_refresh() };
+        ui_refresh();
     } else if !skip_redraw.get() && (redraw == 1 || (msg_scrolled.get() != 0 && redraw != -1)) {
         redraw_later(Win::current(), UPD_VALID);
     }
@@ -577,7 +577,7 @@ pub fn msg_delay(ms: uint64_t, ignoreinput: bool) {
     // SAFETY: one of the two literals just above.
     let note = unsafe { c_str(note) };
     logmsg!(LOGLVL_DBG, c"msg_delay", 4047, "{ms} ms{note}");
-    unsafe { ui_flush() };
+    ui_flush();
     os_delay(ms, ignoreinput);
 }
 

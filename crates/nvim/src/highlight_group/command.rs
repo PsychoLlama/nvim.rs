@@ -225,7 +225,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
         if !ui_has(kUILinegrid) && starting.get() == 0 {
             // Older UIs assume the screen is cleared after the Normal
             // group changes.
-            unsafe { ui_refresh() };
+            ui_refresh();
         } else {
             // TUI and newer UIs repaint themselves; the UPD_NOT_VALID
             // redraw below still handles `guibg=fg` and friends.

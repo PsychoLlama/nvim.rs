@@ -309,10 +309,7 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
 }
 
 /// Removes the match `id` from `window`'s list; `-1` when there is no such match.
-///
-/// # Safety
-/// `window` must be live.
-unsafe fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
+fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
     let mut rtype = UPD_SOME_VALID;
 
     if id < 1 {
@@ -356,10 +353,7 @@ unsafe fn match_delete(mut window: Win, id: c_int, perr: bool) -> c_int {
 }
 
 /// Removes every match from `window`'s list.
-///
-/// # Safety
-/// `window` must be live.
-pub(crate) unsafe fn clear_matches(mut window: Win) {
+pub(crate) fn clear_matches(mut window: Win) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     // SAFETY: the caller's window.
     while !window.w_match_head.is_null() {
@@ -407,7 +401,7 @@ pub(crate) unsafe fn ex_match(args: *mut ExArg) {
 
     // Whatever happens next, the old pattern for this id goes.
     if !skip {
-        unsafe { match_delete(Win::current(), id, false) };
+        match_delete(Win::current(), id, false);
     }
 
     let arg = unsafe { (*args).arg };

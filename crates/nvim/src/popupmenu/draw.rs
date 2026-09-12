@@ -276,13 +276,8 @@ struct PumBorder {
 ///
 /// Answers `None` only when the option fails to parse, in which case the
 /// message has already been given and the caller must draw nothing.
-///
-/// # Safety
-/// The highlight tables must be initialised.
-unsafe fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
-    // SAFETY: `p_pumborder` is an editor-owned string; `parse_winborder`
-    // writes through the config pointer.
-    let width = unsafe { pum_border_width() };
+fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
+    let width = pum_border_width();
     if width == 0 {
         return Some(PumBorder {
             width,
@@ -699,11 +694,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
 }
 
 /// Redraw the popup menu, using `pum_first` and `pum_selected`.
-///
-/// # Safety
-/// The menu must be displayed (`pum_display` or `pum_show_popupmenu` has run
-/// the placement) and no line batch may be in progress.
-pub unsafe fn pum_redraw() {
+pub fn pum_redraw() {
     let mut grid = pum_grid_ref();
     // SAFETY: the placement functions have filled the state cells and the
     // item array is live.
@@ -728,8 +719,7 @@ pub unsafe fn pum_redraw() {
     }
 
     let mut config = WIN_CONFIG_INIT;
-    // SAFETY: `config` is this frame's own.
-    let resolved = unsafe { resolve_border(&mut config) };
+    let resolved = resolve_border(&mut config);
     let Some(border) = resolved else {
         return; // 'pumborder' did not parse; the message is already out
     };
@@ -775,7 +765,7 @@ pub unsafe fn pum_redraw() {
         grid.invalidate();
     }
     if ui_has(kUIMultigrid) {
-        unsafe { pum_send_float_pos() };
+        pum_send_float_pos();
     }
 
     let mut grid_row = 0;

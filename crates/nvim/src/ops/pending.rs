@@ -662,8 +662,7 @@ fn run_operator(
 ) {
     /// Refuse an empty region: beep and drop the half-recorded `.`.
     fn refuse() {
-        // SAFETY: neither touches anything but editor-wide state.
-        unsafe { vim_beep(kOptBoFlagOperator as ::core::ffi::c_uint) };
+        vim_beep(kOptBoFlagOperator as ::core::ffi::c_uint);
         cancel_redo();
     }
 

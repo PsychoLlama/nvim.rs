@@ -392,7 +392,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 p_smd.set(smd_save);
                 // `insertchar` can have run `:normal`, which updates the
                 // cursor shape; put it back.
-                unsafe { ui_cursor_shape() };
+                ui_cursor_shape();
 
                 second_indent = -1;
                 // At the end of a paragraph the next one needs its indent

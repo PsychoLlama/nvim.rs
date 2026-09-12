@@ -91,10 +91,10 @@ pub(crate) fn ins_compl_new_leader() {
     compl_used_match.set(false);
 
     if p_acl.get() > 0 {
-        unsafe { pum_undisplay(true) };
+        pum_undisplay(true);
         redraw_later(Win::current(), UPD_VALID);
         let _ = update_screen(); // Show char (deletion) immediately
-        unsafe { ui_flush() };
+        ui_flush();
     }
 
     if compl_started.get() {

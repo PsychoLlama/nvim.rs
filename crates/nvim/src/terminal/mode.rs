@@ -355,8 +355,7 @@ pub(crate) fn terminal_enter() -> bool {
     s.term.pending.cursor = true;
     adjust_topline_cursor(s.term, buf, 0);
     showmode();
-    // SAFETY: publishes the cursor shape to every attached UI.
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
     terminal_focus(s.term, true);
     let mut buf = current_buf();
     buf.b_last_changedtick_i = buf_get_changedtick(buf);
@@ -397,8 +396,7 @@ pub(crate) fn terminal_enter() -> bool {
     } else {
         unshowmode(true);
     }
-    // SAFETY: publishes the cursor shape to every attached UI.
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
 
     // TermLeave can reach the terminal, so hold it open even though it is
     // about to be destroyed.
@@ -563,8 +561,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     let mut cursor_visible = s.cursor_visible;
     refresh_cursor(s.term, &mut cursor_visible);
     s.cursor_visible = cursor_visible;
-    // SAFETY: flushes what the redraw produced to every attached UI.
-    unsafe { ui_flush() };
+    ui_flush();
     1
 }
 

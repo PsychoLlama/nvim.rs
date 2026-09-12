@@ -225,9 +225,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
             term.sb.drop_oldest();
         }
         let diff = diff as LineNr;
-        // SAFETY: as above; the marks that pointed into the deleted lines
-        // move with them.
-        unsafe { mark_adjust_term(buffer, 1 as LineNr, diff, -diff) };
+        mark_adjust_term(buffer, 1 as LineNr, diff, -diff);
         // Report what the deletion took away.
         deleted_lines_buf(buffer, 1 as LineNr, diff);
     }
@@ -236,10 +234,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
 
 /// `mark_adjust_buf` as this module always calls it: a deletion at the top
 /// of a terminal buffer, running to the end of it.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-unsafe fn mark_adjust_term(buffer: Buf, line1: LineNr, line2: LineNr, amount: LineNr) {
+fn mark_adjust_term(buffer: Buf, line1: LineNr, line2: LineNr, amount: LineNr) {
     let (end, after) = (MAXLNUM, true);
     let (mode, op) = (kMarkAdjustTerm, kExtmarkUndo);
     mark_adjust_buf(buffer, line1, line2, end, amount, after, mode, op);
@@ -261,8 +256,7 @@ pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     // move the marks that were pointing at them.
     let mut deleted = (term.sb.deleted() - term.old_sb_deleted) as LineNr;
     deleted = deleted.min(buffer.line_count());
-    // SAFETY: a live buffer.
-    unsafe { mark_adjust_term(buffer, 1 as LineNr, deleted, -deleted) };
+    mark_adjust_term(buffer, 1 as LineNr, deleted, -deleted);
     term.old_sb_deleted = term.sb.deleted();
 
     let mut old_height = term.old_height;

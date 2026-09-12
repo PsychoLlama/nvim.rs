@@ -611,7 +611,7 @@ pub(crate) unsafe fn recover_from_backup(backup: &Backup, fname: *mut c_char) ->
     // know the message arrived.
     if got_int.get() {
         msg(gettext(e_interr), 0);
-        unsafe { ui_flush() };
+        ui_flush();
     }
     // SAFETY: both are the caller's NUL-terminated names.
     let (from, to) = unsafe { (cstr::at(backup.path), cstr::at(fname)) };

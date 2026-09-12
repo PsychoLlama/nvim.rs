@@ -56,13 +56,8 @@ fn literal_obj(text: &'static CStr) -> Object {
 /// A fresh `TypVal` of no type, which is what every consumer here starts
 /// from before something writes into it.
 /// `chan`'s info dict, as the `TypVal` the Vimscript layer wants.
-///
-/// # Safety
-/// `id` may name any channel; `arena` owns the dict's storage.
-unsafe fn info_tv(id: uint64_t) -> TypVal {
-    // SAFETY: `channel_info` answers a dict, which converts without ever
-    // failing.
-    let info = unsafe { channel_info(id) };
+fn info_tv(id: uint64_t) -> TypVal {
+    let info = channel_info(id);
     let tv = TypVal::from(Object::dict(info));
     debug_assert!(tv.v_type() == VAR_DICT);
     tv
@@ -169,10 +164,7 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
 // ---------------------------------------------------------------------------
 
 /// Whether `id` names a job whose process is still running.
-///
-/// # Safety
-/// Called from the main thread with the registry live.
-pub unsafe fn channel_job_running(id: uint64_t) -> bool {
+pub fn channel_job_running(id: uint64_t) -> bool {
     // SAFETY: the caller's promise; the channel is only read.
     let chan = find_channel(id);
     !chan.is_null()
@@ -182,10 +174,7 @@ pub unsafe fn channel_job_running(id: uint64_t) -> bool {
 
 /// What `nvim_get_chan_info()` reports. An unknown id answers with an empty
 /// dict rather than an error.
-///
-/// # Safety
-/// Called from the main thread.
-pub unsafe fn channel_info(id: uint64_t) -> ApiDict {
+pub fn channel_info(id: uint64_t) -> ApiDict {
     let chan = find_channel(id);
     if chan.is_null() {
         return empty_dict();
@@ -263,18 +252,14 @@ unsafe fn argv_array(args: *mut *mut c_char) -> Array {
 }
 
 /// Every channel's info, ordered by id.
-///
-/// # Safety
-/// Called from the main thread.
-pub unsafe fn channel_all_info() -> Array {
+pub fn channel_all_info() -> Array {
     // The registry iterates in registration order; the API contract is
     // ascending id.
     let mut ids = channels.with(SlotTable::snapshot_keys);
     ids.sort_unstable();
     let mut ret = Array::with_capacity(ids.len());
     for id in ids {
-        // SAFETY: the id came out of the registry.
-        ret.push(Object::dict(unsafe { channel_info(id) }));
+        ret.push(Object::dict(channel_info(id)));
     }
     ret
 }

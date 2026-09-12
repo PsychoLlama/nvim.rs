@@ -258,8 +258,7 @@ pub(crate) unsafe fn do_mouse(
         }
     }
 
-    // SAFETY: reads the `'mouse'` option against the current mode.
-    let mouse_can_visual = unsafe { ui_mouse_has(MOUSE_VISUAL) };
+    let mouse_can_visual = ui_mouse_has(MOUSE_VISUAL);
     let visual_corner = visual_jump_flags(
         &mut jump_flags,
         is_click,

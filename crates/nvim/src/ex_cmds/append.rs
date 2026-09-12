@@ -168,8 +168,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
     }
 
     State.set(MODE_NORMAL);
-    // SAFETY: cursor state, main thread.
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
 
     if forceit != 0 {
         toggle_autoindent();

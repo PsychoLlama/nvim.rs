@@ -149,7 +149,7 @@ fn next_key() -> c_int {
             return safe_vgetc();
         }
         if !unsafe { multiqueue_empty(main_loop_events()) } {
-            unsafe { ui_flush() };
+            ui_flush();
             return Key::Event.code();
         }
         // Nothing to do but wait, so show what has been decided first.
@@ -157,7 +157,7 @@ fn next_key() -> c_int {
             let _ = update_screen();
             setcursor();
         }
-        unsafe { ui_flush() };
+        ui_flush();
         let (buf, maxlen, ms) = (ptr::null_mut::<uint8_t>(), 0, -1);
         let (tb_change_cnt, events) = (typeahead().change_cnt(), main_loop_events());
         unsafe { input_get(buf, maxlen, ms, tb_change_cnt, events) };

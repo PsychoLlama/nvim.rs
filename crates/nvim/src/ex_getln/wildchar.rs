@@ -91,7 +91,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
 
         // Remove the popup menu if no completion items are available.
         if redraw_if_menu_empty && unsafe { (*s).xpc.xp_numfiles } <= 0 {
-            unsafe { pum_check_clear() };
+            pum_check_clear();
         }
 
         // If interrupted while completing, behave as if it failed.
@@ -147,9 +147,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                     showmatches(&raw mut (*s).xpc, p_wmnu.get() != 0, wim_list, wim_noselect)
                 };
             } else {
-                unsafe {
-                    vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint)
-                };
+                vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint);
             }
 
             redrawcmd();

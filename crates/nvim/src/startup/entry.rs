@@ -113,7 +113,7 @@ pub extern "C" fn event_init() {
     resize_events.set(unsafe { multiqueue_new_child((*main_loop.ptr()).events) });
     autocmd_init();
     signal_init();
-    unsafe { channel_init() };
+    channel_init();
     terminal_init();
     ui_init();
     time_msg_at(c"event init");
@@ -135,7 +135,7 @@ pub(crate) fn event_teardown() -> bool {
     unsafe { loop_poll_events(main_loop.ptr(), 0 as int64_t) };
     input_stop();
     server_teardown();
-    unsafe { channel_teardown() };
+    channel_teardown();
     unsafe { proc_teardown(main_loop.ptr()) };
     timer_teardown();
     signal_teardown();
@@ -490,7 +490,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_or_none()) };
     time_msg_at(c"VimEnter autocommands");
     if use_remote_ui {
-        unsafe { do_autocmd_uienter_all() };
+        do_autocmd_uienter_all();
         time_msg_at(c"UIEnter autocommands");
     }
 

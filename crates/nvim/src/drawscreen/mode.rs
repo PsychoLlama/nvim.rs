@@ -244,7 +244,7 @@ pub fn showmode() -> c_int {
         clear_showcmd();
     }
 
-    unsafe { redraw_ruler() };
+    redraw_ruler();
     redraw_cmdline.set(false);
     redraw_mode.set(false);
     clear_cmdline.set(false);

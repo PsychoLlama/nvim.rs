@@ -63,10 +63,7 @@ fn current_window_of(tabpage: TabPage) -> Win {
 
 /// Push the tab pages and the listed buffers to a UI that draws the tab line
 /// itself.
-///
-/// # Safety
-/// The editor's tab page and buffer lists must be live.
-unsafe fn ui_ext_tabline_update() {
+fn ui_ext_tabline_update() {
     let mut name = [0 as c_char; MAXPATHL as usize];
 
     // SAFETY: every list walk, handle read and name copy below is of the
@@ -77,7 +74,7 @@ unsafe fn ui_ext_tabline_update() {
         let mut info = ApiDict::with_capacity(2);
         let (handle, cwp) = (tp.handle as TabpageHandle, current_window_of(tp));
         put(&mut info, c"tab", Object::tabpage(handle));
-        unsafe { get_trans_bufname(cwp.buffer(), &mut name) };
+        get_trans_bufname(cwp.buffer(), &mut name);
         put(
             &mut info,
             c"name",
@@ -92,7 +89,7 @@ unsafe fn ui_ext_tabline_update() {
     for buf in listed() {
         let mut info = ApiDict::with_capacity(2);
         put(&mut info, c"buffer", Object::buffer(buf.handle));
-        unsafe { get_trans_bufname(buf, &mut name) };
+        get_trans_bufname(buf, &mut name);
         put(
             &mut info,
             c"name",
@@ -118,10 +115,7 @@ unsafe fn name_in(name: &[c_char; MAXPATHL as usize]) -> String_0 {
 }
 
 /// Draw the tab pages line at the top of the editor.
-///
-/// # Safety
-/// The editor must be up. `'tabline'` is a user format, so this re-enters.
-pub unsafe fn draw_tabline() {
+pub fn draw_tabline() {
     // SAFETY: `default_grid` is live for the process's lifetime; before the
     // first resize it has no cells yet.
     if !default_grid_ref().is_allocated() {
@@ -130,8 +124,7 @@ pub unsafe fn draw_tabline() {
     redraw_tabline.set(false);
 
     if ui_has(kUITabline) {
-        // SAFETY: the editor's own lists.
-        unsafe { ui_ext_tabline_update() };
+        ui_ext_tabline_update();
         return;
     }
     if tabline_height() < 1 {
@@ -148,12 +141,9 @@ pub unsafe fn draw_tabline() {
 
     if !opt_is_empty(p_tal.get()) {
         // Use the 'tabline' option instead.
-        // SAFETY: a null window means "the tab line"; this evaluates the
-        // option.
-        unsafe { win_redr_custom(None, false, false, false) };
+        win_redr_custom(None, false, false, false);
     } else {
-        // SAFETY: the editor's own lists.
-        unsafe { draw_default_tabline() };
+        draw_default_tabline();
     }
 
     // Reset the flag again, in case evaluating 'tabline' set it.
@@ -161,18 +151,14 @@ pub unsafe fn draw_tabline() {
 }
 
 /// The built-in tab line: one label per tab page.
-///
-/// # Safety
-/// The editor's tab page and window lists must be live.
-unsafe fn draw_default_tabline() {
+fn draw_default_tabline() {
     let mut name = [0 as c_char; MAXPATHL as usize];
     let attr_nosel = hl_attr(HLF_TP);
     let attr_fill = hl_attr(HLF_TPF);
     // Without colours the tabs are separated by `|` and underlined with `_`.
     let use_sep_chars = t_colors.get() < 8;
 
-    // SAFETY: `default_gridview` is live; the batch is flushed below.
-    unsafe { view_line_start(default_gridview(), 0) };
+    view_line_start(default_gridview(), 0);
     let count = tabs().count() as c_int;
     let tabwidth = if count > 0 {
         (Columns.get() - 1 + count / 2) / count
@@ -237,7 +223,7 @@ unsafe fn draw_default_tabline() {
         let room = scol - col + tabwidth - 1;
         if room > 0 {
             // SAFETY: a live window's buffer.
-            unsafe { get_trans_bufname(cwp.buffer(), &mut name) };
+            get_trans_bufname(cwp.buffer(), &mut name);
             col += paint_bufname(col, room, attr, &mut name);
         }
         paint_schar(col, schar_from_ascii(b' '), attr);

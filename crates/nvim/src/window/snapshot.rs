@@ -436,11 +436,8 @@ pub fn win_ui_flush(validate: bool) {
             }
         }
     }
-    // SAFETY: flush the popup menu and message grids the same way.
-    unsafe {
-        pum_ui_flush();
-        msg_ui_flush();
-    }
+    pum_ui_flush();
+    msg_ui_flush();
 }
 
 /// The last non-floating window of `tabpage`, or of the current tab page.

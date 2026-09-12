@@ -352,7 +352,7 @@ unsafe fn echo_search_cmd(
         msg_clr_eos();
         msg_check();
         gotocmdline(false);
-        unsafe { ui_flush() };
+        ui_flush();
         ui_busy_stop();
         msg_nowait.set(true);
     }
@@ -737,7 +737,7 @@ pub fn showmatch(c: c_int) {
 
     let found = unsafe { findmatch(ptr::null_mut(), NUL) };
     let Some(mut lpos) = found else {
-        unsafe { vim_beep(kOptBoFlagShowmatch) }; // no match, so beep
+        vim_beep(kOptBoFlagShowmatch); // no match, so beep
         return;
     };
     if lpos.lnum < Win::current().w_topline || lpos.lnum >= Win::current().w_botline {
@@ -777,14 +777,14 @@ pub fn showmatch(c: c_int) {
     let save_dollar_vcol = dollar_vcol.get();
     let save_state = State.get();
     State.set(MODE_SHOWMATCH);
-    unsafe { ui_cursor_shape() }; // may show a different cursor shape
+    ui_cursor_shape(); // may show a different cursor shape
     Win::current().w_cursor = mpos; // move to the matching char
     so.set(0); // don't use 'scrolloff' here
     siso.set(0); // don't use 'sidescrolloff' here
     show_cursor_info_later(false);
     let _ = update_screen(); // show the new char
     setcursor();
-    unsafe { ui_flush() };
+    ui_flush();
     // Restore dollar_vcol: setcursor() may call curs_rows(), which
     // resets it when the matching position is on an earlier line and
     // has a higher column number.
@@ -802,5 +802,5 @@ pub fn showmatch(c: c_int) {
     so.set(save_so);
     siso.set(save_siso);
     State.set(save_state);
-    unsafe { ui_cursor_shape() }; // may show a different cursor shape
+    ui_cursor_shape(); // may show a different cursor shape
 }

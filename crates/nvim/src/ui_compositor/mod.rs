@@ -67,10 +67,7 @@ fn msg_layer() -> GridRef {
 }
 
 /// The window's own grid.
-///
-/// # Safety
-/// `window` must be a live window.
-unsafe fn win_layer(mut window: Win) -> GridRef {
+fn win_layer(mut window: Win) -> GridRef {
     // SAFETY: a live window owns its `w_grid_alloc` outright.
     unsafe { GridRef::new(&raw mut window.w_grid_alloc) }
 }
@@ -268,8 +265,7 @@ pub unsafe fn ui_comp_put_grid(
             && !on_top
         {
             let below = layer_at(insert_at - 1);
-            // SAFETY: a live window, by the handle.
-            let curwin_grid = unsafe { win_layer(win) };
+            let curwin_grid = win_layer(win);
             if below.same(curwin_grid) && below.zindex == grid.zindex {
                 insert_at -= 1;
             }
@@ -393,11 +389,8 @@ pub unsafe fn ui_comp_mouse_focus(row: c_int, col: c_int) -> *mut ScreenGrid {
     if ui_has(kUIMultigrid) {
         // With `ext_multigrid` a window's grid is not composed and so has no
         // `comp_row`/`comp_col`; the window's own position stands in.
-        // SAFETY: the caller's obligation; nothing here restructures the
-        // window list.
         for wp in windows_in_curtab() {
-            // SAFETY: `wp` came from the live window list.
-            let grid = unsafe { win_layer(wp) };
+            let grid = win_layer(wp);
             let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
             if grid.mouse_enabled
                 && row >= winrow
@@ -420,10 +413,8 @@ pub unsafe fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> *mut ScreenGr
     if let Some(grid) = topmost_at(row, col, |_| true) {
         return grid.raw();
     }
-    // SAFETY: the caller's obligation.
     for wp in windows_in_curtab() {
-        // SAFETY: `wp` came from the live window list.
-        let grid = unsafe { win_layer(wp) };
+        let grid = win_layer(wp);
         let hidden = wp.w_config.hide;
         if grid.covers(row, col) && !hidden {
             return grid.raw();

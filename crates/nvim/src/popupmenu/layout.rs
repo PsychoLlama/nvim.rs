@@ -36,11 +36,7 @@ fn clamp_to_option(value: c_int, limit: OptInt) -> c_int {
 /// `pum_base_width` is the widest `word`. The kind and extra columns each
 /// get one cell more than their widest entry, for the space that separates
 /// them from what precedes.
-///
-/// # Safety
-/// The item array must be the live one — `pum_display` and
-/// `pum_show_popupmenu` both set it before calling.
-pub(crate) unsafe fn pum_compute_size() {
+pub(crate) fn pum_compute_size() {
     // SAFETY: the item strings belong to the caller of `pum_display` and stay
     // valid until `pum_undisplay`.
     let (mut base, mut kind, mut extra) = (0, 0, 0);
@@ -229,11 +225,7 @@ pub(crate) fn pum_compute_horizontal_placement(
 /// Unlike the completion menu this one does not scroll, so it is sized to
 /// `pum_size` outright and only shrinks when a screen edge says so.
 /// `min_width` is the width the caller wants even for narrow items.
-///
-/// # Safety
-/// `pum_size`, `pum_height` and `pum_base_width` must already describe the
-/// menu being shown.
-pub(crate) unsafe fn pum_position_at_mouse(min_width: c_int) {
+pub(crate) fn pum_position_at_mouse(min_width: c_int) {
     let pum_handle = pum_grid_ref().handle;
     // SAFETY: `get_win_by_grid_handle` answers a live window or null.
     let (min_row, min_col) = (0, 0);
@@ -272,7 +264,7 @@ pub(crate) unsafe fn pum_position_at_mouse(min_width: c_int) {
     }
 
     // Width and height are both 1 for a shadow border, otherwise 2.
-    let border_height = unsafe { pum_border_width() };
+    let border_height = pum_border_width();
     let border_width = border_height;
     if max_row - row > pum_size.get() + border_height || max_row - row > row - min_row {
         // Room below the mouse row, or more room below than above.

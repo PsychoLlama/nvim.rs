@@ -131,7 +131,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
 
     // When using completion in Insert mode with <C-R>=<C-F> one can open
     // the command line window, but we don't want the popup menu then.
-    unsafe { pum_undisplay(true) };
+    pum_undisplay(true);
 
     // Don't use a new tab page.
     cmdmod_set_tab(0);

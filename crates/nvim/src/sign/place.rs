@@ -167,10 +167,7 @@ unsafe fn buf_findsign(buffer: Buf, id: c_int, group: *const c_char) -> c_int {
 /// A stable sort is provably the permutation the `qsort` upstream uses
 /// produced: `buf_put_decor_sh` hands every placed sign a distinct
 /// `sign_add_id`, so the comparator is a total order and no two entries tie.
-///
-/// # Safety
-/// Every mark must carry a live sign decoration.
-pub(crate) unsafe fn sort_signs(signs: &mut [MTKey]) {
+pub(crate) fn sort_signs(signs: &mut [MTKey]) {
     signs.sort_by(|a, b| {
         if a.pos.row != b.pos.row {
             return a.pos.row.cmp(&b.pos.row);
@@ -291,8 +288,7 @@ unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum:
         // sweeping forms are content to have deleted nothing.
         return if atlnum > 0 { FAIL } else { OK };
     }
-    // SAFETY: every mark collected above carries a live sign decoration.
-    unsafe { sort_signs(&mut signs) };
+    sort_signs(&mut signs);
     extmark_del_id(buffer, signs[0].ns, signs[0].id);
     OK
 }

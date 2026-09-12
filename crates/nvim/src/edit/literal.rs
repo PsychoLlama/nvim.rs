@@ -307,12 +307,8 @@ pub(crate) fn ins_digraph() -> c_int {
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
 pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count {
-        unsafe { vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint) };
+        vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
         return NUL;
     }
 
@@ -339,7 +335,7 @@ pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
         ci.chr.value as c_int
     };
     if c == NUL {
-        unsafe { vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint) };
+        vim_beep(kOptBoFlagCopy as ::core::ffi::c_uint);
     }
     c
 }

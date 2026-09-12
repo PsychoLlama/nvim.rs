@@ -625,7 +625,7 @@ pub fn flush_buffers(flush_typeahead: FlushBuffers) {
 pub fn beep_flush() {
     if emsg_silent.get() == 0 {
         flush_buffers(FLUSH_MINIMAL);
-        unsafe { vim_beep(kOptBoFlagError as c_uint) };
+        vim_beep(kOptBoFlagError as c_uint);
     }
 }
 

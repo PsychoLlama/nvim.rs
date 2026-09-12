@@ -167,13 +167,11 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
 /// checker decide; `None` means there is nothing to suggest for, and the
 /// beep has already been made.
 fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
-    // SAFETY: the caller guarantees the window; the scan below stays
-    // between the start of the cursor line and its terminator.
     if visual_active() {
         // The Visual selection is the bad word, but only within a
         // single line.
         if Win::current().w_cursor.lnum != visual_anchor().lnum {
-            unsafe { vim_beep(kOptBoFlagSpell as core::ffi::c_uint) };
+            vim_beep(kOptBoFlagSpell as core::ffi::c_uint);
             return None;
         }
         let mut badlen = Win::current().w_cursor.col - visual_anchor().col;

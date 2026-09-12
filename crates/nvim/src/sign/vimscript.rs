@@ -165,10 +165,7 @@ unsafe fn each_dict_arg(args: &[TypVal], result: &mut TypVal, one: impl FnMut(*m
 }
 
 /// `sign_getdefined()`'s dictionary for one defined sign.
-///
-/// # Safety
-/// `sign` must be a live sign definition.
-pub(crate) unsafe fn sign_get_info_dict(sign: SignRef) -> DictRef {
+pub(crate) fn sign_get_info_dict(sign: SignRef) -> DictRef {
     // SAFETY: a definition's name, icon and cells are its own.
     let d_held = tv_dict_alloc();
     let d = d_held.as_ptr();
@@ -199,10 +196,7 @@ pub(crate) unsafe fn sign_get_info_dict(sign: SignRef) -> DictRef {
 }
 
 /// `sign_getplaced()`'s dictionary for one placed sign.
-///
-/// # Safety
-/// `mark` must carry a live sign decoration.
-pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
+pub(crate) fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
     // SAFETY: the caller's mark, and the decoration the store names for it.
     let d_held = tv_dict_alloc();
     let d = d_held.as_ptr();
@@ -216,10 +210,7 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
 }
 
 /// Every sign placed in `buffer`, in marktree order — `getbufinfo()`'s `signs`.
-///
-/// # Safety
-/// `buffer` must be live.
-pub(crate) unsafe fn get_buffer_signs(buffer: Buf) -> ListRef {
+pub(crate) fn get_buffer_signs(buffer: Buf) -> ListRef {
     let signs = placed_signs(buffer, 0, ALL_GROUPS, |_| Keep::Yes);
     let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     for mark in signs {

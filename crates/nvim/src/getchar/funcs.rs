@@ -114,7 +114,7 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
             // getchar(): blocking wait.
             // TODO(bfredl): deduplicate the shared logic with state_enter?
             if !char_avail() {
-                unsafe { ui_flush() }; // flush screen updates before blocking
+                ui_flush(); // flush screen updates before blocking
                 unsafe {
                     input_get(
                         ptr::null_mut(),

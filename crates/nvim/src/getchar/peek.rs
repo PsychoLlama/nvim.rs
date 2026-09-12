@@ -132,7 +132,7 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
         }
     }
     setcursor();
-    unsafe { ui_flush() };
+    ui_flush();
 
     at.wcol = win.w_wcol;
     at.wrow = win.w_wrow;
@@ -575,9 +575,7 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
     let tb_change_cnt = typeahead().change_cnt();
 
     if wait_time == -1 || wait_time > 100 {
-        // SAFETY (this body): `buf` is `maxlen` writable bytes by the caller's
-        // promise, and the script stack entry is one `curscript` names.
-        unsafe { ui_flush() }; // flush output before waiting
+        ui_flush(); // flush output before waiting
     }
 
     // Don't reset these at the hit-return prompt, or an endless recursion
@@ -648,7 +646,7 @@ pub(crate) unsafe fn inchar(buf: *mut u8, maxlen: c_int, wait_time: c_long) -> c
         // Always flush the output when reading input from the user, as
         // opposed to just peeking.
         if wait_time == -1 || wait_time > 10 {
-            unsafe { ui_flush() };
+            ui_flush();
         }
 
         // Fill up to a third of the buffer: `fix_input_buffer` can triple

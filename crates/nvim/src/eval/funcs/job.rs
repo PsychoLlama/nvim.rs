@@ -213,7 +213,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let busy = remaining != 0;
     if busy {
         ui_busy_start();
-        unsafe { ui_flush() };
+        ui_flush();
     }
 
     for i in 0..count {

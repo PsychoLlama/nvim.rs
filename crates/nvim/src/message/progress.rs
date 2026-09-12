@@ -151,7 +151,7 @@ pub unsafe fn msg_progress(
     if let Err(mut e) = unsafe { nvim_echo(chunks.array(), false, &raw mut opts) } {
         e.clear();
     }
-    unsafe { ui_flush() };
+    ui_flush();
     s
 }
 

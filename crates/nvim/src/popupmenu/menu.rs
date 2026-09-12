@@ -37,10 +37,7 @@ const PUM_POPUP_MIN_WIDTH: c_int = 20;
 /// Three cases: the mouse is over the menu's own grid (the row is the item,
 /// less the top border), it is over the grid the menu is anchored to (the row
 /// is an offset from `pum_row`), or it is somewhere else entirely.
-///
-/// # Safety
-/// The item array must be live and the placement settled.
-pub(crate) unsafe fn pum_select_mouse_pos() {
+pub(crate) fn pum_select_mouse_pos() {
     let mut pos = MousePos::current();
     if pos.grid == 0 {
         // Grid zero means "ask the compositor which window that was".
@@ -49,8 +46,7 @@ pub(crate) unsafe fn pum_select_mouse_pos() {
 
     if pos.grid == pum_grid_ref().handle {
         // On the menu itself. A box border (width 2) takes the top row.
-        // SAFETY: reads the 'pumborder' option.
-        let border_offset = c_int::from(unsafe { pum_border_width() } == 2);
+        let border_offset = c_int::from(pum_border_width() == 2);
         let item = pos.row - border_offset;
         pum_selected.set(if item >= 0 && item < pum_height.get() {
             item
@@ -96,11 +92,7 @@ fn shown_entries(menu: Menu, mode: c_int) -> impl Iterator<Item = Menu> {
 }
 
 /// Run the selected entry of `menu`.
-///
-/// # Safety
-/// Running a right-hand side re-enters the editor, so nothing may be held
-/// across this.
-unsafe fn pum_execute_menu(menu: Menu, mode: c_int) {
+fn pum_execute_menu(menu: Menu, mode: c_int) {
     // A separator is not selectable, so only the enabled entries are
     // numbered here -- which is why this is not `shown_entries`.
     let enabled = menu
@@ -146,10 +138,7 @@ enum MenuStep {
 }
 
 /// Handle one key of the `:popup` loop.
-///
-/// # Safety
-/// The menu must be up; `items` must describe it.
-unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
+fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
     match c {
         ESC | Ctrl_C => MenuStep::Close,
         CAR | NL => MenuStep::Execute,
@@ -181,8 +170,7 @@ unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
             || c == Key::Rightdrag.code()
             || c == Key::Mousemove.code() =>
         {
-            // SAFETY: the caller's promise -- the placement is settled.
-            unsafe { pum_select_mouse_pos() };
+            pum_select_mouse_pos();
             MenuStep::Continue
         }
         _ if c == Key::Leftmouse.code()
@@ -191,8 +179,7 @@ unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
         {
             // A left click always closes; a right release only closes when
             // it landed on an item.
-            // SAFETY: as above.
-            unsafe { pum_select_mouse_pos() };
+            pum_select_mouse_pos();
             if pum_selected.get() >= 0 {
                 MenuStep::Execute
             } else if c == Key::Rightrelease.code() {
@@ -213,8 +200,7 @@ unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
 pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
     // SAFETY: the caller's promise.
     let menu = unsafe { Menu::new(menu) };
-    // SAFETY: takes the completion menu down, if one was up.
-    unsafe { pum_undisplay(true) };
+    pum_undisplay(true);
     let mode = get_menu_mode_flag();
     let entries = pum_menu_entries(menu, mode);
 
@@ -236,11 +222,11 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
     // SAFETY: `array` outlives `pum_array`, which the `pum_undisplay` at the
     // end clears; the placement calls read the editor's own state.
     pum_array.set(array.as_mut_ptr());
-    unsafe { pum_compute_size() };
+    pum_compute_size();
     pum_scrollbar.set(0);
     pum_height.set(pum_size.get());
     pum_rl.set(Win::current().w_onebuf_opt.wo_rl != 0);
-    unsafe { pum_position_at_mouse(PUM_POPUP_MIN_WIDTH) };
+    pum_position_at_mouse(PUM_POPUP_MIN_WIDTH);
 
     pum_selected.set(-1);
     pum_first.set(0);
@@ -256,33 +242,26 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
         // Above the cmdline area: #23275.
         let mut grid = pum_grid_ref();
         grid.zindex = kZIndexCmdlinePopupMenu as c_int;
-        // SAFETY: the menu is placed and its grid allocated; `vgetc` pumps
-        // the event loop, so nothing is held across it.
-        let c = unsafe {
-            pum_redraw();
-            setcursor_mayforce(Win::current(), true);
-            vgetc()
-        };
+        pum_redraw();
+        setcursor_mayforce(Win::current(), true);
+        let c = vgetc();
         // A callback or <expr> mapping run from `vgetc` may have taken the
         // menu down under us.
         if pum_array.get().is_null() {
             break;
         }
-        // SAFETY: the menu is still up and `entries` describes it.
-        match unsafe { pum_menu_key(c, &entries) } {
+        match pum_menu_key(c, &entries) {
             MenuStep::Continue => {}
             MenuStep::Close => break,
             MenuStep::Execute => {
-                // SAFETY: a live node; running its rhs re-enters the editor.
-                unsafe { pum_execute_menu(menu, mode) };
+                pum_execute_menu(menu, mode);
                 break;
             }
         }
     }
 
     drop(array);
-    // SAFETY: clears `pum_array` before `entries` goes out of scope.
-    unsafe { pum_undisplay(true) };
+    pum_undisplay(true);
     if p_mousemev.get() == 0 {
         set_mousemoveevent(false);
     }

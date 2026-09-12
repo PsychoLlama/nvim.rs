@@ -238,7 +238,7 @@ pub(crate) unsafe fn ex_redrawstatus(args: *mut ExArg) {
 /// `_args` must point at the command's `ExArg`, unaliased for the call.
 pub(crate) unsafe fn ex_redrawtabline(_args: *mut ExArg) {
     let lazyredraw_off = suspend_lazyredraw();
-    unsafe { draw_tabline() };
+    draw_tabline();
     drop(lazyredraw_off);
     ui_flush();
 }
@@ -347,8 +347,7 @@ fn skipwhite(p: *const c_char) -> *mut c_char {
 
 /// `ui_flush()` as checked code.
 fn ui_flush() {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ui::ui_flush() }
+    crate::ui::ui_flush()
 }
 
 /// `update_screen()` as checked code.

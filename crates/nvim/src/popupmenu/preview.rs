@@ -135,12 +135,8 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
 /// It goes to the right when the text fits there, otherwise to the left,
 /// otherwise on whichever side has more room. Answers false — with the
 /// window hidden — when neither side has enough space to be worth it.
-///
-/// # Safety
-/// `window` must be a live float and the menu's placement settled.
-unsafe fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
-    // SAFETY: `window` is live and `win_config_float` takes the config by value.
-    let border_width = unsafe { pum_border_width() };
+fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
+    let border_width = pum_border_width();
     let col = pum_col.get() + pum_width.get() + 1 + border_width.max(pum_scrollbar.get());
     // TODO(glepnir): support config align border by using completepopup
     // align menu
@@ -215,7 +211,7 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> Option<Win> {
 
     // `unblock_autocmds` has to run whichever way the placement went, so
     // the answer is settled before it rather than after.
-    let placed = unsafe { pum_adjust_info_position(wp, max_info_width) }.then(|| wp.raw());
+    let placed = pum_adjust_info_position(wp, max_info_width).then(|| wp.raw());
     unblock_autocmds();
     unsafe { Win::from_raw(placed.unwrap_or(::core::ptr::null_mut())) }
 }
@@ -364,7 +360,7 @@ unsafe fn pum_show_info(
             resized = unsafe {
                 pum_fill_info(info, repeat, use_float, prev_selected, resized, curwin_save)
             };
-            resized = unsafe { pum_restore_window(curwin_save, curtab_save, resized) };
+            resized = pum_restore_window(curwin_save, curtab_save, resized);
         }
     }
 
@@ -410,7 +406,7 @@ unsafe fn pum_fill_info(
     Win::current().w_cursor.col = 0;
 
     if use_float
-        && !unsafe { pum_adjust_info_position(Win::current(), max_info_width) }
+        && !pum_adjust_info_position(Win::current(), max_info_width)
         && let Some(saved) = valid_win(curwin_save)
     {
         win_enter(saved, false);
@@ -422,10 +418,7 @@ unsafe fn pum_fill_info(
 ///
 /// Does nothing when opening the preview did not leave that window, which is
 /// the float case once the float already existed.
-///
-/// # Safety
-/// `curwin_save`/`curtab_save` are re-checked before use.
-unsafe fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> bool {
+fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> bool {
     // Both identities are resolved to a live object before either is entered.
     let saved_tab = valid_tab(curtab_save);
     let left_window = Win::current_or_none().map(Win::id) != Some(curwin_save)
@@ -484,10 +477,7 @@ unsafe fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bo
 ///
 /// Answers true when a window was resized, so the caller must recompute the
 /// menu's placement.
-///
-/// # Safety
-/// The item array must be live. Autocommands run from here.
-pub(crate) unsafe fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
+pub(crate) fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
     // SAFETY: the array outlives the menu; every window pointer is
     // re-validated after anything that can run autocommands.
     let prev_selected = pum_selected.replace(n);

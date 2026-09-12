@@ -270,18 +270,17 @@ pub fn status_redraw_buf(buffer: Buf) {
 /// Draw every status line and window bar that is marked, plus the tab line and
 /// the title.
 pub fn redraw_statuslines() {
-    // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
         if wp.w_redr_status {
             win_check_ns_hl(Some(wp));
-            unsafe { win_redr_winbar(wp) };
-            unsafe { win_redr_status(wp) };
+            win_redr_winbar(wp);
+            win_redr_status(wp);
         }
     }
     win_check_ns_hl(None);
 
     if redraw_tabline.get() {
-        unsafe { draw_tabline() };
+        draw_tabline();
     }
     if need_maketitle.get() {
         maketitle();

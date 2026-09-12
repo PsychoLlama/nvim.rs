@@ -401,7 +401,7 @@ pub(crate) unsafe fn command_line_execute(
                 if !ui_has(kUICmdline) {
                     msg_cursor_goto(msg_row.get(), 0);
                 }
-                unsafe { ui_flush() };
+                ui_flush();
             }
             return 0;
         }

@@ -138,7 +138,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // SafeState, if nothing is pending.
     may_trigger_safestate(ready && !ins_compl_active() && !pum_visible());
 
-    unsafe { pum_check_clear() };
+    pum_check_clear();
     show_cursor_info_later(false);
     if must_redraw.get() != 0 {
         let _ = update_screen();

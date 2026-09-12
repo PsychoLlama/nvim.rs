@@ -209,7 +209,7 @@ pub fn do_sleep(msec: int64_t, hide_cursor: bool) {
     if hide_cursor {
         ui_busy_start();
     }
-    unsafe { ui_flush() };
+    ui_flush();
     unsafe {
         process_events_until(main_loop.ptr(), (*main_loop.ptr()).events, msec, || {
             got_int.get()
@@ -779,8 +779,7 @@ fn u_undo_and_forget(count: c_int, do_buf_event: bool) -> bool {
 
 /// `ui_cursor_shape()` as checked code.
 pub(super) fn ui_cursor_shape() {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::ui::ui_cursor_shape() }
+    crate::ui::ui_cursor_shape()
 }
 
 /// `undo_time()` as checked code.

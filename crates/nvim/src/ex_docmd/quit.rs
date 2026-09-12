@@ -632,7 +632,7 @@ pub(crate) unsafe fn ex_stop(args: *mut ExArg) {
     }
     may_trigger_vim_suspend_resume(true);
     ui_call_suspend();
-    unsafe { ui_flush() };
+    ui_flush();
 }
 
 /// `:xit` and `:wq` — write, then quit.

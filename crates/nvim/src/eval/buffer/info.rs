@@ -86,10 +86,8 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     }
     list(c"windows", Some(windows));
 
-    // SAFETY: a live buffer; `get_buffer_signs` hands back a fresh list the
-    // dictionary takes over.
     if buf_has_signs(buffer) {
-        list(c"signs", Some(unsafe { get_buffer_signs(buffer) }));
+        list(c"signs", Some(get_buffer_signs(buffer)));
     }
     nr(c"lastused", buffer.b_last_used);
     dict_held

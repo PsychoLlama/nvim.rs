@@ -887,7 +887,7 @@ pub unsafe fn recover_names(
                     unsafe { msg_multiline(text, 0, false, false, clear) };
                 }
             }
-            unsafe { ui_flush() };
+            ui_flush();
         } else if !ret_list.is_null() {
             for &name in found.iter() {
                 let joined = unsafe { concat_fnames(dir_name, name, true) };

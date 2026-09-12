@@ -91,17 +91,14 @@ pub(crate) fn out_data_decide_throttle(size: usize) -> bool {
         2 => c".. ",
         _ => c"...",
     };
-    // SAFETY: static messages, none of which is a format string.
-    unsafe {
-        if visit.get() == 1 {
-            msg_str(c"...\n");
-        }
-        // Put the cursor back at the start of the line either side.
-        msg_putchar('\r' as c_int);
-        msg_str(pulse);
-        msg_putchar('\r' as c_int);
-        ui_flush();
+    if visit.get() == 1 {
+        msg_str(c"...\n");
     }
+    // Put the cursor back at the start of the line either side.
+    msg_putchar('\r' as c_int);
+    msg_str(pulse);
+    msg_putchar('\r' as c_int);
+    ui_flush();
     true
 }
 

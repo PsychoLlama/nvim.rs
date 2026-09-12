@@ -39,11 +39,7 @@ use crate::types::ui::kUIWildmenu;
 use crate::ui::ui_has;
 
 /// Redraw the status line of window `window`.
-///
-/// # Safety
-/// `window` must be a live window. Evaluating `'statusline'` re-enters the
-/// editor, so nothing may be held across this.
-pub unsafe fn win_redr_status(window: Win) {
+pub fn win_redr_status(window: Win) {
     let mut win = window;
     let is_stl_global = stl_is_global();
 
@@ -68,8 +64,7 @@ pub unsafe fn win_redr_status(window: Win) {
         || !win.w_floating
         || (is_stl_global && win.is_current())
     {
-        // SAFETY: a live window; this evaluates the option.
-        unsafe { redraw_custom_statusline(window) };
+        redraw_custom_statusline(window);
     }
 
     // May need to draw the character below the vertical separator.
@@ -83,8 +78,7 @@ pub unsafe fn win_redr_status(window: Win) {
             win.w_p_fcs_chars.vert
         };
         let attr = win_hl(win, group as c_int);
-        // SAFETY: `default_gridview` is live, and the batch is flushed below.
-        unsafe { view_line_start(default_gridview(), win.w_winrow + win.w_height) };
+        view_line_start(default_gridview(), win.w_winrow + win.w_height);
         paint_schar(win.w_wincol + win.w_width, fillchar, attr);
         paint_flush();
     }
@@ -118,10 +112,7 @@ pub fn stl_connected(window: Win) -> bool {
 ///
 /// Upstream fills the shared `NameBuff` and leaves the readers to find it
 /// there, which is why the fill and each read had to be separate borrows.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub(crate) unsafe fn get_trans_bufname(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
+pub(crate) fn get_trans_bufname(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
     let spname = buf_spname(buffer);
     let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);
     // SAFETY: the caller's promise, and `name` is `MAXPATHL` bytes, which

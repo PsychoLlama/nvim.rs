@@ -268,7 +268,7 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
                 }
             }
         }
-        unsafe { ui_flush() };
+        ui_flush();
     }
 
     resizing_screen.set(false);

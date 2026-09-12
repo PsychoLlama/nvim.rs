@@ -107,8 +107,7 @@ pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
     let mut len: c_int = 0;
     let key = loop {
         // Flush output before waiting.
-        // SAFETY: main-thread editor call.
-        unsafe { ui_flush() };
+        ui_flush();
 
         // Leave some room for check_termcode() to insert a key code into
         // (max 5 chars plus NUL), and fix_input_buffer() can triple the
@@ -229,8 +228,7 @@ pub(crate) unsafe fn prompt_for_input(
     };
 
     cmdline_row.set(msg_row.get());
-    // SAFETY: main-thread editor call.
-    unsafe { ui_flush() };
+    ui_flush();
 
     // Don't map prompt input, but do allow special keys.
     let raw_key = Keys::unmapped_with_codes();

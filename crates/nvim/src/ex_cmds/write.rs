@@ -666,13 +666,10 @@ fn write_one_buffer(
     save_forceit: c_int,
     error: &mut c_int,
 ) -> WriteAll {
-    // SAFETY: caller's contract, and a live buffer.
-    // TODO(zeertzjq): channel_job_running always returns false for
-    // nvim_open_term() terminals.  Use terminal_running() instead?
     if exiting.get()
         && args.forceit == 0
         && !buffer.terminal.is_null()
-        && unsafe { channel_job_running(buffer.b_p_channel as u64) }
+        && channel_job_running(buffer.b_p_channel as u64)
     {
         no_write_message_buf(buffer);
         *error += 1;

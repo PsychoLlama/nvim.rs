@@ -355,7 +355,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 
     if patlen != 0 || use_last_pat {
         ui_busy_start();
-        unsafe { ui_flush() };
+        ui_flush();
     }
 
     if search_first_line.get() == 0 {
@@ -651,7 +651,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
     }
 
     ui_busy_start();
-    unsafe { ui_flush() };
+    ui_flush();
 
     let mut search_flags = SEARCH_NOOF;
 
@@ -753,7 +753,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         redrawcmdline();
         Win::current().w_cursor = s.match_end;
     } else {
-        unsafe { vim_beep(kOptBoFlagError as ::core::ffi::c_uint) };
+        vim_beep(kOptBoFlagError as ::core::ffi::c_uint);
     }
 
     restore_last_search_pattern();

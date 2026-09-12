@@ -177,10 +177,7 @@ pub struct RequestEvent {
 // ---------------------------------------------------------------------------
 
 /// Creates the queue that `nvim_get_mode` replies are answered from.
-///
-/// # Safety
-/// The main loop is initialised.
-pub unsafe fn rpc_init() {
+pub fn rpc_init() {
     // SAFETY: the caller's guarantee that the loop exists.
     let queue = unsafe { multiqueue_new_child((*main_loop.ptr()).events) };
     ch_before_blocking_events.set(queue);
@@ -305,10 +302,7 @@ pub unsafe fn rpc_free(channel: *mut Channel) {
 }
 
 /// The channel `id` is talking msgpack-rpc over, if it still is.
-///
-/// # Safety
-/// The channel table is initialised.
-unsafe fn find_rpc_channel(id: uint64_t) -> Option<Chan> {
+fn find_rpc_channel(id: uint64_t) -> Option<Chan> {
     // `find_channel` answers null rather than a dangling pointer.
     let chan = find_channel(id);
     if chan.is_null() {
@@ -360,11 +354,10 @@ unsafe fn chan_close_on_err(chan: Chan, msg: *mut c_char, loglevel: c_int) {
 /// `name` is a NUL-terminated string and `args` describes `args.size` live
 /// objects.
 pub unsafe fn rpc_send_event(id: uint64_t, name: *const c_char, args: Array) -> bool {
-    // SAFETY: the channel table is live whenever the editor is.
     let channel = if id == 0 {
         None
     } else {
-        match unsafe { find_rpc_channel(id) } {
+        match find_rpc_channel(id) {
             Some(chan) => Some(chan),
             None => return false,
         }
@@ -395,8 +388,7 @@ pub unsafe fn rpc_send_call(
     args: Array,
     result_mem: *mut ArenaMem,
 ) -> Result<Object, Error> {
-    // SAFETY: the channel table is live whenever the editor is.
-    let Some(mut chan) = (unsafe { find_rpc_channel(id) }) else {
+    let Some(mut chan) = find_rpc_channel(id) else {
         return Err(api_error!(kErrorTypeException, "Invalid channel: {id}"));
     };
     // SAFETY: the channel is live; this reference is dropped below.
@@ -482,7 +474,7 @@ fn call_error(result: &Object) -> Error {
 /// `buffer` is a live write buffer this call takes over.
 pub unsafe fn rpc_write_raw(id: uint64_t, buffer: *mut WBuffer) -> bool {
     // SAFETY: the channel table is live whenever the editor is.
-    match unsafe { find_rpc_channel(id) } {
+    match find_rpc_channel(id) {
         // SAFETY: the caller's buffer, handed on to the channel.
         Some(chan) => unsafe { channel_write(chan, buffer) },
         // SAFETY: as above; nobody took it, so it is released here.
@@ -613,13 +605,8 @@ unsafe extern "C" fn internal_read_event(argv: *mut *mut c_void) {
 /// The classification decides how responses are matched (see
 /// [`CallStack::find`]), so a peer that claims `msgpack-rpc` is taken at its
 /// word.
-///
-/// # Safety
-/// `info` is a live dict this call takes ownership of.
-pub unsafe fn rpc_set_client_info(id: uint64_t, info: ApiDict) {
-    // SAFETY: the channel table is live whenever the editor is.
-    let mut chan =
-        unsafe { find_rpc_channel(id) }.expect("client info for a channel that is not rpc");
+pub fn rpc_set_client_info(id: uint64_t, info: ApiDict) {
+    let mut chan = find_rpc_channel(id).expect("client info for a channel that is not rpc");
     // The dict being replaced was owned by the channel.
     chan.rpc.info = info;
     // SAFETY: the dict was just stored on this channel, so its strings are

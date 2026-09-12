@@ -160,7 +160,7 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
     cursorcmd();
     cc.special_char = c;
     cc.special_shift = shift;
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
 }
 
 /// Undo a `putcmdline(c, false)`.
@@ -183,7 +183,7 @@ pub fn unputcmdline() {
     msg_no_more.set(false);
     cursorcmd();
     cc.special_char = NUL as ::core::ffi::c_char;
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
 }
 
 /// Insert `len` bytes of `str` into the command line at the cursor; `len` of
@@ -313,7 +313,7 @@ pub fn redrawcmdline() {
     compute_cmdrow();
     redrawcmd();
     cursorcmd();
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
 }
 
 /// Draw the `:` / `/` / `?` and the prompt in front of the command line, and

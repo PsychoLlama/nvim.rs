@@ -522,8 +522,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
 /// Beep, or flash, for a backspace that could not delete anything.
 #[inline(always)]
 fn beep_backspace() {
-    // SAFETY: the bell only reads options.
-    unsafe { vim_beep(kOptBoFlagBackspace as ::core::ffi::c_uint) }
+    vim_beep(kOptBoFlagBackspace as ::core::ffi::c_uint)
 }
 
 /// Step the cursor one character forward, over a line break if need be.

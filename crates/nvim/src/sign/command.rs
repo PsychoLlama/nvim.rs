@@ -66,7 +66,6 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
         if got_int.get() {
             break;
         }
-        // SAFETY: a live buffer, either the caller's or one off the list.
         if buf_has_signs(cbuf) {
             msg_putchar('\n' as c_int);
             // A live buffer's name is a NUL-terminated string, and the
@@ -80,10 +79,8 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
         if ns >= 0 {
             let mut signs = placed_signs(cbuf, 0, ns, |_| Keep::Yes);
             if !signs.is_empty() {
-                // SAFETY: every mark collected carries a live sign.
-                unsafe { sort_signs(&mut signs) };
-                // SAFETY: as above; each `sh` is that mark's own decoration.
-                unsafe { report_signs(&signs) };
+                sort_signs(&mut signs);
+                report_signs(&signs);
             }
         }
 
@@ -96,10 +93,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
 
 /// The `line=`/`id=`/`group=`/`name=`/`priority=` lines `:sign place`
 /// prints for one buffer's signs, already sorted.
-///
-/// # Safety
-/// Every mark must carry a live sign decoration.
-unsafe fn report_signs(signs: &[MTKey]) {
+fn report_signs(signs: &[MTKey]) {
     msg_putchar('\n' as c_int);
     for (i, mark) in signs.iter().enumerate() {
         // SAFETY: the caller promised every mark carries a live sign.
@@ -158,10 +152,7 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
 }
 
 /// The `:sign list` report for one definition.
-///
-/// # Safety
-/// `sign` must be a live sign definition.
-pub(crate) unsafe fn sign_list_defined(sign: SignRef) {
+pub(crate) fn sign_list_defined(sign: SignRef) {
     // SAFETY: a definition's name, icon and cells are its own.
     let sn_name = unsafe { c_str(sign.sn_name) };
     smsg!(0, "sign {sn_name}");
@@ -204,8 +195,7 @@ pub(crate) unsafe fn sign_list_defined(sign: SignRef) {
 unsafe fn sign_list_by_name(name: *mut c_char) {
     // SAFETY: the caller's name.
     match unsafe { sign_find(name) } {
-        // SAFETY: `sign_find` answered a live definition.
-        Some(sp) => unsafe { sign_list_defined(sp) },
+        Some(sp) => sign_list_defined(sp),
         None => {
             // SAFETY: the caller's name, and a format the message takes.
             let name = unsafe { c_str(name) };
@@ -549,7 +539,7 @@ pub(crate) unsafe fn ex_sign(args: *mut ExArg) {
     // Define, undefine or list.
     if idx == SIGNCMD_LIST && unsafe { *arg } == 0 {
         for sp in sign_defs() {
-            unsafe { sign_list_defined(sp) };
+            sign_list_defined(sp);
         }
         return;
     }

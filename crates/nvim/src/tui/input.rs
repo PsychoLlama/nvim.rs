@@ -392,10 +392,7 @@ unsafe fn handle_raw_buffer(input: *mut TermInput, force: bool, data: &[u8]) -> 
 /// Everything up to the next escape belongs to one sequence, since an escape
 /// can only begin one. Mid-paste there is nothing to parse and the bytes go
 /// to the editor as they are.
-///
-/// # Safety
-/// `input` must point to a live [`TermInput`].
-unsafe fn take_one_sequence(input: &mut TermInput, rest: &[u8]) -> usize {
+fn take_one_sequence(input: &mut TermInput, rest: &[u8]) -> usize {
     let count = rest
         .iter()
         .skip(1)

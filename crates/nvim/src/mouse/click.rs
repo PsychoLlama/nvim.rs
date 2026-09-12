@@ -131,11 +131,10 @@ pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: Pos) -> c_
         redraw_curbuf_later(redraw);
         let _ = update_screen();
         setcursor();
-        unsafe { ui_flush() }; // Update before showing popup menu
+        ui_flush(); // Update before showing popup menu
     }
 
-    // SAFETY: runs its own modal loop over the menu tree.
-    unsafe { show_popupmenu() };
+    show_popupmenu();
     got_click.set(false); // ignore release events
     jump_flags
 }

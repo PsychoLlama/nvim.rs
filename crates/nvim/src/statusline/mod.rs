@@ -457,10 +457,7 @@ pub unsafe fn stl_alloc_click_defs(
 /// and [`paint_flush`] closes it. Everything between the two addresses cells
 /// of that line by column, which is why the `paint_*` family is free
 /// functions rather than methods on the grid.
-///
-/// # Safety
-/// No other batch may be in progress; one [`paint_flush`] must follow.
-pub(crate) unsafe fn view_line_start(view: GridView, row: c_int) {
+pub(crate) fn view_line_start(view: GridView, row: c_int) {
     grid_line_start(view, row);
 }
 
@@ -580,19 +577,14 @@ pub unsafe fn fillchar_status(group: *mut Hlf, window: Win) -> ScreenChar {
 }
 
 /// Redraw `window`'s status line from `'statusline'`.
-///
-/// # Safety
-/// `window` must be a live window. This evaluates the option, so it re-enters
-/// the editor.
-pub unsafe fn redraw_custom_statusline(window: Win) {
+pub fn redraw_custom_statusline(window: Win) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // A `'statusline'` expression that triggers a redraw gets here again.
     if ENTERED.get() {
         return;
     }
     ENTERED.set(true);
-    // SAFETY: the caller's promise.
-    unsafe { win_redr_custom(Some(window), false, false, false) };
+    win_redr_custom(Some(window), false, false, false);
     ENTERED.set(false);
 }
 

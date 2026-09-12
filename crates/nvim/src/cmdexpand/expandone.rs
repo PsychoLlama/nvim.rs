@@ -150,7 +150,7 @@ pub(crate) unsafe fn nextwild(
         && !(ui_has(kUICmdline) || ui_has(kUIWildmenu))
     {
         msg_str(c"..."); // show that we are busy
-        unsafe { ui_flush() };
+        ui_flush();
     }
 
     let mut p;
@@ -507,7 +507,7 @@ unsafe fn longest_common_match(expand: *mut Expand, options: WildOpts) -> *mut c
         });
         if diverged {
             if !options.has(WildOpts::NO_BEEP) {
-                unsafe { vim_beep(kOptBoFlagWildmode as ::core::ffi::c_uint) };
+                vim_beep(kOptBoFlagWildmode as ::core::ffi::c_uint);
             }
             break;
         }

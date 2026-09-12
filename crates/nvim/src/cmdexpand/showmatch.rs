@@ -199,7 +199,7 @@ pub unsafe fn showmatches(
         if !ui_has(kUIMessages) {
             msg_putchar('\n' as c_int);
         }
-        unsafe { ui_flush() };
+        ui_flush();
         cmdline_row.set(msg_row.get());
         msg_didany.set(false); // lines_left will be set again
         unsafe { msg_ext_set_kind(c"wildlist".as_ptr()) };

@@ -258,13 +258,10 @@ pub fn find_channel(id: uint64_t) -> *mut Channel {
 }
 
 /// Opens the stderr channel and the RPC event queue.
-///
-/// # Safety
-/// Called once, from startup, after the event loop exists.
-pub unsafe fn channel_init() {
+pub fn channel_init() {
     // SAFETY: the caller's promise.
     unsafe { channel_alloc(kChannelStreamStderr) };
-    unsafe { rpc_init() };
+    rpc_init();
 }
 
 /// A channel with no transport and no callbacks yet.
@@ -333,10 +330,7 @@ pub unsafe fn channel_alloc(type_0: ChannelStreamType) -> *mut Channel {
 }
 
 /// Closes every channel. Called on exit.
-///
-/// # Safety
-/// Called from the main thread with the registry live.
-pub unsafe fn channel_teardown() {
+pub fn channel_teardown() {
     // The ids are snapshotted rather than walked live because closing a
     // channel queues a free event against the same table.
     for id in channels.with(SlotTable::snapshot_keys) {
@@ -469,7 +463,7 @@ pub(super) unsafe fn close_cb(_stream: *mut Stream, data: *mut c_void) {
 /// Called from the main thread; `error`, if given, is writable.
 pub unsafe fn channel_close(id: uint64_t, part: ChannelPart, error: *mut *const c_char) -> bool {
     // SAFETY: the caller's promise.
-    match unsafe { close_channel_part(id, part) } {
+    match close_channel_part(id, part) {
         Ok(()) => true,
         Err(why) => {
             if !error.is_null() {
@@ -512,10 +506,7 @@ impl CloseError {
 }
 
 /// [`channel_close`] with the out-parameter turned back into a result.
-///
-/// # Safety
-/// Called from the main thread with the registry live.
-unsafe fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
+fn close_channel_part(id: uint64_t, part: ChannelPart) -> Result<(), CloseError> {
     // The answer is used before the next event-loop turn.
     let chan = find_channel(id);
     if chan.is_null() {

@@ -102,7 +102,7 @@ pub unsafe fn ui_add_cb(ns_id: u32, cb: LuaRef, ext_widgets: *mut bool) {
         },
     );
     update_ext();
-    unsafe { ui_refresh() };
+    ui_refresh();
 }
 
 /// Unregisters `ns_id`'s handler.
@@ -125,7 +125,7 @@ pub fn ui_remove_cb(ns_id: u32, checkerr: bool) {
     };
     unsafe { api_free_luaref(handler.callback) };
     update_ext();
-    unsafe { ui_refresh() };
+    ui_refresh();
     if checkerr {
         let ns = describe_ns(ns_id.cast_signed(), c"(UNKNOWN PLUGIN)".as_ptr());
         // SAFETY: the one `%s` spends the namespace name.
@@ -147,17 +147,8 @@ fn update_ext() {
 
 /// Offers `name` to every registered handler, then to the attached UIs
 /// unless a handler claimed it by returning `true`.
-///
-/// # Safety
-///
-/// The handlers and the serializers each take an array of their own, so the
-/// event's own array is copied per consumer and released here.
-///
-/// # Safety
-///
-/// The handlers this reaches are arbitrary Lua.
-pub unsafe fn ui_call_event(name: &'static CStr, args: Array) {
-    let handled = unsafe { offer_to_handlers(name, &args) };
+pub fn ui_call_event(name: &'static CStr, args: Array) {
+    let handled = offer_to_handlers(name, &args);
     if !handled {
         let mut any_call = false;
         let mut i = 0;
@@ -174,11 +165,7 @@ pub unsafe fn ui_call_event(name: &'static CStr, args: Array) {
 }
 
 /// Runs the handlers, returning whether one of them claimed the event.
-///
-/// # Safety
-///
-/// As [`ui_call_event`].
-unsafe fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
+fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
     // A handler is arbitrary Lua and may legitimately want to move the
     // cursor or set a variable, which the locks held while redrawing would
     // forbid. Upstream lifts them for the duration and puts them back.
@@ -200,8 +187,7 @@ unsafe fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
             continue;
         };
         ui_event_ns_id.set(ns_id);
-        // SAFETY: `args` is the event's own array, per this call's contract.
-        let fast = unsafe { is_fast(name, args) };
+        let fast = is_fast(name, args);
         let event = name.as_ptr().cast_mut();
         let no_arena = core::ptr::null_mut::<Arena>();
         // SAFETY: `name` is a static protocol name; the callee takes over
@@ -241,11 +227,7 @@ unsafe fn offer_to_handlers(name: &CStr, args: &Array) -> bool {
 /// Only `msg_show` qualifies, and only for the kinds a redraw produces on
 /// its own. The rest are raised by something the user asked for, so the
 /// handler is allowed to be a full-fat callback.
-///
-/// # Safety
-///
-/// As [`ui_call_event`].
-unsafe fn is_fast(name: &CStr, args: &Array) -> bool {
+fn is_fast(name: &CStr, args: &Array) -> bool {
     /// `msg_show` kinds that are not redraw-driven.
     const SLOW_KINDS: [&CStr; 12] = [
         c"empty",

@@ -176,7 +176,7 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
         if hp.is_null() {
             if ml_get_recursive.get() == 0 {
                 ml_get_recursive.set(1);
-                unsafe { get_trans_bufname(buffer, &mut name) };
+                get_trans_bufname(buffer, &mut name);
                 unsafe { shorten_dir(name.as_mut_ptr()) };
                 // The missing space before "in buffer" is upstream's.
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.

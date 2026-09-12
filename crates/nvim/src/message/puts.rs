@@ -401,8 +401,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                     }
                 }
             }
-            // SAFETY: main-thread editor call.
-            BELL => unsafe { vim_beep(kOptBoFlagShell as c_uint) },
+            BELL => vim_beep(kOptBoFlagShell as c_uint),
             _ => {}
         }
     }

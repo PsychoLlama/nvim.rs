@@ -251,7 +251,7 @@ pub fn ml_recover(checkext: bool) {
         {
             complain(c"E308: Warning: Original file may have been changed");
         }
-        unsafe { ui_flush() };
+        ui_flush();
 
         // Take 'fileformat' and 'fileencoding' from block zero. The
         // encoding sits at the very end of the name field, behind a NUL,

@@ -334,9 +334,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     unsafe { clear_virttext(&raw mut window.w_config.title_chunks) };
     // SAFETY: as above.
     unsafe { clear_virttext(&raw mut window.w_config.footer_chunks) };
-    // SAFETY: a live window, whose matches, jump list and quickfix stacks
-    // these are.
-    unsafe { clear_matches(window) };
+    clear_matches(window);
     // SAFETY: as above.
     unsafe { free_jumplist(window) };
     qf_free_all(Some(window));

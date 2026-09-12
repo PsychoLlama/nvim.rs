@@ -130,7 +130,7 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
             set_imsearch_global(Buf::current());
         }
     }
-    unsafe { ui_cursor_shape() }; // may show a different cursor shape
+    ui_cursor_shape(); // may show a different cursor shape
     // Show/unshow the value of 'keymap' in status lines later.
     status_redraw_curbuf();
 }
@@ -255,7 +255,7 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
         Ok(Key::Ins | Key::Kins) => {
             cc.overstrike = (cc.overstrike == 0) as ::core::ffi::c_int;
-            unsafe { ui_cursor_shape() }; // may show a different cursor shape
+            ui_cursor_shape(); // may show a different cursor shape
             may_trigger_modechanged();
             status_redraw_curbuf();
             redraw_statuslines();

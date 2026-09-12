@@ -182,11 +182,8 @@ unsafe fn pum_items() -> &'static [PumItem] {
 ///
 /// Zero for no border, one for the shadow style — which only darkens the
 /// right and bottom edges — and two for any of the box styles.
-///
-/// # Safety
-/// `'pumborder'` must be a live option string.
 #[inline]
-unsafe fn pum_border_width() -> c_int {
+fn pum_border_width() -> c_int {
     // SAFETY: `p_pumborder` and the option's value table are editor-owned
     // NUL-terminated strings.
     let border = p_pumborder.get();
@@ -218,10 +215,7 @@ struct PumAnchor {
 ///
 /// `cmd_startcol` is the column of the completed match, and only means
 /// anything for a cmdline menu.
-///
-/// # Safety
-/// `curwin` must be live and the cursor column validated.
-unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
+fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     // SAFETY: `curwin`, `cmdline_win` and the window tree are the editor's.
     let win = Win::current();
     let cmdline = State.get() & MODE_CMDLINE != 0;
@@ -357,7 +351,7 @@ pub unsafe fn pum_display(
             .set(ui_has(kUIPopupmenu) || (State.get() & MODE_CMDLINE != 0 && ui_has(kUIWildmenu)));
     }
     pum_rl.set(State.get() & MODE_CMDLINE == 0 && Win::current().w_onebuf_opt.wo_rl != 0);
-    let border_width = unsafe { pum_border_width() };
+    let border_width = pum_border_width();
 
     // Placing the menu can resize a window, which invalidates the
     // placement. Redo it at most twice: with little room the size keeps
@@ -369,7 +363,7 @@ pub unsafe fn pum_display(
         pum_is_drawn.set(true);
         validate_cursor_col(Win::current());
 
-        let anchor = unsafe { pum_compute_anchor(cmd_startcol) };
+        let anchor = pum_compute_anchor(cmd_startcol);
 
         if pum_external.get() {
             if !array_changed {
@@ -400,12 +394,12 @@ pub unsafe fn pum_display(
             return;
         }
 
-        unsafe { pum_compute_size() };
+        pum_compute_size();
         // More items than room means a scrollbar.
         pum_scrollbar.set(c_int::from(pum_height.get() < size));
         pum_compute_horizontal_placement(anchor.target_win, anchor.cursor_col, border_width);
 
-        if !unsafe { pum_set_selected(selected, redo_count) } {
+        if !pum_set_selected(selected, redo_count) {
             break;
         }
     }
@@ -416,7 +410,7 @@ pub unsafe fn pum_display(
     } else {
         kZIndexPopupMenu as c_int
     };
-    unsafe { pum_redraw() };
+    pum_redraw();
 }
 
 /// The popup menu's own grid, as a handle.
@@ -433,17 +427,13 @@ pub(crate) fn pum_grid_ref() -> GridRef {
 /// `immediate` tears the grid down now rather than at the next
 /// [`pum_check_clear`], which is what a caller that is about to draw
 /// something else in its place wants.
-///
-/// # Safety
-/// Autocommands run when `immediate` closes an info window.
-pub unsafe fn pum_undisplay(immediate: bool) {
+pub fn pum_undisplay(immediate: bool) {
     pum_is_visible.set(false);
     pum_array.set(::core::ptr::null_mut());
     must_redraw_pum.set(false);
 
     if immediate {
-        // SAFETY: the caller accepts the window close.
-        unsafe { pum_check_clear() };
+        pum_check_clear();
     }
 }
 
@@ -451,10 +441,7 @@ pub unsafe fn pum_undisplay(immediate: bool) {
 ///
 /// Split from [`pum_undisplay`] because the menu is taken down in the middle
 /// of a redraw, where the grid may not be freed yet.
-///
-/// # Safety
-/// Closing the info window runs autocommands.
-pub unsafe fn pum_check_clear() {
+pub fn pum_check_clear() {
     let mut grid = pum_grid_ref();
     // SAFETY: `pum_grid` is the editor's own grid.
     if pum_is_visible.get() || !pum_is_drawn.get() {
@@ -578,10 +565,7 @@ pub unsafe fn pum_set_event_info(dict: *mut Dict) {
 /// The anchor is the corner the menu grows away from the anchor row: a menu
 /// drawn above the cursor line is anchored by its bottom-left corner, so the
 /// row reported is its last one.
-///
-/// # Safety
-/// `pum_grid` must be allocated and its placement settled.
-unsafe fn pum_send_float_pos() {
+fn pum_send_float_pos() {
     let grid = pum_grid_ref();
     let above = pum_above.get();
     let anchor = if above { c"SW" } else { c"NW" };
@@ -605,10 +589,7 @@ unsafe fn pum_send_float_pos() {
 
 /// Re-send the menu's float position if the compositor moved it since the
 /// last redraw.
-///
-/// # Safety
-/// Called from the UI flush, with the grid still allocated.
-pub unsafe fn pum_ui_flush() {
+pub fn pum_ui_flush() {
     let mut grid = pum_grid_ref();
     if ui_has(kUIMultigrid)
         && pum_is_drawn.get()
@@ -616,8 +597,7 @@ pub unsafe fn pum_ui_flush() {
         && grid.handle != 0
         && grid.pending_comp_index_update
     {
-        // SAFETY: the caller's promise.
-        unsafe { pum_send_float_pos() };
+        pum_send_float_pos();
         grid.pending_comp_index_update = false;
     }
 }

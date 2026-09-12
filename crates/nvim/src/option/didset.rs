@@ -489,7 +489,7 @@ pub(crate) fn did_set_previewwindow(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) fn did_set_pumblend(_args: &mut OptSet) -> Option<&CStr> {
     hl_invalidate_blends();
     if pum_drawn() {
-        unsafe { pum_redraw() };
+        pum_redraw();
     }
     None
 }

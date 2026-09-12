@@ -454,7 +454,7 @@ pub fn update_screen() -> Result<(), Failed> {
                 update_window_hl(w, redr_type >= UPD_NOT_VALID);
             }
         }
-        unsafe { draw_tabline() };
+        draw_tabline();
     }
 
     update_buffer_state(redr_type, hl_changed);
@@ -495,8 +495,8 @@ pub fn update_screen() -> Result<(), Failed> {
         // The status line and window bar go after the window, to minimise
         // cursor movement.
         if wp.w_redr_status {
-            unsafe { win_redr_winbar(wp) };
-            unsafe { win_redr_status(wp) };
+            win_redr_winbar(wp);
+            win_redr_status(wp);
         }
     }
 
@@ -512,9 +512,9 @@ pub fn update_screen() -> Result<(), Failed> {
 
     if pum_drawn() && must_redraw_pum.get() {
         win_check_ns_hl(Win::current_or_none());
-        unsafe { pum_redraw() };
+        pum_redraw();
     } else if State.get() & MODE_CMDLINE != 0 {
-        unsafe { pum_check_clear() };
+        pum_check_clear();
     }
 
     win_check_ns_hl(None);

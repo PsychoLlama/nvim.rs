@@ -576,10 +576,8 @@ pub(crate) unsafe fn nv_mouse(cmd_arg: *mut CmdArg) {
 ///
 /// Emits mouse_on/mouse_off UI events (unless `'mouse'` is empty).
 pub(crate) fn setmouse() {
-    // SAFETY: both read the editor's mode and the UI list.
-    unsafe { ui_cursor_shape() };
-    // SAFETY: as above.
-    unsafe { ui_check_mouse() };
+    ui_cursor_shape();
+    ui_check_mouse();
 }
 
 /// `getmousepos()` -- where the pointer last was, in every coordinate system

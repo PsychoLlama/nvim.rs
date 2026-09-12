@@ -290,8 +290,7 @@ pub(crate) fn ins_page(back: bool) {
 /// Beep, or flash, for a motion that could not go anywhere.
 #[inline(always)]
 fn beep_cursor() {
-    // SAFETY: the bell only reads options.
-    unsafe { vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint) }
+    vim_beep(kOptBoFlagCursor as ::core::ffi::c_uint)
 }
 
 /// Take the `$` 'cpoptions' puts at the end of a change off the screen.

@@ -165,7 +165,7 @@ pub fn show_sb_text() {
     // with no output would otherwise leave one line looking odd.
     let mp = unsafe { msg_sb_start(last_msgchunk.get()) };
     if mp.is_null() || unsafe { (*mp).sb_prev }.is_null() {
-        unsafe { vim_beep(kOptBoFlagMess as c_uint) };
+        vim_beep(kOptBoFlagMess as c_uint);
     } else {
         do_more_prompt(c_int::from(b'G'));
         wait_return(0);

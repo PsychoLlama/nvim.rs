@@ -200,7 +200,7 @@ unsafe fn display_fname(fname: *mut c_char) {
     msg_didout.set(false);
     msg_nowait.set(true);
     msg_col.set(0);
-    unsafe { ui_flush() };
+    ui_flush();
 }
 
 /// Load a file into a dummy buffer with `'modelines'` and the `FileType`

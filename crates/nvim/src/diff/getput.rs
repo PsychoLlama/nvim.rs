@@ -37,8 +37,7 @@ fn writable_target(buffer: Buf, cmdidx: CmdIdx) -> bool {
 /// position, which is the only way to choose a side in a three-way diff.
 pub fn nv_diffgetput(put: bool, count: size_t) {
     if buf_is_prompt(current_buf()) {
-        // SAFETY: the editor exists.
-        unsafe { vim_beep(kOptBoFlagOperator as c_int as c_uint) };
+        vim_beep(kOptBoFlagOperator as c_int as c_uint);
         return;
     }
     let mut ea: ExArg = ExArg {

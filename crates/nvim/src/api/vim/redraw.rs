@@ -46,18 +46,14 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
     if flush && status {
         window.w_redr_status = true;
     } else if status {
-        // SAFETY: `window` is a live window, and the last call puts back the
-        // namespace the first one set.
-        unsafe {
-            win_check_ns_hl(Some(window));
-            if winbar {
-                win_redr_winbar(window);
-            }
-            if statusline {
-                win_redr_status(window);
-            }
-            win_check_ns_hl(None);
+        win_check_ns_hl(Some(window));
+        if winbar {
+            win_redr_winbar(window);
         }
+        if statusline {
+            win_redr_status(window);
+        }
+        win_check_ns_hl(None);
     }
     flush
 }
@@ -145,8 +141,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         if redraw_tabline.get() && first_window().is_some_and(|wp| wp.w_lines_valid == 0) {
             flush = true;
         } else {
-            // SAFETY: the tab line is the editor's own grid.
-            unsafe { draw_tabline() };
+            draw_tabline();
         }
         flush_ui = true;
     }
@@ -189,8 +184,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         flush_ui = true;
     }
     if flush_ui {
-        // SAFETY: the editor's own UI.
-        unsafe { ui_flush() };
+        ui_flush();
     }
     drop(redraw);
     p_lz.set(::core::ffi::c_int::from(save_lz));

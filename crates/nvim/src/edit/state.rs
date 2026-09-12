@@ -162,7 +162,7 @@ fn insert_enter(s: &mut InsertState) {
         unsafe { change_warning(Buf::current(), if s.i == 0 { 0 } else { s.i + 1 }) };
     }
 
-    unsafe { ui_cursor_shape() };
+    ui_cursor_shape();
     do_digraph(-1); // clear digraphs
 
     // Everything in the redo buffer up to here belongs to the command,
@@ -188,7 +188,7 @@ fn insert_enter(s: &mut InsertState) {
     if ins_at_eol.get() {
         o_lnum.set(Win::current().w_cursor.lnum);
     }
-    unsafe { pum_check_clear() };
+    pum_check_clear();
     fold_update_after_insert();
     if s.cmdchar != 'r' as c_int && s.cmdchar != 'v' as c_int && s.c != Ctrl_C {
         unsafe { ins_apply_autocmds(AutoEvent::InsertLeave) };

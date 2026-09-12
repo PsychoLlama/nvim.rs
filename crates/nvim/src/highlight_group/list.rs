@@ -282,7 +282,7 @@ fn highlight_list_two(cnt: c_int, id: c_int) {
     let at = (cnt / 11) as usize;
     msg_str_hl(cstr::in_bytes(&FRAMES[at..]), id, false);
     msg_clr_eos();
-    unsafe { ui_flush() };
+    ui_flush();
     // TODO(justinmk): is this delay needed? ":hi" seems to work without it.
     os_delay(if cnt == 99 { 40 } else { cnt as u64 * 50 }, false);
 }

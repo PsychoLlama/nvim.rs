@@ -64,7 +64,7 @@ pub fn os_exit(mut r: c_int) -> ! {
             r = ui_client_exit_status.get();
         }
     } else {
-        unsafe { ui_flush() };
+        ui_flush();
         ui_call_stop();
     }
 

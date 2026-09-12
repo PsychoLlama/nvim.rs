@@ -237,7 +237,7 @@ macro_rules! event {
             ENTERED.set(true);
             let mut args = ArrayBuf::<{ count!($($arg)*) }>::new();
             $( args.push(wire!($ty, $arg)); )*
-            unsafe { ui_call_event($name, args.array()) };
+            ui_call_event($name, args.array());
             ENTERED.set(false);
         }
     )*};

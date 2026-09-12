@@ -97,7 +97,7 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut exprval = EMPTY_TV;
     let mut error = false;
     let called_emsg_before = called_emsg.get();
-    unsafe { ui_flush() };
+    ui_flush();
     let loop_ = main_loop.ptr();
     let events = unsafe { (*loop_).events };
     // SAFETY throughout: `expr` and `exprval` are this frame's locals, which

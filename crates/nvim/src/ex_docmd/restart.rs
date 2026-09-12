@@ -248,7 +248,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
             result_mem = ptr::null_mut();
 
             ui_call_restart(servername);
-            unsafe { ui_flush() };
+            ui_flush();
 
             set_vim_var_string(Vv::Exitreason, c"restart".as_ptr(), 7 as ptrdiff_t);
 

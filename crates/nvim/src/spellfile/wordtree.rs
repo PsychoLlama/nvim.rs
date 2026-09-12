@@ -494,7 +494,7 @@ pub(super) unsafe fn tree_add_word(
             msg_clr_eos();
             msg_didout.set(false);
             msg_col.set(0);
-            unsafe { ui_flush() };
+            ui_flush();
         }
         unsafe { wordtree_compress(spin, spin.si_foldroot, c"case-folded") };
         if affix_id >= 0 {

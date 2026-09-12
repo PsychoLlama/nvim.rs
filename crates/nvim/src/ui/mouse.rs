@@ -48,11 +48,7 @@ const MOUSE_RETURN: c_int = b'r' as c_int;
 const MOUSE_A: &CStr = c"nvich";
 
 /// Recomputes whether the mouse is wanted in the current mode.
-///
-/// # Safety
-///
-/// Reads `'mouse'` and the current buffer.
-pub unsafe fn ui_check_mouse() {
+pub fn ui_check_mouse() {
     has_mouse.set(false);
     if unsafe { *p_mouse.get() } == 0 {
         return;
@@ -72,17 +68,13 @@ pub unsafe fn ui_check_mouse() {
     } else {
         MOUSE_NORMAL
     };
-    if unsafe { ui_mouse_has(checkfor) } {
+    if ui_mouse_has(checkfor) {
         has_mouse.set(true);
     }
 }
 
 /// Whether `'mouse'` enables the mouse for `mode`.
-///
-/// # Safety
-///
-/// Reads `'mouse'` and the current buffer.
-pub unsafe fn ui_mouse_has(mode: c_int) -> bool {
+pub fn ui_mouse_has(mode: c_int) -> bool {
     let mut p = p_mouse.get();
     while unsafe { *p } != 0 {
         let flag = c_int::from(unsafe { *p });

@@ -355,7 +355,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
         };
         if repl {
             State.set(MODE_REPLACE);
-            unsafe { ui_cursor_shape_no_check_conceal() };
+            ui_cursor_shape_no_check_conceal();
         }
         // A language-mapped argument is read *with* mappings on, which is
         // the whole point of 'iminsert' being lmap.
@@ -554,7 +554,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         || ns.ca.cmdchar == 'r' as c_int
         || (ns.ca.cmdchar == 'g' as c_int && ns.ca.nchar == 'r' as c_int)
     {
-        unsafe { ui_cursor_shape() };
+        ui_cursor_shape();
     }
     if ns.oa.op_type == OpType::Nop && ns.oa.regname == 0 && ns.ca.cmdchar != Key::Event.code() {
         clear_showcmd();
@@ -705,7 +705,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
             unsafe { normal_get_additional_char(ns.raw()) };
         }
         if ns.need_flushbuf {
-            unsafe { ui_flush() };
+            ui_flush();
         }
         if ns.ca.cmdchar != Key::Ignore.code() && ns.ca.cmdchar != Key::Event.code() {
             did_cursorhold.set(false);

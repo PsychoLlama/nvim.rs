@@ -145,8 +145,7 @@ pub(crate) fn ins_compl_del_pum() {
     if compl_match_array().is_unset() {
         return;
     }
-    // SAFETY: a menu is up, which is what `is_unset` just asked.
-    unsafe { pum_undisplay(false) };
+    pum_undisplay(false);
     compl_match_array().clear();
 }
 

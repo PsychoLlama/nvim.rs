@@ -599,7 +599,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
         edit_submode_highl.set(HLF_COUNT);
         showmode();
         edit_submode_extra.set(ptr::null_mut());
-        unsafe { ui_flush() };
+        ui_flush();
     }
 
     did_ai.set(save_did_ai);
@@ -699,7 +699,7 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
         && elapsed_ms(compl_start_tv) < p_acl.get() as uint64_t
     {
         setcursor();
-        unsafe { ui_flush() };
+        ui_flush();
         loop {
             if char_avail() {
                 if ins_compl_preinsert_effect() && ins_compl_win_active(Win::current()) {
