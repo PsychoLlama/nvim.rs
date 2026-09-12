@@ -96,3 +96,9 @@ CMakeUserPresets.json
 # lockfile, so they build into their own target/ rather than the repo's.
 /tools/apigen/target/
 /tools/ffigen/target/
+
+# Core dumps. valgrind writes `vgcore.<pid>` into the cwd when the program
+# under it dies by a signal; a 48 MB memory image was committed once by a
+# broad `git add` during a memory-fault triage.
+vgcore.*
+core.[0-9]*
