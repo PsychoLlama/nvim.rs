@@ -7,71 +7,65 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+A cycle of value-model rewrites: the values Vimscript passes around, and the
+ones every API method takes and answers.
+
 ### Changed
 
+- Rewrote the Vimscript value model, which reaches every builtin function and
+  every List, Dictionary, Blob and Funcref the interpreter holds. An optional
+  argument a caller left out is now absent rather than empty, and `:lockvar`
+  locks the variable rather than whatever value it happens to hold, which is
+  what it always meant. The order `keys()`, `values()` and `items()` hand out
+  is unchanged. Several values the interpreter used to leak are released,
+  `flatten()` on a locked List no longer frees it out from under the
+  variable, and a function call, from the interpreter or through `vim.fn`,
+  costs less than it did.
+- Rewrote the values every `nvim_*` method takes and answers, over
+  msgpack-RPC and from Lua alike, down to how a Lua table becomes one.
+- Rewrote how a failing API call reports itself, over msgpack-RPC and from
+  Lua. The messages read as they did, with two exceptions that were bugs: an
+  empty `'winborder'` no longer clears a window's border, title and footer
+  settings, and `nvim_buf_set_text`/`nvim_buf_get_text` no longer swallow the
+  reason they refused.
+- Rewrote how an `nvim_*` method reads the option dictionary it is handed,
+  and the ShaDa reading that shares it. Which keys a returned option
+  dictionary carries, and what an unnamed key falls back to, are unchanged.
 - Rewrote how the editor reads a buffer line and walks the characters in it,
   covering folding, diffs, text formatting, paragraph and sentence motions,
   spell checking, searching, indent measurement and the `:syntax` item
-  arguments: a line is now a run of bytes with a length rather than a pointer
-  into the memline, and a character walk carries an offset into it. Behaviour
-  is unchanged.
-- Rewrote the line `:s` builds its replacement into and the way a spell affix
-  file's items are read, so each owns or borrows its own text instead of
-  writing over a shared buffer through pointers. `:s` and `:mkspell` produce
-  the same output.
+  arguments.
 - Rewrote the C indenter (`'cindent'`, `'cinoptions'`, `'cinkeys'` and
   `cindent()`) and the blockwise operators (`I`, `A`, `c`, `d`, `CTRL-A`) to
-  work over the line's bytes rather than pointers into it. Behaviour is
-  unchanged, quirks included.
-- Rewrote the Vimscript value model: a value is a Rust enum rather than a
-  type tag beside a union, and it owns what it holds -- releasing a string or
-  a reference to a list, a dictionary, a blob or a partial when it goes out of
-  scope. Every builtin function now receives its arguments as a counted list
-  rather than as a pointer into a buffer ended by a marker, so an optional
-  argument that was not given is absent rather than empty. `:lockvar` now
-  locks the slot a value sits in, which is what it always meant. A List holds
-  its items in one array rather than in a chain of separately allocated
-  cells, so indexing it is immediate rather than a walk. A Dictionary entry
-  owns its key instead of being allocated around it, and the garbage
-  collector keeps its own register of live containers rather than a chain
-  threaded through every one of them. A List or Dictionary is now owned
-  through a counted handle, so it is freed the moment its last holder goes
-  rather than when somebody remembers to say so. Behaviour is unchanged --
-  the order `keys()`, `values()` and `items()` hand out included; several
-  values the interpreter used to leak are released, and `flatten()` on a
-  locked List no longer frees it out from under the variable.
-- Rewrote how an API function reports a failure: it now answers a result
-  rather than writing into an error slot the caller lends it, from the
-  msgpack-RPC and Lua dispatch wrappers down through the helpers behind them.
-  Messages and behaviour are unchanged, with two exceptions that were bugs:
-  an empty `'winborder'` no longer clears a window's border, title and footer
-  settings, and `nvim_buf_set_text`/`nvim_buf_get_text` no longer swallow the
-  reason they refused.
-- Rewrote the API's value model: a `String`, `Array` or `Dict` an API method
-  takes or answers now owns its own storage and releases it when it goes out
-  of scope, rather than living in a per-request arena that was thrown away
-  wholesale. That retires the hand-written free, copy and
-  release-the-Lua-references walks the arena could not do itself, and with
-  them the question of whether a given answer was the caller's to free.
-  Behaviour is unchanged.
-- Rewrote how an API function receives its option dictionary: a key the
-  caller did not name is now absent rather than present-and-zero beside a
-  bitmask saying so, across every `nvim_*` method that takes one and the
-  ShaDa reader that shares the same decoder. Which keys a returned option
-  dictionary carries, and what an unnamed key falls back to, are unchanged.
+  work over the line's bytes rather than pointers into it, quirks included.
+- Rewrote the text the editor builds for itself instead of writing it through
+  a shared buffer: the line `:s` fills with its replacement, the items a
+  spell affix file is read as, and the command lines behind `:!`, `:make`,
+  `:grep` and an external `:diffupdate`.
 - Rewrote how the editor hands text to the message area, which every command
   that prints a listing goes through: `:highlight`, `:syntax`, `:syntime`,
   `:map`, `:marks`, `:jumps`, `:changes`, `:registers`, `:tags`, `:tselect`,
   `:checkpath`, `:autocmd`, `:command`, `:sign`, `:function`, `:let`,
   `:oldfiles`, `:recover`, `:version`, `:menu` and the quickfix and spell
-  listings. Output is unchanged.
+  listings.
+- Rewrote how file names and strings are walked, covering how two names are
+  compared and how one is shortened for a listing, the `'path'` and
+  `'runtimepath'` searches, tag files, spell files, ShaDa, `printf()` and the
+  character-index functions.
+- Continued naming windows, buffers and tab pages by handle rather than by
+  address, reaching option setting, the screen and fold drawing, `:quit`,
+  `:mksession` and `:mkview`.
 
 ### Fixed
 
+- The TUI client no longer reads freed memory when it re-attaches to a
+  restarted server, or when the terminal is restarted after `CTRL-Z`.
 - `vim.on_print` is no longer handed the rest of the message along with the
   chunk it was called for, so a headless message containing a control
   character or an invalid byte reaches the callback once rather than several
   times over.
+- `complete()` no longer leaks the `user_data` of an item whose word was
+  already in the match list.
 
 ## [2026.09.07-26d0ee304e]
 
