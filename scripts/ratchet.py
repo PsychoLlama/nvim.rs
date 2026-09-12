@@ -607,6 +607,43 @@ plus these whole-tree metrics, which are not per-file:
                         `unsafe` because something it takes is a raw pointer,
                         so it falls when phases 29-31 retype the parameter,
                         and driving it down any other way means a wrapper.
+                      unsafe_fns_without_raw_params  an `unsafe fn` whose
+                        *signature* — parameters and return type both, joined
+                        the way `raw_ptr_params` joins them, so a list rustfmt
+                        wrapped still reads as one — carries no `*mut`/
+                        `*const` and no `CPtr` bound, is not `extern "C"` (the
+                        ABI is the contract), and whose name is not a row in
+                        docs/unsafe-fn-allowlist.md. The keyword left behind
+                        after a phase retyped the parameters: the body is
+                        already checked under
+                        deny(unsafe_op_in_unsafe_fn), so dropping it is a
+                        semantic no-op and every caller's wrapper goes with
+                        it. A function that hands raw memory *back* is not
+                        counted — `-> *mut c_void` is a contract without
+                        needing a row — and the four classes that are keep
+                        one: see the allowlist. Phase 31.
+                      wrappers  single-call `unsafe {}` regions, tree-wide: a
+                        region whose whole body, bar whitespace and one
+                        trailing `;`, is one call. Such a region exists
+                        because its callee is `unsafe fn` and for no other
+                        reason, so it is the number that falls when the
+                        callee's keyword does. Line-agnostic on purpose — a
+                        call rustfmt wrapped over four lines is the same
+                        wrapper — and blind to what surrounds the braces: a
+                        `let`, a tail, a `return`, an argument and a method
+                        chain are all wrappers. `unsafe { *p }` and
+                        `unsafe { &mut *p }` are not; that obligation is the
+                        caller's own. The per-callee breakdown is
+                        metrics/wrapper-callees.tsv, written by this script
+                        on every run that writes the baseline and compared
+                        literally under `--check`: one JSON object per callee
+                        with its `count`, how many `unsafe fn` definitions
+                        answer to the name (`defs`, and `def` when exactly one
+                        file holds them), and `no_raw` — whether every one of
+                        them is an `unsafe fn` the needle above would count.
+                        That column is the work order: a `no_raw` row's
+                        `count` is the wrappers a slice deletes when it drops
+                        the keyword. Phases 31-33.
                       stored_addr_handles  `Win::new`/`Buf::new`/
                         `TabPage::new`/`FrameRef::new`/`::at`/`::from_raw`
                         whose argument is not `<expr>.raw()`. See
@@ -779,6 +816,18 @@ VISIBILITY = ROOT / "metrics" / "visibility-ledger.jsonl"
 # The perimeter's prose. Its "Today" sentence is measured, not written:
 # `sync_perimeter_doc` rewrites it and `--check` fails when it is stale.
 PERIMETER_DOC = ROOT / "docs" / "perimeter.md"
+# The `unsafe fn` allowlist: one row per function whose signature shows no
+# raw pointer and whose `unsafe` is earned anyway, each with the class of
+# obligation that earns it. It is the floor `unsafe_fns_without_raw_params`
+# is measured against, and it prunes itself -- see `check_unsafe_fn_allowlist`.
+UNSAFE_FN_ALLOW_DOC = ROOT / "docs" / "unsafe-fn-allowlist.md"
+# The wrapper-callee table: the work order for the callee phases, written on
+# every run that writes the baseline and compared literally under `--check`.
+# A TSV rather than the ledgers' JSON lines because it has 5k rows and the
+# repeated keys cost a quarter of a megabyte nobody reads; one row per line
+# still diffs a moved count cleanly, which is the property that mattered.
+WRAPPER_TABLE = ROOT / "metrics" / "wrapper-callees.tsv"
+WRAPPER_TABLE_HEADER = "count\tcallee\tno_raw\tdefs\tdef\n"
 # apigen's attribute spec: one line per method the API exposes. It is the
 # list the generator dispatches, so it is also the list of signatures whose
 # parameter names are the RPC surface's -- see API_EXPORTED below.
@@ -1370,6 +1419,8 @@ CONST_DECL = re.compile(r"\bconst\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^=;{}]+=([^;
 # and the numbers (32), the Lua seam (33), and the shape (34).
 INSTRUMENT_KEYS = (
     "unsafe_fns",
+    "unsafe_fns_without_raw_params",
+    "wrappers",
     "stored_addr_handles",
     "raw_ptr_params",
     "raw_cstr_params",
@@ -2133,6 +2184,286 @@ def unsafe_fn_items(masked):
         yield match.start()
 
 
+# The head of a call expression, matched against a region's whole body: a path
+# (`f`, `m::f`, `T::f`, `T::<X>::f`) or a receiver chain ending in a method
+# (`x.f`, `x.y.f`), up to and including the `(` that opens its arguments.
+WRAPPER_CALL = re.compile(
+    r"^([A-Za-z_][A-Za-z0-9_]*"
+    r"(?:(?:::|\.)[A-Za-z_][A-Za-z0-9_]*|::<[^()]*>)*)\s*\($"
+)
+# A path's generic arguments, stripped before the last segment is read.
+TURBOFISH = re.compile(r"::<.*$")
+PATH_SEPARATOR = re.compile(r"::(?!<)")
+# An `impl` block's head, through the type it is an impl *of*: the name a
+# method's row in the wrapper table is keyed by. A trait impl names the trait
+# first and the type after `for`, so the capture is the last of the two.
+IMPL_HEAD = re.compile(
+    r"\bimpl\s*(?:<[^>]*>)?\s*"
+    r"(?:[A-Za-z_][A-Za-z0-9_:]*(?:<[^>]*>)?\s+for\s+)?([A-Za-z_][A-Za-z0-9_]*)"
+)
+# A raw pointer in a signature, in the two spellings that are one: the pointer
+# itself, and the `CPtr` bound behind which `message_fmt`'s `c_str` hides a
+# `*const c_char`. `NonNull<T>` is deliberately *not* here -- it is a raw
+# pointer whose contract is a row on the allowlist, not a parameter the needle
+# can see for itself.
+RAW_IN_SIGNATURE = re.compile(r"\*\s*(?:mut|const)\b|\bimpl\s+CPtr\b|:\s*CPtr\b")
+FN_WORD = re.compile(r"\bfn\b")
+
+# One `unsafe fn` item: its name, the type whose `impl` block holds it (None
+# for a free function), the file, and the two properties the needle asks about.
+UnsafeFn = collections.namedtuple("UnsafeFn", "name owner file has_raw extern")
+
+
+def callee_key(chain):
+    """The wrapper table's key for a call's path.
+
+    The last segment, qualified by the one before it when that is a type
+    (`Live::new`, not `new`), and `.name` for a method call -- a receiver's
+    type is out of reach of a name-keyed scan, and the method name is what a
+    reader recognises. A bare generic name (`new`, `at`) is *not* resolved
+    across the tree: the table says how many wrappers spell that call, and its
+    `defs` column says whether one definition answers to it.
+    """
+    if "." in chain:
+        return "." + chain.rsplit(".", 1)[1]
+    segments = [TURBOFISH.sub("", s) for s in PATH_SEPARATOR.split(chain) if s]
+    if len(segments) >= 2 and segments[-2][:1].isupper():
+        return segments[-2] + "::" + segments[-1]
+    return segments[-1]
+
+
+def wrapper_callee(body):
+    """The callee of a region that is exactly one call, else None.
+
+    A *wrapper* is an `unsafe {}` region whose whole body, bar whitespace and
+    one trailing `;`, is a single call expression -- the region exists because
+    the callee is `unsafe fn`, not because the caller does anything unsafe.
+    What sits outside the braces is irrelevant: `let x = unsafe { f(..) };`,
+    the tail form, `return unsafe { f(..) };` and `g(unsafe { f(..) })` are all
+    wrappers, and so is one rustfmt wrapped over four lines -- reflowing a
+    retype must not move the number.
+
+    `unsafe { *p }`, `unsafe { &mut *p }` and a compound body are not
+    wrappers: their obligation is the caller's own.
+    """
+    text = body.strip()
+    if text.endswith(";"):
+        text = text[:-1].rstrip()
+    if not text.endswith(")"):
+        return None
+    depth = 0
+    for i in range(len(text) - 1, -1, -1):
+        if text[i] == ")":
+            depth += 1
+        elif text[i] == "(":
+            depth -= 1
+            if not depth:
+                head = WRAPPER_CALL.match(text[: i + 1])
+                return callee_key(head.group(1)) if head else None
+    return None
+
+
+def wrapper_scan(tree):
+    """(wrappers per file, wrappers per callee) over the whole tree."""
+    by_file = collections.Counter()
+    by_callee = collections.Counter()
+    for file, masked in tree.items():
+        for match in UNSAFE_WORD.finditer(masked):
+            at = WHITESPACE.match(masked, match.end()).end()
+            if at >= len(masked) or masked[at] != "{":
+                continue
+            close = matching_brace(masked, at)
+            if callee := wrapper_callee(masked[at + 1 : close]):
+                by_file[file] += 1
+                by_callee[callee] += 1
+    return by_file, by_callee
+
+
+def impl_spans(masked):
+    """(open brace, close brace, type name) for every `impl` block."""
+    for match in IMPL_HEAD.finditer(masked):
+        brace = masked.find("{", match.end())
+        if brace < 0 or ";" in masked[match.end() : brace]:
+            continue
+        yield brace, matching_brace(masked, brace), match.group(1)
+
+
+def unsafe_fn_defs(masked, file):
+    """An `UnsafeFn` per `unsafe fn` item in one file.
+
+    The signature is `fn_signatures`' -- `fn` through the end of the return
+    type, so a parameter rustfmt wrapped onto its own line is inside it and a
+    `-> *mut c_void` is too: a function that hands back raw memory is a
+    contract whether or not it takes one. An item inside a `macro_rules!` body
+    has no signature the join can see and is skipped.
+    """
+    spans = list(impl_spans(masked))
+    signatures = {sig.start: sig for sig in fn_signatures(masked)}
+    for at in unsafe_fn_items(masked):
+        keyword = FN_WORD.search(masked, at)
+        sig = signatures.get(keyword.start()) if keyword else None
+        if sig is None:
+            continue
+        owner = None
+        for open_at, close_at, name in spans:
+            if open_at < at < close_at:
+                owner = name  # the innermost `impl` block wins
+        yield UnsafeFn(
+            sig.name,
+            owner,
+            file,
+            bool(RAW_IN_SIGNATURE.search(sig.text)),
+            "extern" in masked[at : sig.start],
+        )
+
+
+def unsafe_fn_key(item):
+    """`Owner::name` for a method, `name` for a free function."""
+    return f"{item.owner}::{item.name}" if item.owner else item.name
+
+
+def unsafe_fn_index(tree):
+    """key -> the `UnsafeFn`s it names, plus a bare-name entry per method.
+
+    The bare name is what a call written `x.f(..)` or `f(..)` inside an `impl`
+    can be keyed by, so the table can still say which definition a wrapper
+    reaches when the spelling drops the type.
+    """
+    index = collections.defaultdict(list)
+    for file, masked in tree.items():
+        for item in unsafe_fn_defs(masked, file):
+            index[unsafe_fn_key(item)].append(item)
+            if item.owner:
+                index[item.name].append(item)
+    return index
+
+
+# One allowlist row's reason class. Every row says which of the four things
+# the type system cannot hold keeps the keyword on a function whose signature
+# shows no raw pointer; `field:` is the class the string and state phases
+# retire, and a row leaves the list when its field does.
+ALLOW_CLASSES = ("alloc:", "cap:", "ffi:", "field:")
+# A row of the allowlist's markdown table. Three cells: the item, the file it
+# lives in, and the reason. prettier pads the columns, so everything is
+# stripped before it is read.
+ALLOW_ROW = re.compile(r"^\|([^|]*)\|([^|]*)\|(.*)\|\s*$")
+
+
+def unsafe_fn_allowlist():
+    """key -> reason, read from docs/unsafe-fn-allowlist.md.
+
+    The keys are `unsafe_fn_key`'s: `Owner::name` for a method, `name` for a
+    free function. A bare name does *not* excuse a method of that name -- the
+    row would then quietly cover every type that grows one -- so a method's
+    row has to spell its owner, and `check_unsafe_fn_allowlist` says so when
+    a row matches nothing.
+    """
+    allow = {}
+    if not UNSAFE_FN_ALLOW_DOC.exists():
+        sys.exit(
+            f"ratchet: {UNSAFE_FN_ALLOW_DOC.relative_to(ROOT)} is missing. It "
+            "is the floor `unsafe_fns_without_raw_params` is measured "
+            "against; restore it, empty if need be."
+        )
+    for line in UNSAFE_FN_ALLOW_DOC.read_text().splitlines():
+        row = ALLOW_ROW.match(line.strip())
+        if not row:
+            continue
+        name = row.group(1).strip().strip("`").strip()
+        reason = row.group(3).strip()
+        if not name or set(name) <= set("-: ") or name == "item":
+            continue  # the header and its separator
+        if not reason.strip("`").startswith(ALLOW_CLASSES):
+            sys.exit(
+                f"ratchet: {UNSAFE_FN_ALLOW_DOC.relative_to(ROOT)}: the row "
+                f"for `{name}` opens with no reason class. Every row starts "
+                "with one of " + ", ".join(ALLOW_CLASSES) + "."
+            )
+        allow[name] = reason
+    return allow
+
+
+def unsafe_fns_without_raw(masked, file, allow):
+    """`unsafe fn`s the needle counts in one file. See the doc block."""
+    return sum(
+        not (item.has_raw or item.extern) and unsafe_fn_key(item) not in allow
+        for item in unsafe_fn_defs(masked, file)
+    )
+
+
+def check_unsafe_fn_allowlist(index, allow):
+    """Every allowlist row still excuses an `unsafe fn` the needle would count.
+
+    A row whose function is gone, or that now carries a raw pointer (or an
+    `extern "C"` ABI), excuses nothing: it would sit there propping the floor
+    up, and would quietly excuse the name again if it came back. The list
+    prunes itself the way PERIMETER and CELL_PTR_KEEPERS do.
+    """
+    stale = []
+    for name in sorted(allow):
+        matched = [item for item in index.get(name, ()) if unsafe_fn_key(item) == name]
+        if not matched:
+            stale.append(f"{name}: no `unsafe fn` of that name")
+        elif all(item.has_raw or item.extern for item in matched):
+            stale.append(f"{name}: carries a raw pointer or a C ABI now")
+    if stale:
+        sys.exit(
+            "ratchet: these rows of "
+            f"{UNSAFE_FN_ALLOW_DOC.relative_to(ROOT)} excuse nothing:\n  "
+            + "\n  ".join(stale)
+            + "\nDrop each row and run `just refresh` to lock the progress in."
+        )
+
+
+def wrapper_table(by_callee, index):
+    """The wrapper-callee table: one tab-separated row per callee, biggest first.
+
+    The work order for the callee phases. `count` is how many
+    `unsafe { callee(..) }` regions the tree holds, `defs` how many
+    `unsafe fn` definitions answer to the name, `def` the file when exactly
+    one holds them, and `no_raw` the yield column: 1 when every one of those
+    definitions is an `unsafe fn` the `unsafe_fns_without_raw_params` needle
+    would count, so dropping its keyword deletes `count` wrappers (bar the
+    ones docs/unsafe-fn-allowlist.md keeps, which is a list short enough to
+    read).
+
+    The join to a definition is by *name*: a row keyed `.name` or a bare
+    generic one (`new`, `at`) is matched against every `unsafe fn` of that
+    name, so `defs > 1` means the name is ambiguous and the row wants an eye
+    before it is worked. `no_raw` demands that *every* candidate qualifies,
+    which is the safe direction: an ambiguous row under-claims rather than
+    promising a yield that is not there.
+
+    Sorted by count then name, so a row moves only when its count does.
+    """
+    rows = [WRAPPER_TABLE_HEADER]
+    for callee, count in sorted(by_callee.items(), key=lambda row: (-row[1], row[0])):
+        matched = (
+            index.get(callee) or index.get(callee.split("::")[-1].lstrip(".")) or []
+        )
+        no_raw = bool(matched) and all(not (i.has_raw or i.extern) for i in matched)
+        files = sorted({item.file for item in matched})
+        rows.append(
+            f"{count}\t{callee}\t{int(no_raw)}\t{len(matched)}\t"
+            f"{files[0] if len(files) == 1 else ''}\n"
+        )
+    return "".join(rows)
+
+
+def sync_wrapper_table(content, check):
+    """Write metrics/wrapper-callees.tsv, or fail when it is stale."""
+    committed = WRAPPER_TABLE.read_text() if WRAPPER_TABLE.exists() else None
+    if check:
+        if committed != content:
+            sys.exit(
+                f"ratchet: {WRAPPER_TABLE.relative_to(ROOT)} is stale; run "
+                "`just refresh` and commit the result."
+            )
+        return
+    if committed != content:
+        WRAPPER_TABLE.write_text(content)
+
+
 def missing_safety_doc(text, masked):
     """`unsafe fn`s whose doc comment has no `# Safety` section."""
     lines = text.splitlines()
@@ -2427,7 +2758,7 @@ def fn_body_lines(masked, sig):
     return 0
 
 
-def instrument_sites(tree, sources):
+def instrument_sites(tree, sources, wrappers=None):
     """{instrument: {unit -> count}} for every instrument. See the doc block.
 
     The unit is the repo-relative file for all but two: `dup_consts` is keyed
@@ -2441,6 +2772,8 @@ def instrument_sites(tree, sources):
     rather than zero, so the breakdown reads as a list of what is left.
     """
     sites = {name: collections.Counter() for name in INSTRUMENT_KEYS}
+    sites["wrappers"] = wrappers if wrappers is not None else wrapper_scan(tree)[0]
+    allow = unsafe_fn_allowlist()
     consts = {}
     tops, tested = set(), set()
     for file, masked in tree.items():
@@ -2462,6 +2795,8 @@ def instrument_sites(tree, sources):
                 sites[name][file] = found
         if found := sum(1 for _ in unsafe_fn_items(masked)):
             sites["unsafe_fns"][file] = found
+        if found := unsafe_fns_without_raw(masked, file, allow):
+            sites["unsafe_fns_without_raw_params"][file] = found
         if found := sum(
             1 for m in CHAR_AS_C_INT.finditer(source) if masked[m.start(1)] == "a"
         ):
@@ -2696,6 +3031,8 @@ WHOLE_TREE_LABEL = {
     "curwin_raw": "curwin/curbuf/curtab get()s outside winlayer",
     # The instruments, in INSTRUMENT_KEYS' order.
     "unsafe_fns": "`unsafe fn` items",
+    "unsafe_fns_without_raw_params": "`unsafe fn`s with no raw pointer in the signature, off the allowlist",
+    "wrappers": "single-call `unsafe { f(..) }` regions",
     "stored_addr_handles": "handles built from an address nobody re-vouched for",
     "raw_ptr_params": "raw-pointer parameters",
     "raw_cstr_params": "raw `c_char` pointers in a parameter list",
@@ -3195,6 +3532,92 @@ SELF_TEST_CELL_COPY_OWNER = [
     # A longer name ending in a listed one is not it.
     ("fn f() {\n    saved_rex.get();\n}\n", 0),
     ("// rex.get()\nfn f() {}\n", 0),
+]
+
+
+# (source, the wrapper callees the file holds, in source order). A wrapper is
+# a single-call region whatever surrounds the braces and whatever its layout;
+# a dereference, a borrow and a compound body are not wrappers at all.
+SELF_TEST_WRAPPERS = [
+    ("fn f() {\n    let x = unsafe { g(p) };\n}\n", ["g"]),
+    ("fn f() -> u8 {\n    unsafe { g(p) }\n}\n", ["g"]),
+    ("fn f() -> u8 {\n    return unsafe { g(p) };\n}\n", ["g"]),
+    ("fn f() {\n    if unsafe { g(p) } {\n    }\n}\n", ["g"]),
+    ("fn f() {\n    h(unsafe { g(p) });\n}\n", ["g"]),
+    ("fn f() {\n    unsafe { g(p) }.m();\n}\n", ["g"]),
+    # A call rustfmt wrapped over four lines is the same wrapper: reflowing a
+    # retype must not move the number.
+    (
+        "fn f() {\n    unsafe {\n        g(\n            p,\n        )\n    };\n}\n",
+        ["g"],
+    ),
+    # The key: the last segment, qualified when the one before it is a type.
+    ("fn f() {\n    unsafe { module::g(p) };\n}\n", ["g"]),
+    ("fn f() {\n    unsafe { Live::new(p) };\n}\n", ["Live::new"]),
+    ("fn f() {\n    unsafe { Live::<u8>::new(p) };\n}\n", ["Live::new"]),
+    # A method call is keyed by its name: the receiver's type is out of reach.
+    ("fn f() {\n    unsafe { p.add(1) };\n}\n", [".add"]),
+    ("fn f() {\n    unsafe { self.slots.at(i) };\n}\n", [".at"]),
+    # The deref class, which is the caller's own obligation and no wrapper.
+    ("fn f() {\n    let x = unsafe { *p };\n}\n", []),
+    ("fn f() {\n    unsafe { (*p).field = 1 };\n}\n", []),
+    ("fn f() {\n    let r = unsafe { &mut *p };\n}\n", []),
+    ("fn f() {\n    let r = &unsafe { *p };\n}\n", []),
+    # ... and neither is a compound body or a parenthesised one.
+    ("fn f() {\n    unsafe { a(); b() };\n}\n", []),
+    ("fn f() {\n    unsafe { g(p) + 1 };\n}\n", []),
+    ("fn f() {\n    unsafe { (g(p)) };\n}\n", []),
+    ("fn f() {\n    unsafe { g(p)(q) };\n}\n", []),
+    ("fn f() {\n    unsafe {};\n}\n", []),
+    # Prose about one costs nothing.
+    ("// unsafe { g(p) };\nfn f() {}\n", []),
+]
+# (source, allowlist, expected unsafe_fns_without_raw_params). The signature
+# is the whole span -- parameters and return type -- so a function that hands
+# raw memory back is a contract without needing a row.
+SELF_TEST_NO_RAW = [
+    ("unsafe fn f(tv: &TypVal) {\n}\n", (), 1),
+    ("unsafe fn f(p: *mut u8) {\n}\n", (), 0),
+    ("unsafe fn f(p: *const u8) {\n}\n", (), 0),
+    ("unsafe fn f() -> *mut c_void {\n}\n", (), 0),
+    # A rustfmt-wrapped list still reads as one signature.
+    ("unsafe fn f(\n    a: u8,\n    b: *mut u8,\n) {\n}\n", (), 0),
+    # The ABI is the contract.
+    ('unsafe extern "C" fn f(x: u8) {\n}\n', (), 0),
+    # `impl CPtr` hides a `*const c_char`, and so does a bound.
+    ("unsafe fn c_str(p: impl CPtr) -> CDisplay {\n}\n", (), 0),
+    ("unsafe fn c_str<P: CPtr>(p: P) {\n}\n", (), 0),
+    # A safe fn is not this metric's business, and neither is a fn *type*.
+    ("fn f(tv: &TypVal) {\n}\n", (), 0),
+    ("type F = unsafe fn(tv: &TypVal);\n", (), 0),
+    # An allowlist row excuses exactly its own item.
+    ("unsafe fn f(tv: &TypVal) {\n}\n", ("f",), 0),
+    ("unsafe fn f(tv: &TypVal) {\n}\n", ("g",), 1),
+    # A method's row has to spell its owner; a bare name does not excuse it.
+    (
+        "impl Slots {\n    unsafe fn at(&self, i: usize) {\n    }\n}\n",
+        ("Slots::at",),
+        0,
+    ),
+    ("impl Slots {\n    unsafe fn at(&self, i: usize) {\n    }\n}\n", ("at",), 1),
+    # ... and a trait impl is keyed by the type, not the trait.
+    (
+        "impl Sink for Slots {\n    unsafe fn at(&self, i: usize) {\n    }\n}\n",
+        ("Slots::at",),
+        0,
+    ),
+]
+# (tree, allowlist, whether check_unsafe_fn_allowlist rejects it). A row that
+# excuses nothing has to leave the list.
+SELF_TEST_NO_RAW_CHECK = [
+    ({"a.rs": "unsafe fn f(tv: &TypVal) {\n}\n"}, ("f",), False),
+    ({"a.rs": "unsafe fn f(tv: &TypVal) {\n}\n"}, ("gone",), True),
+    # The function is still there, but the needle would skip it now.
+    ({"a.rs": "unsafe fn f(p: *mut u8) {\n}\n"}, ("f",), True),
+    ({"a.rs": 'unsafe extern "C" fn f(x: u8) {\n}\n'}, ("f",), True),
+    # A method row, spelled with its owner.
+    ({"a.rs": "impl S {\n    unsafe fn f(&self) {\n    }\n}\n"}, ("S::f",), False),
+    ({"a.rs": "impl S {\n    unsafe fn f(&self) {\n    }\n}\n"}, ("f",), True),
 ]
 
 
@@ -3722,6 +4145,35 @@ def self_test():
         assert got == expected, (
             f"borrowed_derefs={got}, want {expected}, for {source!r}"
         )
+    for source, expected in SELF_TEST_WRAPPERS:
+        masked = mask(source)
+        got = [
+            wrapper_callee(masked[at + 1 : matching_brace(masked, at)])
+            for at in (
+                WHITESPACE.match(masked, m.end()).end()
+                for m in UNSAFE_WORD.finditer(masked)
+            )
+            if at < len(masked) and masked[at] == "{"
+        ]
+        got = [callee for callee in got if callee]
+        assert got == expected, f"wrappers={got}, want {expected}, for {source!r}"
+    for source, allow, expected in SELF_TEST_NO_RAW:
+        got = unsafe_fns_without_raw(mask(source), "t.rs", set(allow))
+        assert got == expected, (
+            f"unsafe_fns_without_raw_params={got}, want {expected}, "
+            f"for {source!r} with {allow!r}"
+        )
+    for sources, allow, expected in SELF_TEST_NO_RAW_CHECK:
+        index = unsafe_fn_index({f: mask(text) for f, text in sources.items()})
+        try:
+            check_unsafe_fn_allowlist(index, dict.fromkeys(allow, "cap: a fixture"))
+            got = False
+        except SystemExit:
+            got = True
+        assert got == expected, (
+            f"check_unsafe_fn_allowlist rejected={got}, want {expected}, "
+            f"for {sources!r} with {allow!r}"
+        )
     for sources, expected in SELF_TEST_INSTRUMENTS:
         sites = instrument_sites(
             {f: mask(text) for f, text in sources.items()}, sources
@@ -3810,7 +4262,8 @@ def main():
 
     self_test()
     stats, without_deny, without_casts, allowing, tree, sources = measure()
-    sites = instrument_sites(tree, sources)
+    wrappers, by_callee = wrapper_scan(tree)
+    sites = instrument_sites(tree, sources, wrappers)
     if dimension is not None:
         breakdown(sites, dimension)
         return
@@ -3823,7 +4276,10 @@ def main():
     check_cell_ptr(tree)
     check_names(tree)
     check_perimeter(stats)
+    index = unsafe_fn_index(tree)
+    check_unsafe_fn_allowlist(index, unsafe_fn_allowlist())
     sync_perimeter_doc(stats, "--check" in args)
+    sync_wrapper_table(wrapper_table(by_callee, index), "--check" in args)
     counts = {**ledgers(), **whole_tree(stats, tree, sites)}
     content = render(stats, counts, without_deny, without_casts, allowing)
     committed = BASELINE.read_text() if BASELINE.exists() else None

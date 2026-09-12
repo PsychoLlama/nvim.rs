@@ -29,6 +29,8 @@
   "abbrev_params": 0,
   "curwin_raw": 0,
   "unsafe_fns": 6716,
+  "unsafe_fns_without_raw_params": 1590,
+  "wrappers": 24504,
   "stored_addr_handles": 88,
   "raw_ptr_params": 7917,
   "raw_cstr_params": 3063,
