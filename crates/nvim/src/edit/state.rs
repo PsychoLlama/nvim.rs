@@ -514,8 +514,8 @@ unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
 
     // 'cindent' may want to re-indent on this character before it is even
     // inserted.
-    if unsafe { cindent_on() } && ctrl_x_mode_none() {
-        s.line_is_white = unsafe { inindent(0) };
+    if cindent_on() && ctrl_x_mode_none() {
+        s.line_is_white = inindent(0);
         if cinkeys(s.c, '!' as c_int, s.line_is_white) && stop_arrow_ok() {
             c_expr_indent();
             return 1; // don't insert the key
@@ -640,13 +640,11 @@ pub(crate) fn insert_do_complete(s: &mut InsertState) {
     }
     drop(folds_frozen);
     compl_busy.set(false);
-    can_si.set(unsafe { may_do_si() });
+    can_si.set(may_do_si());
 }
 
 /// The tail every key runs after [`insert_handle_key`].
 pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
     if s.c != Key::Event.code() && ctrl_x_mode_normal() {
         did_cursorhold.set(false);
     }
@@ -659,7 +657,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
     }
     // 'cindent': re-indent now that the character is in.
     if can_cindent.get()
-        && unsafe { cindent_on() }
+        && cindent_on()
         && ctrl_x_mode_normal()
         && cinkeys(s.c, ' ' as c_int, s.line_is_white)
         && stop_arrow_ok()
@@ -757,13 +755,11 @@ fn stop_arrow_ok() -> bool {
 /// line held nothing but white space before the key arrived.
 #[inline(always)]
 fn cinkeys(c: c_int, when: c_int, line_is_white: bool) -> bool {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { in_cinkeys(c, when, line_is_white) }
+    in_cinkeys(c, when, line_is_white)
 }
 
 /// Re-indent the current line the way 'cindent'/'indentexpr' wants it.
 #[inline(always)]
 fn c_expr_indent() {
-    // SAFETY: `curwin`/`curbuf` are set from startup to exit.
-    unsafe { do_c_expr_indent() }
+    do_c_expr_indent()
 }

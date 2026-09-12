@@ -760,8 +760,7 @@ pub unsafe fn get_rel_pos(window: Win, buf: *mut c_char, buflen: c_int) -> c_int
     let room = buflen as size_t;
 
     // The number of lines above the window.
-    // SAFETY: a live window and one of its line numbers.
-    let fill = unsafe { win_get_fill(win, win.w_topline) };
+    let fill = win_get_fill(win, win.w_topline);
     let mut above = win.w_topline - 1 + (fill - win.w_topfill) as LineNr;
     if win.w_topline == 1 && win.w_topfill >= 1 {
         // All the buffer's lines are displayed and there is an indication of

@@ -20,10 +20,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// The indent for a line inside the unclosed paren at `our_paren_pos`.
-///
-/// # Safety
-/// Moves the cursor; may unlock the current line.
-pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int {
+pub(crate) fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int {
     let mut our_paren_pos = our_paren_pos;
     let mut cur_amount = MAXCOL;
 
@@ -36,14 +33,11 @@ pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int 
         // If the matching paren is more than one line away, use the
         // indent of a previous non-empty line that matches the *same*
         // paren -- a line under a different one is a different question.
-        // SAFETY: this function's own contract -- the cursor is ours to move
-        // and the current line may be unlocked.
-        unsafe { previous_line_under_same_paren(line, our_paren_pos, &mut cur_amount) }
+        previous_line_under_same_paren(line, our_paren_pos, &mut cur_amount)
     };
 
     if amount == -1 {
-        // SAFETY: the same.
-        amount = unsafe { align_with_unclosed_paren(line, &mut our_paren_pos, &mut cur_amount) };
+        amount = align_with_unclosed_paren(line, &mut our_paren_pos, &mut cur_amount);
     }
 
     // Extra indent for a comment.  `get_c_indent` adds `b_ind_comment`
@@ -63,10 +57,7 @@ pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int 
 /// A line starting with `)` does not take that indent -- it only lowers
 /// `cur_amount`, so that the close paren cannot end up further right than the
 /// lines it closes.
-///
-/// # Safety
-/// Moves the cursor; may unlock the current line.
-unsafe fn previous_line_under_same_paren(
+fn previous_line_under_same_paren(
     line: &Line,
     our_paren_pos: Pos,
     cur_amount: &mut c_int,
@@ -87,14 +78,12 @@ unsafe fn previous_line_under_same_paren(
             Win::current().w_cursor.lnum = lnum;
 
             // Skip a comment or raw string.
-            // SAFETY: the cursor is on `lnum`, a line of the current buffer.
-            let trypos = unsafe { ind_find_start_comment_or_raw_string(None) };
+            let trypos = ind_find_start_comment_or_raw_string(None);
             if let Some(trypos) = trypos {
                 lnum = trypos.lnum + 1;
             } else {
                 let maxparen = corr_ind_maxparen(&line.cur_curpos);
-                // SAFETY: the same -- the search runs back from the cursor.
-                let trypos = unsafe { find_match_paren(maxparen) };
+                let trypos = find_match_paren(maxparen);
                 if let Some(trypos) = trypos
                     && trypos.lnum == our_paren_pos.lnum
                     && trypos.col == our_paren_pos.col
@@ -118,10 +107,7 @@ unsafe fn previous_line_under_same_paren(
 
 /// Line up with the unclosed paren itself: with the line it is on, with the
 /// character after it, or a fixed amount in from either.
-///
-/// # Safety
-/// Moves the cursor; may unlock the current line.
-unsafe fn align_with_unclosed_paren(
+fn align_with_unclosed_paren(
     line: &Line,
     our_paren_pos: &mut Pos,
     cur_amount: &mut c_int,
@@ -137,10 +123,7 @@ unsafe fn align_with_unclosed_paren(
         loop {
             Win::current().w_cursor.lnum = outermost.lnum;
             Win::current().w_cursor.col = outermost.col;
-            // SAFETY: the cursor was just put on `outermost`, a paren
-            // position in the current buffer, which is where the search for
-            // the next one out starts.
-            match unsafe { find_match_paren(Buf::current().b_ind_maxparen) } {
+            match find_match_paren(Buf::current().b_ind_maxparen) {
                 Some(pos) if pos.lnum == outermost.lnum => outermost = pos,
                 _ => break,
             }
@@ -153,8 +136,7 @@ unsafe fn align_with_unclosed_paren(
         is_if_for_while = control_clause_before(lines.line(outermost.lnum), &mut outermost.col);
     }
 
-    // SAFETY: `our_paren_pos.lnum` is a line of the current buffer.
-    let (mut amount, at) = unsafe { skip_label(our_paren_pos.lnum) };
+    let (mut amount, at) = skip_label(our_paren_pos.lnum);
     let look_col = {
         let mut lines = Lines::current();
         let text = lines.line(our_paren_pos.lnum);
@@ -240,9 +222,7 @@ unsafe fn align_with_unclosed_paren(
         // How indented the paren is, or the character after it if the
         // block above moved onto one.
         if our_paren_pos.col > 0 {
-            // SAFETY: `our_paren_pos` is still a position in this buffer --
-            // the block above only moved its column within its own line.
-            let vcol = unsafe { line_vcol(our_paren_pos.lnum, our_paren_pos.col) };
+            let vcol = line_vcol(our_paren_pos.lnum, our_paren_pos.col);
             *cur_amount = (*cur_amount).min(vcol);
         }
     }
@@ -286,9 +266,7 @@ unsafe fn align_with_unclosed_paren(
         } else {
             Win::current().w_cursor.lnum = our_paren_pos.lnum;
             Win::current().w_cursor.col = col;
-            // SAFETY: the cursor was just put on the paren at `col` of
-            // `our_paren_pos.lnum`, a position in the current buffer.
-            if unsafe { find_match_paren_after_brace(Buf::current().b_ind_maxparen) }.is_some() {
+            if find_match_paren_after_brace(Buf::current().b_ind_maxparen).is_some() {
                 amount += Buf::current().b_ind_unclosed2;
             } else if is_if_for_while {
                 amount += Buf::current().b_ind_if_for_while;

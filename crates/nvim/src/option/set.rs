@@ -438,7 +438,7 @@ pub(crate) unsafe fn did_set_option(
     if !errmsg.is_null() {
         unsafe { set_option_varp(opt_idx, varp, old_value, true) };
         if restore_chartab {
-            unsafe { buf_init_chartab(Buf::current(), true) };
+            buf_init_chartab(Buf::current(), true);
         }
         return errmsg;
     }

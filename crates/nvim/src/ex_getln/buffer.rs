@@ -201,8 +201,7 @@ fn copy_str(dst: *mut ::core::ffi::c_char, src: *const ::core::ffi::c_char) {
 }
 
 fn is_word_char(c: ::core::ffi::c_int) -> bool {
-    // SAFETY: reads the 'iskeyword' tables.
-    unsafe { vim_iswordc(c) }
+    vim_iswordc(c)
 }
 
 /// Whether `a` and `b` agree over their first `n` bytes.

@@ -321,7 +321,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
                 .w_valid
                 .clear(WinValid::WCOL | WinValid::VIRTCOL);
             // Correct the cursor for a multi-byte character.
-            unsafe { mb_adjust_cursor() };
+            mb_adjust_cursor();
         }
     }
 

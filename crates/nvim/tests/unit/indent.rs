@@ -44,12 +44,10 @@ fn with_buffer(f: impl FnOnce(&mut Buf)) {
 fn a_non_negative_softtabstop_is_its_own_value() {
     with_buffer(|buf| {
         buf.b_p_sts = 5;
-        // SAFETY: `curbuf` is set, under the editor lock.
-        assert_eq!(unsafe { get_sts_value() }, 5);
+        assert_eq!(get_sts_value(), 5);
 
         buf.b_p_sts = 0;
-        // SAFETY: as above.
-        assert_eq!(unsafe { get_sts_value() }, 0);
+        assert_eq!(get_sts_value(), 0);
     });
 }
 
@@ -61,12 +59,10 @@ fn a_negative_softtabstop_is_the_effective_shiftwidth() {
         buf.b_p_sts = -2;
         buf.b_p_sw = 2;
         buf.b_p_ts = 5;
-        // SAFETY: `curbuf` is set, under the editor lock.
-        assert_eq!(unsafe { get_sts_value() }, 2, "'shiftwidth'");
+        assert_eq!(get_sts_value(), 2, "'shiftwidth'");
 
         buf.b_p_sw = 0;
-        // SAFETY: as above.
-        assert_eq!(unsafe { get_sts_value() }, 5, "'tabstop' stands in");
+        assert_eq!(get_sts_value(), 5, "'tabstop' stands in");
     });
 }
 

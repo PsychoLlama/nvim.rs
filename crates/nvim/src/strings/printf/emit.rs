@@ -539,9 +539,7 @@ unsafe fn render_string(
                 let mut at = 0;
                 while at < bytes.len() {
                     let rest = &bytes[at..];
-                    // SAFETY: the width options exist by the time anything
-                    // is formatted for the screen.
-                    let cell = unsafe { cells_at(rest) }.cast_unsigned() as size_t;
+                    let cell = cells_at(rest).cast_unsigned() as size_t;
                     if c.precision_specified && cells + cell > c.precision {
                         break;
                     }

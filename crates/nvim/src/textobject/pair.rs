@@ -83,10 +83,7 @@ pub unsafe fn current_block(
         setpcmark();
         if what == '{' as c_int {
             // Ignore the indent.
-            // SAFETY: there is a current line; `inindent` only measures its
-            // leading white space and `inc_cursor` only advances within it,
-            // reporting the end of the line itself.
-            while unsafe { inindent(1) } {
+            while inindent(1) {
                 if inc_cursor() != 0 {
                     break;
                 }
@@ -170,7 +167,7 @@ pub unsafe fn current_block(
             sol = Win::current().w_cursor.col == 0;
             unsafe { decl(&mut Win::current().cursor()) };
             // SAFETY: there is a current line with the cursor on it.
-            while unsafe { inindent(1) } {
+            while inindent(1) {
                 sol = true;
                 if unsafe { decl(&mut Win::current().cursor()) } != 0 {
                     break;
@@ -373,7 +370,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         // Ignore the indent.
         // SAFETY: there is a current line; `inindent` only measures its
         // leading white space and `inc_cursor` only advances within it.
-        while unsafe { inindent(1) } {
+        while inindent(1) {
             if inc_cursor() != 0 {
                 break;
             }

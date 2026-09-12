@@ -174,7 +174,7 @@ unsafe fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
     window.w_config.anchor = 0; // NW: align its top with the menu's top
     let count = unsafe { (*window.w_buffer).b_ml.ml_line_count };
     window.w_view_width = window.w_config.width;
-    unsafe { window.w_config.height = plines_m_win(window, window.w_topline, count, Rows.get()) };
+    window.w_config.height = plines_m_win(window, window.w_topline, count, Rows.get());
     window.w_config.row = f64::from(pum_row.get());
     window.w_config.hide = false;
     win_config_float(window, window.w_config.clone());

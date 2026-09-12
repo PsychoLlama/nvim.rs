@@ -158,7 +158,7 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
             report_counts(&mut report, &counts, selection.as_ref());
         }
 
-        bom_count = VarNumber::from(unsafe { bomb_size() });
+        bom_count = VarNumber::from(bomb_size());
         if dict.is_null() && bom_count > 0 {
             let len = unsafe { cstr::bytes_at(report.as_ptr()) }.len();
             let at = unsafe { report.as_mut_ptr().add(len) };

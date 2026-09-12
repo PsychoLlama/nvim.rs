@@ -269,7 +269,7 @@ pub(crate) fn ins_digraph() -> c_int {
         did_putchar = false;
         if redrawing() && !char_avail() {
             unsafe { ins_redraw(false) };
-            if unsafe { char2cells(c) } == 1 {
+            if char2cells(c) == 1 {
                 unsafe { ins_redraw(false) };
                 unsafe { edit_putchar(c, true) };
                 did_putchar = true;
@@ -380,6 +380,6 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
     Buf::current().b_p_tw = tw_save;
     revins_chars.set(revins_chars.get() + 1);
     revins_legal.set(revins_legal.get() + 1);
-    unsafe { auto_format(false, true) };
+    auto_format(false, true);
     Ctrl_V
 }

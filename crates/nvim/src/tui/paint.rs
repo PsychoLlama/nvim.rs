@@ -260,8 +260,7 @@ fn print_cell_at_pos(tui: &mut TUIData, row: c_int, col: c_int, cell: UCell, is_
             utf_ambiguous_width(text),
         )
     };
-    // SAFETY: `c` is the character just decoded.
-    if is_doublewidth && (is_ambiwidth || unsafe { utf_char2cells(c) } == 1) {
+    if is_doublewidth && (is_ambiwidth || utf_char2cells(c) == 1) {
         is_ambiwidth = true;
         update_attrs(tui, cell.attr as c_int);
         print_spaces(tui, 2);

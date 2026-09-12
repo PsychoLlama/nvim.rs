@@ -221,9 +221,7 @@ impl Put {
         // A `#` line stays at the start of the line, and an empty line
         // has no indent to keep.
         //
-        // SAFETY (the three below): the cursor is on `lnum`, a line of the
-        // current buffer, which is the line they measure and reindent.
-        let indent = if (first == '#' as c_int && unsafe { preprocs_left() }) || first == NUL {
+        let indent = if (first == '#' as c_int && preprocs_left()) || first == NUL {
             0
         } else if state.first {
             state.diff = state.orig_indent - get_indent();
@@ -232,7 +230,7 @@ impl Put {
         } else {
             (get_indent() + state.diff).max(0)
         };
-        unsafe { set_indent(indent, SIN_NOMARK) };
+        set_indent(indent, SIN_NOMARK);
         Win::current().w_cursor = old_pos;
     }
 

@@ -71,12 +71,7 @@ fn cw_value(c: c_int) -> c_int {
 ///
 /// "On its own" is the limit of this answer: a character whose width depends
 /// on what follows it — an emoji base plus VS-16 — needs [`utf_ptr2cells`].
-///
-/// # Safety
-///
-/// Reads `'ambiwidth'`, `'emoji'` and `'isprint'` through their globals, so
-/// it is only callable once options exist.
-pub unsafe fn utf_char2cells(c: c_int) -> c_int {
+pub fn utf_char2cells(c: c_int) -> c_int {
     if c < 0x80 {
         return 1;
     }
@@ -143,9 +138,9 @@ pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
     // An ASCII answer from a multibyte lead byte means an overlong
     // sequence, which is displayed the way that ASCII character is.
     if c < 0x80 {
-        return unsafe { char2cells(c) };
+        return char2cells(c);
     }
-    let cells = unsafe { utf_char2cells(c) };
+    let cells = utf_char2cells(c);
     if unsafe { widened_by_vs16(cells, c, p_in.offset(len as isize)) } {
         return 2;
     }
@@ -162,13 +157,8 @@ pub unsafe fn utf_ptr2cells(p_in: *const c_char) -> c_int {
 /// function: that one reports a sequence its `size` cuts short by decoding it
 /// out of whatever bytes follow. Here the slice is the string, so a cut
 /// sequence is an illegal one, drawn as `<xx>`.
-///
-/// # Safety
-///
-/// Reads `'ambiwidth'`, `'emoji'` and `'isprint'` through their globals, so
-/// it is only callable once options exist.
 #[inline]
-pub unsafe fn cells_at(bytes: &[u8]) -> c_int {
+pub fn cells_at(bytes: &[u8]) -> c_int {
     let Some(&first) = bytes.first() else {
         return 1;
     };
@@ -184,9 +174,9 @@ pub unsafe fn cells_at(bytes: &[u8]) -> c_int {
     // An ASCII answer from a multibyte lead byte means an overlong
     // sequence, which is displayed the way that ASCII character is.
     if c < 0x80 {
-        return unsafe { char2cells(c) };
+        return char2cells(c);
     }
-    let cells = unsafe { utf_char2cells(c) };
+    let cells = utf_char2cells(c);
     let rest = &bytes[usize::from(utf8len_tab[usize::from(first)])..];
     if cells == 1
         && p_emoji.get() != 0
@@ -202,17 +192,13 @@ pub unsafe fn cells_at(bytes: &[u8]) -> c_int {
 ///
 /// The slice form of [`mb_string2cells`]. A NUL inside the slice is an
 /// ordinary byte, one cell wide, rather than the end of the string.
-///
-/// # Safety
-///
-/// The same option globals [`cells_at`] reads.
-pub unsafe fn string_cells(bytes: &[u8]) -> usize {
+pub fn string_cells(bytes: &[u8]) -> usize {
     let mut cells = 0;
     let mut at = 0;
     while at < bytes.len() {
         let rest = &bytes[at..];
         // A width is never negative, and a cluster is never empty here.
-        cells += unsafe { cells_at(rest) }.cast_unsigned() as usize;
+        cells += cells_at(rest).cast_unsigned() as usize;
         at += cluster_len(rest);
     }
     cells
@@ -241,9 +227,9 @@ pub unsafe fn utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
         return 4;
     }
     if c < 0x80 {
-        return unsafe { char2cells(c) };
+        return char2cells(c);
     }
-    let cells = unsafe { utf_char2cells(c) };
+    let cells = utf_char2cells(c);
     // The VS-16 has to be *complete* within `size`; a truncated one does
     // not widen anything.
     let next = unsafe { p.offset(len as isize) };

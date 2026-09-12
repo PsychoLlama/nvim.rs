@@ -187,7 +187,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
                 }
             }
 
-            unsafe { auto_format(true, false) };
+            auto_format(true, false);
 
             if ascii_iswhite(cc) {
                 if char_at_cursor() != NUL {
@@ -204,7 +204,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
         }
 
         // Remove a space that was inserted only for auto-formatting.
-        unsafe { check_auto_format(true) };
+        check_auto_format(true);
 
         // After an auto-indent the user typed nothing on, take the white
         // space off the end of the line again and put the cursor back.

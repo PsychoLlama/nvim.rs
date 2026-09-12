@@ -280,8 +280,7 @@ pub fn ins_compl_accept_char(c: c_int) -> bool {
         }
         // For whole-line completion a space can be part of the line.
         CTRL_X_WHOLE_LINE => vim_isprintc(c),
-        // SAFETY: as above.
-        _ => unsafe { vim_iswordc(c) },
+        _ => vim_iswordc(c),
     }
 }
 

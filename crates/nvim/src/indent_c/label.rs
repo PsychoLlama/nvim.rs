@@ -12,8 +12,7 @@
 //! | `cin_first_id_amount` | [`first_id_amount`] |
 //! | `cin_get_equal_amount` | [`equal_amount`] |
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::winlayer::Win;
@@ -54,15 +53,11 @@ pub(crate) fn after_label(line: &[u8]) -> Option<usize> {
 
 /// The screen column the code *after* a label on line `lnum` starts at, or 0
 /// when there is nothing after it.
-///
-/// # Safety
-/// `lnum` must be a valid line; may unlock the current line.
-pub(crate) unsafe fn get_indent_nolabel(lnum: LineNr) -> c_int {
+pub(crate) fn get_indent_nolabel(lnum: LineNr) -> c_int {
     let Some(at) = after_label(Lines::current().line(lnum)) else {
         return 0;
     };
-    // SAFETY: `at` is an offset inside line `lnum` of the current buffer.
-    unsafe { line_vcol(lnum, at as ColNr) }
+    line_vcol(lnum, at as ColNr)
 }
 
 /// The indent of line `lnum` ignoring any case or jump label, with the offset
@@ -72,10 +67,7 @@ pub(crate) unsafe fn get_indent_nolabel(lnum: LineNr) -> c_int {
 ///   label:     if (asdf && asdfasdf)
 ///              ^
 /// ```
-///
-/// # Safety
-/// Moves the cursor and restores it; may unlock the current line.
-pub(crate) unsafe fn skip_label(lnum: LineNr) -> (c_int, usize) {
+pub(crate) fn skip_label(lnum: LineNr) -> (c_int, usize) {
     let cursor_save = Win::current().w_cursor;
     Win::current().w_cursor.lnum = lnum;
     // The chain re-enters at `is_jump_label`, so the borrow the two tests in
@@ -83,14 +75,12 @@ pub(crate) unsafe fn skip_label(lnum: LineNr) -> (c_int, usize) {
     let labelled = {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
-        // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
-        is_case_label(line, 0, false) || unsafe { is_scope_decl(line, 0) }
+        is_case_label(line, 0, false) || is_scope_decl(line, 0)
         // SAFETY: the cursor sits on `lnum`, a line of the current buffer.
-    } || unsafe { is_jump_label() };
+    } || is_jump_label();
 
     let answer = if labelled {
-        // SAFETY: `lnum` is a line of the current buffer.
-        let amount = unsafe { get_indent_nolabel(lnum) };
+        let amount = get_indent_nolabel(lnum);
         // Upstream falls back to the start of the line when there is nothing
         // after the label, "just in case".
         (
@@ -116,10 +106,7 @@ pub(crate) unsafe fn skip_label(lnum: LineNr) -> (c_int, usize) {
 /// ```
 ///
 /// Zero when the line does not look like a declaration.
-///
-/// # Safety
-/// Reads the cursor; may unlock the current line.
-pub(crate) unsafe fn first_id_amount() -> c_int {
+pub(crate) fn first_id_amount() -> c_int {
     let lnum = Win::current().w_cursor.lnum;
     let mut lines = Lines::current();
     let line = lines.line(lnum);
@@ -166,8 +153,7 @@ pub(crate) unsafe fn first_id_amount() -> c_int {
     }
 
     let at = at + len + skip::white(&line[at + len..]);
-    // SAFETY: `at` is an offset inside the cursor's line.
-    unsafe { line_vcol(lnum, at as ColNr) }
+    line_vcol(lnum, at as ColNr)
 }
 
 /// The screen column of the first non-blank after an `=` on line `lnum`.
@@ -180,10 +166,7 @@ pub(crate) unsafe fn first_id_amount() -> c_int {
 /// Zero when there is no useful `=`, and **-1** when the line *above* `lnum`
 /// ends in a backslash -- the assignment started further up, so this line's
 /// `=` is not the one to line up with.
-///
-/// # Safety
-/// `lnum` must be a valid line; may unlock the current line.
-pub(crate) unsafe fn equal_amount(lnum: LineNr) -> c_int {
+pub(crate) fn equal_amount(lnum: LineNr) -> c_int {
     if lnum > 1 && ends_in_backslash(Lines::current().line(lnum - 1)) {
         return -1;
     }
@@ -210,6 +193,5 @@ pub(crate) unsafe fn equal_amount(lnum: LineNr) -> c_int {
     if byte_at(line, at) == b'"' {
         at += 1; // nice alignment for continued strings
     }
-    // SAFETY: `at` is an offset inside line `lnum`.
-    unsafe { line_vcol(lnum, at as ColNr) }
+    line_vcol(lnum, at as ColNr)
 }

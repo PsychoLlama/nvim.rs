@@ -179,27 +179,23 @@ impl Win {
     /// Screen lines line `lnum` takes with 'wrap' and folds accounted for but
     /// filler lines left out, optionally capped at the window height.
     pub(super) fn plines_nofill(self, lnum: LineNr, limit_winheight: bool) -> c_int {
-        // SAFETY: a line of the window's own buffer.
-        unsafe { plines_win_nofill(self, lnum, limit_winheight) }
+        plines_win_nofill(self, lnum, limit_winheight)
     }
 
     /// As [`Win::plines_nofill`], filler lines included.
     pub(super) fn plines(self, lnum: LineNr, limit_winheight: bool) -> c_int {
-        // SAFETY: a line of the window's own buffer.
-        unsafe { plines_win(self, lnum, limit_winheight) }
+        plines_win(self, lnum, limit_winheight)
     }
 
     /// Screen lines the range `first..=last` takes, capped at `max`.
     pub(super) fn plines_range(self, first: LineNr, last: LineNr, max: c_int) -> c_int {
-        // SAFETY: a line of the window's own buffer.
-        unsafe { plines_m_win(self, first, last, max) }
+        plines_m_win(self, first, last, max)
     }
 
     /// Screen cells line `lnum` takes, the cell past its end included -- the
     /// width 'smoothscroll' measures a line by.
     pub(super) fn line_display_width(self, lnum: LineNr) -> c_int {
-        // SAFETY: a live window.
-        unsafe { linetabsize_eol(self, lnum) }
+        linetabsize_eol(self, lnum)
     }
 
     /// Move the cursor to the first line of the fold it landed in.
@@ -218,18 +214,14 @@ impl Win {
     ) -> (c_int, LineNr, bool) {
         let mut next = lnum;
         let mut folded = false;
-        // SAFETY: a line of the window's own buffer. `next` is written only
-        // for a folded line, which is why it is seeded with `lnum`.
-        let height = unsafe {
-            plines_win_full(
-                self,
-                lnum,
-                Some(&mut next),
-                Some(&mut folded),
-                cache,
-                limit_winheight,
-            )
-        };
+        let height = plines_win_full(
+            self,
+            lnum,
+            Some(&mut next),
+            Some(&mut folded),
+            cache,
+            limit_winheight,
+        );
         (height, next, folded)
     }
 
@@ -240,8 +232,7 @@ impl Win {
 
     /// Filler lines drawn above line `lnum`.
     pub(super) fn fill_above(self, lnum: LineNr) -> c_int {
-        // SAFETY: a line of the window's own buffer.
-        unsafe { win_get_fill(self, lnum) }
+        win_get_fill(self, lnum)
     }
 
     /// Whether any line of the window is hidden outright by a decoration.

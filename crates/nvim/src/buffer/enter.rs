@@ -115,8 +115,7 @@ fn check_timestamp(buffer: Buf) {
 
 /// Whether the cursor is in the indent of its line.
 fn cursor_in_indent() -> bool {
-    // SAFETY: reads the current window's cursor and line.
-    unsafe { inindent(0) }
+    inindent(0)
 }
 
 /// Put the cursor back where this window last was in this buffer.

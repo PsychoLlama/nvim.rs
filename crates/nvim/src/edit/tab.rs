@@ -58,10 +58,10 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
         if lastc == '^' as c_int {
             old_indent.set(get_indent()); // remember the indent
         }
-        unsafe { change_indent(INDENT_SET, 0, 1, true) };
+        change_indent(INDENT_SET, 0, 1, true);
     } else {
         let dir = if c == Ctrl_D { INDENT_DEC } else { INDENT_INC };
-        unsafe { change_indent(dir, 0, 1, true) };
+        change_indent(dir, 0, 1, true);
     }
 
     // SAFETY: the cursor's line is NUL-terminated, so `skipwhite` stops at
@@ -90,7 +90,7 @@ pub(crate) fn ins_tab() -> bool {
         return false;
     }
 
-    let ind = unsafe { inindent(0) };
+    let ind = inindent(0);
     if ind {
         can_cindent.set(false);
     }
@@ -426,15 +426,13 @@ fn nolist_virtcol() -> ColNr {
 /// The effective 'shiftwidth' of the current buffer.
 #[inline(always)]
 fn sw_value() -> c_int {
-    // SAFETY: `curbuf` is live for the whole session.
-    unsafe { get_sw_value(Buf::current()) }
+    get_sw_value(Buf::current())
 }
 
 /// The effective 'softtabstop' of the current buffer.
 #[inline(always)]
 fn sts_value() -> c_int {
-    // SAFETY: `curbuf` is live for the whole session.
-    unsafe { get_sts_value() }
+    get_sts_value()
 }
 
 /// How many stops the 'vartabstop'-style array `ts` holds.

@@ -257,7 +257,7 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
             len = 0; // avoid getting stuck when space is in 'isfname'
             while unsafe { *p } as c_int != NUL {
                 c = unsafe { utf_ptr2char(p) };
-                if c == '`' as c_int || unsafe { vim_isfilec_or_wc(c) } {
+                if c == '`' as c_int || vim_isfilec_or_wc(c) {
                     break;
                 }
                 len = unsafe { utfc_ptr2len(p) } as size_t;

@@ -14,8 +14,7 @@
 //! | `cin_is_compound_init` | [`is_compound_init`] |
 //! | `cin_ispreproc` | [`is_preproc`] |
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};
@@ -48,26 +47,19 @@ pub(crate) fn past_label(line: &[u8], at: usize) -> Option<usize> {
 /// comments, raw strings and `#` directives until it finds a line it can
 /// judge.  `default:` and a 'cinscopedecls' word are excluded: they indent
 /// like switch labels, not like jump labels.
-///
-/// # Safety
-/// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn is_jump_label() -> bool {
+pub(crate) fn is_jump_label() -> bool {
     let is_label = {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().w_cursor.lnum);
         let at = code_at(line, 0);
         // The chain is left whole: `past_label` only steps over a line the
         // two tests in front of it did not claim.
-        // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
-        !is_default_label(line, at)
-            && !unsafe { is_scope_decl(line, at) }
-            && past_label(line, at).is_some()
+        !is_default_label(line, at) && !is_scope_decl(line, at) && past_label(line, at).is_some()
     };
     if !is_label {
         return false;
     }
-    // SAFETY: the cursor is on a line of the current buffer.
-    if unsafe { ind_find_start_comment_or_raw_string(None) }.is_some() {
+    if ind_find_start_comment_or_raw_string(None).is_some() {
         return false; // not a label in a comment or a raw string
     }
 
@@ -75,8 +67,7 @@ pub(crate) unsafe fn is_jump_label() -> bool {
     while Win::current().w_cursor.lnum > 1 {
         Win::current().w_cursor.lnum -= 1;
         Win::current().w_cursor.col = 0;
-        // SAFETY: the cursor is on a line of the current buffer.
-        if let Some(trypos) = unsafe { ind_find_start_comment_or_raw_string(None) } {
+        if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
             Win::current().w_cursor = trypos;
         }
 
@@ -90,10 +81,9 @@ pub(crate) unsafe fn is_jump_label() -> bool {
             if is_preproc(line) || at >= line.len() {
                 None
             } else {
-                // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
                 Some(
                     terminator(line, at, true, false) != 0
-                        || unsafe { is_scope_decl(line, at) }
+                        || is_scope_decl(line, at)
                         || is_case_label(line, at, true)
                         || past_label(line, at).is_some_and(|end| only_comment_left(line, end)),
                 )
@@ -166,10 +156,7 @@ pub(crate) fn is_compound_init(line: &[u8], at: usize) -> bool {
 /// Whether the cursor's line is an enumeration or a structure
 /// initialisation: `[typedef] [static|public|protected|private] enum`, or
 /// anything [`is_compound_init`] accepts.
-///
-/// # Safety
-/// Reads the cursor's line of the current buffer.
-pub(crate) unsafe fn is_enum_or_init() -> bool {
+pub(crate) fn is_enum_or_init() -> bool {
     /// Storage-class and access words that may precede the `enum`.
     const SKIP: [&[u8]; 4] = [b"static", b"public", b"protected", b"private"];
 
@@ -243,10 +230,7 @@ pub(crate) fn preproc_start(lnum: &mut LineNr, amount: &mut c_int) -> bool {
 /// text -- always `ml_get(first_lnum)` at every call site -- and to hand it
 /// back refetched.  Here the line is read from the number and the caller
 /// reads it again itself, which is the same pair of reads and one it can see.
-///
-/// # Safety
-/// Reads and restores the cursor line number; may unlock the current line.
-pub(crate) unsafe fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
+pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
     /// Why the walk stopped on the line it was looking at.
     enum Stopped {
         /// Something that cannot be a declaration: not one.
@@ -268,10 +252,8 @@ pub(crate) unsafe fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool 
     // with the statement: the match search reads other lines.
     Win::current().w_cursor.lnum = lnum;
     let has_paren = find_last_paren(Lines::current().line(lnum), b'(', b')');
-    // SAFETY: searches the current buffer from the cursor, and restores it.
-    // The search runs only when `find_last_paren` found one, as upstream.
     let opening = if has_paren {
-        unsafe { find_match_paren(Buf::current().b_ind_maxparen) }
+        find_match_paren(Buf::current().b_ind_maxparen)
     } else {
         None
     };

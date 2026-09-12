@@ -907,8 +907,7 @@ fn select_matching_block(mut win: Win, op: Option<Oap>) -> bool {
     if !visual_mode().is_char() {
         return false;
     }
-    // SAFETY: reads the character-class tables.
-    if unsafe { vim_iswordc(char_at(probe)) } {
+    if vim_iswordc(char_at(probe)) {
         return false;
     }
     if !equalpos(win.w_cursor, visual_anchor()) {

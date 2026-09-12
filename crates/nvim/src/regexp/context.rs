@@ -59,8 +59,7 @@ pub(crate) fn reg_breakcheck(rex: Rex) {
 /// Is `c` a keyword character? 'iskeyword' is buffer-local and the buffer
 /// being matched is not always the current one.
 pub(crate) fn reg_iswordc(rex: Rex, c: c_int) -> bool {
-    // SAFETY: `reg_buf` is the buffer the match was set up against.
-    unsafe { vim_iswordc_buf(c, rex.reg_buf()) }
+    vim_iswordc_buf(c, rex.reg_buf())
 }
 
 /// Which line numbering to resolve against: the running match, or the

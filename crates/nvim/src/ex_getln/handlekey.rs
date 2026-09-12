@@ -623,7 +623,7 @@ pub(crate) unsafe fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
 
         // We come here if we have a normal character.
         if s.do_abbr
-            && (is_special(s.c) || !unsafe { vim_iswordc(s.c) })
+            && (is_special(s.c) || !vim_iswordc(s.c))
             // Add ABBR_OFF for characters above 0x100; this is what
             // check_abbr() expects.
             && (ccheck_abbr(if s.c >= 0x100 {

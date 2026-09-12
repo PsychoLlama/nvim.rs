@@ -114,7 +114,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
             let at = at.min(line.len());
             skip::white(&line[at..]) == line.len() - at
         };
-        if blank && unsafe { inindent(0) } {
+        if blank && inindent(0) {
             op.motion_type = kMTLineWise;
         }
     }
@@ -354,8 +354,7 @@ fn delete_chars(op: Op) -> Result<(), UndoFailed> {
     }
 
     if op.op_type == OpType::Delete {
-        // SAFETY: formats the current buffer around the cursor.
-        unsafe { auto_format(false, true) };
+        auto_format(false, true);
     }
     Ok(())
 }

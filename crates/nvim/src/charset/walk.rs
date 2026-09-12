@@ -55,10 +55,7 @@ pub(crate) unsafe fn skipwhite_len(p: *const c_char, len: size_t) -> *mut c_char
 }
 
 /// The indent of the cursor's line, in bytes.
-///
-/// # Safety
-/// The current window and buffer must be valid.
-pub(crate) unsafe fn getwhitecols_curline() -> intptr_t {
+pub(crate) fn getwhitecols_curline() -> intptr_t {
     unsafe { getwhitecols(get_cursor_line_ptr()) }
 }
 

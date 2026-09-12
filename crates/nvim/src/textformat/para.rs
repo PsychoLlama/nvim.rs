@@ -76,10 +76,7 @@ impl Leader {
 /// and `format_lines` goes on to read that -- see its `://` test. Clearing
 /// it here would be a behaviour change under a 'comments' whose last item
 /// begins `://`.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool) -> bool {
+pub(crate) fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool) -> bool {
     // The borrow is over before `starts_para`, which walks the buffer.
     let nothing_but_leader = {
         let mut lines = Lines::current();
@@ -117,10 +114,7 @@ pub(crate) fn ends_in_white(lnum: LineNr) -> bool {
 /// | `f` | only if the second line has no leader at all |
 /// | `e` | never: this leader ends a comment |
 /// | `s` | only if there is text after it and the second line's item has `m` |
-///
-/// # Safety
-/// `lnum` and `lnum + 1` must be valid lines of the current buffer.
-pub(crate) unsafe fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
+pub(crate) fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
     if first.len == 0 {
         return second.len == 0;
     }
@@ -195,10 +189,7 @@ fn leaders_match(first: &[u8], first_len: usize, second: &[u8], second_len: usiz
 
 /// Whether a paragraph starts at line `lnum` -- that is, whether the line
 /// above it is *not* in the same paragraph. Used by 'formatoptions' `a`.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn paragraph_start(lnum: LineNr) -> bool {
+pub(crate) fn paragraph_start(lnum: LineNr) -> bool {
     if lnum <= 1 {
         return true; // start of the file
     }
@@ -208,20 +199,20 @@ pub(crate) unsafe fn paragraph_start(lnum: LineNr) -> bool {
     let do_comments = has_format_option(FoFlag::Q_COMS);
     let mut prev = Leader::NONE;
     let mut this = Leader::NONE;
-    if unsafe { fmt_check_par(lnum - 1, &mut prev, do_comments) } {
+    if fmt_check_par(lnum - 1, &mut prev, do_comments) {
         return true; // after a non-paragraph line
     }
-    if unsafe { fmt_check_par(lnum, &mut this, do_comments) } {
+    if fmt_check_par(lnum, &mut this, do_comments) {
         return true; // `lnum` is not a paragraph line
     }
     if has_format_option(FoFlag::WHITE_PAR) && !ends_in_white(lnum - 1) {
         return true; // the previous line is missing its trailing space
     }
-    if has_format_option(FoFlag::Q_NUMBER) && unsafe { get_number_indent(lnum) } > 0 {
+    if has_format_option(FoFlag::Q_NUMBER) && get_number_indent(lnum) > 0 {
         return true; // a numbered item starts at `lnum`
     }
     // A change of comment leader.
-    !unsafe { same_leader(lnum - 1, prev, this) }
+    !same_leader(lnum - 1, prev, this)
 }
 
 #[cfg(test)]

@@ -661,7 +661,7 @@ pub(crate) unsafe fn buf_copy_options(buffer: Buf, flags: c_int) {
 
     check_buf_options(buffer);
     if did_isk {
-        unsafe { buf_init_chartab(buffer, false) };
+        buf_init_chartab(buffer, false);
     }
 }
 

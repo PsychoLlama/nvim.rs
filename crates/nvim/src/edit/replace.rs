@@ -96,7 +96,7 @@ fn del_char_after_col(limit_col: c_int) -> bool {
 
         // Put the cursor at the start of a character, then step forward
         // again if a composing character took it too far back.
-        unsafe { mb_adjust_cursor() };
+        mb_adjust_cursor();
         while Win::current().w_cursor.col < limit_col {
             let l = unsafe { utf_ptr2len(get_cursor_pos_ptr()) };
             if l == 0 {

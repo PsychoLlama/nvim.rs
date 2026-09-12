@@ -174,8 +174,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
             if p.lnum != lnum {
                 true
             } else {
-                // SAFETY: the editor exists.
-                let mut cols = unsafe { comp_textwidth(false) };
+                let mut cols = comp_textwidth(false);
                 if cols == 0 {
                     cols = 79;
                 }
@@ -252,13 +251,11 @@ fn redraw_win_for_change(
 
     // Reset 'smoothscroll''s w_skipcol if the topline has become so short
     // that nothing would be visible, allowing for the `<<<` marker.
-    // SAFETY: a live window, in both calls; the short circuits are
-    // upstream's.
     let hide_all = window.w_skipcol > 0
         && (last < window.w_topline
             || (window.w_topline >= lnum
                 && window.w_topline < lnume
-                && unsafe { linetabsize_eol(window, window.w_topline) }
+                && linetabsize_eol(window, window.w_topline)
                     <= window.w_skipcol + sms_marker_overlap(window, -1)));
     if hide_all {
         window.w_skipcol = 0;

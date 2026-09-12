@@ -138,7 +138,7 @@ unsafe fn apply_new_indent(
 ) {
     Win::current().w_cursor.lnum += 1;
     if did_si.get() {
-        let sw = unsafe { get_sw_value(Buf::current()) };
+        let sw = get_sw_value(Buf::current());
         if p_sr.get() != 0 {
             newindent -= newindent % sw;
         }
@@ -151,7 +151,7 @@ unsafe fn apply_new_indent(
         // does not undo the copy; restored at the end of `open_line`.
         Buf::current().b_p_pi = true as c_int;
     } else {
-        unsafe { set_indent(newindent, SIN_INSERT | SIN_NOMARK) };
+        set_indent(newindent, SIN_INSERT | SIN_NOMARK);
     }
     *less_cols -= Win::current().w_cursor.col;
     ai_col.set(Win::current().w_cursor.col);
@@ -251,16 +251,15 @@ unsafe fn reindent_new_line(leader: *mut c_char, do_cindent: bool) {
 
     if p_paste.get() == 0 {
         if leader.is_null()
-            && !unsafe { use_indentexpr_for_lisp() }
+            && !use_indentexpr_for_lisp()
             && Buf::current().b_p_lisp != 0
             && Buf::current().b_p_ai != 0
         {
-            unsafe { fixthisline(Some(get_lisp_indent as unsafe fn() -> c_int)) };
-            ai_col.set(unsafe { getwhitecols_curline() } as ColNr);
-        } else if do_cindent || (Buf::current().b_p_ai != 0 && unsafe { use_indentexpr_for_lisp() })
-        {
-            unsafe { do_c_expr_indent() };
-            ai_col.set(unsafe { getwhitecols_curline() } as ColNr);
+            fixthisline(Some(get_lisp_indent as unsafe fn() -> c_int));
+            ai_col.set(getwhitecols_curline() as ColNr);
+        } else if do_cindent || (Buf::current().b_p_ai != 0 && use_indentexpr_for_lisp()) {
+            do_c_expr_indent();
+            ai_col.set(getwhitecols_curline() as ColNr);
         }
     }
 
@@ -291,7 +290,7 @@ pub unsafe fn open_line(
     second_line_indent: c_int,
     did_do_comment: *mut bool,
 ) -> bool {
-    let do_si = unsafe { may_do_si() };
+    let do_si = may_do_si();
     let saved_pi = Buf::current().b_p_pi;
     let lnum = Win::current().w_cursor.lnum;
     let mincol = Win::current().w_cursor.col + 1;
@@ -390,7 +389,7 @@ pub unsafe fn open_line(
     // are upstream's.
     let do_cindent = p_paste.get() == 0
         && (Buf::current().b_p_cin != 0 || c_int::from(unsafe { *Buf::current().b_p_inde }) != NUL)
-        && unsafe { in_cinkeys(key, ' ' as c_int, linewhite(Win::current().w_cursor.lnum)) }
+        && in_cinkeys(key, ' ' as c_int, linewhite(Win::current().w_cursor.lnum))
         && flags & OPENLINE_FORCE_INDENT == 0;
 
     // Does the current line start with a comment leader that should be

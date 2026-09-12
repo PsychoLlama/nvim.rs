@@ -107,7 +107,7 @@ fn sync_by_ccomment(mut window: Win, mut start_lnum: LineNr) {
     window.w_cursor.col = 0;
 
     // Restrict the search for the end of the comment to "maxlines".
-    if unsafe { find_start_comment(syn_block().b_syn_sync_maxlines as c_int) }.is_some() {
+    if find_start_comment(syn_block().b_syn_sync_maxlines as c_int).is_some() {
         let mut idx = syn_pattern_count();
         while idx > 0 {
             idx -= 1;

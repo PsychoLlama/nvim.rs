@@ -142,7 +142,7 @@ fn measure_before_insert(op: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
         pre_textlen -= bd.textlen;
     }
     Some(BlockInsertPre {
-        ind_pre_col: unsafe { getwhitecols_curline() } as ColNr,
+        ind_pre_col: getwhitecols_curline() as ColNr,
         ind_pre_vcol: get_indent(),
         pre_textlen,
     })
@@ -199,7 +199,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
     let mut did_indent = false;
     // If indenting kicked in the first line has moved -- but only count it
     // when the indent actually grew.
-    let ind_post_col = unsafe { getwhitecols_curline() } as ColNr;
+    let ind_post_col = getwhitecols_curline() as ColNr;
     if Buf::current().b_op_start.col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
         bd.textcol += ind_post_col - pre.ind_pre_col;
         ind_post_vcol = get_indent();
@@ -324,7 +324,7 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
     if op.motion_type == kMTLineWise {
         l = 0;
         // Like opening a new line: do smart indent.
-        can_si.set(unsafe { may_do_si() });
+        can_si.set(may_do_si());
     }
 
     // Delete the region first. In an empty buffer there is nothing to
@@ -361,7 +361,7 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
     }
 
     if op.motion_type == kMTLineWise {
-        unsafe { fix_indent() };
+        fix_indent();
     }
 
     // Reset `finish_op` now: it must not be set inside `edit()`.
@@ -376,7 +376,7 @@ pub(crate) unsafe fn op_change(op: *mut OpArg) -> c_int {
         replay_change(op, &mut bd, pre_textlen, pre_indent);
     }
 
-    unsafe { auto_format(false, true) };
+    auto_format(false, true);
     retval
 }
 

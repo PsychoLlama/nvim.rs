@@ -225,11 +225,8 @@ fn is_xdigit(byte: uint8_t) -> bool {
 }
 
 /// Rebuild the global table and the current buffer's keyword set.
-///
-/// # Safety
-/// The current buffer must be valid.
-pub unsafe fn init_chartab() -> bool {
-    unsafe { buf_init_chartab(Buf::current(), true) }
+pub fn init_chartab() -> bool {
+    buf_init_chartab(Buf::current(), true)
 }
 
 /// Rebuild `buffer`'s keyword set from 'iskeyword', and — when `global` — the
@@ -238,10 +235,7 @@ pub unsafe fn init_chartab() -> bool {
 /// Answers whether every option parsed; a malformed one leaves the tables
 /// half-built, which is why the option code validates with [`check_isopt`]
 /// before assigning.
-///
-/// # Safety
-/// `buffer` must be a valid buffer.
-pub unsafe fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
+pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     if global {
         // Control characters display as `^X` or `<xx>`; printable ASCII is
         // one cell wide; the Latin-1 upper half is printable and valid in a
@@ -461,11 +455,8 @@ pub fn vim_is_ident_char(c: c_int) -> bool {
 }
 
 /// Whether `c` belongs to a word in the current buffer ('iskeyword').
-///
-/// # Safety
-/// The current buffer must be valid.
-pub unsafe fn vim_iswordc(c: c_int) -> bool {
-    unsafe { vim_iswordc_buf(c, Buf::current()) }
+pub fn vim_iswordc(c: c_int) -> bool {
+    vim_iswordc_buf(c, Buf::current())
 }
 
 /// [`vim_iswordc`] as a safe call, for a module that holds no pointer of its
@@ -478,8 +469,7 @@ pub unsafe fn vim_iswordc(c: c_int) -> bool {
 /// a `# Safety` section would only push an `unsafe` block into every caller
 /// to discharge an obligation none of them can influence.
 pub fn is_word_char(c: c_int) -> bool {
-    // SAFETY: `curbuf` is live for the whole of the editor's run.
-    unsafe { vim_iswordc(c) }
+    vim_iswordc(c)
 }
 
 /// Whether `c` belongs to a word according to the 256-bit set `chartab`.
@@ -496,10 +486,7 @@ pub unsafe fn vim_iswordc_tab(c: c_int, chartab: *const uint64_t) -> bool {
 }
 
 /// Whether `c` belongs to a word in `buffer`.
-///
-/// # Safety
-/// `buffer` must be a valid buffer.
-pub unsafe fn vim_iswordc_buf(c: c_int, buffer: Buf) -> bool {
+pub fn vim_iswordc_buf(c: c_int, buffer: Buf) -> bool {
     // SAFETY: a valid buffer carries the four-word keyword set inline.
     unsafe { vim_iswordc_tab(c, (&raw const buffer.b_chartab).cast()) }
 }
@@ -524,8 +511,7 @@ pub unsafe fn vim_iswordp_buf(p: *const c_char, buffer: Buf) -> bool {
     } else {
         lead as c_int
     };
-    // SAFETY: `buffer` is a valid buffer.
-    unsafe { vim_iswordc_buf(c, buffer) }
+    vim_iswordc_buf(c, buffer)
 }
 
 /// Whether `c` may appear in a file name ('isfname'). Everything past
@@ -546,10 +532,7 @@ pub fn vim_is_fname_char(c: c_int) -> bool {
 
 /// Like [`vim_isfilec`], but also accepts the wildcards a file name pattern
 /// may contain.
-///
-/// # Safety
-/// The global table must be initialised.
-pub unsafe fn vim_isfilec_or_wc(c: c_int) -> bool {
+pub fn vim_isfilec_or_wc(c: c_int) -> bool {
     let buf: [c_char; 2] = [c as c_char, NUL as c_char];
     // SAFETY: forwarded, and `buf` is a NUL-terminated string of one byte.
     unsafe { vim_isfilec(c) || c == ']' as c_int || path_has_wildcard(buf.as_ptr()) }

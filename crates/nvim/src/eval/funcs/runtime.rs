@@ -473,7 +473,6 @@ pub fn f_pumvisible(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// the column.
 pub fn f_shiftwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(0);
-    // SAFETY throughout: the frame is live and `curbuf` is live for the call.
     if !args.is_empty() {
         let col = arg_number_chk(&args[0], None) as ColNr;
         // A coercion failure answers 0, which passes; a negative column
@@ -481,10 +480,10 @@ pub fn f_shiftwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if col < 0 {
             return;
         }
-        result.write_number(unsafe { get_sw_value_col(Buf::current(), col, false) } as VarNumber);
+        result.write_number(get_sw_value_col(Buf::current(), col, false) as VarNumber);
         return;
     }
-    result.write_number(unsafe { get_sw_value(Buf::current()) } as VarNumber);
+    result.write_number(get_sw_value(Buf::current()) as VarNumber);
 }
 
 /// `tabpagebuflist([{tabnr}])` — the buffer of every window in the tab, in

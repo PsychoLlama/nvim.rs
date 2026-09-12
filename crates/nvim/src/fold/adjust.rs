@@ -188,7 +188,7 @@ pub unsafe fn fold_adjust_visual() {
     });
     if stretched {
         // SAFETY: the caller's promise.
-        unsafe { mb_adjust_cursor() };
+        mb_adjust_cursor();
     }
 }
 

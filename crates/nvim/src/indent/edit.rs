@@ -49,10 +49,7 @@ use crate::winlayer::{Buf, Win};
 
 /// Whether the cursor is before (or, with `extra` zero, on) the first
 /// non-blank of the line.
-///
-/// # Safety
-/// There must be a current window and line.
-pub unsafe fn inindent(extra: c_int) -> bool {
+pub fn inindent(extra: c_int) -> bool {
     // SAFETY: the caller's contract; the walk is stopped by the NUL, which
     // is not white space.
     let mut ptr = get_cursor_line_ptr();
@@ -149,7 +146,7 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
                 } else {
                     unsafe { how.expect("non-null function pointer")() }
                 };
-                if amount >= 0 && unsafe { set_indent(amount, 0) } {
+                if amount >= 0 && set_indent(amount, 0) {
                     if first_changed == 0 {
                         first_changed = win.w_cursor.lnum;
                     }
@@ -200,24 +197,16 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
 }
 
 /// Whether lines starting with `#` should be left aligned.
-///
-/// # Safety
-/// There must be a current buffer.
-pub unsafe fn preprocs_left() -> bool {
+pub fn preprocs_left() -> bool {
     let buf = Buf::current();
-    unsafe {
-        buf.b_p_si != 0 && buf.b_p_cin == 0
-            || buf.b_p_cin != 0
-                && in_cinkeys('#' as c_int, ' ' as c_int, true)
-                && buf.b_ind_hash_comment == 0
-    }
+    buf.b_p_si != 0 && buf.b_p_cin == 0
+        || buf.b_p_cin != 0
+            && in_cinkeys('#' as c_int, ' ' as c_int, true)
+            && buf.b_ind_hash_comment == 0
 }
 
 /// Whether the conditions are right for smart indenting.
-///
-/// # Safety
-/// There must be a current buffer.
-pub unsafe fn may_do_si() -> bool {
+pub fn may_do_si() -> bool {
     let buf = Buf::current();
     unsafe { buf.b_p_si != 0 && buf.b_p_cin == 0 && *buf.b_p_inde == 0 && p_paste.get() == 0 }
 }
@@ -226,10 +215,7 @@ pub unsafe fn may_do_si() -> bool {
 /// `pos` matched — or, when that `{` has a `)` just before it, to the line
 /// holding the matching `(`, which is what makes an `if (..\n..) {`
 /// spanning several lines come out right (Webb).
-///
-/// # Safety
-/// `pos` must be a position in the current buffer.
-unsafe fn si_indent_like_open_brace(pos: Pos) {
+fn si_indent_like_open_brace(pos: Pos) {
     // SAFETY: the caller's position, and the cursor is put back before the
     // indent is applied.
     let mut win = Win::current();
@@ -255,18 +241,15 @@ unsafe fn si_indent_like_open_brace(pos: Pos) {
     let indent = get_indent();
     win.w_cursor = old_pos;
     if State.get() & VREPLACE_FLAG != 0 {
-        unsafe { change_indent(INDENT_SET as c_int, indent, 0, true) };
+        change_indent(INDENT_SET as c_int, indent, 0, true);
     } else {
-        unsafe { set_indent(indent, SIN_CHANGED as c_int) };
+        set_indent(indent, SIN_CHANGED as c_int);
     }
 }
 
 /// Whether a `{` typed after an `O` should reduce this line's indent: it may
 /// not go below the indent of the previous real line.
-///
-/// # Safety
-/// There must be a current window with the cursor past line 1.
-unsafe fn si_should_shift_back() -> bool {
+fn si_should_shift_back() -> bool {
     // SAFETY: the caller's contract; the walk stops at line 1 and the cursor
     // is put back before answering.
     let mut win = Win::current();
@@ -289,15 +272,12 @@ unsafe fn si_should_shift_back() -> bool {
 
 /// Very smart auto-indenting for a "normal" character typed in Insert mode:
 /// `{`, `}` and `#`.
-///
-/// # Safety
-/// There must be a current window and buffer.
-pub unsafe fn ins_try_si(c: c_int) {
+pub fn ins_try_si(c: c_int) {
     // SAFETY: the caller's contract; every helper below reads and restores
     // the cursor itself.
     let win = Win::current();
     if (did_si.get() || can_si_back.get()) && c == '{' as c_int
-        || can_si.get() && c == '}' as c_int && unsafe { inindent(0) }
+        || can_si.get() && c == '}' as c_int && inindent(0)
     {
         let matching = if c == '}' as c_int {
             unsafe { findmatch(ptr::null_mut(), '{' as c_int) }
@@ -305,22 +285,22 @@ pub unsafe fn ins_try_si(c: c_int) {
             None
         };
         if let Some(matching) = matching {
-            unsafe { si_indent_like_open_brace(matching) };
+            si_indent_like_open_brace(matching);
         } else if win.w_cursor.col > 0 {
             let shift = !(c == '{' as c_int
                 && can_si_back.get()
                 && win.w_cursor.lnum > 1
-                && !unsafe { si_should_shift_back() });
+                && !si_should_shift_back());
             if shift {
                 unsafe { shift_line(true, false, 1, true) };
             }
         }
     }
     // The indent of a '#' is always zero.
-    if win.w_cursor.col > 0 && can_si.get() && c == '#' as c_int && unsafe { inindent(0) } {
+    if win.w_cursor.col > 0 && can_si.get() && c == '#' as c_int && inindent(0) {
         // Remember the current indent for the next line.
         old_indent.set(get_indent());
-        unsafe { set_indent(0, SIN_CHANGED as c_int) };
+        set_indent(0, SIN_CHANGED as c_int);
     }
     // Adjust `ai_col`: the character at this position can be deleted.
     ai_col.set(ai_col.get().min(win.w_cursor.col));
@@ -328,22 +308,16 @@ pub unsafe fn ins_try_si(c: c_int) {
 
 /// Applies the indent [`change_indent`] was asked for, leaving the cursor on
 /// the first non-blank.
-///
-/// # Safety
-/// There must be a modifiable current line.
-unsafe fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
-    // SAFETY: the caller's contract.
+fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
     if type_0 == INDENT_SET as c_int {
-        unsafe {
-            set_indent(
-                amount,
-                if call_changed_bytes {
-                    SIN_CHANGED as c_int
-                } else {
-                    0
-                },
-            )
-        };
+        set_indent(
+            amount,
+            if call_changed_bytes {
+                SIN_CHANGED as c_int
+            } else {
+                0
+            },
+        );
         return;
     }
     let save_state = State.get();
@@ -365,10 +339,7 @@ unsafe fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_
 /// Puts the cursor `end_vcol` screen columns into the new indent, padding
 /// the line with spaces when no character starts exactly there. Answers the
 /// byte column the cursor should take.
-///
-/// # Safety
-/// There must be a current window and line.
-unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
+fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     // SAFETY: the caller's contract; the walk is over the cursor line and
     // stopped by its NUL.
     let mut win = Win::current();
@@ -430,10 +401,7 @@ fn adjust_insert_start(insstart_less: c_int) {
 
 /// Fixes the Replace-mode stack after the indent moved the cursor: pop what
 /// the line lost, push NULs for what it gained.
-///
-/// # Safety
-/// There must be an open replace stack.
-unsafe fn fix_replace_stack(mut start_col: c_int) {
+fn fix_replace_stack(mut start_col: c_int) {
     let win = Win::current();
     while start_col > win.w_cursor.col as c_int {
         replace_join(0); // remove a NUL from the replace stack
@@ -480,10 +448,7 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
 /// keeping the cursor on the same character. `round` rounds to 'shiftwidth'
 /// and applies only to the two shifts; `call_changed_bytes` asks for
 /// `changed_bytes()`.
-///
-/// # Safety
-/// There must be a current window and a modifiable line.
-pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
+pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
     // SAFETY: the caller's contract; every deref is the current window.
     let mut win = Win::current();
     // Virtual Replace needs to know what the line looked like before.
@@ -513,7 +478,7 @@ pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_cha
     if new_cursor_col > 0 {
         start_col = -1; // the replace stack cannot be fixed
     }
-    unsafe { apply_indent(type_0, amount, round, call_changed_bytes) };
+    apply_indent(type_0, amount, round, call_changed_bytes);
     insstart_less -= win.w_cursor.col as c_int;
 
     // Try to keep the cursor on the same character: at or after the first
@@ -529,7 +494,7 @@ pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_cha
     } else if State.get() & MODE_INSERT == 0 {
         new_cursor_col = win.w_cursor.col as c_int;
     } else {
-        new_cursor_col = unsafe { place_cursor_in_indent((get_indent() - vcol).max(0)) };
+        new_cursor_col = place_cursor_in_indent((get_indent() - vcol).max(0));
         insstart_less = MAXCOL as c_int;
     }
 
@@ -541,7 +506,7 @@ pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_cha
         adjust_insert_start(insstart_less);
     }
     if State.get() & REPLACE_FLAG != 0 && State.get() & VREPLACE_FLAG == 0 && start_col >= 0 {
-        unsafe { fix_replace_stack(start_col) };
+        fix_replace_stack(start_col);
     }
     if let Some((orig_line, orig_col)) = orig {
         unsafe { vreplace_restore(orig_line, orig_col) };
@@ -737,10 +702,7 @@ impl Retab {
     /// Rewrites the white-space run that just ended, when doing so is
     /// shorter than what is there (or 'expandtab' or a tab demands it).
     /// `scan` is moved onto the rewritten line.
-    ///
-    /// # Safety
-    /// `scan` must address a line of the current buffer.
-    unsafe fn retabulate(&mut self, scan: &mut LineScan, tabs: &RetabTabs) -> Retabulated {
+    fn retabulate(&mut self, scan: &mut LineScan, tabs: &RetabTabs) -> Retabulated {
         // SAFETY: the caller's line; the replacement is sized from its
         // length and handed to `ml_replace`, which takes it over.
         let buf = Buf::current();
@@ -815,10 +777,7 @@ impl Retab {
     }
 
     /// Retabulates one line. Answers false when the command has to stop.
-    ///
-    /// # Safety
-    /// `lnum` must be a line of the current buffer.
-    unsafe fn line(&mut self, lnum: LineNr, tabs: &RetabTabs, forceit: bool) -> bool {
+    fn line(&mut self, lnum: LineNr, tabs: &RetabTabs, forceit: bool) -> bool {
         // SAFETY: the caller's line. The three closures below are the only
         // places it is read, `col` never passes its NUL, and `retabulate`
         // moves the scan onto whatever line it leaves behind.
@@ -852,8 +811,7 @@ impl Retab {
                 }
             } else {
                 if self.got_tab || (forceit && self.num_spaces > 1) {
-                    // SAFETY: `scan` addresses a line of the current buffer.
-                    match unsafe { self.retabulate(&mut scan, tabs) } {
+                    match self.retabulate(&mut scan, tabs) {
                         Retabulated::Done => {}
                         Retabulated::TooLong => break,
                         Retabulated::OutOfMemory => return false,

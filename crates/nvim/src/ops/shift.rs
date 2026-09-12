@@ -59,7 +59,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
             Win::current().w_cursor.col = 0;
         } else if op.motion_type == kMTBlockWise {
             shift_block(op, amount);
-        } else if first_char != '#' as c_int || !unsafe { preprocs_left() } {
+        } else if first_char != '#' as c_int || !preprocs_left() {
             // A line starting with '#' stays put when 'smartindent' or
             // 'cindent' says preprocessor lines keep column 0.
             let left = op.op_type == OpType::Lshift;
@@ -282,14 +282,14 @@ pub unsafe fn shift_line(left: bool, round: bool, amount: c_int, call_changed_by
 
     let indent = crate::math::trim_to_int(count);
     if State.get() & VREPLACE_FLAG != 0 {
-        unsafe { change_indent(INDENT_SET as c_int, indent, 0, call_changed_bytes) };
+        change_indent(INDENT_SET as c_int, indent, 0, call_changed_bytes);
     } else {
         let flags = if call_changed_bytes {
             SIN_CHANGED as c_int
         } else {
             0
         };
-        unsafe { set_indent(indent, flags) };
+        set_indent(indent, flags);
     }
 }
 
@@ -320,7 +320,7 @@ fn shift_block(op: Op, amount: c_int) {
     let left = op.op_type == OpType::Lshift;
     let old_state = State.get();
     let old_col = Win::current().w_cursor.col;
-    let sw_val = unsafe { get_sw_value_indent(Buf::current(), left) };
+    let sw_val = get_sw_value_indent(Buf::current(), left);
     let old_p_ri = p_ri.get();
 
     // No 'revins' and no MODE_REPLACE while we rebuild the indent.

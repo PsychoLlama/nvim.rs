@@ -132,16 +132,14 @@ impl Win {
     /// Virtual columns line `lnum` occupies.
     #[inline(always)]
     fn linetabsize(self, lnum: LineNr) -> c_int {
-        // SAFETY: a live window and a line of its buffer.
-        unsafe { linetabsize(self, lnum) }
+        linetabsize(self, lnum)
     }
 
     /// As [`Win::linetabsize`], but counting the room 'list' mode's `eol`
     /// character needs.
     #[inline(always)]
     fn linetabsize_eol(self, lnum: LineNr) -> c_int {
-        // SAFETY: a live window and a line of its buffer.
-        unsafe { linetabsize_eol(self, lnum) }
+        linetabsize_eol(self, lnum)
     }
 
     /// Prepare to measure the characters of `line`, which must be line `lnum`

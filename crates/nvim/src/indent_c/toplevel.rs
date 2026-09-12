@@ -7,8 +7,7 @@
 //! (`func_type`, a line that is a function's return type), `p` (`param`, K&R
 //! parameters), `+` (`continuation`) and `i` (`cpp_baseclass`).
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -22,10 +21,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// The indent for a line at the top level.
-///
-/// # Safety
-/// Moves the cursor; may unlock the current line.
-pub(crate) unsafe fn indent_at_top_level(line: &Line) -> c_int {
+pub(crate) fn indent_at_top_level(line: &Line) -> c_int {
     // A line starting with an open brace forgets any prevailing indent
     // and looks like the start of a function.
     if line.starts_with(b'{') {
@@ -40,22 +36,19 @@ pub(crate) unsafe fn indent_at_top_level(line: &Line) -> c_int {
     // guards it -- the chain is left whole so that it keeps doing so, and so
     // that the search only runs once the cheap text tests have passed.
     let theline = line.theline();
-    // SAFETY: the search moves the cursor over lines of the current buffer
-    // and puts it back.
     let is_func_type = line.cur_curpos.lnum < Buf::current().b_ml.ml_line_count
         && !only_comment_left(theline, 0)
         && !theline.contains(&b'{')
         && !theline.contains(&b'}')
         && !ends_in(theline, 0, b":")
         && !ends_in(theline, 0, b",")
-        && unsafe { is_func_decl(line.cur_curpos.lnum + 1, line.cur_curpos.lnum + 1) }
+        && is_func_decl(line.cur_curpos.lnum + 1, line.cur_curpos.lnum + 1)
         && terminator(theline, 0, false, true) == 0;
     if is_func_type {
         return Buf::current().b_ind_func_type;
     }
 
-    // SAFETY: the cursor is ours to move and `line` outlives the call.
-    let mut amount = unsafe { search_backwards(line) };
+    let mut amount = search_backwards(line);
 
     // Extra indent for a comment.
     if starts_comment(line.theline(), 0) {
@@ -72,8 +65,7 @@ pub(crate) unsafe fn indent_at_top_level(line: &Line) -> c_int {
         let above = line.cur_curpos.lnum - 1;
         let continued = ends_in_backslash(Lines::current().line(above));
         if continued {
-            // SAFETY: the same line number, still in range.
-            match unsafe { equal_amount(above) } {
+            match equal_amount(above) {
                 n if n > 0 => amount = n,
                 0 => amount += Buf::current().b_ind_continuation,
                 _ => {}
@@ -84,10 +76,7 @@ pub(crate) unsafe fn indent_at_top_level(line: &Line) -> c_int {
 }
 
 /// Search backwards until something recognisable turns up.
-///
-/// # Safety
-/// Moves the cursor; may unlock the current line.
-unsafe fn search_backwards(line: &Line) -> c_int {
+fn search_backwards(line: &Line) -> c_int {
     let mut amount = 0;
     let mut cache = CppBaseclassCache {
         found: 0,
@@ -103,8 +92,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
         Win::current().w_cursor.col = 0;
 
         // In a comment or raw string now: skip to the start of it.
-        // SAFETY: on the main thread, with a cursor on a line of the buffer.
-        if let Some(trypos) = unsafe { ind_find_start_comment_or_raw_string(None) } {
+        if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
             Win::current().w_cursor.lnum = trypos.lnum + 1;
             Win::current().w_cursor.col = 0;
             continue;
@@ -112,10 +100,8 @@ unsafe fn search_backwards(line: &Line) -> c_int {
 
         // The start of a C++ base-class declaration or constructor
         // initialisation?
-        // SAFETY: the same, and `cache` is this scan's own.
-        if Buf::current().b_ind_cpp_baseclass != 0 && unsafe { in_baseclass_list(&mut cache) } {
-            // SAFETY: the same; the column came out of `cache`.
-            return unsafe { get_baseclass_amount(cache.lpos.col) };
+        if Buf::current().b_ind_cpp_baseclass != 0 && in_baseclass_list(&mut cache) {
+            return get_baseclass_amount(cache.lpos.col);
         }
         // Skip preprocessor directives and blank lines.  `preproc_start`
         // may move the cursor's line number, so the text is read after it.
@@ -147,9 +133,8 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             // statement: the match search reads other lines, and only runs
             // when `find_last_paren` found one, as upstream has it.
             let has_paren = find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
-            // SAFETY: moves the cursor inside the current buffer.
             let opening = has_paren
-                .then(|| unsafe { find_match_paren(Buf::current().b_ind_maxparen) })
+                .then(|| find_match_paren(Buf::current().b_ind_maxparen))
                 .flatten();
             if let Some(trypos) = opening {
                 Win::current().w_cursor = trypos;
@@ -172,8 +157,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
             // SAFETY: reads the cursor's line of the current buffer.
             amount = get_indent();
             if amount == 0 {
-                // SAFETY: the same.
-                amount = unsafe { first_id_amount() };
+                amount = first_id_amount();
             }
             if amount == 0 {
                 amount = Buf::current().b_ind_continuation;
@@ -182,8 +166,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
         }
 
         // A function declaration, and not in a comment: the left margin.
-        // SAFETY: moves the cursor over lines of the current buffer.
-        if unsafe { is_func_decl(line.cur_curpos.lnum, 0) } {
+        if is_func_decl(line.cur_curpos.lnum, 0) {
             return amount;
         }
 
@@ -243,8 +226,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
 
         // If the PREVIOUS line is a function declaration, this line (and
         // the ones after it) are parameters.
-        // SAFETY: moves the cursor over lines of the current buffer.
-        if unsafe { is_func_decl(Win::current().w_cursor.lnum, 0) } {
+        if is_func_decl(Win::current().w_cursor.lnum, 0) {
             return Buf::current().b_ind_param;
         }
 
@@ -267,8 +249,7 @@ unsafe fn search_backwards(line: &Line) -> c_int {
         // rightmost paren first, so that matching it takes us to the
         // start of the line.  The borrow ends with the statement.
         find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
-        // SAFETY: moves the cursor inside the current buffer.
-        if let Some(trypos) = unsafe { find_match_paren(Buf::current().b_ind_maxparen) } {
+        if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen) {
             Win::current().w_cursor = trypos;
         }
         // SAFETY: reads the cursor's line of the current buffer.

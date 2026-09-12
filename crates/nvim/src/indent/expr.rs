@@ -33,10 +33,7 @@ use crate::winlayer::Win;
 
 /// The indent 'indentexpr' answers for the cursor line, or the line's
 /// current indent when the expression failed.
-///
-/// # Safety
-/// There must be a current window and buffer.
-pub unsafe fn get_expr_indent() -> c_int {
+pub fn get_expr_indent() -> c_int {
     let mut win = Win::current();
     let buf = Buf::current();
     // SAFETY: the caller's contract; `curwin` and `curbuf` are the current
@@ -135,10 +132,7 @@ fn count_parens(line: &[u8], parencount: &mut c_int) {
 }
 
 /// The `(` or `[` that encloses the cursor line, whichever starts later.
-///
-/// # Safety
-/// There must be a current window.
-unsafe fn enclosing_open() -> Option<Pos> {
+fn enclosing_open() -> Option<Pos> {
     // SAFETY: the caller's contract; `findmatch` answers a pointer into
     // static storage that stays valid until the next call.
     let __v = unsafe { findmatch(::core::ptr::null_mut(), '(' as c_int) };
@@ -156,10 +150,7 @@ unsafe fn enclosing_open() -> Option<Pos> {
 ///
 /// Leaves the cursor on the line it answered for, which is what makes
 /// `get_indent` the answer.
-///
-/// # Safety
-/// There must be a current window and buffer.
-unsafe fn same_level_indent(open: &Pos) -> Option<c_int> {
+fn same_level_indent(open: &Pos) -> Option<c_int> {
     // SAFETY: the caller's contract; the cursor stays on a real line because
     // the walk stops at `open`, which `findmatch` answered.
     let mut win = Win::current();
@@ -206,10 +197,7 @@ unsafe fn skip_white_measuring(
 
 /// The indent for a line that opens a new form: the column just after
 /// `open`, plus whatever the form's own convention adds.
-///
-/// # Safety
-/// `open` must be a position in the current buffer.
-unsafe fn indent_after_open(open: &Pos) -> c_int {
+fn indent_after_open(open: &Pos) -> c_int {
     // SAFETY: the caller's position; the cursor is moved onto it first, so
     // `get_cursor_line_ptr` is the line `open.col` indexes into.
     let mut win = Win::current();
@@ -336,21 +324,18 @@ unsafe fn measure_first_argument(
 /// The rule is: take the indent of the first previous non-blank line at the
 /// same bracket level, and failing that, line up after the bracket that
 /// encloses this one.
-///
-/// # Safety
-/// There must be a current window and buffer.
-pub unsafe fn get_lisp_indent() -> c_int {
+pub fn get_lisp_indent() -> c_int {
     // SAFETY: the caller's contract; the cursor is put back before returning
     // whichever path answers.
     let mut win = Win::current();
     let realpos = win.w_cursor;
     win.w_cursor.col = 0;
-    let amount = match unsafe { enclosing_open() } {
+    let amount = match enclosing_open() {
         // No enclosing '(' or '[': no indent.
         None => 0,
-        Some(open) => match unsafe { same_level_indent(&open) } {
+        Some(open) => match same_level_indent(&open) {
             Some(amount) => amount,
-            None => unsafe { indent_after_open(&open) },
+            None => indent_after_open(&open),
         },
     };
     win.w_cursor = realpos;
@@ -391,18 +376,14 @@ unsafe fn lisp_match(p: *mut c_char) -> bool {
 
 /// Re-indents the cursor line to whatever `get_the_indent` says, which is
 /// one of `get_c_indent`, [`get_expr_indent`] and [`get_lisp_indent`].
-///
-/// # Safety
-/// There must be a current window and buffer, and the line must be
-/// modifiable.
-pub unsafe fn fixthisline(get_the_indent: IndentGetter) {
+pub fn fixthisline(get_the_indent: IndentGetter) {
     // SAFETY: the caller's contract; `get_the_indent` is one of the three
     // indent engines, all of which read the current buffer.
     let amount = unsafe { get_the_indent.expect("non-null function pointer")() };
     if amount < 0 {
         return;
     }
-    unsafe { change_indent(INDENT_SET as c_int, amount, 0, true) };
+    change_indent(INDENT_SET as c_int, amount, 0, true);
     if linewhite(Win::current().w_cursor.lnum) {
         // Delete the indent again if the line stays empty.
         did_ai.set(true);
@@ -411,33 +392,27 @@ pub unsafe fn fixthisline(get_the_indent: IndentGetter) {
 
 /// Whether 'indentexpr' should be used for Lisp indenting. The caller may
 /// want to check 'autoindent' as well.
-///
-/// # Safety
-/// There must be a current buffer.
-pub unsafe fn use_indentexpr_for_lisp() -> bool {
+pub fn use_indentexpr_for_lisp() -> bool {
     // SAFETY: the caller's contract.
     let buf = Buf::current();
     unsafe { buf.b_p_lisp != 0 && *buf.b_p_inde != 0 && cstr::eq_bytes(buf.b_p_lop, b"expr:1") }
 }
 
 /// Fixes the cursor line's indent for 'lisp' and 'cindent'.
-///
-/// # Safety
-/// There must be a current window and buffer.
-pub unsafe fn fix_indent() {
+pub fn fix_indent() {
     if p_paste.get() != 0 {
         return; // no auto-indenting when 'paste' is set
     }
     // SAFETY: the caller's contract.
     let buf = Buf::current();
     if buf.b_p_lisp != 0 && buf.b_p_ai != 0 {
-        if unsafe { use_indentexpr_for_lisp() } {
-            unsafe { do_c_expr_indent() };
+        if use_indentexpr_for_lisp() {
+            do_c_expr_indent();
         } else {
-            unsafe { fixthisline(Some(get_lisp_indent)) };
+            fixthisline(Some(get_lisp_indent));
         }
-    } else if unsafe { cindent_on() } {
-        unsafe { do_c_expr_indent() };
+    } else if cindent_on() {
+        do_c_expr_indent();
     }
 }
 
@@ -457,16 +432,14 @@ pub fn f_lispindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut win = Win::current();
     let pos = win.w_cursor;
     let lnum = tv_get_lnum(&args[0]);
-    unsafe {
-        (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
-            win.w_cursor.lnum = lnum;
-            let amount = get_lisp_indent() as VarNumber;
-            win.w_cursor = pos;
-            amount
-        } else {
-            -1
-        })
-    };
+    (*result).write_number(if (1..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
+        win.w_cursor.lnum = lnum;
+        let amount = get_lisp_indent() as VarNumber;
+        win.w_cursor = pos;
+        amount
+    } else {
+        -1
+    });
 }
 
 #[cfg(test)]

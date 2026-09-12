@@ -171,7 +171,7 @@ pub(crate) unsafe fn oneleft() -> Result<(), Failed> {
     win.w_set_curswant = true;
     win.w_cursor.col -= 1;
     // The byte to the left may be the tail of a multi-byte character.
-    unsafe { mb_adjust_cursor() };
+    mb_adjust_cursor();
     adjust_skipcol_now();
     Ok(())
 }

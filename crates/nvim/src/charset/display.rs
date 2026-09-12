@@ -576,10 +576,7 @@ pub fn byte2cells(b: c_int) -> c_int {
 
 /// The display width of character `c`. A negative code costs two cells more
 /// for its `~@` prefix.
-///
-/// # Safety
-/// The global table must be initialised.
-pub unsafe fn char2cells(c: c_int) -> c_int {
+pub fn char2cells(c: c_int) -> c_int {
     if c < 0 {
         let escaped = if c == K_SPECIAL {
             KS_SPECIAL
@@ -588,12 +585,10 @@ pub unsafe fn char2cells(c: c_int) -> c_int {
         } else {
             -c & 0xff
         };
-        // SAFETY: forwarded to the caller's contract.
-        return unsafe { char2cells(escaped) } + 2;
+        return char2cells(escaped) + 2;
     }
     if c >= 0x80 {
-        // SAFETY: this only reads the static width tables.
-        return unsafe { utf_char2cells(c) };
+        return utf_char2cells(c);
     }
     table_cells((c & 0xff) as uint8_t)
 }

@@ -635,11 +635,11 @@ fn insert_normal_char(s: &mut InsertState) {
         }
     }
 
-    unsafe { ins_try_si(s.c) };
+    ins_try_si(s.c);
 
     if s.c == ' ' as c_int {
         s.inserted_space = 1;
-        if unsafe { inindent(0) } {
+        if inindent(0) {
             can_cindent.set(false);
         }
         if Insstart_blank_vcol.get() == MAXCOL as ColNr
@@ -652,7 +652,7 @@ fn insert_normal_char(s: &mut InsertState) {
     // Insert the character, checking for an abbreviation on a special
     // one.  `CTRL-]` expands an abbreviation without being inserted
     // itself.  `check_abbr` wants ABBR_OFF added above 0x100.
-    if unsafe { vim_iswordc(s.c) }
+    if vim_iswordc(s.c)
         || (!check_abbr(if s.c >= 0x100 { s.c + ABBR_OFF } else { s.c }) && s.c != Ctrl_RSB)
     {
         insert_special(s.c, 0, 0);
@@ -686,8 +686,7 @@ fn start_autocomplete(s: &mut InsertState) {
 /// `prev_line` also looks at the line before the cursor's.
 #[inline(always)]
 fn autoformat(prev_line: bool) {
-    // SAFETY: `curwin`/`curbuf` are live for the whole session.
-    unsafe { auto_format(false, prev_line) }
+    auto_format(false, prev_line)
 }
 
 /// Is the current buffer a prompt buffer?

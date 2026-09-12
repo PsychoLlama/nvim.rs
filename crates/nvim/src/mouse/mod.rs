@@ -330,8 +330,7 @@ fn mouse_class(line: &[u8], idx: usize) -> c_int {
     if c == ' ' as c_int || c == '\t' as c_int {
         return 0;
     }
-    // SAFETY: reads the character-class tables, not `c`.
-    if unsafe { vim_iswordc(c) } {
+    if vim_iswordc(c) {
         return 2;
     }
 

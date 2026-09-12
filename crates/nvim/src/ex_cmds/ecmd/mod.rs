@@ -761,8 +761,7 @@ unsafe fn recenter(so: ScrollOff, topline: LineNr, command: *mut c_char) {
     }
     // SAFETY: caller's contract; `curwin` is live.
     update_topline(Win::current());
-    Win::current().w_scbind_pos =
-        unsafe { plines_m_win_fill(Win::current(), 1, Win::current().w_topline) };
+    Win::current().w_scbind_pos = plines_m_win_fill(Win::current(), 1, Win::current().w_topline);
     so.set(n);
     // redraw this buffer later
     // SAFETY: no argument beyond the redraw type.

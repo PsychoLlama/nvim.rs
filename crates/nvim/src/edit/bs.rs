@@ -146,7 +146,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
         return false;
     }
 
-    let in_indent = unsafe { inindent(0) };
+    let in_indent = inindent(0);
     if in_indent {
         can_cindent.set(false);
     }
@@ -187,7 +187,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
         // is one before the cursor.
         let mut mincol: ColNr = 0;
         if mode == Backspace::Line
-            && (Buf::current().b_p_ai != 0 || unsafe { cindent_on() })
+            && (Buf::current().b_p_ai != 0 || cindent_on())
             && !revins_on.get()
         {
             let save_col = Win::current().w_cursor.col;
@@ -207,8 +207,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
         // A closure, so that the byte before the cursor is only read once
         // 'smarttab' has had its say and the column has been checked.
         let soft_tab = || {
-            (unsafe { get_sts_value() } != 0
-                || unsafe { tabstop_count(Buf::current().b_p_vsts_array) } != 0)
+            (get_sts_value() != 0 || unsafe { tabstop_count(Buf::current().b_p_vsts_array) } != 0)
                 && Win::current().w_cursor.col > 0
                 && {
                     // SAFETY: the cursor is past column 0, so the byte before
@@ -235,7 +234,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
         did_ai.set(false);
     }
     if call_fix_indent {
-        unsafe { fix_indent() };
+        fix_indent();
     }
 
     // It is a little strange to put backspaces into the redo buffer, but
@@ -387,9 +386,9 @@ fn bs_one_shiftwidth(in_indent: bool) {
     // The virtual column to end up at.
     let mut want_vcol = if vcol > 0 { vcol - 1 } else { 0 };
     if p_sta.get() != 0 && in_indent {
-        want_vcol -= want_vcol % unsafe { get_sw_value(Buf::current()) };
+        want_vcol -= want_vcol % get_sw_value(Buf::current());
     } else {
-        let sts = unsafe { get_sts_value() };
+        let sts = get_sts_value();
         want_vcol = unsafe { tabstop_start(want_vcol, sts, Buf::current().b_p_vsts_array) };
     }
 
@@ -464,11 +463,9 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
         if mode == Backspace::Word && !ascii_isspace(cc) {
             // The start of the word.
             mode = Backspace::WordNotSpace;
-            is_word = unsafe { vim_iswordc(cc) } as c_int;
+            is_word = vim_iswordc(cc) as c_int;
         } else if mode == Backspace::WordNotSpace
-            && (ascii_isspace(cc)
-                || unsafe { vim_iswordc(cc) } as c_int != is_word
-                || prev_cclass != cclass)
+            && (ascii_isspace(cc) || vim_iswordc(cc) as c_int != is_word || prev_cclass != cclass)
         {
             // The end of the word.
             if !revins_on.get() {

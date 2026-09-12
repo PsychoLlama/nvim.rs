@@ -170,7 +170,7 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
         numc -= (op.end_vcol - bd.end_vcol) + 1;
     }
     // A double-wide character only fits half as many times.
-    if unsafe { utf_char2cells(c) } > 1 {
+    if utf_char2cells(c) > 1 {
         if numc & 1 != 0 && bd.is_short == 0 {
             bd.endspaces += 1;
         }

@@ -151,11 +151,7 @@ pub const KS_SPECIAL: c_int = 254;
 /// `g8`: show the bytes of the character under the cursor, in hex.
 ///
 /// A composing sequence is shown as its characters separated by `+`.
-///
-/// # Safety
-///
-/// The editor's globals must be live.
-pub unsafe fn show_utf8() {
+pub fn show_utf8() {
     // The whole grapheme cluster, composing characters included.
     // SAFETY: the cursor line is a NUL-terminated string.
     let line = unsafe { cstr::bytes_at(get_cursor_pos_ptr()) };
@@ -196,11 +192,7 @@ pub unsafe fn show_utf8() {
 /// When the file is being *stored* in an 8-bit encoding, the search runs over
 /// the converted line rather than the buffer's, and the column has to be
 /// walked back character by character, because the two do not share offsets.
-///
-/// # Safety
-///
-/// The editor's globals must be live.
-pub unsafe fn utf_find_illegal() {
+pub fn utf_find_illegal() {
     let start = Win::current().w_cursor;
     let mut vimconv = CONV_NONE_INIT;
     let mut tofree: *mut c_char = core::ptr::null_mut();

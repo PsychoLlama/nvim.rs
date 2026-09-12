@@ -49,10 +49,7 @@ fn ncmp_eq(a: &[u8], b: &[u8], n: usize) -> bool {
 ///
 /// Blank lines are skipped; if there is no such comment on its own line, the
 /// line directly above is searched for one starting *after* code.
-///
-/// # Safety
-/// Reads the cursor and the buffer; may unlock the current line.
-pub(crate) unsafe fn align_with_line_comment() -> Option<c_int> {
+pub(crate) fn align_with_line_comment() -> Option<c_int> {
     let mut trypos = find_line_comment();
     if trypos.is_none() && Win::current().w_cursor.lnum > 1 {
         // There may be a statement before the comment; search from the
@@ -70,26 +67,16 @@ pub(crate) unsafe fn align_with_line_comment() -> Option<c_int> {
             });
         }
     }
-    // SAFETY: `pos` is a position one of the two searches above reported in
-    // the current buffer.
-    trypos.map(|pos| unsafe { line_vcol(pos.lnum, pos.col) })
+    trypos.map(|pos| line_vcol(pos.lnum, pos.col))
 }
 
 /// The indent for a line inside a `/* */` comment whose opener is at
 /// `comment`.
-///
-/// # Safety
-/// Reads the cursor and the buffer; may unlock the current line.  `comment`
-/// is a copy the caller owns, and is moved onto the comment's *text* when
-/// 'cinoptions' `C` is off and there is text after the opener.
-pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
+pub(crate) fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
     // Start from how indented the line that opens the comment is.
-    // SAFETY: `comment` is the position of a `/*` found in this buffer.
-    let mut amount = unsafe { line_vcol(comment.lnum, comment.col) };
+    let mut amount = line_vcol(comment.lnum, comment.col);
 
-    // SAFETY: this function's own contract -- `line` is the caller's and the
-    // current line may be unlocked.
-    if unsafe { align_with_comment_leader(line, comment, &mut amount) } {
+    if align_with_comment_leader(line, comment, &mut amount) {
         return amount;
     }
 
@@ -127,9 +114,7 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
             comment.col = ColNr::try_from(at).expect("a column within a line fits a ColNr");
         }
     }
-    // SAFETY: `comment` is still a position in the current buffer -- the
-    // block above only ever moved its column forward within its own line.
-    amount = unsafe { line_vcol(comment.lnum, comment.col) };
+    amount = line_vcol(comment.lnum, comment.col);
     if Buf::current().b_ind_in_comment2 != 0 || nothing_after_opener {
         amount += Buf::current().b_ind_in_comment;
     }
@@ -143,10 +128,7 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
 /// deliberately set *before* the "this item's start leader does not match the
 /// opener, skip it" `continue`, so an abandoned item still suppresses the
 /// fallbacks in [`align_in_comment`].
-///
-/// # Safety
-/// Reads the buffer; may unlock the current line.
-unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> bool {
+fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> bool {
     // A closure, not a free function: two call sites in one body.
     // SAFETY: the leaders are `LEN`-byte buffers `copy_option_part` filled,
     // and it always NUL-terminates what it writes.

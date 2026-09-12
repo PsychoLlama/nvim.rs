@@ -420,11 +420,7 @@ pub unsafe fn utf_cp_bounds(base: *const c_char, p_in: *const c_char) -> CharBou
 }
 
 /// Move the cursor off the middle of a character, if it is in one.
-///
-/// # Safety
-///
-/// The editor's globals must be live.
-pub unsafe fn mb_adjust_cursor() {
+pub fn mb_adjust_cursor() {
     let (buffer, cursor) = (Buf::current(), Win::current().cursor().raw());
     unsafe { mark_mb_adjustpos(buffer, cursor) }
 }

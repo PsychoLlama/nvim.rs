@@ -197,15 +197,13 @@ fn walk_display(bytes: &[u8], emit: &mut impl FnMut(Shown<'_>)) -> c_int {
         if len > 1 {
             let c = char_at(rest);
             if vim_isprintc(c) {
-                // SAFETY: a message is shown long after options exist.
-                cells += unsafe { cells_at(rest) };
+                cells += cells_at(rest);
             } else {
                 if at > run {
                     emit(Shown::Plain(&bytes[run..at]));
                 }
                 emit(Shown::Instead(transchar_buf(None, c)));
-                // SAFETY: as above.
-                cells += unsafe { char2cells(c) };
+                cells += char2cells(c);
                 run = at + len;
             }
             at += len;

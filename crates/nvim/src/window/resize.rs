@@ -58,20 +58,17 @@ use crate::winlayer::{FrameRef, TabPage, Win, tabs, windows};
 
 /// How many screen lines line `lnum` takes in `window`.
 fn plines(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
-    // SAFETY: a line of the window's own buffer.
-    unsafe { plines_win(window, lnum, limit_winheight) }
+    plines_win(window, lnum, limit_winheight)
 }
 
 /// [`plines`] up to and including column `col` of the line.
 fn plines_to_col(window: Win, lnum: LineNr, col: ::core::ffi::c_long) -> c_int {
-    // SAFETY: a position in the window's own buffer.
-    unsafe { plines_win_col(window, lnum, col) }
+    plines_win_col(window, lnum, col)
 }
 
 /// [`plines`] without the virtual lines a diff fills the window with.
 fn plines_nofill(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
-    // SAFETY: a line of the window's own buffer.
-    unsafe { plines_win_nofill(window, lnum, limit_winheight) }
+    plines_win_nofill(window, lnum, limit_winheight)
 }
 
 /// Columns of `window` the text does not start in: `'number'`, signs and folds.

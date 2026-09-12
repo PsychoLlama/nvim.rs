@@ -526,7 +526,7 @@ unsafe fn utf8_to_latin(
                 return None;
             } else {
                 out.push(0xbf); // ¿
-                if unsafe { utf_char2cells(c) } > 1 {
+                if utf_char2cells(c) > 1 {
                     out.push(b'?');
                 }
             }

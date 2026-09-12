@@ -80,7 +80,7 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
         saved_cursor.set(op.cursor_start);
     }
 
-    unsafe { format_lines(op.line_count, keep_cursor) };
+    format_lines(op.line_count, keep_cursor);
 
     // Leave the cursor on the first non-blank of the last formatted line.
     // If it moved a line back (`Q}` does that), step forward so `.`
@@ -132,17 +132,14 @@ pub(crate) unsafe fn op_formatexpr(op: *mut OpArg) {
         // When nothing changes, the Visual selection still has to go.
         redraw_curbuf_later(UPD_INVERTED);
     }
-    if unsafe { fex_format(region.start.lnum, region.line_count as c_long, NUL) } != 0 {
+    if fex_format(region.start.lnum, region.line_count as c_long, NUL) != 0 {
         unsafe { op_format(op, false) };
     }
 }
 
 /// Evaluate 'formatexpr' over `count` lines from `lnum`, with `c` the
 /// character about to be inserted (or NUL).
-///
-/// # Safety
-/// There must be a current buffer and window.
-pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
+pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     let use_sandbox = was_set_insecurely(Win::current(), kOptFormatexpr, OptionSetFlags::LOCAL);
 
     set_vim_var_nr(Vv::Lnum, lnum as VarNumber);
@@ -168,19 +165,16 @@ pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int 
 /// The very first line formatted keeps whatever indent it has; after that the
 /// indent is recomputed by whichever engine is in force, so that a paragraph
 /// moved under a different one lines up.
-///
-/// # Safety
-/// There must be a current line.
-unsafe fn paragraph_indent(first_line: LineNr) -> c_int {
+fn paragraph_indent(first_line: LineNr) -> c_int {
     if Win::current().w_cursor.lnum == first_line {
         get_indent()
     } else if Buf::current().b_p_lisp != 0 {
-        unsafe { get_lisp_indent() }
-    } else if unsafe { cindent_on() } {
+        get_lisp_indent()
+    } else if cindent_on() {
         if unsafe { *Buf::current().b_p_inde } as c_int != NUL {
-            unsafe { get_expr_indent() }
+            get_expr_indent()
         } else {
-            unsafe { get_c_indent() }
+            get_c_indent()
         }
     } else {
         get_indent()
@@ -192,10 +186,7 @@ unsafe fn paragraph_indent(first_line: LineNr) -> c_int {
 /// 'formatoptions' `2` gave the second line.
 ///
 /// Answers false when the join failed and the walk has to stop.
-///
-/// # Safety
-/// There must be a current line, and it must be modifiable.
-unsafe fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: LineNr) -> bool {
+fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: LineNr) -> bool {
     Win::current().w_cursor.lnum += 1;
     Win::current().w_cursor.col = 0;
     if line_count < 0 && u_save_cursor().is_err() {
@@ -205,7 +196,7 @@ unsafe fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_coun
         next_leader_len
     } else if second_indent > 0 {
         // The "leader" `FoFlag::Q_SECOND` left behind.
-        unsafe { getwhitecols_curline() as c_int }
+        getwhitecols_curline() as c_int
     } else {
         0
     };
@@ -236,10 +227,7 @@ unsafe fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_coun
 ///
 /// The caller must have saved the first line for undo; the ones after it are
 /// saved here.
-///
-/// # Safety
-/// There must be a current line, and it must be modifiable.
-pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
+pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let mut prev_is_end_par = false;
     let mut next_is_start_par = false;
     let mut leader = Leader::NONE;
@@ -255,7 +243,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
     // The length at which a line is formatted whether or not the
     // paragraph has ended: 3 * 'textwidth'.
-    let max_len = unsafe { comp_textwidth(true) } * 3;
+    let max_len = comp_textwidth(true) * 3;
 
     let do_comments = has_format_option(FoFlag::Q_COMS);
     // Format comments with `n` or `2`.
@@ -266,12 +254,12 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
     // The previous and current lines.
     let mut is_not_par = if Win::current().w_cursor.lnum > 1 {
-        unsafe { fmt_check_par(Win::current().w_cursor.lnum - 1, &mut leader, do_comments) }
+        fmt_check_par(Win::current().w_cursor.lnum - 1, &mut leader, do_comments)
     } else {
         true
     };
     let mut next_is_not_par =
-        unsafe { fmt_check_par(Win::current().w_cursor.lnum, &mut next_leader, do_comments) };
+        fmt_check_par(Win::current().w_cursor.lnum, &mut next_leader, do_comments);
     let mut is_end_par = is_not_par || next_is_not_par;
     if !is_end_par && do_trail_white {
         is_end_par = !ends_in_white(Win::current().w_cursor.lnum - 1);
@@ -293,10 +281,9 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
             next_leader = Leader::NONE;
         } else {
             let next = Win::current().w_cursor.lnum + 1;
-            next_is_not_par = unsafe { fmt_check_par(next, &mut next_leader, do_comments) };
+            next_is_not_par = fmt_check_par(next, &mut next_leader, do_comments);
             if do_number_indent {
-                next_is_start_par =
-                    unsafe { get_number_indent(Win::current().w_cursor.lnum + 1) } > 0;
+                next_is_start_par = get_number_indent(Win::current().w_cursor.lnum + 1) > 0;
             }
         }
         advance = true;
@@ -336,7 +323,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
                     // the list flag differs. It is never cleared again --
                     // one comment-bearing paragraph turns it on for the
                     // rest of the run.
-                    second_indent = unsafe { get_number_indent(Win::current().w_cursor.lnum) };
+                    second_indent = get_number_indent(Win::current().w_cursor.lnum);
                     if !no_comment {
                         do_comments_list = true;
                     }
@@ -345,7 +332,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
             // A change of comment leader ends the paragraph.
             if Win::current().w_cursor.lnum >= Buf::current().b_ml.ml_line_count
-                || !unsafe { same_leader(Win::current().w_cursor.lnum, leader, next_leader) }
+                || !same_leader(Win::current().w_cursor.lnum, leader, next_leader)
             {
                 // Except when the next line opens a line comment and this
                 // one has a line comment after some text: then the
@@ -365,7 +352,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 if need_set_indent {
                     // Rewrite the first line's indent with the minimal
                     // number of tabs and spaces the options ask for.
-                    unsafe { set_indent(paragraph_indent(first_line), SIN_CHANGED as c_int) };
+                    set_indent(paragraph_indent(first_line), SIN_CHANGED as c_int);
                 }
 
                 // Put the cursor on the last non-space.
@@ -425,7 +412,7 @@ pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
             // Still in the same paragraph: join the next line on.
             if !is_end_par {
                 advance = false;
-                if !unsafe { join_next_line(next_leader.len, second_indent, line_count) } {
+                if !join_next_line(next_leader.len, second_indent, line_count) {
                     break;
                 }
                 first_par_line = false;

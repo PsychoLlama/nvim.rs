@@ -550,10 +550,10 @@ unsafe fn scroll_down(mut win: Win, rg: &mut Regions) {
         return;
     }
 
-    let mut rows = unsafe { plines_m_win(win, win.w_topline, first_lnum - 1, win.w_view_height) };
+    let mut rows = plines_m_win(win, win.w_topline, first_lnum - 1, win.w_view_height);
     // Extra rows for filler lines that were not visible before.
     if first_lnum != win.w_topline {
-        rows += unsafe { win_get_fill(win, first_lnum) } - win.w_old_topfill;
+        rows += win_get_fill(win, first_lnum) - win.w_old_topfill;
     }
     if rows == 0 || rows >= win.w_view_height - 2 {
         rg.mid_start = 0; // a screen or more off: redraw all lines
@@ -615,7 +615,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
     if unsafe { (*win.w_lines).wl_lnum } == win.w_topline {
         rows += win.w_old_topfill;
     } else {
-        rows += unsafe { win_get_fill(win, win.w_topline) };
+        rows += win_get_fill(win, win.w_topline);
     }
     rows -= win.w_topfill;
 

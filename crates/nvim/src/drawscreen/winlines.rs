@@ -166,7 +166,7 @@ pub(crate) unsafe fn draw_window_lines(
                 // Filler text below the last line. `win_line` recognises
                 // `ml_line_count + 1` and draws only the filler.
                 window.w_botline = buffer.b_ml.ml_line_count + 1;
-                let fill = unsafe { win_get_fill(window, window.w_botline) };
+                let fill = win_get_fill(window, window.w_botline);
                 if fill > 0 && !window.w_botfill && w.row < window.w_view_height {
                     let mut zero_spv = SpellVars::default();
                     w.row = unsafe {
@@ -280,7 +280,7 @@ unsafe fn draw_one_line(
 
     // A concealed line with no filler lines takes no rows at all.
     let concealed = decor_conceal_line(window, w.lnum - 1, false);
-    if concealed && unsafe { win_get_fill(window, w.lnum) } == 0 {
+    if concealed && win_get_fill(window, w.lnum) == 0 {
         let step = if foldinfo.fi_lines != 0 {
             foldinfo.fi_lines
         } else {
@@ -304,7 +304,7 @@ unsafe fn draw_one_line(
         && w.lnum > window.w_topline
         && dy_flags.get() & (kOptDyFlagLastline | kOptDyFlagTruncate) == 0
         && w.srow + unsafe { (*wl).wl_size } as c_int > window.w_view_height
-        && unsafe { win_get_fill(window, w.lnum) } == 0
+        && win_get_fill(window, w.lnum) == 0
     {
         // This line is not going to fit. Draw nothing here; the "@" lines
         // below take the rest.
@@ -671,7 +671,7 @@ unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
         return;
     }
 
-    if unsafe { win_get_fill(window, w.lnum) } >= window.w_view_height - w.srow {
+    if win_get_fill(window, w.lnum) >= window.w_view_height - w.srow {
         // The window ends in filler lines.
         window.w_botline = w.lnum;
         window.w_filler_rows = window.w_view_height - w.srow;

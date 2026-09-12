@@ -263,7 +263,7 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
 /// The caller must have prepared for undo.
 pub unsafe fn del_char(fixpos: bool) -> Result<(), Failed> {
     // Make sure the cursor is at the start of a character.
-    unsafe { mb_adjust_cursor() };
+    mb_adjust_cursor();
     if c_int::from(unsafe { *get_cursor_pos_ptr() }) == NUL {
         return Err(Failed);
     }

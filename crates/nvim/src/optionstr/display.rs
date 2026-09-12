@@ -203,8 +203,7 @@ pub fn did_set_display(args: &mut OptSet) -> Option<&CStr> {
     }
     // "uhex" changes how an unprintable character is drawn, and "msgsep"
     // changes whether the message area is its own grid.
-    // SAFETY: both read the editor's own state.
-    unsafe { init_chartab() };
+    init_chartab();
     msg_grid_validate();
     None
 }

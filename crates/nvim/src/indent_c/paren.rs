@@ -54,10 +54,7 @@ pub(crate) fn first_code_col(trypos: Pos) -> c_int {
 /// A `{` inside a `//` or `/* */` comment is ignored -- which is what makes
 /// the three lines of `foo()\n{\n}` indent -- and the search resumes from
 /// the start of whatever comment or raw string swallowed it.
-///
-/// # Safety
-/// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_start_brace() -> Option<Pos> {
+pub(crate) fn find_start_brace() -> Option<Pos> {
     let cursor_save = Win::current().w_cursor;
     let mut trypos;
     loop {
@@ -72,12 +69,10 @@ pub(crate) unsafe fn find_start_brace() -> Option<Pos> {
         // `brace.col`, and the `&&` chain is left whole so that it keeps
         // doing so.
         let mut pos = None;
-        // SAFETY: on the main thread, with a current window and buffer.
-        let uncommented = first_code_col(brace) == brace.col
-            && unsafe {
-                pos = ind_find_start_comment_or_raw_string(None);
-                pos.is_none()
-            };
+        let uncommented = first_code_col(brace) == brace.col && {
+            pos = ind_find_start_comment_or_raw_string(None);
+            pos.is_none()
+        };
         if uncommented {
             break;
         }
@@ -90,11 +85,8 @@ pub(crate) unsafe fn find_start_brace() -> Option<Pos> {
 }
 
 /// The unclosed `(` above the cursor, or null.
-///
-/// # Safety
-/// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> Option<Pos> {
-    unsafe { find_match_char(b'(', ind_maxparen) }
+pub(crate) fn find_match_paren(ind_maxparen: c_int) -> Option<Pos> {
+    find_match_char(b'(', ind_maxparen)
 }
 
 /// The unclosed `c` above the cursor, or null, ignoring one inside a comment
@@ -104,10 +96,7 @@ pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> Option<Pos> {
 /// *start* of that comment with the remaining budget -- `ind_maxparen` less
 /// the lines already walked -- so the total distance searched stays bounded
 /// however many comments are in the way.
-///
-/// # Safety
-/// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
+pub(crate) fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
     let cursor_save = Win::current().w_cursor;
     let mut ind_maxp_wk = ind_maxparen;
 
@@ -133,8 +122,7 @@ pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> 
 
         Win::current().w_cursor = trypos;
 
-        // SAFETY: on the main thread, with a current window and buffer.
-        let enclosing = unsafe { ind_find_start_comment_or_raw_string(None) };
+        let enclosing = ind_find_start_comment_or_raw_string(None);
         let Some(trypos_wk) = enclosing else {
             break Some(trypos);
         };
@@ -150,14 +138,9 @@ pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> 
 }
 
 /// [`find_match_paren`], but null when an unmatched `{` is closer.
-///
-/// # Safety
-/// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option<Pos> {
-    // SAFETY: searches the current buffer from the cursor, and restores it.
-    let trypos = unsafe { find_match_paren(ind_maxparen) }?;
-    // SAFETY: the same.
-    let brace_is_further_down = unsafe { find_start_brace() }.is_some_and(|brace| {
+pub(crate) fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option<Pos> {
+    let trypos = find_match_paren(ind_maxparen)?;
+    let brace_is_further_down = find_start_brace().is_some_and(|brace| {
         if trypos.lnum != brace.lnum {
             trypos.lnum < brace.lnum
         } else {
@@ -221,10 +204,7 @@ pub(crate) fn find_last_paren(line: &[u8], start: u8, end: u8) -> bool {
 /// `else if` needs one more `if`, a `do`-`while` needs one more `do`, and a
 /// line whose enclosing brace is not `ourscope`'s is in a different scope and
 /// is skipped whole.
-///
-/// # Safety
-/// Moves the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
+pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
     let (mut elselevel, mut whilelevel) = if lookfor == LOOKFOR_IF {
         (1, 0)
     } else {
@@ -249,17 +229,15 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
                 is_else(line, look) || is_if(line, look) || is_do(line, look),
             )
         };
-        // SAFETY: moves the cursor inside the current buffer and restores it.
-        let interesting = interesting
-            || (starts_while_of_do && unsafe { while_closes_do(Win::current().w_cursor.lnum) });
+        let interesting =
+            interesting || (starts_while_of_do && while_closes_do(Win::current().w_cursor.lnum));
         if !interesting {
             continue;
         }
 
         // Outside the braces entirely, or enclosed by a brace further
         // back than ours: out of scope either way.
-        // SAFETY: searches the current buffer from the cursor, and restores it.
-        let Some(theirscope) = (unsafe { find_start_brace() }) else {
+        let Some(theirscope) = find_start_brace() else {
             return false;
         };
         if theirscope.lnum < ourscope {
@@ -306,8 +284,7 @@ pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
             }
         }
 
-        // SAFETY: moves the cursor inside the current buffer and restores it.
-        if starts_while_of_do && unsafe { while_closes_do(Win::current().w_cursor.lnum) } {
+        if starts_while_of_do && while_closes_do(Win::current().w_cursor.lnum) {
             whilelevel += 1;
             continue;
         }

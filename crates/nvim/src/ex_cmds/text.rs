@@ -286,8 +286,7 @@ pub unsafe fn ex_align(args: *mut ExArg) {
         // nothing in the body adds or removes a line.
         Win::current().w_cursor.lnum = lnum;
         if let Some(new_indent) = aligned_indent(cmdidx, indent, width) {
-            // SAFETY: the cursor is on `lnum`.
-            unsafe { set_indent(new_indent.max(0), 0) };
+            set_indent(new_indent.max(0), 0);
         }
         lnum += 1;
     }
@@ -326,8 +325,7 @@ fn aligned_indent(cmdidx: CmdIdx, indent: c_int, width: c_int) -> Option<c_int> 
 /// that still fits, one column at a time.
 fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
     while indent > 0 {
-        // SAFETY: caller's contract.
-        unsafe { set_indent(indent, 0) };
+        set_indent(indent, 0);
         // SAFETY: as above.
         if linelen().0 > width {
             indent -= 1;
@@ -337,7 +335,7 @@ fn fit_right_indent(mut indent: c_int, width: c_int) -> c_int {
         loop {
             indent += 1;
             // SAFETY: as above.
-            unsafe { set_indent(indent, 0) };
+            set_indent(indent, 0);
             // SAFETY: as above.
             if linelen().0 > width {
                 return indent - 1;

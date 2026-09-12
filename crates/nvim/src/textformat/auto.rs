@@ -50,10 +50,7 @@ static did_add_space: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// The caller must have saved the cursor line for undo; the lines after it
 /// are saved here.
-///
-/// # Safety
-/// There must be a current line, and it must be modifiable.
-pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
+pub fn auto_format(trailblank: bool, prev_line: bool) {
     if !has_format_option(FoFlag::AUTO) {
         return;
     }
@@ -62,7 +59,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     let old = get_cursor_line_ptr();
 
     // May remove an added space.
-    unsafe { check_auto_format(false) };
+    check_auto_format(false);
 
     // Don't format in Insert mode when the cursor is on a trailing blank:
     // the user may be about to type ordinary text. Skip it too when `1`
@@ -73,14 +70,14 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     if c_int::from(unsafe { *old }) != NUL && !trailblank && wasatend {
         dec_cursor();
         let mut cc = gchar_cursor();
-        if !unsafe { whitechar(cc) }
+        if !whitechar(cc)
             && Win::current().w_cursor.col > 0
             && has_format_option(FoFlag::ONE_LETTER)
         {
             dec_cursor();
         }
         cc = gchar_cursor();
-        if unsafe { whitechar(cc) } {
+        if whitechar(cc) {
             Win::current().w_cursor = pos;
             return;
         }
@@ -117,7 +114,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     }
 
     // May start one line earlier, but not at the start of a paragraph.
-    if prev_line && !unsafe { paragraph_start(Win::current().w_cursor.lnum) } {
+    if prev_line && !paragraph_start(Win::current().w_cursor.lnum) {
         Win::current().w_cursor.lnum -= 1;
         if u_save_cursor().is_err() {
             return;
@@ -127,7 +124,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
     // Format, then restore the cursor: `saved_cursor` is adjusted by the
     // formatting as the text moves under it.
     saved_cursor.set(pos);
-    unsafe { format_lines(-1, false) };
+    format_lines(-1, false);
     Win::current().w_cursor = saved_cursor.get();
     saved_cursor.set(saved_cursor.get().with_lnum(0));
 
@@ -156,7 +153,7 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
             did_add_space.set(true);
         } else {
             // May remove an added space.
-            unsafe { check_auto_format(false) };
+            check_auto_format(false);
         }
     }
 
@@ -168,15 +165,12 @@ pub unsafe fn auto_format(trailblank: bool, prev_line: bool) {
 ///
 /// `end_insert` says Insert mode is ending, in which case the space counts as
 /// trailing and goes whatever follows it.
-///
-/// # Safety
-/// There must be a current line, and it must be modifiable.
-pub unsafe fn check_auto_format(end_insert: bool) {
+pub fn check_auto_format(end_insert: bool) {
     if !did_add_space.get() {
         return;
     }
     let cc = gchar_cursor();
-    if !unsafe { whitechar(cc) } {
+    if !whitechar(cc) {
         // Somehow the space was removed already.
         did_add_space.set(false);
         return;

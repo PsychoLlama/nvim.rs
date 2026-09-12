@@ -88,24 +88,21 @@ struct BreakSearch {
 impl BreakSearch {
     /// Upstream's `WHITECHAR(cc)` arm: `cc` is white space, so the break goes
     /// in front of the run of blanks this is the end of.
-    ///
-    /// # Safety
-    /// There must be a current line and the cursor must be on it.
-    unsafe fn at_white(&mut self, mut cc: c_int) -> Step {
+    fn at_white(&mut self, mut cc: c_int) -> Step {
         // Remember where the blank just before the text is.
         let end_col = Win::current().w_cursor.col;
 
         // Walk back to the start of the run of blanks, counting them --
         // only "more than one" matters, for the `p` flag below.
         let mut wcc = 0;
-        while Win::current().w_cursor.col > 0 && unsafe { whitechar(cc) } {
+        while Win::current().w_cursor.col > 0 && whitechar(cc) {
             dec_cursor();
             cc = gchar_cursor();
             if wcc < 2 {
                 wcc += 1;
             }
         }
-        if Win::current().w_cursor.col == 0 && unsafe { whitechar(cc) } {
+        if Win::current().w_cursor.col == 0 && whitechar(cc) {
             return Step::Stop; // only spaces in front of the text
         }
         // 'formatoptions' `p`: don't break after a period followed by
@@ -130,7 +127,7 @@ impl BreakSearch {
             let col = Win::current().w_cursor.col;
             dec_cursor();
             cc = gchar_cursor();
-            if unsafe { whitechar(cc) } {
+            if whitechar(cc) {
                 return Step::Again; // one letter: keep looking
             }
             Win::current().w_cursor.col = col;
@@ -146,10 +143,7 @@ impl BreakSearch {
 
     /// Upstream's `fo_multibyte` arm: a break may go straight between two
     /// characters, with no blank in sight, if the pair allows it.
-    ///
-    /// # Safety
-    /// There must be a current line and the cursor must be on it.
-    unsafe fn at_multibyte(&mut self, mut cc: c_int) -> Step {
+    fn at_multibyte(&mut self, mut cc: c_int) -> Step {
         let mut col;
         // First try breaking *after* this character.
         if Win::current().w_cursor.col != self.startcol {
@@ -179,7 +173,7 @@ impl BreakSearch {
         col = Win::current().w_cursor.col;
         dec_cursor();
         cc = gchar_cursor();
-        if unsafe { whitechar(cc) } {
+        if whitechar(cc) {
             return Step::Again; // break with a space instead
         }
         // Don't break inside the comment leader.
@@ -241,10 +235,7 @@ impl BreakSearch {
     /// `flags` and `fo_ins_blank` between them decide how far back the walk
     /// may go: outside an explicit format, 'formatoptions' `v`/`b` stop it at
     /// the first character the user actually typed in this insert.
-    ///
-    /// # Safety
-    /// There must be a current line and the cursor must be on it.
-    unsafe fn run(&mut self, flags: c_int, fo_ins_blank: bool) {
+    fn run(&mut self, flags: c_int, fo_ins_blank: bool) {
         while (!fo_ins_blank && !has_format_option(FoFlag::INS_VI))
             || flags & INSCHAR_FORMAT as c_int != 0
             || Win::current().w_cursor.lnum != Insstart.get().lnum
@@ -255,10 +246,10 @@ impl BreakSearch {
             } else {
                 gchar_cursor()
             };
-            let step = if unsafe { whitechar(cc) } {
-                unsafe { self.at_white(cc) }
+            let step = if whitechar(cc) {
+                self.at_white(cc)
             } else if (cc >= 0x100 || !utf_allow_break_before(cc)) && self.fo_multibyte {
-                unsafe { self.at_multibyte(cc) }
+                self.at_multibyte(cc)
             } else {
                 Step::Back
             };
@@ -280,10 +271,7 @@ impl BreakSearch {
 ///
 /// With 'cindent', a leader that is not at the start of the line still counts
 /// -- a line comment after code -- which is what the second lookup is for.
-///
-/// # Safety
-/// There must be a current line.
-unsafe fn wrap_leader_len() -> ColNr {
+fn wrap_leader_len() -> ColNr {
     let line = get_cursor_line_ptr();
     let mut leader_len =
         unsafe { get_leader_len(line, ::core::ptr::null_mut::<*mut c_char>(), false, true) };
@@ -316,11 +304,7 @@ unsafe fn wrap_leader_len() -> ColNr {
 /// for the second line of the paragraph, and with `INSCHAR_COM_LIST` in
 /// `flags` it is instead the comment leader length handed to `open_line`.
 /// `format_only` suppresses the redraw, for a caller that is going to do one.
-///
-/// # Safety
-/// There must be a current line, and it must be modifiable. Reentrant with
-/// `edit.rs` through `open_line`.
-pub unsafe fn internal_format(
+pub fn internal_format(
     textwidth: c_int,
     mut second_indent: c_int,
     flags: c_int,
@@ -357,8 +341,8 @@ pub unsafe fn internal_format(
         let mut orig_col = 0;
         let mut did_do_comment = false;
 
-        let virtcol = unsafe { get_nolist_virtcol() }
-            + unsafe { char2cells(if c != NUL { c } else { gchar_cursor() }) };
+        let virtcol =
+            unsafe { get_nolist_virtcol() } + char2cells(if c != NUL { c } else { gchar_cursor() });
         if virtcol <= textwidth {
             break;
         }
@@ -368,11 +352,7 @@ pub unsafe fn internal_format(
         } else if flags & INSCHAR_FORMAT as c_int == 0 && has_format_option(FoFlag::WRAP_COMS) {
             do_comments = true;
         }
-        let leader_len = if do_comments {
-            unsafe { wrap_leader_len() }
-        } else {
-            0
-        };
+        let leader_len = if do_comments { wrap_leader_len() } else { 0 };
 
         // When this line does not start with a comment leader, don't
         // start one on a line broken off it either: otherwise a `%word`
@@ -407,7 +387,7 @@ pub unsafe fn internal_format(
             fo_multibyte,
             fo_rigor_tw,
         };
-        unsafe { search.run(flags, fo_ins_blank) };
+        search.run(flags, fo_ins_blank);
         if search.foundcol == 0 {
             // No break column: the line has to stay long.
             win.w_cursor.col = startcol as ColNr;
@@ -432,7 +412,7 @@ pub unsafe fn internal_format(
         win.w_cursor.col = foundcol as ColNr;
         while {
             let cc = gchar_cursor();
-            (unsafe { whitechar(cc) }) && (!fo_white_par || win.w_cursor.col < startcol as ColNr)
+            (whitechar(cc)) && (!fo_white_par || win.w_cursor.col < startcol as ColNr)
         } {
             inc_cursor();
         }
@@ -493,11 +473,11 @@ pub unsafe fn internal_format(
                 // that is, from `format_lines` -- `INSCHAR_COM_LIST` is
                 // set and `open_line` above has already done this.
                 if second_indent < 0 && has_format_option(FoFlag::Q_NUMBER) {
-                    second_indent = unsafe { get_number_indent(win.w_cursor.lnum - 1) };
+                    second_indent = get_number_indent(win.w_cursor.lnum - 1);
                 }
                 if second_indent >= 0 {
                     if State.get() & VREPLACE_FLAG != 0 {
-                        unsafe { change_indent(INDENT_SET as c_int, second_indent, 0, true) };
+                        change_indent(INDENT_SET as c_int, second_indent, 0, true);
                     } else if leader_len > 0 && second_indent - leader_len > 0 {
                         // A numbered list item that has a comment:
                         // `open_line` put the leader in and left the
@@ -508,7 +488,7 @@ pub unsafe fn internal_format(
                             unsafe { ins_str(c" ".as_ptr() as *mut c_char, 1) };
                         }
                     } else {
-                        unsafe { set_indent(second_indent, SIN_CHANGED as c_int) };
+                        set_indent(second_indent, SIN_CHANGED as c_int);
                     }
                 }
             }

@@ -56,11 +56,7 @@ const fn is_special(c: c_int) -> bool {
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
 pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
-    let textwidth = unsafe { comp_textwidth(flags & INSCHAR_FORMAT as c_int != 0) };
+    let textwidth = comp_textwidth(flags & INSCHAR_FORMAT as c_int != 0);
     wrap_before_insert(c, flags, second_indent, textwidth);
 
     if c == NUL {
@@ -88,7 +84,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         && !test_disable_char_avail.get()
         && vpeekc() != NUL
         && State.get() & REPLACE_FLAG == 0
-        && !unsafe { cindent_on() }
+        && !cindent_on()
         && p_ri.get() == 0
     {
         let mut buf: [c_char; INPUT_BUFLEN as usize + 1] = [0; INPUT_BUFLEN as usize + 1];
@@ -114,8 +110,8 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
                     virtcol < textwidth
                 })
                 && !(!no_abbr.get()
-                    && !unsafe { vim_iswordc(next) }
-                    && unsafe { vim_iswordc(buf[i as usize - 1] as uint8_t as c_int) });
+                    && !vim_iswordc(next)
+                    && vim_iswordc(buf[i as usize - 1] as uint8_t as c_int));
             if !take {
                 break;
             }
@@ -191,20 +187,20 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
     // Format with 'formatexpr' when it is set; use the internal
     // formatting when it is not, or when it answered non-zero.
     let mut do_internal = true;
-    let virtcol = unsafe { get_nolist_virtcol() }
-        + unsafe { char2cells(if c != NUL { c } else { gchar_cursor() }) };
+    let virtcol =
+        unsafe { get_nolist_virtcol() } + char2cells(if c != NUL { c } else { gchar_cursor() });
 
     if unsafe { *Buf::current().b_p_fex } as c_int != NUL
         && flags & INSCHAR_NO_FEX as c_int == 0
         && (force_format != 0 || virtcol > textwidth)
     {
-        do_internal = unsafe { fex_format(Win::current().w_cursor.lnum, 1, c) } != 0;
+        do_internal = fex_format(Win::current().w_cursor.lnum, 1, c) != 0;
         // Saving for undo may be needed again, e.g. when the expression
         // called setline().
         ins_need_undo.set(true);
     }
     if do_internal {
-        unsafe { internal_format(textwidth, second_indent, flags, c == NUL, c) };
+        internal_format(textwidth, second_indent, flags, c == NUL, c);
     }
 }
 

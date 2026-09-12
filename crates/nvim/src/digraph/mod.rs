@@ -180,8 +180,7 @@ pub fn get_digraph(cmdline: bool) -> c_int {
         return c;
     }
     if cmdline {
-        // SAFETY: transpiled display helpers, plain value arguments.
-        if unsafe { char2cells(c) } == 1 && c < 128 && cmdline_star.get() == 0 {
+        if char2cells(c) == 1 && c < 128 && cmdline_star.get() == 0 {
             putcmdline(c as c_char, true);
         }
     } else {
@@ -349,8 +348,7 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
     len += unsafe { utf_char2bytes(dp.result, buf[len..].as_mut_ptr() as *mut c_char) } as usize;
     outtrans(&buf[..len], HLF_8);
     let mut num = Vec::with_capacity(8);
-    // SAFETY: value check only.
-    if unsafe { char2cells(dp.result) } == 1 {
+    if char2cells(dp.result) == 1 {
         num.push(b' ');
     }
     num.extend_from_slice(format!(" {:3}", dp.result).as_bytes());

@@ -81,10 +81,7 @@ pub fn has_format_option(x: FoFlag) -> bool {
 /// byte *after* the cursor -- so a caller passing `line[col - 1]` is asking
 /// about two different characters at once. Upstream is a macro, and every
 /// call site inherits that.
-///
-/// # Safety
-/// There must be a current line and the cursor must be on it.
-pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
+pub(crate) fn whitechar(cc: c_int) -> bool {
     ascii_iswhite(cc)
         && !utf_iscomposing_first(unsafe { utf_ptr2char(get_cursor_pos_ptr().add(1)) })
 }
@@ -92,10 +89,7 @@ pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
 /// The width to format to: 'textwidth' if set, else the window width less
 /// 'wrapmargin', else zero. `ff` forces a usable answer for `gq`, which is
 /// the window width capped at 79.
-///
-/// # Safety
-/// There must be a current window and buffer.
-pub unsafe fn comp_textwidth(ff: bool) -> c_int {
+pub fn comp_textwidth(ff: bool) -> c_int {
     let win = Win::current();
     let mut textwidth = c_int::try_from(Buf::current().b_p_tw).unwrap_or(c_int::MAX);
     if textwidth == 0 && Buf::current().b_p_wm != 0 {

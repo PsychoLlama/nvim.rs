@@ -96,8 +96,7 @@ fn save_fileformat(buffer: Buf) {
 }
 
 fn init_chartab(buffer: Buf) {
-    // SAFETY: a live buffer; `false` is upstream's `global` flag.
-    unsafe { buf_init_chartab(buffer, false) };
+    buf_init_chartab(buffer, false);
 }
 
 fn parse_cindent_options(buffer: Buf) {

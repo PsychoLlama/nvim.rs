@@ -410,12 +410,9 @@ pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
     // two fields in.
     // SAFETY: `win` is live and the two calls read only it and the buffer.
     let skipcol = unsafe { Fmark::new(fmp) }.read().view.skipcol;
-    // SAFETY: as above.
-    let keep = unsafe {
-        skipcol > 0
-            && !has_folding(win, topline, None, None)
-            && skipcol < linetabsize_eol(win, topline)
-    };
+    let keep = skipcol > 0
+        && !has_folding(win, topline, None, None)
+        && skipcol < linetabsize_eol(win, topline);
     win.w_skipcol = if keep { skipcol } else { 0 };
 }
 

@@ -120,7 +120,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
             s = unsafe { s.add(1) };
             if c >= 0x80 {
                 // Illegal byte.
-                col += unsafe { utf_char2cells(c) };
+                col += utf_char2cells(c);
                 msg_putchar(c);
                 continue;
             }

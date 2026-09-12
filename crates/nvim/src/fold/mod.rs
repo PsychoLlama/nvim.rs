@@ -724,8 +724,7 @@ unsafe fn check_small(window: Win, fold: FoldRef, lnum_off: LineNr) {
     }
     let mut count = 0;
     for n in 0..fold.len() {
-        // SAFETY: the line is inside the fold, hence inside the buffer.
-        count += unsafe { plines_win_nofold(window, fold.top() + lnum_off + n) };
+        count += plines_win_nofold(window, fold.top() + lnum_off + n);
         if count as OptInt > foldminlines {
             fold.set_small(Some(false));
             return;

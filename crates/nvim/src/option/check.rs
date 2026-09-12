@@ -136,8 +136,7 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
 /// The first startup sweep: everything that has to see the options as they
 /// finally are, before any window or buffer has been shown.
 pub(crate) fn didset_options() {
-    // SAFETY: `curwin`/`curbuf` are live by the time this runs.
-    unsafe { init_chartab() };
+    init_chartab();
     didset_string_options();
     let _ = spell_check_msm();
     let _ = unsafe { spell_check_sps() };

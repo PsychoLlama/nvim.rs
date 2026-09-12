@@ -192,32 +192,23 @@ unsafe fn win_linetabsize_col(
     // SAFETY: the caller's window and line.
     let kind = unsafe { init_charsize_arg(&mut csarg, window, lnum, line) };
     match kind {
-        // SAFETY: `csarg` is now initialised for `line`.
-        CharsizeKind::Fast => unsafe { linesize_fast(&csarg, startvcol, len) },
-        // SAFETY: as above.
-        CharsizeKind::Regular => unsafe { linesize_regular(&mut csarg, startvcol, len) },
+        CharsizeKind::Fast => linesize_fast(&csarg, startvcol, len),
+        CharsizeKind::Regular => linesize_regular(&mut csarg, startvcol, len),
     }
 }
 
 /// Cells line `lnum` takes in `window`, counting inline virtual text but not the
 /// 'listchars' "eol".
-///
-/// # Safety
-/// `lnum` must be a line of `window`'s buffer.
-pub(crate) unsafe fn linetabsize(window: Win, lnum: LineNr) -> c_int {
+pub(crate) fn linetabsize(window: Win, lnum: LineNr) -> c_int {
     let line = window.buffer().line(lnum);
     // SAFETY: as above.
     unsafe { win_linetabsize(window, lnum, line.raw(), MAXCOL) }
 }
 
 /// Like [`linetabsize`], but counts the 'listchars' "eol".
-///
-/// # Safety
-/// `lnum` must be a line of `window`'s buffer.
-pub(crate) unsafe fn linetabsize_eol(window: Win, lnum: LineNr) -> c_int {
+pub(crate) fn linetabsize_eol(window: Win, lnum: LineNr) -> c_int {
     let eol = window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.eol != 0;
-    // SAFETY: the caller's promise -- `lnum` is a line of the buffer.
-    unsafe { linetabsize(window, lnum) + c_int::from(eol) }
+    linetabsize(window, lnum) + c_int::from(eol)
 }
 
 /// Prepare `csarg` for a walk over `line`, and answer which charsize function
@@ -741,14 +732,7 @@ fn in_win_border(window: Win, vcol: ColNr) -> bool {
 /// Virtual column reached after walking `csarg`'s line up to byte `len`,
 /// starting from `vcol_arg`. Pass `MAXCOL` for the whole line, which also
 /// counts inline virtual text sitting past its end.
-///
-/// # Safety
-/// `csarg` must be initialised.
-pub(crate) unsafe fn linesize_regular(
-    csarg: &mut CharsizeArg,
-    mut vcol_arg: c_int,
-    len: ColNr,
-) -> c_int {
+pub(crate) fn linesize_regular(csarg: &mut CharsizeArg, mut vcol_arg: c_int, len: ColNr) -> c_int {
     let line = csarg.line;
     let mut vcol = vcol_arg as int64_t;
 
@@ -786,10 +770,7 @@ pub(crate) unsafe fn linesize_regular(
 
 /// [`linesize_regular`] for a line `init_charsize_arg` called
 /// [`CharsizeKind::Fast`].
-///
-/// # Safety
-/// `csarg` must be initialised.
-pub(crate) unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: ColNr) -> c_int {
+pub(crate) fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: ColNr) -> c_int {
     let use_tabstop = csarg.use_tabstop;
     let line = csarg.line;
     let mut vcol = vcol_arg as int64_t;

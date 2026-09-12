@@ -426,8 +426,7 @@ pub fn did_set_iskeyword(args: &mut OptSet) -> Option<&CStr> {
 /// buffer-local 'iskeyword': rebuild the buffer's character table, and ask
 /// the caller to put the old one back if it does not parse.
 pub fn did_set_isopt(args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: the frame's buffer's chartab is its own.
-    if !unsafe { buf_init_chartab(args.os_buf, true) } {
+    if !buf_init_chartab(args.os_buf, true) {
         args.os_restore_chartab = true;
         return invalid();
     }

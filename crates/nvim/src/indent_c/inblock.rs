@@ -11,8 +11,7 @@
 //! The state of that walk is [`BlockScan`], and every field of it is
 //! something one of those decisions needs.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -80,10 +79,7 @@ pub(crate) struct BlockScan<'a> {
 }
 
 /// The indent for a line inside the `{}` block opened at `brace`.
-///
-/// # Safety
-/// Moves the cursor; may unlock the current line.
-pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
+pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     let ourscope = brace.lnum;
 
     // How indented is the block in general?  If the brace was at the
@@ -99,8 +95,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     };
     let (mut amount, start_brace) = if brace_at_line_start {
         (
-            // SAFETY: `brace` came from a paren search over this buffer.
-            unsafe { line_vcol(brace.lnum, brace.col) },
+            line_vcol(brace.lnum, brace.col),
             if brace_at_col0 {
                 BRACE_IN_COL0
             } else {
@@ -115,10 +110,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         // The borrow ends with the statement: the match search reads other
         // lines, and only runs once `find_last_paren` found one.
         let has_paren = find_last_paren(Lines::current().line(ourscope), b'(', b')');
-        // SAFETY: searches the current buffer from where the cursor was left.
-        if has_paren
-            && let Some(trypos) = unsafe { find_match_paren(Buf::current().b_ind_maxparen) }
-        {
+        if has_paren && let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen) {
             lnum = trypos.lnum;
         }
 
@@ -142,8 +134,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
             // `ourscope` or the line a paren match reported.
             get_indent_lnum(lnum)
         } else {
-            // SAFETY: the same line number.
-            unsafe { skip_label(lnum) }.0
+            skip_label(lnum).0
         };
         (amount, BRACE_AT_END)
     };
@@ -159,20 +150,16 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     }
 
     // An "else" wants its "if", a "while" its "do".
-    // SAFETY: `cur_curpos.lnum` is the cursor's own line of the current
-    // buffer, and the search moves the cursor over it and restores it.
     let lookfor = if is_else(line.theline(), 0) {
         LOOKFOR_IF
-    } else if starts_while(line.theline(), 0) && unsafe { while_closes_do(line.cur_curpos.lnum) } {
+    } else if starts_while(line.theline(), 0) && while_closes_do(line.cur_curpos.lnum) {
         LOOKFOR_DO
     } else {
         LOOKFOR_INITIAL
     };
     if lookfor != LOOKFOR_INITIAL {
         Win::current().w_cursor.lnum = line.cur_curpos.lnum;
-        // SAFETY: the cursor is on a line of the current buffer, and
-        // `ourscope` is a line of it too -- where the search stops.
-        if unsafe { find_match(lookfor, ourscope) } {
+        if find_match(lookfor, ourscope) {
             // SAFETY: a successful match left the cursor on a line of it.
             return get_indent();
         }
@@ -193,10 +180,9 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         let mut lines = Lines::current();
         let text = lines.line(cursor_lnum);
         let at = skip::white(text);
-        // SAFETY: both read the current buffer's 'iskeyword'.
-        if unsafe { opens_namespace(text, at) } {
+        if opens_namespace(text, at) {
             amount += Buf::current().b_ind_cpp_namespace;
-        } else if unsafe { opens_extern_c(text, at) } {
+        } else if opens_extern_c(text, at) {
             amount += Buf::current().b_ind_cpp_extern_c;
         }
     } else {
@@ -206,11 +192,10 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
 
     // What kind of line is being indented decides what to search for.
     let mut lookfor_break = false;
-    // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
     let lookfor = if is_case_label(line.theline(), 0, false) {
         amount += Buf::current().b_ind_case;
         LOOKFOR_CASE // a switch() label: find a previous one
-    } else if unsafe { is_scope_decl(line.theline(), 0) } {
+    } else if is_scope_decl(line.theline(), 0) {
         amount += Buf::current().b_ind_scopedecl;
         LOOKFOR_SCOPEDECL // private:, ...: the class declaration
     } else {
@@ -248,18 +233,13 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         },
         js_cur_has_key,
     };
-    // SAFETY: the scan moves the cursor over lines of the current buffer,
-    // which is exactly what this function's own contract promises.
-    unsafe { scan.run() }
+    scan.run()
 }
 
 impl BlockScan<'_> {
     /// Walk back from the cursor to `ourscope`, looking for something to line
     /// up with.
-    ///
-    /// # Safety
-    /// Moves the cursor; may unlock the current line.
-    unsafe fn run(mut self) -> c_int {
+    fn run(mut self) -> c_int {
         Win::current().w_cursor = self.line.cur_curpos;
         loop {
             Win::current().w_cursor.lnum -= 1;
@@ -267,15 +247,12 @@ impl BlockScan<'_> {
 
             // Back at the start of our scope: line up with it.
             if Win::current().w_cursor.lnum <= self.ourscope {
-                // SAFETY: this function's own contract -- the cursor is ours
-                // to move and the line it is on may be unlocked.
-                if unsafe { self.at_scope_start() } == Step::Done {
+                if self.at_scope_start() == Step::Done {
                     break;
                 }
                 continue;
             }
-            // SAFETY: the same.
-            if unsafe { self.step() } == Step::Done {
+            if self.step() == Step::Done {
                 break;
             }
         }

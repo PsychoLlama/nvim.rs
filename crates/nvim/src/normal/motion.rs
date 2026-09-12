@@ -73,8 +73,7 @@ pub(crate) unsafe fn nv_screengo(
     let mut op = unsafe { Op::new(op) };
     let mut win = Win::current();
     let wp = win;
-    // SAFETY: the cursor line is a line of the window's own buffer.
-    let mut linelen = unsafe { linetabsize(wp, win.w_cursor.lnum) };
+    let mut linelen = linetabsize(wp, win.w_cursor.lnum);
     let mut retval = true;
     // `$` asked for the end of the line, which has to be recomputed on
     // every row rather than carried as a column.
@@ -131,7 +130,7 @@ pub(crate) unsafe fn nv_screengo(
                     break;
                 } else {
                     cursor_up_inner(wp, 1, skip_conceal);
-                    linelen = unsafe { linetabsize(wp, win.w_cursor.lnum) };
+                    linelen = linetabsize(wp, win.w_cursor.lnum);
                     if linelen > width1 {
                         // Land on the *last* row of the line above.
                         let w = ((linelen - width1 - 1) / width2 + 1) * width2;
@@ -153,7 +152,7 @@ pub(crate) unsafe fn nv_screengo(
                     if win.w_curswant >= width1 {
                         win.w_curswant -= width2;
                     }
-                    linelen = unsafe { linetabsize(wp, win.w_cursor.lnum) };
+                    linelen = linetabsize(wp, win.w_cursor.lnum);
                 }
             }
         }
@@ -242,18 +241,16 @@ pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
         if cmdchar == 'M' as c_int {
             // Walk down counting screen rows until half the window's are
             // used up. Filler lines above the top line count against it.
-            let mut used = -(unsafe { win_get_fill(wp, win.w_topline) } - win.w_topfill);
+            let mut used = -(win_get_fill(wp, win.w_topline) - win.w_topfill);
             validate_botline_win(wp);
             let half = (win.w_view_height - win.w_empty_rows + 1) / 2;
             n = 0;
             while (win.w_topline + n as LineNr) < Buf::current().b_ml.ml_line_count {
-                if n > 0
-                    && used + unsafe { win_get_fill(wp, win.w_topline + n as LineNr) } / 2 >= half
-                {
+                if n > 0 && used + win_get_fill(wp, win.w_topline + n as LineNr) / 2 >= half {
                     n -= 1;
                     break;
                 }
-                used += unsafe { plines_win(wp, win.w_topline + n as LineNr, true) };
+                used += plines_win(wp, win.w_topline + n as LineNr, true);
                 if used >= half {
                     break;
                 }
@@ -831,7 +828,7 @@ pub(crate) unsafe fn adjust_cursor(op: *mut OpArg) {
         && get_ve_flags(Win::current()) & kOptVeFlagOnemore as c_uint == 0
     {
         Win::current().w_cursor.col -= 1;
-        unsafe { mb_adjust_cursor() };
+        mb_adjust_cursor();
         op.inclusive = true;
     }
 }

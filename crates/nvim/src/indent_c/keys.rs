@@ -20,10 +20,7 @@ use core::ffi::{c_char, c_int};
 
 /// Whether C indenting is on: `'cindent'` or a non-empty `'indentexpr'`, and
 /// not `'paste'`.
-///
-/// # Safety
-/// Reads the current buffer.
-pub unsafe fn cindent_on() -> bool {
+pub fn cindent_on() -> bool {
     // SAFETY: 'indentexpr' is a NUL-terminated option string.  The cheaper
     // tests are kept in front of it, as upstream has them.
     p_paste.get() == 0 && (Buf::current().b_p_cin != 0 || unsafe { *Buf::current().b_p_inde } != 0)
@@ -49,10 +46,7 @@ fn wants(when: c_int, look: u8) -> bool {
 /// [`KEY_OPEN_FORW`]/[`KEY_OPEN_BACK`] (the `o`/`O` commands) or
 /// [`KEY_COMPLETE`] (a completion just finished).  `when` selects the prefix
 /// class -- see [`wants`].  `line_is_empty` allows the `0` forms.
-///
-/// # Safety
-/// Reads the current buffer, window and cursor line; may unlock it.
-pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
+pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
     if keytyped == NUL {
         // Can happen with CTRL-Y and CTRL-E on a short line.
         return false;
@@ -144,7 +138,7 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
         } else if c == b':' {
             // SAFETY: reads the cursor's line of the current buffer; the two
             // cheap tests are kept in front of it by the `&&` chain.
-            if try_match && keytyped == c_int::from(b':') && unsafe { colon_reindents() } {
+            if try_match && keytyped == c_int::from(b':') && colon_reindents() {
                 return true;
             }
             // SAFETY: as above.
@@ -234,10 +228,7 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
 /// of them blanked out: if the line *only* looks like a label because of the
 /// second colon, it is not one.  The line is written to and restored, which
 /// is why it has to be re-fetched around every call that may unlock it.
-///
-/// # Safety
-/// Reads and temporarily writes the cursor line.
-unsafe fn colon_reindents() -> bool {
+fn colon_reindents() -> bool {
     let lnum = Win::current().w_cursor.lnum;
     // The chain re-enters at `is_jump_label`, so the borrow the two tests in
     // front of it take is dropped before it runs.
@@ -245,11 +236,9 @@ unsafe fn colon_reindents() -> bool {
         let claimed = {
             let mut lines = Lines::current();
             let line = lines.line(lnum);
-            // SAFETY: `is_scope_decl` reads the buffer's 'cinscopedecls'.
-            is_case_label(line, 0, false) || unsafe { is_scope_decl(line, 0) }
+            is_case_label(line, 0, false) || is_scope_decl(line, 0)
         };
-        // SAFETY: the cursor is on a line of the current buffer.
-        claimed || unsafe { is_jump_label() }
+        claimed || is_jump_label()
     };
     if labelled(lnum) {
         return true;
@@ -358,25 +347,19 @@ unsafe fn word_matches(
 
     // "0=word" also requires that only blanks precede the word.
     if matched && try_match_word && !try_match {
-        // SAFETY: reads the cursor's line of the current buffer.
-        let white = unsafe { getwhitecols_curline() };
+        let white = getwhitecols_curline();
         return white == (Win::current().w_cursor.col as isize) - len as isize;
     }
     matched
 }
 
 /// Reindent the current line with 'indentexpr' or the C indent.
-///
-/// # Safety
-/// Reads the current buffer and rewrites the current line.
-pub unsafe fn do_c_expr_indent() {
+pub fn do_c_expr_indent() {
     // SAFETY: 'indentexpr' is a NUL-terminated option string.
     if unsafe { *Buf::current().b_p_inde } != 0 {
-        // SAFETY: rewrites the current line of the current buffer.
-        unsafe { fixthisline(Some(get_expr_indent)) };
+        fixthisline(Some(get_expr_indent));
     } else {
-        // SAFETY: the same.
-        unsafe { fixthisline(Some(get_c_indent)) };
+        fixthisline(Some(get_c_indent));
     }
 }
 
@@ -387,9 +370,7 @@ pub fn f_cindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let lnum = tv_get_lnum(&args[0]) as LineNr;
     let amount = if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count {
         Win::current().w_cursor.lnum = lnum;
-        // SAFETY: the cursor now sits on a line of the current buffer, and it
-        // is put back on the next line.
-        let amount = VarNumber::from(unsafe { get_c_indent() });
+        let amount = VarNumber::from(get_c_indent());
         Win::current().w_cursor = pos;
         amount
     } else {

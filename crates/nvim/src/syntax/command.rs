@@ -185,7 +185,7 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
         let save_isk = Buf::current().b_p_isk;
         unsafe { Buf::current().b_p_isk = xstrdup(arg) };
 
-        unsafe { buf_init_chartab(Buf::current(), false) };
+        buf_init_chartab(Buf::current(), false);
         cur_syn_block().b_syn_chartab = buf_chartab();
         set_buf_chartab(saved);
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };

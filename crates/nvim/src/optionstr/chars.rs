@@ -325,7 +325,7 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
             num = num * 256 + int64_t::from(digits);
         }
         *at += 2;
-        return if unsafe { char2cells(number_as_int(num)) } > 1 {
+        return if char2cells(number_as_int(num)) > 1 {
             0
         } else {
             schar_from_char(number_as_int(num))
@@ -337,7 +337,7 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
     let c = unsafe { utfc_ptr2schar(start, &raw mut firstc) };
     *at += usize::try_from(clen).expect("a character is at least one byte");
     // An invalid UTF-8 byte, or a double-width character.
-    if (clen == 1 && firstc > 127) || unsafe { char2cells(firstc) } > 1 {
+    if (clen == 1 && firstc > 127) || char2cells(firstc) > 1 {
         0
     } else {
         c

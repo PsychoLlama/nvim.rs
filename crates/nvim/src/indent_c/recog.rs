@@ -76,10 +76,7 @@ fn next_option_part<'a>(option: &'a [u8], part: &mut Vec<u8>) -> &'a [u8] {
 /// The word must be delimited on at least one side: an option item that is a
 /// prefix of a longer identifier does not count unless the character before
 /// it is already a non-word one.
-///
-/// # Safety
-/// Reads the current buffer's 'cinwords' and 'iskeyword'.
-pub unsafe fn starts_with_cinword(line: &[u8]) -> bool {
+pub fn starts_with_cinword(line: &[u8]) -> bool {
     let start = line
         .iter()
         .position(|&b| !ascii_iswhite(c_int::from(b)))
@@ -104,8 +101,7 @@ pub unsafe fn starts_with_cinword(line: &[u8]) -> bool {
         } else {
             byte_at(line, start + word.len() - 1)
         };
-        // SAFETY: `vim_iswordc` reads the current buffer's 'iskeyword' table.
-        if unsafe { !vim_iswordc(c_int::from(after)) || !vim_iswordc(c_int::from(before)) } {
+        if !vim_iswordc(c_int::from(after)) || !vim_iswordc(c_int::from(before)) {
             return true;
         }
     }
@@ -207,10 +203,7 @@ fn is_option_label(line: &[u8], at: usize, option: &[u8]) -> bool {
 
 /// Whether `line[at..]` is a scope declaration label named by
 /// 'cinscopedecls' -- `public`, `protected`, `private` by default.
-///
-/// # Safety
-/// Reads the current buffer's 'cinscopedecls'.
-pub(crate) unsafe fn is_scope_decl(line: &[u8], at: usize) -> bool {
+pub(crate) fn is_scope_decl(line: &[u8], at: usize) -> bool {
     // SAFETY: 'cinscopedecls' is a NUL-terminated option string of this
     // buffer, and `is_option_label` only reads the bytes it is handed.
     let decls = unsafe { cstr::bytes_at(Buf::current().b_p_cinsd) };
@@ -270,10 +263,7 @@ pub(crate) fn starts_while(line: &[u8], at: usize) -> bool {
 /// `)` and the `;` -- because that is the shape that ends a statement rather
 /// than opening one.  The condition may span lines, which is why the answer
 /// needs the cursor and `findmatchlimit` rather than the text alone.
-///
-/// # Safety
-/// Moves the cursor and restores it; may unlock the current line.
-pub(crate) unsafe fn while_closes_do(lnum: LineNr) -> bool {
+pub(crate) fn while_closes_do(lnum: LineNr) -> bool {
     let cursor_save = Win::current().w_cursor;
     Win::current().w_cursor.lnum = lnum;
     // Step over any '}' until the 'w' of the "while".
@@ -354,10 +344,7 @@ pub(crate) fn control_clause_before(line: &[u8], offset: &mut c_int) -> bool {
 /// while (foo
 ///          && bar);  <-- here
 /// ```
-///
-/// # Safety
-/// Reads and moves the cursor; may unlock the current line.
-pub(crate) unsafe fn ends_a_do_while(terminated: u8) -> bool {
+pub(crate) fn ends_a_do_while(terminated: u8) -> bool {
     if terminated != b';' {
         return false; // there must be a ';' at the end
     }
@@ -381,9 +368,7 @@ pub(crate) unsafe fn ends_a_do_while(terminated: u8) -> bool {
             // Found ");" at end of the line; now check there is a "while"
             // before the matching '('.
             Win::current().w_cursor.col = at as ColNr;
-            // SAFETY: searches the current buffer from the cursor, and puts
-            // the cursor back where it found it.
-            if let Some(trypos) = unsafe { find_match_paren(Buf::current().b_ind_maxparen) } {
+            if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen) {
                 // `trypos` is a position in this buffer, so the cache answers
                 // with the line the `(` sits on.
                 let opens_while = {

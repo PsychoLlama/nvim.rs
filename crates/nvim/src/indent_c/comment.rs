@@ -30,11 +30,8 @@ use core::ffi::c_int;
 
 /// Where the comment enclosing the cursor starts, bounded by 'cinoptions'
 /// `*N`.
-///
-/// # Safety
-/// Reads the current buffer and window; the current line may be unlocked.
-pub(crate) unsafe fn ind_find_start_comment() -> Option<Pos> {
-    unsafe { find_start_comment(Buf::current().b_ind_maxcomment) }
+pub(crate) fn ind_find_start_comment() -> Option<Pos> {
+    find_start_comment(Buf::current().b_ind_maxcomment)
 }
 
 /// Search backwards from the cursor for the `/*` that opens the comment it is
@@ -43,10 +40,7 @@ pub(crate) unsafe fn ind_find_start_comment() -> Option<Pos> {
 /// A `/*` that is itself inside a string does not open a comment, so on
 /// finding one the search restarts *below* that line -- which is what the
 /// shrinking `cur_maxcomment` expresses.
-///
-/// # Safety
-/// Reads the current buffer and window; the current line may be unlocked.
-pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
+pub fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
     let mut cur_maxcomment = int64_t::from(ind_maxcomment);
     loop {
         // SAFETY: on the main thread, with a current window and buffer.
@@ -71,10 +65,7 @@ pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
 }
 
 /// [`find_start_comment`] for a raw string literal's `R"delim(` instead.
-///
-/// # Safety
-/// Reads the current buffer and window; the current line may be unlocked.
-pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> {
+pub(crate) fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> {
     let mut cur_maxcomment = ind_maxcomment;
     loop {
         // SAFETY: on the main thread, with a current window and buffer.
@@ -104,16 +95,9 @@ pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> 
 /// cursor is really inside the later.  `is_raw` is set to the line number
 /// when the answer is a raw string, which is how `get_c_indent` knows not to
 /// treat that line as an unterminated statement.
-///
-/// # Safety
-/// Reads the current buffer and window; the current line may be unlocked.
-pub(crate) unsafe fn ind_find_start_comment_or_raw_string(
-    is_raw: Option<&mut LineNr>,
-) -> Option<Pos> {
-    // SAFETY: on the main thread, with a current window and buffer.
-    let comment_pos = unsafe { find_start_comment(Buf::current().b_ind_maxcomment) };
-    // SAFETY: the same.
-    let rs_pos = unsafe { find_start_rawstring(Buf::current().b_ind_maxcomment) };
+pub(crate) fn ind_find_start_comment_or_raw_string(is_raw: Option<&mut LineNr>) -> Option<Pos> {
+    let comment_pos = find_start_comment(Buf::current().b_ind_maxcomment);
+    let rs_pos = find_start_rawstring(Buf::current().b_ind_maxcomment);
 
     let raw_wins = match (comment_pos, rs_pos) {
         (None, _) => true,

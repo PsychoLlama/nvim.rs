@@ -43,9 +43,7 @@ pub(crate) use self::zet::*;
 /// windows showing the same buffer at different widths wrap it differently,
 /// so buffer line numbers would not line up.
 pub(crate) fn get_vtopline(window: Win) -> c_int {
-    // SAFETY: a live window, by `Win`'s contract, which is the whole of what
-    // `plines_m_win_fill` asks for.
-    unsafe { plines_m_win_fill(window, 1, window.w_topline) - window.w_topfill }
+    plines_m_win_fill(window, 1, window.w_topline) - window.w_topfill
 }
 
 /// After a command that may have scrolled: bring the 'scrollbind' windows
@@ -126,7 +124,7 @@ pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
                     // SAFETY: a live window of the walk above.
                     let curr_vtopline = get_vtopline(win);
                     let last = Buf::current().b_ml.ml_line_count;
-                    let filled = unsafe { plines_m_win_fill(win, win.w_topline + 1, last) };
+                    let filled = plines_m_win_fill(win, win.w_topline + 1, last);
                     let max_vtopline = curr_vtopline + win.w_topfill + filled;
                     let new_vtopline = win.w_scbind_pos.min(max_vtopline).max(1);
                     let y = new_vtopline - curr_vtopline;

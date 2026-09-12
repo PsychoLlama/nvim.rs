@@ -389,7 +389,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         Ok(b'M') => {
             op.motion_type = kMTCharWise;
             op.inclusive = false;
-            let width = unsafe { linetabsize(Win::current(), Win::current().w_cursor.lnum) };
+            let width = linetabsize(Win::current(), Win::current().w_cursor.lnum);
             if ca.count0 > 0 && ca.count0 <= 100 {
                 coladvance(Win::current(), width * ca.count0 / 100);
             } else {
@@ -436,9 +436,9 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         // `g8` shows the byte sequence; `8g8` finds an illegal one.
         Ok(b'8') => {
             if ca.count0 == 8 {
-                unsafe { utf_find_illegal() };
+                utf_find_illegal();
             } else {
-                unsafe { show_utf8() };
+                show_utf8();
             }
         }
         // `g<`: show the previous message screen again.

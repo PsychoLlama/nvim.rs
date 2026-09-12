@@ -635,7 +635,7 @@ fn adjust_region_end(cmd_arg: Cmd, mut op: Op) {
     op.end_adjusted = true;
     op.line_count -= 1;
     op.end.lnum -= 1;
-    if unsafe { inindent(0) } {
+    if inindent(0) {
         op.motion_type = kMTLineWise;
     } else {
         op.end.col = Lines::current().line_len(op.end.lnum);
@@ -673,7 +673,7 @@ fn run_operator(
         OpType::Lshift | OpType::Rshift => {
             let amount = if op.is_visual { cmd_arg.count1 } else { 1 };
             unsafe { op_shift(op.raw(), true, amount) };
-            unsafe { auto_format(false, true) };
+            auto_format(false, true);
         }
 
         OpType::JoinNs | OpType::Join => {
@@ -683,7 +683,7 @@ fn run_operator(
             } else {
                 let count = op.line_count as size_t;
                 let _ = unsafe { do_join(count, op.op_type == OpType::Join, true, true, true) };
-                unsafe { auto_format(false, true) };
+                auto_format(false, true);
             }
         }
 
@@ -701,7 +701,7 @@ fn run_operator(
                     && has_format_option(FoFlag::AUTO)
                     && u_save_cursor().is_ok()
                 {
-                    unsafe { auto_format(false, true) };
+                    auto_format(false, true);
                 }
             }
         }
@@ -845,7 +845,7 @@ fn indent_or_colon(op: Op) {
         return;
     }
     if Buf::current().b_p_lisp != 0 {
-        let indent = if unsafe { use_indentexpr_for_lisp() } {
+        let indent = if use_indentexpr_for_lisp() {
             get_expr_indent as unsafe fn() -> c_int
         } else {
             get_lisp_indent as unsafe fn() -> c_int
@@ -899,7 +899,7 @@ fn run_block_insert(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
 
     // Back off again, so that formatting measures columns correctly.
     reset_lbr();
-    unsafe { auto_format(false, true) };
+    auto_format(false, true);
 
     if restart_edit.get() == 0 {
         restart_edit.set(restart_edit_save);

@@ -281,8 +281,7 @@ pub unsafe fn do_check_cursorbind() {
             restart_edit.set(restart_edit_save);
 
             // Correct the cursor for a multi-byte character.
-            // SAFETY: `curwin` is the window this loop just switched to.
-            unsafe { mb_adjust_cursor() };
+            mb_adjust_cursor();
             win.redraw_later(UPD_VALID);
 
             // Only scroll when 'scrollbind' has not done it already.

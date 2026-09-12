@@ -419,8 +419,7 @@ pub unsafe fn nvim_win_text_height(
         // With no 'end_row' the answer covers the whole buffer, so the virtual
         // lines below its last line count too.
         //
-        // SAFETY: `w` is live.
-        let end_fill = int64_t::from(unsafe { win_get_fill(w, line_count + 1) });
+        let end_fill = int64_t::from(win_get_fill(w, line_count + 1));
         fill += end_fill;
         all += end_fill;
     }

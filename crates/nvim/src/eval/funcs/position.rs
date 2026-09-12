@@ -442,7 +442,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     Win::current().w_cursor.col = col;
     Win::current().w_cursor.coladd = coladd;
     check_cursor(Win::current());
-    unsafe { mb_adjust_cursor() };
+    mb_adjust_cursor();
     Win::current().w_set_curswant = set_curswant;
     result.write_number(0);
 }

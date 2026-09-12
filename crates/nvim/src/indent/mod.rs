@@ -85,10 +85,7 @@ const SIN_NOMARK: c_uint = 8;
 /// `getvcol` needs a `Pos` and three out-parameters to answer one
 /// position, which is all any indent amount wants of it. Promoted out of
 /// `indent_c.rs` at B15-17, where four functions ask it and two here do.
-///
-/// # Safety
-/// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
+pub(crate) fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
     let mut fp = Pos {
         lnum,
         col,
@@ -249,11 +246,8 @@ pub unsafe fn tabstop_first(ts: *mut ColNr) -> c_int {
 
 /// `buffer`'s 'shiftwidth': the option, or the width of the tabstop at column
 /// zero when the option is 0.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn get_sw_value(buffer: Buf) -> c_int {
-    unsafe { get_sw_value_col(buffer, 0, false) }
+pub fn get_sw_value(buffer: Buf) -> c_int {
+    get_sw_value_col(buffer, 0, false)
 }
 
 /// `buffer`'s 'shiftwidth' as seen from `pos`, which only differs from
@@ -271,20 +265,14 @@ unsafe fn get_sw_value_pos(buffer: Buf, pos: *mut Pos, left: bool) -> c_int {
 }
 
 /// `buffer`'s 'shiftwidth' as seen from the end of the current line's indent.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn get_sw_value_indent(buffer: Buf, left: bool) -> c_int {
+pub fn get_sw_value_indent(buffer: Buf, left: bool) -> c_int {
     let mut pos = Win::current().w_cursor;
-    pos.col = unsafe { getwhitecols_curline() } as ColNr;
+    pos.col = getwhitecols_curline() as ColNr;
     unsafe { get_sw_value_pos(buffer, &raw mut pos, left) }
 }
 
 /// `buffer`'s 'shiftwidth' at screen column `col`.
-///
-/// # Safety
-/// `buffer` must be a live buffer.
-pub unsafe fn get_sw_value_col(buffer: Buf, col: ColNr, left: bool) -> c_int {
+pub fn get_sw_value_col(buffer: Buf, col: ColNr, left: bool) -> c_int {
     if buffer.b_p_sw != 0 {
         buffer.b_p_sw as c_int
     } else {
@@ -294,12 +282,9 @@ pub unsafe fn get_sw_value_col(buffer: Buf, col: ColNr, left: bool) -> c_int {
 
 /// The current buffer's 'softtabstop', with a negative value meaning
 /// 'shiftwidth'.
-///
-/// # Safety
-/// There must be a current buffer.
-pub unsafe fn get_sts_value() -> c_int {
+pub fn get_sts_value() -> c_int {
     if Buf::current().b_p_sts < 0 {
-        unsafe { get_sw_value(Buf::current()) }
+        get_sw_value(Buf::current())
     } else {
         Buf::current().b_p_sts as c_int
     }
@@ -429,7 +414,7 @@ fn indent_width(text: &[u8], stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
 /// # Safety
 /// `vts` must be a valid tabstop array or null.
 pub unsafe fn indent_size_ts(text: &[u8], ts: OptInt, vts: *mut ColNr) -> c_int {
-    debug_assert!(unsafe { char2cells(' ' as c_int) } == 1);
+    debug_assert!(char2cells(' ' as c_int) == 1);
     // `vts[0]` is the count and `vts[1..=count]` the widths.
     // SAFETY: the caller's array, read for the length of this call.
     let stops = (!vts.is_null() && unsafe { *vts } >= 1)
@@ -551,10 +536,7 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
 /// skipped), `UNDO` saves the line first, `NOMARK` leaves extmarks alone.
 ///
 /// Answers whether the line was changed.
-///
-/// # Safety
-/// There must be a current line, and it must be modifiable.
-pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
+pub fn set_indent(size: c_int, flags: c_int) -> bool {
     let buf = Buf::current_raw();
     let oldline = get_cursor_line_ptr();
     // The size of the line, including the NUL.
@@ -742,10 +724,7 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
 /// This is 'formatoptions' `n`'s numbered-list indent. The pattern is
 /// arbitrary, so it can name more than a number, and it is matched past any
 /// comment leader -- which is the only reason `get_leader_len` is here.
-///
-/// # Safety
-/// There must be a current buffer and window.
-pub unsafe fn get_number_indent(lnum: LineNr) -> c_int {
+pub fn get_number_indent(lnum: LineNr) -> c_int {
     if lnum > Buf::current().b_ml.ml_line_count {
         return -1;
     }
@@ -789,7 +768,7 @@ pub unsafe fn get_number_indent(lnum: LineNr) -> c_int {
     if pos.lnum == 0 || byte_at(Lines::current().line(pos.lnum), pos.col as usize) == 0 {
         return -1;
     }
-    unsafe { line_vcol(pos.lnum, pos.col) }
+    line_vcol(pos.lnum, pos.col)
 }
 
 #[cfg(test)]

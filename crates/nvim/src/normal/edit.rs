@@ -236,7 +236,7 @@ pub(crate) unsafe fn nv_replace(cmd_arg: *mut CmdArg) {
         State.set(old_state);
     }
     Win::current().w_cursor.col -= 1;
-    unsafe { mb_adjust_cursor() };
+    mb_adjust_cursor();
     Buf::current().b_op_end = Win::current().w_cursor;
     Win::current().w_set_curswant = true;
     unsafe { set_last_insert(ca.nchar) };
@@ -825,7 +825,7 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
             coladvance(win, MAXCOL as c_int);
         }
     }
-    unsafe { auto_format(false, true) };
+    auto_format(false, true);
 }
 
 /// `o` and `O` -- or, with a pending delete, the diff command, and with a

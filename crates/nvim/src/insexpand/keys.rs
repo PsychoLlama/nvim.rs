@@ -279,14 +279,14 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         unsafe { ins_compl_fix_redo_buf_for_leader(ptr) };
     }
 
-    let mut want_cindent = get_can_cindent() && unsafe { cindent_on() };
+    let mut want_cindent = get_can_cindent() && cindent_on();
 
     // When completing whole lines: fix indent for 'cindent'.
     // Otherwise, break the line if it's too long.
     if compl_cont_mode.get() == CTRL_X_WHOLE_LINE {
         // Re-indent the current line.
         if want_cindent {
-            unsafe { do_c_expr_indent() };
+            do_c_expr_indent();
             want_cindent = false; // don't do it again
         }
     } else if !compl_autocomplete.get() || compl_used_match.get() {
@@ -363,7 +363,7 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
         retval = true;
     }
 
-    unsafe { auto_format(false, true) };
+    auto_format(false, true);
 
     // Trigger the CompleteDonePre event to give scripts a chance to act
     // upon the completion before clearing the info, and restore
@@ -395,8 +395,8 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     }
 
     // Indent now if a key was typed that is in 'cinkeys'.
-    if want_cindent && unsafe { in_cinkeys(KEY_COMPLETE, ' ' as c_int, inindent(0)) } {
-        unsafe { do_c_expr_indent() };
+    if want_cindent && in_cinkeys(KEY_COMPLETE, ' ' as c_int, inindent(0)) {
+        do_c_expr_indent();
     }
     // Trigger the CompleteDone event to give scripts a chance to act upon
     // the end of completion.

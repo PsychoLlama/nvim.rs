@@ -17,8 +17,7 @@
 //! Every one of them may move the cursor and unlock the current line; the
 //! cursor is put back here, once, on the way out.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};
@@ -60,10 +59,7 @@ impl Line {
 
 /// The indent for the cursor's line, or -1 to leave it alone (inside a raw
 /// string).
-///
-/// # Safety
-/// Reads and restores the cursor; unlocks the current line freely.
-pub unsafe fn get_c_indent() -> c_int {
+pub fn get_c_indent() -> c_int {
     // Remember where the cursor was when we started.
     let cur_curpos = Win::current().w_cursor;
 
@@ -93,12 +89,10 @@ pub unsafe fn get_c_indent() -> c_int {
         copy,
         start,
         cur_curpos,
-        // SAFETY: the cursor is on a line of the current buffer.
-        original_line_islabel: unsafe { is_jump_label() },
+        original_line_islabel: is_jump_label(),
     };
 
-    // SAFETY: `line` outlives the call, and the cursor is restored below.
-    let amount = match unsafe { c_indent(&line) } {
+    let amount = match c_indent(&line) {
         // Inside a raw string: leave the indent alone, and do not clamp.
         None => -1,
         Some(amount) => amount.max(0),
@@ -112,16 +106,11 @@ pub unsafe fn get_c_indent() -> c_int {
 /// The dispatch: which context encloses the line, and what that context says.
 ///
 /// `None` means "inside a raw string, leave the indent alone".
-///
-/// # Safety
-/// Moves the cursor and unlocks the current line; the caller restores it.
-unsafe fn c_indent(line: &Line) -> Option<c_int> {
+fn c_indent(line: &Line) -> Option<c_int> {
     // A raw string wins over a comment only if it starts *earlier*; a raw
     // string inside a comment is just comment text.
-    // SAFETY: on the main thread, with a current window and buffer.
-    let mut comment_pos = unsafe { ind_find_start_comment() };
-    // SAFETY: the same.
-    let raw_string = unsafe { find_start_rawstring(Buf::current().b_ind_maxcomment) };
+    let mut comment_pos = ind_find_start_comment();
+    let raw_string = find_start_rawstring(Buf::current().b_ind_maxcomment);
     if let Some(raw) = raw_string
         && comment_pos.is_none_or(|comment| lt(raw, comment))
     {
@@ -131,10 +120,9 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     // `#define` and friends go at the left when 'cinkeys' says so,
     // excluding `#pragma` when 'cinoptions' `P` asks.
     let theline = line.theline();
-    // SAFETY: `in_cinkeys` reads the current buffer and its cursor line.
     let hash_at_left = line.starts_with(b'#')
         && (line.whole().first() == Some(&b'#')
-            || unsafe { in_cinkeys(c_int::from(b'#'), c_int::from(b' '), true) })
+            || in_cinkeys(c_int::from(b'#'), c_int::from(b' '), true))
         && {
             let directive = 1 + skip::white(&theline[1..]);
             Buf::current().b_ind_pragma == 0 || !theline[directive..].starts_with(b"pragma")
@@ -153,10 +141,8 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     }
 
     // Inside a `//` comment with another one above: line up with it.
-    // SAFETY: the alignment search reads the current buffer, and only runs
-    // when the line is a `//` comment, as upstream has it.
     let aligned = starts_line_comment(theline, 0)
-        .then(|| unsafe { incomment::align_with_line_comment() })
+        .then(incomment::align_with_line_comment)
         .flatten();
     if let Some(amount) = aligned {
         return Some(amount);
@@ -167,16 +153,13 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     if !starts_comment(theline, 0)
         && let Some(comment) = comment_pos.as_mut()
     {
-        // SAFETY: `line` outlives the call and `comment` is a position this
-        // scan found in the current buffer.
-        return Some(unsafe { incomment::align_in_comment(line, comment) });
+        return Some(incomment::align_in_comment(line, comment));
     }
 
     // A `]` that has a match lines up with the line holding the `[`.
-    // SAFETY: the match search runs on the current buffer, and only for a `]`.
     let bracket = line
         .starts_with(b']')
-        .then(|| unsafe { find_match_char(b'[', Buf::current().b_ind_maxparen) })
+        .then(|| find_match_char(b'[', Buf::current().b_ind_maxparen))
         .flatten();
     if let Some(trypos) = bracket {
         // SAFETY: `trypos` is a position in the current buffer.
@@ -186,13 +169,11 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
     // Inside parentheses or braces?  Upstream spells the test as
     // `(paren && !java) || (brace = find_start_brace()) || paren`, so the
     // brace search runs in every case but "a paren, and not Java".
-    // SAFETY: both search the current buffer from the cursor.
-    let mut paren = unsafe { find_match_paren(Buf::current().b_ind_maxparen) };
+    let mut paren = find_match_paren(Buf::current().b_ind_maxparen);
     let mut brace = if paren.is_some() && Buf::current().b_ind_java == 0 {
         None
     } else {
-        // SAFETY: the same.
-        unsafe { find_start_brace() }
+        find_start_brace()
     };
     if let (Some(p), Some(b)) = (paren, brace) {
         // Both unmatched: take the one closer to the cursor.
@@ -208,14 +189,10 @@ unsafe fn c_indent(line: &Line) -> Option<c_int> {
         }
     }
 
-    // SAFETY: `line` outlives the call, and `paren`/`brace` are positions
-    // this function found in the current buffer.
-    let mut amount = unsafe {
-        match (paren, brace) {
-            (Some(paren), _) => inparen::indent_in_parens(line, paren),
-            (None, Some(brace)) => indent_in_block(line, brace),
-            (None, None) => return Some(toplevel::indent_at_top_level(line)),
-        }
+    let mut amount = match (paren, brace) {
+        (Some(paren), _) => inparen::indent_in_parens(line, paren),
+        (None, Some(brace)) => indent_in_block(line, brace),
+        (None, None) => return Some(toplevel::indent_at_top_level(line)),
     };
 
     // Extra indent for a comment.

@@ -399,5 +399,5 @@ pub unsafe fn goto_byte(cnt: c_int) {
     check_cursor(Win::current());
 
     // Make sure the cursor is on the first byte of a multi-byte char.
-    unsafe { mb_adjust_cursor() };
+    mb_adjust_cursor();
 }

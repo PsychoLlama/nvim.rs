@@ -223,8 +223,7 @@ fn msg_bytes_to_ui(bytes: &[u8], hl_id: c_int, attr: c_int) {
         }
         None => bytes,
     };
-    // SAFETY: options exist by the time a message is shown.
-    let cells = unsafe { string_cells(tail) };
+    let cells = string_cells(tail);
     msg_col.set(msg_col.get() + c_int::try_from(cells).unwrap_or(c_int::MAX));
 }
 
@@ -353,8 +352,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
 
         if byte >= 0x20 {
             // Printable character.
-            // SAFETY: options exist by the time a message is shown.
-            let mut cw = unsafe { cells_at(&text[at..]) };
+            let mut cw = cells_at(&text[at..]);
             // Composing characters past the end of the text are left out.
             let len = cluster_len(&text[at..]);
             if cw > 1 && msg_col.get() == Columns.get() - 1 {
@@ -487,8 +485,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
             msg_col.set(0);
             msg_didout.set(false);
         } else {
-            // SAFETY: options exist by the time a message is shown.
-            msg_col.set(msg_col.get() + unsafe { utf_char2cells(char_at(rest)) });
+            msg_col.set(msg_col.get() + utf_char2cells(char_at(rest)));
             msg_didout.set(true);
         }
         at += len;

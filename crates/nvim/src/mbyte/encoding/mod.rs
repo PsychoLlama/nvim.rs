@@ -111,11 +111,7 @@ pub unsafe fn enc_canon_props(name: *const c_char) -> EncProps {
 
 /// How many bytes the current buffer's byte-order mark occupies, or 0 when it
 /// is not writing one.
-///
-/// # Safety
-///
-/// The editor's globals must be live.
-pub unsafe fn bomb_size() -> c_int {
+pub fn bomb_size() -> c_int {
     let buf = Buf::current_raw();
     if unsafe { (*buf).b_p_bomb } == 0 || unsafe { (*buf).b_p_bin } != 0 {
         return 0;
