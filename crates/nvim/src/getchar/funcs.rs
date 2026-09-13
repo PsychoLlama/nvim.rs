@@ -9,7 +9,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::NumBuf;
+use crate::eval::typval::{NumBuf, Unconvertible};
 use crate::guard::{Keys, Suppress};
 use crate::keycodes::{Key, key_escape};
 use crate::message_fmt::c_str;
@@ -109,6 +109,9 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
         // SAFETY (this body): reads one key through the ordinary input stack;
         // the buffers it fills are this frame's own.
         let blocking = args.is_empty() || args[0].as_number() == Some(-1);
+        // Read once: the coercion reports its own message, and asking twice
+        // would report it twice.
+        let how = (!blocking).then(|| tv_get_number_chk(&args[0]));
         let n: VarNumber = if blocking {
             // getchar(): blocking wait.
             // TODO(bfredl): deduplicate the shared logic with state_enter?
@@ -130,10 +133,10 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
                 }
             }
             safe_vgetc() as VarNumber
-        } else if tv_get_number_chk(&args[0]).is_ok_and(|n| n == 1) {
+        } else if how == Some(Ok(1)) {
             // getchar(1): only check whether a character is available.
             vpeekc_any() as VarNumber
-        } else if tv_get_number_chk(&args[0]).is_err() || vpeekc_any() == NUL {
+        } else if how == Some(Err(Unconvertible)) || vpeekc_any() == NUL {
             // An illegal argument, or getchar(0) with nothing there.
             0
         } else {
