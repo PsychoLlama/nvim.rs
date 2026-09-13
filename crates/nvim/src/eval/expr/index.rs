@@ -296,19 +296,19 @@ pub(crate) unsafe fn eval_index_inner(
                     return Err(Failed);
                 }
             }
-            // SAFETY: the kind says the value holds a Dict, and `key` is the
-            // caller's own of `keylen` bytes.
-            // A negative `keylen` means the key runs to its terminator.
-            // The pointer form is the answer: the value is copied out of
-            // the item after the dictionary has been named again.
+            // A negative `keylen` means the key runs to its terminator, and
+            // `v:_null_dict` holds no key at all. The pointer form is the
+            // answer: the value is copied out of the item after the
+            // dictionary has been named again.
             //
             // SAFETY: the caller's promise about `key` and `keylen`, and the
-            // kind says the value holds a live dictionary.
-            let dict = rv.dict_or_null();
+            // kind says the value holds a live dictionary or none.
             let item = unsafe {
-                (*dict).find_ptr(match usize::try_from(keylen) {
-                    Ok(keylen) => cstr::slice_at(key, keylen),
-                    Err(_) => cstr::bytes_at(key),
+                rv.dict_ref().map_or(::core::ptr::null_mut(), |d| {
+                    d.find_ptr(match usize::try_from(keylen) {
+                        Ok(keylen) => cstr::slice_at(key, keylen),
+                        Err(_) => cstr::bytes_at(key),
+                    })
                 })
             };
             if item.is_null() && verbose {

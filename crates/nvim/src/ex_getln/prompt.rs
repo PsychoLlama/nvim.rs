@@ -129,8 +129,11 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         }
         // The pointer form is what `cancelreturn` is: the value outlives
         // the borrow, and the dictionary is named again below.
-        // SAFETY: the argument's own dictionary.
-        let cancelreturn_di = unsafe { (*dict).find_ptr(b"cancelreturn") };
+        // `v:_null_dict` is a `VAR_DICT` holding nothing, so the lookup has
+        // to tolerate it -- `input(v:_null_dict)` reaches here.
+        // SAFETY: the argument's own dictionary, or none.
+        let cancelreturn_di = unsafe { dict.as_ref() }
+            .map_or(::core::ptr::null_mut(), |d| d.find_ptr(b"cancelreturn"));
         if !cancelreturn_di.is_null() {
             // SAFETY: just tested non-null; a dictionary item's value is
             // its own field, so its address is the item's plus a constant.

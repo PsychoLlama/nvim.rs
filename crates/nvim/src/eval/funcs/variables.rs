@@ -88,9 +88,16 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
     }
     // SAFETY: as `f_dictwatcheradd`; the callback only identifies a
     // watcher here and is freed below.
+    // `v:_null_dict` is a `VAR_DICT` holding nothing, and has no watchers:
+    // upstream's own entry point tested the pointer, and this is that test.
+    // SAFETY: the argument's own dictionary, or none, and a NUL-terminated
+    // pattern.
     let d = args[0].dict_or_null();
-    let len = unsafe { cstr::bytes_at(key_pattern) }.len();
-    if !unsafe { (*d).watcher_remove(cstr::slice_at(key_pattern, len), &callback) } {
+    // SAFETY: the argument's own dictionary, or none, and a NUL-terminated
+    // pattern.
+    let removed =
+        !d.is_null() && unsafe { (*d).watcher_remove(cstr::bytes_at(key_pattern), &callback) };
+    if !removed {
         semsg!("Couldn't find a watcher matching key and callback");
     }
     unsafe { callback_free(&raw mut callback) };

@@ -12,8 +12,8 @@ use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
-    DictRef, ListRef, NumBuf, callback_free, dict_copy, dict_equal, dict_extend, dict_find,
-    dict_get_callback, dict_get_number, dict_get_string_alloc, dict_get_string_buf,
+    DictRef, ListRef, NumBuf, callback_free, dict_clear, dict_copy, dict_equal, dict_extend,
+    dict_find, dict_get_callback, dict_get_number, dict_get_string_alloc, dict_get_string_buf,
     dict_get_string_buf_chk, list_unref, tv_clear, tv_dict_alloc, tv_dict_free,
     tv_dict_item_alloc_len, tv_dict_unref,
 };
@@ -861,7 +861,7 @@ fn clearing_a_dict_frees_its_items() {
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
         // Clearing an empty dict is a no-op.
-        (*d).clear();
+        dict_clear(d);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
         let _ = (*d).add_str(b"TES", cstr("tEsT").as_ptr());
@@ -870,7 +870,7 @@ fn clearing_a_dict_frees_its_items() {
         log.check(&[alloc::string(value, "tEsT".len())]);
         assert_eq!(tv::read_dict(d), Tv::dict([("TES", Tv::s("tEsT"))]));
 
-        (*d).clear();
+        dict_clear(d);
         log.check(&[alloc::freed(value)]);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
@@ -1271,9 +1271,9 @@ fn a_self_referencing_dict_copies_into_a_self_referencing_copy() {
         assert_eq!((*copy).dv_refcount.get(), 2, "the copy holds itself");
         assert_eq!(tv::read_dict(copy), Tv::dict([("test", Tv::Cycle(0))]));
 
-        (*d).clear();
+        dict_clear(d);
         assert_eq!((*d).dv_refcount.get(), 1);
-        (*copy).clear();
+        dict_clear(copy);
         assert_eq!((*copy).dv_refcount.get(), 1);
 
         tv_dict_unref(copy);

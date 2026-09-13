@@ -6,7 +6,7 @@
 //! module's tests pin.
 //!
 //! [`tv_dict_alloc`] and [`tv_dict_unref`] are the reference-counted pair;
-//! [`Dict::clear`] empties one without freeing it.  The `Dict::add_*` family
+//! [`dict_clear`] empties one without freeing it.  The `Dict::add_*` family
 //! is the C header's overload set, each taking the key as bytes and copying
 //! exactly those.  [`dict_extend`] is `extend()` with its three `action`
 //! modes, [`dict_copy`] is `copy()`/`deepcopy()` over a dictionary.
@@ -330,6 +330,15 @@ impl Dict {
     /// The tail every `add_*` below shares: hand `item` over, or free it
     /// again when the key is taken.
     ///
+    /// **The value may not name this dictionary.** A taken key frees the
+    /// item here, and releasing a container value *reads* the container --
+    /// so a value naming `self` would be read while the exclusive borrow of
+    /// `self` claims to be alone with it. Safe code cannot build such a
+    /// value (a second handle to a borrowed dictionary needs
+    /// [`DictRef::retained`], which is `unsafe`), and that is where the
+    /// obligation sits. [`dict_clear`] is the same hazard where the values
+    /// are already in the table, and takes a pointer for it.
+    ///
     /// # Safety
     /// As [`Dict::add_item`], except that a taken key frees `item` rather
     /// than handing it back — so the caller must not touch it on either
@@ -503,46 +512,42 @@ impl Dict {
     }
 }
 
-impl Dict {
-    /// Free every item, leaving the dictionary allocated and empty.
-    ///
-    /// The exclusive borrow is the whole contract the pointer form spelled
-    /// out: nothing else may be walking the table. The hashtab is still
-    /// locked for the walk, because *this* walk removes as it goes.
-    pub fn clear(&mut self) {
-        // SAFETY: this dictionary's own table; the lock is released below.
-        unsafe { hash_lock(&raw mut self.dv_hashtab) };
-        debug_assert!(self.dv_hashtab.ht_locked > 0);
-        // SAFETY: a live dictionary, locked for the walk.
-        for hi in unsafe { tv_dict_iter(&raw const *self) } {
-            // SAFETY: the walk's own item, unlinked immediately below.
-            unsafe { tv_dict_item_free(tv_dict_hi2di(hi)) };
-            // SAFETY: the slot the walk is standing on.
-            unsafe { hash_remove(&raw mut self.dv_hashtab, hi) };
-        }
-        // SAFETY: the lock taken above.
-        unsafe { hash_unlock(&raw mut self.dv_hashtab) };
+/// Free every item of `d`, leaving the dictionary allocated and empty.
+///
+/// **Not a method, and not `&mut Dict`.** The values it frees may name this
+/// very dictionary -- `deepcopy()` of a self-referencing one leaves exactly
+/// that, and so does any cycle the collector has not yet reached -- and
+/// releasing such a value *reads* the dictionary again, from a pointer whose
+/// provenance is the allocator's rather than the borrow's. An exclusive
+/// reference is a promise about the whole call, so the read is a use of
+/// memory the promise had claimed alone. `just miri` is the only thing that
+/// sees it; the functional suite, ASan and all three differentials pass
+/// either way.
+///
+/// # Safety
+/// `d` must point at a live dictionary that nothing else is walking: the
+/// hashtab is locked for this walk, because the walk removes as it goes.
+pub unsafe fn dict_clear(d: *mut Dict) {
+    // SAFETY: the caller's live dictionary; the lock is released below.
+    unsafe { hash_lock(&raw mut (*d).dv_hashtab) };
+    debug_assert!(unsafe { (*d).dv_hashtab.ht_locked } > 0);
+    // SAFETY: a live dictionary, locked for the walk.
+    for hi in unsafe { tv_dict_iter(d) } {
+        // SAFETY: the walk's own item, unlinked immediately below.
+        unsafe { tv_dict_item_free(tv_dict_hi2di(hi)) };
+        // SAFETY: the slot the walk is standing on.
+        unsafe { hash_remove(&raw mut (*d).dv_hashtab, hi) };
     }
+    // SAFETY: the lock taken above.
+    unsafe { hash_unlock(&raw mut (*d).dv_hashtab) };
+}
 
+impl Dict {
     /// Mark every key read-only and fixed.
     pub fn set_keys_readonly(&mut self) {
         for di in self.items_mut() {
             di.di_flags |= (DI_FLAGS_RO | DI_FLAGS_FIX) as uint8_t;
         }
-    }
-
-    /// `extend(self, other, action)` for two *different* dictionaries: fold
-    /// `other`'s items in.
-    ///
-    /// `action` is the first byte of `"keep"`, `"force"` or `"error"`, plus
-    /// the internal `"move"`, which takes each item out of `other` rather
-    /// than copying it — and so needs it writable.
-    pub fn extend_from(&mut self, other: &mut Dict, action: u8) {
-        // SAFETY: two live dictionaries the borrows name, and both borrows
-        // are given up for the call: the body re-enters through
-        // `value_check_lock` and through the watcher callbacks, either of
-        // which can reach either dictionary again.
-        unsafe { dict_extend(&raw mut *self, &raw mut *other, action) };
     }
 
     /// `extend(d, d, action)`: the case where the two dictionaries are one.
@@ -571,11 +576,14 @@ impl Dict {
 
 /// `extend(d1, d2, action)`: fold `d2`'s items into `d1`.
 ///
-/// The one entry point that still takes pointers, and for the same reason
-/// the list's does: **`d1` and `d2` may be the same dictionary**, and the
-/// body reaches each of them again while holding an item of the other.
-/// [`Dict::extend_from`] and [`Dict::extend_from_self`] are the two cases
-/// spelled as borrows; this is what branches between them.
+/// Takes pointers, for two reasons the list's twin has only one of:
+/// **`d1` and `d2` may be the same dictionary**, and the body reaches each
+/// of them again while holding an item of the other -- and every watcher
+/// this fires is user code that reaches them a third way. So unlike the
+/// list, only the *self* case is spelled as a borrow
+/// ([`Dict::extend_from_self`], which is a walk and a message and nothing
+/// else); there is no `extend_from(&mut self, &mut Dict)`, because an
+/// exclusive reference promises more than the watchers leave true.
 ///
 /// # Safety
 /// `d1` and `d2` must point at live dictionaries. `"move"` empties `d2`, so
@@ -1084,7 +1092,7 @@ mod tests {
 
         let copy_id = crate::eval::get_copy_id();
         // SAFETY: a live dictionary, no conversion, and a fresh copy id.
-        let mut copy = unsafe { dict_copy(::core::ptr::null(), d.as_ptr(), true, copy_id) }
+        let copy = unsafe { dict_copy(::core::ptr::null(), d.as_ptr(), true, copy_id) }
             .expect("the copy was not interrupted");
         assert_eq!(copy.len(), 2);
         assert_eq!(number_at(&copy, b"n"), Some(0));
@@ -1095,9 +1103,14 @@ mod tests {
             "the cycle followed the original"
         );
 
-        // Break the cycles so both dictionaries actually go away.
-        d.clear();
-        copy.clear();
+        // Break the cycles so both dictionaries actually go away. A cycle
+        // is exactly why this is not a method: releasing the value reads
+        // the dictionary it names, which is this one.
+        // SAFETY: two live dictionaries this case owns.
+        unsafe {
+            dict_clear(d.as_ptr());
+            dict_clear(copy.as_ptr());
+        }
     }
 
     /// A walk may remove the entry it is standing on, but only with the
@@ -1127,13 +1140,14 @@ mod tests {
         assert_eq!(number_at(&d, b"d"), Some(3));
     }
 
-    /// [`Dict::clear`] empties a dictionary without freeing it, and the
+    /// [`dict_clear`] empties a dictionary without freeing it, and the
     /// table it leaves behind takes new keys in the order a fresh one does.
     #[test]
     fn clearing_leaves_a_usable_table() {
         let _held = serial();
         let mut d = dict_of(&["a", "b", "c"]);
-        d.clear();
+        // SAFETY: a live dictionary this case owns and nothing walks.
+        unsafe { dict_clear(d.as_ptr()) };
         assert_eq!(d.len(), 0);
         assert!(d.is_empty());
         assert_eq!(number_at(&d, b"a"), None);
