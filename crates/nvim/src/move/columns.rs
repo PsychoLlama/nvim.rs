@@ -12,13 +12,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::drawscreen::state::dollar_vcol;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, win_scroll_lines};
 use crate::eval::typval::{
-    tv_check_for_number_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_get_number, tv_get_number_chk,
+    tv_check_for_number_arg, tv_dict_alloc_ret, tv_get_number, tv_get_number_chk,
 };
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::mbyte::utf_head_off;
@@ -381,10 +382,8 @@ unsafe fn arg_number(args: &[TypVal], n: isize) -> VarNumber {
 unsafe fn dict_add_nr(dict: *mut Dict, key: &CStr, value: c_int) {
     let bytes = key.to_bytes();
     let _ = unsafe {
-        tv_dict_add_nr(
-            dict,
-            bytes.as_ptr().cast::<c_char>(),
-            bytes.len() as size_t,
+        (*dict).add_number(
+            cstr::slice_at(bytes.as_ptr().cast::<c_char>(), bytes.len() as size_t),
             value as VarNumber,
         )
     };

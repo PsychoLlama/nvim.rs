@@ -8,8 +8,8 @@ use super::{
 };
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
-    NumBuf, blob_bytes, list_items, list_iter, list_len, list_locked, list_set_lock,
-    tv_check_for_number_arg, tv_check_for_string_arg, tv_copy, tv_dict_len, tv_get_number_chk,
+    NumBuf, blob_bytes, dict_len, list_items, list_iter, list_len, list_locked, list_set_lock,
+    tv_check_for_number_arg, tv_check_for_string_arg, tv_copy, tv_get_number_chk,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
@@ -63,7 +63,7 @@ fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
             }
         }
         VAR_DICT => {
-            if unsafe { tv_dict_len(tv.dict_or_null()) } == 0 {
+            if dict_len(tv.dict_ref()) == 0 {
                 return;
             }
             // SAFETY: the argument's own dictionary, live for the walk.

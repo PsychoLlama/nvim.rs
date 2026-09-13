@@ -199,9 +199,9 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     // SAFETY: `v_event` is the dict just built, and the key is a static
     // string of the length given.
     unsafe {
-        let _ = tv_dict_add_dict(v_event, c"completed_item".as_ptr(), 14, Some(item_held));
+        let _ = (*v_event).add_dict(b"completed_item", Some(item_held));
         pum_set_event_info(v_event);
-        tv_dict_set_keys_readonly(v_event);
+        (*v_event).set_keys_readonly();
     }
 
     recursive.set(true);

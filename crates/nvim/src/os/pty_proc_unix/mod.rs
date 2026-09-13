@@ -27,7 +27,7 @@
 mod termios;
 mod wait_status;
 
-use crate::eval::typval::tv_dict_to_env;
+use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{
     uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open, uv_signal_start, uv_signal_stop,
     uv_strerror,
@@ -354,7 +354,7 @@ pub unsafe fn pty_proc_teardown(uv_loop: *mut Loop) {
 /// Everything here runs between `fork` and `exec` in a process that had more
 /// than one thread, so in principle it may only call async-signal-safe
 /// functions: no allocation, no locks. Upstream does not honour that — both
-/// `tv_dict_to_env` and the failure logging allocate — and the behaviour is
+/// `dict_to_env` and the failure logging allocate — and the behaviour is
 /// preserved rather than fixed, because building the environment before the
 /// fork would change when the child's variables are read. Do not add
 /// anything further that allocates, formats or takes a lock.
@@ -394,7 +394,7 @@ unsafe fn init_child(ptyproc: *mut PtyProc) -> ! {
 
         let prog = proc_get_exepath(proc);
         debug_assert!(!(*proc).env.is_null());
-        environ = tv_dict_to_env((*proc).env);
+        environ = dict_to_env(&*((*proc).env));
         execvp(prog, (*proc).argv.cast::<*const c_char>());
         let (at, prog, why) = (c"init_child", c_str(prog), c_str(strerror(errno())));
         logmsg!(LOGLVL_ERR, at, 327, "execvp({prog}) failed: {why}");

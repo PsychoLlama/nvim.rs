@@ -27,9 +27,7 @@ use core::slice;
 use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
-use crate::eval::typval::{
-    CallFrame, DictRef, NumBuf, list_items, list_len, tv_dict_add_bool, tv_dict_alloc,
-};
+use crate::eval::typval::{CallFrame, DictRef, NumBuf, list_items, list_len, tv_dict_alloc};
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
 use crate::memory::{xmalloc, xstrdup};
@@ -250,7 +248,7 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
 
     let dict = frame.args()[1].dict_or_null();
     // SAFETY: `dict` is the dictionary the frame's second slot names.
-    let _ = unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
+    let _ = unsafe { (*dict).add_bool(b"term", kBoolVarTrue) };
     f_jobstart(frame.args(), result, fptr);
     drop(held);
 }

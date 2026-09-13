@@ -360,16 +360,14 @@ unsafe fn script_query(
     // The tag was tested above, so this is the argument's own dictionary.
     let dict = arg.dict_or_null();
 
-    // SAFETY: `tv_dict_find` only reads the dict and the key literal.
-    let sid_di = unsafe { tv_dict_find(dict, c"sid".as_ptr(), c"sid".count_bytes() as ptrdiff_t) };
-    if !sid_di.is_null() {
-        // SAFETY: `sid_di` is a live item of `dict`.
-        let Ok(sid) = tv_get_number_chk(unsafe { &(*sid_di).di_tv }) else {
+    // SAFETY: the argument's own dictionary.
+    if let Some(sid_di) = dict_find(unsafe { dict.as_ref() }, b"sid") {
+        let Ok(sid) = tv_get_number_chk(&sid_di.di_tv) else {
             return ScriptQuery::Rejected;
         };
         if sid <= 0 {
-            // SAFETY: as above; the message borrows the item's string form.
-            let arg1 = unsafe { c_str(numbuf.string_ptr(&(*sid_di).di_tv)) };
+            // SAFETY: the message borrows the item's string form.
+            let arg1 = unsafe { c_str(numbuf.string_ptr(&sid_di.di_tv)) };
             semsg!("E475: Invalid value for argument {}: {arg1}", "sid");
             return ScriptQuery::Rejected;
         }
@@ -377,7 +375,7 @@ unsafe fn script_query(
     }
 
     // SAFETY: the string is allocated for us and handed straight to the caller.
-    unsafe { *pat = tv_dict_get_string_alloc(dict, c"name".as_ptr()) };
+    unsafe { *pat = dict_get_string_alloc((dict).as_ref(), b"name") };
     if !unsafe { *pat }.is_null() {
         regmatch.regprog = unsafe { vim_regcomp(*pat, RE_MAGIC + RE_STRING) };
     }
@@ -428,12 +426,12 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
         // A script ID was specified, so report that script in full.
         if let ScriptQuery::Sid(_) = *query {
             let sv_dict = unsafe { &raw mut (*(*si).sn_vars).sv_dict };
-            let vars = unsafe { tv_dict_copy(ptr::null(), sv_dict, true, get_copy_id()) };
+            let vars = unsafe { dict_copy(ptr::null(), sv_dict, true, get_copy_id()) };
             let (key, klen) = (c"variables".as_ptr(), c"variables".count_bytes());
-            let _ = unsafe { tv_dict_add_dict(d, key, klen, vars) };
+            let _ = unsafe { (*d).add_dict(cstr::slice_at(key, klen), vars) };
             let funcs = get_script_local_funcs(sid as ScriptId);
             let (key, klen) = (c"functions".as_ptr(), c"functions".count_bytes());
-            let _ = unsafe { tv_dict_add_list(d, key, klen, Some(funcs)) };
+            let _ = unsafe { (*d).add_list(cstr::slice_at(key, klen), Some(funcs)) };
         }
     }
 }
@@ -457,21 +455,21 @@ fn empty_regmatch() -> RegMatch {
 /// `d` must point at a live dictionary, unaliased for the call. `val` must
 /// point at a NUL-terminated string.
 unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
-    let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.to_bytes(), val) };
 }
 
 /// # Safety
 ///
 /// `d` must point at a live dictionary, unaliased for the call.
 unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
-    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
+    let _ = unsafe { (*d).add_number(key.to_bytes(), nr) };
 }
 
 /// # Safety
 ///
 /// `d` must point at a live dictionary, unaliased for the call.
 unsafe fn dict_add_bool(d: *mut Dict, key: &CStr, val: BoolVarValue) {
-    let _ = unsafe { tv_dict_add_bool(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { (*d).add_bool(key.to_bytes(), val) };
 }
 
 // ---------------------------------------------------------------------------

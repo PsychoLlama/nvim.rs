@@ -11,6 +11,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::memline::MlFlags;

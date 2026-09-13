@@ -25,9 +25,7 @@ use core::{mem, ptr, slice};
 
 use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
-use crate::eval::typval::{
-    ListRef, callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc,
-};
+use crate::eval::typval::{ListRef, callback_free, dict_find, tv_clear, tv_list_alloc};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::terminal::terminal_receive;
@@ -214,10 +212,14 @@ unsafe fn deliver_buffered(chan: *mut Channel, reader: *mut CallbackReader) {
     }
     if unsafe { (*reader).self_0 }.is_null() {
         unsafe { channel_callback_call(chan, reader) };
-    } else if unsafe { tv_dict_find((*reader).self_0, (*reader).type_0, -1) }.is_null() {
+    } else if unsafe { dict_find((*reader).self_0.as_ref(), cstr::bytes_at((*reader).type_0)) }
+        .is_none()
+    {
         let data = unsafe { reader_lines(reader) };
         let n_len = unsafe { cstr::bytes_at((*reader).type_0) }.len();
-        let _ = unsafe { tv_dict_add_list((*reader).self_0, (*reader).type_0, n_len, Some(data)) };
+        let _ = unsafe {
+            (*(*reader).self_0).add_list(cstr::slice_at((*reader).type_0, n_len), Some(data))
+        };
     } else {
         // SAFETY: the reader's own stream name and the channel's id.
         let (kind, id) = unsafe { (c_str((*reader).type_0), (*chan).id) };

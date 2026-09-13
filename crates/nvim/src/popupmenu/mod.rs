@@ -21,7 +21,6 @@ use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, redraw_later, setcursor_mayforce, update_screen,
 };
-use crate::eval::typval::{tv_dict_add_bool, tv_dict_add_float, tv_dict_add_nr};
 use crate::ex_cmds::{do_ecmd, prepare_tagpreview};
 use crate::fuzzy::fuzzy_match_str_with_pos;
 use crate::getchar::{vgetc, vungetc};
@@ -543,14 +542,12 @@ pub unsafe fn pum_set_event_info(dict: *mut Dict) {
         c = f64::from(pum_col.get());
     }
     for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
-        let _ = unsafe { tv_dict_add_float(dict, key.as_ptr(), key.count_bytes(), value as Float) };
+        let _ = unsafe { (*dict).add_float(key.to_bytes(), value as Float) };
     }
-    let _ = unsafe { tv_dict_add_nr(dict, c"size".as_ptr(), 4, pum_size.get() as VarNumber) };
+    let _ = unsafe { (*dict).add_number(b"size", pum_size.get() as VarNumber) };
     let _ = unsafe {
-        tv_dict_add_bool(
-            dict,
-            c"scrollbar".as_ptr(),
-            9,
+        (*dict).add_bool(
+            b"scrollbar",
             if pum_scrollbar.get() != 0 {
                 kBoolVarTrue
             } else {

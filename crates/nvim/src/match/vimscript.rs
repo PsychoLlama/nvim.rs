@@ -30,7 +30,7 @@ const MAX_SAVED_POS: c_int = 8;
 /// `d` must be live and `val` null or NUL-terminated.
 unsafe fn put_str(d: *mut Dict, key: &str, val: *const c_char) {
     // SAFETY: the caller's dictionary and value.
-    let _ = unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
+    let _ = unsafe { (*d).add_str(key.as_bytes(), val) };
 }
 
 /// `tv_dict_add_nr` with a Rust key; see [`put_str`].
@@ -39,16 +39,17 @@ unsafe fn put_str(d: *mut Dict, key: &str, val: *const c_char) {
 /// `d` must be live.
 unsafe fn put_nr(d: *mut Dict, key: &str, nr: VarNumber) {
     // SAFETY: the caller's dictionary.
-    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
+    let _ = unsafe { (*d).add_number(key.as_bytes(), nr) };
 }
 
-/// `tv_dict_find` with a Rust key; null when absent.
+/// [`dict_find`] with a Rust key.
 ///
 /// # Safety
-/// `d` must be null or live.
-unsafe fn find(d: *const Dict, key: &str) -> *mut DictItem {
-    // SAFETY: the caller's dictionary.
-    unsafe { tv_dict_find(d, key.as_ptr().cast(), key.len() as ptrdiff_t) }
+/// `d` must be null or live; the answer borrows it.
+unsafe fn find<'a>(d: *const Dict, key: &str) -> Option<&'a DictItem> {
+    // SAFETY: the caller's dictionary, which the answer borrows -- the
+    // contract this signature passes on.
+    dict_find(unsafe { d.as_ref() }, key.as_bytes())
 }
 
 /// Reads `matchadd()`'s and `matchaddpos()`' optional fifth argument, the
@@ -69,16 +70,18 @@ unsafe fn matchadd_dict_arg(
     }
     let dict = (*tv).dict_or_null();
 
-    let di = unsafe { find(dict, "conceal") };
-    if !di.is_null() {
-        unsafe { *conceal_char = numbuf.string_ptr(&(*di).di_tv) };
+    // SAFETY: the value's own dictionary.
+    if let Some(di) = unsafe { find(dict, "conceal") } {
+        // SAFETY: the caller's out-parameter.
+        unsafe { *conceal_char = numbuf.string_ptr(&di.di_tv) };
     }
 
-    let di = unsafe { find(dict, "window") };
-    if di.is_null() {
+    // SAFETY: as above.
+    let Some(di) = (unsafe { find(dict, "window") }) else {
         return Ok(());
-    }
-    let Some(found) = (unsafe { find_win_by_nr_or_id(&(*di).di_tv) }) else {
+    };
+    // SAFETY: the item's own value.
+    let Some(found) = find_win_by_nr_or_id(&di.di_tv) else {
         emsg(gettext(e_invalwindow));
         return Err(Failed);
     };
@@ -124,8 +127,7 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                     unsafe { (*sub).push_number((*llpos).len as VarNumber) };
                 }
                 let key = format!("pos{}", i + 1);
-                let _ =
-                    unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), Some(held)) };
+                let _ = unsafe { (*dict).add_list(key.as_bytes(), Some(held)) };
             }
         } else {
             unsafe { put_str(dict, "pattern", (*cur).mit_pattern) };
@@ -179,10 +181,9 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
             return;
         }
         let d = tv.dict_or_null();
-        let ok = !unsafe { find(d, "group") }.is_null()
-            && (!unsafe { find(d, "pattern") }.is_null() || !unsafe { find(d, "pos1") }.is_null())
-            && !unsafe { find(d, "priority") }.is_null()
-            && !unsafe { find(d, "id") }.is_null();
+        // SAFETY: the item's own dictionary.
+        let has = |key| unsafe { find(d, key) }.is_some();
+        let ok = has("group") && (has("pattern") || has("pos1")) && has("priority") && has("id");
         if !ok {
             semsg!(
                 "E474: List item {} is missing one of the required keys",
@@ -204,17 +205,16 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         // A match with no `pattern` is a position match: collect
         // pos1..pos8 into the list `match_add` wants.
         let mut held = None;
-        if unsafe { find(d, "pattern") }.is_null() {
+        if unsafe { find(d, "pattern") }.is_none() {
             held = Some(tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1));
             let positions = held.as_ref().expect("just built").as_ptr();
             for i in 1..MAX_SAVED_POS + 1 {
                 let key = format!("pos{i}");
-                let pos_di =
-                    unsafe { tv_dict_find(d, key.as_ptr().cast(), key.len() as ptrdiff_t) };
-                if pos_di.is_null() {
+                // SAFETY: the caller's dictionary.
+                let Some(pos_di) = (unsafe { find(d, &key) }) else {
                     break;
-                }
-                if unsafe { (*pos_di).di_tv.v_type() } != VAR_LIST {
+                };
+                if pos_di.di_tv.v_type() != VAR_LIST {
                     // The earlier entries stay restored, as upstream's do:
                     // the validation above does not look inside a `posN`
                     // key. Upstream *also* leaked the position list here --
@@ -222,28 +222,28 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                     // which the handle no longer permits.
                     return;
                 }
-                unsafe { (*positions).push_copy(&(*pos_di).di_tv) };
+                // SAFETY: the list this call just allocated.
+                unsafe { (*positions).push_copy(&pos_di.di_tv) };
             }
         }
 
         // Three scratches are in play here — this one and the two the
         // frame lends below — and none may be reused before its value is.
-        let group = unsafe { group_buf.dict_string(d, c"group".as_ptr()) };
-        let priority = unsafe { tv_dict_get_number(d, c"priority".as_ptr()) } as c_int;
-        let id = unsafe { tv_dict_get_number(d, c"id".as_ptr()) } as c_int;
-        let conceal_di = unsafe { find(d, "conceal") };
-        let conceal = if conceal_di.is_null() {
-            ::core::ptr::null()
-        } else {
-            // SAFETY: a live dictionary item.
-            numbuf.string_ptr(unsafe { &(*conceal_di).di_tv })
+        // SAFETY: the caller's dictionary.
+        let d_ref = unsafe { d.as_ref() };
+        let group = group_buf.dict_string(d_ref, b"group");
+        let priority = dict_get_number(d_ref, b"priority") as c_int;
+        let id = dict_get_number(d_ref, b"id") as c_int;
+        let conceal = match dict_find(d_ref, b"conceal") {
+            Some(di) => numbuf.string_ptr(&di.di_tv),
+            None => ::core::ptr::null(),
         };
 
         let positions = held
             .as_ref()
             .map_or(::core::ptr::null_mut(), ListRef::as_ptr);
         let added = if positions.is_null() {
-            let pattern = unsafe { numbuf2.dict_string(d, c"pattern".as_ptr()) };
+            let pattern = numbuf2.dict_string(d_ref, b"pattern");
             let no_pos = ::core::ptr::null_mut();
             // SAFETY: the caller's window and the arguments checked above.
             unsafe { match_add(win, group, pattern, priority, id, no_pos, conceal) }

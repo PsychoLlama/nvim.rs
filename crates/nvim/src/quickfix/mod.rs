@@ -38,11 +38,10 @@ use crate::drawscreen::{
 };
 use crate::edit::beginline;
 use crate::eval::typval::{
-    KeyTaken, callback_copy, callback_free, callback_put, list_len, tv_clear, tv_copy, tv_dict_add,
-    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_add_tv, tv_dict_alloc,
-    tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
-    tv_dict_get_string_alloc, tv_dict_get_tv, tv_dict_item_alloc_len, tv_dict_item_free, tv_free,
-    tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
+    KeyTaken, callback_copy, callback_free, callback_put, dict_find, dict_get_bool,
+    dict_get_number, dict_get_string_alloc, dict_get_tv, list_len, tv_clear, tv_copy,
+    tv_dict_alloc, tv_dict_alloc_lock, tv_dict_alloc_ret, tv_dict_item_alloc_len,
+    tv_dict_item_free, tv_free, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::eval::vars::set_internal_string_var;
 use crate::eval::window::{find_win_by_nr_or_id, win_by_id};

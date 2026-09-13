@@ -40,8 +40,8 @@ use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage
 use crate::eval::typval::DictEntry;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    DictRef, ListRef, blob_copy, list_copy, list_free_contents, list_free_list, list_iter_mut,
-    tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict, tv_dict_watcher_node_data,
+    DictRef, ListRef, blob_copy, dict_copy, list_copy, list_free_contents, list_free_list,
+    list_iter_mut, tv_copy, tv_dict_free_contents, tv_dict_free_dict, tv_dict_watcher_node_data,
     tv_in_free_unref_items,
 };
 use crate::eval::userfunc::{
@@ -708,7 +708,7 @@ pub unsafe fn var_item_copy(
                 dst.write_dict(unsafe { DictRef::retained((*d).dv_copydict) });
             } else {
                 // SAFETY: as above; `conv` is null or the caller's.
-                dst.write_dict(unsafe { tv_dict_copy(conv, d, deep, copy_id) });
+                dst.write_dict(unsafe { dict_copy(conv, d, deep, copy_id) });
             }
             if dst.dict_or_null().is_null() && !d.is_null() {
                 ret = Err(Failed);

@@ -23,9 +23,8 @@ use crate::drawscreen::state::search_hl_has_cursor_lnum;
 use crate::drawscreen::{UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_range_later};
 use crate::eval::funcs::get_optional_window;
 use crate::eval::typval::{
-    index_of, list_items, list_iter, list_len, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
-    tv_dict_alloc, tv_dict_find, tv_dict_get_number, tv_get_number, tv_get_number_chk,
-    tv_list_alloc, tv_list_alloc_ret,
+    dict_find, dict_get_number, index_of, list_items, list_iter, list_len, tv_dict_alloc,
+    tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};

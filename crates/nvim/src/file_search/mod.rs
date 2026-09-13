@@ -21,7 +21,6 @@ use crate::autocmd::{apply_autocmds, has_event};
 use crate::charset::{getdigits_int32, getdigits_long, skipwhite, vim_isfilec};
 use crate::cstr;
 use crate::cursor::get_cursor_line_ptr;
-use crate::eval::typval::{tv_dict_add_bool, tv_dict_add_str, tv_dict_set_keys_readonly};
 use crate::eval::vars::set_vim_var_string;
 use crate::eval::{eval_to_string_safe, get_v_event, restore_v_event};
 use crate::getchar::state::got_int;

@@ -23,16 +23,16 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     let dict = dict_held.as_ptr();
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
-        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { (*dict).add_number(key.to_bytes(), value) };
     };
     let str = |key: &CStr, value: *const c_char| {
         // SAFETY: a live dictionary, and two NUL-terminated strings.
-        let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { (*dict).add_str(key.to_bytes(), value) };
     };
     let list = |key: &CStr, value: Option<ListRef>| {
         // SAFETY: a live dictionary and a live list, which the dictionary
         // takes over.
-        let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { (*dict).add_list(key.to_bytes(), value) };
     };
 
     nr(c"bufnr", VarNumber::from(buffer.handle));
@@ -72,7 +72,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     let vars = c"variables";
     // SAFETY: the buffer's own `b:` scope; the answer takes a reference.
     let b_vars = unsafe { DictRef::retained(buffer.b_vars) };
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), b_vars) };
+    let _ = unsafe { (*dict).add_dict(vars.to_bytes(), b_vars) };
 
     // The windows displaying this buffer.
     let windows = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
@@ -97,18 +97,16 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
 /// filter dictionary selects.
 pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
-    // `result` for the whole walk, and `tv_dict_find` hands back a live entry
+    // `result` for the whole walk, and `dict_find` hands back a live entry
     // of the dictionary the argument holds.
     let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let mut argbuf: *mut Buffer = ptr::null_mut();
     let mut filter = Filter::default();
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT) {
-        let sel_d = args[0].dict_or_null();
-        if !sel_d.is_null() {
+        let sel_d = args[0].dict_ref();
+        if sel_d.is_some() {
             let flag = |key: &CStr| {
-                let di =
-                    unsafe { tv_dict_find(sel_d, key.as_ptr(), key.count_bytes().cast_signed()) };
-                !di.is_null() && unsafe { tv_get_number(&(*di).di_tv) } != 0
+                dict_find(sel_d, key.to_bytes()).is_some_and(|di| tv_get_number(&di.di_tv) != 0)
             };
             filter = Filter {
                 on: true,

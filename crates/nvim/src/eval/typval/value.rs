@@ -411,7 +411,7 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
         }
         VAR_DICT => {
             let _recursing = Depth::of(&recursive_cnt);
-            unsafe { tv_dict_equal((*tv1).dict_or_null(), (*tv2).dict_or_null(), ic) }
+            dict_equal((*tv1).dict_ref(), (*tv2).dict_ref(), ic)
         }
         VAR_PARTIAL | VAR_FUNC => {
             if a.as_partial().is_some_and(|p| p.is_null())

@@ -36,7 +36,7 @@ use core::{ptr, slice};
 
 use crate::charset::vim_iswordc;
 use crate::cursor::set_leftcol;
-use crate::eval::typval::{tv_dict_add_nr, tv_dict_alloc_ret};
+use crate::eval::typval::tv_dict_alloc_ret;
 use crate::ex_docmd::{tabpage_close, tabpage_close_other};
 use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
@@ -50,7 +50,7 @@ use crate::statusline::state::tab_page_click_defs;
 use crate::statusline::stl_connected;
 use crate::types::{
     CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, StlClickDefinition, Tabpage, TypVal,
-    VarNumber, Window, size_t,
+    VarNumber, Window,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
@@ -584,10 +584,9 @@ pub(crate) fn setmouse() {
 /// the editor knows.
 pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     tv_dict_alloc_ret(result);
-    let d = result.dict_or_null();
-    let add = |key: &CStr, value: VarNumber| {
-        // SAFETY: the dict just allocated, and a NUL-terminated literal key.
-        let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.to_bytes().len() as size_t, value) };
+    let d = result.dict_mut().expect("just allocated");
+    let mut add = |key: &CStr, value: VarNumber| {
+        let _ = d.add_number(key.to_bytes(), value);
     };
     add(c"screenrow", mouse_row.get() as VarNumber + 1);
     add(c"screencol", mouse_col.get() as VarNumber + 1);

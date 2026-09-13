@@ -40,10 +40,7 @@ use crate::cursor::{
 use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{showmode, update_screen};
 use crate::edit::{beginline, get_last_insert, get_last_insert_save, oneright, stuff_inserted};
-use crate::eval::typval::{
-    list_set_lock, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_set_keys_readonly,
-    tv_list_alloc,
-};
+use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::{eval_to_string, get_v_event, restore_v_event};
 use crate::ex_cmds2::check_fname;
 use crate::ex_docmd::state::{last_cmdline, new_last_cmdline};

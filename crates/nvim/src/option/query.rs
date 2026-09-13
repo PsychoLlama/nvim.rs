@@ -20,7 +20,7 @@ use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
 use crate::drawscreen::state::{need_maketitle, redraw_tabline};
-use crate::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free};
+use crate::eval::typval::{callback_free, tv_dict_alloc, tv_free};
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::{xcalloc, xfree, xstrdup};
@@ -453,10 +453,9 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
         }
         // The value names the option's own storage; the dictionary takes a
         // copy, so this releases nothing.
-        let mut tv =
-            ManuallyDrop::new(unsafe { optval_as_tv(optval_from_varp(opt_idx, varp), true) });
+        let tv = ManuallyDrop::new(unsafe { optval_as_tv(optval_from_varp(opt_idx, varp), true) });
         let name = get_option(opt_idx).fullname;
-        let _ = unsafe { tv_dict_add_tv(d, name, cstr::bytes_at(name).len(), &mut tv) };
+        let _ = unsafe { (*d).add_tv(cstr::bytes_at(name), &tv) };
     }
     // The caller takes the reference over.
     d_held.into_raw()

@@ -40,19 +40,16 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = NumBuf::new();
     let which: *const c_char;
     let is_abbr: bool;
-    let d: *mut Dict;
+    let d: Option<&Dict>;
 
     // If the first argument is a dict, then that is the only one allowed.
     // SAFETY (this block): the Vimscript call convention — `args` is a live
     // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
     // there, and `buf` is the scratch `tv_get_string_buf_chk` may answer with.
     if args[0].v_type() == VAR_DICT as _ {
-        d = args[0].dict_or_null();
-        // SAFETY: `d` is the dict just taken off the argument.
-        let abbr = unsafe {
-            which = numbuf.dict_string(d, c"mode".as_ptr());
-            tv_dict_get_bool(d, c"abbr".as_ptr(), -1)
-        };
+        d = args[0].dict_ref();
+        which = numbuf.dict_string(d, b"mode");
+        let abbr = dict_get_bool(d, b"abbr", -1);
         if which.is_null() || abbr < 0 {
             emsg(gettext(E_ENTRIES_MISSING_IN_MAPSET_DICT_ARGUMENT));
             return;
@@ -72,7 +69,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
             return;
         }
         // SAFETY: `tv_check_for_dict_arg` just said slot 2 is a dict.
-        d = args[2].dict_or_null();
+        d = args[2].dict_ref();
     }
 
     // SAFETY: `which` is a NUL-terminated mode string.
@@ -85,24 +82,20 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     // Get the values in the same order as get_maparg() writes them.
-    // SAFETY: `d` is a live dict, and each `NumBuf` outlives the string it
-    // lends back.
-    let (lhs, lhsraw, lhsrawalt, mut orig_rhs) = unsafe {
-        (
-            numbuf2.dict_string(d, c"lhs".as_ptr()),
-            numbuf3.dict_string(d, c"lhsraw".as_ptr()),
-            numbuf4.dict_string(d, c"lhsrawalt".as_ptr()),
-            numbuf5.dict_string(d, c"rhs".as_ptr()),
-        )
-    };
+    // Each `NumBuf` outlives the string it lends back.
+    let (lhs, lhsraw, lhsrawalt, mut orig_rhs) = (
+        numbuf2.dict_string(d, b"lhs"),
+        numbuf3.dict_string(d, b"lhsraw"),
+        numbuf4.dict_string(d, b"lhsrawalt"),
+        numbuf5.dict_string(d, b"rhs"),
+    );
     let mut rhs_lua = LUA_NOREF;
-    // SAFETY: as above; `callback_di` is null or one of `d`'s own items, and
-    // `find_func` answers null or a live `UserFunc`.
-    unsafe {
-        let key = c"callback".count_bytes() as _;
-        let callback_di = tv_dict_find(d, c"callback".as_ptr(), key);
-        if !callback_di.is_null() && (*callback_di).di_tv.v_type() == VAR_FUNC as _ {
-            let fp = find_func((*callback_di).di_tv.func_name_or_null());
+    if let Some(di) = dict_find(d, b"callback")
+        && di.di_tv.v_type() == VAR_FUNC as _
+    {
+        // SAFETY: `find_func` answers null or a live `UserFunc`.
+        unsafe {
+            let fp = find_func(di.di_tv.func_name_or_null());
             if !fp.is_null() && (*fp).uf_flags.has(FuncFlags::LUAREF) {
                 rhs_lua = api_new_luaref((*fp).uf_luaref);
                 orig_rhs = c"".as_ptr().cast_mut();
@@ -119,11 +112,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    // The dict is read a dozen times; the promise that `d` is live is made
-    // once, here, and every read after it is ordinary checked code.
-    // SAFETY: `d` is the live dict taken off the argument above, and every
-    // key is NUL-terminated by its type.
-    let number = |key: &CStr| unsafe { tv_dict_get_number(d, key.as_ptr()) };
+    let number = |key: &CStr| dict_get_number(d, key.to_bytes());
 
     let mut noremap = if number(c"noremap") != 0 {
         REMAP_NONE
@@ -136,7 +125,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 
     // SAFETY: as above; the `desc` allocation is copied out of and released
     // by the guard.
-    let desc = unsafe { COwned::new(tv_dict_get_string_alloc(d, c"desc".as_ptr())) };
+    let desc = unsafe { COwned::new(dict_get_string_alloc(d, b"desc")) };
     let mut args = MapArguments {
         expr: number(c"expr") != 0,
         silent: number(c"silent") != 0,

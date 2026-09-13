@@ -65,15 +65,17 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
         let d = args[1].dict_or_null();
 
         if opts.allow_number {
-            opts.allow_number = unsafe { tv_dict_get_bool(d, c"number".as_ptr(), 1) } != 0;
-        } else if unsafe { tv_dict_has_key(d, c"number".as_ptr()) } {
+            opts.allow_number = dict_get_bool(unsafe { (d).as_ref() }, b"number", 1) != 0;
+        } else if dict_has_key(unsafe { (d).as_ref() }, b"number") {
             // getcharstr() never answers a number, so asking is an error.
             semsg!("E475: Invalid argument: {}", "number");
         }
 
-        opts.simplify = unsafe { tv_dict_get_bool(d, c"simplify".as_ptr(), 1) } != 0;
+        // SAFETY: the argument's own dictionary.
+        let d = unsafe { d.as_ref() };
+        opts.simplify = dict_get_bool(d, b"simplify", 1) != 0;
 
-        let cursor = unsafe { numbuf.dict_string(d, c"cursor".as_ptr()) };
+        let cursor = numbuf.dict_string(d, b"cursor");
         if !cursor.is_null() {
             opts.cursor = if unsafe { cstr::eq_bytes(cursor, b"hide") } {
                 CursorFlag::Hide

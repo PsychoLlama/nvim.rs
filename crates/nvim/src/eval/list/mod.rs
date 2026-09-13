@@ -45,11 +45,11 @@ use core::slice;
 
 use crate::cstr;
 use crate::eval::typval::{
-    BlobRef, DictRef, ListRef, NumBuf, blob_copy, blob_remove, index_of, list_copy, list_extend,
-    list_index, list_items_mut, list_remove, tv_blob_set_ret,
-    tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret,
-    tv_dict_copy, tv_dict_extend, tv_dict_item_remove, tv_dict_remove, tv_equal, tv_get_number_chk,
-    tv_list_alloc_ret, value_check_lock,
+    BlobRef, DictRef, ListRef, NumBuf, blob_copy, blob_remove, dict_copy, dict_extend, index_of,
+    list_copy, list_extend, list_index, list_items_mut, list_remove, tv_blob_set_ret,
+    tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy, tv_dict_alloc_ret,
+    tv_dict_item_remove, tv_dict_remove, tv_equal, tv_get_number_chk, tv_list_alloc_ret,
+    value_check_lock,
 };
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
@@ -459,7 +459,7 @@ impl DictArg {
     pub(crate) fn add_tv(self, key: *mut c_char, tv: &mut TypVal) -> bool {
         // SAFETY: a live dict, `key` the NUL-terminated key of one of its own
         // items, and `tv` a live value.
-        unsafe { tv_dict_add_tv(self.0, key, cstr::bytes_at(key).len(), tv) }.is_ok()
+        unsafe { (*self.0).add_tv(cstr::slice_at(key, cstr::bytes_at(key).len()), tv) }.is_ok()
     }
 
     #[inline(always)]
@@ -472,14 +472,14 @@ impl DictArg {
     #[inline(always)]
     pub(crate) fn extend_with(self, other: DictArg, action: &CStr) {
         // SAFETY: both live, and `action` is NUL-terminated.
-        unsafe { tv_dict_extend(self.0, other.0, action.as_ptr()) };
+        unsafe { dict_extend(self.0, other.0, *(action.as_ptr()) as u8) };
     }
 
     /// A shallow copy, for `extendnew()`.  `None` when the copy failed.
     #[inline(always)]
     pub(crate) fn copy(self) -> Option<DictRef> {
         // SAFETY: live; no conversion, and a fresh copyID.
-        unsafe { tv_dict_copy(core::ptr::null::<VimConv>(), self.0, false, get_copy_id()) }
+        unsafe { dict_copy(core::ptr::null::<VimConv>(), self.0, false, get_copy_id()) }
     }
 
     /// Allocate a fresh dict into `result`, for `mapnew()`.

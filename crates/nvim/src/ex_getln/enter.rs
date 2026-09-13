@@ -178,17 +178,9 @@ pub(crate) unsafe fn cmdline_event_dict(
     cmdtype: *const ::core::ffi::c_char,
 ) -> *mut Dict {
     let dict = unsafe { get_v_event(save_v_event) };
-    let _ =
-        unsafe { tv_dict_add_str(dict, c"cmdtype".as_ptr(), c"cmdtype".count_bytes(), cmdtype) };
-    let _ = unsafe {
-        tv_dict_add_nr(
-            dict,
-            c"cmdlevel".as_ptr(),
-            c"cmdlevel".count_bytes(),
-            Cc::current().level as VarNumber,
-        )
-    };
-    unsafe { tv_dict_set_keys_readonly(dict) };
+    let _ = unsafe { (*dict).add_str(b"cmdtype", cmdtype) };
+    let _ = unsafe { (*dict).add_number(b"cmdlevel", Cc::current().level as VarNumber) };
+    unsafe { (*dict).set_keys_readonly() };
     dict
 }
 
@@ -400,10 +392,8 @@ pub(crate) fn command_line_enter(
             let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
             // Not readonly, unlike the keys above:
             let _ = unsafe {
-                tv_dict_add_bool(
-                    dict,
-                    c"abort".as_ptr(),
-                    c"abort".count_bytes(),
+                (*dict).add_bool(
+                    b"abort",
                     if s.gotesc {
                         kBoolVarTrue
                     } else {
@@ -420,7 +410,7 @@ pub(crate) fn command_line_enter(
             cmdline_autocmd(AutoEvent::CmdlineLeave, firstcbuf.as_mut_ptr());
             err.absorb(unsafe { try_leave(&raw mut tstate) });
 
-            if unsafe { tv_dict_get_number(dict, c"abort".as_ptr()) } != 0 {
+            if dict_get_number(unsafe { (dict).as_ref() }, b"abort") != 0 {
                 s.gotesc = true;
             }
             unsafe { restore_v_event(dict, &raw mut save_v_event) };

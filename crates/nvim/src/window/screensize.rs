@@ -25,10 +25,7 @@ use super::arith::NextCurwin;
 use super::*;
 use crate::autocmd::{apply_autocmds, event_ignored, has_event};
 use crate::buffer::BufRef;
-use crate::eval::typval::{
-    DictRef, ListRef, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_tv, tv_dict_alloc,
-    tv_dict_extend, tv_dict_set_keys_readonly, tv_list_alloc,
-};
+use crate::eval::typval::{DictRef, ListRef, dict_extend, tv_dict_alloc, tv_list_alloc};
 use crate::eval::{get_v_event, restore_v_event};
 use crate::ex_getln::compute_cmdrow;
 use crate::global_cell::GlobalCell;
@@ -155,12 +152,10 @@ fn win_info_dict(deltas: [c_int; 6]) -> DictRef {
         c"skipcol".to_bytes(),
     ];
     for (key, value) in keys.iter().zip(deltas) {
-        let mut tv = TypVal::Number(value as VarNumber);
-        let (name, len) = (key.as_ptr().cast::<c_char>(), key.len() as size_t);
-        // SAFETY: a live dictionary, a static key of the given length, and a
-        // value the dictionary takes over.
+        let tv = TypVal::Number(value as VarNumber);
+        // SAFETY: a live dictionary, and a value the copy is taken from.
         // The key is a distinct literal, so the add cannot fail.
-        let added = unsafe { tv_dict_add_tv(d, name, len, &mut tv) };
+        let added = unsafe { (*d).add_tv(key, &tv) };
         debug_assert!(added.is_ok(), "a fresh dictionary rejected a key");
     }
     d_held
@@ -257,7 +252,9 @@ fn scan_windows(what: &mut Scan) {
         let key_len =
             unsafe { vim_snprintf(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), wp.handle) };
         // SAFETY: a live dictionary, and a live dictionary to add to it.
-        if unsafe { tv_dict_add_dict(*v_event, name, key_len as size_t, Some(d)) }.is_err() {
+        if unsafe { (**v_event).add_dict(cstr::slice_at(name, key_len as size_t), Some(d)) }
+            .is_err()
+        {
             break;
         }
         for (total, delta) in tot.iter_mut().zip(deltas) {
@@ -268,9 +265,8 @@ fn scan_windows(what: &mut Scan) {
         return;
     };
     let alldict = win_info_dict(tot);
-    let (key, len) = (c"all".as_ptr(), 3 as size_t);
     // SAFETY: two live dictionaries.
-    let _ = unsafe { tv_dict_add_dict(*v_event, key, len, Some(alldict)) };
+    let _ = unsafe { (**v_event).add_dict(b"all", Some(alldict)) };
 }
 
 /// The window whose id and buffer an event is reported against.
@@ -361,12 +357,11 @@ fn fire_resized(resize: &mut Subject, windows_list: Option<ListRef>) {
     let mut save = SaveVEvent::default();
     // SAFETY: `get_v_event` hands back the dictionary it saved into `save`.
     let v_event = unsafe { get_v_event(&raw mut save) };
-    let (key, len) = (c"windows".as_ptr(), 7 as size_t);
-    // SAFETY: a live dictionary, a static key, and a live list it takes over.
-    if unsafe { tv_dict_add_list(v_event, key, len, windows_list) }.is_ok() {
+    // SAFETY: a live dictionary and a live list it takes over.
+    if unsafe { (*v_event).add_list(b"windows", windows_list) }.is_ok() {
         let (name, buf) = (resize.name(), resize.buffer());
         // SAFETY: a live dictionary, a NUL-terminated name and a live buffer.
-        unsafe { tv_dict_set_keys_readonly(v_event) };
+        unsafe { (*v_event).set_keys_readonly() };
 
         let __hoisted_0 = Some(buf);
 
@@ -386,9 +381,9 @@ fn fire_scrolled(scroll: &mut Subject, scroll_dict: Option<DictRef>) {
     let from = scroll_dict
         .as_ref()
         .map_or(ptr::null_mut(), DictRef::as_ptr);
-    unsafe { tv_dict_extend(v_event, from, c"move".as_ptr()) };
+    unsafe { dict_extend(v_event, from, b'm') };
     // SAFETY: a live dictionary.
-    unsafe { tv_dict_set_keys_readonly(v_event) };
+    unsafe { (*v_event).set_keys_readonly() };
     drop(scroll_dict);
     let (name, buf) = (scroll.name(), scroll.buffer());
 

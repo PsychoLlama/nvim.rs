@@ -9,7 +9,7 @@ use super::wrappers::{
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
-    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_get_number,
+    tv_dict_alloc_ret, tv_get_number,
 };
 use crate::eval::window::{find_win_by_nr_or_id, win_and_tab_by_id};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
@@ -505,11 +505,11 @@ pub fn f_getcharsearch(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     let csearch = last_csearch();
     tv_dict_alloc_ret(result);
     let dict = result.dict_or_null();
-    let _ = unsafe { tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr()) };
+    let _ = unsafe { (*dict).add_str(b"char", csearch.as_ptr()) };
     let forward = last_csearch_forward() as VarNumber;
-    let _ = unsafe { tv_dict_add_nr(dict, c"forward".as_ptr(), 7, forward) };
+    let _ = unsafe { (*dict).add_number(b"forward", forward) };
     let until = last_csearch_until() as VarNumber;
-    let _ = unsafe { tv_dict_add_nr(dict, c"until".as_ptr(), 5, until) };
+    let _ = unsafe { (*dict).add_number(b"until", until) };
 }
 
 /// `setcharsearch({dict})` — each key is optional and missing keys leave
@@ -522,21 +522,18 @@ pub fn f_setcharsearch(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
     if tv_check_for_dict_arg(args, 0).is_err() {
         return;
     }
-    let d = args[0].dict_or_null();
-    if d.is_null() {
+    let Some(d) = args[0].dict_ref() else {
         return;
-    }
-    let csearch = unsafe { numbuf.dict_string(d, c"char".as_ptr()) };
+    };
+    let csearch = numbuf.dict_string(Some(d), b"char");
     if !csearch.is_null() {
         unsafe { set_last_csearch(utf_ptr2char(csearch), csearch, utfc_ptr2len(csearch)) };
     }
-    let di = unsafe { tv_dict_find(d, c"forward".as_ptr(), 7) };
-    if !di.is_null() {
-        let forward = unsafe { tv_get_number(&(*di).di_tv) } != 0;
+    if let Some(di) = d.find(b"forward") {
+        let forward = tv_get_number(&di.di_tv) != 0;
         set_csearch_direction(if forward { FORWARD } else { BACKWARD } as Direction);
     }
-    let di = unsafe { tv_dict_find(d, c"until".as_ptr(), 5) };
-    if !di.is_null() {
-        set_csearch_until((unsafe { tv_get_number(&(*di).di_tv) } != 0) as c_int);
+    if let Some(di) = d.find(b"until") {
+        set_csearch_until((tv_get_number(&di.di_tv) != 0) as c_int);
     }
 }

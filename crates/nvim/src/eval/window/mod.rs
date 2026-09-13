@@ -56,9 +56,8 @@ use crate::buffer::{buf_is_quickfix, buf_is_terminal, do_autochdir};
 use crate::cursor::{check_cursor, check_pos};
 use crate::eval::funcs::execute_common;
 use crate::eval::typval::{
-    tv_check_for_nonnull_dict_arg, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_nr,
-    tv_dict_alloc, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_number, tv_get_number,
-    tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
+    dict_find, dict_get_number, tv_check_for_nonnull_dict_arg, tv_dict_alloc, tv_dict_alloc_ret,
+    tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::ex_getln::text_or_buf_locked;
 use crate::memory::{xfree, xmallocz, xstrdup};

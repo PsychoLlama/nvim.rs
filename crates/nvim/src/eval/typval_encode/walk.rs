@@ -14,16 +14,16 @@ use super::{
 };
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::typval::{
-    DictSlot, Dt, Li, Pt, Tv, blob_bytes, di_tv, dv_copyid, list_first, list_items, list_items_mut,
-    list_iter, list_last, list_len, lv_copyid, tv_dict_find, tv_dict_hi2di, tv_dict_item_key,
+    DictSlot, Dt, Li, Pt, Tv, blob_bytes, di_tv, dict_find, dv_copyid, list_first, list_items,
+    list_items_mut, list_iter, list_last, list_len, lv_copyid, tv_dict_hi2di,
 };
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::eval::{get_copy_id, partial_name};
 use crate::memory::xfree;
 use crate::message::internal_error;
 use crate::types::{
-    Dict, DictItem, List, Partial, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, int64_t,
+    Dict, List, Partial, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, int64_t,
     kBoolVarFalse, kBoolVarTrue, kSpecialVarNull, ptrdiff_t, size_t,
 };
 
@@ -348,19 +348,25 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     copyid: c_int,
     objname: &CStr,
 ) -> Result<Option<Flow>, Refused> {
-    let dict = unsafe { (*tv).dict_or_null() };
-    if unsafe { (*dict).dv_hashtab.ht_used } != 2 {
+    // SAFETY: the caller's promise: `tv` is a live dictionary value.
+    let dict = unsafe { (*tv).dict_ref() };
+    if dict.map_or(0, Dict::len) != 2 {
         return Ok(None);
     }
-    let type_di: *const DictItem = unsafe { tv_dict_find(dict, c"_TYPE".as_ptr(), 5) };
-    if type_di.is_null() || unsafe { (*type_di).di_tv.v_type() } != VAR_LIST {
+    let Some(type_di) = dict_find(dict, b"_TYPE") else {
+        return Ok(None);
+    };
+    if type_di.di_tv.v_type() != VAR_LIST {
         return Ok(None);
     }
-    let val_di: *const DictItem = unsafe { tv_dict_find(dict, c"_VAL".as_ptr(), 4) };
+    // The `_VAL` item is re-derived below rather than held: the walk writes
+    // through it, and `find_ptr` answers the table's own pointer where a
+    // borrow would have to be cast.
+    let val_di = dict.map_or(::core::ptr::null_mut(), |d| d.find_ptr(b"_VAL"));
     if val_di.is_null() {
         return Ok(None);
     }
-    let type_list = unsafe { (*type_di).di_tv.list_or_null() };
+    let type_list = type_di.di_tv.list_or_null();
     let found = eval_msgpack_type_lists
         .get()
         .iter()
@@ -371,7 +377,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     let Some(found) = found else {
         return Ok(None);
     };
-    let val_tv = di_tv(val_di.cast_mut());
+    let val_tv = di_tv(val_di);
     // SAFETY: the `_VAL` item's value, live while the dictionary is.
     let val = unsafe { Tv::new(val_tv) };
     // As `convert_one_value`: the borrow is taken last.
@@ -639,7 +645,7 @@ unsafe fn walk<S: TypvalSink>(
                     *slot_field = slot;
                     *todo_slot = todo;
                 }
-                let key = unsafe { tv_dict_item_key(di) };
+                let key = unsafe { (*di).key().as_ptr() };
                 walk_hook!(sink.conv_dict_key(unsafe { cstr::bytes_at(key) }));
                 sink.conv_dict_after_key(Some(dictp));
                 tv = di_tv(di);

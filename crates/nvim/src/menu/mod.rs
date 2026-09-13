@@ -32,7 +32,7 @@
 
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char, c_int, c_long};
+use core::ffi::{CStr, c_char, c_int};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 use std::ffi::CString;
@@ -40,10 +40,7 @@ use std::ffi::CString;
 use crate::autocmd::apply_autocmds;
 use crate::charset::skipwhite;
 use crate::cstr;
-use crate::eval::typval::{
-    DictRef, ListRef, tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict,
-    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_len, tv_list_alloc,
-};
+use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
@@ -530,11 +527,6 @@ pub(crate) fn dict_alloc() -> DictRef {
     tv_dict_alloc()
 }
 
-pub(crate) fn dict_len(dict: *const Dict) -> c_long {
-    // SAFETY: a live Dict, or null (which answers 0).
-    unsafe { tv_dict_len(dict) }
-}
-
 pub(crate) fn dict_add_str(dict: *mut Dict, key: &CStr, value: &CStr) {
     dict_add_str_raw(dict, key, value.as_ptr());
 }
@@ -542,28 +534,28 @@ pub(crate) fn dict_add_str(dict: *mut Dict, key: &CStr, value: &CStr) {
 /// [`dict_add_str`] for a value that is still a raw pointer.
 pub(crate) fn dict_add_str_raw(dict: *mut Dict, key: &CStr, value: *const c_char) {
     // SAFETY: see the section note; `tv_dict_add_str` copies `value`.
-    let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
+    let _ = unsafe { (*dict).add_str(key.to_bytes(), value) };
 }
 
 /// [`dict_add_str`] handing over an allocation the Dict then owns.
 pub(crate) fn dict_add_allocated_str(dict: *mut Dict, key: &CStr, value: *mut c_char) {
     // SAFETY: see the section note; the Dict takes over `value`.
-    let _ = unsafe { tv_dict_add_allocated_str(dict, key.as_ptr(), key.count_bytes(), value) };
+    let _ = unsafe { (*dict).add_allocated_str(key.to_bytes(), value) };
 }
 
 pub(crate) fn dict_add_nr(dict: *mut Dict, key: &CStr, value: VarNumber) {
     // SAFETY: see the section note.
-    let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+    let _ = unsafe { (*dict).add_number(key.to_bytes(), value) };
 }
 
 pub(crate) fn dict_add_bool(dict: *mut Dict, key: &CStr, value: bool) {
     // SAFETY: see the section note.
-    let _ = unsafe { tv_dict_add_bool(dict, key.as_ptr(), key.count_bytes(), value.into()) };
+    let _ = unsafe { (*dict).add_bool(key.to_bytes(), value.into()) };
 }
 
 pub(crate) fn dict_add_list(dict: *mut Dict, key: &CStr, value: Option<ListRef>) {
     // SAFETY: see the section note; the Dict takes the list over.
-    let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
+    let _ = unsafe { (*dict).add_list(key.to_bytes(), value) };
 }
 
 /// A nested Dict under a key given as raw bytes -- `menu_get()` files each
@@ -571,7 +563,7 @@ pub(crate) fn dict_add_list(dict: *mut Dict, key: &CStr, value: Option<ListRef>)
 /// terminal mode lands under `t` rather than `tl`.
 pub(crate) fn dict_add_dict(dict: *mut Dict, key: &[u8], value: Option<DictRef>) {
     // SAFETY: see the section note; `key` is a live slice of `key.len()`.
-    let _ = unsafe { tv_dict_add_dict(dict, key.as_ptr().cast(), key.len(), value) };
+    let _ = unsafe { (*dict).add_dict(key, value) };
 }
 
 pub(crate) fn list_alloc() -> ListRef {

@@ -31,7 +31,6 @@ use crate::channel::channel_job_running;
 use crate::diff::diff_buf_add;
 use crate::digraph::keymap_init;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::eval::typval::tv_dict_add;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::{buf_check_timestamp, shorten_fnames};
@@ -188,7 +187,7 @@ fn now() -> time_t {
 fn add_changedtick(mut buffer: Buf) {
     let (vars, di) = (buffer.b_vars, &raw mut buffer.changedtick_di);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
-    let _ = unsafe { tv_dict_add(vars, di) };
+    let _ = unsafe { (*vars).add_item(di) };
 }
 
 // ---------------------------------------------------------------------------

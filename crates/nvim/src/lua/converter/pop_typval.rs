@@ -34,9 +34,7 @@ use core::ffi::{CStr, c_char};
 use super::pop::{At, LuaStack, TURN_SLOTS};
 use super::{VARNUMBER_MAX, VARNUMBER_MIN, nlua_traverse_table};
 use crate::eval::decode::{decode_create_map_special_dict, decode_string};
-use crate::eval::typval::{
-    DictRef, ListRef, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc_len, tv_list_alloc,
-};
+use crate::eval::typval::{DictRef, ListRef, tv_dict_alloc, tv_dict_item_alloc_len, tv_list_alloc};
 use crate::eval::userfunc::register_luafunc;
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
 use crate::lua::ffi::{
@@ -158,7 +156,7 @@ impl OpenValue {
                 unsafe {
                     let item = tv_dict_item_alloc_len(key.as_ptr().cast::<c_char>(), key.len());
                     (*item).di_tv = value;
-                    if tv_dict_add(dict.as_ptr(), item).is_err() {
+                    if dict.add_item(item).is_err() {
                         // A Lua table cannot hand the same key back twice,
                         // so the only refusal left is the funcref-name
                         // check, which a key from a table never trips.

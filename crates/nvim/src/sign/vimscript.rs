@@ -36,7 +36,7 @@ const HL_KEYS: [&str; 4] = ["linehl", "texthl", "culhl", "numhl"];
 /// `d` must be a live dictionary and `val` a NUL-terminated string.
 unsafe fn put_str(d: *mut Dict, key: &str, val: *const ::core::ffi::c_char) {
     // SAFETY: the caller's dictionary and value.
-    let _ = unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
+    let _ = unsafe { (*d).add_str(key.as_bytes(), val) };
 }
 
 /// `tv_dict_add_nr` with a Rust key; see [`put_str`].
@@ -45,7 +45,7 @@ unsafe fn put_str(d: *mut Dict, key: &str, val: *const ::core::ffi::c_char) {
 /// `d` must be a live dictionary.
 unsafe fn put_nr(d: *mut Dict, key: &str, nr: VarNumber) {
     // SAFETY: the caller's dictionary.
-    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
+    let _ = unsafe { (*d).add_number(key.as_bytes(), nr) };
 }
 
 /// `NULL`, for the many optional pointers in this file.
@@ -59,17 +59,10 @@ fn null<T>() -> *mut T {
 /// # Safety
 /// `d` must be null or a live dictionary; the answer borrows from it.
 unsafe fn key<'a>(d: *const Dict, key: &str) -> Option<&'a TypVal> {
-    // SAFETY: the caller's dictionary.
-    let di: *mut DictItem = unsafe {
-        tv_dict_find(
-            d,
-            key.as_ptr().cast(),
-            ptrdiff_t::try_from(key.len()).expect("a key literal is short"),
-        )
-    };
-    // SAFETY: a non-null answer is a live item of that dictionary. No read
-    // happens here.
-    (!di.is_null()).then(|| unsafe { &(*di).di_tv })
+    // SAFETY: the caller's dictionary; the answer borrows it, which is the
+    // contract this signature passes on.
+    let di = dict_find(unsafe { d.as_ref() }, key.as_bytes())?;
+    Some(&di.di_tv)
 }
 
 /// Argument `i` as a dictionary, or null when it was not supplied.
@@ -245,7 +238,7 @@ unsafe fn sign_get_placed_in_buf(
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
         // A borrow of the list the dictionary owns from here on.
         let into = l.as_ptr();
-        let _ = tv_dict_add_list(d, "signs".as_ptr().cast(), "signs".len(), Some(l));
+        let _ = (*d).add_list("signs".as_bytes(), Some(l));
         into
     };
 
@@ -327,7 +320,9 @@ unsafe fn sign_define_from_dict(
     // SAFETY: the caller's name and dictionary.
     let mut name = name;
     if name.is_null() {
-        name = unsafe { numbuf.dict_string(dict, c"name".as_ptr()) }.cast_mut();
+        name = numbuf
+            .dict_string(unsafe { dict.as_ref() }, b"name")
+            .cast_mut();
         if name.is_null() || unsafe { *name } == 0 {
             return -1;
         }
@@ -340,13 +335,30 @@ unsafe fn sign_define_from_dict(
         // `tv_dict_get_string(.., false)` hands back the dictionary's own
         // buffer, which `init_sign_text` then unescapes IN PLACE — see
         // the note on `sign_define_by_name`.
-        icon = unsafe { numbuf2.dict_string(dict, c"icon".as_ptr()) }.cast_mut();
-        linehl = unsafe { numbuf3.dict_string(dict, c"linehl".as_ptr()) }.cast_mut();
-        text = unsafe { numbuf4.dict_string(dict, c"text".as_ptr()) }.cast_mut();
-        texthl = unsafe { numbuf5.dict_string(dict, c"texthl".as_ptr()) }.cast_mut();
-        culhl = unsafe { numbuf6.dict_string(dict, c"culhl".as_ptr()) }.cast_mut();
-        numhl = unsafe { numbuf7.dict_string(dict, c"numhl".as_ptr()) }.cast_mut();
-        prio = number_as_int(unsafe { tv_dict_get_number_def(dict, c"priority".as_ptr(), -1) });
+        icon = numbuf2
+            .dict_string(unsafe { dict.as_ref() }, b"icon")
+            .cast_mut();
+        linehl = numbuf3
+            .dict_string(unsafe { dict.as_ref() }, b"linehl")
+            .cast_mut();
+        text = numbuf4
+            .dict_string(unsafe { dict.as_ref() }, b"text")
+            .cast_mut();
+        texthl = numbuf5
+            .dict_string(unsafe { dict.as_ref() }, b"texthl")
+            .cast_mut();
+        culhl = numbuf6
+            .dict_string(unsafe { dict.as_ref() }, b"culhl")
+            .cast_mut();
+        numhl = numbuf7
+            .dict_string(unsafe { dict.as_ref() }, b"numhl")
+            .cast_mut();
+        // SAFETY: the caller's dictionary.
+        prio = number_as_int(dict_get_number_def(
+            unsafe { dict.as_ref() },
+            b"priority",
+            -1,
+        ));
     }
     let defined =
         unsafe { sign_define_by_name(name, icon, text, linehl, texthl, culhl, numhl, prio) };
@@ -656,7 +668,7 @@ unsafe fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: *mut Dict) -> 
     let mut buf = ::core::ptr::null_mut();
     let mut group = match group_tv {
         Some(tv) => numbuf.string_ptr(tv),
-        None => unsafe { numbuf2.dict_string(dict, c"group".as_ptr()) },
+        None => numbuf2.dict_string(unsafe { dict.as_ref() }, b"group"),
     };
     if !group.is_null() && unsafe { *group } == 0 {
         group = ::core::ptr::null();
@@ -670,7 +682,7 @@ unsafe fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: *mut Dict) -> 
             }
         }
         if unsafe { key(dict, "id") }.is_some() {
-            id = number_as_int(unsafe { tv_dict_get_number(dict, c"id".as_ptr()) });
+            id = number_as_int(dict_get_number(unsafe { (dict).as_ref() }, b"id"));
             if id <= 0 {
                 emsg(gettext(e_invarg));
                 return -1;

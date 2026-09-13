@@ -216,9 +216,9 @@ pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
 
     // C's S_LEN(): `tv_dict_add_*` copies exactly `key_len` bytes, so the
     // key type is a plain `&str`.
-    let add_str = |k: &str, v| unsafe { tv_dict_add_str(retdict, k.as_ptr().cast(), k.len(), v) };
-    let add_nr = |k: &str, v| unsafe { tv_dict_add_nr(retdict, k.as_ptr().cast(), k.len(), v) };
-    let add_list = |k: &str, v| unsafe { tv_dict_add_list(retdict, k.as_ptr().cast(), k.len(), v) };
+    let add_str = |k: &str, v| unsafe { (*retdict).add_str(k.as_bytes(), v) };
+    let add_nr = |k: &str, v| unsafe { (*retdict).add_number(k.as_bytes(), v) };
+    let add_list = |k: &str, v| unsafe { (*retdict).add_list(k.as_bytes(), v) };
 
     let mut ret = add_str("cmdline_orig", cmdline_orig.get());
     if ret.is_ok() {

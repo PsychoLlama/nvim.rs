@@ -38,8 +38,8 @@ use crate::charset::{skipwhite, transchar, vim_iswordp};
 use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::cmdexpand::fuzzymatches_to_strmatches;
 use crate::eval::typval::{
-    tv_check_for_dict_arg, tv_dict_alloc_ret, tv_dict_find, tv_dict_get_bool, tv_dict_get_number,
-    tv_dict_get_string_alloc, tv_get_bool, tv_get_number, tv_list_alloc_ret,
+    dict_find, dict_get_bool, dict_get_number, dict_get_string_alloc, tv_check_for_dict_arg,
+    tv_dict_alloc_ret, tv_get_bool, tv_get_number, tv_list_alloc_ret,
 };
 use crate::eval::userfunc::find_func;
 use crate::eval::vars::set_vim_var_char;

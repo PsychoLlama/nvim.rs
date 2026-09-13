@@ -5,8 +5,8 @@
 use super::wrappers::{arg_number, list_alloc_ret};
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    list_find_nr, list_len, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
-    tv_check_for_opt_number_arg, tv_dict_find, tv_get_number, tv_get_number_chk,
+    dict_find, list_find_nr, list_len, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
+    tv_check_for_opt_number_arg, tv_get_number, tv_get_number_chk,
 };
 use crate::eval::{
     add_timer_info, add_timer_info_all, callback_from_typval, eval_expr_typval, find_timer_by_nr,
@@ -282,9 +282,8 @@ pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         if tv_check_for_nonnull_dict_arg(args, 2).is_err() {
             return;
         }
-        let di = unsafe { tv_dict_find(args[2].dict_or_null(), c"repeat".as_ptr(), 6) };
-        if !di.is_null() {
-            repeat = unsafe { tv_get_number(&(*di).di_tv) } as c_int;
+        if let Some(di) = dict_find(args[2].dict_ref(), b"repeat") {
+            repeat = tv_get_number(&di.di_tv) as c_int;
             // A repeat of 0 means "once", the same as the default.
             if repeat == 0 {
                 repeat = 1;

@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use core::ffi::{CStr, c_char, c_int, c_long};
 use core::ptr;

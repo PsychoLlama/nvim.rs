@@ -14,6 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
 use crate::winlayer::prev_window;

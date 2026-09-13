@@ -27,9 +27,7 @@ use crate::cursor::{
 use crate::drawscreen::redraw_win_line;
 use crate::edit::beginline;
 use crate::eval::funcs::get_buf_arg;
-use crate::eval::typval::{
-    tv_dict_add_list, tv_dict_add_nr, tv_dict_alloc, tv_dict_alloc_ret, tv_list_alloc,
-};
+use crate::eval::typval::{tv_dict_alloc, tv_dict_alloc_ret, tv_list_alloc};
 use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_docmd::state::global_busy;

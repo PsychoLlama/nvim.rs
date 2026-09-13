@@ -26,7 +26,7 @@ use core::ptr;
 /// `dict` must be a live dictionary.
 unsafe fn add_nr(dict: *mut Dict, key: &str, value: VarNumber) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
-    Ok(unsafe { tv_dict_add_nr(dict, key.as_ptr().cast(), key.len(), value) }?)
+    Ok(unsafe { (*dict).add_number(key.as_bytes(), value) }?)
 }
 
 /// Add a string under `key`. A null `value` is stored as the empty string,
@@ -38,7 +38,7 @@ unsafe fn add_nr(dict: *mut Dict, key: &str, value: VarNumber) -> Result<(), Key
 unsafe fn add_str(dict: *mut Dict, key: &str, value: *const c_char) -> Result<(), KeyTaken> {
     let value = if value.is_null() { c"".as_ptr() } else { value };
     // SAFETY: the caller's dictionary and string.
-    Ok(unsafe { tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), value) }?)
+    Ok(unsafe { (*dict).add_str(key.as_bytes(), value) }?)
 }
 
 /// Add a list under `key`, which takes over the reference.
@@ -48,7 +48,7 @@ unsafe fn add_str(dict: *mut Dict, key: &str, value: *const c_char) -> Result<()
 /// `dict` and `list` must be live.
 unsafe fn add_list(dict: *mut Dict, key: &str, list: Option<ListRef>) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and list.
-    Ok(unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), list) }?)
+    Ok(unsafe { (*dict).add_list(key.as_bytes(), list) }?)
 }
 
 /// Add a copy of `tv` under `key`.
@@ -58,7 +58,7 @@ unsafe fn add_list(dict: *mut Dict, key: &str, list: Option<ListRef>) -> Result<
 /// `dict` must be live and `tv` a live value.
 unsafe fn add_tv(dict: *mut Dict, key: &str, tv: &mut TypVal) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and value.
-    Ok(unsafe { tv_dict_add_tv(dict, key.as_ptr().cast(), key.len(), tv) }?)
+    Ok(unsafe { (*dict).add_tv(key.as_bytes(), tv) }?)
 }
 
 /// The entry of `what` under `key`, or null.
@@ -66,9 +66,10 @@ unsafe fn add_tv(dict: *mut Dict, key: &str, tv: &mut TypVal) -> Result<(), KeyT
 /// # Safety
 ///
 /// `what` must be null or a live dictionary.
-unsafe fn find(what: *const Dict, key: &str) -> *mut DictItem {
-    // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
-    unsafe { tv_dict_find(what, key.as_ptr().cast(), key.len() as ptrdiff_t) }
+unsafe fn find<'a>(what: *const Dict, key: &str) -> Option<&'a DictItem> {
+    // SAFETY: the caller's dictionary, which the answer borrows -- the
+    // contract this signature passes on.
+    dict_find(unsafe { what.as_ref() }, key.as_bytes())
 }
 
 /// Whether `what` names `key` at all — its value is never looked at, since
@@ -79,7 +80,7 @@ unsafe fn find(what: *const Dict, key: &str) -> *mut DictItem {
 /// `what` must be null or a live dictionary.
 unsafe fn asked_for(what: *const Dict, key: &str) -> bool {
     // SAFETY: forwarded from the caller.
-    !unsafe { find(what, key) }.is_null()
+    unsafe { find(what, key) }.is_some()
 }
 
 /// Append one entry to `list`, as the dictionary `getqflist()` reports.
@@ -185,6 +186,20 @@ pub(crate) unsafe fn get_errorlist(
     Ok(())
 }
 
+/// [`find`] with the entry writable.
+///
+/// # Safety
+///
+/// `what` must be null or a live dictionary; the answer borrows it.
+unsafe fn find_mut<'a>(what: *const Dict, key: &str) -> Option<&'a mut DictItem> {
+    // SAFETY: the caller's dictionary. `find_ptr` answers the table's own
+    // pointer to the item, not one cast out of a shared borrow, so writing
+    // through it is sound; the lifetime is the contract this passes on.
+    let at = unsafe { what.as_ref() }?.find_ptr(key.as_bytes());
+    // SAFETY: as above -- a non-null answer is a live item of `what`.
+    (!at.is_null()).then(|| unsafe { &mut *at })
+}
+
 /// `getqflist({'lines': […]})`: parse the given lines with `'errorformat'`
 /// — the `'efm'` key overrides it — into a throwaway list and answer the
 /// entries, without touching any real list.
@@ -194,25 +209,20 @@ pub(crate) unsafe fn get_errorlist(
 /// `what`, `di` and `retdict` must be live.
 unsafe fn qf_get_list_from_lines(
     what: *mut Dict,
-    di: *mut DictItem,
+    di: &mut DictItem,
     retdict: *mut Dict,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
-    if unsafe { (*di).di_tv.v_type() } != VAR_LIST
-        || unsafe { (*di).di_tv.list_or_null() }.is_null()
-    {
+    if di.di_tv.v_type() != VAR_LIST || di.di_tv.list_or_null().is_null() {
         return Err(QfError::BadValue);
     }
 
     let mut errorformat = p_efm.get();
-    let efm_di = unsafe { find(what, "efm") };
-    if !efm_di.is_null() {
-        if unsafe { (*efm_di).di_tv.v_type() } != VAR_STRING
-            || unsafe { (*efm_di).di_tv.string_or_null() }.is_null()
-        {
+    if let Some(efm_di) = unsafe { find(what, "efm") } {
+        if efm_di.di_tv.v_type() != VAR_STRING || efm_di.di_tv.string_or_null().is_null() {
             return Err(QfError::BadValue);
         }
-        errorformat = unsafe { (*efm_di).di_tv.string_or_null() };
+        errorformat = efm_di.di_tv.string_or_null();
     }
 
     // Only a List value is supported.
@@ -224,7 +234,7 @@ unsafe fn qf_get_list_from_lines(
             0,
             ptr::null(),
             None,
-            Some(&mut (*di).di_tv),
+            Some(&mut di.di_tv),
             errorformat,
             true,
             0,
@@ -331,18 +341,17 @@ unsafe fn qf_getprop_qfidx(qi: *mut QfInfo, what: *mut Dict) -> Option<c_int> {
     let mut qf_idx = unsafe { (*qi).qf_curlist };
 
     // Use the specified list, or the last list, or the current one.
-    let di = unsafe { find(what, "nr") };
-    if !di.is_null() {
-        if unsafe { (*di).di_tv.v_type() } == VAR_NUMBER {
+    if let Some(di) = unsafe { find(what, "nr") } {
+        if di.di_tv.v_type() == VAR_NUMBER {
             // For zero, use the current list.
-            if unsafe { (*di).di_tv.number_or_zero() } != 0 {
-                qf_idx = unsafe { (*di).di_tv.number_or_zero() } as c_int - 1;
+            if di.di_tv.number_or_zero() != 0 {
+                qf_idx = di.di_tv.number_or_zero() as c_int - 1;
                 if qf_idx < 0 || qf_idx >= unsafe { (*qi).qf_listcount } {
                     qf_idx = INVALID_QFIDX;
                 }
             }
-        } else if unsafe { (*di).di_tv.v_type() } == VAR_STRING
-            && unsafe { strequal((*di).di_tv.string_or_null(), c"$".as_ptr()) }
+        } else if di.di_tv.v_type() == VAR_STRING
+            && unsafe { strequal(di.di_tv.string_or_null(), c"$".as_ptr()) }
         {
             // Get the last list.
             qf_idx = unsafe { (*qi).qf_listcount } - 1;
@@ -352,12 +361,11 @@ unsafe fn qf_getprop_qfidx(qi: *mut QfInfo, what: *mut Dict) -> Option<c_int> {
     }
 
     // An id overrides the number.
-    let di = unsafe { find(what, "id") };
-    if !di.is_null() {
-        if unsafe { (*di).di_tv.v_type() } == VAR_NUMBER {
+    if let Some(di) = unsafe { find(what, "id") } {
+        if di.di_tv.v_type() == VAR_NUMBER {
             // For zero, use the current list.
-            if unsafe { (*di).di_tv.number_or_zero() } != 0 {
-                qf_idx = unsafe { qf_id2nr(qi, (*di).di_tv.number_or_zero() as c_uint) };
+            if di.di_tv.number_or_zero() != 0 {
+                qf_idx = unsafe { qf_id2nr(qi, di.di_tv.number_or_zero() as c_uint) };
             }
         } else {
             qf_idx = INVALID_QFIDX;
@@ -469,7 +477,7 @@ unsafe fn qf_getprop_ctx(qfl: *mut QfList, retdict: *mut Dict) -> Result<(), Key
     }
     let di = unsafe { tv_dict_item_alloc_len(c"context".as_ptr(), "context".len()) };
     unsafe { tv_copy(&*(*qfl).qf_ctx, &mut (*di).di_tv) };
-    let status = unsafe { tv_dict_add(retdict, di) };
+    let status = unsafe { (*retdict).add_item(di) };
     if status.is_err() {
         // A refused item is still ours to free.
         unsafe { tv_dict_item_free(di) };
@@ -529,8 +537,7 @@ pub(crate) unsafe fn qf_get_properties(
 
     // A 'lines' key asks about lines the caller supplies, not about a
     // list at all.
-    let lines = unsafe { find(what, "lines") };
-    if !lines.is_null() {
+    if let Some(lines) = unsafe { find_mut(what, "lines") } {
         return unsafe { qf_get_list_from_lines(what, lines, retdict) };
     }
 
@@ -556,12 +563,11 @@ pub(crate) unsafe fn qf_get_properties(
 
     // An 'idx' key asks about one entry rather than the whole list.
     let mut eidx = 0;
-    let di = unsafe { find(what, "idx") };
-    if !di.is_null() {
-        if unsafe { (*di).di_tv.v_type() } != VAR_NUMBER {
+    if let Some(di) = unsafe { find(what, "idx") } {
+        if di.di_tv.v_type() != VAR_NUMBER {
             return Err(QfError::BadValue);
         }
-        eidx = unsafe { (*di).di_tv.number_or_zero() } as c_int;
+        eidx = di.di_tv.number_or_zero() as c_int;
     }
 
     let wanted = |flag: GetListProps| flags.has(flag);

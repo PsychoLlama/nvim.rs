@@ -199,7 +199,7 @@ unsafe fn do_unlet_var(
         debug_assert!(!d.is_null());
         // SAFETY: a resolved lvalue's item of that dictionary.
         let di = unsafe { Di::new(lval.ll_di) };
-        let watched = unsafe { tv_dict_is_watched(d) };
+        let watched = dict_is_watched(unsafe { (d).as_ref() });
 
         let mut oldtv = TV_INITIAL_VALUE;
         let mut key: *mut c_char = ptr::null_mut();
@@ -207,13 +207,13 @@ unsafe fn do_unlet_var(
             let tv = di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
             unsafe { tv_copy(&*tv, &mut oldtv) };
             // The key has to be saved: removing the item frees it.
-            key = unsafe { xstrdup(tv_dict_item_key(di.raw())) };
+            key = unsafe { xstrdup((*di.raw()).key().as_ptr()) };
         }
 
         unsafe { tv_dict_item_remove(d, di.raw()) };
 
         if watched {
-            unsafe { tv_dict_watcher_notify(d, key, None, Some(&oldtv)) };
+            unsafe { dict_watcher_notify(d, ::core::ffi::CStr::from_ptr(key), None, Some(&oldtv)) };
             clear_local(&mut oldtv);
             unsafe { xfree(key.cast()) };
         }
@@ -293,7 +293,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             }
 
             let mut oldtv = TV_INITIAL_VALUE;
-            let watched = unsafe { tv_dict_is_watched(dict) };
+            let watched = dict_is_watched(unsafe { (dict).as_ref() });
             if watched {
                 let tv = di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
                 unsafe { tv_copy(&*tv, &mut oldtv) };
@@ -302,7 +302,14 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             unsafe { delete_var(ht, hi) };
 
             if watched {
-                unsafe { tv_dict_watcher_notify(dict, varname, None, Some(&oldtv)) };
+                unsafe {
+                    dict_watcher_notify(
+                        dict,
+                        ::core::ffi::CStr::from_ptr(varname),
+                        None,
+                        Some(&oldtv),
+                    )
+                };
                 clear_local(&mut oldtv);
             }
             return Ok(());

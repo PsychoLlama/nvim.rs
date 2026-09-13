@@ -12,7 +12,7 @@ use super::{
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one};
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_dict_add_str, tv_dict_find, tv_dict_get_bool, tv_list_alloc};
+use crate::eval::typval::{NumBuf, dict_get_bool, dict_has_key, tv_list_alloc};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{eval_vars, expand_filename};
 use crate::guard::Suppress;
@@ -68,8 +68,12 @@ pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         unsafe { *entry.offset(len) = NUL as c_char };
         let key = unsafe { xstrdup(entry) };
         unsafe { *entry.offset(len) = saved };
-        if unsafe { tv_dict_find(result.dict_or_null(), key, len) }.is_null() {
-            let _ = unsafe { tv_dict_add_str(result.dict_or_null(), key, len as usize, value) };
+        // SAFETY: `key` is the `len` bytes just copied out of the entry.
+        let bytes = unsafe { cstr::slice_at(key, len as usize) };
+        if !dict_has_key(result.dict_ref(), bytes) {
+            // SAFETY: `value` is the NUL-terminated tail of the entry.
+            let d = result.dict_mut().expect("just allocated");
+            let _ = unsafe { d.add_str(bytes, value) };
         }
         unsafe { xfree(key as *mut c_void) };
     }
@@ -184,7 +188,7 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // SAFETY: the kind says the value holds a Dict pointer.
         let d = args[1].dict_or_null();
         let no = kBoolVarFalse as c_int;
-        unsafe { tv_dict_get_bool(d, c"errmsg".as_ptr(), no) != 0 }
+        dict_get_bool(unsafe { (d).as_ref() }, b"errmsg", no) != 0
     };
     let quiet = !errmsg;
     let mut cmdstr = unsafe { xstrdup(arg_string(&mut numbuf, &args[0])) };

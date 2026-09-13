@@ -9,11 +9,10 @@ use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    ListRef, NumBuf, blob_bytes, blob_len, list_copy, list_find, list_flatten, list_items,
-    list_len, list_locked, list_uidx, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
-    tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
-    tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def, tv_dict_len,
-    tv_dict_set_ret, tv_equal, tv_get_bool_chk, value_check_lock,
+    ListRef, NumBuf, blob_bytes, blob_len, dict_get_number_def, dict_len, list_copy, list_find,
+    list_flatten, list_items, list_len, list_locked, list_uidx, tv_check_for_list_or_blob_arg,
+    tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg,
+    tv_clear, tv_copy, tv_dict_set_ret, tv_equal, tv_get_bool_chk, value_check_lock,
 };
 use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
 use crate::eval::vars::{
@@ -75,7 +74,7 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_NUMBER => (tv.number_or_zero()) == 0,
         VAR_FLOAT => (tv.float_or_zero()) == 0.0,
         VAR_LIST => tv.list_ref().is_none_or(List::is_empty),
-        VAR_DICT => (unsafe { tv_dict_len(tv.dict_or_null()) }) == 0,
+        VAR_DICT => (dict_len(tv.dict_ref())) == 0,
         VAR_BLOB => tv.blob_ref().is_none_or(Blob::is_empty),
         VAR_SPECIAL => tv.as_special() == Some(kSpecialVarNull),
         // A Bool other than the two named values leaves the answer at its
@@ -242,7 +241,9 @@ fn get_from_dict(args: &[TypVal]) -> *mut TypVal {
     if d.is_null() {
         return ptr::null_mut();
     }
-    let di = unsafe { tv_dict_find(d, arg_string(&mut numbuf, &args[1]), -1) };
+    // SAFETY: the argument's own dictionary and a NUL-terminated key. The
+    // pointer form is the answer: the caller writes through the value.
+    let di = unsafe { (*d).find_ptr(cstr::bytes_at(arg_string(&mut numbuf, &args[1]))) };
     if di.is_null() {
         return ptr::null_mut();
     }
@@ -350,9 +351,9 @@ unsafe fn func_arity(pt: *mut Partial, result: &mut TypVal) {
     } else {
         required -= unsafe { (*pt).pt_argc };
     }
-    let _ = unsafe { tv_dict_add_nr(dict, c"required".as_ptr(), 8, required as VarNumber) };
-    let _ = unsafe { tv_dict_add_nr(dict, c"optional".as_ptr(), 8, optional as VarNumber) };
-    let _ = unsafe { tv_dict_add_bool(dict, c"varargs".as_ptr(), 7, varargs as BoolVarValue) };
+    let _ = unsafe { (*dict).add_number(b"required", required as VarNumber) };
+    let _ = unsafe { (*dict).add_number(b"optional", optional as VarNumber) };
+    let _ = unsafe { (*dict).add_bool(b"varargs", varargs as BoolVarValue) };
 }
 
 /// `index({object}, {expr} [, {start} [, {ic}]])`.
@@ -470,7 +471,7 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let startidx = if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
-        unsafe { tv_dict_get_number_def(args[2].dict_or_null(), c"startidx".as_ptr(), 0) }
+        dict_get_number_def(args[2].dict_ref(), b"startidx", 0)
     } else {
         0
     };
@@ -592,7 +593,7 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
         VAR_BLOB => VarNumber::from(blob_len(tv.blob_ref())),
         VAR_LIST => list_len(tv.list_ref()) as VarNumber,
-        VAR_DICT => unsafe { tv_dict_len(tv.dict_or_null()) as VarNumber },
+        VAR_DICT => dict_len(tv.dict_ref()) as VarNumber,
         // The remaining tags are Unknown, Funcref, Partial, Float,
         // Bool and Special; `VarType` has no twelfth value.
         _ => {

@@ -13,8 +13,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::cstr;
 use crate::eval::typval::{
-    ListRef, NumBuf, list_iter, list_len, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str,
-    tv_dict_find, tv_dict_get_number, tv_dict_len, tv_list_alloc,
+    ListRef, NumBuf, dict_get_number, dict_len, list_iter, list_len, tv_list_alloc,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
@@ -120,7 +119,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     // SAFETY: the register's list, whose reference the dictionary takes over.
-    let _ = unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, ListRef::owning(list)) };
+    let _ = unsafe { (*dict).add_list(b"regcontents", ListRef::owning(list)) };
 
     let mut buf: TypeBuf = [0; 67];
     let mut reglen: ColNr = 0;
@@ -138,18 +137,18 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // contents, which the null check above established.
         _ => unreachable!("register {regname} has contents but no type"),
     }
-    let _ = unsafe { tv_dict_add_str(dict, c"regtype".as_ptr(), 7, buf.as_ptr()) };
+    let _ = unsafe { (*dict).add_str(b"regtype", buf.as_ptr()) };
 
     // The unnamed register reports what it points at; every other one
     // reports whether it is what the unnamed register points at.
     buf[0] = get_register_name(get_unname_register()) as c_char;
     buf[1] = NUL as c_char;
     if regname == b'"' as c_int {
-        let _ = unsafe { tv_dict_add_str(dict, c"points_to".as_ptr(), 9, buf.as_ptr()) };
+        let _ = unsafe { (*dict).add_str(b"points_to", buf.as_ptr()) };
     } else {
         let unnamed = regname == buf[0] as c_int;
         let flag = if unnamed { kBoolVarTrue } else { kBoolVarFalse } as BoolVarValue;
-        let _ = unsafe { tv_dict_add_bool(dict, c"isunnamed".as_ptr(), 9, flag) };
+        let _ = unsafe { (*dict).add_bool(b"isunnamed", flag) };
     }
 }
 
@@ -236,18 +235,22 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args[1].v_type() == VAR_DICT {
         let d = args[1].dict_or_null();
         // An empty dict clears the register outright.
-        if unsafe { tv_dict_len(d) } == 0 {
+        if dict_len(unsafe { (d).as_ref() }) == 0 {
             let mut empty: [*mut c_char; 2] = [ptr::null_mut(); 2];
             let lines = empty.as_mut_ptr();
             let reg = regname as c_int;
             unsafe { write_reg_contents_lst(reg, lines, false, kMTUnknown, -1) };
             return;
         }
-        let di = unsafe { tv_dict_find(d, c"regcontents".as_ptr(), -1) };
+        // SAFETY: the argument's own dictionary. The pointer form is what
+        // `regcontents` is: the value is handed on to the register writer.
+        let di = unsafe { (*d).find_ptr(b"regcontents") };
         if !di.is_null() {
             regcontents = unsafe { &raw mut (*di).di_tv };
         }
-        let stropt = unsafe { numbuf2.dict_string(d, c"regtype".as_ptr()) };
+        // SAFETY: as above.
+        let d_ref = unsafe { d.as_ref() };
+        let stropt = numbuf2.dict_string(d_ref, b"regtype");
         if !stropt.is_null() {
             let mut p: *const c_char = stropt;
             // The type must be exactly one letter (plus a width), so
@@ -262,12 +265,12 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         }
         if regname == b'"' as c_char {
-            let stropt = unsafe { numbuf3.dict_string(d, c"points_to".as_ptr()) };
+            let stropt = numbuf3.dict_string(d_ref, b"points_to");
             if !stropt.is_null() {
                 pointreg = unsafe { *stropt };
                 regname = pointreg;
             }
-        } else if unsafe { tv_dict_get_number(d, c"isunnamed".as_ptr()) } != 0 {
+        } else if dict_get_number(d_ref, b"isunnamed") != 0 {
             pointreg = regname;
         }
     } else {

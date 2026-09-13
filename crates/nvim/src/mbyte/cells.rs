@@ -19,6 +19,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::{index_of, list_iter};
 use crate::semsg;
 use crate::types::NUL;

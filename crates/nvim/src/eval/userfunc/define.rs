@@ -605,7 +605,7 @@ impl Definition {
             // live dictionary.
             self.fudi.fd_di = unsafe { tv_dict_item_alloc(self.fudi.fd_newkey) };
             // SAFETY: as above -- the item is freed again if it is refused.
-            if unsafe { tv_dict_add(self.fudi.fd_dict, self.fudi.fd_di) }.is_err() {
+            if unsafe { (*self.fudi.fd_dict).add_item(self.fudi.fd_di) }.is_err() {
                 // SAFETY: as above.
                 unsafe { tv_dict_item_free(self.fudi.fd_di) };
                 // SAFETY: `func` was allocated just now and never installed.

@@ -18,7 +18,7 @@
 
 use crate::buffer::buflist_nr2name;
 use crate::cstr::c_bytes;
-use crate::eval::typval::{tv_dict_add_list, tv_dict_add_str, tv_dict_alloc, tv_list_alloc};
+use crate::eval::typval::{tv_dict_alloc, tv_list_alloc};
 use crate::memory::xfree;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -70,12 +70,9 @@ pub(super) unsafe fn add_mark(
         }))
     };
     unsafe { (*lpos).push_number(VarNumber::from(pos.coladd)) };
-    if unsafe { tv_dict_add_str(d, c"mark".as_ptr(), c"mark".count_bytes(), mname) }.is_err()
-        || unsafe { tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), Some(held)) }
-            .is_err()
-        || (!fname.is_null()
-            && unsafe { tv_dict_add_str(d, c"file".as_ptr(), c"file".count_bytes(), fname) }
-                .is_err())
+    if unsafe { (*d).add_str(b"mark", mname) }.is_err()
+        || unsafe { (*d).add_list(b"pos", Some(held)) }.is_err()
+        || (!fname.is_null() && unsafe { (*d).add_str(b"file", fname) }.is_err())
     {
         return Err(Failed);
     }

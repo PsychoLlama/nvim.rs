@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::tr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -265,7 +266,7 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> Option<DictRef> {
             let list = list_alloc();
             for child in children.siblings() {
                 let entry = menu_get_recursive(child, modes);
-                if entry.as_ref().is_some_and(|d| dict_len(d.as_ptr()) > 0) {
+                if entry.as_ref().is_some_and(|d| !d.is_empty()) {
                     list_append_dict(list.as_ptr(), entry);
                 }
             }
@@ -293,7 +294,7 @@ pub(crate) unsafe fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut L
     }
     for node in menu.into_iter().flat_map(Menu::siblings) {
         let entry = menu_get_recursive(node, modes);
-        if entry.as_ref().is_some_and(|d| dict_len(d.as_ptr()) > 0) {
+        if entry.as_ref().is_some_and(|d| !d.is_empty()) {
             list_append_dict(list, entry);
         }
         if !path.is_empty() {

@@ -29,7 +29,7 @@ use std::ptr;
 
 use neovim::eval::typval::{
     BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
-    tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
+    tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
 };
 use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
@@ -168,7 +168,7 @@ impl Tv {
                     let mut value_tv = unsafe { value.build_at(path) };
                     unsafe { tv_copy(&value_tv, &mut (*di).di_tv) };
                     tv_clear(&mut value_tv);
-                    let _ = unsafe { tv_dict_add(d, di) };
+                    let _ = unsafe { (*d).add_item(di) };
                 }
                 path.pop();
                 dict_tv(Some(dict))
@@ -521,7 +521,7 @@ pub(crate) unsafe fn dict_items(d: *const Dict) -> Vec<(Vec<u8>, *mut DictItem)>
 }
 
 /// The item `d` holds under `key`. Panics if there is none — a case that
-/// wants the absence asserts it through `tv_dict_find`.
+/// wants the absence asserts it through `dict_find`.
 ///
 /// # Safety
 /// As [`dict_items`].

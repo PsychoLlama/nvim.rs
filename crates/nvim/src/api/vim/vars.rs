@@ -95,10 +95,10 @@ pub unsafe fn nvim_get_var(name: String_0) -> Result<Object, Error> {
 /// # Safety
 /// `name` must name its own bytes.
 unsafe fn find_globvar(name: &String_0) -> *mut DictItem {
-    // SAFETY: the caller's promise; the global dictionary is live from
-    // startup to exit.
-    let len: ptrdiff_t = name.len().cast_signed();
-    unsafe { tv_dict_find(get_globvar_dict(), name.data(), len) }
+    // SAFETY: the global dictionary is live from startup to exit. The
+    // pointer form is the answer: the caller writes through the item and
+    // reaches the dictionary again to fire its watchers.
+    unsafe { (*get_globvar_dict()).find_ptr(name.as_bytes()) }
 }
 
 /// "Key not found: `name`".

@@ -19,7 +19,7 @@ use core::ptr::{null, null_mut};
 use crate::ascii::ascii_iswhite;
 use crate::eval::typval::{
     NumBuf, blob_slice_or_index, list_slice_or_index, tv_check_str, tv_clear, tv_copy,
-    tv_dict_find, tv_dict_unref, tv_get_number,
+    tv_dict_unref, tv_get_number,
 };
 use crate::eval::userfunc::make_partial;
 use crate::eval::{
@@ -35,9 +35,9 @@ use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::types::{
-    Dict, DictItem, EvalArg, EvalFuncData, Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
-    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber,
-    ptrdiff_t, size_t, ssize_t,
+    Dict, EvalArg, EvalFuncData, Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, ptrdiff_t,
+    size_t, ssize_t,
 };
 
 /// A freshly declared typval.
@@ -298,8 +298,19 @@ pub(crate) unsafe fn eval_index_inner(
             }
             // SAFETY: the kind says the value holds a Dict, and `key` is the
             // caller's own of `keylen` bytes.
+            // A negative `keylen` means the key runs to its terminator.
+            // The pointer form is the answer: the value is copied out of
+            // the item after the dictionary has been named again.
+            //
+            // SAFETY: the caller's promise about `key` and `keylen`, and the
+            // kind says the value holds a live dictionary.
             let dict = rv.dict_or_null();
-            let item: *mut DictItem = unsafe { tv_dict_find(dict, key, keylen) };
+            let item = unsafe {
+                (*dict).find_ptr(match usize::try_from(keylen) {
+                    Ok(keylen) => cstr::slice_at(key, keylen),
+                    Err(_) => cstr::bytes_at(key),
+                })
+            };
             if item.is_null() && verbose {
                 if keylen > 0 {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.

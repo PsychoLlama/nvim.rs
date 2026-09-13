@@ -31,7 +31,7 @@ use crate::cursor::{
 };
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, update_screen};
 use crate::edit::{beginline, display_dollar, edit};
-use crate::eval::typval::{tv_clear, tv_dict_add_nr};
+use crate::eval::typval::tv_clear;
 use crate::eval::{callback_call, set_ref_in_callback};
 use crate::ex_docmd::state::repeat_cmdline;
 use crate::extmark::curbuf_splice_pending;

@@ -15,7 +15,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
-use crate::eval::typval::{tv_dict_add_tv, tv_dict_alloc, tv_dict_find, tv_equal};
+use crate::eval::typval::{tv_dict_alloc, tv_equal};
 use crate::eval::vars::assert_error;
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::memory::xfree;
@@ -205,25 +205,31 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
     let (exp, got) = (exp_held.as_ptr(), got_held.as_ptr());
 
     let mut omitted = 0;
-    for item in unsafe { &mut *exp_d }.items_mut() {
-        let (key, key_len) = (item.di_key.as_ptr(), item.di_key.len());
-        let item2 = unsafe { tv_dict_find(got_d, key, -1) };
-        if !item2.is_null() && unsafe { tv_equal(&item.di_tv, &(*item2).di_tv, false) } {
+    // SAFETY: the caller's two live dictionaries.
+    let (exp_ref, got_ref) = unsafe { (&*exp_d, &*got_d) };
+    for item in exp_ref.items() {
+        let key = item.key_bytes();
+        let item2 = got_ref.find(key);
+        if item2.is_some_and(|other| tv_equal(&item.di_tv, &other.di_tv, false)) {
             omitted += 1;
             continue;
         }
         // Absent from the actual value, or present with a different one.
-        let _ = unsafe { tv_dict_add_tv(exp, key, key_len, &mut item.di_tv) };
-        if !item2.is_null() {
-            let _ = unsafe { tv_dict_add_tv(got, key, key_len, &mut (*item2).di_tv) };
+        // SAFETY: the two dictionaries this call owns.
+        unsafe {
+            let _ = (*exp).add_tv(key, &item.di_tv);
+            if let Some(other) = item2 {
+                let _ = (*got).add_tv(key, &other.di_tv);
+            }
         }
     }
 
     // Entries only the actual value has.
-    for item in unsafe { &mut *got_d }.items_mut() {
-        let (key, key_len) = (item.di_key.as_ptr(), item.di_key.len());
-        if unsafe { tv_dict_find(exp_d, key, -1) }.is_null() {
-            let _ = unsafe { tv_dict_add_tv(got, key, key_len, &mut item.di_tv) };
+    for item in got_ref.items() {
+        let key = item.key_bytes();
+        if !exp_ref.has_key(key) {
+            // SAFETY: the dictionary this call owns.
+            let _ = unsafe { (*got).add_tv(key, &item.di_tv) };
         }
     }
     (

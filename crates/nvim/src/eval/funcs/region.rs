@@ -10,7 +10,7 @@ use crate::buffer::find_buf;
 use crate::charset::getdigits_int;
 use crate::eval::list2fpos;
 use crate::eval::typval::{
-    NumBuf, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_list_alloc,
+    NumBuf, dict_get_bool, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_list_alloc,
 };
 use crate::keycodes::Ctrl_V;
 use crate::mbyte::{mb_prevptr, utfc_ptr2len};
@@ -162,11 +162,14 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
         (args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)).then(|| args[2].dict_or_null());
     let exclusive_by_default = unsafe { *p_sel.get() } == b'e' as c_char;
     let (is_select_exclusive, spec) = match opts {
-        Some(d) => (
-            unsafe { tv_dict_get_bool(d, c"exclusive".as_ptr(), exclusive_by_default as c_int) }
-                != 0,
-            unsafe { numbuf.dict_string(d, c"type".as_ptr()) },
-        ),
+        Some(d) => {
+            // SAFETY: the argument's own dictionary.
+            let d = unsafe { d.as_ref() };
+            (
+                dict_get_bool(d, b"exclusive", exclusive_by_default as c_int) != 0,
+                numbuf.dict_string(d, b"type"),
+            )
+        }
         None => (exclusive_by_default, ptr::null()),
     };
     let spec: *const c_char = if spec.is_null() { c"v".as_ptr() } else { spec };
@@ -382,7 +385,7 @@ pub fn f_getregionpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     };
     // Whether a position may sit one past the end of its line.
     let allow_eol = args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)
-        && unsafe { tv_dict_get_bool(args[2].dict_or_null(), c"eol".as_ptr(), 0) } != 0;
+        && dict_get_bool(args[2].dict_ref(), b"eol", 0) != 0;
 
     for lnum in r.p1.lnum..=r.p2.lnum {
         let line = ml_get(lnum);

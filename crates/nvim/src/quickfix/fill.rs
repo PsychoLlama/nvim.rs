@@ -272,7 +272,7 @@ unsafe fn call_qftf_func(
     let dict_held = tv_dict_alloc_lock(VarLock::Fixed);
     let dict = dict_held.as_ptr();
     let add = |key: &CStr, value: VarNumber| {
-        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { (*dict).add_number(key.to_bytes(), value) };
     };
     add(c"quickfix", VarNumber::from(qfl.qfl_type == QFLT_QUICKFIX));
     add(c"winid", qf_winid as VarNumber);

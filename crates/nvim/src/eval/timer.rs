@@ -12,14 +12,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
 use crate::eval::typval::{
-    callback_free, callback_put, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_item_alloc,
-    tv_list_alloc_ret,
+    callback_free, callback_put, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc_ret,
 };
 use crate::eval::vars::clear_local;
 use crate::eval::{Tm, Tv, callback_call, last_timer_id, timers};
@@ -85,14 +85,14 @@ pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
         let len = key.count_bytes() as size_t;
         // SAFETY: `dict` is the dictionary just appended, and `key` is a
         // NUL-terminated literal `len` bytes long.
-        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), len, value) };
+        let _ = unsafe { (*dict).add_number(cstr::slice_at(key.as_ptr(), len), value) };
     }
 
     // SAFETY: `tv_dict_item_alloc` never answers NULL.
     let di: *mut DictItem = unsafe { tv_dict_item_alloc(c"callback".as_ptr()) };
     // SAFETY: `di` is the item just allocated, and it is freed again here
     // when the dictionary refuses it.
-    if unsafe { tv_dict_add(dict, di) }.is_err() {
+    if unsafe { (*dict).add_item(di) }.is_err() {
         // SAFETY: nothing took the item over.
         unsafe { xfree(di as *mut c_void) };
         return;

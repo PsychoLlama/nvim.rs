@@ -20,8 +20,7 @@ use crate::charset::{skipdigits, skipwhite};
 use crate::cursor::{check_cursor, check_pos};
 use crate::drawscreen::state::need_maketitle;
 use crate::eval::typval::{
-    TV_INITIAL_VALUE, callback_copy, callback_free, callback_to_string, tv_clear, tv_dict_add_nr,
-    tv_dict_add_tv, tv_dict_set_keys_readonly,
+    TV_INITIAL_VALUE, callback_copy, callback_free, callback_to_string, tv_clear,
 };
 use crate::eval::userfunc::{restore_funccal, save_funccal};
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, set_cmdarg, set_vim_var_nr, vars_clear};

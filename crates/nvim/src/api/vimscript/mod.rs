@@ -4,7 +4,7 @@
 
 use crate::api::private::helpers::{api_set_sctx, cstr_to_string, try_enter, try_leave};
 use crate::eval::EVALARG_EVALUATE;
-use crate::eval::typval::{tv_clear, tv_dict_find};
+use crate::eval::typval::tv_clear;
 use crate::eval::userfunc::call_func;
 use crate::eval::{clear_evalarg, eval0};
 use crate::ex_docmd::do_cmdline_cmd;
@@ -15,12 +15,12 @@ use crate::memory::xfree;
 use crate::message::state::{capture_ga, did_emsg, msg_col, redir_off};
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, Array, Boolean, Dict, DictItem, Error, ExArg, ExprAST, ExprASTNode, ExprASTNodeType,
+    ApiDict, Array, Boolean, Dict, Error, ExArg, ExprAST, ExprASTNode, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
     FuncExe, GArray, Integer, KeyDict_exec_opts, LineNr, Object, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Partial, String_0, TryState,
     TypVal, UVarNumber, VAR_DICT, VAR_FUNC, VAR_PARTIAL, kErrorTypeException, kErrorTypeValidation,
-    ptrdiff_t, size_t, uint64_t,
+    size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,

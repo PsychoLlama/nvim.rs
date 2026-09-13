@@ -322,14 +322,14 @@ pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut Dict) {
 /// `d` must point at a live dictionary, unaliased for the call. `val` must
 /// point at `len` readable bytes.
 unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char, len: c_int) {
-    let _ = unsafe { tv_dict_add_str_len(d, key.as_ptr(), key.count_bytes(), val, len) };
+    let _ = unsafe { (*d).add_str_len(key.to_bytes(), val, len) };
 }
 
 /// # Safety
 ///
 /// `d` must point at a live dictionary, unaliased for the call.
 unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
-    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
+    let _ = unsafe { (*d).add_number(key.to_bytes(), nr) };
 }
 
 /// Describe a swap file in the ATTENTION message and in `:recover`'s listing.

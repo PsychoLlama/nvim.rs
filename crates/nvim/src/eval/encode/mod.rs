@@ -35,7 +35,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::slice;
 
-use crate::eval::typval::{list_items, list_items_mut, list_len, tv_dict_find};
+use crate::eval::typval::{dict_find, list_items, list_items_mut, list_len};
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::global_cell::GlobalCell;
@@ -49,7 +49,7 @@ use crate::tr_c;
 use crate::tr_plural;
 use crate::types::{
     Failed, IOSIZE, List, ListItem, ListReaderState, MessagePackType, TypVal, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_STRING, ptrdiff_t, size_t,
+    VAR_LIST, VAR_STRING, size_t,
 };
 use ::libc::abort;
 
@@ -733,25 +733,22 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
     if unsafe { (*spdict).dv_hashtab.ht_used } != 2 {
         return false;
     }
-    // SAFETY: `spdict` is live and both keys are NUL-terminated literals.
-    let type_di = unsafe { tv_dict_find(spdict, c"_TYPE".as_ptr(), 5 as ptrdiff_t) };
-    let val_di = unsafe { tv_dict_find(spdict, c"_VAL".as_ptr(), 4 as ptrdiff_t) };
-    if type_di.is_null() {
+    // SAFETY: `spdict` is live; the two items borrow it.
+    let spdict = unsafe { spdict.as_ref() };
+    let (Some(type_di), Some(val_di)) = (dict_find(spdict, b"_TYPE"), dict_find(spdict, b"_VAL"))
+    else {
         return false;
-    }
-    // SAFETY: a non-NULL find answers a live item of `spdict`.
-    let type_tv = unsafe { &(*type_di).di_tv };
+    };
+    let type_tv = &type_di.di_tv;
     if type_tv.v_type() != VAR_LIST
         || !core::ptr::eq(
             type_tv.list_or_null(),
             eval_msgpack_type_lists.get()[kMPString as usize],
         )
-        || val_di.is_null()
     {
         return false;
     }
-    // SAFETY: as `type_di`.
-    let val_tv = unsafe { &(*val_di).di_tv };
+    let val_tv = &val_di.di_tv;
     if val_tv.v_type() != VAR_LIST {
         return false;
     }

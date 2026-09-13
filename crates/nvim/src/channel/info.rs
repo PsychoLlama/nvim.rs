@@ -27,7 +27,7 @@ use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::channel::channels;
 use crate::eval::encode::encode_tv2json;
-use crate::eval::typval::{DictRef, tv_dict_add_dict, tv_dict_set_keys_readonly};
+use crate::eval::typval::DictRef;
 use crate::eval::{eval_fmt_source_name_line, get_v_event, restore_v_event};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
@@ -151,8 +151,8 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     let retval = unsafe { info_tv((*chan).id) };
     // SAFETY: the answer's own dictionary; `v:event` takes a reference.
     let info = unsafe { DictRef::retained(retval.dict_or_null()) };
-    let _ = unsafe { tv_dict_add_dict(dict, c"info".as_ptr(), 4, info) };
-    unsafe { tv_dict_set_keys_readonly(dict) };
+    let _ = unsafe { (*dict).add_dict(b"info", info) };
+    unsafe { (*dict).set_keys_readonly() };
     let __hoisted_0 = Buf::current_or_none();
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, __hoisted_0) };
     unsafe { restore_v_event(dict, &raw mut save_v_event) };

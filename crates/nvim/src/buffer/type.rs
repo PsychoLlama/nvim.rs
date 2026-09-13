@@ -25,7 +25,7 @@ use core::ptr;
 
 use super::*;
 use crate::autocmd::apply_autocmds;
-use crate::eval::typval::{tv_dict_find, tv_dict_is_watched, tv_dict_watcher_notify};
+use crate::eval::typval::{dict_find, dict_is_watched, dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
 use crate::memline::ml_get_buf;
 use crate::message::emsg_ptr;
@@ -33,9 +33,7 @@ use crate::option::vars::p_hid;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::quickfix::{msg_loclist, msg_qflist};
-use crate::types::{
-    CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber, ptrdiff_t,
-};
+use crate::types::{CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber};
 use crate::winlayer::Buf;
 use crate::winlayer::graph::cmdwin_buf;
 
@@ -259,14 +257,21 @@ pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
     check_changedtick_item(b);
     b.changedtick_di.di_tv.write_number(changedtick);
     // SAFETY: `b_vars` is the buffer's own dictionary, allocated with it.
-    if unsafe { tv_dict_is_watched(b.b_vars) } {
+    if dict_is_watched(unsafe { (b.b_vars).as_ref() }) {
         b.b_locked += 1;
         let vars = b.b_vars;
         let key = b.changedtick_di.di_key.as_ptr().cast_mut();
         let new = &raw mut b.changedtick_di.di_tv;
         // SAFETY: the buffer's own dictionary and its `changedtick` entry,
         // plus a local holding the value it had.
-        unsafe { tv_dict_watcher_notify(vars, key, Some(&*new), Some(&old_val)) };
+        unsafe {
+            dict_watcher_notify(
+                vars,
+                ::core::ffi::CStr::from_ptr(key),
+                Some(&*new),
+                Some(&old_val),
+            )
+        };
         b.b_locked -= 1;
     }
 }
@@ -279,13 +284,8 @@ fn check_changedtick_item(buffer: Buf) {
     }
     let vars = buffer.b_vars;
     let key = c"changedtick";
-    let keylen = key.count_bytes() as ptrdiff_t;
-    // SAFETY: the buffer's own dictionary; the key is a literal with its
-    // length, as `S_LEN` spells it.
-    let di = unsafe { tv_dict_find(vars, key.as_ptr(), keylen) };
-    assert!(!di.is_null(), "changedtick_di != NULL");
-    // SAFETY: non-null, and `tv_dict_find` answers a live dictionary item.
-    let item = unsafe { &*di };
+    // SAFETY: the buffer's own dictionary.
+    let item = dict_find(unsafe { vars.as_ref() }, key.to_bytes()).expect("changedtick_di != NULL");
     assert!(
         item.di_tv.v_type() == VAR_NUMBER as _,
         "changedtick_di->di_tv.v_type() == VAR_NUMBER"
@@ -299,9 +299,7 @@ fn check_changedtick_item(buffer: Buf) {
         "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
     );
     assert!(
-        di == (&raw const buffer.changedtick_di)
-            .cast::<DictItem>()
-            .cast_mut(),
+        ::core::ptr::from_ref(item) == (&raw const buffer.changedtick_di).cast::<DictItem>(),
         "changedtick_di == (DictItem *)&buf->changedtick_di"
     );
 }

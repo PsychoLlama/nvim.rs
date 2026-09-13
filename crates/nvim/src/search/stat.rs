@@ -326,12 +326,11 @@ fn update_search_stat(
 /// # Safety
 /// `dict` must be a readable dictionary.
 unsafe fn dict_number(dict: *mut Dict, key: &CStr, current: c_int) -> Option<c_int> {
-    let di = unsafe { tv_dict_find(dict, key.as_ptr(), -1 as ptrdiff_t) };
-    if di.is_null() {
+    // SAFETY: the caller's dictionary.
+    let Some(di) = dict_find(unsafe { dict.as_ref() }, key.to_bytes()) else {
         return Some(current);
-    }
-    // SAFETY: the item just found belongs to the caller's dictionary.
-    tv_get_number_chk(unsafe { &(*di).di_tv })
+    };
+    tv_get_number_chk(&di.di_tv)
         .ok()
         .map(|value| value as c_int)
 }
@@ -385,23 +384,22 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         };
         recompute = r != 0;
 
-        let di = unsafe { tv_dict_find(dict, c"pattern".as_ptr(), -1 as ptrdiff_t) };
-        if !di.is_null() {
-            // SAFETY: a live dictionary item.
-            pattern = numbuf.string_ptr_chk(unsafe { &(*di).di_tv }) as *mut c_char;
+        // SAFETY: the caller's dictionary.
+        let dict_ref = unsafe { dict.as_ref() };
+        if let Some(di) = dict_find(dict_ref, b"pattern") {
+            pattern = numbuf.string_ptr_chk(&di.di_tv) as *mut c_char;
             if pattern.is_null() {
                 return;
             }
         }
 
-        let di = unsafe { tv_dict_find(dict, c"pos".as_ptr(), -1 as ptrdiff_t) };
-        if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type() } != VAR_LIST {
+        if let Some(di) = dict_find(dict_ref, b"pos") {
+            if di.di_tv.v_type() != VAR_LIST {
                 // SAFETY: reporting a static, translated message.
                 semsg!("E475: Invalid argument: {}", "pos");
                 return;
             }
-            let list = unsafe { (*di).di_tv.list_or_null() };
+            let list = di.di_tv.list_or_null();
             if list_len(unsafe { list.as_ref() }) != 3 {
                 let form = c"List format should be [lnum, col, off]".as_ptr();
                 // SAFETY: reporting a static, translated message.
@@ -450,7 +448,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         let add = |key: &CStr, value: c_int| {
             let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as VarNumber);
             // SAFETY: adding a number under a static key.
-            let _ = unsafe { tv_dict_add_nr(dict, k, klen, v) };
+            let _ = unsafe { (*dict).add_number(cstr::slice_at(k, klen), v) };
         };
         add(c"current", stat.cur);
         add(c"total", stat.cnt);

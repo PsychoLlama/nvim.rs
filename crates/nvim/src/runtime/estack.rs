@@ -296,14 +296,14 @@ unsafe fn render_stack(stack: &[EStack], which: EStackArg) -> *mut c_char {
 /// `d` must point at a live dictionary, unaliased for the call. `val` must
 /// point at a NUL-terminated string.
 unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
-    let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.to_bytes(), val) };
 }
 
 /// # Safety
 ///
 /// `d` must point at a live dictionary, unaliased for the call.
 unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
-    let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
+    let _ = unsafe { (*d).add_number(key.to_bytes(), nr) };
 }
 
 /// Append one `getstacktrace()` frame to `l`.
@@ -335,7 +335,7 @@ unsafe fn stacktrace_push_item(
     // append takes a second; both are given back when this frame ends.
     let tv = TypVal::dict(Some(d_held));
     if !func.is_null() {
-        let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), func) };
+        let _ = unsafe { (*d).add_func(b"funcref", func) };
     }
     if !event.is_null() {
         unsafe { dict_add_str(d, c"event", event) };

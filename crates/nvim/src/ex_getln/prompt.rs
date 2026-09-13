@@ -113,19 +113,11 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         }
         let dict = args[0].dict_or_null();
         // C's `S_LEN(key)`: the key pointer and its length, spelled once.
-        let dict_str = |key: &::core::ffi::CStr,
-                        numbuf: &mut NumBuf,
-                        def: *const ::core::ffi::c_char| {
-            unsafe {
-                tv_dict_get_string_buf_chk(
-                    dict,
-                    key.as_ptr(),
-                    key.count_bytes() as ptrdiff_t,
-                    numbuf,
-                    def,
-                )
-            }
-        };
+        let dict_str =
+            |key: &::core::ffi::CStr, numbuf: &mut NumBuf, def: *const ::core::ffi::c_char| {
+                // SAFETY: the argument's own dictionary.
+                dict_get_string_buf_chk(unsafe { dict.as_ref() }, key.to_bytes(), numbuf, def)
+            };
 
         prompt = dict_str(c"prompt", &mut prompt_buf, c"".as_ptr());
         if prompt.is_null() {
@@ -135,14 +127,10 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         if defstr.is_null() {
             return;
         }
-        let cancelreturn_key = c"cancelreturn";
-        let cancelreturn_di = unsafe {
-            tv_dict_find(
-                dict,
-                cancelreturn_key.as_ptr(),
-                cancelreturn_key.count_bytes() as ptrdiff_t,
-            )
-        };
+        // The pointer form is what `cancelreturn` is: the value outlives
+        // the borrow, and the dictionary is named again below.
+        // SAFETY: the argument's own dictionary.
+        let cancelreturn_di = unsafe { (*dict).find_ptr(b"cancelreturn") };
         if !cancelreturn_di.is_null() {
             // SAFETY: just tested non-null; a dictionary item's value is
             // its own field, so its address is the item's plus a constant.
@@ -157,15 +145,8 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             // key absent: default to NULL
             xp_name = ::core::ptr::null::<::core::ffi::c_char>();
         }
-        let highlight_key = c"highlight";
-        if !unsafe {
-            tv_dict_get_callback(
-                dict,
-                highlight_key.as_ptr(),
-                highlight_key.count_bytes() as ptrdiff_t,
-                &raw mut input_callback,
-            )
-        } {
+        // SAFETY: the argument's own dictionary, and this frame's callback.
+        if !unsafe { dict_get_callback(dict.as_mut(), b"highlight", &mut input_callback) } {
             return;
         }
     } else {

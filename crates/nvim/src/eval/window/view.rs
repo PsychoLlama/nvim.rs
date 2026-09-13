@@ -88,26 +88,22 @@ pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// The `{options}` dictionary `win_splitmove()` takes: the split flags and the
 /// size to give the moved window.
 fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
-    // SAFETY: the caller's obligation; `tv_dict_find` hands back a live entry
+    // SAFETY: the caller's obligation; `dict_find` hands back a live entry
     // of the same dictionary or NULL.
-    let d = (*opts).dict_or_null();
+    let d = (*opts).dict_ref();
     let mut flags = 0;
-    if unsafe { tv_dict_get_number(d, c"vertical".as_ptr()) } != 0 {
+    if dict_get_number(d, b"vertical") != 0 {
         flags |= WSP_VERT.cast_signed();
     }
-    let di = unsafe { tv_dict_find(d, c"rightbelow".as_ptr(), -1) };
-    if !di.is_null() {
-        let below = unsafe { tv_get_number(&(*di).di_tv) };
+    if let Some(di) = dict_find(d, b"rightbelow") {
+        let below = tv_get_number(&di.di_tv);
         flags |= if below != 0 {
             WSP_BELOW.cast_signed()
         } else {
             WSP_ABOVE.cast_signed()
         };
     }
-    (
-        flags,
-        number_as_int(unsafe { tv_dict_get_number(d, c"size".as_ptr()) }),
-    )
+    (flags, number_as_int(dict_get_number(d, b"size")))
 }
 
 /// `win_splitmove({nr}, {target} [, {options}])` — 0 when the window moved.
@@ -221,10 +217,8 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
     let dict = args[0].dict_or_null();
     let mut win = Win::current();
     let entry = |key: &CStr| {
-        // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
-        // entry of it or NULL.
-        let di = unsafe { tv_dict_find(dict, key.as_ptr(), key.count_bytes().cast_signed()) };
-        (!di.is_null()).then(|| unsafe { tv_get_number(&(*di).di_tv) })
+        // SAFETY: a live dictionary.
+        dict_find(unsafe { dict.as_ref() }, key.to_bytes()).map(|di| tv_get_number(&di.di_tv))
     };
 
     if let Some(v) = entry(c"lnum") {
@@ -290,11 +284,10 @@ pub fn f_winsaveview(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     // SAFETY: `result` is the cleared return value and `curwin` is set; the
     // dictionary stays alive for the appends because `result` owns it.
     tv_dict_alloc_ret(result);
-    let dict = result.dict_or_null();
+    let dict = result.dict_mut().expect("just allocated");
     let win = Win::current();
-    let nr = |key: &CStr, value: VarNumber| {
-        // SAFETY: a live dictionary and a NUL-terminated key.
-        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+    let mut nr = |key: &CStr, value: VarNumber| {
+        let _ = dict.add_number(key.to_bytes(), value);
     };
 
     nr(c"lnum", VarNumber::from(win.w_cursor.lnum));

@@ -469,34 +469,34 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
         list
     };
     // SAFETY: `dict` is `v:event`'s, the key is a literal of the length given.
-    let _ = unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, Some(list)) };
+    let _ = unsafe { (*dict).add_list(b"regcontents", Some(list)) };
 
     let mut buf: [c_char; 67] = [0; 67];
     // SAFETY: `reg` is live, and `buf` is 67 writable bytes -- more than one.
     unsafe { format_reg_type((*reg).y_type, (*reg).y_width, buf.as_mut_ptr(), buf.len()) };
     // SAFETY: `buf` is NUL-terminated, and the key is a literal of length 7.
-    let _ = unsafe { tv_dict_add_str(dict, c"regtype".as_ptr(), 7, buf.as_mut_ptr()) };
+    let _ = unsafe { (*dict).add_str(b"regtype", buf.as_mut_ptr()) };
 
     // SAFETY: the caller promises `op` is the yank's operator.
     let op = unsafe { *op };
     buf[0] = op.regname as c_char;
     buf[1] = NUL as c_char;
     // SAFETY: as above.
-    let _ = unsafe { tv_dict_add_str(dict, c"regname".as_ptr(), 7, buf.as_mut_ptr()) };
+    let _ = unsafe { (*dict).add_str(b"regname", buf.as_mut_ptr()) };
 
     let flag = |set| if set { kBoolVarTrue } else { kBoolVarFalse };
     // SAFETY: `dict` is `v:event`'s, the key a literal of the length given.
-    let _ = unsafe { tv_dict_add_bool(dict, c"inclusive".as_ptr(), 9, flag(op.inclusive)) };
+    let _ = unsafe { (*dict).add_bool(b"inclusive", flag(op.inclusive)) };
 
     buf[0] = get_op_char(op.op_type) as c_char;
     buf[1] = NUL as c_char;
     // SAFETY: `buf` is NUL-terminated, and the key is a literal of length 8.
-    let _ = unsafe { tv_dict_add_str(dict, c"operator".as_ptr(), 8, buf.as_mut_ptr()) };
+    let _ = unsafe { (*dict).add_str(b"operator", buf.as_mut_ptr()) };
 
     // SAFETY: as for `inclusive`.
-    let _ = unsafe { tv_dict_add_bool(dict, c"visual".as_ptr(), 6, flag(op.is_visual)) };
+    let _ = unsafe { (*dict).add_bool(b"visual", flag(op.is_visual)) };
     // SAFETY: `dict` is the one just filled in.
-    unsafe { tv_dict_set_keys_readonly(dict) };
+    unsafe { (*dict).set_keys_readonly() };
 
     // The buffer must not change under the yank that is still in flight.
     let locked = Lock::text();

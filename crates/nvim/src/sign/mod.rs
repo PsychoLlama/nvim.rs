@@ -49,10 +49,9 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_buf_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::funcs::get_buf_arg;
 use crate::eval::typval::{
-    tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg,
-    tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
-    tv_dict_get_number, tv_dict_get_number_def, tv_get_lnum, tv_get_number_chk, tv_list_alloc,
-    tv_list_alloc_ret,
+    dict_find, dict_get_number, dict_get_number_def, tv_check_for_nonnull_dict_arg,
+    tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_dict_alloc, tv_get_lnum,
+    tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::extmark::{extmark_del, extmark_del_id, extmark_set};
@@ -72,7 +71,7 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::strings::vim_snprintf;
 use crate::types::{
     Buffer, DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight,
-    DecorVirtText, Dict, DictItem, EvalFuncData, ExArg, Expand, FAIL, Integer, LineNr, List, MTKey,
+    DecorVirtText, Dict, EvalFuncData, ExArg, Expand, FAIL, Integer, LineNr, List, MTKey,
     MarkTreeIter, OK, ScreenChar, Sign, SignItem, TypVal, VarNumber, int32_t, int64_t, ptrdiff_t,
     size_t, uint32_t,
 };

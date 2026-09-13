@@ -25,8 +25,8 @@ use super::{
 };
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
-    Di, TV_INITIAL_VALUE, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_hi2di,
-    tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_iter, tv_list_alloc,
+    Di, TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_dict_hi2di, tv_dict_item_alloc_len,
+    tv_dict_item_free, tv_dict_iter, tv_list_alloc,
 };
 use crate::memory::{xfree, xmallocz};
 use crate::mpack::conv::{
@@ -233,7 +233,7 @@ unsafe fn map_to_dict(result: &mut TypVal, pairs: &mut [TypVal], len: usize) -> 
     for i in 0..len {
         let key = pairs[i * 2].string_or_null();
         let di = unsafe { tv_dict_item_alloc_len(key, cstr::bytes_at(key).len()) };
-        if unsafe { tv_dict_add(dict, di) }.is_err() {
+        if unsafe { (*dict).add_item(di) }.is_err() {
             // Duplicate key.  Disown the values already handed to the
             // dictionary — the special-map path is about to re-use every
             // one of them — then free the dictionary and give up.

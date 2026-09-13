@@ -289,9 +289,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
                 if !err.is_set() {
                     // SAFETY: `v_event` is that dictionary and `item.key` is
                     // the dict entry's own name of the length given.
-                    let _ = unsafe {
-                        tv_dict_add_tv(v_event, item.key.as_ptr(), item.key.len(), &mut tv)
-                    };
+                    let _ = unsafe { (*v_event).add_tv(item.key.bytes(), &tv) };
                     tv_clear(&mut tv);
                 } else {
                     err.clear();
@@ -299,7 +297,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
             }
         }
         // SAFETY: `v_event` is that dictionary.
-        unsafe { tv_dict_set_keys_readonly(v_event) };
+        unsafe { (*v_event).set_keys_readonly() };
 
         let mut aco = AcoSave::default();
         // SAFETY: `aco` is this frame's own, `buf` was just proved live, and
@@ -415,9 +413,9 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     debug_assert!(chanid < VarNumber::MAX as uint64_t);
     // SAFETY: `dict` is that dictionary and the key is a NUL-terminated
     // literal of the length given.
-    let _ = unsafe { tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid.cast_signed()) };
+    let _ = unsafe { (*dict).add_number(b"chan", chanid.cast_signed()) };
     // SAFETY: as above.
-    unsafe { tv_dict_set_keys_readonly(dict) };
+    unsafe { (*dict).set_keys_readonly() };
 
     // SAFETY: no file name, and `curbuf` is live from startup to exit.
     unsafe {

@@ -43,7 +43,7 @@ use crate::eval::typval::DictTab;
 use crate::eval::typval::{
     NumBuf, blob_check_index, blob_check_range, blob_len, di_lock, index_of,
     list_check_range_index_one, list_check_range_index_two, list_items_mut, tv_blob_alloc_ret,
-    tv_check_str, tv_dict_alloc, tv_dict_find, tv_get_number, tv_list_alloc_ret,
+    tv_check_str, tv_dict_alloc, tv_get_number, tv_list_alloc_ret,
 };
 use crate::eval::userfunc::get_funccal_args_ht;
 use crate::eval::vars::{clear_local, emsg_static};
@@ -152,8 +152,19 @@ pub(crate) unsafe fn get_lval_dict_item(
         container.write_dict(Some(tv_dict_alloc()));
     }
     lval.ll_dict = container.dict_or_null();
-    // SAFETY: `ll_dict` is a live Dict, and `key` is NUL-terminated or `len` bytes long.
-    lval.ll_di = unsafe { tv_dict_find(lval.ll_dict, key, len as ptrdiff_t) };
+    // A negative `len` means the key runs to its terminator; anything else
+    // is exactly that many bytes, terminator or not.
+    //
+    // SAFETY: the caller's promise about `key` and `len`, and `ll_dict` is
+    // the live Dict just resolved. The pointer form is what `ll_di` is: the
+    // caller assigns through the item and then reaches the dictionary again
+    // to fire its watchers.
+    lval.ll_di = unsafe {
+        (*lval.ll_dict).find_ptr(match usize::try_from(len) {
+            Ok(len) => cstr::slice_at(key, len),
+            Err(_) => cstr::bytes_at(key),
+        })
+    };
     // The one field this needs, read through the pointer.
     // SAFETY: `ll_dict` is the live Dict just resolved.
     let dv_scope = unsafe { (*lval.ll_dict).dv_scope };

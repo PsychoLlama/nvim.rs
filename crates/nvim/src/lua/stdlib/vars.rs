@@ -16,6 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -24,8 +25,8 @@ use crate::api::private::helpers::{
     dict_check_writable, find_buffer_by_handle, find_tab_by_handle, find_window_by_handle,
 };
 use crate::eval::typval::{
-    TV_INITIAL_VALUE, tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_is_watched,
-    tv_dict_item_alloc_len, tv_dict_item_remove, tv_dict_watcher_notify,
+    TV_INITIAL_VALUE, dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy,
+    tv_dict_item_alloc_len, tv_dict_item_remove,
 };
 use crate::eval::vars::{before_set_vvar, get_globvar_dict, get_vimvar_dict};
 use crate::ex_eval::aborting;
@@ -100,7 +101,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
             }
         };
 
-        let watched = tv_dict_is_watched(dict);
+        let watched = dict_is_watched((dict).as_ref());
 
         if del {
             if di.is_null() {
@@ -108,7 +109,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
                 return 0;
             }
             if watched {
-                tv_dict_watcher_notify(dict, key.data(), None, Some(&(*di).di_tv));
+                dict_watcher_notify(dict, key.as_cstr(), None, Some(&(*di).di_tv));
             }
             tv_dict_item_remove(dict, di);
             return 0;
@@ -123,7 +124,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         let mut oldtv = TV_INITIAL_VALUE;
         if di.is_null() {
             di = tv_dict_item_alloc_len(key.data(), key.len());
-            let _ = tv_dict_add(dict, di);
+            let _ = (*dict).add_item(di);
         } else {
             let mut type_error = false;
             if dict == get_vimvar_dict()
@@ -148,7 +149,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         tv_copy(&tv, &mut (*di).di_tv);
 
         if watched {
-            tv_dict_watcher_notify(dict, key.data(), Some(&tv), Some(&oldtv));
+            dict_watcher_notify(dict, key.as_cstr(), Some(&tv), Some(&oldtv));
             tv_clear(&mut oldtv);
         }
         tv_clear(&mut tv);
@@ -168,17 +169,19 @@ pub unsafe extern "C-unwind" fn nlua_getvar(lstate: *mut lua_State) -> c_int {
         let dict = nlua_get_var_scope(lstate);
         let mut len: size_t = 0;
         let name: *const c_char = luaL_checklstring(lstate, 3, &raw mut len);
-        let mut di = tv_dict_find(dict, name, len.cast_signed());
-        if di.is_null() && dict == get_globvar_dict() {
+        let mut di = dict_find(dict.as_ref(), cstr::slice_at(name, len));
+        if di.is_none() && dict == get_globvar_dict() {
             if !script_autoload(name, len, false) || aborting() {
                 return 0; // nil
             }
-            di = tv_dict_find(dict, name, len.cast_signed());
+            // The autoload ran arbitrary Vimscript, so the lookup starts
+            // again rather than reusing the borrow it invalidated.
+            di = dict_find(dict.as_ref(), cstr::slice_at(name, len));
         }
-        if di.is_null() {
+        let Some(di) = di else {
             return 0; // nil
-        }
-        nlua_push_typval(lstate, &(*di).di_tv, 0);
+        };
+        nlua_push_typval(lstate, &di.di_tv, 0);
         1
     }
 }

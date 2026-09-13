@@ -12,13 +12,10 @@ use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
-    DictRef, ListRef, NumBuf, callback_free, list_unref, tv_clear, tv_dict_add,
-    tv_dict_add_allocated_str, tv_dict_add_dict, tv_dict_add_float, tv_dict_add_list,
-    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_clear, tv_dict_copy, tv_dict_equal,
-    tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_callback, tv_dict_get_number,
-    tv_dict_get_string_alloc, tv_dict_get_string_buf, tv_dict_get_string_buf_chk,
-    tv_dict_item_alloc_len, tv_dict_set_keys_readonly, tv_dict_unref, tv_dict_watcher_add,
-    tv_dict_watcher_remove,
+    DictRef, ListRef, NumBuf, callback_free, dict_copy, dict_equal, dict_extend, dict_find,
+    dict_get_callback, dict_get_number, dict_get_string_alloc, dict_get_string_buf,
+    dict_get_string_buf_chk, list_unref, tv_clear, tv_dict_alloc, tv_dict_free,
+    tv_dict_item_alloc_len, tv_dict_unref,
 };
 use neovim::guard::sandbox;
 use neovim::mbyte::convert_setup;
@@ -44,7 +41,7 @@ unsafe fn dict_copied(
     deep: bool,
     copy_id: c_int,
 ) -> *mut Dict {
-    unsafe { tv_dict_copy(conv, orig, deep, copy_id) }.map_or(ptr::null_mut(), DictRef::into_raw)
+    unsafe { dict_copy(conv, orig, deep, copy_id) }.map_or(ptr::null_mut(), DictRef::into_raw)
 }
 use crate::support::{check_emsg, cstr};
 
@@ -75,14 +72,14 @@ fn a_zero_length_watch_pattern_matches_anything() {
         let cb = tv::build_callback(&Cb::None);
         log.clear();
 
-        tv_dict_watcher_add(d, cstr("*").as_ptr(), 0, cb.clone());
+        (*d).watcher_add(b"", cb.clone());
         let ws = tv::dict_watchers(d);
         log.check(&[alloc::dwatcher(ws[0].at), alloc::string(ws[0].pattern, 0)]);
         assert_eq!(ws[0].pat, b"");
         assert_eq!(ws[0].cb, Cb::None);
         assert!(!ws[0].busy);
 
-        assert!(tv_dict_watcher_remove(d, cstr("x").as_ptr(), 0, &cb));
+        assert!((*d).watcher_remove(b"", &cb));
         log.check(&[alloc::freed(ws[0].pattern), alloc::freed(ws[0].at)]);
         assert_eq!(tv::dict_watchers(d), []);
 
@@ -138,7 +135,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
 
         let registered = [("te", none), ("foo", fref), ("te", partial)];
         for (pattern, cb) in registered.clone() {
-            tv_dict_watcher_add(d, cstr(pattern).as_ptr(), pattern.len(), cb);
+            (*d).watcher_add(pattern.as_bytes(), cb);
         }
         let ws = tv::dict_watchers(d);
         assert_eq!(
@@ -170,12 +167,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         ]);
 
         // The funcref: its name, its pattern, itself.
-        assert!(tv_dict_watcher_remove(
-            d,
-            cstr("foo").as_ptr(),
-            3,
-            &registered[1].1
-        ));
+        assert!((*d).watcher_remove(b"foo", &registered[1].1));
         log.check(&[
             alloc::freed(match registered[1].1 {
                 Callback::Funcref(name) => name,
@@ -184,21 +176,11 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             alloc::freed(ws[1].pattern),
             alloc::freed(ws[1].at),
         ]);
-        assert!(!tv_dict_watcher_remove(
-            d,
-            cstr("foo").as_ptr(),
-            3,
-            &registered[1].1
-        ));
+        assert!(!(*d).watcher_remove(b"foo", &registered[1].1));
         assert_eq!(tv::dict_watchers(d).len(), 2);
 
         // The partial: everything it owns, innermost first.
-        assert!(tv_dict_watcher_remove(
-            d,
-            cstr("te").as_ptr(),
-            2,
-            &registered[2].1
-        ));
+        assert!((*d).watcher_remove(b"te", &registered[2].1));
         log.check(&[
             alloc::freed(pt_arg),
             alloc::freed(pt_argv),
@@ -208,28 +190,13 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
             alloc::freed(ws[2].pattern),
             alloc::freed(ws[2].at),
         ]);
-        assert!(!tv_dict_watcher_remove(
-            d,
-            cstr("te").as_ptr(),
-            2,
-            &registered[2].1
-        ));
+        assert!(!(*d).watcher_remove(b"te", &registered[2].1));
         assert_eq!(tv::dict_watchers(d).len(), 1);
 
         // And the one that owns nothing.
-        assert!(tv_dict_watcher_remove(
-            d,
-            cstr("te").as_ptr(),
-            2,
-            &registered[0].1
-        ));
+        assert!((*d).watcher_remove(b"te", &registered[0].1));
         log.check(&[alloc::freed(ws[0].pattern), alloc::freed(ws[0].at)]);
-        assert!(!tv_dict_watcher_remove(
-            d,
-            cstr("te").as_ptr(),
-            2,
-            &registered[0].1
-        ));
+        assert!(!(*d).watcher_remove(b"te", &registered[0].1));
         assert_eq!(tv::dict_watchers(d), []);
 
         tv_dict_free(d);
@@ -256,12 +223,9 @@ fn prefix_dict() -> Vec<(&'static str, Tv)> {
 #[test]
 fn finding_in_a_null_dict_answers_nothing() {
     let _log = AllocLog::start();
-    // SAFETY: no dict is dereferenced.
-    unsafe {
-        assert!(tv_dict_find(ptr::null(), cstr("").as_ptr(), 0).is_null());
-        assert!(tv_dict_find(ptr::null(), cstr("test").as_ptr(), -1).is_null());
-        assert!(tv_dict_find(ptr::null(), ptr::null(), 0).is_null());
-    }
+    assert!(dict_find(None, b"").is_none());
+    assert!(dict_find(None, cstr("test").to_bytes()).is_none());
+    assert!(dict_find(None, &[]).is_none());
 }
 
 /// The same `describe`'s two `itp`s at spec lines 1736 and 1752: the empty
@@ -285,26 +249,29 @@ fn finding_reads_exactly_the_key_length_asked_for() {
         );
         log.check(&[]);
 
-        let find = |key: &str, len: isize| -> Option<(Tv, Vec<u8>)> {
-            let di = tv_dict_find(d, cstr(key).as_ptr(), len);
-            (!di.is_null()).then(|| (tv::read(&raw const (*di).di_tv), (*di).key_bytes().to_vec()))
+        // The key is bytes now, where the C took a pointer and a length,
+        // so the prefixes the spec asks for are slices of one literal.
+        let find = |key: &[u8]| -> Option<(Tv, Vec<u8>)> {
+            let di = dict_find(d.as_ref(), key)?;
+            Some((tv::read(&raw const di.di_tv), di.key_bytes().to_vec()))
         };
 
-        assert_eq!(find("", 0), Some((f(0.0), b"".to_vec())));
-        for i in 0..=5 {
+        assert_eq!(find(b""), Some((f(0.0), b"".to_vec())));
+        for i in 0..=5usize {
             assert_eq!(
-                find("testt", i),
+                find(&b"testt"[..i]),
                 Some((
                     f(f64::from(i32::try_from(i).unwrap())),
-                    b"testt"[..i as usize].to_vec()
+                    b"testt"[..i].to_vec()
                 )),
                 "length {i}"
             );
         }
-        // Six bytes of `testt` is five bytes and the terminator.
-        assert_eq!(find("testt", 6), None);
-        // A negative length reads to the terminator.
-        assert_eq!(find("testt", -1), Some((f(5.0), b"testt".to_vec())));
+        // Six bytes of `testt` is five bytes and the terminator, which is a
+        // key no dictionary can hold.
+        assert_eq!(find(b"testt\0"), None);
+        // The whole key is what a negative length used to ask for.
+        assert_eq!(find(b"testt"), Some((f(5.0), b"testt".to_vec())));
         log.check(&[]);
 
         tv_dict_free(d);
@@ -322,7 +289,7 @@ fn getting_a_number_reads_through_strings_and_reports_otherwise() {
         let get = |d: *const Dict, key: &str, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
-                || tv_dict_get_number(d, cstr(key).as_ptr()),
+                || dict_get_number((d).as_ref(), cstr(key).to_bytes()),
                 msg,
             )
         };
@@ -363,7 +330,7 @@ fn getting_a_string_renders_a_scalar_into_the_lent_buffer() {
         let get = |d: *const Dict, key: &str, msg: Option<&str>, buf: &mut NumBuf| {
             check_emsg(
                 log.editor(),
-                || tv_dict_get_string_buf(d, cstr(key).as_ptr(), buf),
+                || dict_get_string_buf((d).as_ref(), cstr(key).to_bytes(), buf),
                 msg,
             )
         };
@@ -435,7 +402,7 @@ fn getting_a_string_with_save_allocates_the_answer() {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
-                || tv_dict_get_string_alloc(d, cstr(key).as_ptr()),
+                || dict_get_string_alloc((d).as_ref(), cstr(key).to_bytes()),
                 msg,
             );
             let answer =
@@ -497,7 +464,7 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
-                || tv_dict_get_string_buf(d, cstr(key).as_ptr(), &mut scratch),
+                || dict_get_string_buf((d).as_ref(), cstr(key).to_bytes(), &mut scratch),
                 None,
             );
             if is_float {
@@ -558,37 +525,33 @@ fn getting_a_checked_string_falls_back_to_the_default() {
         let mut scratch = NumBuf::new();
         let buf: *mut c_char = scratch.as_mut_ptr();
         let def = xstrdup(cstr("DEFAULT").as_ptr());
-        let mut get = |d: *const Dict,
-                       key: &str,
-                       len: Option<isize>,
-                       is_float: bool|
-         -> Option<(String, bool, bool)> {
-            let len = len.unwrap_or_else(|| isize::try_from(key.len()).unwrap());
-            log.clear();
-            let ret = check_emsg(
-                log.editor(),
-                || tv_dict_get_string_buf_chk(d, cstr(key).as_ptr(), len, &mut scratch, def),
-                None,
-            );
-            if is_float {
-                log.check(&[
-                    alloc::freed(ptr::null::<u8>()),
-                    alloc::freed(ptr::null::<u8>()),
-                ]);
-            } else {
-                log.check(&[]);
-            }
-            (!ret.is_null()).then(|| {
-                (
-                    CStr::from_ptr(ret).to_string_lossy().into_owned(),
-                    ret == buf.cast_const(),
-                    ret == def.cast_const(),
-                )
-            })
-        };
+        let mut get =
+            |d: *const Dict, key: &[u8], is_float: bool| -> Option<(String, bool, bool)> {
+                log.clear();
+                let ret = check_emsg(
+                    log.editor(),
+                    || dict_get_string_buf_chk(d.as_ref(), key, &mut scratch, def),
+                    None,
+                );
+                if is_float {
+                    log.check(&[
+                        alloc::freed(ptr::null::<u8>()),
+                        alloc::freed(ptr::null::<u8>()),
+                    ]);
+                } else {
+                    log.check(&[]);
+                }
+                (!ret.is_null()).then(|| {
+                    (
+                        CStr::from_ptr(ret).to_string_lossy().into_owned(),
+                        ret == buf.cast_const(),
+                        ret == def.cast_const(),
+                    )
+                })
+            };
 
         assert_eq!(
-            get(ptr::null(), "test", None, false),
+            get(ptr::null(), b"test", false),
             Some(("DEFAULT".into(), false, true))
         );
 
@@ -602,18 +565,12 @@ fn getting_a_checked_string_falls_back_to_the_default() {
         ]);
         log.clear();
 
-        assert_eq!(
-            get(d, "test", None, false),
-            Some(("tset".into(), false, false))
-        );
+        assert_eq!(get(d, b"test", false), Some(("tset".into(), false, false)));
         // One byte of `test` is the key `t`, whose float goes to the buffer.
+        assert_eq!(get(d, b"t", true), Some(("1.0".into(), true, false)));
+        assert_eq!(get(d, b"te", false), Some(("2".into(), true, false)));
         assert_eq!(
-            get(d, "test", Some(1), true),
-            Some(("1.0".into(), true, false))
-        );
-        assert_eq!(get(d, "te", None, false), Some(("2".into(), true, false)));
-        assert_eq!(
-            get(d, "TEST", None, false),
+            get(d, b"TEST", false),
             Some(("DEFAULT".into(), false, true)),
             "keys are case-sensitive"
         );
@@ -634,12 +591,12 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
     // SAFETY: each callback is released before the next lookup reuses the
     // slot; the dict is this case's own.
     unsafe {
-        let get = |d: *mut Dict, key: &str, len: isize, msg: Option<&str>| -> (Cb, bool) {
+        let get = |d: *mut Dict, key: &[u8], msg: Option<&str>| -> (Cb, bool) {
             let slot: *mut Callback = xmalloc(size_of::<Callback>()).cast();
             log.clear();
             let ok = check_emsg(
                 log.editor(),
-                || tv_dict_get_callback(d, cstr(key).as_ptr(), len, slot),
+                || dict_get_callback(d.as_mut(), key, &mut *slot),
                 msg,
             );
             let cb = tv::read_callback(slot);
@@ -648,7 +605,7 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
             (cb, ok)
         };
 
-        assert_eq!(get(ptr::null_mut(), "", 0, None), (Cb::None, true));
+        assert_eq!(get(ptr::null_mut(), b"", None), (Cb::None, true));
 
         let with_dict = |args: Vec<Tv>| {
             Tv::Partial(Box::new(Pt {
@@ -686,24 +643,23 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
         );
 
         // The empty key holds the *string* `tr`, which is a function name.
-        assert_eq!(get(d, "", -1, None), (Cb::Fref(b"tr".to_vec()), true));
+        assert_eq!(get(d, b"", None), (Cb::Fref(b"tr".to_vec()), true));
         // A missing key leaves the slot alone and still succeeds.
-        assert_eq!(get(d, "x", -1, None), (Cb::None, true));
-        // `key_len` picks which of the six prefixes is looked up.
-        assert_eq!(get(d, "testt", 0, None), (Cb::Fref(b"tr".to_vec()), true));
+        assert_eq!(get(d, b"x", None), (Cb::None, true));
+        // The key's length picks which of the six prefixes is looked up.
+        assert_eq!(get(d, b"", None), (Cb::Fref(b"tr".to_vec()), true));
         assert_eq!(
             get(
                 d,
-                "test",
-                1,
+                b"t",
                 Some("E6000: Argument is not a function or function name")
             ),
             (Cb::None, false),
             "the key `t` holds a number"
         );
-        assert_eq!(get(d, "testt", 2, None), (Cb::Fref(b"tr".to_vec()), true));
+        assert_eq!(get(d, b"te", None), (Cb::Fref(b"tr".to_vec()), true));
         assert_eq!(
-            get(d, "testt", 3, None),
+            get(d, b"tes", None),
             (
                 Cb::Pt(Box::new(Pt {
                     value: b"tr".to_vec(),
@@ -714,9 +670,9 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
                 true
             )
         );
-        for (len, args) in [(4, vec![]), (5, vec![f(1.0)])] {
+        for (len, args) in [(4usize, vec![]), (5, vec![f(1.0)])] {
             assert_eq!(
-                get(d, "testt", len, None),
+                get(d, &b"testt"[..len], None),
                 (
                     Cb::Pt(Box::new(Pt {
                         value: b"Test".to_vec(),
@@ -751,7 +707,7 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
         assert_eq!(tv::read_dict(d), Tv::dict([("test", f(10.0))]));
         log.clear();
 
-        assert_eq!(tv_dict_add(d, di), Ok(()));
+        assert_eq!((*d).add_item(di), Ok(()));
         log.check(&[]);
         assert_eq!(
             tv::read_dict(d),
@@ -761,7 +717,7 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
         assert_eq!(
             check_emsg(
                 log.editor(),
-                || tv_dict_add(d, di),
+                || (*d).add_item(di),
                 Some(&duplicate("t-est"))
             ),
             Err(Failed)
@@ -798,43 +754,37 @@ fn adding_a_typed_value_takes_the_key_by_length() {
         let adds: Vec<(&str, Add, Tv, bool)> = vec![
             (
                 "list",
-                Box::new(move |d, _| {
-                    tv_dict_add_list(d, cstr("testt").as_ptr(), 3, ListRef::retained(l))
-                }),
+                Box::new(move |d, _| (*d).add_list(b"tes", ListRef::retained(l))),
                 Tv::List(vec![f(1.0), f(2.0), f(3.0)]),
                 false,
             ),
             (
                 "dict",
-                Box::new(move |d, _| {
-                    tv_dict_add_dict(d, cstr("testt").as_ptr(), 3, DictRef::retained(d2))
-                }),
+                Box::new(move |d, _| (*d).add_dict(b"tes", DictRef::retained(d2))),
                 Tv::dict([("foo", f(42.0))]),
                 false,
             ),
             (
                 "nr",
-                Box::new(|d, _| tv_dict_add_nr(d, cstr("testt").as_ptr(), 3, 2)),
+                Box::new(|d, _| (*d).add_number(b"tes", 2)),
                 Tv::Int(2),
                 false,
             ),
             (
                 "float",
-                Box::new(|d, _| tv_dict_add_float(d, cstr("testt").as_ptr(), 3, 1.5)),
+                Box::new(|d, _| (*d).add_float(b"tes", 1.5)),
                 f(1.5),
                 false,
             ),
             (
                 "str",
-                Box::new(|d, _| {
-                    tv_dict_add_str(d, cstr("testt").as_ptr(), 3, cstr("TEST").as_ptr())
-                }),
+                Box::new(|d, _| (*d).add_str(b"tes", cstr("TEST").as_ptr())),
                 Tv::s("TEST"),
                 true,
             ),
             (
                 "allocated_str",
-                Box::new(move |d, n| tv_dict_add_allocated_str(d, cstr("testt").as_ptr(), 3, s[n])),
+                Box::new(move |d, n| (*d).add_allocated_str(b"tes", s[n])),
                 Tv::s("TEST"),
                 false,
             ),
@@ -911,16 +861,16 @@ fn clearing_a_dict_frees_its_items() {
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
         // Clearing an empty dict is a no-op.
-        tv_dict_clear(d);
+        (*d).clear();
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
-        let _ = tv_dict_add_str(d, cstr("TEST").as_ptr(), 3, cstr("tEsT").as_ptr());
+        let _ = (*d).add_str(b"TES", cstr("tEsT").as_ptr());
         let di = tv::di_of(d, "TES");
         let value = (*di).di_tv.string();
         log.check(&[alloc::string(value, "tEsT".len())]);
         assert_eq!(tv::read_dict(d), Tv::dict([("TES", Tv::s("tEsT"))]));
 
-        tv_dict_clear(d);
+        (*d).clear();
         log.check(&[alloc::freed(value)]);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
@@ -939,7 +889,7 @@ fn extending_a_dict_keeps_forces_or_reports() {
         let extend = |d1: *mut Dict, d2: *mut Dict, action: &str, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
-                || tv_dict_extend(d1, d2, cstr(action).as_ptr()),
+                || dict_extend(d1, d2, *(cstr(action).as_ptr()) as u8),
                 msg,
             );
         };
@@ -998,7 +948,7 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
         let extend = |d1: *mut Dict, d2: *mut Dict, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
-                || tv_dict_extend(d1, d2, cstr("force").as_ptr()),
+                || dict_extend(d1, d2, *(cstr("force").as_ptr()) as u8),
                 msg,
             );
         };
@@ -1075,15 +1025,15 @@ fn comparing_dicts_folds_the_values_case_but_never_the_keys() {
     let log = AllocLog::start();
     // SAFETY: every dict is this case's own.
     unsafe {
-        assert!(tv_dict_equal(ptr::null_mut(), ptr::null_mut(), false));
+        assert!(dict_equal(None, None, false));
         let d1 = tv_dict_alloc().into_raw();
         log.check(&[alloc::dict(d1)]);
         // The allocator hands out one reference, which `into_raw` gave to
         // this case; `tv_dict_free` at the bottom is where it goes back.
         assert_eq!((*d1).dv_refcount.get(), 1);
-        assert!(tv_dict_equal(ptr::null_mut(), d1, false));
-        assert!(tv_dict_equal(d1, ptr::null_mut(), false));
-        assert!(tv_dict_equal(d1, d1, false));
+        assert!(dict_equal(None, (d1).as_ref(), false));
+        assert!(dict_equal((d1).as_ref(), None, false));
+        assert!(dict_equal((d1).as_ref(), (d1).as_ref(), false));
         log.check(&[]);
 
         let build = |key: &str, value: &str| {
@@ -1103,14 +1053,21 @@ fn comparing_dicts_folds_the_values_case_but_never_the_keys() {
         let kupper_upper = build("A", "TEST");
         let kupper_lower = build("A", "test");
 
-        assert!(tv_dict_equal(upper, upper, false));
-        assert!(tv_dict_equal(upper, upper, true));
-        assert!(!tv_dict_equal(upper, lower, false));
-        assert!(tv_dict_equal(upper, lower, true));
-        assert!(tv_dict_equal(kupper_upper, kupper_lower, true));
-        assert!(!tv_dict_equal(kupper_upper, lower, true), "the key differs");
+        assert!(dict_equal((upper).as_ref(), (upper).as_ref(), false));
+        assert!(dict_equal((upper).as_ref(), (upper).as_ref(), true));
+        assert!(!dict_equal((upper).as_ref(), (lower).as_ref(), false));
+        assert!(dict_equal((upper).as_ref(), (lower).as_ref(), true));
+        assert!(dict_equal(
+            (kupper_upper).as_ref(),
+            (kupper_lower).as_ref(),
+            true
+        ));
         assert!(
-            !tv_dict_equal(kupper_upper, upper, true),
+            !dict_equal((kupper_upper).as_ref(), (lower).as_ref(), true),
+            "the key differs"
+        );
+        assert!(
+            !dict_equal((kupper_upper).as_ref(), (upper).as_ref(), true),
             "so does this one"
         );
         log.check(&[]);
@@ -1307,16 +1264,16 @@ fn a_self_referencing_dict_copies_into_a_self_referencing_copy() {
         let mut d_tv = Tv::Dict(vec![]).build();
         let d = d_tv.dict();
         assert_eq!((*d).dv_refcount.get(), 1);
-        let _ = tv_dict_add_dict(d, cstr("test").as_ptr(), 4, DictRef::retained(d));
+        let _ = (*d).add_dict(b"test", DictRef::retained(d));
         assert_eq!((*d).dv_refcount.get(), 2);
 
         let copy = dict_copied(ptr::null(), d, true, 2);
         assert_eq!((*copy).dv_refcount.get(), 2, "the copy holds itself");
         assert_eq!(tv::read_dict(copy), Tv::dict([("test", Tv::Cycle(0))]));
 
-        tv_dict_clear(d);
+        (*d).clear();
         assert_eq!((*d).dv_refcount.get(), 1);
-        tv_dict_clear(copy);
+        (*copy).clear();
         assert_eq!((*copy).dv_refcount.get(), 1);
 
         tv_dict_unref(copy);
@@ -1338,7 +1295,7 @@ fn making_keys_read_only_sets_both_flags_on_every_item() {
         assert_eq!((*di).di_flags & ro, 0);
         assert_eq!((*di).di_flags & fix, 0);
 
-        tv_dict_set_keys_readonly(d);
+        (*d).set_keys_readonly();
         log.check(&[]);
         assert_eq!((*di).di_flags & ro, ro);
         assert_eq!((*di).di_flags & fix, fix);

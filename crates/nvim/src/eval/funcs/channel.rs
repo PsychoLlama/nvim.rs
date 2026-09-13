@@ -16,9 +16,7 @@ use crate::channel::{
 use crate::cstr;
 use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
-use crate::eval::typval::{
-    NumBuf, blob_bytes, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
-};
+use crate::eval::typval::{NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number};
 use crate::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
@@ -355,7 +353,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT)
-        && unsafe { tv_dict_get_bool(args[0].dict_or_null(), c"peer".as_ptr(), 0) } != 0
+        && dict_get_bool(args[0].dict_ref(), b"peer", 0) != 0
     {
         let lua_args = Array::from(vec![Object::array(addrs_arr)]);
 
@@ -495,11 +493,12 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut on_data = NO_READER;
     if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
         let opts = args[2].dict_or_null();
-        rpc = unsafe { tv_dict_get_number(opts, c"rpc".as_ptr()) } != 0;
-        if !unsafe { tv_dict_get_callback(opts, c"on_data".as_ptr(), 7, &raw mut on_data.cb) } {
+        rpc = dict_get_number(unsafe { opts.as_ref() }, b"rpc") != 0;
+        // SAFETY: the argument's own dictionary, and this frame's reader.
+        if !unsafe { dict_get_callback(opts.as_mut(), b"on_data", &mut on_data.cb) } {
             return;
         }
-        on_data.buffered = unsafe { tv_dict_get_number(opts, c"data_buffered".as_ptr()) } != 0;
+        on_data.buffered = dict_get_number(unsafe { opts.as_ref() }, b"data_buffered") != 0;
         // Buffered with no callback means "collect it on the Dict", so
         // the Dict has to be reachable from the reader.
         if on_data.buffered && !on_data.cb.is_set() {
@@ -528,15 +527,17 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let opts = args[0].dict_or_null();
     let mut on_stdin = NO_READER;
-    let rpc = unsafe { tv_dict_get_number(opts, c"rpc".as_ptr()) } != 0;
-    if !unsafe { tv_dict_get_callback(opts, c"on_stdin".as_ptr(), 8, &raw mut on_stdin.cb) } {
+    let rpc = dict_get_number(unsafe { opts.as_ref() }, b"rpc") != 0;
+    // SAFETY: the argument's own dictionary, and this frame's reader.
+    if !unsafe { dict_get_callback(opts.as_mut(), b"on_stdin", &mut on_stdin.cb) } {
         return;
     }
     // `on_print` is a global: there is only one stdio channel.
-    if !unsafe { tv_dict_get_callback(opts, c"on_print".as_ptr(), 8, on_print_cb()) } {
+    // SAFETY: as above, with the one global callback slot.
+    if !unsafe { dict_get_callback(opts.as_mut(), b"on_print", &mut *on_print_cb()) } {
         return;
     }
-    on_stdin.buffered = unsafe { tv_dict_get_number(opts, c"stdin_buffered".as_ptr()) } != 0;
+    on_stdin.buffered = dict_get_number(unsafe { opts.as_ref() }, b"stdin_buffered") != 0;
     if on_stdin.buffered && !on_stdin.cb.is_set() {
         on_stdin.self_0 = opts;
     }

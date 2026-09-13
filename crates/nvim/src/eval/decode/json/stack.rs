@@ -15,14 +15,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text, msg_bytes};
 use crate::semsg;
 use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int};
 
-use crate::eval::typval::{
-    list_len, tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc,
-};
+use crate::eval::typval::{dict_find, list_len, tv_clear, tv_dict_item_alloc, tv_list_alloc};
 use crate::types::{Dict, List, TypVal, VAR_STRING};
 use ::libc::abort;
 
@@ -216,7 +215,7 @@ impl<'a> Decoder<'a> {
                 debug_assert!(!(key.is_special_string || key.val.string_or_null().is_null()));
                 let obj_di = unsafe { tv_dict_item_alloc(key.val.string_or_null()) };
                 tv_clear(&mut key.val);
-                if unsafe { tv_dict_add(last.container.dict(), obj_di) }.is_err() {
+                if unsafe { (*last.container.dict()).add_item(obj_di) }.is_err() {
                     unsafe { abort() };
                 }
                 unsafe { (*obj_di).di_tv = obj.val };
@@ -257,8 +256,13 @@ impl<'a> Decoder<'a> {
         if last.special_val.is_null()
             && (obj.is_special_string
                 || obj.val.string_or_null().is_null()
-                || !unsafe { tv_dict_find(last.container.dict(), obj.val.string_or_null(), -1) }
-                    .is_null())
+                || unsafe {
+                    dict_find(
+                        last.container.dict().as_ref(),
+                        cstr::bytes_at(obj.val.string_or_null()),
+                    )
+                }
+                .is_some())
         {
             tv_clear(&mut obj.val);
             // Rewind to the `{` and reopen it as a special map.

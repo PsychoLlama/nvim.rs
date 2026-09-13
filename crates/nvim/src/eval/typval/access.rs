@@ -192,6 +192,30 @@ impl TypVal {
         }
     }
 
+    /// The dictionary this value holds, borrowed -- `None` for every other
+    /// kind and for `v:_null_dict`.
+    ///
+    /// The safe spelling of [`TypVal::dict_or_null`], and the one the
+    /// `dict_*` family reads its argument in; see [`TypVal::list_ref`].
+    #[inline(always)]
+    pub(crate) fn dict_ref(&self) -> Option<&Dict> {
+        match self {
+            TypVal::Dict(dict) => dict.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// The dictionary this value holds, borrowed for writing.
+    ///
+    /// See [`TypVal::list_mut`]: the exclusive borrow is the point.
+    #[inline(always)]
+    pub(crate) fn dict_mut(&mut self) -> Option<&mut Dict> {
+        match self {
+            TypVal::Dict(dict) => dict.as_deref_mut(),
+            _ => None,
+        }
+    }
+
     /// A dictionary value over `dict`, which the value takes over.
     ///
     /// The dictionary half of [`TypVal::list`]: the one place the
@@ -683,26 +707,22 @@ pub unsafe fn tv_dict_set_ret(tv: &mut TypVal, d: *mut Dict) {
     unsafe { Tv::new(tv) }.write_dict(unsafe { DictRef::retained(d) });
 }
 
-/// Number of items in `d`; a NULL dictionary is empty.
-///
-/// # Safety
-/// `d` is null or points at a live dictionary.
+/// Number of items in `d`, as the `long` the family counts in; a NULL
+/// dictionary is empty.
 #[inline]
-pub unsafe fn tv_dict_len(d: *const Dict) -> ::core::ffi::c_long {
-    unsafe { d.as_ref() }.map_or(0, |d| {
-        ::core::ffi::c_long::try_from(d.dv_hashtab.ht_used)
+pub fn dict_len(d: Option<&Dict>) -> ::core::ffi::c_long {
+    d.map_or(0, |d| {
+        ::core::ffi::c_long::try_from(d.len())
             .expect("a dictionary never holds more items than a long counts")
     })
 }
 
 /// Whether at least one watcher is registered on `d`.
-///
-/// # Safety
-/// `d` is null or points at a live dictionary whose watcher queue has been
-/// initialised (every dictionary from `tv_dict_alloc` has).
 #[inline]
-pub unsafe fn tv_dict_is_watched(d: *const Dict) -> bool {
-    unsafe { d.as_ref() }.is_some_and(|d| !unsafe { queue_empty(&raw const d.watchers) })
+pub fn dict_is_watched(d: Option<&Dict>) -> bool {
+    // SAFETY: an initialised watcher queue -- every dictionary is allocated
+    // through `tv_dict_alloc`, which runs `queue_init` over this field.
+    d.is_some_and(|d| !unsafe { queue_empty(&raw const d.watchers) })
 }
 
 /// The key of `di`, which upstream reads as the plain `di->di_key`.

@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::eval::Parsed;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::c_str;
@@ -13,8 +14,8 @@ use core::ptr::null_mut;
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    DictRef, ListRef, NumBuf, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find,
-    tv_dict_item_alloc, tv_dict_item_free, tv_list_alloc,
+    DictRef, ListRef, NumBuf, dict_find, tv_clear, tv_dict_alloc, tv_dict_item_alloc,
+    tv_dict_item_free, tv_list_alloc,
 };
 use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
@@ -203,7 +204,9 @@ pub(crate) unsafe fn eval_dict(
                 break 'items false;
             }
             if evaluate {
-                if !unsafe { tv_dict_find(dict, key, -1 as ptrdiff_t) }.is_null() {
+                // SAFETY: the dictionary being built, and a NUL-terminated
+                // key.
+                if unsafe { dict_find(dict.as_ref(), cstr::bytes_at(key)) }.is_some() {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
                     let key = unsafe { c_str(key) };
                     semsg!("E721: Duplicate key in Dictionary: \"{key}\"");
@@ -216,7 +219,7 @@ pub(crate) unsafe fn eval_dict(
                 item.di_tv = tv.take();
                 item.di_lock = VarLock::Unlocked;
                 let item = item.raw();
-                if unsafe { tv_dict_add(dict, item) }.is_err() {
+                if unsafe { (*dict).add_item(item) }.is_err() {
                     unsafe { tv_dict_item_free(item) };
                 }
             }

@@ -241,9 +241,8 @@ unsafe fn call_in_dict(
     // A Dict argument was converted whole, so its function member is
     // already `fn_0`; a String argument named a dictionary to look in.
     if !fn_0.data().is_null() && !fn_0.is_empty() && !dict_given {
-        // SAFETY: `self_dict` is live and `fn_0` names its own bytes.
-        let len: ptrdiff_t = fn_0.len().cast_signed();
-        let di: *mut DictItem = unsafe { tv_dict_find(self_dict, fn_0.data(), len) };
+        // SAFETY: `self_dict` is live.
+        let di = unsafe { (*self_dict).find_ptr(fn_0.as_bytes()) };
         if di.is_null() {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
             let name = unsafe { c_str(fn_0.data()) };

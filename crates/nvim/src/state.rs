@@ -20,6 +20,7 @@
 //! look like input to all of them.
 
 pub(crate) mod mode;
+use crate::cstr;
 use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
@@ -31,7 +32,6 @@ use crate::channel::main_loop_events;
 use crate::debugger::state::debug_mode;
 use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{setcursor, update_screen};
-use crate::eval::typval::{tv_dict_add_str, tv_dict_set_keys_readonly};
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_get};
 use crate::ex_docmd::state::global_busy;
@@ -455,10 +455,10 @@ pub fn may_trigger_modechanged() {
     // both mode names outlive the autocommand that reads them.
     let v_event = unsafe { get_v_event(&raw mut save_v_event) };
     let (key, len) = (c"new_mode".as_ptr(), c"new_mode".count_bytes());
-    let _ = unsafe { tv_dict_add_str(v_event, key, len, curr_mode.as_mut_ptr()) };
+    let _ = unsafe { (*v_event).add_str(cstr::slice_at(key, len), curr_mode.as_mut_ptr()) };
     let (key, len) = (c"old_mode".as_ptr(), c"old_mode".count_bytes());
-    let _ = unsafe { tv_dict_add_str(v_event, key, len, old_mode.as_mut_ptr()) };
-    unsafe { tv_dict_set_keys_readonly(v_event) };
+    let _ = unsafe { (*v_event).add_str(cstr::slice_at(key, len), old_mode.as_mut_ptr()) };
+    unsafe { (*v_event).set_keys_readonly() };
     let (fname, fname_io) = (pattern.as_mut_ptr(), ptr::null_mut::<c_char>());
     let buf = Buf::current_or_none();
     unsafe { apply_autocmds(AutoEvent::ModeChanged, fname, fname_io, false, buf) };

@@ -22,6 +22,7 @@
 
 use super::throttle::{Ring, out_data_cb, out_data_decide_throttle, out_data_ring};
 use super::*;
+use crate::cstr;
 use crate::event::libuv::{uv_err_name, uv_strerror};
 use crate::event::libuv_proc::libuv_proc_init;
 use crate::event::r#loop::loop_poll_events;

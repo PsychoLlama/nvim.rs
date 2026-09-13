@@ -29,9 +29,9 @@ use core::ptr::null_mut;
 
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
-    blob_len, blob_set_range, di_lock, list_assign_range, tv_check_lock, tv_clear, tv_copy,
-    tv_dict_add, tv_dict_is_watched, tv_dict_item_alloc, tv_dict_item_free, tv_dict_watcher_notify,
-    tv_dict_wrong_func_name, tv_get_number_chk, value_check_lock,
+    blob_len, blob_set_range, di_lock, dict_is_watched, dict_watcher_notify, dict_wrong_func_name,
+    list_assign_range, tv_check_lock, tv_clear, tv_copy, tv_dict_item_alloc, tv_dict_item_free,
+    tv_get_number_chk, value_check_lock,
 };
 use crate::eval::userfunc::TV_CSTRING;
 use crate::eval::vars::{clear_local, emsg_static};
@@ -121,7 +121,7 @@ pub unsafe fn set_var_lval(
     // docs. It must never be the same typval as the new value.
     let mut oldtv = UNSET_TV;
     let dict = lval.ll_dict;
-    let watched = unsafe { tv_dict_is_watched(dict) };
+    let watched = dict_is_watched(unsafe { (dict).as_ref() });
 
     if is_const {
         emsg_static(c"E996: Cannot lock a list or dict");
@@ -153,11 +153,18 @@ pub unsafe fn set_var_lval(
         }
         // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
         let target = unsafe { Tv::new(lval.ll_tv).dict_or_null() };
-        if unsafe { tv_dict_wrong_func_name(target, result, lval.ll_newkey) } != 0 {
+        // SAFETY: the value's own dictionary and the owned key text.
+        if unsafe {
+            dict_wrong_func_name(
+                &*target,
+                result,
+                ::core::ffi::CStr::from_ptr(lval.ll_newkey),
+            )
+        } {
             return;
         }
         let di = unsafe { tv_dict_item_alloc(lval.ll_newkey) };
-        if unsafe { tv_dict_add(target, di) }.is_err() {
+        if unsafe { (*target).add_item(di) }.is_err() {
             unsafe { tv_dict_item_free(di) };
             return;
         }
@@ -200,7 +207,14 @@ pub unsafe fn set_var_lval(
         // Nothing was saved, so this is the new-key case.
         debug_assert!(!lval.ll_newkey.is_null());
         // SAFETY: the watched Dict, its new key, and the value just written.
-        unsafe { tv_dict_watcher_notify(dict, lval.ll_newkey, Some(&*lval.ll_tv), None) };
+        unsafe {
+            dict_watcher_notify(
+                dict,
+                ::core::ffi::CStr::from_ptr(lval.ll_newkey),
+                Some(&*lval.ll_tv),
+                None,
+            )
+        };
     } else {
         let di = lval.ll_di;
         // SAFETY: an item of the dictionary being written to, which owns its
@@ -208,7 +222,14 @@ pub unsafe fn set_var_lval(
         let key = unsafe { (*di).di_key.as_ptr() }.cast_mut();
         // SAFETY: the watched Dict, its key, the new value and the old copy.
         let new = unsafe { &*lval.ll_tv };
-        unsafe { tv_dict_watcher_notify(dict, key, Some(new), Some(&oldtv)) };
+        unsafe {
+            dict_watcher_notify(
+                dict,
+                ::core::ffi::CStr::from_ptr(key),
+                Some(new),
+                Some(&oldtv),
+            )
+        };
         clear_local(&mut oldtv);
     }
 }

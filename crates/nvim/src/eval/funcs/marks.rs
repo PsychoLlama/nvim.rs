@@ -5,8 +5,8 @@
 use super::tv_get_buf;
 use super::wrappers::{arg_number, arg_string, arg_string_chk, dict_alloc_ret, list_alloc_ret};
 use crate::eval::typval::{
-    NumBuf, tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str,
-    tv_dict_alloc, tv_list_alloc, tv_list_alloc_ret,
+    NumBuf, tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_alloc, tv_list_alloc,
+    tv_list_alloc_ret,
 };
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::guard::Suppress;
@@ -39,9 +39,9 @@ unsafe fn append_mark(l: *mut List, mark: Pos) -> *mut Dict {
     let d_held = tv_dict_alloc();
     let d = d_held.as_ptr();
     unsafe { (*l).push_dict(Some(d_held)) };
-    let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, mark.lnum as VarNumber) };
-    let _ = unsafe { tv_dict_add_nr(d, c"col".as_ptr(), 3, mark.col as VarNumber) };
-    let _ = unsafe { tv_dict_add_nr(d, c"coladd".as_ptr(), 6, mark.coladd as VarNumber) };
+    let _ = unsafe { (*d).add_number(b"lnum", mark.lnum as VarNumber) };
+    let _ = unsafe { (*d).add_number(b"col", mark.col as VarNumber) };
+    let _ = unsafe { (*d).add_number(b"coladd", mark.coladd as VarNumber) };
     d
 }
 
@@ -110,10 +110,10 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             continue;
         }
         let d = unsafe { append_mark(l, entry.fmark.mark) };
-        let _ = unsafe { tv_dict_add_nr(d, c"bufnr".as_ptr(), 5, entry.fmark.fnum as VarNumber) };
+        let _ = unsafe { (*d).add_number(b"bufnr", entry.fmark.fnum as VarNumber) };
         // A jump into a file that is no longer loaded keeps its name.
         if !entry.fname.is_null() {
-            let _ = unsafe { tv_dict_add_str(d, c"filename".as_ptr(), 8, entry.fname) };
+            let _ = unsafe { (*d).add_str(b"filename", entry.fname) };
         }
     }
 }

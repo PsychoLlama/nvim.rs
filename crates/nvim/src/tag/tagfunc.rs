@@ -355,5 +355,5 @@ unsafe fn string_fields(d: *mut Dict) -> Vec<Field> {
 /// `d` must be live and `val` NUL-terminated.
 unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     // SAFETY: the caller's promise.
-    let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
+    let _ = unsafe { (*d).add_str(key.to_bytes(), val) };
 }

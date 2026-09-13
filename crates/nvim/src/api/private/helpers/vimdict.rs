@@ -18,8 +18,8 @@ use super::{DI_FLAGS_FIX, DI_FLAGS_LOCK, DI_FLAGS_RO};
 use crate::api_error;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    tv_clear, tv_copy, tv_dict_add, tv_dict_find, tv_dict_is_watched, tv_dict_item_alloc_len,
-    tv_dict_item_remove, tv_dict_watcher_notify,
+    dict_find, dict_is_watched, dict_watcher_notify, tv_clear, tv_copy, tv_dict_item_alloc_len,
+    tv_dict_item_remove,
 };
 use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::types::TypVal;
@@ -39,13 +39,11 @@ use core::ffi::c_int;
 pub(crate) unsafe fn dict_get_value(dict: *mut Dict, key: &String_0) -> Result<Object, Error> {
     // SAFETY: `dict` is a live Vimscript dictionary and `key` borrows the
     // caller's text.
-    let di = unsafe { tv_dict_find(dict, key.data(), key.len().cast_signed()) };
-    if di.is_null() {
+    let Some(di) = dict_find(unsafe { dict.as_ref() }, key.as_bytes()) else {
         let key = key.as_cstr().to_string_lossy();
         return Err(api_error!(kErrorTypeValidation, "Key not found: {key}"));
-    }
-    // SAFETY: the lookup answered a live item of `dict`.
-    Ok(Object::from(unsafe { &(*di).di_tv }))
+    };
+    Ok(Object::from(&di.di_tv))
 }
 
 /// The item `key` names, or why it could not be assigned to (or, with `del`,
@@ -63,8 +61,9 @@ pub(crate) unsafe fn dict_check_writable(
     key: &String_0,
     del: bool,
 ) -> Result<*mut DictItem, Error> {
-    // SAFETY: as `dict_get_value`.
-    let di = unsafe { tv_dict_find(dict, key.data(), key.len().cast_signed()) };
+    // SAFETY: as `dict_get_value`. The pointer form is what the answer is:
+    // the caller writes through the item and then reaches `dict` again.
+    let di = unsafe { (*dict).find_ptr(key.as_bytes()) };
     if !di.is_null() {
         // SAFETY: the lookup answered a live item.
         let flags = c_int::from(unsafe { (*di).di_flags });
@@ -118,7 +117,7 @@ pub(crate) unsafe fn dict_set_var(
     // SAFETY: as `dict_get_value`.
     let mut di = unsafe { dict_check_writable(dict, key, del) }?;
     // SAFETY: `dict` is live.
-    let watched = unsafe { tv_dict_is_watched(dict) };
+    let watched = dict_is_watched(unsafe { (dict).as_ref() });
 
     if del {
         if di.is_null() {
@@ -130,7 +129,14 @@ pub(crate) unsafe fn dict_set_var(
         let old = unsafe { &raw mut (*di).di_tv };
         if watched {
             // SAFETY: as above; a removal has no new value to show.
-            unsafe { tv_dict_watcher_notify(dict, key.data(), None, Some(&*old)) };
+            unsafe {
+                dict_watcher_notify(
+                    dict,
+                    ::core::ffi::CStr::from_ptr(key.data()),
+                    None,
+                    Some(&*old),
+                )
+            };
         }
         if retval {
             // SAFETY: as above.
@@ -150,7 +156,7 @@ pub(crate) unsafe fn dict_set_var(
         // SAFETY: `key` names its own bytes and `dict` is live.
         unsafe {
             di = tv_dict_item_alloc_len(key.data(), key.len());
-            let _ = tv_dict_add(dict, di);
+            let _ = (*dict).add_item(di);
         }
     } else {
         if retval {
@@ -188,7 +194,12 @@ pub(crate) unsafe fn dict_set_var(
     if watched {
         // SAFETY: as above, and `oldtv` is this frame's.
         unsafe {
-            tv_dict_watcher_notify(dict, key.data(), Some(&tv), Some(&oldtv));
+            dict_watcher_notify(
+                dict,
+                ::core::ffi::CStr::from_ptr(key.data()),
+                Some(&tv),
+                Some(&oldtv),
+            );
             tv_clear(&mut oldtv);
         }
     }

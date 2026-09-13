@@ -14,6 +14,7 @@ use super::file::*;
 use super::format::*;
 use super::store::Marks;
 use super::*;
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;

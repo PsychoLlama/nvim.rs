@@ -177,15 +177,7 @@ unsafe fn describe_match(list: *mut List, entry: *mut c_char) -> bool {
         && unsafe { add_tag_field(dict, c"filename".as_ptr(), full_fname, ptr::null()) }.is_ok()
         && unsafe { add_tag_field(dict, c"cmd".as_ptr(), tp.command, tp.command_end) }.is_ok()
         && unsafe { add_tag_field(dict, c"kind".as_ptr(), tp.tagkind, kind_end) }.is_ok()
-        && unsafe {
-            tv_dict_add_nr(
-                dict,
-                static_key.as_ptr(),
-                static_key.count_bytes(),
-                is_static as VarNumber,
-            )
-        }
-        .is_ok();
+        && unsafe { (*dict).add_number(static_key.to_bytes(), is_static as VarNumber) }.is_ok();
     unsafe { xfree(full_fname.cast()) };
 
     ok &= unsafe { add_extra_fields(dict, &tp) };
@@ -335,7 +327,8 @@ unsafe fn add_tag_field(
     // SAFETY: the caller's promise.
     // A dictionary holds one value per key, so a field name the tags
     // line repeats is dropped rather than replacing the first.
-    if !unsafe { tv_dict_find(dict, field_name, -1) }.is_null() {
+    // SAFETY: the dictionary being built, and a NUL-terminated field name.
+    if unsafe { dict_find(dict.as_ref(), cstr::bytes_at(field_name)) }.is_some() {
         if p_verbose.get() > 0 {
             verbose_enter();
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
@@ -363,5 +356,5 @@ unsafe fn add_tag_field(
     }
     value.push(0);
     let name_len = unsafe { cstr::bytes_at(field_name) }.len();
-    unsafe { tv_dict_add_str(dict, field_name, name_len, value.as_ptr()) }
+    unsafe { (*dict).add_str(cstr::slice_at(field_name, name_len), value.as_ptr()) }
 }

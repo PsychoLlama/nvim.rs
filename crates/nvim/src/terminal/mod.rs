@@ -51,7 +51,6 @@ use crate::channel::main_loop_events;
 use crate::cstr;
 use crate::cursor_shape::{SHAPE_IDX_TERM, shape_entry};
 use crate::drawscreen::redraw_buf_line_later;
-use crate::eval::typval::{tv_dict_add_nr, tv_dict_set_keys_readonly};
 use crate::eval::vars::get_globvar_dict;
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_free, multiqueue_new, multiqueue_put_event};
@@ -512,9 +511,9 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     // SAFETY: paired with the `restore_v_event` below.
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
     // SAFETY: `dict` is `v:event`, which takes a number under a fixed key.
-    let _ = unsafe { tv_dict_add_nr(dict, c"status".as_ptr(), 6, status as VarNumber) };
+    let _ = unsafe { (*dict).add_number(b"status", status as VarNumber) };
     // SAFETY: as above.
-    unsafe { tv_dict_set_keys_readonly(dict) };
+    unsafe { (*dict).set_keys_readonly() };
     let mut payload = DictBuf::<1>::new();
     payload.insert(c"pos", Object::integer(pos as i64));
     let mut event = payload.object();

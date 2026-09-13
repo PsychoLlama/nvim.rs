@@ -21,7 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::typval::tv_dict_to_env;
+use crate::eval::typval::dict_to_env;
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn, uv_strerror};
 use crate::event::proc::{kProcTypeUv, proc_get_exepath, proc_init};
 use crate::log::{LOGLVL_INF, logmsg};
@@ -209,7 +209,7 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
     } else {
         let env = uvproc.proc.env;
         // SAFETY: the caller's dictionary of environment variables.
-        unsafe { tv_dict_to_env(env) }
+        dict_to_env(unsafe { &*(env) })
     };
 
     // The parent's copies of the descriptors the child inherits. They are
@@ -247,7 +247,7 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
         // Nothing will reach `close_cb` to free it.
         if !uvproc.uvopts.env.is_null() {
             let env = uvproc.uvopts.env;
-            // SAFETY: the environment `tv_dict_to_env` built above.
+            // SAFETY: the environment `dict_to_env` built above.
             unsafe { os_free_fullenv(env) };
         }
     } else {

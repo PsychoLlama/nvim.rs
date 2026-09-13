@@ -20,7 +20,7 @@ use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
 use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
-    ListRef, callback_free, tv_dict_get_callback, tv_dict_get_number, tv_list_alloc,
+    ListRef, callback_free, dict_get_callback, dict_get_number, tv_list_alloc,
 };
 use crate::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
@@ -115,9 +115,9 @@ pub unsafe fn common_job_callbacks(
     }
 
     // SAFETY: the caller's promise -- `vopts` is a live Dict.
-    out.buffered = unsafe { tv_dict_get_number(vopts, c"stdout_buffered".as_ptr()) } != 0;
+    out.buffered = dict_get_number(unsafe { (vopts).as_ref() }, b"stdout_buffered") != 0;
     // SAFETY: as above.
-    err.buffered = unsafe { tv_dict_get_number(vopts, c"stderr_buffered".as_ptr()) } != 0;
+    err.buffered = dict_get_number(unsafe { (vopts).as_ref() }, b"stderr_buffered") != 0;
     // Buffered output with no callback is collected into the options
     // Dict itself, which is why it becomes the reader's `self`.
     if out.buffered && !out.cb.is_set() {
@@ -136,10 +136,9 @@ pub unsafe fn common_job_callbacks(
 /// # Safety
 /// `vopts` must be a live Dict and `into` a valid callback slot.
 unsafe fn job_callback(vopts: *mut Dict, key: &CStr, into: *mut Callback) -> bool {
-    let len = key.count_bytes() as ptrdiff_t;
-    // SAFETY: the caller's promise; `key` is a NUL-terminated literal of
-    // `len` bytes.
-    unsafe { tv_dict_get_callback(vopts, key.as_ptr(), len, into) }
+    // SAFETY: the caller's promise -- a live Dict or null, and a callback
+    // slot the caller owns.
+    unsafe { dict_get_callback(vopts.as_mut(), key.to_bytes(), &mut *into) }
 }
 
 /// The channel a job id names, or null.

@@ -5,10 +5,7 @@
 use super::wrappers::{arg_string, arg_string_chk};
 use super::{DI_FLAGS_LOCK, FNE_CHECK_START, GLV_NO_AUTOLOAD, GLV_READ_ONLY, dummy_ap};
 use crate::cstr;
-use crate::eval::typval::{
-    NumBuf, callback_free, di_lock, di_tv, list_items, tv_dict_watcher_add, tv_dict_watcher_remove,
-    tv_islocked,
-};
+use crate::eval::typval::{NumBuf, callback_free, di_lock, di_tv, list_items, tv_islocked};
 use crate::eval::vars::find_var;
 use crate::eval::{callback_from_typval, clear_lval, get_lval};
 use crate::ex_cmds::check_secure;
@@ -61,7 +58,7 @@ pub fn f_dictwatcheradd(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
     // SAFETY: the kind checked above says the value holds a Dict pointer;
     // the watcher takes the callback over.
     let d = args[0].dict_or_null();
-    unsafe { tv_dict_watcher_add(d, key_pattern, key_pattern_len, callback) };
+    unsafe { (*d).watcher_add(cstr::slice_at(key_pattern, key_pattern_len), callback) };
 }
 
 /// `dictwatcherdel({dict}, {pattern}, {callback})`.
@@ -93,7 +90,7 @@ pub fn f_dictwatcherdel(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDa
     // watcher here and is freed below.
     let d = args[0].dict_or_null();
     let len = unsafe { cstr::bytes_at(key_pattern) }.len();
-    if !unsafe { tv_dict_watcher_remove(d, key_pattern, len, &callback) } {
+    if !unsafe { (*d).watcher_remove(cstr::slice_at(key_pattern, len), &callback) } {
         semsg!("Couldn't find a watcher matching key and callback");
     }
     unsafe { callback_free(&raw mut callback) };

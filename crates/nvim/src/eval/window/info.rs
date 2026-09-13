@@ -28,7 +28,7 @@ fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
     let (quickfix, terminal) = (buf_is_quickfix(Some(buf)), buf_is_terminal(Some(buf)));
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
-        let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
+        let _ = unsafe { (*dict).add_number(key.to_bytes(), value) };
     };
 
     nr(c"tabnr", VarNumber::from(tpnr));
@@ -55,7 +55,7 @@ fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
     let vars = c"variables";
     // SAFETY: the window's own `w:` scope; the answer takes a reference.
     let w_vars = unsafe { DictRef::retained(window.w_vars) };
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), w_vars) };
+    let _ = unsafe { (*dict).add_dict(vars.to_bytes(), w_vars) };
     dict_held
 }
 
@@ -69,7 +69,7 @@ fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
     let nr = VarNumber::from(tp_idx);
     let dict_held = tv_dict_alloc();
     let dict = dict_held.as_ptr();
-    let _ = unsafe { tv_dict_add_nr(dict, nrkey.as_ptr(), nrkey.count_bytes(), nr) };
+    let _ = unsafe { (*dict).add_number(nrkey.to_bytes(), nr) };
     let windows = tv_list_alloc(hint);
     let into = windows.as_ptr();
     let append = |handle: Handle| {
@@ -81,10 +81,10 @@ fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
     }
     // SAFETY: a live dictionary, and the tab page's own variable dictionary.
     let (wins, vars) = (c"windows", c"variables");
-    let _ = unsafe { tv_dict_add_list(dict, wins.as_ptr(), wins.count_bytes(), Some(windows)) };
+    let _ = unsafe { (*dict).add_list(wins.to_bytes(), Some(windows)) };
     // SAFETY: the tab page's own `t:` scope; the answer takes a reference.
     let tp_vars = unsafe { DictRef::retained(tabpage.tp_vars) };
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tp_vars) };
+    let _ = unsafe { (*dict).add_dict(vars.to_bytes(), tp_vars) };
     dict_held
 }
 

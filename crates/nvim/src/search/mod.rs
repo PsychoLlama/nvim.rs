@@ -26,8 +26,8 @@ use crate::drawscreen::{
     setcursor, show_cursor_info_later, showmode, update_screen,
 };
 use crate::eval::typval::{
-    list_find, list_len, tv_check_for_nonnull_dict_arg, tv_dict_add_nr, tv_dict_alloc_ret,
-    tv_dict_find, tv_get_number_chk,
+    dict_find, list_find, list_len, tv_check_for_nonnull_dict_arg, tv_dict_alloc_ret,
+    tv_get_number_chk,
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_cmds::{getfile, prepare_tagpreview};
@@ -92,7 +92,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdArg, ColNr, Dict, Direction, EvalFuncData, FILE, FileComparison, LPos, LineNr, List, Magic,
     MotionType, OpArg, Pos, ProfTime, RegMMatch, RegMatch, SearchItArg, SearchOffset,
-    SearchPattern, TypVal, VarNumber, int64_t, ptrdiff_t, size_t,
+    SearchPattern, TypVal, VarNumber, int64_t, size_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};

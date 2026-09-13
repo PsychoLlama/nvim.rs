@@ -13,9 +13,8 @@ use crate::channel::{
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, list_iter, list_len, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc,
-    tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove,
-    tv_list_alloc,
+    NumBuf, dict_extend, dict_find, dict_get_number, list_iter, list_len, tv_dict_alloc,
+    tv_dict_free, tv_dict_item_remove, tv_list_alloc,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
@@ -45,9 +44,9 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, EvalFuncData, IOSIZE,
-    Integer, List, MAXPATHL, NUL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER,
-    VarNumber, Vv, uint16_t, uint64_t,
+    Callback, CallbackReader, Channel, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer, List,
+    MAXPATHL, NUL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VarNumber, Vv,
+    uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -289,14 +288,14 @@ const REQUIRED_ENV: [&CStr; 0] = [];
 /// `job_env` is null or a live dict item holding a Dict; `pty_term_name` is
 /// null or a NUL-terminated string, and non-null whenever `pty` is set.
 unsafe fn create_environment(
-    job_env: *const DictItem,
+    job_env: *mut Dict,
     clear_env: bool,
     pty: bool,
     pty_term_name: *const c_char,
 ) -> *mut Dict {
     // SAFETY: the caller's obligation; every key below is a `'static`
     // NUL-terminated string and the dict owns what it is given.
-    let env_held = tv_dict_alloc();
+    let mut env_held = tv_dict_alloc();
     let env = env_held.as_ptr();
 
     if !clear_env {
@@ -308,7 +307,7 @@ unsafe fn create_environment(
         let row = EvalFuncData::None;
         // SAFETY: `out` is this frame's own value.
         f_environ(&[], unsafe { &mut *out }, row);
-        unsafe { tv_dict_extend(env, inherited.dict_or_null(), c"force".as_ptr()) };
+        unsafe { dict_extend(env, inherited.dict_or_null(), b'f') };
         unsafe { tv_dict_free(inherited.dict_or_null()) };
         // Freed outright rather than released, so the value that named it
         // must give it up without a second release.
@@ -316,52 +315,55 @@ unsafe fn create_environment(
 
         if pty {
             for name in PTY_IGNORED_ENV {
-                let dv = unsafe { tv_dict_find(env, name.as_ptr(), -1) };
-                if !dv.is_null() {
-                    unsafe { tv_dict_item_remove(env, dv) };
+                if let Some(dv) = env_held.find(name.to_bytes()) {
+                    // SAFETY: the dictionary this call owns, and its own item.
+                    unsafe { tv_dict_item_remove(env, ::core::ptr::from_ref(dv).cast_mut()) };
                 }
             }
             // COLORTERM was just removed; put ours back when we know
             // the child can use it.
             if p_tgc.get() != 0 {
                 let truecolor = c"truecolor".as_ptr();
-                let _ = unsafe { tv_dict_add_str(env, c"COLORTERM".as_ptr(), 9, truecolor) };
+                let _ = unsafe { (*env).add_str(b"COLORTERM", truecolor) };
             }
         }
     }
 
     if pty {
-        let dv = unsafe { tv_dict_find(env, c"TERM".as_ptr(), 4) };
-        if !dv.is_null() {
-            unsafe { tv_dict_item_remove(env, dv) };
+        if let Some(dv) = env_held.find(b"TERM") {
+            // SAFETY: the dictionary this call owns, and its own item.
+            unsafe { tv_dict_item_remove(env, ::core::ptr::from_ref(dv).cast_mut()) };
         }
-        let _ = unsafe { tv_dict_add_str(env, c"TERM".as_ptr(), 4, pty_term_name) };
+        let _ = unsafe { (*env).add_str(b"TERM", pty_term_name) };
     }
 
     // $NVIM points the child at this instance's server address, when
     // there is one.
     let nvim_addr = get_vim_var_str(Vv::Servername);
     if unsafe { *nvim_addr } as c_int != NUL {
-        let dv = unsafe { tv_dict_find(env, c"NVIM".as_ptr(), 4) };
-        if !dv.is_null() {
-            unsafe { tv_dict_item_remove(env, dv) };
+        if let Some(dv) = env_held.find(b"NVIM") {
+            // SAFETY: the dictionary this call owns, and its own item.
+            unsafe { tv_dict_item_remove(env, ::core::ptr::from_ref(dv).cast_mut()) };
         }
-        let _ = unsafe { tv_dict_add_str(env, c"NVIM".as_ptr(), 4, nvim_addr) };
+        let _ = unsafe { (*env).add_str(b"NVIM", nvim_addr) };
     }
 
     // The job's own `env` wins over everything above.
     if !job_env.is_null() {
-        unsafe { tv_dict_extend(env, (*job_env).di_tv.dict_or_null(), c"force".as_ptr()) };
+        // SAFETY: the dictionary this call owns, and the job's own.
+        unsafe { dict_extend(env, job_env, b'f') };
     }
 
     if pty {
         for name in REQUIRED_ENV {
-            let len = name.count_bytes();
-            if unsafe { tv_dict_find(env, name.as_ptr(), len as isize) }.is_null() {
-                let value = unsafe { os_getenv(name.as_ptr()) };
-                if !value.is_null() {
-                    let _ = unsafe { tv_dict_add_allocated_str(env, name.as_ptr(), len, value) };
-                }
+            if env_held.has_key(name.to_bytes()) {
+                continue;
+            }
+            // SAFETY: a NUL-terminated variable name.
+            let value = unsafe { os_getenv(name.as_ptr()) };
+            if !value.is_null() {
+                // SAFETY: `os_getenv` answers an allocation this takes over.
+                let _ = unsafe { env_held.add_allocated_str(name.to_bytes(), value) };
             }
         }
     }
@@ -406,7 +408,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         bail!();
     }
 
-    let mut job_opts = ptr::null_mut::<Dict>();
+    let mut job_opts: Option<&Dict> = None;
     let mut detach = false;
     let mut rpc = false;
     let mut pty = false;
@@ -418,19 +420,22 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut on_stderr = NO_READER;
     let mut on_exit = NO_CALLBACK;
     let mut cwd = ptr::null::<c_char>();
-    let mut job_env = ptr::null_mut::<DictItem>();
+    // The env dictionary itself, not the item holding it: the borrow the
+    // lookup answers does not survive `common_job_callbacks`, which takes a
+    // reference to the options dictionary it was found in.
+    let mut job_env = ptr::null_mut::<Dict>();
 
     if args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) {
-        job_opts = args[1].dict_or_null();
-        detach = unsafe { tv_dict_get_number(job_opts, c"detach".as_ptr()) } != 0;
-        rpc = unsafe { tv_dict_get_number(job_opts, c"rpc".as_ptr()) } != 0;
-        term = unsafe { tv_dict_get_number(job_opts, c"term".as_ptr()) } != 0;
-        pty = term || unsafe { tv_dict_get_number(job_opts, c"pty".as_ptr()) } != 0;
-        clear_env = unsafe { tv_dict_get_number(job_opts, c"clear_env".as_ptr()) } != 0;
-        overlapped = unsafe { tv_dict_get_number(job_opts, c"overlapped".as_ptr()) } != 0;
+        job_opts = args[1].dict_ref();
+        detach = dict_get_number(job_opts, b"detach") != 0;
+        rpc = dict_get_number(job_opts, b"rpc") != 0;
+        term = dict_get_number(job_opts, b"term") != 0;
+        pty = term || dict_get_number(job_opts, b"pty") != 0;
+        clear_env = dict_get_number(job_opts, b"clear_env") != 0;
+        overlapped = dict_get_number(job_opts, b"overlapped") != 0;
 
         // An unrecognised `stdin` is a warning, not a failure.
-        let s = unsafe { numbuf.dict_string(job_opts, c"stdin".as_ptr()) };
+        let s = numbuf.dict_string(job_opts, b"stdin");
         if !s.is_null() {
             if unsafe { cstr::prefix_eq(s, c"null".as_ptr(), NUMBUFLEN as usize) } {
                 stdin_mode = kChannelStdinNull;
@@ -443,8 +448,8 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
         // `term` is the one option whose *type* is checked, because a
         // truthy string used to mean something else.
-        let job_term = unsafe { tv_dict_find(job_opts, c"term".as_ptr(), 4) };
-        if !job_term.is_null() && unsafe { (*job_term).di_tv.v_type() } != VAR_BOOL {
+        let job_term = dict_find(job_opts, b"term");
+        if job_term.is_some_and(|di| di.di_tv.v_type() != VAR_BOOL) {
             let what = c"'term' must be Boolean".as_ptr();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let what = unsafe { c_str(what) };
@@ -459,7 +464,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             bail!();
         }
 
-        let new_cwd = unsafe { numbuf2.dict_string(job_opts, c"cwd".as_ptr()) };
+        let new_cwd = numbuf2.dict_string(job_opts, b"cwd");
         if !new_cwd.is_null() && unsafe { *new_cwd } as c_int != NUL {
             cwd = new_cwd;
             if !unsafe { os_isdir(cwd) } {
@@ -471,26 +476,32 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         }
 
-        job_env = unsafe { tv_dict_find(job_opts, c"env".as_ptr(), 3) };
-        if !job_env.is_null() && unsafe { (*job_env).di_tv.v_type() } != VAR_DICT {
-            let arg0 = "env";
-            semsg!("E475: Invalid argument: {arg0}");
-            bail!();
+        if let Some(di) = dict_find(job_opts, b"env") {
+            if di.di_tv.v_type() != VAR_DICT {
+                let arg0 = "env";
+                semsg!("E475: Invalid argument: {arg0}");
+                bail!();
+            }
+            job_env = di.di_tv.dict_or_null();
         }
 
         let out = &raw mut on_stdout;
         let err = &raw mut on_stderr;
         let exit = &raw mut on_exit;
         // SAFETY: `job_opts` is null or a live Dict; the three are locals.
-        if !unsafe { common_job_callbacks(job_opts, out, err, exit) } {
+        if !unsafe { common_job_callbacks(args[1].dict_or_null(), out, err, exit) } {
             bail!();
         }
+        // The call above took a reference to the options dictionary, which
+        // is a write through it: the borrow taken before that is spent, so
+        // the reads after it start from the argument again.
+        job_opts = args[1].dict_ref();
     }
 
-    // `tv_dict_get_number` accepts a null dict, so these two are read
+    // `dict_get_number` accepts a null dict, so these two are read
     // whether or not there were options at all.
-    let mut width = unsafe { tv_dict_get_number(job_opts, c"width".as_ptr()) } as uint16_t;
-    let mut height = unsafe { tv_dict_get_number(job_opts, c"height".as_ptr()) } as uint16_t;
+    let mut width = dict_get_number(job_opts, b"width") as uint16_t;
+    let mut height = dict_get_number(job_opts, b"height") as uint16_t;
     let mut term_name = ptr::null::<c_char>();
 
     if term {
@@ -529,7 +540,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
     if pty && term_name.is_null() {
-        term_name = unsafe { numbuf3.dict_string(job_opts, c"TERM".as_ptr()) };
+        term_name = numbuf3.dict_string(job_opts, b"TERM");
         if term_name.is_null() {
             term_name = c"ansi".as_ptr();
         }

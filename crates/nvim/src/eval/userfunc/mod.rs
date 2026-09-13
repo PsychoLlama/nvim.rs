@@ -23,7 +23,7 @@ use crate::eval::funcs::{
 use crate::eval::gc::want_garbage_collect;
 use crate::eval::typval::{
     GARRAY_EMPTY, TV_INITIAL_VALUE, list_init_static, list_iter, list_iter_mut, list_set_lock,
-    tv_clear, tv_copy, tv_dict_add, tv_dict_hi2di, tv_dict_item_alloc, tv_dict_item_alloc_len,
+    tv_clear, tv_copy, tv_dict_hi2di, tv_dict_item_alloc, tv_dict_item_alloc_len,
     tv_dict_item_remove, tv_dict_iter, tv_dict_unref, tv_get_number_chk, value_check_lock,
 };
 use crate::eval::vars::{

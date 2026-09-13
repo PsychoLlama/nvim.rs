@@ -29,7 +29,6 @@ use crate::drawscreen::{
     UPD_CLEAR, UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_buf_later,
     redraw_buf_range_later, redraw_later, setcursor_mayforce, update_screen, win_update_cursorline,
 };
-use crate::eval::typval::tv_dict_find;
 use crate::eval::vars::{get_globvar_dict, get_vimvar_dict, set_vim_var_nr};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{changedir_func, exec_normal};
@@ -106,8 +105,8 @@ use crate::types::{
     MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal, RemapValues, ScreenChar,
     ScriptId, SignTextAttrs, StatusCol, String_0, StringBuilder, TabpageHandle, TerminalOptions,
     VarNumber, Vv, Window, WindowHandle, YankReg, int64_t, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, ptrdiff_t, size_t,
-    uint8_t, uint16_t, uint64_t,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, size_t, uint8_t,
+    uint16_t, uint64_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};

@@ -1,7 +1,7 @@
 //! `Dict` watchers and the `Callback` values they hold.
 //!
-//! [`tv_dict_watcher_add`] threads a `DictWatcher` onto `dv_watchers` and
-//! [`tv_dict_watcher_notify`] fires every watcher whose pattern matches a
+//! [`Dict::watcher_add`] threads a `DictWatcher` onto `dv_watchers` and
+//! [`dict_watcher_notify`] fires every watcher whose pattern matches a
 //! key that just changed, building the `{old, new}` dictionary each callback
 //! is handed.  The `callback_*` half is `Callback`'s own lifetime — funcref,
 //! partial and LuaRef each reference-counted differently.
@@ -22,6 +22,8 @@
     clippy::ptr_as_ptr
 )]
 
+use ::core::ffi::CStr;
+
 use super::*;
 use crate::cstr;
 
@@ -36,31 +38,83 @@ pub(crate) unsafe fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
     unsafe { xfree(watcher.cast()) };
 }
 
-/// Register `callback` to fire when a key of `dict` matching `key_pattern`
-/// changes.  A trailing `*` in the pattern matches a prefix.
-///
-/// # Safety
-///
-/// `dict` must point at a live dictionary, unaliased for the call, and
-/// `key_pattern` at `key_pattern_len` readable bytes.
-pub unsafe fn tv_dict_watcher_add(
-    dict: *mut Dict,
-    key_pattern: *const ::core::ffi::c_char,
-    key_pattern_len: size_t,
-    callback: Callback,
-) {
-    if dict.is_null() {
-        return;
+impl Dict {
+    /// Register `callback` to fire when a key matching `key_pattern`
+    /// changes.  A trailing `*` in the pattern matches a prefix.
+    ///
+    /// The callback is taken over; the pattern is copied.
+    pub fn watcher_add(&mut self, key_pattern: &[u8], callback: Callback) {
+        // SAFETY: room for one watcher, filled in field by field below.
+        let watcher =
+            unsafe { xmalloc(::core::mem::size_of::<DictWatcher>()) }.cast::<DictWatcher>();
+        // SAFETY: the allocation just made, and `key_pattern` is a slice.
+        unsafe {
+            (*watcher).key_pattern =
+                xmemdupz(key_pattern.as_ptr().cast(), key_pattern.len()).cast();
+        };
+        // SAFETY: freshly allocated just above.
+        let mut w = unsafe { Dw::new(watcher) };
+        w.key_pattern_len = key_pattern.len();
+        w.callback = callback;
+        w.busy = false;
+        w.needs_free = false;
+        // SAFETY: this dictionary's own queue head, and a node on no queue.
+        unsafe { queue_insert_tail(&raw mut self.watchers, &raw mut (*watcher).node) };
     }
-    let watcher = unsafe { xmalloc(::core::mem::size_of::<DictWatcher>()) }.cast::<DictWatcher>();
-    unsafe { (*watcher).key_pattern = xmemdupz(key_pattern.cast(), key_pattern_len).cast() };
-    // SAFETY: freshly allocated just above.
-    let mut w = unsafe { Dw::new(watcher) };
-    w.key_pattern_len = key_pattern_len;
-    w.callback = callback;
-    w.busy = false;
-    w.needs_free = false;
-    unsafe { queue_insert_tail(&raw mut (*dict).watchers, &raw mut (*watcher).node) };
+
+    /// Unregister the watcher with this exact pattern and callback.
+    ///
+    /// A watcher removed while any watcher on the queue is mid-callback is
+    /// only marked `needs_free`; [`dict_watcher_notify`] unlinks it when the
+    /// walk that is running finishes.
+    ///
+    /// `callback` is only compared against the registered ones — it stays
+    /// the caller's to free, which is why it arrives borrowed. Contrast
+    /// [`Dict::watcher_add`], which takes its callback over.
+    pub fn watcher_remove(&mut self, key_pattern: &[u8], callback: &Callback) -> bool {
+        let head = &raw mut self.watchers;
+        let mut watcher = ::core::ptr::null_mut::<DictWatcher>();
+        let mut matched = false;
+        let mut queue_is_busy = false;
+        // QUEUE_FOREACH; `w` stays on the matching node when the walk breaks.
+        let mut w = self.watchers.next;
+        while w != head {
+            // SAFETY: an entry of this dictionary's watcher queue.
+            let next = unsafe { (*w).next };
+            // SAFETY: as above.
+            watcher = unsafe { tv_dict_watcher_node_data(w) };
+            // SAFETY: as above.
+            let wd = unsafe { Dw::new(watcher) };
+            if wd.busy {
+                queue_is_busy = true;
+            }
+            // SAFETY: the watcher's own callback and pattern.
+            if unsafe { tv_callback_equal(&raw const (*watcher).callback, callback) }
+                && wd.key_pattern_len == key_pattern.len()
+                // SAFETY: the watcher's own pattern, that many bytes of it.
+                && unsafe { cstr::slice_at(wd.key_pattern, key_pattern.len()) } == key_pattern
+            {
+                matched = true;
+                break;
+            }
+            w = next;
+        }
+
+        if !matched {
+            return false;
+        }
+
+        if queue_is_busy {
+            // SAFETY: the watcher the walk stopped on.
+            unsafe { (*watcher).needs_free = true };
+        } else {
+            // SAFETY: as above, and the node it is on.
+            unsafe { queue_remove(w) };
+            // SAFETY: as above, now off the queue.
+            unsafe { tv_dict_watcher_free(watcher) };
+        }
+        true
+    }
 }
 
 /// Whether `cb1` and `cb2` name the same function.
@@ -199,71 +253,6 @@ pub unsafe fn callback_to_string(callback: &Callback) -> *mut ::core::ffi::c_cha
     msg
 }
 
-/// Unregister the watcher on `dict` with this exact pattern and callback.
-///
-/// A watcher removed while any watcher on the queue is mid-callback is only
-/// marked `needs_free`; [`tv_dict_watcher_notify`] unlinks it when the walk
-/// that is running finishes.
-///
-/// `callback` is only compared against the registered ones — it stays the
-/// caller's to free, which is why it arrives borrowed. Contrast
-/// [`tv_dict_watcher_add`], which takes its callback over.
-///
-/// # Safety
-///
-/// `dict` must point at a live dictionary, unaliased for the call, and
-/// `key_pattern` at `key_pattern_len` readable bytes.
-pub unsafe fn tv_dict_watcher_remove(
-    dict: *mut Dict,
-    key_pattern: *const ::core::ffi::c_char,
-    key_pattern_len: size_t,
-    callback: &Callback,
-) -> bool {
-    if dict.is_null() {
-        return false;
-    }
-
-    let mut watcher = ::core::ptr::null_mut::<DictWatcher>();
-    let mut matched = false;
-    let mut queue_is_busy = false;
-    // QUEUE_FOREACH; `w` stays on the matching node when the walk breaks.
-    // SAFETY: the caller's promise: a live dictionary.
-    let d = unsafe { Dt::new(dict) };
-    let mut w = d.watchers.next;
-    while w != dv_watchers(dict) {
-        let next = unsafe { (*w).next };
-        watcher = unsafe { tv_dict_watcher_node_data(w) };
-        // SAFETY: an entry of the dictionary's watcher queue.
-        let wd = unsafe { Dw::new(watcher) };
-        if wd.busy {
-            queue_is_busy = true;
-        }
-        if unsafe { tv_callback_equal(&raw const (*watcher).callback, callback) }
-            && wd.key_pattern_len == key_pattern_len
-            && {
-                let n = key_pattern_len;
-                unsafe { cstr::slice_at(wd.key_pattern, n) == cstr::slice_at(key_pattern, n) }
-            }
-        {
-            matched = true;
-            break;
-        }
-        w = next;
-    }
-
-    if !matched {
-        return false;
-    }
-
-    if queue_is_busy {
-        unsafe { (*watcher).needs_free = true };
-    } else {
-        unsafe { queue_remove(w) };
-        unsafe { tv_dict_watcher_free(watcher) };
-    }
-    true
-}
-
 /// Whether `watcher`'s pattern matches `key`.  A trailing `*` makes it a
 /// prefix match.
 ///
@@ -291,13 +280,18 @@ pub(crate) unsafe fn tv_dict_watcher_matches(
 /// `busy` flag is what stops a watcher firing inside its own callback, and the
 /// second walk is the deferred deletion the first one could not do.
 ///
+/// **The dictionary stays a pointer.** Every callback fired here runs
+/// arbitrary Vimscript or Lua, which reaches this same dictionary through
+/// whatever named it in the first place -- a scope, a variable, the
+/// argument the callback is handed -- so no borrow of it may be live across
+/// the walk. The reference the callbacks run under is the retain below.
+///
 /// # Safety
 ///
-/// `dict` must point at a live dictionary, unaliased for the call, and `key`
-/// at a NUL-terminated key.
-pub unsafe fn tv_dict_watcher_notify(
+/// `dict` must point at a live dictionary.
+pub unsafe fn dict_watcher_notify(
     dict: *mut Dict,
-    key: *const ::core::ffi::c_char,
+    key: &CStr,
     newtv: Option<&TypVal>,
     oldtv: Option<&TypVal>,
 ) {
@@ -308,24 +302,24 @@ pub unsafe fn tv_dict_watcher_notify(
     // it: the reference the callbacks run under is the retain below, and
     // `tv_dict_unref` at the bottom is what gives it back.
     argv.push_naming(TypVal::dict(unsafe { DictRef::owning(dict) }));
-    argv.push_owned(TypVal::String(unsafe { xstrdup(key) }));
+    // SAFETY: the key's own NUL-terminated bytes, copied into the frame.
+    argv.push_owned(TypVal::String(unsafe { xstrdup(key.as_ptr()) }));
     argv.push_owned(TypVal::dict(Some(tv_dict_alloc())));
     let event = argv.args()[2].dict_or_null();
 
-    // `tv_dict_item_alloc_len` copies exactly the length given and appends
-    // the NUL itself, so a Rust `&str` is upstream's `S_LEN(…)`.
-    let add = |name: &str, from: &TypVal| {
-        let v = unsafe { tv_dict_item_alloc_len(name.as_ptr().cast(), name.len()) };
-        unsafe { tv_copy(from, &mut (*v).di_tv) };
-        let _ = unsafe { tv_dict_add(event, v) };
+    // A `&[u8]` is upstream's `S_LEN(…)`: the key is copied at exactly the
+    // length given, and the item appends the NUL itself.
+    let add = |name: &[u8], from: &TypVal| {
+        // SAFETY: the dictionary this call just allocated into the frame.
+        let _ = unsafe { (*event).add_tv(name, from) };
     };
     if let Some(newtv) = newtv {
-        add("new", newtv);
+        add(b"new", newtv);
     }
     if let Some(oldtv) = oldtv
         && oldtv.v_type() != VAR_UNKNOWN
     {
-        add("old", oldtv);
+        add(b"old", oldtv);
     }
 
     let mut any_needs_free = false;
@@ -345,7 +339,8 @@ pub unsafe fn tv_dict_watcher_notify(
     while w != head {
         let next = unsafe { (*w).next };
         let watcher = unsafe { tv_dict_watcher_node_data(w) };
-        if !unsafe { (*watcher).busy } && unsafe { tv_dict_watcher_matches(watcher, key) } {
+        if !unsafe { (*watcher).busy } && unsafe { tv_dict_watcher_matches(watcher, key.as_ptr()) }
+        {
             let mut rettv = TV_INITIAL_VALUE;
             // SAFETY: an entry of the dictionary's watcher queue.
             let mut wd = unsafe { Dw::new(watcher) };

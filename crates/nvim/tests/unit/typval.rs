@@ -25,10 +25,9 @@ use std::ffi::{CStr, c_char};
 use std::ptr;
 
 use neovim::eval::typval::{
-    list_find, list_first, list_last, list_len, list_unref, tv_dict_add, tv_dict_alloc,
-    tv_dict_free, tv_dict_is_watched, tv_dict_item_alloc, tv_dict_item_alloc_len,
-    tv_dict_item_free, tv_dict_item_remove, tv_dict_watcher_add, tv_dict_watcher_remove,
-    tv_list_alloc,
+    dict_is_watched, list_find, list_first, list_last, list_len, list_unref, tv_dict_alloc,
+    tv_dict_free, tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_free,
+    tv_dict_item_remove, tv_list_alloc,
 };
 use neovim::memory::xstrdup;
 use neovim::types::{Callback, Failed, ListWatch, TypVal, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
@@ -200,14 +199,14 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         (*di).di_tv = TypVal::String(value);
         log.check(&[alloc::string(value, 4)]);
 
-        assert_eq!(tv_dict_add(d, di), Ok(()));
+        assert_eq!((*d).add_item(di), Ok(()));
         log.check(&[]);
 
         // The same key again. The hashtab reports it and nothing is
         // allocated for the failure.
         let again = check_emsg(
             log.editor(),
-            || tv_dict_add(d, di),
+            || (*d).add_item(di),
             Some(r#"E685: Internal error: hash_add(): duplicate key """#),
         );
         assert_eq!(again, Err(Failed));
@@ -308,21 +307,24 @@ fn a_watcher_is_removed_only_by_its_own_pattern() {
         let d = tv_dict_alloc().into_raw();
         let callback = Callback::None;
         let pattern = cstr("key*");
-        tv_dict_watcher_add(d, pattern.as_ptr(), 4, callback.clone());
-        assert!(tv_dict_is_watched(d));
+        (*d).watcher_add(pattern.to_bytes(), callback.clone());
+        assert!(dict_is_watched(d.as_ref()));
 
         // A prefix of the pattern is not the pattern ...
         let shorter = cstr("key");
-        assert!(!tv_dict_watcher_remove(d, shorter.as_ptr(), 3, &callback));
-        assert!(tv_dict_is_watched(d), "a shorter pattern matched");
+        assert!(!(*d).watcher_remove(shorter.to_bytes(), &callback));
+        assert!(dict_is_watched(d.as_ref()), "a shorter pattern matched");
 
         // ... and neither are different bytes of the same length.
         let same_len = cstr("kex*");
-        assert!(!tv_dict_watcher_remove(d, same_len.as_ptr(), 4, &callback));
-        assert!(tv_dict_is_watched(d), "a different pattern matched");
+        assert!(!(*d).watcher_remove(same_len.to_bytes(), &callback));
+        assert!(dict_is_watched(d.as_ref()), "a different pattern matched");
 
-        assert!(tv_dict_watcher_remove(d, pattern.as_ptr(), 4, &callback));
-        assert!(!tv_dict_is_watched(d), "its own pattern did not match");
+        assert!((*d).watcher_remove(pattern.to_bytes(), &callback));
+        assert!(
+            !dict_is_watched(d.as_ref()),
+            "its own pattern did not match"
+        );
         tv_dict_free(d);
     }
 }

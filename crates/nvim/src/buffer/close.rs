@@ -34,7 +34,7 @@ use crate::change::deleted_lines_mark;
 use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
 use crate::drawscreen::state::updating_screen;
 use crate::eval::typval::DictTab;
-use crate::eval::typval::{callback_free, tv_dict_add, tv_dict_item_copy};
+use crate::eval::typval::{callback_free, tv_dict_item_copy};
 use crate::eval::vars::{unref_var_dict, vars_clear};
 use crate::extmark::extmark_free_all;
 use crate::garray::ga_clear;
@@ -231,7 +231,7 @@ fn clear_buf_vars(buffer: Buf) {
 fn rescue_changedtick(mut buffer: Buf) {
     let (vars, di) = (buffer.b_vars, &raw mut buffer.changedtick_di);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
-    let _ = unsafe { tv_dict_add(vars, tv_dict_item_copy(di)) };
+    let _ = unsafe { (*vars).add_item(tv_dict_item_copy(di)) };
 }
 
 fn release_vars(buffer: Buf) {

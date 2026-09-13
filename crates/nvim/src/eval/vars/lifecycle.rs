@@ -85,7 +85,7 @@ pub fn evalvars_init() {
         // back, since `v:msgpack_types` lives as long as the process.
         let kept = unsafe { ListRef::retained(at) };
         type_lists[i] = kept.expect("the list just allocated").into_raw();
-        if unsafe { tv_dict_add(msgpack_types_dict, di) }.is_err() {
+        if unsafe { (*msgpack_types_dict).add_item(di) }.is_err() {
             // The names are distinct by construction.
             unsafe { abort() };
         }

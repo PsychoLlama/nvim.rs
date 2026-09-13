@@ -20,8 +20,8 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::eval::typval::{
-    Di, ListRef, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc,
-    tv_dict_item_alloc_len, tv_list_alloc,
+    Di, ListRef, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_alloc, tv_dict_item_alloc_len,
+    tv_list_alloc,
 };
 use crate::eval::vars::msgpack_type_list;
 use crate::garray::ga_concat_len;
@@ -60,12 +60,12 @@ pub(crate) fn create_special_dict(result: &mut TypVal, type_: MessagePackType, v
     type_item.di_lock = VarLock::Unlocked;
     let type_list = unsafe { ListRef::retained(msgpack_type_list(type_)) };
     type_item.di_tv.write_list(type_list);
-    let _ = unsafe { tv_dict_add(dict, type_di) };
+    let _ = unsafe { (*dict).add_item(type_di) };
 
     let val_di: *mut DictItem =
         unsafe { tv_dict_item_alloc_len("_VAL".as_ptr() as *const c_char, "_VAL".len()) };
     unsafe { di_tv(val_di).write(val) };
-    let _ = unsafe { tv_dict_add(dict, val_di) };
+    let _ = unsafe { (*dict).add_item(val_di) };
 
     unsafe { ::core::ptr::write(result, TypVal::dict(Some(dict_held))) };
 }

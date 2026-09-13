@@ -19,7 +19,7 @@ use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::typval::{
-    NumBuf, blob_equal, list_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
+    NumBuf, blob_equal, dict_equal, list_equal, tv_clear, tv_equal, tv_get_float, tv_get_number,
 };
 use crate::eval::{
     _ISalnum, Cur, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
@@ -130,7 +130,7 @@ pub(crate) fn func_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
         if d1 != d2 {
             return false;
         }
-    } else if !unsafe { tv_dict_equal(d1, d2, ic) } {
+    } else if !unsafe { dict_equal((d1).as_ref(), (d2).as_ref(), ic) } {
         return false;
     }
 
@@ -254,7 +254,7 @@ pub(crate) fn typval_compare(
         // SAFETY: as the Blob arm.
         let (d1, d2) = (typ1.dict_or_null(), typ2.dict_or_null());
         let same = || d1 == d2;
-        let eq = || unsafe { tv_dict_equal(d1, d2, ic) };
+        let eq = || unsafe { dict_equal((d1).as_ref(), (d2).as_ref(), ic) };
         let wrong_type = c"E735: Can only compare Dictionary with Dictionary";
         let wrong_op = c"E736: Invalid operation for Dictionary";
         let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);

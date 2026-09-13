@@ -256,7 +256,7 @@ pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
         return;
     }
     // SAFETY: the caller's obligation -- a live dictionary.
-    unsafe { tv_dict_set_keys_readonly(at) };
+    unsafe { (*at).set_keys_readonly() };
 }
 
 /// Set `v:lua`'s partial.
@@ -520,7 +520,14 @@ pub unsafe fn before_set_vvar(
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.
             let vv_dict = get_vimvar_dict();
-            unsafe { tv_dict_watcher_notify(vv_dict, varname, Some(&*cur), Some(&oldtv)) };
+            unsafe {
+                dict_watcher_notify(
+                    vv_dict,
+                    ::core::ffi::CStr::from_ptr(varname),
+                    Some(&*cur),
+                    Some(&oldtv),
+                )
+            };
             clear_local(&mut oldtv);
         }
         return false;
@@ -543,7 +550,14 @@ pub unsafe fn before_set_vvar(
         if watched {
             // SAFETY: the `v:` dictionary, this item's value and a live local.
             let vv_dict = get_vimvar_dict();
-            unsafe { tv_dict_watcher_notify(vv_dict, varname, Some(&*cur), Some(&oldtv)) };
+            unsafe {
+                dict_watcher_notify(
+                    vv_dict,
+                    ::core::ffi::CStr::from_ptr(varname),
+                    Some(&*cur),
+                    Some(&oldtv),
+                )
+            };
             clear_local(&mut oldtv);
         }
         return false;
@@ -587,8 +601,8 @@ pub(crate) unsafe fn set_vvar_item(
     // `cur` survives the store.
     let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
     // SAFETY: the caller's obligation, and the `v:` dictionary is a static.
-    let varname = unsafe { tv_dict_item_key(di) };
-    let watched = unsafe { tv_dict_is_watched(get_vimvar_dict()) };
+    let varname = unsafe { (*di).key().as_ptr() };
+    let watched = dict_is_watched(unsafe { (get_vimvar_dict()).as_ref() });
 
     // `+=` and friends act on the current value, so evaluate them into a
     // temporary first and enforce the type on the *result*.
@@ -650,7 +664,14 @@ pub(crate) unsafe fn set_vvar_item(
     if watched {
         // SAFETY: the `v:` dictionary, this item's value and a live local.
         let vv_dict = get_vimvar_dict();
-        unsafe { tv_dict_watcher_notify(vv_dict, varname, Some(&*cur), Some(&oldtv)) };
+        unsafe {
+            dict_watcher_notify(
+                vv_dict,
+                ::core::ffi::CStr::from_ptr(varname),
+                Some(&*cur),
+                Some(&oldtv),
+            )
+        };
         clear_local(&mut oldtv);
     }
     // SAFETY: a live local.

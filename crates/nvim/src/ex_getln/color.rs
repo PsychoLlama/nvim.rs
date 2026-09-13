@@ -217,13 +217,13 @@ msg_putchar('\n' as ::core::ffi::c_int);
             let mut tstate: TryState = TRY_STATE_INIT;
             unsafe { try_enter(&raw mut tstate) };
             err_errmsg = c"E5408: Unable to get g:Nvim_color_cmdline callback: %s".as_ptr();
-            let key = c"Nvim_color_cmdline";
+            // SAFETY: the global dictionary is live from startup to exit,
+            // and `color_cb` is this frame's own.
             dgc_ret = unsafe {
-                tv_dict_get_callback(
-                    get_globvar_dict(),
-                    key.as_ptr(),
-                    key.count_bytes() as ptrdiff_t,
-                    &raw mut color_cb,
+                dict_get_callback(
+                    get_globvar_dict().as_mut(),
+                    b"Nvim_color_cmdline",
+                    &mut color_cb,
                 )
             };
             err.absorb(unsafe { try_leave(&raw mut tstate) });

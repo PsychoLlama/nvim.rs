@@ -14,12 +14,11 @@ use crate::eval::callback_call;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    DictRef, ListRef, NumBuf, callback_free, index_of, list_find, list_items, list_items_mut,
-    list_uidx, tv_check_for_buffer_arg, tv_check_for_list_arg, tv_check_for_lnum_arg,
-    tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg, tv_check_for_string_arg, tv_clear,
-    tv_copy, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str_len, tv_dict_alloc, tv_dict_find,
-    tv_dict_get_callback, tv_dict_has_key, tv_get_bool, tv_get_lnum_buf, tv_get_number_chk,
-    tv_list_alloc, tv_list_alloc_ret,
+    DictRef, ListRef, NumBuf, callback_free, dict_find, dict_get_callback, index_of, list_find,
+    list_items, list_items_mut, list_uidx, tv_check_for_buffer_arg, tv_check_for_list_arg,
+    tv_check_for_lnum_arg, tv_check_for_nonnull_dict_arg, tv_check_for_opt_dict_arg,
+    tv_check_for_string_arg, tv_clear, tv_copy, tv_dict_alloc, tv_get_bool, tv_get_lnum_buf,
+    tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
 use crate::mbyte::utfc_ptr2len;
@@ -35,8 +34,8 @@ use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg;
 use crate::types::{
-    Callback, ColNr, Dict, EvalFuncData, LineNr, List, RegMatch, RegProg, TypVal, VAR_BOOL,
-    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kListLenMayKnow, kListLenUnknown,
+    Callback, ColNr, EvalFuncData, LineNr, List, RegMatch, RegProg, TypVal, VAR_BOOL, VAR_DICT,
+    VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -363,20 +362,20 @@ unsafe fn get_matches_in_str(
         // A buffer's matches are keyed by line number, a List's by the
         // index of the item they came from.
         if matchbuf {
-            let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, idx as VarNumber) };
+            let _ = unsafe { (*d).add_number(b"lnum", idx as VarNumber) };
         } else {
-            let _ = unsafe { tv_dict_add_nr(d, c"idx".as_ptr(), 3, idx as VarNumber) };
+            let _ = unsafe { (*d).add_number(b"idx", idx as VarNumber) };
         }
         let (start, end) = unsafe { ((*rmp).startp[0], (*rmp).endp[0]) };
         let byteidx = unsafe { start.offset_from(str) } as ColNr as VarNumber;
-        let _ = unsafe { tv_dict_add_nr(d, c"byteidx".as_ptr(), 7, byteidx) };
+        let _ = unsafe { (*d).add_number(b"byteidx", byteidx) };
         let matchlen = unsafe { end.offset_from(start) } as c_int;
-        let _ = unsafe { tv_dict_add_str_len(d, c"text".as_ptr(), 4, start, matchlen) };
+        let _ = unsafe { (*d).add_str_len(b"text", start, matchlen) };
         if submatches {
             let submatch_list = tv_list_alloc(NSUBEXP as isize - 1);
             // A borrow of the list the dictionary owns from here on.
             let sml = submatch_list.as_ptr();
-            let _ = unsafe { tv_dict_add_list(d, c"submatches".as_ptr(), 10, Some(submatch_list)) };
+            let _ = unsafe { (*d).add_list(b"submatches", Some(submatch_list)) };
             for i in 1..NSUBEXP as usize {
                 if unsafe { (*rmp).endp[i] }.is_null() {
                     unsafe { (*sml).push_string(c"".as_ptr(), 0) };
@@ -477,20 +476,15 @@ fn want_submatches(args: &[TypVal], i: usize) -> Option<bool> {
     if args.len() <= i {
         return Some(false);
     }
-    let d = args[i].dict_or_null();
-    if d.is_null() {
+    let Some(di) = dict_find(args[i].dict_ref(), b"submatches") else {
         return Some(false);
-    }
-    let di = unsafe { tv_dict_find(d, c"submatches".as_ptr(), 10) };
-    if di.is_null() {
-        return Some(false);
-    }
-    if unsafe { (*di).di_tv.v_type() } != VAR_BOOL {
+    };
+    if di.di_tv.v_type() != VAR_BOOL {
         let arg0 = "submatches";
         semsg!("E475: Invalid value for argument {arg0}");
         return None;
     }
-    Some(unsafe { tv_get_bool(&(*di).di_tv) } != 0)
+    Some(tv_get_bool(&di.di_tv) != 0)
 }
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
@@ -628,7 +622,8 @@ unsafe fn item_string(
     }
     match request.source {
         Source::Item => ptr::null(),
-        Source::Key(key) => unsafe { numbuf.dict_string((*tv).dict_or_null(), key) },
+        // SAFETY: the key the option dictionary held, NUL-terminated.
+        Source::Key(key) => numbuf.dict_string((*tv).dict_ref(), unsafe { cstr::bytes_at(key) }),
         Source::Callback(cb) => {
             // The callback is handed the dict, which it must not be able
             // to free out from under this loop.
@@ -801,36 +796,34 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
         if tv_check_for_nonnull_dict_arg(args, 2).is_err() {
             return;
         }
-        let d: *mut Dict = args[2].dict_or_null();
-        let di = unsafe { tv_dict_find(d, c"key".as_ptr(), -1) };
-        if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type() } != VAR_STRING
-                || unsafe { (*di).di_tv.string_or_null() }.is_null()
-                || unsafe { *(*di).di_tv.string_or_null() } == 0
+        // SAFETY: the argument's own dictionary, which the check above
+        // says is there.
+        let d = unsafe { &mut *args[2].dict_or_null() };
+        if let Some(di) = d.find(b"key") {
+            if di.di_tv.v_type() != VAR_STRING
+                || di.di_tv.string_or_null().is_null()
+                // SAFETY: a non-null string of the item's own.
+                || unsafe { *di.di_tv.string_or_null() } == 0
             {
-                // SAFETY: a live dictionary item.
-                let got = numbuf2.string_ptr(unsafe { &(*di).di_tv });
+                let got = numbuf2.string_ptr(&di.di_tv);
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let got = unsafe { c_str(got) };
                 semsg!("E475: Invalid value for argument {}: {got}", "key");
                 return;
             }
-            // SAFETY: a live dictionary item.
-            key = numbuf3.string_ptr(unsafe { &(*di).di_tv });
-        } else if !unsafe { tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) } {
+            key = numbuf3.string_ptr(&di.di_tv);
+        } else if !dict_get_callback(Some(d), b"text_cb", &mut cb) {
             semsg!("E475: Invalid value for argument {}", "text_cb");
             return;
         }
-        let di = unsafe { tv_dict_find(d, c"limit".as_ptr(), -1) };
-        if !di.is_null() {
-            if unsafe { (*di).di_tv.v_type() } != VAR_NUMBER {
+        if let Some(di) = d.find(b"limit") {
+            if di.di_tv.v_type() != VAR_NUMBER {
                 semsg!("E475: Invalid value for argument {}", "limit");
                 return;
             }
-            // SAFETY: a live dictionary item.
-            limit = tv_get_number_chk(unsafe { &(*di).di_tv }).unwrap_or(-1) as c_int;
+            limit = tv_get_number_chk(&di.di_tv).unwrap_or(-1) as c_int;
         }
-        matchseq = unsafe { tv_dict_has_key(d, c"matchseq".as_ptr()) };
+        matchseq = d.has_key(b"matchseq");
     }
 
     // matchfuzzypos() answers three lists: the matching strings, their

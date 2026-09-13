@@ -91,7 +91,7 @@ pub unsafe fn set_var_const(
     let mut varname: *const c_char = ptr::null();
     let mut dict: *mut Dict = ptr::null_mut();
     let ht = unsafe { find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict) };
-    let watched = unsafe { tv_dict_is_watched(dict) };
+    let watched = dict_is_watched(unsafe { (dict).as_ref() });
 
     if ht.is_null() || unsafe { *varname } == NUL as c_char {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -205,8 +205,15 @@ pub unsafe fn set_var_const(
     unsafe { *di_lock(di) = VarLock::Unlocked };
 
     if watched {
-        let key = unsafe { tv_dict_item_key(di) };
-        unsafe { tv_dict_watcher_notify(dict, key, Some(&*cur), Some(&oldtv)) };
+        let key = unsafe { (*di).key().as_ptr() };
+        unsafe {
+            dict_watcher_notify(
+                dict,
+                ::core::ffi::CStr::from_ptr(key),
+                Some(&*cur),
+                Some(&oldtv),
+            )
+        };
         clear_local(&mut oldtv);
     }
 
