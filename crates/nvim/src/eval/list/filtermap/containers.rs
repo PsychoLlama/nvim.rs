@@ -72,7 +72,7 @@ pub(crate) fn filter_map_dict(
         {
             break;
         }
-        set_key_string(di.key());
+        set_key_string(di.key_cstr());
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         let ok = filter_map_one(di.tv(), expr, filtermap, &mut newtv, &mut rem);
@@ -88,7 +88,7 @@ pub(crate) fn filter_map_dict(
             FilterMap::MapNew => {
                 let added = d_ret
                     .expect("mapnew allocated one")
-                    .add_tv(di.key(), &mut newtv);
+                    .add_tv(di.key(), &newtv);
                 clear_tv(&mut newtv);
                 if !added {
                     break;

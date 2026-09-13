@@ -374,6 +374,13 @@ impl Item {
 // ---------------------------------------------------------------------
 
 /// A `Dict` the evaluator handed us: live, or NULL for `v:_null_dict`.
+///
+/// **Not a borrow wearing a handle's name, unlike its list and blob
+/// siblings.** `filter()`, `map()` and `foreach()` run a callback per item,
+/// and that callback reaches this same dictionary through whatever named it
+/// — so nothing here may hold a `&mut Dict` across a step, and
+/// [`DictArg::items`] is a *slot index* rather than an iterator that borrows
+/// the table.
 #[derive(Clone, Copy)]
 pub(crate) struct DictArg(*mut Dict);
 
@@ -456,10 +463,9 @@ impl DictArg {
 
     /// Add a copy of `tv` under `key`; false when the key was already there.
     #[inline(always)]
-    pub(crate) fn add_tv(self, key: *mut c_char, tv: &mut TypVal) -> bool {
-        // SAFETY: a live dict, `key` the NUL-terminated key of one of its own
-        // items, and `tv` a live value.
-        unsafe { (*self.0).add_tv(cstr::slice_at(key, cstr::bytes_at(key).len()), tv) }.is_ok()
+    pub(crate) fn add_tv(self, key: &[u8], tv: &TypVal) -> bool {
+        // SAFETY: a live dict, and `tv` a live value of another one.
+        unsafe { (*self.0).add_tv(key, tv) }.is_ok()
     }
 
     #[inline(always)]
@@ -471,8 +477,12 @@ impl DictArg {
     /// Merge `other`'s keys in under `action` (`"keep"`/`"force"`/`"error"`).
     #[inline(always)]
     pub(crate) fn extend_with(self, other: DictArg, action: &CStr) {
-        // SAFETY: both live, and `action` is NUL-terminated.
-        unsafe { dict_extend(self.0, other.0, *(action.as_ptr()) as u8) };
+        // The mode is the action's first byte, which is how upstream tells
+        // `"keep"` from `"force"` from `"error"`.
+        let mode = action.to_bytes()[0];
+        // SAFETY: both live, and the two may be the same dictionary --
+        // which is the whole reason `dict_extend` takes pointers.
+        unsafe { dict_extend(self.0, other.0, mode) };
     }
 
     /// A shallow copy, for `extendnew()`.  `None` when the copy failed.
@@ -502,10 +512,16 @@ impl DictItemRef {
         unsafe { &mut *self.0 }
     }
 
-    /// The key, NUL-terminated: the item's own.
+    /// The key: the item's own bytes, without the terminator.
     #[inline(always)]
-    pub(crate) fn key(self) -> *mut c_char {
-        self.get().di_key.as_ptr().cast_mut()
+    pub(crate) fn key(self) -> &'static [u8] {
+        self.get().key_bytes()
+    }
+
+    /// The key as the NUL-terminated string the message layer takes.
+    #[inline(always)]
+    pub(crate) fn key_cstr(self) -> &'static CStr {
+        self.get().key()
     }
 
     /// The value; see [`Item::tv`] for why it is not a borrow.
@@ -840,10 +856,10 @@ pub(crate) fn set_key_nr(n: VarNumber) {
 
 /// Set `v:key` to the NUL-terminated string `s`.
 #[inline(always)]
-pub(crate) fn set_key_string(s: *mut c_char) {
-    // SAFETY: `Vv::Key` names a `v:` variable and `s` is a dict key, which is
-    // NUL-terminated -- what a length of -1 promises.
-    unsafe { set_vim_var_string(Vv::Key, s, -1 as ptrdiff_t) };
+pub(crate) fn set_key_string(s: &CStr) {
+    // SAFETY: `Vv::Key` names a `v:` variable, and a `&CStr` is the
+    // NUL-terminated string a length of -1 promises.
+    unsafe { set_vim_var_string(Vv::Key, s.as_ptr().cast_mut(), -1 as ptrdiff_t) };
 }
 
 /// Declare `v:key`'s type for a walk that will set Numbers into it.
