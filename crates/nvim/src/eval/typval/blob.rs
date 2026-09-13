@@ -281,11 +281,9 @@ pub unsafe fn tv_blob_remove(
         return;
     }
 
-    let mut error = false;
-    let mut idx = unsafe { tv_get_number_chk(&args[1], &raw mut error) };
-    if error {
+    let Ok(mut idx) = tv_get_number_chk(&args[1]) else {
         return;
-    }
+    };
 
     let len = int64_t::from(unsafe { tv_blob_len(b) });
     if idx < 0 {
@@ -313,10 +311,9 @@ pub unsafe fn tv_blob_remove(
     }
 
     // Remove range of items, return blob with values.
-    let mut end = unsafe { tv_get_number_chk(&args[2], &raw mut error) };
-    if error {
+    let Ok(mut end) = tv_get_number_chk(&args[2]) else {
         return;
-    }
+    };
     if end < 0 {
         // count from the end
         end += len;
@@ -375,10 +372,10 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     for li in tv_list_iter(unsafe { l.as_ref() }) {
-        let mut error = false;
-        let n = unsafe { tv_get_number_chk(&li.li_tv, &raw mut error) };
-        if error || !(0..=255).contains(&n) {
-            if !error {
+        let read = tv_get_number_chk(&li.li_tv);
+        let n = read.unwrap_or(0);
+        if read.is_err() || !(0..=255).contains(&n) {
+            if read.is_ok() {
                 // As in `eval/lval.rs`: upstream's text has no conversion in
                 // it, so `n` has never reached the message.
                 semsg!("E1239: Invalid value for blob: 0xlX");

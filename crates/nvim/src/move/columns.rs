@@ -424,15 +424,18 @@ pub fn f_virtcol2col(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let Some(win) = find_win_by_nr_or_id(&args[0]) else {
         return;
     };
-    let mut error = false;
-    // SAFETY: the evaluator's calling convention, and `error` is of this frame.
-    let lnum = unsafe { tv_get_number_chk(&args[1], &raw mut error) } as LineNr;
-    if error || lnum < 0 || lnum > win.buffer().line_count() {
+    let Ok(lnum) = tv_get_number_chk(&args[1]) else {
+        return;
+    };
+    let lnum = lnum as LineNr;
+    if lnum < 0 || lnum > win.buffer().line_count() {
         return;
     }
-    // SAFETY: the evaluator's calling convention, and `error` is of this frame.
-    let screencol = unsafe { tv_get_number_chk(&args[2], &raw mut error) } as c_int;
-    if error || screencol < 0 {
+    let Ok(screencol) = tv_get_number_chk(&args[2]) else {
+        return;
+    };
+    let screencol = screencol as c_int;
+    if screencol < 0 {
         return;
     }
     let col = virtcol2col(win, lnum, screencol);

@@ -12,7 +12,7 @@ use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
-    DictRef, ListRef, callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str,
+    DictRef, ListRef, NumBuf, callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str,
     tv_dict_add_dict, tv_dict_add_float, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
     tv_dict_alloc, tv_dict_clear, tv_dict_copy, tv_dict_equal, tv_dict_extend, tv_dict_find,
     tv_dict_free, tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string_alloc,
@@ -24,7 +24,6 @@ use neovim::guard::sandbox;
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xmalloc, xstrdup};
 use neovim::message::state::emsg_skip;
-use neovim::ops::NUMBUFLEN;
 use neovim::types::{Callback, Dict, Failed, VarLock, VimConv};
 use std::ffi::c_int;
 
@@ -361,15 +360,15 @@ fn getting_a_string_renders_a_scalar_into_the_lent_buffer() {
     // SAFETY: every dict is this case's own; the answers are borrowed and
     // every buffer lent outlives the answer taken from it.
     unsafe {
-        let get = |d: *const Dict, key: &str, msg: Option<&str>, buf: &mut [c_char; 65]| {
+        let get = |d: *const Dict, key: &str, msg: Option<&str>, buf: &mut NumBuf| {
             check_emsg(
                 log.editor(),
-                || tv_dict_get_string_buf(d, cstr(key).as_ptr(), buf.as_mut_ptr()),
+                || tv_dict_get_string_buf(d, cstr(key).as_ptr(), buf),
                 msg,
             )
         };
-        let mut buf1 = [0 as c_char; 65];
-        let mut buf2 = [0 as c_char; 65];
+        let mut buf1 = NumBuf::new();
+        let mut buf2 = NumBuf::new();
         let text = |p: *const c_char| CStr::from_ptr(p).to_string_lossy().into_owned();
 
         assert!(get(ptr::null(), "test", None, &mut buf1).is_null());
@@ -492,12 +491,13 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
     let log = AllocLog::start();
     // SAFETY: the buffer and the dict are this case's own.
     unsafe {
-        let buf: *mut c_char = xmalloc(NUMBUFLEN as usize).cast();
-        let get = |d: *const Dict, key: &str, is_float: bool| -> Option<(String, bool)> {
+        let mut scratch = NumBuf::new();
+        let buf: *mut c_char = scratch.as_mut_ptr();
+        let mut get = |d: *const Dict, key: &str, is_float: bool| -> Option<(String, bool)> {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
-                || tv_dict_get_string_buf(d, cstr(key).as_ptr(), buf),
+                || tv_dict_get_string_buf(d, cstr(key).as_ptr(), &mut scratch),
                 None,
             );
             if is_float {
@@ -544,7 +544,7 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
         assert_eq!(get(d, "te", false), Some(("2".into(), true)));
 
         tv_dict_free(d);
-        xfree(buf.cast());
+        // `scratch` is this frame's own; nothing to free.
     }
 }
 
@@ -555,18 +555,19 @@ fn getting_a_checked_string_falls_back_to_the_default() {
     let log = AllocLog::start();
     // SAFETY: the buffer, the default and the dict are this case's own.
     unsafe {
-        let buf: *mut c_char = xmalloc(NUMBUFLEN as usize).cast();
+        let mut scratch = NumBuf::new();
+        let buf: *mut c_char = scratch.as_mut_ptr();
         let def = xstrdup(cstr("DEFAULT").as_ptr());
-        let get = |d: *const Dict,
-                   key: &str,
-                   len: Option<isize>,
-                   is_float: bool|
+        let mut get = |d: *const Dict,
+                       key: &str,
+                       len: Option<isize>,
+                       is_float: bool|
          -> Option<(String, bool, bool)> {
             let len = len.unwrap_or_else(|| isize::try_from(key.len()).unwrap());
             log.clear();
             let ret = check_emsg(
                 log.editor(),
-                || tv_dict_get_string_buf_chk(d, cstr(key).as_ptr(), len, buf, def),
+                || tv_dict_get_string_buf_chk(d, cstr(key).as_ptr(), len, &mut scratch, def),
                 None,
             );
             if is_float {
@@ -618,7 +619,7 @@ fn getting_a_checked_string_falls_back_to_the_default() {
         );
 
         tv_dict_free(d);
-        xfree(buf.cast());
+        // `scratch` is this frame's own; nothing to free.
         xfree(def.cast());
     }
 }

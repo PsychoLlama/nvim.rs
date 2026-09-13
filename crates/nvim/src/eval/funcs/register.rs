@@ -14,8 +14,7 @@ use crate::charset::getdigits_int;
 use crate::cstr;
 use crate::eval::typval::{
     ListRef, NumBuf, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_find,
-    tv_dict_get_number, tv_dict_len, tv_get_string_buf_chk, tv_list_alloc, tv_list_iter,
-    tv_list_len,
+    tv_dict_get_number, tv_dict_len, tv_list_alloc, tv_list_iter, tv_list_len,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
@@ -308,7 +307,8 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let list = unsafe { (*regcontents).list_or_null() };
         unsafe { write_list(regname, list, append, yank_type, block_len) };
     } else if !regcontents.is_null() {
-        let strval = unsafe { numbuf5.string_chk(&*regcontents) };
+        // SAFETY: a non-null pointer to the caller's value.
+        let strval = numbuf5.string_ptr_chk(unsafe { &*regcontents });
         if strval.is_null() {
             return;
         }
@@ -354,8 +354,8 @@ unsafe fn write_list(
     let mut complete = true;
     if !l.is_null() {
         for li in tv_list_iter(unsafe { l.as_ref() }) {
-            let mut buf: [c_char; 65] = [0; 65];
-            let s = unsafe { tv_get_string_buf_chk(&li.li_tv, buf.as_mut_ptr()) };
+            let mut buf = NumBuf::new();
+            let s = buf.string_ptr_chk(&li.li_tv);
             if s.is_null() {
                 complete = false;
                 break;
@@ -363,7 +363,7 @@ unsafe fn write_list(
             // A value that is not already a String was rendered into
             // the scratch buffer, which the next item reuses, so it is
             // copied out and the copy remembered for the free below.
-            let value = if s == buf.as_ptr() {
+            let value = if s == buf.as_mut_ptr().cast_const() {
                 // SAFETY: `curalloc` is inside the copies half of the
                 // allocation, which has room for one per item.
                 let copy = unsafe { xstrdup(s) };

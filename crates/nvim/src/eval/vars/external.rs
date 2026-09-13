@@ -215,5 +215,5 @@ pub unsafe fn get_spellword(
     if unsafe { (*ret_word).is_null() } {
         return -1;
     }
-    number_as_int(unsafe { tv_list_find_nr(list, -1, ptr::null_mut()) })
+    number_as_int(unsafe { tv_list_find_nr(list, -1, None) })
 }

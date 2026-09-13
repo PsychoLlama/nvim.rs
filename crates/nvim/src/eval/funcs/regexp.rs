@@ -788,7 +788,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
     let pat = &args[1];
     if pat.v_type() != VAR_STRING || pat.string_or_null().is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(numbuf.string(pat)) };
+        let arg0 = unsafe { c_str(numbuf.string_ptr(pat)) };
         semsg!("E475: Invalid argument: {arg0}");
         return;
     }
@@ -810,13 +810,15 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
                 || unsafe { (*di).di_tv.string_or_null() }.is_null()
                 || unsafe { *(*di).di_tv.string_or_null() } == 0
             {
-                let got = unsafe { numbuf2.string(&(*di).di_tv) };
+                // SAFETY: a live dictionary item.
+                let got = numbuf2.string_ptr(unsafe { &(*di).di_tv });
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let got = unsafe { c_str(got) };
                 semsg!("E475: Invalid value for argument {}: {got}", "key");
                 return;
             }
-            key = unsafe { numbuf3.string(&(*di).di_tv) };
+            // SAFETY: a live dictionary item.
+            key = numbuf3.string_ptr(unsafe { &(*di).di_tv });
         } else if !unsafe { tv_dict_get_callback(d, c"text_cb".as_ptr(), -1, &raw mut cb) } {
             semsg!("E475: Invalid value for argument {}", "text_cb");
             return;
@@ -827,7 +829,8 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
                 semsg!("E475: Invalid value for argument {}", "limit");
                 return;
             }
-            limit = unsafe { tv_get_number_chk(&(*di).di_tv, ptr::null_mut()) } as c_int;
+            // SAFETY: a live dictionary item.
+            limit = tv_get_number_chk(unsafe { &(*di).di_tv }).unwrap_or(-1) as c_int;
         }
         matchseq = unsafe { tv_dict_has_key(d, c"matchseq".as_ptr()) };
     }
@@ -846,7 +849,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
         }
     }
     let request = Request {
-        pattern: unsafe { numbuf4.string(pat) },
+        pattern: numbuf4.string_ptr(pat),
         source: if !key.is_null() {
             Source::Key(key)
         } else if cb.is_set() {

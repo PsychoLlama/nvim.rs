@@ -18,7 +18,6 @@
 
 use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
 
 use super::strict_bool_arg;
 use crate::eval::typval::{
@@ -76,8 +75,8 @@ fn byteidx_common(args: &[TypVal], result: &mut TypVal, comp: bool) {
     let mut numbuf = NumBuf::new();
     (*result).write_number(-1);
 
-    let str = unsafe { numbuf.string_chk(&args[0]) };
-    let mut idx = unsafe { tv_get_number_chk(&args[1], ptr::null_mut()) };
+    let str = numbuf.string_ptr_chk(&args[0]);
+    let mut idx = tv_get_number_chk(&args[1]).unwrap_or(-1);
     if str.is_null() || idx < 0 {
         return;
     }
@@ -140,8 +139,8 @@ pub fn f_charidx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let str = unsafe { numbuf.string_chk(&args[0]) };
-    let mut idx = unsafe { tv_get_number_chk(&args[1], ptr::null_mut()) };
+    let str = numbuf.string_ptr_chk(&args[0]);
+    let mut idx = tv_get_number_chk(&args[1]).unwrap_or(-1);
     if str.is_null() || idx < 0 {
         return;
     }
@@ -189,15 +188,13 @@ pub fn f_strgetchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
 
-    let str = unsafe { numbuf.string_chk(&args[0]) };
+    let str = numbuf.string_ptr_chk(&args[0]);
     if str.is_null() {
         return;
     }
-    let mut error = false;
-    let mut charidx = unsafe { tv_get_number_chk(&args[1], &raw mut error) };
-    if error {
+    let Ok(mut charidx) = tv_get_number_chk(&args[1]) else {
         return;
-    }
+    };
 
     // SAFETY: `string_chk` answered a NUL-terminated string.
     let bytes = unsafe { cstr::bytes_at(str) };
@@ -228,7 +225,7 @@ pub fn f_strutf16len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         mb_ptr2char_adv
     };
 
-    let mut s = unsafe { numbuf.string(&args[0]) };
+    let mut s = numbuf.string_ptr(&args[0]);
     let mut len: VarNumber = 0;
     while unsafe { *s } != 0 {
         // Anything over U+FFFF is a surrogate pair: two units.
@@ -240,16 +237,14 @@ pub fn f_strutf16len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// "strcharpart()" function: a substring measured in characters.
 pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let p = unsafe { numbuf.string(&args[0]) };
+    let p = numbuf.string_ptr(&args[0]);
     // SAFETY: the argument was converted to a NUL-terminated string.
     let bytes = unsafe { cstr::bytes_at(p) };
     let slen = bytes.len();
 
     let mut nbyte: c_int = 0;
     let mut skipcc = false;
-    let mut error = false;
-    let mut nchar = unsafe { tv_get_number_chk(&args[1], &raw mut error) };
-    if !error {
+    if let Ok(mut nchar) = tv_get_number_chk(&args[1]) {
         if args.len() > 2 && args.len() > 3 {
             match strict_bool_arg(&args[3]) {
                 Some(flag) => skipcc = flag,
@@ -311,14 +306,14 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// fourth argument -- in characters starting from a byte offset.
 pub fn f_strpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut error = false;
-    let p = unsafe { numbuf.string(&args[0]) };
+    let p = numbuf.string_ptr(&args[0]);
     // SAFETY: the argument was converted to a NUL-terminated string.
     let bytes = unsafe { cstr::bytes_at(p) };
     let slen = bytes.len() as VarNumber;
 
-    let mut n = unsafe { tv_get_number_chk(&args[1], &raw mut error) };
-    let mut len = if error {
+    let start = tv_get_number_chk(&args[1]);
+    let mut n = start.unwrap_or(0);
+    let mut len = if start.is_err() {
         0
     } else if args.len() > 2 {
         tv_get_number(&args[2])
@@ -368,8 +363,8 @@ pub fn f_utf16idx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let str = unsafe { numbuf.string_chk(&args[0]) };
-    let mut idx = unsafe { tv_get_number_chk(&args[1], ptr::null_mut()) };
+    let str = numbuf.string_ptr_chk(&args[0]);
+    let mut idx = tv_get_number_chk(&args[1]).unwrap_or(-1);
     if str.is_null() || idx < 0 {
         return;
     }

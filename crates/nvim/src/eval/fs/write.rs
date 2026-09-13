@@ -25,9 +25,7 @@ use super::{
     str_arg_chk,
 };
 use crate::cstr;
-use crate::eval::typval::{
-    NumBuf, tv_blob_len, tv_check_str_or_nr, tv_get_string_buf_chk, tv_list_items,
-};
+use crate::eval::typval::{NumBuf, tv_blob_len, tv_check_str_or_nr, tv_list_items};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
@@ -138,8 +136,7 @@ impl Item {
         // SAFETY: a live item and a scratch of the promised length; the
         // answer is NUL-terminated, or NULL.
         let tv = &raw const unsafe { tv_list_items(self.list) }[self.at].li_tv;
-        unsafe { tv_get_string_buf_chk(&*tv, buf.as_mut_ptr()).as_ref() }
-            .map(|p| unsafe { CStr::from_ptr(p) })
+        unsafe { buf.string_ptr_chk(&*tv).as_ref() }.map(|p| unsafe { CStr::from_ptr(p) })
     }
 
     /// Whether the item is a String or a Number, having reported if not.

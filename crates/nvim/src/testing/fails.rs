@@ -25,8 +25,8 @@ use core::ptr;
 use crate::eval::pattern_match;
 use crate::eval::typval::{
     NumBuf, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
-    tv_check_for_opt_string_or_list_arg, tv_check_for_string_or_number_arg, tv_get_string_buf_chk,
-    tv_list_items, tv_list_len,
+    tv_check_for_opt_string_or_list_arg, tv_check_for_string_or_number_arg, tv_list_items,
+    tv_list_len,
 };
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_docmd::do_cmdline_cmd;
@@ -48,7 +48,7 @@ use crate::ui::state::Rows;
 use super::report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
 use super::{
     AssertType, E_ASSERT_FAILS_FIFTH_ARGUMENT, E_ASSERT_FAILS_FOURTH_ARGUMENT,
-    E_ASSERT_FAILS_SECOND_ARG, NUMBUFLEN, assert_append_cmd_or_arg,
+    E_ASSERT_FAILS_SECOND_ARG, assert_append_cmd_or_arg,
 };
 
 /// What checking `assert_fails()`'s expectations against the reported error
@@ -108,7 +108,7 @@ unsafe fn assert_fails_args_ok(args: &[TypVal]) -> bool {
 /// # Safety
 /// `args` has five slots; `tofree` receives an allocation the caller frees.
 unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> FailsCheck {
-    let mut buf = [0 as c_char; NUMBUFLEN];
+    let mut buf = NumBuf::new();
     // SAFETY: the caller's arguments and out-parameter.
     let unknown = c"[unknown]".as_ptr().cast_mut();
     let reported = emsg_assert_fails_msg.get();
@@ -120,7 +120,7 @@ unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> Fai
 
     match args.get(1).map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_STRING => {
-            let expected = unsafe { tv_get_string_buf_chk(&args[1], buf.as_mut_ptr()) };
+            let expected = buf.string_ptr_chk(&args[1]);
             if !expected.is_null()
                 && unsafe { has_bytes(cstr::at(actual), cstr::bytes_at(expected)) }
             {
@@ -140,7 +140,8 @@ unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> Fai
             // SAFETY: a live list of one or two items.
             let items = unsafe { tv_list_items(list) };
             let mut tv: *const TypVal = &raw const items[0].li_tv;
-            let mut expected = unsafe { tv_get_string_buf_chk(&*tv, buf.as_mut_ptr()) };
+            // SAFETY: an item of the list borrowed above.
+            let mut expected = buf.string_ptr_chk(unsafe { &*tv });
             if expected.is_null() {
                 return FailsCheck::Abandon;
             }
@@ -158,7 +159,8 @@ unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> Fai
             actual = unsafe { xstrdup(get_vim_var_str(Vv::Errmsg)) };
             *tofree = actual;
             tv = &raw const items[1].li_tv;
-            expected = unsafe { tv_get_string_buf_chk(&*tv, buf.as_mut_ptr()) };
+            // SAFETY: as above.
+            expected = buf.string_ptr_chk(unsafe { &*tv });
             if expected.is_null() {
                 return FailsCheck::Abandon;
             }
@@ -296,7 +298,7 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     // hit-enter prompt.
     let no_prompt = Suppress::wait_return();
 
-    let cmd = unsafe { numbuf.string_chk(&args[0]) };
+    let cmd = numbuf.string_ptr_chk(&args[0]);
     let _ = unsafe { do_cmdline_cmd(cmd) };
 
     // Reset here for any errors reported below.

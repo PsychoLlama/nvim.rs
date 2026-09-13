@@ -192,14 +192,15 @@ unsafe fn tv_op_string(tv1: *mut TypVal, tv2: *const TypVal) -> Result<(), Faile
     }
     let mut numbuf = NumBuf::new();
     // SAFETY: as above.
-    let s2 = unsafe { numbuf.string(&*tv2) };
+    // SAFETY: as above.
+    let s2 = numbuf.string_ptr(unsafe { &*tv2 });
     // An owned string with room to spare is extended in place.
     // SAFETY: as above.
     if unsafe { grow_string_tv(&mut *tv1, s2) } {
         return Ok(());
     }
     // SAFETY: as above.
-    let s = unsafe { concat_str(numbuf1.string(&*tv1), s2) };
+    let s = unsafe { concat_str(numbuf1.string_ptr(&*tv1), s2) };
     // SAFETY: both operands have been copied out of `tv1` by now.
     unsafe { tv_clear(&mut *tv1) };
     lhs.write_string(s);

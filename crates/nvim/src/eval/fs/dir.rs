@@ -29,7 +29,7 @@
 use super::{__S_IFMT, FAIL, Owned, no_fileinfo, str_arg, str_arg_chk};
 use crate::cstr;
 use crate::eval::typval::NumBuf;
-use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk, tv_get_string_buf};
+use crate::eval::typval::{tv_check_for_string_arg, tv_get_number_chk};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::eval::window::find_win_by_nr;
 use crate::event::libuv::uv_strerror;
@@ -81,7 +81,7 @@ fn is_string_arg(args: &[TypVal], i: usize) -> bool {
 ///
 /// Upstream's `tv_get_string_buf`, which is the *unchecked* form: the three
 /// builtins below carry on with the empty string rather than returning.
-fn path_arg<'a>(args: &[TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
+fn path_arg<'a>(args: &'a [TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
     str_arg_chk(args, i, buf).unwrap_or(c"")
 }
 
@@ -90,9 +90,7 @@ fn path_arg<'a>(args: &[TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
 /// gave it, which is upstream's own doing and not something a `&CStr` may
 /// share provenance with.
 fn path_arg_raw(args: &[TypVal], i: usize, buf: &mut NumBuf) -> *mut c_char {
-    // SAFETY: a live typval and a scratch of the length the callee is
-    // promised; the answer is NUL-terminated and never NULL.
-    unsafe { tv_get_string_buf(&args[i], buf.as_mut_ptr()).cast_mut() }
+    buf.string_ptr(&args[i]).cast_mut()
 }
 
 /// The current directory of the process, into `cwd`; false when the OS will
@@ -468,7 +466,7 @@ pub fn f_mkdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             // With no error flag the failure answer is -1 rather than 0, and
             // -1 is exactly what the test below looks for.
             // SAFETY: a live typval; a null flag asks for that answer.
-            prot = unsafe { tv_get_number_chk(&args[2], ptr::null_mut()) } as c_int;
+            prot = tv_get_number_chk(&args[2]).unwrap_or(-1) as c_int;
             if prot == -1 {
                 return;
             }

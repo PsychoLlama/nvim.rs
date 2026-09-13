@@ -511,12 +511,10 @@ unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const DictItem) -> Result
             // Select the last entry in the list.
             qfl.qf_count
         } else {
-            let mut not_a_number = false;
-            let idx = tv_get_number_chk(&(*di).di_tv, &raw mut not_a_number) as c_int;
-            if not_a_number {
+            let Ok(idx) = tv_get_number_chk(&(*di).di_tv) else {
                 return Err(QfError::BadValue);
-            }
-            idx
+            };
+            idx as c_int
         }
     };
 

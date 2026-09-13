@@ -445,12 +445,7 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
     let mut retval = 0;
     let ran = eval_expr_typval(expr, false, argv.args(), &mut rettv);
     if ran.is_ok() {
-        let mut error = false;
-        // SAFETY: a live typval; the callee reports through `error`.
-        retval = unsafe { tv_get_number_chk(&rettv, &raw mut error) };
-        if error {
-            retval = -1;
-        }
+        retval = tv_get_number_chk(&rettv).unwrap_or(-1);
         tv_clear(&mut rettv);
     }
 

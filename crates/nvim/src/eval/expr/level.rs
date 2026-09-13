@@ -330,12 +330,16 @@ pub(crate) unsafe fn eval1(
     let mut truthy = false;
     if evaluate {
         let mut error = false;
-        // SAFETY: `result` is the operand `eval2` just parsed.
         truthy = if op_falsy {
             tv2bool(result)
         } else {
-            let n = unsafe { tv_get_number_chk(result, &raw mut error) };
-            n != 0
+            tv_get_number_chk(result).map_or_else(
+                |_| {
+                    error = true;
+                    false
+                },
+                |n| n != 0,
+            )
         };
         // `??` keeps the left operand when it is truthy; `? :` never
         // does, and neither keeps it after an error.
@@ -436,13 +440,12 @@ unsafe fn eval_logical(
 
     let mut truthy = !stop_at;
     if evaluate {
-        let mut error = false;
-        // SAFETY: `result` is the operand just parsed.
-        truthy = unsafe { tv_get_number_chk(result, &raw mut error) } != 0;
+        let read = tv_get_number_chk(result);
         tv_clear(result);
-        if error {
+        let Ok(n) = read else {
             return Err(Failed);
-        }
+        };
+        truthy = n != 0;
     }
 
     while is_op(cur) {
@@ -453,13 +456,12 @@ unsafe fn eval_logical(
         // frame's own.
         unsafe { operand(arg, &mut var2, used.raw()) }?;
         if evaluate && truthy != stop_at {
-            let mut error = false;
-            // SAFETY: `var2` is the operand just parsed.
-            truthy = unsafe { tv_get_number_chk(&var2, &raw mut error) } != 0;
+            let read = tv_get_number_chk(&var2);
             tv_clear(&mut var2);
-            if error {
+            let Ok(n) = read else {
                 return Err(Failed);
-            }
+            };
+            truthy = n != 0;
         }
         if evaluate {
             rv.write_number(VarNumber::from(truthy));
@@ -832,7 +834,10 @@ pub(crate) unsafe fn eval7_leader(
         // SAFETY: the kind says the value holds a Float.
         f = rv.float_or_zero();
     } else {
-        val = unsafe { tv_get_number_chk(result, &raw mut error) };
+        val = tv_get_number_chk(result).unwrap_or_else(|_| {
+            error = true;
+            0
+        });
     }
 
     if error {

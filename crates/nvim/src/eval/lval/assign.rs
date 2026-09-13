@@ -322,9 +322,7 @@ unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) 
         return true;
     }
 
-    let mut error = false;
-    let val = unsafe { tv_get_number_chk(result, &raw mut error) };
-    if !error {
+    if let Ok(val) = tv_get_number_chk(result) {
         if !(0..=255).contains(&val) {
             // Upstream's text is `"E1239: Invalid value for blob: 0x" PRIX64`,
             // which is missing the `%`: `val` has never reached the message.

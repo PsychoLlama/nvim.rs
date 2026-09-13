@@ -47,7 +47,7 @@ pub fn f_bufadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the arguments are live typvals and `tv_get_string` hands back a
     // NUL-terminated string.
-    let name = unsafe { numbuf.string(&args[0]) } as *mut c_char;
+    let name = numbuf.string_ptr(&args[0]) as *mut c_char;
     // An empty name asks for an unnamed buffer.
     let name = if unsafe { *name } == 0 {
         ptr::null_mut()
@@ -120,13 +120,11 @@ pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let _no_emsg = Suppress::emsg();
         arg_buf(args, 0, 0).map_or(ptr::null_mut(), Buf::raw)
     };
-    let mut error = false;
     if buf.is_null()
         && args.len() > 1
-        && unsafe { tv_get_number_chk(&args[1], &raw mut error) } != 0
-        && !error
+        && tv_get_number_chk(&args[1]).is_ok_and(|create| create != 0)
     {
-        let name = unsafe { numbuf.string_chk(&args[0]) };
+        let name = numbuf.string_ptr_chk(&args[0]);
         if !name.is_null() {
             buf = unsafe {
                 buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0)

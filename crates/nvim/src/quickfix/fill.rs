@@ -439,7 +439,7 @@ pub(crate) unsafe fn qf_fill_buffer(
             if let Some(item) = qftf_item
                 && !invalid_val
             {
-                qftf_str = unsafe { numbuf.string_chk(&item.li_tv) };
+                qftf_str = numbuf.string_ptr_chk(&item.li_tv);
                 if qftf_str.is_null() {
                     invalid_val = true;
                 }

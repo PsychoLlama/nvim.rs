@@ -56,7 +56,7 @@ pub fn f_deepcopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_opt_bool_arg(args, 1).is_err() {
         return;
     }
-    let noref = args.len() > 1 && unsafe { tv_get_bool_chk(&args[1], ptr::null_mut()) } != 0;
+    let noref = args.len() > 1 && tv_get_bool_chk(&args[1]).unwrap_or(-1) != 0;
     let copy_id = if noref { 0 } else { get_copy_id() };
     let _ = unsafe { var_item_copy(ptr::null(), &args[0], result, true, copy_id) };
 }
@@ -499,10 +499,9 @@ fn indexof_matches(expr: &TypVal) -> bool {
     if eval_expr_typval(expr, false, argv.args(), &mut newtv).is_err() {
         return false;
     }
-    let mut error = false;
-    let found = unsafe { tv_get_bool_chk(&newtv, &raw mut error) };
+    let found = tv_get_bool_chk(&newtv);
     tv_clear(&mut newtv);
-    !error && found != 0
+    found.is_ok_and(|n| n != 0)
 }
 
 /// # Safety

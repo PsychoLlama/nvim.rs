@@ -241,11 +241,8 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut Dict)
 pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    // SAFETY: the caller's obligation.
-    let (retdict, menu_name) = unsafe {
-        tv_dict_alloc_ret(result);
-        ((*result).dict_or_null(), numbuf.string_chk(&args[0]))
-    };
+    tv_dict_alloc_ret(result);
+    let (retdict, menu_name) = (result.dict_or_null(), numbuf.string_ptr_chk(&args[0]));
     if menu_name.is_null() {
         // Before the second argument is looked at: `tv_get_string_chk`
         // answers a shared scratch buffer, so converting one argument can
@@ -254,7 +251,7 @@ pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     }
     // SAFETY: the caller's obligation; the second argument if there is one.
     let which = match args.get(1) {
-        Some(second) => unsafe { numbuf2.string_chk(second) },
+        Some(second) => numbuf2.string_ptr_chk(second),
         // The default is the modes of plain ":menu".
         None => c"".as_ptr(),
     };

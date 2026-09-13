@@ -217,7 +217,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypV
         }
         // Never null: the value is a string, which is what
         // `tv_get_string_chk` fails on anything else for.
-        let act = unsafe { numbuf.string_chk(action_arg) };
+        let act = numbuf.string_ptr_chk(action_arg);
         let known = matches!(
             unsafe { *act }.cast_unsigned(),
             b'a' | b'r' | b'u' | b' ' | b'f'
@@ -232,7 +232,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypV
 
         if let Some(what_arg) = args.get(2) {
             if what_arg.v_type() == VAR_STRING {
-                title = unsafe { numbuf2.string_chk(what_arg) };
+                title = numbuf2.string_ptr_chk(what_arg);
                 if title.is_null() {
                     return;
                 }

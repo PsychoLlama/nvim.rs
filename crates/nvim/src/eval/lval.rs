@@ -130,8 +130,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     let mut container = unsafe { Tv::new(lval.ll_tv) };
     // "[key]": the key is `var1`'s string, which is a Number or String.
     let key = if len == -1 {
-        // SAFETY: `var1` is the caller's, and `numbuf` outlives the string rendered into it.
-        unsafe { numbuf.string(var1) as *mut c_char }
+        numbuf.string_ptr(var1).cast_mut()
     } else {
         key
     };

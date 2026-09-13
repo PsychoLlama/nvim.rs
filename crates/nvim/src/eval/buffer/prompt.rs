@@ -78,13 +78,13 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
             let l = lines.list_or_null();
             if let Some(item) = (unsafe { tv_list_items_mut(l) }).first_mut() {
                 let itv = &raw mut item.li_tv;
-                let joined = unsafe { concat_str(text, numbuf.string(&*itv)) };
+                let joined = unsafe { concat_str(text, numbuf.string_ptr(&*itv)) };
                 unsafe { tv_clear(&mut *itv) };
                 item.li_tv.write_string(joined);
                 did_concat = true;
             }
         } else if lines.v_type() == VAR_STRING {
-            let joined = unsafe { concat_str(text, numbuf2.string(lines)) };
+            let joined = unsafe { concat_str(text, numbuf2.string_ptr(lines)) };
             joined_string = TypVal::String(joined);
             lines = &joined_string;
         }
@@ -111,9 +111,9 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         buf.b_prompt_append_new_line = if lines.v_type() == VAR_LIST {
             let last = list_last(lines);
             let ltv = unsafe { Li::new(last) }.field_ptr::<TypVal>(offset_of!(ListItem, li_tv));
-            !last.is_null() && unsafe { ends_in_newline(numbuf3.string(&*ltv)) }
+            !last.is_null() && unsafe { ends_in_newline(numbuf3.string_ptr(&*ltv)) }
         } else {
-            lines.v_type() == VAR_STRING && unsafe { ends_in_newline(numbuf4.string(lines)) }
+            lines.v_type() == VAR_STRING && unsafe { ends_in_newline(numbuf4.string_ptr(lines)) }
         };
     }
 }
@@ -170,7 +170,7 @@ pub fn f_prompt_setprompt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFunc
     let Some(mut buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
-    let new_prompt = unsafe { numbuf.string(&args[1]) };
+    let new_prompt = numbuf.string_ptr(&args[1]);
     let new_prompt_len = len_as_int(unsafe { cstr::bytes_at(new_prompt) }.len());
     if buf_is_prompt(Some(buf)) && !buf.b_ml.ml_mfp.is_null() {
         unsafe { rewrite_prompt_line(buf, new_prompt, new_prompt_len) };

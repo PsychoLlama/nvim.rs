@@ -12,7 +12,7 @@
 use super::*;
 use crate::eval::typval::{ListRef, NumBuf, tv_list_items, tv_list_iter};
 use crate::semsg;
-use crate::types::{Failed, MB_MAXCHAR, VAR_DICT, VAR_LIST, kListLenMayKnow};
+use crate::types::{Failed, VAR_DICT, VAR_LIST, kListLenMayKnow};
 use crate::winlayer::Win;
 
 /// How many `posN` keys a saved position match can carry.
@@ -71,7 +71,7 @@ unsafe fn matchadd_dict_arg(
 
     let di = unsafe { find(dict, "conceal") };
     if !di.is_null() {
-        unsafe { *conceal_char = numbuf.string(&(*di).di_tv) };
+        unsafe { *conceal_char = numbuf.string_ptr(&(*di).di_tv) };
     }
 
     let di = unsafe { find(dict, "window") };
@@ -135,7 +135,7 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         unsafe { put_nr(dict, "id", (*cur).mit_id as VarNumber) };
 
         if unsafe { (*cur).mit_conceal_char } != 0 {
-            let mut buf = [0 as c_char; MB_MAXCHAR + 1];
+            let mut buf = [0 as c_char; 65];
             let len = unsafe { utf_char2bytes((*cur).mit_conceal_char, buf.as_mut_ptr()) };
             buf[len as usize] = 0;
             unsafe { put_str(dict, "conceal", buf.as_ptr()) };
@@ -235,7 +235,8 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         let conceal = if conceal_di.is_null() {
             ::core::ptr::null()
         } else {
-            unsafe { numbuf.string(&(*conceal_di).di_tv) }
+            // SAFETY: a live dictionary item.
+            numbuf.string_ptr(unsafe { &(*conceal_di).di_tv })
         };
 
         let positions = held
@@ -282,9 +283,15 @@ unsafe fn optional_args(
     // Nested, not sequential: an `id` is only read when a `priority` was
     // given, and the dictionary only when an `id` was.
     if args.len() > 2 {
-        prio = unsafe { tv_get_number_chk(&args[2], &raw mut error) } as c_int;
+        prio = tv_get_number_chk(&args[2]).unwrap_or_else(|_| {
+            error = true;
+            0
+        }) as c_int;
         if args.len() > 3 {
-            id = unsafe { tv_get_number_chk(&args[3], &raw mut error) } as c_int;
+            id = tv_get_number_chk(&args[3]).unwrap_or_else(|_| {
+                error = true;
+                0
+            }) as c_int;
             if args.len() > 4
                 && unsafe { matchadd_dict_arg(&args[4], &raw mut conceal_char, &mut win, numbuf) }
                     .is_err()
@@ -308,8 +315,8 @@ pub(crate) fn f_matchadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     let mut patbuf = NumBuf::new();
     let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    let grp = unsafe { grpbuf.string_chk(&args[0]) };
-    let pat = unsafe { patbuf.string_chk(&args[1]) };
+    let grp = grpbuf.string_ptr_chk(&args[0]);
+    let pat = patbuf.string_ptr_chk(&args[1]);
 
     result.write_number(-1);
     if grp.is_null() || pat.is_null() {
@@ -336,7 +343,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
     // SAFETY: the evaluator's slots.
     result.write_number(-1);
 
-    let group = unsafe { buf.string_chk(&args[0]) };
+    let group = buf.string_ptr_chk(&args[0]);
     if group.is_null() {
         return;
     }

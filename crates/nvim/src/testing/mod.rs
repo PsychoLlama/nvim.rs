@@ -25,7 +25,7 @@ use core::ptr;
 use crate::eval::encode::encode_tv2echo;
 use crate::eval::typval::{
     NumBuf, tv_check_for_float_or_nr_arg, tv_check_for_opt_string_arg, tv_equal, tv_get_float,
-    tv_get_number_chk, tv_get_string_buf_chk,
+    tv_get_number_chk,
 };
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, get_vim_var_tv};
 use crate::eval::{garbage_collect, pattern_match};
@@ -60,10 +60,6 @@ enum AssertType {
 
 /// `ESTACK_NONE`: `estack_sfile()` wants no `<sfile>`-style expansion.
 const ESTACK_NONE: EStackArg = 0;
-/// `NUMBUFLEN`: the scratch buffer the `tv_get_string_buf_chk` family wants,
-/// and what a formatted number goes into.
-const NUMBUFLEN: usize = 65;
-
 const E_ASSERT_FAILS_SECOND_ARG: &CStr =
     c"E856: \"assert_fails()\" second argument must be a string or a list with one or two strings";
 const E_ASSERT_FAILS_FOURTH_ARGUMENT: &CStr =
@@ -111,12 +107,12 @@ unsafe fn assert_equal_common(args: &[TypVal], atype: AssertType) -> c_int {
 /// # Safety
 /// `args` has three slots.
 unsafe fn assert_match_common(args: &[TypVal], atype: AssertType) -> c_int {
-    let mut buf1 = [0 as c_char; NUMBUFLEN];
-    let mut buf2 = [0 as c_char; NUMBUFLEN];
+    let mut buf1 = NumBuf::new();
+    let mut buf2 = NumBuf::new();
     // SAFETY: the caller's arguments, and two scratch buffers of the size the
     // `_buf_chk` contract asks for.
-    let pat = unsafe { tv_get_string_buf_chk(&args[0], buf1.as_mut_ptr()) };
-    let text = unsafe { tv_get_string_buf_chk(&args[1], buf2.as_mut_ptr()) };
+    let pat = buf1.string_ptr_chk(&args[0]);
+    let text = buf2.string_ptr_chk(&args[1]);
     if pat.is_null()
         || text.is_null()
         || unsafe { pattern_match(pat, text, false) } == (atype == AssertType::Match)
@@ -138,12 +134,9 @@ unsafe fn assert_match_common(args: &[TypVal], atype: AssertType) -> c_int {
 /// # Safety
 /// `args` has two slots.
 unsafe fn assert_bool(args: &[TypVal], is_true: bool) -> c_int {
-    let mut error = false;
-    // SAFETY: the caller's arguments.
     let actual = &args[0];
     let number_ok = actual.v_type() == VAR_NUMBER
-        && (unsafe { tv_get_number_chk(&args[0], &raw mut error) } == 0) != is_true
-        && !error;
+        && tv_get_number_chk(&args[0]).is_ok_and(|n| (n == 0) != is_true);
     let want = (if is_true { kBoolVarTrue } else { kBoolVarFalse }) as BoolVarValue;
     let bool_ok = actual.as_bool() == Some(want);
     if number_ok || bool_ok {
@@ -190,7 +183,7 @@ unsafe fn assert_beeps(args: &[TypVal], no_beep: bool) -> c_int {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's arguments; `do_cmdline_cmd` runs user code, which
     // is the whole point, and the flags around it are restored below.
-    let cmd = unsafe { numbuf.string_chk(&args[0]) };
+    let cmd = numbuf.string_ptr_chk(&args[0]);
     called_vim_beep.set(false);
     suppress_errthrow.set(true);
     emsg_silent.set(0);
@@ -341,12 +334,12 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
 /// # Safety
 /// `args` has three slots.
 unsafe fn assert_equalfile(args: &[TypVal]) -> c_int {
-    let mut buf1 = [0 as c_char; NUMBUFLEN];
-    let mut buf2 = [0 as c_char; NUMBUFLEN];
+    let mut buf1 = NumBuf::new();
+    let mut buf2 = NumBuf::new();
     // SAFETY: the caller's arguments and two scratch buffers of the size the
     // `_buf_chk` contract asks for.
-    let fname1 = unsafe { tv_get_string_buf_chk(&args[0], buf1.as_mut_ptr()) };
-    let fname2 = unsafe { tv_get_string_buf_chk(&args[1], buf2.as_mut_ptr()) };
+    let fname1 = buf1.string_ptr_chk(&args[0]);
+    let fname2 = buf2.string_ptr_chk(&args[1]);
     if fname1.is_null() || fname2.is_null() {
         return 0;
     }
@@ -409,11 +402,17 @@ unsafe fn assert_inrange(args: &[TypVal]) -> c_int {
             )
         };
     } else {
-        let mut error = false;
-        let lower = unsafe { tv_get_number_chk(&args[0], &raw mut error) };
-        let upper = unsafe { tv_get_number_chk(&args[1], &raw mut error) };
-        let actual: VarNumber = unsafe { tv_get_number_chk(&args[2], &raw mut error) };
-        if error || !(actual < lower || actual > upper) {
+        // All three are read, in this order, whatever the first answers:
+        // each reports its own message.
+        let bounds = (
+            tv_get_number_chk(&args[0]),
+            tv_get_number_chk(&args[1]),
+            tv_get_number_chk(&args[2]),
+        );
+        let (Ok(lower), Ok(upper), Ok(actual)) = bounds else {
+            return 0;
+        };
+        if !(actual < lower || actual > upper) {
             return 0;
         }
         unsafe {
@@ -480,7 +479,7 @@ pub(crate) fn f_assert_equalfile(args: &[TypVal], result: &mut TypVal, _fptr: Ev
 pub(crate) fn f_assert_exception(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot.
-    let error = unsafe { numbuf.string_chk(&args[0]) };
+    let error = numbuf.string_ptr_chk(&args[0]);
     let thrown = unsafe { cstr::at(get_vim_var_str(Vv::Exception)) };
     if thrown.is_empty() {
         let mut ga = prepare_assert_error();
@@ -545,7 +544,7 @@ pub(crate) fn f_assert_notmatch(args: &[TypVal], result: &mut TypVal, _fptr: Eva
 pub(crate) fn f_assert_report(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut ga = prepare_assert_error();
-    unsafe { ga_concat_cstr(&mut ga, numbuf.string(&args[0])) };
+    unsafe { ga_concat_cstr(&mut ga, numbuf.string_ptr(&args[0])) };
     report_assert_error(&ga);
     result.write_number(1);
 }
@@ -577,5 +576,5 @@ pub(crate) fn f_test_garbagecollect_now(
 pub(crate) fn f_test_write_list_log(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector.
-    unsafe { numbuf.string_chk(&args[0]) };
+    numbuf.string_ptr_chk(&args[0]);
 }

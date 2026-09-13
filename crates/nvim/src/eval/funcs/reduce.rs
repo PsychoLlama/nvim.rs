@@ -44,7 +44,6 @@ const fn number_tv(n: VarNumber) -> TypVal {
 fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
     // SAFETY throughout: the caller's obligation; the container is only read, and the
     // dictionary walk is the C's own `TV_DICT_ITER`.
-    let mut error = false;
     result.write_number(0);
     // Seeded at the far end so the first item always wins. An empty
     // container returns the 0 written above instead.
@@ -56,10 +55,9 @@ fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
                 return;
             }
             for li in tv_list_iter(unsafe { tv.list_or_null().as_ref() }) {
-                let i = unsafe { tv_get_number_chk(&li.li_tv, &raw mut error) };
-                if error {
+                let Ok(i) = tv_get_number_chk(&li.li_tv) else {
                     return;
-                }
+                };
                 if better(i, n) {
                     n = i;
                 }
@@ -72,11 +70,9 @@ fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
             // SAFETY: the argument's own dictionary, live for the walk.
             let d = unsafe { &*tv.dict_or_null() };
             for item in d.items() {
-                // SAFETY: an item of the argument's own dictionary.
-                let i = unsafe { tv_get_number_chk(&item.di_tv, &raw mut error) };
-                if error {
+                let Ok(i) = tv_get_number_chk(&item.di_tv) else {
                     return;
-                }
+                };
                 if better(i, n) {
                     n = i;
                 }

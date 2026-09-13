@@ -13,8 +13,8 @@ use crate::cstr;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
-    ListRef, NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_string_buf_chk,
-    tv_list_items, tv_list_iter, tv_list_len,
+    ListRef, NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_list_items,
+    tv_list_iter, tv_list_len,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -49,10 +49,6 @@ use crate::types::{
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
-
-/// The size of a `tv_get_string_buf_chk` scratch buffer. `NUMBUFLEN` in the
-/// C.
-const NUMBUFLEN: usize = 65;
 
 /// A C string this module allocated and must release.
 ///
@@ -191,8 +187,8 @@ unsafe fn get_list_line(
     let Some(item) = (unsafe { tv_list_items((*state).list) }).get(at) else {
         return ptr::null_mut();
     };
-    let mut buf = [0 as c_char; NUMBUFLEN];
-    let s = unsafe { tv_get_string_buf_chk(&item.li_tv, buf.as_mut_ptr()) };
+    let mut buf = NumBuf::new();
+    let s = buf.string_ptr_chk(&item.li_tv);
     unsafe { (*state).at = at + 1 };
     if s.is_null() {
         ptr::null_mut()

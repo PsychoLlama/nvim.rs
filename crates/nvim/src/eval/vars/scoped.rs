@@ -139,12 +139,12 @@ unsafe fn get_var_from(
 fn getwinvar(args: &[TypVal], result: &mut TypVal, off: c_int) {
     let mut numbuf = NumBuf::new();
     let tp = if off == 1 {
-        find_tabpage(unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) } as c_int)
+        find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int)
     } else {
         TabPage::current_or_none()
     };
     let win = find_win_by_nr(&args[off as usize], tp);
-    let varname = unsafe { numbuf.string_chk(&args[off as usize + 1]) };
+    let varname = numbuf.string_ptr_chk(&args[off as usize + 1]);
     let deftv = args.get(off as usize + 2);
     let nil = None;
     // SAFETY: the caller's obligation -- `off + 3` live values -- and the
@@ -166,7 +166,7 @@ pub(crate) unsafe fn tv_to_optval(
     option: *const c_char,
     error: *mut bool,
 ) -> OptVal {
-    let mut nbuf = [0 as c_char; 65];
+    let mut nbuf = NumBuf::new();
     let mut err = false;
     // SAFETY: the caller's obligation -- a live value and a NUL-terminated
     // option name.
@@ -186,11 +186,13 @@ pub(crate) unsafe fn tv_to_optval(
         err = strval.is_null();
         OptVal::string(unsafe { cstr_to_string(strval) })
     } else if option_has_bool || option_has_num {
-        let n = if option_has_num {
-            unsafe { tv_get_number_chk(tv, &raw mut err) }
+        let read = if option_has_num {
+            tv_get_number_chk(tv)
         } else {
-            unsafe { tv_get_bool_chk(tv, &raw mut err) }
+            tv_get_bool_chk(tv)
         };
+        err = read.is_err();
+        let n = read.unwrap_or(0);
         // A String answers 0 both when it *is* zero and when it is not a
         // number at all, so a zero from a String has to be re-read: it
         // is only honest if the string is all '0's and nothing else.
@@ -221,7 +223,7 @@ pub(crate) unsafe fn tv_to_optval(
     } else if option_has_str {
         // Never set a string option to `v:true` or `v:null`.
         if tvh.v_type() != VAR_BOOL && tvh.v_type() != VAR_SPECIAL {
-            let strval = unsafe { tv_get_string_buf_chk(tv, nbuf.as_mut_ptr()) };
+            let strval = nbuf.string_ptr_chk(tv);
             err = strval.is_null();
             OptVal::string(unsafe { cstr_to_string(strval) })
         } else {
@@ -305,12 +307,12 @@ fn setwinvar(args: &[TypVal], off: c_int) {
         return;
     }
     let tp = if off == 1 {
-        find_tabpage(unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) } as c_int)
+        find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int)
     } else {
         TabPage::current_or_none()
     };
     let win = find_win_by_nr(&args[off as usize], tp).map_or(ptr::null_mut(), Win::raw);
-    let varname = unsafe { numbuf.string_chk(&args[off as usize + 1]) };
+    let varname = numbuf.string_ptr_chk(&args[off as usize + 1]);
     let varp = &args[off as usize + 2];
     if win.is_null() || varname.is_null() {
         return;
@@ -358,8 +360,8 @@ unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: &TypVal) {
 /// `gettabvar()`.
 pub fn f_gettabvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let varname = unsafe { numbuf.string_chk(&args[1]) };
-    let tp = find_tabpage(unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) } as c_int);
+    let varname = numbuf.string_ptr_chk(&args[1]);
+    let tp = find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int);
     // Any window of that tab page will do: only its `t:` scope is read.
     let win = any_window_of(tp);
     let (deftv, nil) = (args.get(2), None);
@@ -382,7 +384,7 @@ pub fn f_getwinvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `getbufvar()`.
 pub fn f_getbufvar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let varname = unsafe { numbuf.string_chk(&args[1]) };
+    let varname = numbuf.string_ptr_chk(&args[1]);
     let buf = tv_get_buf_from_arg(&args[0]);
     let deftv = args.get(2);
     let (tp, win) = (TabPage::current_or_none(), Win::current_or_none());
@@ -398,8 +400,8 @@ pub fn f_settabvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() {
         return;
     }
-    let tp = find_tabpage(unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) } as c_int);
-    let varname = unsafe { numbuf.string_chk(&args[1]) };
+    let tp = find_tabpage(tv_get_number_chk(&args[0]).unwrap_or(-1) as c_int);
+    let varname = numbuf.string_ptr_chk(&args[1]);
     let varp = &args[2];
     if varname.is_null() || tp.is_none() {
         return;
@@ -438,7 +440,7 @@ pub fn f_setbufvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if check_secure() || !tv_check_str_or_nr(&args[0]) {
         return;
     }
-    let varname = unsafe { numbuf.string_chk(&args[1]) };
+    let varname = numbuf.string_ptr_chk(&args[1]);
     let buf = tv_get_buf(&args[0], 0);
     let varp = &args[2];
     if buf.is_none() || varname.is_null() {

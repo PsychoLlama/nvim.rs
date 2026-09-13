@@ -28,9 +28,8 @@ use crate::charset::skipwhite;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
-    NumBuf, tv_clear, tv_dict_free_contents, tv_get_number_chk, tv_get_string_buf_chk,
-    tv_list_alloc, tv_list_append_string, tv_list_join, tv_list_last, tv_list_len,
-    tv_list_set_lock,
+    NumBuf, tv_clear, tv_dict_free_contents, tv_get_number_chk, tv_list_alloc,
+    tv_list_append_string, tv_list_join, tv_list_last, tv_list_len, tv_list_set_lock,
 };
 use crate::eval::userfunc::{call_func, func_init, restore_funccal, save_funccal};
 use crate::eval::vars::clear_local;
@@ -66,9 +65,6 @@ const UNSET_EVALARG: EvalArg = EvalArg {
     eval_cookie: null_mut(),
     eval_tofree: null_mut(),
 };
-
-/// The scratch a Number or a Float is rendered into. `NUMBUFLEN` in the C.
-const NUMBUFLEN: usize = 65;
 
 /// One expression's evaluation state, owned by the frame that declared it.
 type Ev = Live<EvalArg>;
@@ -181,7 +177,14 @@ pub unsafe fn eval_to_bool(
     } else {
         unsafe { *error = false };
         if !skip {
-            retval = unsafe { tv_get_number_chk(&tv, error) } != 0;
+            retval = match tv_get_number_chk(&tv) {
+                Ok(n) => n != 0,
+                Err(_) => {
+                    // SAFETY: the caller's flag, as above.
+                    unsafe { *error = true };
+                    false
+                }
+            };
             clear_local(&mut tv);
         }
     }
@@ -268,7 +271,7 @@ pub(crate) fn eval_expr_func(
     argv: &[TypVal],
     result: &mut TypVal,
 ) -> Result<(), Failed> {
-    let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
+    let mut buf = NumBuf::new();
     // SAFETY: the caller's promise -- `expr` outlives the call, and it is
     // only read through here; `VAR_FUNC` says `v_string` is its live
     // member, and `buf` outlives the string rendered into it.
@@ -276,7 +279,7 @@ pub(crate) fn eval_expr_func(
     let s: *const c_char = if expr_tv.v_type() == VAR_FUNC {
         expr_tv.func_name_or_null() as *const c_char
     } else {
-        unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) }
+        buf.string_ptr_chk(expr)
     };
     if s.is_null() || unsafe { *s } as c_int == NUL {
         return Err(Failed);
@@ -289,8 +292,8 @@ pub(crate) fn eval_expr_func(
 
 /// Evaluate `expr` as an expression *string*, which must consume all of it.
 pub(crate) fn eval_expr_string(expr: &TypVal, result: &mut TypVal) -> Result<(), Failed> {
-    let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-    let mut s = unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) } as *mut c_char;
+    let mut buf = NumBuf::new();
+    let mut s = buf.string_ptr_chk(expr) as *mut c_char;
     if s.is_null() {
         return Err(Failed);
     }
@@ -336,7 +339,14 @@ pub unsafe fn eval_expr_to_bool(expr: &TypVal, error: *mut bool) -> bool {
         unsafe { *error = true };
         return false;
     }
-    let res = unsafe { tv_get_number_chk(&rettv, error) } != 0;
+    let res = match tv_get_number_chk(&rettv) {
+        Ok(n) => n != 0,
+        Err(_) => {
+            // SAFETY: the caller's flag, as above.
+            unsafe { *error = true };
+            false
+        }
+    };
     clear_local(&mut rettv);
     res
 }
@@ -354,7 +364,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, args: *mut ExArg, skip: bool
     let retval = if unsafe { eval0(arg, &mut tv, args, &raw mut evalarg) }.is_err() || skip {
         null_mut()
     } else {
-        let s = unsafe { xstrdup(numbuf.string(&tv)) };
+        let s = unsafe { xstrdup(numbuf.string_ptr(&tv)) };
         clear_local(&mut tv);
         s
     };
@@ -425,7 +435,7 @@ pub(crate) unsafe fn typval2string(tv: &mut TypVal, join_list: bool) -> *mut c_c
         return unsafe { encode_tv2string(tv, null_mut()) };
     }
     // SAFETY: as above; `numbuf` outlives the string rendered into it.
-    unsafe { xstrdup(numbuf.string(tv)) }
+    unsafe { xstrdup(numbuf.string_ptr(tv)) }
 }
 
 /// Evaluate `arg` for its String.
@@ -517,7 +527,7 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> Va
     if r.is_err() {
         -1
     } else {
-        let n = unsafe { tv_get_number_chk(&rettv, null_mut()) };
+        let n = tv_get_number_chk(&rettv).unwrap_or(-1);
         clear_local(&mut rettv);
         n
     }
@@ -617,7 +627,7 @@ pub unsafe fn call_func_retstr(func: *const c_char, argv: &[TypVal]) -> *mut c_v
     if unsafe { call_vim_function(func, argv, &mut rettv) }.is_err() {
         return null_mut();
     }
-    let retval = unsafe { xstrdup(numbuf.string(&rettv)) };
+    let retval = unsafe { xstrdup(numbuf.string_ptr(&rettv)) };
     clear_local(&mut rettv);
     retval as *mut c_void
 }
@@ -728,7 +738,7 @@ pub fn eval_foldtext(window: Win) -> Object {
                 Object::from(&tv)
             } else {
                 // SAFETY: `numbuf` holds the rendering, NUL-terminated.
-                Object::string(unsafe { cstr_to_string(numbuf.string(&tv)) })
+                Object::string(unsafe { cstr_to_string(numbuf.string_ptr(&tv)) })
             };
             clear_local(&mut tv);
             obj

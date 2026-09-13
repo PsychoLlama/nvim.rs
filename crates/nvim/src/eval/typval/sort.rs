@@ -212,7 +212,11 @@ pub(crate) unsafe fn item_compare2(
         res = ITEM_COMPARE_FAIL;
         sort_info.item_compare_func_err = true;
     } else {
-        let n = unsafe { tv_get_number_chk(&rettv, &raw mut (*info).item_compare_func_err) };
+        let n = tv_get_number_chk(&rettv).unwrap_or_else(|_| {
+            // SAFETY: the sort's own record, live for the comparison.
+            unsafe { (*info).item_compare_func_err = true };
+            0
+        });
         res = if n > 0 {
             1
         } else if n < 0 {
@@ -445,15 +449,14 @@ pub(crate) unsafe fn parse_sort_uniq_args(
     } else if arg1.v_type() == VAR_PARTIAL {
         sort_info.item_compare_partial = arg1.partial_or_null();
     } else {
-        let mut error = false;
-        let nr = unsafe { tv_get_number_chk(&args[1], &raw mut error) } as ::core::ffi::c_int;
-        if error {
+        let Ok(nr) = tv_get_number_chk(&args[1]) else {
             return Err(Failed); // type error; errmsg already given
-        }
+        };
+        let nr = nr as ::core::ffi::c_int;
         if nr == 1 {
             sort_info.item_compare_ic = 1;
         } else if arg1.v_type() != VAR_NUMBER {
-            let name = unsafe { how.string(&args[1]) };
+            let name = how.string_ptr(&args[1]);
             sort_info.item_compare_func = name;
         } else if nr != 0 {
             emsg(gettext(e_invarg));

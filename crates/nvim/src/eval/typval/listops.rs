@@ -279,12 +279,10 @@ pub unsafe fn tv_list_remove(
         return;
     }
 
-    let mut error = false;
-    let idx = unsafe { tv_get_number_chk(&args[1], &raw mut error) };
-    if error {
+    let Ok(idx) = tv_get_number_chk(&args[1]) else {
         // Type error: do nothing, errmsg already given.
         return;
-    }
+    };
     let at = ::core::ffi::c_int::try_from(idx).ok();
     let Some(first) = at.and_then(|n| unsafe { tv_list_index(l, n) }) else {
         semsg!("E684: List index out of range: {}", idx);
@@ -300,10 +298,9 @@ pub unsafe fn tv_list_remove(
     }
 
     // Remove range of items, return list with values.
-    let end = unsafe { tv_get_number_chk(&args[2], &raw mut error) };
-    if error {
+    let Ok(end) = tv_get_number_chk(&args[2]) else {
         return;
-    }
+    };
     let at = ::core::ffi::c_int::try_from(end).ok();
     let Some(last) = at.and_then(|n| unsafe { tv_list_index(l, n) }) else {
         semsg!("E684: List index out of range: {}", end);
@@ -430,16 +427,24 @@ pub(crate) unsafe fn tv_list_index(l: *const List, n: ::core::ffi::c_int) -> Opt
 pub unsafe fn tv_list_find_nr(
     l: *mut List,
     n: ::core::ffi::c_int,
-    ret_error: *mut bool,
+    ret_error: Option<&mut bool>,
 ) -> VarNumber {
     let Some(at) = (unsafe { tv_list_index(l, n) }) else {
-        if let Some(ret_error) = unsafe { ret_error.as_mut() } {
+        if let Some(ret_error) = ret_error {
             *ret_error = true;
         }
         return -1;
     };
-    // SAFETY: an index just bounds-checked, and the caller's error cell.
-    unsafe { tv_get_number_chk(&tv_list_items(l)[at].li_tv, ret_error) }
+    // SAFETY: an index just bounds-checked.
+    let item = &unsafe { tv_list_items(l) }[at].li_tv;
+    match (tv_get_number_chk(item), ret_error) {
+        (Ok(n), _) => n,
+        (Err(_), Some(flag)) => {
+            *flag = true;
+            0
+        }
+        (Err(_), None) => -1,
+    }
 }
 
 /// The string at index `n` of `l`, or NULL with `E684` raised.
@@ -458,7 +463,7 @@ pub unsafe fn tv_list_find_str(
         return ::core::ptr::null();
     };
     // SAFETY: an index just bounds-checked.
-    unsafe { numbuf.string(&tv_list_items(l)[at].li_tv) }
+    numbuf.string_ptr(&unsafe { tv_list_items(l) }[at].li_tv)
 }
 
 /// [`tv_list_index`], clamping a negative index that fell off the front to 0.

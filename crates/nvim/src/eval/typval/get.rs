@@ -16,43 +16,53 @@ use crate::semsg;
 use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
+use ::core::ffi::CStr;
+
+/// A coercion that failed with its error already on screen.
+///
+/// The `_chk` readings below report the message that names what went wrong
+/// -- `E745: Using a List as a Number`, `E808: Number or Float required` --
+/// so a caller has no error to render, only a branch to take.  It is the
+/// out-parameter `bool` upstream set, moved into the answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Unconvertible;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
 /// numeric form.
 pub fn tv_get_number(tv: &TypVal) -> VarNumber {
-    let mut error = false;
-    unsafe { tv_get_number_chk(tv, &raw mut error) }
+    tv_get_number_chk(tv).unwrap_or(0)
 }
 
-/// `tv` as a number, setting `*ret_error` for a value that has no numeric
-/// form.
+/// `tv` as a number, or [`Unconvertible`] for a value that has no numeric
+/// form -- with the message naming it already reported.
 ///
-/// With a NULL `ret_error` the failure answer is -1 rather than 0, which is
-/// what makes `tv_get_bool` usable as a tri-state.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval. `ret_error` must point at a
-/// writable `bool` the caller owns.
-pub unsafe fn tv_get_number_chk(tv: &TypVal, ret_error: *mut bool) -> VarNumber {
+/// A String that is not a number is *not* a failure: it reads as 0, the way
+/// Vimscript's coercion does. Only a container, a funcref, a Float and the
+/// internal `VAR_UNKNOWN` have no numeric form at all.
+pub fn tv_get_number_chk(tv: &TypVal) -> Result<VarNumber, Unconvertible> {
     let val = tv;
     match val.v_type() {
-        VAR_NUMBER => return val.number_or_zero(),
+        VAR_NUMBER => return Ok(val.number_or_zero()),
         VAR_STRING => {
             let mut n = 0;
             if let Some(s) = val.as_string().filter(|s| !s.is_null()) {
                 let (prep, len) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
                 let (unptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
                 let all = Str2NrBases::ALL;
+                // SAFETY: the variant says the payload is a live
+                // NUL-terminated string; every out-parameter but `n` is
+                // declined, and `n` is this frame's own.
                 #[rustfmt::skip]
                 unsafe { vim_str2nr(s, prep, len, all, &raw mut n, unptr, 0, false, overflow) };
             }
-            return n;
+            return Ok(n);
         }
-        VAR_BOOL => return VarNumber::from(val.as_bool() == Some(kBoolVarTrue)),
-        VAR_SPECIAL => return 0,
+        VAR_BOOL => return Ok(VarNumber::from(val.as_bool() == Some(kBoolVarTrue))),
+        VAR_SPECIAL => return Ok(0),
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
-            unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type() as usize])) };
+            // SAFETY: `num_errors` is the static table of messages indexed by
+            // the kind, and the kind is this value's own.
+            unsafe { emsg(gettext_ptr(num_errors[val.v_type() as usize])) };
         }
         VAR_UNKNOWN => {
             let arg0 = "tv_get_number(UNKNOWN)";
@@ -61,37 +71,30 @@ pub unsafe fn tv_get_number_chk(tv: &TypVal, ret_error: *mut bool) -> VarNumber 
         _ => {}
     }
 
-    if let Some(ret_error) = unsafe { ret_error.as_mut() } {
-        *ret_error = true;
-        0
-    } else {
-        -1
-    }
+    Err(Unconvertible)
 }
 
 /// `tv` as a boolean number: -1 when it has no numeric form.
+///
+/// The tri-state upstream got by handing `tv_get_number_chk` a NULL flag.
 pub fn tv_get_bool(tv: &TypVal) -> VarNumber {
-    unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) }
+    tv_get_number_chk(tv).unwrap_or(-1)
 }
 
-/// `tv` as a boolean number, setting `*ret_error` when it has no numeric form.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval. `ret_error` must point at a
-/// writable `bool` the caller owns.
-pub unsafe fn tv_get_bool_chk(tv: &TypVal, ret_error: *mut bool) -> VarNumber {
-    unsafe { tv_get_number_chk(tv, ret_error) }
+/// `tv` as a boolean number, or [`Unconvertible`] when it has none.
+pub fn tv_get_bool_chk(tv: &TypVal) -> Result<VarNumber, Unconvertible> {
+    tv_get_number_chk(tv)
 }
 
 /// `tv` as a line number, resolving a non-Number such as `"$"` or `"."`
 /// through `var2fpos`.
 pub fn tv_get_lnum(tv: &TypVal) -> LineNr {
     let did_emsg_before = did_emsg.get();
-    let mut lnum = unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) } as LineNr;
-    if lnum <= 0 && did_emsg_before == did_emsg.get() && (*tv).v_type() != VAR_NUMBER {
+    let mut lnum = tv_get_bool(tv) as LineNr;
+    if lnum <= 0 && did_emsg_before == did_emsg.get() && tv.v_type() != VAR_NUMBER {
         // No valid number, try using same function as line() does.
         let mut fnum = 0;
+        // SAFETY: the value is the caller's and `fnum` this frame's own.
         let fp = unsafe { var2fpos(tv, true, &raw mut fnum, false, Win::current()) };
         if let Some(fp) = fp.as_ref() {
             lnum = fp.lnum;
@@ -104,6 +107,8 @@ pub fn tv_get_lnum(tv: &TypVal) -> LineNr {
 pub fn tv_get_lnum_buf(tv: &TypVal, buffer: Option<Buf>) -> LineNr {
     let val = tv;
     let s = val.string_or_null();
+    // SAFETY: the variant says the payload is a live NUL-terminated string,
+    // so the second byte is readable once the first is not the terminator.
     if let Some(buffer) = buffer
         && !s.is_null()
         && unsafe { *s } as ::core::ffi::c_int == '$' as ::core::ffi::c_int
@@ -111,7 +116,7 @@ pub fn tv_get_lnum_buf(tv: &TypVal, buffer: Option<Buf>) -> LineNr {
     {
         return buffer.b_ml.ml_line_count;
     }
-    unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) as LineNr }
+    tv_get_bool(tv) as LineNr
 }
 
 /// `tv` as a float, raising an error and answering 0.0 for a value that has no
@@ -139,58 +144,6 @@ pub fn tv_get_float(tv: &TypVal) -> Float {
     0.0
 }
 
-/// `tv` as a string, formatting a number into `buf` (`NUMBUFLEN` bytes).
-///
-/// Answers NULL with an error raised for a value that has no string form.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval. `buf` must point at writable
-/// scratch of at least `NUMBUFLEN` bytes, which the answer borrows when the
-/// value has no string of its own.
-pub unsafe fn tv_get_string_buf_chk(
-    tv: &TypVal,
-    buf: *mut ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
-    let val = tv;
-    match val.v_type() {
-        VAR_NUMBER => {
-            let n = val.number_or_zero();
-            let size = NUMBUFLEN as size_t;
-            unsafe { snprintf(buf, size, c"%ld".as_ptr(), n) };
-            buf
-        }
-        VAR_FLOAT => {
-            let f = val.float_or_zero();
-            unsafe { vim_snprintf(buf, NUMBUFLEN as size_t, c"%g".as_ptr(), f) };
-            buf
-        }
-        VAR_STRING => {
-            let s = val.string_or_null();
-            if s.is_null() { c"".as_ptr() } else { s }
-        }
-        VAR_BOOL => {
-            let names = (&raw const encode_bool_var_names).cast::<*const ::core::ffi::c_char>();
-            let which = val.as_bool().unwrap_or(crate::types::kBoolVarFalse);
-            let name = unsafe { *names.offset(which as isize) };
-            unsafe { strcpy(buf, name) };
-            buf
-        }
-        VAR_SPECIAL => {
-            let names = (&raw const encode_special_var_names).cast::<*const ::core::ffi::c_char>();
-            let which = val.as_special().unwrap_or(kSpecialVarNull);
-            let name = unsafe { *names.offset(which as isize) };
-            unsafe { strcpy(buf, name) };
-            buf
-        }
-        VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
-            unsafe { emsg(gettext_ptr(str_errors[(*tv).v_type() as usize])) };
-            ::core::ptr::null()
-        }
-        _ => unsafe { abort() },
-    }
-}
-
 /// The scratch a caller lends for the string form of a Number.
 ///
 /// It replaces the process-wide buffer the C's `tv_get_string`,
@@ -199,8 +152,10 @@ pub unsafe fn tv_get_string_buf_chk(
 /// buffer the second silently overwrote the first.
 ///
 /// The answer borrows either the value's own string or this buffer, so it
-/// lives no longer than the shorter of the two: a caller whose answer
-/// outlives the frame must be lent a buffer that does too.
+/// lives no longer than the shorter of the two. [`string`](Self::string) and
+/// [`string_chk`](Self::string_chk) say that in the type; the `_ptr` pair
+/// answers the same bytes as a raw pointer for the callers whose consumer is
+/// still a `*const c_char`, and there the lifetime is the caller's to keep.
 pub struct NumBuf([::core::ffi::c_char; NUMBUFLEN as usize]);
 
 impl Default for NumBuf {
@@ -215,45 +170,96 @@ impl NumBuf {
         NumBuf([0; NUMBUFLEN as usize])
     }
 
-    /// `tv` as a string — the empty string, with the error reported, for a
-    /// value that has none. The C's `tv_get_string`.
-    ///
-    /// # Safety
-    /// `tv` points at a live, initialised value.
-    pub unsafe fn string(&mut self, tv: &TypVal) -> *const ::core::ffi::c_char {
-        // SAFETY: the caller's value; the scratch is `NUMBUFLEN` bytes.
-        unsafe { tv_get_string_buf(tv, self.as_mut_ptr()) }
+    /// `tv` as a string, or `None` with the error reported for a value that
+    /// has no string form. The C's `tv_get_string_chk`.
+    pub fn string_chk<'a>(&'a mut self, tv: &'a TypVal) -> Option<&'a CStr> {
+        let text = self.string_ptr_chk(tv);
+        // SAFETY: a non-null answer is a NUL-terminated string owned either
+        // by `tv` or by this buffer, and the signature holds both for `'a`.
+        (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
     }
 
-    /// As [`string`](Self::string), but NULL rather than the empty string for
-    /// a value that has none. The C's `tv_get_string_chk`.
+    /// `tv` as a string — the empty string, with the error reported, for a
+    /// value that has none. The C's `tv_get_string`.
+    pub fn string<'a>(&'a mut self, tv: &'a TypVal) -> &'a CStr {
+        self.string_chk(tv).unwrap_or(c"")
+    }
+
+    /// [`string_chk`](Self::string_chk) as a borrowed pointer: NULL for a
+    /// value with no string form, and otherwise bytes owned by `tv` or by
+    /// this buffer.
     ///
-    /// # Safety
-    /// `tv` points at a live, initialised value.
-    pub unsafe fn string_chk(&mut self, tv: &TypVal) -> *const ::core::ffi::c_char {
-        // SAFETY: as `string`.
-        unsafe { tv_get_string_buf_chk(tv, self.as_mut_ptr()) }
+    /// The answer is a *borrow* of both, and nothing in the type says so —
+    /// it is here for the callers that hand the bytes straight to a
+    /// `*const c_char` consumer, and it goes when they do.
+    pub fn string_ptr_chk(&mut self, tv: &TypVal) -> *const ::core::ffi::c_char {
+        let buf = self.0.as_mut_ptr();
+        match tv.v_type() {
+            VAR_NUMBER => {
+                let n = tv.number_or_zero();
+                let size = NUMBUFLEN as size_t;
+                // SAFETY: `buf` is this buffer's own `NUMBUFLEN` bytes, and
+                // the format string takes exactly the one argument given.
+                unsafe { snprintf(buf, size, c"%ld".as_ptr(), n) };
+                buf
+            }
+            VAR_FLOAT => {
+                let f = tv.float_or_zero();
+                // SAFETY: as above.
+                unsafe { vim_snprintf(buf, NUMBUFLEN as size_t, c"%g".as_ptr(), f) };
+                buf
+            }
+            VAR_STRING => {
+                let s = tv.string_or_null();
+                if s.is_null() { c"".as_ptr() } else { s }
+            }
+            VAR_BOOL => {
+                let names = (&raw const encode_bool_var_names).cast::<*const ::core::ffi::c_char>();
+                let which = tv.as_bool().unwrap_or(crate::types::kBoolVarFalse);
+                // SAFETY: the table has one name per `BoolVarValue`, and
+                // `which` is one; the names are shorter than `NUMBUFLEN`.
+                unsafe {
+                    let name = *names.offset(which as isize);
+                    strcpy(buf, name);
+                }
+                buf
+            }
+            VAR_SPECIAL => {
+                let names =
+                    (&raw const encode_special_var_names).cast::<*const ::core::ffi::c_char>();
+                let which = tv.as_special().unwrap_or(kSpecialVarNull);
+                // SAFETY: as `VAR_BOOL`, for the special-value table.
+                unsafe {
+                    let name = *names.offset(which as isize);
+                    strcpy(buf, name);
+                }
+                buf
+            }
+            VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
+                // SAFETY: `str_errors` is the static table of messages
+                // indexed by the kind, and the kind is this value's own.
+                unsafe { emsg(gettext_ptr(str_errors[tv.v_type() as usize])) };
+                ::core::ptr::null()
+            }
+            // SAFETY: the eight arms above are every kind there is.
+            _ => unsafe { abort() },
+        }
+    }
+
+    /// [`string`](Self::string) as a borrowed pointer: the empty string
+    /// rather than NULL for a value with no string form.
+    ///
+    /// See [`string_ptr_chk`](Self::string_ptr_chk) for why the pointer form
+    /// exists.
+    pub fn string_ptr(&mut self, tv: &TypVal) -> *const ::core::ffi::c_char {
+        let text = self.string_ptr_chk(tv);
+        if text.is_null() { c"".as_ptr() } else { text }
     }
 
     /// The raw buffer, for the `*buffer` entry points that take one.
     pub fn as_mut_ptr(&mut self) -> *mut ::core::ffi::c_char {
         self.0.as_mut_ptr()
     }
-}
-
-/// [`tv_get_string_buf_chk`] answering the empty string rather than NULL.
-///
-/// # Safety
-///
-/// `tv` must point at an initialized typval. `buf` must point at writable
-/// scratch of at least `NUMBUFLEN` bytes, which the answer borrows when the
-/// value has no string of its own.
-pub unsafe fn tv_get_string_buf(
-    tv: &TypVal,
-    buf: *mut ::core::ffi::c_char,
-) -> *const ::core::ffi::c_char {
-    let res = unsafe { tv_get_string_buf_chk(tv, buf) };
-    if res.is_null() { c"".as_ptr() } else { res }
 }
 
 /// Truthiness of `tv`, as `if` and `while` ask for it.

@@ -16,10 +16,6 @@ use crate::memory::handoff::owned_cstr;
 use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
 use core::mem::ManuallyDrop;
 
-/// C's `NUMBUFLEN`: the size of the scratch buffer `tv_get_string_buf_chk`
-/// and friends format a non-string value into.
-const NUMBUFLEN: usize = 65;
-
 /// Read the script body of a command that takes either `:command script` or a
 /// heredoc:
 ///
@@ -64,7 +60,7 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
         if !skip {
             // SAFETY: the item's rendering is NUL-terminated and outlives
             // the copy.
-            let line = unsafe { numbuf.string(&li.li_tv) };
+            let line = numbuf.string_ptr(&li.li_tv);
             text.extend_from_slice(unsafe { cstr::bytes_at(line) });
             text.push(b'\n');
         }
@@ -102,10 +98,10 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     let mut cancelreturn_strarg2 = ManuallyDrop::new(TV_INITIAL_VALUE);
     let mut xp_name: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     let mut input_callback = Callback::None;
-    let mut prompt_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-    let mut defstr_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-    let mut cancelreturn_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-    let mut xp_name_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
+    let mut prompt_buf = NumBuf::new();
+    let mut defstr_buf = NumBuf::new();
+    let mut cancelreturn_buf = NumBuf::new();
+    let mut xp_name_buf = NumBuf::new();
     // Its *address* is the "argument absent" answer below, so it has to be
     // a distinct object from the `""` literal `defstr` starts as.
     let def: [::core::ffi::c_char; 1] = [0];
@@ -118,7 +114,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         let dict = args[0].dict_or_null();
         // C's `S_LEN(key)`: the key pointer and its length, spelled once.
         let dict_str = |key: &::core::ffi::CStr,
-                        numbuf: *mut ::core::ffi::c_char,
+                        numbuf: &mut NumBuf,
                         def: *const ::core::ffi::c_char| {
             unsafe {
                 tv_dict_get_string_buf_chk(
@@ -131,11 +127,11 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             }
         };
 
-        prompt = dict_str(c"prompt", prompt_buf.as_mut_ptr(), c"".as_ptr());
+        prompt = dict_str(c"prompt", &mut prompt_buf, c"".as_ptr());
         if prompt.is_null() {
             return;
         }
-        defstr = dict_str(c"default", defstr_buf.as_mut_ptr(), c"".as_ptr());
+        defstr = dict_str(c"default", &mut defstr_buf, c"".as_ptr());
         if defstr.is_null() {
             return;
         }
@@ -152,7 +148,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             // its own field, so its address is the item's plus a constant.
             cancelreturn = unsafe { &raw mut (*cancelreturn_di).di_tv };
         }
-        xp_name = dict_str(c"completion", xp_name_buf.as_mut_ptr(), def.as_ptr());
+        xp_name = dict_str(c"completion", &mut xp_name_buf, def.as_ptr());
         if xp_name.is_null() {
             // error
             return;
@@ -173,18 +169,17 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             return;
         }
     } else {
-        prompt = unsafe { tv_get_string_buf_chk(&args[0], prompt_buf.as_mut_ptr()) };
+        prompt = prompt_buf.string_ptr_chk(&args[0]);
         if prompt.is_null() {
             return;
         }
         if args.len() > 1 {
-            defstr = unsafe { tv_get_string_buf_chk(&args[1], defstr_buf.as_mut_ptr()) };
+            defstr = defstr_buf.string_ptr_chk(&args[1]);
             if defstr.is_null() {
                 return;
             }
             if args.len() > 2 {
-                let strarg2 =
-                    unsafe { tv_get_string_buf_chk(&args[2], cancelreturn_buf.as_mut_ptr()) };
+                let strarg2 = cancelreturn_buf.string_ptr_chk(&args[2]);
                 if strarg2.is_null() {
                     return;
                 }

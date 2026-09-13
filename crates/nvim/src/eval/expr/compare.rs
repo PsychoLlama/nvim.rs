@@ -19,8 +19,8 @@ use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::typval::{
-    tv_blob_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
-    tv_get_string_buf, tv_list_equal,
+    NumBuf, tv_blob_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
+    tv_list_equal,
 };
 use crate::eval::{
     _ISalnum, Cur, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
@@ -34,9 +34,6 @@ use crate::types::{
     Dict, ExprType, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
     VAR_NUMBER, VAR_PARTIAL, VarNumber,
 };
-
-/// The scratch a Number or Float is rendered into for a String comparison.
-const NUMBUFLEN: usize = 65;
 
 /// `isalnum` in the process locale, which is what decides whether `is` and
 /// `isnot` stand as whole words. nvim calls `setlocale(LC_ALL, "")` at
@@ -305,10 +302,10 @@ pub(crate) fn typval_compare(
         let b = tv_get_number(typ2);
         from_ordering(op, if a < b { -1 } else { c_int::from(a > b) })
     } else {
-        let mut buf1: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-        let mut buf2: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-        let s1 = unsafe { tv_get_string_buf(typ1, buf1.as_mut_ptr()) };
-        let s2 = unsafe { tv_get_string_buf(typ2, buf2.as_mut_ptr()) };
+        let mut buf1 = NumBuf::new();
+        let mut buf2 = NumBuf::new();
+        let s1 = buf1.string_ptr(typ1);
+        let s2 = buf2.string_ptr(typ2);
         if op == EXPR_MATCH || op == EXPR_NOMATCH {
             // The pattern is the right-hand side and the subject the left.
             VarNumber::from(unsafe { pattern_match(s2, s1, ic) } == (op == EXPR_MATCH))

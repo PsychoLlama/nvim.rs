@@ -14,8 +14,8 @@ use core::ffi::{c_char, c_int};
 use core::ptr::{copy, copy_nonoverlapping};
 
 use crate::eval::typval::{
-    tv_blob_alloc, tv_blob_len, tv_blob_set_ret, tv_clear, tv_get_number_chk, tv_get_string_buf,
-    tv_get_string_buf_chk, tv_list_concat,
+    NumBuf, tv_blob_alloc, tv_blob_len, tv_blob_set_ret, tv_clear, tv_get_number_chk,
+    tv_list_concat,
 };
 use crate::eval::{INT_MAX, Tv, VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::garray::ga_grow;
@@ -24,10 +24,6 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::concat_str;
 use crate::types::{Blob, Float, TypVal, VAR_FLOAT, VAR_STRING, VarNumber};
-
-/// The length of the scratch buffer `tv_get_string_buf` may render a Number
-/// or a Float into. `NUMBUFLEN` in the C.
-const NUMBUFLEN: usize = 65;
 
 /// `n1 / n2`, with the two cases a machine divide cannot answer.
 ///
@@ -143,13 +139,13 @@ pub(crate) unsafe fn grow_string_tv(tv1: &mut TypVal, s2: *const c_char) -> bool
 
 /// `..` (and `.`): the string concatenation `eval5` performs.
 pub(crate) fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
-    let mut buf1: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-    let mut buf2: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
+    let mut buf1 = NumBuf::new();
+    let mut buf2 = NumBuf::new();
     // SAFETY: the caller's promise -- both operands are valid typvals, and
     // the two scratch buffers are this frame's own.
     let mut one = unsafe { Tv::new(tv1) };
-    let s1 = unsafe { tv_get_string_buf(tv1, buf1.as_mut_ptr()) };
-    let s2 = unsafe { tv_get_string_buf_chk(tv2, buf2.as_mut_ptr()) };
+    let s1 = buf1.string_ptr(tv1);
+    let s2 = buf2.string_ptr_chk(tv2);
     if s2.is_null() {
         tv_clear(tv1);
         tv_clear(tv2);
@@ -168,7 +164,6 @@ pub(crate) fn eval_concat_str(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
 
 /// `+` and `-` over Numbers and Floats.
 pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> bool {
-    let mut error = false;
     let mut n1: VarNumber = 0;
     let mut n2: VarNumber = 0;
     let mut f1: Float = 0.0;
@@ -181,15 +176,15 @@ pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> 
         // SAFETY: the kind says the value holds a Float.
         f1 = one.float_or_zero();
     } else {
-        n1 = unsafe { tv_get_number_chk(tv1, &raw mut error) };
-        if error {
+        let Ok(left) = tv_get_number_chk(tv1) else {
             // Only reachable for "list + non-list" or "blob + non-blob":
             // for anything else the caller returned before evaluating the
             // second operand.
             tv_clear(tv1);
             tv_clear(tv2);
             return false;
-        }
+        };
+        n1 = left;
         if two.v_type() == VAR_FLOAT {
             f1 = n1 as Float;
         }
@@ -198,12 +193,12 @@ pub(crate) fn eval_addsub_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) -> 
         // SAFETY: as above, for the right operand.
         f2 = two.float_or_zero();
     } else {
-        n2 = unsafe { tv_get_number_chk(tv2, &raw mut error) };
-        if error {
+        let Ok(right) = tv_get_number_chk(tv2) else {
             tv_clear(tv1);
             tv_clear(tv2);
             return false;
-        }
+        };
+        n2 = right;
         if one.v_type() == VAR_FLOAT {
             f2 = n2 as Float;
         }
@@ -243,7 +238,10 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
         // SAFETY: the kind says the value holds a Float.
         f1 = one.float_or_zero();
     } else {
-        n1 = unsafe { tv_get_number_chk(tv1, &raw mut error) };
+        n1 = tv_get_number_chk(tv1).unwrap_or_else(|_| {
+            error = true;
+            0
+        });
     }
     // Unlike the additive path this clears the left operand before
     // looking at the error, and clears the right one only on the branch
@@ -262,11 +260,12 @@ pub(crate) fn eval_multdiv_number(tv1: &mut TypVal, tv2: &mut TypVal, op: u8) ->
         // SAFETY: as above, for the right operand.
         f2 = two.float_or_zero();
     } else {
-        n2 = unsafe { tv_get_number_chk(tv2, &raw mut error) };
+        let read = tv_get_number_chk(tv2);
         tv_clear(tv2);
-        if error {
+        let Ok(right) = read else {
             return false;
-        }
+        };
+        n2 = right;
         if use_float {
             f2 = n2 as Float;
         }

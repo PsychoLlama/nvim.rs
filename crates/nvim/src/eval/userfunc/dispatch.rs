@@ -149,7 +149,7 @@ pub unsafe fn callback_call_retnr(callback: *mut Callback, args: &[TypVal]) -> V
     if !unsafe { callback_call(callback, args, &mut rettv) } {
         return -2;
     }
-    let retval = unsafe { tv_get_number_chk(&rettv, ptr::null_mut()) };
+    let retval = tv_get_number_chk(&rettv).unwrap_or(-1);
     tv_clear(&mut rettv);
     retval
 }

@@ -91,7 +91,7 @@ unsafe fn dict_arg(args: &[TypVal], i: usize) -> *mut Dict {
 /// `tv` must be a live typval.
 unsafe fn group_arg(tv: &TypVal, numbuf: &mut NumBuf) -> Option<*mut c_char> {
     // SAFETY: the caller's typval.
-    let group = unsafe { numbuf.string_chk(tv) }.cast_mut();
+    let group = numbuf.string_ptr_chk(tv).cast_mut();
     if group.is_null() {
         return None;
     }
@@ -371,7 +371,7 @@ pub(crate) fn f_sign_define(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
 
     result.write_number(-1);
     // SAFETY: the argument slots the frame named.
-    let name = unsafe { numbuf.string_chk(&args[0]) }.cast_mut();
+    let name = numbuf.string_ptr_chk(&args[0]).cast_mut();
     // SAFETY: as above.
     if name.is_null() || tv_check_for_opt_dict_arg(args, 1).is_err() {
         return;
@@ -389,7 +389,7 @@ pub(crate) fn f_sign_getdefined(args: &[TypVal], result: &mut TypVal, _fptr: Eva
     unsafe {
         let l = tv_list_alloc_ret(result, 0);
         let defs = if !args.is_empty() {
-            sign_find(numbuf.string(&args[0])).into_iter().collect()
+            sign_find(numbuf.string_ptr(&args[0])).into_iter().collect()
         } else {
             sign_defs()
         };
@@ -429,14 +429,13 @@ pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: Eval
                     }
                 }
                 if let Some(tv) = key(dict, "id") {
-                    let mut notanum = false;
-                    sign_id = number_as_int(tv_get_number_chk(tv, &raw mut notanum));
-                    if notanum {
+                    let Ok(given) = tv_get_number_chk(tv) else {
                         return;
-                    }
+                    };
+                    sign_id = number_as_int(given);
                 }
                 if let Some(tv) = key(dict, "group") {
-                    group = numbuf.string_chk(tv);
+                    group = numbuf.string_ptr_chk(tv);
                     if group.is_null() {
                         return;
                     }
@@ -457,12 +456,10 @@ pub(crate) fn f_sign_jump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
 
-    let mut notanum = false;
-    // SAFETY: the frame's argument slots.
-    let id = number_as_int(unsafe { tv_get_number_chk(&args[0], &raw mut notanum) });
-    if notanum {
+    let Ok(given) = tv_get_number_chk(&args[0]) else {
         return;
-    }
+    };
+    let id = number_as_int(given);
     if id <= 0 {
         emsg(gettext(e_invarg));
         return;
@@ -510,14 +507,12 @@ unsafe fn sign_place_from_dict(
 ) -> ::core::ffi::c_int {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's typvals and dictionary.
-    let mut notanum = false;
-
     let mut id = 0;
     if let Some(tv) = unsafe { slot(id_tv, dict, "id") } {
-        id = number_as_int(unsafe { tv_get_number_chk(tv, &raw mut notanum) });
-        if notanum {
+        let Ok(given) = tv_get_number_chk(tv) else {
             return -1;
-        }
+        };
+        id = number_as_int(given);
         if id < 0 {
             emsg(gettext(e_invarg));
             return -1;
@@ -537,7 +532,7 @@ unsafe fn sign_place_from_dict(
     let Some(name_tv) = __v else {
         return -1;
     };
-    let name = unsafe { numbuf.string_chk(name_tv) }.cast_mut();
+    let name = numbuf.string_ptr_chk(name_tv).cast_mut();
     if name.is_null() {
         return -1;
     }
@@ -563,10 +558,10 @@ unsafe fn sign_place_from_dict(
 
     let mut prio = -1;
     if let Some(tv) = unsafe { key(dict, "priority") } {
-        prio = number_as_int(unsafe { tv_get_number_chk(tv, &raw mut notanum) });
-        if notanum {
+        let Ok(given) = tv_get_number_chk(tv) else {
             return -1;
-        }
+        };
+        prio = number_as_int(given);
     }
 
     // `sign_place` writes the id back when it was zero (auto-allocate).
@@ -626,7 +621,7 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
         unsafe {
             let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
             for tv in list_items(args[0].list_or_null()) {
-                let name = numbuf.string_chk(&*tv);
+                let name = numbuf.string_ptr_chk(&*tv);
                 let ok = !name.is_null() && sign_undefine_by_name(name).is_ok();
                 tv_list_append_number(retlist, if ok { 0 } else { -1 });
             }
@@ -641,7 +636,7 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
         return;
     }
     // SAFETY: the frame's argument slot.
-    let name = unsafe { numbuf2.string_chk(&args[0]) };
+    let name = numbuf2.string_ptr_chk(&args[0]);
     // SAFETY: a name the argument owns, NUL-terminated.
     if !name.is_null() && unsafe { sign_undefine_by_name(name) }.is_ok() {
         result.write_number(0);
@@ -662,7 +657,7 @@ unsafe fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: *mut Dict) -> 
     let mut id = 0;
     let mut buf = ::core::ptr::null_mut();
     let mut group = match group_tv {
-        Some(tv) => unsafe { numbuf.string(tv) },
+        Some(tv) => numbuf.string_ptr(tv),
         None => unsafe { numbuf2.dict_string(dict, c"group".as_ptr()) },
     };
     if !group.is_null() && unsafe { *group } == 0 {

@@ -1719,7 +1719,7 @@ fn finding_a_number_by_index_reads_through_strings() {
     unsafe {
         let find_nr = |l: *mut List, n: c_int, msg: Option<&str>| -> (bool, i64) {
             let mut err = false;
-            let ret = check_emsg(log.editor(), || tv_list_find_nr(l, n, &raw mut err), msg);
+            let ret = check_emsg(log.editor(), || tv_list_find_nr(l, n, Some(&mut err)), msg);
             (err, ret)
         };
 

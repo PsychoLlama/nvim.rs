@@ -99,7 +99,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
     let items = unsafe { tv_list_items(argv_list) };
     let mut at = 0;
     while at < items.len() {
-        let arg = unsafe { numbuf.string(&items[at].li_tv) };
+        let arg = numbuf.string_ptr(&items[at].li_tv);
         // `-- [files…]` is dropped: it is almost never wanted, and
         // `:mksession` is the way to carry a session over.
         if i > 0 && strequal(arg, c"--".as_ptr()) {
@@ -119,7 +119,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
             // SAFETY: the list entry is live and `string` answers a
             // NUL-terminated buffer that outlives the loop.
             if let Some(next_li) = items.get(at + 1)
-                && let addr = unsafe { numbuf2.string(&next_li.li_tv) }
+                && let addr = numbuf2.string_ptr(&next_li.li_tv)
                 && let text = unsafe { cstr::at(addr) }
                 && (has_bytes(text, b":") || has_bytes(text, b"/") || has_bytes(text, b"\\"))
             {

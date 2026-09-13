@@ -422,7 +422,7 @@ unsafe fn ex_let_env(
         unsafe { *end = NUL as c_char };
 
         // SAFETY: the caller's obligation -- `tv` is a live value.
-        let mut p = unsafe { numbuf.string_chk(tv) };
+        let mut p = numbuf.string_ptr_chk(tv);
         if !p.is_null() && opch == Some(b'.') {
             // SAFETY: a NUL-terminated name and value.
             let s = unsafe { vim_getenv(name) };
@@ -640,7 +640,7 @@ unsafe fn ex_let_register(
     };
     let mut ptofree: *mut c_char = ptr::null_mut();
     // SAFETY: the caller's obligation -- `tv` is a live value.
-    let mut p = unsafe { numbuf.string_chk(tv) };
+    let mut p = numbuf.string_ptr_chk(tv);
     if !p.is_null() && opch == Some(b'.') {
         // SAFETY: a register name and a NUL-terminated value.
         let s = unsafe { get_reg_contents(regname, kGRegExprSrc as c_int) } as *mut c_char;

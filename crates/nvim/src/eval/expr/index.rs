@@ -240,7 +240,7 @@ pub(crate) unsafe fn eval_index_inner(
         VAR_NUMBER | VAR_STRING => {
             // SAFETY: `numbuf` is this frame's own scratch, and the String
             // it answers is NUL-terminated with `n1`/`n2` inside it.
-            let s = unsafe { numbuf.string(result) };
+            let s = numbuf.string_ptr(result);
             let len = unsafe { cstr::bytes_at(s) }.len() as c_int as VarNumber;
             let v = if exclusive {
                 // slice(): character indexes, second one excluded.
@@ -298,7 +298,7 @@ pub(crate) unsafe fn eval_index_inner(
             let mut key = key;
             if key.is_null() {
                 // SAFETY: `numbuf2` is this frame's own scratch.
-                key = unsafe { numbuf2.string_chk(var1.expect("checked")) };
+                key = numbuf2.string_ptr_chk(var1.expect("checked"));
                 if key.is_null() {
                     return Err(Failed);
                 }

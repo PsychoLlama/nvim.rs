@@ -216,11 +216,10 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut pos = -1;
     if args.len() > 1 {
-        let mut error = false;
-        pos = unsafe { tv_get_number_chk(&args[1], &raw mut error) } as ::core::ffi::c_int - 1;
-        if error {
+        let Ok(given) = tv_get_number_chk(&args[1]) else {
             return;
-        }
+        };
+        pos = given as ::core::ffi::c_int - 1;
         if pos < 0 {
             emsg(gettext(e_positive));
             return;
@@ -228,7 +227,9 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     // tv_get_string() so that a NULL string reads as an empty one.
-    unsafe { (*result).write_number(set_cmdline_str(numbuf.string(&args[0]), pos) as VarNumber) };
+    unsafe {
+        (*result).write_number(set_cmdline_str(numbuf.string_ptr(&args[0]), pos) as VarNumber)
+    };
 }
 
 /// `setcmdpos()` function.

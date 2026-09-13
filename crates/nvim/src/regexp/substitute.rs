@@ -33,9 +33,7 @@ use super::{
     RegSubMatch, Rex, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
     reg_prev_sub, reg_prev_sublen, rsm,
 };
-use crate::eval::typval::{
-    ListRef, TV_INITIAL_VALUE, tv_clear, tv_get_string_buf_chk, tv_list_init_static,
-};
+use crate::eval::typval::{ListRef, NumBuf, TV_INITIAL_VALUE, tv_clear, tv_list_init_static};
 use crate::eval::userfunc::call_func;
 use crate::eval::{eval_to_string, partial_name};
 use crate::global_cell::GlobalCell;
@@ -89,9 +87,6 @@ fn stash(nested: usize, text: *mut c_char) {
 /// means the two passes disagreed, which is a bug here rather than in the
 /// user's pattern.
 const E_NOT_ENOUGH_SPACE: &core::ffi::CStr = c"vim_regsub_both(): not enough space";
-
-/// How large a buffer `tv_get_string_buf_chk` wants for a number.
-const NUMBUFLEN: usize = 65;
 
 /// A `FuncExe` that asks for nothing.
 const FUNCEXE_INIT: FuncExe = FuncExe {
@@ -591,8 +586,8 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     let text = if rettv.v_type() == VAR_UNKNOWN {
         core::ptr::null_mut()
     } else {
-        let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
-        let s = unsafe { tv_get_string_buf_chk(&rettv, buf.as_mut_ptr()) };
+        let mut buf = NumBuf::new();
+        let s = buf.string_ptr_chk(&rettv);
         if s.is_null() {
             core::ptr::null_mut()
         } else {

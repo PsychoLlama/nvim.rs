@@ -17,20 +17,17 @@ use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-/// Size of the scratch buffer `tv_get_string_buf` may answer with.
-const NUMBUFLEN: usize = 65;
-
 /// `hasmapto()`: whether any mapping in the named modes has `{name}` in its
 /// RHS.
 pub fn f_hasmapto(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut buf = [0 as c_char; NUMBUFLEN];
+    let mut buf = NumBuf::new();
     // SAFETY: the Vimscript call convention — `args` is a live argument
     // vector, and `numbuf` outlives the string it lends back.
-    let name = unsafe { numbuf.string(&args[0]) };
+    let name = numbuf.string_ptr(&args[0]);
     let mode = match args.get(1) {
         // SAFETY: `buf` is the scratch `tv_get_string_buf` may answer with.
-        Some(tv) => unsafe { tv_get_string_buf(tv, buf.as_mut_ptr()) },
+        Some(tv) => buf.string_ptr(tv),
         None => c"nvo".as_ptr(),
     };
     let number = |n: usize| args.get(n).map(tv_get_number);
@@ -188,20 +185,20 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
 
     // SAFETY: the Vimscript call convention — `args` is a live argument
     // vector whose first entry is the keys, NUL-terminated.
-    let keys = unsafe { numbuf.string(&args[0]) }.cast_mut();
+    let keys = numbuf.string_ptr(&args[0]).cast_mut();
     // SAFETY: as above.
     if unsafe { c_int::from(*keys) } == NUL {
         return;
     }
 
-    let mut buf = [0 as c_char; NUMBUFLEN];
+    let mut buf = NumBuf::new();
     // SAFETY: as above.
     let number = |n: usize| args.get(n).map(tv_get_number);
     let abbr = number(2).is_some_and(|n| n != 0);
     let get_dict = number(3).is_some_and(|n| n != 0);
     let mut which: *mut c_char = match args.get(1) {
         // SAFETY: `buf` is `tv_get_string_buf_chk`'s scratch.
-        Some(tv) => unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()) }.cast_mut(),
+        Some(tv) => buf.string_ptr_chk(tv).cast_mut(),
         None => c"".as_ptr().cast_mut(),
     };
     if which.is_null() {

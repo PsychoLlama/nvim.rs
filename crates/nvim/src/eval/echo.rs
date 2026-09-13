@@ -203,7 +203,7 @@ pub unsafe fn ex_execute(args: *mut ExArg) {
             // SAFETY: `rettv` is this frame's, holding the value just
             // evaluated; each of the three renderings is NUL-terminated.
             let argstr: *const c_char = if !owned {
-                unsafe { numbuf.string(&rettv) }
+                numbuf.string_ptr(&rettv)
             } else if rettv.v_type() == VAR_STRING {
                 unsafe { encode_tv2echo(&rettv, null_mut::<size_t>()) }
             } else {

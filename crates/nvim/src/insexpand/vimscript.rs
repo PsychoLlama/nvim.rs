@@ -121,7 +121,7 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Direction, fast: bool) -> c_int
             flags |= CP_EQUAL;
         }
     } else {
-        word = unsafe { numbuf.string_chk(tv) };
+        word = numbuf.string_ptr_chk(tv);
     }
 
     if word.is_null() || (!empty && unsafe { *word } as c_int == NUL) {
@@ -355,7 +355,7 @@ pub fn f_complete(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     if args[1].v_type() != VAR_LIST {
         emsg(gettext(e_invarg));
     } else {
-        let startcol = unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) } as ColNr;
+        let startcol = tv_get_number_chk(&args[0]).unwrap_or(-1) as ColNr;
         if startcol > 0 {
             unsafe { set_completion(startcol - 1, args[1].list_or_null()) };
         }
@@ -432,7 +432,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
         for item in tv_list_iter(unsafe { what_list.as_ref() }) {
             // `tv_get_string` answers "" rather than NULL for anything it
             // cannot render, so this is never a null pointer.
-            let what = unsafe { CStr::from_ptr(numbuf.string(&item.li_tv)) };
+            let what = unsafe { CStr::from_ptr(numbuf.string_ptr(&item.li_tv)) };
             what_flag |= match what.to_bytes() {
                 b"mode" => CI_WHAT_MODE,
                 b"pum_visible" => CI_WHAT_PUM_VISIBLE,

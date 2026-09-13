@@ -199,7 +199,8 @@ pub unsafe fn tv_dict_to_env(denv: *mut Dict) -> *mut *mut ::core::ffi::c_char {
     for (i, hi) in unsafe { tv_dict_iter(denv) }.enumerate() {
         let var = tv_dict_hi2di(hi);
         let key = unsafe { tv_dict_item_key(var) };
-        let str = unsafe { numbuf.string(&(*var).di_tv) };
+        // SAFETY: the iterator's own item.
+        let str = numbuf.string_ptr(unsafe { &(*var).di_tv });
         debug_assert!(!str.is_null());
         let len = unsafe { cstr::bytes_at(key) }.len()
             + unsafe { cstr::bytes_at(str) }.len()
@@ -240,19 +241,20 @@ pub unsafe fn tv_dict_get_string_alloc(
 /// `d[key]` as a string, formatting a number into `numbuf`.
 ///
 /// # Safety
-/// `d` is null or points at a live dictionary, `key` must be a
-/// NUL-terminated string, and `numbuf` must be writable for `NUMBUFLEN`
-/// bytes. The answer may point into `numbuf` or borrow the item.
+/// `d` is null or points at a live dictionary and `key` must be a
+/// NUL-terminated string. The answer may point into `numbuf` or borrow the
+/// item.
 pub unsafe fn tv_dict_get_string_buf(
     d: *const Dict,
     key: *const ::core::ffi::c_char,
-    numbuf: *mut ::core::ffi::c_char,
+    numbuf: &mut NumBuf,
 ) -> *const ::core::ffi::c_char {
     let di = unsafe { tv_dict_find(d, key, -1) };
     if di.is_null() {
         return ::core::ptr::null();
     }
-    unsafe { tv_get_string_buf(&(*di).di_tv, numbuf) }
+    // SAFETY: the item just found belongs to the caller's dictionary.
+    numbuf.string_ptr(unsafe { &(*di).di_tv })
 }
 
 /// [`tv_dict_get_string_buf`] answering `def` for a missing key, and NULL with
@@ -260,21 +262,22 @@ pub unsafe fn tv_dict_get_string_buf(
 ///
 /// # Safety
 /// `d` is null or points at a live dictionary, `key` must be readable for
-/// `key_len` bytes (or NUL-terminated when it is negative), and `numbuf`
-/// must be writable for `NUMBUFLEN` bytes. `def` is returned as-is for a
-/// missing key, so its lifetime is the caller's problem.
+/// `key_len` bytes (or NUL-terminated when it is negative). `def` is
+/// returned as-is for a missing key, so its lifetime is the caller's
+/// problem.
 pub unsafe fn tv_dict_get_string_buf_chk(
     d: *const Dict,
     key: *const ::core::ffi::c_char,
     key_len: ptrdiff_t,
-    numbuf: *mut ::core::ffi::c_char,
+    numbuf: &mut NumBuf,
     def: *const ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     let di = unsafe { tv_dict_find(d, key, key_len) };
     if di.is_null() {
         return def;
     }
-    unsafe { tv_get_string_buf_chk(&(*di).di_tv, numbuf) }
+    // SAFETY: the item just found belongs to the caller's dictionary.
+    numbuf.string_ptr_chk(unsafe { &(*di).di_tv })
 }
 
 /// `d[key]` as a callback, bound to `d` as its `self` dictionary.
@@ -409,7 +412,7 @@ pub fn f_has_key(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if d.is_null() {
         return;
     }
-    let key = unsafe { numbuf.string(&args[1]) };
+    let key = numbuf.string_ptr(&args[1]);
     let found = !unsafe { tv_dict_find(d, key, -1) }.is_null();
     result.write_number(VarNumber::from(found));
 }
@@ -428,6 +431,6 @@ impl NumBuf {
         key: *const ::core::ffi::c_char,
     ) -> *const ::core::ffi::c_char {
         // SAFETY: the caller's dictionary and key.
-        unsafe { tv_dict_get_string_buf(d, key, self.as_mut_ptr()) }
+        unsafe { tv_dict_get_string_buf(d, key, self) }
     }
 }

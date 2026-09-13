@@ -104,7 +104,7 @@ pub fn f_argv(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let (entries, count) =
         unsafe { selected_arglist(args.get(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
     result.write_string(ptr::null_mut());
-    let idx = number_as_int(unsafe { tv_get_number_chk(&args[0], ptr::null_mut()) });
+    let idx = number_as_int(tv_get_number_chk(&args[0]).unwrap_or(-1));
     if !entries.is_null() && idx >= 0 && idx < count {
         unsafe { (*result).write_string(xstrdup(alist_name(entries.offset(idx as isize)))) };
     } else if idx == -1 {

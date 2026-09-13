@@ -438,7 +438,7 @@ pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let sep = if args.len() <= 1 {
         c" ".as_ptr()
     } else {
-        unsafe { numbuf.string_chk(&args[1]) }
+        numbuf.string_ptr_chk(&args[1])
     };
 
     result.write_empty(VAR_STRING);

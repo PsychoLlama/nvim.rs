@@ -135,7 +135,7 @@ pub fn f_undofile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
     result.write_empty(VAR_STRING);
     // SAFETY: as above.
-    let fname: *const c_char = unsafe { numbuf.string(&args[0]) };
+    let fname: *const c_char = numbuf.string_ptr(&args[0]);
     // SAFETY: a NUL-terminated name.
     if unsafe { *fname } == 0 {
         // SAFETY: the return value to fill in.

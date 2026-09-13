@@ -39,7 +39,7 @@ pub(crate) fn arg_number(args: &[TypVal], i: usize) -> VarNumber {
 /// Argument `i` as a Number, answering 0 for a value that has none.
 pub(crate) fn arg_number_chk(args: &[TypVal], i: usize) -> VarNumber {
     // SAFETY: as [`arg_number`].
-    unsafe { tv_get_number_chk(&args[i], ptr::null_mut()) }
+    tv_get_number_chk(&args[i]).unwrap_or(-1)
 }
 
 /// The window argument `i` names: an id in any tab page, or a number in the
@@ -71,7 +71,7 @@ pub fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Win> {
     // SAFETY: the caller's obligation. A value that is not a number reports
     // and answers zero, which reads here as "the current window"; the
     // narrowing is upstream's and is what makes 0x1_0000_0000 read as 0.
-    let nr = number_as_int(unsafe { tv_get_number_chk(vp, ptr::null_mut()) });
+    let nr = number_as_int(tv_get_number_chk(vp).unwrap_or(-1));
     if nr < 0 {
         return None;
     }
@@ -93,7 +93,7 @@ pub fn find_win_by_nr(vp: &TypVal, tabpage: Option<TabPage>) -> Option<Win> {
 /// the current one.
 pub fn find_win_by_nr_or_id(vp: &TypVal) -> Option<Win> {
     // SAFETY: the caller's obligation.
-    let nr = number_as_int(unsafe { tv_get_number_chk(vp, ptr::null_mut()) });
+    let nr = number_as_int(tv_get_number_chk(vp).unwrap_or(-1));
     if nr >= LOWEST_WIN_ID {
         // The second read is upstream's: `tv_get_number` where the test used
         // `tv_get_number_chk`, so a value that already reported does not
@@ -139,7 +139,7 @@ fn get_winnr(tabpage: TabPage, argvar: Option<&TypVal>) -> c_int {
     if let Some(argvar) = argvar {
         // SAFETY: the caller's obligation; `endp` is a live local and
         // `tv_get_string_chk` hands back a NUL-terminated string or NULL.
-        let arg = unsafe { numbuf.string_chk(argvar) };
+        let arg = numbuf.string_ptr_chk(argvar);
         let resolved = match arg.is_null() {
             true => None,
             false => unsafe { relative_win(tabpage, twin, arg) },
@@ -330,7 +330,7 @@ pub fn f_tabpagenr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         // SAFETY: the arguments are live typvals, and `tv_get_string_chk`
         // hands back a NUL-terminated string or NULL.
-        let arg = unsafe { numbuf.string_chk(&args[0]) };
+        let arg = numbuf.string_ptr_chk(&args[0]);
         let word = (!arg.is_null()).then(|| unsafe { CStr::from_ptr(arg) });
         match word.map(CStr::to_bytes) {
             None => 0,

@@ -6,7 +6,6 @@
 use crate::cstr;
 use crate::winlayer::{Buf, Live};
 use core::ffi::{c_char, c_int};
-use core::ptr::null_mut;
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::find_buf;
@@ -123,12 +122,12 @@ pub unsafe fn var2fpos(
         }
         let mut error = false;
         // SAFETY: `l` is a live List and `error` is this frame's.
-        pos.lnum = unsafe { tv_list_find_nr(l, 0, &raw mut error) } as LineNr;
+        pos.lnum = unsafe { tv_list_find_nr(l, 0, Some(&mut error)) } as LineNr;
         if error || pos.lnum <= 0 || pos.lnum > bp.line_count() {
             return None;
         }
         // SAFETY: as above.
-        pos.col = unsafe { tv_list_find_nr(l, 1, &raw mut error) } as ColNr;
+        pos.col = unsafe { tv_list_find_nr(l, 1, Some(&mut error)) } as ColNr;
         if error {
             return None;
         }
@@ -158,7 +157,7 @@ pub unsafe fn var2fpos(
         pos.col -= 1;
 
         // SAFETY: `l` is a live List and `error` is this frame's.
-        pos.coladd = unsafe { tv_list_find_nr(l, 2, &raw mut error) } as ColNr;
+        pos.coladd = unsafe { tv_list_find_nr(l, 2, Some(&mut error)) } as ColNr;
         if error {
             pos.coladd = 0;
         }
@@ -166,7 +165,7 @@ pub unsafe fn var2fpos(
     }
 
     // SAFETY: `tv` is the caller's typval and `numbuf` outlives the name.
-    let name = unsafe { numbuf.string_chk(tv) };
+    let name = numbuf.string_ptr_chk(tv);
     if name.is_null() {
         return None;
     }
@@ -288,7 +287,7 @@ pub unsafe fn list2fpos(
     let mut i = 0;
     if !fnump.is_null() {
         // SAFETY: `l` is a live List; a null `error` means "do not report".
-        let mut n = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
+        let mut n = unsafe { tv_list_find_nr(l, i, None) } as c_int;
         i += 1;
         if n < 0 {
             return Err(Failed);
@@ -301,7 +300,7 @@ pub unsafe fn list2fpos(
     }
 
     // SAFETY: `l` is a live List.
-    let n = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
+    let n = unsafe { tv_list_find_nr(l, i, None) } as c_int;
     i += 1;
     if n < 0 {
         return Err(Failed);
@@ -309,7 +308,7 @@ pub unsafe fn list2fpos(
     posp.lnum = n as LineNr;
 
     // SAFETY: as above.
-    let mut n = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
+    let mut n = unsafe { tv_list_find_nr(l, i, None) } as c_int;
     i += 1;
     if n < 0 {
         return Err(Failed);
@@ -336,12 +335,12 @@ pub unsafe fn list2fpos(
 
     // A missing or negative offset is no offset.
     // SAFETY: `l` is a live List.
-    let off = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
+    let off = unsafe { tv_list_find_nr(l, i, None) } as c_int;
     posp.coladd = if off < 0 { 0 } else { off as ColNr };
 
     if !curswantp.is_null() {
         // SAFETY: `l` is a live List, and a non-null `curswantp` is valid.
-        unsafe { *curswantp = tv_list_find_nr(l, i + 1, null_mut()) as ColNr };
+        unsafe { *curswantp = tv_list_find_nr(l, i + 1, None) as ColNr };
     }
     Ok(())
 }

@@ -132,7 +132,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the list is unchanged since it was counted, so it still has
     // `argsl` items and they all fit.
     for arg in unsafe { items(args_list) } {
-        child_argv[i] = unsafe { xstrdup(numbuf.string(&arg.li_tv)) };
+        child_argv[i] = unsafe { xstrdup(numbuf.string_ptr(&arg.li_tv)) };
         i += 1;
     }
     child_argv[i] = core::ptr::null_mut();

@@ -23,7 +23,7 @@ use ring::{EMPTY_RING, to_cstring};
 pub use ring::{HistEntry, Ring};
 
 use crate::charset::vim_strsize;
-use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk, tv_get_string_buf};
+use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
@@ -312,7 +312,7 @@ fn arg_histtype(arg: &TypVal) -> HistoryType {
     // SAFETY: caller contract; a non-null result is a NUL-terminated string
     // owned by the typval, which outlives the lookup.
     unsafe {
-        let name = numbuf.string_chk(arg);
+        let name = numbuf.string_ptr_chk(arg);
         if name.is_null() {
             HIST_INVALID
         } else {
@@ -333,11 +333,11 @@ pub fn f_histadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if histype == HIST_INVALID {
         return;
     }
-    let mut buf = [0 as c_char; 65];
+    let mut buf = NumBuf::new();
     // SAFETY: `histadd()` takes two arguments; the entry is NUL-terminated
     // and lives in the typval or in `buf`, both of which outlive the add.
     let added = unsafe {
-        let entry = tv_get_string_buf(&args[1], buf.as_mut_ptr());
+        let entry = buf.string_ptr(&args[1]);
         *entry != 0 && {
             init_history();
             add_to_history(histype, CStr::from_ptr(entry).to_bytes(), false, 0);
@@ -356,7 +356,7 @@ pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
     // the second argument is only read once its type says it is present.
     let n = unsafe {
-        let name = numbuf.string_chk(&args[0]);
+        let name = numbuf.string_ptr_chk(&args[0]);
         if name.is_null() {
             0
         } else {
@@ -370,8 +370,8 @@ pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 del_history_idx(histype, tv_get_number(arg) as c_int) as c_int
             } else {
                 // Delete by regex.
-                let mut buf = [0 as c_char; 65];
-                del_history_entry(histype, tv_get_string_buf(arg, buf.as_mut_ptr())) as c_int
+                let mut buf = NumBuf::new();
+                del_history_entry(histype, buf.string_ptr(arg)) as c_int
             }
         }
     };
@@ -383,7 +383,7 @@ pub fn f_histdel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract.
-    let name = unsafe { numbuf.string_chk(&args[0]) };
+    let name = numbuf.string_ptr_chk(&args[0]);
     let text = if name.is_null() {
         core::ptr::null_mut()
     } else {
@@ -395,7 +395,7 @@ pub fn f_histget(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let num = if args.len() <= 1 {
                 get_history_idx(histype)
             } else {
-                tv_get_number_chk(&args[1], core::ptr::null_mut()) as c_int
+                tv_get_number_chk(&args[1]).unwrap_or(-1) as c_int
             };
             let idx = calc_hist_idx(histype, num);
             match hist_entry_ref(histype, idx) {

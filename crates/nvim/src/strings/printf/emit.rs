@@ -33,6 +33,7 @@ use super::spec::{
 };
 use super::{TMP_LEN, tv_float, tv_nr, tv_ptr, tv_str};
 use crate::ascii::ascii_isdigit;
+use crate::eval::typval::NumBuf;
 use crate::mbyte::{cells_at, cluster_len};
 use crate::memory::{xfree, xmemscan, xstrchrnul};
 use crate::message::emsg;
@@ -211,14 +212,15 @@ impl<'f> Args<'f> {
     ///
     /// # Safety
     ///
-    /// `numbuf` must point at a NUL-terminated string, unaliased for the call.
+    /// `self` must be an `Args` built for the format it is being walked
+    /// against; see [`Args::next_pointer`].
     unsafe fn next_string(
         &mut self,
         tofree: &mut *mut c_char,
-        numbuf: *mut c_char,
+        numbuf: &mut NumBuf,
     ) -> *const c_char {
         if let Some(tvs) = self.typvals() {
-            unsafe { tv_str(tvs, &mut self.arg_idx, tofree, numbuf) }
+            tv_str(tvs, &mut self.arg_idx, tofree, numbuf)
         } else {
             unsafe { self.position() };
             unsafe { self.ap.next_arg::<*const c_char>() }
@@ -502,6 +504,7 @@ unsafe fn render_string(
     args: &mut Args,
     p: *const c_char,
     tmp: &mut [c_char; TMP],
+    numbuf: &mut NumBuf,
     tofree: &mut *mut c_char,
 ) -> Body {
     match c.fmt_spec {
@@ -514,9 +517,8 @@ unsafe fn render_string(
         }
         // b's' | b'S'
         _ => {
-            // `tmp` is untouched on this branch and outlives the
-            // answer, so it doubles as the Number scratch.
-            let str_arg = unsafe { args.next_string(tofree, tmp.as_mut_ptr()) };
+            // SAFETY: the caller's obligation, forwarded.
+            let str_arg = unsafe { args.next_string(tofree, numbuf) };
             if str_arg.is_null() {
                 return Body::At(c"[NULL]".as_ptr(), 6);
             }
@@ -814,11 +816,12 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
                 break 'error;
             };
             let mut tmp = [0 as c_char; TMP];
+            let mut numbuf = NumBuf::new();
             let mut tofree = ptr::null_mut::<c_char>();
 
             let body = match c.fmt_spec {
                 b'%' | b'c' | b's' | b'S' => unsafe {
-                    render_string(&mut c, &mut args, p, &mut tmp, &mut tofree)
+                    render_string(&mut c, &mut args, p, &mut tmp, &mut numbuf, &mut tofree)
                 },
                 b'd' | b'u' | b'b' | b'B' | b'o' | b'x' | b'X' | b'p' => unsafe {
                     render_integer(&mut c, &mut args, &mut tmp)

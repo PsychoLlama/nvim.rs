@@ -298,14 +298,13 @@ msg_putchar('\n' as ::core::ffi::c_int);
                 break 'body Label::Error;
             }
 
-            let mut error = false;
             // SAFETY: the item's own list, just checked to hold three
             // items.
             let chunk = unsafe { tv_list_items(l) };
-            let start = unsafe { tv_get_number_chk(&chunk[0].li_tv, &raw mut error) };
-            if error {
+            let Ok(start) = tv_get_number_chk(&chunk[0].li_tv) else {
                 break 'body Label::Error;
-            } else if !(prev_end <= start && start < colored_ccline.len() as VarNumber) {
+            };
+            if !(prev_end <= start && start < colored_ccline.len() as VarNumber) {
                 let end = colored_ccline.len();
                 print_errmsg!("E5403: Chunk {i} start {start} not in range [{prev_end}, {end})");
                 break 'body Label::Error;
@@ -327,10 +326,10 @@ msg_putchar('\n' as ::core::ffi::c_int);
                 unsafe { (*ccline_colors).push(coloured) };
             }
 
-            let end = unsafe { tv_get_number_chk(&chunk[1].li_tv, &raw mut error) };
-            if error {
+            let Ok(end) = tv_get_number_chk(&chunk[1].li_tv) else {
                 break 'body Label::Error;
-            } else if !(start < end && end <= colored_ccline.len() as VarNumber) {
+            };
+            if !(start < end && end <= colored_ccline.len() as VarNumber) {
                 let limit = colored_ccline.len();
                 print_errmsg!("E5404: Chunk {i} end {end} not in range ({start}, {limit}]");
                 break 'body Label::Error;
@@ -344,7 +343,7 @@ msg_putchar('\n' as ::core::ffi::c_int);
             }
 
             prev_end = end;
-            let group = unsafe { numbuf.string_chk(&chunk[2].li_tv) };
+            let group = numbuf.string_ptr_chk(&chunk[2].li_tv);
             if group.is_null() {
                 break 'body Label::Error;
             }

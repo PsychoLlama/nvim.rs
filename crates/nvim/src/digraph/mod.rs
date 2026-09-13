@@ -17,9 +17,8 @@ use crate::cstr;
 use crate::drawscreen::status_redraw_curbuf;
 use crate::eval::eval_to_string;
 use crate::eval::typval::{
-    NumBuf, tv_check_for_opt_bool_arg, tv_get_bool, tv_get_string_buf_chk, tv_list_alloc,
-    tv_list_alloc_ret, tv_list_append_list, tv_list_append_string, tv_list_items, tv_list_iter,
-    tv_list_len,
+    NumBuf, tv_check_for_opt_bool_arg, tv_get_bool, tv_list_alloc, tv_list_alloc_ret,
+    tv_list_append_list, tv_list_append_string, tv_list_items, tv_list_iter, tv_list_len,
 };
 use crate::ex_docmd::{do_cmdline_cmd, getline_equal};
 use crate::ex_getln::putcmdline;
@@ -454,11 +453,8 @@ fn next_char(s: &[u8]) -> (c_int, &[u8]) {
 
 /// The string value of `arg`, `None` when the typval is not one (which is
 /// where `tv_get_string_buf_chk` reports its own error).
-fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut [c_char; 65]) -> Option<&'a [u8]> {
-    // SAFETY: caller contract; the result is null or a NUL-terminated string
-    // owned by the typval or by `buf`, both of which outlive the borrow.
-    let s = unsafe { tv_get_string_buf_chk(arg, buf.as_mut_ptr()) };
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
+fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut NumBuf) -> Option<&'a [u8]> {
+    buf.string_chk(arg).map(CStr::to_bytes)
 }
 
 /// The two digraph characters of `chars`. Reports E1214 on anything but
@@ -483,12 +479,12 @@ fn digraph_chars(chars: Option<&[u8]>) -> Option<(c_int, c_int)> {
 /// argument is only read once the characters check out, so a bad pair
 /// reports its own error and nothing else.
 fn digraph_set_common(argchars: &TypVal, argdigraph: &TypVal) -> bool {
-    let mut buf_chars = [0 as c_char; 65];
+    let mut buf_chars = NumBuf::new();
     let chars = tv_string(argchars, &mut buf_chars);
     let Some((char1, char2)) = digraph_chars(chars) else {
         return false;
     };
-    let mut buf_digraph = [0 as c_char; 65];
+    let mut buf_digraph = NumBuf::new();
     let Some(digraph) = tv_string(argdigraph, &mut buf_digraph) else {
         return false;
     };
@@ -514,11 +510,8 @@ fn set_bool_ret(result: &mut TypVal, value: bool) {
 /// `digraph_get()`.
 pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: caller contract; the result slot starts out empty.
-    let digraphs = unsafe {
-        (*result).write_string(core::ptr::null_mut());
-        numbuf.string_chk(&args[0])
-    };
+    result.write_string(core::ptr::null_mut());
+    let digraphs = numbuf.string_ptr_chk(&args[0]);
     if digraphs.is_null() {
         return;
     }

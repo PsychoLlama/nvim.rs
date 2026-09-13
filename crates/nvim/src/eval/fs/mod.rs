@@ -37,7 +37,7 @@
 
 use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
-    tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_string,
+    tv_list_alloc_ret, tv_list_append_string,
 };
 use crate::memory::{xfree, xmallocz, xmemdupz, xstrdup};
 use crate::message::emsg;
@@ -102,25 +102,27 @@ static e_error_while_writing_str: &::core::ffi::CStr = c"E80: Error while writin
 pub(crate) fn str_arg<'a>(args: &[TypVal], i: usize, buf: &'a mut NumBuf) -> &'a CStr {
     // SAFETY: a live typval and a scratch of the promised length; the answer
     // is NUL-terminated and never NULL.
-    unsafe { CStr::from_ptr(tv_get_string_buf(&args[i], buf.as_mut_ptr())) }
+    unsafe { CStr::from_ptr(buf.string_ptr(&args[i])) }
 }
 
 /// Argument `i` as a NUL-terminated path, or None -- having reported the
 /// error -- for a type that has no string form. As [`str_arg`], the caller
 /// lends the scratch a Number is spelled into.
-pub(crate) fn str_arg_chk<'a>(args: &[TypVal], i: usize, buf: &'a mut NumBuf) -> Option<&'a CStr> {
-    // SAFETY: a live typval and a scratch of the length the callee is
-    // promised; the answer is NUL-terminated, or NULL.
-    unsafe { tv_get_string_buf_chk(&args[i], buf.as_mut_ptr()).as_ref() }
-        .map(|p| unsafe { CStr::from_ptr(p) })
+pub(crate) fn str_arg_chk<'a>(
+    args: &'a [TypVal],
+    i: usize,
+    buf: &'a mut NumBuf,
+) -> Option<&'a CStr> {
+    buf.string_chk(&args[i])
 }
 
 /// Argument `i` as a Number, setting `error` -- and reporting one -- for a
 /// type that has no number form.
 pub(crate) fn nr_arg(args: &[TypVal], i: usize, error: &mut bool) -> VarNumber {
-    // SAFETY: a live typval; the callee reports through `error` rather than
-    // by returning a failure.
-    unsafe { tv_get_number_chk(&args[i], error) }
+    tv_get_number_chk(&args[i]).unwrap_or_else(|_| {
+        *error = true;
+        0
+    })
 }
 
 /// Report `msg`, translated.

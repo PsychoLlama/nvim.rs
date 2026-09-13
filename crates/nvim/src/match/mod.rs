@@ -240,7 +240,6 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
         let mut lnum: LineNr = 0;
         let mut col: ColNr = 0;
         let mut len: c_int = 1;
-        let mut error = false;
         let mut skip = false;
 
         if tv.v_type() == VAR_LIST {
@@ -250,28 +249,29 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
                 semsg!("E5030: Empty list at position {at}");
                 return None;
             }
-            lnum = unsafe { tv_get_number_chk(&sub[0].li_tv, &raw mut error) } as LineNr;
-            if error {
+            let Ok(first) = tv_get_number_chk(&sub[0].li_tv) else {
                 return None;
-            }
+            };
+            lnum = first as LineNr;
             if lnum <= 0 {
                 skip = true;
             } else {
                 unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
                 if let Some(second) = sub.get(1) {
-                    col = unsafe { tv_get_number_chk(&second.li_tv, &raw mut error) } as ColNr;
-                    if error {
+                    let Ok(second) = tv_get_number_chk(&second.li_tv) else {
                         return None;
-                    }
+                    };
+                    col = second as ColNr;
                     if col < 0 {
                         skip = true;
                     } else if let Some(third) = sub.get(2) {
-                        len = unsafe { tv_get_number_chk(&third.li_tv, &raw mut error) } as ColNr;
+                        let read = tv_get_number_chk(&third.li_tv);
+                        len = read.unwrap_or(0) as ColNr;
                         // Note the order: a negative length is skipped
-                        // before `error` is even looked at.
+                        // before the failure is even looked at.
                         if len < 0 {
                             skip = true;
-                        } else if error {
+                        } else if read.is_err() {
                             return None;
                         }
                     }

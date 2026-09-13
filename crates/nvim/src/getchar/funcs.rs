@@ -101,7 +101,6 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
 /// `argvars[0]` decides how: absent or -1 blocks, 1 only peeks, 0 takes a key
 /// if one is there. Keys nothing can act on are skipped.
 fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
-    let mut error = false;
     loop {
         if cursor == CursorFlag::Msg || (cursor == CursorFlag::Default && msg_col.get() > 0) {
             ui_cursor_goto(msg_row.get(), msg_col.get());
@@ -131,10 +130,10 @@ fn getchar_read(args: &[TypVal], cursor: CursorFlag) -> VarNumber {
                 }
             }
             safe_vgetc() as VarNumber
-        } else if unsafe { tv_get_number_chk(&args[0], &raw mut error) } == 1 {
+        } else if tv_get_number_chk(&args[0]).is_ok_and(|n| n == 1) {
             // getchar(1): only check whether a character is available.
             vpeekc_any() as VarNumber
-        } else if error || vpeekc_any() == NUL {
+        } else if tv_get_number_chk(&args[0]).is_err() || vpeekc_any() == NUL {
             // An illegal argument, or getchar(0) with nothing there.
             0
         } else {

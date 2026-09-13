@@ -13,16 +13,13 @@ use core::ptr::null_mut;
 use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    DictRef, ListRef, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find, tv_dict_item_alloc,
-    tv_dict_item_free, tv_get_string_buf_chk, tv_list_alloc, tv_list_append_owned_tv,
+    DictRef, ListRef, NumBuf, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find,
+    tv_dict_item_alloc, tv_dict_item_free, tv_list_alloc, tv_list_append_owned_tv,
 };
 use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
 use crate::types::{EvalArg, Failed, NUL, TypVal, VarLock, kListLenShouldKnow, ptrdiff_t, size_t};
 use crate::winlayer::Live;
-
-/// The scratch a non-String dict key is rendered into.
-const NUMBUFLEN: usize = 65;
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TV_INITIAL_VALUE;
@@ -148,7 +145,7 @@ pub(crate) unsafe fn eval_dict(
     let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
     let mut tv = UNSET_TV;
-    let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
+    let mut buf = NumBuf::new();
 
     // Is this `{expr}` rather than a Dict? It has to be decided without
     // evaluating, or a function in it would be called twice — which is
@@ -194,7 +191,7 @@ pub(crate) unsafe fn eval_dict(
             // The key borrows `buf`, so it must not outlive this pass.
             let mut key: *mut c_char = null_mut();
             if evaluate {
-                key = unsafe { tv_get_string_buf_chk(&tvkey, buf.as_mut_ptr()) } as *mut c_char;
+                key = buf.string_ptr_chk(&tvkey) as *mut c_char;
                 if key.is_null() {
                     tv_clear(&mut tvkey);
                     break 'items false;

@@ -19,9 +19,6 @@ use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-/// Size of the scratch buffer `tv_get_string_buf_chk` may answer with.
-const NUMBUFLEN: usize = 65;
-
 /// The two `nvim_set_keymap` validation messages that carry a quote, hoisted
 /// out of the bodies that raise them.
 const REQUIRES_EXPR: &CStr = c"\"replace_keycodes\" requires \"expr\"";
@@ -40,7 +37,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
-    let mut buf = [0 as c_char; NUMBUFLEN];
+    let mut buf = NumBuf::new();
     let which: *const c_char;
     let is_abbr: bool;
     let d: *mut Dict;
@@ -63,7 +60,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         is_abbr = abbr != 0;
     } else {
         // SAFETY: as above.
-        which = unsafe { tv_get_string_buf_chk(&args[0], buf.as_mut_ptr()) };
+        which = buf.string_ptr_chk(&args[0]);
         if which.is_null() {
             return;
         }

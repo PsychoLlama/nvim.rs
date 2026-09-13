@@ -404,7 +404,7 @@ pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_
         return ptr::null_mut();
     }
     let tv = unsafe { Di::new(v) }.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
-    unsafe { numbuf.string(&*tv) as *mut c_char }
+    unsafe { numbuf.string_ptr(&*tv) as *mut c_char }
 }
 
 /// `exists()` over a variable name: whether `var` names something, including

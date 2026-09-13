@@ -20,7 +20,7 @@ use crate::charset::{Str2NrBases, skipwhite, transstr, vim_str2nr};
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
     NumBuf, tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
-    tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
+    tv_list_alloc_ret, tv_list_append_number,
 };
 use crate::mbyte::{
     char_at, char_count, char_len, cluster_len, clusters, mb_cptr2char_adv, mb_ptr2char_adv,
@@ -35,16 +35,12 @@ use crate::plines::linetabsize_col;
 use crate::types::{EvalFuncData, TypVal, VAR_STRING, VarNumber, kListLenUnknown, ptrdiff_t};
 use core::ffi::CStr;
 
-/// The scratch buffer `tv_get_string_buf_chk` renders a Number into.
-/// `NUMBUFLEN` in the C.
-const NUMBUFLEN: usize = 65;
-
 /// "str2list()" function: the string as a list of code points.
 pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
     // SAFETY: the argument was converted to a NUL-terminated string.
-    let bytes = unsafe { cstr::bytes_at(numbuf.string(&args[0])) };
+    let bytes = unsafe { cstr::bytes_at(numbuf.string_ptr(&args[0])) };
     let mut at = 0;
     while at < bytes.len() {
         let rest = &bytes[at..];
@@ -73,7 +69,7 @@ pub fn f_str2nr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    let mut p = unsafe { skipwhite(numbuf.string(&args[0])) };
+    let mut p = unsafe { skipwhite(numbuf.string_ptr(&args[0])) };
     let isneg = unsafe { *p } == b'-' as c_char;
     if unsafe { *p } == b'+' as c_char || unsafe { *p } == b'-' as c_char {
         p = unsafe { skipwhite(p.add(1)) };
@@ -105,18 +101,20 @@ pub fn f_stridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
 
-    let mut buf = [0 as c_char; NUMBUFLEN];
-    let needle = unsafe { numbuf.string_chk(&args[1]) };
-    let haystack_start = unsafe { tv_get_string_buf_chk(&args[0], buf.as_mut_ptr()) };
+    let mut buf = NumBuf::new();
+    let needle = numbuf.string_ptr_chk(&args[1]);
+    let haystack_start = buf.string_ptr_chk(&args[0]);
     let mut haystack = haystack_start;
     if needle.is_null() || haystack.is_null() {
         return;
     }
 
     if args.len() > 2 {
-        let mut error = false;
-        let start_idx = unsafe { tv_get_number_chk(&args[2], &raw mut error) as ptrdiff_t };
-        if error || start_idx >= unsafe { cstr::bytes_at(haystack).len() as ptrdiff_t } {
+        let Ok(start_idx) = tv_get_number_chk(&args[2]) else {
+            return;
+        };
+        let start_idx = start_idx as ptrdiff_t;
+        if start_idx >= unsafe { cstr::bytes_at(haystack).len() as ptrdiff_t } {
             return;
         }
         // A negative start is ignored, not counted from the end.
@@ -138,15 +136,15 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
 
-    let mut buf = [0 as c_char; NUMBUFLEN];
-    let needle = unsafe { numbuf.string_chk(&args[1]) };
-    let haystack = unsafe { tv_get_string_buf_chk(&args[0], buf.as_mut_ptr()) };
+    let mut buf = NumBuf::new();
+    let needle = numbuf.string_ptr_chk(&args[1]);
+    let haystack = buf.string_ptr_chk(&args[0]);
     if needle.is_null() || haystack.is_null() {
         return;
     }
 
     let end_idx = if args.len() > 2 {
-        let idx = unsafe { tv_get_number_chk(&args[2], ptr::null_mut()) as ptrdiff_t };
+        let idx = tv_get_number_chk(&args[2]).unwrap_or(-1) as ptrdiff_t;
         if idx < 0 {
             return;
         }
@@ -154,7 +152,7 @@ pub fn f_strridx(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         unsafe { cstr::bytes_at(haystack).len() as ptrdiff_t }
     };
-    let last_allowed = unsafe { haystack.offset(end_idx as isize) };
+    let last_allowed = unsafe { haystack.offset(end_idx) };
 
     let lastmatch = if unsafe { *needle } == 0 {
         // The empty needle matches at the end of the range.
@@ -186,7 +184,9 @@ pub fn f_string(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// "strlen()" function: the length in bytes.
 pub fn f_strlen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_number(cstr::bytes_at(numbuf.string(&args[0])).len() as VarNumber) };
+    unsafe {
+        (*result).write_number(cstr::bytes_at(numbuf.string_ptr(&args[0])).len() as VarNumber)
+    };
 }
 
 /// The character count `strchars()` and `strcharlen()` share.
@@ -200,7 +200,7 @@ fn strchar_common(args: &[TypVal], result: &mut TypVal, skipcc: bool) {
     } else {
         mb_cptr2char_adv
     };
-    let mut s = unsafe { numbuf.string(&args[0]) };
+    let mut s = numbuf.string_ptr(&args[0]);
     let mut len: VarNumber = 0;
     while unsafe { *s } != 0 {
         unsafe { next_char(&raw mut s) };
@@ -232,7 +232,7 @@ pub fn f_strchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// optional starting column.
 pub fn f_strdisplaywidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let s = unsafe { numbuf.string(&args[0]) };
+    let s = numbuf.string_ptr(&args[0]);
     let col = if args.len() > 1 {
         tv_get_number(&args[1]) as c_int
     } else {
@@ -244,25 +244,25 @@ pub fn f_strdisplaywidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
 /// "strwidth()" function: screen cells, with a tab counting as one.
 pub fn f_strwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_number(mb_string2cells(numbuf.string(&args[0])) as VarNumber) };
+    unsafe { (*result).write_number(mb_string2cells(numbuf.string_ptr(&args[0])) as VarNumber) };
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
 pub fn f_strtrans(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string(transstr(numbuf.string(&args[0]), true)) };
+    unsafe { (*result).write_string(transstr(numbuf.string_ptr(&args[0]), true)) };
 }
 
 /// "tolower()" function.
 pub fn f_tolower(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string(strcase_save(numbuf.string(&args[0]), false)) };
+    unsafe { (*result).write_string(strcase_save(numbuf.string_ptr(&args[0]), false)) };
 }
 
 /// "toupper()" function.
 pub fn f_toupper(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*result).write_string(strcase_save(numbuf.string(&args[0]), true)) };
+    unsafe { (*result).write_string(strcase_save(numbuf.string_ptr(&args[0]), true)) };
 }
 
 /// "tr()" function: character-wise translation.
@@ -274,11 +274,11 @@ pub fn f_toupper(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `tr('a', 'ab', 'x')` is an error but `tr('a', 'a', 'x')` is not.
 pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut buf = [0 as c_char; NUMBUFLEN];
-    let mut buf2 = [0 as c_char; NUMBUFLEN];
-    let in_str = unsafe { numbuf.string(&args[0]) };
-    let fromstr = unsafe { tv_get_string_buf_chk(&args[1], buf.as_mut_ptr()) };
-    let tostr = unsafe { tv_get_string_buf_chk(&args[2], buf2.as_mut_ptr()) };
+    let mut buf = NumBuf::new();
+    let mut buf2 = NumBuf::new();
+    let in_str = numbuf.string_ptr(&args[0]);
+    let fromstr = buf.string_ptr_chk(&args[1]);
+    let tostr = buf2.string_ptr_chk(&args[2]);
 
     result.write_string(ptr::null_mut());
     if fromstr.is_null() || tostr.is_null() {
@@ -363,9 +363,9 @@ pub fn f_tr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// default.
 pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut buf1 = [0 as c_char; NUMBUFLEN];
-    let mut buf2 = [0 as c_char; NUMBUFLEN];
-    let head = unsafe { tv_get_string_buf_chk(&args[0], buf1.as_mut_ptr()) };
+    let mut buf1 = NumBuf::new();
+    let mut buf2 = NumBuf::new();
+    let head = buf1.string_ptr_chk(&args[0]);
     let mut mask = ptr::null::<c_char>();
     let mut dir = 0;
 
@@ -375,19 +375,18 @@ pub fn f_trim(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
-        mask = unsafe { tv_get_string_buf_chk(&args[1], buf2.as_mut_ptr()) };
+        mask = buf2.string_ptr_chk(&args[1]);
         if unsafe { *mask } == 0 {
             mask = ptr::null();
         }
         if args.len() > 2 {
-            let mut error = false;
-            dir = unsafe { tv_get_number_chk(&args[2], &raw mut error) as c_int };
-            if error {
+            let Ok(given) = tv_get_number_chk(&args[2]) else {
                 return;
-            }
+            };
+            dir = given as c_int;
             if !(0..=2).contains(&dir) {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let arg0 = unsafe { c_str(numbuf.string(&args[2])) };
+                let arg0 = unsafe { c_str(numbuf.string_ptr(&args[2])) };
                 semsg!("E475: Invalid argument: {arg0}");
                 return;
             }

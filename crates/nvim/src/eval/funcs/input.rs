@@ -183,7 +183,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let list = args[0].list_or_null();
     let len = unsafe { tv_list_len(list) } as usize;
     for (at, li) in tv_list_iter(unsafe { list.as_ref() }).enumerate() {
-        msg_str(unsafe { cstr::at(numbuf.string(&li.li_tv)) });
+        msg_str(unsafe { cstr::at(numbuf.string_ptr(&li.li_tv)) });
         // A UI that owns the message area keeps the items in one message,
         // bar the last separator.
         if !ui_has(kUIMessages) || at + 1 < len {

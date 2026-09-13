@@ -12,13 +12,12 @@ use std::ptr;
 
 use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
-    DictRef, ListRef, tv_check_lock, tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear,
-    tv_copy, tv_dict_alloc_ret, tv_equal, tv_get_float, tv_get_lnum, tv_get_number,
-    tv_get_number_chk, tv_get_string_buf, tv_get_string_buf_chk, tv_islocked, tv_item_lock,
-    tv_list_alloc_ret, tv_list_append_number, tv_list_first, value_check_lock,
+    DictRef, ListRef, NumBuf, Unconvertible, tv_check_lock, tv_check_num, tv_check_str,
+    tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal, tv_get_bool,
+    tv_get_bool_chk, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_islocked,
+    tv_item_lock, tv_list_alloc_ret, tv_list_append_number, tv_list_first, value_check_lock,
 };
 use neovim::memory::{xfree, xmalloc};
-use neovim::ops::NUMBUFLEN;
 use neovim::types::{
     TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, kBoolVarFalse, kBoolVarTrue,
@@ -1203,12 +1202,11 @@ fn number_rows(number: &CString) -> Vec<Row> {
 }
 
 /// `describe('get') describe('number()') itp('works')`, spec line 3135, and
-/// `number_chk()` beside it — the same table, plus the error flag.
+/// `number_chk()` beside it — the same table, plus the failure answer.
 #[test]
 fn getting_a_number_reads_a_string_and_reports_the_rest() {
     let log = AllocLog::start();
-    // SAFETY: every value is this case's own and owns nothing.
-    unsafe {
+    {
         let number = cstr("100500");
         let answers = [42, 100500, 0, 0, 0, 0, 0, 0, 1, 0, 0];
         for (row, want) in number_rows(&number).into_iter().zip(answers) {
@@ -1223,15 +1221,20 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
             }
         }
 
+        // The `_chk` half answers in the type: the failure that used to
+        // set an out-parameter is `Err(Unconvertible)`, and it is exactly
+        // the rows that report a message.
         for (row, want) in number_rows(&number).into_iter().zip(answers) {
             let tv = row.tv;
-            let mut err = false;
-            let got = check_emsg(
-                log.editor(),
-                || tv_get_number_chk(&tv, &raw mut err),
-                row.emsg,
-            );
-            assert_eq!((got, err), (want, row.emsg.is_some()), "{}", tv.v_type());
+            let got = check_emsg(log.editor(), || tv_get_number_chk(&tv), row.emsg);
+            match row.emsg {
+                Some(_) => assert_eq!(got, Err(Unconvertible), "{}", tv.v_type()),
+                None => assert_eq!(got, Ok(want), "{}", tv.v_type()),
+            }
+            // The tri-state reading answers -1 for exactly those rows,
+            // which is what upstream's NULL flag bought.
+            let tri = check_emsg(log.editor(), || tv_get_bool(&tv), row.emsg);
+            assert_eq!(tri, if row.emsg.is_some() { -1 } else { want });
             if row.emsg.is_some() {
                 log.clear();
             } else {
@@ -1423,22 +1426,22 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
         // the first the way one process-wide buffer made it.
         let one = Tv::Int(1).build();
         let two = Tv::Int(2).build();
-        let mut first = [0 as c_char; NUMBUFLEN as usize];
-        let mut second = [0 as c_char; NUMBUFLEN as usize];
-        let a = tv_get_string_buf(&one, first.as_mut_ptr());
-        let b = tv_get_string_buf(&two, second.as_mut_ptr());
+        let mut first = NumBuf::new();
+        let mut second = NumBuf::new();
+        let a = first.string_ptr(&one);
+        let b = second.string_ptr(&two);
         assert_ne!(a, b);
         assert_eq!(CStr::from_ptr(a).to_bytes(), b"1");
         assert_eq!(CStr::from_ptr(b).to_bytes(), b"2");
 
         // The caller's buffer is this frame's, so allocating it does not
         // land in the log the rows below assert over.
-        let mut buffer = [0 as c_char; NUMBUFLEN as usize];
-        let scratch: *mut c_char = buffer.as_mut_ptr();
+        let mut buffer = NumBuf::new();
+        let scratch: *const c_char = buffer.as_mut_ptr().cast_const();
 
         for (name, checked, in_buffer) in [
-            ("string_buf", false, scratch.cast_const()),
-            ("string_buf_chk", true, scratch.cast_const()),
+            ("string_buf", false, scratch),
+            ("string_buf_chk", true, scratch),
         ] {
             for (tv, emsg, answer) in &rows {
                 let v_type = tv.v_type();
@@ -1446,8 +1449,8 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
                 let got = check_emsg(
                     log.editor(),
                     || match name {
-                        "string_buf" => tv_get_string_buf(tv, scratch),
-                        _ => tv_get_string_buf_chk(tv, scratch),
+                        "string_buf" => buffer.string_ptr(tv),
+                        _ => buffer.string_ptr_chk(tv),
                     },
                     *emsg,
                 );
@@ -1484,4 +1487,84 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
             }
         }
     }
+}
+
+/// The borrowing forms: the answer's lifetime is the shorter of the value's
+/// and the buffer's, and a value with no string form is `None` rather than
+/// a NULL pointer the caller has to remember to test.
+#[test]
+fn the_borrowed_string_forms_answer_bytes_and_a_missing_one_is_none() {
+    let log = AllocLog::start();
+    let mut buf = NumBuf::new();
+
+    // A String is read in place; a Number is rendered into the buffer.
+    let text = cstr("hello");
+    let string = ManuallyDrop::new(TypVal::String(text.as_ptr().cast_mut()));
+    assert_eq!(buf.string(&string).to_bytes(), b"hello");
+    assert_eq!(
+        buf.string_chk(&string).map(CStr::to_bytes),
+        Some(&b"hello"[..])
+    );
+
+    let number = ManuallyDrop::new(TypVal::Number(100500));
+    assert_eq!(buf.string(&number).to_bytes(), b"100500");
+
+    // A List has no string form: `string_chk` answers `None` with E730
+    // reported, and `string` the empty string with the same message.
+    let list = ManuallyDrop::new(tv::list_tv(None));
+    let got = check_emsg(
+        log.editor(),
+        || buf.string_chk(&list).map(|s| s.to_bytes().to_vec()),
+        Some("E730: Using a List as a String"),
+    );
+    assert_eq!(got, None);
+    let got = check_emsg(
+        log.editor(),
+        || buf.string(&list).to_bytes().to_vec(),
+        Some("E730: Using a List as a String"),
+    );
+    assert!(got.is_empty());
+    log.clear();
+}
+
+/// `tv_get_number_chk` and its siblings report the message themselves, so
+/// the failure the caller sees carries nothing but the fact of it.
+#[test]
+fn an_unconvertible_value_reports_its_own_message() {
+    let log = AllocLog::start();
+    let list = ManuallyDrop::new(tv::list_tv(None));
+
+    let got = check_emsg(
+        log.editor(),
+        || tv_get_number_chk(&list),
+        Some("E745: Using a List as a Number"),
+    );
+    assert_eq!(got, Err(Unconvertible));
+
+    let got = check_emsg(
+        log.editor(),
+        || tv_get_bool_chk(&list),
+        Some("E745: Using a List as a Number"),
+    );
+    assert_eq!(got, Err(Unconvertible));
+
+    // And the two total readings differ only in what they answer for it.
+    let got = check_emsg(
+        log.editor(),
+        || tv_get_number(&list),
+        Some("E745: Using a List as a Number"),
+    );
+    assert_eq!(got, 0);
+    let got = check_emsg(
+        log.editor(),
+        || tv_get_bool(&list),
+        Some("E745: Using a List as a Number"),
+    );
+    assert_eq!(got, -1);
+
+    // A String that is not a number is not a failure: it reads as zero.
+    let text = cstr("not a number");
+    let string = ManuallyDrop::new(TypVal::String(text.as_ptr().cast_mut()));
+    assert_eq!(tv_get_number_chk(&string), Ok(0));
+    log.clear();
 }

@@ -288,7 +288,7 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 /// literally.
 pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut name = unsafe { numbuf.string(&args[0]) } as *mut c_char;
+    let mut name = numbuf.string_ptr(&args[0]) as *mut c_char;
     result.write_string(ptr::null_mut());
     while byte(name) == ':' as c_int {
         name = unsafe { name.add(1) };

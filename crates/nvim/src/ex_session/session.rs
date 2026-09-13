@@ -593,7 +593,7 @@ unsafe fn put_session_global(
 ) -> bool {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; `escaped` is owned and freed here.
-    let escaped = unsafe { vim_strsave_escaped(numbuf.string(tv), c"\\\"\n\r".as_ptr()) };
+    let escaped = unsafe { vim_strsave_escaped(numbuf.string_ptr(tv), c"\\\"\n\r".as_ptr()) };
     let mut t = escaped;
     while unsafe { *t } != NUL as c_char {
         if unsafe { *t } == b'\n' as c_char {

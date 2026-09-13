@@ -20,7 +20,7 @@ use core::ffi::{CStr, VaList, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::eval::encode::encode_tv2echo;
-use crate::eval::typval::{tv_get_number_chk, tv_get_string_buf_chk};
+use crate::eval::typval::{NumBuf, tv_get_number_chk};
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, vsnprintf};
@@ -56,9 +56,7 @@ pub(crate) fn tv_nr(tvs: &[TypVal], idxp: &mut c_int) -> VarNumber {
     let Some(tv) = next_arg(tvs, idxp) else {
         return 0;
     };
-    let mut err = false;
-    let n = unsafe { tv_get_number_chk(tv, &raw mut err) };
-    if err { 0 } else { n }
+    tv_get_number_chk(tv).unwrap_or(0)
 }
 
 /// The next argument as a string.
@@ -66,22 +64,20 @@ pub(crate) fn tv_nr(tvs: &[TypVal], idxp: &mut c_int) -> VarNumber {
 /// A String is read in place and a Number is rendered into `numbuf`, which
 /// the caller lends and which must outlive the answer; anything else is
 /// rendered as `:echo` would render it, and `*tofree` then owns that.
-///
-/// # Safety
-/// `numbuf` must be writable for `NUMBUFLEN` bytes.
-pub(crate) unsafe fn tv_str(
+pub(crate) fn tv_str(
     tvs: &[TypVal],
     idxp: &mut c_int,
     tofree: &mut *mut c_char,
-    numbuf: *mut c_char,
+    numbuf: &mut NumBuf,
 ) -> *const c_char {
     let Some(tv) = next_arg(tvs, idxp) else {
         return ptr::null();
     };
     if matches!(tv.v_type(), VAR_STRING | VAR_NUMBER) {
         *tofree = ptr::null_mut();
-        unsafe { tv_get_string_buf_chk(tv, numbuf) }
+        numbuf.string_ptr_chk(tv)
     } else {
+        // SAFETY: a live value; the rendering is a fresh allocation.
         *tofree = unsafe { encode_tv2echo(tv, ptr::null_mut()) };
         *tofree
     }

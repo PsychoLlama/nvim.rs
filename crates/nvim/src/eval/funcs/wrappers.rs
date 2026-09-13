@@ -65,9 +65,14 @@ pub(crate) fn arg_number(tv: &TypVal) -> VarNumber {
 /// With an `error` the failure answer is 0 and the flag is set; without one
 /// it is -1, which is what makes the reading usable as a tri-state.
 pub(crate) fn arg_number_chk(tv: &TypVal, error: Option<&mut bool>) -> VarNumber {
-    let error = error.map_or(ptr::null_mut(), ptr::from_mut);
-    // SAFETY: as [`arg_number`]; `error` is null or a live `bool`.
-    unsafe { tv_get_number_chk(tv, error) }
+    match (tv_get_number_chk(tv), error) {
+        (Ok(n), _) => n,
+        (Err(_), Some(flag)) => {
+            *flag = true;
+            0
+        }
+        (Err(_), None) => -1,
+    }
 }
 
 /// Argument `tv` as a boolean Number: -1 when it has no numeric form.
@@ -77,8 +82,10 @@ pub(crate) fn arg_bool(tv: &TypVal) -> VarNumber {
 
 /// Argument `tv` as a boolean Number, setting `error` when it has none.
 pub(crate) fn arg_bool_chk(tv: &TypVal, error: &mut bool) -> VarNumber {
-    // SAFETY: as [`arg_number_chk`].
-    unsafe { tv_get_bool_chk(tv, error) }
+    tv_get_bool_chk(tv).unwrap_or_else(|_| {
+        *error = true;
+        0
+    })
 }
 
 /// Argument `tv` as a line number, resolving `"$"` and `"."` the way
@@ -91,14 +98,14 @@ pub(crate) fn arg_lnum(tv: &TypVal) -> LineNr {
 pub(crate) fn arg_string(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
     // SAFETY: as [`arg_number`]; a Number is formatted into `buf`, which
     // outlives the borrow the caller holds it through.
-    unsafe { buf.string(tv) }
+    buf.string_ptr(tv)
 }
 
 /// As [`arg_string`], but NULL rather than the empty string for a value that
 /// has none.
 pub(crate) fn arg_string_chk(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
     // SAFETY: as [`arg_string`].
-    unsafe { buf.string_chk(tv) }
+    buf.string_ptr_chk(tv)
 }
 
 /// Copy argument `tv` into `to`, taking a reference on what it points at.
@@ -477,7 +484,7 @@ pub fn get_buf_arg(arg: &TypVal) -> Option<Buf> {
     let buf = tv_get_buf(arg, 0);
     drop(no_emsg);
     if buf.is_none() {
-        let what = unsafe { numbuf.string(arg) };
+        let what = numbuf.string_ptr(arg);
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let what = unsafe { c_str(what) };
         semsg!("E158: Invalid buffer name: {what}");

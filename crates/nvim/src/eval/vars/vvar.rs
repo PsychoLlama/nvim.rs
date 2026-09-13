@@ -499,7 +499,7 @@ pub unsafe fn before_set_vvar(
 
         if copy || tv.v_type() != VAR_STRING {
             // SAFETY: a live value; the answer lives in `numbuf` or in it.
-            let val = unsafe { numbuf.string(&*tv.raw()) };
+            let val = numbuf.string_ptr(unsafe { &*tv.raw() });
             // Careful: assigning to v:errmsg, `tv_get_string()` may
             // itself raise an error, which sets the variable -- so only
             // store when it is still empty.

@@ -330,9 +330,10 @@ unsafe fn dict_number(dict: *mut Dict, key: &CStr, current: c_int) -> Option<c_i
     if di.is_null() {
         return Some(current);
     }
-    let mut error = false;
-    let value = unsafe { tv_get_number_chk(&(*di).di_tv, &raw mut error) } as c_int;
-    if error { None } else { Some(value) }
+    // SAFETY: the item just found belongs to the caller's dictionary.
+    tv_get_number_chk(unsafe { &(*di).di_tv })
+        .ok()
+        .map(|value| value as c_int)
 }
 
 /// One element of the `pos` list, which is `[lnum, col, off]`.
@@ -344,9 +345,10 @@ unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c
     if li.is_null() {
         return Some(current);
     }
-    let mut error = false;
-    let value = unsafe { tv_get_number_chk(&(*li).li_tv, &raw mut error) } as c_int;
-    if error { None } else { Some(value) }
+    // SAFETY: the item just found belongs to the caller's list.
+    tv_get_number_chk(unsafe { &(*li).li_tv })
+        .ok()
+        .map(|value| value as c_int)
 }
 
 /// `searchcount()`: the match counts as a dictionary.
@@ -385,7 +387,8 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
         let di = unsafe { tv_dict_find(dict, c"pattern".as_ptr(), -1 as ptrdiff_t) };
         if !di.is_null() {
-            pattern = unsafe { numbuf.string_chk(&(*di).di_tv) } as *mut c_char;
+            // SAFETY: a live dictionary item.
+            pattern = numbuf.string_ptr_chk(unsafe { &(*di).di_tv }) as *mut c_char;
             if pattern.is_null() {
                 return;
             }

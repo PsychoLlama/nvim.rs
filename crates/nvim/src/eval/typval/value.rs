@@ -436,10 +436,10 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
         VAR_NUMBER => a.as_number() == b.as_number(),
         VAR_FLOAT => a.as_float() == b.as_float(),
         VAR_STRING => {
-            let mut buf1: [::core::ffi::c_char; 65] = [0; 65];
-            let mut buf2: [::core::ffi::c_char; 65] = [0; 65];
-            let s1 = unsafe { tv_get_string_buf(tv1, buf1.as_mut_ptr()) };
-            let s2 = unsafe { tv_get_string_buf(tv2, buf2.as_mut_ptr()) };
+            let mut buf1 = NumBuf::new();
+            let mut buf2 = NumBuf::new();
+            let s1 = buf1.string_ptr(tv1);
+            let s2 = buf2.string_ptr(tv2);
             (unsafe { mb_strcmp_ic(ic, s1, s2) }) == 0
         }
         VAR_BOOL => a.as_bool() == b.as_bool(),

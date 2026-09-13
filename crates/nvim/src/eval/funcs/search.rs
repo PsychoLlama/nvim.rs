@@ -13,7 +13,7 @@ use crate::cstr;
 
 use crate::api::private::helpers::cstr_to_string;
 use crate::cursor::check_cursor;
-use crate::eval::typval::{NumBuf, tv_get_string_buf_chk, tv_list_append_number};
+use crate::eval::typval::{NumBuf, tv_list_append_number};
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
 use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
@@ -37,10 +37,6 @@ use crate::types::{
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::ptr;
-
-/// The size of a `tv_get_string_buf_chk` scratch buffer. `NUMBUFLEN` in the
-/// C: enough for the decimal spelling of any Number.
-const NUMBUFLEN: usize = 65;
 
 /// One `searchit` over the window the editor is in, which is the only shape
 /// the search builtins ask for: one match, forward or back from `at`, with
@@ -126,8 +122,8 @@ fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
     let Some(varp) = varp else {
         return FORWARD as c_int;
     };
-    let mut nbuf = [0 as c_char; NUMBUFLEN];
-    let mut p = unsafe { tv_get_string_buf_chk(varp, nbuf.as_mut_ptr()) };
+    let mut nbuf = NumBuf::new();
+    let mut p = nbuf.string_ptr_chk(varp);
     if p.is_null() {
         // Type error; the message is already out.
         return 0;

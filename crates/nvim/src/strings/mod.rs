@@ -31,11 +31,9 @@ pub use self::printf::*;
 /// Returns `None` after raising the error, which both callers turn into a
 /// silent `-1` result.
 pub(crate) fn strict_bool_arg(tv: &TypVal) -> Option<bool> {
-    let mut error = false;
-    let value = unsafe { tv_get_bool_chk(tv, &raw mut error) };
-    if error {
+    let Ok(value) = tv_get_bool_chk(tv) else {
         return None;
-    }
+    };
     if !(0..=1).contains(&value) {
         semsg!("E1023: Using a Number as a Bool: {}", value);
         return None;

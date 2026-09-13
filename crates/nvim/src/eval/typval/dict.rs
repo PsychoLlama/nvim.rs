@@ -950,7 +950,7 @@ pub unsafe fn tv_dict_remove(
     {
         return;
     }
-    let key = unsafe { numbuf.string_chk(&args[1]) };
+    let key = numbuf.string_ptr_chk(&args[1]);
     if key.is_null() {
         return;
     }

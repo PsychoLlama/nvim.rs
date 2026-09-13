@@ -48,9 +48,9 @@ use crate::eval::typval::{
     DictRef, ListRef, NumBuf, index_of, tv_blob_copy, tv_blob_remove, tv_blob_set_ret,
     tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret,
     tv_dict_copy, tv_dict_extend, tv_dict_item_remove, tv_dict_remove, tv_equal, tv_get_number_chk,
-    tv_get_string_buf, tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_owned_tv,
-    tv_list_append_tv, tv_list_copy, tv_list_extend, tv_list_index, tv_list_insert_tv,
-    tv_list_items_mut, tv_list_remove, tv_list_remove_at, tv_list_reverse, value_check_lock,
+    tv_list_alloc_ret, tv_list_append_owned_tv, tv_list_append_tv, tv_list_copy, tv_list_extend,
+    tv_list_index, tv_list_insert_tv, tv_list_items_mut, tv_list_remove, tv_list_remove_at,
+    tv_list_reverse, value_check_lock,
 };
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
@@ -674,8 +674,10 @@ pub(crate) fn clear_tv(tv: &mut TypVal) {
 /// `tv` as a Number, setting `error` (and reporting one) if it is not.
 #[inline(always)]
 pub(crate) fn number_of(tv: &TypVal, error: &mut bool) -> VarNumber {
-    // SAFETY: a live typval.
-    unsafe { tv_get_number_chk(tv, error) }
+    tv_get_number_chk(tv).unwrap_or_else(|_| {
+        *error = true;
+        0
+    })
 }
 
 /// `tv`'s Number, for the arms whose `v_type` has already been checked.
@@ -717,7 +719,7 @@ pub(crate) fn string_bytes<'a>(tv: &TypVal) -> &'a [u8] {
 pub(crate) fn cstr_of<'a>(tv: &TypVal, buf: &'a mut NumBuf) -> &'a CStr {
     // SAFETY: the scratch is the promised length and the answer is
     // NUL-terminated, never NULL.
-    unsafe { CStr::from_ptr(tv_get_string_buf(tv, buf.as_mut_ptr())) }
+    unsafe { CStr::from_ptr(buf.string_ptr(tv)) }
 }
 
 /// `tv` as a NUL-terminated string, or None -- having reported the error --
@@ -726,7 +728,7 @@ pub(crate) fn cstr_of<'a>(tv: &TypVal, buf: &'a mut NumBuf) -> &'a CStr {
 #[inline(always)]
 pub(crate) fn cstr_of_chk<'a>(tv: &TypVal, buf: &'a mut NumBuf) -> Option<&'a CStr> {
     // SAFETY: as `cstr_of`; the answer may also be NULL.
-    unsafe { cstr::at_opt(tv_get_string_buf_chk(tv, buf.as_mut_ptr())) }
+    unsafe { cstr::at_opt(buf.string_ptr_chk(tv)) }
 }
 
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.

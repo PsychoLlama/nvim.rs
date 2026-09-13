@@ -95,7 +95,9 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { time_watcher_start(tw, Some(due), every, every) };
 
     let mut exprval = EMPTY_TV;
-    let mut error = false;
+    // A `Cell` because the closure below both writes it and is called
+    // through a `Fn` pointer the event loop holds.
+    let error = ::core::cell::Cell::new(false);
     let called_emsg_before = called_emsg.get();
     ui_flush();
     let loop_ = main_loop.ptr();
@@ -107,19 +109,25 @@ pub fn f_wait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // SAFETY: `out` is this frame's own local.
         let got = unsafe { eval_expr_typval(expr, false, &[], &mut *out) };
         got.is_err()
-            || unsafe { tv_get_number_chk(&*out, &raw mut error) } != 0
+            || tv_get_number_chk(unsafe { &*out }).map_or_else(
+                |_| {
+                    error.set(true);
+                    false
+                },
+                |n| n != 0,
+            )
             || called_emsg.get() > called_emsg_before
-            || error
+            || error.get()
             || got_int.get()
     };
     unsafe { process_events_until(loop_, events, timeout as i64, done) };
-    if called_emsg.get() > called_emsg_before || error {
+    if called_emsg.get() > called_emsg_before || error.get() {
         result.write_number(-3);
     } else if got_int.get() {
         got_int.set(false);
         vgetc();
         result.write_number(-2);
-    } else if unsafe { tv_get_number_chk(&exprval, &raw mut error) } != 0 {
+    } else if tv_get_number_chk(&exprval).is_ok_and(|n| n != 0) {
         result.write_number(0);
     }
     unsafe { time_watcher_stop(tw) };
@@ -158,8 +166,8 @@ fn list2proftime(arg: &TypVal) -> Option<ProfTime> {
         return None;
     }
     let mut error = false;
-    let n1 = unsafe { tv_list_find_nr(arg.list_or_null(), 0, &raw mut error) };
-    let n2 = unsafe { tv_list_find_nr(arg.list_or_null(), 1, &raw mut error) };
+    let n1 = unsafe { tv_list_find_nr(arg.list_or_null(), 0, Some(&mut error)) };
+    let n2 = unsafe { tv_list_find_nr(arg.list_or_null(), 1, Some(&mut error)) };
     if error {
         return None;
     }

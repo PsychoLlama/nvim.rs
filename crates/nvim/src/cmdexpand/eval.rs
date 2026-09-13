@@ -41,10 +41,10 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     if tv_check_for_string_arg(args, 1).is_err() {
         return;
     }
-    let type_0 = unsafe { numbuf.string(&args[1]) };
+    let type_0 = numbuf.string_ptr(&args[1]);
 
     if args.len() > 2 {
-        filtered = unsafe { tv_get_number_chk(&args[2], ptr::null_mut()) } != 0;
+        filtered = tv_get_number_chk(&args[2]).unwrap_or(-1) != 0;
     }
 
     if p_wic.get() != 0 {
@@ -60,7 +60,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         emsg(gettext(e_invarg));
         return;
     }
-    let pattern = unsafe { numbuf2.string(&args[0]) };
+    let pattern = numbuf2.string_ptr(&args[0]);
     let mut pattern_start = pattern;
 
     // C's `goto theend`: the "cmdline" type takes the whole classifier and
@@ -185,7 +185,7 @@ pub fn f_getcompletiontype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         return;
     }
 
-    let pat = unsafe { numbuf.string(&args[0]) };
+    let pat = numbuf.string_ptr(&args[0]);
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
 
