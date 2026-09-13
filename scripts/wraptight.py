@@ -51,7 +51,12 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import ratchet  # noqa: E402
 
-CHECK = ["cargo", "check", "-p", "neovim", "--message-format=json"]
+# `--all-targets`, so the oracle covers `crates/nvim/tests/` as well as the
+# library. A lib-only check reports nothing about the test crate, and two
+# slices in a row shipped stale `unsafe {}` blocks there that only `just lint`
+# (which does run `--all-targets`) went on to fail: the run says "nothing left
+# to do" over a family it has only half converted.
+CHECK = ["cargo", "check", "-p", "neovim", "--all-targets", "--message-format=json"]
 
 
 def masked(raw: bytes) -> bytes:
@@ -486,11 +491,93 @@ def fixtail(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
     return raw, len(edits)
 
 
+def single_expression(body: bytes) -> bool:
+    """Whether `body` is one expression, so its braces are only punctuation.
+
+    Two things end an expression at a block's top level: a `;`, and a brace
+    group with anything after it -- `if c { a; } b` is a block *statement* and
+    a tail, spelled without a separator. An `else` arm is neither, so the scan
+    steps over it and carries on.
+    """
+    trimmed = body.strip()
+    depth = 0
+    i = 0
+    while i < len(trimmed):
+        c = trimmed[i : i + 1]
+        if c == b"{" and depth == 0:
+            close = closing_brace(trimmed, i)
+            if close is None:
+                return False
+            tail = trimmed[close + 1 :]
+            rest = tail.lstrip()
+            if not rest:
+                return True
+            if not rest.startswith(b"else"):
+                return False
+            i = close + 1 + (len(tail) - len(rest))
+            continue
+        if c in b"([{":
+            depth += 1
+        elif c in b")]}":
+            depth -= 1
+        elif c == b";" and depth == 0:
+            return False
+        i += 1
+    return True
+
+
+def declares_binding(body: bytes) -> bool:
+    """Whether `body` opens a `let` binding at its own top level."""
+    depth = 0
+    for i in range(len(body)):
+        c = body[i : i + 1]
+        if c in b"([{":
+            depth += 1
+        elif c in b")]}":
+            depth -= 1
+        elif depth == 0 and body[i : i + 4] == b"let ":
+            before = body[i - 1 : i]
+            if not (before.isalnum() or before == b"_"):
+                return True
+    return False
+
+
+def in_statement_position(scan: bytes, at: int) -> bool:
+    """Whether a block starting at `at` stands where a statement may stand."""
+    head = scan[:at].rstrip()
+    return not head or head[-1:] in (b";", b"{", b"}")
+
+
+def redundant_braces(scan: bytes, start: int, open_at: int, close: int) -> bool:
+    """Whether the block's braces go away with the `unsafe` keyword.
+
+    They do not, in general. `unsafe { a; b }` is a **value** wherever it sits
+    on the right of a `let`, inside a call or as a match arm, and dropping its
+    braces there splices `a; b` into an operand position: a parse error at
+    best, and at worst the program the author did not write. Three of those
+    shipped in one p31-3 run, which is what this predicate is for -- in that
+    case the keyword alone is deleted and the block stays.
+
+    It is also not enough for the block to *sit* where a statement may sit: a
+    `let` at its own top level is scoped to it, and splicing the body into the
+    enclosing scope makes that binding outlive the region. Rust answers a
+    conflicting binding by shadowing, so nothing would say so.
+    """
+    body = scan[open_at + 1 : close]
+    if declares_binding(body):
+        return False
+    if in_statement_position(scan, start):
+        return True
+    # An operand: only a single expression survives losing its braces.
+    return single_expression(body)
+
+
 def unnest(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
     """Delete an `unsafe {}` rustc now calls unnecessary, body kept.
 
     `unused_unsafe`'s primary span covers **only the `unsafe` keyword**, not
-    the block, so the brace has to be matched forward from there.
+    the block, so the brace has to be matched forward from there. Whether the
+    braces go with it is `redundant_braces`'s question.
     """
     offs = line_offsets(raw)
     scan = masked(raw)
@@ -505,12 +592,15 @@ def unnest(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
             continue
         edits.append((at, open_at, close))
     for start, open_at, close in sorted(set(edits), reverse=True):
-        raw = raw[:start] + raw[open_at + 1 : close].strip() + raw[close + 1 :]
+        if redundant_braces(scan, start, open_at, close):
+            raw = raw[:start] + raw[open_at + 1 : close].strip() + raw[close + 1 :]
+        else:
+            raw = raw[:start] + raw[open_at:]
     return raw, len(set(edits))
 
 
 def deparen(raw: bytes, spans: list[dict]) -> tuple[bytes, int]:
-    """Drop parentheses rustc calls unnecessary around a block's value."""
+    """Drop parentheses rustc calls unnecessary around an expression."""
     offs = line_offsets(raw)
     scan = masked(raw)
     edits = set()
@@ -551,10 +641,14 @@ PASSES = [
     ),
     ("fixtail", fixtail, lambda d: bool(PARSE_TAIL.search(d["message"]))),
     ("unnest", unnest, lambda d: "unnecessary `unsafe` block" in d["message"]),
+    # Every wording `unused_parens` has, not just the block one: rustc names
+    # the *position* it found the parentheses in, and a region wrapped on the
+    # right of a `let ... else` is reported as an "assigned value", which the
+    # narrower test skipped and left for a human every time (p31-3).
     (
         "deparen",
         deparen,
-        lambda d: "unnecessary parentheses around block" in d["message"],
+        lambda d: "unnecessary parentheses around" in d["message"],
     ),
 ]
 
