@@ -978,3 +978,264 @@ pub unsafe fn tv_dict_remove(
         unsafe { tv_dict_watcher_notify(d, key, None, Some(result)) };
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ::core::ffi::CStr;
+
+    use super::*;
+
+    /// Exclusive use of the collector's registries, which every dictionary
+    /// allocated below is entered in. See [`crate::eval::gc::serial`].
+    fn serial() -> crate::eval::gc::serial::Held {
+        crate::eval::gc::serial::lock()
+    }
+
+    /// A dictionary holding `keys`, each under its own position as a number.
+    fn dict_of(keys: &[&str]) -> DictRef {
+        let d = tv_dict_alloc();
+        for (n, key) in keys.iter().enumerate() {
+            // SAFETY: the dictionary just allocated, and a key of this
+            // frame's own bytes.
+            let item = unsafe { tv_dict_item_alloc_len(key.as_ptr().cast(), key.len()) };
+            // SAFETY: the item just allocated, which holds `VAR_UNKNOWN`.
+            unsafe {
+                (*item)
+                    .di_tv
+                    .write_number(VarNumber::try_from(n).expect("a short dict"))
+            };
+            // SAFETY: a live dictionary and a fresh item in no table.
+            unsafe { tv_dict_add(d.as_ptr(), item) }.expect("a key used once");
+        }
+        d
+    }
+
+    /// The keys of `d` in slot order -- the order `keys()` shows.
+    fn slot_order(d: &Dict) -> Vec<String> {
+        d.items()
+            .map(|di| String::from_utf8(di.key_bytes().to_vec()).expect("an ASCII key"))
+            .collect()
+    }
+
+    /// The number `d[key]` holds, or `None` when there is no such key.
+    fn number_at(d: &Dict, key: &CStr) -> Option<VarNumber> {
+        // SAFETY: a live dictionary and a NUL-terminated key.
+        let di = unsafe { tv_dict_find(&raw const *d, key.as_ptr(), -1) };
+        // SAFETY: a non-null answer is one of the dictionary's own items.
+        (!di.is_null()).then(|| unsafe { (*di).di_tv.number_or_zero() })
+    }
+
+    /// **The slot order is user-visible**, so it is pinned here rather than
+    /// described: `keys()` shows this, and a change to the hash, the probe
+    /// sequence or the resize thresholds would change it.
+    ///
+    /// The keys straddle the first two rehashes, and are of several shapes
+    /// and lengths, which is what makes this more than a spelling of
+    /// insertion order -- the answer is neither that nor sorted.
+    #[test]
+    fn the_slot_order_survives_growth() {
+        let _held = serial();
+        const KEYS: [&str; 14] = [
+            "a",
+            "bb",
+            "ccc",
+            "dddd",
+            "k0",
+            "k1",
+            "k2",
+            "k3",
+            "k4",
+            "k5",
+            "zz",
+            "Z",
+            "_",
+            "a_long_key_past_the_inline_cap",
+        ];
+        let d = dict_of(&KEYS);
+        assert_eq!(
+            slot_order(&d),
+            [
+                "dddd",
+                "a",
+                "zz",
+                "a_long_key_past_the_inline_cap",
+                "Z",
+                "k5",
+                "k0",
+                "k1",
+                "k2",
+                "k3",
+                "k4",
+                "bb",
+                "ccc",
+                "_",
+            ]
+        );
+        assert_eq!(d.len(), KEYS.len());
+    }
+
+    /// A rehash moves *slots*, not items: an item is its own allocation, so
+    /// the address `find` answered before a growth is the address it answers
+    /// after one.
+    ///
+    /// This is what lets the lookup hand back a borrow of the item at all.
+    /// What it does **not** survive is the item being removed -- that frees
+    /// it -- which is why the borrow is of the dictionary.
+    #[test]
+    fn an_item_outlives_the_rehash_that_moves_its_slot() {
+        let _held = serial();
+        let d = dict_of(&["first"]);
+        // SAFETY: the dictionary just built, and a NUL-terminated key.
+        let before = unsafe { tv_dict_find(d.as_ptr(), c"first".as_ptr(), -1) };
+        let slots_before = d.dv_hashtab.size();
+        for n in 0..40 {
+            let key = format!("k{n}");
+            // SAFETY: a live dictionary and this frame's own bytes.
+            let item = unsafe { tv_dict_item_alloc_len(key.as_ptr().cast(), key.len()) };
+            // SAFETY: the fresh item, holding `VAR_UNKNOWN`.
+            unsafe { (*item).di_tv.write_number(VarNumber::from(n)) };
+            // SAFETY: a live dictionary and a fresh item in no table.
+            unsafe { tv_dict_add(d.as_ptr(), item) }.expect("a key used once");
+        }
+        assert!(d.dv_hashtab.size() > slots_before, "the table never grew");
+        // SAFETY: as above.
+        let after = unsafe { tv_dict_find(d.as_ptr(), c"first".as_ptr(), -1) };
+        assert_eq!(before, after);
+        assert_eq!(number_at(&d, c"first"), Some(0));
+        assert_eq!(number_at(&d, c"k39"), Some(39));
+        assert_eq!(number_at(&d, c"absent"), None);
+    }
+
+    /// The empty string is a key like any other: `{'': 1}` holds one entry.
+    #[test]
+    fn the_empty_key_is_a_key() {
+        let _held = serial();
+        let d = dict_of(&["", "a"]);
+        assert_eq!(d.len(), 2);
+        assert_eq!(number_at(&d, c""), Some(0));
+        assert_eq!(number_at(&d, c"a"), Some(1));
+    }
+
+    /// `extend(d, d)` walks the dictionary it is adding to. Every key it
+    /// finds is already there, so `"force"` overwrites each value with
+    /// itself and the walk terminates.
+    #[test]
+    fn extending_a_dictionary_with_itself_is_the_identity() {
+        let _held = serial();
+        let d = dict_of(&["a", "b", "c"]);
+        let order = slot_order(&d);
+        // SAFETY: one live dictionary, named twice, and a NUL-terminated
+        // action.
+        unsafe { tv_dict_extend(d.as_ptr(), d.as_ptr(), c"force".as_ptr()) };
+        assert_eq!(slot_order(&d), order);
+        assert_eq!(number_at(&d, c"a"), Some(0));
+        assert_eq!(number_at(&d, c"c"), Some(2));
+    }
+
+    /// A dictionary equals itself without walking into the comparison, and
+    /// two dictionaries with the same keys and values are equal whatever
+    /// order they were built in.
+    #[test]
+    fn equality_is_by_key_not_by_slot() {
+        let _held = serial();
+        let d1 = dict_of(&["a", "b"]);
+        // SAFETY: one live dictionary, named twice.
+        assert!(unsafe { tv_dict_equal(d1.as_ptr(), d1.as_ptr(), false) });
+        let d2 = tv_dict_alloc();
+        for (n, key) in [(1usize, c"b"), (0, c"a")] {
+            // SAFETY: a live dictionary and a NUL-terminated key.
+            let item = unsafe { tv_dict_item_alloc(key.as_ptr()) };
+            // SAFETY: the fresh item.
+            unsafe { (*item).di_tv.write_number(VarNumber::try_from(n).unwrap()) };
+            // SAFETY: a live dictionary and a fresh item.
+            unsafe { tv_dict_add(d2.as_ptr(), item) }.expect("a key used once");
+        }
+        // SAFETY: two live dictionaries.
+        assert!(unsafe { tv_dict_equal(d1.as_ptr(), d2.as_ptr(), false) });
+        // SAFETY: a live dictionary against `v:_null_dict`.
+        assert!(!unsafe { tv_dict_equal(d1.as_ptr(), ::core::ptr::null_mut(), false) });
+    }
+
+    /// A deep copy of a dictionary that holds itself resolves to the *copy*,
+    /// not to the original: `copy_id` is what records the answer on the way
+    /// down, and the cycle is what would otherwise recurse forever.
+    #[test]
+    fn a_deep_copy_of_a_cycle_points_at_the_copy() {
+        let _held = serial();
+        let d = dict_of(&["n"]);
+        // SAFETY: a live dictionary and a NUL-terminated key; the value is
+        // a second reference to the dictionary itself.
+        let item = unsafe { tv_dict_item_alloc(c"self".as_ptr()) };
+        // SAFETY: the fresh item.
+        unsafe { (*item).di_tv.write_dict(DictRef::retained(d.as_ptr())) };
+        // SAFETY: a live dictionary and a fresh item.
+        unsafe { tv_dict_add(d.as_ptr(), item) }.expect("a key used once");
+
+        let copy_id = crate::eval::get_copy_id();
+        // SAFETY: a live dictionary, no conversion, and a fresh copy id.
+        let copy = unsafe { tv_dict_copy(::core::ptr::null(), d.as_ptr(), true, copy_id) }
+            .expect("the copy was not interrupted");
+        assert_eq!(copy.len(), 2);
+        assert_eq!(number_at(&copy, c"n"), Some(0));
+        // SAFETY: the copy's own item.
+        let inner = unsafe { tv_dict_find(copy.as_ptr(), c"self".as_ptr(), -1) };
+        // SAFETY: a non-null answer is one of the copy's items.
+        let inner = unsafe { (*inner).di_tv.dict_or_null() };
+        assert_eq!(inner, copy.as_ptr(), "the cycle followed the original");
+
+        // Break the cycles so both dictionaries actually go away.
+        // SAFETY: both are live and hold their own self-reference.
+        unsafe { tv_dict_clear(d.as_ptr()) };
+        // SAFETY: as above.
+        unsafe { tv_dict_clear(copy.as_ptr()) };
+    }
+
+    /// A walk may remove the entry it is standing on, but only with the
+    /// table locked: an unlocked `hash_remove` may rehash and renumber the
+    /// slots the cursor is counting through.
+    #[test]
+    fn a_locked_walk_may_remove_as_it_goes() {
+        let _held = serial();
+        let d = dict_of(&["a", "b", "c", "d"]);
+        // SAFETY: a live dictionary; the lock is released below.
+        unsafe { hash_lock(&raw mut (*d.as_ptr()).dv_hashtab) };
+        // SAFETY: a live dictionary, locked for the walk.
+        for hi in unsafe { tv_dict_iter(d.as_ptr()) } {
+            let di = tv_dict_hi2di(hi);
+            // SAFETY: one of the dictionary's own items.
+            if unsafe { (*di).di_tv.number_or_zero() } % 2 == 0 {
+                // SAFETY: the slot the walk is standing on, and its item.
+                unsafe { hash_remove(&raw mut (*d.as_ptr()).dv_hashtab, hi) };
+                unsafe { tv_dict_item_free(di) };
+            }
+        }
+        // SAFETY: the lock taken above.
+        unsafe { hash_unlock(&raw mut (*d.as_ptr()).dv_hashtab) };
+        assert_eq!(slot_order(&d), ["b", "d"]);
+        assert_eq!(number_at(&d, c"a"), None);
+        assert_eq!(number_at(&d, c"d"), Some(3));
+    }
+
+    /// `tv_dict_clear` empties a dictionary without freeing it, and the
+    /// table it leaves behind takes new keys in the order a fresh one does.
+    #[test]
+    fn clearing_leaves_a_usable_table() {
+        let _held = serial();
+        let d = dict_of(&["a", "b", "c"]);
+        // SAFETY: a live dictionary nothing else is walking.
+        unsafe { tv_dict_clear(d.as_ptr()) };
+        assert_eq!(d.len(), 0);
+        assert!(d.is_empty());
+        assert_eq!(number_at(&d, c"a"), None);
+        let refilled = dict_of(&["x", "y"]);
+        for (n, key) in ["x", "y"].iter().enumerate() {
+            // SAFETY: a live dictionary and this frame's own bytes.
+            let item = unsafe { tv_dict_item_alloc_len(key.as_ptr().cast(), key.len()) };
+            // SAFETY: the fresh item.
+            unsafe { (*item).di_tv.write_number(VarNumber::try_from(n).unwrap()) };
+            // SAFETY: a live dictionary and a fresh item.
+            unsafe { tv_dict_add(d.as_ptr(), item) }.expect("a key used once");
+        }
+        assert_eq!(slot_order(&d), slot_order(&refilled));
+    }
+}
