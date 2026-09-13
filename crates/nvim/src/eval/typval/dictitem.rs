@@ -179,7 +179,7 @@ pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
 /// `di` must be a live item. The copy is the caller's, with the same
 /// obligation as [`tv_dict_item_alloc_len`]'s result.
 pub unsafe fn tv_dict_item_copy(di: *mut DictItem) -> *mut DictItem {
-    let new_di = unsafe { tv_dict_item_alloc(tv_dict_item_key(di)) };
+    let new_di = unsafe { tv_dict_item_alloc((*di).key().as_ptr()) };
     unsafe { tv_copy(&(*di).di_tv, &mut (*new_di).di_tv) };
     new_di
 }
@@ -190,7 +190,7 @@ pub unsafe fn tv_dict_item_copy(di: *mut DictItem) -> *mut DictItem {
 /// `item` must be an item of `dict`, and both must be live. `item` is
 /// freed, so the caller must not hold it afterwards.
 pub unsafe fn tv_dict_item_remove(dict: *mut Dict, item: *mut DictItem) {
-    let hi = unsafe { hash_find(&raw mut (*dict).dv_hashtab, tv_dict_item_key(item)) };
+    let hi = unsafe { hash_find(&raw mut (*dict).dv_hashtab, (*item).key().as_ptr()) };
     if hi.is_kept() {
         unsafe { hash_remove(&raw mut (*dict).dv_hashtab, hi) };
     } else {

@@ -725,20 +725,6 @@ pub fn dict_is_watched(d: Option<&Dict>) -> bool {
     d.is_some_and(|d| !unsafe { queue_empty(&raw const d.watchers) })
 }
 
-/// The key of `di`, which upstream reads as the plain `di->di_key`.
-///
-/// An item owns its key now, so this is a read rather than the pointer
-/// arithmetic it used to be; the answer is still the NUL-terminated bytes
-/// the hash table probes on.
-///
-/// # Safety
-/// `di` points at a live item. The key borrows it.
-#[inline(always)]
-pub(crate) unsafe fn tv_dict_item_key(di: *const DictItem) -> *const ::core::ffi::c_char {
-    // SAFETY: the caller's live item.
-    unsafe { (*di).di_key.as_ptr() }
-}
-
 /// The `DictItem` a dictionary hashtab slot names: upstream's
 /// `TV_DICT_HI2DI`.
 ///
