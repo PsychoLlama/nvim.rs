@@ -518,12 +518,6 @@ impl DictItemRef {
         self.get().key_bytes()
     }
 
-    /// The key as the NUL-terminated string the message layer takes.
-    #[inline(always)]
-    pub(crate) fn key_cstr(self) -> &'static CStr {
-        self.get().key()
-    }
-
     /// The value; see [`Item::tv`] for why it is not a borrow.
     #[inline(always)]
     pub(crate) fn tv<'a>(self) -> TvRef<'a> {
@@ -856,10 +850,19 @@ pub(crate) fn set_key_nr(n: VarNumber) {
 
 /// Set `v:key` to the NUL-terminated string `s`.
 #[inline(always)]
-pub(crate) fn set_key_string(s: &CStr) {
-    // SAFETY: `Vv::Key` names a `v:` variable, and a `&CStr` is the
-    // NUL-terminated string a length of -1 promises.
-    unsafe { set_vim_var_string(Vv::Key, s.as_ptr().cast_mut(), -1 as ptrdiff_t) };
+pub(crate) fn set_key_string(key: &[u8]) {
+    // The length is spelled out rather than left to a `strlen`: this runs
+    // once per item of every `filter()` and `map()` over a dictionary, and
+    // a `DictKey` already knows how long it is.
+    // SAFETY: `Vv::Key` names a `v:` variable, and `key` is a slice, so it
+    // is readable for its own length.
+    unsafe {
+        set_vim_var_string(
+            Vv::Key,
+            key.as_ptr().cast::<c_char>(),
+            index_of(key.len()) as ptrdiff_t,
+        );
+    };
 }
 
 /// Declare `v:key`'s type for a walk that will set Numbers into it.

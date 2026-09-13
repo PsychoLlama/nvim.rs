@@ -72,7 +72,7 @@ pub(crate) fn filter_map_dict(
         {
             break;
         }
-        set_key_string(di.key_cstr());
+        set_key_string(di.key());
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         let ok = filter_map_one(di.tv(), expr, filtermap, &mut newtv, &mut rem);

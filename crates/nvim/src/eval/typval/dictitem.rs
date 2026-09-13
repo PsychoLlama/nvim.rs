@@ -33,8 +33,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use ::core::ffi::CStr;
-
 use super::*;
 use crate::cstr;
 use crate::hashtab::removed_sentinel;
@@ -179,7 +177,7 @@ pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
 /// `di` must be a live item. The copy is the caller's, with the same
 /// obligation as [`tv_dict_item_alloc_len`]'s result.
 pub unsafe fn tv_dict_item_copy(di: *mut DictItem) -> *mut DictItem {
-    let new_di = unsafe { tv_dict_item_alloc((*di).key().as_ptr()) };
+    let new_di = unsafe { tv_dict_item_alloc((*di).di_key.as_ptr()) };
     unsafe { tv_copy(&(*di).di_tv, &mut (*new_di).di_tv) };
     new_di
 }
@@ -190,7 +188,7 @@ pub unsafe fn tv_dict_item_copy(di: *mut DictItem) -> *mut DictItem {
 /// `item` must be an item of `dict`, and both must be live. `item` is
 /// freed, so the caller must not hold it afterwards.
 pub unsafe fn tv_dict_item_remove(dict: *mut Dict, item: *mut DictItem) {
-    let hi = unsafe { hash_find(&raw mut (*dict).dv_hashtab, (*item).key().as_ptr()) };
+    let hi = unsafe { hash_find(&raw mut (*dict).dv_hashtab, (*item).di_key.as_ptr()) };
     if hi.is_kept() {
         unsafe { hash_remove(&raw mut (*dict).dv_hashtab, hi) };
     } else {
@@ -397,11 +395,11 @@ pub fn dict_to_env(denv: &Dict) -> *mut *mut ::core::ffi::c_char {
             as *mut *mut ::core::ffi::c_char;
 
     for (i, var) in denv.items().enumerate() {
-        let key = var.key();
+        let key = &var.di_key;
         let str = numbuf.string_ptr(&var.di_tv);
         debug_assert!(!str.is_null());
         // SAFETY: a non-null answer is a NUL-terminated string.
-        let len = key.count_bytes() + unsafe { cstr::bytes_at(str) }.len() + c"=".count_bytes() + 1;
+        let len = key.len() + unsafe { cstr::bytes_at(str) }.len() + c"=".count_bytes() + 1;
         // SAFETY: `i` is below `env_size`, and the format spends two
         // NUL-terminated strings into `len` writable bytes.
         unsafe {
@@ -496,17 +494,23 @@ pub fn dict_get_callback(d: Option<&mut Dict>, key: &[u8], result: &mut Callback
     res
 }
 
-/// Whether storing `tv` under `name` in `d` would shadow a builtin function.
+/// Whether storing `item` in `d` would shadow a builtin function.
 ///
 /// Only the global scope and a function's local scope are guarded, and both
 /// are read through their globals, so this is the editor's own thread's to
 /// call.
-pub fn dict_wrong_func_name(d: &Dict, tv: &TypVal, name: &CStr) -> bool {
+///
+/// **The item, not its key as a `&CStr`.** Every insertion runs this, and
+/// building a `&CStr` out of a `DictKey` *validates* it — a scan of the key
+/// on the hot path, which is the 2.5 % `evalbench` p30-9 §7 already paid
+/// once. [`DictKey::as_ptr`] is the read that costs nothing, and the guards
+/// above it rule the call out before the key is touched at all.
+pub fn dict_wrong_func_name(d: &Dict, item: &DictItem) -> bool {
     let at = &raw const *d;
     (at == get_globvar_dict().cast_const() || dv_hashtab(at.cast_mut()) == get_funccal_local_ht())
-        && tv.is_func()
-        // SAFETY: `name` is NUL-terminated, which is what a `&CStr` is.
-        && unsafe { var_wrong_func_name(name.as_ptr(), true) }
+        && item.di_tv.is_func()
+        // SAFETY: a key is NUL-terminated, which is what `as_ptr` answers.
+        && unsafe { var_wrong_func_name(item.di_key.as_ptr(), true) }
 }
 
 /// The shared body of `keys()`, `values()` and `items()` over a dictionary.
@@ -527,7 +531,7 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
         match what {
             kDict2ListKeys => {
                 // SAFETY: the item's own NUL-terminated key.
-                tv_item.write_string(unsafe { xstrdup(di.key().as_ptr()) });
+                tv_item.write_string(unsafe { xstrdup(di.di_key.as_ptr()) });
             }
             kDict2ListValues => {
                 tv_copy(&di.di_tv, &mut tv_item);
@@ -538,7 +542,7 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
                 let at = sub_l.as_ptr();
                 tv_item.write_list(Some(sub_l));
                 // SAFETY: the pair just allocated, and the item's own key.
-                unsafe { (*at).push_string(di.key().as_ptr(), -1) };
+                unsafe { (*at).push_string(di.di_key.as_ptr(), -1) };
                 // SAFETY: as above.
                 unsafe { (*at).push_copy(&di.di_tv) };
             }

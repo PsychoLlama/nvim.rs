@@ -1592,7 +1592,6 @@ count	callee	no_raw	defs	def
 2	dict_equal	0	0	
 2	dict_lookup	0	1	crates/nvim/src/terminal/mod.rs
 2	dict_to_hlattrs	1	1	crates/nvim/src/ui_client.rs
-2	dict_wrong_func_name	0	0	
 2	did_set_vartabs	0	1	crates/nvim/src/optionstr/buffer.rs
 2	diff_check_sanity	0	1	crates/nvim/src/diff/block.rs
 2	diff_file	0	1	crates/nvim/src/diff/engine.rs
@@ -2788,6 +2787,7 @@ count	callee	no_raw	defs	def
 1	dict_add_bool	0	1	crates/nvim/src/runtime/script.rs
 1	dict_check_writable	0	1	crates/nvim/src/api/private/helpers/vimdict.rs
 1	dict_clear	0	1	crates/nvim/src/eval/typval/dict.rs
+1	dict_wrong_func_name	0	0	
 1	did_set_cb	0	0	
 1	did_set_global_chars_option	0	1	crates/nvim/src/optionstr/chars.rs
 1	did_set_opt_flags	0	1	crates/nvim/src/optionstr/flags.rs

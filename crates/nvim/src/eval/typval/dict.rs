@@ -11,10 +11,11 @@
 //! exactly those.  [`dict_extend`] is `extend()` with its three `action`
 //! modes, [`dict_copy`] is `copy()`/`deepcopy()` over a dictionary.
 //!
-//! Three entry points keep a raw pointer, each because the operation reaches
+//! Four entry points keep a raw pointer, each because the operation reaches
 //! the same dictionary again while it is running: [`dict_extend`] (the two
 //! arguments may be one dictionary), [`dict_copy`] (a cycle is read back
-//! through the mark this call writes) and
+//! through the mark this call writes), [`dict_clear`] (the values it frees
+//! may name the dictionary they are in) and
 //! [`dict_watcher_notify`](super::dict_watcher_notify) (the callbacks are
 //! user code). The allocation pair -- `tv_dict_item_*` -- keeps one for the
 //! reason `tv_list_free` does.
@@ -320,7 +321,7 @@ impl Dict {
     /// `item` must point at a live item that is in no hashtab.
     pub unsafe fn add_item(&mut self, item: *mut DictItem) -> Result<(), Failed> {
         // SAFETY: the caller's fresh item.
-        if dict_wrong_func_name(self, unsafe { &(*item).di_tv }, unsafe { (*item).key() }) {
+        if dict_wrong_func_name(self, unsafe { &*item }) {
             return Err(Failed);
         }
         // SAFETY: this dictionary's own table, and an item that is in none.
@@ -559,7 +560,7 @@ impl Dict {
     pub fn extend_from_self(&mut self, action: u8) {
         let scoped = self.dv_scope != VAR_NO_SCOPE;
         for di in self.items() {
-            let key = di.key();
+            let key = &di.di_key;
             // SAFETY: the item's own NUL-terminated key.
             if scoped && !unsafe { valid_varname(key.as_ptr()) } {
                 break;
@@ -606,12 +607,12 @@ pub unsafe fn dict_extend(d1: *mut Dict, d2: *mut Dict, action: u8) {
     for hi2 in unsafe { tv_dict_iter(d2) } {
         let di2 = tv_dict_hi2di(hi2);
         // SAFETY: the walk's own item.
-        let di2_key = unsafe { (*di2).key() };
+        let di2_key = unsafe { &(*di2).di_key };
         // SAFETY: the caller's live dictionary. The pointer form is what
         // this branch needs: the item is held across `value_check_lock`,
         // which re-enters, and it is an item of `d1` itself when the two
         // dictionaries are one.
-        let di1 = unsafe { (*d1).find_ptr(di2_key.to_bytes()) };
+        let di1 = unsafe { (*d1).find_ptr(di2_key.bytes()) };
         // Check the key to be valid when adding to any scope.
         // SAFETY: the caller's live dictionary and the item's own key.
         if unsafe { (*d1).dv_scope } != VAR_NO_SCOPE && !unsafe { valid_varname(di2_key.as_ptr()) }
@@ -629,7 +630,9 @@ pub unsafe fn dict_extend(d1: *mut Dict, d2: *mut Dict, action: u8) {
                     // Note upstream does not gate this on `watched`, unlike
                     // the copying branch below.
                     // SAFETY: the item just moved into `d1`.
-                    unsafe { dict_watcher_notify(d1, di2_key, Some(&*di_tv(di2)), None) };
+                    unsafe {
+                        dict_watcher_notify(d1, di2_key.as_c_str(), Some(&*di_tv(di2)), None);
+                    };
                 }
             } else {
                 // SAFETY: the walk's own item.
@@ -641,7 +644,7 @@ pub unsafe fn dict_extend(d1: *mut Dict, d2: *mut Dict, action: u8) {
                 } else if watched {
                     // SAFETY: the item just added to `d1`.
                     unsafe {
-                        let key = (*new_di).key();
+                        let key = (*new_di).di_key.as_c_str();
                         dict_watcher_notify(d1, key, Some(&*di_tv(new_di)), None);
                     }
                 }
@@ -663,7 +666,7 @@ pub unsafe fn dict_extend(d1: *mut Dict, d2: *mut Dict, action: u8) {
             }
             // Disallow replacing a builtin function.
             // SAFETY: the caller's live dictionary and the source item.
-            if unsafe { dict_wrong_func_name(&*d1, &(*di2).di_tv, di2_key) } {
+            if unsafe { dict_wrong_func_name(&*d1, &*di2) } {
                 break;
             }
 
@@ -682,7 +685,7 @@ pub unsafe fn dict_extend(d1: *mut Dict, d2: *mut Dict, action: u8) {
             if watched {
                 // SAFETY: the item just overwritten in `d1`.
                 unsafe {
-                    let key = (*di1).key();
+                    let key = (*di1).di_key.as_c_str();
                     dict_watcher_notify(d1, key, Some(&*di_tv(di1)), Some(&oldtv));
                 }
                 tv_clear(&mut oldtv);
@@ -774,14 +777,17 @@ pub unsafe fn dict_copy(
         if got_int.get() {
             break;
         }
+        // The key is read as a pointer and a length, not as a `&CStr`:
+        // every item of every `copy()` passes through here, and building a
+        // `&CStr` out of a `DictKey` validates it.
         // SAFETY: the walk's own item.
-        let di_key = unsafe { (*di).key() };
+        let di_key = unsafe { &(*di).di_key };
         // SAFETY: the caller's converter, read only for its kind.
         let new_di = if conv.is_null() || unsafe { (*conv).vc_type } == CONV_NONE {
             // SAFETY: the item's own NUL-terminated key.
             unsafe { tv_dict_item_alloc(di_key.as_ptr()) }
         } else {
-            let mut len = di_key.count_bytes();
+            let mut len = di_key.len();
             // SAFETY: the caller's converter and the item's own key.
             let key = unsafe { string_convert(conv, di_key.as_ptr().cast_mut(), &raw mut len) };
             if key.is_null() {

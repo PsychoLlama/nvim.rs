@@ -29,9 +29,9 @@ use core::ptr::null_mut;
 
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
-    blob_len, blob_set_range, di_lock, dict_is_watched, dict_watcher_notify, dict_wrong_func_name,
-    list_assign_range, tv_check_lock, tv_clear, tv_copy, tv_dict_item_alloc, tv_dict_item_free,
-    tv_get_number_chk, value_check_lock,
+    blob_len, blob_set_range, di_lock, dict_is_watched, dict_watcher_notify, list_assign_range,
+    tv_check_lock, tv_clear, tv_copy, tv_dict_item_alloc, tv_dict_item_free, tv_get_number_chk,
+    value_check_lock,
 };
 use crate::eval::userfunc::TV_CSTRING;
 use crate::eval::vars::{clear_local, emsg_static};
@@ -153,16 +153,11 @@ pub unsafe fn set_var_lval(
         }
         // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
         let target = unsafe { Tv::new(lval.ll_tv).dict_or_null() };
+        // The builtin-name check upstream runs here is `add_item`'s own, and
+        // it runs on the item rather than on a key this would have had to
+        // spell twice; a refusal frees the item and leaves the dictionary
+        // alone, which is what the early return did.
         // SAFETY: the value's own dictionary and the owned key text.
-        if unsafe {
-            dict_wrong_func_name(
-                &*target,
-                result,
-                ::core::ffi::CStr::from_ptr(lval.ll_newkey),
-            )
-        } {
-            return;
-        }
         let di = unsafe { tv_dict_item_alloc(lval.ll_newkey) };
         if unsafe { (*target).add_item(di) }.is_err() {
             unsafe { tv_dict_item_free(di) };
