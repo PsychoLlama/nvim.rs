@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::eval::typval::PartialRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::semsg;
 use crate::winlayer::{Ea, Live};
@@ -782,9 +783,9 @@ pub(crate) unsafe fn eval7(
                 if rv.v_type() == VAR_UNKNOWN && lua {
                     rv.write_empty(VAR_PARTIAL);
                     let partial = get_vim_var_partial(Vv::Lua);
-                    rv.write_partial(partial);
-                    // SAFETY: `get_vim_var_partial` answers a live partial.
-                    unsafe { (*partial).pt_refcount.retain() };
+                    // SAFETY: `get_vim_var_partial` answers a live partial,
+                    // and the slot takes a reference of its own.
+                    rv.write_partial(unsafe { PartialRef::retained(partial) });
                 }
                 ret = Ok(Parsed::Done);
             }

@@ -122,7 +122,7 @@ pub(crate) fn filter_map_blob(
     result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        result.write_blob(ptr::null_mut());
+        result.write_blob(None);
     }
     let b = blob_arg;
     if b.is_null() || (filtermap == FilterMap::Filter && check_lock(b.lock(), arg_errmsg)) {

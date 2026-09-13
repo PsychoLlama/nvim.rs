@@ -83,7 +83,7 @@ pub unsafe fn tv_free(tv: Option<&mut TypVal>) {
     match tv.v_type() {
         // SAFETY, for every arm: the caller's promise -- a live typval, so
         // the member the kind names is its own.
-        VAR_PARTIAL => unsafe { partial_unref(tv.partial_or_null()) },
+        VAR_PARTIAL => drop(tv.take_partial()),
         // FALLTHROUGH from VAR_FUNC into VAR_STRING: a funcref owns both a
         // reference to the function and the name string.
         VAR_FUNC | VAR_STRING => {
@@ -92,7 +92,7 @@ pub unsafe fn tv_free(tv: Option<&mut TypVal>) {
             }
             unsafe { xfree(tv.string_or_func_name().cast()) };
         }
-        VAR_BLOB => unsafe { tv_blob_unref(tv.blob_or_null()) },
+        VAR_BLOB => drop(tv.take_blob()),
         VAR_LIST => drop(tv.take_list()),
         VAR_DICT => drop(tv.take_dict()),
         _ => {}
@@ -125,20 +125,10 @@ impl Clone for TypVal {
                 unsafe { func_ref(copy) };
                 TypVal::Func(copy)
             }
-            TypVal::Partial(pt) => {
-                // SAFETY: the variant says the payload is a live partial.
-                if let Some(pt) = unsafe { pt.as_mut() } {
-                    pt.pt_refcount.retain();
-                }
-                TypVal::Partial(pt)
-            }
-            TypVal::Blob(b) => {
-                // SAFETY: as above, for a blob.
-                if let Some(blob) = unsafe { b.as_mut() } {
-                    blob.bv_refcount.retain();
-                }
-                TypVal::Blob(b)
-            }
+            // As `List`: the handle's own `Clone` is the reference.
+            TypVal::Partial(ref pt) => TypVal::partial((**pt).clone()),
+            // As `List`: the handle's own `Clone` is the reference.
+            TypVal::Blob(ref blob) => TypVal::blob((**blob).clone()),
             // The handle's own `Clone` is the reference: one more owner of
             // the same list, and `v:_null_list` counts nothing.
             TypVal::List(ref list) => TypVal::list((**list).clone()),

@@ -15,6 +15,7 @@
 use crate::cstr;
 use crate::eval::typval::DictRef;
 use crate::eval::typval::ListRef;
+use crate::eval::typval::PartialRef;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
@@ -269,7 +270,9 @@ pub fn set_vim_var_dict(idx: Vv, val: Option<DictRef>) {
 /// hands over.
 pub unsafe fn set_vim_var_partial(idx: Vv, val: *mut Partial) {
     let mut tv = vimvar_val(idx);
-    tv.write_partial(val);
+    // SAFETY: the caller's promise -- a live partial whose reference the
+    // slot takes over.
+    tv.write_partial(unsafe { PartialRef::owning(val) });
 }
 
 /// Set `v:register` to `c`, or to `"` for the unnamed register.

@@ -25,8 +25,8 @@
 use super::{__S_IFMT, SEEK_END, SEEK_SET, no_fileinfo, str_arg};
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::{
-    tv_blob_alloc_ret, tv_blob_free, tv_get_number, tv_list_alloc_ret, tv_list_append_owned_tv,
-    tv_list_len, tv_list_remove_at,
+    tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret, tv_list_append_owned_tv, tv_list_len,
+    tv_list_remove_at,
 };
 use crate::garray::ga_grow;
 use crate::memory::{xfree, xmemdupz, xrealloc};
@@ -104,15 +104,15 @@ impl File {
     }
 }
 
-/// The Blob `readblob()` is filling.
+/// The Blob `readblob()` is filling: a **borrow** of the one the result
+/// slot owns.
 #[derive(Clone, Copy)]
-struct BlobRef(*mut Blob);
+struct BlobOut(*mut Blob);
 
-impl BlobRef {
+impl BlobOut {
     /// Make `result` a fresh, empty Blob.
     fn alloc(result: &mut TypVal) -> Self {
-        // SAFETY: `result` is the builtin's own cleared result slot.
-        Self(unsafe { tv_blob_alloc_ret(result) })
+        Self(tv_blob_alloc_ret(result))
     }
 
     /// Grow to `len` bytes and fill them from `fd`; false on a short read.
@@ -131,12 +131,6 @@ impl BlobRef {
         unsafe { ga_grow(&raw mut (*self.0).bv_ga, len as c_int) };
         unsafe { (*self.0).bv_ga.ga_len = len as c_int };
         unsafe { fd.read_into((*self.0).bv_ga.ga_data, want) }
-    }
-
-    /// Give the Blob back, which is what an error answers instead.
-    fn free(self) {
-        // SAFETY: a live blob nothing else refers to yet.
-        unsafe { tv_blob_free(self.0) };
     }
 }
 
@@ -279,7 +273,7 @@ impl Carry {
 fn read_blob(
     fd: &File,
     result: &mut TypVal,
-    blob: BlobRef,
+    blob: BlobOut,
     offset: FileOffset,
     size_arg: FileOffset,
 ) -> bool {
@@ -324,9 +318,9 @@ fn read_blob(
     if blob.fill(fd, size as usize) {
         return true;
     }
-    // An empty blob is returned on error.
-    blob.free();
-    result.write_blob(ptr::null_mut());
+    // An empty blob is returned on error: the slot gives up the one it
+    // holds, which frees it.
+    result.write_blob(None);
     false
 }
 
@@ -499,7 +493,7 @@ fn read_file_or_blob(args: &[TypVal], result: &mut TypVal, always_blob: bool) {
     }
 
     let filling = if blob {
-        Ok(BlobRef::alloc(result))
+        Ok(BlobOut::alloc(result))
     } else {
         Err(Lines::alloc(result))
     };

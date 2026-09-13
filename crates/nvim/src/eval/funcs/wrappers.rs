@@ -134,8 +134,7 @@ pub(crate) fn dict_alloc_ret(result: &mut TypVal) {
 
 /// Make `result` a fresh, empty Blob.
 pub(crate) fn blob_alloc_ret(result: &mut TypVal) -> *mut Blob {
-    // SAFETY: `result` is the caller's cleared return value.
-    unsafe { tv_blob_alloc_ret(result) }
+    tv_blob_alloc_ret(result)
 }
 
 /// The table row for the builtin `name` spells, or null if there is none.

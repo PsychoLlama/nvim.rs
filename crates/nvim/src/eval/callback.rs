@@ -11,6 +11,7 @@
 )]
 
 use crate::cstr;
+use crate::eval::typval::PartialRef;
 use crate::guard::Depth;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::ManuallyDrop;
@@ -212,7 +213,10 @@ pub unsafe fn set_ref_in_callback(
         Callback::Partial(partial) => {
             // A borrowed view: the callback keeps the reference, so this
             // releases nothing.
-            let mut tv = ManuallyDrop::new(TypVal::Partial(*partial));
+            // SAFETY: a made-up owner of the callback's reference, in a
+            // `ManuallyDrop` so that nothing ever releases it.
+            let held = unsafe { PartialRef::owning(*partial) };
+            let mut tv = ManuallyDrop::new(TypVal::partial(held));
             // SAFETY: `tv` is this frame's, and the stacks are the caller's.
             unsafe { set_ref_in_item(&mut tv, copy_id, ht_stack, list_stack) }
         }

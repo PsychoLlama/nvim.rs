@@ -436,8 +436,7 @@ impl Subscripts<'_> {
         if container.v_type() == VAR_LIST && container.list_or_null().is_null() {
             tv_list_alloc_ret(target, kListLenUnknown as ptrdiff_t);
         } else if container.v_type() == VAR_BLOB && container.blob_or_null().is_null() {
-            // SAFETY: as above.
-            unsafe { tv_blob_alloc_ret(target) };
+            tv_blob_alloc_ret(target);
         }
 
         if self.lval.ll_range {

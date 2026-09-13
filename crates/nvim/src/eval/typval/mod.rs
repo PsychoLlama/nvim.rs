@@ -68,6 +68,8 @@ mod dictget;
 pub use self::dictget::*;
 mod blob;
 pub use self::blob::*;
+mod partial;
+pub use self::partial::*;
 mod value;
 pub use self::value::*;
 mod check;

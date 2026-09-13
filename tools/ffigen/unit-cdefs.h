@@ -249,6 +249,7 @@ typedef ptrdiff_t BCount;
 typedef int BackslashEscape;
 typedef unsigned int BfaFlags;
 typedef unsigned int BlnFlags;
+typedef Blob *BlobRef;
 typedef int64_t BlockNr;
 typedef unsigned int BoolVarValue;
 typedef bool Boolean;
@@ -367,6 +368,7 @@ typedef int OptionSetFlags;
 typedef void (*ParserLineGetter)(void *, ParserLine *);
 typedef unsigned int ParserStateItem_data_expr_type_0;
 typedef unsigned int ParserStateItem_type_0;
+typedef Partial *PartialRef;
 typedef struct proc Proc;
 typedef unsigned int ProcType;
 typedef uint64_t ProfTime;
@@ -1066,8 +1068,8 @@ struct TypVal {
     Float float_;
     BoolVarValue bool_;
     SpecialVarValue special_;
-    Partial *partial_;
-    Blob *blob_;
+    PartialRef partial_;
+    BlobRef blob_;
   } payload;
 };
 struct UserFunc {

@@ -13,6 +13,7 @@
 
 use crate::charset::Str2NrBases;
 use crate::cstr;
+use crate::eval::typval::BlobRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::keycodes::ModMask;
 use crate::memory::handoff::owned_cstr;
@@ -29,7 +30,7 @@ use crate::eval::{
     get_env_len,
 };
 use crate::eval::{Cur, Tv};
-use crate::garray::{ga_append, ga_clear};
+use crate::garray::ga_append;
 use crate::keycodes::{find_special_key, trans_special};
 use crate::mbyte::{mb_copy_char, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc};
@@ -266,23 +267,19 @@ pub(crate) unsafe fn eval_number(
             rv.write_float(f);
         }
     } else if cur.byte() == b'0' && matches!(cur.at(1), b'z' | b'Z') {
-        let blob: *mut Blob = if evaluate {
-            tv_blob_alloc()
-        } else {
-            null_mut()
-        };
+        // The handle owns the allocation for the length of the walk: every
+        // way out of it below drops what it holds, which is the free the
+        // error path used to spell by hand.
+        let held = evaluate.then(tv_blob_alloc);
+        let blob: *mut Blob = held.as_ref().map_or(null_mut(), BlobRef::as_ptr);
         // SAFETY: the `0z` was just read, so the walk starts inside the
         // expression and every step below stops at a non-hex byte.
         let mut bp = unsafe { Walk::new(cur.get().add(2)) };
         while ascii_isxdigit(c_int::from(bp.byte())) {
             if !ascii_isxdigit(c_int::from(bp.at(1))) {
                 if !blob.is_null() {
-                    // SAFETY: a literal message, and `blob` is this call's
-                    // own, unreferenced allocation.
                     let odd = c"E973: Blob literal should have an even number of hex characters";
                     emsg(gettext(odd));
-                    unsafe { ga_clear(&raw mut (*blob).bv_ga) };
-                    unsafe { xfree(blob.cast()) };
                 }
                 return Err(Failed);
             }
@@ -297,9 +294,8 @@ pub(crate) unsafe fn eval_number(
             }
             bp.step(2);
         }
-        if !blob.is_null() {
-            // SAFETY: `result` is valid whenever a Blob was allocated.
-            unsafe { tv_blob_set_ret(result, blob) };
+        if held.is_some() {
+            tv_blob_set_ret(result, held);
         }
         cur.set(bp.raw());
     } else {

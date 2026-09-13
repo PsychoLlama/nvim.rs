@@ -12,8 +12,8 @@ use std::ptr;
 
 use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
-    DictRef, ListRef, NumBuf, Unconvertible, tv_check_lock, tv_check_num, tv_check_str,
-    tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal, tv_get_bool,
+    BlobRef, DictRef, ListRef, NumBuf, PartialRef, Unconvertible, tv_check_lock, tv_check_num,
+    tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal, tv_get_bool,
     tv_get_bool_chk, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_islocked,
     tv_item_lock, tv_list_alloc_ret, tv_list_append_number, tv_list_first, value_check_lock,
 };
@@ -55,8 +55,10 @@ fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
         // SAFETY: as the list arm -- a made-up address in a
         // `ManuallyDrop`, never released.
         VAR_DICT => tv::dict_tv(unsafe { DictRef::owning(p.cast()) }),
-        VAR_PARTIAL => TypVal::Partial(p.cast()),
-        VAR_BLOB => TypVal::Blob(p.cast()),
+        // SAFETY: as the list arm.
+        VAR_PARTIAL => tv::partial_tv(unsafe { PartialRef::owning(p.cast()) }),
+        // SAFETY: as the list arm.
+        VAR_BLOB => tv::blob_tv(unsafe { BlobRef::owning(p.cast()) }),
         VAR_BOOL => TypVal::Bool(kBoolVarTrue),
         VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
         VAR_UNKNOWN => TypVal::Unknown,
@@ -1179,7 +1181,7 @@ fn number_rows(number: &CString) -> Vec<Row> {
             Some("E805: Using a Float as a Number"),
         ),
         row(
-            TypVal::Partial(ptr::null_mut()),
+            tv::partial_tv(None),
             Some("E703: Using a Funcref as a Number"),
         ),
         row(
@@ -1306,7 +1308,7 @@ fn getting_a_float_accepts_only_numbers() {
         ),
         (ManuallyDrop::new(TypVal::Float(42.53)), None, 42.53),
         (
-            ManuallyDrop::new(TypVal::Partial(ptr::null_mut())),
+            ManuallyDrop::new(tv::partial_tv(None)),
             Some("E891: Using a Funcref as a Float"),
             0.0,
         ),
@@ -1380,7 +1382,7 @@ fn getting_a_string_formats_scalars_into_the_buffer() {
             ),
             (ManuallyDrop::new(TypVal::Float(42.53)), None, Some("42.53")),
             (
-                ManuallyDrop::new(TypVal::Partial(ptr::null_mut())),
+                ManuallyDrop::new(tv::partial_tv(None)),
                 Some("E729: Using a Funcref as a String"),
                 None,
             ),

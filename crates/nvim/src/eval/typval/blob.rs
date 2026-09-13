@@ -13,12 +13,150 @@ use super::*;
 use crate::message::emsg_ptr;
 use crate::semsg;
 use crate::types::Failed;
+use ::core::ptr::NonNull;
 
-/// Allocate an empty blob.  The caller owns the reference count.
-pub fn tv_blob_alloc() -> *mut Blob {
+/// One reference to a [`Blob`], given back when the handle goes.
+///
+/// The blob half of [`ListRef`]: the refcount *is* the ownership, `Clone`
+/// retains and `Drop` releases, and the last one frees.  The two
+/// constructors are the two things a raw pointer can mean; a handle is
+/// never null, because `v:_null_blob` is `TypVal::blob(None)` and every
+/// reader that wants the old spelling asks [`TypVal::blob_or_null`].
+#[repr(transparent)]
+pub struct BlobRef(NonNull<Blob>);
+
+impl BlobRef {
+    /// Take over a reference the caller already holds and will not release.
+    ///
+    /// # Safety
+    ///
+    /// `at` must point at a live blob, and the caller must hold a reference
+    /// to it -- one this handle now owns and eventually gives back.
+    #[inline(always)]
+    pub unsafe fn from_owned(at: NonNull<Blob>) -> BlobRef {
+        BlobRef(at)
+    }
+
+    /// Take over the caller's reference to `b`, or answer `None` for a NULL
+    /// blob.  See [`BlobRef::from_owned`].
+    ///
+    /// # Safety
+    ///
+    /// As [`BlobRef::from_owned`], for a pointer that may be null.
+    #[inline(always)]
+    pub unsafe fn owning(b: *mut Blob) -> Option<BlobRef> {
+        NonNull::new(b).map(BlobRef)
+    }
+
+    /// Take *another* reference to `b`: the caller keeps its own.
+    ///
+    /// `None` for a NULL blob, which is `v:_null_blob` and counts nothing.
+    ///
+    /// # Safety
+    ///
+    /// `b` is null or points at a live blob.
+    #[inline(always)]
+    pub unsafe fn retained(b: *mut Blob) -> Option<BlobRef> {
+        let at = NonNull::new(b)?;
+        // SAFETY: the caller's promise: a live blob.
+        unsafe { Bl::new(b) }.bv_refcount.retain();
+        Some(BlobRef(at))
+    }
+
+    /// The blob, as the pointer most of the family still takes.
+    ///
+    /// A **borrow**: live only while the handle is.
+    #[inline(always)]
+    pub fn as_ptr(&self) -> *mut Blob {
+        self.0.as_ptr()
+    }
+}
+
+impl Clone for BlobRef {
+    /// One more owner of the same blob.
+    #[inline(always)]
+    fn clone(&self) -> BlobRef {
+        // SAFETY: this handle names a live blob, since it holds a reference
+        // to it.
+        unsafe { Bl::new(self.as_ptr()) }.bv_refcount.retain();
+        BlobRef(self.0)
+    }
+}
+
+impl Drop for BlobRef {
+    /// Give the reference back, freeing the blob with the last one.
+    #[inline(always)]
+    fn drop(&mut self) {
+        // SAFETY: this handle names a live blob, and is giving up the
+        // reference that kept it so.
+        unsafe { tv_blob_unref(self.as_ptr()) };
+    }
+}
+
+/// The `TypVal` readers and writers for the blob arm.
+///
+/// Hand-written where the scalar arms are generated, because the payload is
+/// a [`BlobRef`]: it can be borrowed but never handed out, since a copy of
+/// it would be a reference nobody took.
+impl TypVal {
+    /// The blob, or `None` unless this is a `Blob` -- including the
+    /// `v:_null_blob` case, which answers `Some(NULL)`.
+    #[inline(always)]
+    pub(crate) fn as_blob(&self) -> Option<*mut Blob> {
+        match self {
+            TypVal::Blob(blob) => Some(
+                blob.as_ref()
+                    .map_or(::core::ptr::null_mut(), BlobRef::as_ptr),
+            ),
+            _ => None,
+        }
+    }
+
+    /// The blob this value holds, or NULL unless it is a blob holding one.
+    ///
+    /// A **borrow**; see [`TypVal::list_or_null`].
+    #[inline(always)]
+    pub(crate) fn blob_or_null(&self) -> *mut Blob {
+        self.as_blob().unwrap_or(::core::ptr::null_mut())
+    }
+
+    /// A blob value over `blob`, which the value takes over.
+    #[inline(always)]
+    pub(crate) const fn blob(blob: Option<BlobRef>) -> TypVal {
+        TypVal::Blob(::core::mem::ManuallyDrop::new(blob))
+    }
+
+    /// Overwrite this slot with `blob`, **releasing nothing**: see
+    /// [`union_writers`](super::access).
+    #[inline(always)]
+    pub(crate) fn write_blob(&mut self, blob: Option<BlobRef>) {
+        self.overwrite(TypVal::blob(blob));
+    }
+
+    /// Move the blob out of this slot, leaving `v:_null_blob` behind.
+    #[inline(always)]
+    pub(crate) fn take_blob(&mut self) -> Option<BlobRef> {
+        match self {
+            TypVal::Blob(blob) => blob.take(),
+            _ => None,
+        }
+    }
+}
+
+/// Allocate an empty blob, **owned by the handle it answers**.
+///
+/// The blob arrives at a reference count of **one**, as
+/// [`tv_list_alloc`](super::tv_list_alloc) does and where upstream answered
+/// zero: a caller that stores it nowhere drops the handle, and that is the
+/// free.
+pub fn tv_blob_alloc() -> BlobRef {
     let blob = unsafe { xcalloc(1, ::core::mem::size_of::<Blob>()) } as *mut Blob;
     unsafe { ga_init(&raw mut (*blob).bv_ga, 1, 100) };
-    blob
+    // SAFETY: freshly allocated, and the count starts at the handle's one.
+    unsafe { Bl::new(blob) }.bv_refcount.retain();
+    // SAFETY: `xcalloc` never answers null, and the reference is this
+    // handle's own.
+    unsafe { BlobRef::from_owned(NonNull::new_unchecked(blob)) }
 }
 
 /// Free `b` and its bytes.
@@ -108,20 +246,21 @@ pub(crate) unsafe fn tv_blob_slice(
 
     if n1 >= VarNumber::from(len) || n2 < 0 || n1 > n2 {
         tv_clear(result);
-        (*result).write_blob(::core::ptr::null_mut());
+        result.write_blob(None);
     } else {
         let new_blob = tv_blob_alloc();
+        let at = new_blob.as_ptr();
         let sublen = (n2 - n1 + 1) as ::core::ffi::c_int;
-        unsafe { ga_grow(&raw mut (*new_blob).bv_ga, sublen) };
-        unsafe { (*new_blob).bv_ga.ga_len = sublen };
+        unsafe { ga_grow(&raw mut (*at).bv_ga, sublen) };
+        unsafe { (*at).bv_ga.ga_len = sublen };
         let n1 = n1 as ::core::ffi::c_int;
         let mut i = n1;
         while i <= n2 as ::core::ffi::c_int {
-            unsafe { tv_blob_set(new_blob, i - n1, tv_blob_get((*result).blob_or_null(), i)) };
+            unsafe { tv_blob_set(at, i - n1, tv_blob_get(result.blob_or_null(), i)) };
             i += 1;
         }
         tv_clear(result);
-        unsafe { tv_blob_set_ret(result, new_blob) };
+        tv_blob_set_ret(result, Some(new_blob));
     }
 
     Ok(())
@@ -324,7 +463,8 @@ pub unsafe fn tv_blob_remove(
     }
 
     let taken = (end - idx + 1) as ::core::ffi::c_int;
-    let taken_raw = tv_blob_alloc();
+    let taken_held = tv_blob_alloc();
+    let taken_raw = taken_held.as_ptr();
     // SAFETY: freshly allocated just above.
     let mut taken_blob = unsafe { Bl::new(taken_raw) };
     taken_blob.bv_ga.ga_len = taken;
@@ -335,7 +475,7 @@ pub unsafe fn tv_blob_remove(
     let dst = taken_blob.bv_ga.ga_data;
     let src = unsafe { p.offset(idx as isize) };
     unsafe { dst.cast::<u8>().copy_from(src.cast(), taken as size_t) };
-    unsafe { tv_blob_set_ret(result, taken_raw) };
+    tv_blob_set_ret(result, Some(taken_held));
 
     if len - end - 1 > 0 {
         let at = unsafe { p.offset(idx as isize) };
@@ -363,7 +503,7 @@ pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// A value outside `0..=255` raises `E1239` and answers the empty blob.
 pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let blob = unsafe { tv_blob_alloc_ret(result) };
+    let blob = tv_blob_alloc_ret(result);
     if tv_check_for_list_arg(args, 0).is_err() {
         return;
     }
@@ -389,14 +529,13 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// Allocate an empty blob and store it in `ret_tv` as the return value.
 ///
-/// # Safety
-///
-/// `ret_tv` must point at the caller's return slot: an initialized typval it
-/// owns and will clear.
-pub unsafe fn tv_blob_alloc_ret(ret_tv: &mut TypVal) -> *mut Blob {
-    let b = tv_blob_alloc();
-    unsafe { tv_blob_set_ret(ret_tv, b) };
-    b
+/// The answer is a **borrow** of the slot's blob, for the callers that go on
+/// filling it; the slot owns the reference.
+pub fn tv_blob_alloc_ret(ret_tv: &mut TypVal) -> *mut Blob {
+    let held = tv_blob_alloc();
+    let at = held.as_ptr();
+    tv_blob_set_ret(ret_tv, Some(held));
+    at
 }
 
 /// Store a copy of `from` in `to`.  A NULL blob copies as a NULL blob.
@@ -410,11 +549,11 @@ pub unsafe fn tv_blob_copy(from: *mut Blob, to: &mut TypVal) {
     let mut dst = unsafe { Tv::new(to) };
     dst.write_empty(VAR_BLOB);
     if from.is_null() {
-        (*to).write_blob(::core::ptr::null_mut());
+        to.write_blob(None);
         return;
     }
 
-    unsafe { tv_blob_alloc_ret(to) };
+    tv_blob_alloc_ret(to);
     let len = unsafe { (*from).bv_ga.ga_len };
     let ga = bv_ga(dst.blob_or_null());
     if len > 0 {

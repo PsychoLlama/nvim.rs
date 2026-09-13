@@ -35,10 +35,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use super::{
-    DictSlot, Pt, VAR_PARTIAL, func_unref, partial_unref, tv_blob_unref, tv_dict_unref,
-    tv_empty_string,
-};
+use super::{DictSlot, Pt, VAR_PARTIAL, func_unref, tv_dict_unref, tv_empty_string};
 use crate::eval::typval_encode::{
     ConvFrame, ConvPath, ConvType, Flow, Frame, TypvalSink, encode_typval,
 };
@@ -137,9 +134,8 @@ impl TypvalSink for NothingSink {
     /// it is standing on.
     unsafe fn conv_blob(&mut self, tv: Option<&mut TypVal>, _blob: *const Blob, _len: c_int) {
         let tv = slot(tv);
-        // SAFETY: the typval's own blob.
-        unsafe { tv_blob_unref(tv.blob_or_null()) };
-        tv.write_blob(ptr::null_mut());
+        // The slot gives up its reference and is left `v:_null_blob`.
+        drop(tv.take_blob());
     }
 
     /// A funcref releases its name here and is done.  A partial with another
@@ -161,10 +157,12 @@ impl TypvalSink for NothingSink {
         if tv.v_type() == VAR_PARTIAL {
             let pt = tv.partial_or_null();
             // SAFETY: the typval's own partial.
-            let mut part = unsafe { Pt::new(pt) };
+            let part = unsafe { Pt::new(pt) };
             if !pt.is_null() && part.pt_refcount.is_shared() {
-                part.pt_refcount.release();
-                tv.write_partial(ptr::null_mut());
+                // Somebody else still holds it: give up this slot's
+                // reference and stop, rather than walking into arguments
+                // that are not ours to free.
+                drop(tv.take_partial());
                 return Flow::Stop;
             }
         } else {
@@ -197,8 +195,8 @@ impl TypvalSink for NothingSink {
         let mut part = unsafe { Pt::new(pt) };
         part.pt_argc = 0;
         debug_assert!(!part.pt_refcount.is_shared());
-        unsafe { partial_unref(pt) };
-        tv.write_partial(ptr::null_mut());
+        // The last reference: the slot gives it up and the partial is freed.
+        drop(tv.take_partial());
     }
 
     /// Nothing to announce; the frame surgery below is where the list is

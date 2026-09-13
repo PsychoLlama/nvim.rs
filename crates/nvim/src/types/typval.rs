@@ -13,7 +13,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::eval::gc::RootId;
-pub use crate::eval::typval::{DictRef, DictTab, ItemSlot, ListRef};
+pub use crate::eval::typval::{BlobRef, DictRef, DictTab, ItemSlot, ListRef, PartialRef};
 
 pub type BoolVarValue = ::core::ffi::c_uint;
 /// The two `VAR_BOOL` values: `v:false` and `v:true`.
@@ -635,10 +635,11 @@ pub enum TypVal {
     Bool(BoolVarValue) = VAR_BOOL,
     /// `v:null`.
     Special(SpecialVarValue) = VAR_SPECIAL,
-    /// A partial; owned as one reference.
-    Partial(*mut Partial) = VAR_PARTIAL,
-    /// A blob; owned as one reference, and null for `v:_null_blob`.
-    Blob(*mut Blob) = VAR_BLOB,
+    /// A partial, owned as one reference; `None` is a funcref that could
+    /// not be built.
+    Partial(::core::mem::ManuallyDrop<Option<PartialRef>>) = VAR_PARTIAL,
+    /// A blob, owned as one reference; `None` is `v:_null_blob`.
+    Blob(::core::mem::ManuallyDrop<Option<BlobRef>>) = VAR_BLOB,
 }
 #[repr(C)]
 pub struct UserFunc {

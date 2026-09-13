@@ -176,8 +176,6 @@ union_readers! {
     Float,   Float,                    as_float,     float_or_zero = 0.0;
     String,  *mut ::core::ffi::c_char, as_string,    string_or_null = ::core::ptr::null_mut();
     Func,    *mut ::core::ffi::c_char, as_func_name, func_name_or_null = ::core::ptr::null_mut();
-    Partial, *mut Partial,             as_partial,   partial_or_null = ::core::ptr::null_mut();
-    Blob,    *mut Blob,                as_blob,      blob_or_null = ::core::ptr::null_mut();
 }
 
 impl TypVal {
@@ -288,8 +286,8 @@ impl TypVal {
             VAR_FLOAT => TypVal::Float(0.0),
             VAR_BOOL => TypVal::Bool(crate::types::kBoolVarFalse),
             VAR_SPECIAL => TypVal::Special(kSpecialVarNull),
-            VAR_PARTIAL => TypVal::Partial(::core::ptr::null_mut()),
-            VAR_BLOB => TypVal::Blob(::core::ptr::null_mut()),
+            VAR_PARTIAL => TypVal::partial(None),
+            VAR_BLOB => TypVal::blob(None),
             _ => panic!("a VarType outside the eleven the enum names"),
         }
     }
@@ -327,8 +325,8 @@ impl TypVal {
             TypVal::String(p) | TypVal::Func(p) => p.is_null(),
             TypVal::List(ref list) => list.is_none(),
             TypVal::Dict(ref dict) => dict.is_none(),
-            TypVal::Partial(p) => p.is_null(),
-            TypVal::Blob(p) => p.is_null(),
+            TypVal::Partial(ref pt) => pt.is_none(),
+            TypVal::Blob(ref blob) => blob.is_none(),
         }
     }
 
@@ -369,8 +367,12 @@ impl TypVal {
             TypVal::Dict(dict) => dict
                 .as_ref()
                 .map_or(::core::ptr::null(), |d| d.as_ptr().cast_const().cast()),
-            TypVal::Partial(p) => p.cast_const().cast(),
-            TypVal::Blob(p) => p.cast_const().cast(),
+            TypVal::Partial(pt) => pt
+                .as_ref()
+                .map_or(::core::ptr::null(), |p| p.as_ptr().cast_const().cast()),
+            TypVal::Blob(blob) => blob
+                .as_ref()
+                .map_or(::core::ptr::null(), |b| b.as_ptr().cast_const().cast()),
             TypVal::Number(n) => bits(n.cast_unsigned()),
             TypVal::Float(f) => bits(f.to_bits()),
             TypVal::Bool(b) => bits(u64::from(*b)),
@@ -455,8 +457,6 @@ union_writers! {
     Float,   float,     Float,                    write_float,     "a float";
     String,  string,    *mut ::core::ffi::c_char, write_string,    "an owned string";
     Func,    name,      *mut ::core::ffi::c_char, write_func_name, "an owned function name";
-    Partial, partial,   *mut Partial,             write_partial,   "a partial";
-    Blob,    blob,      *mut Blob,                write_blob,      "a blob";
 }
 
 impl TypVal {
@@ -869,19 +869,13 @@ pub(crate) unsafe fn tv_ht_iter<E: SlotEntry>(ht: *const HashTab<E>) -> TableIte
     }
 }
 
-/// Store `b` in `tv` as the return value, taking a reference to it.
+/// Store `b` in `tv` as the return value: the slot takes the handle over.
 ///
-/// # Safety
-/// `tv` must point at a writable `TypVal` holding no value yet — the old
-/// contents are overwritten, not cleared — and `b` is null or a live blob.
+/// The old contents are overwritten, not cleared, as every
+/// [`union_writers`] row is.
 #[inline(always)]
-pub unsafe fn tv_blob_set_ret(tv: &mut TypVal, b: *mut Blob) {
-    // SAFETY: the caller's promise: a writable typval.
-    let mut val = unsafe { Tv::new(tv) };
-    val.write_blob(b);
-    if let Some(b) = unsafe { b.as_mut() } {
-        b.bv_refcount.retain();
-    }
+pub fn tv_blob_set_ret(tv: &mut TypVal, b: Option<BlobRef>) {
+    tv.write_blob(b);
 }
 
 /// Length of `b`'s data in bytes; a NULL blob is empty.
@@ -986,8 +980,10 @@ mod tests {
             VAR_LIST => TypVal::list(unsafe { ListRef::owning(p.cast()) }),
             // SAFETY: as the list arm above.
             VAR_DICT => TypVal::dict(unsafe { DictRef::owning(p.cast()) }),
-            VAR_BLOB => TypVal::Blob(p.cast()),
-            VAR_PARTIAL => TypVal::Partial(p.cast()),
+            // SAFETY: as the list arm above.
+            VAR_BLOB => TypVal::blob(unsafe { BlobRef::owning(p.cast()) }),
+            // SAFETY: as the list arm above.
+            VAR_PARTIAL => TypVal::partial(unsafe { PartialRef::owning(p.cast()) }),
             VAR_STRING => TypVal::String(p.cast()),
             VAR_FUNC => TypVal::Func(p.cast()),
             other => panic!("no bogus payload for {other}"),
@@ -1068,8 +1064,8 @@ mod tests {
             TypVal::Float(1.0),
             TypVal::Bool(kBoolVarTrue),
             TypVal::Special(kSpecialVarNull),
-            TypVal::Partial(::core::ptr::null_mut()),
-            TypVal::Blob(::core::ptr::null_mut()),
+            TypVal::partial(None),
+            TypVal::blob(None),
         ] {
             // Every one of these is an empty value, so dropping it is free.
             // SAFETY: `repr(C, u32)` puts the discriminant first, and it is

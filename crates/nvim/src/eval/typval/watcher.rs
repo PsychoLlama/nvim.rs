@@ -122,10 +122,9 @@ pub unsafe fn callback_put(cb: *mut Callback, tv: &mut TypVal) {
     // SAFETY: as above, and a live callback whose payload it owns.
     match unsafe { &*cb } {
         Callback::Partial(partial) => {
-            value.write_partial(*partial);
-            // SAFETY: the partial the callback holds; the reference the
-            // typval is about to hold is what this counts.
-            unsafe { (**partial).pt_refcount.retain() };
+            // SAFETY: the partial the callback holds; the typval takes a
+            // reference of its own.
+            value.write_partial(unsafe { PartialRef::retained(*partial) });
         }
         Callback::Funcref(name) => {
             // SAFETY: a funcref names its own NUL-terminated bytes.

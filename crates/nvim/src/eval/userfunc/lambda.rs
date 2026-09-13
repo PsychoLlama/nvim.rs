@@ -13,6 +13,7 @@
 
 use crate::cstr;
 use crate::eval::Parsed;
+use crate::eval::typval::PartialRef;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::strings::has_bytes;
@@ -231,7 +232,8 @@ pub unsafe fn get_lambda_tv(
 
             part.pt_func = fp;
             part.pt_refcount = Refcount::ONE;
-            rv.write_partial(pt);
+            // SAFETY: the count just set is the one the slot takes over.
+            rv.write_partial(unsafe { PartialRef::owning(pt) });
         }
         true
     };
@@ -331,7 +333,8 @@ pub unsafe fn make_partial(selfdict: *mut Dict, result: &mut TypVal) {
         }
         unsafe { partial_unref(ret_pt.raw()) };
     }
-    rv.write_partial(pt);
+    // SAFETY: the count set above is the one the slot takes over.
+    rv.write_partial(unsafe { PartialRef::owning(pt) });
 }
 
 /// Wrap a Lua reference in a `UserFunc`, so that Vimscript can call it by

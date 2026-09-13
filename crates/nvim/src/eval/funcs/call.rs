@@ -13,8 +13,8 @@ use crate::cstr;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
-    ListRef, NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_list_items,
-    tv_list_iter, tv_list_len,
+    ListRef, NumBuf, PartialRef, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy,
+    tv_list_items, tv_list_iter, tv_list_len,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -512,6 +512,8 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     }
 
     unsafe { (*pt).pt_refcount = Refcount::ONE };
+    // SAFETY: the count just set is the one this handle owns.
+    let held = unsafe { PartialRef::owning(pt) };
     if !arg_pt.is_null() && !unsafe { (*arg_pt).pt_func }.is_null() {
         unsafe { (*pt).pt_func = (*arg_pt).pt_func };
         unsafe { func_ptr_ref((*pt).pt_func) };
@@ -524,7 +526,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         unsafe { (*pt).pt_name = name };
         unsafe { func_ref(name) };
     }
-    result.write_partial(pt);
+    result.write_partial(held);
 }
 
 /// `funcref({name} [, {arglist}] [, {dict}])`

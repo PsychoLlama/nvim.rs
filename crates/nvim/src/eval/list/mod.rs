@@ -45,7 +45,7 @@ use core::slice;
 
 use crate::cstr;
 use crate::eval::typval::{
-    DictRef, ListRef, NumBuf, index_of, tv_blob_copy, tv_blob_remove, tv_blob_set_ret,
+    BlobRef, DictRef, ListRef, NumBuf, index_of, tv_blob_copy, tv_blob_remove, tv_blob_set_ret,
     tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret,
     tv_dict_copy, tv_dict_extend, tv_dict_item_remove, tv_dict_remove, tv_equal, tv_get_number_chk,
     tv_list_alloc_ret, tv_list_append_owned_tv, tv_list_append_tv, tv_list_copy, tv_list_extend,
@@ -642,8 +642,8 @@ impl BlobArg {
     /// Store the blob in `result`, taking a reference to it.
     #[inline(always)]
     pub(crate) fn set_ret(self, result: &mut TypVal) {
-        // SAFETY: live or NULL, and `result` is a cleared result slot.
-        unsafe { tv_blob_set_ret(result, self.0) };
+        // SAFETY: live or NULL; the slot takes a reference of its own.
+        tv_blob_set_ret(result, unsafe { BlobRef::retained(self.0) });
     }
 
     /// Copy the blob into `result` and answer the copy, for `mapnew()`.

@@ -28,9 +28,9 @@ use std::ops::Deref;
 use std::ptr;
 
 use neovim::eval::typval::{
-    DictRef, ListRef, tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear, tv_copy, tv_dict_add,
-    tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv, tv_list_find,
-    tv_list_len,
+    BlobRef, DictRef, ListRef, PartialRef, tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear,
+    tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
+    tv_list_append_owned_tv, tv_list_find, tv_list_len,
 };
 use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
@@ -140,14 +140,14 @@ impl Tv {
             Tv::NullStr => TypVal::String(ptr::null_mut()),
             Tv::NullList => list_tv(None),
             Tv::NullDict => dict_tv(None),
-            Tv::NullBlob => TypVal::Blob(ptr::null_mut()),
+            Tv::NullBlob => blob_tv(None),
             Tv::Blob(bytes) => {
-                let b = tv_blob_alloc();
-                unsafe { (*b).bv_refcount = Refcount::ONE };
+                let held = tv_blob_alloc();
+                let b = held.as_ptr();
                 for byte in bytes {
                     unsafe { ga_append(&raw mut (*b).bv_ga, *byte) };
                 }
-                TypVal::Blob(b)
+                blob_tv(Some(held))
             }
             Tv::List(items) => {
                 let list = tv_list_alloc(items.len() as isize);
@@ -177,7 +177,8 @@ impl Tv {
             Tv::Func(name) => {
                 TypVal::Func(unsafe { xmemdupz(name.as_ptr().cast(), name.len()) }.cast())
             }
-            Tv::Partial(pt) => TypVal::Partial(unsafe { pt.build_at(path) }),
+            // SAFETY: the partial just built, at a count of one.
+            Tv::Partial(pt) => partial_tv(unsafe { PartialRef::owning(pt.build_at(path)) }),
             Tv::Cycle(up) => {
                 // The container is already live and gains a reference.
                 match path[*up] {
@@ -270,14 +271,14 @@ impl Payload for TypVal {
 
     fn blob(&self) -> *mut Blob {
         match self {
-            TypVal::Blob(b) => *b,
+            TypVal::Blob(b) => b.as_ref().map_or(ptr::null_mut(), BlobRef::as_ptr),
             other => panic!("not a blob: v_type {}", other.v_type()),
         }
     }
 
     fn partial(&self) -> *mut Partial {
         match self {
-            TypVal::Partial(pt) => *pt,
+            TypVal::Partial(pt) => pt.as_ref().map_or(ptr::null_mut(), PartialRef::as_ptr),
             other => panic!("not a partial: v_type {}", other.v_type()),
         }
     }
@@ -374,8 +375,8 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
         TypVal::String(s) => Tv::Str(unsafe { CStr::from_ptr(*s) }.to_bytes().to_vec()),
         TypVal::Func(s) if s.is_null() => Tv::NullStr,
         TypVal::Func(s) => Tv::Func(unsafe { CStr::from_ptr(*s) }.to_bytes().to_vec()),
-        TypVal::Blob(b) if b.is_null() => Tv::NullBlob,
-        TypVal::Blob(b) => Tv::Blob(unsafe { blob_bytes(*b) }),
+        TypVal::Blob(b) if b.is_none() => Tv::NullBlob,
+        TypVal::Blob(b) => Tv::Blob(unsafe { blob_bytes(b.as_ref().expect("a blob").as_ptr()) }),
         TypVal::List(l) => {
             let at: *const List = l.as_ref().map_or(ptr::null(), |l| l.as_ptr().cast_const());
             unsafe { read_list_at(at, path) }
@@ -384,7 +385,10 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
             let at: *const Dict = d.as_ref().map_or(ptr::null(), |d| d.as_ptr().cast_const());
             unsafe { read_dict_at(at, path) }
         }
-        TypVal::Partial(pt) => Tv::Partial(Box::new(unsafe { read_partial(*pt, path) })),
+        TypVal::Partial(pt) => {
+            let at: *const Partial = pt.as_ref().map_or(ptr::null(), |p| p.as_ptr().cast_const());
+            Tv::Partial(Box::new(unsafe { read_partial(at, path) }))
+        }
     }
 }
 
@@ -639,6 +643,16 @@ pub(crate) fn list_tv(handle: Option<ListRef>) -> TypVal {
 /// The dictionary half of [`list_tv`].
 pub(crate) fn dict_tv(handle: Option<DictRef>) -> TypVal {
     TypVal::Dict(ManuallyDrop::new(handle))
+}
+
+/// The blob half of [`list_tv`].
+pub(crate) fn blob_tv(handle: Option<BlobRef>) -> TypVal {
+    TypVal::Blob(ManuallyDrop::new(handle))
+}
+
+/// The partial half of [`list_tv`].
+pub(crate) fn partial_tv(handle: Option<PartialRef>) -> TypVal {
+    TypVal::Partial(ManuallyDrop::new(handle))
 }
 
 pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> neovim::types::GArray {

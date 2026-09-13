@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::eval::typval::BlobRef;
 use crate::eval::typval::{ListRef, NumBuf, tv_clear, tv_get_number, tv_list_extend};
 use crate::eval::{Tv, grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
@@ -74,9 +75,9 @@ unsafe fn tv_op_blob(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
     if b1.is_null() {
         // Appending to an unallocated blob shares the right-hand one
         // rather than copying it.
-        lhs.write_blob(b2);
-        // SAFETY: `b2` is the live Blob the right-hand typval holds.
-        unsafe { (*b2).bv_refcount.retain() };
+        // SAFETY: `b2` is the live Blob the right-hand typval holds, and
+        // this takes a reference of its own.
+        lhs.write_blob(unsafe { BlobRef::retained(b2) });
         return Ok(());
     }
     // SAFETY: `b2` is live.
