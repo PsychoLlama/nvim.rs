@@ -627,3 +627,124 @@ pub fn blob_copy(from: Option<&Blob>, to: &mut TypVal) {
     copy.claim(from.len()).copy_from_slice(from.bytes());
     to.write_blob(Some(copy));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Exclusive use of the collector's registries, which allocating a value
+    /// into a typval reaches. See [`crate::eval::gc::serial`].
+    fn serial() -> crate::eval::gc::serial::Held {
+        crate::eval::gc::serial::lock()
+    }
+
+    /// A blob holding `bytes`, owned by the handle it answers.
+    fn blob_of(bytes: &[u8]) -> BlobRef {
+        let mut b = tv_blob_alloc();
+        b.claim(bytes.len()).copy_from_slice(bytes);
+        b
+    }
+
+    /// A blob the allocator has never grown has a **null** `ga_data`, and
+    /// `from_raw_parts` refuses a null base even for an empty slice -- which
+    /// is why [`Blob::bytes`] tests it rather than trusting the length.
+    #[test]
+    fn an_untouched_blob_is_the_empty_slice() {
+        let _held = serial();
+        let mut b = tv_blob_alloc();
+        assert!(b.bv_ga.ga_data.is_null());
+        assert_eq!(b.bytes(), b"");
+        assert_eq!(b.bytes_mut(), b"");
+        assert_eq!(b.len(), 0);
+        assert!(b.is_empty());
+        assert_eq!(blob_len(Some(&b)), 0);
+        assert_eq!(blob_len(None), 0);
+        assert_eq!(blob_bytes(None), b"");
+    }
+
+    /// `claim` hands back exactly the run it added, leaving what was there.
+    #[test]
+    fn claiming_room_answers_only_the_new_bytes() {
+        let _held = serial();
+        let mut b = blob_of(b"ab");
+        let room = b.claim(3);
+        assert_eq!(room.len(), 3);
+        room.copy_from_slice(b"cde");
+        assert_eq!(b.bytes(), b"abcde");
+        assert_eq!(b.claim(0).len(), 0);
+        assert_eq!(b.bytes(), b"abcde");
+    }
+
+    /// `drain` closes the gap and shortens the blob; the run may be the
+    /// whole of it, which is `remove(b, 0, len(b) - 1)`.
+    #[test]
+    fn draining_a_run_closes_the_gap() {
+        let _held = serial();
+        let mut b = blob_of(b"abcdef");
+        b.drain(1, 2);
+        assert_eq!(b.bytes(), b"adef");
+        b.drain(3, 3);
+        assert_eq!(b.bytes(), b"ade");
+        b.drain(0, 2);
+        assert_eq!(b.bytes(), b"");
+        assert!(b.is_empty());
+    }
+
+    /// `blob[idx] = byte` grows the blob by one at the slot just past the
+    /// end and ignores anything further out -- upstream's silence, kept.
+    #[test]
+    fn setting_the_slot_past_the_end_appends_and_no_further() {
+        let _held = serial();
+        let mut b = blob_of(b"ab");
+        b.set_or_append(0, b'z');
+        assert_eq!(b.bytes(), b"zb");
+        b.set_or_append(2, b'c');
+        assert_eq!(b.bytes(), b"zbc");
+        b.set_or_append(9, b'!');
+        assert_eq!(b.bytes(), b"zbc");
+    }
+
+    /// `:let b[0 : len(b) - 1] = b` names one blob twice.  The length check
+    /// forces such a range to be the whole blob, so the copy is the
+    /// identity -- and the borrow is never taken twice.
+    #[test]
+    fn assigning_a_blob_over_the_whole_of_itself_changes_nothing() {
+        let _held = serial();
+        let held = blob_of(b"abcd");
+        let src = TypVal::blob(Some(held.clone()));
+        let mut dest = TypVal::Unknown;
+        dest.write_blob(Some(held));
+
+        let at = dest.blob_mut().expect("the blob just stored");
+        assert_eq!(blob_set_range(at, 0, 3, &src), Ok(()));
+        assert_eq!(at.bytes(), b"abcd");
+
+        // A shorter range of the same blob never gets here: the length
+        // check refuses it first, which is what keeps the identity the only
+        // aliased case. That path raises `E972`, so it belongs in the
+        // differential rather than here.
+
+        tv_clear(&mut dest);
+        drop(src);
+    }
+
+    /// A copy is a blob of its own, holding the same bytes.
+    #[test]
+    fn copying_a_blob_answers_a_blob_of_its_own() {
+        let _held = serial();
+        let from = blob_of(b"xyz");
+        let mut to = TypVal::Unknown;
+        blob_copy(Some(&from), &mut to);
+        let copy = to.blob_ref().expect("the copy");
+        assert_eq!(copy.bytes(), b"xyz");
+        assert!(!::core::ptr::eq(copy, &*from));
+        assert!(blob_equal(Some(&from), Some(copy)));
+
+        let mut nothing = TypVal::Unknown;
+        blob_copy(None, &mut nothing);
+        assert_eq!(nothing.blob_ref().map(Blob::len), None);
+        assert!(blob_equal(None, nothing.blob_ref()));
+
+        tv_clear(&mut to);
+    }
+}

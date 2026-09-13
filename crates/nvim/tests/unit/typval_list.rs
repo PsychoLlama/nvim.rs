@@ -1291,6 +1291,32 @@ fn extending_with_an_empty_list_does_nothing() {
     }
 }
 
+/// `extend(l, v:_null_list)`: the NULL list is the empty one, and extends
+/// nothing.
+///
+/// Not a spec case — `null_spec.lua` is where the behaviour is written
+/// down, and the reason it is here as well is that the pointer form read
+/// the source through `tv_list_items`, which answers the empty slice for a
+/// NULL list, where the borrowed form has to say so itself.
+#[test]
+fn extending_with_a_null_list_does_nothing() {
+    let log = AllocLog::start();
+    // SAFETY: the list is this case's own, and NULL is a list argument.
+    unsafe {
+        let l = tv::new_list(&[f(1.0), f(2.0)]);
+        log.clear();
+
+        for bef in [None, Some(0), Some(1)] {
+            list_extend(l, ptr::null(), bef);
+            log.check(&[]);
+            assert_eq!((*l).lv_refcount.get(), 1);
+            assert_eq!(tv::read_list(l), Tv::List(vec![f(1.0), f(2.0)]));
+        }
+
+        list_free(l);
+    }
+}
+
 /// The same `describe`'s `itp('can extend list with another non-empty
 /// list')`, spec line 1028.
 ///
