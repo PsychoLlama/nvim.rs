@@ -131,8 +131,9 @@ impl TypvalSink for NothingSink {
     /// # Safety
     ///
     /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    fn conv_blob(&mut self, tv: Option<&mut TypVal>, _bytes: &[u8]) {
+    /// it is standing on.  The bytes are never read, which is what lets
+    /// this release them.
+    unsafe fn conv_blob(&mut self, tv: Option<&mut TypVal>, _bytes: *const [u8]) {
         let tv = slot(tv);
         // The slot gives up its reference and is left `v:_null_blob`.
         drop(tv.take_blob());

@@ -312,19 +312,22 @@ unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) 
         return false;
     }
     // SAFETY: the caller's promise: `ll_blob` is live, the name resolved.
-    let blob = unsafe { &mut *lval.ll_blob };
+    let lock = unsafe { (*lval.ll_blob).bv_lock };
     // SAFETY: `ll_name` is the resolved name, NUL-terminated.
-    let locked = unsafe { value_check_lock(blob.bv_lock, lval.ll_name, TV_CSTRING) };
+    let locked = unsafe { value_check_lock(lock, lval.ll_name, TV_CSTRING) };
     if locked {
         return false;
     }
 
     if lval.ll_range && value.v_type() == VAR_BLOB {
         if lval.ll_empty2 {
-            lval.ll_n2 = blob_len(Some(blob)) - 1;
+            // SAFETY: as above.
+            lval.ll_n2 = blob_len(unsafe { lval.ll_blob.as_ref() }) - 1;
         }
         let (n1, n2) = (VarNumber::from(lval.ll_n1), VarNumber::from(lval.ll_n2));
-        if blob_set_range(blob, n1, n2, result).is_err() {
+        // SAFETY: as above -- and `result` may hold that very blob, which
+        // is why this takes the pointer.
+        if unsafe { blob_set_range(lval.ll_blob, n1, n2, result) }.is_err() {
             return false;
         }
         return true;
@@ -337,7 +340,9 @@ unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) 
             let _ = val;
             semsg!("E1239: Invalid value for blob: 0xlX");
         } else {
-            blob.set_or_append(lval.ll_n1, u8::try_from(val).expect("a byte, just checked"));
+            // SAFETY: as above.
+            unsafe { &mut *lval.ll_blob }
+                .set_or_append(lval.ll_n1, u8::try_from(val).expect("a byte, just checked"));
         }
     }
     true

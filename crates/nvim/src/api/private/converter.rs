@@ -185,7 +185,14 @@ impl TypvalSink for ObjectSink {
 
     /// A blob is bytes, and so is a `String` object.
     ///
-    fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: &[u8]) {
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
+    /// it is standing on.
+    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: *const [u8]) {
+        // SAFETY: the walk's promise: the blob's own array, and this sink
+        // releases nothing.
+        let bytes = unsafe { &*bytes };
         self.emit(Object::string(String_0::from_bytes(bytes)));
     }
 

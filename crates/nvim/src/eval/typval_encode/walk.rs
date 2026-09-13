@@ -204,11 +204,11 @@ unsafe fn convert_one_value<S: TypvalSink>(
             item_hook!(unsafe { sink.conv_float(slot!(), f) });
         }
         VAR_BLOB => {
-            // SAFETY: the value's own blob, borrowed for the call.
-            let bytes = blob_bytes(unsafe { val.blob_or_null().as_ref() });
+            // A raw slice, not a borrow: the sink may release the value.
+            // SAFETY: the value's own blob.
+            let bytes = ::core::ptr::from_ref(blob_bytes(unsafe { val.blob_or_null().as_ref() }));
             // SAFETY: the walk's contract on the value it is standing on.
-            let slot = unsafe { slot!() };
-            sink.conv_blob(slot, bytes);
+            unsafe { sink.conv_blob(slot!(), bytes) };
         }
         VAR_FUNC => {
             let name = val.func_name_or_null();

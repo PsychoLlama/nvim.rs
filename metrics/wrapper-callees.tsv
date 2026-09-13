@@ -13,7 +13,7 @@ count	callee	no_raw	defs	def
 161	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 154	from_raw_parts	0	0	
 151	Ea::new	0	70	
-134	.as_ref	0	0	
+136	.as_ref	0	0	
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 120	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 110	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
@@ -1519,6 +1519,7 @@ count	callee	no_raw	defs	def
 2	backslash_halve_save	0	1	crates/nvim/src/charset/mod.rs
 2	backslashes_before	0	1	crates/nvim/src/option/expand.rs
 2	before_quit_all	0	1	crates/nvim/src/ex_docmd/quit.rs
+2	blob_set_range	0	1	crates/nvim/src/eval/typval/blob.rs
 2	blob_unref	0	1	crates/nvim/src/eval/typval/blob.rs
 2	block_def2str	1	1	crates/nvim/src/eval/funcs/region.rs
 2	briopt_check	0	1	crates/nvim/src/indent/breakindent.rs
@@ -2449,6 +2450,7 @@ count	callee	no_raw	defs	def
 1	.can_strip	1	1	crates/nvim/src/path/mod.rs
 1	.consider	0	1	crates/nvim/src/undo/apply/entry.rs
 1	.contents	0	2	crates/nvim/src/getchar/buffers.rs
+1	.conv_blob	0	7	
 1	.conv_empty_list	0	0	
 1	.conv_ext_string	0	7	
 1	.conv_list_between_items	0	0	

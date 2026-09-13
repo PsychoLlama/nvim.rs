@@ -476,29 +476,43 @@ pub fn blob_check_range(
 
 /// `dest[n1 : n2] = src`: copy `src`'s blob over that range of `dest`.
 ///
-/// The two may be the *same* blob -- `:let b[0 : len(b) - 1] = b` reaches
-/// here with one blob as both operands. The length check above forces such
-/// a range to be the whole blob, so the copy is the identity and the borrow
-/// never has to be taken twice.
-pub fn blob_set_range(
-    dest: &mut Blob,
+/// `dest` is a **pointer** rather than a borrow because `src` may name the
+/// very same blob: `:let b[0 : len(b) - 1] = b` reaches here with one blob
+/// as both operands, and a `&mut` to it while the source is being read is
+/// undefined where the pointer was merely delicate. The length check forces
+/// such a range to span the whole blob, so the copy is the identity and
+/// this answers before it takes the borrow at all.
+///
+/// # Safety
+///
+/// `dest` must point at a live blob with no other borrow of it live for the
+/// call; `src` may hold that same blob.
+pub unsafe fn blob_set_range(
+    dest: *mut Blob,
     n1: VarNumber,
     n2: VarNumber,
     src: &TypVal,
 ) -> Result<(), Failed> {
-    let from = src.blob_ref();
+    // The source is kept as a pointer as well as a borrow: `dest` is
+    // compared against the pointer, because a second *borrow* of what it
+    // names is the aliasing this exists to avoid.
+    let at = src.blob_or_null();
+    // SAFETY: the value's own blob.
+    let from = unsafe { at.as_ref() };
     if n2 - n1 + 1 != VarNumber::from(blob_len(from)) {
         let msg = tr(c"E972: Blob value does not have the right number of bytes");
         // SAFETY: a NUL-terminated message from the translation table.
         unsafe { emsg_ptr(msg) };
         return Err(Failed);
     }
-    if from.is_some_and(|from| ::core::ptr::eq(from, dest)) {
+    if ::core::ptr::eq(at, dest) {
         return Ok(());
     }
-    let at = usize::try_from(n1).expect("a byte of the blob");
     let bytes = blob_bytes(from);
-    dest.bytes_mut()[at..at + bytes.len()].copy_from_slice(bytes);
+    let first = usize::try_from(n1).expect("a byte of the blob");
+    // SAFETY: the caller's live blob, which the test above says `from` is
+    // not -- so the two borrows name different allocations.
+    unsafe { (*dest).bytes_mut()[first..first + bytes.len()].copy_from_slice(bytes) };
     Ok(())
 }
 
@@ -711,13 +725,14 @@ mod tests {
     fn assigning_a_blob_over_the_whole_of_itself_changes_nothing() {
         let _held = serial();
         let held = blob_of(b"abcd");
+        let at = held.as_ptr();
         let src = TypVal::blob(Some(held.clone()));
         let mut dest = TypVal::Unknown;
         dest.write_blob(Some(held));
 
-        let at = dest.blob_mut().expect("the blob just stored");
-        assert_eq!(blob_set_range(at, 0, 3, &src), Ok(()));
-        assert_eq!(at.bytes(), b"abcd");
+        // SAFETY: the blob both values hold, unborrowed for the call.
+        assert_eq!(unsafe { blob_set_range(at, 0, 3, &src) }, Ok(()));
+        assert_eq!(blob_bytes(dest.blob_ref()), b"abcd");
 
         // A shorter range of the same blob never gets here: the length
         // check refuses it first, which is what keeps the identity the only

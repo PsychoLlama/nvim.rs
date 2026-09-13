@@ -190,7 +190,14 @@ impl TypvalSink for LuaSink {
         Flow::Go
     }
 
-    fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: &[u8]) {
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
+    /// it is standing on.
+    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: *const [u8]) {
+        // SAFETY: the walk's promise: the blob's own array, and this sink
+        // releases nothing.
+        let bytes = unsafe { &*bytes };
         let data = if bytes.is_empty() {
             c"".as_ptr()
         } else {

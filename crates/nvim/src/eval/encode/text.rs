@@ -201,7 +201,14 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         Flow::Go
     }
 
-    fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: &[u8]) {
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
+    /// it is standing on.
+    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: *const [u8]) {
+        // SAFETY: the walk's promise: the blob's own array, and this sink
+        // releases nothing.
+        let bytes = unsafe { &*bytes };
         let len = c_int::try_from(bytes.len()).expect("a short blob");
         if len == 0 {
             self.gap.extend_from_slice(b"0z");

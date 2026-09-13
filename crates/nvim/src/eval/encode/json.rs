@@ -153,7 +153,14 @@ impl TypvalSink for JsonSink<'_> {
 
     /// A blob becomes an array of byte values — JSON has nothing shorter.
     ///
-    fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: &[u8]) {
+    /// # Safety
+    ///
+    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
+    /// it is standing on.
+    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: *const [u8]) {
+        // SAFETY: the walk's promise: the blob's own array, and this sink
+        // releases nothing.
+        let bytes = unsafe { &*bytes };
         if bytes.is_empty() {
             self.gap.extend_from_slice(b"[]");
             return;

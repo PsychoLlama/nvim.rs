@@ -358,7 +358,17 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// The walk's contract on the value it is standing on, above. `blob` points at a live blob holding `len` bytes,
     /// borrowed for the call.
-    fn conv_blob(&mut self, tv: Option<&mut TypVal>, bytes: &[u8]);
+    /// The bytes arrive as a **raw slice**, not a `&[u8]`, because a sink
+    /// is free to release the value it is standing on -- `NothingSink` does,
+    /// and a reference handed to a call that frees what it names is
+    /// undefined however short its life. A reading sink dereferences it
+    /// first and does not touch `tv`.
+    ///
+    /// # Safety
+    ///
+    /// `bytes` names the blob's own array and is live until this sink
+    /// releases the value, which no sink that reads the bytes does.
+    unsafe fn conv_blob(&mut self, tv: Option<&mut TypVal>, bytes: *const [u8]);
 
     /// A funcref or partial, before its arguments.  `fun` may be NULL;
     /// `prefix` is `"g:"` where the name needs qualifying.
