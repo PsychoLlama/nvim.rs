@@ -2375,7 +2375,6 @@ count	callee	no_raw	defs	def
 2	tv_dict_has_key	0	1	crates/nvim/src/eval/typval/dictget.rs
 2	tv_get_bool	0	0	
 2	tv_get_float	0	0	
-2	tv_get_float_chk	0	1	crates/nvim/src/eval/funcs/wrappers.rs
 2	tv_islocked	0	0	
 2	tv_list_alloc	0	0	
 2	tv_list_equal	0	1	crates/nvim/src/eval/typval/listops.rs

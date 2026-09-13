@@ -156,9 +156,7 @@ pub fn trunc(x: Float) -> Float {
 /// Argument `i` coerced to Float, reporting E808 if it is neither a Float
 /// nor a Number.
 fn float_arg(args: &[TypVal], i: usize) -> Option<Float> {
-    let mut f: Float = 0.0;
-    // SAFETY: `&args[i]` is a live typval and `f` is a live local.
-    unsafe { tv_get_float_chk(&args[i], &raw mut f) }.then_some(f)
+    tv_get_float_chk(&args[i]).ok()
 }
 
 /// `float2nr({expr})` — truncation towards zero, saturating at the Number

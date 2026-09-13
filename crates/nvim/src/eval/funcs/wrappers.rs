@@ -16,8 +16,9 @@ use crate::buffer::{buflist_findpat, find_buf};
 use crate::cstr;
 use crate::eval::buffer::find_buffer;
 use crate::eval::typval::{
-    CallFrame, ListRef, NumBuf, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy, tv_dict_alloc_ret,
-    tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_list_alloc_ret,
+    CallFrame, ListRef, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
+    tv_dict_alloc_ret, tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk,
+    tv_list_alloc_ret,
 };
 use crate::eval::userfunc::get_user_func_name;
 use crate::eval::vars::{cat_prefix_varname, get_user_var_name};
@@ -348,41 +349,36 @@ pub(crate) fn non_zero_arg(tv: &TypVal) -> bool {
     }
 }
 
-/// A Float or a Number as a Float, reporting E808 for anything else.
-///
-/// # Safety
-/// `tv` is a live typval.
-pub(crate) unsafe fn tv_get_float_chk(tv: &TypVal, ret_f: *mut Float) -> bool {
-    // SAFETY: the caller's obligation; each union read is guarded by the
-    // type tag that names it.
-    match (*tv).v_type() {
-        VAR_FLOAT => unsafe { *ret_f = (*tv).float_or_zero() },
-        VAR_NUMBER => unsafe { *ret_f = (*tv).number_or_zero() as Float },
+/// A Float or a Number as a Float, or [`Unconvertible`] with E808 reported
+/// for anything else.
+pub(crate) fn tv_get_float_chk(tv: &TypVal) -> Result<Float, Unconvertible> {
+    match tv.v_type() {
+        VAR_FLOAT => Ok(tv.float_or_zero()),
+        VAR_NUMBER => Ok(tv.number_or_zero() as Float),
         _ => {
             let msg = c"E808: Number or Float required";
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
+            // SAFETY: a message argument this call holds as a NUL-terminated
+            // string for the length of the format.
             let arg0 = unsafe { c_str(gettext(msg).as_ptr()) };
             semsg!("{arg0}");
-            return false;
+            Err(Unconvertible)
         }
     }
-    true
 }
 
 /// The body every one-argument float builtin shares. The generated table
 /// puts the libm function in the row's payload.
 ///
 pub fn float_op_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
-    let mut f: Float = 0.0;
     result.write_empty(VAR_FLOAT);
-    // SAFETY: an argument is a live value and `f` is this frame's local.
-    let value = if unsafe { tv_get_float_chk(&args[0], &raw mut f) } {
-        let EvalFuncData::Float(op) = fptr else {
-            unreachable!("a float builtin's row carries its operation")
-        };
-        op.expect("non-null function pointer")(f)
-    } else {
-        0.0
+    let value = match tv_get_float_chk(&args[0]) {
+        Ok(f) => {
+            let EvalFuncData::Float(op) = fptr else {
+                unreachable!("a float builtin's row carries its operation")
+            };
+            op.expect("non-null function pointer")(f)
+        }
+        Err(_) => 0.0,
     };
     result.write_float(value);
 }
