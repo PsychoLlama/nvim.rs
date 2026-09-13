@@ -230,11 +230,17 @@ impl List {
 /// pointers precisely because one borrow cannot answer both, and each arm
 /// takes only the borrows it needs.
 ///
+/// A NULL `src` is the empty list -- `extend(l, v:_null_list)` -- and
+/// extends nothing.
+///
 /// # Safety
-/// `dest` and `src` must point at live lists -- possibly the same one --
-/// with no other borrow of either live for the call, and `bef` must be
-/// `None` or an index of `dest`.
+/// `dest` must point at a live list and `src` at a live list or null --
+/// possibly the same list as `dest` -- with no other borrow of either live
+/// for the call, and `bef` must be `None` or an index of `dest`.
 pub unsafe fn list_extend(dest: *mut List, src: *const List, bef: InsertAt) {
+    if src.is_null() {
+        return;
+    }
     if ::core::ptr::eq(dest.cast_const(), src) {
         // SAFETY: the caller's promise: a live list.
         unsafe { &mut *dest }.extend_from_self(bef);

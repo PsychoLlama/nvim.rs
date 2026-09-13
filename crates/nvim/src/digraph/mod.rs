@@ -574,12 +574,12 @@ fn digraph_setlist_common(arg: &TypVal) -> bool {
     // `digraph_set_common` does not touch the list it is reading from.
     for pli in list_iter(unsafe { pl.as_ref() }) {
         let l = pli.li_tv.list_or_null();
-        if l.is_null() || list_len(unsafe { l.as_ref() }) != 2 {
+        if l.is_null() || list_len(pli.li_tv.list_ref()) != 2 {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;
         }
         // SAFETY: a live list of exactly two items.
-        let pair = list_items(unsafe { l.as_ref() });
+        let pair = list_items(pli.li_tv.list_ref());
         if !digraph_set_common(&pair[0].li_tv, &pair[1].li_tv) {
             return false;
         }

@@ -450,7 +450,7 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     unsafe { ga_init(&raw mut ga, 1, 80) };
     let mut buf: [::core::ffi::c_char; 22] = [0; 22];
     // SAFETY: the builtin's own argument, borrowed for the walk.
-    for li in list_iter(unsafe { l.as_ref() }) {
+    for li in list_iter(args.list_ref()) {
         let n = tv_get_number(&li.li_tv);
         let buflen = unsafe { utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) } as size_t;
         buf[buflen as usize] = '\0' as ::core::ffi::c_char;

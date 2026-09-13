@@ -229,10 +229,21 @@ pub(crate) fn watch_permute(l: &mut List, moved: &[::core::ffi::c_int]) {
 /// Lists are `int`-indexed the whole way down (`list_len`, `E684`, the
 /// `[n1:n2]` arithmetic), so this is where the width changes, once.  A list
 /// longer than `INT_MAX` cannot be built: every path that adds an item goes
-/// through a length this saturates.
+/// through a length this saturates.  A subscript the user wrote goes through
+/// it too, which is why it takes a signed width as well: upstream truncated
+/// the `varnumber_T` and let the bounds check reject whatever came out, and
+/// saturating is the same answer for every index a list can hold.
 #[inline(always)]
-pub(crate) fn index_of(n: usize) -> ::core::ffi::c_int {
-    ::core::ffi::c_int::try_from(n).unwrap_or(::core::ffi::c_int::MAX)
+pub(crate) fn index_of<N>(n: N) -> ::core::ffi::c_int
+where
+    N: Copy + Default + PartialOrd + TryInto<::core::ffi::c_int>,
+{
+    let negative = n < N::default();
+    n.try_into().unwrap_or(if negative {
+        ::core::ffi::c_int::MIN
+    } else {
+        ::core::ffi::c_int::MAX
+    })
 }
 
 /// An owning reference to a heap-allocated [`List`].

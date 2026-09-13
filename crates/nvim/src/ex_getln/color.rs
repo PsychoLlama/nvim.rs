@@ -290,17 +290,16 @@ msg_putchar('\n' as ::core::ffi::c_int);
                 print_errmsg!("E5401: List item {i} is not a List");
                 break 'body Label::Error;
             }
-            let l: *const List = li.li_tv.list_or_null();
-            if list_len(unsafe { l.as_ref() }) != 3 {
+            if list_len(li.li_tv.list_ref()) != 3 {
                 // SAFETY: `l` is the list item just checked.
-                let len = list_len(unsafe { l.as_ref() });
+                let len = list_len(li.li_tv.list_ref());
                 print_errmsg!("E5402: List item {i} has incorrect length: {len} /= 3");
                 break 'body Label::Error;
             }
 
             // SAFETY: the item's own list, just checked to hold three
             // items.
-            let chunk = list_items(unsafe { l.as_ref() });
+            let chunk = list_items(li.li_tv.list_ref());
             let Ok(start) = tv_get_number_chk(&chunk[0].li_tv) else {
                 break 'body Label::Error;
             };

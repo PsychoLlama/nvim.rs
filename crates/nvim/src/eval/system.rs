@@ -81,7 +81,7 @@ pub unsafe fn tv_to_argv(
 
     let argl: *mut List = tv.list_or_null();
     // SAFETY: `argl` is a live List or null.
-    let argc = list_len(unsafe { argl.as_ref() });
+    let argc = list_len(tv.list_ref());
     if argc == 0 {
         // SAFETY: `e_invarg` is a shared NUL-terminated message.
         emsg_static(e_invarg);
@@ -126,7 +126,7 @@ pub unsafe fn tv_to_argv(
     let mut i = 0;
     if !argl.is_null() {
         // SAFETY: `argl` is a live List.
-        for arg in list_iter(unsafe { argl.as_ref() }) {
+        for arg in list_iter(tv.list_ref()) {
             // SAFETY: `arg` is one of the List's items, and `numbuf3`
             // outlives the string rendered into it.
             let a = numbuf3.string_ptr_chk(&arg.li_tv);

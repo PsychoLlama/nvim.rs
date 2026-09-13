@@ -290,7 +290,7 @@ fn seed_list(tv: &TypVal) -> Option<[*mut TypVal; 4]> {
     // null for an empty list literal; `list_len` answers 0 for null.
     let l = tv.list_or_null();
     // SAFETY: `l` is a list pointer or null.
-    if list_len(unsafe { l.as_ref() }) != 4 {
+    if list_len(tv.list_ref()) != 4 {
         return None;
     }
     let mut out = [ptr::null_mut(); 4];

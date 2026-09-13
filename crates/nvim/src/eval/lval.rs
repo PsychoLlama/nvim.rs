@@ -14,6 +14,13 @@
 //! | set | — | null | true | a List slice |
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 #![allow(unsafe_code)]
 
 // The write half, which reads the record this one fills in.
@@ -34,9 +41,9 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    NumBuf, blob_check_index, blob_check_range, blob_len, di_lock, list_check_range_index_one,
-    list_check_range_index_two, list_items_mut, tv_blob_alloc_ret, tv_check_str, tv_dict_alloc,
-    tv_dict_find, tv_get_number, tv_list_alloc_ret,
+    NumBuf, blob_check_index, blob_check_range, blob_len, di_lock, index_of,
+    list_check_range_index_one, list_check_range_index_two, list_items_mut, tv_blob_alloc_ret,
+    tv_check_str, tv_dict_alloc, tv_dict_find, tv_get_number, tv_list_alloc_ret,
 };
 use crate::eval::userfunc::get_funccal_args_ht;
 use crate::eval::vars::{clear_local, emsg_static};
@@ -76,7 +83,7 @@ const NAMESPACES: &core::ffi::CStr = c"bgstvw";
 pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *const c_char {
     // SAFETY: the caller's promise -- `arg` is NUL-terminated, so its first byte is readable.
     let first = unsafe { *arg };
-    if !eval_isnamec1(first as c_int) {
+    if !eval_isnamec1(c_int::from(first)) {
         return arg;
     }
     // SAFETY: a name character is not the terminator, so the byte after it is inside the string.
@@ -85,12 +92,13 @@ pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *co
     loop {
         // SAFETY: `p` walks the string and every step stops at the terminator.
         let c = unsafe { *p };
-        if c as c_int == NUL || !eval_isnamec(c as c_int) {
+        if c_int::from(c) == NUL || !eval_isnamec(c_int::from(c)) {
             break;
         }
-        if c == b':' as c_char {
+        if c == b':'.cast_signed() {
             // A `:` continues the name only as the one namespace letter.
-            let namespaced = use_namespace && p == start && has_char(NAMESPACES, first as c_int);
+            let namespaced =
+                use_namespace && p == start && has_char(NAMESPACES, c_int::from(first));
             if !namespaced {
                 break;
             }
@@ -123,7 +131,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     result: Option<&mut TypVal>,
 ) -> GlvStatus {
     let mut numbuf = NumBuf::new();
-    let quiet = flags & GLV_QUIET as c_int != 0;
+    let quiet = flags & GLV_QUIET.cast_signed() != 0;
     // SAFETY: the caller's promise; `key_end` holds a cursor into `name`.
     let (mut lval, p) = unsafe { (Lv::new(lval), *key_end) };
     // SAFETY: the caller's promise: `ll_tv` holds a Dict, so `v_dict` is live.
@@ -166,7 +174,7 @@ pub(crate) unsafe fn get_lval_dict_item(
         };
         if len != -1 {
             // SAFETY: as above.
-            unsafe { *key.offset(len as isize) = NUL as c_char };
+            unsafe { *key.add(usize::try_from(len).expect("a key length")) = 0 };
         }
         // SAFETY: `key` is NUL-terminated either way now.
         let existing = lval.ll_di.is_null();
@@ -211,7 +219,7 @@ pub(crate) unsafe fn get_lval_dict_item(
         // follows it to subscript, or this is an `:unlet`.
         // SAFETY: `p` is a cursor into the NUL-terminated `name`.
         let after = unsafe { *p };
-        if after == b'[' as c_char || after == b'.' as c_char || unlet {
+        if after == b'['.cast_signed() || after == b'.'.cast_signed() || unlet {
             if !quiet {
                 // SAFETY: the format takes one NUL-terminated string.
                 let key = unsafe { c_str(key) };
@@ -223,7 +231,8 @@ pub(crate) unsafe fn get_lval_dict_item(
         lval.ll_newkey = if len == -1 {
             unsafe { xstrdup(key) }
         } else {
-            unsafe { xmemdupz(key as *const c_void, len as size_t) as *mut c_char }
+            let len = usize::try_from(len).expect("a key length");
+            unsafe { xmemdupz(key.cast::<c_void>(), len).cast::<c_char>() }
         };
         // SAFETY: the caller's promise about `key_end`.
         unsafe { *key_end = p };
@@ -232,10 +241,10 @@ pub(crate) unsafe fn get_lval_dict_item(
 
     // An existing item: check it may be changed.
     // SAFETY: `ll_di` is a live item, and `p` and `name` are cursors into the one string.
-    let di_flags = unsafe { (*lval.ll_di).di_flags } as c_int;
+    let di_flags = c_int::from(unsafe { (*lval.ll_di).di_flags });
     // SAFETY: as above.
-    let name_len = unsafe { p.offset_from(name) } as size_t;
-    let refused = flags & GLV_READ_ONLY as c_int == 0
+    let name_len = unsafe { p.offset_from(name) }.cast_unsigned();
+    let refused = flags & GLV_READ_ONLY.cast_signed() == 0
         && (unsafe { var_check_ro(di_flags, name, name_len) }
             || unsafe { var_check_lock(di_flags, name, name_len) });
     if refused {
@@ -267,13 +276,13 @@ pub(crate) unsafe fn get_lval_blob(
     lval.ll_n1 = if empty1 {
         0
     } else {
-        tv_get_number(var1) as c_int
+        index_of(tv_get_number(var1))
     };
-    let n1 = lval.ll_n1 as VarNumber;
+    let n1 = VarNumber::from(lval.ll_n1);
     blob_check_index(bloblen, n1, quiet)?;
     if lval.ll_range && !lval.ll_empty2 {
-        lval.ll_n2 = tv_get_number(var2) as c_int;
-        let n2 = lval.ll_n2 as VarNumber;
+        lval.ll_n2 = index_of(tv_get_number(var2));
+        let n2 = VarNumber::from(lval.ll_n2);
         blob_check_range(bloblen, n1, n2, quiet)?;
     }
     // SAFETY: as above -- the typval still holds the Blob.
@@ -313,7 +322,7 @@ pub(crate) unsafe fn get_lval_list(
     let first = if empty1 {
         0
     } else {
-        tv_get_number(var1) as c_int
+        index_of(tv_get_number(var1))
     };
     // SAFETY: `VAR_LIST` says the value holds a List, and
     // `rec` is the caller's record.
@@ -337,7 +346,7 @@ pub(crate) unsafe fn get_lval_list(
     if ranged {
         // SAFETY: `var2` is the caller's second index expression, and both
         // indexes are `lval`'s own fields.
-        unsafe { *n2 = tv_get_number(var2) as c_int };
+        unsafe { *n2 = index_of(tv_get_number(var2)) };
         // SAFETY: `at` is the index one selected.
         unsafe { list_check_range_index_two(list.as_ref(), &mut *n1, at, &mut *n2, quiet) }?;
     }
@@ -458,7 +467,8 @@ impl Subscripts<'_> {
         let key = unsafe { self.cursor.get().add(1) };
         let mut len: c_int = 0;
         loop {
-            let b = unsafe { *key.offset(len as isize) } as u8;
+            let b =
+                unsafe { *key.add(usize::try_from(len).expect("a key length")) }.cast_unsigned();
             if !(b.is_ascii_alphabetic() || ascii_isdigit(b.into()) || b == b'_') {
                 break;
             }
@@ -644,7 +654,7 @@ pub(crate) unsafe fn get_lval_subscript(
         result,
         unlet,
         flags,
-        quiet: flags & GLV_QUIET as c_int != 0,
+        quiet: flags & GLV_QUIET.cast_signed() != 0,
         evalarg: EVALARG_EVALUATE,
     };
     // The two index expressions. They outlive the walk, so a refusal
@@ -673,7 +683,7 @@ pub unsafe fn get_lval(
     flags: c_int,
     fne_flags: c_int,
 ) -> *mut c_char {
-    let quiet = flags & GLV_QUIET as c_int != 0;
+    let quiet = flags & GLV_QUIET.cast_signed() != 0;
     // SAFETY: the caller's promise; every field is written before it is read.
     let mut lval = unsafe { Lv::new(lval) };
     // SAFETY: as above -- the whole record is the caller's.
@@ -703,10 +713,10 @@ pub unsafe fn get_lval(
         // SAFETY: `p` is a cursor into the NUL-terminated `name`.
         let after = unsafe { *p };
         if unlet
-            && !ascii_iswhite(after as c_int)
-            && ends_excmd(after as c_int) == 0
-            && after != b'[' as c_char
-            && after != b'.' as c_char
+            && !ascii_iswhite(c_int::from(after))
+            && ends_excmd(c_int::from(after)) == 0
+            && after != b'['.cast_signed()
+            && after != b'.'.cast_signed()
         {
             // SAFETY: the format takes one NUL-terminated string.
             let p = unsafe { c_str(p) };
@@ -732,30 +742,30 @@ pub unsafe fn get_lval(
     } else {
         lval.ll_name = name;
         // SAFETY: `p` and the name are cursors into the one string.
-        lval.ll_name_len = unsafe { p.offset_from(lval.ll_name) } as size_t;
+        lval.ll_name_len = unsafe { p.offset_from(lval.ll_name) }.cast_unsigned();
     }
 
     // Nothing is subscripted: the name is the whole left-hand side.
     // SAFETY: `p` is a cursor into the NUL-terminated `name`.
     let after = unsafe { *p };
-    if (after != b'[' as c_char && after != b'.' as c_char) || lval.ll_name.is_null() {
+    if (after != b'['.cast_signed() && after != b'.'.cast_signed()) || lval.ll_name.is_null() {
         return p;
     }
 
     let mut ht: *mut DictTab = null_mut();
-    let htp = if flags & GLV_READ_ONLY as c_int != 0 {
+    let htp = if flags & GLV_READ_ONLY.cast_signed() != 0 {
         null_mut()
     } else {
         &raw mut ht
     };
-    let no_autoload = flags & GLV_NO_AUTOLOAD as c_int != 0;
+    let no_autoload = flags & GLV_NO_AUTOLOAD.cast_signed() != 0;
     // SAFETY: the name is NUL-terminated and `ht` is this frame's.
     let v = unsafe { find_var(lval.ll_name, lval.ll_name_len, htp, no_autoload) };
     if v.is_null() {
         if !quiet {
-            let (n, s) = (lval.ll_name_len as c_int, lval.ll_name);
+            let (n, s) = (lval.ll_name_len, lval.ll_name);
             // SAFETY: as above.
-            let s = unsafe { c_str_len(s, n as usize) };
+            let s = unsafe { c_str_len(s, n) };
             semsg!("E121: Undefined variable: {s}");
         }
         return null_mut();
@@ -775,7 +785,7 @@ pub unsafe fn get_lval(
         return null_mut();
     }
     // SAFETY: `p` and the name are cursors into the one string.
-    lval.ll_name_len = unsafe { p.offset_from(lval.ll_name) } as size_t;
+    lval.ll_name_len = unsafe { p.offset_from(lval.ll_name) }.cast_unsigned();
     p
 }
 
@@ -787,7 +797,7 @@ pub unsafe fn clear_lval(lval: *mut LVal) {
     // SAFETY: the caller's promise; both strings are `get_lval`'s own.
     let lval = unsafe { Lv::new(lval) };
     // SAFETY: as above -- both are owned, and null is fine for `xfree`.
-    unsafe { xfree(lval.ll_exp_name as *mut c_void) };
+    unsafe { xfree(lval.ll_exp_name.cast::<c_void>()) };
     // SAFETY: as above.
-    unsafe { xfree(lval.ll_newkey as *mut c_void) };
+    unsafe { xfree(lval.ll_newkey.cast::<c_void>()) };
 }

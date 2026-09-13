@@ -187,7 +187,7 @@ pub(crate) unsafe fn get_clipboard(
         }
         let res = result.list_or_null();
         let lines;
-        if list_len(unsafe { res.as_ref() }) == 2
+        if list_len(result.list_ref()) == 2
             && unsafe { (*list_first(res.as_mut())).li_tv.v_type() } == VAR_LIST
         {
             lines = unsafe { (*list_first(res.as_mut())).li_tv.list_or_null() };

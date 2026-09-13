@@ -224,7 +224,7 @@ pub unsafe fn ex_let_vars(
 
     // ":let [v1, v2] = list" or ":for [v1, v2] in listlist"
     // SAFETY: the caller's obligation -- a live value.
-    let tv = unsafe { Tv::new(tv) };
+    let mut tv = unsafe { Tv::new(tv) };
     if tv.v_type() != VAR_LIST {
         emsg_static(e_listreq);
         return Err(Failed);
@@ -232,7 +232,7 @@ pub unsafe fn ex_let_vars(
     // SAFETY: the kind says the value holds a List, and the list
     // is the caller's for the whole walk below.
     let l = tv.list_or_null();
-    let len = list_len(unsafe { l.as_ref() });
+    let len = list_len(tv.list_ref());
     if semicolon == 0 && var_count < len {
         emsg_static(c"E687: Less targets than List items");
         return Err(Failed);
@@ -248,13 +248,13 @@ pub unsafe fn ex_let_vars(
     // An index, not an address: `ex_let_one` runs the evaluator, which may
     // edit the very list being unpacked.
     let mut at: usize = 0;
-    let mut rest_len = list_len(unsafe { l.as_ref() }) as size_t;
+    let mut rest_len = list_len(tv.list_ref()) as size_t;
     while unsafe { *arg } != b']' as c_char {
         // Skip the whitespace after the '[', ',' or ';'.
         // SAFETY: `arg` is inside the caller's NUL-terminated string, and
         // `at` is inside `l` -- the length checks above are what keep the
         // walk inside it.
-        let itv = &raw mut list_items_mut(unsafe { l.as_mut() })[at].li_tv;
+        let itv = &raw mut list_items_mut(tv.list_mut())[at].li_tv;
         let next = unsafe { skipwhite(arg.add(1)) };
         arg = unsafe { ex_let_one(next, &mut *itv, true, is_const, c",;]".as_ptr(), op) };
         if arg.is_null() {
@@ -271,8 +271,8 @@ pub unsafe fn ex_let_vars(
             let rest_list = tv_list_alloc(rest_len as ptrdiff_t);
             let into = rest_list.as_ptr();
             // SAFETY: a live list, re-read each step.
-            while at < list_items(unsafe { l.as_ref() }).len() {
-                let tv = &raw const list_items(unsafe { l.as_ref() })[at].li_tv;
+            while at < list_items(tv.list_ref()).len() {
+                let tv = &raw const list_items(tv.list_ref())[at].li_tv;
                 unsafe { (*into).push_copy(&*tv) };
                 at += 1;
             }

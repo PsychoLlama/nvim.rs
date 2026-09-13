@@ -150,11 +150,11 @@ use crate::types::{
     CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg,
     ExArgt, Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
-    HistoryType, Integer, LineNr, List, Magic, MotionType, MsgList, Object, OpArg, OptInt,
-    OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
-    ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg, String_0,
-    TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window, XpPrefix,
-    ptrdiff_t, size_t, time_t, uint8_t, uint32_t,
+    HistoryType, Integer, LineNr, Magic, MotionType, MsgList, Object, OpArg, OptInt, OptMagic,
+    OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
+    Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg, String_0, TryState, TypVal,
+    UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window, XpPrefix, ptrdiff_t, size_t,
+    time_t, uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{

@@ -12,8 +12,8 @@ count	callee	no_raw	defs	def
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 161	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 154	from_raw_parts	0	0	
-152	.as_ref	0	0	
 151	Ea::new	0	70	
+135	.as_ref	0	0	
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 120	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 110	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
@@ -75,13 +75,13 @@ count	callee	no_raw	defs	def
 32	ga_grow	0	1	crates/nvim/src/garray.rs
 32	os_path_exists	0	1	crates/nvim/src/os/fs/dir.rs
 32	ptr2cells	0	1	crates/nvim/src/charset/display.rs
-31	.as_mut	0	0	
 31	.copy_from_nonoverlapping	0	0	
 31	f	0	0	
 30	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 30	emsg	0	0	
 30	syn_check_group	0	1	crates/nvim/src/highlight_group/table.rs
 30	tv_dict_get_number	0	1	crates/nvim/src/eval/typval/dictget.rs
+29	.as_mut	0	0	
 29	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
 29	os_fileinfo	0	1	crates/nvim/src/os/fs/meta.rs
 29	xmemcpyz	0	1	crates/nvim/src/memory/mod.rs

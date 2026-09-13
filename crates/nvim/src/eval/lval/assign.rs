@@ -14,6 +14,13 @@
 //! it twice.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -26,15 +33,14 @@ use crate::eval::typval::{
     tv_dict_add, tv_dict_is_watched, tv_dict_item_alloc, tv_dict_item_free, tv_dict_watcher_notify,
     tv_dict_wrong_func_name, tv_get_number_chk, value_check_lock,
 };
+use crate::eval::userfunc::TV_CSTRING;
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{
     eval_variable, get_vimvar_dict, set_var, set_var_const, set_vvar_item, var_check_ro,
 };
-use crate::eval::{Lv, TV_CSTRING, Tv};
+use crate::eval::{Lv, Tv};
 use crate::message::{e_cannot_mod, e_listreq};
-use crate::types::{
-    DictItem, LVal, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, size_t,
-};
+use crate::types::{DictItem, LVal, TypVal, VAR_BLOB, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber};
 
 use super::UNSET_TV;
 
@@ -80,7 +86,7 @@ pub unsafe fn set_var_lval(
         // SAFETY: as above -- the Dict the key is being added to.
         unsafe { (*target.dict_or_null()).dv_lock }
     };
-    if unsafe { value_check_lock(lock, lval.ll_name, TV_CSTRING as size_t) } {
+    if unsafe { value_check_lock(lock, lval.ll_name, TV_CSTRING) } {
         return;
     }
 
@@ -139,7 +145,7 @@ pub unsafe fn set_var_lval(
     let assign;
     if !lval.ll_newkey.is_null() {
         // The key has to be added to the Dictionary first.
-        if !op.is_null() && unsafe { *op } != b'=' as c_char {
+        if !op.is_null() && unsafe { *op } != b'='.cast_signed() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let ll_newkey = unsafe { c_str(lval.ll_newkey) };
             semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
@@ -163,7 +169,7 @@ pub unsafe fn set_var_lval(
             // SAFETY: this frame's separate record of the old value.
             unsafe { tv_copy(&*lval.ll_tv, &mut oldtv) };
         }
-        assign = op.is_null() || unsafe { *op } == b'=' as c_char;
+        assign = op.is_null() || unsafe { *op } == b'='.cast_signed();
         if assign {
             unsafe { tv_clear(&mut *lval.ll_tv) };
         } else {
@@ -226,7 +232,7 @@ unsafe fn set_whole_var(
     // SAFETY: the caller's promise -- `endp` points into the same writable NUL-terminated string.
     let cc = unsafe { *endp };
     // SAFETY: as above -- the byte is put back before returning.
-    unsafe { *endp = NUL as c_char };
+    unsafe { *endp = 0 };
 
     if !lval.ll_blob.is_null() {
         // Upstream's three early returns here leave the left-hand side
@@ -237,7 +243,7 @@ unsafe fn set_whole_var(
         if !unsafe { set_blob_var(lval.raw(), result, op) } {
             return;
         }
-    } else if !op.is_null() && unsafe { *op } != b'=' as c_char {
+    } else if !op.is_null() && unsafe { *op } != b'='.cast_signed() {
         // `+=`, `-=`, `*=`, `/=`, `%=` and `..=`.
         if is_const {
             emsg_static(e_cannot_mod);
@@ -249,8 +255,16 @@ unsafe fn set_whole_var(
         let (name, name_len) = (lval.ll_name, lval.ll_name_len);
         // SAFETY: the name is the one `get_lval` resolved, and `tv` and `di` are this frame's.
         let dip = &raw mut di;
-        let found =
-            unsafe { eval_variable(name, name_len as c_int, Some(&mut tv), dip, true, false) };
+        let found = unsafe {
+            eval_variable(
+                name,
+                c_int::try_from(name_len).expect("a variable name"),
+                Some(&mut tv),
+                dip,
+                true,
+                false,
+            )
+        };
         if found.is_ok() {
             // SAFETY: a non-null `di` is live; `tv` is this frame's copy.
             let (n, dtv, dlock) = if di.is_null() {
@@ -259,14 +273,14 @@ unsafe fn set_whole_var(
                 // SAFETY: `di` is live, so naming its typval reads nothing,
                 // and its lock is the slot's.
                 (
-                    unsafe { (*di).di_flags } as c_int,
+                    c_int::from(unsafe { (*di).di_flags }),
                     unsafe { &raw mut (*di).di_tv },
                     unsafe { *di_lock(di) },
                 )
             };
             let writable = di.is_null()
-                || (!unsafe { var_check_ro(n, name, TV_CSTRING as size_t) }
-                    && !unsafe { tv_check_lock(dlock, &*dtv, name, TV_CSTRING as size_t) });
+                || (!unsafe { var_check_ro(n, name, TV_CSTRING) }
+                    && !unsafe { tv_check_lock(dlock, &*dtv, name, TV_CSTRING) });
             if writable && unsafe { eexe_mod_op(&raw mut tv, result, op) }.is_ok() {
                 // SAFETY: as above -- the folded value goes back by name.
                 unsafe { set_var(name, name_len, &mut tv, false) };
@@ -291,7 +305,7 @@ unsafe fn set_whole_var(
 unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) -> bool {
     // SAFETY: the caller's promise -- both outlive the call.
     let (mut lval, value) = unsafe { (Lv::new(lval), Tv::new(result)) };
-    if !op.is_null() && unsafe { *op } != b'=' as c_char {
+    if !op.is_null() && unsafe { *op } != b'='.cast_signed() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let op = unsafe { c_str(op) };
         semsg!("E734: Wrong variable type for {op}=");
@@ -300,7 +314,7 @@ unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) 
     // SAFETY: the caller's promise: `ll_blob` is live, the name resolved.
     let blob = unsafe { &mut *lval.ll_blob };
     // SAFETY: `ll_name` is the resolved name, NUL-terminated.
-    let locked = unsafe { value_check_lock(blob.bv_lock, lval.ll_name, TV_CSTRING as size_t) };
+    let locked = unsafe { value_check_lock(blob.bv_lock, lval.ll_name, TV_CSTRING) };
     if locked {
         return false;
     }

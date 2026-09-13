@@ -291,14 +291,13 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 let pairs = matches!(frame.frame, Frame::Pairs { .. });
                 let pair_key = cur.filter(|_| pairs).and_then(|at| {
                     let value = &items[at].li_tv;
-                    let inner = value.list_or_null();
-                    if value.v_type() != VAR_LIST && list_len(unsafe { inner.as_ref() }) <= 0 {
+                    if value.v_type() != VAR_LIST && list_len(value.list_ref()) <= 0 {
                         return None;
                     }
                     // A special map's item is a [key, value] pair, so the
                     // path can name the key rather than the index.
                     // SAFETY: the pair's own first item.
-                    let key_tv = &list_items(unsafe { inner.as_ref() }).first()?.li_tv;
+                    let key_tv = &list_items(value.list_ref()).first()?.li_tv;
                     Some(unsafe { encode_tv2echo(key_tv, core::ptr::null_mut()) })
                 });
                 match pair_key {
