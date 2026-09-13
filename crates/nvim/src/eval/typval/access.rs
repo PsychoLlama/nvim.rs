@@ -122,12 +122,6 @@ pub(crate) fn lv_watch(l: *mut List) -> *mut *mut ListWatch {
     field_of(l, ::core::mem::offset_of!(List, lv_watch))
 }
 
-/// The address of a blob's byte array; see [`field_of`].
-#[inline(always)]
-pub(crate) fn bv_ga(b: *mut Blob) -> *mut GArray {
-    field_of(b, ::core::mem::offset_of!(Blob, bv_ga))
-}
-
 /// The tag-checked readers, generated ten times over the one shape they all
 /// have.
 ///
@@ -876,35 +870,6 @@ pub(crate) unsafe fn tv_ht_iter<E: SlotEntry>(ht: *const HashTab<E>) -> TableIte
 #[inline(always)]
 pub fn tv_blob_set_ret(tv: &mut TypVal, b: Option<BlobRef>) {
     tv.write_blob(b);
-}
-
-/// Length of `b`'s data in bytes; a NULL blob is empty.
-///
-/// # Safety
-/// `b` is null or points at a live blob.
-#[inline]
-pub unsafe fn tv_blob_len(b: *const Blob) -> ::core::ffi::c_int {
-    unsafe { b.as_ref() }.map_or(0, |b| b.bv_ga.ga_len)
-}
-
-/// The byte at `idx` in `b`.  `b` must be non-NULL and `idx` in range.
-///
-/// # Safety
-/// `b` must point at a live blob and `idx` must be in `0..tv_blob_len(b)`.
-/// Neither is checked.
-#[inline(always)]
-pub unsafe fn tv_blob_get(b: *const Blob, idx: ::core::ffi::c_int) -> uint8_t {
-    unsafe { *(*b).bv_ga.ga_data.cast::<uint8_t>().offset(idx as isize) }
-}
-
-/// Store `c` at `idx` in `blob`.  `blob` must be non-NULL and `idx` in range.
-///
-/// # Safety
-/// `blob` must point at a live blob and `idx` must be in
-/// `0..tv_blob_len(blob)`. Neither is checked.
-#[inline(always)]
-pub unsafe fn tv_blob_set(blob: *mut Blob, idx: ::core::ffi::c_int, c: uint8_t) {
-    unsafe { *(*blob).bv_ga.ga_data.cast::<uint8_t>().offset(idx as isize) = c };
 }
 
 /// The `DictWatcher` a queue node is embedded in (upstream's `QUEUE_DATA`).

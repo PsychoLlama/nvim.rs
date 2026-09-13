@@ -17,7 +17,7 @@ use crate::cstr;
 use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
-    NumBuf, tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
+    NumBuf, blob_bytes, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
     tv_list_append_allocated_string, tv_list_append_string,
 };
 use crate::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
@@ -40,7 +40,7 @@ use crate::runtime::state::current_sctx;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, ArenaMem, Array, Blob, CallbackReader, ChannelPart, Error, EvalFuncData, FuncCall,
+    Arena, ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, FuncCall,
     FuncCallEntry, Object, ScriptCtx, String_0, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING,
     VarNumber, uint64_t,
 };
@@ -126,12 +126,13 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let input = if args[1].v_type() == VAR_BLOB {
         // A Blob goes over byte for byte; an empty one sends nothing
         // and is reported as a failure below.
-        let b: *const Blob = args[1].blob_or_null();
-        input_len = unsafe { tv_blob_len(b) } as isize;
-        if input_len > 0 {
-            unsafe { xmemdup((*b).bv_ga.ga_data, input_len as usize) as *mut c_char }
-        } else {
+        let bytes = blob_bytes(args[1].blob_ref());
+        input_len = isize::try_from(bytes.len()).expect("a short blob");
+        if bytes.is_empty() {
             ptr::null_mut()
+        } else {
+            // SAFETY: the blob's own bytes, readable for their length.
+            unsafe { xmemdup(bytes.as_ptr().cast(), bytes.len()) }.cast::<c_char>()
         }
     } else {
         // `false` for both: a List joins with NL, not CR-NL, and the

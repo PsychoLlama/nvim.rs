@@ -14,7 +14,7 @@ use crate::eval::encode::{
 };
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, tv_blob_len, tv_list_append_owned_tv, tv_list_items, tv_list_len,
+    NumBuf, blob_bytes, tv_list_append_owned_tv, tv_list_items, tv_list_len,
 };
 use crate::memory::{alloc_block, free_block, strequal, xfree};
 use crate::message_fmt::c_str_len;
@@ -119,11 +119,11 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         // The Blob adopts the packer's allocation as-is, capacity and
         // all; nothing copies, so the string gives the block up rather than
         // releasing it on the way out.
-        let b: *mut Blob = blob_alloc_ret(result);
         let (len, maxlen) = (data.len() as c_int, packer.capacity() as c_int);
-        unsafe { (*b).bv_ga.ga_data = data.into_raw() as *mut c_void };
-        unsafe { (*b).bv_ga.ga_len = len };
-        unsafe { (*b).bv_ga.ga_maxlen = maxlen };
+        let b = blob_alloc_ret(result);
+        b.bv_ga.ga_data = data.into_raw().cast::<c_void>();
+        b.bv_ga.ga_len = len;
+        b.bv_ga.ga_maxlen = maxlen;
     } else {
         let l = list_alloc_ret(result, kListLenMayKnow as isize);
         unsafe { encode_list_write(l as *mut c_void, data.data(), data.len()) };
@@ -212,16 +212,15 @@ unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
 /// Unpack a Blob, which is already one contiguous buffer.
 ///
 /// # Safety
-/// `blob` is a live blob and `ret_list` a live list.
-unsafe fn msgpackparse_unpack_blob(blob: *const Blob, ret_list: *mut List) {
-    // SAFETY: the caller's obligation; `unpack_typval` advances the cursor
-    // and the remaining count together.
-    let len = unsafe { tv_blob_len(blob) };
-    if len == 0 {
+/// `ret_list` is a live list.
+unsafe fn msgpackparse_unpack_blob(blob: Option<&Blob>, ret_list: *mut List) {
+    let bytes = blob_bytes(blob);
+    if bytes.is_empty() {
         return;
     }
-    let mut data = unsafe { (*blob).bv_ga.ga_data } as *const c_char;
-    let mut remaining = len as usize;
+    // `unpack_typval` advances the cursor and the remaining count together.
+    let mut data = bytes.as_ptr().cast::<c_char>();
+    let mut remaining = bytes.len();
     while remaining != 0 {
         let mut tv = EMPTY_TV;
         let status = unsafe { unpack_typval(&raw mut data, &raw mut remaining, &mut tv) };
@@ -246,6 +245,6 @@ pub fn f_msgpackparse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if args[0].v_type() == VAR_LIST {
         unsafe { msgpackparse_unpack_list(args[0].list_or_null(), ret_list) };
     } else {
-        unsafe { msgpackparse_unpack_blob(args[0].blob_or_null(), ret_list) };
+        unsafe { msgpackparse_unpack_blob(args[0].blob_ref(), ret_list) };
     }
 }

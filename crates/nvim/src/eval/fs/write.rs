@@ -25,7 +25,7 @@ use super::{
     str_arg_chk,
 };
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_blob_len, tv_check_str_or_nr, tv_list_items};
+use crate::eval::typval::{NumBuf, blob_bytes, tv_check_str_or_nr, tv_list_items};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
@@ -285,14 +285,10 @@ unsafe fn write_data(out: &mut Out, data: *const c_char, len: usize) -> bool {
     false
 }
 
-fn write_blob(out: &mut Out, blob: *const Blob) -> bool {
-    // SAFETY: a live blob, whose `ga_data` holds `tv_blob_len` readable
-    // bytes.
-    let (data, len) = (
-        unsafe { (*blob).bv_ga.ga_data }.cast(),
-        unsafe { tv_blob_len(blob) } as usize,
-    );
-    unsafe { write_data(out, data, len) }
+fn write_blob(out: &mut Out, blob: Option<&Blob>) -> bool {
+    let bytes = blob_bytes(blob);
+    // SAFETY: the blob's own bytes, readable for their length.
+    unsafe { write_data(out, bytes.as_ptr().cast(), bytes.len()) }
 }
 
 fn write_string(out: &mut Out, data: *const c_char) -> bool {
@@ -436,10 +432,7 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let write_ok = match args[0].v_type() {
-        VAR_BLOB => match blob_of(&args[0]) {
-            Some(blob) => write_blob(&mut out, blob),
-            None => true,
-        },
+        VAR_BLOB => write_blob(&mut out, args[0].blob_ref()),
         VAR_STRING => write_string(&mut out, string_of(&args[0])),
         _ => write_list(&mut out, list_of(&args[0]), flags.binary),
     };
@@ -451,12 +444,6 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let fmt = c"E80: Error when closing file %s: %s";
         err2(fmt, fname.as_ptr(), strerror(error));
     }
-}
-
-/// The Blob argument 0 holds, or None when it is the empty one.
-fn blob_of(tv: &TypVal) -> Option<*const Blob> {
-    let blob = tv.blob_or_null();
-    (!blob.is_null()).then_some(blob.cast_const())
 }
 
 /// The String argument 0 holds.

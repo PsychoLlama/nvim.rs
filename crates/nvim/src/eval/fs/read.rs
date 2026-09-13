@@ -112,7 +112,7 @@ struct BlobOut(*mut Blob);
 impl BlobOut {
     /// Make `result` a fresh, empty Blob.
     fn alloc(result: &mut TypVal) -> Self {
-        Self(tv_blob_alloc_ret(result))
+        Self(&raw mut *tv_blob_alloc_ret(result))
     }
 
     /// Grow to `len` bytes and fill them from `fd`; false on a short read.

@@ -14,9 +14,9 @@ use super::{
 };
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::typval::{
-    DictSlot, Dt, Li, Pt, Tv, di_tv, dv_copyid, lv_copyid, tv_blob_len, tv_dict_find,
-    tv_dict_hi2di, tv_dict_item_key, tv_list_copyid, tv_list_first, tv_list_items,
-    tv_list_items_mut, tv_list_iter, tv_list_last, tv_list_len, tv_list_set_copyid,
+    DictSlot, Dt, Li, Pt, Tv, blob_bytes, di_tv, dv_copyid, lv_copyid, tv_dict_find, tv_dict_hi2di,
+    tv_dict_item_key, tv_list_copyid, tv_list_first, tv_list_items, tv_list_items_mut,
+    tv_list_iter, tv_list_last, tv_list_len, tv_list_set_copyid,
 };
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::eval::{get_copy_id, partial_name};
@@ -205,9 +205,11 @@ unsafe fn convert_one_value<S: TypvalSink>(
             item_hook!(unsafe { sink.conv_float(slot!(), f) });
         }
         VAR_BLOB => {
-            let blob = val.blob_or_null();
-            let len = unsafe { tv_blob_len(blob) };
-            unsafe { sink.conv_blob(slot!(), blob, len) };
+            // SAFETY: the value's own blob, borrowed for the call.
+            let bytes = blob_bytes(unsafe { val.blob_or_null().as_ref() });
+            // SAFETY: the walk's contract on the value it is standing on.
+            let slot = unsafe { slot!() };
+            sink.conv_blob(slot, bytes);
         }
         VAR_FUNC => {
             let name = val.func_name_or_null();

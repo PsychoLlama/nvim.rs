@@ -19,7 +19,7 @@ use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::typval::{
-    NumBuf, tv_blob_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
+    NumBuf, blob_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
     tv_list_equal,
 };
 use crate::eval::{
@@ -170,7 +170,6 @@ pub(crate) fn func_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
 ///
 /// Answers `None` after reporting and clearing `typ1`.
 fn compare_container(
-    typ1: &mut TypVal,
     op: ExprType,
     same_type: bool,
     identical: impl FnOnce() -> bool,
@@ -184,7 +183,6 @@ fn compare_container(
     } else if !same_type || (op != EXPR_EQUAL && op != EXPR_NEQUAL) {
         let message = if !same_type { wrong_type } else { wrong_op };
         emsg(gettext(message));
-        tv_clear(typ1);
         None
     } else {
         Some(VarNumber::from(equal() == (op == EXPR_EQUAL)))
@@ -224,16 +222,19 @@ pub(crate) fn typval_compare(
     } else if t1 == VAR_BLOB || t2 == VAR_BLOB {
         // SAFETY: `same_type` has held before either closure runs, so the
         // union member each reads is the one the tag names.
-        let (b1, b2) = (typ1.blob_or_null(), typ2.blob_or_null());
-        let same = || b1 == b2;
-        let eq = || unsafe { tv_blob_equal(b1, b2) };
+        let (b1, b2) = (typ1.blob_ref(), typ2.blob_ref());
+        let same = || b1.map(::core::ptr::from_ref) == b2.map(::core::ptr::from_ref);
+        let eq = || blob_equal(b1, b2);
         let wrong_type = c"E977: Can only compare Blob with Blob";
         // SAFETY: a message constant is a NUL-terminated literal.
         let wrong_op = unsafe { CStr::from_ptr(e_invalblob.as_ptr()) };
-        let cmp = compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op);
+        let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);
         match cmp {
             Some(n) => n,
-            None => return Err(Failed),
+            None => {
+                tv_clear(typ1);
+                return Err(Failed);
+            }
         }
     } else if t1 == VAR_LIST || t2 == VAR_LIST {
         // SAFETY: as the Blob arm.
@@ -242,10 +243,13 @@ pub(crate) fn typval_compare(
         let eq = || unsafe { tv_list_equal(l1, l2, ic) };
         let wrong_type = c"E691: Can only compare List with List";
         let wrong_op = c"E692: Invalid operation for List";
-        let cmp = compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op);
+        let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);
         match cmp {
             Some(n) => n,
-            None => return Err(Failed),
+            None => {
+                tv_clear(typ1);
+                return Err(Failed);
+            }
         }
     } else if t1 == VAR_DICT || t2 == VAR_DICT {
         // SAFETY: as the Blob arm.
@@ -254,10 +258,13 @@ pub(crate) fn typval_compare(
         let eq = || unsafe { tv_dict_equal(d1, d2, ic) };
         let wrong_type = c"E735: Can only compare Dictionary with Dictionary";
         let wrong_op = c"E736: Invalid operation for Dictionary";
-        let cmp = compare_container(typ1, op, same_type, same, eq, wrong_type, wrong_op);
+        let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);
         match cmp {
             Some(n) => n,
-            None => return Err(Failed),
+            None => {
+                tv_clear(typ1);
+                return Err(Failed);
+            }
         }
     } else if (*typ1).is_func() || (*typ2).is_func() {
         if op != EXPR_EQUAL && op != EXPR_NEQUAL && !type_is {

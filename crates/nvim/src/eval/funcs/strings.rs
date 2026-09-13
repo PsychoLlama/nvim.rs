@@ -12,12 +12,11 @@ use crate::cstr;
 use crate::cursor::get_cursor_pos_ptr;
 use crate::eval::do_string_sub;
 use crate::eval::typval::{
-    NumBuf, tv_blob_get, tv_blob_set_range, tv_check_for_nonempty_string_arg,
-    tv_check_for_string_arg, tv_check_num, tv_list_append_allocated_string, tv_list_append_string,
-    tv_list_extend, tv_list_len,
+    NumBuf, blob_bytes, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_check_num,
+    tv_list_append_allocated_string, tv_list_append_string, tv_list_extend, tv_list_len,
 };
 use crate::ex_getln::vim_strsave_fnameescape;
-use crate::garray::{ga_clear, ga_grow};
+use crate::garray::ga_clear;
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::keycodes::vim_strsave_escape_ks;
 use crate::mbyte::{
@@ -41,8 +40,8 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    Blob, CONV_NONE, ColNr, EvalFuncData, GArray, Hlf, List, NUL, RegMatch, RegProg, TypVal,
-    VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, VimConv, kListLenMayKnow, time_t, tm,
+    CONV_NONE, ColNr, EvalFuncData, GArray, Hlf, List, NUL, RegMatch, RegProg, TypVal, VAR_BLOB,
+    VAR_LIST, VAR_STRING, VarNumber, VimConv, kListLenMayKnow, time_t, tm,
 };
 use crate::winlayer::{Buf, Win};
 use ::libc::{mktime, strftime, time};
@@ -208,34 +207,20 @@ fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
 }
 
 fn repeat_blob(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
-    // SAFETY throughout: the caller's obligation.
-    blob_alloc_ret(result);
-    let src: *mut Blob = args[0].blob_or_null();
-    if src.is_null() || n <= 0 {
+    let src = blob_bytes(args[0].blob_ref());
+    let out = blob_alloc_ret(result);
+    if src.is_empty() || n <= 0 {
         return;
     }
-    let slen = unsafe { (*src).bv_ga.ga_len };
     // Upstream computes the total in `int`; a product that does not fit
     // reads as non-positive and the repeat is dropped.
-    let len = (slen as VarNumber * n) as c_int;
+    let len = (src.len() as VarNumber * n) as c_int;
     if len <= 0 {
         return;
     }
-    let out = result.blob_or_null();
-    unsafe { ga_grow(&raw mut (*out).bv_ga, len) };
-    unsafe { (*out).bv_ga.ga_len = len };
-    // An all-zero source needs no copying: `ga_grow` already zeroed the
-    // destination. This is upstream's shortcut, not an optimisation
-    // added here.
-    if (0..slen).all(|i| unsafe { tv_blob_get(src, i) } == 0) {
-        return;
-    }
-    for i in 0..len / slen {
-        let from = (i * slen) as VarNumber;
-        let to = ((i + 1) * slen - 1) as VarNumber;
-        // SAFETY: `out` has room for `len` bytes and the source is a live
-        // Blob typval.
-        let _ = unsafe { tv_blob_set_range(out, from, to, &args[0]) };
+    let len = usize::try_from(len).expect("a positive length");
+    for room in out.claim(len).chunks_mut(src.len()) {
+        room.copy_from_slice(&src[..room.len()]);
     }
 }
 

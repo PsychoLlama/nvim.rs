@@ -27,7 +27,7 @@ use core::mem::MaybeUninit;
 
 use crate::eval::typval::DictSlot;
 
-use crate::types::{Blob, Dict, Float, List, Partial, TypVal, int64_t, ptrdiff_t, size_t};
+use crate::types::{Dict, Float, List, Partial, TypVal, int64_t, ptrdiff_t, size_t};
 
 // The walk itself; this half is the contract it runs against.
 mod walk;
@@ -358,7 +358,7 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// The walk's contract on the value it is standing on, above. `blob` points at a live blob holding `len` bytes,
     /// borrowed for the call.
-    unsafe fn conv_blob(&mut self, tv: Option<&mut TypVal>, blob: *const Blob, len: c_int);
+    fn conv_blob(&mut self, tv: Option<&mut TypVal>, bytes: &[u8]);
 
     /// A funcref or partial, before its arguments.  `fun` may be NULL;
     /// `prefix` is `"g:"` where the name needs qualifying.

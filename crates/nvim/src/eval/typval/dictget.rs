@@ -21,14 +21,17 @@ use crate::types::NUL;
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
 pub(crate) fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
-    let blob = args[0].blob_or_null();
-    tv_list_alloc_ret(result, unsafe { tv_blob_len(blob) } as ptrdiff_t);
-    for i in 0..unsafe { tv_blob_len(blob) } {
-        let l2 = tv_list_alloc(2);
-        let at = l2.as_ptr();
-        unsafe { tv_list_append_list((*result).list_or_null(), Some(l2)) };
-        unsafe { tv_list_append_number(at, i as VarNumber) };
-        unsafe { tv_list_append_number(at, tv_blob_get(blob, i) as VarNumber) };
+    let bytes = blob_bytes(args[0].blob_ref());
+    tv_list_alloc_ret(result, ptrdiff_t::try_from(bytes.len()).unwrap_or(-1));
+    for (at, &byte) in bytes.iter().enumerate() {
+        let pair = tv_list_alloc(2);
+        let into = pair.as_ptr();
+        // SAFETY: the list stored in the return slot, and the fresh pair.
+        unsafe {
+            tv_list_append_list(result.list_or_null(), Some(pair));
+            tv_list_append_number(into, VarNumber::try_from(at).expect("a short blob"));
+            tv_list_append_number(into, VarNumber::from(byte));
+        }
     }
 }
 

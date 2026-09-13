@@ -8,9 +8,8 @@ use super::{
 };
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
-    NumBuf, tv_blob_get, tv_blob_len, tv_check_for_number_arg, tv_check_for_string_arg, tv_copy,
-    tv_dict_len, tv_get_number_chk, tv_list_items, tv_list_iter, tv_list_len, tv_list_locked,
-    tv_list_set_lock,
+    NumBuf, blob_bytes, tv_check_for_number_arg, tv_check_for_string_arg, tv_copy, tv_dict_len,
+    tv_get_number_chk, tv_list_items, tv_list_iter, tv_list_len, tv_list_locked, tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
@@ -21,8 +20,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    Blob, EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
+    EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
@@ -252,28 +251,30 @@ fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
 fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // SAFETY: the caller's obligation; the blob is re-measured every pass,
     // as the C does, so a fold that shortens it cannot walk off the end.
-    let b: *const Blob = args[0].blob_or_null();
+    let bytes = blob_bytes(args[0].blob_ref());
     let called_emsg_start = called_emsg.get();
-    let mut i = if args.len() > 2 {
+    let mut at = if args.len() > 2 {
         if tv_check_for_number_arg(args, 2).is_err() {
             return;
         }
         tv_copy(&args[2], result);
         0
     } else {
-        if unsafe { tv_blob_len(b) } == 0 {
+        let Some(&first) = bytes.first() else {
             semsg!("E998: Reduce of an empty {} with no initial value", "Blob");
             return;
-        }
-        result.write_number(unsafe { tv_blob_get(b, 0) } as VarNumber);
+        };
+        result.write_number(VarNumber::from(first));
         1
     };
-    while i < unsafe { tv_blob_len(b) } {
-        let item = number_tv(unsafe { tv_blob_get(b, i) } as VarNumber);
+    // By index and re-read each step: the fold runs a user function, which
+    // can grow or free the blob under the walk.
+    while at < blob_bytes(args[0].blob_ref()).len() {
+        let item = number_tv(VarNumber::from(blob_bytes(args[0].blob_ref())[at]));
         if !fold_step(expr, result, &item, BLOB_CLEANUP, called_emsg_start) {
             return;
         }
-        i += 1;
+        at += 1;
     }
 }
 

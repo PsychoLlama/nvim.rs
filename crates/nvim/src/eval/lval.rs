@@ -34,9 +34,9 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    NumBuf, di_lock, tv_blob_alloc_ret, tv_blob_check_index, tv_blob_check_range, tv_blob_len,
-    tv_check_str, tv_dict_alloc, tv_dict_find, tv_get_number, tv_list_alloc_ret,
-    tv_list_check_range_index_one, tv_list_check_range_index_two, tv_list_items_mut,
+    NumBuf, blob_check_index, blob_check_range, blob_len, di_lock, tv_blob_alloc_ret, tv_check_str,
+    tv_dict_alloc, tv_dict_find, tv_get_number, tv_list_alloc_ret, tv_list_check_range_index_one,
+    tv_list_check_range_index_two, tv_list_items_mut,
 };
 use crate::eval::userfunc::get_funccal_args_ht;
 use crate::eval::vars::{clear_local, emsg_static};
@@ -263,18 +263,18 @@ pub(crate) unsafe fn get_lval_blob(
     // SAFETY: the caller's promise: `ll_tv` holds a Blob, so `v_blob` is live.
     let mut lval = unsafe { Lv::new(lval) };
     // SAFETY: as above.
-    let bloblen = unsafe { tv_blob_len(Tv::new(lval.ll_tv).blob_or_null()) };
+    let bloblen = blob_len(unsafe { (*lval.ll_tv).blob_ref() });
     lval.ll_n1 = if empty1 {
         0
     } else {
         tv_get_number(var1) as c_int
     };
     let n1 = lval.ll_n1 as VarNumber;
-    tv_blob_check_index(bloblen, n1, quiet)?;
+    blob_check_index(bloblen, n1, quiet)?;
     if lval.ll_range && !lval.ll_empty2 {
         lval.ll_n2 = tv_get_number(var2) as c_int;
         let n2 = lval.ll_n2 as VarNumber;
-        tv_blob_check_range(bloblen, n1, n2, quiet)?;
+        blob_check_range(bloblen, n1, n2, quiet)?;
     }
     // SAFETY: as above -- the typval still holds the Blob.
     lval.ll_blob = unsafe { Tv::new(lval.ll_tv).blob_or_null() };

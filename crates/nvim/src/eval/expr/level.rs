@@ -600,7 +600,7 @@ pub(crate) unsafe fn eval5(
             let ok = if concat {
                 eval_concat_str(result, &mut var2)
             } else if op == b'+' && rv.v_type() == VAR_BLOB && blob2 {
-                eval_addblob(result, &mut var2);
+                eval_addblob(result, &var2);
                 true
             } else if op == b'+' && rv.v_type() == VAR_LIST && list2 {
                 eval_addlist(result, &mut var2)

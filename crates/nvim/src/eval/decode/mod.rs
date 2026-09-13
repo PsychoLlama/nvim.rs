@@ -20,7 +20,7 @@
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::eval::typval::{
-    Bl, Di, ListRef, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc,
+    Di, ListRef, TV_INITIAL_VALUE, di_tv, tv_blob_alloc_ret, tv_dict_add, tv_dict_alloc,
     tv_dict_item_alloc_len, tv_list_alloc,
 };
 use crate::eval::vars::msgpack_type_list;
@@ -113,13 +113,12 @@ pub unsafe fn decode_string(
         if s_allocated {
             // The caller's allocation becomes the blob's, sized exactly to
             // `len`: nothing is copied and nothing is left to grow into.
-            unsafe { (*b).bv_ga.ga_data = s as *mut c_void };
-            // SAFETY: freshly allocated just above.
-            let mut bl = unsafe { Bl::new(b) };
-            bl.bv_ga.ga_len = len as c_int;
-            bl.bv_ga.ga_maxlen = len as c_int;
+            b.bv_ga.ga_data = s.cast_mut().cast::<c_void>();
+            b.bv_ga.ga_len = len as c_int;
+            b.bv_ga.ga_maxlen = len as c_int;
         } else {
-            unsafe { ga_concat_len(&raw mut (*b).bv_ga, s, len) };
+            // SAFETY: the caller's promise: `len` readable bytes at `s`.
+            unsafe { ga_concat_len(&raw mut b.bv_ga, s, len) };
         }
         return tv;
     }

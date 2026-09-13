@@ -134,7 +134,7 @@ pub(crate) fn dict_alloc_ret(result: &mut TypVal) {
 }
 
 /// Make `result` a fresh, empty Blob.
-pub(crate) fn blob_alloc_ret(result: &mut TypVal) -> *mut Blob {
+pub(crate) fn blob_alloc_ret(result: &mut TypVal) -> &mut Blob {
     tv_blob_alloc_ret(result)
 }
 

@@ -40,7 +40,7 @@ use crate::eval::typval_encode::{
     ConvFrame, ConvPath, ConvType, Flow, Frame, TypvalSink, encode_typval,
 };
 use crate::memory::xfree;
-use crate::types::{Blob, Float, TypVal, int64_t, kBoolVarFalse, kSpecialVarNull, size_t};
+use crate::types::{Float, TypVal, int64_t, kBoolVarFalse, kSpecialVarNull, size_t};
 
 /// A sink with no state: everything it does, it does to the value it is
 /// handed.
@@ -132,7 +132,7 @@ impl TypvalSink for NothingSink {
     ///
     /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
     /// it is standing on.
-    unsafe fn conv_blob(&mut self, tv: Option<&mut TypVal>, _blob: *const Blob, _len: c_int) {
+    fn conv_blob(&mut self, tv: Option<&mut TypVal>, _bytes: &[u8]) {
         let tv = slot(tv);
         // The slot gives up its reference and is left `v:_null_blob`.
         drop(tv.take_blob());

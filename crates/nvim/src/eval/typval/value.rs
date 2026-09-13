@@ -422,7 +422,7 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
             let _recursing = Depth::of(&recursive_cnt);
             func_equal(tv1, tv2, ic)
         }
-        VAR_BLOB => unsafe { tv_blob_equal((*tv1).blob_or_null(), (*tv2).blob_or_null()) },
+        VAR_BLOB => blob_equal(tv1.blob_ref(), tv2.blob_ref()),
         VAR_NUMBER => a.as_number() == b.as_number(),
         VAR_FLOAT => a.as_float() == b.as_float(),
         VAR_STRING => {

@@ -27,13 +27,13 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use crate::eval::encode::{
     conv_error, convert_to_json_string, did_echo_string_emsg, encode_check_json_key,
 };
-use crate::eval::typval::{DictSlot, tv_blob_get};
+use crate::eval::typval::DictSlot;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
 use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
-use crate::types::{Blob, Float, TypVal, int64_t, size_t};
+use crate::types::{Float, TypVal, int64_t, size_t};
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.
@@ -153,21 +153,17 @@ impl TypvalSink for JsonSink<'_> {
 
     /// A blob becomes an array of byte values — JSON has nothing shorter.
     ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, blob: *const Blob, len: c_int) {
-        if len == 0 {
+    fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: &[u8]) {
+        if bytes.is_empty() {
             self.gap.extend_from_slice(b"[]");
             return;
         }
         self.gap.push(b'[');
-        for i in 0..len {
-            if i > 0 {
+        for (at, &byte) in bytes.iter().enumerate() {
+            if at > 0 {
                 self.gap.extend_from_slice(b", ");
             }
-            self.concat_num(c"%d", c_int::from(unsafe { tv_blob_get(blob, i) }));
+            self.concat_num(c"%d", c_int::from(byte));
         }
         self.gap.push(b']');
     }

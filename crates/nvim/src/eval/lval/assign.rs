@@ -22,8 +22,8 @@ use core::ptr::null_mut;
 
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
-    di_lock, tv_blob_len, tv_blob_set_append, tv_blob_set_range, tv_check_lock, tv_clear, tv_copy,
-    tv_dict_add, tv_dict_is_watched, tv_dict_item_alloc, tv_dict_item_free, tv_dict_watcher_notify,
+    blob_len, blob_set_range, di_lock, tv_check_lock, tv_clear, tv_copy, tv_dict_add,
+    tv_dict_is_watched, tv_dict_item_alloc, tv_dict_item_free, tv_dict_watcher_notify,
     tv_dict_wrong_func_name, tv_get_number_chk, tv_list_assign_range, value_check_lock,
 };
 use crate::eval::vars::{clear_local, emsg_static};
@@ -34,7 +34,6 @@ use crate::eval::{Lv, TV_CSTRING, Tv};
 use crate::message::{e_cannot_mod, e_listreq};
 use crate::types::{
     DictItem, LVal, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, size_t,
-    uint8_t,
 };
 
 use super::UNSET_TV;
@@ -299,24 +298,19 @@ unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) 
         return false;
     }
     // SAFETY: the caller's promise: `ll_blob` is live, the name resolved.
-    let lock = unsafe { (*lval.ll_blob).bv_lock };
-    // SAFETY: as above.
-    let locked = unsafe { value_check_lock(lock, lval.ll_name, TV_CSTRING as size_t) };
+    let blob = unsafe { &mut *lval.ll_blob };
+    // SAFETY: `ll_name` is the resolved name, NUL-terminated.
+    let locked = unsafe { value_check_lock(blob.bv_lock, lval.ll_name, TV_CSTRING as size_t) };
     if locked {
         return false;
     }
 
     if lval.ll_range && value.v_type() == VAR_BLOB {
         if lval.ll_empty2 {
-            lval.ll_n2 = unsafe { tv_blob_len(lval.ll_blob) } - 1;
+            lval.ll_n2 = blob_len(Some(blob)) - 1;
         }
-        let (blob, n1, n2) = (
-            lval.ll_blob,
-            lval.ll_n1 as VarNumber,
-            lval.ll_n2 as VarNumber,
-        );
-        // SAFETY: as above; `result` holds the Blob being assigned.
-        if unsafe { tv_blob_set_range(blob, n1, n2, result) }.is_err() {
+        let (n1, n2) = (VarNumber::from(lval.ll_n1), VarNumber::from(lval.ll_n2));
+        if blob_set_range(blob, n1, n2, result).is_err() {
             return false;
         }
         return true;
@@ -329,8 +323,7 @@ unsafe fn set_blob_var(lval: *mut LVal, result: &mut TypVal, op: *const c_char) 
             let _ = val;
             semsg!("E1239: Invalid value for blob: 0xlX");
         } else {
-            // SAFETY: `ll_blob` is the live Blob and `ll_n1` a byte of it.
-            unsafe { tv_blob_set_append(lval.ll_blob, lval.ll_n1, val as uint8_t) };
+            blob.set_or_append(lval.ll_n1, u8::try_from(val).expect("a byte, just checked"));
         }
     }
     true

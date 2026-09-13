@@ -18,7 +18,7 @@ use core::ptr::{null, null_mut};
 
 use crate::ascii::ascii_iswhite;
 use crate::eval::typval::{
-    NumBuf, tv_blob_slice_or_index, tv_check_str, tv_clear, tv_copy, tv_dict_find, tv_dict_unref,
+    NumBuf, blob_slice_or_index, tv_check_str, tv_clear, tv_copy, tv_dict_find, tv_dict_unref,
     tv_get_number, tv_list_slice_or_index,
 };
 use crate::eval::userfunc::make_partial;
@@ -276,9 +276,7 @@ pub(crate) unsafe fn eval_index_inner(
             rv.write_string(v);
         }
         VAR_BLOB => {
-            // SAFETY: the kind says the value holds a Blob.
-            let blob = rv.blob_or_null();
-            let _ = unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, result) };
+            let _ = blob_slice_or_index(is_range, n1, n2, exclusive, result);
         }
         VAR_LIST => {
             if var1.is_none() {

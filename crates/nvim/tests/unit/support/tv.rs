@@ -28,9 +28,9 @@ use std::ops::Deref;
 use std::ptr;
 
 use neovim::eval::typval::{
-    BlobRef, DictRef, ListRef, PartialRef, tv_blob_alloc, tv_blob_get, tv_blob_len, tv_clear,
-    tv_copy, tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
-    tv_list_append_owned_tv, tv_list_find, tv_list_len,
+    BlobRef, DictRef, ListRef, PartialRef, tv_blob_alloc, tv_clear, tv_copy, tv_dict_add,
+    tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv, tv_list_find,
+    tv_list_len,
 };
 use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
@@ -397,9 +397,8 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
 /// # Safety
 /// `b` points at a live blob.
 unsafe fn blob_bytes(b: *const Blob) -> Vec<u8> {
-    (0..unsafe { tv_blob_len(b) })
-        .map(|i| unsafe { tv_blob_get(b, i) })
-        .collect()
+    // SAFETY: the caller's promise: a live blob.
+    unsafe { &*b }.bytes().to_vec()
 }
 
 /// # Safety

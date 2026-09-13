@@ -40,9 +40,9 @@ use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage
 use crate::eval::typval::DictEntry;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    DictRef, ListRef, tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents,
-    tv_dict_free_dict, tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy,
-    tv_list_copyid, tv_list_free_contents, tv_list_free_list, tv_list_iter_mut,
+    DictRef, ListRef, blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
+    tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy, tv_list_copyid,
+    tv_list_free_contents, tv_list_free_list, tv_list_iter_mut,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -712,10 +712,8 @@ pub unsafe fn var_item_copy(
             }
         }
         VAR_BLOB => {
-            // SAFETY: `VAR_BLOB` says `v_blob` is the live member, and `to`
-            // is the caller's typval.
-            // SAFETY: `to` is the caller's slot.
-            unsafe { tv_blob_copy(src.blob_or_null(), &mut *to) };
+            // SAFETY: the source's own blob, and `to` the caller's slot.
+            blob_copy(unsafe { src.blob_or_null().as_ref() }, to);
         }
         VAR_UNKNOWN => {
             // SAFETY: the text is a NUL-terminated literal.

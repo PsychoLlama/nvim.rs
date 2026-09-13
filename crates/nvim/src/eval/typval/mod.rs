@@ -25,7 +25,7 @@ use crate::hashtab::{
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
 use crate::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
-use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup};
+use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrndup};
 use crate::message::emsg;
 use crate::message::state::did_emsg;
 use crate::message::{

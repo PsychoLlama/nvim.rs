@@ -9,7 +9,7 @@ use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    ListRef, NumBuf, tv_blob_get, tv_blob_len, tv_check_for_list_or_blob_arg,
+    ListRef, NumBuf, blob_bytes, blob_len, tv_check_for_list_or_blob_arg,
     tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg,
     tv_clear, tv_copy, tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def,
     tv_dict_len, tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_list_append_tv, tv_list_copy,
@@ -77,7 +77,7 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_FLOAT => (tv.float_or_zero()) == 0.0,
         VAR_LIST => (unsafe { tv_list_len(tv.list_or_null()) }) == 0,
         VAR_DICT => (unsafe { tv_dict_len(tv.dict_or_null()) }) == 0,
-        VAR_BLOB => (unsafe { tv_blob_len(tv.blob_or_null()) }) == 0,
+        VAR_BLOB => tv.blob_ref().is_none_or(Blob::is_empty),
         VAR_SPECIAL => tv.as_special() == Some(kSpecialVarNull),
         // A Bool other than the two named values leaves the answer at its
         // "empty" default, as upstream's switch does.
@@ -198,17 +198,20 @@ fn get_from_blob(args: &[TypVal], result: &mut TypVal) -> *mut TypVal {
     if error {
         return ptr::null_mut();
     }
-    let blob = args[0].blob_or_null();
+    let bytes = blob_bytes(args[0].blob_ref());
+    let len = c_int::try_from(bytes.len()).expect("a short blob");
     result.write_empty(VAR_NUMBER);
     if idx < 0 {
-        idx += unsafe { tv_blob_len(blob) };
+        idx += len;
     }
-    if idx < 0 || idx >= unsafe { tv_blob_len(blob) } {
+    if idx < 0 || idx >= len {
         // Out of range is -1 rather than the default argument.
         result.write_number(-1);
         return ptr::null_mut();
     }
-    result.write_number(unsafe { tv_blob_get(blob, idx) } as VarNumber);
+    result.write_number(VarNumber::from(
+        bytes[usize::try_from(idx).expect("a byte of the blob")],
+    ));
     // The value is already in place; copying it onto itself is a no-op
     // and is what upstream does.
     result
@@ -376,16 +379,16 @@ fn index_blob(args: &[TypVal], result: &mut TypVal) {
             return;
         }
     }
-    let b = args[0].blob_or_null();
-    if b.is_null() {
+    let Some(b) = args[0].blob_ref() else {
         return;
-    }
+    };
+    let len = blob_len(Some(b));
     if start < 0 {
-        start = (unsafe { tv_blob_len(b) } + start).max(0);
+        start = (len + start).max(0);
     }
-    for idx in start..unsafe { tv_blob_len(b) } {
+    for idx in start..len {
         let mut tv = NIL;
-        tv.write_number(unsafe { tv_blob_get(b, idx) } as VarNumber);
+        tv.write_number(VarNumber::from(b.byte(idx)));
         // The Blob branch never reads argument 3, so a Blob search is
         // always case-sensitive however 'ic' was spelled. Upstream is
         // the same; the flag only reaches the List branch.
@@ -474,7 +477,7 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let saved_did_emsg = did_emsg.get();
     did_emsg.set(0);
     result.write_number(if args[0].v_type() == VAR_BLOB {
-        unsafe { indexof_blob(args[0].blob_or_null(), startidx, &args[1]) }
+        indexof_blob(args[0].blob_ref(), startidx, &args[1])
     } else {
         unsafe { indexof_list(args[0].list_or_null(), startidx, &args[1]) }
     });
@@ -504,24 +507,24 @@ fn indexof_matches(expr: &TypVal) -> bool {
     found.is_ok_and(|n| n != 0)
 }
 
-/// # Safety
-/// `b` is a Blob pointer or null and `expr` is a live predicate typval.
-unsafe fn indexof_blob(b: *mut Blob, startidx: VarNumber, expr: &TypVal) -> VarNumber {
-    if b.is_null() {
+/// Walk a Blob's bytes, answering the index of the first `expr` accepts.
+fn indexof_blob(b: Option<&Blob>, startidx: VarNumber, expr: &TypVal) -> VarNumber {
+    let Some(b) = b else {
         return -1;
-    }
-    // SAFETY throughout: the caller's obligation.
+    };
+    let len = VarNumber::from(blob_len(Some(b)));
     let start = if startidx < 0 {
-        (unsafe { tv_blob_len(b) } as VarNumber + startidx).max(0)
+        (len + startidx).max(0)
     } else {
         startidx
     };
     set_vim_var_type(Vv::Key, VAR_NUMBER);
     set_vim_var_type(Vv::Val, VAR_NUMBER);
     let called_emsg_start = called_emsg.get();
-    for idx in start..unsafe { tv_blob_len(b) } as VarNumber {
+    for idx in start..len {
         set_vim_var_nr(Vv::Key, idx);
-        unsafe { set_vim_var_nr(Vv::Val, tv_blob_get(b, idx as c_int) as VarNumber) };
+        let at = c_int::try_from(idx).expect("a byte of the blob");
+        set_vim_var_nr(Vv::Val, VarNumber::from(b.byte(at)));
         if indexof_matches(expr) {
             return idx;
         }
@@ -583,7 +586,7 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let s = arg_string(&mut numbuf, &args[0]);
             unsafe { cstr::bytes_at(s).len() as VarNumber }
         }
-        VAR_BLOB => unsafe { tv_blob_len(tv.blob_or_null()) as VarNumber },
+        VAR_BLOB => VarNumber::from(blob_len(tv.blob_ref())),
         VAR_LIST => unsafe { tv_list_len(tv.list_or_null()) as VarNumber },
         VAR_DICT => unsafe { tv_dict_len(tv.dict_or_null()) as VarNumber },
         // The remaining tags are Unknown, Funcref, Partial, Float,

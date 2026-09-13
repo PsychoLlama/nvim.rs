@@ -34,7 +34,7 @@ use crate::lua::ffi::{
 };
 use crate::lua::state::nlua_global_refs;
 use crate::types::{
-    Blob, Float, LuaRef, TypVal, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
+    Float, LuaRef, TypVal, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
 };
 
 /// How many Lua slots opening a container needs: its table, the key or index
@@ -190,19 +190,15 @@ impl TypvalSink for LuaSink {
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, blob: *const Blob, len: c_int) {
-        unsafe {
-            let data = if blob.is_null() {
-                c"".as_ptr()
-            } else {
-                (*blob).bv_ga.ga_data.cast::<c_char>()
-            };
-            self.pushlstring(data, len as size_t);
-        }
+    fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: &[u8]) {
+        let data = if bytes.is_empty() {
+            c"".as_ptr()
+        } else {
+            bytes.as_ptr().cast::<c_char>()
+        };
+        // SAFETY: `data` is readable for `bytes.len()` bytes, which is what
+        // the Lua stack copies.
+        unsafe { self.pushlstring(data, bytes.len() as size_t) };
     }
 
     /// A Lua function that reached Vimscript as a funcref goes back as the

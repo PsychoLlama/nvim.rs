@@ -45,7 +45,7 @@ use core::slice;
 
 use crate::cstr;
 use crate::eval::typval::{
-    BlobRef, DictRef, ListRef, NumBuf, index_of, tv_blob_copy, tv_blob_remove, tv_blob_set_ret,
+    BlobRef, DictRef, ListRef, NumBuf, blob_copy, blob_remove, index_of, tv_blob_set_ret,
     tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret,
     tv_dict_copy, tv_dict_extend, tv_dict_item_remove, tv_dict_remove, tv_equal, tv_get_number_chk,
     tv_list_alloc_ret, tv_list_append_owned_tv, tv_list_append_tv, tv_list_copy, tv_list_extend,
@@ -649,8 +649,8 @@ impl BlobArg {
     /// Copy the blob into `result` and answer the copy, for `mapnew()`.
     #[inline(always)]
     pub(crate) fn copy_to(self, result: &mut TypVal) -> BlobArg {
-        // SAFETY: a live blob and a cleared result slot.
-        unsafe { tv_blob_copy(self.0, result) };
+        // SAFETY: the argument's own blob, borrowed for the copy.
+        blob_copy(unsafe { self.0.as_ref() }, result);
         Self(result.blob_or_null())
     }
 }
@@ -908,7 +908,8 @@ pub fn f_remove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // SAFETY: as above -- these three take the vector itself, and each is
         // reached only for the type it handles.
         Container::Dict(_) => unsafe { tv_dict_remove(args, result, arg_errmsg) },
-        Container::Blob(_) => unsafe { tv_blob_remove(args, result, arg_errmsg) },
+        // SAFETY: the blob the first argument holds, borrowed for the call.
+        Container::Blob(b) => unsafe { blob_remove(b.0.as_mut(), args, result, arg_errmsg) },
         Container::List(_) => unsafe { tv_list_remove(args, result, arg_errmsg) },
         _ => err_str(e_listdictblobarg, c"remove()"),
     }

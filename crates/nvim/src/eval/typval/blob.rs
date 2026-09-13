@@ -1,6 +1,6 @@
 //! `Blob`: a reference-counted byte vector, and the builtins over it.
 //!
-//! [`tv_blob_alloc`] / [`tv_blob_unref`] are the lifetime pair.
+//! [`tv_blob_alloc`] / [`blob_unref`] are the lifetime pair.
 //! [`tv_blob_slice_or_index`] is the subscript, [`tv_blob_set_range`] and
 //! [`tv_blob_set_append`] the two ways an assignment writes into one, and
 //! [`tv_blob_remove`] is `remove()`.  [`f_blob2list`] and [`f_list2blob`]
@@ -89,8 +89,143 @@ impl Drop for BlobRef {
     fn drop(&mut self) {
         // SAFETY: this handle names a live blob, and is giving up the
         // reference that kept it so.
-        unsafe { tv_blob_unref(self.as_ptr()) };
+        unsafe { blob_unref(self.as_ptr()) };
     }
+}
+
+impl ::core::ops::Deref for BlobRef {
+    type Target = Blob;
+
+    #[inline(always)]
+    fn deref(&self) -> &Blob {
+        // SAFETY: the handle holds a reference, so the blob is live; the
+        // borrow lasts only as long as the access that asked for it.
+        unsafe { self.0.as_ref() }
+    }
+}
+
+impl ::core::ops::DerefMut for BlobRef {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Blob {
+        // SAFETY: as [`BlobRef::deref`].
+        unsafe { self.0.as_mut() }
+    }
+}
+
+/// The byte vector a [`Blob`] is.
+///
+/// The bytes live in a [`GArray`](crate::types::GArray) because the C
+/// reached them through one; an array that never grew has a null
+/// `ga_data`, which is the empty slice.
+impl Blob {
+    /// The blob's bytes.
+    #[inline]
+    pub fn bytes(&self) -> &[u8] {
+        if self.bv_ga.ga_data.is_null() {
+            return &[];
+        }
+        let len = self.len();
+        // SAFETY: the blob's own byte array, `ga_len` bytes long -- the
+        // invariant of every `Blob` the allocator hands out.
+        unsafe { ::core::slice::from_raw_parts(self.bv_ga.ga_data.cast::<u8>(), len) }
+    }
+
+    /// The blob's bytes, writable.
+    #[inline]
+    pub(crate) fn bytes_mut(&mut self) -> &mut [u8] {
+        if self.bv_ga.ga_data.is_null() {
+            return &mut [];
+        }
+        let len = self.len();
+        // SAFETY: as [`Blob::bytes`], and `&mut self` is the exclusive
+        // borrow the slice needs.
+        unsafe { ::core::slice::from_raw_parts_mut(self.bv_ga.ga_data.cast::<u8>(), len) }
+    }
+
+    /// How many bytes the blob holds.
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        usize::try_from(self.bv_ga.ga_len).unwrap_or(0)
+    }
+
+    /// Whether the blob holds no bytes at all.
+    #[inline]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.bv_ga.ga_len <= 0
+    }
+
+    /// The byte at `idx`, which must name one.
+    #[inline]
+    pub(crate) fn byte(&self, idx: ::core::ffi::c_int) -> u8 {
+        self.bytes()[usize::try_from(idx).expect("a byte of the blob")]
+    }
+
+    /// Store `byte` at `idx`, which must name a byte of the blob.
+    #[inline]
+    pub(crate) fn set_byte(&mut self, idx: ::core::ffi::c_int, byte: u8) {
+        let at = usize::try_from(idx).expect("a byte of the blob");
+        self.bytes_mut()[at] = byte;
+    }
+
+    /// `blob[idx] = byte`, growing the blob by one when `idx` is the slot
+    /// just past the end.  Anything further out is silently ignored, which
+    /// is upstream's `tv_blob_set_append`.
+    pub(crate) fn set_or_append(&mut self, idx: ::core::ffi::c_int, byte: u8) {
+        if idx > self.bv_ga.ga_len {
+            return;
+        }
+        if idx == self.bv_ga.ga_len {
+            self.claim(1);
+        }
+        self.set_byte(idx, byte);
+    }
+
+    /// Append `byte` to the blob.
+    #[inline]
+    pub(crate) fn push(&mut self, byte: u8) {
+        // SAFETY: the blob's own byte array, which this grows by one.
+        unsafe { ga_append(&raw mut self.bv_ga, byte) };
+    }
+
+    /// Make room for `n` more bytes, declare them live and answer the run
+    /// just claimed.
+    ///
+    /// The bytes are whatever the allocator left there, so every caller
+    /// overwrites the whole run.
+    pub(crate) fn claim(&mut self, n: usize) -> &mut [u8] {
+        let was = self.len();
+        let n = ::core::ffi::c_int::try_from(n).expect("a short blob");
+        // SAFETY: the blob's own byte array.
+        unsafe { ga_grow(&raw mut self.bv_ga, n) };
+        self.bv_ga.ga_len += n;
+        &mut self.bytes_mut()[was..]
+    }
+
+    /// Take the bytes `first..=last` out, closing the gap.
+    pub(crate) fn drain(&mut self, first: usize, last: usize) {
+        let taken = ::core::ffi::c_int::try_from(last - first + 1).expect("a short blob");
+        self.bytes_mut().copy_within(last + 1.., first);
+        self.bv_ga.ga_len -= taken;
+    }
+
+    /// Drop every byte, leaving the blob empty and its storage released.
+    #[inline]
+    pub(crate) fn clear(&mut self) {
+        // SAFETY: the blob's own byte array.
+        unsafe { ga_clear(&raw mut self.bv_ga) };
+    }
+}
+
+/// Length of `b`'s data in bytes; a NULL blob is empty.
+#[inline]
+pub(crate) fn blob_len(b: Option<&Blob>) -> ::core::ffi::c_int {
+    b.map_or(0, |b| b.bv_ga.ga_len)
+}
+
+/// The bytes of `b`; a NULL blob is empty.
+#[inline]
+pub(crate) fn blob_bytes(b: Option<&Blob>) -> &[u8] {
+    b.map_or(&[], Blob::bytes)
 }
 
 /// The `TypVal` readers and writers for the blob arm.
@@ -118,6 +253,33 @@ impl TypVal {
     #[inline(always)]
     pub(crate) fn blob_or_null(&self) -> *mut Blob {
         self.as_blob().unwrap_or(::core::ptr::null_mut())
+    }
+
+    /// The blob this value holds, borrowed -- `None` for every other kind
+    /// and for `v:_null_blob`.
+    ///
+    /// The safe spelling of [`TypVal::blob_or_null`], and the one the
+    /// `blob_*` family reads its argument in: the borrow lasts as long as
+    /// the value does, which is what the pointer never said.
+    #[inline(always)]
+    pub(crate) fn blob_ref(&self) -> Option<&Blob> {
+        match self {
+            TypVal::Blob(blob) => blob.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// The blob this value holds, borrowed for writing.
+    ///
+    /// The exclusive borrow is the whole point: a caller holding one cannot
+    /// also be reading the blob through the value, which the raw pointer
+    /// let it do.
+    #[inline(always)]
+    pub(crate) fn blob_mut(&mut self) -> Option<&mut Blob> {
+        match self {
+            TypVal::Blob(blob) => blob.as_deref_mut(),
+            _ => None,
+        }
     }
 
     /// A blob value over `blob`, which the value takes over.
@@ -164,8 +326,9 @@ pub fn tv_blob_alloc() -> BlobRef {
 /// # Safety
 ///
 /// `b` must point at a live blob, unaliased for the call.
-pub unsafe fn tv_blob_free(b: *mut Blob) {
-    unsafe { ga_clear(&raw mut (*b).bv_ga) };
+pub unsafe fn blob_free(b: *mut Blob) {
+    // SAFETY: the caller's promise: a live, unaliased blob.
+    unsafe { &mut *b }.clear();
     unsafe { xfree(b.cast()) };
 }
 
@@ -174,53 +337,25 @@ pub unsafe fn tv_blob_free(b: *mut Blob) {
 /// # Safety
 ///
 /// `b` must point at a live blob, unaliased for the call.
-pub unsafe fn tv_blob_unref(b: *mut Blob) {
+pub unsafe fn blob_unref(b: *mut Blob) {
     if let Some(blob) = unsafe { b.as_mut() }
         && blob.bv_refcount.release() <= 0
     {
-        unsafe { tv_blob_free(b) };
+        unsafe { blob_free(b) };
     }
 }
 
 /// Whether `b1` and `b2` hold the same bytes.  An empty blob and a NULL one
 /// are equal.
-///
-/// # Safety
-///
-/// `b1` must point at a live blob. `b2` must point at a live blob.
-pub unsafe fn tv_blob_equal(b1: *const Blob, b2: *const Blob) -> bool {
-    let len1 = unsafe { tv_blob_len(b1) };
-    let len2 = unsafe { tv_blob_len(b2) };
-    if len1 == 0 && len2 == 0 {
-        return true;
-    }
-    if b1 == b2 {
-        return true;
-    }
-    if len1 != len2 {
-        return false;
-    }
-    let mut i = 0;
-    while i < unsafe { (*b1).bv_ga.ga_len } {
-        if unsafe { tv_blob_get(b1, i) } != unsafe { tv_blob_get(b2, i) } {
-            return false;
-        }
-        i += 1;
-    }
-    true
+pub fn blob_equal(b1: Option<&Blob>, b2: Option<&Blob>) -> bool {
+    blob_bytes(b1) == blob_bytes(b2)
 }
 
 /// `blob[n1 : n2]`: store the sub-blob in `result`.
 ///
 /// `result` holds the blob being subscripted on the way in.  Indexes out of
 /// range give an empty result rather than an error.
-///
-/// # Safety
-///
-/// `_blob` must point at a live blob. `result` must point at the caller's
-/// return slot: an initialized typval it owns and will clear.
-pub(crate) unsafe fn tv_blob_slice(
-    _blob: *const Blob,
+pub(crate) fn blob_slice(
     len: ::core::ffi::c_int,
     mut n1: VarNumber,
     mut n2: VarNumber,
@@ -248,17 +383,12 @@ pub(crate) unsafe fn tv_blob_slice(
         tv_clear(result);
         result.write_blob(None);
     } else {
-        let new_blob = tv_blob_alloc();
-        let at = new_blob.as_ptr();
-        let sublen = (n2 - n1 + 1) as ::core::ffi::c_int;
-        unsafe { ga_grow(&raw mut (*at).bv_ga, sublen) };
-        unsafe { (*at).bv_ga.ga_len = sublen };
-        let n1 = n1 as ::core::ffi::c_int;
-        let mut i = n1;
-        while i <= n2 as ::core::ffi::c_int {
-            unsafe { tv_blob_set(at, i - n1, tv_blob_get(result.blob_or_null(), i)) };
-            i += 1;
-        }
+        let mut new_blob = tv_blob_alloc();
+        let from = usize::try_from(n1).expect("a byte of the blob");
+        let to = usize::try_from(n2).expect("a byte of the blob");
+        new_blob
+            .claim(to - from + 1)
+            .copy_from_slice(&blob_bytes(result.blob_ref())[from..=to]);
         tv_clear(result);
         tv_blob_set_ret(result, Some(new_blob));
     }
@@ -270,13 +400,7 @@ pub(crate) unsafe fn tv_blob_slice(
 ///
 /// `result` holds the blob being subscripted on the way in.  An index out of
 /// range raises `E979`.
-///
-/// # Safety
-///
-/// `_blob` must point at a live blob. `result` must point at the caller's
-/// return slot: an initialized typval it owns and will clear.
-pub(crate) unsafe fn tv_blob_index(
-    _blob: *const Blob,
+pub(crate) fn blob_index(
     len: ::core::ffi::c_int,
     mut idx: VarNumber,
     result: &mut TypVal,
@@ -291,37 +415,36 @@ pub(crate) unsafe fn tv_blob_index(
         return Err(Failed);
     }
 
-    let v = unsafe { tv_blob_get((*result).blob_or_null(), idx as ::core::ffi::c_int) };
+    let at = usize::try_from(idx).expect("a byte of the blob");
+    let v = blob_bytes(result.blob_ref())[at];
     tv_clear(result);
-    (*result).write_number(VarNumber::from(v));
+    result.write_number(VarNumber::from(v));
     Ok(())
 }
 
 /// `blob[n1]` or `blob[n1 : n2]`, whichever `is_range` says.
 ///
-/// # Safety
-///
-/// `blob` must point at a live blob. `result` must point at the caller's
-/// return slot: an initialized typval it owns and will clear.
-pub unsafe fn tv_blob_slice_or_index(
-    blob: *const Blob,
+/// `result` holds the blob being subscripted on the way in, which is the
+/// only blob either half reads -- upstream passed it a second time and the
+/// argument went unread.
+pub fn blob_slice_or_index(
     is_range: bool,
     n1: VarNumber,
     n2: VarNumber,
     exclusive: bool,
     result: &mut TypVal,
 ) -> Result<(), Failed> {
-    let len = unsafe { tv_blob_len((*result).blob_or_null()) };
+    let len = blob_len(result.blob_ref());
     if is_range {
-        unsafe { tv_blob_slice(blob, len, n1, n2, exclusive, result) }
+        blob_slice(len, n1, n2, exclusive, result)
     } else {
-        unsafe { tv_blob_index(blob, len, n1, result) }
+        blob_index(len, n1, result)
     }
 }
 
 /// Whether `n1` names a byte of a `bloblen`-byte blob, or the slot just past
 /// the end (which an assignment may append to).
-pub fn tv_blob_check_index(
+pub fn blob_check_index(
     bloblen: ::core::ffi::c_int,
     n1: VarNumber,
     quiet: bool,
@@ -336,7 +459,7 @@ pub fn tv_blob_check_index(
 }
 
 /// Whether `n1..=n2` is a range of a `bloblen`-byte blob.
-pub fn tv_blob_check_range(
+pub fn blob_check_range(
     bloblen: ::core::ffi::c_int,
     n1: VarNumber,
     n2: VarNumber,
@@ -353,51 +476,30 @@ pub fn tv_blob_check_range(
 
 /// `dest[n1 : n2] = src`: copy `src`'s blob over that range of `dest`.
 ///
-/// # Safety
-///
-/// `dest` must point at a live blob, unaliased for the call. `src` must point
-/// at an initialized typval, unaliased for the call.
-pub unsafe fn tv_blob_set_range(
-    dest: *mut Blob,
+/// The two may be the *same* blob -- `:let b[0 : len(b) - 1] = b` reaches
+/// here with one blob as both operands. The length check above forces such
+/// a range to be the whole blob, so the copy is the identity and the borrow
+/// never has to be taken twice.
+pub fn blob_set_range(
+    dest: &mut Blob,
     n1: VarNumber,
     n2: VarNumber,
     src: &TypVal,
 ) -> Result<(), Failed> {
-    if n2 - n1 + 1 != VarNumber::from(unsafe { tv_blob_len((*src).blob_or_null()) }) {
+    let from = src.blob_ref();
+    if n2 - n1 + 1 != VarNumber::from(blob_len(from)) {
         let msg = tr(c"E972: Blob value does not have the right number of bytes");
+        // SAFETY: a NUL-terminated message from the translation table.
         unsafe { emsg_ptr(msg) };
         return Err(Failed);
     }
-    let mut il = n1 as ::core::ffi::c_int;
-    let mut ir = 0;
-    while il <= n2 as ::core::ffi::c_int {
-        unsafe { tv_blob_set(dest, il, tv_blob_get((*src).blob_or_null(), ir)) };
-        il += 1;
-        ir += 1;
+    if from.is_some_and(|from| ::core::ptr::eq(from, dest)) {
+        return Ok(());
     }
+    let at = usize::try_from(n1).expect("a byte of the blob");
+    let bytes = blob_bytes(from);
+    dest.bytes_mut()[at..at + bytes.len()].copy_from_slice(bytes);
     Ok(())
-}
-
-/// `blob[idx] = byte`, growing the blob by one when `idx` is the slot just
-/// past the end.  Anything further out is silently ignored.
-///
-/// # Safety
-///
-/// `blob` must point at a live blob, unaliased for the call.
-pub unsafe fn tv_blob_set_append(blob: *mut Blob, idx: ::core::ffi::c_int, byte: uint8_t) {
-    let gap = bv_ga(blob);
-
-    // Allow for appending a byte.  Setting a byte beyond
-    // the end is an error otherwise.
-    // SAFETY: the blob's own byte array.
-    let mut ga = unsafe { Ga::new(gap) };
-    if idx <= ga.ga_len {
-        if idx == ga.ga_len {
-            unsafe { ga_grow(gap, 1) };
-            ga.ga_len += 1;
-        }
-        unsafe { tv_blob_set(blob, idx, byte) };
-    }
 }
 
 /// `remove()` over a blob: take out one byte, or the range `[idx, end]`, and
@@ -405,18 +507,17 @@ pub unsafe fn tv_blob_set_append(blob: *mut Blob, idx: ::core::ffi::c_int, byte:
 ///
 /// # Safety
 ///
-/// `args` must be the evaluator's argument buffer (`Args::new`) and `result`
-/// its live return value: the contract the two builtin dispatchers keep.
 /// `arg_errmsg` must point at the NUL-terminated message to raise when the
 /// blob is locked.
-pub unsafe fn tv_blob_remove(
+pub unsafe fn blob_remove(
+    blob: Option<&mut Blob>,
     args: &[TypVal],
     result: &mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
-    let b = args[0].blob_or_null();
-    if !b.is_null() && unsafe { value_check_lock((*b).bv_lock, arg_errmsg, TV_TRANSLATE as size_t) }
-    {
+    let lock = blob.as_ref().map_or(VarLock::Unlocked, |b| b.bv_lock);
+    // SAFETY: the caller's promise: a NUL-terminated message.
+    if unsafe { value_check_lock(lock, arg_errmsg, TV_TRANSLATE as size_t) } {
         return;
     }
 
@@ -424,7 +525,7 @@ pub unsafe fn tv_blob_remove(
         return;
     };
 
-    let len = int64_t::from(unsafe { tv_blob_len(b) });
+    let len = int64_t::from(blob_len(blob.as_deref()));
     if idx < 0 {
         // count from the end
         idx += len;
@@ -433,19 +534,15 @@ pub unsafe fn tv_blob_remove(
         semsg!("E979: Blob index out of range: {}", idx);
         return;
     }
-    // SAFETY: past the range check `len` is at least 1, which a NULL blob
-    // cannot be, so this is the caller's live blob.
-    let mut blob = unsafe { Bl::new(b) };
+    // Past the range check the length is at least one, which a NULL blob
+    // cannot be.
+    let blob = blob.expect("a blob with a byte in it");
+    let first = usize::try_from(idx).expect("a byte of the blob");
 
     if args.len() <= 2 {
         // Remove one item, return its value.
-        let p = blob.bv_ga.ga_data.cast::<uint8_t>();
-        unsafe { (*result).write_number(VarNumber::from(*p.offset(idx as isize))) };
-        let at = unsafe { p.offset(idx as isize) };
-        let after = unsafe { at.add(1) };
-        let into = at.cast::<u8>();
-        unsafe { into.copy_from(after.cast(), (len - idx - 1) as size_t) };
-        blob.bv_ga.ga_len -= 1;
+        result.write_number(VarNumber::from(blob.bytes()[first]));
+        blob.drain(first, first);
         return;
     }
 
@@ -461,29 +558,14 @@ pub unsafe fn tv_blob_remove(
         semsg!("E979: Blob index out of range: {}", end);
         return;
     }
+    let last = usize::try_from(end).expect("a byte of the blob");
 
-    let taken = (end - idx + 1) as ::core::ffi::c_int;
-    let taken_held = tv_blob_alloc();
-    let taken_raw = taken_held.as_ptr();
-    // SAFETY: freshly allocated just above.
-    let mut taken_blob = unsafe { Bl::new(taken_raw) };
-    taken_blob.bv_ga.ga_len = taken;
-    unsafe { ga_grow(&raw mut (*taken_raw).bv_ga, taken) };
-
-    // Read `ga_data` after the allocation above, as upstream does.
-    let p = blob.bv_ga.ga_data.cast::<uint8_t>();
-    let dst = taken_blob.bv_ga.ga_data;
-    let src = unsafe { p.offset(idx as isize) };
-    unsafe { dst.cast::<u8>().copy_from(src.cast(), taken as size_t) };
+    let mut taken_held = tv_blob_alloc();
+    taken_held
+        .claim(last - first + 1)
+        .copy_from_slice(&blob.bytes()[first..=last]);
     tv_blob_set_ret(result, Some(taken_held));
-
-    if len - end - 1 > 0 {
-        let at = unsafe { p.offset(idx as isize) };
-        let after = unsafe { p.offset(end as isize).add(1) };
-        let into = at.cast::<u8>();
-        unsafe { into.copy_from(after.cast(), (len - end - 1) as size_t) };
-    }
-    blob.bv_ga.ga_len -= taken;
+    blob.drain(first, last);
 }
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
@@ -492,10 +574,10 @@ pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_blob_arg(args, 0).is_err() {
         return;
     }
-    let blob = args[0].blob_or_null();
     let l = result.list_or_null();
-    for i in 0..unsafe { tv_blob_len(blob) } {
-        unsafe { tv_list_append_number(l, VarNumber::from(tv_blob_get(blob, i))) };
+    for &byte in blob_bytes(args[0].blob_ref()) {
+        // SAFETY: the list just stored in the return slot.
+        unsafe { tv_list_append_number(l, VarNumber::from(byte)) };
     }
 }
 
@@ -507,11 +589,8 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_list_arg(args, 0).is_err() {
         return;
     }
-    let l = args[0].list_or_null();
-    if l.is_null() {
-        return;
-    }
-    for li in tv_list_iter(unsafe { l.as_ref() }) {
+    // SAFETY: the argument's own list, borrowed for the walk.
+    for li in tv_list_iter(unsafe { args[0].list_or_null().as_ref() }) {
         let read = tv_get_number_chk(&li.li_tv);
         let n = read.unwrap_or(0);
         if read.is_err() || !(0..=255).contains(&n) {
@@ -520,10 +599,10 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 // it, so `n` has never reached the message.
                 semsg!("E1239: Invalid value for blob: 0xlX");
             }
-            unsafe { ga_clear(&raw mut (*blob).bv_ga) };
+            blob.clear();
             return;
         }
-        unsafe { ga_append(&raw mut (*blob).bv_ga, n as uint8_t) };
+        blob.push(u8::try_from(n).expect("a byte, just checked"));
     }
 }
 
@@ -531,36 +610,20 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// The answer is a **borrow** of the slot's blob, for the callers that go on
 /// filling it; the slot owns the reference.
-pub fn tv_blob_alloc_ret(ret_tv: &mut TypVal) -> *mut Blob {
-    let held = tv_blob_alloc();
-    let at = held.as_ptr();
-    tv_blob_set_ret(ret_tv, Some(held));
-    at
+pub fn tv_blob_alloc_ret(ret_tv: &mut TypVal) -> &mut Blob {
+    tv_blob_set_ret(ret_tv, Some(tv_blob_alloc()));
+    ret_tv.blob_mut().expect("the blob just stored")
 }
 
 /// Store a copy of `from` in `to`.  A NULL blob copies as a NULL blob.
 ///
-/// # Safety
-///
-/// `from` must point at a live blob, unaliased for the call. `to` must point
-/// at an initialized typval, unaliased for the call.
-pub unsafe fn tv_blob_copy(from: *mut Blob, to: &mut TypVal) {
-    // SAFETY: the caller's promise: a writable typval.
-    let mut dst = unsafe { Tv::new(to) };
-    dst.write_empty(VAR_BLOB);
-    if from.is_null() {
+/// `to` is overwritten, not cleared: it holds no value yet.
+pub fn blob_copy(from: Option<&Blob>, to: &mut TypVal) {
+    let Some(from) = from else {
         to.write_blob(None);
         return;
-    }
-
-    tv_blob_alloc_ret(to);
-    let len = unsafe { (*from).bv_ga.ga_len };
-    let ga = bv_ga(dst.blob_or_null());
-    if len > 0 {
-        unsafe { (*ga).ga_data = xmemdup((*from).bv_ga.ga_data, len as size_t) };
-    }
-    // SAFETY: the destination blob's own byte array.
-    let mut garr = unsafe { Ga::new(ga) };
-    garr.ga_len = len;
-    garr.ga_maxlen = len;
+    };
+    let mut copy = tv_blob_alloc();
+    copy.claim(from.len()).copy_from_slice(from.bytes());
+    to.write_blob(Some(copy));
 }

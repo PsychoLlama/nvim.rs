@@ -21,8 +21,8 @@ use core::ptr::null_mut;
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
-    index_of, tv_blob_copy, tv_blob_get, tv_blob_len, tv_blob_unref, tv_list_items_mut,
-    tv_list_unref, tv_list_watch_add, tv_list_watch_remove,
+    blob_copy, blob_len, blob_unref, index_of, tv_list_items_mut, tv_list_unref, tv_list_watch_add,
+    tv_list_watch_remove,
 };
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{ex_let_vars, skip_var_list};
@@ -120,8 +120,8 @@ pub unsafe fn eval_for_line(
                         // Copied, so the loop is not affected by later
                         // changes to the Blob it was handed.
                         let mut btv = UNSET_TV;
-                        // SAFETY: as above; `btv` is this frame's.
-                        unsafe { tv_blob_copy(tv.blob_or_null(), &mut btv) };
+                        // SAFETY: the value's own blob, borrowed for the copy.
+                        blob_copy(unsafe { tv.blob_or_null().as_ref() }, &mut btv);
                         // SAFETY: the copy left a Blob in `btv`.
                         fi.fi_blob = btv.blob_or_null();
                         // The reference the copy took is `fi`'s now.
@@ -177,12 +177,12 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
 
     if !fi.fi_blob.is_null() {
         // SAFETY: `fi_blob` is the copy `eval_for_line` took.
-        if fi.fi_bi >= unsafe { tv_blob_len(fi.fi_blob) } {
+        let blob = unsafe { &*fi.fi_blob };
+        if fi.fi_bi >= blob_len(Some(blob)) {
             return false;
         }
         let mut tv = UNSET_TV;
-        // SAFETY: as above; `fi_bi` is inside the Blob.
-        tv.write_number(unsafe { tv_blob_get(fi.fi_blob, fi.fi_bi) } as VarNumber);
+        tv.write_number(VarNumber::from(blob.byte(fi.fi_bi)));
         // SAFETY: `rec` is the caller's record.
         unsafe { (*rec).fi_bi += 1 };
         // SAFETY: `tv` is this frame's, and `arg` the caller's list.
@@ -269,7 +269,7 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
         unsafe { tv_list_unref(list) };
     } else if !fi.fi_blob.is_null() {
         // SAFETY: the Blob is the copy `eval_for_line` took.
-        unsafe { tv_blob_unref(fi.fi_blob) };
+        unsafe { blob_unref(fi.fi_blob) };
     } else {
         // SAFETY: the String is owned, and null is fine for `xfree`.
         unsafe { xfree(fi.fi_string as *mut c_void) };

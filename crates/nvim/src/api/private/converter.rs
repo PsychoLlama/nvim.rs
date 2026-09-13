@@ -49,7 +49,7 @@ use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
-    ApiDict, Array, Blob, BoolVarValue, DictItem, DictKey, Float, Integer, KeyValuePair, ListItem,
+    ApiDict, Array, BoolVarValue, DictItem, DictKey, Float, Integer, KeyValuePair, ListItem,
     Object, String_0, TypVal, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, kSpecialVarNull,
@@ -185,22 +185,8 @@ impl TypvalSink for ObjectSink {
 
     /// A blob is bytes, and so is a `String` object.
     ///
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, blob: *const Blob, len: c_int) {
-        let len = usize::try_from(len).expect("a blob length is never negative");
-        // SAFETY: a non-empty blob has a `bv_ga` holding `len` bytes.
-        let obj = unsafe {
-            let data = if len != 0 {
-                (*blob).bv_ga.ga_data.cast::<c_char>()
-            } else {
-                c"".as_ptr()
-            };
-            Self::cbuf_to_obj(data, len)
-        };
-        self.emit(obj);
+    fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: &[u8]) {
+        self.emit(Object::string(String_0::from_bytes(bytes)));
     }
 
     /// A funcref that is really a Lua function goes back as a `LuaRef`;

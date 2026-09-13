@@ -11,19 +11,17 @@
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{c_char, c_int};
-use core::ptr::{copy, copy_nonoverlapping};
+use core::ptr::copy;
 
 use crate::eval::typval::{
-    NumBuf, tv_blob_alloc, tv_blob_len, tv_blob_set_ret, tv_clear, tv_get_number_chk,
-    tv_list_concat,
+    NumBuf, blob_bytes, tv_blob_alloc, tv_blob_set_ret, tv_clear, tv_get_number_chk, tv_list_concat,
 };
-use crate::eval::{INT_MAX, Tv, VARNUMBER_MAX, VARNUMBER_MIN};
-use crate::garray::ga_grow;
+use crate::eval::{Tv, VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::memory::xrealloc;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::concat_str;
-use crate::types::{Blob, Float, TypVal, VAR_FLOAT, VAR_STRING, VarNumber};
+use crate::types::{Float, TypVal, VAR_FLOAT, VAR_STRING, VarNumber};
 
 /// `n1 / n2`, with the two cases a machine divide cannot answer.
 ///
@@ -58,37 +56,20 @@ pub(crate) fn num_modulus(n1: VarNumber, n2: VarNumber) -> VarNumber {
 }
 
 /// `blob + blob`.
-pub(crate) fn eval_addblob(tv1: &mut TypVal, tv2: &mut TypVal) {
-    // SAFETY: the caller's promise -- both operands are Blobs, so each
-    // union holds a live `Blob`, and `b` is a Blob of this call's own.
-    let b1: *const Blob = (*tv1).blob_or_null();
-    let b2: *const Blob = (*tv2).blob_or_null();
-    let held = tv_blob_alloc();
-    let b: *mut Blob = held.as_ptr();
-    let len1 = unsafe { tv_blob_len(b1) } as i64;
-    let len2 = unsafe { tv_blob_len(b2) } as i64;
-    let total = len1 + len2;
+///
+/// The answer is a blob of this call's own, so it overlaps neither operand
+/// even when the two are the same blob.
+pub(crate) fn eval_addblob(tv1: &mut TypVal, tv2: &TypVal) {
+    let (b1, b2) = (blob_bytes(tv1.blob_ref()), blob_bytes(tv2.blob_ref()));
+    let mut held = tv_blob_alloc();
+    let total = b1.len() + b2.len();
 
     // A result that would not fit a garray is silently dropped: the
     // answer is an empty Blob and nothing is reported.
-    if (0..=i64::from(INT_MAX)).contains(&total) {
-        // SAFETY: as above; `ga_grow` sized `bv_ga` for `total` bytes and
-        // `b` was allocated a moment ago, so it cannot overlap either
-        // source even when the two operands are the same Blob.
-        let dest = unsafe {
-            ga_grow(&raw mut (*b).bv_ga, total as c_int);
-            (*b).bv_ga.ga_data as *mut u8
-        };
-        if len1 > 0 {
-            let src = unsafe { (*b1).bv_ga.ga_data } as *const u8;
-            unsafe { copy_nonoverlapping(src, dest, len1 as usize) };
-        }
-        if len2 > 0 {
-            let src = unsafe { (*b2).bv_ga.ga_data } as *const u8;
-            let at = unsafe { dest.add(len1 as usize) };
-            unsafe { copy_nonoverlapping(src, at, len2 as usize) };
-        }
-        unsafe { (*b).bv_ga.ga_len = total as c_int };
+    if c_int::try_from(total).is_ok() {
+        let room = held.claim(total);
+        room[..b1.len()].copy_from_slice(b1);
+        room[b1.len()..].copy_from_slice(b2);
     }
     tv_clear(tv1);
     tv_blob_set_ret(tv1, Some(held));

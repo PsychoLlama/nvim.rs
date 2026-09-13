@@ -27,7 +27,7 @@ use crate::msgpack_rpc::packer::{
     mpack_map, mpack_nil, mpack_str, mpack_uint64,
 };
 use crate::os::cshim::gettext;
-use crate::types::{Blob, Float, Integer, PackerBuffer, TypVal, int64_t, size_t};
+use crate::types::{Float, Integer, PackerBuffer, TypVal, int64_t, size_t};
 
 /// The two errors this sink can raise, both through
 /// [`conv_error`][crate::eval::encode::conv_error], which appends
@@ -136,18 +136,8 @@ impl TypvalSink for MsgpackSink<'_> {
         Flow::Go
     }
 
-    /// # Safety
-    ///
-    /// As [`TypvalSink::conv_blob`]: the walk's contract on the value
-    /// it is standing on.
-    unsafe fn conv_blob(&mut self, _tv: Option<&mut TypVal>, blob: *const Blob, len: c_int) {
-        let data = if blob.is_null() {
-            ::core::ptr::null_mut()
-        } else {
-            unsafe { (*blob).bv_ga.ga_data }.cast::<c_char>()
-        };
-        let len = usize::try_from(len).expect("a blob length is never negative");
-        mpack_bin(unsafe { Self::buf(data, len) }, self.packer);
+    fn conv_blob(&mut self, _tv: Option<&mut TypVal>, bytes: &[u8]) {
+        mpack_bin(bytes, self.packer);
     }
 
     /// # Safety
