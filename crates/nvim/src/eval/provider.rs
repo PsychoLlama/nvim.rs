@@ -21,7 +21,6 @@ use crate::change::appended_lines_mark;
 use crate::channel::{callback_reader_free, channel_proc, find_channel};
 use crate::eval::typval::{
     ListRef, callback_free, tv_dict_get_callback, tv_dict_get_number, tv_list_alloc,
-    tv_list_append_string,
 };
 use crate::eval::userfunc::{
     call_func, find_func, get_current_funccal, restore_funccal, save_funccal,
@@ -190,7 +189,7 @@ pub unsafe fn script_host_eval(name: *mut c_char, args: &[TypVal], result: &mut 
     let args = tv_list_alloc(1 as ptrdiff_t);
     // SAFETY: `VAR_STRING` says the value holds a string, and
     // -1 asks the callee to measure it.
-    unsafe { tv_list_append_string(args.as_ptr(), arg.string_or_null(), -1 as ssize_t) };
+    unsafe { (*args.as_ptr()).push_string(arg.string_or_null(), -1 as ssize_t) };
     let method = c"eval".as_ptr() as *mut c_char;
     // SAFETY: `name` and `method` are NUL-terminated.
     *ret = unsafe { eval_call_provider(name, method, Some(args), false) };

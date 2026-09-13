@@ -40,9 +40,9 @@ use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage
 use crate::eval::typval::DictEntry;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    DictRef, ListRef, blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
-    tv_dict_watcher_node_data, tv_in_free_unref_items, tv_list_copy, tv_list_copyid,
-    tv_list_free_contents, tv_list_free_list, tv_list_iter_mut,
+    DictRef, ListRef, blob_copy, list_copy, list_free_contents, list_free_list, list_iter_mut,
+    tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict, tv_dict_watcher_node_data,
+    tv_in_free_unref_items,
 };
 use crate::eval::userfunc::{
     free_unref_funccal, set_ref_in_call_stack, set_ref_in_func, set_ref_in_func_args,
@@ -389,8 +389,9 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
         let Some(ll) = list_at(idx).map(NonNull::as_ptr) else {
             continue;
         };
-        if stale(unsafe { tv_list_copyid(ll) }, copy_id) && !unsafe { tv_list_has_watchers(ll) } {
-            unsafe { tv_list_free_contents(ll) };
+        if stale(unsafe { (*ll).copy_id() }, copy_id) && !list_has_watchers(unsafe { ll.as_ref() })
+        {
+            list_free_contents(unsafe { &mut *ll });
             did_free = true;
         }
     }
@@ -410,8 +411,9 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
         let Some(ll) = list_at(idx).map(NonNull::as_ptr) else {
             continue;
         };
-        if stale(unsafe { (*ll).lv_copy_id }, copy_id) && !unsafe { tv_list_has_watchers(ll) } {
-            unsafe { tv_list_free_list(ll) };
+        if stale(unsafe { (*ll).lv_copy_id }, copy_id) && !list_has_watchers(unsafe { ll.as_ref() })
+        {
+            unsafe { list_free_list(ll) };
         }
     }
 
@@ -473,7 +475,7 @@ pub unsafe fn set_ref_in_list_items(
     let mut list_stack: *mut ListStack = null_mut();
     let mut cur_l = l;
     loop {
-        for li in tv_list_iter_mut(unsafe { cur_l.as_mut() }) {
+        for li in list_iter_mut(unsafe { cur_l.as_mut() }) {
             if abort {
                 break;
             }
@@ -681,14 +683,15 @@ pub unsafe fn var_item_copy(
             if l.is_null() {
                 dst.write_list(None);
             // SAFETY: `l` is the source's live List.
-            } else if copy_id != 0 && unsafe { tv_list_copyid(l) } == copy_id {
+            } else if copy_id != 0 && unsafe { (*l).copy_id() } == copy_id {
                 // Already copied under this id: share that copy, which gains
                 // this reference.
                 // SAFETY: as above -- the copy it was given under this id.
-                dst.write_list(unsafe { ListRef::retained(tv_list_latest_copy(l)) });
+                let copy = list_latest_copy(unsafe { &*l });
+                dst.write_list(unsafe { ListRef::retained(copy) });
             } else {
                 // SAFETY: as above; `conv` is null or the caller's.
-                dst.write_list(unsafe { tv_list_copy(conv, l, deep, copy_id) });
+                dst.write_list(unsafe { list_copy(conv, ListRef::retained(l), deep, copy_id) });
             }
             if dst.list_or_null().is_null() && !l.is_null() {
                 ret = Err(Failed);
@@ -736,16 +739,14 @@ pub unsafe fn var_item_copy(
 /// # Safety
 /// `l` must be valid.
 #[inline]
-pub(crate) unsafe fn tv_list_latest_copy(l: *const List) -> *mut List {
-    unsafe { (*l).lv_copylist }
+pub(crate) fn list_latest_copy(l: &List) -> *mut List {
+    l.lv_copylist
 }
 
 /// Is anything watching this list? A watched list is never freed, because
 /// the watcher is a borrow the mark cannot see.
 ///
-/// # Safety
-/// `l` must be null or valid.
 #[inline]
-pub(crate) unsafe fn tv_list_has_watchers(l: *const List) -> bool {
-    unsafe { !l.is_null() && !(*l).lv_watch.is_null() }
+pub(crate) fn list_has_watchers(l: Option<&List>) -> bool {
+    l.is_some_and(|l| !l.lv_watch.is_null())
 }

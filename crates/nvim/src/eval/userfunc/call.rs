@@ -156,8 +156,9 @@ pub unsafe fn call_user_func(
         let a000 = unsafe { ListRef::owning(&raw mut (*fc).fc_l_varlist) };
         unsafe { (*v).di_tv.write_list(a000) };
     }
-    unsafe { tv_list_init_static(&raw mut (*fc).fc_l_varlist) };
-    unsafe { tv_list_set_lock(&raw mut (*fc).fc_l_varlist, VarLock::Fixed) };
+    unsafe { list_init_static(&raw mut (*fc).fc_l_varlist) };
+    // SAFETY: the funccall's own list, just initialised.
+    list_set_lock(Some(unsafe { &mut (*fc).fc_l_varlist }), VarLock::Fixed);
     if has_args {
         // Set a:firstline and a:lastline.
         let avars = unsafe { &raw mut (*fc).fc_l_avars };
@@ -264,7 +265,7 @@ pub unsafe fn call_user_func(
         if (0..MAX_FUNC_ARGS).contains(&ai) {
             // Add the extra argument to a:000.  As `a:name` above, the item
             // *names* the caller's value without owning it;
-            // `tv_list_disown_items` is the counterpart.
+            // `List::disown_items` is the counterpart.
             // SAFETY: the caller keeps the value for the length of the
             // call, and the list is the funccall's own.
             let value = unsafe { args[i as usize].bit_copy() };

@@ -5,9 +5,8 @@
 use super::wrappers::{arg_number, list_alloc_ret};
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    tv_check_for_nonnull_dict_arg, tv_check_for_number_arg, tv_check_for_opt_number_arg,
-    tv_dict_find, tv_get_number, tv_get_number_chk, tv_list_append_number, tv_list_find_nr,
-    tv_list_len,
+    list_find_nr, list_len, tv_check_for_nonnull_dict_arg, tv_check_for_number_arg,
+    tv_check_for_opt_number_arg, tv_dict_find, tv_get_number, tv_get_number_chk,
 };
 use crate::eval::{
     add_timer_info, add_timer_info_all, callback_from_typval, eval_expr_typval, find_timer_by_nr,
@@ -162,12 +161,12 @@ fn proftime_from_halves(high: int32_t, low: int32_t) -> ProfTime {
 /// Read a `[high, low]` List back into a profile timestamp. `None` when the
 /// argument is not a two-element List of Numbers.
 fn list2proftime(arg: &TypVal) -> Option<ProfTime> {
-    if arg.v_type() != VAR_LIST || unsafe { tv_list_len(arg.list_or_null()) } != 2 {
+    if arg.v_type() != VAR_LIST || list_len(arg.list_ref()) != 2 {
         return None;
     }
     let mut error = false;
-    let n1 = unsafe { tv_list_find_nr(arg.list_or_null(), 0, Some(&mut error)) };
-    let n2 = unsafe { tv_list_find_nr(arg.list_or_null(), 1, Some(&mut error)) };
+    let n1 = list_find_nr(arg.list_ref(), 0, Some(&mut error));
+    let n2 = list_find_nr(arg.list_ref(), 1, Some(&mut error));
     if error {
         return None;
     }
@@ -198,8 +197,8 @@ pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     let (high, low) = proftime_halves(res);
     list_alloc_ret(result, 2);
-    unsafe { tv_list_append_number(result.list_or_null(), high as VarNumber) };
-    unsafe { tv_list_append_number(result.list_or_null(), low as VarNumber) };
+    unsafe { (*result.list_or_null()).push_number(high as VarNumber) };
+    unsafe { (*result.list_or_null()).push_number(low as VarNumber) };
 }
 
 /// `reltimestr({time})` — the elapsed time as seconds with six decimals.

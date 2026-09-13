@@ -330,7 +330,7 @@ unsafe fn stacktrace_push_item(
     let d_held = tv_dict_alloc_lock(VarLock::Fixed);
     let d = d_held.as_ptr();
     // Upstream marks this local `VAR_LOCKED`; the lock never travels, because
-    // `tv_list_append_tv` copies it into a fresh item and a copy is unlocked.
+    // `List::push_copy` copies it into a fresh item and a copy is unlocked.
     // The value holds the one reference the allocator handed out, and the
     // append takes a second; both are given back when this frame ends.
     let tv = TypVal::dict(Some(d_held));
@@ -342,7 +342,7 @@ unsafe fn stacktrace_push_item(
     }
     unsafe { dict_add_nr(d, c"lnum", VarNumber::from(lnum)) };
     unsafe { dict_add_str(d, c"filepath", filepath) };
-    unsafe { tv_list_append_tv(l, &tv) };
+    unsafe { (*l).push_copy(&tv) };
 }
 
 /// The execution stack as `getstacktrace()` reports it: one dict per frame,

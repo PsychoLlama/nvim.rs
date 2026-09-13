@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::eval::typval::{ListRef, NumBuf, tv_list_items, tv_list_iter};
+use crate::eval::typval::{ListRef, NumBuf, list_items, list_iter};
 use crate::semsg;
 use crate::types::{Failed, VAR_DICT, VAR_LIST, kListLenMayKnow};
 use crate::winlayer::Win;
@@ -118,10 +118,10 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                 // as a one-element list.
                 let held = unsafe { tv_list_alloc(1 + if (*llpos).col > 0 { 2 } else { 0 }) };
                 let sub = held.as_ptr();
-                unsafe { tv_list_append_number(sub, (*llpos).lnum as VarNumber) };
+                unsafe { (*sub).push_number((*llpos).lnum as VarNumber) };
                 if unsafe { (*llpos).col } > 0 {
-                    unsafe { tv_list_append_number(sub, (*llpos).col as VarNumber) };
-                    unsafe { tv_list_append_number(sub, (*llpos).len as VarNumber) };
+                    unsafe { (*sub).push_number((*llpos).col as VarNumber) };
+                    unsafe { (*sub).push_number((*llpos).len as VarNumber) };
                 }
                 let key = format!("pos{}", i + 1);
                 let _ =
@@ -141,7 +141,7 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
             unsafe { put_str(dict, "conceal", buf.as_ptr()) };
         }
 
-        unsafe { tv_list_append_dict(l, Some(dict_held)) };
+        (*l).push_dict(Some(dict_held));
         cur = unsafe { (*cur).mit_next };
     }
 }
@@ -169,7 +169,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let l = args[0].list_or_null();
 
     // To some extent make sure this really came from getmatches().
-    for (li_idx, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
+    for (li_idx, li) in list_iter(unsafe { l.as_ref() }).enumerate() {
         let tv = &li.li_tv;
         if tv.v_type() != VAR_DICT || tv.dict_or_null().is_null() {
             semsg!(
@@ -198,8 +198,8 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     // below do reach the evaluator, and the list is the caller's own.
     let mut at = 0;
     // SAFETY: a live list, or NULL, which reads as empty.
-    while at < unsafe { tv_list_items(l) }.len() {
-        let d = unsafe { tv_list_items(l) }[at].li_tv.dict_or_null();
+    while at < list_items(unsafe { l.as_ref() }).len() {
+        let d = list_items(unsafe { l.as_ref() })[at].li_tv.dict_or_null();
 
         // A match with no `pattern` is a position match: collect
         // pos1..pos8 into the list `match_add` wants.
@@ -222,7 +222,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                     // which the handle no longer permits.
                     return;
                 }
-                unsafe { tv_list_append_tv(positions, &(*pos_di).di_tv) };
+                unsafe { (*positions).push_copy(&(*pos_di).di_tv) };
             }
         }
 
@@ -352,7 +352,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
         return;
     }
     let l = args[1].list_or_null();
-    if unsafe { tv_list_len(l) } == 0 {
+    if list_len(unsafe { l.as_ref() }) == 0 {
         return;
     }
 
@@ -384,11 +384,11 @@ pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     }
     let m = unsafe { get_match(Win::current(), id) };
     if m.is_null() {
-        unsafe { tv_list_append_string(l, ::core::ptr::null(), 0) };
-        unsafe { tv_list_append_string(l, ::core::ptr::null(), 0) };
+        unsafe { (*l).push_string(::core::ptr::null(), 0) };
+        unsafe { (*l).push_string(::core::ptr::null(), 0) };
     } else {
-        unsafe { tv_list_append_string(l, syn_id2name((*m).mit_hlg_id), -1) };
-        unsafe { tv_list_append_string(l, (*m).mit_pattern, -1) };
+        unsafe { (*l).push_string(syn_id2name((*m).mit_hlg_id), -1) };
+        unsafe { (*l).push_string((*m).mit_pattern, -1) };
     }
 }
 

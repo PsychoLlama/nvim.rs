@@ -14,10 +14,9 @@
 use super::lines::set_buffer_lines;
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_list_items_mut, tv_list_last, tv_list_len};
+use crate::eval::typval::{NumBuf, list_items, list_items_mut, list_len};
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
-use core::mem::offset_of;
 
 /// Whether `s` ends in a newline — which asks the *next* `prompt_appendbuf()`
 /// to start a fresh line rather than extending this one.
@@ -29,13 +28,6 @@ unsafe fn ends_in_newline(s: *const c_char) -> bool {
     // `strlen` measured it.
     let len = unsafe { cstr::bytes_at(s) }.len();
     len > 0 && unsafe { *s.add(len - 1) } == b'\n'.cast_signed()
-}
-
-/// The last item of the List `lines` holds, or NULL when it is not a non-empty
-/// List.
-fn list_last(lines: &TypVal) -> *mut ListItem {
-    // SAFETY: a `VAR_LIST` holds a live list or NULL.
-    unsafe { tv_list_last(lines.list_or_null()) }
 }
 
 /// `prompt_appendbuf({buf}, {string/list})` — 0 when the text went in.
@@ -76,7 +68,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         };
         if lines.v_type() == VAR_LIST {
             let l = lines.list_or_null();
-            if let Some(item) = (unsafe { tv_list_items_mut(l) }).first_mut() {
+            if let Some(item) = (list_items_mut(unsafe { l.as_mut() })).first_mut() {
                 let itv = &raw mut item.li_tv;
                 let joined = unsafe { concat_str(text, numbuf.string_ptr(&*itv)) };
                 unsafe { tv_clear(&mut *itv) };
@@ -90,15 +82,15 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         }
     }
     if did_emsg.get() == did_emsg_before {
-        let split = did_concat && unsafe { tv_list_len(lines.list_or_null()) } > 1;
+        let split = did_concat && list_len(lines.list_ref()) > 1;
         if split {
             // The joined first item replaces the prompt line; the rest is
             // appended after it, but only once the replacement worked.
             let l = lines.list_or_null();
-            let itv = &raw mut unsafe { tv_list_items_mut(l) }[0].li_tv;
+            let itv = &raw mut list_items_mut(unsafe { l.as_mut() })[0].li_tv;
             unsafe { set_buffer_lines(Some(buf), lnum, false, &*itv, result) };
             if result.number_or_zero() == 0 {
-                unsafe { tv_list_remove_at(l, 0) };
+                unsafe { (*l).remove_at(0) };
                 set_buffer_lines(Some(buf), lnum, true, lines, result);
             }
         } else {
@@ -109,9 +101,11 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     if result.number_or_zero() == 0 {
         let mut buf = buf;
         buf.b_prompt_append_new_line = if lines.v_type() == VAR_LIST {
-            let last = list_last(lines);
-            let ltv = unsafe { Li::new(last) }.field_ptr::<TypVal>(offset_of!(ListItem, li_tv));
-            !last.is_null() && unsafe { ends_in_newline(numbuf3.string_ptr(&*ltv)) }
+            match list_items(lines.list_ref()).last() {
+                // SAFETY: the item's own string, NUL-terminated.
+                Some(last) => unsafe { ends_in_newline(numbuf3.string_ptr(&last.li_tv)) },
+                None => false,
+            }
         } else {
             lines.v_type() == VAR_STRING && unsafe { ends_in_newline(numbuf4.string_ptr(lines)) }
         };

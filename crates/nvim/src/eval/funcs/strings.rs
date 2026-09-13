@@ -12,8 +12,8 @@ use crate::cstr;
 use crate::cursor::get_cursor_pos_ptr;
 use crate::eval::do_string_sub;
 use crate::eval::typval::{
-    NumBuf, blob_bytes, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_check_num,
-    tv_list_append_allocated_string, tv_list_append_string, tv_list_extend, tv_list_len,
+    NumBuf, blob_bytes, list_extend, list_len, tv_check_for_nonempty_string_arg,
+    tv_check_for_string_arg, tv_check_num,
 };
 use crate::ex_getln::vim_strsave_fnameescape;
 use crate::garray::ga_clear;
@@ -199,10 +199,10 @@ fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     let src = args[0].list_or_null();
     // The length hint is upstream's; a non-positive count contributes
     // nothing rather than a negative capacity.
-    let hint = VarNumber::from(n > 0) * n * VarNumber::from(unsafe { tv_list_len(src) });
+    let hint = VarNumber::from(n > 0) * n * VarNumber::from(list_len(unsafe { src.as_ref() }));
     let out = list_alloc_ret(result, hint as isize);
     for _ in 0..n.max(0) {
-        unsafe { tv_list_extend(out, src, None) };
+        unsafe { list_extend(out, src, None) };
     }
 }
 
@@ -363,7 +363,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     }
     debug_assert!(len <= c_int::MAX as usize);
     let list = list_alloc_ret(result, 2);
-    unsafe { tv_list_append_string(list, word, len as isize) };
+    unsafe { (*list).push_string(word, len as isize) };
     let reason: Option<&CStr> = match attr {
         HLF_SPB => Some(c"bad"),
         HLF_SPR => Some(c"rare"),
@@ -372,8 +372,8 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         _ => None,
     };
     match reason {
-        Some(r) => unsafe { tv_list_append_string(list, r.as_ptr(), r.count_bytes() as isize) },
-        None => unsafe { tv_list_append_string(list, ptr::null(), -1) },
+        Some(r) => unsafe { (*list).push_string(r.as_ptr(), r.count_bytes() as isize) },
+        None => unsafe { (*list).push_string(ptr::null(), -1) },
     }
 }
 
@@ -414,7 +414,7 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         // SAFETY: the garray holds `ga_len` allocated strings, and the list
         // takes each one over.
         let word = unsafe { *ga.ga_data.cast::<*mut c_char>().offset(i as isize) };
-        unsafe { tv_list_append_allocated_string(list, word) };
+        unsafe { (*list).push_allocated_string(word) };
     }
     unsafe { ga_clear(&raw mut ga) };
 }
@@ -491,12 +491,12 @@ unsafe fn split_into(list: *mut List, mut str: *const c_char, prog: *mut RegProg
         };
         if keepempty
             || end > str
-            || (unsafe { tv_list_len(list) } > 0
+            || (list_len(unsafe { list.as_ref() }) > 0
                 && unsafe { *str } != NUL as c_char
                 && matched
                 && end < regmatch.endp[0] as *const c_char)
         {
-            unsafe { tv_list_append_string(list, str, end.offset_from(str) as isize) };
+            unsafe { (*list).push_string(str, end.offset_from(str) as isize) };
         }
         if !matched {
             break;

@@ -205,15 +205,15 @@ pub unsafe fn get_spellword(
     ret_word: *mut *const c_char,
     numbuf: &mut NumBuf,
 ) -> c_int {
-    if unsafe { tv_list_len(list) } != 2 {
+    if list_len(unsafe { list.as_ref() }) != 2 {
         let msg = c"E5700: Expression from 'spellsuggest' must yield lists with exactly two values";
         // SAFETY: a NUL-terminated literal.
         emsg_static(msg);
         return -1;
     }
-    unsafe { *ret_word = tv_list_find_str(list, 0, numbuf) };
+    unsafe { *ret_word = list_find_str(list.as_ref(), 0, numbuf) };
     if unsafe { (*ret_word).is_null() } {
         return -1;
     }
-    number_as_int(unsafe { tv_list_find_nr(list, -1, None) })
+    number_as_int(list_find_nr(unsafe { list.as_ref() }, -1, None))
 }

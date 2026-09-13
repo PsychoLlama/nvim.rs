@@ -16,7 +16,7 @@ use core::ffi::{c_char, c_int};
 use super::{
     LineOrigin, RegMMatch, RegMatch, RegSubMatch, Rex, can_f_submatch, reg_line, reg_line_len, rsm,
 };
-use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc, tv_list_append_string};
+use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc};
 use crate::memory::{xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
 use crate::types::{ColNr, LineNr, ListItem, NUL, TypVal, UserFunc, VarLock};
@@ -268,9 +268,7 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
             return None;
         }
         let list = tv_list_alloc(1);
-        unsafe {
-            tv_list_append_string(list.as_ptr(), start, match_.endp[no].offset_from(start));
-        };
+        unsafe { (*list.as_ptr()).push_string(start, match_.endp[no].offset_from(start)) };
         return Some(list);
     }
 
@@ -288,14 +286,14 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
     let into = list.as_ptr();
     let s = unsafe { reg_getline_submatch(rex, slnum).offset(scol as isize) };
     if slnum == elnum {
-        unsafe { tv_list_append_string(into, s, (ecol - scol) as isize) };
+        unsafe { (*into).push_string(s, (ecol - scol) as isize) };
     } else {
         // A negative length means "to the end of the line".
-        unsafe { tv_list_append_string(into, s, -1) };
+        unsafe { (*into).push_string(s, -1) };
         for lnum in slnum + 1..elnum {
-            unsafe { tv_list_append_string(into, reg_getline_submatch(rex, lnum), -1) };
+            unsafe { (*into).push_string(reg_getline_submatch(rex, lnum), -1) };
         }
-        unsafe { tv_list_append_string(into, reg_getline_submatch(rex, elnum), ecol as isize) };
+        unsafe { (*into).push_string(reg_getline_submatch(rex, elnum), ecol as isize) };
     }
     Some(list)
 }

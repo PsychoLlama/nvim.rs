@@ -577,7 +577,7 @@ pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let l = result.list_or_null();
     for &byte in blob_bytes(args[0].blob_ref()) {
         // SAFETY: the list just stored in the return slot.
-        unsafe { tv_list_append_number(l, VarNumber::from(byte)) };
+        unsafe { (*l).push_number(VarNumber::from(byte)) };
     }
 }
 
@@ -590,7 +590,7 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     // SAFETY: the argument's own list, borrowed for the walk.
-    for li in tv_list_iter(unsafe { args[0].list_or_null().as_ref() }) {
+    for li in list_iter(unsafe { args[0].list_or_null().as_ref() }) {
         let read = tv_get_number_chk(&li.li_tv);
         let n = read.unwrap_or(0);
         if read.is_err() || !(0..=255).contains(&n) {

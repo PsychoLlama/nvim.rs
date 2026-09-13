@@ -187,7 +187,7 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
         // A second hunk inside a block this pass already wrote: extend
         // `idx_new` by however much longer the new text is than the part
         // of the block the hunk covers.
-        let orig_size_in_dp = unsafe { *hunk }.count_orig.min(
+        let orig_size_in_dp = unsafe { (*hunk).count_orig }.min(
             unsafe { (*dp).df_lnum[idx_orig] } + unsafe { (*dp).df_count[idx_orig] }
                 - unsafe { (*hunk).lnum_orig },
         );

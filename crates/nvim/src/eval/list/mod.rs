@@ -45,12 +45,11 @@ use core::slice;
 
 use crate::cstr;
 use crate::eval::typval::{
-    BlobRef, DictRef, ListRef, NumBuf, blob_copy, blob_remove, index_of, tv_blob_set_ret,
+    BlobRef, DictRef, ListRef, NumBuf, blob_copy, blob_remove, index_of, list_copy, list_extend,
+    list_index, list_items_mut, list_remove, tv_blob_set_ret,
     tv_check_for_string_or_list_or_blob_arg, tv_clear, tv_copy, tv_dict_add_tv, tv_dict_alloc_ret,
     tv_dict_copy, tv_dict_extend, tv_dict_item_remove, tv_dict_remove, tv_equal, tv_get_number_chk,
-    tv_list_alloc_ret, tv_list_append_owned_tv, tv_list_append_tv, tv_list_copy, tv_list_extend,
-    tv_list_index, tv_list_insert_tv, tv_list_items_mut, tv_list_remove, tv_list_remove_at,
-    tv_list_reverse, value_check_lock,
+    tv_list_alloc_ret, value_check_lock,
 };
 use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
@@ -228,15 +227,15 @@ impl ListArg {
     /// The item at `n`, which may count back from the end.
     #[inline(always)]
     pub(crate) fn find(self, n: c_int) -> Option<Item> {
-        // SAFETY: live or NULL, which is what `tv_list_index` takes.
-        let at = unsafe { tv_list_index(self.0, n) }?;
+        // SAFETY: live or NULL, which is what `list_index` takes.
+        let at = list_index(unsafe { self.0.as_ref() }, n)?;
         Some(Item { list: self, at })
     }
 
     #[inline(always)]
     pub(crate) fn reverse(self) {
         // SAFETY: live or NULL.
-        unsafe { tv_list_reverse(self.0) };
+        unsafe { (*self.0).reverse() };
     }
 
     /// Store the list in `result`, which takes a reference of its own.
@@ -250,14 +249,14 @@ impl ListArg {
     #[inline(always)]
     pub(crate) fn append_tv(self, tv: &TypVal) {
         // SAFETY: live or NULL, and `tv` is a live value.
-        unsafe { tv_list_append_tv(self.0, tv) };
+        unsafe { (*self.0).push_copy(tv) };
     }
 
     /// Append `tv`, taking ownership of it.
     #[inline(always)]
     pub(crate) fn append_owned(self, tv: TypVal) {
         // SAFETY: live, and the caller gives up `tv`.
-        unsafe { tv_list_append_owned_tv(self.0, tv) };
+        unsafe { (*self.0).push(tv) };
     }
 
     /// Insert a copy of `tv` before `before`, or at the end when it is None.
@@ -265,14 +264,14 @@ impl ListArg {
     pub(crate) fn insert_tv(self, tv: &TypVal, before: Option<Item>) {
         // SAFETY: live, `tv` is a live value, and `before` is an item of this
         // very list -- `find` is the only thing that produces one.
-        unsafe { tv_list_insert_tv(self.0, tv, before.map(|i| i.at)) };
+        unsafe { (*self.0).insert_copy(tv, before.map(|i| i.at)) };
     }
 
     /// Splice copies of `other`'s items in before `before`.
     #[inline(always)]
     pub(crate) fn extend_with(self, other: ListArg, before: Option<Item>) {
         // SAFETY: both live or NULL, and `before` is an item of this list.
-        unsafe { tv_list_extend(self.0, other.0, before.map(|i| i.at)) };
+        unsafe { list_extend(self.0, other.0, before.map(|i| i.at)) };
     }
 
     /// Remove `item` and answer the one that followed it.
@@ -280,15 +279,23 @@ impl ListArg {
     pub(crate) fn remove_item(self, item: Item) -> Option<Item> {
         // SAFETY: live, and `item` is an item of this list.  This is what
         // shifts any `:for` cursor parked on it.
-        unsafe { tv_list_remove_at(self.0, item.at) };
+        unsafe { (*self.0).remove_at(item.at) };
         self.at(item.at)
     }
 
     /// A shallow copy, for `extendnew()`.  `None` when the copy failed.
     #[inline(always)]
     pub(crate) fn copy(self) -> Option<ListRef> {
-        // SAFETY: live or NULL; no conversion, and a fresh copyID.
-        unsafe { tv_list_copy(core::ptr::null::<VimConv>(), self.0, false, get_copy_id()) }
+        // SAFETY: live or NULL; the copy takes a reference of its own for
+        // the walk, no conversion, and a fresh copyID.
+        unsafe {
+            list_copy(
+                core::ptr::null::<VimConv>(),
+                ListRef::retained(self.0),
+                false,
+                get_copy_id(),
+            )
+        }
     }
 }
 
@@ -299,7 +306,7 @@ pub(crate) fn list_alloc_ret(result: &mut TypVal) -> ListArg {
     // module level, where `ffigen` would emit it into the unit cdefs.
     const LEN_UNKNOWN: ptrdiff_t = -1;
     // SAFETY: `result` is a cleared result slot.
-    ListArg(tv_list_alloc_ret(result, LEN_UNKNOWN))
+    ListArg(&raw mut *tv_list_alloc_ret(result, LEN_UNKNOWN))
 }
 
 /// One item of a list: the list, and *where in it*.
@@ -320,7 +327,7 @@ impl Item {
     #[inline(always)]
     fn get<'a>(self) -> &'a mut ListItem {
         // SAFETY: an `Item` is only ever made from a live list.
-        let items = unsafe { tv_list_items_mut(self.list.0) };
+        let items = list_items_mut(unsafe { self.list.0.as_mut() });
         &mut items[self.at]
     }
 
@@ -910,7 +917,8 @@ pub fn f_remove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         Container::Dict(_) => unsafe { tv_dict_remove(args, result, arg_errmsg) },
         // SAFETY: the blob the first argument holds, borrowed for the call.
         Container::Blob(b) => unsafe { blob_remove(b.0.as_mut(), args, result, arg_errmsg) },
-        Container::List(_) => unsafe { tv_list_remove(args, result, arg_errmsg) },
+        // SAFETY: the list the first argument holds, borrowed for the call.
+        Container::List(l) => unsafe { list_remove(l.0.as_mut(), args, result, arg_errmsg) },
         _ => err_str(e_listdictblobarg, c"remove()"),
     }
 }

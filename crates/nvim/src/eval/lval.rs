@@ -34,9 +34,9 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::typval::DictTab;
 use crate::eval::typval::{
-    NumBuf, blob_check_index, blob_check_range, blob_len, di_lock, tv_blob_alloc_ret, tv_check_str,
-    tv_dict_alloc, tv_dict_find, tv_get_number, tv_list_alloc_ret, tv_list_check_range_index_one,
-    tv_list_check_range_index_two, tv_list_items_mut,
+    NumBuf, blob_check_index, blob_check_range, blob_len, di_lock, list_check_range_index_one,
+    list_check_range_index_two, list_items_mut, tv_blob_alloc_ret, tv_check_str, tv_dict_alloc,
+    tv_dict_find, tv_get_number, tv_list_alloc_ret,
 };
 use crate::eval::userfunc::get_funccal_args_ht;
 use crate::eval::vars::{clear_local, emsg_static};
@@ -325,7 +325,7 @@ pub(crate) unsafe fn get_lval_list(
     // SAFETY: `ll_list` is the typval's List and `n1` is `lval`'s own field.
     let (list, at) = unsafe {
         let list = (*rec).ll_list;
-        let at = tv_list_check_range_index_one(list, n1, quiet);
+        let at = list_check_range_index_one(list.as_ref(), &mut *n1, quiet);
         (*rec).ll_li = at.unwrap_or(0);
         (list, at)
     };
@@ -339,10 +339,10 @@ pub(crate) unsafe fn get_lval_list(
         // indexes are `lval`'s own fields.
         unsafe { *n2 = tv_get_number(var2) as c_int };
         // SAFETY: `at` is the index one selected.
-        unsafe { tv_list_check_range_index_two(list, n1, at, n2, quiet) }?;
+        unsafe { list_check_range_index_two(list.as_ref(), &mut *n1, at, &mut *n2, quiet) }?;
     }
     // SAFETY: `ll_li` is an index of the list, whose item is the target.
-    let item = &raw mut unsafe { tv_list_items_mut(list) }[at];
+    let item = &raw mut list_items_mut(unsafe { list.as_mut() })[at];
     unsafe { (*rec).ll_tv = &raw mut (*item).li_tv };
     unsafe { (*rec).ll_lock = &raw mut (*item).li_lock };
     Ok(())

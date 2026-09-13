@@ -24,9 +24,8 @@ use core::ptr;
 
 use crate::eval::pattern_match;
 use crate::eval::typval::{
-    NumBuf, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
-    tv_check_for_opt_string_or_list_arg, tv_check_for_string_or_number_arg, tv_list_items,
-    tv_list_len,
+    NumBuf, list_items, list_len, tv_check_for_opt_number_arg, tv_check_for_opt_string_arg,
+    tv_check_for_opt_string_or_list_arg, tv_check_for_string_or_number_arg,
 };
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_docmd::do_cmdline_cmd;
@@ -134,11 +133,11 @@ unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> Fai
         }
         VAR_LIST => {
             let list: *const List = args[1].list_or_null();
-            if list.is_null() || !(1..=2).contains(&unsafe { tv_list_len(list) }) {
+            if list.is_null() || !(1..=2).contains(&list_len(unsafe { list.as_ref() })) {
                 return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG);
             }
             // SAFETY: a live list of one or two items.
-            let items = unsafe { tv_list_items(list) };
+            let items = list_items(unsafe { list.as_ref() });
             let mut tv: *const TypVal = &raw const items[0].li_tv;
             // SAFETY: an item of the list borrowed above.
             let mut expected = buf.string_ptr_chk(unsafe { &*tv });
@@ -152,7 +151,7 @@ unsafe fn check_reported_error(args: &[TypVal], tofree: &mut *mut c_char) -> Fai
                     actual,
                 });
             }
-            if unsafe { tv_list_len(list) } != 2 {
+            if list_len(unsafe { list.as_ref() }) != 2 {
                 return FailsCheck::Matched;
             }
             // Take a copy: an error inside pattern_match() may free it.

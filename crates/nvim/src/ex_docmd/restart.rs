@@ -16,7 +16,7 @@ use crate::api::vim::nvim__chan_set_detach;
 use crate::api::vimscript::nvim_command;
 use crate::channel::{channel_close, channel_job_start, find_channel};
 
-use crate::eval::typval::{NumBuf, tv_list_items, tv_list_len};
+use crate::eval::typval::{NumBuf, list_items, list_len};
 use crate::eval::vars::{get_vim_var_list, get_vim_var_str};
 
 use crate::event::proc::{proc_stop, proc_wait};
@@ -87,7 +87,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
     let no_ui = ui_active() == 0;
     let exepath = get_vim_var_str(Vv::Progpath);
     let argv_list = get_vim_var_list(Vv::Argv);
-    let argc = unsafe { tv_list_len(argv_list) };
+    let argc = list_len(unsafe { argv_list.as_ref() });
 
     // Three more than `v:argv`: `--embed`, `--headless`, and the null
     // terminator.
@@ -96,7 +96,7 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
     let mut listen_arg: *const c_char = ptr::null();
 
     // SAFETY: `v:argv` is a live list of strings.
-    let items = unsafe { tv_list_items(argv_list) };
+    let items = list_items(unsafe { argv_list.as_ref() });
     let mut at = 0;
     while at < items.len() {
         let arg = numbuf.string_ptr(&items[at].li_tv);

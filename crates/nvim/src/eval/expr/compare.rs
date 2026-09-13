@@ -19,8 +19,7 @@ use crate::cstr;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::typval::{
-    NumBuf, blob_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
-    tv_list_equal,
+    NumBuf, blob_equal, list_equal, tv_clear, tv_dict_equal, tv_equal, tv_get_float, tv_get_number,
 };
 use crate::eval::{
     _ISalnum, Cur, EXPR_EQUAL, EXPR_GEQUAL, EXPR_GREATER, EXPR_IS, EXPR_ISNOT, EXPR_MATCH,
@@ -238,9 +237,9 @@ pub(crate) fn typval_compare(
         }
     } else if t1 == VAR_LIST || t2 == VAR_LIST {
         // SAFETY: as the Blob arm.
-        let (l1, l2) = (typ1.list_or_null(), typ2.list_or_null());
-        let same = || l1 == l2;
-        let eq = || unsafe { tv_list_equal(l1, l2, ic) };
+        let (l1, l2) = (typ1.list_ref(), typ2.list_ref());
+        let same = || l1.map(::core::ptr::from_ref) == l2.map(::core::ptr::from_ref);
+        let eq = || list_equal(l1, l2, ic);
         let wrong_type = c"E691: Can only compare List with List";
         let wrong_op = c"E692: Invalid operation for List";
         let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);

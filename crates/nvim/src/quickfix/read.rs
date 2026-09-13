@@ -17,7 +17,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::tv_list_items;
+use crate::eval::typval::list_items;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::strings::vim_strchr;
@@ -243,7 +243,7 @@ impl Reader {
             unreachable!()
         };
         // SAFETY: the caller's list is live.
-        let items = unsafe { tv_list_items(list) };
+        let items = list_items(unsafe { list.as_ref() });
         while items
             .get(at)
             .is_some_and(|li| li.li_tv.string_or_null().is_null())

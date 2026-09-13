@@ -31,7 +31,7 @@ pub fn assert_error(message: &[u8]) {
         set_vim_var_list(Vv::Errors, Some(tv_list_alloc(1)));
     }
     // A message that was never appended to used to be a null `ga_data`, and
-    // `tv_list_append_string` tells that apart from a zero-length buffer: the
+    // `List::push_string` tells that apart from a zero-length buffer: the
     // first appends `v:null`, the second an empty string.
     let text = if message.is_empty() {
         ptr::null()
@@ -39,7 +39,7 @@ pub fn assert_error(message: &[u8]) {
         message.as_ptr().cast::<c_char>()
     };
     let len = message.len() as ssize_t;
-    unsafe { tv_list_append_string(get_vim_var_list(Vv::Errors), text, len) };
+    unsafe { (*get_vim_var_list(Vv::Errors)).push_string(text, len) };
 }
 
 /// The lvalue `:redir =>` is capturing into, its name (kept because the

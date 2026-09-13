@@ -28,8 +28,8 @@ use crate::charset::skipwhite;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
-    NumBuf, tv_clear, tv_dict_free_contents, tv_get_number_chk, tv_list_alloc,
-    tv_list_append_string, tv_list_join, tv_list_last, tv_list_len, tv_list_set_lock,
+    NumBuf, list_join, list_last, list_len, list_set_lock, tv_clear, tv_dict_free_contents,
+    tv_get_number_chk, tv_list_alloc,
 };
 use crate::eval::userfunc::{call_func, func_init, restore_funccal, save_funccal};
 use crate::eval::vars::clear_local;
@@ -419,9 +419,9 @@ pub(crate) unsafe fn typval2string(tv: &mut TypVal, join_list: bool) -> *mut c_c
         let l = value.list_or_null();
         if !l.is_null() {
             // SAFETY: `l` is the typval's live List.
-            let _ = unsafe { tv_list_join(&raw mut ga, l, c"\n".as_ptr()) };
+            let _ = unsafe { list_join(&raw mut ga, l.as_ref(), c"\n".as_ptr()) };
             // SAFETY: as above.
-            if unsafe { tv_list_len(l) } > 0 {
+            if list_len(unsafe { l.as_ref() }) > 0 {
                 // SAFETY: `ga` is this frame's.
                 unsafe { ga_append(&raw mut ga, NL as uint8_t) };
             }
@@ -757,15 +757,15 @@ pub unsafe fn set_argv_var(argv: *mut *mut c_char, argc: c_int) {
     let list = tv_list_alloc(argc as ptrdiff_t);
     let l = list.as_ptr();
     // SAFETY: `l` is that List.
-    unsafe { tv_list_set_lock(l, VarLock::Fixed) };
+    list_set_lock(unsafe { l.as_mut() }, VarLock::Fixed);
     for i in 0..argc {
         // SAFETY: the caller's promise -- `argc` NUL-terminated strings,
         // so slot `i` is one of them; -1 asks the callee to measure it.
         let arg = unsafe { *argv.offset(i as isize) } as *const c_char;
         // SAFETY: as above.
-        unsafe { tv_list_append_string(l, arg, -1 as ssize_t) };
+        unsafe { (*l).push_string(arg, -1 as ssize_t) };
         // SAFETY: the item just appended is the List's last.
-        unsafe { (*tv_list_last(l)).li_lock = VarLock::Fixed };
+        unsafe { (*list_last(l.as_mut())).li_lock = VarLock::Fixed };
     }
     set_vim_var_list(Vv::Argv, Some(list));
 }

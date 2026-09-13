@@ -123,7 +123,7 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> ListRef {
             dict_add_list(dict, c"alt", Some(eval_tree(buffer, uh.uh_alt_next)));
         }
         // SAFETY: a list and a dictionary this function owns.
-        unsafe { tv_list_append_dict(list, Some(dict_held)) };
+        unsafe { (*list).push_dict(Some(dict_held)) };
         link = uh.uh_prev;
     }
     held

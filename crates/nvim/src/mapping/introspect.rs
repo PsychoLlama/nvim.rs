@@ -314,7 +314,7 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 let dict = mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true);
                 let mut d = TypVal::from(Object::dict(dict));
                 debug_assert_eq!(d.v_type(), VAR_DICT);
-                tv_list_append_dict((*result).list_or_null(), d.take_dict());
+                (*(*result).list_or_null()).push_dict(d.take_dict());
                 arena_mem_free(arena_finish(&raw mut arena));
             }
             None

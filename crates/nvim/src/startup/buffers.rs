@@ -29,7 +29,7 @@ use crate::buffer::{
     buf_is_empty, buflist_new, do_modelines, handle_swap_exists, open_buffer, set_buflisted,
     set_curbuf, setfname,
 };
-use crate::eval::typval::{tv_list_alloc, tv_list_append_string, tv_list_set_lock};
+use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::vars::set_vim_var_list;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
@@ -95,10 +95,10 @@ pub(crate) fn set_argf_var() {
         let fname = unsafe { alist_name(((*alist).al_ga.as_mut_ptr()).offset(i as isize)) };
         if !fname.is_null() {
             let _ = unsafe { vim_full_name(fname, full.as_mut_ptr(), MAXPATHL as usize, false) };
-            unsafe { tv_list_append_string(list, full.as_mut_ptr(), -1 as ssize_t) };
+            unsafe { (*list).push_string(full.as_mut_ptr(), -1 as ssize_t) };
         }
     }
-    unsafe { tv_list_set_lock(list, VarLock::Fixed) };
+    list_set_lock(unsafe { list.as_mut() }, VarLock::Fixed);
     set_vim_var_list(Vv::Argf, Some(held));
 }
 

@@ -15,7 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{CallFrame, DictRef, ListRef, tv_list_items};
+use crate::eval::typval::{CallFrame, DictRef, ListRef, list_items};
 use crate::guard::Lock;
 use crate::memline::MlFlags;
 use crate::types::{BCount, MAXPATHL, OptionSetFlags, VAR_LIST, VarLock};
@@ -435,7 +435,7 @@ pub(crate) unsafe fn qf_fill_buffer(
             // its answer is ignored too.
             let mut qftf_str = ptr::null::<c_char>();
             // SAFETY: the list the user's `quickfixtextfunc` answered.
-            let qftf_item = unsafe { tv_list_items(qftf_list) }.get(qftf_at);
+            let qftf_item = list_items(unsafe { qftf_list.as_ref() }).get(qftf_at);
             if let Some(item) = qftf_item
                 && !invalid_val
             {

@@ -33,7 +33,7 @@
 use crate::autocmd::apply_autocmds;
 use crate::charset::{skip, vim_is_ident_char};
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_list_find_str, tv_list_iter, tv_list_len};
+use crate::eval::typval::{NumBuf, list_find_str, list_iter, list_len};
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
@@ -343,12 +343,12 @@ pub unsafe fn ex_oldfiles(args: *mut ExArg) {
     let nr = unsafe { prompt_for_input(ptr::null_mut(), 0, false, ptr::null_mut::<bool>()) };
     say::starthere();
     // SAFETY: `list` is still the editor's list.
-    if nr <= 0 || nr > unsafe { tv_list_len(list) } {
+    if nr <= 0 || nr > list_len(unsafe { list.as_ref() }) {
         return;
     }
     let mut numbuf = NumBuf::new();
     // SAFETY: as above; `nr` is inside the list.
-    let picked = unsafe { tv_list_find_str(list, nr - 1, &mut numbuf) };
+    let picked = list_find_str(unsafe { list.as_ref() }, nr - 1, &mut numbuf);
     if picked.is_null() {
         return;
     }
@@ -371,7 +371,7 @@ unsafe fn list_oldfiles(list: *mut List) {
     let mut text = NumBuf::new();
     let mut nr = 0;
     // SAFETY: caller's contract: a live list.
-    for item in tv_list_iter(unsafe { list.as_ref() }) {
+    for item in list_iter(unsafe { list.as_ref() }) {
         if got_int.get() {
             break;
         }

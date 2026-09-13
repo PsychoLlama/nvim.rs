@@ -14,7 +14,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr::copy;
 
 use crate::eval::typval::{
-    NumBuf, blob_bytes, tv_blob_alloc, tv_blob_set_ret, tv_clear, tv_get_number_chk, tv_list_concat,
+    NumBuf, blob_bytes, list_concat, tv_blob_alloc, tv_blob_set_ret, tv_clear, tv_get_number_chk,
 };
 use crate::eval::{Tv, VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::memory::xrealloc;
@@ -82,7 +82,7 @@ pub(crate) fn eval_addlist(tv1: &mut TypVal, tv2: &mut TypVal) -> bool {
     // SAFETY: the caller's promise -- both operands are Lists, so each
     // union holds a live `List`, and `joined` is this frame's own.
     let (l1, l2) = ((*tv1).list_or_null(), (*tv2).list_or_null());
-    if unsafe { tv_list_concat(l1, l2, &mut joined) }.is_err() {
+    if unsafe { list_concat(l1, l2, &mut joined) }.is_err() {
         tv_clear(tv1);
         tv_clear(tv2);
         return false;

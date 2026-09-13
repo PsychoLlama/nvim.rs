@@ -19,7 +19,7 @@
 use core::ffi::{CStr, c_char};
 
 use super::decode_create_map_special_dict;
-use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear, tv_dict_alloc, tv_list_alloc, tv_list_len};
+use crate::eval::typval::{TV_INITIAL_VALUE, list_len, tv_clear, tv_dict_alloc, tv_list_alloc};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
@@ -105,11 +105,11 @@ pub unsafe fn json_decode_string(
     // a leading one.
     let is_empty = |c: &Container| {
         if !c.special_val.is_null() {
-            unsafe { tv_list_len(c.special_val) == 0 }
+            list_len(unsafe { c.special_val.as_ref() }) == 0
         } else {
             match c.container {
                 OpenContainer::Dict(d) => unsafe { (*d).dv_hashtab.ht_used == 0 },
-                OpenContainer::List(l) => unsafe { tv_list_len(l) == 0 },
+                OpenContainer::List(l) => list_len(unsafe { l.as_ref() }) == 0,
             }
         }
     };

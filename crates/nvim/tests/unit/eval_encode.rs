@@ -8,7 +8,7 @@
 use std::mem::ManuallyDrop;
 
 use neovim::eval::encode::encode_list_write;
-use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append_owned_tv, tv_list_first};
+use neovim::eval::typval::{list_first, tv_clear, tv_list_alloc};
 use neovim::types::{List, TypVal};
 
 use crate::support::alloc::{self, AllocLog};
@@ -148,7 +148,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
             }
             // Every item names the same container; the retain above is
             // what pays for the extra holder.
-            tv_list_append_owned_tv(outer, tv::bit_copy(&inner_tv));
+            (*outer).push(tv::bit_copy(&inner_tv));
         }
         tv::list_tv(Some(list))
     }
@@ -165,7 +165,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&l [1], *l, *l]`
         let mut tv = sharing(3, &Tv::List(vec![Tv::Float(1.0)]));
         let outer = tv.list();
-        let inner = (*tv_list_first(outer)).li_tv.list();
+        let inner = (*list_first(outer.as_mut())).li_tv.list();
         // Two lists and nothing per item: the items are the lists' own
         // arrays, whose growth this log does not see.
         log.check(&[alloc::list(outer), alloc::list(inner)]);
@@ -176,7 +176,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&l [], *l, *l]`
         let mut tv = sharing(3, &Tv::List(vec![]));
         let outer = tv.list();
-        let inner = (*tv_list_first(outer)).li_tv.list();
+        let inner = (*list_first(outer.as_mut())).li_tv.list();
         log.check(&[alloc::list(outer), alloc::list(inner)]);
         assert_eq!((*inner).lv_refcount.get(), 3);
         tv_clear(&mut tv);
@@ -185,7 +185,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&d {}, *d]`
         let mut tv = sharing(2, &Tv::Dict(vec![]));
         let outer = tv.list();
-        let inner = (*tv_list_first(outer)).li_tv.dict();
+        let inner = (*list_first(outer.as_mut())).li_tv.dict();
         log.check(&[alloc::list(outer), alloc::dict(inner)]);
         assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&mut tv);
@@ -194,7 +194,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // `[&d {a: 1}, *d]`
         let mut tv = sharing(2, &Tv::dict([("a", Tv::Float(1.0))]));
         let outer = tv.list();
-        let inner = (*tv_list_first(outer)).li_tv.dict();
+        let inner = (*list_first(outer.as_mut())).li_tv.dict();
         log.check(&[alloc::list(outer), alloc::dict(inner)]);
         assert_eq!((*inner).dv_refcount.get(), 2);
         tv_clear(&mut tv);

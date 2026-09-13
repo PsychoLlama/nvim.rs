@@ -891,7 +891,7 @@ pub unsafe fn recover_names(
         } else if !ret_list.is_null() {
             for &name in found.iter() {
                 let joined = unsafe { concat_fnames(dir_name, name, true) };
-                unsafe { tv_list_append_allocated_string(ret_list, joined) };
+                unsafe { (*ret_list).push_allocated_string(joined) };
             }
         } else {
             file_count += num_files;

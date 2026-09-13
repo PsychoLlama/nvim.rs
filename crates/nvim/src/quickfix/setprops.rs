@@ -11,7 +11,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{NumBuf, tv_list_items};
+use crate::eval::typval::{NumBuf, list_items};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
@@ -266,8 +266,8 @@ unsafe fn qf_add_entries(
         // can re-enter.
         let mut at = 0;
         // SAFETY: a live list.
-        while at < unsafe { tv_list_items(list) }.len() {
-            let item = &unsafe { tv_list_items(list) }[at].li_tv;
+        while at < list_items(unsafe { list.as_ref() }).len() {
+            let item = &list_items(unsafe { list.as_ref() })[at].li_tv;
             if item.v_type() == VAR_DICT && !item.dict_or_null().is_null() {
                 let d = item.dict_or_null();
                 unsafe { qf_add_entry_from_dict(qfl, d, at == 0, &mut valid_entry) };
@@ -630,7 +630,7 @@ pub unsafe fn set_errorlist(
         return Ok(());
     }
 
-    if !list.is_null() && unsafe { tv_list_len(list) } != 0 && !what.is_null() {
+    if !list.is_null() && list_len(unsafe { list.as_ref() }) != 0 && !what.is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 =
             unsafe { c_str(gettext(c"cannot have both a list and a \"what\" argument").as_ptr()) };

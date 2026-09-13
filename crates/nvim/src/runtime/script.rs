@@ -292,7 +292,7 @@ fn get_script_local_funcs(sid: ScriptId) -> ListRef {
             fp.uf_name_exp
         };
         // SAFETY: `name` is NUL-terminated, which the -1 length asks for.
-        unsafe { tv_list_append_string(l, name, -1) };
+        unsafe { (*l).push_string(name, -1) };
     }
     list
 }
@@ -418,7 +418,7 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
         // SAFETY: a fresh dict, handed to the list before anything else sees it.
         let d_held = tv_dict_alloc();
         let d = d_held.as_ptr();
-        unsafe { tv_list_append_dict(l, Some(d_held)) };
+        unsafe { (*l).push_dict(Some(d_held)) };
         unsafe { dict_add_str(d, c"name", name) };
         unsafe { dict_add_nr(d, c"sid", sid) };
         unsafe { dict_add_nr(d, c"version", 1) };

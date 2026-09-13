@@ -7,7 +7,7 @@
 //!
 //! The entry points take raw pointers rather than references because the two
 //! operands can be the same object: `:let l[0:1] += l[0:1]` reaches here from
-//! `tv_list_assign_range` with `tv1` and `tv2` aliasing, so a `&mut`/`&` pair
+//! `list_assign_range` with `tv1` and `tv2` aliasing, so a `&mut`/`&` pair
 //! would be unsound.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -21,7 +21,7 @@
 )]
 
 use crate::eval::typval::BlobRef;
-use crate::eval::typval::{ListRef, NumBuf, tv_clear, tv_get_number, tv_list_extend};
+use crate::eval::typval::{ListRef, NumBuf, list_extend, tv_clear, tv_get_number};
 use crate::eval::{Tv, grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
 use crate::strings::concat_str;
@@ -124,7 +124,7 @@ unsafe fn tv_op_list(tv1: *mut TypVal, tv2: *const TypVal, op: u8) -> Result<(),
         lhs.write_list(unsafe { ListRef::retained(l2) });
     } else {
         // SAFETY: both Lists are live.
-        unsafe { tv_list_extend(l1, l2, None) };
+        unsafe { list_extend(l1, l2, None) };
     }
     Ok(())
 }

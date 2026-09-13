@@ -7,7 +7,7 @@
 //! rest of the spec is built out of:
 //!
 //! - an allocation *sequence* whose order is the assertion
-//!   (`tv_list_append_string`),
+//!   (`List::push_string`),
 //! - a *size* derived from a struct's layout, which is the only evidence the
 //!   over-allocation happened (`tv_dict_item_alloc`),
 //! - and `tv_dict_add`, whose interesting step allocates nothing at all.
@@ -25,11 +25,10 @@ use std::ffi::{CStr, c_char};
 use std::ptr;
 
 use neovim::eval::typval::{
-    tv_dict_add, tv_dict_alloc, tv_dict_free, tv_dict_is_watched, tv_dict_item_alloc,
-    tv_dict_item_alloc_len, tv_dict_item_free, tv_dict_item_remove, tv_dict_watcher_add,
-    tv_dict_watcher_remove, tv_list_alloc, tv_list_append_number, tv_list_append_string,
-    tv_list_find, tv_list_first, tv_list_last, tv_list_len, tv_list_remove_range, tv_list_unref,
-    tv_list_watch_add, tv_list_watch_remove,
+    list_find, list_first, list_last, list_len, list_unref, tv_dict_add, tv_dict_alloc,
+    tv_dict_free, tv_dict_is_watched, tv_dict_item_alloc, tv_dict_item_alloc_len,
+    tv_dict_item_free, tv_dict_item_remove, tv_dict_watcher_add, tv_dict_watcher_remove,
+    tv_list_alloc,
 };
 use neovim::memory::xstrdup;
 use neovim::types::{Callback, Failed, ListWatch, TypVal, VAR_UNKNOWN, kListLenUnknown, ptrdiff_t};
@@ -55,17 +54,17 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
         log.check(&[alloc::list(l)]);
 
         let test = cstr("test");
-        tv_list_append_string(l, test.as_ptr(), 3);
+        (*l).push_string(test.as_ptr(), 3);
         log.check(&[alloc::string(last_string(l), 3)]);
 
         // A NULL string allocates nothing at all.
-        tv_list_append_string(l, ptr::null(), 0);
+        (*l).push_string(ptr::null(), 0);
         log.check(&[]);
-        tv_list_append_string(l, ptr::null(), -1);
+        (*l).push_string(ptr::null(), -1);
         log.check(&[]);
 
         // A negative length means "to the terminator".
-        tv_list_append_string(l, test.as_ptr(), -1);
+        (*l).push_string(test.as_ptr(), -1);
         log.check(&[alloc::string(last_string(l), 4)]);
 
         assert_eq!(strings(l), [Some("tes"), None, None, Some("test")]);
@@ -75,8 +74,8 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
         // front to back, and the list goes last. An item holding a NULL
         // string reaches the allocator not at all: `tv_clear` recognises an
         // already-empty value and returns, where the C called `xfree(NULL)`.
-        let held: Vec<*mut c_char> = (0..tv_list_len(l))
-            .map(|at| (*tv_list_find(l, at)).li_tv.string())
+        let held: Vec<*mut c_char> = (0..list_len(l.as_ref()))
+            .map(|at| (*list_find(l.as_mut(), at)).li_tv.string())
             .collect();
         let mut expected: Vec<_> = held
             .iter()
@@ -84,7 +83,7 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
             .map(|&s| alloc::freed(s))
             .collect();
         expected.push(alloc::freed(l));
-        tv_list_unref(l);
+        list_unref(l);
         log.check(&expected);
     }
 }
@@ -94,7 +93,7 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
 /// # Safety
 /// `l` is a live, non-empty list whose last item holds a `VAR_STRING`.
 unsafe fn last_string(l: *mut neovim::types::List) -> *mut c_char {
-    unsafe { (*tv_list_last(l)).li_tv.string() }
+    unsafe { (*list_last(l.as_mut())).li_tv.string() }
 }
 
 /// The list's items as UTF-8, with a NULL string spelled `None`.
@@ -102,9 +101,9 @@ unsafe fn last_string(l: *mut neovim::types::List) -> *mut c_char {
 /// # Safety
 /// `l` is a live list of `VAR_STRING` items.
 unsafe fn strings(l: *mut neovim::types::List) -> Vec<Option<&'static str>> {
-    (0..unsafe { tv_list_len(l) })
+    (0..list_len(unsafe { l.as_ref() }))
         .map(|at| {
-            let s = unsafe { (*tv_list_find(l, at)).li_tv.string() };
+            let s = unsafe { (*list_find(l.as_mut(), at)).li_tv.string() };
             (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_str().unwrap())
         })
         .collect()
@@ -242,16 +241,20 @@ fn removing_a_run_shortens_the_list() {
     unsafe {
         let l = tv_list_alloc(kListLenUnknown as ptrdiff_t).into_raw();
         for n in 1..=4 {
-            tv_list_append_number(l, n);
+            (*l).push_number(n);
         }
-        assert_eq!(tv_list_len(l), 4);
+        assert_eq!(list_len(l.as_ref()), 4);
 
-        tv_list_remove_range(l, 1, 2);
+        (*l).remove_range(1, 2);
 
-        assert_eq!(tv_list_len(l), 2, "two of the four items were removed");
-        assert_eq!((*tv_list_first(l)).li_tv.number(), 1);
-        assert_eq!((*tv_list_last(l)).li_tv.number(), 4, "the gap closed");
-        tv_list_unref(l);
+        assert_eq!(
+            list_len(l.as_ref()),
+            2,
+            "two of the four items were removed"
+        );
+        assert_eq!((*list_first(l.as_mut())).li_tv.number(), 1);
+        assert_eq!((*list_last(l.as_mut())).li_tv.number(), 4, "the gap closed");
+        list_unref(l);
     }
 }
 
@@ -270,22 +273,22 @@ fn a_watcher_on_a_removed_item_advances_past_it() {
     unsafe {
         let l = tv_list_alloc(kListLenUnknown as ptrdiff_t).into_raw();
         for n in 1..=3 {
-            tv_list_append_number(l, n);
+            (*l).push_number(n);
         }
 
         let mut lw = ListWatch {
             lw_index: 1,
             lw_next: ptr::null_mut(),
         };
-        tv_list_watch_add(l, &raw mut lw);
-        tv_list_remove_range(l, 1, 1);
+        (*l).watch_add(&raw mut lw);
+        (*l).remove_range(1, 1);
         // Index 1 again -- but the item that *followed* the removed one,
         // which has shifted down into its place.
         assert_eq!(lw.lw_index, 1, "the watcher moved on, not back");
-        assert_eq!((*tv_list_find(l, lw.lw_index)).li_tv.number(), 3);
+        assert_eq!((*list_find(l.as_mut(), lw.lw_index)).li_tv.number(), 3);
 
-        tv_list_watch_remove(l, &raw mut lw);
-        tv_list_unref(l);
+        (*l).watch_remove(&raw mut lw);
+        list_unref(l);
     }
 }
 

@@ -18,7 +18,6 @@ use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
     NumBuf, blob_bytes, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
-    tv_list_append_allocated_string, tv_list_append_string,
 };
 use crate::eval::userfunc::{restore_funccal, save_funccal, set_current_funccal};
 use crate::event::libuv::uv_strerror;
@@ -350,7 +349,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut addrs_arr = Array::with_capacity(n);
     let list = list_alloc_ret(result, n as isize);
     for i in 0..n {
-        unsafe { tv_list_append_allocated_string(list, *addrs.add(i)) };
+        unsafe { (*list).push_allocated_string(*addrs.add(i)) };
         let addr = unsafe { *addrs.add(i) };
         addrs_arr.push(Object::string(unsafe { cstr_to_string(addr) }));
     }
@@ -391,7 +390,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                     .as_string()
                     .expect("`serverlist()` answers with a list of strings");
                 // SAFETY: the address is the object's own, NUL-terminated.
-                unsafe { tv_list_append_string(list, addr.data(), -1) };
+                unsafe { (*list).push_string(addr.data(), -1) };
             }
         }
     }

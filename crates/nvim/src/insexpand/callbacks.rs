@@ -660,7 +660,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
         unsafe { tv_dict_unref(matchdict) };
     }
     if !matchlist.is_null() {
-        unsafe { tv_list_unref(matchlist) };
+        unsafe { list_unref(matchlist) };
     }
 }
 

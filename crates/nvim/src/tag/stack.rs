@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::tv_list_items;
+use crate::eval::typval::list_items;
 use crate::highlight_group::HLF_D;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -160,8 +160,8 @@ impl TagStack {
         // An index: `push` below reads user dictionaries and can re-enter.
         let mut at = 0;
         // SAFETY: the caller's promise -- a live list.
-        while at < unsafe { tv_list_items(l) }.len() {
-            let tv = &raw const unsafe { tv_list_items(l) }[at].li_tv;
+        while at < list_items(unsafe { l.as_ref() }).len() {
+            let tv = &raw const list_items(unsafe { l.as_ref() })[at].li_tv;
             at += 1;
 
             // Skip anything that is not a dict describing a jump.
@@ -300,8 +300,8 @@ unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
     } else {
         0
     };
-    unsafe { tv_list_append_number(pos, str_m) };
-    unsafe { tv_list_append_number(pos, mark.mark.lnum as VarNumber) };
+    unsafe { (*pos).push_number(str_m) };
+    unsafe { (*pos).push_number(mark.mark.lnum as VarNumber) };
     // Columns are counted from one outside, except for the "past the
     // end of the line" sentinel, which is passed through.
     let n2 = if mark.mark.col == MAXCOL as ColNr {
@@ -309,8 +309,8 @@ unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
     } else {
         (mark.mark.col + 1) as VarNumber
     };
-    unsafe { tv_list_append_number(pos, n2) };
-    unsafe { tv_list_append_number(pos, mark.mark.coladd as VarNumber) };
+    unsafe { (*pos).push_number(n2) };
+    unsafe { (*pos).push_number(mark.mark.coladd as VarNumber) };
 }
 
 /// `gettagstack()` — describe the tag stack of `window` into `retdict`.
@@ -329,7 +329,7 @@ pub unsafe fn get_tagstack(window: Win, retdict: *mut Dict) {
     for entry in stack.entries() {
         let d_held = tv_dict_alloc();
         let d = d_held.as_ptr();
-        unsafe { tv_list_append_dict(items, Some(d_held)) };
+        unsafe { (*items).push_dict(Some(d_held)) };
         unsafe { tag_details(entry, d) };
     }
 }

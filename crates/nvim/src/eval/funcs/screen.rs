@@ -8,7 +8,7 @@ use super::wrappers::{
 };
 use crate::winlayer::{Buf, Win};
 
-use crate::eval::typval::{NumBuf, tv_list_append_number, tv_list_append_string};
+use crate::eval::typval::NumBuf;
 use crate::grid::{
     GridRef, MAX_SCHAR_SIZE, grid_getchar, schar_from_char, schar_get, schar_get_first_codepoint,
 };
@@ -122,7 +122,7 @@ pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // reports one codepoint.
     let mut i = 0usize;
     loop {
-        unsafe { tv_list_append_number(list, utf_ptr2char(buf.as_ptr().add(i)) as VarNumber) };
+        unsafe { (*list).push_number(utf_ptr2char(buf.as_ptr().add(i)) as VarNumber) };
         i += unsafe { utf_ptr2len(buf.as_ptr().add(i)) } as usize;
         if buf[i] as c_int == NUL {
             break;
@@ -335,9 +335,9 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 
     let list = list_alloc_ret(result, 3);
     let concealed = syntax_flags.has(SynFlags::CONCEAL) as c_int as VarNumber;
-    unsafe { tv_list_append_number(list, concealed) };
-    unsafe { tv_list_append_string(list, text.as_ptr(), -1) };
-    unsafe { tv_list_append_number(list, matchid as VarNumber) };
+    unsafe { (*list).push_number(concealed) };
+    unsafe { (*list).push_string(text.as_ptr(), -1) };
+    unsafe { (*list).push_number(matchid as VarNumber) };
 }
 
 /// `synstack({lnum}, {col})` — every syntax id in effect at a position,
@@ -362,7 +362,7 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             if id < 0 {
                 break;
             }
-            unsafe { tv_list_append_number(list, id as VarNumber) };
+            unsafe { (*list).push_number(id as VarNumber) };
         }
     }
 }

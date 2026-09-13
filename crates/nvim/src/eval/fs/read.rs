@@ -24,10 +24,7 @@
 
 use super::{__S_IFMT, SEEK_END, SEEK_SET, no_fileinfo, str_arg};
 use crate::eval::typval::NumBuf;
-use crate::eval::typval::{
-    tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret, tv_list_append_owned_tv, tv_list_len,
-    tv_list_remove_at,
-};
+use crate::eval::typval::{list_len, tv_blob_alloc_ret, tv_get_number, tv_list_alloc_ret};
 use crate::garray::ga_grow;
 use crate::memory::{xfree, xmemdupz, xrealloc};
 use crate::message::{e_cant_read_file_str, e_isadir2, e_notopen};
@@ -148,7 +145,7 @@ impl Lines {
 
     fn len(self) -> int64_t {
         // SAFETY: a live list.
-        unsafe { tv_list_len(self.0) as int64_t }
+        list_len(unsafe { self.0.as_ref() }) as int64_t
     }
 
     /// Append `s`, a NUL-terminated string in nvim's heap that the list owns
@@ -156,14 +153,14 @@ impl Lines {
     fn push(self, s: *mut c_char) {
         let tv = TypVal::String(s);
         // SAFETY: a live list, and `tv` an owned String the list takes over.
-        unsafe { tv_list_append_owned_tv(self.0, tv) };
+        unsafe { (*self.0).push(tv) };
     }
 
     /// Drop the oldest line, which is how a negative `{max}` keeps only the
     /// last few.
     fn drop_first(self) {
         // SAFETY: a live list, reached only with at least one item in it.
-        unsafe { tv_list_remove_at(self.0, 0) };
+        unsafe { (*self.0).remove_at(0) };
     }
 }
 
@@ -361,14 +358,11 @@ fn read_lines(fd: &File, lines: Lines, binary: bool, maxline: int64_t) {
                 start = p + 1; // Step over the newline.
                 if maxline < 0 {
                     if lines.len() > -maxline {
-                        debug_assert!(
-                            lines.len() == 1 + -maxline,
-                            "tv_list_len(l) == 1 + -maxline"
-                        );
+                        debug_assert!(lines.len() == 1 + -maxline, "list_len(l) == 1 + -maxline");
                         lines.drop_first();
                     }
                 } else if lines.len() >= maxline {
-                    debug_assert!(lines.len() == maxline, "tv_list_len(l) == maxline");
+                    debug_assert!(lines.len() == maxline, "list_len(l) == maxline");
                     break;
                 }
                 if readlen <= 0 {

@@ -21,8 +21,7 @@ use crate::tr_c;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::eval::typval::{
-    tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
-    tv_list_append_owned_tv, tv_list_len,
+    list_len, tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc,
 };
 use crate::types::{Dict, List, TypVal, VAR_STRING};
 use ::libc::abort;
@@ -188,7 +187,7 @@ impl<'a> Decoder<'a> {
         }
 
         if let OpenContainer::List(list) = last.container {
-            if unsafe { tv_list_len(list) } != 0 && !obj.didcomma {
+            if list_len(unsafe { list.as_ref() }) != 0 && !obj.didcomma {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
                 let arg0 = unsafe { c_str(self.buf[val_location..].as_ptr() as *const c_char) };
                 semsg!("E474: Expected comma before list item: {arg0}");
@@ -196,7 +195,7 @@ impl<'a> Decoder<'a> {
                 return false;
             }
             debug_assert!(last.special_val.is_null());
-            unsafe { tv_list_append_owned_tv(list, obj.val) };
+            unsafe { (*list).push(obj.val) };
             return true;
         }
 
@@ -224,9 +223,9 @@ impl<'a> Decoder<'a> {
             } else {
                 let kv_pair = tv_list_alloc(2);
                 let into = kv_pair.as_ptr();
-                unsafe { tv_list_append_list(last.special_val, Some(kv_pair)) };
-                unsafe { tv_list_append_owned_tv(into, key.val) };
-                unsafe { tv_list_append_owned_tv(into, obj.val) };
+                unsafe { (*last.special_val).push_list(Some(kv_pair)) };
+                unsafe { (*into).push(key.val) };
+                unsafe { (*into).push(obj.val) };
             }
             return true;
         }

@@ -25,7 +25,7 @@ use super::{
     str_arg_chk,
 };
 use crate::cstr;
-use crate::eval::typval::{NumBuf, blob_bytes, tv_check_str_or_nr, tv_list_items};
+use crate::eval::typval::{NumBuf, blob_bytes, list_items, tv_check_str_or_nr};
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
@@ -117,7 +117,7 @@ struct Item {
 impl Item {
     fn of(list: *const List, at: usize) -> Option<Self> {
         // SAFETY: a live list, or NULL, which reads as empty.
-        (at < unsafe { tv_list_items(list) }.len()).then_some(Self { list, at })
+        (at < list_items(unsafe { list.as_ref() }).len()).then_some(Self { list, at })
     }
 
     /// The first item of `list`, which may itself be NULL.
@@ -135,14 +135,14 @@ impl Item {
     fn string(self, buf: &mut NumBuf) -> Option<&CStr> {
         // SAFETY: a live item and a scratch of the promised length; the
         // answer is NUL-terminated, or NULL.
-        let tv = &raw const unsafe { tv_list_items(self.list) }[self.at].li_tv;
+        let tv = &raw const list_items(unsafe { self.list.as_ref() })[self.at].li_tv;
         unsafe { buf.string_ptr_chk(&*tv).as_ref() }.map(|p| unsafe { CStr::from_ptr(p) })
     }
 
     /// Whether the item is a String or a Number, having reported if not.
     fn is_str_or_nr(self) -> bool {
         // SAFETY: a live item.
-        unsafe { tv_check_str_or_nr(&tv_list_items(self.list)[self.at].li_tv) }
+        tv_check_str_or_nr(&list_items(unsafe { self.list.as_ref() })[self.at].li_tv)
     }
 }
 

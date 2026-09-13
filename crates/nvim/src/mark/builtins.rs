@@ -18,10 +18,7 @@
 
 use crate::buffer::buflist_nr2name;
 use crate::cstr::c_bytes;
-use crate::eval::typval::{
-    tv_dict_add_list, tv_dict_add_str, tv_dict_alloc, tv_list_alloc, tv_list_append_dict,
-    tv_list_append_number,
-};
+use crate::eval::typval::{tv_dict_add_list, tv_dict_add_str, tv_dict_alloc, tv_list_alloc};
 use crate::memory::xfree;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -54,28 +51,25 @@ pub(super) unsafe fn add_mark(
     }
     // SAFETY: the caller promised a live list and NUL-terminated strings; the
     // dict and the position list are handed to `l`, which owns them from
-    // `tv_list_append_dict` on.
+    // `List::push_dict` on.
     let d_held = tv_dict_alloc();
     let d = d_held.as_ptr();
-    unsafe { tv_list_append_dict(l, Some(d_held)) };
+    unsafe { (*l).push_dict(Some(d_held)) };
     let held = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     let lpos = held.as_ptr();
-    unsafe { tv_list_append_number(lpos, VarNumber::from(bufnr)) };
-    unsafe { tv_list_append_number(lpos, VarNumber::from(pos.lnum)) };
+    unsafe { (*lpos).push_number(VarNumber::from(bufnr)) };
+    unsafe { (*lpos).push_number(VarNumber::from(pos.lnum)) };
     // 1-BASED, unlike `:marks` and unlike the store. `MAXCOL` — which is
     // what a linewise `'>` carries — is passed through rather than
     // incremented, so it stays recognisable.
     unsafe {
-        tv_list_append_number(
-            lpos,
-            VarNumber::from(if pos.col < MAXCOL {
-                pos.col + 1
-            } else {
-                MAXCOL
-            }),
-        )
+        (*lpos).push_number(VarNumber::from(if pos.col < MAXCOL {
+            pos.col + 1
+        } else {
+            MAXCOL
+        }))
     };
-    unsafe { tv_list_append_number(lpos, VarNumber::from(pos.coladd)) };
+    unsafe { (*lpos).push_number(VarNumber::from(pos.coladd)) };
     if unsafe { tv_dict_add_str(d, c"mark".as_ptr(), c"mark".count_bytes(), mname) }.is_err()
         || unsafe { tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), Some(held)) }
             .is_err()

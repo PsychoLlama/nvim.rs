@@ -6,8 +6,7 @@ use super::tv_get_buf;
 use super::wrappers::{arg_number, arg_string, arg_string_chk, dict_alloc_ret, list_alloc_ret};
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_string_arg, tv_dict_add_nr, tv_dict_add_str,
-    tv_dict_alloc, tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict, tv_list_append_list,
-    tv_list_append_number, tv_list_append_string,
+    tv_dict_alloc, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::guard::Suppress;
@@ -39,7 +38,7 @@ unsafe fn append_mark(l: *mut List, mark: Pos) -> *mut Dict {
     // immediately, so it is not leaked.
     let d_held = tv_dict_alloc();
     let d = d_held.as_ptr();
-    unsafe { tv_list_append_dict(l, Some(d_held)) };
+    unsafe { (*l).push_dict(Some(d_held)) };
     let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, mark.lnum as VarNumber) };
     let _ = unsafe { tv_dict_add_nr(d, c"col".as_ptr(), 3, mark.col as VarNumber) };
     let _ = unsafe { tv_dict_add_nr(d, c"coladd".as_ptr(), 6, mark.coladd as VarNumber) };
@@ -66,7 +65,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     };
     let entries = tv_list_alloc(buf.b_changelistlen as isize);
     let l = entries.as_ptr();
-    unsafe { tv_list_append_list(out, Some(entries)) };
+    unsafe { (*out).push_list(Some(entries)) };
 
     // The index is this window's if it is showing the buffer, and
     // otherwise the one remembered for this window in the buffer's
@@ -82,7 +81,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
                 (*wip).wi_changelistidx
             })
     };
-    unsafe { tv_list_append_number(out, index as VarNumber) };
+    unsafe { (*out).push_number(index as VarNumber) };
 
     for i in 0..buf.b_changelistlen {
         let mark = buf.b_changelist[i as usize].mark;
@@ -103,8 +102,8 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     cleanup_jumplist(wp, true);
     let entries = tv_list_alloc(wp.w_jumplistlen as isize);
     let l = entries.as_ptr();
-    unsafe { tv_list_append_list(out, Some(entries)) };
-    unsafe { tv_list_append_number(out, wp.w_jumplistidx as VarNumber) };
+    unsafe { (*out).push_list(Some(entries)) };
+    unsafe { (*out).push_number(wp.w_jumplistidx as VarNumber) };
     for i in 0..wp.w_jumplistlen {
         let entry = &wp.w_jumplist[i as usize];
         if entry.fmark.mark.lnum == 0 {
@@ -196,7 +195,7 @@ pub fn f_tagfiles(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let out = tv_list_alloc_ret(result, kListLenUnknown as isize);
     let mut files = TagFiles::new();
     while let Some(name) = files.next() {
-        unsafe { tv_list_append_string(out, name.as_ptr(), -1) };
+        unsafe { (*out).push_string(name.as_ptr(), -1) };
     }
 }
 

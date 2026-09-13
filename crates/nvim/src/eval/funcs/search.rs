@@ -13,7 +13,7 @@ use crate::cstr;
 
 use crate::api::private::helpers::cstr_to_string;
 use crate::cursor::check_cursor;
-use crate::eval::typval::{NumBuf, tv_list_append_number};
+use crate::eval::typval::NumBuf;
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
 use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
@@ -317,10 +317,10 @@ pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         (0, 0)
     };
-    unsafe { tv_list_append_number(list, lnum as VarNumber) };
-    unsafe { tv_list_append_number(list, col as VarNumber) };
+    unsafe { (*list).push_number(lnum as VarNumber) };
+    unsafe { (*list).push_number(col as VarNumber) };
     if flags & SP_SUBPAT != 0 {
-        unsafe { tv_list_append_number(list, n as VarNumber) };
+        unsafe { (*list).push_number(n as VarNumber) };
     }
 }
 
@@ -454,8 +454,8 @@ pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         lnum = match_pos.lnum as c_int;
         col = match_pos.col as c_int;
     }
-    unsafe { tv_list_append_number(list, lnum as VarNumber) };
-    unsafe { tv_list_append_number(list, col as VarNumber) };
+    unsafe { (*list).push_number(lnum as VarNumber) };
+    unsafe { (*list).push_number(col as VarNumber) };
 }
 
 /// The alternation `do_searchpair` hands to `searchit`, NUL-terminated.

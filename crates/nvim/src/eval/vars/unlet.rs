@@ -8,9 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::eval::typval::{
-    index_of, tv_list_items, tv_list_iter_mut, tv_list_remove_at, tv_list_remove_range,
-};
+use crate::eval::typval::{index_of, list_items, list_iter_mut};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -150,7 +148,7 @@ unsafe fn do_unlet_var(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
-    let lval = unsafe { Lv::new(lval) };
+    let mut lval = unsafe { Lv::new(lval) };
     let ea = unsafe { Ea::new(args) };
     if lval.ll_tv.is_null() {
         // A whole variable: an environment variable, a plain name or an
@@ -177,7 +175,7 @@ unsafe fn do_unlet_var(
     // SAFETY: a resolved lvalue's list and dictionary are live or NULL.
     let mut locked = false;
     if !lval.ll_list.is_null() {
-        let lock = unsafe { tv_list_locked(lval.ll_list) };
+        let lock = list_locked(unsafe { lval.ll_list.as_ref() });
         locked = unsafe { value_check_lock(lock, lval.ll_name, lval.ll_name_len) };
     }
     if !locked && !lval.ll_dict.is_null() {
@@ -194,7 +192,7 @@ unsafe fn do_unlet_var(
         unsafe { tv_list_unlet_range(lval.ll_list, lval.ll_li, n1, to_end, n2) };
     } else if !lval.ll_list.is_null() {
         // One List item.
-        unsafe { tv_list_remove_at(lval.ll_list, lval.ll_li) };
+        unsafe { (*lval.ll_list).remove_at(lval.ll_li) };
     } else {
         // One Dict item.
         let d = lval.ll_dict;
@@ -231,7 +229,7 @@ unsafe fn do_unlet_var(
 unsafe fn tv_list_unlet_range(l: *mut List, first: usize, n1: c_int, has_n2: bool, n2: c_int) {
     debug_assert!(!l.is_null());
     // SAFETY: the caller's promise: a live list.
-    let len = unsafe { tv_list_items(l) }.len();
+    let len = list_items(unsafe { l.as_ref() }).len();
     // The run ends at `n2` when there is one, and at the last item either
     // way.  An empty list has no run at all; `get_lval` refuses the index
     // that would name one, so this only guards the arithmetic.
@@ -244,7 +242,7 @@ unsafe fn tv_list_unlet_range(l: *mut List, first: usize, n1: c_int, has_n2: boo
         end
     };
     // SAFETY: as above; `first..=last` is a run of the list's items.
-    unsafe { tv_list_remove_range(l, first, last.min(end)) };
+    unsafe { (*l).remove_range(first, last.min(end)) };
 }
 
 /// Delete the variable `name[0..name_len]`, reporting E108 if it does not
@@ -399,7 +397,7 @@ unsafe fn do_lock_var(
                 usize::try_from(lval.ll_n2 - lval.ll_n1 + 1).unwrap_or(0)
             };
             // SAFETY: a resolved lvalue's own list, and `ll_li` an index of it.
-            let items = tv_list_iter_mut(unsafe { lval.ll_list.as_mut() });
+            let items = list_iter_mut(unsafe { lval.ll_list.as_mut() });
             let mut done = 0;
             for li in items.skip(lval.ll_li).take(count) {
                 // SAFETY: an item of that list.

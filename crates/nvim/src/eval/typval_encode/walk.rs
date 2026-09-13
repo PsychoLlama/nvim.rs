@@ -14,9 +14,8 @@ use super::{
 };
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::typval::{
-    DictSlot, Dt, Li, Pt, Tv, blob_bytes, di_tv, dv_copyid, lv_copyid, tv_dict_find, tv_dict_hi2di,
-    tv_dict_item_key, tv_list_copyid, tv_list_first, tv_list_items, tv_list_items_mut,
-    tv_list_iter, tv_list_last, tv_list_len, tv_list_set_copyid,
+    DictSlot, Dt, Li, Pt, Tv, blob_bytes, di_tv, dv_copyid, list_first, list_items, list_items_mut,
+    list_iter, list_last, list_len, lv_copyid, tv_dict_find, tv_dict_hi2di, tv_dict_item_key,
 };
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::eval::{get_copy_id, partial_name};
@@ -251,16 +250,16 @@ unsafe fn convert_one_value<S: TypvalSink>(
         }
         VAR_LIST => {
             let list = val.list_or_null();
-            if list.is_null() || unsafe { tv_list_len(list) } == 0 {
+            if list.is_null() || list_len(unsafe { list.as_ref() }) == 0 {
                 unsafe { sink.conv_empty_list(slot!()) };
             } else {
-                let saved_copyid = unsafe { tv_list_copyid(list) };
+                let saved_copyid = unsafe { (*list).copy_id() };
                 {
                     let path = ConvPath { stack, objname };
                     let ty = ConvType::List;
                     item_hook!(unsafe { check_list_seen(sink, list, ty, copyid, &path) });
                 }
-                let len = unsafe { tv_list_len(list) };
+                let len = list_len(unsafe { list.as_ref() });
                 item_hook!(unsafe { sink.conv_list_start(slot!(), len) });
                 debug_assert!(saved_copyid != copyid);
                 stack.push(ConvFrame {
@@ -399,11 +398,11 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                 return Ok(None);
             }
             let val_list = val.list_or_null();
-            if unsafe { tv_list_len(val_list) } != 4 {
+            if list_len(unsafe { val_list.as_ref() }) != 4 {
                 return Ok(None);
             }
             // SAFETY: the four items of a list this long.
-            let parts = unsafe { tv_list_items(val_list) };
+            let parts = list_items(unsafe { val_list.as_ref() });
             let [sign, highest_bits, high_bits, low_bits] =
                 [0, 1, 2, 3].map(|i| parts[i].li_tv.number_or_zero());
             if parts.iter().any(|li| li.li_tv.v_type() != VAR_NUMBER) {
@@ -449,7 +448,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                 return Ok(None);
             }
             let val_list = val.list_or_null();
-            let saved_copyid = unsafe { tv_list_copyid(val_list) };
+            let saved_copyid = unsafe { (*val_list).copy_id() };
             {
                 let path = ConvPath { stack, objname };
                 let ty = ConvType::List;
@@ -458,7 +457,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                     other => return Ok(Some(other)),
                 }
             }
-            let len = unsafe { tv_list_len(val_list) };
+            let len = list_len(unsafe { val_list.as_ref() });
             match unsafe { sink.conv_list_start(slot!(), len) } {
                 Flow::Go => {}
                 other => return Ok(Some(other)),
@@ -478,20 +477,18 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                 return Ok(None);
             }
             let val_list = val.list_or_null();
-            if val_list.is_null() || unsafe { tv_list_len(val_list) } == 0 {
+            if val_list.is_null() || list_len(unsafe { val_list.as_ref() }) == 0 {
                 sink.conv_empty_dict(None);
                 return Ok(Some(Flow::Go));
             }
             // Every item has to be a two-element list, or this is not a
             // map after all.
-            for li in tv_list_iter(unsafe { val_list.as_ref() }) {
-                if li.li_tv.v_type() != VAR_LIST
-                    || unsafe { tv_list_len(li.li_tv.list_or_null()) } != 2
-                {
+            for li in list_iter(unsafe { val_list.as_ref() }) {
+                if li.li_tv.v_type() != VAR_LIST || list_len(li.li_tv.list_ref()) != 2 {
                     return Ok(None);
                 }
             }
-            let saved_copyid = unsafe { tv_list_copyid(val_list) };
+            let saved_copyid = unsafe { (*val_list).copy_id() };
             {
                 let path = ConvPath { stack, objname };
                 let ty = ConvType::Pairs;
@@ -500,7 +497,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                     other => return Ok(Some(other)),
                 }
             }
-            let len = unsafe { tv_list_len(val_list) } as size_t;
+            let len = list_len(unsafe { val_list.as_ref() }) as size_t;
             match unsafe { sink.conv_dict_start(slot!(), len) } {
                 Flow::Go => {}
                 other => return Ok(Some(other)),
@@ -520,13 +517,13 @@ unsafe fn convert_special_dict<S: TypvalSink>(
                 return Ok(None);
             }
             let val_list = val.list_or_null();
-            if unsafe { tv_list_len(val_list) } != 2 {
+            if list_len(unsafe { val_list.as_ref() }) != 2 {
                 return Ok(None);
             }
             // SAFETY: the two items of a two-item list.
-            let first = unsafe { Li::new(tv_list_first(val_list)) };
+            let first = unsafe { Li::new(list_first(val_list.as_mut())) };
             // SAFETY: as above.
-            let last = unsafe { Li::new(tv_list_last(val_list)) };
+            let last = unsafe { Li::new(list_last(val_list.as_mut())) };
             let ext_type = first.number();
             if first.v_type() != VAR_NUMBER
                 || ext_type > i8::MAX as VarNumber
@@ -650,11 +647,11 @@ unsafe fn walk<S: TypvalSink>(
             Frame::List { list, at } => {
                 // SAFETY: the frame's own list, which stays live for the
                 // walk.
-                let items = unsafe { tv_list_items_mut(list) };
+                let items = list_items_mut(unsafe { list.as_mut() });
                 let Some(item) = items.get_mut(at) else {
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
-                    unsafe { tv_list_set_copyid(list, saved_copyid) };
+                    unsafe { (*list).set_copy_id(saved_copyid) };
                     unsafe { sink.conv_list_end(cur_tv.as_mut()) };
                     continue;
                 };
@@ -668,11 +665,11 @@ unsafe fn walk<S: TypvalSink>(
             }
             Frame::Pairs { list, at } => {
                 // SAFETY: as above.
-                let items = unsafe { tv_list_items(list) };
+                let items = list_items(unsafe { list.as_ref() });
                 let Some(item) = items.get(at) else {
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
-                    unsafe { tv_list_set_copyid(list, saved_copyid) };
+                    unsafe { (*list).set_copy_id(saved_copyid) };
                     sink.conv_dict_end(None);
                     continue;
                 };
@@ -682,7 +679,7 @@ unsafe fn walk<S: TypvalSink>(
                 let kv_pair = item.li_tv.list_or_null();
                 // SAFETY: a `[key, value]` pair, checked when the frame was
                 // pushed.
-                let pair = unsafe { tv_list_items_mut(kv_pair) };
+                let pair = list_items_mut(unsafe { kv_pair.as_mut() });
                 let key = &raw mut pair[0].li_tv;
                 // SAFETY: an item of the pair, live while the list is.
                 walk_hook!(unsafe { sink.special_dict_key_check(&*key) });
@@ -695,7 +692,7 @@ unsafe fn walk<S: TypvalSink>(
                 sink.conv_dict_after_key(None);
                 // Re-derived: the key's own walk may have edited the pair.
                 // SAFETY: as above.
-                tv = &raw mut unsafe { tv_list_items_mut(kv_pair) }[1].li_tv;
+                tv = &raw mut list_items_mut(unsafe { kv_pair.as_mut() })[1].li_tv;
                 if let Frame::Pairs { at: slot, .. } = &mut stack.get_mut(idx).frame {
                     *slot = at + 1;
                 }

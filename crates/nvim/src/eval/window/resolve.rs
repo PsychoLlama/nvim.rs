@@ -258,8 +258,8 @@ pub fn f_win_id2tabwin(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let (mut winnr, mut tabnr) = (1, 1);
     unsafe { win_get_tabwin(id, &raw mut tabnr, &raw mut winnr) };
     let list = tv_list_alloc_ret(result, 2);
-    unsafe { tv_list_append_number(list, VarNumber::from(tabnr)) };
-    unsafe { tv_list_append_number(list, VarNumber::from(winnr)) };
+    (*list).push_number(VarNumber::from(tabnr));
+    (*list).push_number(VarNumber::from(winnr));
 }
 
 /// `win_id2win({winid})` — the window's number in the current tab page, or 0.
@@ -289,7 +289,7 @@ pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let list = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
     let bufnr = number_as_int(arg_number(args, 0));
     for wp in tab_windows().filter(|wp| wp.buffer().handle == bufnr) {
-        unsafe { tv_list_append_number(list, VarNumber::from(wp.handle)) };
+        (*list).push_number(VarNumber::from(wp.handle));
     }
 }
 

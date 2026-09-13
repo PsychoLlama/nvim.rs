@@ -16,7 +16,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{DictRef, NumBuf, tv_dict_get_string_alloc, tv_list_items, tv_list_iter};
+use crate::eval::typval::{DictRef, NumBuf, list_items, list_iter, tv_dict_get_string_alloc};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_E, Ctrl_N, Ctrl_Y, Key};
 use crate::types::{
@@ -163,8 +163,8 @@ pub(crate) unsafe fn ins_compl_add_list(list: *mut List) {
     // `'completefunc'`), which may edit the very list it is reading.
     let mut at = 0;
     // SAFETY: the caller's promise: a live list.
-    while at < unsafe { tv_list_items(list) }.len() {
-        let tv = &raw const unsafe { tv_list_items(list) }[at].li_tv;
+    while at < list_items(unsafe { list.as_ref() }).len() {
+        let tv = &raw const list_items(unsafe { list.as_ref() })[at].li_tv;
         if unsafe { ins_compl_add_tv(&*tv, dir, true) } == OK {
             // If dir was BACKWARD then honour it just once.
             dir = FORWARD;
@@ -429,7 +429,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
         what_flag = CI_WHAT_ALL & !(CI_WHAT_MATCHES | CI_WHAT_COMPLETED);
     } else {
         what_flag = 0;
-        for item in tv_list_iter(unsafe { what_list.as_ref() }) {
+        for item in list_iter(unsafe { what_list.as_ref() }) {
             // `tv_get_string` answers "" rather than NULL for anything it
             // cannot render, so this is never a null pointer.
             let what = unsafe { CStr::from_ptr(numbuf.string_ptr(&item.li_tv)) };
@@ -512,7 +512,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
                 unsafe {
                     let di_held = tv_dict_alloc();
                     let di = di_held.as_ptr();
-                    tv_list_append_dict(li, Some(di_held));
+                    (*li).push_dict(Some(di_held));
                     fill_complete_info_dict(di, match_0.raw(), has_matches && has_items);
                 }
             }

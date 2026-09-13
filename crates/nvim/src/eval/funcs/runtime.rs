@@ -14,7 +14,7 @@ use crate::charset::skipwhite;
 use crate::cmdexpand::cmdline_pum_active;
 use crate::cmdexpand::state::wild_menu_showing;
 use crate::cstr;
-use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_append_number};
+use crate::eval::typval::{NumBuf, tv_dict_alloc_ret};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{eval_has_provider, get_callback_depth};
 use crate::getchar::state::vgetc_busy;
@@ -506,7 +506,7 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     // `firstwin` rather than in the tab page record, which is only
     // updated on the way out.
     for wp in windows_in_tab(tab) {
-        unsafe { tv_list_append_number(list, (*wp.w_buffer).handle as VarNumber) };
+        unsafe { (*list).push_number((*wp.w_buffer).handle as VarNumber) };
     }
 }
 

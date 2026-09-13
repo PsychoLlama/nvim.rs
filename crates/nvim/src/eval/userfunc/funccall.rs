@@ -172,7 +172,7 @@ unsafe fn free_funccal_contents(fc: *mut FuncCall) {
     let (vars, avars, items) = unsafe { scopes_of(fc) };
     unsafe { vars_clear(vars) };
     unsafe { vars_clear(avars) };
-    for li in tv_list_iter_mut(unsafe { items.as_mut() }) {
+    for li in list_iter_mut(unsafe { items.as_mut() }) {
         tv_clear(&mut li.li_tv);
     }
     unsafe { free_funccal(fc) };
@@ -213,11 +213,11 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
     }
 
     if may_free_fc && frame.fc_l_varlist.lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
-        tv_list_disown_items(&mut frame.fc_l_varlist);
+        frame.fc_l_varlist.disown_items();
     } else {
         free_fc = false;
         // Make a copy of the a:000 items, since that was not done above.
-        tv_list_own_items(&mut frame.fc_l_varlist);
+        frame.fc_l_varlist.own_items();
     }
 
     if free_fc {

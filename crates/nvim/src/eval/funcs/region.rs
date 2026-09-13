@@ -11,7 +11,6 @@ use crate::charset::getdigits_int;
 use crate::eval::list2fpos;
 use crate::eval::typval::{
     NumBuf, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_list_alloc,
-    tv_list_append_allocated_string, tv_list_append_list, tv_list_append_number,
 };
 use crate::keycodes::Ctrl_V;
 use crate::mbyte::{mb_prevptr, utfc_ptr2len};
@@ -370,7 +369,7 @@ pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         debug_assert!(!text.data().is_null());
         // The list takes the block over, so the string gives it up rather
         // than releasing it here.
-        unsafe { tv_list_append_allocated_string(result.list_or_null(), text.into_raw()) };
+        unsafe { (*result.list_or_null()).push_allocated_string(text.into_raw()) };
     }
 }
 
@@ -481,14 +480,14 @@ fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
 fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     let pair = tv_list_alloc(2);
     let into = pair.as_ptr();
-    unsafe { tv_list_append_list(result.list_or_null(), Some(pair)) };
+    unsafe { (*result.list_or_null()).push_list(Some(pair)) };
     for p in [p1, p2] {
         let pos = tv_list_alloc(4);
         let l = pos.as_ptr();
-        unsafe { tv_list_append_list(into, Some(pos)) };
-        unsafe { tv_list_append_number(l, Buf::current().handle as VarNumber) };
-        unsafe { tv_list_append_number(l, p.lnum as VarNumber) };
-        unsafe { tv_list_append_number(l, p.col as VarNumber) };
-        unsafe { tv_list_append_number(l, p.coladd as VarNumber) };
+        unsafe { (*into).push_list(Some(pos)) };
+        unsafe { (*l).push_number(Buf::current().handle as VarNumber) };
+        unsafe { (*l).push_number(p.lnum as VarNumber) };
+        unsafe { (*l).push_number(p.col as VarNumber) };
+        unsafe { (*l).push_number(p.coladd as VarNumber) };
     }
 }

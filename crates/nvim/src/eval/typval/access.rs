@@ -10,8 +10,8 @@
 //! sites across the tree pass `*mut List`/`*mut Dict` around, and the
 //! `TypVal` family's layout is frozen by the LuaJIT unit specs.  What they
 //! buy the rest of the family is that *nothing else* has to spell a field walk:
-//! the children below reach a list through `tv_list_items`/`tv_list_iter`/
-//! `tv_list_len`, never through `(*l).lv_items`.
+//! the children below reach a list through `list_items`/`list_iter`/
+//! `list_len`, never through `(*l).lv_items`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -36,8 +36,8 @@ use crate::winlayer::Live;
 /// `tv_*_set`/`_alloc` families lose almost all of their regions to these.
 ///
 /// A handle is never built from a pointer the code has not already committed
-/// to dereferencing: the null-tolerant entry points (`tv_list_len`,
-/// `tv_list_unref`, …) keep their `as_ref()` guard and take no handle.
+/// to dereferencing: the null-tolerant entry points (`list_len`,
+/// `list_unref`, …) keep their `as_ref()` guard and take no handle.
 pub(crate) type Tv = Live<TypVal>;
 /// A live `List`; see [`Tv`].
 pub(crate) type Ls = Live<List>;
@@ -116,12 +116,6 @@ pub(crate) fn lv_copyid(l: *mut List) -> *mut ::core::ffi::c_int {
     field_of(l, ::core::mem::offset_of!(List, lv_copy_id))
 }
 
-/// The address of a list's watcher chain head; see [`field_of`].
-#[inline(always)]
-pub(crate) fn lv_watch(l: *mut List) -> *mut *mut ListWatch {
-    field_of(l, ::core::mem::offset_of!(List, lv_watch))
-}
-
 /// The tag-checked readers, generated ten times over the one shape they all
 /// have.
 ///
@@ -132,7 +126,7 @@ pub(crate) fn lv_watch(l: *mut List) -> *mut *mut ListWatch {
 /// is defined once, so a new variant is a new row here rather than a hunt.
 ///
 /// The `*_or_null`/`*_or_zero` form answers the empty value this family
-/// already reads as absent everywhere (`tv_list_len(NULL) == 0`,
+/// already reads as absent everywhere (`list_len(NULL) == 0`,
 /// `partial_name(NULL)`, `tv_get_number` of a `VAR_SPECIAL`), which is what a
 /// site whose type was established by an earlier `tv_check_for_*_arg` wants to
 /// write.
@@ -173,20 +167,6 @@ union_readers! {
 }
 
 impl TypVal {
-    /// The handle, or `None` unless this is a list holding one.
-    ///
-    /// Hand-written where the other nine readers are generated, because the
-    /// payload is a [`ListRef`] rather than a `Copy` pointer: it can be
-    /// borrowed but never handed out, since a copy of it would be a
-    /// reference nobody took.
-    #[inline(always)]
-    pub(crate) fn list_ref(&self) -> Option<&ListRef> {
-        match self {
-            TypVal::List(list) => list.as_ref(),
-            _ => None,
-        }
-    }
-
     /// The dictionary, or `None` unless this is a `Dict` -- including the
     /// `v:_null_dict` case, which answers `Some(NULL)`.
     #[inline(always)]
@@ -640,65 +620,34 @@ pub(crate) unsafe fn queue_remove(q: *mut QUEUE) {
 }
 
 /// Lock status of `l`; a NULL list reads as `VarLock::Fixed`.
-///
-/// # Safety
-/// `l` is null or points at a live list.
 #[inline]
-pub unsafe fn tv_list_locked(l: *const List) -> VarLock {
-    unsafe { l.as_ref() }.map_or(VarLock::Fixed, |l| l.lv_lock)
+pub fn list_locked(l: Option<&List>) -> VarLock {
+    l.map_or(VarLock::Fixed, List::lock)
 }
 
-/// Set the lock status of `l`.  A NULL list may only be "set" to `VarLock::Fixed`.
-///
-/// # Safety
-/// `l` is null or points at a live list. A null list can only be "set" to
+/// Set the lock status of `l`.  A NULL list may only be "set" to
 /// `VarLock::Fixed`, which is what a `debug_assert` here checks.
 #[inline]
-pub unsafe fn tv_list_set_lock(l: *mut List, lock: VarLock) {
-    match unsafe { l.as_mut() } {
-        Some(l) => l.lv_lock = lock,
+pub fn list_set_lock(l: Option<&mut List>, lock: VarLock) {
+    match l {
+        Some(l) => l.set_lock(lock),
         None => debug_assert!(lock == VarLock::Fixed),
     }
 }
 
-/// Set the copyID of `l`.  Does not expect a NULL list, be careful.
-///
-/// # Safety
-/// `l` must point at a live list — **not** null, unlike its neighbours. The
-/// `copyid` must be one the caller reserved from `get_copyID`.
+/// Number of items in `l`, as the `int` the family counts in; a NULL list is
+/// empty.
 #[inline]
-pub unsafe fn tv_list_set_copyid(l: *mut List, copyid: ::core::ffi::c_int) {
-    unsafe { (*l).lv_copy_id = copyid };
-}
-
-/// Number of items in `l`; a NULL list is empty.
-///
-/// # Safety
-/// `l` is null or points at a live list.
-#[inline]
-pub unsafe fn tv_list_len(l: *const List) -> ::core::ffi::c_int {
-    // SAFETY: the caller's promise: null or a live list.
-    index_of(unsafe { tv_list_items(l) }.len())
-}
-
-/// The copyID of `l`.  Does not expect a NULL list, be careful.
-///
-/// # Safety
-/// `l` must point at a live list — **not** null, unlike its neighbours.
-#[inline]
-pub unsafe fn tv_list_copyid(l: *const List) -> ::core::ffi::c_int {
-    unsafe { (*l).lv_copy_id }
+pub fn list_len(l: Option<&List>) -> ::core::ffi::c_int {
+    index_of(l.map_or(0, List::len))
 }
 
 /// Normalise a possibly negative list index against `l`'s length.
 ///
-/// Returns an index in `0..tv_list_len(l)`, or -1 when it is out of range.
-///
-/// # Safety
-/// `l` is null or points at a live list.
+/// Returns an index in `0..list_len(l)`, or -1 when it is out of range.
 #[inline]
-pub unsafe fn tv_list_uidx(l: *const List, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    let len = unsafe { tv_list_len(l) };
+pub fn list_uidx(l: Option<&List>, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
+    let len = list_len(l);
     // A negative index counts back from the end.
     let n = if n < 0 { n + len } else { n };
     if n < 0 || n >= len { -1 } else { n }
@@ -711,20 +660,15 @@ pub unsafe fn tv_list_uidx(l: *const List, n: ::core::ffi::c_int) -> ::core::ffi
 /// advances correctly; this one is a borrow of the item array, so a body
 /// that edits the list is a borrow error rather than a wrong answer.  Where
 /// the body does edit the list, walk it by index instead.
-///
-/// Takes an `Option` rather than a pointer because the macro's NULL handling
-/// is half of what it does, and because that makes this one safe: `l.as_ref()`
-/// at the call site costs the caller nothing, its `unsafe` block being
-/// already open.
 #[inline]
-pub(crate) fn tv_list_iter(l: Option<&List>) -> ::core::slice::Iter<'_, ListItem> {
-    l.map_or(&[][..], |l| &l.lv_items).iter()
+pub(crate) fn list_iter(l: Option<&List>) -> ::core::slice::Iter<'_, ListItem> {
+    list_items(l).iter()
 }
 
-/// [`tv_list_iter`] with the items writable.
+/// [`list_iter`] with the items writable.
 #[inline]
-pub(crate) fn tv_list_iter_mut(l: Option<&mut List>) -> ::core::slice::IterMut<'_, ListItem> {
-    l.map_or(&mut [][..], |l| &mut l.lv_items).iter_mut()
+pub(crate) fn list_iter_mut(l: Option<&mut List>) -> ::core::slice::IterMut<'_, ListItem> {
+    list_items_mut(l).iter_mut()
 }
 
 /// Store `d` in `tv` as the return value, taking a reference to it.

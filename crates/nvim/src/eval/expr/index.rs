@@ -18,8 +18,8 @@ use core::ptr::{null, null_mut};
 
 use crate::ascii::ascii_iswhite;
 use crate::eval::typval::{
-    NumBuf, blob_slice_or_index, tv_check_str, tv_clear, tv_copy, tv_dict_find, tv_dict_unref,
-    tv_get_number, tv_list_slice_or_index,
+    NumBuf, blob_slice_or_index, list_slice_or_index, tv_check_str, tv_clear, tv_copy,
+    tv_dict_find, tv_dict_unref, tv_get_number,
 };
 use crate::eval::userfunc::make_partial;
 use crate::eval::{
@@ -285,12 +285,7 @@ pub(crate) unsafe fn eval_index_inner(
             if var2.is_none() {
                 n2 = VARNUMBER_MAX;
             }
-            // SAFETY: the kind says the value holds a List.
-            let list = rv.list_or_null();
-            let sliced = unsafe {
-                tv_list_slice_or_index(list, is_range, n1, n2, exclusive, result, verbose)
-            };
-            sliced?;
+            list_slice_or_index(is_range, n1, n2, exclusive, result, verbose)?;
         }
         VAR_DICT => {
             let mut key = key;

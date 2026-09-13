@@ -12,10 +12,10 @@ use std::ptr;
 
 use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
-    BlobRef, DictRef, ListRef, NumBuf, PartialRef, Unconvertible, tv_check_lock, tv_check_num,
-    tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal, tv_get_bool,
-    tv_get_bool_chk, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_islocked,
-    tv_item_lock, tv_list_alloc_ret, tv_list_append_number, tv_list_first, value_check_lock,
+    BlobRef, DictRef, ListRef, NumBuf, PartialRef, Unconvertible, list_first, tv_check_lock,
+    tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal,
+    tv_get_bool, tv_get_bool_chk, tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk,
+    tv_islocked, tv_item_lock, tv_list_alloc_ret, value_check_lock,
 };
 use neovim::memory::{xfree, xmalloc};
 use neovim::types::{
@@ -76,7 +76,7 @@ fn allocating_into_a_return_value_leaves_an_empty_container() {
     // SAFETY: both values are this case's own and are cleared.
     unsafe {
         let mut rettv = TypVal::Unknown;
-        let l = tv_list_alloc_ret(&mut rettv, 0);
+        let l = &raw mut *tv_list_alloc_ret(&mut rettv, 0);
         assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
         assert_eq!(rettv.list(), l);
         tv_clear(&mut rettv);
@@ -266,7 +266,7 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
 /// takes one reference to whatever the value names and stops there, so a
 /// nested container is the *same* container in both values and its own
 /// count does not move. `deepcopy()` is the other one, and it goes through
-/// `tv_list_copy`/`tv_dict_copy` (see `typval_list`, `typval_dict`).
+/// `list_copy`/`tv_dict_copy` (see `typval_list`, `typval_dict`).
 #[test]
 fn copying_a_container_is_shallow() {
     let _log = AllocLog::start();
@@ -274,7 +274,7 @@ fn copying_a_container_is_shallow() {
     unsafe {
         let mut from = Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build();
         let outer = from.list();
-        let inner = (*tv_list_first(outer)).li_tv.list();
+        let inner = (*list_first(outer.as_mut())).li_tv.list();
         assert_eq!(
             ((*outer).lv_refcount.get(), (*inner).lv_refcount.get()),
             (1, 1)
@@ -285,7 +285,7 @@ fn copying_a_container_is_shallow() {
 
         assert_eq!(to.list(), outer, "the copy names the same list");
         assert_eq!(
-            (*tv_list_first(to.list())).li_tv.list(),
+            (*list_first(to.list().as_mut())).li_tv.list(),
             inner,
             "and the same list inside it",
         );
@@ -297,7 +297,7 @@ fn copying_a_container_is_shallow() {
 
         // Which is what makes the copy an alias: appending through one is
         // visible through the other.
-        tv_list_append_number(inner, 2);
+        (*inner).push_number(2);
         assert_eq!(
             tv::read(&raw const to),
             Tv::List(vec![Tv::List(vec![Tv::Int(1), Tv::Int(2)])]),
@@ -781,7 +781,7 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
     unsafe {
         let mut tv = Slot::new(Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build());
         let outer = tv.tv.list();
-        let inner = (*tv_list_first(outer)).li_tv.list();
+        let inner = (*list_first(outer.as_mut())).li_tv.list();
 
         // A second name for the outer list, as an argument binding is.
         let mut other = TypVal::Unknown;
@@ -913,7 +913,7 @@ fn a_null_list_value_equals_an_empty_one() {
 }
 
 /// The same `describe`'s two list `itp`s, spec lines 2926 and 2947 — the
-/// `tv_equal` twin of `typval_list`'s `tv_list_equal` corpus.
+/// `tv_equal` twin of `typval_list`'s `list_equal` corpus.
 #[test]
 fn comparing_values_folds_case_only_when_asked() {
     let _log = AllocLog::start();

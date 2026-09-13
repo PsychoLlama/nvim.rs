@@ -28,7 +28,7 @@ use crate::channel::{channel_close, channel_create_event, channel_job_start};
 use crate::eval::find_job;
 use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{
-    CallFrame, DictRef, NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_list_items, tv_list_len,
+    CallFrame, DictRef, NumBuf, list_items, list_len, tv_dict_add_bool, tv_dict_alloc,
 };
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
@@ -66,7 +66,7 @@ const CALLBACK_READER_INIT: CallbackReader = CallbackReader::none();
 unsafe fn items<'a>(list: *const List) -> impl Iterator<Item = &'a ListItem> {
     // SAFETY: the caller's promise -- a live list nothing changes for the
     // life of the iterator.
-    unsafe { tv_list_items(list) }.iter()
+    list_items(unsafe { list.as_ref() }).iter()
 }
 
 /// `rpcstart(prog[, argv])`: start a job and speak RPC over its pipes.
@@ -98,7 +98,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // The guard above leaves only `VAR_LIST` here.
         // SAFETY: a `VAR_LIST` holds a live list or NULL.
         args_list = given.list_or_null();
-        argsl = unsafe { tv_list_len(args_list) };
+        argsl = list_len(unsafe { args_list.as_ref() });
         // Assert that all list items are strings.
         for (i, arg) in unsafe { items(args_list) }.enumerate() {
             // SAFETY: `arg` is one of the list's items.

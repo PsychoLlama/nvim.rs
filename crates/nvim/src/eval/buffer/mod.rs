@@ -55,8 +55,7 @@ use crate::eval::funcs::{get_buf_arg, tv_get_buf, tv_get_buf_from_arg};
 use crate::eval::typval::{
     callback_free, tv_check_str_or_nr, tv_clear, tv_dict_add_dict, tv_dict_add_list,
     tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find, tv_get_lnum, tv_get_lnum_buf,
-    tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret, tv_list_append_dict,
-    tv_list_append_number, tv_list_append_string, tv_list_remove_at,
+    tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::eval::{callback_from_typval, typval_tostring};
 use crate::ex_cmds::check_secure;
@@ -88,9 +87,6 @@ use crate::winlayer::{Buf, Live, TabPage, Win, buffers, tab_windows, windows_in_
 /// the evaluator's own argument frame, which outlives the call. Wrapping is
 /// the unsafe step, once; every `(*p).field` after it is checked code.
 pub(super) type Tv = Live<TypVal>;
-
-/// One item of a live list, whose caller has promised the list outlives it.
-pub(super) type Li = Live<ListItem>;
 
 /// Argument `i` as a Number.
 ///

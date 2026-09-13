@@ -12,10 +12,7 @@ use super::{
 };
 use crate::cmdexpand::{WildMode, WildOpts, expand_cleanup, expand_init, expand_one};
 use crate::cstr;
-use crate::eval::typval::{
-    NumBuf, tv_dict_add_str, tv_dict_find, tv_dict_get_bool, tv_list_alloc,
-    tv_list_append_allocated_string, tv_list_append_string,
-};
+use crate::eval::typval::{NumBuf, tv_dict_add_str, tv_dict_find, tv_dict_get_bool, tv_list_alloc};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{eval_vars, expand_filename};
 use crate::guard::Suppress;
@@ -126,7 +123,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if result.v_type() == VAR_LIST {
             list_alloc_ret(result, isize::from(!expanded.is_null()));
             if !expanded.is_null() {
-                unsafe { tv_list_append_string(result.list_or_null(), expanded, -1) };
+                unsafe { (*result.list_or_null()).push_string(expanded, -1) };
             }
             unsafe { xfree(expanded as *mut c_void) };
         } else {
@@ -168,7 +165,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         for i in 0..xpc.xp_numfiles {
             let list = result.list_or_null();
             let name = unsafe { *xpc.xp_files.offset(i as isize) };
-            unsafe { tv_list_append_string(list, name, -1) };
+            unsafe { (*list).push_string(name, -1) };
         }
         unsafe { expand_cleanup(&raw mut xpc) };
     }
@@ -282,7 +279,7 @@ fn get_xdg_var_list(xdg: XDGVarType, result: &mut TypVal) {
         if !dir.is_null() && dir_len > 0 {
             let dir = unsafe { xmemdupz(dir as *const c_void, dir_len) } as *mut c_char;
             let path = unsafe { concat_fnames_realloc(dir, appname.as_ptr(), true) };
-            unsafe { tv_list_append_allocated_string(list, path) };
+            unsafe { (*list).push_allocated_string(path) };
         }
         if iter.is_null() {
             break;

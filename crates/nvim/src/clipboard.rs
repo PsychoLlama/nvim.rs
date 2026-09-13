@@ -14,10 +14,7 @@
 
 use crate::api::private::helpers::cstr_to_string;
 use crate::cstr;
-use crate::eval::typval::{
-    tv_list_alloc, tv_list_append_list, tv_list_append_string, tv_list_first, tv_list_iter,
-    tv_list_last, tv_list_len,
-};
+use crate::eval::typval::{list_first, list_iter, list_last, list_len, tv_list_alloc};
 use crate::eval::{eval_call_provider, eval_has_provider};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xcalloc, xfree};
@@ -173,7 +170,7 @@ pub(crate) unsafe fn get_clipboard(
     let regname = name as c_char;
     // SAFETY: a fresh list; `regname` outlives the append, and the provider
     // call below owns `args` from here on.
-    unsafe { tv_list_append_string(args.as_ptr(), &raw const regname, 1) };
+    unsafe { (*args.as_ptr()).push_string(&raw const regname, 1) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"get".as_ptr().cast_mut());
     let result = unsafe { eval_call_provider(provider, method, Some(args), false) };
 
@@ -190,14 +187,14 @@ pub(crate) unsafe fn get_clipboard(
         }
         let res = result.list_or_null();
         let lines;
-        if unsafe { tv_list_len(res) } == 2
-            && unsafe { (*tv_list_first(res)).li_tv.v_type() } == VAR_LIST
+        if list_len(unsafe { res.as_ref() }) == 2
+            && unsafe { (*list_first(res.as_mut())).li_tv.v_type() } == VAR_LIST
         {
-            lines = unsafe { (*tv_list_first(res)).li_tv.list_or_null() };
-            if unsafe { (*tv_list_last(res)).li_tv.v_type() } != VAR_STRING {
+            lines = unsafe { (*list_first(res.as_mut())).li_tv.list_or_null() };
+            if unsafe { (*list_last(res.as_mut())).li_tv.v_type() } != VAR_STRING {
                 break 'err;
             }
-            let regtype = unsafe { (*tv_list_last(res)).li_tv.string_or_null() };
+            let regtype = unsafe { (*list_last(res.as_mut())).li_tv.string_or_null() };
             if regtype.is_null() || unsafe { cstr::bytes_at(regtype) }.len() > 1 {
                 break 'err;
             }
@@ -213,9 +210,9 @@ pub(crate) unsafe fn get_clipboard(
 
         unsafe {
             (*reg).y_array =
-                xcalloc(tv_list_len(lines) as size_t, size_of::<String_0>()) as *mut String_0
+                xcalloc(list_len(lines.as_ref()) as size_t, size_of::<String_0>()) as *mut String_0
         };
-        unsafe { (*reg).y_size = tv_list_len(lines) as size_t };
+        unsafe { (*reg).y_size = list_len(lines.as_ref()) as size_t };
         unsafe { (*reg).y_width = 0 };
         unsafe { (*reg).additional_data = core::ptr::null_mut::<AdditionalData>() };
         // No timestamp: clipboard registers are not saved in the ShaDa file.
@@ -223,7 +220,7 @@ pub(crate) unsafe fn get_clipboard(
 
         let mut tv_idx: size_t = 0;
         if !lines.is_null() {
-            for li in tv_list_iter(unsafe { lines.as_ref() }) {
+            for li in list_iter(unsafe { lines.as_ref() }) {
                 if li.li_tv.v_type() != VAR_STRING {
                     break 'err;
                 }
@@ -307,18 +304,18 @@ pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
     let lines = tv_list_alloc(reg.y_size as ptrdiff_t + trailing as ptrdiff_t);
     for i in 0..reg.y_size {
         let line = unsafe { &*reg.y_array.add(i) };
-        unsafe { tv_list_append_string(lines.as_ptr(), line.data(), line.len() as ssize_t) };
+        unsafe { (*lines.as_ptr()).push_string(line.data(), line.len() as ssize_t) };
     }
     if trailing {
-        unsafe { tv_list_append_string(lines.as_ptr(), core::ptr::null(), 0) };
+        unsafe { (*lines.as_ptr()).push_string(core::ptr::null(), 0) };
     }
 
     let args = tv_list_alloc(3);
     let into = args.as_ptr();
-    unsafe { tv_list_append_list(into, Some(lines)) };
-    unsafe { tv_list_append_string(into, &raw const regtype, 1) };
+    unsafe { (*into).push_list(Some(lines)) };
+    unsafe { (*into).push_string(&raw const regtype, 1) };
     let regname = [name as c_char];
-    unsafe { tv_list_append_string(into, regname.as_ptr(), 1) };
+    unsafe { (*into).push_string(regname.as_ptr(), 1) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
     unsafe { eval_call_provider(provider, method, Some(args), true) };
 }

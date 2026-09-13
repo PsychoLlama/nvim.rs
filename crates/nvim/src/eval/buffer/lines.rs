@@ -13,7 +13,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::eval::typval::{tv_list_items, tv_list_len};
+use crate::eval::typval::{list_items, list_len};
 use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 
@@ -59,7 +59,7 @@ pub(crate) fn set_buffer_lines(
     '_cleanup: {
         if src.v_type() == VAR_LIST {
             l = src.list_or_null();
-            if unsafe { tv_list_len(l) } == 0 {
+            if list_len(unsafe { l.as_ref() }) == 0 {
                 break '_cleanup;
             }
         } else {
@@ -71,7 +71,7 @@ pub(crate) fn set_buffer_lines(
             if src.v_type() == VAR_LIST {
                 // Re-read the items too: the body below runs autocommands,
                 // which may edit the very list being appended.
-                let Some(item) = (unsafe { tv_list_items(l) }).get(at) else {
+                let Some(item) = (list_items(unsafe { l.as_ref() })).get(at) else {
                     break;
                 };
                 unsafe { xfree(line.cast()) };
@@ -177,7 +177,7 @@ fn get_buffer_lines(
     let list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
     for lnum in start..=end {
         let (text, len) = (buffer.line(lnum).raw(), buffer.line_len(lnum) as ssize_t);
-        unsafe { tv_list_append_string(list, text, len) };
+        unsafe { (*list).push_string(text, len) };
     }
 }
 

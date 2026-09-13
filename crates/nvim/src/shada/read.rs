@@ -103,7 +103,7 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
     // `v:oldfiles` is only filled in while it is still empty, so that a
     // second file does not append to the first one's answer.
     let get_old_files = flags & (kShaDaGetOldfiles | kShaDaForceit) as c_int != 0
-        && (force || unsafe { tv_list_len(oldfiles_list) } == 0);
+        && (force || list_len(unsafe { oldfiles_list.as_ref() }) == 0);
     let want_marks = flags & kShaDaWantMarks as c_int != 0;
 
     let srni_flags = wanted_kinds(flags, want_marks, get_old_files);
@@ -345,7 +345,7 @@ impl Reading {
             };
             // SAFETY: `fname` is null or NUL-terminated.
             self.oldfiles_set.insert(unsafe { shada_key(fname) }.into());
-            unsafe { tv_list_append_allocated_string(self.oldfiles_list, fname) };
+            unsafe { (*self.oldfiles_list).push_allocated_string(fname) };
             if !self.want_marks {
                 entry.data.filemark_mut().fname = core::ptr::null_mut();
             }

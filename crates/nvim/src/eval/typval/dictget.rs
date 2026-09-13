@@ -27,11 +27,9 @@ pub(crate) fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
         let pair = tv_list_alloc(2);
         let into = pair.as_ptr();
         // SAFETY: the list stored in the return slot, and the fresh pair.
-        unsafe {
-            tv_list_append_list(result.list_or_null(), Some(pair));
-            tv_list_append_number(into, VarNumber::try_from(at).expect("a short blob"));
-            tv_list_append_number(into, VarNumber::from(byte));
-        }
+        unsafe { (*result.list_or_null()).push_list(Some(pair)) };
+        unsafe { (*into).push_number(VarNumber::try_from(at).expect("a short blob")) };
+        unsafe { (*into).push_number(VarNumber::from(byte)) };
     }
 }
 
@@ -43,16 +41,16 @@ pub(crate) fn tv_dict2items(args: &[TypVal], result: &mut TypVal) {
 /// `items()` over a list: a list of `[index, value]` pairs.
 pub(crate) fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
     let l = args[0].list_or_null();
-    tv_list_alloc_ret(result, unsafe { tv_list_len(l) } as ptrdiff_t);
+    tv_list_alloc_ret(result, list_len(unsafe { l.as_ref() }) as ptrdiff_t);
     if l.is_null() {
         return;
     }
-    for (idx, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
+    for (idx, li) in list_iter(unsafe { l.as_ref() }).enumerate() {
         let l2 = tv_list_alloc(2);
         let at = l2.as_ptr();
-        unsafe { tv_list_append_list((*result).list_or_null(), Some(l2)) };
-        unsafe { tv_list_append_number(at, idx as VarNumber) };
-        unsafe { tv_list_append_tv(at, &li.li_tv) };
+        unsafe { (*(*result).list_or_null()).push_list(Some(l2)) };
+        unsafe { (*at).push_number(idx as VarNumber) };
+        unsafe { (*at).push_copy(&li.li_tv) };
     }
 }
 
@@ -73,9 +71,9 @@ pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
         }
         let l2 = tv_list_alloc(2);
         let at = l2.as_ptr();
-        unsafe { tv_list_append_list((*result).list_or_null(), Some(l2)) };
-        unsafe { tv_list_append_number(at, idx) };
-        unsafe { tv_list_append_string(at, p, len as ssize_t) };
+        unsafe { (*(*result).list_or_null()).push_list(Some(l2)) };
+        unsafe { (*at).push_number(idx) };
+        unsafe { (*at).push_string(p, len as ssize_t) };
         p = unsafe { p.offset(len as isize) };
         idx += 1;
     }
@@ -369,13 +367,13 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
                 let sub_l = tv_list_alloc(2);
                 let at = sub_l.as_ptr();
                 tv_item.write_list(Some(sub_l));
-                unsafe { tv_list_append_string(at, di_key, -1) };
-                unsafe { tv_list_append_tv(at, &(*di).di_tv) };
+                unsafe { (*at).push_string(di_key, -1) };
+                unsafe { (*at).push_copy(&(*di).di_tv) };
             }
             _ => {}
         }
 
-        unsafe { tv_list_append_owned_tv((*result).list_or_null(), tv_item) };
+        unsafe { (*(*result).list_or_null()).push(tv_item) };
     }
 }
 

@@ -319,9 +319,9 @@ pub unsafe fn heredoc_get(
                 eval_failed = true;
                 continue;
             }
-            unsafe { tv_list_append_allocated_string(l, evaluated) };
+            unsafe { (*l).push_allocated_string(evaluated) };
         } else {
-            unsafe { tv_list_append_string(l, str, -1) };
+            unsafe { (*l).push_string(str, -1) };
         }
     }
 

@@ -25,7 +25,7 @@ use crate::cmdexpand::{expand_init, expand_one};
 use crate::eval::fs::modify_fname;
 use crate::eval::skip_expr;
 use crate::eval::typval::NumBuf;
-use crate::eval::typval::tv_list_find_str;
+use crate::eval::typval::list_find_str;
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
@@ -508,8 +508,8 @@ pub unsafe fn eval_vars(
                             return ptr::null_mut();
                         }
                         let oldfiles = get_vim_var_list(Vv::Oldfiles);
-                        result =
-                            unsafe { tv_list_find_str(oldfiles, i - 1, &mut numbuf) }.cast_mut();
+                        result = list_find_str(unsafe { oldfiles.as_ref() }, i - 1, &mut numbuf)
+                            .cast_mut();
                         if result.is_null() {
                             unsafe { *errormsg = c"".as_ptr() };
                             return ptr::null_mut();

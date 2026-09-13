@@ -13,9 +13,9 @@ use crate::channel::{
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    NumBuf, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc, tv_dict_extend,
-    tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove, tv_list_alloc,
-    tv_list_append_number, tv_list_iter, tv_list_len,
+    NumBuf, list_iter, list_len, tv_dict_add_allocated_str, tv_dict_add_str, tv_dict_alloc,
+    tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_number, tv_dict_item_remove,
+    tv_list_alloc,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::eval::{common_job_callbacks, find_job, tv_to_argv};
@@ -167,7 +167,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let list: *mut List = args[0].list_or_null();
-    let count = unsafe { tv_list_len(list) };
+    let count = list_len(unsafe { list.as_ref() });
     let jobs = unsafe { xcalloc(count as usize, size_of::<*mut Channel>()) } as *mut *mut Channel;
     // The waiting jobs' events are parked on a queue of our own so that
     // they do not run while we block.
@@ -175,7 +175,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut i = 0;
     {
-        for arg in tv_list_iter(unsafe { list.as_ref() }) {
+        for arg in list_iter(unsafe { list.as_ref() }) {
             let chan;
             if arg.li_tv.v_type() != VAR_NUMBER
                 || {
@@ -245,13 +245,13 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     for i in 0..count {
         let chan = unsafe { *jobs.add(i as usize) };
         if chan.is_null() {
-            unsafe { tv_list_append_number(rv, -3) };
+            unsafe { (*rv).push_number(-3) };
             continue;
         }
         // Hand the parked events back before reporting.
         unsafe { multiqueue_process_events((*chan).events) };
         unsafe { multiqueue_replace_parent((*chan).events, (*main_loop.ptr()).events) };
-        unsafe { tv_list_append_number(rv, (*channel_proc(chan)).status as VarNumber) };
+        unsafe { (*rv).push_number((*channel_proc(chan)).status as VarNumber) };
         unsafe { channel_decref(chan) };
     }
 

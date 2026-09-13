@@ -13,9 +13,7 @@ use crate::eval::encode::{
     encode_vim_list_to_buf, encode_vim_to_msgpack,
 };
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{
-    NumBuf, blob_bytes, tv_list_append_owned_tv, tv_list_items, tv_list_len,
-};
+use crate::eval::typval::{NumBuf, blob_bytes, list_items, list_len};
 use crate::memory::{alloc_block, free_block, strequal, xfree};
 use crate::message_fmt::c_str_len;
 use crate::mpack::object::mpack_parser_init;
@@ -102,7 +100,7 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // By index: an encoder hook can run Lua, which may edit the list being
     // dumped.
     // SAFETY: a live list, or NULL, which reads as empty.
-    while let Some(item) = (unsafe { tv_list_items(list) }).get(idx) {
+    while let Some(item) = (list_items(unsafe { list.as_ref() })).get(idx) {
         label.clear();
         let _ = write!(label, "msgpackdump() argument, index {idx}\0");
         idx += 1;
@@ -151,10 +149,10 @@ unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
     // SAFETY: the caller's obligation. `buf` is an arena block owned for the
     // whole walk and freed at the end; `parser` is initialised before use
     // and its error state released before the last message.
-    if unsafe { tv_list_len(list) } == 0 {
+    if list_len(unsafe { list.as_ref() }) == 0 {
         return;
     }
-    if unsafe { tv_list_items(list) }[0].li_tv.v_type() != VAR_STRING {
+    if list_items(unsafe { list.as_ref() })[0].li_tv.v_type() != VAR_STRING {
         semsg!("E475: Invalid argument: List item is not a string");
         return;
     }
@@ -187,7 +185,7 @@ unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
             if status != MPACK_OK as c_int {
                 break;
             }
-            unsafe { tv_list_append_owned_tv(ret_list, cur_item.take()) };
+            unsafe { (*ret_list).push(cur_item.take()) };
         }
         if rlret == Ok(ListRead::Drained) {
             break;
@@ -228,7 +226,7 @@ unsafe fn msgpackparse_unpack_blob(blob: Option<&Blob>, ret_list: *mut List) {
             emsg_mpack_error(status);
             return;
         }
-        unsafe { tv_list_append_owned_tv(ret_list, tv) };
+        unsafe { (*ret_list).push(tv) };
     }
 }
 

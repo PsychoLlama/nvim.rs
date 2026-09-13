@@ -170,7 +170,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     // SAFETY: the frame's return slot, holding the list just allocated.
     let retlist = result.list_or_null();
     for i in 0..xpc.xp_numfiles {
-        unsafe { tv_list_append_string(retlist, *xpc.xp_files.offset(i as isize), -1) };
+        unsafe { (*retlist).push_string(*xpc.xp_files.offset(i as isize), -1) };
     }
     unsafe { xfree(pat as *mut c_void) };
     unsafe { expand_cleanup(&raw mut xpc) };
@@ -235,7 +235,7 @@ pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         ret = add_list("matches", Some(li));
         let mut idx = 0;
         while ret.is_ok() && idx < unsafe { (*xpc).xp_numfiles } {
-            unsafe { tv_list_append_string(into, *(*xpc).xp_files.offset(idx as isize), -1) };
+            unsafe { (*into).push_string(*(*xpc).xp_files.offset(idx as isize), -1) };
             idx += 1;
         }
     }

@@ -341,7 +341,7 @@ unsafe fn dict_number(dict: *mut Dict, key: &CStr, current: c_int) -> Option<c_i
 /// # Safety
 /// `list` must be a readable list.
 unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c_int> {
-    let li = unsafe { tv_list_find(list, index) };
+    let li = list_find(unsafe { list.as_mut() }, index);
     if li.is_null() {
         return Some(current);
     }
@@ -402,7 +402,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
                 return;
             }
             let list = unsafe { (*di).di_tv.list_or_null() };
-            if unsafe { tv_list_len(list) } != 3 {
+            if list_len(unsafe { list.as_ref() }) != 3 {
                 let form = c"List format should be [lnum, col, off]".as_ptr();
                 // SAFETY: reporting a static, translated message.
                 let form = unsafe { c_str(form) };

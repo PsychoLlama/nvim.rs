@@ -22,9 +22,9 @@ use core::ptr::null_mut;
 
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
-    blob_len, blob_set_range, di_lock, tv_check_lock, tv_clear, tv_copy, tv_dict_add,
-    tv_dict_is_watched, tv_dict_item_alloc, tv_dict_item_free, tv_dict_watcher_notify,
-    tv_dict_wrong_func_name, tv_get_number_chk, tv_list_assign_range, value_check_lock,
+    blob_len, blob_set_range, di_lock, list_assign_range, tv_check_lock, tv_clear, tv_copy,
+    tv_dict_add, tv_dict_is_watched, tv_dict_item_alloc, tv_dict_item_free, tv_dict_watcher_notify,
+    tv_dict_wrong_func_name, tv_get_number_chk, value_check_lock,
 };
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{
@@ -94,7 +94,7 @@ pub unsafe fn set_var_lval(
         // *target* may be a Blob, but a Blob target leaves `ll_tv`
         // null and never reaches this branch. So a Blob reaching it
         // means a List target, and upstream hands its `v_blob` to
-        // `tv_list_assign_range` through `vval.v_list` — walking a
+        // `list_assign_range` through `vval.v_list` — walking a
         // `Blob` as a `List`. `let l = [1,2] | let l[0:] = 0z11`
         // is enough. Report what the assignment actually needs.
         if value.v_type() != VAR_LIST {
@@ -105,7 +105,7 @@ pub unsafe fn set_var_lval(
         let (list, n1, n2) = (lval.ll_list, lval.ll_n1, lval.ll_n2);
         let (empty2, name) = (lval.ll_empty2, lval.ll_name);
         // SAFETY: as above.
-        let _ = unsafe { tv_list_assign_range(list, src, n1, n2, empty2, op, name) };
+        let _ = unsafe { list_assign_range(list, src, n1, n2, empty2, op, name) };
         return;
     }
 

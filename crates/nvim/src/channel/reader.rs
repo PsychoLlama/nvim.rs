@@ -27,7 +27,6 @@ use crate::eval::callback_call;
 use crate::eval::encode::encode_list_write;
 use crate::eval::typval::{
     ListRef, callback_free, tv_clear, tv_dict_add_list, tv_dict_find, tv_list_alloc,
-    tv_list_append_string,
 };
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
@@ -284,7 +283,7 @@ pub unsafe fn reader_lines(reader: *mut CallbackReader) -> ListRef {
     let into = l.as_ptr();
     // SAFETY: the fresh list, and the caller's garray, which holds `ga_len`
     // readable bytes at `ga_data`.
-    unsafe { tv_list_append_string(into, c"".as_ptr(), 0) };
+    unsafe { (*into).push_string(c"".as_ptr(), 0) };
     let buffer = unsafe { &(*reader).buffer };
     if !buffer.is_empty() {
         unsafe { encode_list_write(into.cast(), buffer.as_ptr().cast(), buffer.len()) };

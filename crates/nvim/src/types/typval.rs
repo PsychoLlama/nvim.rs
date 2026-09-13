@@ -98,7 +98,7 @@ pub enum VarLock {
     /// `:lockvar` set this, and `:unlockvar` can clear it.
     Locked = 1,
     /// A slot that cannot be unlocked at all: `v:` variables, `a:`
-    /// arguments, and the static lists `tv_list_init_static` hands out.
+    /// arguments, and the static lists `list_init_static` hands out.
     Fixed = 2,
 }
 

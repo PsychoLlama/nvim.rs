@@ -463,9 +463,9 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
         let list = tv_list_alloc((*reg).y_size as ptrdiff_t);
         for i in 0..(*reg).y_size {
             let line = &*(*reg).y_array.add(i);
-            tv_list_append_string(list.as_ptr(), line.data(), line.len() as c_int as ssize_t);
+            (*list.as_ptr()).push_string(line.data(), line.len() as c_int as ssize_t);
         }
-        tv_list_set_lock(list.as_ptr(), VarLock::Fixed);
+        list_set_lock(list.as_ptr().as_mut(), VarLock::Fixed);
         list
     };
     // SAFETY: `dict` is `v:event`'s, the key is a literal of the length given.

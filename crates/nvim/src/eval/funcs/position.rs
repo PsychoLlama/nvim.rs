@@ -10,7 +10,6 @@ use crate::cursor::check_cursor;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
     tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc_ret, tv_dict_find, tv_get_number,
-    tv_list_append_number,
 };
 use crate::eval::window::{find_win_by_nr_or_id, win_and_tab_by_id};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
@@ -221,8 +220,8 @@ pub fn f_virtcol(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     if args.len() > 1 && arg_bool(&args[1]) != 0 {
         let l = list_alloc_ret(result, 2);
-        unsafe { tv_list_append_number(l, vcol_start as VarNumber) };
-        unsafe { tv_list_append_number(l, vcol_end as VarNumber) };
+        unsafe { (*l).push_number(vcol_start as VarNumber) };
+        unsafe { (*l).push_number(vcol_end as VarNumber) };
     } else {
         result.write_number(vcol_end as VarNumber);
     }
@@ -309,7 +308,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
     };
 
     let l = list_alloc_ret(result, 4 + isize::from(getcurpos));
-    unsafe { tv_list_append_number(l, if fnum != -1 { fnum as VarNumber } else { 0 }) };
+    unsafe { (*l).push_number(if fnum != -1 { fnum as VarNumber } else { 0 }) };
     let (lnum, col, coladd) = fp.map_or((0, 0, 0), |fp| {
         // MAXCOL is passed through rather than made one-based.
         let col = if fp.col == END_OF_LINE {
@@ -323,9 +322,9 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
             fp.coladd as VarNumber,
         )
     });
-    unsafe { tv_list_append_number(l, lnum) };
-    unsafe { tv_list_append_number(l, col) };
-    unsafe { tv_list_append_number(l, coladd) };
+    unsafe { (*l).push_number(lnum) };
+    unsafe { (*l).push_number(col) };
+    unsafe { (*l).push_number(coladd) };
     if getcurpos {
         unsafe { append_curswant(l, wp) };
     }
@@ -354,7 +353,7 @@ unsafe fn append_curswant(l: *mut List, window: Option<Win>) {
         Some(END_OF_LINE) => MAXCOL as VarNumber,
         Some(want) => want as VarNumber + 1,
     };
-    unsafe { tv_list_append_number(l, curswant) };
+    unsafe { (*l).push_number(curswant) };
     // Only restored when 'curswant' was due to be recomputed anyway:
     // if it was already valid, `update_curswant` did not change it.
     if window == Some(cur) && saved_set_curswant {

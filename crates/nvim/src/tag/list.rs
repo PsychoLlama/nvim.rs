@@ -387,7 +387,7 @@ pub(crate) unsafe fn add_llist_tags(
         let dict_held = tv_dict_alloc();
 
         let dict = dict_held.as_ptr();
-        unsafe { tv_list_append_dict(list, Some(dict_held)) };
+        unsafe { (*list).push_dict(Some(dict_held)) };
         unsafe { add_str(dict, c"text", name.as_ptr()) };
         unsafe { add_str(dict, c"filename", fname.as_ptr()) };
         let _ = unsafe {

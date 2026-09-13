@@ -43,7 +43,6 @@ use crate::cstr;
 use crate::eval::typval::{
     DictRef, ListRef, tv_dict_add_allocated_str, tv_dict_add_bool, tv_dict_add_dict,
     tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_len, tv_list_alloc,
-    tv_list_append_dict, tv_list_append_string,
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
@@ -581,12 +580,12 @@ pub(crate) fn list_alloc() -> ListRef {
 
 pub(crate) fn list_append_dict(list: *mut List, dict: Option<DictRef>) {
     // SAFETY: see the section note.
-    unsafe { tv_list_append_dict(list, dict) };
+    unsafe { (*list).push_dict(dict) };
 }
 
 pub(crate) fn list_append_str(list: *mut List, value: &CStr) {
     // SAFETY: see the section note; a negative length means "to the NUL".
-    unsafe { tv_list_append_string(list, value.as_ptr(), -1) };
+    unsafe { (*list).push_string(value.as_ptr(), -1) };
 }
 
 /// A right-hand side with its special keys spelled out, as an allocation the

@@ -26,8 +26,8 @@ use crate::drawscreen::{
     setcursor, show_cursor_info_later, showmode, update_screen,
 };
 use crate::eval::typval::{
-    tv_check_for_nonnull_dict_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_dict_find,
-    tv_get_number_chk, tv_list_find, tv_list_len,
+    list_find, list_len, tv_check_for_nonnull_dict_arg, tv_dict_add_nr, tv_dict_alloc_ret,
+    tv_dict_find, tv_get_number_chk,
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_cmds::{getfile, prepare_tagpreview};

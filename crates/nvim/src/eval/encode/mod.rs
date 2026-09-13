@@ -35,9 +35,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::slice;
 
-use crate::eval::typval::{
-    tv_dict_find, tv_list_append_allocated_string, tv_list_items, tv_list_items_mut, tv_list_len,
-};
+use crate::eval::typval::{list_items, list_items_mut, list_len, tv_dict_find};
 use crate::eval::typval_encode::{ConvPath, Flow, Frame, PartialStage};
 use crate::eval::vars::eval_msgpack_type_lists;
 use crate::global_cell::GlobalCell;
@@ -96,7 +94,7 @@ fn tr(msg: &'static CStr) -> *const c_char {
 #[inline(always)]
 unsafe fn item_string(l: *const List, at: size_t) -> *mut c_char {
     // SAFETY: the caller's promise: a live list.
-    match unsafe { tv_list_items(l) }.get(at) {
+    match list_items(unsafe { l.as_ref() }).get(at) {
         Some(li) => li.li_tv.string_or_null(),
         None => core::ptr::null_mut(),
     }
@@ -124,7 +122,7 @@ unsafe fn item_strlen(l: *const List, at: size_t) -> size_t {
 unsafe fn items<'a>(list: *const List) -> impl Iterator<Item = &'a ListItem> {
     // SAFETY: the caller's promise -- a live list nothing adds to or removes
     // from for the life of the iterator.
-    unsafe { tv_list_items(list) }.iter()
+    list_items(unsafe { list.as_ref() }).iter()
 }
 
 /// Store a line the way a `readfile()`-style list does: NUL bytes become
@@ -148,7 +146,9 @@ unsafe fn extend_item(l: *mut List, at: size_t, line: &[u8]) {
     let held = unsafe { item_string(l, at) };
     let grown =
         unsafe { xrealloc(held.cast::<c_void>(), old_len + line.len() + 1) }.cast::<c_char>();
-    unsafe { tv_list_items_mut(l)[at].li_tv.write_string(grown) };
+    list_items_mut(unsafe { l.as_mut() })[at]
+        .li_tv
+        .write_string(grown);
     let tail =
         unsafe { slice::from_raw_parts_mut(grown.add(old_len).cast::<u8>(), line.len() + 1) };
     tail[..line.len()].copy_from_slice(line);
@@ -192,7 +192,7 @@ pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size
 
     // SAFETY: `list` is the caller's, and nothing runs between these calls
     // that could touch it.
-    let count = unsafe { tv_list_items(list) }.len();
+    let count = list_items(unsafe { list.as_ref() }).len();
     let mut at = 0;
     if let Some(last) = count.checked_sub(1) {
         // Continue the last item, unless the write starts with a newline.
@@ -211,13 +211,13 @@ pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size
             own_line(line)
         };
         // SAFETY: `list` is live and takes over `owned`.
-        unsafe { tv_list_append_allocated_string(list, owned) };
+        unsafe { (*list).push_allocated_string(owned) };
         at = next;
     }
     if at == len {
         // The write ended on a newline, so it opened one more empty item.
         // SAFETY: as above.
-        unsafe { tv_list_append_allocated_string(list, core::ptr::null_mut()) };
+        unsafe { (*list).push_allocated_string(core::ptr::null_mut()) };
     }
 }
 
@@ -281,7 +281,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
             }
             Frame::List { list, at } | Frame::Pairs { list, at } => {
                 // SAFETY: the frame's list is live for the walk.
-                let items = unsafe { tv_list_items(list) };
+                let items = list_items(unsafe { list.as_ref() });
                 // The item most recently handed out: one back from the
                 // cursor, or the last one once the walk has run off the end.
                 let cur = at
@@ -292,13 +292,13 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 let pair_key = cur.filter(|_| pairs).and_then(|at| {
                     let value = &items[at].li_tv;
                     let inner = value.list_or_null();
-                    if value.v_type() != VAR_LIST && unsafe { tv_list_len(inner) } <= 0 {
+                    if value.v_type() != VAR_LIST && list_len(unsafe { inner.as_ref() }) <= 0 {
                         return None;
                     }
                     // A special map's item is a [key, value] pair, so the
                     // path can name the key rather than the index.
                     // SAFETY: the pair's own first item.
-                    let key_tv = &unsafe { tv_list_items(inner) }.first()?.li_tv;
+                    let key_tv = &list_items(unsafe { inner.as_ref() }).first()?.li_tv;
                     Some(unsafe { encode_tv2echo(key_tv, core::ptr::null_mut()) })
                 });
                 match pair_key {
@@ -449,7 +449,7 @@ pub unsafe fn encode_read_from_list(
         if p < nbuf {
             state.at += 1;
             // SAFETY: the caller's promise: a live list.
-            let Some(item) = (unsafe { tv_list_items(state.list) }).get(state.at) else {
+            let Some(item) = (list_items(unsafe { state.list.as_ref() })).get(state.at) else {
                 // SAFETY: the caller's promise about `read_bytes`.
                 unsafe { *read_bytes = p };
                 return Ok(ListRead::Drained);
@@ -468,7 +468,7 @@ pub unsafe fn encode_read_from_list(
     // SAFETY: the caller's promise about `read_bytes`.
     unsafe { *read_bytes = nbuf };
     // SAFETY: the caller's promise: a live list.
-    let more = state.at + 1 < unsafe { tv_list_items(state.list) }.len();
+    let more = state.at + 1 < list_items(unsafe { state.list.as_ref() }).len();
     if state.offset < state.li_length || more {
         Ok(ListRead::More)
     } else {

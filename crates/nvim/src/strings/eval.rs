@@ -20,7 +20,7 @@ use crate::charset::{Str2NrBases, skipwhite, transstr, vim_str2nr};
 use crate::eval::encode::encode_tv2string;
 use crate::eval::typval::{
     NumBuf, tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
-    tv_list_alloc_ret, tv_list_append_number,
+    tv_list_alloc_ret,
 };
 use crate::mbyte::{
     char_at, char_count, char_len, cluster_len, clusters, mb_cptr2char_adv, mb_ptr2char_adv,
@@ -44,7 +44,7 @@ pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut at = 0;
     while at < bytes.len() {
         let rest = &bytes[at..];
-        unsafe { tv_list_append_number((*result).list_or_null(), VarNumber::from(char_at(rest))) };
+        unsafe { (*(*result).list_or_null()).push_number(VarNumber::from(char_at(rest))) };
         at += char_len(rest);
     }
 }

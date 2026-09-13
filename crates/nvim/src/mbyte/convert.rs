@@ -376,7 +376,7 @@ pub unsafe fn string_convert_ext(
     // allocates: it converts *in place* into this buffer. Building the
     // answer first and copying it in would be tighter, but the allocation
     // size is observable -- `test/unit/eval/typval_spec.lua` asserts the
-    // exact malloc sizes a converting `tv_list_copy` makes -- and it is
+    // exact malloc sizes a converting `list_copy` makes -- and it is
     // the same bound `VimConv::vc_factor` promises callers.
     let factor: size_t = match unsafe { (*vcp).vc_type } {
         CONV_TO_UTF8 => 2,

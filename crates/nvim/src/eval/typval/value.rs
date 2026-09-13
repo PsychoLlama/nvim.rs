@@ -241,7 +241,7 @@ pub unsafe fn tv_item_lock(
                 unsafe { (*l).lv_lock = (*l).lv_lock.changed(lock) };
                 if !(0..=1).contains(&deep) {
                     // Recursive: lock/unlock the items the List contains.
-                    for li in tv_list_iter_mut(unsafe { l.as_mut() }) {
+                    for li in list_iter_mut(unsafe { l.as_mut() }) {
                         let (lock_of, value) = (&raw mut li.li_lock, &raw mut li.li_tv);
                         unsafe {
                             tv_item_lock(lock_of, &mut *value, deep - 1, lock, check_refcount)
@@ -278,7 +278,7 @@ pub unsafe fn tv_item_lock(
 pub fn tv_islocked(slot_lock: VarLock, tv: &TypVal) -> bool {
     let val = tv;
     let container_lock = match val.v_type() {
-        VAR_LIST => unsafe { tv_list_locked((*tv).list_or_null()) },
+        VAR_LIST => list_locked((*tv).list_ref()),
         VAR_DICT => {
             unsafe { (*tv).dict_or_null().as_ref() }.map_or(VarLock::Unlocked, |d| d.dv_lock)
         }
@@ -407,7 +407,7 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     match a.v_type() {
         VAR_LIST => {
             let _recursing = Depth::of(&recursive_cnt);
-            unsafe { tv_list_equal((*tv1).list_or_null(), (*tv2).list_or_null(), ic) }
+            list_equal((*tv1).list_ref(), (*tv2).list_ref(), ic)
         }
         VAR_DICT => {
             let _recursing = Depth::of(&recursive_cnt);

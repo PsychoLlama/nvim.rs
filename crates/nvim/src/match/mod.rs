@@ -23,10 +23,9 @@ use crate::drawscreen::state::search_hl_has_cursor_lnum;
 use crate::drawscreen::{UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_range_later};
 use crate::eval::funcs::get_optional_window;
 use crate::eval::typval::{
-    index_of, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_find,
-    tv_dict_get_number, tv_get_number, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_dict, tv_list_append_number, tv_list_append_string, tv_list_append_tv,
-    tv_list_items, tv_list_iter, tv_list_len,
+    index_of, list_items, list_iter, list_len, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
+    tv_dict_alloc, tv_dict_find, tv_dict_get_number, tv_get_number, tv_get_number_chk,
+    tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};
@@ -147,15 +146,15 @@ unsafe fn match_add(
     // window's match list.
     let mut m =
         unsafe { Mi::new(xcalloc(1, ::core::mem::size_of::<MatchItem>()).cast::<MatchItem>()) };
-    if unsafe { tv_list_len(pos_list) } > 0 {
+    if list_len(unsafe { pos_list.as_ref() }) > 0 {
         unsafe {
             m.mit_pos_array = xcalloc(
-                tv_list_len(pos_list) as size_t,
+                list_len(pos_list.as_ref()) as size_t,
                 ::core::mem::size_of::<LLPos>(),
             )
             .cast::<LLPos>()
         };
-        unsafe { m.mit_pos_count = tv_list_len(pos_list) };
+        m.mit_pos_count = list_len(unsafe { pos_list.as_ref() });
     }
     m.mit_id = id;
     m.mit_priority = prio;
@@ -234,7 +233,7 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
     let mut botlnum: LineNr = 0;
     let mut i = 0;
 
-    for (at, li) in tv_list_iter(unsafe { pos_list.as_ref() }).enumerate() {
+    for (at, li) in list_iter(unsafe { pos_list.as_ref() }).enumerate() {
         let at = index_of(at);
         let tv = &li.li_tv;
         let mut lnum: LineNr = 0;
@@ -244,7 +243,7 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
 
         if tv.v_type() == VAR_LIST {
             // SAFETY: a `VAR_LIST` holds a live list or NULL.
-            let sub = unsafe { tv_list_items(tv.list_or_null()) };
+            let sub = list_items(tv.list_ref());
             if sub.is_empty() {
                 semsg!("E5030: Empty list at position {at}");
                 return None;

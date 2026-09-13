@@ -1,9 +1,9 @@
 //! Ranges over a list: slicing, assigning through a slice, flattening, joining.
 //!
-//! [`tv_list_check_range_index_one`] and [`tv_list_check_range_index_two`]
+//! [`list_check_range_index_one`] and [`list_check_range_index_two`]
 //! are the bounds arithmetic `l[i:j]` shares with `l[i:j] = x`;
-//! [`tv_list_slice_or_index`] is the subscript itself.
-//! [`tv_list_join`] and [`list_join_inner`] are `join()`, which makes two
+//! [`list_slice_or_index`] is the subscript itself.
+//! [`list_join`] and [`list_join_inner`] are `join()`, which makes two
 //! passes so the result buffer is sized once, and [`f_list2str`] is the
 //! codepoint-list-to-string builtin.
 
@@ -22,19 +22,14 @@ use crate::types::NUL;
 ///
 /// `*n1` is updated to the index actually used.
 ///
-/// # Safety
-///
-/// `l` must point at a live list, unaliased for the call. `n1` must point at
-/// a writable `int` the caller owns.
-pub unsafe fn tv_list_check_range_index_one(
-    l: *mut List,
-    n1: *mut ::core::ffi::c_int,
+pub fn list_check_range_index_one(
+    l: Option<&List>,
+    n1: &mut ::core::ffi::c_int,
     quiet: bool,
 ) -> Option<usize> {
-    let at = unsafe { tv_list_find_index(l, n1) };
+    let at = list_find_index(l, n1);
     if at.is_none() && !quiet {
-        // SAFETY: the caller's index cell.
-        let index = int64_t::from(unsafe { *n1 });
+        let index = int64_t::from(*n1);
         semsg!("E684: List index out of range: {index}");
     }
     at
@@ -43,35 +38,30 @@ pub unsafe fn tv_list_check_range_index_one(
 /// Resolve the second index of `l[n1:n2]` against the index `idx1` the first
 /// one landed on, normalising both to non-negative indexes.
 ///
-/// # Safety
-///
-/// `l` must point at a live list, unaliased for the call. `n1` and `n2` must
-/// point at writable `int`s the caller owns. `idx1` must be an index of `l`.
-pub unsafe fn tv_list_check_range_index_two(
-    l: *mut List,
-    n1: *mut ::core::ffi::c_int,
+/// `idx1` must be an index of `l`.
+pub fn list_check_range_index_two(
+    l: Option<&List>,
+    n1: &mut ::core::ffi::c_int,
     idx1: usize,
-    n2: *mut ::core::ffi::c_int,
+    n2: &mut ::core::ffi::c_int,
     quiet: bool,
 ) -> Result<(), Failed> {
-    if unsafe { *n2 } < 0 {
-        let Some(at) = (unsafe { tv_list_index(l, *n2) }) else {
+    if *n2 < 0 {
+        let Some(at) = list_index(l, *n2) else {
             if !quiet {
-                // SAFETY: the caller's index cell.
-                let index = int64_t::from(unsafe { *n2 });
+                let index = int64_t::from(*n2);
                 semsg!("E684: List index out of range: {index}");
             }
             return Err(Failed);
         };
-        unsafe { *n2 = index_of(at) };
+        *n2 = index_of(at);
     }
-    if unsafe { *n1 } < 0 {
-        unsafe { *n1 = index_of(idx1) };
+    if *n1 < 0 {
+        *n1 = index_of(idx1);
     }
-    if unsafe { *n2 } < unsafe { *n1 } {
+    if *n2 < *n1 {
         if !quiet {
-            // SAFETY: the caller's index cell.
-            let index = int64_t::from(unsafe { *n2 });
+            let index = int64_t::from(*n2);
             semsg!("E684: List index out of range: {index}");
         }
         return Err(Failed);
@@ -88,7 +78,7 @@ pub unsafe fn tv_list_check_range_index_two(
 /// `dest` and `src` must point at live lists, unaliased for the call. `op`
 /// must be null or a NUL-terminated operator, and `varname` null or a NUL-
 /// terminated name for the lock error; both live for the call.
-pub unsafe fn tv_list_assign_range(
+pub unsafe fn list_assign_range(
     dest: *mut List,
     src: *mut List,
     idx1_arg: ::core::ffi::c_int,
@@ -98,8 +88,9 @@ pub unsafe fn tv_list_assign_range(
     varname: *const ::core::ffi::c_char,
 ) -> Result<(), Failed> {
     let mut idx1 = idx1_arg;
-    let first = unsafe { tv_list_find_index(dest, &raw mut idx1) };
-    let srclen = unsafe { tv_list_len(src) } as usize;
+    // SAFETY: the caller's promise: two live lists.
+    let first = list_find_index(unsafe { dest.as_ref() }, &mut idx1);
+    let srclen = list_len(unsafe { src.as_ref() }) as usize;
 
     // Check whether any of the list items is locked before making any
     // changes.  The walk stops at the end of the range or at the end of the
@@ -110,7 +101,7 @@ pub unsafe fn tv_list_assign_range(
     for i in 0..srclen {
         let Some(dest_at) = at else { break };
         // SAFETY: an index of `dest`, which nothing has edited yet.
-        let lock = unsafe { tv_list_items(dest) }[dest_at].li_lock;
+        let lock = unsafe { (*dest).items() }[dest_at].li_lock;
         // SAFETY: the caller's promise about `varname`.
         if unsafe { value_check_lock(lock, varname, TV_CSTRING as size_t) } {
             return Err(Failed);
@@ -119,7 +110,7 @@ pub unsafe fn tv_list_assign_range(
             break;
         }
         // SAFETY: a live list.
-        at = (dest_at + 1 < unsafe { tv_list_items(dest) }.len()).then_some(dest_at + 1);
+        at = (dest_at + 1 < unsafe { (*dest).len() }).then_some(dest_at + 1);
         idx += 1;
     }
 
@@ -131,18 +122,18 @@ pub unsafe fn tv_list_assign_range(
     let mut at = first.unwrap_or(0);
     let mut i = 0;
     // SAFETY: a live list.
-    while i < srclen && at < unsafe { tv_list_items(dest) }.len() {
+    while i < srclen && at < unsafe { (*dest).len() } {
         // Both slots are re-derived on every step: `eexe_mod_op` runs the
         // evaluator and may have moved either array.  When `dest` *is*
         // `src` -- `:let l[0:1] += l[0:1]`, p30-7's documented aliasing --
         // both come from the *one* derivation of it, because two would pop
         // each other.
         // SAFETY: two live lists.
-        let dbase = unsafe { tv_list_items_mut(dest) }.as_mut_ptr();
+        let dbase = unsafe { (*dest).items_mut().as_mut_ptr() };
         let sbase = if ::core::ptr::eq(dest, src) {
             dbase
         } else {
-            unsafe { tv_list_items_mut(src) }.as_mut_ptr()
+            unsafe { (*src).items_mut().as_mut_ptr() }
         };
         // SAFETY: `at` is an index of `dest` and `i` one of `src`.
         let (to, from) = unsafe {
@@ -162,9 +153,9 @@ pub unsafe fn tv_list_assign_range(
             break;
         }
         // SAFETY: a live list.
-        if at + 1 == unsafe { tv_list_items(dest) }.len() {
+        if at + 1 == unsafe { (*dest).len() } {
             // Need to add an empty item.
-            unsafe { tv_list_append_number(dest, 0) };
+            unsafe { (*dest).push_number(0) };
         }
         at += 1;
         idx += 1;
@@ -177,7 +168,7 @@ pub unsafe fn tv_list_assign_range(
     }
     let short = if empty_idx2 {
         // SAFETY: a live list.
-        at + 1 < unsafe { tv_list_items(dest) }.len()
+        at + 1 < unsafe { (*dest).len() }
     } else {
         idx != idx2
     };
@@ -191,48 +182,45 @@ pub unsafe fn tv_list_assign_range(
 /// `flatten()`: splice the items of any nested list into `list` in place,
 /// starting at `first` and going `maxdepth` levels down.
 ///
-/// # Safety
+/// `first` must be an index into `list`.
 ///
-/// `list` must point at a live list, unaliased for the call. `first` must be
-/// an index into it.
-pub unsafe fn tv_list_flatten(list: *mut List, first: usize, maxitems: int64_t, maxdepth: int64_t) {
+/// The nested list an item names may be **the list being flattened** -- a
+/// list can hold itself -- which is why the splice goes through
+/// [`list_extend`]'s branch rather than a second borrow.
+pub fn list_flatten(list: &mut List, first: usize, maxitems: int64_t, maxdepth: int64_t) {
     if maxdepth == 0 {
         return;
     }
 
     let mut at = first;
     let mut done = 0;
-    // SAFETY: the caller's promise: a live list.
-    while at < unsafe { tv_list_items(list) }.len() && done < maxitems {
+    while at < list.len() && done < maxitems {
         fast_breakcheck();
         if got_int.get() {
             return;
         }
-        // SAFETY: as above, and `at` is inside the list.
-        let items = unsafe { tv_list_items(list) };
-        let step = if let Some(inner) = items[at].li_tv.as_list() {
-            let before = items.len();
+        let step = if let Some(inner) = list.items()[at].li_tv.as_list() {
+            let before = list.len();
             // The item naming the nested list is taken out *without* being
             // released, and held until the splice is done: `inner` may be
             // the very list being flattened, or the item may hold its last
             // reference, and either way freeing it first would pull the
             // items out from under the copy.  That is what upstream's
             // `tv_list_drop_items`-then-`tv_clear` order bought.
-            // SAFETY: as above -- one item, at an index inside the list.
-            let held = unsafe { tv_list_take_range(list, at, at) };
-            // SAFETY: as above; `inner` is the list the item names.
-            unsafe { tv_list_extend(list, inner, Some(at)) };
+            let held = list.take_range(at, at);
+            // SAFETY: `inner` is the live list the taken item still names,
+            // and may be `list` itself -- which is the branch's business.
+            unsafe { list_extend(list, inner, Some(at)) };
 
             if maxdepth > 0 {
                 // SAFETY: as above.
-                let inner_len = int64_t::from(unsafe { tv_list_len(inner) });
-                unsafe { tv_list_flatten(list, at, inner_len, maxdepth - 1) };
+                let inner_len = int64_t::from(list_len(unsafe { inner.as_ref() }));
+                list_flatten(list, at, inner_len, maxdepth - 1);
             }
             drop(held);
             // However many items now stand where the one item stood --
             // the recursion above may have spliced in more.
-            // SAFETY: as above.
-            unsafe { tv_list_items(list) }.len() + 1 - before
+            list.len() + 1 - before
         } else {
             1
         };
@@ -242,19 +230,12 @@ pub unsafe fn tv_list_flatten(list: *mut List, first: usize, maxitems: int64_t, 
     }
 }
 
-/// A fresh list holding copies of `ol[n1..=n2]`.
-///
-/// # Safety
-///
-/// `ol` must point at a live list, unaliased for the call.
-pub(crate) unsafe fn tv_list_slice(ol: *mut List, n1: VarNumber, n2: VarNumber) -> ListRef {
-    let l = tv_list_alloc((n2 - n1 + 1) as ptrdiff_t);
-    let into = l.as_ptr();
+/// A fresh list holding copies of `ol[n1..=n2]`, which the caller has
+/// already clamped to the list.
+pub(crate) fn list_slice(ol: Option<&List>, n1: VarNumber, n2: VarNumber) -> ListRef {
+    let mut l = tv_list_alloc((n2 - n1 + 1) as ptrdiff_t);
     for at in n1..=n2 {
-        // SAFETY: the caller's promise: a live list, and the caller has
-        // already clamped the range to it.
-        let from = &unsafe { tv_list_items(ol) }[at as usize].li_tv;
-        unsafe { tv_list_append_tv(into, from) };
+        l.push_copy(&list_items(ol)[at as usize].li_tv);
     }
     l
 }
@@ -264,13 +245,10 @@ pub(crate) unsafe fn tv_list_slice(ol: *mut List, n1: VarNumber, n2: VarNumber) 
 /// `result` holds the list being subscripted on the way in.  An index out of
 /// range is an error; a *range* out of range is merely empty.
 ///
-/// # Safety
-///
-/// `_list` must point at a live list, unaliased for the call. `result` must
-/// point at the caller's return slot: an initialized typval it owns and will
-/// clear.
-pub unsafe fn tv_list_slice_or_index(
-    _list: *mut List,
+/// `result` holds the list being subscripted on the way in, which is the
+/// only list this reads -- upstream passed it a second time and the argument
+/// went unread.
+pub fn list_slice_or_index(
     range: bool,
     n1_arg: VarNumber,
     n2_arg: VarNumber,
@@ -278,7 +256,7 @@ pub unsafe fn tv_list_slice_or_index(
     result: &mut TypVal,
     verbose: bool,
 ) -> Result<(), Failed> {
-    let len = unsafe { tv_list_len((*result).list_or_null()) };
+    let len = list_len(result.list_ref());
     let mut n1 = n1_arg;
     let mut n2 = n2_arg;
 
@@ -309,15 +287,15 @@ pub unsafe fn tv_list_slice_or_index(
         if n2 < 0 || n2 + 1 < n1 {
             n2 = -1;
         }
-        let l = unsafe { tv_list_slice((*result).list_or_null(), n1, n2) };
+        let l = list_slice(result.list_ref(), n1, n2);
         tv_clear(result);
         result.write_list(Some(l));
     } else {
         // copy the item to "var1" to avoid that freeing the list makes it
         // invalid.
         let mut var1 = TV_INITIAL_VALUE;
-        let li = unsafe { tv_list_find((*result).list_or_null(), n1 as ::core::ffi::c_int) };
-        unsafe { tv_copy(&(*li).li_tv, &mut var1) };
+        let at = usize::try_from(n1).expect("an index of the list");
+        tv_copy(&list_items(result.list_ref())[at].li_tv, &mut var1);
         tv_clear(result);
         *result = var1;
     }
@@ -331,12 +309,11 @@ pub unsafe fn tv_list_slice_or_index(
 ///
 /// # Safety
 ///
-/// `gap` and `join_gap` must point at live growable arrays the caller owns,
-/// `l` at a live list, and `sep` at a NUL-terminated separator; all live for
-/// the call.
+/// `gap` and `join_gap` must point at live growable arrays the caller owns
+/// and `sep` at a NUL-terminated separator; all live for the call.
 pub(crate) unsafe fn list_join_inner(
     gap: *mut GArray,
-    l: *mut List,
+    l: Option<&List>,
     sep: *const ::core::ffi::c_char,
     join_gap: *mut GArray,
 ) -> Result<(), Failed> {
@@ -344,7 +321,7 @@ pub(crate) unsafe fn list_join_inner(
     let mut first = true;
 
     // Stringify each item in the list.
-    for item in tv_list_iter(unsafe { l.as_ref() }) {
+    for item in list_iter(l) {
         if got_int.get() {
             break;
         }
@@ -398,20 +375,20 @@ pub(crate) unsafe fn list_join_inner(
 ///
 /// # Safety
 ///
-/// `gap` must point at a live growable array the caller owns, `l` at a live
-/// list, and `sep` at a NUL-terminated separator; all live for the call.
-pub unsafe fn tv_list_join(
+/// `gap` must point at a live growable array the caller owns and `sep` at a
+/// NUL-terminated separator; both live for the call.
+pub unsafe fn list_join(
     gap: *mut GArray,
-    l: *mut List,
+    l: Option<&List>,
     sep: *const ::core::ffi::c_char,
 ) -> Result<(), Failed> {
-    if unsafe { tv_list_len(l) } == 0 {
+    if list_len(l) == 0 {
         return Ok(());
     }
 
     let mut join_ga = GARRAY_EMPTY;
     let itemsize = ::core::mem::size_of::<Join>() as ::core::ffi::c_int;
-    let growsize = unsafe { tv_list_len(l) };
+    let growsize = list_len(l);
     unsafe { ga_init(&raw mut join_ga, itemsize, growsize) };
     let retval = unsafe { list_join_inner(gap, l, sep, &raw mut join_ga) };
 
@@ -450,7 +427,7 @@ pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut ga = GARRAY_EMPTY;
     let itemsize = ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int;
     unsafe { ga_init(&raw mut ga, itemsize, 80) };
-    let _ = unsafe { tv_list_join(&raw mut ga, args[0].list_or_null(), sep) };
+    let _ = unsafe { list_join(&raw mut ga, args[0].list_ref(), sep) };
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
     result.write_string(ga.ga_data as *mut ::core::ffi::c_char);
 }
@@ -472,7 +449,8 @@ pub fn f_list2str(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut ga = GARRAY_EMPTY;
     unsafe { ga_init(&raw mut ga, 1, 80) };
     let mut buf: [::core::ffi::c_char; 22] = [0; 22];
-    for li in tv_list_iter(unsafe { l.as_ref() }) {
+    // SAFETY: the builtin's own argument, borrowed for the walk.
+    for li in list_iter(unsafe { l.as_ref() }) {
         let n = tv_get_number(&li.li_tv);
         let buflen = unsafe { utf_char2bytes(n as ::core::ffi::c_int, buf.as_mut_ptr()) } as size_t;
         buf[buflen as usize] = '\0' as ::core::ffi::c_char;

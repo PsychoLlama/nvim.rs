@@ -14,7 +14,7 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::skipwhite;
 use crate::eval::typval::{
     DictRef, ListRef, NumBuf, tv_clear, tv_dict_add, tv_dict_alloc, tv_dict_find,
-    tv_dict_item_alloc, tv_dict_item_free, tv_list_alloc, tv_list_append_owned_tv,
+    tv_dict_item_alloc, tv_dict_item_free, tv_list_alloc,
 };
 use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
@@ -47,7 +47,7 @@ pub(crate) unsafe fn eval_list(
     let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
     // The one reference to the list being built. A path that gives up
-    // drops it, which is what upstream's `tv_list_free` on a list still at
+    // drops it, which is what upstream's `list_free` on a list still at
     // refcount zero was.
     let held = evaluate.then(|| tv_list_alloc(kListLenShouldKnow as ptrdiff_t));
     let list = held.as_ref().map_or(null_mut(), ListRef::as_ptr);
@@ -60,7 +60,7 @@ pub(crate) unsafe fn eval_list(
                 break 'items false;
             }
             if evaluate {
-                unsafe { tv_list_append_owned_tv(list, tv) };
+                unsafe { (*list).push(tv) };
             }
             let had_comma = cur.byte() == b',';
             if had_comma {

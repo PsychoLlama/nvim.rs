@@ -13,8 +13,8 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::cstr;
 use crate::eval::typval::{
-    ListRef, NumBuf, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str, tv_dict_find,
-    tv_dict_get_number, tv_dict_len, tv_list_alloc, tv_list_iter, tv_list_len,
+    ListRef, NumBuf, list_iter, list_len, tv_dict_add_bool, tv_dict_add_list, tv_dict_add_str,
+    tv_dict_find, tv_dict_get_number, tv_dict_len, tv_list_alloc,
 };
 use crate::eval::vars::get_vim_var_str;
 use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
@@ -345,7 +345,7 @@ unsafe fn write_list(
     // SAFETY: the caller's obligation. The allocation has room for
     // `len + 1` pointers of value plus `len + 1` of copies, which is the
     // most either half can need.
-    let len = unsafe { tv_list_len(l) } as usize;
+    let len = list_len(unsafe { l.as_ref() }) as usize;
     let base = unsafe { xmalloc(size_of::<*mut c_char>() * (len + 1) * 2) }.cast::<*mut c_char>();
     let allocated = unsafe { base.add(len + 2) };
     let mut curval = base;
@@ -353,7 +353,7 @@ unsafe fn write_list(
 
     let mut complete = true;
     if !l.is_null() {
-        for li in tv_list_iter(unsafe { l.as_ref() }) {
+        for li in list_iter(unsafe { l.as_ref() }) {
             let mut buf = NumBuf::new();
             let s = buf.string_ptr_chk(&li.li_tv);
             if s.is_null() {

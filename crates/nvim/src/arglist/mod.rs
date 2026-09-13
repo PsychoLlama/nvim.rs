@@ -33,9 +33,7 @@ use crate::buffer::{
     otherfile,
 };
 use crate::cstr;
-use crate::eval::typval::{
-    tv_get_number, tv_get_number_chk, tv_list_alloc_ret, tv_list_append_string,
-};
+use crate::eval::typval::{tv_get_number, tv_get_number_chk, tv_list_alloc_ret};
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds2::{autowrite, check_changed};

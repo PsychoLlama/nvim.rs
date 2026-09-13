@@ -19,7 +19,7 @@ use core::ptr::null_mut;
 
 use crate::eval::typval::{
     callback_free, callback_put, tv_dict_add, tv_dict_add_nr, tv_dict_alloc, tv_dict_item_alloc,
-    tv_list_alloc_ret, tv_list_append_dict,
+    tv_list_alloc_ret,
 };
 use crate::eval::vars::clear_local;
 use crate::eval::{Tm, Tv, callback_call, last_timer_id, timers};
@@ -73,7 +73,7 @@ pub unsafe fn add_timer_info(result: &mut TypVal, timer: *mut Timer) {
     // SAFETY: the caller's promise that `rettv` holds a List, so `v_list` is
     // the kind the caller promised; the append takes over the dictionary's
     // reference.
-    unsafe { tv_list_append_dict(rettv.list_or_null(), Some(dict_held)) };
+    unsafe { (*rettv.list_or_null()).push_dict(Some(dict_held)) };
 
     for (key, value) in [
         (c"id", timer.timer_id as VarNumber),

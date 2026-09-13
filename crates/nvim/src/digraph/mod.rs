@@ -17,8 +17,8 @@ use crate::cstr;
 use crate::drawscreen::status_redraw_curbuf;
 use crate::eval::eval_to_string;
 use crate::eval::typval::{
-    NumBuf, tv_check_for_opt_bool_arg, tv_get_bool, tv_list_alloc, tv_list_alloc_ret,
-    tv_list_append_list, tv_list_append_string, tv_list_items, tv_list_iter, tv_list_len,
+    NumBuf, list_items, list_iter, list_len, tv_check_for_opt_bool_arg, tv_get_bool, tv_list_alloc,
+    tv_list_alloc_ret,
 };
 use crate::ex_docmd::{do_cmdline_cmd, getline_equal};
 use crate::ex_getln::putcmdline;
@@ -401,10 +401,10 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
     let mut buf = [0u8; 7];
     let l2 = tv_list_alloc(2);
     let into = l2.as_ptr();
-    unsafe { tv_list_append_list(l, Some(l2)) };
-    unsafe { tv_list_append_string(into, chars.as_ptr() as *const c_char, -1) };
+    unsafe { (*l).push_list(Some(l2)) };
+    unsafe { (*into).push_string(chars.as_ptr() as *const c_char, -1) };
     unsafe { utf_char2bytes(dp.result, buf.as_mut_ptr() as *mut c_char) };
-    unsafe { tv_list_append_string(into, buf.as_ptr() as *const c_char, -1) };
+    unsafe { (*into).push_string(buf.as_ptr() as *const c_char, -1) };
 }
 
 /// Build the `digraph_getlist()` result: user digraphs, plus the effective
@@ -572,14 +572,14 @@ fn digraph_setlist_common(arg: &TypVal) -> bool {
     }
     // SAFETY: `pl` is a valid list; the walk only follows its links, and
     // `digraph_set_common` does not touch the list it is reading from.
-    for pli in tv_list_iter(unsafe { pl.as_ref() }) {
+    for pli in list_iter(unsafe { pl.as_ref() }) {
         let l = pli.li_tv.list_or_null();
-        if l.is_null() || unsafe { tv_list_len(l) } != 2 {
+        if l.is_null() || list_len(unsafe { l.as_ref() }) != 2 {
             crate::semsg!("{E_DIGRAPH_SETLIST}");
             return false;
         }
         // SAFETY: a live list of exactly two items.
-        let pair = unsafe { tv_list_items(l) };
+        let pair = list_items(unsafe { l.as_ref() });
         if !digraph_set_common(&pair[0].li_tv, &pair[1].li_tv) {
             return false;
         }

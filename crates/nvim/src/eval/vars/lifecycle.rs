@@ -74,7 +74,7 @@ pub fn evalvars_init() {
     for (i, name) in msgpack_type_names.iter().enumerate() {
         let type_list = tv_list_alloc(0);
         let at = type_list.as_ptr();
-        unsafe { tv_list_set_lock(at, VarLock::Fixed) };
+        list_set_lock(unsafe { at.as_mut() }, VarLock::Fixed);
         let di = unsafe { tv_dict_item_alloc(name.as_ptr()) };
         // SAFETY: the item just allocated.
         let mut item = unsafe { Di::new(di) };

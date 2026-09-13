@@ -83,7 +83,7 @@ fn line(text: &str) -> Tv {
     Tv::s(text)
 }
 
-/// The empty line a *newline* opens. `tv_list_append_allocated_string` takes
+/// The empty line a *newline* opens. `List::push_allocated_string` takes
 /// a null for it, so it reads back as a NULL string and not as `""` — the
 /// two are the same line to Vimscript but not to `assert_eq!`.
 fn opened() -> Tv {
@@ -199,7 +199,7 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
 
 /// `test/functional/core/job_spec.lua`'s "lists passed to callbacks are freed
 /// if not stored" (`#25891`), which used to `ffi.cdef` `gc_first_list`,
-/// `tv_list_alloc` and `tv_list_free` and read the chain head across a live
+/// `tv_list_alloc` and `list_free` and read the chain head across a live
 /// `jobstart()`. Nothing about that assertion needed the child process: what
 /// it watched was one list allocated *before* the deliveries still being the
 /// most recently allocated one *after* them, which says every list built for
@@ -217,7 +217,7 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
     let mut reader = reader();
     let at = &raw mut reader;
     // SAFETY: as `delivered`. The sentinel is this case's own: it is never
-    // referenced, so nothing but the final `tv_list_free` can free it.
+    // referenced, so nothing but the final `list_free` can free it.
     unsafe {
         let before = rooted_lists();
         let held = tv_list_alloc(kListLenUnknown as isize);

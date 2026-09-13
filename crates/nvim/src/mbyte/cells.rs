@@ -19,7 +19,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::eval::typval::{index_of, tv_list_iter};
+use crate::eval::typval::{index_of, list_iter};
 use crate::semsg;
 use crate::types::NUL;
 use core::cmp::Ordering;
@@ -342,8 +342,9 @@ pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
 ///
 /// `l` must be a live list.
 unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
-    let mut rows: Vec<CellWidthRange> = Vec::with_capacity(unsafe { tv_list_len(l) } as usize);
-    for (item, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
+    let mut rows: Vec<CellWidthRange> =
+        Vec::with_capacity(list_len(unsafe { l.as_ref() }) as usize);
+    for (item, li) in list_iter(unsafe { l.as_ref() }).enumerate() {
         let item = index_of(item);
         if li.li_tv.v_type() as c_uint != VAR_LIST as c_uint || li.li_tv.list_or_null().is_null() {
             semsg!("E1109: List item {} is not a List", item);
@@ -379,7 +380,7 @@ unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
 unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWidthRange> {
     let mut numbers = [0 as VarNumber; 3];
     let mut seen = 0;
-    for lili in tv_list_iter(unsafe { li_l.as_ref() }) {
+    for lili in list_iter(unsafe { li_l.as_ref() }) {
         let tv = &lili.li_tv;
         if tv.v_type() as c_uint != VAR_NUMBER as c_uint {
             break;
@@ -426,9 +427,9 @@ pub fn f_getcellwidths(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     for row in &rows {
         let entry = tv_list_alloc(3);
         let into = entry.as_ptr();
-        unsafe { tv_list_append_number(into, row.first) };
-        unsafe { tv_list_append_number(into, row.last) };
-        unsafe { tv_list_append_number(into, row.width as VarNumber) };
-        unsafe { tv_list_append_list((*result).list_or_null(), Some(entry)) };
+        unsafe { (*into).push_number(row.first) };
+        unsafe { (*into).push_number(row.last) };
+        unsafe { (*into).push_number(row.width as VarNumber) };
+        unsafe { (*(*result).list_or_null()).push_list(Some(entry)) };
     }
 }

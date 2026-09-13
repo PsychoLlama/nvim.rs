@@ -20,10 +20,7 @@ use core::ptr::null_mut;
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::skipwhite;
-use crate::eval::typval::{
-    blob_copy, blob_len, blob_unref, index_of, tv_list_items_mut, tv_list_unref, tv_list_watch_add,
-    tv_list_watch_remove,
-};
+use crate::eval::typval::{blob_copy, blob_len, blob_unref, index_of, list_items_mut, list_unref};
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{ex_let_vars, skip_var_list};
 use crate::eval::{EVAL_EVALUATE, Fi, ForInfo, e_string_list_or_blob_required, eval0};
@@ -109,7 +106,7 @@ pub unsafe fn eval_for_line(
                         // the loop's first step reads.
                         unsafe { (*lw).lw_index = 0 };
                         // SAFETY: `l` is the live List the typval held.
-                        unsafe { tv_list_watch_add(l, lw) };
+                        unsafe { (*l).watch_add(lw) };
                         // The reference is `fi`'s now.
                         tv.disown();
                     }
@@ -211,7 +208,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
     }
 
     // The cursor is an index into the list, which
-    // `tv_list_watch_shift` moves at every insert and removal so that it
+    // `watch_shift` moves at every insert and removal so that it
     // keeps naming the same item.  `ENDED` is upstream's NULL `lw_item`,
     // and is sticky: a loop whose body appends to the list it is walking
     // still ends.
@@ -219,7 +216,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         return false;
     };
     // SAFETY: `fi_list` is the List the loop took a reference to.
-    let items = unsafe { tv_list_items_mut(fi.fi_list) };
+    let items = list_items_mut(unsafe { fi.fi_list.as_mut() });
     let Some(item) = items.get_mut(at) else {
         return false;
     };
@@ -258,15 +255,15 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
     let fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
     if !fi.fi_list.is_null() {
         let lw = fi.field_ptr(offset_of!(ForInfo, fi_lw));
-        // Read out first: `tv_list_watch_remove` writes through `lw`, which
+        // Read out first: `List::watch_remove` writes through `lw`, which
         // points into this record, so no borrow of the record may still be
         // alive while it runs.
         let list = fi.fi_list;
         // SAFETY: the watcher was added to this List by `eval_for_line`,
         // and the reference it took is released here.
-        unsafe { tv_list_watch_remove(list, lw) };
+        unsafe { (*list).watch_remove(lw) };
         // SAFETY: as above -- this releases the reference `fi` held.
-        unsafe { tv_list_unref(list) };
+        unsafe { list_unref(list) };
     } else if !fi.fi_blob.is_null() {
         // SAFETY: the Blob is the copy `eval_for_line` took.
         unsafe { blob_unref(fi.fi_blob) };

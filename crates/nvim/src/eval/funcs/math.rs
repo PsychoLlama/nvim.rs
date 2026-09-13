@@ -7,7 +7,7 @@ use super::VARNUMBER_MAX;
 use super::wrappers::{arg_number_chk, arg_string, list_alloc_ret, tv_get_float_chk};
 use crate::charset::skipwhite;
 use crate::eval::string2float;
-use crate::eval::typval::{NumBuf, tv_list_append_number, tv_list_find, tv_list_len};
+use crate::eval::typval::{NumBuf, list_find, list_len};
 use crate::event::libuv::uv_random;
 use crate::global_cell::GlobalCell;
 use crate::message_fmt::c_str;
@@ -287,17 +287,17 @@ fn seed_list(tv: &TypVal) -> Option<[*mut TypVal; 4]> {
         return None;
     }
     // SAFETY: the kind says the value holds a list pointer, which may be
-    // null for an empty list literal; `tv_list_len` answers 0 for null.
+    // null for an empty list literal; `list_len` answers 0 for null.
     let l = tv.list_or_null();
     // SAFETY: `l` is a list pointer or null.
-    if unsafe { tv_list_len(l) } != 4 {
+    if list_len(unsafe { l.as_ref() }) != 4 {
         return None;
     }
     let mut out = [ptr::null_mut(); 4];
     for (i, slot) in out.iter_mut().enumerate() {
         // SAFETY: the length check above proves index `i` exists, so
-        // `tv_list_find` returns a live item.
-        let tv = unsafe { &raw mut (*tv_list_find(l, i as c_int)).li_tv };
+        // `list_find` returns a live item.
+        let tv = unsafe { &raw mut (*list_find(l.as_mut(), i as c_int)).li_tv };
         // SAFETY: as above.
         if unsafe { (*tv).v_type() } != VAR_NUMBER {
             return None;
@@ -325,7 +325,7 @@ pub fn f_srand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     for _ in 0..4 {
         // SAFETY: the list was just allocated into `result`.
-        unsafe { tv_list_append_number(result.list_or_null(), splitmix32(&mut x) as VarNumber) };
+        unsafe { (*result.list_or_null()).push_number(splitmix32(&mut x) as VarNumber) };
     }
 }
 
@@ -377,7 +377,7 @@ pub fn f_range(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         start >= end
     } {
         // SAFETY: `list` was just allocated into `result`.
-        unsafe { tv_list_append_number(list, start) };
+        unsafe { (*list).push_number(start) };
         let Some(next) = start.checked_add(stride) else {
             // `i += stride` overflows here in the C and the loop's own test
             // then ends it. Stopping is the same observable outcome without

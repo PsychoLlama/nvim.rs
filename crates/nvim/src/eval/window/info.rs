@@ -74,7 +74,7 @@ fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
     let into = windows.as_ptr();
     let append = |handle: Handle| {
         // SAFETY: a live list.
-        unsafe { tv_list_append_number(into, VarNumber::from(handle)) };
+        unsafe { (*into).push_number(VarNumber::from(handle)) };
     };
     for wp in windows_in_tab(tabpage) {
         append(wp.handle);
@@ -111,7 +111,7 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             continue;
         }
         // SAFETY: a live tab page, and a live list `result` owns.
-        unsafe { tv_list_append_dict(list, Some(get_tabpage_info(tp, tpnr))) };
+        (*list).push_dict(Some(get_tabpage_info(tp, tpnr)));
         if wanted.is_some() {
             return;
         }
@@ -150,7 +150,7 @@ pub fn f_getwininfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let numbered = if wp.has_winnr(tp) { winnr } else { 0 };
             // SAFETY: a live window in a live tab page, and a live list
             // `result` owns.
-            unsafe { tv_list_append_dict(list, Some(get_win_info(wp, tabnr, numbered))) };
+            (*list).push_dict(Some(get_win_info(wp, tabnr, numbered)));
             if wanted.is_some() {
                 return;
             }
@@ -173,12 +173,12 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
     } else {
         let nested = tv_list_alloc(2);
         let into = nested.as_ptr();
-        unsafe { tv_list_append_list(l, Some(nested)) };
+        unsafe { (*l).push_list(Some(nested)) };
         into
     };
     let word = |s: &CStr| {
         // SAFETY: a live list and a NUL-terminated string.
-        unsafe { tv_list_append_string(fr_list, s.as_ptr(), s.count_bytes().cast_signed()) };
+        unsafe { (*fr_list).push_string(s.as_ptr(), s.count_bytes().cast_signed()) };
     };
     if c_int::from(fr.fr_layout) == FR_LEAF {
         // A leaf frame with no window is a frame being taken apart; it is
@@ -186,7 +186,7 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
         if let Some(wp) = fr.win() {
             word(c"leaf");
             // SAFETY: a live list.
-            unsafe { tv_list_append_number(fr_list, VarNumber::from(wp.handle)) };
+            unsafe { (*fr_list).push_number(VarNumber::from(wp.handle)) };
         }
         return;
     }
@@ -197,7 +197,7 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
     });
     let win_list = tv_list_alloc(kListLenUnknown as ptrdiff_t);
     let into = win_list.as_ptr();
-    unsafe { tv_list_append_list(fr_list, Some(win_list)) };
+    unsafe { (*fr_list).push_list(Some(win_list)) };
     for child in fr.children() {
         // SAFETY: a live child frame and the live list just built.
         unsafe { get_framelayout(child, into, false) };

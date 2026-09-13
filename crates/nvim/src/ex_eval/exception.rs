@@ -45,7 +45,7 @@ use crate::ascii::ascii_isdigit;
 use crate::cstr;
 use crate::debugger::state::debug_break_level;
 use crate::drawscreen::state::cmdline_row;
-use crate::eval::typval::{ListRef, tv_list_unref};
+use crate::eval::typval::{ListRef, list_unref};
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
@@ -536,7 +536,7 @@ pub(super) unsafe fn discard_exception(excp: *mut Exception, was_finished: bool)
         unsafe { free_msglist((*excp).messages) };
     }
     unsafe { xfree((*excp).throw_name.cast()) };
-    unsafe { tv_list_unref((*excp).stacktrace) };
+    unsafe { list_unref((*excp).stacktrace) };
     unsafe { xfree(excp.cast()) };
 }
 

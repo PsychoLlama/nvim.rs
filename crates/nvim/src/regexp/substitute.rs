@@ -33,7 +33,7 @@ use super::{
     RegSubMatch, Rex, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
     reg_prev_sub, reg_prev_sublen, rsm,
 };
-use crate::eval::typval::{ListRef, NumBuf, TV_INITIAL_VALUE, tv_clear, tv_list_init_static};
+use crate::eval::typval::{ListRef, NumBuf, TV_INITIAL_VALUE, list_init_static, tv_clear};
 use crate::eval::userfunc::call_func;
 use crate::eval::{eval_to_string, partial_name};
 use crate::global_cell::GlobalCell;
@@ -554,7 +554,7 @@ unsafe fn call_replacement(expr: &TypVal) -> *mut c_char {
     // The list is this frame's own storage, and drops its items with it.
     let mut match_list = List::empty();
     // SAFETY: this frame's own storage, holding no list yet.
-    unsafe { tv_list_init_static(&raw mut match_list) };
+    unsafe { list_init_static(&raw mut match_list) };
     // The slot names the list without owning it, which is what `naming`
     // says.
     // SAFETY: this frame's own list, which outlives the call.

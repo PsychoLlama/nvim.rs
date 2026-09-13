@@ -14,7 +14,7 @@ use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::edit::buf_prompt_text;
 use crate::eval::prompt_get_input;
-use crate::eval::typval::{NumBuf, tv_list_iter, tv_list_len};
+use crate::eval::typval::{NumBuf, list_iter, list_len};
 use crate::event::libuv::uv_kill;
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::get_user_input;
@@ -181,8 +181,8 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     msg_clr_eos();
 
     let list = args[0].list_or_null();
-    let len = unsafe { tv_list_len(list) } as usize;
-    for (at, li) in tv_list_iter(unsafe { list.as_ref() }).enumerate() {
+    let len = list_len(unsafe { list.as_ref() }) as usize;
+    for (at, li) in list_iter(unsafe { list.as_ref() }).enumerate() {
         msg_str(unsafe { cstr::at(numbuf.string_ptr(&li.li_tv)) });
         // A UI that owns the message area keeps the items in one message,
         // bar the last separator.
@@ -196,7 +196,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // A click names a line rather than an item, so count back from the
     // bottom of the list.
     if mouse_used {
-        selected = unsafe { tv_list_len(list) } - (cmdline_row.get() - mouse_row.get());
+        selected = list_len(unsafe { list.as_ref() }) - (cmdline_row.get() - mouse_row.get());
     }
     result.write_number(selected as VarNumber);
 }

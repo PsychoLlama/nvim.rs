@@ -17,7 +17,7 @@
 )]
 
 use super::*;
-use crate::eval::typval::{DictRef, ListRef, NumBuf, tv_list_items};
+use crate::eval::typval::{DictRef, ListRef, NumBuf, list_items};
 use crate::narrow::number_as_int;
 use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
 use core::ptr;
@@ -117,9 +117,9 @@ unsafe fn hl_name(id: ::core::ffi::c_int) -> *const ::core::ffi::c_char {
 ///
 /// # Safety
 /// `l` must be null or a live list the body does not modify.
-unsafe fn list_items<'a>(l: *const List) -> impl Iterator<Item = *mut TypVal> + 'a {
+unsafe fn item_values<'a>(l: *const List) -> impl Iterator<Item = *mut TypVal> + 'a {
     // SAFETY: the caller's list, which the body does not modify.
-    unsafe { tv_list_items(l) }
+    list_items(unsafe { l.as_ref() })
         .iter()
         .map(|li| ::core::ptr::from_ref(&li.li_tv).cast_mut())
 }
@@ -132,14 +132,14 @@ unsafe fn list_items<'a>(l: *const List) -> impl Iterator<Item = *mut TypVal> + 
 unsafe fn each_dict(retlist: *mut List, l: *const List, mut one: impl FnMut(*mut Dict) -> c_int) {
     // SAFETY: the caller's lists.
     unsafe {
-        for tv in list_items(l) {
+        for tv in item_values(l) {
             let retval = if (*tv).v_type() == VAR_DICT {
                 one((*tv).dict_or_null())
             } else {
                 emsg(gettext(e_dictreq));
                 -1
             };
-            tv_list_append_number(retlist, VarNumber::from(retval));
+            (*retlist).push_number(VarNumber::from(retval));
         }
     };
 }
@@ -214,7 +214,7 @@ pub(crate) fn get_buffer_signs(buffer: Buf) -> ListRef {
     let signs = placed_signs(buffer, 0, ALL_GROUPS, |_| Keep::Yes);
     let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
     for mark in signs {
-        unsafe { tv_list_append_dict(l.as_ptr(), Some(sign_get_placed_info_dict(mark))) };
+        unsafe { (*l.as_ptr()).push_dict(Some(sign_get_placed_info_dict(mark))) };
     }
     l
 }
@@ -240,7 +240,7 @@ unsafe fn sign_get_placed_in_buf(
     let d = d_held.as_ptr();
     // SAFETY: the caller's list, and the buffer handle it reports.
     let l = unsafe {
-        tv_list_append_dict(retlist, Some(d_held));
+        (*retlist).push_dict(Some(d_held));
         put_nr(d, "bufnr", VarNumber::from(cbuf.handle));
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
         // A borrow of the list the dictionary owns from here on.
@@ -272,12 +272,10 @@ unsafe fn sign_get_placed_in_buf(
     });
 
     // SAFETY: every mark the walk kept carries a live sign decoration.
-    unsafe {
-        sort_signs(&mut signs);
-        for mark in signs {
-            tv_list_append_dict(l, Some(sign_get_placed_info_dict(mark)));
-        }
-    };
+    sort_signs(&mut signs);
+    for mark in signs {
+        unsafe { (*l).push_dict(Some(sign_get_placed_info_dict(mark))) };
+    }
 }
 
 /// Appends the placed-sign report for `buffer`, or for every buffer that has
@@ -394,7 +392,7 @@ pub(crate) fn f_sign_getdefined(args: &[TypVal], result: &mut TypVal, _fptr: Eva
             sign_defs()
         };
         for sp in defs {
-            tv_list_append_dict(l, Some(sign_get_info_dict(sp)));
+            (*l).push_dict(Some(sign_get_info_dict(sp)));
         }
     };
 }
@@ -620,10 +618,10 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
         // SAFETY: the frame's return slot, and a list the evaluator owns.
         unsafe {
             let retlist = tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t);
-            for tv in list_items(args[0].list_or_null()) {
+            for tv in item_values(args[0].list_or_null()) {
                 let name = numbuf.string_ptr_chk(&*tv);
                 let ok = !name.is_null() && sign_undefine_by_name(name).is_ok();
-                tv_list_append_number(retlist, if ok { 0 } else { -1 });
+                (*retlist).push_number(if ok { 0 } else { -1 });
             }
         };
         return;

@@ -11,7 +11,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{NumBuf, tv_list_iter};
+use crate::eval::typval::{NumBuf, list_iter};
 use crate::memory::handoff::owned_cstr;
 use crate::types::{ExArgt, ExpandContext, NUL, VAR_DICT};
 use core::mem::ManuallyDrop;
@@ -56,7 +56,7 @@ pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ff
 
     let skip = unsafe { (*args).skip } != 0;
     let mut text = Vec::<u8>::new();
-    for li in tv_list_iter(unsafe { l.as_ref() }) {
+    for li in list_iter(unsafe { l.as_ref() }) {
         if !skip {
             // SAFETY: the item's rendering is NUL-terminated and outlives
             // the copy.

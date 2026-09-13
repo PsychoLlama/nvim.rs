@@ -8,8 +8,8 @@ use super::{
 };
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
-    NumBuf, blob_bytes, tv_check_for_number_arg, tv_check_for_string_arg, tv_copy, tv_dict_len,
-    tv_get_number_chk, tv_list_items, tv_list_iter, tv_list_len, tv_list_locked, tv_list_set_lock,
+    NumBuf, blob_bytes, list_items, list_iter, list_len, list_locked, list_set_lock,
+    tv_check_for_number_arg, tv_check_for_string_arg, tv_copy, tv_dict_len, tv_get_number_chk,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::utfc_ptr2len;
@@ -50,10 +50,10 @@ fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
     let better = |i: VarNumber, n: VarNumber| if domax { i > n } else { i < n };
     match tv.v_type() {
         VAR_LIST => {
-            if unsafe { tv_list_len(tv.list_or_null()) } == 0 {
+            if list_len(tv.list_ref()) == 0 {
                 return;
             }
-            for li in tv_list_iter(unsafe { tv.list_or_null().as_ref() }) {
+            for li in list_iter(unsafe { tv.list_or_null().as_ref() }) {
                 let Ok(i) = tv_get_number_chk(&li.li_tv) else {
                     return;
                 };
@@ -182,7 +182,7 @@ fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
         0
     } else {
         // SAFETY: a live list, or NULL, which reads as empty.
-        let Some(first) = (unsafe { tv_list_items(l) }).first() else {
+        let Some(first) = (list_items(unsafe { l.as_ref() })).first() else {
             semsg!("E998: Reduce of an empty {} with no initial value", "List");
             return;
         };
@@ -194,19 +194,19 @@ fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     if l.is_null() {
         return;
     }
-    let prev_locked = unsafe { tv_list_locked(l) };
-    unsafe { tv_list_set_lock(l, VarLock::Fixed) };
+    let prev_locked = list_locked(unsafe { l.as_ref() });
+    list_set_lock(unsafe { l.as_mut() }, VarLock::Fixed);
     // By index: `expr` is the user's function, and the lock above stops it
     // editing the list but not a `:for` on the same list from doing so.
     // SAFETY: a live list.
-    while at < unsafe { tv_list_items(l) }.len() {
-        let item = &raw const unsafe { tv_list_items(l) }[at].li_tv;
+    while at < list_items(unsafe { l.as_ref() }).len() {
+        let item = &raw const list_items(unsafe { l.as_ref() })[at].li_tv;
         if !unsafe { fold_step(expr, result, &*item, LIST_CLEANUP, called_emsg_start) } {
             break;
         }
         at += 1;
     }
-    unsafe { tv_list_set_lock(l, prev_locked) };
+    list_set_lock(unsafe { l.as_mut() }, prev_locked);
 }
 
 /// `reduce()` over a String, one composed character at a time.

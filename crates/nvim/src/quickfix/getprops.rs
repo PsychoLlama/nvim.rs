@@ -104,7 +104,7 @@ unsafe fn get_qfline_items(qfp: *mut QfLine, list: *mut List) {
     let dict_held = tv_dict_alloc();
 
     let dict = dict_held.as_ptr();
-    unsafe { tv_list_append_dict(list, Some(dict_held)) };
+    unsafe { (*list).push_dict(Some(dict_held)) };
 
     // The type is one character, or NUL for "none".
     let kind = [unsafe { (*qfp).qf_type }, 0];

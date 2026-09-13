@@ -14,9 +14,7 @@ use crate::cmdhist::{HistShadaEntry, hist_shada_replace, hist_shada_take, hist_s
 use crate::eval::decode::{decode_string, unpack_typval};
 use crate::eval::encode::encode_vim_to_msgpack;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{
-    tv_clear, tv_copy, tv_list_alloc, tv_list_append_allocated_string, tv_list_len,
-};
+use crate::eval::typval::{list_len, tv_clear, tv_copy, tv_list_alloc};
 use crate::eval::vars::{get_globvar_ht, get_vim_var_list, set_vim_var_list};
 use crate::eval::{get_copy_id, set_ref_in_ht, set_ref_in_list_items, var_flavour, var_set_global};
 use crate::event::libuv::uv_strerror;

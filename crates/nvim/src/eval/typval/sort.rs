@@ -357,7 +357,7 @@ pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
             let from = unsafe { entry.item.offset_from(base) };
             moved[from.cast_unsigned()] = index_of(dest);
         }
-        tv_list_watch_permute(list, &moved);
+        watch_permute(list, &moved);
     }
     // Anything the comparator appended is dropped with the empty list it
     // went into.
@@ -380,7 +380,7 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
     // Re-read the length every step: the comparator runs a user function,
     // which may edit the list.
     // SAFETY: the caller's promise: a live list.
-    while at < unsafe { tv_list_items(l) }.len() {
+    while at < list_items(unsafe { l.as_ref() }).len() {
         // Upstream hands the comparator the addresses of two bare
         // `ListItem *` locals and lets it read them as `ListSortItem *`,
         // relying on `item` sitting at offset 0 and on `idx` never being
@@ -394,14 +394,14 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
         // read by the `_not_keeping_zero` comparators, which never reach
         // here; they are still filled in list order so that would work.
         // SAFETY: two items of the list, read out afresh each step.
-        let items = unsafe { tv_list_items_mut(l) };
+        let items = list_items_mut(unsafe { l.as_mut() });
         let prev = sort_item(&raw mut items[at - 1], 0);
         let cur = sort_item(&raw mut items[at], 1);
         // SAFETY: the two records just built.
         let equal = unsafe { compare((&raw const prev).cast(), (&raw const cur).cast()) } == 0;
         if equal {
             // SAFETY: a live list and an index of it.
-            unsafe { tv_list_remove_range(l, at, at) };
+            unsafe { (*l).remove_range(at, at) };
         } else {
             at += 1;
         }
@@ -528,11 +528,11 @@ pub(crate) fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
         c"uniq() argument".as_ptr()
     };
     let l = first.list_or_null();
-    if !unsafe { value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) } {
+    if !unsafe { value_check_lock(list_locked(l.as_ref()), arg_errmsg, TV_TRANSLATE as size_t) } {
         // SAFETY: the argument's own list, whose reference the answer
         // takes a second one of.
         result.write_list(unsafe { ListRef::retained(l) });
-        if unsafe { tv_list_len(l) } > 1
+        if list_len(unsafe { l.as_ref() }) > 1
             && unsafe { parse_sort_uniq_args(args, &raw mut info, &mut how) }.is_ok()
         {
             if sort {

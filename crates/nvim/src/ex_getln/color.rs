@@ -13,7 +13,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{NumBuf, index_of, tv_list_items, tv_list_iter};
+use crate::eval::typval::{NumBuf, index_of, list_items, list_iter};
 use crate::guard::Suppress;
 use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext_ptr;
@@ -284,23 +284,23 @@ msg_putchar('\n' as ::core::ffi::c_int);
         }
 
         let mut prev_end: VarNumber = 0;
-        for (i, li) in tv_list_iter(unsafe { tv.list_or_null().as_ref() }).enumerate() {
+        for (i, li) in list_iter(unsafe { tv.list_or_null().as_ref() }).enumerate() {
             let i = index_of(i);
             if li.li_tv.v_type() != VAR_LIST {
                 print_errmsg!("E5401: List item {i} is not a List");
                 break 'body Label::Error;
             }
             let l: *const List = li.li_tv.list_or_null();
-            if unsafe { tv_list_len(l) } != 3 {
+            if list_len(unsafe { l.as_ref() }) != 3 {
                 // SAFETY: `l` is the list item just checked.
-                let len = unsafe { tv_list_len(l) };
+                let len = list_len(unsafe { l.as_ref() });
                 print_errmsg!("E5402: List item {i} has incorrect length: {len} /= 3");
                 break 'body Label::Error;
             }
 
             // SAFETY: the item's own list, just checked to hold three
             // items.
-            let chunk = unsafe { tv_list_items(l) };
+            let chunk = list_items(unsafe { l.as_ref() });
             let Ok(start) = tv_get_number_chk(&chunk[0].li_tv) else {
                 break 'body Label::Error;
             };

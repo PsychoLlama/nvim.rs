@@ -13,8 +13,8 @@ use crate::cstr;
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
-    ListRef, NumBuf, PartialRef, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy,
-    tv_list_items, tv_list_iter, tv_list_len,
+    ListRef, NumBuf, PartialRef, list_items, list_iter, list_len, tv_check_for_dict_arg,
+    tv_check_for_list_arg, tv_copy,
 };
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_ptr_ref, func_ref, func_unref, function_exists,
@@ -184,7 +184,7 @@ unsafe fn get_list_line(
     // `tv_get_string_buf_chk` may park in it, because the duplicate is made
     // before returning.
     let at = unsafe { (*state).at };
-    let Some(item) = (unsafe { tv_list_items((*state).list) }).get(at) else {
+    let Some(item) = (list_items(unsafe { (*state).list.as_ref() })).get(at) else {
         return ptr::null_mut();
     };
     let mut buf = NumBuf::new();
@@ -454,9 +454,9 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
                 return;
             }
             list = args[arg_idx as usize].list_or_null();
-            if unsafe { tv_list_len(list) } == 0 {
+            if list_len(unsafe { list.as_ref() }) == 0 {
                 arg_idx = 0;
-            } else if unsafe { tv_list_len(list) } > MAX_FUNC_ARGS as c_int {
+            } else if list_len(unsafe { list.as_ref() }) > MAX_FUNC_ARGS as c_int {
                 unsafe { emsg_funcname(e_toomanyarg.as_ptr(), s) };
                 unsafe { xfree(name as *mut c_void) };
                 return;
@@ -480,7 +480,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
         } else {
             unsafe { (*arg_pt).pt_argc }
         };
-        let lv_len = unsafe { tv_list_len(list) };
+        let lv_len = list_len(unsafe { list.as_ref() });
         unsafe { (*pt).pt_argc = arg_len + lv_len };
         let bytes = size_of::<TypVal>() * unsafe { (*pt).pt_argc } as usize;
         unsafe { (*pt).pt_argv = xmalloc(bytes) as *mut TypVal };
@@ -491,7 +491,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             unsafe { tv_copy(&*from, &mut *to) };
             i += 1;
         }
-        for li in tv_list_iter(unsafe { list.as_ref() }) {
+        for li in list_iter(unsafe { list.as_ref() }) {
             unsafe { tv_copy(&li.li_tv, &mut *(*pt).pt_argv.add(i as usize)) };
             i += 1;
         }

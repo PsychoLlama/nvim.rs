@@ -12,7 +12,7 @@ use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{CallFrame, tv_list_iter};
+use crate::eval::typval::{CallFrame, list_iter};
 use crate::memory::handoff::owned_cstr_array;
 use crate::path::ExpandFlags;
 use crate::strings::vim_strchr;
@@ -416,7 +416,7 @@ pub(crate) unsafe fn process_user_list(
 
     // Loop over the items in the list.
     if !retlist.is_null() {
-        for li in tv_list_iter(unsafe { retlist.as_ref() }) {
+        for li in list_iter(unsafe { retlist.as_ref() }) {
             // Skip non-string items and empty strings.
             let s = li.li_tv.string_or_null();
             if !s.is_null() {
@@ -425,7 +425,7 @@ pub(crate) unsafe fn process_user_list(
             }
         }
     }
-    unsafe { tv_list_unref(retlist) };
+    unsafe { list_unref(retlist) };
 
     unsafe { *num_matches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
     unsafe { *matches = owned_cstr_array(found) };

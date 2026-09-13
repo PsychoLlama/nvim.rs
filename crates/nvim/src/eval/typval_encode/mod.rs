@@ -96,7 +96,7 @@ pub(crate) enum Frame {
     List {
         list: *mut List,
         /// The item the walk stands on -- an *index*, because the list owns
-        /// its items and a body may edit it.  `at == tv_list_len(list)` is
+        /// its items and a body may edit it.  `at == list_len(list)` is
         /// a drained frame.
         at: usize,
     },

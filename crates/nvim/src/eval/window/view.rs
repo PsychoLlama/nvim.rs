@@ -21,8 +21,8 @@ pub fn f_getwinpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value, and the list it is given
     // stays alive for the two appends.
     let list = tv_list_alloc_ret(result, 2);
-    unsafe { tv_list_append_number(list, -1) };
-    unsafe { tv_list_append_number(list, -1) };
+    (*list).push_number(-1);
+    (*list).push_number(-1);
 }
 
 /// `getwinposx()` — always -1; there is no GUI window.
@@ -81,8 +81,8 @@ pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let list = tv_list_alloc_ret(result, 2);
     let wp = arg_win(args, 0);
     let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
-    unsafe { tv_list_append_number(list, VarNumber::from(row)) };
-    unsafe { tv_list_append_number(list, VarNumber::from(col)) };
+    (*list).push_number(VarNumber::from(row));
+    (*list).push_number(VarNumber::from(col));
 }
 
 /// The `{options}` dictionary `win_splitmove()` takes: the split flags and the

@@ -12,13 +12,13 @@ use std::ptr;
 
 use neovim::buffer::{DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX};
 use neovim::eval::typval::{
-    DictRef, ListRef, NumBuf, callback_free, tv_clear, tv_dict_add, tv_dict_add_allocated_str,
-    tv_dict_add_dict, tv_dict_add_float, tv_dict_add_list, tv_dict_add_nr, tv_dict_add_str,
-    tv_dict_alloc, tv_dict_clear, tv_dict_copy, tv_dict_equal, tv_dict_extend, tv_dict_find,
-    tv_dict_free, tv_dict_get_callback, tv_dict_get_number, tv_dict_get_string_alloc,
-    tv_dict_get_string_buf, tv_dict_get_string_buf_chk, tv_dict_item_alloc_len,
-    tv_dict_set_keys_readonly, tv_dict_unref, tv_dict_watcher_add, tv_dict_watcher_remove,
-    tv_list_unref,
+    DictRef, ListRef, NumBuf, callback_free, list_unref, tv_clear, tv_dict_add,
+    tv_dict_add_allocated_str, tv_dict_add_dict, tv_dict_add_float, tv_dict_add_list,
+    tv_dict_add_nr, tv_dict_add_str, tv_dict_alloc, tv_dict_clear, tv_dict_copy, tv_dict_equal,
+    tv_dict_extend, tv_dict_find, tv_dict_free, tv_dict_get_callback, tv_dict_get_number,
+    tv_dict_get_string_alloc, tv_dict_get_string_buf, tv_dict_get_string_buf_chk,
+    tv_dict_item_alloc_len, tv_dict_set_keys_readonly, tv_dict_unref, tv_dict_watcher_add,
+    tv_dict_watcher_remove,
 };
 use neovim::guard::sandbox;
 use neovim::mbyte::convert_setup;
@@ -893,7 +893,7 @@ fn adding_a_typed_value_takes_the_key_by_length() {
         // Each container is still held by nothing but this case.
         assert_eq!((*l).lv_refcount.get(), 1);
         assert_eq!((*d2).dv_refcount.get(), 1);
-        tv_list_unref(l);
+        list_unref(l);
         tv_dict_unref(d2);
     }
 }

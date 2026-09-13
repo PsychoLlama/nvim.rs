@@ -9,12 +9,11 @@ use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
-    ListRef, NumBuf, blob_bytes, blob_len, tv_check_for_list_or_blob_arg,
-    tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg,
-    tv_clear, tv_copy, tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def,
-    tv_dict_len, tv_dict_set_ret, tv_equal, tv_get_bool_chk, tv_list_append_tv, tv_list_copy,
-    tv_list_find, tv_list_flatten, tv_list_items, tv_list_len, tv_list_locked, tv_list_uidx,
-    value_check_lock,
+    ListRef, NumBuf, blob_bytes, blob_len, list_copy, list_find, list_flatten, list_items,
+    list_len, list_locked, list_uidx, tv_check_for_list_or_blob_arg, tv_check_for_opt_bool_arg,
+    tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg, tv_clear, tv_copy,
+    tv_dict_add_bool, tv_dict_add_nr, tv_dict_find, tv_dict_get_number_def, tv_dict_len,
+    tv_dict_set_ret, tv_equal, tv_get_bool_chk, value_check_lock,
 };
 use crate::eval::userfunc::{func_ref, get_func_arity, printable_func_name};
 use crate::eval::vars::{
@@ -75,7 +74,7 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_PARTIAL => false,
         VAR_NUMBER => (tv.number_or_zero()) == 0,
         VAR_FLOAT => (tv.float_or_zero()) == 0.0,
-        VAR_LIST => (unsafe { tv_list_len(tv.list_or_null()) }) == 0,
+        VAR_LIST => tv.list_ref().is_none_or(List::is_empty),
         VAR_DICT => (unsafe { tv_dict_len(tv.dict_or_null()) }) == 0,
         VAR_BLOB => tv.blob_ref().is_none_or(Blob::is_empty),
         VAR_SPECIAL => tv.as_special() == Some(kSpecialVarNull),
@@ -137,7 +136,9 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
         return;
     }
     if make_copy {
-        let copy = unsafe { tv_list_copy(ptr::null(), list, false, get_copy_id()) };
+        // SAFETY: the argument's live list, which the copy takes a
+        // reference to for the walk; no conversion, a fresh copyID.
+        let copy = unsafe { list_copy(ptr::null(), ListRef::retained(list), false, get_copy_id()) };
         list = copy.as_ref().map_or(ptr::null_mut(), ListRef::as_ptr);
         // The reference taken above goes back: the answer is the copy.
         drop(result.take_list());
@@ -147,15 +148,15 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
         }
     } else {
         // SAFETY: `list` is the live List argument 0 named.
-        let lock = unsafe { tv_list_locked(list) };
+        let lock = list_locked(unsafe { list.as_ref() });
         let what = c"flatten() argument".as_ptr();
         if unsafe { value_check_lock(lock, what, TV_TRANSLATE as usize) } {
             return;
         }
     }
     // SAFETY: `list` is the live List argument 0 named.
-    let len = unsafe { tv_list_len(list) } as i64;
-    unsafe { tv_list_flatten(list, 0, len, maxdepth as i64) };
+    let len = list_len(unsafe { list.as_ref() }) as i64;
+    list_flatten(unsafe { &mut *list }, 0, len, maxdepth as i64);
 }
 
 /// `get({container}, {key} [, {default}])` — for a Blob, List, Dict,
@@ -226,7 +227,7 @@ fn get_from_list(args: &[TypVal]) -> *mut TypVal {
     }
     let mut error = false;
     let idx = arg_number_chk(&args[1], Some(&mut error)) as c_int;
-    let li = unsafe { tv_list_find(l, idx) };
+    let li = list_find(unsafe { l.as_mut() }, idx);
     if error || li.is_null() {
         return ptr::null_mut();
     }
@@ -311,7 +312,7 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             result.write_empty(VAR_LIST);
             let list = unsafe { list_alloc_ret(result, (*pt).pt_argc as isize) };
             for i in 0..unsafe { (*pt).pt_argc } {
-                unsafe { tv_list_append_tv(list, &*(*pt).pt_argv.offset(i as isize)) };
+                unsafe { (*list).push_copy(&*(*pt).pt_argv.offset(i as isize)) };
             }
         }
         b"arity" => unsafe { func_arity(pt, result) },
@@ -411,7 +412,10 @@ fn index_list(args: &[TypVal], result: &mut TypVal) {
     let mut ic = false;
     if args.len() > 2 {
         let mut error = false;
-        idx = unsafe { tv_list_uidx(l, arg_number_chk(&args[2], Some(&mut error)) as c_int) };
+        idx = list_uidx(
+            unsafe { l.as_ref() },
+            arg_number_chk(&args[2], Some(&mut error)) as c_int,
+        );
         start = if error {
             None
         } else {
@@ -428,8 +432,8 @@ fn index_list(args: &[TypVal], result: &mut TypVal) {
     // By index: `tv_equal` compares two values and can re-enter.
     let mut at = start;
     // SAFETY: the caller's obligation: a live list.
-    while at < unsafe { tv_list_items(l) }.len() {
-        let item = &unsafe { tv_list_items(l) }[at];
+    while at < list_items(unsafe { l.as_ref() }).len() {
+        let item = &list_items(unsafe { l.as_ref() })[at];
         if tv_equal(&item.li_tv, &args[1], ic) {
             result.write_number(VarNumber::from(idx));
             return;
@@ -544,11 +548,11 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: &TypVal) -> VarN
     }
     let mut idx: VarNumber = 0;
     // A zero start index is taken literally rather than run through
-    // `tv_list_uidx`, so it does not have to be a valid index.
+    // `list_uidx`, so it does not have to be a valid index.
     let start = if startidx == 0 {
         Some(0usize)
     } else {
-        idx = VarNumber::from(unsafe { tv_list_uidx(l, startidx as c_int) });
+        idx = VarNumber::from(list_uidx(unsafe { l.as_ref() }, startidx as c_int));
         usize::try_from(idx).ok()
     };
     let Some(start) = start else { return -1 };
@@ -557,9 +561,9 @@ unsafe fn indexof_list(l: *mut List, startidx: VarNumber, expr: &TypVal) -> VarN
     // By index: `expr` is the user's, and may edit the list it is testing.
     let mut at = start;
     // SAFETY: the caller's obligation: a live list.
-    while at < unsafe { tv_list_items(l) }.len() {
+    while at < list_items(unsafe { l.as_ref() }).len() {
         set_vim_var_nr(Vv::Key, idx);
-        let item = &unsafe { tv_list_items(l) }[at];
+        let item = &list_items(unsafe { l.as_ref() })[at];
         unsafe { tv_copy(&item.li_tv, &mut *get_vim_var_tv(Vv::Val)) };
         let found = indexof_matches(expr);
         unsafe { tv_clear(&mut *get_vim_var_tv(Vv::Val)) };
@@ -587,7 +591,7 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             unsafe { cstr::bytes_at(s).len() as VarNumber }
         }
         VAR_BLOB => VarNumber::from(blob_len(tv.blob_ref())),
-        VAR_LIST => unsafe { tv_list_len(tv.list_or_null()) as VarNumber },
+        VAR_LIST => list_len(tv.list_ref()) as VarNumber,
         VAR_DICT => unsafe { tv_dict_len(tv.dict_or_null()) as VarNumber },
         // The remaining tags are Unknown, Funcref, Partial, Float,
         // Bool and Special; `VarType` has no twelfth value.

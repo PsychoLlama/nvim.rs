@@ -28,9 +28,8 @@ use std::ops::Deref;
 use std::ptr;
 
 use neovim::eval::typval::{
-    BlobRef, DictRef, ListRef, PartialRef, tv_blob_alloc, tv_clear, tv_copy, tv_dict_add,
-    tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc, tv_list_append_owned_tv, tv_list_find,
-    tv_list_len,
+    BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
+    tv_dict_add, tv_dict_alloc, tv_dict_item_alloc, tv_list_alloc,
 };
 use neovim::garray::ga_append;
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
@@ -155,7 +154,7 @@ impl Tv {
                 path.push(Container::List(l));
                 for item in items {
                     let item_tv = unsafe { item.build_at(path) };
-                    unsafe { tv_list_append_owned_tv(l, item_tv) };
+                    unsafe { (*l).push(item_tv) };
                 }
                 path.pop();
                 list_tv(Some(list))
@@ -412,8 +411,8 @@ unsafe fn read_list_at(l: *const List, path: &mut Vec<Container>) -> Tv {
     }
     path.push(Container::List(l.cast_mut()));
     let mut items = Vec::new();
-    for at in 0..unsafe { tv_list_len(l) } {
-        let li = unsafe { tv_list_find(l.cast_mut(), at) };
+    for at in 0..list_len(unsafe { l.as_ref() }) {
+        let li = list_find(unsafe { l.cast_mut().as_mut() }, at);
         items.push(unsafe { read_at(&raw const (*li).li_tv, path) });
     }
     path.pop();
@@ -501,8 +500,8 @@ pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut Dict {
 /// # Safety
 /// `l` is NULL or points at a live list.
 pub(crate) unsafe fn list_items(l: *const List) -> Vec<*mut ListItem> {
-    (0..unsafe { tv_list_len(l) })
-        .map(|at| unsafe { tv_list_find(l.cast_mut(), at) })
+    (0..list_len(unsafe { l.as_ref() }))
+        .map(|at| list_find(unsafe { l.cast_mut().as_mut() }, at))
         .collect()
 }
 

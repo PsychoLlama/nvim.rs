@@ -27,7 +27,7 @@ use crate::autocmd::{apply_autocmds, event_ignored, has_event};
 use crate::buffer::BufRef;
 use crate::eval::typval::{
     DictRef, ListRef, tv_dict_add_dict, tv_dict_add_list, tv_dict_add_tv, tv_dict_alloc,
-    tv_dict_extend, tv_dict_set_keys_readonly, tv_list_alloc, tv_list_append_owned_tv,
+    tv_dict_extend, tv_dict_set_keys_readonly, tv_list_alloc,
 };
 use crate::eval::{get_v_event, restore_v_event};
 use crate::ex_getln::compute_cmdrow;
@@ -212,7 +212,7 @@ fn scan_windows(what: &mut Scan) {
                 Scan::Winlist(list) => {
                     let tv = TypVal::Number(wp.handle as VarNumber);
                     // SAFETY: a live list, which takes ownership of `tv`.
-                    unsafe { tv_list_append_owned_tv(*list, tv) };
+                    unsafe { (**list).push(tv) };
                 }
                 Scan::Counts {
                     size_count,

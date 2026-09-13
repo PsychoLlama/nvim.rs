@@ -79,7 +79,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     let into = windows.as_ptr();
     let append = |handle: Handle| {
         // SAFETY: a live list.
-        unsafe { tv_list_append_number(into, VarNumber::from(handle)) };
+        unsafe { (*into).push_number(VarNumber::from(handle)) };
     };
     for wp in tab_windows().filter(|wp| wp.w_buffer == buffer.raw()) {
         append(wp.handle);
@@ -127,7 +127,7 @@ pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if !argbuf.is_null() && argbuf != buf.raw() || filter.rejects(buf) {
             continue;
         }
-        unsafe { tv_list_append_dict(list, Some(get_buffer_info(buf))) };
+        (*list).push_dict(Some(get_buffer_info(buf)));
         if !argbuf.is_null() {
             return;
         }

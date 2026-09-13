@@ -37,7 +37,7 @@
 
 use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
-    tv_list_alloc_ret, tv_list_append_string,
+    tv_list_alloc_ret,
 };
 use crate::memory::{xfree, xmallocz, xmemdupz, xstrdup};
 use crate::message::emsg;
@@ -156,7 +156,7 @@ impl RetList {
     pub(crate) fn push(self, s: *const c_char) {
         // SAFETY: a live list and a NUL-terminated string, which is what a
         // length of -1 promises.
-        unsafe { tv_list_append_string(self.0, s, -1 as ssize_t) };
+        unsafe { (*self.0).push_string(s, -1 as ssize_t) };
     }
 }
 

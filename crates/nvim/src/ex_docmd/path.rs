@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use crate::eval::typval::{
-    ListRef, TV_INITIAL_VALUE, callback_free, tv_clear, tv_list_copy, tv_list_find, tv_list_iter,
+    ListRef, TV_INITIAL_VALUE, callback_free, list_copy, list_find, list_iter, list_len, tv_clear,
 };
 
 use crate::eval::userfunc::get_scriptlocal_funcname;
@@ -49,9 +49,9 @@ use crate::os::env::expand_env;
 
 use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, List, MAXPATHL, NUL, OK,
-    OptInt, OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-    kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
+    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, MAXPATHL, NUL, OK, OptInt,
+    OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse,
+    kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
 };
 
 /// The parsed `'findfunc'`.
@@ -99,8 +99,16 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> Opti
     let mut retlist = None;
     if called as c_int == OK {
         if rettv.v_type() as c_uint == VAR_LIST as c_uint {
-            retlist =
-                unsafe { tv_list_copy(ptr::null(), rettv.list_or_null(), false, get_copy_id()) };
+            // SAFETY: the return value's own list, which the copy takes a
+            // reference to for the walk; no conversion, a fresh copyID.
+            retlist = unsafe {
+                list_copy(
+                    ptr::null(),
+                    ListRef::retained(rettv.list_or_null()),
+                    false,
+                    get_copy_id(),
+                )
+            };
         } else {
             emsg(gettext(e_invalid_return_type_from_findfunc.as_ptr()));
         }
@@ -127,8 +135,7 @@ pub unsafe fn expand_findfunc(
     let Some(held) = call_findfunc(pat, kBoolVarTrue) else {
         return Err(Failed);
     };
-    let l = held.as_ptr();
-    let len = tv_list_len(l);
+    let len = list_len(Some(&held));
     if len == 0 {
         return Err(Failed);
     }
@@ -136,7 +143,7 @@ pub unsafe fn expand_findfunc(
     // strings — so the count answered may be smaller.
     unsafe { *files = xmalloc(size_of::<*mut c_char>() * len as size_t) as *mut *mut c_char };
     let mut idx = 0;
-    for li in tv_list_iter(unsafe { l.as_ref() }) {
+    for li in list_iter(Some(&held)) {
         if li.li_tv.v_type() as c_uint == VAR_STRING as c_uint {
             unsafe { *(*files).offset(idx as isize) = xstrdup(li.li_tv.string_or_null()) };
             idx += 1;
@@ -163,9 +170,8 @@ pub(crate) unsafe fn findfunc_find_file(
     let saved = unsafe { *findarg.add(findarg_len) };
     unsafe { *findarg.add(findarg_len) = NUL as c_char };
 
-    let held = call_findfunc(findarg, kBoolVarFalse);
-    let fname_list = held.as_ref().map_or(ptr::null_mut(), ListRef::as_ptr);
-    let fname_count = tv_list_len(fname_list);
+    let mut held = call_findfunc(findarg, kBoolVarFalse);
+    let fname_count = list_len(held.as_deref());
     if fname_count == 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let findarg = unsafe { c_str(findarg) };
@@ -175,7 +181,7 @@ pub(crate) unsafe fn findfunc_find_file(
         let findarg = unsafe { c_str(findarg) };
         semsg!("E347: No more file \"{findarg}\" found in path");
     } else {
-        let li = unsafe { tv_list_find(fname_list, count - 1) };
+        let li = list_find(held.as_deref_mut(), count - 1);
         if !li.is_null() && unsafe { (*li).li_tv.v_type() } as c_uint == VAR_STRING as c_uint {
             ret_fname = unsafe { xstrdup((*li).li_tv.string_or_null()) };
         }
@@ -431,12 +437,6 @@ fn option_set_callback_func(optval: *mut c_char, optcb: *mut Callback) -> Result
 fn os_dirname(buf: *mut c_char, len: size_t) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::os::fs::os_dirname(buf, len) }
-}
-
-/// `tv_list_len()` as checked code.
-fn tv_list_len(l: *const List) -> ::core::ffi::c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::eval::typval::tv_list_len(l) }
 }
 
 /// `xstrdup()` as checked code.

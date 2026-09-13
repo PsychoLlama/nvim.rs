@@ -21,9 +21,7 @@ use crate::drawscreen::status_redraw_buf;
 use crate::eval::eval_call_provider;
 
 use crate::api::private::helpers::dict_set_var;
-use crate::eval::typval::{
-    tv_list_alloc, tv_list_append_allocated_string, tv_list_append_list, tv_list_append_string,
-};
+use crate::eval::typval::tv_list_alloc;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::memory::xmemdupz;
 use crate::option::vars::p_bg;
@@ -250,17 +248,17 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
     };
     let lines = tv_list_alloc(1 as ptrdiff_t);
     // SAFETY: as above.
-    unsafe { tv_list_append_allocated_string(lines.as_ptr(), data) };
+    unsafe { (*lines.as_ptr()).push_allocated_string(data) };
     let held = tv_list_alloc(3 as ptrdiff_t);
     let args = held.as_ptr();
     // SAFETY: as above.
-    unsafe { tv_list_append_list(args, Some(lines)) };
+    unsafe { (*args).push_list(Some(lines)) };
     let regtype = b'v' as c_char;
     // SAFETY: as above, over one byte of this frame each, which the list
     // copies.
-    unsafe { tv_list_append_string(args, &raw const regtype, 1 as ssize_t) };
+    unsafe { (*args).push_string(&raw const regtype, 1 as ssize_t) };
     // SAFETY: as above.
-    unsafe { tv_list_append_string(args, &raw mut regname, 1 as ssize_t) };
+    unsafe { (*args).push_string(&raw mut regname, 1 as ssize_t) };
     let (provider, method) = (c"clipboard".as_ptr().cast_mut(), c"set".as_ptr().cast_mut());
     // SAFETY: two names of this crate's own, and the arguments built above.
     // The provider is Vimscript, which is why this runs on the main loop.

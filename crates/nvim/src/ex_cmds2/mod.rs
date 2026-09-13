@@ -55,9 +55,7 @@ use crate::channel::channel_job_running;
 use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::eval::eval_call_provider;
-use crate::eval::typval::{
-    tv_list_alloc, tv_list_append_allocated_string, tv_list_append_number, tv_list_append_string,
-};
+use crate::eval::typval::tv_list_alloc;
 use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var, set_vim_var_string};
 use crate::ex_cmds::{check_overwrite, set_swapcommand};
 use crate::ex_docmd::state::cmdmod;
@@ -231,7 +229,7 @@ pub(crate) unsafe fn ex_perldo(args: *mut ExArg) {
 /// Module contract.
 unsafe fn script_host_execute(name: &CStr, args: *mut ExArg) {
     // SAFETY: module contract; `script_get` returns an owned string that
-    // `tv_list_append_allocated_string` takes over.
+    // `List::push_allocated_string` takes over.
     let mut len: size_t = 0;
     let script = unsafe { script_get(args, &raw mut len) };
     if script.is_null() {
@@ -239,9 +237,9 @@ unsafe fn script_host_execute(name: &CStr, args: *mut ExArg) {
     }
     let argv = tv_list_alloc(3 as ptrdiff_t);
     let into = argv.as_ptr();
-    unsafe { tv_list_append_allocated_string(into, script) };
-    unsafe { tv_list_append_number(into, (*args).line1 as c_int as VarNumber) };
-    unsafe { tv_list_append_number(into, (*args).line2 as c_int as VarNumber) };
+    unsafe { (*into).push_allocated_string(script) };
+    unsafe { (*into).push_number((*args).line1 as c_int as VarNumber) };
+    unsafe { (*into).push_number((*args).line2 as c_int as VarNumber) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
@@ -266,9 +264,9 @@ unsafe fn script_host_execute_file(name: &CStr, args: *mut ExArg) {
 
     let argv = tv_list_alloc(3 as ptrdiff_t);
     let into = argv.as_ptr();
-    unsafe { tv_list_append_string(into, buffer.as_ptr(), -1 as ssize_t) };
-    unsafe { tv_list_append_number(into, (*args).line1 as c_int as VarNumber) };
-    unsafe { tv_list_append_number(into, (*args).line2 as c_int as VarNumber) };
+    unsafe { (*into).push_string(buffer.as_ptr(), -1 as ssize_t) };
+    unsafe { (*into).push_number((*args).line1 as c_int as VarNumber) };
+    unsafe { (*into).push_number((*args).line2 as c_int as VarNumber) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
@@ -290,9 +288,9 @@ unsafe fn script_host_do_range(name: &CStr, args: *mut ExArg) {
     }
     let argv = tv_list_alloc(3 as ptrdiff_t);
     let into = argv.as_ptr();
-    unsafe { tv_list_append_number(into, (*args).line1 as c_int as VarNumber) };
-    unsafe { tv_list_append_number(into, (*args).line2 as c_int as VarNumber) };
-    unsafe { tv_list_append_string(into, (*args).arg, -1 as ssize_t) };
+    unsafe { (*into).push_number((*args).line1 as c_int as VarNumber) };
+    unsafe { (*into).push_number((*args).line2 as c_int as VarNumber) };
+    unsafe { (*into).push_string((*args).arg, -1 as ssize_t) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
@@ -817,7 +815,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     // ":drop file ...": edit the first argument, jumping to an existing
     // window if there is one, editing in the current window if its
     // buffer can be abandoned, and otherwise opening a new window.
-    let buf = find_buf(unsafe { *((*Win::current().w_alist).al_ga.as_mut_ptr()) }.ae_fnum)
+    let buf = find_buf(unsafe { (*((*Win::current().w_alist).al_ga.as_mut_ptr())).ae_fnum })
         .map_or(ptr::null_mut(), |b| b.raw());
     for (tp, wp) in tab_windows() {
         if wp.buffer().raw() != buf {

@@ -10,7 +10,7 @@ use core::ffi::{c_char, c_int};
 use crate::ascii::ascii_isdigit;
 use crate::buffer::find_buf;
 use crate::eval::kMarkAll;
-use crate::eval::typval::{NumBuf, tv_list_find, tv_list_find_nr, tv_list_len};
+use crate::eval::typval::{NumBuf, list_find, list_find_nr, list_len};
 use crate::mark::mark_get;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
@@ -122,12 +122,12 @@ pub unsafe fn var2fpos(
         }
         let mut error = false;
         // SAFETY: `l` is a live List and `error` is this frame's.
-        pos.lnum = unsafe { tv_list_find_nr(l, 0, Some(&mut error)) } as LineNr;
+        pos.lnum = list_find_nr(unsafe { l.as_ref() }, 0, Some(&mut error)) as LineNr;
         if error || pos.lnum <= 0 || pos.lnum > bp.line_count() {
             return None;
         }
         // SAFETY: as above.
-        pos.col = unsafe { tv_list_find_nr(l, 1, Some(&mut error)) } as ColNr;
+        pos.col = list_find_nr(unsafe { l.as_ref() }, 1, Some(&mut error)) as ColNr;
         if error {
             return None;
         }
@@ -141,7 +141,7 @@ pub unsafe fn var2fpos(
         };
         // The column may be spelled `"$"`, meaning end of line.
         // SAFETY: `l` is a live List.
-        let li: *mut ListItem = unsafe { tv_list_find(l, 1) };
+        let li: *mut ListItem = list_find(unsafe { l.as_mut() }, 1);
         // SAFETY: a non-null item holds a typval, and `VAR_STRING` says
         // `v_string` is its live member.
         let dollar = !li.is_null()
@@ -157,7 +157,7 @@ pub unsafe fn var2fpos(
         pos.col -= 1;
 
         // SAFETY: `l` is a live List and `error` is this frame's.
-        pos.coladd = unsafe { tv_list_find_nr(l, 2, Some(&mut error)) } as ColNr;
+        pos.coladd = list_find_nr(unsafe { l.as_ref() }, 2, Some(&mut error)) as ColNr;
         if error {
             pos.coladd = 0;
         }
@@ -279,7 +279,7 @@ pub unsafe fn list2fpos(
     let least = if fnump.is_null() { 2 } else { 3 };
     let most = if fnump.is_null() { 4 } else { 5 };
     // SAFETY: `l` is a live List.
-    let n_items = unsafe { tv_list_len(l) };
+    let n_items = list_len(unsafe { l.as_ref() });
     if n_items < least || n_items > most {
         return Err(Failed);
     }
@@ -287,7 +287,7 @@ pub unsafe fn list2fpos(
     let mut i = 0;
     if !fnump.is_null() {
         // SAFETY: `l` is a live List; a null `error` means "do not report".
-        let mut n = unsafe { tv_list_find_nr(l, i, None) } as c_int;
+        let mut n = list_find_nr(unsafe { l.as_ref() }, i, None) as c_int;
         i += 1;
         if n < 0 {
             return Err(Failed);
@@ -300,7 +300,7 @@ pub unsafe fn list2fpos(
     }
 
     // SAFETY: `l` is a live List.
-    let n = unsafe { tv_list_find_nr(l, i, None) } as c_int;
+    let n = list_find_nr(unsafe { l.as_ref() }, i, None) as c_int;
     i += 1;
     if n < 0 {
         return Err(Failed);
@@ -308,7 +308,7 @@ pub unsafe fn list2fpos(
     posp.lnum = n as LineNr;
 
     // SAFETY: as above.
-    let mut n = unsafe { tv_list_find_nr(l, i, None) } as c_int;
+    let mut n = list_find_nr(unsafe { l.as_ref() }, i, None) as c_int;
     i += 1;
     if n < 0 {
         return Err(Failed);
@@ -335,12 +335,12 @@ pub unsafe fn list2fpos(
 
     // A missing or negative offset is no offset.
     // SAFETY: `l` is a live List.
-    let off = unsafe { tv_list_find_nr(l, i, None) } as c_int;
+    let off = list_find_nr(unsafe { l.as_ref() }, i, None) as c_int;
     posp.coladd = if off < 0 { 0 } else { off as ColNr };
 
     if !curswantp.is_null() {
         // SAFETY: `l` is a live List, and a non-null `curswantp` is valid.
-        unsafe { *curswantp = tv_list_find_nr(l, i + 1, None) as ColNr };
+        unsafe { *curswantp = list_find_nr(l.as_ref(), i + 1, None) as ColNr };
     }
     Ok(())
 }
