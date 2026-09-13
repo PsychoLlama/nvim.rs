@@ -13,7 +13,7 @@ count	callee	no_raw	defs	def
 161	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 154	from_raw_parts	0	0	
 151	Ea::new	0	70	
-135	.as_ref	0	0	
+134	.as_ref	0	0	
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 120	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 110	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
@@ -4015,7 +4015,6 @@ count	callee	no_raw	defs	def
 1	tv_dict_watcher_add	0	1	crates/nvim/src/eval/typval/watcher.rs
 1	tv_dict_watcher_matches	0	1	crates/nvim/src/eval/typval/watcher.rs
 1	tv_dict_watcher_remove	0	1	crates/nvim/src/eval/typval/watcher.rs
-1	tv_list_unlet_range	0	1	crates/nvim/src/eval/vars/unlet.rs
 1	tv_op_blob	0	1	crates/nvim/src/eval/executor.rs
 1	tv_op_float	0	1	crates/nvim/src/eval/executor.rs
 1	tv_op_list	0	1	crates/nvim/src/eval/executor.rs

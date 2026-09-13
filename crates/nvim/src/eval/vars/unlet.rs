@@ -8,7 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::eval::typval::{index_of, list_items, list_iter_mut};
+use crate::eval::typval::{index_of, list_iter_mut};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -188,8 +188,8 @@ unsafe fn do_unlet_var(
 
     if lval.ll_range {
         let (n1, n2, to_end) = (lval.ll_n1, lval.ll_n2, !lval.ll_empty2);
-        // SAFETY: a resolved lvalue's list and the item it starts at.
-        unsafe { tv_list_unlet_range(lval.ll_list, lval.ll_li, n1, to_end, n2) };
+        // SAFETY: a resolved lvalue's list, which is live and unaliased.
+        unlet_range(unsafe { &mut *lval.ll_list }, lval.ll_li, n1, to_end, n2);
     } else if !lval.ll_list.is_null() {
         // One List item.
         unsafe { (*lval.ll_list).remove_at(lval.ll_li) };
@@ -222,18 +222,12 @@ unsafe fn do_unlet_var(
 }
 
 /// Delete the items of `l` from `first` through the `n2`-th, or to the
-/// end when `has_n2` is false.
-///
-/// # Safety
-/// `l` is a live list and `first` an index into it.
-unsafe fn tv_list_unlet_range(l: *mut List, first: usize, n1: c_int, has_n2: bool, n2: c_int) {
-    debug_assert!(!l.is_null());
-    // SAFETY: the caller's promise: a live list.
-    let len = list_items(unsafe { l.as_ref() }).len();
+/// end when `has_n2` is false.  `first` must be an index into `l`.
+fn unlet_range(l: &mut List, first: usize, n1: c_int, has_n2: bool, n2: c_int) {
     // The run ends at `n2` when there is one, and at the last item either
     // way.  An empty list has no run at all; `get_lval` refuses the index
     // that would name one, so this only guards the arithmetic.
-    let Some(end) = len.checked_sub(1) else {
+    let Some(end) = l.len().checked_sub(1) else {
         return;
     };
     let last = if has_n2 {
@@ -241,8 +235,7 @@ unsafe fn tv_list_unlet_range(l: *mut List, first: usize, n1: c_int, has_n2: boo
     } else {
         end
     };
-    // SAFETY: as above; `first..=last` is a run of the list's items.
-    unsafe { (*l).remove_range(first, last.min(end)) };
+    l.remove_range(first, last.min(end));
 }
 
 /// Delete the variable `name[0..name_len]`, reporting E108 if it does not
