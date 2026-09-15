@@ -172,8 +172,9 @@ pub(crate) fn sourcing_lnum() -> LineNr {
     crate::runtime::innermost_frame().es_lnum
 }
 
-/// A command handler. Plain `unsafe fn`, not `extern "C"`: nothing
-/// outside this crate calls the table.
+/// A command handler. A plain safe `fn`, not `extern "C"`: nothing outside
+/// this crate calls the table, and a handler that still needed the keyword
+/// would not coerce -- which is how the table checks its own rows.
 pub type ExFunc = Option<fn(&mut ExArg)>;
 /// An 'inccommand' preview callback, likewise.
 pub type ExPreviewFunc = Option<fn(&mut ExArg, c_int, Handle) -> c_int>;

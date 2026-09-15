@@ -37,6 +37,11 @@ use crate::types::ExArgt as Ex;
 /// c2rust wrote each of these as a twelve-line struct literal whose
 /// `cmd_func` went through a transmute from `ExFunc` to `ExFunc` --
 /// a no-op that cost three `unsafe ` tokens a row.
+///
+/// `func` is a *safe* `fn` on purpose: a safe `fn` coerces to an
+/// `unsafe fn` pointer but not the other way round, so a handler that
+/// still carries the keyword fails to compile here and the table checks
+/// its own rows.
 const fn cmd<const N: usize>(
     name: &'static [u8; N],
     func: fn(&mut ExArg),
