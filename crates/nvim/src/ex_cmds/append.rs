@@ -74,7 +74,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     let mut empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
 
     // The ! flag toggles autoindent.
-    if forceit != 0 {
+    if forceit {
         toggle_autoindent();
     }
 
@@ -165,7 +165,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     State.set(MODE_NORMAL);
     ui_cursor_shape();
 
-    if forceit != 0 {
+    if forceit {
         toggle_autoindent();
     }
 
@@ -264,7 +264,7 @@ pub fn ex_change(excmd: &mut ExArg) {
 
     // The ! flag toggles autoindent.
     let autoindent = Buf::current().b_p_ai;
-    if if forceit != 0 {
+    if if forceit {
         autoindent == 0
     } else {
         autoindent != 0
@@ -304,7 +304,7 @@ pub fn ex_z(excmd: &mut ExArg) {
         excmd.flags,
         excmd.line2,
     );
-    let mut bigness = default_bigness(forceit).max(1);
+    let mut bigness = default_bigness(c_int::from(forceit)).max(1);
 
     // SAFETY: the command argument is NUL-terminated.
     let text = unsafe { CStr::from_ptr(arg) }.to_bytes();

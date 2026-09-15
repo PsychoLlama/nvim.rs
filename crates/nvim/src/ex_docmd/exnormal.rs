@@ -125,7 +125,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
             unsafe {
                 exec_normal_cmd(
                     if arg.is_null() { excmd.arg } else { arg },
-                    if excmd.forceit != 0 {
+                    if excmd.forceit {
                         REMAP_NONE as c_int
                     } else {
                         REMAP_YES as c_int
@@ -203,7 +203,7 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
 
 /// `:startinsert`, `:startreplace` and `:startgreplace`.
 pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
-    if excmd.forceit != 0 {
+    if excmd.forceit {
         if Win::current().w_cursor.lnum == 0 {
             Win::current().w_cursor.lnum = 1;
         }
@@ -222,7 +222,7 @@ pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
     } else {
         'V' as c_int
     });
-    if excmd.forceit == 0 {
+    if !excmd.forceit {
         if idx == CmdIdx::startinsert {
             restart_edit.set('i' as c_int);
         }

@@ -25,7 +25,7 @@ pub fn ex_unlet(excmd: &mut ExArg) {
     // GLV_QUIET and `do_unlet` as `forceit`.
     // SAFETY: the caller's obligation -- a live command, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
-    let glv_flags = if excmd.forceit != 0 { GLV_QUIET } else { 0 };
+    let glv_flags = if excmd.forceit { GLV_QUIET } else { 0 };
     let arg = excmd.arg;
     unsafe { ex_unletlock(excmd, arg, 0, glv_flags, do_unlet_var) };
 }
@@ -38,7 +38,7 @@ pub fn ex_lockvar(excmd: &mut ExArg) {
     // Two levels by default: the variable and what it directly holds.
     // `!` is everything, and an explicit count says how deep.
     let mut deep = 2;
-    if excmd.forceit != 0 {
+    if excmd.forceit {
         deep = -1;
     } else if ascii_isdigit(c_int::from(unsafe { *arg })) {
         deep = unsafe { getdigits_int(&raw mut arg, false, -1) };
@@ -83,12 +83,12 @@ unsafe fn ex_unletlock(
                 semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
-            if !error && excmd.skip == 0 && unsafe { callback(lvp, arg, excmd, deep) }.is_err() {
+            if !error && !excmd.skip && unsafe { callback(lvp, arg, excmd, deep) }.is_err() {
                 error = true;
             }
             name_end = arg;
         } else {
-            let quiet = excmd.skip != 0 || error;
+            let quiet = excmd.skip || error;
             name_end = unsafe { get_lval(arg, None, lvp, true, quiet, glv_flags, FNE_CHECK_START) };
             if lv.ll_name.is_null() {
                 // An error, but carry on parsing.
@@ -104,17 +104,16 @@ unsafe fn ex_unletlock(
                     let name_end = unsafe { c_str(name_end) };
                     semsg!("E488: Trailing characters: {name_end}");
                 }
-                if !(excmd.skip != 0 || error) {
+                if !(excmd.skip || error) {
                     unsafe { clear_lval(lvp) };
                 }
                 break;
             }
 
-            if !error && excmd.skip == 0 && unsafe { callback(lvp, name_end, excmd, deep) }.is_err()
-            {
+            if !error && !excmd.skip && unsafe { callback(lvp, name_end, excmd, deep) }.is_err() {
                 error = true;
             }
-            if excmd.skip == 0 {
+            if !excmd.skip {
                 unsafe { clear_lval(lvp) };
             }
         }
@@ -153,7 +152,7 @@ unsafe fn do_unlet_var(
             unsafe { vim_unsetenv_ext(lval.ll_name.add(1)) };
             Ok(())
         } else {
-            unsafe { do_unlet(lval.ll_name, lval.ll_name_len, excmd.forceit != 0) }
+            unsafe { do_unlet(lval.ll_name, lval.ll_name_len, excmd.forceit) }
         };
         unsafe { *name_end = cc };
         return ret;

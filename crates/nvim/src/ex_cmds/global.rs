@@ -227,7 +227,7 @@ pub fn ex_global(excmd: &mut ExArg) {
     }
 
     // ":global!" is like ":vglobal".
-    let kind = if excmd.forceit != 0 {
+    let kind = if excmd.forceit {
         b'v'
     } else {
         // SAFETY: `args.cmd` points at the command word.

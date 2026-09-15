@@ -259,7 +259,7 @@ pub(crate) fn ex_eval(excmd: &mut ExArg) {
         eval_cookie: ptr::null_mut(),
         eval_tofree: ptr::null_mut(),
     };
-    let skip = excmd.skip != 0;
+    let skip = excmd.skip;
     // SAFETY: module contract.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
     let arg = excmd.arg;

@@ -312,7 +312,7 @@ pub unsafe fn heredoc_get(
         }
 
         let str = unsafe { theline.offset(ti as isize) };
-        if evalstr && excmd.skip == 0 {
+        if evalstr && !excmd.skip {
             let evaluated = unsafe { eval_all_expr_in_str(str) };
             if evaluated.is_null() {
                 eval_failed = true;

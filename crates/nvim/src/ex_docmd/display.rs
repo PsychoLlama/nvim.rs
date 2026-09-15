@@ -79,7 +79,7 @@ pub(crate) fn ex_highlight(excmd: &mut ExArg) {
     if byte(excmd.arg) == NUL && byte_at(excmd.cmd, 2) == '!' as c_int {
         msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
-    unsafe { do_highlight(excmd.arg, excmd.forceit != 0, false) };
+    unsafe { do_highlight(excmd.arg, excmd.forceit, false) };
 }
 
 /// `:redir` — send message output to a file, a register or a variable
@@ -106,7 +106,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         if fname.is_null() {
             return;
         }
-        redir_fd.set(unsafe { open_exfile(fname, excmd.forceit, mode) });
+        redir_fd.set(unsafe { open_exfile(fname, c_int::from(excmd.forceit), mode) });
         xfree(fname as *mut c_void);
     } else if byte(arg) == '@' as c_int {
         close_redir();
@@ -164,7 +164,7 @@ pub(crate) fn ex_redraw(excmd: &mut ExArg) {
     let lazyredraw_off = suspend_lazyredraw();
     validate_cursor(Win::current());
     update_topline(Win::current());
-    if excmd.forceit != 0 {
+    if excmd.forceit {
         redraw_all_later(UPD_NOT_VALID);
         redraw_cmdline.set(true);
     } else if visual_active() {
@@ -188,7 +188,7 @@ pub(crate) fn ex_redrawstatus(excmd: &mut ExArg) {
     if cmdpreview.get() {
         return;
     }
-    if excmd.forceit != 0 {
+    if excmd.forceit {
         status_redraw_all();
     } else {
         status_redraw_curbuf();
@@ -255,7 +255,7 @@ pub(crate) fn ex_digraphs(excmd: &mut ExArg) {
     if byte(excmd.arg) != NUL {
         putdigraph(unsafe { core::ffi::CStr::from_ptr(excmd.arg) }.to_bytes());
     } else {
-        listdigraphs(excmd.forceit != 0);
+        listdigraphs(excmd.forceit);
     }
 }
 

@@ -96,7 +96,7 @@ pub fn ex_let(excmd: &mut ExArg) {
         } else if ends_excmd(c_int::from(head.cast_signed())) == 0 {
             // ":let var1 var2"
             arg = unsafe { list_arg_vars(excmd, arg, &raw mut first) } as *mut c_char;
-        } else if excmd.skip == 0 {
+        } else if !excmd.skip {
             // ":let" on its own.
             const SCOPES: [ScopeLister; 7] = [
                 list_glob_vars,
@@ -140,7 +140,7 @@ pub fn ex_let(excmd: &mut ExArg) {
         let l = unsafe { heredoc_get(excmd, expr.add(3), false) };
         if let Some(l) = l {
             rettv.write_list(Some(l));
-            if excmd.skip == 0 {
+            if !excmd.skip {
                 let op = [b'=' as c_char, NUL as c_char];
                 assign(&mut rettv, op.as_ptr());
             }
@@ -168,14 +168,14 @@ pub fn ex_let(excmd: &mut ExArg) {
     }
     expr = unsafe { skipwhite(expr) };
 
-    let skipping = (excmd.skip != 0).then(Suppress::emsg_skip);
+    let skipping = (excmd.skip).then(Suppress::emsg_skip);
     let mut evalarg = EvalArg {
         eval_flags: 0,
         eval_getline: None,
         eval_cookie: ptr::null_mut(),
         eval_tofree: ptr::null_mut(),
     };
-    let skip = excmd.skip != 0;
+    let skip = excmd.skip;
     // SAFETY: a live local `evalarg`, and `expr` inside the command's own
     // argument text.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(&mut *excmd), skip) };
@@ -183,7 +183,7 @@ pub fn ex_let(excmd: &mut ExArg) {
     drop(skipping);
     unsafe { clear_evalarg(&raw mut evalarg, Some(&mut *excmd)) };
 
-    if excmd.skip == 0 && eval_res.is_ok() {
+    if !excmd.skip && eval_res.is_ok() {
         assign(&mut rettv, op.as_ptr());
     }
     if eval_res.is_ok() {

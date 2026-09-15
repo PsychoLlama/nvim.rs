@@ -182,7 +182,7 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
     let mut got_clstr = false;
 
     args.nextcmd = unsafe { find_nextcmd(arg) };
-    if args.skip != 0 {
+    if args.skip {
         return;
     }
 
@@ -204,7 +204,7 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
 
         while let Some((keylen, list_op)) = cluster_op(&line[cursor..]) {
             let mut clstr_list = IdList::NONE;
-            match read_id_list(&line, cursor, keylen, &mut clstr_list, args.skip != 0) {
+            match read_id_list(&line, cursor, keylen, &mut clstr_list, args.skip) {
                 Ok(next) => cursor = next,
                 Err(next) => {
                     let shown = msg_bytes(&line[next..]);

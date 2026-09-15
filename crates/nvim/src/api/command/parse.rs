@@ -300,7 +300,7 @@ pub unsafe fn nvim_parse_cmd(
         result.reg = Some(unsafe { cstr_to_string(reg.as_ptr()) });
     }
 
-    result.bang = Some(ea.forceit != 0);
+    result.bang = Some(ea.forceit);
     result.args = Some(args);
 
     // `:command -nargs=` spelling of how many arguments the command takes.

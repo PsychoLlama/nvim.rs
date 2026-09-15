@@ -206,7 +206,7 @@ pub(crate) unsafe fn eval1_emsg(
     let called_emsg_before = called_emsg.get();
 
     let mut evalarg = UNSET_EVALARG;
-    let skip = excmd.as_deref().is_some_and(|command| command.skip != 0);
+    let skip = excmd.as_deref().is_some_and(|command| command.skip);
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, excmd.as_deref_mut(), skip) };
     let ret = unsafe { eval1(arg, result, &raw mut evalarg) };
     if ret.is_err()
@@ -448,7 +448,7 @@ pub unsafe fn eval_to_string_eap(
 ) -> *mut c_char {
     let mut tv = UNSET_TV;
     let mut evalarg = UNSET_EVALARG;
-    let skip = excmd.as_deref().is_some_and(|command| command.skip != 0);
+    let skip = excmd.as_deref().is_some_and(|command| command.skip);
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, excmd, skip) };
     // The `excmd` is read for the line getter above but deliberately not
     // handed on: this evaluation is not the Ex command's own.
@@ -552,7 +552,7 @@ pub unsafe fn eval_expr_ext(
 ) -> *mut TypVal {
     let mut tv = unsafe { xmalloc(size_of::<TypVal>()) } as *mut TypVal;
     let mut evalarg = UNSET_EVALARG;
-    let skip = excmd.as_deref().is_some_and(|command| command.skip != 0);
+    let skip = excmd.as_deref().is_some_and(|command| command.skip);
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, excmd.as_deref_mut(), skip) };
     // `eval0_simple_funccal` falls through to `eval0` itself, so the two
     // arms are the whole of the choice: nothing here can be left undone.

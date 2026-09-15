@@ -392,7 +392,7 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
         return;
     }
     let id = excmd.line2 as c_int;
-    let skip = excmd.skip != 0;
+    let skip = excmd.skip;
 
     // Whatever happens next, the old pattern for this id goes.
     if !skip {

@@ -156,7 +156,7 @@ pub fn show_sb_text() {
     if ui_has(kUIMessages) {
         let mut ea = ExArg {
             arg: c"".as_ptr().cast_mut(),
-            skip: 1,
+            skip: true,
             ..ExArg::default()
         };
         ex_messages(&mut ea);

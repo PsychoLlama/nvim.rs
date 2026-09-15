@@ -80,7 +80,7 @@ pub(crate) fn parse_register(excmd: &mut ExArg) {
     // The expression register swallows the rest of the line: it *is* the
     // expression, and evaluating it is deferred until the register is read.
     if excmd.regname == '=' as c_int && byte(excmd.arg) != NUL {
-        if excmd.skip == 0 {
+        if !excmd.skip {
             unsafe { set_expr_line(xstrdup(excmd.arg)) };
         }
         excmd.arg = unsafe { excmd.arg.add(cstr::bytes_at(excmd.arg).len()) };

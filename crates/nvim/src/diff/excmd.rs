@@ -376,7 +376,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
     let mut diffwin = false;
     // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: always the `firstwin` list.
     for mut wp in windows() {
-        let wanted = if excmd.forceit != 0 {
+        let wanted = if excmd.forceit {
             wp.w_onebuf_opt.wo_diff != 0
         } else {
             wp.is_current()
@@ -424,7 +424,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
         }
         diffwin = diffwin || wp.w_onebuf_opt.wo_diff != 0;
     }
-    if excmd.forceit != 0 {
+    if excmd.forceit {
         diff_buf_clear();
     }
     let mut tp = TabPage::current();

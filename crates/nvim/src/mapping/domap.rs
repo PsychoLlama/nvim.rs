@@ -561,7 +561,7 @@ fn do_exmap(excmd: &mut ExArg, isabbrev: bool) {
     let mut cmdp = excmd.cmd;
     // SAFETY: `cmd` is the command name the dispatcher matched, so it is live
     // and NUL-terminated.
-    let mode = unsafe { get_map_mode(&raw mut cmdp, excmd.forceit != 0 || isabbrev) };
+    let mode = unsafe { get_map_mode(&raw mut cmdp, excmd.forceit || isabbrev) };
 
     // SAFETY: `get_map_mode` left `cmdp` inside the same name.
     let maptype = match unsafe { *cmdp } as u8 {
@@ -630,7 +630,7 @@ pub fn ex_unmap(excmd: &mut ExArg) {
 pub fn ex_mapclear(excmd: &mut ExArg) {
     // SAFETY: the caller's promise — `excmd` is a live `ExArg`, so `cmd` and
     // `arg` are its own NUL-terminated strings.
-    unsafe { do_mapclear(excmd.cmd, excmd.arg, excmd.forceit != 0, false) }
+    unsafe { do_mapclear(excmd.cmd, excmd.arg, excmd.forceit, false) }
 }
 
 /// `:abclear` and friends.

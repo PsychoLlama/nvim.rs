@@ -79,14 +79,14 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
         }
     }
 
-    if excmd.skip == 0 {
+    if !excmd.skip {
         unsafe {
             find_pattern_in_path(
                 excmd.arg,
                 kDirectionNotSet,
                 cstr::bytes_at(excmd.arg).len(),
                 whole,
-                excmd.forceit == 0,
+                !excmd.forceit,
                 if *excmd.cmd as c_int == 'd' as c_int {
                     FIND_DEFINE as c_int
                 } else {
@@ -96,7 +96,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
                 action,
                 excmd.line1,
                 excmd.line2,
-                excmd.forceit != 0,
+                excmd.forceit,
                 false,
             )
         };
@@ -158,7 +158,7 @@ unsafe fn ex_tag_cmd(excmd: &mut ExArg, name: *const c_char) {
             } else {
                 1
             },
-            excmd.forceit,
+            c_int::from(excmd.forceit),
             true,
         )
     };

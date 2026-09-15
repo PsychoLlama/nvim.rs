@@ -555,7 +555,7 @@ unsafe fn uc_check_code(
         // SAFETY: module contract.
         Code::Args => unsafe { expand_args(&mut out, args, quote, split_buf, split_len) },
         Code::Bang => {
-            let body: &[u8] = if args.forceit != 0 { b"!" } else { b"" };
+            let body: &[u8] = if args.forceit { b"!" } else { b"" };
             // SAFETY: caller contract.
             unsafe { out.quoted(quotes(b'"'), body) };
             out.len

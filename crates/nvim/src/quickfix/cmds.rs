@@ -105,7 +105,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
 
     let jumps = matches!(excmd.cmdidx, CmdIdx::cfile | CmdIdx::lfile);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
-        unsafe { qf_jump_first(qi.raw(), save_qfid, excmd.forceit) };
+        unsafe { qf_jump_first(qi.raw(), save_qfid, c_int::from(excmd.forceit)) };
     }
     qf_busy_end();
 }
@@ -240,7 +240,7 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
 
     let jumps = matches!(excmd.cmdidx, CmdIdx::cbuffer | CmdIdx::lbuffer);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
-        unsafe { qf_jump_first(qi.raw(), save_qfid, excmd.forceit) };
+        unsafe { qf_jump_first(qi.raw(), save_qfid, c_int::from(excmd.forceit)) };
     }
     qf_busy_end();
 }
@@ -328,7 +328,7 @@ fn cexpr_core(excmd: &mut ExArg, tv: &mut TypVal) -> Result<(), Failed> {
 
     let jumps = matches!(excmd.cmdidx, CmdIdx::cexpr | CmdIdx::lexpr);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
-        unsafe { qf_jump_first(qi.raw(), save_qfid, excmd.forceit) };
+        unsafe { qf_jump_first(qi.raw(), save_qfid, c_int::from(excmd.forceit)) };
     }
     qf_busy_end();
     Ok(())

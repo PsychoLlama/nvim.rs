@@ -56,9 +56,9 @@ pub fn ex_return(excmd: &mut ExArg) {
     }
 
     let mut evalarg = EVALARG_INIT;
-    evalarg.eval_flags = if excmd.skip != 0 { 0 } else { EVAL_EVALUATE };
+    evalarg.eval_flags = if excmd.skip { 0 } else { EVAL_EVALUATE };
 
-    let skipping = (excmd.skip != 0).then(Suppress::emsg_skip);
+    let skipping = (excmd.skip).then(Suppress::emsg_skip);
 
     excmd.nextcmd = ptr::null_mut();
     if unsafe { *arg } != NUL as c_char
@@ -66,12 +66,12 @@ pub fn ex_return(excmd: &mut ExArg) {
         && unsafe { *arg } != b'\n' as c_char
         && unsafe { eval0(arg, &mut rettv, Some(excmd), &raw mut evalarg) }.is_ok()
     {
-        if excmd.skip == 0 {
+        if !excmd.skip {
             returning = unsafe { do_return(excmd, false, true, (&raw mut rettv) as *mut c_void) };
         } else {
             tv_clear(&mut rettv);
         }
-    } else if excmd.skip == 0 {
+    } else if !excmd.skip {
         // It's safer to return also on error.
         update_force_abort();
 
@@ -341,10 +341,10 @@ pub fn ex_call(excmd: &mut ExArg) {
     let mut fudi = FUNCDICT_INIT;
     let mut partial: *mut Partial = ptr::null_mut();
     let mut evalarg = EVALARG_INIT;
-    let skip = excmd.skip != 0;
+    let skip = excmd.skip;
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
 
-    if excmd.skip != 0 {
+    if excmd.skip {
         // Trailing arguments are still evaluated, so that errors in them
         // are reported -- but nothing is called.
         let mut rettv = TV_INITIAL_VALUE;

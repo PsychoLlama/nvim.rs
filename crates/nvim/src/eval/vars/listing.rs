@@ -133,7 +133,7 @@ pub(crate) unsafe fn list_arg_vars(
     let mut evalarg = EVALARG_EVALUATE;
     let mut error = false;
     while ends_excmd(unsafe { *arg } as c_int) == 0 && !got_int.get() {
-        if error || excmd.skip != 0 {
+        if error || excmd.skip {
             // Nothing is being printed any more; just check that what is
             // left parses as names.
             let flags = FNE_INCL_BR | FNE_CHECK_START;

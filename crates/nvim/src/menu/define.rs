@@ -61,7 +61,7 @@ pub(crate) fn ex_menu(excmd: &mut ExArg) {
         (
             CStr::from_ptr(excmd.cmd),
             CText::new(excmd.arg),
-            excmd.forceit != 0,
+            excmd.forceit,
             (excmd.addr_count != 0 && excmd.line2 != 0).then_some(excmd.line2 as c_int),
         )
     };

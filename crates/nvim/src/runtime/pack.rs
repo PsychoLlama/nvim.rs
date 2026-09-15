@@ -697,7 +697,7 @@ pub fn load_start_packages() {
 /// `:packloadall[!]`.
 pub fn ex_packloadall(excmd: &mut ExArg) {
     // SAFETY: `excmd` is the live command.
-    if did_source_packages.get() && excmd.forceit == 0 {
+    if did_source_packages.get() && !excmd.forceit {
         return;
     }
     // One round to add every directory to 'runtimepath', then a second to
@@ -763,7 +763,7 @@ pub fn ex_packadd(excmd: &mut ExArg) {
     let arg = excmd.arg;
     let len = PACKADD_PATTERN.count_bytes() + 1 + unsafe { cstr::bytes_at(arg) }.len() + 5;
     let pat = unsafe { xmallocz(len) }.cast::<c_char>();
-    let cookie = if excmd.forceit != 0 {
+    let cookie = if excmd.forceit {
         PackWork::AddDir
     } else {
         PackWork::Both

@@ -144,7 +144,7 @@ pub(crate) unsafe fn build_cmdline_str(
     let name = excmd.cmd;
     // SAFETY: `cmd.cmd` is the command name, NUL-terminated.
     unsafe { cmdline_concat(&mut cmdline, name, cstr::bytes_at(name).len()) };
-    if excmd.argt.has(ExArgt::BANG) && excmd.forceit != 0 {
+    if excmd.argt.has(ExArgt::BANG) && excmd.forceit {
         cmdline_concat_str(&mut cmdline, c"!");
     }
     if excmd.argt.has(ExArgt::REGSTR) && excmd.regname != 0 {

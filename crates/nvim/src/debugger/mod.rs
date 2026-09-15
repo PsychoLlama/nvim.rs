@@ -224,7 +224,7 @@ static debug_skipped_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_m
 pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
     debug_skipped.set(false);
     // SAFETY: caller contract.
-    let skip = excmd.skip != 0;
+    let skip = excmd.skip;
     let name = debug_breakpoint_name.get();
 
     if name.is_null() {
@@ -283,9 +283,9 @@ pub fn dbg_check_skipped(excmd: &mut ExArg) -> bool {
     got_int.set(false);
     debug_breakpoint_name.set(debug_skipped_name.get());
     // SAFETY: caller contract; `args.skip` is true on entry, and is put back.
-    excmd.skip = 0;
+    excmd.skip = false;
     dbg_check_breakpoint(excmd);
-    excmd.skip = 1;
+    excmd.skip = true;
     got_int.set(got_int.get() | prev_got_int);
     true
 }
@@ -445,7 +445,7 @@ pub fn ex_breakadd(excmd: &mut ExArg) {
     let Ok(mut bp) = (unsafe { dbg_parsearg(arg, list) }) else {
         return;
     };
-    bp.dbg_forceit = forceit;
+    bp.dbg_forceit = c_int::from(forceit);
 
     if bp.dbg_type == DBG_EXPR {
         last_breakp.set(last_breakp.get() + 1);

@@ -428,12 +428,12 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
         let word = &key[..key.len() - 1];
 
         if word == b"CCOMMENT" {
-            if args.skip == 0 {
+            if !args.skip {
                 cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
             }
             if ends_excmd(unsafe { *next_arg } as c_int) == 0 {
                 arg_end = unsafe { skiptowhite(next_arg) };
-                if args.skip == 0 {
+                if !args.skip {
                     unsafe {
                         cur_syn_block().b_syn_sync_id =
                             syn_check_group(next_arg, arg_end.offset_from(next_arg) as size_t)
@@ -441,7 +441,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
                     };
                 }
                 next_arg = unsafe { skipwhite(arg_end) };
-            } else if args.skip == 0 {
+            } else if !args.skip {
                 unsafe {
                     cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t
                 };
@@ -456,7 +456,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
             // SAFETY: `key` is NUL-terminated and `digits_at` is inside it.
             let mut digits = unsafe { key.as_mut_ptr().add(count.digits_at) }.cast::<c_char>();
             let n = unsafe { getdigits_int32(&raw mut digits, false, 0) };
-            if args.skip == 0 {
+            if !args.skip {
                 let mut block = cur_syn_block();
                 match count.field {
                     SyncField::MinLines => block.b_syn_sync_minlines = n,
@@ -465,7 +465,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
                 }
             }
         } else if word == b"FROMSTART" {
-            if args.skip == 0 {
+            if !args.skip {
                 cur_syn_block().b_syn_sync_minlines = MAXLNUM;
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
@@ -550,7 +550,7 @@ unsafe fn sync_linecont(args: &ExArg, next_arg: *mut c_char) -> Result<*mut c_ch
         return Err(LineContError::Illegal); // end delimiter not found
     }
 
-    if args.skip == 0 {
+    if !args.skip {
         let mut block = cur_syn_block();
         // Store the pattern and its compiled program. 'cpoptions' is
         // emptied first, to avoid the 'l' flag.

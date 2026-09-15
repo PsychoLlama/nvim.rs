@@ -192,7 +192,7 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
         } else {
             0
         }) | CCGD_MULTWIN as c_int
-            | (if excmd.forceit != 0 {
+            | (if excmd.forceit {
                 CCGD_FORCEIT as c_int
             } else {
                 0
@@ -210,7 +210,7 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
 
 /// `:find` — edit the first file of that name on 'path', or the `count`'th.
 pub(crate) fn ex_find(excmd: &mut ExArg) {
-    if !check_can_set_curbuf_forceit(excmd.forceit) {
+    if !check_can_set_curbuf_forceit(c_int::from(excmd.forceit)) {
         return;
     }
     let count = if excmd.addr_count > 0 {
@@ -290,7 +290,7 @@ pub(crate) fn ex_edit(excmd: &mut ExArg) {
     if excmd.cmdidx != CmdIdx::badd
         && excmd.cmdidx != CmdIdx::balt
         && unsafe { is_other_file(0, ffname) }
-        && !check_can_set_curbuf_forceit(excmd.forceit)
+        && !check_can_set_curbuf_forceit(c_int::from(excmd.forceit))
     {
         return;
     }
@@ -353,7 +353,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             ptr::null_mut(),
             excmd,
             newlnum::ONE as LineNr,
-            EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit != 0),
+            EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit),
             old_curwin.is_none().then(|| Win::current().id()),
         );
     } else if idx != CmdIdx::split && idx != CmdIdx::vsplit || byte(excmd.arg) != NUL {
@@ -381,7 +381,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             excmd,
             excmd.do_ecmd_lnum,
             EcmdFlags::HIDE.when(buf_hide(Buf::current()))
-                | EcmdFlags::FORCEIT.when(excmd.forceit != 0)
+                | EcmdFlags::FORCEIT.when(excmd.forceit)
                 | EcmdFlags::OLDBUF.when(old_curwin.is_some())
                 | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
                 | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt),
@@ -440,7 +440,7 @@ pub(crate) fn ex_swapname(_excmd: &mut ExArg) {
 /// `:read` — insert a file, or the output of a command.
 pub(crate) fn ex_read(excmd: &mut ExArg) {
     let was_empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
-    if excmd.usefilter != 0 {
+    if excmd.usefilter {
         do_bang(1, excmd, false, false, true);
         return;
     }
@@ -508,7 +508,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
 
 /// `:!cmd`.
 pub(crate) fn ex_bang(excmd: &mut ExArg) {
-    let (addr_count, forceit) = (excmd.addr_count, excmd.forceit != 0);
+    let (addr_count, forceit) = (excmd.addr_count, excmd.forceit);
     do_bang(addr_count, excmd, forceit, true, true);
 }
 
@@ -519,7 +519,7 @@ pub(crate) fn ex_wundo(excmd: &mut ExArg) {
     u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
     let buffer = Buf::current();
     let hash = hash.as_mut_ptr();
-    unsafe { u_write_undo(excmd.arg, excmd.forceit != 0, buffer, hash) };
+    unsafe { u_write_undo(excmd.arg, excmd.forceit, buffer, hash) };
 }
 
 /// `:rundo`.
@@ -540,14 +540,14 @@ pub(crate) fn ex_checkpath(excmd: &mut ExArg) {
             false,
             CHECK_PATH as c_int,
             1,
-            if excmd.forceit != 0 {
+            if excmd.forceit {
                 ACTION_SHOW_ALL as c_int
             } else {
                 ACTION_SHOW as c_int
             },
             1,
             MAXLNUM,
-            excmd.forceit != 0,
+            excmd.forceit,
             false,
         )
     };
@@ -562,16 +562,16 @@ pub(crate) fn ex_shada(excmd: &mut ExArg) {
         p_shada.set(c"'100".as_ptr() as *mut c_char);
     }
     if excmd.cmdidx == CmdIdx::rviminfo || excmd.cmdidx == CmdIdx::rshada {
-        let _ = unsafe { shada_read_everything(excmd.arg, excmd.forceit != 0, false) };
+        let _ = unsafe { shada_read_everything(excmd.arg, excmd.forceit, false) };
     } else {
-        unsafe { shada_write_file(excmd.arg, excmd.forceit != 0) };
+        unsafe { shada_write_file(excmd.arg, excmd.forceit) };
     }
     p_shada.set(save_shada);
 }
 
 /// `:fclose` — close a floating window by its handle.
 pub(crate) fn ex_fclose(excmd: &mut ExArg) {
-    win_float_remove(excmd.forceit != 0, excmd.line1 as c_int);
+    win_float_remove(excmd.forceit, excmd.line1 as c_int);
 }
 
 /// `buf_hide()` as checked code.

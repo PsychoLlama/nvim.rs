@@ -69,7 +69,7 @@ pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
 pub(crate) unsafe fn list_functions_matching_pat(excmd: &mut ExArg) -> *mut c_char {
     // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
     let mut p = unsafe { skip_regexp(excmd.arg.add(1), b'/' as c_int, 1) };
-    if excmd.skip == 0 {
+    if !excmd.skip {
         let mut regmatch = REGMATCH_INIT;
         // Terminate the pattern for `vim_regcomp`, then put the byte back.
         let c = unsafe { *p };
@@ -110,7 +110,7 @@ pub(crate) unsafe fn list_one_function(
     if !excmd.nextcmd.is_null() {
         unsafe { *p = NUL as c_char };
     }
-    if excmd.skip != 0 || got_int.get() {
+    if excmd.skip || got_int.get() {
         return ptr::null_mut();
     }
 
@@ -124,7 +124,7 @@ pub(crate) unsafe fn list_one_function(
     // therefore that `fp` is still the function this started on.
     let prev_ht_changed = func_table().changed();
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    if unsafe { list_func_head(fp, excmd.forceit == 0, excmd.forceit != 0) }.is_err() {
+    if unsafe { list_func_head(fp, !excmd.forceit, excmd.forceit) }.is_err() {
         return fp;
     }
     // SAFETY: `fp` is the live function just listed.
@@ -138,7 +138,7 @@ pub(crate) unsafe fn list_one_function(
             continue;
         }
         msg_putchar(b'\n' as c_int);
-        if excmd.forceit == 0 {
+        if !excmd.forceit {
             // The line number, right-aligned in three columns.
             msg_outnum(j as c_int + 1);
             if j < 9 {
@@ -157,7 +157,7 @@ pub(crate) unsafe fn list_one_function(
     if !got_int.get() {
         msg_putchar(b'\n' as c_int);
         if function_list_modified(prev_ht_changed) == 0 {
-            let end = if excmd.forceit != 0 {
+            let end = if excmd.forceit {
                 c"endfunction".as_ptr()
             } else {
                 c"   endfunction".as_ptr()
@@ -278,18 +278,11 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
     let mut fudi = FUNCDICT_INIT;
     let mut p = excmd.arg;
-    let name = unsafe {
-        trans_function_name(
-            &raw mut p,
-            excmd.skip != 0,
-            0,
-            &raw mut fudi,
-            ptr::null_mut(),
-        )
-    };
+    let name =
+        unsafe { trans_function_name(&raw mut p, excmd.skip, 0, &raw mut fudi, ptr::null_mut()) };
     unsafe { xfree(fudi.fd_newkey as *mut c_void) };
     if name.is_null() {
-        if !fudi.fd_dict.is_null() && excmd.skip == 0 {
+        if !fudi.fd_dict.is_null() && !excmd.skip {
             emsg(gettext(E_FUNCREF));
         }
         return;
@@ -308,7 +301,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
 
     if (unsafe { *name } as u8).is_ascii_digit() && fudi.fd_dict.is_null() {
         // Numbered function.
-        if excmd.skip == 0 {
+        if !excmd.skip {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = unsafe { c_str(excmd.arg) };
             semsg!("E475: Invalid argument: {arg}");
@@ -316,18 +309,18 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
         unsafe { xfree(name as *mut c_void) };
         return;
     }
-    let fp = if excmd.skip == 0 {
+    let fp = if !excmd.skip {
         unsafe { find_func(name) }
     } else {
         ptr::null_mut()
     };
     unsafe { xfree(name as *mut c_void) };
-    if excmd.skip != 0 {
+    if excmd.skip {
         return;
     }
 
     if fp.is_null() {
-        if excmd.forceit == 0 {
+        if !excmd.forceit {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = unsafe { c_str(excmd.arg) };
             semsg!("E130: Unknown function: {arg}");

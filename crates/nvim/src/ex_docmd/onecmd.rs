@@ -163,7 +163,7 @@ pub(crate) fn shift_cmd_args(excmd: &mut ExArg) {
 /// derived `PartialEq` at `-O0`, which is what the test suites build.
 #[rustfmt::skip]
 pub(crate) fn skip_cmd(excmd: &mut ExArg) -> bool {
-    excmd.skip != 0 && !matches!(excmd.cmdidx,
+    excmd.skip && !matches!(excmd.cmdidx,
         CmdIdx::r#while | CmdIdx::endwhile | CmdIdx::r#for | CmdIdx::endfor |
         CmdIdx::r#if | CmdIdx::elseif | CmdIdx::r#else | CmdIdx::endif | CmdIdx::r#try |
         CmdIdx::catch | CmdIdx::finally | CmdIdx::endtry | CmdIdx::function |
@@ -246,15 +246,15 @@ pub(crate) unsafe fn do_one_cmd(
         mods.apply();
         after_modifier = ea.cmd;
 
-        ea.skip = (did_emsg.get() != 0
+        // SAFETY: `cstack` is the caller's conditional stack, live for the
+        // whole of this command.
+        ea.skip = did_emsg.get() != 0
             || got_int.get()
             || did_throw.get()
-            // SAFETY: `cstack` is the caller's conditional stack, live for
-            // the whole of this command.
             || unsafe {
                 (*cstack).cs_idx >= 0
                     && !(*cstack).cs_flags[(*cstack).cs_idx as usize].has(CsFlags::ACTIVE)
-            }) as c_int;
+            };
 
         // The command name is needed before the range can be read: it is
         // what says whether an address counts lines, windows, buffers or
@@ -268,8 +268,8 @@ pub(crate) unsafe fn do_one_cmd(
             // is skipped.
             dbg_check_breakpoint(&mut ea);
         }
-        if ea.skip == 0 && got_int.get() {
-            ea.skip = 1;
+        if !ea.skip && got_int.get() {
+            ea.skip = true;
             unsafe { do_intthrow(cstack) };
         }
 
@@ -287,7 +287,7 @@ pub(crate) unsafe fn do_one_cmd(
             ea.nextcmd = unsafe { check_nextcmd(ea.cmd) };
             !ea.nextcmd.is_null()
         } {
-            if ea.skip == 0 {
+            if !ea.skip {
                 debug_assert!(errormsg.is_none());
                 errormsg = ex_range_without_command(&mut ea);
             }
@@ -298,7 +298,7 @@ pub(crate) unsafe fn do_one_cmd(
         // CmdUndefined autocommand waiting to define it.
         if !p.is_null()
             && ea.cmdidx == CmdIdx::SIZE
-            && ea.skip == 0
+            && !ea.skip
             && (ubyte(ea.cmd)).is_ascii_uppercase()
             && has_event(AutoEvent::CmdUndefined)
         {
@@ -322,14 +322,14 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         if p.is_null() {
-            if ea.skip == 0 {
+            if !ea.skip {
                 errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
             }
             break 'doend;
         }
 
         if ea.cmdidx == CmdIdx::SIZE {
-            if ea.skip == 0 {
+            if !ea.skip {
                 // The modifiers parsed, so the error is in what follows
                 // them.
                 let cmdname = if after_modifier.is_null() {
@@ -354,13 +354,13 @@ pub(crate) unsafe fn do_one_cmd(
         // relaxed, because there is nothing to check them against.
         let ni = is_cmd_ni(ea.cmdidx);
 
-        ea.forceit = unsafe { parse_bang(&mut ea, &raw mut p) } as c_int;
+        ea.forceit = unsafe { parse_bang(&mut ea, &raw mut p) };
 
         if !is_user_cmd(ea.cmdidx) {
             ea.argt = cmdnames[ea.cmdidx.index()].cmd_argt;
         }
 
-        if ea.skip == 0 {
+        if !ea.skip {
             if let Some(msg) = refuses_here(&ea) {
                 errormsg = Some(msg);
                 break 'doend;
@@ -383,14 +383,14 @@ pub(crate) unsafe fn do_one_cmd(
             }
         }
 
-        if !ni && !ea.argt.has(ExArgt::BANG) && ea.forceit != 0 {
+        if !ni && !ea.argt.has(ExArgt::BANG) && ea.forceit {
             errormsg = Some(ex_msg(e_nobang.as_ptr()));
             break 'doend;
         }
 
         // A range that is not used is not complained about, which can
         // happen when a line count is accidentally zero.
-        if ea.skip == 0 && !ni && ea.argt.has(ExArgt::RANGE) {
+        if !ea.skip && !ni && ea.argt.has(ExArgt::RANGE) {
             // A backwards range is offered for swapping. `:global` is
             // busy running a command per line and would fail below
             // anyway, so it is not asked.
@@ -467,21 +467,21 @@ pub(crate) unsafe fn do_one_cmd(
                     break 'doend;
                 }
                 ea.arg = unsafe { skipwhite(ea.arg.add(1)) };
-                ea.append = 1;
+                ea.append = true;
             } else if byte(ea.arg) == '!' as c_int && ea.cmdidx == CmdIdx::write {
                 // `:w !filter`
                 ea.arg = unsafe { ea.arg.add(1) };
-                ea.usefilter = 1;
+                ea.usefilter = true;
             }
         } else if ea.cmdidx == CmdIdx::read {
-            if ea.forceit != 0 {
+            if ea.forceit {
                 // `:r!filter`
-                ea.usefilter = 1;
-                ea.forceit = 0;
+                ea.usefilter = true;
+                ea.forceit = false;
             } else if byte(ea.arg) == '!' as c_int {
                 // `:r !filter`
                 ea.arg = unsafe { ea.arg.add(1) };
-                ea.usefilter = 1;
+                ea.usefilter = true;
             }
         } else if ea.cmdidx == CmdIdx::lshift || ea.cmdidx == CmdIdx::rshift {
             // How far to shift is how many `<` or `>` were typed.
@@ -495,17 +495,17 @@ pub(crate) unsafe fn do_one_cmd(
 
         // `+command`, before the next command is looked for. Not for
         // `:read !cmd` and `:write !cmd`.
-        if ea.argt.has(ExArgt::CMDARG) && ea.usefilter == 0 {
+        if ea.argt.has(ExArgt::CMDARG) && !ea.usefilter {
             ea.do_ecmd_cmd = unsafe { getargcmd(&raw mut ea.arg) };
         }
 
-        if ea.argt.has(ExArgt::TRLBAR) && ea.usefilter == 0 {
+        if ea.argt.has(ExArgt::TRLBAR) && !ea.usefilter {
             separate_nextcmd(&mut ea);
         } else if ea.cmdidx == CmdIdx::bang
             || ea.cmdidx == CmdIdx::terminal
             || ea.cmdidx == CmdIdx::global
             || ea.cmdidx == CmdIdx::vglobal
-            || ea.usefilter != 0
+            || ea.usefilter
         {
             // A shell command ends at a newline instead, and one
             // backslash before that newline is removed.
@@ -650,7 +650,7 @@ pub(crate) unsafe fn profile_cmd(
     // SAFETY: the caller's conditional stack, live for the command.
     let cs = unsafe { Cs::new(cstack) };
     if do_profiling.get() != PROF_YES
-        || !(excmd.skip == 0
+        || !(!excmd.skip
             || cs.cs_idx == 0
             || (cs.cs_idx > 0 && cs.cs_flags[cs.cs_idx as usize - 1].has(CsFlags::ACTIVE)))
     {
@@ -673,7 +673,7 @@ pub(crate) unsafe fn profile_cmd(
         // The four block-enders are the only commands left that keep the
         // caller's `skip`; everything else takes it.
         CmdIdx::endif | CmdIdx::endfor | CmdIdx::endtry | CmdIdx::endwhile => {}
-        _ => skip = excmd.skip != 0,
+        _ => skip = excmd.skip,
     }
     if skip {
         return;
@@ -796,7 +796,7 @@ const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this 
 /// Keeps the raw signature: it is a `cmd_func` in the command table, and
 /// `is_cmd_ni` recognises a command by comparing against its address.
 pub fn ex_ni(excmd: &mut ExArg) {
-    if excmd.skip == 0 {
+    if !excmd.skip {
         excmd.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
     }
 }
@@ -805,7 +805,7 @@ pub fn ex_ni(excmd: &mut ExArg) {
 /// (`:perl <<EOF`) — the body has to be consumed even when the command
 /// cannot run, or its lines would be read as commands.
 pub(crate) fn ex_script_ni(excmd: &mut ExArg) {
-    if excmd.skip == 0 {
+    if !excmd.skip {
         ex_ni(excmd);
     } else {
         let mut len: size_t = 0;

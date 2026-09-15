@@ -184,7 +184,7 @@ unsafe fn prepare_cmd(
     unsafe { build_cmdline_str(cmdline, ea, cmdinfo, args) };
     ea.cmdlinep = cmdline;
     apply_argopt(ea)?;
-    if ea.argt.has(ExArgt::CMDARG) && ea.usefilter == 0 {
+    if ea.argt.has(ExArgt::CMDARG) && !ea.usefilter {
         // SAFETY: as above.
         ea.do_ecmd_cmd = unsafe { getargcmd(&raw mut ea.arg) };
     }
@@ -506,8 +506,8 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
 
 /// Apply `cmd.bang`.
 fn apply_bang(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
-    ea.forceit = c_int::from(cmd.bang.unwrap_or(false));
-    if ea.forceit != 0 && !ea.argt.has(ExArgt::BANG) {
+    ea.forceit = cmd.bang.unwrap_or(false);
+    if ea.forceit && !ea.argt.has(ExArgt::BANG) {
         return Err(err_cannot_accept(c"bang", cmd));
     }
     Ok(())

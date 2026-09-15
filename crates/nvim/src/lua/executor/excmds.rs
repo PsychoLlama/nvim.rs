@@ -61,7 +61,7 @@ pub fn ex_lua(excmd: &mut ExArg) {
 
         let mut len: size_t = 0;
         let mut code = script_get(excmd, &raw mut len);
-        if excmd.skip != 0 || code.is_null() {
+        if excmd.skip || code.is_null() {
             xfree(code.cast::<c_void>());
             return;
         }

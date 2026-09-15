@@ -317,7 +317,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
     }
 
     let mut entries = EMPTY_ARRAY;
-    let mut p = if excmd.skip != 0 {
+    let mut p = if excmd.skip {
         msg_hist_temp.get()
     } else {
         msg_hist_first.get()
@@ -332,7 +332,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
         // Skip over count or temporary "g<" messages. The decrement sits
         // inside the short circuit: a temporary entry does not consume one
         // of the counted lines.
-        let temporary = unsafe { (*p).temp } && excmd.skip == 0;
+        let temporary = unsafe { (*p).temp } && !excmd.skip;
         let counted_out = !temporary && {
             let remaining = skip;
             skip -= 1;
@@ -365,6 +365,6 @@ pub fn ex_messages(excmd: &mut ExArg) {
     }
 
     if !entries.is_empty() {
-        ui_call_msg_history_show(entries, excmd.skip != 0);
+        ui_call_msg_history_show(entries, excmd.skip);
     }
 }

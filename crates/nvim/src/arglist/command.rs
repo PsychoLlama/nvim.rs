@@ -182,7 +182,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     // SAFETY: caller contract.
     // SAFETY: `cmd` points at the command's own text, which is not empty.
     let is_split_cmd = unsafe { *excmd.cmd } as c_int == 's' as c_int;
-    let forceit = excmd.forceit != 0;
+    let forceit = excmd.forceit;
     let cmdidx = excmd.cmdidx;
     let old_arg_idx = cur_arg_idx();
     if argn < 0 || argn >= argcount() {
@@ -196,7 +196,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     let entry_fnum = unsafe { (*arg(argn)).ae_fnum };
     let refused = !is_split_cmd
         && entry_fnum != Buf::current().handle
-        && !check_can_set_curbuf_forceit(excmd.forceit);
+        && !check_can_set_curbuf_forceit(c_int::from(excmd.forceit));
     if refused {
         return;
     }
@@ -246,7 +246,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
 /// `:next` and the commands that behave like it.
 pub fn ex_next(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let forceit = excmd.forceit != 0;
+    let forceit = excmd.forceit;
     let is_snext = excmd.cmdidx == CmdIdx::snext;
     // SAFETY: `arg` points at the command's own text.
     let has_arg = unsafe { *excmd.arg } as c_int != NUL;

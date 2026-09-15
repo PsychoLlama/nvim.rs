@@ -319,7 +319,7 @@ pub(crate) fn parse_command_modifiers(
                         // The scan advances a cursor of its own; see
                         // `parse_cmd_address`.
                         let mut cursor = excmd.cmd;
-                        let skip = excmd.skip != 0;
+                        let skip = excmd.skip;
                         let tabnr = unsafe {
                             get_address(
                                 Some(excmd),

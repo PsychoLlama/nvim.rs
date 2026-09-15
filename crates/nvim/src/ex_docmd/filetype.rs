@@ -55,9 +55,9 @@ pub(crate) fn ex_autocmd(excmd: &mut ExArg) {
         secure.set(2);
         excmd.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
     } else if excmd.cmdidx == CmdIdx::autocmd {
-        unsafe { do_autocmd(excmd, excmd.arg, excmd.forceit) };
+        unsafe { do_autocmd(excmd, excmd.arg, c_int::from(excmd.forceit)) };
     } else {
-        unsafe { do_augroup(excmd.arg, excmd.forceit != 0) };
+        unsafe { do_augroup(excmd.arg, excmd.forceit) };
     }
 }
 

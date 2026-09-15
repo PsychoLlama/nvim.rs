@@ -213,7 +213,7 @@ pub(super) unsafe fn show_one_mark(
 pub fn ex_delmarks(excmd: &mut ExArg) {
     // SAFETY: the caller promised a live command whose `arg` is a
     // NUL-terminated string.
-    let (arg, forceit) = (excmd.arg, excmd.forceit != 0);
+    let (arg, forceit) = (excmd.arg, excmd.forceit);
     let mut buf = Buf::current();
     // SAFETY: `arg` is a NUL-terminated string.
     let empty = c_int::from(unsafe { *arg }) == NUL;

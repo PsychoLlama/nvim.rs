@@ -113,7 +113,7 @@ fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
         line1: args.line1,
         line2: args.line2,
         addr_count: args.addr_count,
-        forceit: args.forceit != 0,
+        forceit: args.forceit,
         regname: u8::try_from(args.regname)
             .ok()
             .filter(|&r| r != 0)
@@ -269,8 +269,8 @@ fn argopts(_editor: &Editor, line: &str) -> Result<ArgOpts, ()> {
         char::from(u8::try_from(args.force_ff).unwrap_or(0)),
         at(args.force_enc),
         args.force_bin,
-        args.read_edit != 0,
-        args.mkdir_p != 0,
+        args.read_edit,
+        args.mkdir_p,
         args.bad_char,
         text_at(args.arg),
     ))

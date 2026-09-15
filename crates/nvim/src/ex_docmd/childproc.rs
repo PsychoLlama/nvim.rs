@@ -59,7 +59,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
                 &raw mut ex_cmd as *mut c_char,
                 CMD_LEN,
                 c"enew%s".as_ptr(),
-                if excmd.forceit != 0 {
+                if excmd.forceit {
                     c"!".as_ptr()
                 } else {
                     c"".as_ptr()

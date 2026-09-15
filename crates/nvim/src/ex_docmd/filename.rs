@@ -194,7 +194,7 @@ pub(crate) unsafe fn expand_filename(
         // that hand the whole argument to a shell themselves, and not
         // for a name that came back already escaped (`##`).
         let idx = excmd.cmdidx;
-        if excmd.usefilter == 0
+        if !excmd.usefilter
             && escaped == 0
             && idx != CmdIdx::bang
             && idx != CmdIdx::grep
@@ -219,7 +219,7 @@ pub(crate) unsafe fn expand_filename(
         }
         // A `!` in the replacement would be read as "the previous
         // command" by the shell-command line parser.
-        if (excmd.usefilter != 0 || idx == CmdIdx::bang || idx == CmdIdx::terminal)
+        if (excmd.usefilter || idx == CmdIdx::bang || idx == CmdIdx::terminal)
             && !unsafe { strpbrk(repl, c"!".as_ptr()) }.is_null()
         {
             let escaped_repl = vim_strsave_escaped(repl, c"!".as_ptr());
@@ -233,7 +233,7 @@ pub(crate) unsafe fn expand_filename(
 
     // `ExArgt::NOSPC` means the argument is one file name, so wildcards in
     // it can be expanded to exactly one match.
-    if !excmd.argt.has(ExArgt::NOSPC) || excmd.usefilter != 0 {
+    if !excmd.argt.has(ExArgt::NOSPC) || excmd.usefilter {
         return Ok(());
     }
 

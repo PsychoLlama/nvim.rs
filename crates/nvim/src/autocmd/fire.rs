@@ -467,7 +467,7 @@ pub unsafe fn apply_autocmds_group(
                 Some(command) => {
                     // SAFETY: a fresh value, so nothing is being freed.
                     let saved = unsafe { set_cmdarg(Some(command), ::core::ptr::null_mut()) };
-                    set_vim_var_nr(Vv::Cmdbang, VarNumber::from(bang.unwrap_or(0)));
+                    set_vim_var_nr(Vv::Cmdbang, VarNumber::from(bang.unwrap_or(false)));
                     saved
                 }
             };

@@ -139,7 +139,7 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
             // it for the quickfix addresses, so its `cmd` cannot be lent as
             // well.
             let mut cursor = excmd.cmd;
-            let (addr_type, skip) = (excmd.addr_type, excmd.skip != 0);
+            let (addr_type, skip) = (excmd.addr_type, excmd.skip);
             let to_other_file = (excmd.addr_count == 0) as c_int;
             lnum = unsafe {
                 get_address(
@@ -175,7 +175,7 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                     break 'theend;
                 }
                 excmd.cmd = unsafe { excmd.cmd.add(1) };
-                if excmd.skip == 0 {
+                if !excmd.skip {
                     let fm = mark_get_visual(Buf::current(), &raw mut first, '<' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
@@ -193,7 +193,7 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
             }
             excmd.addr_count += 1;
             if byte(excmd.cmd) == ';' as c_int {
-                if excmd.skip == 0 {
+                if !excmd.skip {
                     Win::current().w_cursor.lnum = excmd.line2;
                     // A zero line number is not a position, so only the
                     // column is worth correcting there.

@@ -162,7 +162,7 @@ pub fn ex_file(excmd: &mut ExArg) {
 
     // print file name if no argument or 'F' is not in 'shortmess'
     if no_arg || !shortmess(ShmFlag::FILEINFO) {
-        fileinfo(0, 0, excmd.forceit != 0);
+        fileinfo(0, 0, excmd.forceit);
     }
 }
 
@@ -186,7 +186,7 @@ pub fn ex_write(excmd: &mut ExArg) {
         excmd.line2 = Buf::current().b_ml.ml_line_count;
     }
 
-    if excmd.usefilter != 0 {
+    if excmd.usefilter {
         // input lines to shell command
         do_bang(1, excmd, false, true, false);
     } else {
@@ -217,7 +217,7 @@ unsafe fn check_writable(fname: *const c_char) -> Result<(), Failed> {
 /// `fname` must be live.
 unsafe fn handle_mkdir_p_arg(args: &ExArg, fname: *mut c_char) -> Result<(), Failed> {
     // SAFETY: caller's contract.
-    if args.mkdir_p != 0 && unsafe { os_file_mkdir(fname, 0o755 as int32_t) } < 0 {
+    if args.mkdir_p && unsafe { os_file_mkdir(fname, 0o755 as int32_t) } < 0 {
         return Err(Failed);
     }
     Ok(())
@@ -306,8 +306,8 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
 
     let name_was_missing = Buf::current().b_ffname.is_null();
     let request = WriteRequest {
-        append: args.append != 0,
-        forceit: args.forceit != 0,
+        append: args.append,
+        forceit: args.forceit,
         reset_changed: true,
         filtering: false,
     };
@@ -343,24 +343,22 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
 /// readonly mode, no file name, an unwritable target, or a "nofile"/"nowrite"
 /// buffer that cannot be written implicitly.
 fn cannot_write_curbuf(args: &mut ExArg) -> bool {
-    let forceit = &raw mut args.forceit;
-    // SAFETY: `curbuf` is the live current buffer, and `forceit` is the
-    // borrowed command's own field. The whole chain is one region so the
-    // short-circuiting is untouched -- a block cannot lead a `||` chain in
-    // tail position anyway.
+    // SAFETY: `curbuf` is the live current buffer. The whole chain is one
+    // region so the short-circuiting is untouched -- a block cannot lead a
+    // `||` chain in tail position anyway.
     unsafe {
         buf_dontwrite_msg(current_buf())
             || check_fname().is_err()
             || check_writable(Buf::current().b_ffname).is_err()
-            || check_readonly(forceit, Buf::current())
+            || check_readonly(&mut args.forceit, Buf::current())
     }
 }
 
 /// Writing less than the whole buffer needs a `!`, or the user's blessing.
 fn confirm_partial_write(args: &mut ExArg) -> bool {
     if (args.line1 == 1 && args.line2 == Buf::current().b_ml.ml_line_count)
-        || args.forceit != 0
-        || args.append != 0
+        || args.forceit
+        || args.append
         || p_wa.get() != 0
     {
         return true;
@@ -380,7 +378,7 @@ fn confirm_partial_write(args: &mut ExArg) -> bool {
     {
         return false;
     }
-    args.forceit = 1;
+    args.forceit = true;
     true
 }
 
@@ -473,7 +471,7 @@ pub unsafe fn check_overwrite(
         return Ok(());
     }
 
-    if args.forceit == 0 && args.append == 0 {
+    if !args.forceit && !args.append {
         // SAFETY: as above; one `%s` for one string.
         if unsafe { os_isdir(ffname) } {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -496,7 +494,7 @@ pub unsafe fn check_overwrite(
         } {
             return Err(Failed);
         }
-        args.forceit = 1;
+        args.forceit = true;
     }
 
     if !other || emsg_silent.get() != 0 {
@@ -536,7 +534,7 @@ pub unsafe fn check_overwrite(
     } {
         return Err(Failed);
     }
-    args.forceit = 1;
+    args.forceit = true;
     Ok(())
 }
 
@@ -638,11 +636,11 @@ enum WriteAll {
 fn write_one_buffer(
     args: &mut ExArg,
     buffer: Buf,
-    save_forceit: c_int,
+    save_forceit: bool,
     error: &mut c_int,
 ) -> WriteAll {
     if exiting.get()
-        && args.forceit == 0
+        && !args.forceit
         && !buffer.terminal.is_null()
         && channel_job_running(buffer.b_p_channel as u64)
     {
@@ -665,14 +663,14 @@ fn write_one_buffer(
     if buffer.b_ffname.is_null() {
         semsg!("E141: No file name for buffer {}", buffer.handle as int64_t);
         *error += 1;
-    } else if unsafe { check_readonly(&raw mut args.forceit, buffer) }
+    } else if check_readonly(&mut args.forceit, buffer)
         || unsafe { check_overwrite(args, buffer, buffer.b_fname, buffer.b_ffname, false) }.is_err()
     {
         *error += 1;
     } else {
         let bufref = BufRef::of(buffer);
         if unsafe { handle_mkdir_p_arg(args, buffer.b_fname) }.is_err()
-            || buf_write_all(buffer, args.forceit != 0).is_err()
+            || buf_write_all(buffer, args.forceit).is_err()
         {
             *error += 1;
         }
@@ -706,18 +704,15 @@ fn not_writing() -> bool {
 ///
 /// Returns true and gives an error message when the buffer is read-only.
 ///
-/// # Safety
-/// `forceit` must be live; `*forceit` may be set by the dialog.
-unsafe fn check_readonly(forceit: *mut c_int, buffer: Buf) -> bool {
+/// `forceit` is set when the dialog overrules a read-only file.
+fn check_readonly(forceit: &mut bool, buffer: Buf) -> bool {
     // Handle a file being readonly when the 'readonly' option is set or when
     // the file exists and permissions are read-only.
-    // SAFETY: caller's contract, and the buffer's own file name.
     let file = buffer.b_ffname;
-    let readonly = unsafe {
-        *forceit == 0
-            && (buffer.b_p_ro != 0
-                || os_path_exists(file) && os_file_is_writable(cstr::at(file)) == 0)
-    };
+    // SAFETY: the buffer's own file name.
+    let readonly = !*forceit
+        && (buffer.b_p_ro != 0
+            || unsafe { os_path_exists(file) && os_file_is_writable(cstr::at(file)) == 0 });
     if !readonly {
         return false;
     }
@@ -746,8 +741,7 @@ unsafe fn check_readonly(forceit: *mut c_int, buffer: Buf) -> bool {
         return true;
     }
     // Set forceit, to force the writing of a readonly file.
-    // SAFETY: caller's contract.
-    unsafe { *forceit = 1 };
+    *forceit = true;
     false
 }
 

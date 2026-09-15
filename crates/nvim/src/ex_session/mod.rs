@@ -477,7 +477,7 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
             && (*arg == NUL as c_char
                 || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL as c_char))
         {
-            excmd.forceit = 1;
+            excmd.forceit = true;
             view_file = get_view_file(*arg);
             if view_file.is_null() {
                 return;
@@ -500,7 +500,7 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
     let using_vdir = !view_file.is_null();
 
     // SAFETY: `fname` is NUL-terminated, and `fd` is used only while open.
-    let fd = unsafe { open_exfile(fname, excmd.forceit, c"wb".as_ptr().cast_mut()) };
+    let fd = unsafe { open_exfile(fname, c_int::from(excmd.forceit), c"wb".as_ptr().cast_mut()) };
     if !fd.is_null() {
         let out = unsafe { SessionFile::new(fd) };
         let failed = unsafe { write_rc(out, excmd, fname, view_session, using_vdir) };

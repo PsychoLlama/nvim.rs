@@ -68,7 +68,7 @@ pub fn ex_cc(excmd: &mut ExArg) {
         errornr = c_int::try_from(valid_entry).expect("a quickfix list is shorter than INT_MAX");
     }
 
-    qf_goto(qi, 0, errornr, excmd.forceit);
+    qf_goto(qi, 0, errornr, c_int::from(excmd.forceit));
 }
 
 /// `:cnext`, `:cprevious`, `:cnfile`, `:cpfile` and their `:l…` twins, plus
@@ -101,7 +101,7 @@ pub fn ex_cnext(excmd: &mut ExArg) {
         _ => FORWARD,
     };
 
-    qf_goto(qi, dir, errornr, excmd.forceit);
+    qf_goto(qi, dir, errornr, c_int::from(excmd.forceit));
 }
 
 /// The first entry of the list that belongs to buffer `bnr`.

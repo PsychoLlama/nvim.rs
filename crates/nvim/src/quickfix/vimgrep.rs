@@ -602,7 +602,7 @@ unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
 /// friends when `'grepprg'` is `internal`.
 pub fn ex_vimgrep(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    if !check_can_set_curbuf_forceit(excmd.forceit) {
+    if !check_can_set_curbuf_forceit(c_int::from(excmd.forceit)) {
         return;
     }
 
@@ -665,7 +665,7 @@ pub fn ex_vimgrep(excmd: &mut ExArg) {
         let spat = unsafe { c_str(search.spat) };
         semsg!("E480: No match: {spat}");
     } else if search.flags & VGR_NOJUMP as c_int == 0 {
-        unsafe { jump_to_match(qi.raw(), excmd.forceit, &mut out) };
+        unsafe { jump_to_match(qi.raw(), c_int::from(excmd.forceit), &mut out) };
     }
 
     qf_busy_end();

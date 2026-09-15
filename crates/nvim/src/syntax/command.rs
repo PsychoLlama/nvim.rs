@@ -35,7 +35,7 @@ fn word_index(word: &[u8], names: &[&CStr]) -> Option<usize> {
 fn mode_cmd_start(args: &mut ExArg) -> bool {
     // SAFETY: `arg` is the caller's command line, a NUL-terminated string.
     args.nextcmd = unsafe { find_nextcmd(args.arg) };
-    args.skip == 0
+    !args.skip
 }
 
 /// `:syntax conceal [on|off]`.
@@ -162,7 +162,7 @@ pub(crate) fn syn_cmd_spell(args: &mut ExArg, _syncing: c_int) {
 /// the current buffer and keeping the character table that produces, so the
 /// buffer's own table has to be saved and put back around the call.
 pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
-    if args.skip != 0 {
+    if args.skip {
         return;
     }
     let arg = unsafe { skipwhite(args.arg) };
@@ -217,7 +217,7 @@ pub(crate) fn syn_cmd_on(args: &mut ExArg, _syncing: c_int) {
 /// `:syntax reset`. It actually resets highlighting, not syntax.
 pub(crate) fn syn_cmd_reset(args: &mut ExArg, _syncing: c_int) {
     args.nextcmd = unsafe { check_nextcmd(args.arg) };
-    if args.skip == 0 {
+    if !args.skip {
         init_highlight(true, true);
     }
 }
@@ -236,7 +236,7 @@ pub(crate) fn syn_cmd_off(args: &mut ExArg, _syncing: c_int) {
 /// on/off commands amount to.
 fn syn_cmd_onoff(args: &mut ExArg, name: &CStr) {
     args.nextcmd = unsafe { check_nextcmd(args.arg) };
-    if args.skip != 0 {
+    if args.skip {
         return;
     }
     did_syntax_onoff.set(true);
@@ -256,7 +256,7 @@ pub(crate) fn syn_maybe_enable() {
     if !did_syntax_onoff.get() {
         let mut ea = ExArg {
             arg: c"".as_ptr().cast_mut(),
-            skip: 0,
+            skip: false,
             ..Default::default()
         };
         syn_cmd_on(&mut ea, 0);
@@ -326,7 +326,7 @@ pub(crate) fn ex_syntax(excmd: &mut ExArg) {
     let subcmd_name = unsafe { name_at(arg, subcmd_end.offset_from(arg) as usize) };
 
     // Skip the error messages of every subcommand too.
-    let _skipping = (excmd.skip != 0).then(Suppress::emsg_skip);
+    let _skipping = (excmd.skip).then(Suppress::emsg_skip);
     match SUBCOMMANDS.iter().find(|sub| *sub.name == *subcmd_name) {
         Some(sub) => {
             excmd.arg = unsafe { skipwhite(subcmd_end) };

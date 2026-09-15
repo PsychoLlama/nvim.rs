@@ -91,7 +91,7 @@ impl ListDo {
 /// `:lfdo`.
 pub(crate) fn ex_listdo(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let (cmdidx, forceit) = (excmd.cmdidx, excmd.forceit != 0);
+    let (cmdidx, forceit) = (excmd.cmdidx, excmd.forceit);
     let Some(list) = ListDo::from_cmdidx(cmdidx) else {
         return;
     };

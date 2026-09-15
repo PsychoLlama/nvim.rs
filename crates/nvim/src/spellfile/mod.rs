@@ -452,7 +452,7 @@ pub fn ex_mkspell(excmd: &mut ExArg) {
     if unsafe { get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false) }.is_err() {
         return;
     }
-    unsafe { mkspell(fcount, fnames, ascii, excmd.forceit != 0, false) };
+    unsafe { mkspell(fcount, fnames, ascii, excmd.forceit, false) };
     unsafe { free_wild(fcount, fnames) };
 }
 
@@ -792,7 +792,7 @@ pub fn ex_spell(excmd: &mut ExArg) {
     };
     // `:N spellgood` files the word in the Nth 'spellfile'; `!` means the
     // internal word list instead.
-    let which = if forceit != 0 {
+    let which = if forceit {
         0
     } else {
         line2 as ::core::ffi::c_int

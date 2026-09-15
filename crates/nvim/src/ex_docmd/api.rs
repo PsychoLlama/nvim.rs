@@ -159,7 +159,7 @@ pub unsafe fn parse_cmdline(
             break 'end;
         }
 
-        excmd.forceit = c_int::from(unsafe { parse_bang(excmd, &raw mut p) });
+        excmd.forceit = unsafe { parse_bang(excmd, &raw mut p) };
         if !is_user_cmd(excmd.cmdidx) {
             excmd.argt = cmdnames[excmd.cmdidx.index()].cmd_argt;
         }
@@ -170,8 +170,8 @@ pub unsafe fn parse_cmdline(
             skipwhite(p)
         };
         // `:r!` is a filter, not a bang.
-        if excmd.cmdidx == CmdIdx::read && excmd.forceit != 0 {
-            excmd.forceit = 0;
+        if excmd.cmdidx == CmdIdx::read && excmd.forceit {
+            excmd.forceit = false;
         }
 
         if excmd.argt.has(ExArgt::TRLBAR) {
@@ -199,7 +199,7 @@ pub unsafe fn parse_cmdline(
             }
         }
 
-        if !excmd.argt.has(ExArgt::BANG) && excmd.forceit != 0 {
+        if !excmd.argt.has(ExArgt::BANG) && excmd.forceit {
             *errormsg = Some(ex_msg(e_nobang.as_ptr()));
             break 'end;
         }

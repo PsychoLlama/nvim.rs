@@ -37,7 +37,7 @@ use std::ffi::CString;
 unsafe fn cmd_source(fname: *mut c_char, excmd: Option<&mut ExArg>) {
     // SAFETY: the caller's contract -- `fname` is NUL-terminated.
     let named = unsafe { *fname } as c_int != NUL;
-    let forceit = excmd.as_deref().is_some_and(|command| command.forceit != 0);
+    let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
     if named
         && excmd
             .as_deref()

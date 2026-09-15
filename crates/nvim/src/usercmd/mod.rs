@@ -517,7 +517,7 @@ pub(crate) fn ex_command(excmd: &mut ExArg) {
     let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
 
     // SAFETY: caller contract.
-    let (arg, forceit) = (excmd.arg, excmd.forceit != 0);
+    let (arg, forceit) = (excmd.arg, excmd.forceit);
     // SAFETY: caller contract; `arg` is NUL-terminated.
     let has_attr = unsafe { *arg } == b'-' as c_char;
     let mut p = arg;

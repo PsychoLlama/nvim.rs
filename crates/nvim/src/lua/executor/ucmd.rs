@@ -133,7 +133,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
 
         lua_pushstring(lstate, (*cmd).uc_name);
         set(c"name");
-        lua_pushboolean(lstate, (excmd.forceit == 1) as c_int);
+        lua_pushboolean(lstate, (excmd.forceit) as c_int);
         set(c"bang");
         lua_pushinteger(lstate, excmd.line1 as lua_Integer);
         set(c"line1");

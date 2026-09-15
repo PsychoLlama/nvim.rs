@@ -100,7 +100,7 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
     };
     if !fresh {
         // Use the previous pattern and substitution.
-        if args.skip != 0 {
+        if args.skip {
             return Some(Parsed {
                 pat: ptr::null_mut(),
                 patlen: 0 as size_t,
@@ -194,7 +194,7 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
     };
 
     // SAFETY: `sub.0` is a live copy of the replacement.
-    if args.skip == 0 && !keeppatterns && cmdpreview_ns <= 0 as c_int {
+    if !args.skip && !keeppatterns && cmdpreview_ns <= 0 as c_int {
         unsafe {
             sub_set_replacement(SubReplacementString {
                 sub: xstrdup(sub.0),
@@ -230,7 +230,7 @@ unsafe fn read_count(args: &mut ExArg, cmd: &mut *mut c_char) -> bool {
     let count_arg: *const c_char = *cmd;
     // SAFETY: as above; `getdigits_int` advances `cmd` past the digits.
     let i = unsafe { getdigits_int(cmd, false, INT_MAX) };
-    let skip = args.skip != 0;
+    let skip = args.skip;
     if i <= 0 as c_int && !skip && subflags.with(|flags| flags.do_error) {
         emsg(gettext(e_zerocount));
         return false;
@@ -313,7 +313,7 @@ pub(super) fn parse_sub(
             return None;
         }
     }
-    if args.skip != 0 {
+    if args.skip {
         // Not executing commands, only parsing.
         return None;
     }

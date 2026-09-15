@@ -81,14 +81,14 @@ pub(crate) fn ex_throw(excmd: &mut ExArg) {
         && unsafe { *arg } != b'|' as c_char
         && unsafe { *arg } != b'\n' as c_char
     {
-        unsafe { eval_to_string_skip(arg, excmd, excmd.skip != 0) }
+        unsafe { eval_to_string_skip(arg, excmd, excmd.skip) }
     } else {
         unsafe { emsg_ptr(message(e_argreq)) };
         ptr::null_mut()
     };
 
     // Do not throw on an error, or when the argument evaluation threw.
-    if excmd.skip != 0 || value.is_null() {
+    if excmd.skip || value.is_null() {
         return;
     }
     if unsafe { throw_exception(value.cast(), ET_USER, ptr::null_mut()) }.is_err() {

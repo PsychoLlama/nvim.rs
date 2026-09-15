@@ -43,7 +43,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     let mut sgl_id = 1;
 
     args.nextcmd = unsafe { find_nextcmd(arg) };
-    if args.skip != 0 {
+    if args.skip {
         return;
     }
 
@@ -147,18 +147,12 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     // pattern, and the options after it.
     let name = split_group_name(&line);
     let mut end = name.as_ref().and_then(|name| {
-        let at = read_item_options(
-            &line,
-            name.rest,
-            &mut opt,
-            &mut conceal_char,
-            args.skip != 0,
-        )?;
+        let at = read_item_options(&line, name.rest, &mut opt, &mut conceal_char, args.skip)?;
         let at = read_pattern(&line, at, &mut item)?;
         if vim_regcomp_had_eol() != 0 && !opt.flags.has(SynFlags::EXCLUDENL) {
             opt.flags |= SynFlags::HAS_EOL;
         }
-        read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip != 0)
+        read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip)
     });
 
     let mut stored = false;
@@ -167,7 +161,7 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
         // SAFETY: `at` is an offset `line` answered, so it is within the
         // command line the caller still owns.
         args.nextcmd = unsafe { check_nextcmd(arg.add(at)) };
-        if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip != 0 {
+        if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip {
             end = None;
         } else {
             let name_len = name.as_ref().map_or(0, |name| name.len);
@@ -268,13 +262,7 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
     let mut cursor = at;
     while let Some(mut at) = cursor.filter(|&at| ends_excmd(byte(at)) == 0) {
         // Options may appear anywhere between the patterns.
-        cursor = read_item_options(
-            line,
-            at,
-            &mut out.opt,
-            &mut out.conceal_char,
-            args.skip != 0,
-        );
+        cursor = read_item_options(line, at, &mut out.opt, &mut out.conceal_char, args.skip);
         match cursor {
             Some(next) if ends_excmd(byte(next)) == 0 => at = next,
             _ => break,
@@ -309,7 +297,7 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
 
         if item == ITEM_MATCHGROUP {
             let name_end = at + skip::to_white(&line[at..]);
-            if &line[at..name_end] == b"NONE" || args.skip != 0 {
+            if &line[at..name_end] == b"NONE" || args.skip {
                 matchgroup_id = 0;
             } else {
                 let name = cstr::owned(&line[at..name_end]);
@@ -374,7 +362,7 @@ pub(crate) fn syn_cmd_region(args: &mut ExArg, syncing: c_int) {
         // Check for trailing garbage or a command; if OK, add the item.
         // SAFETY: `at` is an offset within the command line the caller owns.
         args.nextcmd = unsafe { check_nextcmd(arg.add(at)) };
-        if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip != 0 {
+        if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip {
             end = None;
         } else {
             let name_len = name.as_ref().map_or(0, |name| name.len);

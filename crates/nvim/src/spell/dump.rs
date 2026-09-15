@@ -123,11 +123,7 @@ pub fn ex_spelldump(excmd: &mut ExArg) {
         return;
     }
 
-    let dumpflags = if excmd.forceit != 0 {
-        DUMPFLAG_COUNT
-    } else {
-        0
-    };
+    let dumpflags = if excmd.forceit { DUMPFLAG_COUNT } else { 0 };
     let (pat, dir) = (core::ptr::null_mut(), core::ptr::null_mut());
     unsafe { spell_dump_compl(pat, 0, dir, dumpflags) };
 

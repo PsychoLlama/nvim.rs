@@ -888,7 +888,7 @@ pub fn ex_retab(excmd: &mut ExArg) {
     };
     let mut lnum = excmd.line1;
     while !got_int.get() && lnum <= excmd.line2 {
-        if !retab.line(lnum, &tabs, excmd.forceit != 0) {
+        if !retab.line(lnum, &tabs, excmd.forceit) {
             break;
         }
         line_breakcheck();

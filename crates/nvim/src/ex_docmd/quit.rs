@@ -79,7 +79,7 @@ pub(crate) fn ex_bunload(excmd: &mut ExArg) {
             excmd.addr_count,
             excmd.line1 as c_int,
             excmd.line2 as c_int,
-            excmd.forceit,
+            c_int::from(excmd.forceit),
         )
     };
 }
@@ -164,12 +164,12 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
         return;
     }
     let wp = wp.expect("`:quit` resolves to a window");
-    if before_quit_autocmds(wp, false, excmd.forceit != 0) {
+    if before_quit_autocmds(wp, false, excmd.forceit) {
         return;
     }
 
     let save_exiting = exiting.get();
-    if check_more(false, excmd.forceit != 0) == OK && only_one_window() {
+    if check_more(false, excmd.forceit) == OK && only_one_window() {
         exiting.set(true);
     }
     // The three refusals: unsaved changes in this buffer, files left in
@@ -181,14 +181,14 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
                 CCGD_AW as c_int
             } else {
                 0
-            }) | (if excmd.forceit != 0 {
+            }) | (if excmd.forceit {
                 CCGD_FORCEIT as c_int
             } else {
                 0
             }) | CCGD_EXCMD as c_int,
         )
-        || check_more(true, excmd.forceit != 0) == FAIL
-        || only_one_window() && check_changed_any(excmd.forceit != 0, true)
+        || check_more(true, excmd.forceit) == FAIL
+        || only_one_window() && check_changed_any(excmd.forceit, true)
     {
         not_exiting(save_exiting);
         return;
@@ -199,8 +199,8 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
         getout(0);
     }
     not_exiting(save_exiting);
-    let free_buf = !buf_hide(wp.buffer()) || excmd.forceit != 0;
-    win_close(wp, free_buf, excmd.forceit != 0);
+    let free_buf = !buf_hide(wp.buffer()) || excmd.forceit;
+    win_close(wp, free_buf, excmd.forceit);
 }
 
 /// The `nr`'th window of the current tab page, clamped to the last one.
@@ -242,7 +242,7 @@ pub(crate) fn ex_cquit(excmd: &mut ExArg) {
 /// starts writing.
 pub fn before_quit_all(excmd: &mut ExArg) -> Result<(), Failed> {
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(special_key(if excmd.forceit != 0 {
+        cmdwin_result.set(special_key(if excmd.forceit {
             KE_XF1 as c_int
         } else {
             KE_XF2 as c_int
@@ -253,7 +253,7 @@ pub fn before_quit_all(excmd: &mut ExArg) -> Result<(), Failed> {
         text_locked_msg();
         return Err(Failed);
     }
-    if before_quit_autocmds(Win::current(), true, excmd.forceit != 0) {
+    if before_quit_autocmds(Win::current(), true, excmd.forceit) {
         return Err(Failed);
     }
     Ok(())
@@ -266,7 +266,7 @@ pub(crate) fn ex_quitall(excmd: &mut ExArg) {
     }
     let save_exiting = exiting.get();
     exiting.set(true);
-    if excmd.forceit != 0 || !check_changed_any(false, false) {
+    if excmd.forceit || !check_changed_any(false, false) {
         getout(0);
     }
     not_exiting(save_exiting);
@@ -286,7 +286,7 @@ pub(crate) fn ex_close(excmd: &mut ExArg) {
     } else {
         numbered_window(excmd.line2)
     };
-    ex_win_close(excmd.forceit, win, None);
+    ex_win_close(c_int::from(excmd.forceit), win, None);
 }
 
 /// The window with this number in the current tab page, or the last one.
@@ -308,7 +308,7 @@ fn numbered_window(nr: LineNr) -> Win {
 pub(crate) fn ex_pclose(excmd: &mut ExArg) {
     for win in windows() {
         if win.w_onebuf_opt.wo_pvw != 0 {
-            ex_win_close(excmd.forceit, win, None);
+            ex_win_close(c_int::from(excmd.forceit), win, None);
             return;
         }
     }
@@ -388,9 +388,9 @@ pub(crate) fn ex_tabclose(excmd: &mut ExArg) {
         return;
     }
     if tp != TabPage::current_or_none() {
-        tabpage_close_other(tp.expect("a live handle"), excmd.forceit);
+        tabpage_close_other(tp.expect("a live handle"), c_int::from(excmd.forceit));
     } else if !text_locked() && !curbuf_locked() {
-        tabpage_close(excmd.forceit);
+        tabpage_close(c_int::from(excmd.forceit));
     }
 }
 
@@ -421,7 +421,7 @@ pub(crate) fn ex_tabonly(excmd: &mut ExArg) {
     while done < 1000 {
         for tp in tabs() {
             if tp.tp_topframe != topframe.get() {
-                tabpage_close_other(tp, excmd.forceit);
+                tabpage_close_other(tp, c_int::from(excmd.forceit));
                 if valid_tabpage(tp.id()) {
                     done = 1000;
                 }
@@ -519,7 +519,7 @@ pub(crate) fn ex_only(excmd: &mut ExArg) {
             win_goto(wp.expect("a live handle"));
         }
     }
-    close_others(1, excmd.forceit);
+    close_others(1, c_int::from(excmd.forceit));
 }
 
 /// The `nr`'th window, counting down rather than up.
@@ -541,7 +541,7 @@ fn window_at_stepwise(nr: LineNr) -> Option<Win> {
 
 /// `:hide` used as a command rather than as a modifier.
 pub(crate) fn ex_hide(excmd: &mut ExArg) {
-    if excmd.skip != 0 {
+    if excmd.skip {
         return;
     }
     let win = if excmd.addr_count == 0 {
@@ -552,12 +552,12 @@ pub(crate) fn ex_hide(excmd: &mut ExArg) {
     if !win.w_floating && window_layout_locked(CmdIdx::hide) {
         return;
     }
-    win_close(win, false, excmd.forceit != 0);
+    win_close(win, false, excmd.forceit);
 }
 
 /// `:stop` and `:suspend`.
 pub(crate) fn ex_stop(excmd: &mut ExArg) {
-    if excmd.forceit == 0 {
+    if !excmd.forceit {
         autowrite_all();
     }
     may_trigger_vim_suspend_resume(true);
@@ -576,14 +576,14 @@ pub(crate) fn ex_exit(excmd: &mut ExArg) {
         return;
     }
     let save_exiting = exiting.get();
-    if check_more(false, excmd.forceit != 0) == OK && only_one_window() {
+    if check_more(false, excmd.forceit) == OK && only_one_window() {
         exiting.set(true);
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
     if (excmd.cmdidx == CmdIdx::wq || curbuf_is_changed()) && do_write(excmd).is_err()
-        || before_quit_autocmds(Win::current(), false, excmd.forceit != 0)
-        || check_more(true, excmd.forceit != 0) == FAIL
-        || only_one_window() && check_changed_any(excmd.forceit != 0, false)
+        || before_quit_autocmds(Win::current(), false, excmd.forceit)
+        || check_more(true, excmd.forceit) == FAIL
+        || only_one_window() && check_changed_any(excmd.forceit, false)
     {
         not_exiting(save_exiting);
         return;
@@ -595,7 +595,7 @@ pub(crate) fn ex_exit(excmd: &mut ExArg) {
     win_close(
         Win::current(),
         !buf_hide(Win::current().buffer()),
-        excmd.forceit != 0,
+        excmd.forceit,
     );
 }
 

@@ -355,7 +355,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
         }
 
         // `:diffupdate!` re-reads any buffer that changed on disk first.
-        let forceit = excmd.as_deref().is_some_and(|command| command.forceit != 0);
+        let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
         if forceit {
             for idx in idx_orig..DB_COUNT as usize {
                 // A diff buffer may already have been wiped, so the slot is

@@ -140,7 +140,7 @@ pub fn buflist_list(excmd: &mut ExArg) {
         if got_int.get() {
             break;
         }
-        if skip(buf, arg, forceit) {
+        if skip(buf, arg, c_int::from(forceit)) {
             continue;
         }
         // The name to show, then the message filter's verdict on it:

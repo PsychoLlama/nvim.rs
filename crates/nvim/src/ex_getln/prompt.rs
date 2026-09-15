@@ -41,7 +41,7 @@ pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::f
         || excmd.ea_getline.is_none()
     {
         unsafe { *lenp = cstr::bytes_at(excmd.arg).len() };
-        if excmd.skip != 0 {
+        if excmd.skip {
             return ::core::ptr::null_mut();
         }
         return unsafe { xmemdupz(excmd.arg as *const ::core::ffi::c_void, *lenp) }
@@ -54,7 +54,7 @@ pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::f
     };
     let l = held.as_ptr();
 
-    let skip = excmd.skip != 0;
+    let skip = excmd.skip;
     let mut text = Vec::<u8>::new();
     for li in list_iter(unsafe { l.as_ref() }) {
         if !skip {

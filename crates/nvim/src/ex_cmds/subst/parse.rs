@@ -130,7 +130,7 @@ pub(crate) unsafe fn sub_joining_lines(
     if !joins {
         return false;
     }
-    if args.skip != 0 {
+    if args.skip {
         return true;
     }
 

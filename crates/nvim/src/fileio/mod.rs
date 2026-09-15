@@ -665,8 +665,8 @@ pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
     } else {
         FORCE_NOBIN
     };
-    excmd.read_edit = false as c_int;
-    excmd.forceit = false as c_int;
+    excmd.read_edit = false;
+    excmd.forceit = false;
 }
 
 /// Set the default or forced `'fileformat'` and `'binary'`.

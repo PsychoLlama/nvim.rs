@@ -214,7 +214,7 @@ fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
 /// Hand the argument, as a full path, to the provider.
 fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
     // SAFETY: module contract; `buffer` is `MAXPATHL` bytes as promised.
-    if excmd.skip != 0 {
+    if excmd.skip {
         return;
     }
     let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
@@ -238,7 +238,7 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
 /// Hand the range and the command's text to the provider, range first.
 fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     // SAFETY: module contract.
-    if excmd.skip != 0 {
+    if excmd.skip {
         return;
     }
     let argv = tv_list_alloc(3 as ptrdiff_t);
@@ -661,7 +661,7 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     // function. Save the old value, then set "b:current_compiler" from
     // whatever the plugin leaves behind and put the old value back.
     let mut old_cur_comp = ptr::null_mut();
-    if excmd.forceit != 0 {
+    if excmd.forceit {
         // ":compiler! {name}" sets global options.
         let cmd = c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr();
         let _ = unsafe { do_cmdline_cmd(cmd) };
@@ -700,7 +700,7 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     }
 
     // Restore "current_compiler" for ":compiler {name}".
-    if excmd.forceit == 0 {
+    if !excmd.forceit {
         if old_cur_comp.is_null() {
             let _ = unsafe {
                 do_unlet(

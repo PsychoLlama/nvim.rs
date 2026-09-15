@@ -269,7 +269,7 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
     let name = split_group_name(&line);
     let mut end = name.as_ref().map(|name| name.rest);
     if let Some(name) = &name {
-        let syn_id = if args.skip != 0 {
+        let syn_id = if args.skip {
             -1
         } else {
             // SAFETY: the group name at the head of the command line.
@@ -300,7 +300,7 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
             let mut out = 0;
             let byte = |at: usize| c_int::from(cstr::byte_at(&line, at));
             while let Some(mut at) = end.filter(|&at| ends_excmd(byte(at)) == 0) {
-                end = read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip != 0);
+                end = read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip);
                 match end {
                     Some(next) if ends_excmd(byte(next)) == 0 => at = next,
                     _ => break,
@@ -321,7 +321,7 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
             }
 
             // Pass 2: an entry per keyword.
-            if args.skip == 0 {
+            if !args.skip {
                 syn_incl_toplevel(syn_id, &mut opt.flags);
                 let def = KeywordDef {
                     id: syn_id,

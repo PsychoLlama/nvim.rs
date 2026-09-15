@@ -595,7 +595,7 @@ fn wincmd(ea: &mut ExArg) {
     p = skip_white(p);
     if byte(p) != NUL && byte(p) != '"' as c_int && ea.nextcmd.is_null() {
         err(e_invarg.as_ptr());
-    } else if ea.skip == 0 {
+    } else if !ea.skip {
         // A `:vertical`/`:tab` in front applies to the split the window
         // command is about to make.
         postponed_split_flags.set(cmdmod.with(|m| m.cmod_split));
@@ -621,7 +621,7 @@ pub(crate) fn ex_popup(excmd: &mut ExArg) {
     let ea = &mut *excmd;
     let (name, use_mouse_pos) = (ea.arg, ea.forceit);
     // SAFETY: a NUL-terminated menu path.
-    unsafe { pum_make_popup(name, use_mouse_pos) };
+    unsafe { pum_make_popup(name, c_int::from(use_mouse_pos)) };
 }
 
 // ---------------------------------------------------------------------------

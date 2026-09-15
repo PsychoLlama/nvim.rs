@@ -483,7 +483,7 @@ pub fn ex_all(excmd: &mut ExArg) {
         excmd.line2 = 9999 as LineNr;
     }
     let count = excmd.line2 as c_int;
-    let forceit = excmd.forceit != 0;
+    let forceit = excmd.forceit;
     let drop = excmd.cmdidx == CmdIdx::drop;
     do_arg_all(count, forceit, drop);
 }

@@ -166,7 +166,7 @@ pub fn ex_make(excmd: &mut ExArg) {
         if let Some(name) = au_name {
             fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         }
-        if res > 0 && excmd.forceit == 0 && qf_list_still_valid(wp, save_qfid) {
+        if res > 0 && !excmd.forceit && qf_list_still_valid(wp, save_qfid) {
             // Display the first error.
             unsafe { qf_jump_first(qi.raw(), save_qfid, false as c_int) };
         }

@@ -75,7 +75,7 @@ pub fn ex_runtime(excmd: &mut ExArg) {
     // SAFETY: `excmd` is the live command being executed; `arg` is its
     // NUL-terminated argument text.
     let mut arg = excmd.arg;
-    let mut flags = if excmd.forceit != 0 {
+    let mut flags = if excmd.forceit {
         RuntimeOpts::ALL
     } else {
         RuntimeOpts::NONE

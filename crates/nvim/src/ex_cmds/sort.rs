@@ -656,7 +656,7 @@ fn sort_range(args: &mut ExArg) {
         sorted.sort_by(|l1, l2| compare_lines(order, l1, l2));
 
         // Insert the lines in the sorted order below the last one.
-        let placed = append_sorted(&sorted, order, spec.unique, forceit != 0, line2);
+        let placed = append_sorted(&sorted, order, spec.unique, forceit, line2);
         if placed.interrupted {
             break 'sortend;
         }
@@ -811,7 +811,7 @@ fn uniq_range(args: &mut ExArg) {
     }
 
     let mut regmatch = no_regmatch();
-    let mut mode = if forceit != 0 {
+    let mut mode = if forceit {
         UniqMode::OnlyRepeated
     } else {
         UniqMode::Dedup

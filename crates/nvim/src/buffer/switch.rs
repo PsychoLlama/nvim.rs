@@ -197,7 +197,7 @@ pub fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
     // NUL-terminated pointer into the command line.
     let (cmdidx, split) = unsafe { (excmd.cmdidx, *excmd.cmd as c_int == 's' as c_int) };
     // SAFETY: as above.
-    let forceit = excmd.forceit != 0;
+    let forceit = excmd.forceit;
 
     let skip_help_buf = matches!(
         cmdidx,

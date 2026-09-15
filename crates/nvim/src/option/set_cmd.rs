@@ -88,7 +88,7 @@ pub(crate) fn ex_set(excmd: &mut ExArg) {
         _ => OptionSetFlags::NONE,
     };
     // `:set!` lists one option per line.
-    if excmd.forceit != 0 {
+    if excmd.forceit {
         flags |= OptionSetFlags::ONECOLUMN;
     }
     let _ = unsafe { do_set(excmd.arg, flags) };

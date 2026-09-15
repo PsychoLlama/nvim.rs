@@ -87,9 +87,7 @@ pub(crate) unsafe fn readfile(
         nofile: flags & READ_NOFILE as c_int != 0,
         keep_undo: flags & READ_KEEP_UNDO as c_int != 0,
         set_options: flags & (READ_NEW | READ_BUFFER) as c_int != 0
-            || excmd
-                .as_deref()
-                .is_some_and(|command| command.read_edit != 0),
+            || excmd.as_deref().is_some_and(|command| command.read_edit),
     };
     let set_options = how.set_options;
 

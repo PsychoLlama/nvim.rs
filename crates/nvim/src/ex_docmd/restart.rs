@@ -319,7 +319,7 @@ fn blank_callback() -> Callback {
 
 /// `:detach` — let the UI go, and keep running headless.
 pub(crate) fn ex_detach(excmd: &mut ExArg) {
-    if excmd.forceit != 0 {
+    if excmd.forceit {
         emsg(c"bang (!) not supported yet".as_ptr());
         return;
     }
@@ -371,7 +371,7 @@ fn detach_ui() {
 /// `:connect!` also *exits* when this was the only UI, so that the session
 /// really moves rather than being left running.
 pub(crate) fn ex_connect(excmd: &mut ExArg) {
-    let stop_server = excmd.forceit != 0 && ui_active() == 1;
+    let stop_server = excmd.forceit && ui_active() == 1;
     if let Err(e) = unsafe { remote_ui_connect(current_ui.get(), excmd.arg) } {
         emsg(e.message_or_empty().as_ptr());
         return;

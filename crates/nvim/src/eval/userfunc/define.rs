@@ -186,7 +186,7 @@ impl Definition<'_> {
 
         self.cursor.skip(0);
         if self.cursor.byte() != b'(' {
-            if self.excmd.skip == 0 {
+            if !self.excmd.skip {
                 // SAFETY: a message argument the caller holds as a
                 // NUL-terminated string.
                 let arg = unsafe { c_str(self.excmd.arg) };
@@ -209,7 +209,7 @@ impl Definition<'_> {
         // SAFETY: as above.
         unsafe { ga_init(&raw mut self.newlines, slot, 3) };
 
-        if self.excmd.skip == 0 && self.check_name().is_none() {
+        if !self.excmd.skip && self.check_name().is_none() {
             return;
         }
         if self.install().is_none() {
@@ -267,7 +267,7 @@ impl Definition<'_> {
     fn install(&mut self) -> Option<()> {
         let (argp, names) = (self.cursor.raw(), &raw mut self.newargs);
         let (varp, defs) = (&raw mut self.varargs, &raw mut self.default_args);
-        let skip = self.excmd.skip != 0;
+        let skip = self.excmd.skip;
         // SAFETY: the cursor walks the command's argument and the three
         // out-parameters are this record's own.
         let parsed = unsafe { get_function_args(argp, b')' as c_char, names, varp, defs, skip) };
@@ -322,7 +322,7 @@ impl Definition<'_> {
         // SAFETY: both out-parameters are this record's own fields, and
         // neither is the command.
         let read = unsafe { get_function_body(self.excmd, lines, line_arg, freep, block) };
-        if read == FAIL || self.excmd.skip != 0 {
+        if read == FAIL || self.excmd.skip {
             return Err(Refusal::Unwind);
         }
 
@@ -376,7 +376,7 @@ impl Definition<'_> {
             self.line_arg = unsafe { self.cursor.get().add(1) };
         } else if self.cursor.byte() != NUL as u8
             && self.cursor.byte() != b'"'
-            && self.excmd.skip == 0
+            && !self.excmd.skip
             && did_emsg.get() == 0
         {
             // SAFETY: the cursor walks a NUL-terminated string.
@@ -386,7 +386,7 @@ impl Definition<'_> {
 
         if KeyTyped.get() {
             self.report_existing();
-            if self.excmd.skip == 0 && did_emsg.get() != 0 {
+            if !self.excmd.skip && did_emsg.get() != 0 {
                 return Err(Refusal::Unwind);
             }
             if !ui_has(kUICmdline) {
@@ -401,7 +401,7 @@ impl Definition<'_> {
     /// Report a function of this name that already exists, which for a body
     /// being typed in is worth saying before the whole of it is.
     fn report_existing(&self) {
-        if self.excmd.skip != 0 || self.excmd.forceit != 0 {
+        if self.excmd.skip || self.excmd.forceit {
             return;
         }
         if !self.fudi.fd_dict.is_null() && self.fudi.fd_newkey.is_null() {
@@ -446,7 +446,7 @@ impl Definition<'_> {
         // table answered, and `name` its NUL-terminated name.
         let (sid, seq) = unsafe { ((*func).uf_script_ctx.sc_sid, (*func).uf_script_ctx.sc_seq) };
         let sctx = current_sctx.get();
-        if self.excmd.forceit == 0 && (sid != sctx.sc_sid || seq == sctx.sc_seq) {
+        if !self.excmd.forceit && (sid != sctx.sc_sid || seq == sctx.sc_seq) {
             unsafe { emsg_funcname(E_FUNCEXTS.as_ptr(), self.name) };
             return Err(Refusal::Keep);
         }
@@ -488,7 +488,7 @@ impl Definition<'_> {
     /// sequential number, reachable only through a Funcref.
     fn number_dict_function(&mut self) -> Result<size_t, Refusal> {
         self.func = ptr::null_mut();
-        if self.fudi.fd_newkey.is_null() && self.excmd.forceit == 0 {
+        if self.fudi.fd_newkey.is_null() && !self.excmd.forceit {
             emsg(gettext(E_FUNCDICT));
             return Err(Refusal::Unwind);
         }
@@ -700,7 +700,7 @@ pub fn ex_function(excmd: &mut ExArg) {
     // ":function" without argument: list functions.
     // SAFETY: `ea.arg` is the command's NUL-terminated argument.
     if ends_excmd(unsafe { *excmd.arg } as c_int) != 0 {
-        if excmd.skip == 0 {
+        if !excmd.skip {
             // SAFETY: no pattern means every function.
             unsafe { list_functions(ptr::null_mut()) };
         }
@@ -733,10 +733,10 @@ pub fn ex_function(excmd: &mut ExArg) {
     // SAFETY: the command's argument, and both out-parameters are this
     // frame's own.
     let name =
-        unsafe { save_function_name(&raw mut p, excmd.skip != 0, TFN_NO_AUTOLOAD, &raw mut fudi) };
+        unsafe { save_function_name(&raw mut p, excmd.skip, TFN_NO_AUTOLOAD, &raw mut fudi) };
     // SAFETY: `p` is the cursor into the NUL-terminated argument.
     let paren = has_char(unsafe { cstr::at(p) }, b'(' as c_int);
-    if name.is_null() && (fudi.fd_dict.is_null() || !paren) && excmd.skip == 0 {
+    if name.is_null() && (fudi.fd_dict.is_null() || !paren) && !excmd.skip {
         // Return on an invalid expression in braces, unless the evaluation
         // was cancelled by an aborting error, an interrupt or an exception.
         if !aborting() {
@@ -750,7 +750,7 @@ pub fn ex_function(excmd: &mut ExArg) {
             unsafe { xfree(fudi.fd_newkey as *mut c_void) };
             return;
         }
-        excmd.skip = 1;
+        excmd.skip = true;
     }
 
     // An error in a function call while evaluating an expression in magic

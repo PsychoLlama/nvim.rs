@@ -71,7 +71,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
     let called_emsg_before = called_emsg.get();
 
     let mut evalarg = UNSET_EVALARG;
-    let skip = excmd.skip != 0;
+    let skip = excmd.skip;
     // SAFETY: `evalarg` is this frame's.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
     let _skipping = skip.then(Suppress::emsg_skip);
@@ -98,7 +98,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
         }
         need_clr_eos.set(false);
 
-        if excmd.skip == 0 {
+        if !excmd.skip {
             if atstart {
                 atstart = false;
                 msg_ext_set_append(excmd.cmdidx == CmdIdx::echon);
@@ -136,7 +136,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
     unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
     msg_ext_set_append(false);
 
-    if excmd.skip != 0 {
+    if excmd.skip {
         return;
     }
     // SAFETY: the command's argument is NUL-terminated.
@@ -176,7 +176,7 @@ pub fn ex_execute(excmd: &mut ExArg) {
     // there is no message, which is not the same as an empty one.
     let mut built = false;
 
-    let _skipping = (excmd.skip != 0).then(Suppress::emsg_skip);
+    let _skipping = (excmd.skip).then(Suppress::emsg_skip);
     // SAFETY: `arg` walks the command line, which is NUL-terminated.
     while !ends_args(unsafe { *arg }) {
         // SAFETY: `arg` and `rettv` are this frame's, `excmd` the caller's.
@@ -184,7 +184,7 @@ pub fn ex_execute(excmd: &mut ExArg) {
         if ret.is_err() {
             break;
         }
-        if excmd.skip == 0 {
+        if !excmd.skip {
             // `:execute` coerces; the two message commands render, and
             // so own what they produce.
             let owned = excmd.cmdidx != CmdIdx::execute;

@@ -2651,7 +2651,6 @@ count	callee	no_raw	defs	def
 1	check_keyword_id	0	1	crates/nvim/src/syntax/endpos.rs
 1	check_mtime	0	1	crates/nvim/src/bufwrite/backup.rs
 1	check_num_option_bounds	0	1	crates/nvim/src/option/validate.rs
-1	check_readonly	0	1	crates/nvim/src/ex_cmds/write.rs
 1	check_reported_error	0	1	crates/nvim/src/testing/fails.rs
 1	choose_swapfile	0	1	crates/nvim/src/memline/recover.rs
 1	claim_file	0	1	crates/nvim/src/quickfix/parse.rs

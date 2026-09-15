@@ -177,7 +177,7 @@ pub(crate) fn ex_sleep(excmd: &mut ExArg) {
             return;
         }
     }
-    do_sleep(len, excmd.forceit != 0);
+    do_sleep(len, excmd.forceit);
 }
 
 /// Wait `msec` milliseconds, still serving events, and stop early on an
@@ -269,7 +269,7 @@ pub(crate) fn ex_iput(excmd: &mut ExArg) {
 fn put_lines(excmd: &mut ExArg, flags: c_int) {
     if excmd.line2 == 0 {
         excmd.line2 = 1;
-        excmd.forceit = 1;
+        excmd.forceit = true;
     }
     Win::current().w_cursor.lnum = excmd.line2;
     check_cursor_col(Win::current());
@@ -277,7 +277,7 @@ fn put_lines(excmd: &mut ExArg, flags: c_int) {
         do_put(
             excmd.regname,
             ptr::null_mut(),
-            if excmd.forceit != 0 {
+            if excmd.forceit {
                 BACKWARD as c_int
             } else {
                 FORWARD as c_int
@@ -395,7 +395,7 @@ pub(crate) fn ex_join(excmd: &mut ExArg) {
     }
     let _ = do_join(
         (excmd.line2 as ssize_t - excmd.line1 as ssize_t + 1) as size_t,
-        excmd.forceit == 0,
+        !excmd.forceit,
         true,
         true,
         true,
@@ -446,7 +446,7 @@ pub(crate) fn ex_at(excmd: &mut ExArg) {
 /// current branch.
 pub(crate) fn ex_undo(excmd: &mut ExArg) {
     if excmd.addr_count != 1 {
-        if excmd.forceit != 0 {
+        if excmd.forceit {
             u_undo_and_forget(1, true);
         } else {
             u_undo(1);
@@ -454,7 +454,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
         return;
     }
     let step = excmd.line2;
-    if excmd.forceit == 0 {
+    if !excmd.forceit {
         undo_time(step as c_int, false, false, true);
         return;
     }
@@ -602,7 +602,7 @@ pub(crate) fn ex_foldopen(excmd: &mut ExArg) {
         range_start(excmd),
         range_end(excmd),
         (excmd.cmdidx == CmdIdx::foldopen) as c_int,
-        excmd.forceit,
+        c_int::from(excmd.forceit),
         false,
     );
 }

@@ -354,7 +354,7 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
         } else if command.force_bin == FORCE_NOBIN {
             len += 8; // " ++nobin"
         }
-        if command.read_edit != 0 {
+        if command.read_edit {
             len += 7; // " ++edit"
         }
         if command.force_ff != 0 {
@@ -370,7 +370,7 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
         if command.bad_char != 0 {
             len += 7 + 4; // " ++bad=" + "keep" or "drop"
         }
-        if command.mkdir_p != 0 {
+        if command.mkdir_p {
             len += 4; // " ++p"
         }
 
@@ -403,7 +403,7 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
             // SAFETY: at least one byte was allocated.
             unsafe { *newval = NUL as c_char };
         }
-        if command.read_edit != 0 {
+        if command.read_edit {
             put!(c" ++edit".as_ptr());
         }
         if command.force_ff != 0 {
@@ -426,7 +426,7 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
         } else if command.bad_char != 0 {
             put!(c" ++bad=%c".as_ptr(), command.bad_char);
         }
-        if command.mkdir_p != 0 {
+        if command.mkdir_p {
             put!(c" ++p".as_ptr());
         }
         debug_assert!(xlen <= newval_len);

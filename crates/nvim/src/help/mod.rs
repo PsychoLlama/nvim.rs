@@ -133,13 +133,13 @@ pub(crate) fn ex_help(excmd: &mut ExArg) {
 pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     let old_key_typed = KeyTyped.get();
 
-    let forceit = excmd.as_deref().is_some_and(|command| command.forceit != 0);
+    let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
     let mut arg = match excmd {
         None => c"".as_ptr().cast_mut(),
         Some(command) => {
             // SAFETY: caller contract; the command line is writable.
             split_off_next_cmd(command);
-            if command.skip != 0 {
+            if command.skip {
                 return;
             }
             // SAFETY: as above.
@@ -401,7 +401,7 @@ pub(crate) fn ex_helpclose(excmd: &mut ExArg) {
         return;
     };
     // SAFETY: caller contract; a live window.
-    win_close(win, false, excmd.forceit != 0);
+    win_close(win, false, excmd.forceit);
 }
 
 /// `:exusage`.

@@ -140,14 +140,14 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
 
     // `++edit`, and not `++editsomething`.
     if starts_with(arg, b"edit") && !(ubyte_at(arg, 4)).is_ascii_alphabetic() {
-        excmd.read_edit = 1;
+        excmd.read_edit = true;
         excmd.arg = unsafe { skipwhite(arg.add(4)) };
         return Ok(());
     }
 
     // `++p`, and not `++psomething`.
     if byte(arg) == 'p' as c_int && !(ubyte_at(arg, 1)).is_ascii_alphabetic() {
-        excmd.mkdir_p = 1;
+        excmd.mkdir_p = true;
         excmd.arg = unsafe { skipwhite(arg.add(1)) };
         return Ok(());
     }
