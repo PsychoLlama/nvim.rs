@@ -296,8 +296,7 @@ pub unsafe fn parse_border_style(style: &Object, fconfig: *mut WinConfig) -> Res
         // SAFETY: the caller's live array.
         Some(unsafe { parse_border_array(array) }?)
     } else if let Some(str) = style.as_string() {
-        // SAFETY: a live API string is NUL-terminated.
-        if str.is_empty() || unsafe { strequal(str.data(), BORDER_NONE.as_ptr()) } {
+        if str.is_empty() || str.as_cstr() == BORDER_NONE {
             // Border text does not work without a border.
             cfg.border = false;
             cfg.title = false;

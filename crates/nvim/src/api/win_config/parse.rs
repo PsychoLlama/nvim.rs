@@ -1,31 +1,28 @@
 //! Decoding the config keyset into a `WinConfig`.
 //!
-//! `parse_win_config` is the whole validation surface: which keys may appear
+//! [`parse_win_config`] is the whole validation surface: which keys may appear
 //! together, which are floats-only, which need a window or buffer handle, and
-//! what each one's range is.  The small `parse_*` helpers are the individual
-//! enumerated fields -- the anchor, the `relative` kind, the split direction,
-//! the `bufpos` pair and the border title/footer with its position.
+//! what each one's range is.  It is one [`Decode`] per call, and one method
+//! per group of keys -- where the window hangs, where it sits, how big it is,
+//! which window it belongs to, its border and its border text -- each
+//! answering a [`Result`] whose `Err` is the first thing found wrong.
 //!
-//! The three pointers the family passes around get their names here as well
-//! ([`CfgKeys`], [`WinCfg`], [`ErrSlot`]), and so do the safe spellings of the
-//! validation messages ([`err_exp`] and friends).
+//! The two pointers the family passes around get their names here as well
+//! ([`CfgKeys`] and [`WinCfg`]).
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::validate::{self, Bad, err_expected, err_invalid};
-use crate::cstr;
+use crate::api::private::validate::{Bad, err_conflict, err_expected, err_invalid, err_required};
 use crate::kvec::Kvec;
-use crate::types::{ErrorType, NUL};
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::{Live, Win};
-use core::ffi::{CStr, c_char, c_int};
-use core::mem::offset_of;
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 // ---------------------------------------------------------------------------
-// The three pointers the family passes around
+// The two pointers the family passes around
 //
 // Each is a [`Live<T>`](crate::winlayer::Live): a record that whoever built it
 // promised the pointee outlives the value. Construction is the unsafe step,
@@ -39,125 +36,73 @@ pub(crate) type CfgKeys = Live<KeyDict_win_config>;
 /// The window configuration being filled in from it.
 pub(crate) type WinCfg = Live<WinConfig>;
 
-/// The caller's error slot.
-pub(crate) type ErrSlot = Live<Error>;
+/// What a parse that found nothing wrong with the keyset came to.
+///
+/// Not a two-valued answer, because "nothing was wrong" and "here is a config
+/// to act on" are not the same thing. Two paths refuse without a word to say
+/// about it -- a `win` handle that resolves to no window at all, and a
+/// `'winborder'` value that does not spell a border -- and upstream answers
+/// both by making no window and reporting nothing. `Err` is the other half:
+/// a message for the client, which is every other refusal here.
+pub(crate) enum Parsed {
+    /// The keyset was decoded into the config.
+    Done,
+    /// Nothing was decoded and there is nothing to report.
+    Refused,
+}
 
 // ---------------------------------------------------------------------------
-// The validation messages, written through the slot
+// The validation messages
 //
-// `api/private/validate.rs` answers with an `Error`; this family passes the
-// caller's slot around as an [`ErrSlot`] instead of returning, so each of
-// these is that answer stored. Every name they are handed is a literal and
-// the slot is always the caller's own, so the promise is discharged once,
-// here.
+// `api/private/validate.rs` answers with an `Error` and so does every helper
+// here; the only one that needs a spelling of its own is the one that quotes
+// a keyset string back at the client.
 
-/// Store `e` in the caller's slot -- what every reporter here ends with, and
-/// what a call site with a message of its own spells directly.
-pub(crate) fn store(err: ErrSlot, e: Error) {
-    // SAFETY: `err` names a live slot, which is what `Live` records.
-    unsafe { *err.raw() = e };
-}
-
-/// A helper's `Result` as a value, storing its refusal in the caller's slot.
-/// The bridge between this module's slot-passing shape and the `Result` every
-/// helper outside it answers with.
-pub(crate) fn stored<T>(err: ErrSlot, r: Result<T, Error>) -> Option<T> {
-    match r {
-        Ok(v) => Some(v),
-        Err(e) => {
-            store(err, e);
-            None
-        }
-    }
-}
-
-/// "Invalid `name`: '`val`'", naming the keyset string that was wrong.
+/// "Invalid `name`: '`value`'", naming the keyset string that was wrong.
 ///
-/// # Safety
-/// `val`'s bytes must be NUL-terminated.
-pub(crate) unsafe fn err_invalid_str(err: ErrSlot, name: &CStr, val: &String_0, quote_val: bool) {
-    // SAFETY: the caller's promise about `val`.
-    let val = unsafe { cstr::at_opt(val.data()) };
-    let bad = match (val, quote_val) {
-        (None, _) => Bad::Number(0),
-        (Some(val), true) => Bad::Quoted(val),
-        (Some(val), false) => Bad::Bare(val),
+/// The null string has no bytes to quote, and upstream's `%s` over a null
+/// pointer is why it reads back as a number instead.
+fn err_invalid_str(name: &CStr, value: &String_0) -> Error {
+    let bad = if value.is_null() {
+        Bad::Number(0)
+    } else {
+        Bad::Quoted(value.as_cstr())
     };
-    store(err, err_invalid(name, bad));
-}
-
-/// "Invalid `name`: expected `expected`", naming what arrived when `actual`
-/// says.
-pub(crate) fn err_exp(err: ErrSlot, name: &CStr, expected: &CStr, actual: Option<&CStr>) {
-    store(err, err_expected(name, expected, actual));
-}
-
-/// "Required: `name`", for a key the caller left out.
-pub(crate) fn err_required(err: ErrSlot, name: &CStr) {
-    store(err, validate::err_required(name));
-}
-
-/// "Conflict: `name` not allowed with `name2`", for two keys that exclude
-/// each other.
-pub(crate) fn err_conflict(err: ErrSlot, name: &CStr, name2: &CStr) {
-    store(err, validate::err_conflict(name, name2));
-}
-
-/// A failure of kind `kind` whose whole message is `msg`.
-pub(crate) fn err_msg(err: ErrSlot, kind: ErrorType, msg: &CStr) {
-    store(err, Error::from_message(kind, msg));
-}
-
-/// [`err_msg`] for the messages `message`'s statics hold rather than a literal.
-///
-/// # Safety
-/// `msg` must be NUL-terminated.
-pub(crate) unsafe fn err_msg_raw(err: ErrSlot, kind: ErrorType, msg: *const c_char) {
-    // SAFETY: the caller's promise.
-    store(err, Error::from_message(kind, unsafe { cstr::at(msg) }));
+    err_invalid(name, bad)
 }
 
 // ---------------------------------------------------------------------------
 // The enumerated keys
+//
+// One function per key that spells its value as a name, each answering the
+// value that name stands for. A `None` is the caller's message to write:
+// which key was wrong is not something these know.
 
-/// The index of the first of `names` that `s` spells, ignoring case.
-///
-/// # Safety
-/// `s`'s bytes must be NUL-terminated.
-unsafe fn imatch(s: &String_0, names: &[&CStr]) -> Option<usize> {
+/// The index of the first of `names` that `spelling` spells, ignoring case.
+fn imatch(spelling: &CStr, names: &[&CStr]) -> Option<usize> {
+    // SAFETY: both sides are `CStr`s, which is the NUL-terminated string
+    // `striequal` reads. It is the locale's case fold, not ASCII's, which is
+    // why this is not `eq_ignore_ascii_case`.
     names
         .iter()
-        // SAFETY: the caller's promise about `s`.
-        .position(|name| unsafe { striequal(s.data(), name.as_ptr()) })
+        .position(|name| unsafe { striequal(spelling.as_ptr(), name.as_ptr()) })
 }
 
 /// The `anchor` key: which corner of the float `row`/`col` place.
-///
-/// # Safety
-/// `anchor`'s bytes must be NUL-terminated.
-unsafe fn parse_float_anchor(anchor: &String_0, out: &mut FloatAnchor) -> bool {
-    if anchor.is_empty() {
-        // NW is the default, and is neither bit.
-        *out = 0;
-    }
-    // SAFETY: the caller's promise.
-    let Some(which) = (unsafe { imatch(anchor, &[c"NW", c"NE", c"SW", c"SE"]) }) else {
-        return false;
-    };
-    *out = [
+fn float_anchor(spelling: &CStr) -> Option<FloatAnchor> {
+    const NAMES: [&CStr; 4] = [c"NW", c"NE", c"SW", c"SE"];
+    // NW is the default, and is neither bit.
+    const CORNERS: [FloatAnchor; 4] = [
         0,
         kFloatAnchorEast,
         kFloatAnchorSouth,
         kFloatAnchorSouth | kFloatAnchorEast,
-    ][which];
-    true
+    ];
+    Some(CORNERS[imatch(spelling, &NAMES)?])
 }
 
 /// The `relative` key: what `row`/`col` are measured from.
-///
-/// # Safety
-/// `relative`'s bytes must be NUL-terminated.
-unsafe fn parse_float_relative(relative: &String_0, out: &mut FloatRelative) -> bool {
+fn float_relative(spelling: &CStr) -> Option<FloatRelative> {
     const NAMES: [&CStr; 6] = [
         c"editor",
         c"win",
@@ -166,536 +111,668 @@ unsafe fn parse_float_relative(relative: &String_0, out: &mut FloatRelative) -> 
         c"tabline",
         c"laststatus",
     ];
-    // SAFETY: the caller's promise.
-    let Some(which) = (unsafe { imatch(relative, &NAMES) }) else {
-        return false;
-    };
-    *out = [
+    const KINDS: [FloatRelative; 6] = [
         kFloatRelativeEditor,
         kFloatRelativeWindow,
         kFloatRelativeCursor,
         kFloatRelativeMouse,
         kFloatRelativeTabline,
         kFloatRelativeLaststatus,
-    ][which];
-    true
+    ];
+    Some(KINDS[imatch(spelling, &NAMES)?])
 }
 
 /// The `split` key: which side of the target window the new one goes.
-///
-/// # Safety
-/// `split`'s bytes must be NUL-terminated.
-unsafe fn parse_config_split(split: &String_0, out: &mut WinSplit) -> bool {
+fn config_split(spelling: &CStr) -> Option<WinSplit> {
     const NAMES: [&CStr; 4] = [c"left", c"right", c"above", c"below"];
-    // SAFETY: the caller's promise.
-    let Some(which) = (unsafe { imatch(split, &NAMES) }) else {
-        return false;
-    };
-    *out = [
+    const SIDES: [WinSplit; 4] = [
         kWinSplitLeft,
         kWinSplitRight,
         kWinSplitAbove,
         kWinSplitBelow,
-    ][which];
-    true
+    ];
+    Some(SIDES[imatch(spelling, &NAMES)?])
+}
+
+/// The `title_pos`/`footer_pos` key: which end of the border the text sits
+/// at. Case-sensitive, unlike every other name here.
+fn align_pos(spelling: &CStr) -> Option<AlignTextPos> {
+    const NAMES: [&CStr; 3] = [c"left", c"center", c"right"];
+    const ENDS: [AlignTextPos; 3] = [kAlignLeft, kAlignCenter, kAlignRight];
+    Some(ENDS[NAMES.iter().position(|name| *name == spelling)?])
 }
 
 /// The `bufpos` key: the `[lnum, col]` pair a `relative='win'` float hangs
 /// off.
-///
-/// # Safety
-/// `bufpos` must name its own `size` items.
-unsafe fn parse_float_bufpos(bufpos: &Array, out: &mut LPos) -> bool {
-    if bufpos.len() != 2 {
-        return false;
-    }
-    // SAFETY: the caller's promise -- the array holds the two items read here.
-    let (lnum, col) = (&bufpos[0], &bufpos[1]);
-    let (Some(lnum), Some(col)) = (lnum.as_integer(), col.as_integer()) else {
-        return false;
+fn float_bufpos(bufpos: &Array) -> Option<LPos> {
+    let [lnum, col] = bufpos.as_slice() else {
+        return None;
     };
-    out.lnum = lnum as LineNr;
-    out.col = col as ColNr;
-    true
+    Some(LPos {
+        lnum: lnum.as_integer()? as LineNr,
+        col: col.as_integer()? as ColNr,
+    })
 }
 
 // ---------------------------------------------------------------------------
 // The border text
 
-/// The three `WinConfig` fields one of the two border texts is spelled in:
-/// whether it is present, its chunks and its display width.
+/// The three `WinConfig` fields one of the two border texts is spelled in.
 ///
-/// The addresses come off the config's raw pointer rather than off one
-/// `Deref`, which is what lets all three stay usable at once -- see
-/// [`Live`]'s module docs.
-fn bordertext_fields(
-    fconfig: WinCfg,
-    which: BorderTextType,
-) -> (Live<bool>, Live<VirtText>, Live<c_int>) {
-    let (present, chunks, width) = if which == kBorderTextFooter {
-        (
-            offset_of!(WinConfig, footer),
-            offset_of!(WinConfig, footer_chunks),
-            offset_of!(WinConfig, footer_width),
-        )
-    } else {
-        (
-            offset_of!(WinConfig, title),
-            offset_of!(WinConfig, title_chunks),
-            offset_of!(WinConfig, title_width),
-        )
-    };
-    // SAFETY: the three offsets name fields of the config `fconfig`'s builder
-    // promised is live, so each address is live exactly as long as it is.
-    unsafe {
-        (
-            Live::new(fconfig.field_ptr(present)),
-            Live::new(fconfig.field_ptr(chunks)),
-            Live::new(fconfig.field_ptr(width)),
-        )
+/// `chunks` and `width` are `None` where the key leaves whatever the window
+/// already had: clearing the text with an empty string writes `present` and
+/// nothing else, which is a distinction the three bare field writes this
+/// replaces made only by leaving early.
+struct BorderText {
+    present: bool,
+    chunks: Option<VirtText>,
+    width: Option<c_int>,
+}
+
+impl BorderText {
+    /// Write the three fields `which` names.
+    ///
+    /// The chunks the config already held are dropped on the floor rather
+    /// than released, as upstream drops them: whatever reaches the window
+    /// takes them over, and a refusal on the way there has
+    /// [`merge_win_config`] free them.
+    fn apply(self, config: &mut WinConfig, which: BorderTextType) {
+        let (present, chunks, width) = if which == kBorderTextFooter {
+            (
+                &mut config.footer,
+                &mut config.footer_chunks,
+                &mut config.footer_width,
+            )
+        } else {
+            (
+                &mut config.title,
+                &mut config.title_chunks,
+                &mut config.title_width,
+            )
+        };
+        *present = self.present;
+        if let Some(text) = self.chunks {
+            *chunks = text;
+        }
+        if let Some(cells) = self.width {
+            *width = cells;
+        }
     }
 }
 
 /// The `title`/`footer` key: either one plain string or [`parse_virt_text`]'s
 /// chunks.
-///
-/// # Safety
-/// A `String` `bordertext` must be NUL-terminated, and an `Array` one must
-/// name its own items.
-unsafe fn parse_bordertext(
-    bordertext: &Object,
-    bordertext_type: BorderTextType,
-    fconfig: WinCfg,
-    err: ErrSlot,
-) {
-    if bordertext.as_array().is_some_and(|array| array.is_empty()) {
-        err_exp(err, c"title/footer", c"non-empty Array", None);
-        return;
+fn set_border_text(mut config: WinCfg, which: BorderTextType, text: &Object) -> Result<(), Error> {
+    if text.as_array().is_some_and(|array| array.is_empty()) {
+        return Err(err_expected(c"title/footer", c"non-empty Array", None));
     }
-    let (mut is_present, mut chunks, mut width) = bordertext_fields(fconfig, bordertext_type);
-    match &bordertext {
-        Object::String(string) => {
-            if string.is_empty() {
-                *is_present = false;
-                return;
-            }
-            // `kv_init` and then the `kv_push` whose growth step c2rust expanded
-            // inline, on this frame's own vector rather than in place: three
-            // `&mut`s into the config at once is what `Live` cannot give.
-            let mut text = VirtText {
-                size: 0,
-                capacity: 0,
-                items: ptr::null_mut::<VirtTextChunk>(),
-            };
-            // SAFETY: the caller's promise -- `string` is NUL-terminated -- and
-            // `text` is this frame's own empty vector.
-            unsafe {
-                let hl_id = -1;
-                let chunk = VirtTextChunk {
-                    text: xstrdup(string.data()),
-                    hl_id,
-                };
-                Kvec::new(&mut text.size, &mut text.capacity, &mut text.items).push(chunk);
-            }
-            // SAFETY: as above.
-            *width = unsafe { mb_string2cells(string.data()) } as c_int;
-            *chunks = text;
-            *is_present = true;
-        }
+    let decoded = match text {
+        // An empty string clears the text; its chunks and width are the
+        // window's own until something replaces them.
+        Object::String(string) if string.is_empty() => BorderText {
+            present: false,
+            chunks: None,
+            width: None,
+        },
+        Object::String(string) => BorderText {
+            present: true,
+            chunks: Some(one_chunk(string)),
+            // SAFETY: the string owns its NUL-terminated bytes.
+            width: Some(unsafe { mb_string2cells(string.data()) } as c_int),
+        },
         Object::Array(array) => {
-            *width = 0;
-            let parsed = parse_virt_text(array, Some(&mut width));
-            if let Some(parsed) = stored(err, parsed) {
-                *chunks = parsed;
+            let mut cells = 0;
+            let chunks = parse_virt_text(array, Some(&mut cells))?;
+            BorderText {
+                present: true,
+                chunks: Some(chunks),
+                width: Some(cells),
             }
-            *is_present = true;
         }
         other => {
             let actual = api_typename(other.kind());
-            err_exp(err, c"title/footer", c"String or Array", Some(actual));
+            return Err(err_expected(
+                c"title/footer",
+                c"String or Array",
+                Some(actual),
+            ));
         }
-    }
+    };
+    decoded.apply(&mut config, which);
+    Ok(())
 }
 
-/// The `title_pos`/`footer_pos` key: which end of the border the text sits
-/// at.
+/// One border text holding `string` and no highlight of its own.
 ///
-/// # Safety
-/// `bordertext_pos`'s bytes must be NUL-terminated.
-unsafe fn parse_bordertext_pos(
-    window: Option<Win>,
-    bordertext_pos: &String_0,
-    bordertext_type: BorderTextType,
-    fconfig: WinCfg,
-    err: ErrSlot,
-) -> bool {
-    let align = if bordertext_type == kBorderTextFooter {
-        offset_of!(WinConfig, footer_pos)
-    } else {
-        offset_of!(WinConfig, title_pos)
+/// `kv_init` and then the `kv_push` whose growth step c2rust expanded inline,
+/// on this frame's own vector rather than in place: three `&mut`s into the
+/// config at once is what [`Live`] cannot give.
+fn one_chunk(string: &String_0) -> VirtText {
+    let mut text = VirtText {
+        size: 0,
+        capacity: 0,
+        items: ptr::null_mut::<VirtTextChunk>(),
     };
-    // SAFETY: the offset names a field of the config `fconfig`'s builder
-    // promised is live.
-    let mut align: Live<AlignTextPos> = unsafe { Live::new(fconfig.field_ptr(align)) };
-    if bordertext_pos.is_empty() {
-        // A new window starts left-aligned; an existing one keeps what it
-        // had.
-        if window.is_none() {
-            *align = kAlignLeft;
-        }
-        return true;
-    }
-    const NAMES: [&CStr; 3] = [c"left", c"center", c"right"];
-    // SAFETY: the caller's promise.
-    let Some(which) = (unsafe { smatch(bordertext_pos, &NAMES) }) else {
-        let name = if bordertext_type == kBorderTextTitle {
-            c"title_pos"
-        } else {
-            c"footer_pos"
+    // SAFETY: the string owns its NUL-terminated bytes, and `text` is this
+    // frame's own empty vector.
+    unsafe {
+        let chunk = VirtTextChunk {
+            text: xstrdup(string.data()),
+            hl_id: -1,
         };
-        // SAFETY: as above.
-        unsafe { err_invalid_str(err, name, bordertext_pos, true) };
-        return false;
-    };
-    *align = [kAlignLeft, kAlignCenter, kAlignRight][which];
-    true
+        Kvec::new(&mut text.size, &mut text.capacity, &mut text.items).push(chunk);
+    }
+    text
 }
 
-/// [`imatch`], case-sensitively.
-///
-/// # Safety
-/// `s`'s bytes must be NUL-terminated.
-unsafe fn smatch(s: &String_0, names: &[&CStr]) -> Option<usize> {
-    names
-        .iter()
-        // SAFETY: the caller's promise about `s`.
-        .position(|name| unsafe { strequal(s.data(), name.as_ptr()) })
+/// Write the `title_pos`/`footer_pos` field `which` names.
+fn set_align(mut config: WinCfg, which: BorderTextType, align: AlignTextPos) {
+    if which == kBorderTextFooter {
+        config.footer_pos = align;
+    } else {
+        config.title_pos = align;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // The whole keyset
 
-/// Fill `fconfig` in from `config`, reporting the first thing wrong with it
-/// through `err`.
+/// Fill `fconfig` in from `config`, answering the first thing wrong with it.
 ///
-/// `window` is the window being reconfigured, `None` when one is being created;
-/// `reconf` says that the missing keys keep whatever the window already had
-/// rather than being required.
+/// `window` is the window being reconfigured, `None` when one is being
+/// created; `reconf` says that the missing keys keep whatever the window
+/// already had rather than being required.
 ///
-/// On failure `fconfig` is merged back onto the window's current config (or
-/// onto the defaults) before `false` is answered, so a rejected call leaves a
-/// usable config behind.
-///
-/// # Safety
-/// Every string in `config` must be NUL-terminated and every array must name
-/// its own items, which is what the keyset decoder guarantees.
-pub(crate) unsafe fn parse_win_config(
+/// Whatever the answer is not [`Parsed::Done`], `fconfig` is merged back onto
+/// the window's current config (or onto the defaults) before it is given, so
+/// a rejected call leaves a usable config behind.
+pub(crate) fn parse_win_config(
     window: Option<Win>,
     config: CfgKeys,
-    mut fconfig: WinCfg,
+    fconfig: WinCfg,
     reconf: bool,
-    err: ErrSlot,
-) -> bool {
-    let floating = |w: &Win| w.w_floating;
-    let mut has_relative = false;
-    let mut relative_is_win = false;
-    let mut is_split = false;
-    '_fail: {
-        let no_string = String_0::NULL;
-        let relative = config.relative.as_ref().unwrap_or(&no_string);
-        if !relative.is_empty() {
-            // SAFETY: the caller's promise -- the keyset's strings are
-            // NUL-terminated.
-            if !unsafe { parse_float_relative(relative, &mut fconfig.relative) } {
-                // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"relative", relative, true) };
-                break '_fail;
-            }
-            if !(config.row.is_some() && config.col.is_some()) && config.bufpos.is_none() {
-                err_required(err, c"'relative' requires 'row'/'col' or 'bufpos'");
-                break '_fail;
-            }
-            has_relative = true;
-            fconfig.external = false;
-            if fconfig.relative == kFloatRelativeWindow {
-                relative_is_win = true;
-                fconfig.bufpos.lnum = -1;
-            }
-        } else if !config.external.unwrap_or(false) {
-            if config.vertical.is_some() || config.split.is_some() {
-                is_split = true;
-                fconfig.external = false;
-            } else if window.is_none() {
-                err_required(err, c"'relative' or 'external' when creating a float");
-                break '_fail;
-            }
-        }
-        // A split-only key on a float, and a float-only key on a split, are
-        // both reported here rather than in the walk below.
-        if config.vertical.is_some() && !is_split {
-            err_conflict(err, c"vertical", c"floating windows");
-            break '_fail;
-        }
-        if config.split.is_some() && !is_split {
-            err_conflict(err, c"split", c"floating windows");
-            break '_fail;
-        }
-        if let Some(split) = config.split.as_ref() {
-            // SAFETY: the caller's promise about the keyset's strings.
-            if !unsafe { parse_config_split(split, &mut fconfig.split) } {
-                // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"split", split, true) };
-                break '_fail;
-            }
-        }
-        if let Some(anchor) = config.anchor.as_ref() {
-            // SAFETY: as above.
-            if !unsafe { parse_float_anchor(anchor, &mut fconfig.anchor) } {
-                // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"anchor", anchor, true) };
-                break '_fail;
-            }
-        }
-        if let Some(row) = config.row {
-            if !has_relative || is_split {
-                generate_error(window, c"row", err);
-                break '_fail;
-            }
-            fconfig.row = row;
-        }
-        if let Some(col) = config.col {
-            if !has_relative || is_split {
-                generate_error(window, c"col", err);
-                break '_fail;
-            }
-            fconfig.col = col;
-        }
-        if let Some(bufpos) = config.bufpos.as_ref() {
-            if !has_relative || is_split {
-                generate_error(window, c"bufpos", err);
-                break '_fail;
-            }
-            // SAFETY: the caller's promise -- the keyset's arrays name their
-            // own items.
-            if !unsafe { parse_float_bufpos(bufpos, &mut fconfig.bufpos) } {
-                err_exp(err, c"bufpos", c"[row, col] array", None);
-                break '_fail;
-            }
-            // `bufpos` without `row`/`col` puts the float just below the
-            // position, or just above it for a south anchor.
-            if config.row.is_none() {
-                fconfig.row = if fconfig.anchor & kFloatAnchorSouth != 0 {
-                    0.0
-                } else {
-                    1.0
-                };
-            }
-            if config.col.is_none() {
-                fconfig.col = 0.0;
-            }
-        }
-        if let Some(width) = config.width {
-            if width <= 0 {
-                err_exp(err, c"width", c"positive Integer", None);
-                break '_fail;
-            }
-            fconfig.width = width as c_int;
-        } else if !reconf && !is_split {
-            err_required(err, c"width");
-            break '_fail;
-        }
-        if let Some(height) = config.height {
-            if height <= 0 {
-                err_exp(err, c"height", c"positive Integer", None);
-                break '_fail;
-            }
-            fconfig.height = height as c_int;
-        } else if !reconf && !is_split {
-            err_required(err, c"height");
-            break '_fail;
-        }
-        if let Some(external) = config.external {
-            fconfig.external = external;
-            if has_relative && fconfig.external {
-                err_conflict(err, c"relative", c"external");
-                break '_fail;
-            }
-            if fconfig.external && !ui_has(kUIMultigrid) {
-                let msg = c"UI doesn't support external windows";
-                err_msg(err, kErrorTypeValidation, msg);
-                break '_fail;
-            }
-        }
-        if config.win.is_some() && fconfig.external {
-            err_conflict(err, c"win", c"external window");
-            break '_fail;
-        }
-        let win_is_target = config.win.is_some()
-            && !is_split
-            && window.as_ref().is_some_and(floating)
-            && fconfig.relative == kFloatRelativeWindow;
-        if relative_is_win || win_is_target {
-            let win_handle = config.win.unwrap_or(0);
-            let Some(target) = stored(err, find_window_by_handle(win_handle)).flatten() else {
-                break '_fail;
-            };
-            if Some(target) == window {
-                let msg = c"floating window cannot be relative to itself";
-                err_msg(err, kErrorTypeException, msg);
-                break '_fail;
-            }
-            fconfig.window = target.handle;
-        } else {
-            if let Some(win_handle) = config.win {
-                if !is_split && !has_relative && !window.as_ref().is_some_and(floating) {
-                    err_required(err, c"non-float with 'win' requires 'split' or 'vertical'");
-                    break '_fail;
-                }
-                fconfig.window = win_handle;
-            }
-            if fconfig.window == 0 {
-                fconfig.window = Win::current().handle;
-            }
-        }
-        if let Some(focusable) = config.focusable {
-            fconfig.focusable = focusable;
-            fconfig.mouse = focusable;
-        }
-        if let Some(mouse) = config.mouse {
-            fconfig.mouse = mouse;
-        }
-        if let Some(zindex) = config.zindex {
-            if is_split {
-                err_conflict(err, c"zindex", c"non-float window");
-                break '_fail;
-            }
-            if zindex <= 0 {
-                err_exp(err, c"zindex", c"positive Integer", None);
-                break '_fail;
-            }
-            fconfig.zindex = zindex as c_int;
-        }
-        if let Some(title) = config.title.as_ref() {
-            if is_split {
-                err_conflict(err, c"title", c"non-float window");
-                break '_fail;
-            }
-            // SAFETY: the caller's promise about the keyset's strings and
-            // arrays.
-            let placed = unsafe {
-                parse_bordertext(title, kBorderTextTitle, fconfig, err);
-                !err.is_set()
-                    && parse_bordertext_pos(
-                        window,
-                        config.title_pos.as_ref().unwrap_or(&no_string),
-                        kBorderTextTitle,
-                        fconfig,
-                        err,
-                    )
-            };
-            if !placed {
-                break '_fail;
-            }
-        } else if config.title_pos.is_some() {
-            err_required(err, c"'title' requires 'title_pos'");
-            break '_fail;
-        }
-        if let Some(footer) = config.footer.as_ref() {
-            if is_split {
-                err_conflict(err, c"footer", c"non-float window");
-                break '_fail;
-            }
-            // SAFETY: as the title above.
-            let placed = unsafe {
-                parse_bordertext(footer, kBorderTextFooter, fconfig, err);
-                !err.is_set()
-                    && parse_bordertext_pos(
-                        window,
-                        config.footer_pos.as_ref().unwrap_or(&no_string),
-                        kBorderTextFooter,
-                        fconfig,
-                        err,
-                    )
-            };
-            if !placed {
-                break '_fail;
-            }
-        } else if config.footer_pos.is_some() {
-            err_required(err, c"'footer' requires 'footer_pos'");
-            break '_fail;
-        }
-        if let Some(border_style) = config.border.as_ref() {
-            if is_split {
-                err_conflict(err, c"border", c"non-float window");
-                break '_fail;
-            }
-            if !border_style.is_nil() {
-                // SAFETY: the caller's promise about the keyset's strings and
-                // arrays, and `fconfig` is live.
-                let parsed = unsafe { parse_border_style(border_style, fconfig.raw()) };
-                if stored(err, parsed).is_none() {
-                    break '_fail;
-                }
-            }
-        } else if !window.as_ref().is_some_and(floating) {
-            // No `border` key on a new float: `'winborder'` decides.
-            // SAFETY: the option's value is a live NUL-terminated string,
-            // and `fconfig` is live.
-            let winborder = unsafe { *p_winborder.get() };
-            if winborder as c_int != NUL {
-                // SAFETY: as above.
-                let parsed = unsafe { parse_winborder(fconfig.raw(), p_winborder.get()) };
-                if stored(err, parsed) != Some(true) {
-                    break '_fail;
-                }
-            }
-        }
-        if let Some(style) = config.style.as_ref() {
-            // SAFETY: the caller's promise -- the keyset's strings are
-            // NUL-terminated.
-            let empty = unsafe { *style.data() } as c_int == NUL;
-            // SAFETY: as above.
-            let minimal = !empty && unsafe { imatch(style, &[c"minimal"]) }.is_some();
-            if empty {
-                fconfig.style = kWinStyleUnused;
-            } else if minimal {
-                fconfig.style = kWinStyleMinimal;
-            } else {
-                // SAFETY: as above.
-                unsafe { err_invalid_str(err, c"style", style, true) };
-                break '_fail;
-            }
-        }
-        if let Some(noautocmd) = config.noautocmd {
-            if window.is_some() && noautocmd != fconfig.noautocmd {
-                let msg = c"'noautocmd' cannot be changed on existing window";
-                err_msg(err, kErrorTypeValidation, msg);
-                break '_fail;
-            }
-            fconfig.noautocmd = noautocmd;
-        }
-        if let Some(fixed) = config.fixed {
-            fconfig.fixed = fixed;
-        }
-        if let Some(hide) = config.hide {
-            fconfig.hide = hide;
-        }
-        if let Some(offset) = config._cmdline_offset {
-            fconfig._cmdline_offset = offset as c_int;
-        }
-        return true;
+) -> Result<Parsed, Error> {
+    let mut decode = Decode {
+        window,
+        config,
+        fconfig,
+        reconf,
+        has_relative: false,
+        relative_is_win: false,
+        is_split: false,
+    };
+    let answer = decode.run();
+    if !matches!(answer, Ok(Parsed::Done)) {
+        decode.restore();
     }
-    let base = window.map_or(WIN_CONFIG_INIT, |w| w.w_config.clone());
-    // SAFETY: `fconfig` names the live config the caller promised.
-    unsafe { merge_win_config(fconfig.raw(), base) };
-    false
+    answer
 }
 
-/// [`generate_api_error`] with the window as a handle and the name as a
-/// literal: "this key needs a `relative`", or "not on a split".
-fn generate_error(window: Option<Win>, attribute: &CStr, err: ErrSlot) {
-    let window = window.map_or(ptr::null_mut(), Win::raw);
-    // SAFETY: `window` is null or a live window.
-    let why = unsafe { generate_api_error(Win::from_raw(window), attribute) };
-    store(err, why);
+/// One `config` keyset being decoded into one `WinConfig`.
+///
+/// The three flags are what the `goto fail` this replaces shared between its
+/// sections: each is settled by an earlier key and read by a later one, and
+/// naming them together is what lets each section be a method of its own.
+struct Decode {
+    /// The window being reconfigured, `None` when one is being created.
+    window: Option<Win>,
+    /// The keyset the caller handed in.
+    config: CfgKeys,
+    /// The configuration being filled in from it.
+    fconfig: WinCfg,
+    /// Whether a key the caller left out keeps what the window had rather
+    /// than being required.
+    reconf: bool,
+    /// Whether `relative` named something, and whether what it named is a
+    /// window.
+    has_relative: bool,
+    relative_is_win: bool,
+    /// Whether the config describes a split rather than a float.
+    is_split: bool,
+}
+
+impl Decode {
+    /// Every group of keys in the order upstream reads them, which is also
+    /// the order their messages are reported in.
+    fn run(&mut self) -> Result<Parsed, Error> {
+        self.placement()?;
+        self.position()?;
+        self.size()?;
+        if matches!(self.target_window()?, Parsed::Refused) {
+            return Ok(Parsed::Refused);
+        }
+        self.focus();
+        self.zindex()?;
+        self.border_text()?;
+        if matches!(self.border()?, Parsed::Refused) {
+            return Ok(Parsed::Refused);
+        }
+        self.style()?;
+        self.flags()?;
+        Ok(Parsed::Done)
+    }
+
+    /// Merge the window's own config -- or the defaults, for a window that
+    /// does not exist yet -- back over whatever was filled in.
+    fn restore(&self) {
+        let base = self.window.map_or(WIN_CONFIG_INIT, |w| w.w_config.clone());
+        // SAFETY: `self.fconfig` names the live config its builder promised.
+        unsafe { merge_win_config(self.fconfig.raw(), base) };
+    }
+
+    /// Whether `window` is a float, which several keys read differently.
+    fn on_a_float(&self) -> bool {
+        self.window.is_some_and(|w| w.w_floating)
+    }
+
+    /// The `relative`, `external`, `split`, `vertical` and `anchor` keys:
+    /// what the window hangs off, and which way round.
+    fn placement(&mut self) -> Result<(), Error> {
+        match self.config.relative.as_ref().filter(|r| !r.is_empty()) {
+            Some(relative) => {
+                let Some(kind) = float_relative(relative.as_cstr()) else {
+                    return Err(err_invalid_str(c"relative", relative));
+                };
+                self.fconfig.relative = kind;
+                if !(self.config.row.is_some() && self.config.col.is_some())
+                    && self.config.bufpos.is_none()
+                {
+                    return Err(err_required(c"'relative' requires 'row'/'col' or 'bufpos'"));
+                }
+                self.has_relative = true;
+                self.fconfig.external = false;
+                if kind == kFloatRelativeWindow {
+                    self.relative_is_win = true;
+                    self.fconfig.bufpos.lnum = -1;
+                }
+            }
+            None if !self.config.external.unwrap_or(false) => {
+                if self.config.vertical.is_some() || self.config.split.is_some() {
+                    self.is_split = true;
+                    self.fconfig.external = false;
+                } else if self.window.is_none() {
+                    return Err(err_required(
+                        c"'relative' or 'external' when creating a float",
+                    ));
+                }
+            }
+            None => {}
+        }
+        // A split-only key on a float, and a float-only key on a split, are
+        // both reported here rather than where the key itself is read.
+        if self.config.vertical.is_some() && !self.is_split {
+            return Err(err_conflict(c"vertical", c"floating windows"));
+        }
+        if self.config.split.is_some() && !self.is_split {
+            return Err(err_conflict(c"split", c"floating windows"));
+        }
+        if let Some(split) = self.config.split.as_ref() {
+            let Some(side) = config_split(split.as_cstr()) else {
+                return Err(err_invalid_str(c"split", split));
+            };
+            self.fconfig.split = side;
+        }
+        if let Some(anchor) = self.config.anchor.as_ref() {
+            let Some(corner) = float_anchor(anchor.as_cstr()) else {
+                return Err(err_invalid_str(c"anchor", anchor));
+            };
+            self.fconfig.anchor = corner;
+        }
+        Ok(())
+    }
+
+    /// The `row`, `col` and `bufpos` keys: where a float sits.
+    fn position(&mut self) -> Result<(), Error> {
+        // All three are float-only, and all three say so the same way: a
+        // window being reconfigured is told it needs a `relative`, and a
+        // split that the key is not one a split has.
+        let placed = self.has_relative && !self.is_split;
+        if let Some(row) = self.config.row {
+            if !placed {
+                return Err(generate_api_error(self.window, c"row"));
+            }
+            self.fconfig.row = row;
+        }
+        if let Some(col) = self.config.col {
+            if !placed {
+                return Err(generate_api_error(self.window, c"col"));
+            }
+            self.fconfig.col = col;
+        }
+        let Some(bufpos) = self.config.bufpos.as_ref() else {
+            return Ok(());
+        };
+        if !placed {
+            return Err(generate_api_error(self.window, c"bufpos"));
+        }
+        let Some(at) = float_bufpos(bufpos) else {
+            return Err(err_expected(c"bufpos", c"[row, col] array", None));
+        };
+        self.fconfig.bufpos = at;
+        // `bufpos` without `row`/`col` puts the float just below the
+        // position, or just above it for a south anchor.
+        if self.config.row.is_none() {
+            self.fconfig.row = if self.fconfig.anchor & kFloatAnchorSouth != 0 {
+                0.0
+            } else {
+                1.0
+            };
+        }
+        if self.config.col.is_none() {
+            self.fconfig.col = 0.0;
+        }
+        Ok(())
+    }
+
+    /// The `width` and `height` keys, which a new float must carry and a
+    /// split takes from the layout.
+    fn size(&mut self) -> Result<(), Error> {
+        self.fconfig.width = self.one_size(self.config.width, c"width", self.fconfig.width)?;
+        self.fconfig.height = self.one_size(self.config.height, c"height", self.fconfig.height)?;
+        Ok(())
+    }
+
+    /// One of the two: `given` when it is a positive integer, `had` when the
+    /// key may be left out at all.
+    fn one_size(&self, given: Option<Integer>, name: &CStr, had: c_int) -> Result<c_int, Error> {
+        match given {
+            Some(size) if size <= 0 => Err(err_expected(name, c"positive Integer", None)),
+            Some(size) => Ok(size as c_int),
+            None if !self.reconf && !self.is_split => Err(err_required(name)),
+            None => Ok(had),
+        }
+    }
+
+    /// The `external` and `win` keys: whether the window is the UI's rather
+    /// than the editor's, and which window it hangs off if it is not.
+    fn target_window(&mut self) -> Result<Parsed, Error> {
+        if let Some(external) = self.config.external {
+            self.fconfig.external = external;
+            if self.has_relative && external {
+                return Err(err_conflict(c"relative", c"external"));
+            }
+            if external && !ui_has(kUIMultigrid) {
+                return Err(Error::validation(c"UI doesn't support external windows"));
+            }
+        }
+        if self.config.win.is_some() && self.fconfig.external {
+            return Err(err_conflict(c"win", c"external window"));
+        }
+        let win_is_target = self.config.win.is_some()
+            && !self.is_split
+            && self.on_a_float()
+            && self.fconfig.relative == kFloatRelativeWindow;
+        if !(self.relative_is_win || win_is_target) {
+            return self.split_target();
+        }
+        let Some(target) = find_window_by_handle(self.config.win.unwrap_or(0))? else {
+            return Ok(Parsed::Refused);
+        };
+        if Some(target) == self.window {
+            let why = c"floating window cannot be relative to itself";
+            return Err(Error::exception(why));
+        }
+        self.fconfig.window = target.handle;
+        Ok(Parsed::Done)
+    }
+
+    /// The `win` key where it names the window to split rather than the one
+    /// to float over. Left where it is, since a handle is not resolved here.
+    fn split_target(&mut self) -> Result<Parsed, Error> {
+        if let Some(win_handle) = self.config.win {
+            if !self.is_split && !self.has_relative && !self.on_a_float() {
+                return Err(err_required(
+                    c"non-float with 'win' requires 'split' or 'vertical'",
+                ));
+            }
+            self.fconfig.window = win_handle;
+        }
+        if self.fconfig.window == 0 {
+            self.fconfig.window = Win::current().handle;
+        }
+        Ok(Parsed::Done)
+    }
+
+    /// The `focusable` and `mouse` keys. `focusable` carries `mouse` with
+    /// it, and a `mouse` of its own overrides that.
+    fn focus(&mut self) {
+        if let Some(focusable) = self.config.focusable {
+            self.fconfig.focusable = focusable;
+            self.fconfig.mouse = focusable;
+        }
+        if let Some(mouse) = self.config.mouse {
+            self.fconfig.mouse = mouse;
+        }
+    }
+
+    /// The `zindex` key: which floats draw over which.
+    fn zindex(&mut self) -> Result<(), Error> {
+        let Some(zindex) = self.config.zindex else {
+            return Ok(());
+        };
+        if self.is_split {
+            return Err(err_conflict(c"zindex", c"non-float window"));
+        }
+        if zindex <= 0 {
+            return Err(err_expected(c"zindex", c"positive Integer", None));
+        }
+        self.fconfig.zindex = zindex as c_int;
+        Ok(())
+    }
+
+    /// The `title`/`footer` keys and the `*_pos` each of them takes.
+    fn border_text(&mut self) -> Result<(), Error> {
+        self.one_border_text(kBorderTextTitle)?;
+        self.one_border_text(kBorderTextFooter)
+    }
+
+    /// One of the two, whichever `which` names.
+    fn one_border_text(&mut self, which: BorderTextType) -> Result<(), Error> {
+        let footer = which == kBorderTextFooter;
+        let (name, text, pos) = if footer {
+            (c"footer", &self.config.footer, &self.config.footer_pos)
+        } else {
+            (c"title", &self.config.title, &self.config.title_pos)
+        };
+        let Some(text) = text.as_ref() else {
+            // The position on its own places nothing.
+            if pos.is_none() {
+                return Ok(());
+            }
+            let why = if footer {
+                c"'footer' requires 'footer_pos'"
+            } else {
+                c"'title' requires 'title_pos'"
+            };
+            return Err(err_required(why));
+        };
+        if self.is_split {
+            return Err(err_conflict(name, c"non-float window"));
+        }
+        set_border_text(self.fconfig, which, text)?;
+        let Some(pos) = pos.as_ref().filter(|p| !p.is_empty()) else {
+            // A new window starts left-aligned; an existing one keeps what
+            // it had.
+            if self.window.is_none() {
+                set_align(self.fconfig, which, kAlignLeft);
+            }
+            return Ok(());
+        };
+        let Some(end) = align_pos(pos.as_cstr()) else {
+            let name = if footer { c"footer_pos" } else { c"title_pos" };
+            return Err(err_invalid_str(name, pos));
+        };
+        set_align(self.fconfig, which, end);
+        Ok(())
+    }
+
+    /// The `border` key, or `'winborder'` where a new float leaves it out.
+    fn border(&mut self) -> Result<Parsed, Error> {
+        let Some(style) = self.config.border.as_ref() else {
+            return self.winborder();
+        };
+        if self.is_split {
+            return Err(err_conflict(c"border", c"non-float window"));
+        }
+        if !style.is_nil() {
+            // SAFETY: `self.fconfig` names the live config its builder
+            // promised.
+            unsafe { parse_border_style(style, self.fconfig.raw()) }?;
+        }
+        Ok(Parsed::Done)
+    }
+
+    /// No `border` key on a new float: `'winborder'` decides, and a value
+    /// that does not spell a border refuses the whole config without a
+    /// message -- which is what upstream's `goto fail` does here too.
+    fn winborder(&self) -> Result<Parsed, Error> {
+        if self.on_a_float() {
+            return Ok(Parsed::Done);
+        }
+        // SAFETY: the option's value is a live NUL-terminated string.
+        if unsafe { *p_winborder.get() } == 0 {
+            return Ok(Parsed::Done);
+        }
+        // SAFETY: as above, and `self.fconfig` names the live config.
+        let parsed = unsafe { parse_winborder(self.fconfig.raw(), p_winborder.get()) }?;
+        Ok(if parsed {
+            Parsed::Done
+        } else {
+            Parsed::Refused
+        })
+    }
+
+    /// The `style` key: `"minimal"`, or nothing at all.
+    fn style(&mut self) -> Result<(), Error> {
+        let Some(style) = self.config.style.as_ref() else {
+            return Ok(());
+        };
+        let spelling = style.as_cstr();
+        self.fconfig.style = if spelling.is_empty() {
+            kWinStyleUnused
+        } else if imatch(spelling, &[c"minimal"]).is_some() {
+            kWinStyleMinimal
+        } else {
+            return Err(err_invalid_str(c"style", style));
+        };
+        Ok(())
+    }
+
+    /// The keys that are a plain copy: `noautocmd`, `fixed`, `hide` and the
+    /// command line's offset.
+    fn flags(&mut self) -> Result<(), Error> {
+        if let Some(noautocmd) = self.config.noautocmd {
+            if self.window.is_some() && noautocmd != self.fconfig.noautocmd {
+                let why = c"'noautocmd' cannot be changed on existing window";
+                return Err(Error::validation(why));
+            }
+            self.fconfig.noautocmd = noautocmd;
+        }
+        if let Some(fixed) = self.config.fixed {
+            self.fconfig.fixed = fixed;
+        }
+        if let Some(hide) = self.config.hide {
+            self.fconfig.hide = hide;
+        }
+        if let Some(offset) = self.config._cmdline_offset {
+            self.fconfig._cmdline_offset = offset as c_int;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Integer;
+
+    /// Every name the `relative` key takes, and nothing else. The table and
+    /// the values it indexes are two literals that have to stay the same
+    /// length, which is the one thing a lookup by index can get wrong.
+    #[test]
+    fn relative_names_its_six_kinds() {
+        let named = [
+            (c"editor", kFloatRelativeEditor),
+            (c"win", kFloatRelativeWindow),
+            (c"cursor", kFloatRelativeCursor),
+            (c"mouse", kFloatRelativeMouse),
+            (c"tabline", kFloatRelativeTabline),
+            (c"laststatus", kFloatRelativeLaststatus),
+        ];
+        for (name, kind) in named {
+            assert_eq!(float_relative(name), Some(kind), "{name:?}");
+        }
+        assert_eq!(float_relative(c""), None);
+        assert_eq!(float_relative(c"editorial"), None);
+    }
+
+    /// The anchor is two bits, and its default corner is neither of them.
+    #[test]
+    fn the_anchor_is_a_corner_of_two_bits() {
+        assert_eq!(float_anchor(c"NW"), Some(0));
+        assert_eq!(float_anchor(c"NE"), Some(kFloatAnchorEast));
+        assert_eq!(float_anchor(c"SW"), Some(kFloatAnchorSouth));
+        assert_eq!(
+            float_anchor(c"SE"),
+            Some(kFloatAnchorSouth | kFloatAnchorEast)
+        );
+        assert_eq!(float_anchor(c""), None);
+    }
+
+    /// The enumerated keys fold case, because `striequal` does.
+    #[test]
+    fn a_name_is_matched_whatever_its_case() {
+        assert_eq!(float_anchor(c"nw"), Some(0));
+        assert_eq!(float_relative(c"EDITOR"), Some(kFloatRelativeEditor));
+        assert_eq!(config_split(c"Above"), Some(kWinSplitAbove));
+    }
+
+    /// The border text's position is the one that does not: upstream reads
+    /// it with `strequal`.
+    #[test]
+    fn the_border_text_position_is_case_sensitive() {
+        assert_eq!(align_pos(c"left"), Some(kAlignLeft));
+        assert_eq!(align_pos(c"center"), Some(kAlignCenter));
+        assert_eq!(align_pos(c"right"), Some(kAlignRight));
+        assert_eq!(align_pos(c"Left"), None);
+        assert_eq!(align_pos(c""), None);
+    }
+
+    #[test]
+    fn split_names_its_four_sides() {
+        assert_eq!(config_split(c"left"), Some(kWinSplitLeft));
+        assert_eq!(config_split(c"right"), Some(kWinSplitRight));
+        assert_eq!(config_split(c"above"), Some(kWinSplitAbove));
+        assert_eq!(config_split(c"below"), Some(kWinSplitBelow));
+        assert_eq!(config_split(c"beside"), None);
+    }
+
+    /// `bufpos` is exactly two integers: one is not a position and three is
+    /// not either.
+    #[test]
+    fn bufpos_is_two_integers_or_nothing() {
+        let at = float_bufpos(&Array::from(vec![
+            Object::Integer(3 as Integer),
+            Object::Integer(7 as Integer),
+        ]))
+        .expect("a pair");
+        assert_eq!((at.lnum, at.col), (3, 7));
+        assert!(float_bufpos(&Array::EMPTY).is_none());
+        assert!(float_bufpos(&Array::from(vec![Object::Integer(3)])).is_none());
+        assert!(
+            float_bufpos(&Array::from(vec![
+                Object::Integer(1),
+                Object::Integer(2),
+                Object::Integer(3),
+            ]))
+            .is_none()
+        );
+        assert!(
+            float_bufpos(&Array::from(vec![
+                Object::Integer(1),
+                Object::Boolean(true),
+            ]))
+            .is_none()
+        );
+    }
 }

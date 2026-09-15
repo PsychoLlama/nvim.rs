@@ -11,7 +11,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::buffer::BufRef;
 use crate::guard::Suppress;
 use crate::types::CmdIdx;
@@ -255,26 +254,22 @@ pub unsafe fn nvim_open_win(
     enter: Boolean,
     config: *mut KeyDict_win_config,
 ) -> Result<WindowHandle, Error> {
-    let mut error = Error::none();
-    // SAFETY: `error` is this frame's own slot, live for the whole call, and
-    // `config` is the caller's keyset.
-    let (report, keys) = unsafe { (ErrSlot::new(&mut error), CfgKeys::new(config)) };
-    // SAFETY: `error` is this frame's slot; the lookup answers a live buffer or
-    // a null.
+    // SAFETY: `config` is the caller's keyset, live for the whole call.
+    let keys = unsafe { CfgKeys::new(config) };
+    // The lookup answers a live buffer or a null.
     let Some(buffer) = find_buffer_by_handle(buf)? else {
         return Ok(0 as WindowHandle);
     };
     if cmdwin_type.get() != 0 && enter || cmdwin_buf.get() == Some(buffer.id()) {
-        // SAFETY: `e_cmdwin` is a static NUL-terminated message.
-        unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
-        return (0 as WindowHandle).reported(error);
+        return Err(Error::exception(e_cmdwin));
     }
     let mut fconfig = WIN_CONFIG_INIT;
-    // SAFETY: `fconfig` is this frame's own and `keys` the caller's keyset.
-    let parsed =
-        unsafe { parse_win_config(None, keys, WinCfg::new(&raw mut fconfig), false, report) };
-    if !parsed {
-        return (0 as WindowHandle).reported(error);
+    // SAFETY: `fconfig` is this frame's own, live for the whole call.
+    let cfg = unsafe { WinCfg::new(&raw mut fconfig) };
+    if matches!(parse_win_config(None, keys, cfg, false)?, Parsed::Refused) {
+        // The config named a window that is not there. Upstream makes no
+        // window for it and reports nothing.
+        return Ok(0 as WindowHandle);
     }
 
     debug_assert!(Win::current_or_none().is_some(), "curwin != NULL");

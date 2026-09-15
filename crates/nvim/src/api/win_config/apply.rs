@@ -17,7 +17,6 @@
 )]
 
 use super::*;
-use crate::api::private::helpers::Reported;
 use crate::api_error;
 use crate::winlayer::{FrameId, FrameRef, TabPage, Win, WinId};
 use core::ffi::c_int;
@@ -552,12 +551,9 @@ pub unsafe fn nvim_win_set_config(
     win: WindowHandle,
     config: *mut KeyDict_win_config,
 ) -> Result<(), Error> {
-    let mut error = Error::none();
-    // SAFETY: `error` is this frame's own slot, live for the whole call, and
-    // `config` is the caller's keyset.
-    let (report, keys) = unsafe { (ErrSlot::new(&mut error), CfgKeys::new(config)) };
-    // SAFETY: `error` is this frame's slot; the lookup answers a live window or
-    // a null.
+    // SAFETY: `config` is the caller's keyset, live for the whole call.
+    let keys = unsafe { CfgKeys::new(config) };
+    // The lookup answers a live window or a null.
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
@@ -569,23 +565,17 @@ pub unsafe fn nvim_win_set_config(
     let external = keys.external.unwrap_or(false);
     let relative_named = keys.relative.as_ref().is_some_and(|r| !r.is_empty());
     let to_split = !relative_named && !external && (has_split || has_vertical || was_split);
-    // SAFETY: `fconfig` is this frame's own, and `keys` the caller's keyset.
-    let parsed = unsafe {
-        parse_win_config(
-            Some(w),
-            keys,
-            WinCfg::new(&raw mut fconfig),
-            !was_split || to_split,
-            report,
-        )
-    };
-    if !parsed {
-        return ().reported(error);
-    }
-    // SAFETY: `w` is live, `fconfig` this frame's own, and `keys` the
-    // caller's keyset.
     // SAFETY: `fconfig` is this frame's own, live for the whole call.
     let fc = unsafe { WinCfg::new(&raw mut fconfig) };
+    let reconf = !was_split || to_split;
+    if matches!(
+        parse_win_config(Some(w), keys, fc, reconf)?,
+        Parsed::Refused
+    ) {
+        // The config named a window that is not there. Upstream changes
+        // nothing for it and reports nothing.
+        return Ok(());
+    }
     let applied = if to_split {
         apply_split(w, keys, fc)
     } else {
