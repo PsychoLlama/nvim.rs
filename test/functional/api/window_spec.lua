@@ -1518,6 +1518,23 @@ describe('API/win', function()
       eq(wins_before, api.nvim_list_wins())
     end)
 
+    it('answers the split it made even when an autocommand raised', function()
+      exec([[
+        augroup NvimOpenWinRaise
+          autocmd!
+          autocmd WinNewPre * throw 'boom'
+        augroup END
+      ]])
+      local wins_before = api.nvim_list_wins()
+      eq(
+        'WinNewPre Autocommands for "*": boom',
+        pcall_err(api.nvim_open_win, 0, false, { split = 'below', height = 5 })
+      )
+      -- The split both happened and raised: an exception thrown while the
+      -- window was being made does not un-make it.
+      eq(#wins_before + 1, #api.nvim_list_wins())
+    end)
+
     describe('creates a split window above', function()
       local function test_open_win_split_above(key, val)
         local initial_win = api.nvim_get_current_win()
@@ -3371,6 +3388,33 @@ describe('API/win', function()
       eq(true, api.nvim_win_get_config(0).external)
       api.nvim_win_set_config(0, { external = false })
       eq(false, api.nvim_win_get_config(0).external)
+    end)
+
+    it('stays put after moving the current float to another tabpage', function()
+      local first_tab_win = api.nvim_get_current_win()
+      command('tabnew')
+      local second_tab = api.nvim_get_current_tabpage()
+      local float = api.nvim_open_win(0, true, {
+        relative = 'editor',
+        row = 1,
+        col = 1,
+        width = 5,
+        height = 5,
+      })
+      eq(float, api.nvim_get_current_win())
+      api.nvim_win_set_config(float, {
+        relative = 'win',
+        win = first_tab_win,
+        row = 1,
+        col = 1,
+        width = 5,
+        height = 5,
+      })
+      eq(api.nvim_win_get_tabpage(first_tab_win), api.nvim_win_get_tabpage(float))
+      -- The window the move stepped off is on the other tabpage now, so the
+      -- go-back a *refused* move does must not run on this path.
+      neq(float, api.nvim_get_current_win())
+      eq(second_tab, api.nvim_get_current_tabpage())
     end)
   end)
 
