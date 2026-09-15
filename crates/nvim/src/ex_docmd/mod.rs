@@ -73,7 +73,7 @@ use crate::spellfile::{ex_mkspell, ex_spell};
 use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStackArg,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStack, EStackArg,
     EStackType, ExArg, ExArgt, Exception, GArray, Handle, LineGetter, LineNr, LuaRetMode, MarkGet,
     MotionType, OptMagic, RemapValues, uint8_t, uint16_t,
 };
@@ -141,6 +141,37 @@ pub const kMarkBufLocal: MarkGet = 0;
 pub const CSTP_THROW: c_uint = 4;
 pub const CSTP_INTERRUPT: c_uint = 2;
 pub const CSTP_ERROR: c_uint = 1;
+crate::flag_set! {
+    /// How [`do_cmdline`] should run the lines it is given -- upstream's
+    /// `DOCMD_*`.
+    pub struct DoCmdOpts;
+
+    /// Include the command in any error message.
+    const VERBOSE = 1;
+    /// Skip `wait_return` and friends.
+    const NOWAIT = 2;
+    /// Keep asking `fgetline` until it answers null.
+    const REPEAT = 4;
+    /// Leave `KeyTyped` alone.
+    const KEYTYPED = 8;
+    /// Save and restore the exception environment (debugging).
+    const EXCRESET = 16;
+    /// Remember the first typed line, for `.` to repeat.
+    const KEEPLINE = 32;
+}
+
+/// The top of the execution stack: the script or function whose line is
+/// running. `SOURCING_LNUM`/`SOURCING_NAME` in the C, where they are macros
+/// over `exestack`'s last entry.
+pub(crate) fn sourcing_entry() -> EStack {
+    crate::runtime::innermost_frame()
+}
+
+/// The line number the message and breakpoint machinery reports.
+pub(crate) fn sourcing_lnum() -> LineNr {
+    crate::runtime::innermost_frame().es_lnum
+}
+
 /// A command handler. Plain `unsafe fn`, not `extern "C"`: nothing
 /// outside this crate calls the table.
 pub type ExFunc = Option<fn(&mut ExArg)>;

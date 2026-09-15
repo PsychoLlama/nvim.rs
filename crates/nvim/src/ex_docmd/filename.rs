@@ -27,8 +27,8 @@ use crate::eval::skip_expr;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::list_find_str;
 use crate::eval::vars::get_vim_var_list;
-use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
+use crate::ex_docmd::sourcing_entry;
 use crate::ex_docmd::state::escape_chars;
 use crate::ex_docmd::xfree;
 use crate::ex_docmd::{

@@ -20,7 +20,8 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later, update_screen};
 use crate::eval::vars::set_vim_var_string;
 
 use crate::ex_cmds::print_line_no_prefix;
-use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
+use crate::ex_docmd::cmdline::do_cmdline;
+use crate::ex_docmd::sourcing_entry;
 use crate::ex_docmd::xfree;
 
 use crate::drawscreen::state::cmdline_row;
