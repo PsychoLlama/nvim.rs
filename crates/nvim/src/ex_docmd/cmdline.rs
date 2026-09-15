@@ -3,8 +3,7 @@
 //! This is the re-entrant heart of the editor: a sourced file, `:execute`, a
 //! `:global` body, an autocommand and a mapping all arrive here, nested
 //! inside one another, each with its own conditional stack, its own share of
-//! the exception state and its own store of the lines a `:while` or `:for`
-//! will replay.
+//! the exception state and its own store of the lines a `:while` replays.
 //!
 //! One pass of the loop -- [`Run::step`] -- runs one `|`-separated command.
 //! Where the next one comes from is the first decision it makes, and there
@@ -282,8 +281,8 @@ fn ask_for_line(
 
 /// One pass of the loop bookkeeping, after a command has run inside a
 /// `:while` or `:for`. `:endwhile`, `:endfor` and `:continue` all land here:
-/// if commands were being executed, jump back to the `:while` or `:for`; if
-/// they were being skipped, the loop level is already decremented.
+/// commands that ran jump back to the `:while` or `:for`; ones that were
+/// skipped have had the loop level decremented already.
 fn advance_loop(
     source: &Source,
     cstack: &mut CondStack,
@@ -347,8 +346,7 @@ fn advance_loop(
 /// or `:try` still open. Reports the missing `:end…` where one really was,
 /// then puts `trylevel` back after a `:finish`, a `:return` or that missing
 /// `:endtry` -- a try block in its finally clause drops anything pending,
-/// one in a catch clause finishes the exception it caught. Frees the
-/// `cs_forinfo`s too.
+/// one in a catch clause finishes what it caught. Frees the `cs_forinfo`s.
 fn unwind_conditionals(source: &Source, cstack: &mut CondStack, initial_trylevel: c_int) {
     if !got_int.get()
         && !did_throw.get()
@@ -393,7 +391,7 @@ fn unwind_conditionals(source: &Source, cstack: &mut CondStack, initial_trylevel
 /// out of the debugger's nesting level. This `cstack` is about to go away:
 /// an uncaught exception has to be rethrown against the caller's, and a
 /// finished function or script may leave the caller's stack with finally
-/// clauses to run. `do_one_cmd` does both, once it sees these two flags.
+/// clauses to run -- `do_one_cmd` does both once it sees these flags.
 fn leave_nesting(source: &Source) {
     if did_throw.get() {
         need_rethrow.set(true);
@@ -428,8 +426,8 @@ fn leave_nesting(source: &Source) {
 /// outermost one owns the "wait for return" bookkeeping.
 static RECURSIVE: crate::global_cell::GlobalCell<c_int> = crate::global_cell::GlobalCell::new(0);
 
-/// A line to run: a newtype, so that "no line" is `None` rather than a
-/// null and no `*mut c_char` reaches a return type.
+/// A line to run: a newtype, so "no line" is `None` and no `*mut c_char`
+/// reaches a return type.
 struct Line(*mut c_char);
 
 /// What one pass of the loop decided.
@@ -442,12 +440,12 @@ enum Pass {
 
 /// Everything one [`do_cmdline`] run carries from one `|`-separated command
 /// to the next. C kept these as a dozen locals of a 600-line function whose
-/// loop body read and wrote all of them; naming the set is what lets one
-/// pass be a method.
+/// loop body read and wrote all of them; naming the set is what lets a pass
+/// be a method.
 struct Run {
-    /// The `:if`/`:while`/`:try` stack this run opens and closes, the lines
-    /// of a `:while`/`:for` body it is storing or replaying, which of them
-    /// is next, and the getter a command is handed to read further ones.
+    /// The `:if`/`:while`/`:try` stack this run opens and closes, the body
+    /// it is storing or replaying, which line of it is next, and the getter
+    /// a command is handed to read further ones.
     cstack: CondStack,
     lines: GArray,
     current_line: c_int,
@@ -460,13 +458,11 @@ struct Run {
     /// and whether a line came from the getter rather than the caller.
     count: c_int,
     used_getline: bool,
-    /// The storing-and-replaying getter is in use, and where in the stored
-    /// body this command started.
+    /// The storing getter is in use, and where in the body this started.
     looping: bool,
     line_before: c_int,
     /// A `cmdline_block` UI event is open; what 'msg_didout' was before the
-    /// first command's `msg_start`; and the suppression held from it to the
-    /// end of the run.
+    /// first `msg_start`; the suppression held from it to the run's end.
     did_block: bool,
     msg_didout_before: bool,
     quiet_output: Option<(Bump, Bump)>,
@@ -756,6 +752,39 @@ impl Run {
         self.keep_going(source, flags)
     }
 
+    /// Free the `:silent!` list, and ask for a return when too much output
+    /// piled up to fit on the command line (with `:global`, once after the
+    /// whole command). Runs *after* `msg_list` is put back, so that what
+    /// `wait_return` says reaches the caller's list and not this run's.
+    fn report(&mut self) {
+        // SAFETY: the list this run's `:silent!`s built, owned here.
+        let mut elem: *mut EsList = self.cstack.cs_emsg_silent_list;
+        while !elem.is_null() {
+            let next = unsafe { (*elem).next };
+            xfree(elem as *mut c_void);
+            elem = next;
+        }
+
+        if self.quiet_output.take().is_some() {
+            msg_scroll.set(0);
+
+            if self.retval.is_err() || did_endif.get() && KeyTyped.get() && did_emsg.get() == 0 {
+                // A typed `:if`/`:else` that has just finished, or an error.
+                need_wait_return.set(false);
+                msg_didany.set(false);
+            } else if need_wait_return.get() {
+                // `msg_start` above cleared 'msg_didout'; the `wait_return`
+                // here must not overwrite whatever was shown before it.
+                msg_didout.set(msg_didout.get() || self.msg_didout_before);
+                wait_return(0);
+            }
+        }
+
+        if self.did_block {
+            ui_ext_cmdline_block_leave();
+        }
+    }
+
     /// What the run puts back once its last command has run.
     fn close(&mut self, source: &Source, flags: DoCmdOpts, debug_saved: &mut SavedDebugState) {
         xfree(self.copy as *mut c_void);
@@ -793,36 +822,6 @@ impl Run {
         if flags.has(DoCmdOpts::EXCRESET) {
             // SAFETY: the caller's own saved state.
             unsafe { restore_dbg_stuff(&raw mut *debug_saved) };
-        }
-
-        // SAFETY: the list this run's `:silent!`s built, owned here.
-        let mut elem: *mut EsList = self.cstack.cs_emsg_silent_list;
-        while !elem.is_null() {
-            let next = unsafe { (*elem).next };
-            xfree(elem as *mut c_void);
-            elem = next;
-        }
-
-        // Too much output to fit on the command line: ask for a return
-        // before the screen is redrawn. With `:global` this happens once,
-        // after the whole command.
-        if self.quiet_output.take().is_some() {
-            msg_scroll.set(0);
-
-            if self.retval.is_err() || did_endif.get() && KeyTyped.get() && did_emsg.get() == 0 {
-                // A typed `:if`/`:else` that has just finished, or an error.
-                need_wait_return.set(false);
-                msg_didany.set(false);
-            } else if need_wait_return.get() {
-                // `msg_start` above cleared 'msg_didout'; the `wait_return`
-                // here must not overwrite whatever was shown before it.
-                msg_didout.set(msg_didout.get() || self.msg_didout_before);
-                wait_return(0);
-            }
-        }
-
-        if self.did_block {
-            ui_ext_cmdline_block_leave();
         }
     }
 }
@@ -913,8 +912,9 @@ pub unsafe fn do_cmdline(
     let mut run = Run::new(cmdline);
     while run.step(source, flags) == Pass::Again {}
     run.close(source, flags, &mut debug_saved);
-
     msg_list.set(saved_msg_list);
+    run.report();
+
     // In case `do_cmdline` was used recursively.
     did_endif.set(false);
     do_cmdline_end();
