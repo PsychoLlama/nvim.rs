@@ -118,11 +118,11 @@ pub fn ex_let(excmd: &mut ExArg) {
     }
 
     // Assign to the target or targets, whatever produced the value. The
-    // command's argument text is re-read here rather than reused from above
-    // because `heredoc_get` moves it.
-    // The argument's *address* is read once here rather than through the
-    // command: the command is lent out to `heredoc_get` and the evaluator,
-    // and only the text it points at is wanted afterwards.
+    // command's argument text is read again here rather than reused from
+    // above, because the listing branch moves the local `arg`; it is read
+    // *now* rather than inside the closure because the command itself is
+    // lent to `heredoc_get` and to the evaluator below, neither of which
+    // touches `arg`.
     let arg = excmd.arg;
     let assign = |tv: &mut TypVal, op: *const c_char| {
         // SAFETY: the command's own argument text, and a live value.
