@@ -30,7 +30,7 @@
 //!   command table, the register table) are live for the whole call.
 //!
 //! What is left `unsafe fn` is what those two do not cover: the raw `arena`,
-//! and `ea.arg` pointing into a command line only the caller can vouch for.
+//! and `excmd.arg` pointing into a command line only the caller can vouch for.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -102,10 +102,10 @@ pub unsafe fn nvim_cmd(
     // SAFETY: `ExArg` and `CmdParseInfo` are plain C aggregates whose
     // all-zero state is the valid "nothing parsed yet" one; the C original
     // clears both with CLEAR_FIELD.
-    let mut ea: ExArg = unsafe { ::core::mem::zeroed() };
+    let mut excmd: ExArg = unsafe { ::core::mem::zeroed() };
     let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
 
-    // Owned here rather than in `prepare_cmd` because `ea.cmdlinep` points at
+    // Owned here rather than in `prepare_cmd` because `excmd.cmdlinep` points at
     // it for the whole of `execute_cmd`.
     let mut cmdline: *mut c_char = ptr::null_mut();
 
@@ -113,11 +113,11 @@ pub unsafe fn nvim_cmd(
     // below has to run whichever way the two stages went, so the answer is
     // held rather than returned from inside them.
     let answered =
-        unsafe { prepare_cmd(cmd, &mut ea, &mut cmdinfo, &mut cmdline) }.and_then(|prepared| {
+        unsafe { prepare_cmd(cmd, &mut excmd, &mut cmdinfo, &mut cmdline) }.and_then(|prepared| {
             match prepared {
-                // SAFETY: `prepare_cmd` answering true means `ea`/`cmdinfo`
+                // SAFETY: `prepare_cmd` answering true means `excmd`/`cmdinfo`
                 // describe a resolved, validated command.
-                true => unsafe { run_cmd(channel_id, &mut ea, &mut cmdinfo, output) },
+                true => unsafe { run_cmd(channel_id, &mut excmd, &mut cmdinfo, output) },
                 false => Ok(String_0::NULL),
             }
         });
@@ -126,8 +126,8 @@ pub unsafe fn nvim_cmd(
     // and `getargopt` are the only writers.
     unsafe {
         xfree(cmdline.cast());
-        xfree(ea.args.cast());
-        xfree(ea.arglens.cast());
+        xfree(excmd.args.cast());
+        xfree(excmd.arglens.cast());
     }
     answered
 }
@@ -144,19 +144,19 @@ pub unsafe fn nvim_cmd(
 /// it is left holding a heap-allocated command line the caller frees.
 unsafe fn prepare_cmd(
     cmd: &KeyDict_cmd,
-    ea: &mut ExArg,
+    excmd: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
     cmdline: &mut *mut c_char,
 ) -> Result<bool, Error> {
     // SAFETY (all): the keyset and the command the caller was handed.
-    let Some(range_only) = unsafe { resolve_command(cmd, ea) }? else {
+    let Some(range_only) = unsafe { resolve_command(cmd, excmd) }? else {
         return Ok(false);
     };
 
     let mut args = EMPTY_ARRAY;
     let mut count_from_first_arg = false;
     if let Some(given) = cmd.args.as_ref() {
-        count_from_first_arg = unsafe { collect_args(given, ea, &mut args) }?;
+        count_from_first_arg = unsafe { collect_args(given, excmd, &mut args) }?;
     }
 
     if !range_only {
@@ -168,30 +168,30 @@ unsafe fn prepare_cmd(
                 .expect("`collect_args` puts only Strings in the array")
                 .data()
         });
-        unsafe { set_cmd_addr_type(ea, first) };
+        unsafe { set_cmd_addr_type(excmd, first) };
     }
 
-    apply_range(cmd, ea)?;
-    apply_count(cmd, ea, count_from_first_arg)?;
-    apply_register(cmd, ea)?;
-    apply_bang(cmd, ea)?;
-    apply_magic(cmd, ea, cmdinfo)?;
-    apply_mods(cmd, ea, cmdinfo)?;
+    apply_range(cmd, excmd)?;
+    apply_count(cmd, excmd, count_from_first_arg)?;
+    apply_register(cmd, excmd)?;
+    apply_bang(cmd, excmd)?;
+    apply_magic(cmd, excmd, cmdinfo)?;
+    apply_mods(cmd, excmd, cmdinfo)?;
 
     // Render the Dict back into a command line: `execute_cmd` and everything
-    // under it read `ea.arg`, not the Array.
-    // SAFETY: `ea` is resolved and `args` holds only Strings.
-    unsafe { build_cmdline_str(cmdline, ea, cmdinfo, args) };
-    ea.cmdlinep = cmdline;
-    apply_argopt(ea)?;
-    if ea.argt.has(ExArgt::CMDARG) && !ea.usefilter {
+    // under it read `excmd.arg`, not the Array.
+    // SAFETY: `excmd` is resolved and `args` holds only Strings.
+    unsafe { build_cmdline_str(cmdline, excmd, cmdinfo, args) };
+    excmd.cmdlinep = cmdline;
+    apply_argopt(excmd)?;
+    if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
         // SAFETY: as above.
-        ea.do_ecmd_cmd = unsafe { getargcmd(&raw mut ea.arg) };
+        excmd.do_ecmd_cmd = unsafe { getargcmd(&raw mut excmd.arg) };
     }
     Ok(true)
 }
 
-/// Look `cmd.cmd` up in the command table, filling `ea.cmdidx`/`ea.argt`.
+/// Look `cmd.cmd` up in the command table, filling `excmd.cmdidx`/`excmd.argt`.
 ///
 /// `Ok(Some(range_only))` on success -- a "range only" command such as `:1`
 /// has no name at all. `Ok(None)` means stop with nothing executed, per
@@ -200,7 +200,7 @@ unsafe fn prepare_cmd(
 /// # Safety
 /// The answer's storage is the api's own: the caller frees whatever this hands
 /// back.
-unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bool>, Error> {
+unsafe fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>, Error> {
     let Some(name) = cmd.cmd.as_ref() else {
         return Err(err_required(c"cmd"));
     };
@@ -214,17 +214,17 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bo
         return Err(err_expected_at(c"cmd", c"non-empty String", ptr::null()));
     }
 
-    // `find_ex_command` reads `ea.cmd`, which is the keydict's own string --
+    // `find_ex_command` reads `excmd.cmd`, which is the keydict's own string --
     // and the keydict outlives this call.
     let cmdname = name.data();
-    ea.cmd = cmdname;
-    let mut p = unsafe { find_ex_command(ea, ptr::null_mut()) };
+    excmd.cmd = cmdname;
+    let mut p = unsafe { find_ex_command(excmd, ptr::null_mut()) };
 
     // An unknown capitalised name plus a CmdUndefined autocommand is a lazily
     // defined user command: fire the event, then look again.
     if !p.is_null()
-        && ea.cmdidx == CmdIdx::SIZE
-        && unsafe { *ea.cmd as u8 }.is_ascii_uppercase()
+        && excmd.cmdidx == CmdIdx::SIZE
+        && unsafe { *excmd.cmd as u8 }.is_ascii_uppercase()
         && has_event(AutoEvent::CmdUndefined)
     {
         // SAFETY: as above.
@@ -232,14 +232,14 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bo
             p = name.data();
             let ret = apply_autocmds(AutoEvent::CmdUndefined, p, p, true, None);
             p = if ret as c_int != 0 && !aborting() {
-                find_ex_command(ea, ptr::null_mut())
+                find_ex_command(excmd, ptr::null_mut())
             } else {
-                ea.cmd
+                excmd.cmd
             };
         }
     }
 
-    let unnamed_unknown = ea.cmdidx == CmdIdx::SIZE && !named;
+    let unnamed_unknown = excmd.cmdidx == CmdIdx::SIZE && !named;
     let range_only = unnamed_unknown && has_range;
 
     // Modifiers and nothing else: upstream falls straight through to the
@@ -248,7 +248,7 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bo
         return Ok(None);
     }
 
-    if !(!p.is_null() && ea.cmdidx != CmdIdx::SIZE) && !range_only {
+    if !(!p.is_null() && excmd.cmdidx != CmdIdx::SIZE) && !range_only {
         // SAFETY: `cmdname` is the caller's NUL-terminated name.
         let name = unsafe { c_str(cmdname) };
         return Err(api_error!(
@@ -257,8 +257,8 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bo
         ));
     }
 
-    // SAFETY: `ea.cmdidx` came out of `find_ex_command`.
-    if !range_only && is_cmd_ni(ea.cmdidx) {
+    // SAFETY: `excmd.cmdidx` came out of `find_ex_command`.
+    if !range_only && is_cmd_ni(excmd.cmdidx) {
         // SAFETY: `cmdname` is the caller's NUL-terminated name.
         let name = unsafe { c_str(cmdname) };
         return Err(api_error!(
@@ -271,10 +271,10 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bo
         // The Dict may abbreviate the name; it still has to be a prefix.
         // SAFETY: both names are NUL-terminated.
         let matched = unsafe {
-            let fullname = if is_user_cmd(ea.cmdidx) {
-                get_user_command_name(ea.useridx, ea.cmdidx)
+            let fullname = if is_user_cmd(excmd.cmdidx) {
+                get_user_command_name(excmd.useridx, excmd.cmdidx)
             } else {
-                get_command_name(ptr::null_mut(), ea.cmdidx.code())
+                get_command_name(ptr::null_mut(), excmd.cmdidx.code())
             };
             cstr::starts_with(fullname, cstr::bytes_at(cmdname))
         };
@@ -289,10 +289,10 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bo
     }
 
     if range_only {
-        ea.argt = ExArgt::RANGE | ExArgt::SBOXOK;
-    } else if !is_user_cmd(ea.cmdidx) {
+        excmd.argt = ExArgt::RANGE | ExArgt::SBOXOK;
+    } else if !is_user_cmd(excmd.cmdidx) {
         // A user command's flags already came out of `find_ex_command`.
-        ea.argt = excmd_get_argt(ea.cmdidx);
+        excmd.argt = excmd_get_argt(excmd.cmdidx);
     }
 
     Ok(Some(range_only))
@@ -306,10 +306,10 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<Option<bo
 /// # Safety
 /// The answer's storage is the api's own: the caller frees whatever this hands
 /// back.
-unsafe fn collect_args(given: &Array, ea: &mut ExArg, args: &mut Array) -> Result<bool, Error> {
+unsafe fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bool, Error> {
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
-    if given.len() == 1 && ea.argt.has(ExArgt::COUNT) && !ea.argt.has(ExArgt::EXTRA) {
+    if given.len() == 1 && excmd.argt.has(ExArgt::COUNT) && !excmd.argt.has(ExArgt::EXTRA) {
         let count = match &given[0] {
             Object::Integer(n) => Some(*n as int64_t),
             Object::String(str) => {
@@ -326,9 +326,9 @@ unsafe fn collect_args(given: &Array, ea: &mut ExArg, args: &mut Array) -> Resul
         if let Some(count) = count
             && count >= 0
         {
-            ea.addr_count = 1;
-            ea.line2 = count as LineNr;
-            ea.line1 = ea.line2;
+            excmd.addr_count = 1;
+            excmd.line2 = count as LineNr;
+            excmd.line1 = excmd.line2;
             *args = Array::with_capacity(0);
             return Ok(true);
         }
@@ -373,7 +373,7 @@ unsafe fn collect_args(given: &Array, ea: &mut ExArg, args: &mut Array) -> Resul
     }
 
     let arity = ExArgt::EXTRA | ExArgt::NOSPC | ExArgt::NEEDARG;
-    let argc_valid = match ea.argt.masked(arity) {
+    let argc_valid = match excmd.argt.masked(arity) {
         v if v == arity => args.len() == 1,
         v if v == ExArgt::EXTRA | ExArgt::NOSPC => args.len() <= 1,
         v if v == ExArgt::EXTRA | ExArgt::NEEDARG => !args.is_empty(),
@@ -388,16 +388,16 @@ unsafe fn collect_args(given: &Array, ea: &mut ExArg, args: &mut Array) -> Resul
 }
 
 /// Apply `cmd.range`, then fall back to the command's default range.
-fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
+fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
     if let Some(range) = cmd.range.as_ref() {
-        if !ea.argt.has(ExArgt::RANGE) {
+        if !excmd.argt.has(ExArgt::RANGE) {
             return Err(err_cannot_accept(c"range", cmd));
         }
         if range.len() > 2 {
             return Err(err_expected_at(c"range", c"<=2 elements", ptr::null()));
         }
 
-        ea.addr_count = range.len() as c_int;
+        excmd.addr_count = range.len() as c_int;
         for i in 0..range.len() {
             // SAFETY: `i` is in bounds.
             let bound = &range[i];
@@ -420,26 +420,26 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
                 first.as_integer().expect(expect),
                 last.as_integer().expect(expect),
             );
-            ea.line1 = first as LineNr;
-            ea.line2 = last as LineNr;
+            excmd.line1 = first as LineNr;
+            excmd.line2 = last as LineNr;
         }
-        // SAFETY: `ea` is resolved.
-        if invalid_range(ea).is_some() {
+        // SAFETY: `excmd` is resolved.
+        if invalid_range(excmd).is_some() {
             return Err(err_bad_value(c"range", c""));
         }
     }
 
-    if ea.addr_count == 0 {
-        if ea.argt.has(ExArgt::DFLALL) {
-            // SAFETY: `ea` is resolved; both entry points read it and the
+    if excmd.addr_count == 0 {
+        if excmd.argt.has(ExArgt::DFLALL) {
+            // SAFETY: `excmd` is resolved; both entry points read it and the
             // editor globals, per the module contract.
-            set_cmd_dflall_range(ea);
+            set_cmd_dflall_range(excmd);
         } else {
             // SAFETY: as above.
-            ea.line2 = get_cmd_default_range(ea);
-            ea.line1 = ea.line2;
-            if ea.addr_type == CmdAddr::Other {
-                ea.line2 = 1;
+            excmd.line2 = get_cmd_default_range(excmd);
+            excmd.line1 = excmd.line2;
+            if excmd.addr_type == CmdAddr::Other {
+                excmd.line2 = 1;
             }
         }
     }
@@ -448,7 +448,11 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
 }
 
 /// Apply `cmd.count`.
-fn apply_count(cmd: &KeyDict_cmd, ea: &mut ExArg, count_from_first_arg: bool) -> Result<(), Error> {
+fn apply_count(
+    cmd: &KeyDict_cmd,
+    excmd: &mut ExArg,
+    count_from_first_arg: bool,
+) -> Result<(), Error> {
     let Some(count) = cmd.count else {
         return Ok(());
     };
@@ -456,7 +460,7 @@ fn apply_count(cmd: &KeyDict_cmd, ea: &mut ExArg, count_from_first_arg: bool) ->
         let why = c"Cannot specify both 'count' and numeric argument";
         return Err(Error::validation(why));
     }
-    if !ea.argt.has(ExArgt::COUNT) {
+    if !excmd.argt.has(ExArgt::COUNT) {
         return Err(err_cannot_accept(c"count", cmd));
     }
     if count < 0 as Integer {
@@ -466,18 +470,18 @@ fn apply_count(cmd: &KeyDict_cmd, ea: &mut ExArg, count_from_first_arg: bool) ->
             ptr::null(),
         ));
     }
-    // SAFETY: `ea` is resolved; `set_cmd_count` only writes its address
+    // SAFETY: `excmd` is resolved; `set_cmd_count` only writes its address
     // fields.
-    set_cmd_count(ea, count as LineNr, true);
+    set_cmd_count(excmd, count as LineNr, true);
     Ok(())
 }
 
 /// Apply `cmd.reg`.
-fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
+fn apply_register(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
     let Some(reg) = cmd.reg.as_ref() else {
         return Ok(());
     };
-    if !ea.argt.has(ExArgt::REGSTR) {
+    if !excmd.argt.has(ExArgt::REGSTR) {
         return Err(err_cannot_accept(c"register", cmd));
     }
     if reg.len() != 1 {
@@ -490,7 +494,8 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
         return Err(Error::validation(c"Cannot use register \"="));
     }
     // `:put`/`:iput` read the register, everything else writes it.
-    let writing = !is_user_cmd(ea.cmdidx) && ea.cmdidx != CmdIdx::put && ea.cmdidx != CmdIdx::iput;
+    let writing =
+        !is_user_cmd(excmd.cmdidx) && excmd.cmdidx != CmdIdx::put && excmd.cmdidx != CmdIdx::iput;
     if !valid_yank_reg(regname as c_int, writing) {
         // `%c` wrote the one byte, whatever it was.
         let byte = regname as u8;
@@ -500,14 +505,14 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
             "Invalid register: \"{reg}"
         ));
     }
-    ea.regname = regname as uint8_t as c_int;
+    excmd.regname = regname as uint8_t as c_int;
     Ok(())
 }
 
 /// Apply `cmd.bang`.
-fn apply_bang(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
-    ea.forceit = cmd.bang.unwrap_or(false);
-    if ea.forceit && !ea.argt.has(ExArgt::BANG) {
+fn apply_bang(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
+    excmd.forceit = cmd.bang.unwrap_or(false);
+    if excmd.forceit && !excmd.argt.has(ExArgt::BANG) {
         return Err(err_cannot_accept(c"bang", cmd));
     }
     Ok(())
@@ -526,9 +531,13 @@ fn err_cannot_accept(what: &CStr, cmd: &KeyDict_cmd) -> Error {
 }
 
 /// Unpack the `magic` sub-keyset, defaulting each half to what `argt` says.
-fn apply_magic(cmd: &KeyDict_cmd, ea: &mut ExArg, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
-    let argt_file = ea.argt.has(ExArgt::XFILE);
-    let argt_bar = ea.argt.has(ExArgt::TRLBAR);
+fn apply_magic(
+    cmd: &KeyDict_cmd,
+    excmd: &mut ExArg,
+    cmdinfo: &mut CmdParseInfo,
+) -> Result<(), Error> {
+    let argt_file = excmd.argt.has(ExArgt::XFILE);
+    let argt_bar = excmd.argt.has(ExArgt::TRLBAR);
 
     let Some(given) = cmd.magic.as_ref() else {
         cmdinfo.magic.file = argt_file;
@@ -544,15 +553,15 @@ fn apply_magic(cmd: &KeyDict_cmd, ea: &mut ExArg, cmdinfo: &mut CmdParseInfo) ->
 
     // `magic.file` overrides `XFILE` for the expansion `execute_cmd` does.
     if cmdinfo.magic.file {
-        ea.argt |= ExArgt::XFILE;
+        excmd.argt |= ExArgt::XFILE;
     } else {
-        ea.argt.clear(ExArgt::XFILE);
+        excmd.argt.clear(ExArgt::XFILE);
     }
     Ok(())
 }
 
 /// Unpack the `mods` sub-keyset into `cmdinfo.cmdmod`.
-fn apply_mods(cmd: &KeyDict_cmd, ea: &ExArg, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
+fn apply_mods(cmd: &KeyDict_cmd, excmd: &ExArg, cmdinfo: &mut CmdParseInfo) -> Result<(), Error> {
     let Some(given) = cmd.mods.as_ref() else {
         return Ok(());
     };
@@ -615,7 +624,7 @@ fn apply_mods(cmd: &KeyDict_cmd, ea: &ExArg, cmdinfo: &mut CmdParseInfo) -> Resu
         cmdinfo.cmdmod.cmod_flags |= CmdModFlags::SILENT;
     }
 
-    if cmdinfo.cmdmod.cmod_flags.has(CmdModFlags::SANDBOX) && !ea.argt.has(ExArgt::SBOXOK) {
+    if cmdinfo.cmdmod.cmod_flags.has(CmdModFlags::SANDBOX) && !excmd.argt.has(ExArgt::SBOXOK) {
         return Err(Error::validation(c"Command cannot be run in sandbox"));
     }
 
@@ -664,21 +673,22 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Resu
 }
 
 /// Consume any leading `++opt` arguments off the rendered command line.
-fn apply_argopt(ea: &mut ExArg) -> Result<(), Error> {
-    if !ea.argt.has(ExArgt::ARGOPT) {
+fn apply_argopt(excmd: &mut ExArg) -> Result<(), Error> {
+    if !excmd.argt.has(ExArgt::ARGOPT) {
         return Ok(());
     }
     loop {
-        // SAFETY: caller contract; `getargopt` only ever advances `ea.arg`
+        // SAFETY: caller contract; `getargopt` only ever advances `excmd.arg`
         // within the same line, so the two bytes stay readable.
-        let opt =
-            unsafe { *ea.arg as c_int == '+' as c_int && *ea.arg.add(1) as c_int == '+' as c_int };
+        let opt = unsafe {
+            *excmd.arg as c_int == '+' as c_int && *excmd.arg.add(1) as c_int == '+' as c_int
+        };
         if !opt {
             return Ok(());
         }
-        let orig_arg = ea.arg;
+        let orig_arg = excmd.arg;
         // SAFETY: as above.
-        if getargopt(ea).is_err() && !is_cmd_ni(ea.cmdidx) {
+        if getargopt(excmd).is_err() && !is_cmd_ni(excmd.cmdidx) {
             return Err(err_invalid_at(c"argument ", orig_arg));
         }
     }
@@ -691,7 +701,7 @@ fn apply_argopt(ea: &mut ExArg) -> Result<(), Error> {
 /// back.
 unsafe fn run_cmd(
     channel_id: uint64_t,
-    ea: &mut ExArg,
+    excmd: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
     capture: bool,
 ) -> Result<String_0, Error> {
@@ -731,9 +741,9 @@ unsafe fn run_cmd(
     }
 
     let sctx = api_set_sctx(channel_id);
-    // SAFETY: `ea`/`cmdinfo` are fully prepared; this is the call the whole
+    // SAFETY: `excmd`/`cmdinfo` are fully prepared; this is the call the whole
     // function exists to make.
-    unsafe { execute_cmd(ea, cmdinfo, false) };
+    unsafe { execute_cmd(excmd, cmdinfo, false) };
     drop(sctx);
 
     drop(silenced);

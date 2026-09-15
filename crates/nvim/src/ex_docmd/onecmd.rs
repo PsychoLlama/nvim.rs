@@ -90,10 +90,10 @@ use ::libc::strcpy;
 pub(crate) fn fresh_exarg() -> ExArg {
     // SAFETY: `ExArg` is a `repr(C)` aggregate of scalars, pointers and
     // `Option<fn>`; all-zero is a valid value of every one of them.
-    let mut ea: ExArg = unsafe { core::mem::zeroed() };
-    ea.line1 = 1;
-    ea.line2 = 1;
-    ea
+    let mut excmd: ExArg = unsafe { core::mem::zeroed() };
+    excmd.line1 = 1;
+    excmd.line2 = 1;
+    excmd
 }
 
 /// Is `func` this exact Ex-command handler?
@@ -604,7 +604,7 @@ pub(crate) unsafe fn do_one_cmd(
     let mut errormsg: Option<CString> = None;
     let save_reg_executing = reg_executing.get();
     let save_pending_end_reg_executing = pending_end_reg_executing.get();
-    let mut ea = fresh_exarg();
+    let mut excmd = fresh_exarg();
     let nesting = Depth::of(&ex_nesting_level);
 
     // When the last file has not been edited `:q` has to be typed twice.
@@ -621,43 +621,44 @@ pub(crate) unsafe fn do_one_cmd(
     let mods = CmdModScope::cleared();
 
     // SAFETY: the caller's command line.
-    ea.cmd = unsafe { *cmdlinep };
-    ea.cmdlinep = cmdlinep;
-    ea.ea_getline = fgetline;
-    ea.cookie = cookie;
-    ea.cstack = cstack;
+    excmd.cmd = unsafe { *cmdlinep };
+    excmd.cmdlinep = cmdlinep;
+    excmd.ea_getline = fgetline;
+    excmd.cookie = cookie;
+    excmd.cstack = cstack;
 
     // Each stage refuses by answering `Err`, having left whatever it has to
     // say in `errormsg`; the reporting below is shared by all of them.
     let ran = (|| {
-        locate_command(&mut ea, &mods, flags, &mut errormsg)?;
+        locate_command(&mut excmd, &mods, flags, &mut errormsg)?;
 
         // Not implemented in this build: the argument checks are relaxed,
         // because there is nothing to check them against.
-        let ni = is_cmd_ni(ea.cmdidx);
+        let ni = is_cmd_ni(excmd.cmdidx);
 
         // The bang is read through a cursor of its own: the command is lent
         // to the scan, so its `arg` cannot be lent as well.
-        let mut cursor = ea.arg;
+        let mut cursor = excmd.arg;
         // SAFETY: `cursor` is this frame's own, over the command's line.
-        ea.forceit = unsafe { parse_bang(&mut ea, &raw mut cursor) };
-        ea.arg = cursor;
-        if !is_user_cmd(ea.cmdidx) {
-            ea.argt = cmdnames[ea.cmdidx.index()].cmd_argt;
+        excmd.forceit = unsafe { parse_bang(&mut excmd, &raw mut cursor) };
+        excmd.arg = cursor;
+        if !is_user_cmd(excmd.cmdidx) {
+            excmd.argt = cmdnames[excmd.cmdidx.index()].cmd_argt;
         }
 
-        check_may_run(&mut ea, ni, flags, &mut errormsg)?;
-        read_command_args(&mut ea, ni, &mut errormsg)?;
+        check_may_run(&mut excmd, ni, flags, &mut errormsg)?;
+        read_command_args(&mut excmd, ni, &mut errormsg)?;
 
-        if skip_cmd(&mut ea) {
+        if skip_cmd(&mut excmd) {
             return Err(Refused);
         }
         let mut retv: c_int = 0;
         // SAFETY: `retv` is this frame's own.
-        unsafe { execute_cmd0(&raw mut retv, &mut ea, &mut errormsg, false) }.map_err(|_| Refused)
+        unsafe { execute_cmd0(&raw mut retv, &mut excmd, &mut errormsg, false) }
+            .map_err(|_| Refused)
     })();
     if ran.is_ok() {
-        rethrow_from_nested(&mut ea);
+        rethrow_from_nested(&mut excmd);
     }
 
     // Can happen with a zero line number.
@@ -672,7 +673,7 @@ pub(crate) unsafe fn do_one_cmd(
     {
         let msg = if flags.has(DoCmdOpts::VERBOSE) {
             // SAFETY: the command line the command was parsed out of.
-            unsafe { append_command(&msg, *ea.cmdlinep) }
+            unsafe { append_command(&msg, *excmd.cmdlinep) }
         } else {
             msg
         };
@@ -682,8 +683,8 @@ pub(crate) unsafe fn do_one_cmd(
     unsafe {
         do_errthrow(
             cstack,
-            if ea.cmdidx != CmdIdx::SIZE && !is_user_cmd(ea.cmdidx) {
-                cmdnames[ea.cmdidx.index()].cmd_name
+            if excmd.cmdidx != CmdIdx::SIZE && !is_user_cmd(excmd.cmdidx) {
+                cmdnames[excmd.cmdidx.index()].cmd_name
             } else {
                 ptr::null_mut()
             },
@@ -695,14 +696,14 @@ pub(crate) unsafe fn do_one_cmd(
     pending_end_reg_executing.set(save_pending_end_reg_executing);
 
     // A trailing bar with nothing after it is not really a next command.
-    if !ea.nextcmd.is_null() && byte(ea.nextcmd) == NUL {
-        ea.nextcmd = ptr::null_mut();
+    if !excmd.nextcmd.is_null() && byte(excmd.nextcmd) == NUL {
+        excmd.nextcmd = ptr::null_mut();
     }
 
     drop(nesting);
-    xfree(ea.cmdline_tofree as *mut c_void);
+    xfree(excmd.cmdline_tofree as *mut c_void);
 
-    ea.nextcmd
+    excmd.nextcmd
 }
 
 /// Does the "type `:q` twice" counter belong to a command the *user* typed?
@@ -774,23 +775,23 @@ pub(crate) unsafe fn profile_cmd(
 /// The three "this command is not allowed here" checks that share an exit.
 ///
 /// Answers the message to report, or `None` when the command may run.
-fn refuses_here(ea: &ExArg) -> Option<CString> {
-    if sandbox.get() != 0 && !ea.argt.has(ExArgt::SBOXOK) {
+fn refuses_here(excmd: &ExArg) -> Option<CString> {
+    if sandbox.get() != 0 && !excmd.argt.has(ExArgt::SBOXOK) {
         return Some(ex_msg(e_sandbox.as_ptr()));
     }
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
     if Buf::current().b_p_ma == 0
-        && ea.argt.has(ExArgt::MODIFY)
+        && excmd.argt.has(ExArgt::MODIFY)
         && !(!Buf::current().terminal.is_null()
-            && (ea.cmdidx == CmdIdx::put || ea.cmdidx == CmdIdx::iput))
+            && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
     {
         return Some(ex_msg(e_modifiable.as_ptr()));
     }
-    if !is_user_cmd(ea.cmdidx) {
-        if cmdwin_type.get() != 0 && !ea.argt.has(ExArgt::CMDWIN) {
+    if !is_user_cmd(excmd.cmdidx) {
+        if cmdwin_type.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
             return Some(ex_msg(e_cmdwin.as_ptr()));
         }
-        if text_locked() && !ea.argt.has(ExArgt::LOCK_OK) {
+        if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {
             return Some(ex_msg(get_text_locked_msg().as_ptr()));
         }
     }

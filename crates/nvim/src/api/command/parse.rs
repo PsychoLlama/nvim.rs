@@ -59,25 +59,27 @@ unsafe fn parse_map_cmd(arg_str: *const c_char) -> Array {
 ///
 /// # Safety
 /// As [`parse_map_cmd`]; `arena` must be the dispatcher's.
-unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
+unsafe fn parse_args(excmd: &ExArg, arena: *mut Arena) -> Array {
     // SAFETY: caller contract.
-    let (length, empty) = unsafe { (cstr::bytes_at(ea.arg).len(), *ea.arg == NUL as c_char) };
+    let (length, empty) = unsafe { (cstr::bytes_at(excmd.arg).len(), *excmd.arg == NUL as c_char) };
 
     // `is_map_cmd` indexes the command table by `cmdidx`, so the `CmdIdx::SIZE`
     // guard has to stay in front of it rather than be hoisted alongside.
     // SAFETY: `cmdidx` is in range, checked immediately to its left.
-    if ea.cmdidx != CmdIdx::SIZE && is_map_cmd(ea.cmdidx) && !empty {
+    if excmd.cmdidx != CmdIdx::SIZE && is_map_cmd(excmd.cmdidx) && !empty {
         // SAFETY: caller contract.
-        return unsafe { parse_map_cmd(ea.arg) };
+        return unsafe { parse_map_cmd(excmd.arg) };
     }
-    if ea.argt.has(ExArgt::NOSPC) {
+    if excmd.argt.has(ExArgt::NOSPC) {
         // One argument, whitespace and all.
         if empty {
             return Array::EMPTY;
         }
         let mut args: Array = Array::with_capacity(1);
         // SAFETY: room for the one item was just reserved.
-        args.push(Object::string(unsafe { cstrn_to_string(ea.arg, length) }));
+        args.push(Object::string(unsafe {
+            cstrn_to_string(excmd.arg, length)
+        }));
         return args;
     }
 
@@ -91,7 +93,7 @@ unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
         let buf: *mut c_char = arena_alloc(arena, length + 1, false).cast();
         (
             buf,
-            Array::with_capacity(uc_nargs_upper_bound(ea.arg, length)),
+            Array::with_capacity(uc_nargs_upper_bound(excmd.arg, length)),
         )
     };
     let (mut end, mut len): (size_t, size_t) = (0, 0);
@@ -100,7 +102,7 @@ unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
         // SAFETY: `end`/`len` are this frame's, and `buf` advances by
         // exactly what each call wrote, so it stays inside the block.
         unsafe {
-            done = uc_split_args_iter(ea.arg, length, &raw mut end, buf, &raw mut len);
+            done = uc_split_args_iter(excmd.arg, length, &raw mut end, buf, &raw mut len);
             if len > 0 {
                 args.push(Object::string(cstrn_to_string(buf, len)));
                 buf = buf.add(len + 1);
@@ -110,13 +112,13 @@ unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
     args
 }
 
-/// The name of the command `ea` names: a user command's own spelling, the
+/// The name of the command `excmd` names: a user command's own spelling, the
 /// built-in table's, or the empty string where the line named no command.
 ///
 /// # Safety
 /// `cmd` must be null or point at a live `UserCmd`.
-unsafe fn command_name(ea: &ExArg, cmd: *const UserCmd) -> *const c_char {
-    if ea.cmdidx == CmdIdx::SIZE {
+unsafe fn command_name(excmd: &ExArg, cmd: *const UserCmd) -> *const c_char {
+    if excmd.cmdidx == CmdIdx::SIZE {
         return c"".as_ptr();
     }
     if !cmd.is_null() {
@@ -124,7 +126,7 @@ unsafe fn command_name(ea: &ExArg, cmd: *const UserCmd) -> *const c_char {
         return unsafe { (*cmd).uc_name };
     }
     // SAFETY: `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
-    unsafe { get_command_name(ptr::null_mut::<Expand>(), ea.cmdidx.code()) }
+    unsafe { get_command_name(ptr::null_mut::<Expand>(), excmd.cmdidx.code()) }
 }
 
 /// How the command's range is counted, as the `addr` field's string.
@@ -224,18 +226,18 @@ pub unsafe fn nvim_parse_cmd(
     let mut result = KeyDict_cmd::default();
     // SAFETY (both): a plain C aggregate whose all-zero state is the valid
     // "nothing parsed yet" one, as the C original's CLEAR_FIELD relies on.
-    let mut ea: ExArg = unsafe { ::core::mem::zeroed() };
+    let mut excmd: ExArg = unsafe { ::core::mem::zeroed() };
     // SAFETY: as above.
     let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
 
     let mut errormsg = None;
     // SAFETY: `arena` is the dispatcher's and `str` is `size` readable bytes;
     // the arena copy outlives everything `parse_cmdline` leaves pointing into
-    // it, including `ea.arg` and `ea.nextcmd`.
+    // it, including `excmd.arg` and `excmd.nextcmd`.
     let mut cmdline = unsafe { arena_memdupz(arena, str.data(), str.len()) };
     let (line, info) = (&raw mut cmdline, &raw mut cmdinfo);
     // SAFETY: as above; the three out-parameters are this frame's.
-    let parsed = unsafe { parse_cmdline(line, &mut ea, info, &mut errormsg) };
+    let parsed = unsafe { parse_cmdline(line, &mut excmd, info, &mut errormsg) };
     if !parsed {
         match &errormsg {
             // SAFETY: `err` is live; the message takes no argument.
@@ -255,12 +257,12 @@ pub unsafe fn nvim_parse_cmd(
     let nth = |table: Table| {
         // SAFETY: `useridx` indexes the table the matching `cmdidx` names.
         unsafe { table.list() }
-            .get(ea.useridx as usize)
+            .get(excmd.useridx as usize)
             .map_or(ptr::null_mut(), |cmd| ptr::from_ref(cmd).cast_mut())
     };
-    // SAFETY: `parse_args` reads the arguments `parse_cmdline` left in `ea`.
-    let args = unsafe { parse_args(&ea, arena) };
-    let cmd: *mut UserCmd = match ea.cmdidx {
+    // SAFETY: `parse_args` reads the arguments `parse_cmdline` left in `excmd`.
+    let args = unsafe { parse_args(&excmd, arena) };
+    let cmd: *mut UserCmd = match excmd.cmdidx {
         CmdIdx::USER => nth(Table::Global),
         CmdIdx::USER_BUF => nth(Table::Buffer(Buf::current())),
         _ => ptr::null_mut(),
@@ -270,49 +272,49 @@ pub unsafe fn nvim_parse_cmd(
     let uc_def = (!cmd.is_null()).then(|| unsafe { (*cmd).uc_def });
 
     // SAFETY: both names are NUL-terminated, and outlive the reply.
-    result.cmd = Some(unsafe { cstr_to_string(command_name(&ea, cmd)) });
+    result.cmd = Some(unsafe { cstr_to_string(command_name(&excmd, cmd)) });
 
-    if ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
+    if excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
         // Two addresses give both bounds, one gives only `line2`.
         let mut range: Array = Array::with_capacity(2);
-        if ea.addr_count > 1 {
-            range.push(Object::integer(ea.line1 as Integer));
+        if excmd.addr_count > 1 {
+            range.push(Object::integer(excmd.line1 as Integer));
         }
-        range.push(Object::integer(ea.line2 as Integer));
+        range.push(Object::integer(excmd.line2 as Integer));
         result.range = Some(range);
     }
 
-    if ea.argt.has(ExArgt::COUNT) {
-        let count: Integer = if ea.addr_count > 0 {
-            ea.line2 as Integer
+    if excmd.argt.has(ExArgt::COUNT) {
+        let count: Integer = if excmd.addr_count > 0 {
+            excmd.line2 as Integer
         } else {
             uc_def.unwrap_or(0) as Integer
         };
         // A zero count that nothing asked for is left unset.
-        if ea.addr_count > 0 || uc_def.is_some_and(|def| def != 0) || count != 0 {
+        if excmd.addr_count > 0 || uc_def.is_some_and(|def| def != 0) || count != 0 {
             result.count = Some(count);
         }
     }
 
-    if ea.argt.has(ExArgt::REGSTR) {
-        let reg: [c_char; 2] = [ea.regname as c_char, NUL as c_char];
+    if excmd.argt.has(ExArgt::REGSTR) {
+        let reg: [c_char; 2] = [excmd.regname as c_char, NUL as c_char];
         // SAFETY: `reg` is NUL-terminated and alive for the copy.
         result.reg = Some(unsafe { cstr_to_string(reg.as_ptr()) });
     }
 
-    result.bang = Some(ea.forceit);
+    result.bang = Some(excmd.forceit);
     result.args = Some(args);
 
     // `:command -nargs=` spelling of how many arguments the command takes.
-    let nargs: &CStr = if !ea.argt.has(ExArgt::EXTRA) {
+    let nargs: &CStr = if !excmd.argt.has(ExArgt::EXTRA) {
         c"0"
-    } else if ea.argt.has(ExArgt::NOSPC) {
-        if ea.argt.has(ExArgt::NEEDARG) {
+    } else if excmd.argt.has(ExArgt::NOSPC) {
+        if excmd.argt.has(ExArgt::NEEDARG) {
             c"1"
         } else {
             c"?"
         }
-    } else if ea.argt.has(ExArgt::NEEDARG) {
+    } else if excmd.argt.has(ExArgt::NEEDARG) {
         c"+"
     } else {
         c"*"
@@ -320,9 +322,9 @@ pub unsafe fn nvim_parse_cmd(
     // SAFETY: the arena copy is what the reply keeps; `nargs` is a literal.
     let nargs = String_0::from_cstr(nargs);
     result.nargs = Some(Object::string(nargs));
-    result.addr = Some(String_0::from_cstr(addr_type_name(ea.addr_type)));
-    // SAFETY: `ea.nextcmd` points into the arena copy of the command line.
-    result.nextcmd = Some(unsafe { cstr_to_string(ea.nextcmd) });
+    result.addr = Some(String_0::from_cstr(addr_type_name(excmd.addr_type)));
+    // SAFETY: `excmd.nextcmd` points into the arena copy of the command line.
+    result.nextcmd = Some(unsafe { cstr_to_string(excmd.nextcmd) });
     // SAFETY: `cmdinfo.cmdmod` is what `parse_cmdline` filled in.
     result.mods = Some(parse_mods(&cmdinfo.cmdmod));
     result.magic = Some(dict_of([

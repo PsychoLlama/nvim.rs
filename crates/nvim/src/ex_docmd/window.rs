@@ -118,15 +118,15 @@ fn len(p: *const c_char) -> size_t {
 }
 
 /// `do_exedit()`: run the `:edit` half of a command that opened a window.
-fn edit(ea: &mut ExArg, old_curwin: Option<Win>) {
+fn edit(excmd: &mut ExArg, old_curwin: Option<Win>) {
     // SAFETY: a live window or null.
-    do_exedit(ea, old_curwin.map(Win::id));
+    do_exedit(excmd, old_curwin.map(Win::id));
 }
 
 /// `get_tabpage_arg()`: the tab page number the command names, setting
 /// `errmsg` when the argument is not one.
-fn tabpage_arg(ea: &mut ExArg) -> c_int {
-    get_tabpage_arg(ea)
+fn tabpage_arg(excmd: &mut ExArg) -> c_int {
+    get_tabpage_arg(excmd)
 }
 
 fn skip_white(p: *mut c_char) -> *mut c_char {
@@ -170,8 +170,7 @@ pub(crate) fn current_tab_nr(tab: Option<TabPage>) -> c_int {
 /// The handler every command modifier carries in the table, for the case
 /// where it was typed as a command in its own right.
 pub(crate) fn ex_wrongmodifier(excmd: &mut ExArg) {
-    let ea = &mut *excmd;
-    ea.errmsg = err_msg(e_invcmd.as_ptr());
+    excmd.errmsg = err_msg(e_invcmd.as_ptr());
 }
 
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
@@ -180,48 +179,49 @@ pub fn ex_splitview(excmd: &mut ExArg) {
     splitview(excmd);
 }
 
-fn splitview(ea: &mut ExArg) {
+fn splitview(excmd: &mut ExArg) {
     // Taken as a handle here, while the window is certainly live: `split`
     // below fires `WinEnter`, and 'findfunc' runs before it, either of which
     // can close this window. Holding the handle across that is safe -- the id
     // is what `open_tabpage` and `do_exedit` vet -- but *building* one from
     // the address afterwards would read a freed window.
     let old_curwin = Win::current();
-    let use_tab = is(ea, CmdIdx::tabedit) || is(ea, CmdIdx::tabfind) || is(ea, CmdIdx::tabnew);
+    let use_tab =
+        is(excmd, CmdIdx::tabedit) || is(excmd, CmdIdx::tabfind) || is(excmd, CmdIdx::tabnew);
 
     // Splitting a quickfix window gives a plain window, not a second
     // quickfix one — unless `:tab` asked for a tab page.
     if buf_is_quickfix(Some(Buf::current())) && cmdmod.with(|m| m.cmod_tab) == 0 {
-        if is(ea, CmdIdx::split) {
-            ea.cmdidx = CmdIdx::new;
+        if is(excmd, CmdIdx::split) {
+            excmd.cmdidx = CmdIdx::new;
         }
-        if is(ea, CmdIdx::vsplit) {
-            ea.cmdidx = CmdIdx::vnew;
+        if is(excmd, CmdIdx::vsplit) {
+            excmd.cmdidx = CmdIdx::vnew;
         }
     }
 
     // `:sfind`/`:tabfind` resolve the name through 'findfunc' or 'path'
     // before anything is opened.
     let mut fname = ptr::null_mut();
-    if is(ea, CmdIdx::sfind) || is(ea, CmdIdx::tabfind) {
-        fname = find_file(ea.arg, count(ea, 1));
+    if is(excmd, CmdIdx::sfind) || is(excmd, CmdIdx::tabfind) {
+        fname = find_file(excmd.arg, count(excmd, 1));
         if fname.is_null() {
             return;
         }
-        ea.arg = fname;
+        excmd.arg = fname;
     }
 
     if use_tab {
-        open_tabpage(ea, old_curwin);
-    } else if split(count(ea, 0), vertical_flag(ea.cmd)).is_ok() {
+        open_tabpage(excmd, old_curwin);
+    } else if split(count(excmd, 0), vertical_flag(excmd.cmd)).is_ok() {
         // A split that will show a *different* file must not stay bound to
         // the one it came from.
-        if byte(ea.arg) != NUL {
+        if byte(excmd.arg) != NUL {
             reset_binding(Win::current());
         } else {
             do_check_scrollbind(false);
         }
-        edit(ea, Some(old_curwin));
+        edit(excmd, Some(old_curwin));
     }
     free(fname);
 }
@@ -265,18 +265,18 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
 ///
 /// Nothing happens at all when there was no room for a tab page: the file is
 /// not edited anywhere.
-fn open_tabpage(ea: &mut ExArg, old_curwin: Win) {
+fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
     let after = if cmdmod.with(|m| m.cmod_tab) != 0 {
         cmdmod.with(|m| m.cmod_tab)
-    } else if ea.addr_count == 0 {
+    } else if excmd.addr_count == 0 {
         0
     } else {
-        ea.line2 as c_int + 1
+        excmd.line2 as c_int + 1
     };
-    if new_tabpage(after, ea.arg, true).is_none() {
+    if new_tabpage(after, excmd.arg, true).is_none() {
         return;
     }
-    edit(ea, Some(old_curwin));
+    edit(excmd, Some(old_curwin));
     let (ev, buf) = (AutoEvent::TabNewEntered, Buf::current_or_none());
     let (no_fname, no_file) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: an event with no file name, over the current buffer.
@@ -294,15 +294,15 @@ fn open_tabpage(ea: &mut ExArg, old_curwin: Win) {
 
 /// Open a new tab page, as `:tabnew` would.
 pub fn tabpage_new() {
-    let mut ea = fresh_exarg();
-    ea.line1 = 0;
-    ea.line2 = 0;
-    ea.arg = c"".as_ptr() as *mut c_char;
+    let mut excmd = fresh_exarg();
+    excmd.line1 = 0;
+    excmd.line2 = 0;
+    excmd.arg = c"".as_ptr() as *mut c_char;
     // `ex_splitview` reads the first byte of `cmd` to tell a vertical split
     // from a horizontal one.
-    ea.cmd = c"tabn".as_ptr() as *mut c_char;
-    ea.cmdidx = CmdIdx::tabnew;
-    splitview(&mut ea);
+    excmd.cmd = c"tabn".as_ptr() as *mut c_char;
+    excmd.cmdidx = CmdIdx::tabnew;
+    splitview(&mut excmd);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,19 +317,19 @@ pub(crate) fn ex_tabnext(excmd: &mut ExArg) {
     tabnext(excmd);
 }
 
-fn tabnext(ea: &mut ExArg) {
-    if is(ea, CmdIdx::tabfirst) || is(ea, CmdIdx::tabrewind) {
+fn tabnext(excmd: &mut ExArg) {
+    if is(excmd, CmdIdx::tabfirst) || is(excmd, CmdIdx::tabrewind) {
         goto_tab_number(1);
         return;
     }
-    if is(ea, CmdIdx::tablast) {
+    if is(excmd, CmdIdx::tablast) {
         // Larger than any tab count.
         goto_tab_number(9999);
         return;
     }
-    if !is(ea, CmdIdx::tabprevious) && !is(ea, CmdIdx::tabNext) {
-        let tab_number = tabpage_arg(ea);
-        if ea.errmsg.is_none() {
+    if !is(excmd, CmdIdx::tabprevious) && !is(excmd, CmdIdx::tabNext) {
+        let tab_number = tabpage_arg(excmd);
+        if excmd.errmsg.is_none() {
             goto_tab_number(tab_number);
         }
         return;
@@ -339,8 +339,8 @@ fn tabnext(ea: &mut ExArg) {
     // *signed* argument is not a count of places to go back — `:tabp -1`
     // is an error, not `:tabp 1`.
     let tab_number;
-    if !ea.arg.is_null() && byte(ea.arg) != NUL {
-        let mut p = ea.arg;
+    if !excmd.arg.is_null() && byte(excmd.arg) != NUL {
+        let mut p = excmd.arg;
         let p_save = p;
         // SAFETY: a NUL-terminated argument; `p` is left on the first byte
         // the number did not use.
@@ -351,17 +351,17 @@ fn tabnext(ea: &mut ExArg) {
             || byte(p) != NUL
             || tab_number == 0
         {
-            let (msg, arg) = (e_invarg2.as_ptr(), ea.arg);
+            let (msg, arg) = (e_invarg2.as_ptr(), excmd.arg);
             // SAFETY: a message with one `%s`, and the argument for it.
-            ea.errmsg = Some(unsafe { ex_errmsg(msg, arg) });
+            excmd.errmsg = Some(unsafe { ex_errmsg(msg, arg) });
             return;
         }
-    } else if ea.addr_count == 0 {
+    } else if excmd.addr_count == 0 {
         tab_number = 1;
     } else {
-        tab_number = ea.line2 as c_int;
+        tab_number = excmd.line2 as c_int;
         if tab_number < 1 {
-            ea.errmsg = err_msg(e_invrange.as_ptr());
+            excmd.errmsg = err_msg(e_invrange.as_ptr());
             return;
         }
     }
@@ -373,9 +373,9 @@ pub(crate) fn ex_tabmove(excmd: &mut ExArg) {
     tabmove(excmd);
 }
 
-fn tabmove(ea: &mut ExArg) {
-    let tab_number = tabpage_arg(ea);
-    if ea.errmsg.is_none() {
+fn tabmove(excmd: &mut ExArg) {
+    let tab_number = tabpage_arg(excmd);
+    if excmd.errmsg.is_none() {
         tabpage_move(tab_number);
     }
 }
@@ -481,11 +481,10 @@ fn is_changed(buffer: Buf) -> bool {
 /// `:mode` — a redraw; the Vim spelling that took a terminal mode name is
 /// refused.
 pub(crate) fn ex_mode(excmd: &mut ExArg) {
-    let ea = &mut *excmd;
-    if byte(ea.arg) == NUL {
+    if byte(excmd.arg) == NUL {
         must_redraw.set(UPD_CLEAR);
         // SAFETY: a live command.
-        ex_redraw(ea);
+        ex_redraw(excmd);
     } else {
         err(e_screenmode.as_ptr());
     }
@@ -500,11 +499,11 @@ pub(crate) fn ex_resize(excmd: &mut ExArg) {
     resize(excmd);
 }
 
-fn resize(ea: &mut ExArg) {
+fn resize(excmd: &mut ExArg) {
     let mut wp = Win::current();
-    if ea.addr_count > 0 {
+    if excmd.addr_count > 0 {
         // The count is a window number, clamped to the last window.
-        let mut n = ea.line2 as c_int;
+        let mut n = excmd.line2 as c_int;
         let mut walk = windows();
         wp = walk.next().expect("firstwin");
         for next in walk {
@@ -516,10 +515,10 @@ fn resize(ea: &mut ExArg) {
         }
     }
 
-    let relative = byte(ea.arg) == '-' as c_int || byte(ea.arg) == '+' as c_int;
-    let empty = byte(ea.arg) == NUL;
+    let relative = byte(excmd.arg) == '-' as c_int || byte(excmd.arg) == '+' as c_int;
+    let empty = byte(excmd.arg) == NUL;
     // SAFETY: a NUL-terminated argument; a non-number reads as zero.
-    let mut n = unsafe { atol(ea.arg) } as c_int;
+    let mut n = unsafe { atol(excmd.arg) } as c_int;
     if cmdmod.with(|m| m.cmod_split) & WSP_VERT as c_int != 0 {
         if relative {
             n += wp.w_width;
@@ -542,8 +541,8 @@ pub(crate) fn ex_winsize(excmd: &mut ExArg) {
     winsize(excmd);
 }
 
-fn winsize(ea: &mut ExArg) {
-    let mut arg = ea.arg;
+fn winsize(excmd: &mut ExArg) {
+    let mut arg = excmd.arg;
     if !ascii_isdigit(byte(arg)) {
         // SAFETY: the command's NUL-terminated argument.
         let at = unsafe { c_str(arg) };
@@ -574,33 +573,33 @@ pub(crate) fn ex_wincmd(excmd: &mut ExArg) {
     wincmd(excmd);
 }
 
-fn wincmd(ea: &mut ExArg) {
+fn wincmd(excmd: &mut ExArg) {
     // `CTRL-W g` takes a second character.
     let mut xchar = NUL;
     let mut p;
-    if byte(ea.arg) == 'g' as c_int || byte(ea.arg) == Ctrl_G {
-        let second = ea.arg.wrapping_add(1);
+    if byte(excmd.arg) == 'g' as c_int || byte(excmd.arg) == Ctrl_G {
+        let second = excmd.arg.wrapping_add(1);
         if byte(second) == NUL {
             err(e_invarg.as_ptr());
             return;
         }
         xchar = byte(second) as uint8_t as c_int;
-        p = ea.arg.wrapping_add(2);
+        p = excmd.arg.wrapping_add(2);
     } else {
-        p = ea.arg.wrapping_add(1);
+        p = excmd.arg.wrapping_add(1);
     }
 
     // SAFETY: a NUL-terminated argument; the answer points into it or is null.
-    ea.nextcmd = unsafe { check_nextcmd(p) };
+    excmd.nextcmd = unsafe { check_nextcmd(p) };
     p = skip_white(p);
-    if byte(p) != NUL && byte(p) != '"' as c_int && ea.nextcmd.is_null() {
+    if byte(p) != NUL && byte(p) != '"' as c_int && excmd.nextcmd.is_null() {
         err(e_invarg.as_ptr());
-    } else if !ea.skip {
+    } else if !excmd.skip {
         // A `:vertical`/`:tab` in front applies to the split the window
         // command is about to make.
         postponed_split_flags.set(cmdmod.with(|m| m.cmod_split));
         postponed_split_tab.set(cmdmod.with(|m| m.cmod_tab));
-        let (nchar, prenum) = (byte(ea.arg), count(ea, 0));
+        let (nchar, prenum) = (byte(excmd.arg), count(excmd, 0));
         do_window(nchar, prenum, xchar);
         postponed_split_flags.set(0);
         postponed_split_tab.set(0);
@@ -612,14 +611,12 @@ fn wincmd(ea: &mut ExArg) {
 
 /// The Vim commands that only make sense with a built-in GUI.
 pub(crate) fn ex_nogui(excmd: &mut ExArg) {
-    let ea = &mut *excmd;
-    ea.errmsg = err_msg(c"E25: Nvim does not have a built-in GUI".as_ptr());
+    excmd.errmsg = err_msg(c"E25: Nvim does not have a built-in GUI".as_ptr());
 }
 
 /// `:popup`.
 pub(crate) fn ex_popup(excmd: &mut ExArg) {
-    let ea = &mut *excmd;
-    let (name, use_mouse_pos) = (ea.arg, ea.forceit);
+    let (name, use_mouse_pos) = (excmd.arg, excmd.forceit);
     // SAFETY: a NUL-terminated menu path.
     unsafe { pum_make_popup(name, c_int::from(use_mouse_pos)) };
 }
@@ -637,10 +634,9 @@ pub(crate) fn ex_psearch(excmd: &mut ExArg) {
 
 /// `:pedit`.
 pub(crate) fn ex_pedit(excmd: &mut ExArg) {
-    let ea = &mut *excmd;
     let curwin_save = Win::current().id();
     prepare_preview_window();
-    edit(ea, None);
+    edit(excmd, None);
     back_to_current_window(curwin_save);
 }
 
