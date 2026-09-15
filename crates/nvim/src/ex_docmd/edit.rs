@@ -307,6 +307,7 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
             &mut errormsg,
         )
     };
+    excmd.arg = cursor;
     if excmd.arg.is_null() {
         if let Some(msg) = &errormsg {
             emsg(msg.as_ptr());
