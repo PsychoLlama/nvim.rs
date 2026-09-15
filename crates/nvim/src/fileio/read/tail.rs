@@ -78,11 +78,11 @@ pub(crate) unsafe fn report_and_place(
 /// swap-file sync, as upstream does.
 ///
 /// # Safety
-/// `sfname` must be the name the read used, or null, and `args` the caller's
+/// `sfname` must be the name the read used, or null, and `excmd` the caller's
 /// command or null.
 pub(crate) unsafe fn run_read_autocmds(
     sfname: *mut c_char,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     how: How,
     set_options: bool,
 ) -> bool {
@@ -116,8 +116,8 @@ pub(crate) unsafe fn run_read_autocmds(
     } else {
         (AutoEvent::FileReadPost, sfname, None)
     };
-    // SAFETY: the current buffer is live and `args` is the caller's command.
-    unsafe { apply_autocmds_exarg(ev, iofile, sfname, false, buf, args) };
+    // SAFETY: the current buffer is live and `excmd` is the caller's command.
+    unsafe { apply_autocmds_exarg(ev, iofile, sfname, false, buf, excmd) };
     // SAFETY: `b_p_ft` is the buffer's own `'filetype'` string.
     if buf_read && !Buf::current().b_au_did_filetype && unsafe { *Buf::current().b_p_ft } != 0 {
         let (ft, fname) = (Buf::current().b_p_ft, Buf::current().b_fname);

@@ -120,33 +120,40 @@ const fn cstr_optval(value: &'static CStr) -> OptVal {
 /// `:help`, and `:help!` — which resolves the best tag under the cursor
 /// instead of taking a subject.
 ///
-/// # Safety
-/// `args` is null or the current Ex command; its `arg` is a writable,
-/// NUL-terminated command line, which this truncates at the first `\n`,
-/// `\r`, or `|` that starts a following command.
-pub(crate) unsafe fn ex_help(args: *mut ExArg) {
+pub(crate) fn ex_help(excmd: &mut ExArg) {
+    // SAFETY: the command's `arg` is its own writable, NUL-terminated
+    // command line.
+    open_help(Some(excmd));
+}
+
+/// `:help` with the subject the command gave, or `F1`'s "no subject at all".
+///
+/// The command's `arg` is truncated at the first `\n`, `\r`, or `|` that
+/// starts a following command.
+pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
     let old_key_typed = KeyTyped.get();
 
-    // SAFETY: caller contract; the command line is writable.
-    let mut arg = unsafe {
-        if args.is_null() {
-            c"".as_ptr().cast_mut()
-        } else {
-            split_off_next_cmd(args);
-            if (*args).skip != 0 {
+    let forceit = excmd.as_deref().is_some_and(|command| command.forceit != 0);
+    let mut arg = match excmd {
+        None => c"".as_ptr().cast_mut(),
+        Some(command) => {
+            // SAFETY: caller contract; the command line is writable.
+            split_off_next_cmd(command);
+            if command.skip != 0 {
                 return;
             }
-            trim_trailing_blanks((*args).arg)
+            // SAFETY: as above.
+            unsafe { trim_trailing_blanks(command.arg) }
         }
     };
 
-    // SAFETY: `arg` is NUL-terminated, and writable whenever `args` is set --
+    // SAFETY: `arg` is NUL-terminated, and writable whenever `excmd` is set --
     // which is the only case where `check_help_lang` can find a `@xx` to
     // strip.
     let lang = unsafe { check_help_lang(arg) };
 
-    // SAFETY: caller contract.
-    let helpbang = unsafe { !args.is_null() && (*args).forceit != 0 && *arg == NUL as c_char };
+    // SAFETY: `arg` is NUL-terminated.
+    let helpbang = forceit && unsafe { *arg } == NUL as c_char;
     if unsafe { *arg == NUL as c_char } && !helpbang {
         arg = c"help.txt".as_ptr().cast_mut();
     }
@@ -166,7 +173,6 @@ pub(crate) unsafe fn ex_help(args: *mut ExArg) {
     let mut num_matches: c_int = 0;
     let mut matches: *mut *mut c_char = ptr::null_mut();
     // SAFETY: `arg` is NUL-terminated; the two out-parameters are ours.
-    let forceit = !args.is_null() && unsafe { (*args).forceit } != 0;
     let (out_n, out_m) = (&raw mut num_matches, &raw mut matches);
     let n = unsafe { find_help_tags(arg, out_n, out_m, forceit) };
 
@@ -242,12 +248,9 @@ pub(crate) unsafe fn ex_help(args: *mut ExArg) {
 
 /// A `:help` command ends at the first LF, or at a `|` followed by some
 /// text. Terminate the argument there and point `nextcmd` at the rest.
-///
-/// # Safety
-/// `args`'s `arg` is a writable NUL-terminated command line.
-unsafe fn split_off_next_cmd(args: *mut ExArg) {
+fn split_off_next_cmd(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    let mut arg = unsafe { (*args).arg };
+    let mut arg = excmd.arg;
     while unsafe { *arg } != NUL as c_char {
         if unsafe { *arg } == b'\n' as c_char
             || unsafe { *arg } == b'\r' as c_char
@@ -257,7 +260,7 @@ unsafe fn split_off_next_cmd(args: *mut ExArg) {
         {
             unsafe { *arg = NUL as c_char };
             arg = unsafe { arg.offset(1) };
-            unsafe { (*args).nextcmd = arg };
+            excmd.nextcmd = arg;
             return;
         }
         arg = unsafe { arg.offset(1) };
@@ -382,10 +385,9 @@ fn enter_help_window() -> Option<HelpWindow> {
     // 'readonly'. The buffer is still open, so don't store info.
     opened.alt_fnum = Buf::current().handle;
     let (fnum, fname, sfname) = (0, ptr::null_mut(), ptr::null_mut());
-    let eap_0 = ptr::null_mut();
     let (lnum, flags) = (newlnum::LASTL, EcmdFlags::HIDE | EcmdFlags::SET_HELP);
     // SAFETY: the editor's own current window and buffer.
-    let _ = unsafe { do_ecmd(fnum, fname, sfname, eap_0, lnum, flags, None) };
+    let _ = unsafe { do_ecmd(fnum, fname, sfname, None, lnum, flags, None) };
     if keepalt_is_off() {
         Win::current().w_alt_fnum = opened.alt_fnum;
     }
@@ -394,31 +396,22 @@ fn enter_help_window() -> Option<HelpWindow> {
 }
 
 /// `:helpclose`: close the first help window in the current tab page.
-///
-/// # Safety
-/// `args` is the current Ex command.
-pub(crate) unsafe fn ex_helpclose(args: *mut ExArg) {
+pub(crate) fn ex_helpclose(excmd: &mut ExArg) {
     let Some(win) = windows().find(|wp| buf_is_help(wp.buffer_or_none())) else {
         return;
     };
     // SAFETY: caller contract; a live window.
-    unsafe { win_close(win, false, (*args).forceit != 0) };
+    win_close(win, false, excmd.forceit != 0);
 }
 
 /// `:exusage`.
-///
-/// # Safety
-/// `args` is unused, but the signature is the Ex-command one.
-pub(crate) unsafe fn ex_exusage(_args: *mut ExArg) {
+pub(crate) fn ex_exusage(_excmd: &mut ExArg) {
     // SAFETY: a static command line.
     let _ = unsafe { do_cmdline_cmd(c"help ex-cmd-index".as_ptr()) };
 }
 
 /// `:viusage`.
-///
-/// # Safety
-/// As [`ex_exusage`].
-pub(crate) unsafe fn ex_viusage(_args: *mut ExArg) {
+pub(crate) fn ex_viusage(_excmd: &mut ExArg) {
     // SAFETY: a static command line.
     let _ = unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
 }

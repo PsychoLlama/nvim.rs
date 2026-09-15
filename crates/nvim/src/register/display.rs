@@ -173,14 +173,10 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
 ///
 /// The argument, if any, is a set of register names to restrict the listing
 /// to.
-///
-/// # Safety
-/// `args` must be a live `ExArg`. Queries the clipboard provider, and so
-/// runs Lua.
-pub unsafe fn ex_display(args: *mut ExArg) {
+pub fn ex_display(excmd: &mut ExArg) {
     // SAFETY: the caller promises a live `ExArg`, whose `arg` is null or a
     // NUL-terminated string.
-    let mut arg = unsafe { (*args).arg };
+    let mut arg = excmd.arg;
     // SAFETY: as above, and tested non-null.
     if !arg.is_null() && unsafe { c_int::from(*arg) } == NUL {
         arg = ::core::ptr::null_mut();

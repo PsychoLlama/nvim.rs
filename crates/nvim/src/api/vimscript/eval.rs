@@ -64,12 +64,11 @@ pub unsafe fn nvim_eval(expr: String_0) -> Result<Object, Error> {
     let _nesting = enter_recursive(&recursive);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
     let evaluated = api_try(|| {
-        let no_eap = ptr::null_mut::<ExArg>();
-        let ea = &raw mut evalarg;
+        let arg = &raw mut evalarg;
         // SAFETY: `expr` names its own bytes, and `evalarg` is this frame's.
-        let ok = unsafe { eval0(expr.data(), &mut rettv, no_eap, ea) };
+        let ok = unsafe { eval0(expr.data(), &mut rettv, None, arg) };
         // SAFETY: `evalarg` is this frame's.
-        unsafe { clear_evalarg(ea, no_eap) };
+        unsafe { clear_evalarg(arg, None) };
         ok
     });
     // A thrown exception outranks the generic message, and `rettv` is cleared
@@ -184,12 +183,11 @@ pub unsafe fn nvim_call_dict_function(
         // SAFETY: `tstate` is this frame's, live until the `try_leave`
         // below.
         unsafe { try_enter(&raw mut tstate) };
-        let no_eap = ptr::null_mut::<ExArg>();
-        let ea = &raw mut evalarg;
+        let arg = &raw mut evalarg;
         // SAFETY: `expr` names its own bytes, and `evalarg` is this frame's.
-        let eval_ret = unsafe { eval0(expr.data(), &mut rettv, no_eap, ea) };
+        let eval_ret = unsafe { eval0(expr.data(), &mut rettv, None, arg) };
         // SAFETY: `evalarg` is this frame's.
-        unsafe { clear_evalarg(ea, no_eap) };
+        unsafe { clear_evalarg(arg, None) };
         // SAFETY: `tstate` is what the `try_enter` above filled in.
         error.absorb(unsafe { try_leave(&raw mut tstate) });
         if error.is_set() {

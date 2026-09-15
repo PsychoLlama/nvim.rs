@@ -424,7 +424,7 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
             ea.line2 = last as LineNr;
         }
         // SAFETY: `ea` is resolved.
-        if unsafe { invalid_range(ea) }.is_some() {
+        if invalid_range(ea).is_some() {
             return Err(err_bad_value(c"range", c""));
         }
     }
@@ -433,10 +433,10 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg) -> Result<(), Error> {
         if ea.argt.has(ExArgt::DFLALL) {
             // SAFETY: `ea` is resolved; both entry points read it and the
             // editor globals, per the module contract.
-            unsafe { set_cmd_dflall_range(ea) };
+            set_cmd_dflall_range(ea);
         } else {
             // SAFETY: as above.
-            ea.line2 = unsafe { get_cmd_default_range(ea) };
+            ea.line2 = get_cmd_default_range(ea);
             ea.line1 = ea.line2;
             if ea.addr_type == CmdAddr::Other {
                 ea.line2 = 1;
@@ -468,7 +468,7 @@ fn apply_count(cmd: &KeyDict_cmd, ea: &mut ExArg, count_from_first_arg: bool) ->
     }
     // SAFETY: `ea` is resolved; `set_cmd_count` only writes its address
     // fields.
-    unsafe { set_cmd_count(ea, count as LineNr, true) };
+    set_cmd_count(ea, count as LineNr, true);
     Ok(())
 }
 
@@ -678,7 +678,7 @@ fn apply_argopt(ea: &mut ExArg) -> Result<(), Error> {
         }
         let orig_arg = ea.arg;
         // SAFETY: as above.
-        if unsafe { getargopt(ea).is_err() && !is_cmd_ni(ea.cmdidx) } {
+        if getargopt(ea).is_err() && !is_cmd_ni(ea.cmdidx) {
             return Err(err_invalid_at(c"argument ", orig_arg));
         }
     }

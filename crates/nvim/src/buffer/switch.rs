@@ -191,16 +191,13 @@ fn confirming() -> bool {
 // The `:buffer` family's entry points
 
 /// Go to another buffer, handling the result of the ATTENTION dialog.
-///
-/// # Safety
-/// `args` must be a live `ExArg`.
-pub unsafe fn goto_buffer(args: *mut ExArg, start: c_int, dir: c_int, count: c_int) {
+pub fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
     let save_sea = swap_exists_action.get();
     // SAFETY: the caller's promise -- a live command, whose `cmd` is a
     // NUL-terminated pointer into the command line.
-    let (cmdidx, split) = unsafe { ((*args).cmdidx, *(*args).cmd as c_int == 's' as c_int) };
+    let (cmdidx, split) = unsafe { (excmd.cmdidx, *excmd.cmd as c_int == 's' as c_int) };
     // SAFETY: as above.
-    let forceit = unsafe { (*args).forceit != 0 };
+    let forceit = excmd.forceit != 0;
 
     let skip_help_buf = matches!(
         cmdidx,
@@ -447,7 +444,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
     let none = ptr::null_mut::<c_char>();
     let one = newlnum::ONE as LineNr;
     let flags = EcmdFlags::FORCEIT.when(forceit != 0);
-    let retval = edit_file(0, none, none, ptr::null_mut(), one, flags, Win::current());
+    let retval = edit_file(0, none, none, None, one, flags, Win::current());
 
     // do_ecmd() may create a new buffer, then we have to delete the old one.
     // But do_ecmd() may have done that already, check if the buffer still

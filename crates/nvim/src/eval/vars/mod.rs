@@ -97,8 +97,8 @@ use crate::types::{
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
+use crate::winlayer::Live;
 use crate::winlayer::graph::lastused_tabpage;
-use crate::winlayer::{Ea, Live};
 use ::libc::{abort, memchr, strcpy};
 
 // The carve of the transpiled module; see each child's docs.
@@ -187,7 +187,7 @@ pub const kGRegExprSrc: GRegFlags = 2;
 /// `do_lock_var`.  The two are written together because the walk that finds
 /// the arguments is what makes `:unlet` and `:lockvar` agree.
 pub type UnletLockCallback =
-    unsafe fn(*mut LVal, *mut c_char, *mut ExArg, c_int) -> Result<(), Failed>;
+    unsafe fn(*mut LVal, *mut c_char, &mut ExArg, c_int) -> Result<(), Failed>;
 
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const INT64_MIN: ::core::ffi::c_long = -9223372036854775807 - 1;

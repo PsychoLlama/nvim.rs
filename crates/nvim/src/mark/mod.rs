@@ -231,7 +231,6 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: Buf) {
             ptr::null_mut(),
             AUGROUP_ALL,
             buffer,
-            ptr::null_mut(),
             &raw mut payload,
         )
     };

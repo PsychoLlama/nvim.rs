@@ -307,10 +307,9 @@ unsafe fn diff_write(
     let name = din.din_fname;
     let req = WriteRequest::filter();
     let noshort = ::core::ptr::null_mut::<c_char>();
-    let noeap = ::core::ptr::null_mut::<ExArg>();
     // SAFETY: a live buffer and one of this module's temp file names; no
     // short name and no `ExArg` are wanted.
-    let r = unsafe { buf_write(buffer, name, noshort, start, end, noeap, req) };
+    let r = unsafe { buf_write(buffer, name, noshort, start, end, None, req) };
     cmdmod_set_flags(CmdModFlags::SANDBOX.when(save_cmod_flags));
     // SAFETY: the option string the buffer itself holds.
     unsafe { free_string_option(buffer.b_p_ff) };
@@ -328,8 +327,8 @@ unsafe fn diff_write(
 /// segments' block lists are shifted back into place and chained together.
 ///
 /// # Safety
-/// `dio` must be a live diff run, and `args` null or a live command.
-unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
+/// `dio` must be a live diff run, and `excmd` null or a live command.
+unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg>) {
     // SAFETY: the caller's diff run.
     let mut dio = unsafe { Live::<DiffIo>::new(dio) };
     let orig_in: *mut DiffIn = dio.field_ptr(offset_of!(DiffIo, dio_orig));
@@ -356,8 +355,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
         }
 
         // `:diffupdate!` re-reads any buffer that changed on disk first.
-        // SAFETY: the caller's command, when there is one.
-        let forceit = !args.is_null() && unsafe { (*args).forceit } != 0;
+        let forceit = excmd.as_deref().is_some_and(|command| command.forceit != 0);
         if forceit {
             for idx in idx_orig..DB_COUNT as usize {
                 // A diff buffer may already have been wiped, so the slot is
@@ -498,11 +496,17 @@ pub fn diff_internal() -> c_int {
     c_int::from(diff_flags.get() & DIFF_INTERNAL != 0 && no_diffexpr)
 }
 
-/// `:diffupdate`, and every implicit recompute.
+/// `:diffupdate`.
+pub fn ex_diffupdate(excmd: &mut ExArg) {
+    diff_update(Some(excmd));
+}
+
+/// Recompute the tab page's diffs.
 ///
-/// # Safety
-/// `args` must be null or a live command.
-pub unsafe fn ex_diffupdate(args: *mut ExArg) {
+/// Split from the handler because most recomputes are implicit — a fold
+/// opening, a scroll, a `:diffget` finishing — and have no Ex command to
+/// hand down to 'diffexpr'.
+pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
     // A recompute asked for from inside `:diffget`/`:diffput` is deferred
     // to that command's tail, where `diff_need_update` is read.
     if diff_busy.get() {
@@ -531,8 +535,8 @@ pub unsafe fn ex_diffupdate(args: *mut ExArg) {
             },
             dio_internal: internal,
         };
-        // SAFETY: `diffio` is a local, and `args` is the caller's command.
-        unsafe { diff_try_update(&raw mut diffio, idx_orig, args) };
+        // SAFETY: `diffio` is a local, and `excmd` is the caller's command.
+        unsafe { diff_try_update(&raw mut diffio, idx_orig, excmd) };
         Win::current().w_valid_cursor.lnum = 0;
     }
 

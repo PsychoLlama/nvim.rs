@@ -338,10 +338,9 @@ fn open_window_for_arg(
     let flags = EcmdFlags::HIDE.when(hide) | EcmdFlags::OLDBUF;
     let ffname = unsafe { alist_name(alist_arg(aall.alist, i)) };
     let sfname = ptr::null_mut();
-    let eap2 = ptr::null_mut();
     let newlnum = newlnum::ONE as LineNr;
     let here = Some(Win::current().id());
-    let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, here) };
+    let _ = unsafe { do_ecmd(0, ffname, sfname, None, newlnum, flags, here) };
     aall.use_firstwin = false;
     Ok(())
 }
@@ -477,20 +476,15 @@ fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
 
 /// `:all` and `:sall`, and `:tab drop file ...` once it has set the
 /// argument list.
-///
-/// # Safety
-///
-/// `args` must be a live command block.
-pub unsafe fn ex_all(args: *mut ExArg) {
+pub fn ex_all(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let mut args = unsafe { Ea::new(args) };
     // `:all` takes an optional count as its range.
-    if args.addr_count == 0 {
-        args.line2 = 9999 as LineNr;
+    if excmd.addr_count == 0 {
+        excmd.line2 = 9999 as LineNr;
     }
-    let count = args.line2 as c_int;
-    let forceit = args.forceit != 0;
-    let drop = args.cmdidx == CmdIdx::drop;
+    let count = excmd.line2 as c_int;
+    let forceit = excmd.forceit != 0;
+    let drop = excmd.cmdidx == CmdIdx::drop;
     do_arg_all(count, forceit, drop);
 }
 

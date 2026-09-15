@@ -59,7 +59,7 @@ use crate::types::{
     ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, NUL, Vv, size_t, ssize_t,
     uint8_t,
 };
-use crate::winlayer::{Buf, Ea};
+use crate::winlayer::Buf;
 use ::libc::{strcat, strcpy, strpbrk, strrchr};
 
 /// `:make` and `:grep` are 'makeprg'/'grepprg' with `$*` replaced by the
@@ -71,17 +71,16 @@ use ::libc::{strcat, strcpy, strpbrk, strrchr};
 ///
 /// # Safety
 ///
-/// `args` must point at the command's `ExArg`, unaliased for the call. `mut
+/// `excmd` must point at the command's `ExArg`, unaliased for the call. `mut
 /// arg` must point at a NUL-terminated string, unaliased for the call.
 /// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns for
 /// the call.
 pub unsafe fn replace_makeprg(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     mut arg: *mut c_char,
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
-    let args = unsafe { Ea::new(args) };
-    let idx = args.cmdidx;
+    let idx = excmd.cmdidx;
     let is_grep = idx == CmdIdx::grep
         || idx == CmdIdx::lgrep
         || idx == CmdIdx::grepadd
@@ -89,7 +88,7 @@ pub unsafe fn replace_makeprg(
     let is_make = idx == CmdIdx::make || idx == CmdIdx::lmake;
     // `grep_internal` means 'grepprg' is `internal`, which is not a
     // program at all.
-    if !(is_make || is_grep) || grep_internal(args.cmdidx) {
+    if !(is_make || is_grep) || grep_internal(excmd.cmdidx) {
         return arg;
     }
 
@@ -127,11 +126,11 @@ pub unsafe fn replace_makeprg(
 ///
 /// # Safety
 ///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
+/// `excmd` must point at the command's `ExArg`, unaliased for the call.
 /// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns for
 /// the call.
 pub(crate) unsafe fn expand_filename(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     cmdlinep: *mut *mut c_char,
     errormsgp: &mut Option<CString>,
 ) -> Result<(), Failed> {
@@ -141,10 +140,9 @@ pub(crate) unsafe fn expand_filename(
     // Where the environment variables in a file argument are expanded;
     // upstream shares `NameBuff`.
     let mut expanded = [0 as c_char; MAXPATHL as usize];
-    let ea = unsafe { Ea::new(args) };
     // A `:vimgrep` pattern is not a file name, so the scan starts after
     // it.
-    let mut p = skip_grep_pat(ea);
+    let mut p = skip_grep_pat(excmd);
     let mut has_wildcards = path_has_wildcard(p);
 
     while byte(p) != NUL {
@@ -168,9 +166,9 @@ pub(crate) unsafe fn expand_filename(
         let mut repl = unsafe {
             eval_vars(
                 p,
-                ea.arg,
+                excmd.arg,
                 &raw mut srclen,
-                ea.do_ecmd_lnum_ptr(),
+                &raw mut excmd.do_ecmd_lnum,
                 &raw mut msg,
                 &raw mut escaped,
                 true,
@@ -195,8 +193,8 @@ pub(crate) unsafe fn expand_filename(
         // shell-special characters escaped — but not for the commands
         // that hand the whole argument to a shell themselves, and not
         // for a name that came back already escaped (`##`).
-        let idx = ea.cmdidx;
-        if ea.usefilter == 0
+        let idx = excmd.cmdidx;
+        if excmd.usefilter == 0
             && escaped == 0
             && idx != CmdIdx::bang
             && idx != CmdIdx::grep
@@ -206,7 +204,7 @@ pub(crate) unsafe fn expand_filename(
             && idx != CmdIdx::lmake
             && idx != CmdIdx::make
             && idx != CmdIdx::terminal
-            && !ea.argt.has(ExArgt::NOSPC)
+            && !excmd.argt.has(ExArgt::NOSPC)
         {
             let mut l = repl;
             while unsafe { *l } != 0 {
@@ -221,7 +219,7 @@ pub(crate) unsafe fn expand_filename(
         }
         // A `!` in the replacement would be read as "the previous
         // command" by the shell-command line parser.
-        if (ea.usefilter != 0 || idx == CmdIdx::bang || idx == CmdIdx::terminal)
+        if (excmd.usefilter != 0 || idx == CmdIdx::bang || idx == CmdIdx::terminal)
             && !unsafe { strpbrk(repl, c"!".as_ptr()) }.is_null()
         {
             let escaped_repl = vim_strsave_escaped(repl, c"!".as_ptr());
@@ -229,28 +227,28 @@ pub(crate) unsafe fn expand_filename(
             repl = escaped_repl;
         }
 
-        p = repl_cmdline(args, p, srclen, repl, cmdlinep);
+        p = repl_cmdline(excmd, p, srclen, repl, cmdlinep);
         xfree(repl as *mut c_void);
     }
 
     // `ExArgt::NOSPC` means the argument is one file name, so wildcards in
     // it can be expanded to exactly one match.
-    if !ea.argt.has(ExArgt::NOSPC) || ea.usefilter != 0 {
+    if !excmd.argt.has(ExArgt::NOSPC) || excmd.usefilter != 0 {
         return Ok(());
     }
 
     if has_wildcards {
         // Environment variables first: they may hold the wildcards, or
         // may be all that looked like one.
-        if has_char(ea.arg, '$' as c_int) || has_char(ea.arg, '~' as c_int) {
+        if has_char(excmd.arg, '$' as c_int) || has_char(excmd.arg, '~' as c_int) {
             let out = expanded.as_mut_ptr();
-            unsafe { expand_env_esc(ea.arg, out, MAXPATHL, true, true, ptr::null_mut()) };
+            unsafe { expand_env_esc(excmd.arg, out, MAXPATHL, true, true, ptr::null_mut()) };
             has_wildcards = path_has_wildcard(out);
-            repl_cmdline(args, ea.arg, len_of(ea.arg), out, cmdlinep);
+            repl_cmdline(excmd, excmd.arg, len_of(excmd.arg), out, cmdlinep);
         }
     }
     if !has_wildcards {
-        unsafe { backslash_halve(ea.arg) };
+        unsafe { backslash_halve(excmd.arg) };
         return Ok(());
     }
 
@@ -264,7 +262,7 @@ pub(crate) unsafe fn expand_filename(
     let expanded = unsafe {
         expand_one(
             &raw mut xpc,
-            ea.arg,
+            excmd.arg,
             ptr::null_mut(),
             options,
             WildMode::ExpandFree,
@@ -273,7 +271,7 @@ pub(crate) unsafe fn expand_filename(
     if expanded.is_null() {
         return Err(Failed);
     }
-    repl_cmdline(args, ea.arg, len_of(ea.arg), expanded, cmdlinep);
+    repl_cmdline(excmd, excmd.arg, len_of(excmd.arg), expanded, cmdlinep);
     xfree(expanded as *mut c_void);
     Ok(())
 }
@@ -286,13 +284,12 @@ pub(crate) unsafe fn expand_filename(
 /// Answers where the text after the replacement now lives, which is where
 /// the caller's scan resumes.
 pub(crate) fn repl_cmdline(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     src: *mut c_char,
     srclen: size_t,
     repl: *mut c_char,
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
-    let mut ea = unsafe { Ea::new(args) };
     let len = len_of(repl);
     // The tail after the replacement, the replacement itself, a
     // terminator, and — because `nextcmd` is stored past the end — the
@@ -301,8 +298,8 @@ pub(crate) fn repl_cmdline(
         + unsafe { cstr::bytes_at(src.add(srclen)) }.len()
         + len
         + 3;
-    if !ea.nextcmd.is_null() {
-        size += len_of(ea.nextcmd);
+    if !excmd.nextcmd.is_null() {
+        size += len_of(excmd.nextcmd);
     }
     let new_cmdline = xmalloc(size) as *mut c_char;
 
@@ -316,20 +313,20 @@ pub(crate) fn repl_cmdline(
     unsafe { strcpy(new_cmdline.add(tail), src.add(srclen)) };
     let resume = unsafe { new_cmdline.add(tail) };
 
-    if !ea.nextcmd.is_null() {
+    if !excmd.nextcmd.is_null() {
         let after = len_of(new_cmdline) + 1;
-        unsafe { strcpy(new_cmdline.add(after), ea.nextcmd) };
-        ea.nextcmd = unsafe { new_cmdline.add(after) };
+        unsafe { strcpy(new_cmdline.add(after), excmd.nextcmd) };
+        excmd.nextcmd = unsafe { new_cmdline.add(after) };
     }
-    ea.cmd = unsafe { new_cmdline.offset(ea.cmd.offset_from(*cmdlinep)) };
-    ea.arg = unsafe { new_cmdline.offset(ea.arg.offset_from(*cmdlinep)) };
+    excmd.cmd = unsafe { new_cmdline.offset(excmd.cmd.offset_from(*cmdlinep)) };
+    excmd.arg = unsafe { new_cmdline.offset(excmd.arg.offset_from(*cmdlinep)) };
     // An argument after the replacement moved by the length difference;
     // one before it did not move at all.
-    for j in 0..ea.argc {
-        let old = unsafe { *ea.args.add(j) };
+    for j in 0..excmd.argc {
+        let old = unsafe { *excmd.args.add(j) };
         let old_off = unsafe { old.offset_from(*cmdlinep) };
         unsafe {
-            *ea.args.add(j) = if offset >= old_off as size_t {
+            *excmd.args.add(j) = if offset >= old_off as size_t {
                 new_cmdline.offset(old_off)
             } else {
                 new_cmdline.offset(old_off + len.wrapping_sub(srclen) as isize)
@@ -338,8 +335,8 @@ pub(crate) fn repl_cmdline(
     }
     // The `+cmd` argument, unless it is the shared `$` constant, which
     // is not in the command line at all.
-    if !ea.do_ecmd_cmd.is_null() && !ptr::eq(ea.do_ecmd_cmd, dollar_command.as_ptr()) {
-        ea.do_ecmd_cmd = unsafe { new_cmdline.offset(ea.do_ecmd_cmd.offset_from(*cmdlinep)) };
+    if !excmd.do_ecmd_cmd.is_null() && !ptr::eq(excmd.do_ecmd_cmd, dollar_command.as_ptr()) {
+        excmd.do_ecmd_cmd = unsafe { new_cmdline.offset(excmd.do_ecmd_cmd.offset_from(*cmdlinep)) };
     }
 
     unsafe { xfree(*cmdlinep as *mut c_void) };

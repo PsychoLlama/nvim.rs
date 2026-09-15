@@ -89,12 +89,9 @@ impl ListDo {
 
 /// `:argdo`, `:windo`, `:bufdo`, `:tabdo`, `:cdo`, `:ldo`, `:cfdo` and
 /// `:lfdo`.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
+pub(crate) fn ex_listdo(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let (cmdidx, forceit) = unsafe { ((*args).cmdidx, (*args).forceit != 0) };
+    let (cmdidx, forceit) = (excmd.cmdidx, excmd.forceit != 0);
     let Some(list) = ListDo::from_cmdidx(cmdidx) else {
         return;
     };
@@ -125,7 +122,7 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
         );
     if may_run {
         // SAFETY: module contract.
-        unsafe { listdo_walk(args, list) };
+        listdo_walk(excmd, list);
     }
 
     drop(keep_messages);
@@ -166,10 +163,7 @@ fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
 
 /// Position the walk at `args.line1`, then run `args.arg` once per item
 /// until the list runs out, the range does, or something goes wrong.
-///
-/// # Safety
-/// Module contract.
-unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
+fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
     // SAFETY: module contract. The command being run can do anything at all,
     // which is why every step re-validates what it is about to touch.
     let mut i: c_int = 0;
@@ -183,7 +177,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
         ListDo::Windows => {
             while let Some(cur) = wp
                 .and_then(WinId::get)
-                .filter(|_| (i as LineNr + 1) < unsafe { (*args).line1 })
+                .filter(|_| (i as LineNr + 1) < excmd.line1)
             {
                 i += 1;
                 wp = cur.next().map(Win::id);
@@ -192,13 +186,13 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
         ListDo::Tabs => {
             while let Some(cur) = tp
                 .and_then(TabId::get)
-                .filter(|_| (i as LineNr + 1) < unsafe { (*args).line1 })
+                .filter(|_| (i as LineNr + 1) < excmd.line1)
             {
                 i += 1;
                 tp = cur.next().map(TabPage::id);
             }
         }
-        ListDo::Args => i = unsafe { (*args).line1 } as c_int - 1,
+        ListDo::Args => i = excmd.line1 as c_int - 1,
         _ => {}
     }
 
@@ -208,10 +202,9 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
         ListDo::Buffers => {
             // Advance to the first listed buffer after "eap->line1".
             let mut cur = first_buffer();
-            let unlisted =
-                |b: &Buf| (b.handle as LineNr) < unsafe { (*args).line1 } || b.b_p_bl == 0;
+            let unlisted = |b: &Buf| (b.handle as LineNr) < excmd.line1 || b.b_p_bl == 0;
             while let Some(b) = cur.filter(unlisted) {
-                if b.handle as LineNr > unsafe { (*args).line2 } {
+                if b.handle as LineNr > excmd.line2 {
                     cur = None;
                     break;
                 }
@@ -221,7 +214,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             if !buf.is_null() {
                 unsafe {
                     goto_buffer(
-                        args,
+                        excmd,
                         DOBUF_FIRST as c_int,
                         FORWARD as c_int,
                         (*buf).handle as c_int,
@@ -230,18 +223,18 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             }
         }
         ListDo::Quickfix { .. } => {
-            qf_size = unsafe { qf_get_valid_size(args) };
-            debug_assert!(unsafe { (*args).line1 } >= 0 as LineNr, "eap->line1 >= 0");
-            if qf_size == 0 || unsafe { (*args).line1 } as size_t > qf_size {
+            qf_size = qf_get_valid_size(excmd);
+            debug_assert!(excmd.line1 >= 0 as LineNr, "eap->line1 >= 0");
+            if qf_size == 0 || excmd.line1 as size_t > qf_size {
                 buf = ptr::null_mut();
             } else {
-                unsafe { ex_cc(args) };
+                ex_cc(excmd);
                 buf = Buf::current_raw();
-                i = unsafe { (*args).line1 } as c_int - 1;
-                if unsafe { (*args).addr_count } <= 0 {
+                i = excmd.line1 as c_int - 1;
+                if excmd.addr_count <= 0 {
                     // Default to every quickfix/location list entry.
                     debug_assert!(qf_size < MAXLNUM as size_t, "qf_size < MAXLNUM");
-                    unsafe { (*args).line2 = qf_size as LineNr };
+                    excmd.line2 = qf_size as LineNr;
                 }
             }
         }
@@ -264,7 +257,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 // Don't call `do_argfile` when already there, it would
                 // try reloading the file.
                 if Win::current().w_arg_idx != i || !editing_arg_idx(Win::current()) {
-                    unsafe { do_argfile(args, i) };
+                    do_argfile(excmd, i);
                 }
                 if Win::current().w_arg_idx != i {
                     break;
@@ -313,9 +306,9 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
         if execute {
             let _ = unsafe {
                 do_cmdline(
-                    (*args).arg,
-                    (*args).ea_getline,
-                    (*args).cookie,
+                    excmd.arg,
+                    excmd.ea_getline,
+                    excmd.cookie,
                     DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT,
                 )
             };
@@ -324,14 +317,14 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
         match list {
             ListDo::Buffers => {
                 // Done?
-                if next_fnum < 0 || next_fnum as LineNr > unsafe { (*args).line2 } {
+                if next_fnum < 0 || next_fnum as LineNr > excmd.line2 {
                     break;
                 }
                 // Does the buffer still exist?
                 if !buffers().any(|bp| bp.handle == next_fnum) {
                     break;
                 }
-                unsafe { goto_buffer(args, DOBUF_FIRST as c_int, FORWARD as c_int, next_fnum) };
+                goto_buffer(excmd, DOBUF_FIRST as c_int, FORWARD as c_int, next_fnum);
                 // If autocommands took us elsewhere, quit here.
                 if Buf::current().handle != next_fnum {
                     break;
@@ -339,13 +332,13 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
             }
             ListDo::Quickfix { .. } => {
                 debug_assert!(i >= 0, "i >= 0");
-                if i as size_t >= qf_size || i as LineNr >= unsafe { (*args).line2 } {
+                if i as size_t >= qf_size || i as LineNr >= excmd.line2 {
                     break;
                 }
-                let qf_idx = unsafe { qf_get_cur_idx(args) };
-                unsafe { ex_cnext(args) };
+                let qf_idx = qf_get_cur_idx(excmd);
+                ex_cnext(excmd);
                 // If jumping to the next quickfix entry fails, quit here.
-                if unsafe { qf_get_cur_idx(args) } == qf_idx {
+                if qf_get_cur_idx(excmd) == qf_idx {
                     break;
                 }
             }
@@ -358,17 +351,17 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                         do_check_scrollbind(true);
                     }
                 }
-                if i as LineNr + 1 > unsafe { (*args).line2 } {
+                if i as LineNr + 1 > excmd.line2 {
                     break;
                 }
             }
             ListDo::Tabs => {
-                if i as LineNr + 1 > unsafe { (*args).line2 } {
+                if i as LineNr + 1 > excmd.line2 {
                     break;
                 }
             }
             ListDo::Args => {
-                if i as LineNr >= unsafe { (*args).line2 } {
+                if i as LineNr >= excmd.line2 {
                     break;
                 }
             }

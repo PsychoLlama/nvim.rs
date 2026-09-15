@@ -67,7 +67,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
 
     // Everything left, up to the next command, is the file to include.
     args.argt |= ExArgt::XFILE | ExArgt::NOSPC;
-    unsafe { separate_nextcmd(args) };
+    separate_nextcmd(args);
 
     // An absolute path, "$VIM/.." or "<sfile>.." is `:source`d, which needs
     // the name expanded first; everything else goes through `:runtime!`.

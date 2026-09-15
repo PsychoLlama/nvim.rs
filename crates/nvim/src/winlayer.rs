@@ -137,7 +137,7 @@ mod live;
 mod walk;
 
 pub(crate) use frame::{current_topframe, free_frame, new_frame};
-pub(crate) use live::{Cc, Ea, Live};
+pub(crate) use live::{Cc, Live};
 
 pub use handles::BufId;
 

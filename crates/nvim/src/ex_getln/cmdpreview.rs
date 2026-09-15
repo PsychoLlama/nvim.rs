@@ -364,14 +364,8 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // Block errors while parsing the command line, and don't update
         // v:errmsg.
         let no_emsg = Suppress::emsg();
-        let parsed = unsafe {
-            parse_cmdline(
-                &raw mut cmdline,
-                &raw mut ea,
-                &raw mut cmdinfo,
-                &mut errormsg,
-            )
-        };
+        let parsed =
+            unsafe { parse_cmdline(&raw mut cmdline, &mut ea, &raw mut cmdinfo, &mut errormsg) };
         drop(no_emsg);
         if !parsed {
             break 'end;
@@ -441,7 +435,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         let mut err: Error = Error::none();
         let mut tstate: TryState = TRY_STATE_INIT;
         unsafe { try_enter(&raw mut tstate) };
-        cmdpreview_type = unsafe { execute_cmd(&raw mut ea, &raw mut cmdinfo, true) };
+        cmdpreview_type = unsafe { execute_cmd(&mut ea, &raw mut cmdinfo, true) };
         err.absorb(unsafe { try_leave(&raw mut tstate) });
         if err.is_set() {
             err.clear();

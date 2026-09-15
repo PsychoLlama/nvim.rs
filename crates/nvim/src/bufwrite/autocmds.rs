@@ -86,19 +86,18 @@ pub(crate) enum PreWrite {
 ///
 /// `event` must be an initialized `AutoEvent` whose pointer fields point at
 /// live data for the call. `sfname` must point at a NUL-terminated string,
-/// unaliased for the call. `args` must point at the command's `ExArg`.
+/// unaliased for the call. `excmd` must point at the command's `ExArg`.
 unsafe fn apply_pre(
     event: AutoEvent,
     sfname: *mut c_char,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     overwriting: bool,
 ) -> bool {
     if overwriting && buf_is_nofilename(current_buf()) {
         return true;
     }
-    // SAFETY: the caller's promise -- a live Ex-command argument and a
-    // NUL-terminated short file name.
-    unsafe { apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), args) };
+    // SAFETY: the caller's promise -- a NUL-terminated short file name.
+    unsafe { apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), excmd) };
     false
 }
 
@@ -106,17 +105,12 @@ unsafe fn apply_pre(
 /// still happen.
 ///
 /// Careful: the autocommands may call `buf_write` recursively.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`. `mode` must be an initialized
-/// `WriteMode` whose pointer fields point at live data for the call.
-pub(crate) unsafe fn buf_write_do_autocmds(
+pub(crate) fn buf_write_do_autocmds(
     buffer: Buf,
     names: &mut WriteNames,
     start: LineNr,
     end: &mut LineNr,
-    args: *mut ExArg,
+    mut excmd: Option<&mut ExArg>,
     mode: WriteMode,
     orig: OpMarks,
 ) -> PreWrite {
@@ -137,32 +131,35 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
     let bufref = BufRef::of_opt(Some(buffer));
 
+    // One firing of a `*WriteCmd`-family event against the short name. A
+    // closure rather than a function so that it borrows `sfname` from here
+    // and states the obligation once.
+    let fire = |event, iofile, excmd| {
+        // SAFETY: `iofile` and `sfname` are the caller's names or null, and
+        // the current buffer is live.
+        unsafe { apply_autocmds_exarg(event, iofile, sfname, false, Buf::current_or_none(), excmd) }
+    };
+
     // Did a "Cmd" autocommand write the file itself?
     let mut did_cmd = false;
     let mut nofile_err = false;
     if mode.req.append {
         let event = AutoEvent::FileAppendCmd;
-        did_cmd = unsafe {
-            apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), args)
-        };
+        did_cmd = fire(event, sfname, excmd.as_deref_mut());
         if !did_cmd {
-            nofile_err =
-                unsafe { apply_pre(AutoEvent::FileAppendPre, sfname, args, mode.overwriting) };
+            let pre = AutoEvent::FileAppendPre;
+            nofile_err = unsafe { apply_pre(pre, sfname, excmd.as_deref_mut(), mode.overwriting) };
         }
     } else if mode.req.filtering {
         // No <afile>: the filter's output file is not what the event is
         // about.
         let event = AutoEvent::FilterWritePre;
         let no_fname = core::ptr::null_mut();
-        unsafe {
-            apply_autocmds_exarg(event, no_fname, sfname, false, Buf::current_or_none(), args)
-        };
+        fire(event, no_fname, excmd.as_deref_mut());
     } else if mode.req.reset_changed && mode.whole {
         let was_changed = curbuf_is_changed();
         let event = AutoEvent::BufWriteCmd;
-        did_cmd = unsafe {
-            apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), args)
-        };
+        did_cmd = fire(event, sfname, excmd.as_deref_mut());
         if did_cmd {
             if was_changed && !curbuf_is_changed() {
                 // BufWriteCmd wrote everything correctly and reset
@@ -172,17 +169,15 @@ pub(crate) unsafe fn buf_write_do_autocmds(
                 u_update_save_nr(Buf::current());
             }
         } else {
-            nofile_err =
-                unsafe { apply_pre(AutoEvent::BufWritePre, sfname, args, mode.overwriting) };
+            let pre = AutoEvent::BufWritePre;
+            nofile_err = unsafe { apply_pre(pre, sfname, excmd.as_deref_mut(), mode.overwriting) };
         }
     } else {
         let event = AutoEvent::FileWriteCmd;
-        did_cmd = unsafe {
-            apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), args)
-        };
+        did_cmd = fire(event, sfname, excmd.as_deref_mut());
         if !did_cmd {
-            nofile_err =
-                unsafe { apply_pre(AutoEvent::FileWritePre, sfname, args, mode.overwriting) };
+            let pre = AutoEvent::FileWritePre;
+            nofile_err = unsafe { apply_pre(pre, sfname, excmd, mode.overwriting) };
         }
     }
 
@@ -292,12 +287,12 @@ pub(crate) unsafe fn buf_write_do_autocmds(
 /// # Safety
 ///
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
-/// `args` must point at the command's `ExArg`. `mode` must be an initialized
+/// `excmd` must point at the command's `ExArg`. `mode` must be an initialized
 /// `WriteMode` whose pointer fields point at live data for the call.
 pub(crate) unsafe fn buf_write_do_post_autocmds(
     buffer: Buf,
     fname: *mut c_char,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     mode: WriteMode,
 ) {
     // In case it was set by the previous read.
@@ -321,7 +316,7 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
     } else {
         fname
     };
-    unsafe { apply_autocmds_exarg(event, afile, fname, false, Buf::current_or_none(), args) };
+    unsafe { apply_autocmds_exarg(event, afile, fname, false, Buf::current_or_none(), excmd) };
 
     // Restore curwin/curbuf and a few other things.
     unsafe { aucmd_restbuf(&raw mut aco) };

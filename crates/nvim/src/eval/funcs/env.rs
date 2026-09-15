@@ -200,7 +200,7 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     eap.argt = ExArgt::NOSPC;
     let mut errormsg = None;
     let _no_emsg = quiet.then(Suppress::emsg);
-    if unsafe { expand_filename(&raw mut eap, &raw mut cmdstr, &mut errormsg) }.is_err()
+    if unsafe { expand_filename(&mut eap, &raw mut cmdstr, &mut errormsg) }.is_err()
         && !quiet
         && let Some(msg) = &errormsg
         && !msg.is_empty()

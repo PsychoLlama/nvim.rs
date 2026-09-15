@@ -32,17 +32,16 @@ pub const MAX_FUNC_NESTING: c_int = 50;
 /// the index in the array stays the line number.
 ///
 /// # Safety
-/// `args` is a live `:function` command, `newlines` an initialised `char *`
+/// `excmd` is a live `:function` command, `newlines` an initialised `char *`
 /// garray, and `line_to_free` owns whatever the last read handed back.
 pub(crate) unsafe fn get_function_body(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     newlines: *mut GArray,
     line_arg_in: *mut c_char,
     line_to_free: *mut *mut c_char,
     show_block: bool,
 ) -> c_int {
-    // SAFETY: the caller's promise -- `args` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(args) };
+    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
     let mut saved_wait_return = need_wait_return.get();
     let mut line_arg = line_arg_in;
     let mut indent = 2;
@@ -111,10 +110,10 @@ pub(crate) unsafe fn get_function_body(
                 }
             } else {
                 unsafe { xfree(*line_to_free as *mut c_void) };
-                theline = match ea.ea_getline {
+                theline = match excmd.ea_getline {
                     None => getcmdline(b':' as c_int, 0, indent, do_concat),
                     Some(getline) => unsafe {
-                        getline(b':' as c_int, ea.cookie, indent, do_concat)
+                        getline(b':' as c_int, excmd.cookie, indent, do_concat)
                     },
                 };
                 unsafe { *line_to_free = theline };
@@ -139,7 +138,7 @@ pub(crate) unsafe fn get_function_body(
 
             // Detect line continuation: SOURCING_LNUM increased by more
             // than one.
-            let mut sourcing_lnum_off = unsafe { get_sourced_lnum(ea.ea_getline, ea.cookie) };
+            let mut sourcing_lnum_off = unsafe { get_sourced_lnum(excmd.ea_getline, excmd.cookie) };
             if sourcing_lnum() < sourcing_lnum_off {
                 sourcing_lnum_off -= sourcing_lnum();
             } else {
@@ -211,10 +210,10 @@ pub(crate) unsafe fn get_function_body(
                         // Another command follows.  If the line came from
                         // "eap" we can point into it, otherwise
                         // "eap->cmdlinep" has to take the line over.
-                        ea.nextcmd = nextcmd;
+                        excmd.nextcmd = nextcmd;
                         if !unsafe { *line_to_free }.is_null() {
-                            unsafe { xfree(*ea.cmdlinep as *mut c_void) };
-                            unsafe { *ea.cmdlinep = *line_to_free };
+                            unsafe { xfree(*excmd.cmdlinep as *mut c_void) };
+                            unsafe { *excmd.cmdlinep = *line_to_free };
                             unsafe { *line_to_free = ptr::null_mut() };
                         }
                     }

@@ -52,7 +52,7 @@ use crate::types::{
     CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr, MarkGet,
     MarkMove, NUL, OK, Pos, size_t,
 };
-use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
+use crate::winlayer::{Buf, Win, first_buffer, last_buffer};
 
 /// Where a `+N`/`-N` offset lands when the addresses count buffers.
 ///
@@ -106,12 +106,12 @@ pub(super) fn tail() -> Buf {
 }
 
 /// Where the command word starts, without consuming the range.
-pub(crate) fn find_excmd_after_range(mut ea: Ea) -> *mut c_char {
-    let cmd = ea.cmd;
-    ea.cmd = unsafe { skip_range(ea.cmd, ptr::null_mut()) };
+pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> *mut c_char {
+    let cmd = excmd.cmd;
+    excmd.cmd = unsafe { skip_range(excmd.cmd, ptr::null_mut()) };
     // SAFETY: the command is the caller's, promised live by `Ea`.
-    let p = unsafe { find_ex_command(ea.raw(), ptr::null_mut()) };
-    ea.cmd = cmd;
+    let p = unsafe { find_ex_command(excmd, ptr::null_mut()) };
+    excmd.cmd = cmd;
     p
 }
 
@@ -121,19 +121,10 @@ pub(crate) fn find_excmd_after_range(mut ea: Ea) -> *mut c_char {
 /// `;` differs from `,` in moving the cursor to the first address before
 /// the second is resolved, which is what makes `:.;+3` mean "three lines
 /// from here" however the first address was spelled.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub unsafe fn parse_cmd_address(
-    args: *mut ExArg,
-    errormsg: &mut Option<CString>,
-    silent: bool,
-) -> c_int {
+pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, silent: bool) -> c_int {
     // The records `:*` reads the Visual marks into: they are never adjusted
     // and have no store, so each is computed into a record of its own.
     let (mut first, mut last) = (FileMark::UNSET, FileMark::UNSET);
-    let mut ea = unsafe { Ea::new(args) };
     let mut address_count = 1;
     let mut lnum: LineNr;
     let mut need_check_cursor = false;
@@ -141,81 +132,88 @@ pub unsafe fn parse_cmd_address(
 
     'theend: {
         loop {
-            ea.line1 = ea.line2;
-            ea.line2 = unsafe { get_cmd_default_range(args) };
-            ea.cmd = skipwhite(ea.cmd);
+            excmd.line1 = excmd.line2;
+            excmd.line2 = get_cmd_default_range(excmd);
+            excmd.cmd = skipwhite(excmd.cmd);
+            // The scan advances a cursor of its own: the command is lent to
+            // it for the quickfix addresses, so its `cmd` cannot be lent as
+            // well.
+            let mut cursor = excmd.cmd;
+            let (addr_type, skip) = (excmd.addr_type, excmd.skip != 0);
+            let to_other_file = (excmd.addr_count == 0) as c_int;
             lnum = unsafe {
                 get_address(
-                    args,
-                    ea.cmd_ptr(),
-                    ea.addr_type,
-                    ea.skip != 0,
+                    Some(excmd),
+                    &raw mut cursor,
+                    addr_type,
+                    skip,
                     silent,
-                    (ea.addr_count == 0) as c_int,
+                    to_other_file,
                     address_count,
                     errormsg,
                 )
             };
+            excmd.cmd = cursor;
             address_count += 1;
-            if ea.cmd.is_null() {
+            if excmd.cmd.is_null() {
                 break 'theend;
             }
             if lnum != MAXLNUM {
-                ea.line2 = lnum;
-            } else if byte(ea.cmd) == '%' as c_int {
+                excmd.line2 = lnum;
+            } else if byte(excmd.cmd) == '%' as c_int {
                 // `%` is not an address, it is a whole range, so it is
                 // only recognised where an address was expected and
                 // none was found.
-                ea.cmd = unsafe { ea.cmd.add(1) };
-                if !whole_range(ea, errormsg) {
+                excmd.cmd = unsafe { excmd.cmd.add(1) };
+                if !whole_range(excmd, errormsg) {
                     break 'theend;
                 }
-                ea.addr_count += 1;
-            } else if byte(ea.cmd) == '*' as c_int {
-                if ea.addr_type != CmdAddr::Lines {
+                excmd.addr_count += 1;
+            } else if byte(excmd.cmd) == '*' as c_int {
+                if excmd.addr_type != CmdAddr::Lines {
                     *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                     break 'theend;
                 }
-                ea.cmd = unsafe { ea.cmd.add(1) };
-                if ea.skip == 0 {
+                excmd.cmd = unsafe { excmd.cmd.add(1) };
+                if excmd.skip == 0 {
                     let fm = mark_get_visual(Buf::current(), &raw mut first, '<' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
                     }
                     debug_assert!(!fm.is_null());
-                    ea.line1 = unsafe { (*fm).mark.lnum };
+                    excmd.line1 = unsafe { (*fm).mark.lnum };
                     let fm = mark_get_visual(Buf::current(), &raw mut last, '>' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
                     }
                     debug_assert!(!fm.is_null());
-                    ea.line2 = unsafe { (*fm).mark.lnum };
-                    ea.addr_count += 1;
+                    excmd.line2 = unsafe { (*fm).mark.lnum };
+                    excmd.addr_count += 1;
                 }
             }
-            ea.addr_count += 1;
-            if byte(ea.cmd) == ';' as c_int {
-                if ea.skip == 0 {
-                    Win::current().w_cursor.lnum = ea.line2;
+            excmd.addr_count += 1;
+            if byte(excmd.cmd) == ';' as c_int {
+                if excmd.skip == 0 {
+                    Win::current().w_cursor.lnum = excmd.line2;
                     // A zero line number is not a position, so only the
                     // column is worth correcting there.
-                    if ea.line2 > 0 {
+                    if excmd.line2 > 0 {
                         check_cursor(Win::current());
                     } else {
                         check_cursor_col(Win::current());
                     }
                     need_check_cursor = true;
                 }
-            } else if byte(ea.cmd) != ',' as c_int {
+            } else if byte(excmd.cmd) != ',' as c_int {
                 break;
             }
-            ea.cmd = unsafe { ea.cmd.add(1) };
+            excmd.cmd = unsafe { excmd.cmd.add(1) };
         }
-        if ea.addr_count == 1 {
-            ea.line1 = ea.line2;
+        if excmd.addr_count == 1 {
+            excmd.line1 = excmd.line2;
             // One address that resolved to nothing is no address.
             if lnum == MAXLNUM {
-                ea.addr_count = 0;
+                excmd.addr_count = 0;
             }
         }
         ret = OK;
@@ -231,30 +229,30 @@ pub unsafe fn parse_cmd_address(
 
 /// Fill in the range `%` means for this address kind. Answers false when
 /// the kind has no "all", having reported why.
-fn whole_range(mut args: Ea, errormsg: &mut Option<CString>) -> bool {
-    match args.addr_type {
+fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
+    match excmd.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
-            args.line1 = 1;
-            args.line2 = Buf::current().b_ml.ml_line_count;
+            excmd.line1 = 1;
+            excmd.line2 = Buf::current().b_ml.ml_line_count;
         }
         CmdAddr::LoadedBuffers => {
             let (first, last) = loaded_buffer_range();
-            args.line1 = first;
-            args.line2 = last;
+            excmd.line1 = first;
+            excmd.line2 = last;
         }
         CmdAddr::Buffers => {
-            args.line1 = head().handle as LineNr;
-            args.line2 = tail().handle as LineNr;
+            excmd.line1 = head().handle as LineNr;
+            excmd.line2 = tail().handle as LineNr;
         }
         CmdAddr::Windows | CmdAddr::Tabs => {
             // Only a *user* command may say `%` over windows or tab
             // pages; a builtin one would not know what to do with it.
-            if !is_user_cmd(args.cmdidx) {
+            if !is_user_cmd(excmd.cmdidx) {
                 *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                 return false;
             }
-            args.line1 = 1;
-            args.line2 = if args.addr_type == CmdAddr::Windows {
+            excmd.line1 = 1;
+            excmd.line2 = if excmd.addr_type == CmdAddr::Windows {
                 current_win_nr(None) as LineNr
             } else {
                 current_tab_nr(None) as LineNr
@@ -267,20 +265,20 @@ fn whole_range(mut args: Ea, errormsg: &mut Option<CString>) -> bool {
         CmdAddr::Arguments => {
             let len = arglist_len();
             if len == 0 {
-                args.line2 = 0;
-                args.line1 = 0;
+                excmd.line2 = 0;
+                excmd.line1 = 0;
             } else {
-                args.line1 = 1;
-                args.line2 = len as LineNr;
+                excmd.line1 = 1;
+                excmd.line2 = len as LineNr;
             }
         }
         CmdAddr::QuickfixValid => {
             // SAFETY: the caller's promise -- a live command.
-            let valid = qf_get_valid_size(args.raw()) as LineNr;
-            args.line1 = 1;
-            args.line2 = valid;
-            if args.line2 == 0 {
-                args.line2 = 1;
+            let valid = qf_get_valid_size(excmd) as LineNr;
+            excmd.line1 = 1;
+            excmd.line2 = valid;
+            if excmd.line2 == 0 {
+                excmd.line2 = 1;
             }
         }
         // `NoRange` reaches here for a user command and is accepted
@@ -357,12 +355,12 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 ///
 /// # Safety
 ///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
+/// `excmd` must point at the command's `ExArg`, unaliased for the call.
 /// `cursor` must point at a writable `*mut c_char` slot the caller owns for
 /// the call.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn get_address(
-    args: *mut ExArg,
+    mut excmd: Option<&mut ExArg>,
     cursor: *mut *mut c_char,
     addr_type: CmdAddr,
     skip: bool,
@@ -371,7 +369,6 @@ pub unsafe fn get_address(
     address_count: c_int,
     errormsg: &mut Option<CString>,
 ) -> LineNr {
-    let ea = unsafe { Ea::new(args) };
     // The record a `'m` address answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
     let mut cmd: *mut c_char = unsafe { skipwhite(*cursor) };
@@ -387,9 +384,9 @@ pub unsafe fn get_address(
                 let want_last = ubyte(cmd) == b'$';
                 cmd = unsafe { cmd.add(1) };
                 let at = if want_last {
-                    last_lnum(ea, addr_type)
+                    last_lnum(excmd.as_deref_mut(), addr_type)
                 } else {
-                    dot_lnum(ea, addr_type)
+                    dot_lnum(excmd.as_deref_mut(), addr_type)
                 };
                 match at {
                     Addr::At(n) => lnum = n,
@@ -572,7 +569,7 @@ pub unsafe fn get_address(
                 break;
             }
             if lnum == MAXLNUM
-                && let Addr::At(n) = offset_base(ea, addr_type)
+                && let Addr::At(n) = offset_base(excmd.as_deref_mut(), addr_type)
             {
                 lnum = n;
             }
@@ -652,15 +649,18 @@ enum Addr {
 }
 
 /// What `.` means for this address kind.
-fn dot_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
+fn dot_lnum(excmd: Option<&mut ExArg>, addr_type: CmdAddr) -> Addr {
+    // Only the quickfix kinds read the command, and only a quickfix command
+    // can name one: `get_address` with no command never reaches them.
+    let quickfix = || excmd.expect("a quickfix address is asked by a quickfix command");
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => Win::current().w_cursor.lnum,
         CmdAddr::Windows => current_win_nr(Win::current_or_none()) as LineNr,
         CmdAddr::Arguments => (Win::current().w_arg_idx + 1) as LineNr,
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle as LineNr,
         CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
-        CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
+        CmdAddr::Quickfix => qf_get_cur_idx(quickfix()) as LineNr,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(quickfix()) as LineNr,
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
             return Addr::Refused;
         }
@@ -669,7 +669,9 @@ fn dot_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
 }
 
 /// What `$` means for this address kind.
-fn last_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
+fn last_lnum(excmd: Option<&mut ExArg>, addr_type: CmdAddr) -> Addr {
+    // As [`dot_lnum`].
+    let quickfix = || excmd.expect("a quickfix address is asked by a quickfix command");
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => Buf::current().b_ml.ml_line_count,
         CmdAddr::Windows => current_win_nr(None) as LineNr,
@@ -678,8 +680,8 @@ fn last_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
         CmdAddr::Buffers => tail().handle as LineNr,
         CmdAddr::Tabs => current_tab_nr(None) as LineNr,
         // An empty quickfix list still has a last entry, numbered 1.
-        CmdAddr::Quickfix => (unsafe { qf_get_size(args.raw()) } as LineNr).max(1),
-        CmdAddr::QuickfixValid => (qf_get_valid_size(args.raw()) as LineNr).max(1),
+        CmdAddr::Quickfix => (qf_get_size(quickfix()) as LineNr).max(1),
+        CmdAddr::QuickfixValid => (qf_get_valid_size(quickfix()) as LineNr).max(1),
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
             return Addr::Refused;
         }
@@ -689,35 +691,31 @@ fn last_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
 
 /// What a bare `+N`/`-N` counts from. Unlike `.`, the three cursor-less
 /// kinds answer a number here rather than an error.
-fn offset_base(args: Ea, addr_type: CmdAddr) -> Addr {
+fn offset_base(excmd: Option<&mut ExArg>, addr_type: CmdAddr) -> Addr {
     match addr_type {
         CmdAddr::TabsRelative => Addr::At(1),
         CmdAddr::NoRange | CmdAddr::Unsigned => Addr::At(0),
-        _ => dot_lnum(args, addr_type),
+        _ => dot_lnum(excmd, addr_type),
     }
 }
 
 /// Is the range this command was given out of bounds? Answers the message
 /// to report, or null.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn invalid_range(args: *mut ExArg) -> Option<CString> {
-    let ea = unsafe { Ea::new(args) };
+pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
     let invrange = || Some(ex_msg(e_invrange.as_ptr()));
-    if ea.line1 < 0 || ea.line2 < 0 || ea.line1 > ea.line2 {
+    if excmd.line1 < 0 || excmd.line2 < 0 || excmd.line1 > excmd.line2 {
         return invrange();
     }
-    if !ea.argt.has(ExArgt::RANGE) {
+    if !excmd.argt.has(ExArgt::RANGE) {
         return None;
     }
-    match ea.addr_type {
+    match excmd.addr_type {
         CmdAddr::Lines => {
             // `:diffget`/`:diffput` accept one line past the end: they
             // may add a line there.
-            let extra = (ea.cmdidx == CmdIdx::diffget || ea.cmdidx == CmdIdx::diffput) as c_int;
-            if ea.line2 > Buf::current().b_ml.ml_line_count + extra {
+            let extra =
+                (excmd.cmdidx == CmdIdx::diffget || excmd.cmdidx == CmdIdx::diffput) as c_int;
+            if excmd.line2 > Buf::current().b_ml.ml_line_count + extra {
                 return invrange();
             }
         }
@@ -725,12 +723,12 @@ pub(crate) unsafe fn invalid_range(args: *mut ExArg) -> Option<CString> {
             // An empty argument list still accepts line 1, which is
             // what makes `:argdelete` on it report a better message.
             let len = arglist_len();
-            if ea.line2 > len as LineNr + (len == 0) as c_int {
+            if excmd.line2 > len as LineNr + (len == 0) as c_int {
                 return invrange();
             }
         }
         CmdAddr::Buffers => {
-            if ea.line1 < 1 || ea.line2 > get_highest_fnum() as LineNr {
+            if excmd.line1 < 1 || excmd.line2 > get_highest_fnum() as LineNr {
                 return invrange();
             }
         }
@@ -742,7 +740,7 @@ pub(crate) unsafe fn invalid_range(args: *mut ExArg) -> Option<CString> {
                 };
                 buf = next;
             }
-            if ea.line1 < buf.handle as LineNr {
+            if excmd.line1 < buf.handle as LineNr {
                 return invrange();
             }
             let mut buf = tail();
@@ -752,36 +750,36 @@ pub(crate) unsafe fn invalid_range(args: *mut ExArg) -> Option<CString> {
                 };
                 buf = prev;
             }
-            if ea.line2 > buf.handle as LineNr {
+            if excmd.line2 > buf.handle as LineNr {
                 return invrange();
             }
         }
         CmdAddr::Windows => {
-            if ea.line2 > current_win_nr(None) as LineNr {
+            if excmd.line2 > current_win_nr(None) as LineNr {
                 return invrange();
             }
         }
         CmdAddr::Tabs => {
-            if ea.line2 > current_tab_nr(None) as LineNr {
+            if excmd.line2 > current_tab_nr(None) as LineNr {
                 return invrange();
             }
         }
         CmdAddr::Quickfix => {
-            debug_assert!(ea.line2 >= 0);
-            if ea.line2 <= 0 {
+            debug_assert!(excmd.line2 >= 0);
+            if excmd.line2 <= 0 {
                 // "no errors" reads better than "invalid range" when
                 // the user did not ask for a particular entry.
-                if ea.addr_count == 0 {
+                if excmd.addr_count == 0 {
                     return Some(ex_msg(e_no_errors.as_ptr()));
                 }
                 return invrange();
             }
         }
-        CmdAddr::QuickfixValid
-            if ((ea.line2 != 1 && ea.line2 as size_t > qf_get_valid_size(args))
-                || ea.line2 < 0) =>
-        {
-            return invrange();
+        CmdAddr::QuickfixValid => {
+            let line2 = excmd.line2;
+            if (line2 != 1 && line2 as size_t > qf_get_valid_size(excmd)) || line2 < 0 {
+                return invrange();
+            }
         }
         _ => {}
     }
@@ -790,15 +788,15 @@ pub(crate) unsafe fn invalid_range(args: *mut ExArg) -> Option<CString> {
 
 /// Turn line 0 into line 1 for a command that does not accept a zero
 /// address. `:0read` does, `:0print` does not.
-pub(crate) fn correct_range(mut ea: Ea) {
-    if ea.argt.has(ExArgt::ZEROR) {
+pub(crate) fn correct_range(excmd: &mut ExArg) {
+    if excmd.argt.has(ExArgt::ZEROR) {
         return;
     }
-    if ea.line1 == 0 {
-        ea.line1 = 1;
+    if excmd.line1 == 0 {
+        excmd.line1 = 1;
     }
-    if ea.line2 == 0 {
-        ea.line2 = 1;
+    if excmd.line2 == 0 {
+        excmd.line2 = 1;
     }
 }
 
@@ -815,21 +813,21 @@ fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *mut FileMar
 }
 
 /// `qf_get_cur_idx()` as checked code.
-pub(super) fn qf_get_cur_idx(args: *mut ExArg) -> size_t {
+pub(super) fn qf_get_cur_idx(excmd: &mut ExArg) -> size_t {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::quickfix::qf_get_cur_idx(args) }
+    crate::quickfix::qf_get_cur_idx(excmd)
 }
 
 /// `qf_get_cur_valid_idx()` as checked code.
-pub(super) fn qf_get_cur_valid_idx(args: *mut ExArg) -> c_int {
+pub(super) fn qf_get_cur_valid_idx(excmd: &mut ExArg) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::quickfix::qf_get_cur_valid_idx(args) }
+    crate::quickfix::qf_get_cur_valid_idx(excmd)
 }
 
 /// `qf_get_valid_size()` as checked code.
-pub(super) fn qf_get_valid_size(args: *mut ExArg) -> size_t {
+pub(super) fn qf_get_valid_size(excmd: &mut ExArg) -> size_t {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::quickfix::qf_get_valid_size(args) }
+    crate::quickfix::qf_get_valid_size(excmd)
 }
 
 /// `skipwhite()` as checked code.

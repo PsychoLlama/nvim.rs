@@ -215,16 +215,11 @@ unsafe fn global_mark(args: &ExArg, regmatch: *mut RegMMatch, kind: u8) -> c_int
 /// mark on each line that (does not) match, then execute the command for each
 /// marked line.  The split is required because after deleting lines we would
 /// not know where to search for the next match.
-///
-/// # Safety
-/// Main thread; `args` must be the live Ex-command argument.
-pub unsafe fn ex_global(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
+pub fn ex_global(excmd: &mut ExArg) {
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
     if global_busy.get() != 0
-        && (args.line1 != 1 || args.line2 != Buf::current().b_ml.ml_line_count)
+        && (excmd.line1 != 1 || excmd.line2 != Buf::current().b_ml.ml_line_count)
     {
         // Will increment global_busy to break out of the loop.
         emsg(gettext(c"E147: Cannot do :global recursive with a range"));
@@ -232,13 +227,13 @@ pub unsafe fn ex_global(args: *mut ExArg) {
     }
 
     // ":global!" is like ":vglobal".
-    let kind = if args.forceit != 0 {
+    let kind = if excmd.forceit != 0 {
         b'v'
     } else {
         // SAFETY: `args.cmd` points at the command word.
-        unsafe { *args.cmd as u8 }
+        unsafe { *excmd.cmd as u8 }
     };
-    let Some(parsed) = global_pattern(args) else {
+    let Some(parsed) = global_pattern(excmd) else {
         return;
     };
 
@@ -270,7 +265,7 @@ pub unsafe fn ex_global(args: *mut ExArg) {
         }
     } else {
         // SAFETY: as above.
-        let ndone = unsafe { global_mark(args, &raw mut regmatch, kind) };
+        let ndone = unsafe { global_mark(excmd, &raw mut regmatch, kind) };
         // Pass 2: execute the command for each line that has been marked.
         if got_int.get() {
             msg(gettext(e_interr), 0 as c_int);

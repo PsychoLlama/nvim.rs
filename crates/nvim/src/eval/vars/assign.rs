@@ -64,15 +64,11 @@ unsafe fn ends_target(endchars: *const c_char, p: *const c_char) -> bool {
 }
 
 /// `:let`, `:const` and (with no `=`) the listing forms.
-///
-/// # Safety
-/// `args` is a live `:let`/`:const` command.
-pub unsafe fn ex_let(args: *mut ExArg) {
+pub fn ex_let(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation -- a live `:let`, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
-    let mut ea = unsafe { Ea::new(args) };
-    let is_const = ea.cmdidx == CmdIdx::r#const;
-    let mut arg = ea.arg;
+    let is_const = excmd.cmdidx == CmdIdx::r#const;
+    let mut arg = excmd.arg;
     let mut var_count = 0;
     let mut semicolon = 0;
     let mut first: c_int = 1;
@@ -99,8 +95,8 @@ pub unsafe fn ex_let(args: *mut ExArg) {
             emsg_static(e_invarg);
         } else if ends_excmd(c_int::from(head.cast_signed())) == 0 {
             // ":let var1 var2"
-            arg = unsafe { list_arg_vars(args, arg, &raw mut first) } as *mut c_char;
-        } else if ea.skip == 0 {
+            arg = unsafe { list_arg_vars(excmd, arg, &raw mut first) } as *mut c_char;
+        } else if excmd.skip == 0 {
             // ":let" on its own.
             const SCOPES: [ScopeLister; 7] = [
                 list_glob_vars,
@@ -117,17 +113,20 @@ pub unsafe fn ex_let(args: *mut ExArg) {
                 unsafe { lister(&raw mut first) };
             }
         }
-        ea.nextcmd = unsafe { check_nextcmd(arg) };
+        excmd.nextcmd = unsafe { check_nextcmd(arg) };
         return;
     }
 
     // Assign to the target or targets, whatever produced the value. The
     // command's argument text is re-read here rather than reused from above
     // because `heredoc_get` moves it.
+    // The argument's *address* is read once here rather than through the
+    // command: the command is lent out to `heredoc_get` and the evaluator,
+    // and only the text it points at is wanted afterwards.
+    let arg = excmd.arg;
     let assign = |tv: &mut TypVal, op: *const c_char| {
-        let a = ea.arg;
         // SAFETY: the command's own argument text, and a live value.
-        let _ = unsafe { ex_let_vars(a, tv, false, semicolon, var_count, is_const, op) };
+        let _ = unsafe { ex_let_vars(arg, tv, false, semicolon, var_count, is_const, op) };
     };
 
     let mut rettv = TV_INITIAL_VALUE;
@@ -138,10 +137,10 @@ pub unsafe fn ex_let(args: *mut ExArg) {
     {
         // A here-document.
         // SAFETY: a live command and the text past the "=<<".
-        let l = unsafe { heredoc_get(args, expr.add(3), false) };
+        let l = unsafe { heredoc_get(excmd, expr.add(3), false) };
         if let Some(l) = l {
             rettv.write_list(Some(l));
-            if ea.skip == 0 {
+            if excmd.skip == 0 {
                 let op = [b'=' as c_char, NUL as c_char];
                 assign(&mut rettv, op.as_ptr());
             }
@@ -169,22 +168,22 @@ pub unsafe fn ex_let(args: *mut ExArg) {
     }
     expr = unsafe { skipwhite(expr) };
 
-    let skipping = (ea.skip != 0).then(Suppress::emsg_skip);
+    let skipping = (excmd.skip != 0).then(Suppress::emsg_skip);
     let mut evalarg = EvalArg {
         eval_flags: 0,
         eval_getline: None,
         eval_cookie: ptr::null_mut(),
         eval_tofree: ptr::null_mut(),
     };
-    let skip = ea.skip != 0;
-    // SAFETY: a live command, a live local `evalarg`, and `expr` inside the
-    // command's own argument text.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, args, skip) };
-    let eval_res = unsafe { eval0(expr, &mut rettv, args, &raw mut evalarg) };
+    let skip = excmd.skip != 0;
+    // SAFETY: a live local `evalarg`, and `expr` inside the command's own
+    // argument text.
+    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(&mut *excmd), skip) };
+    let eval_res = unsafe { eval0(expr, &mut rettv, Some(&mut *excmd), &raw mut evalarg) };
     drop(skipping);
-    unsafe { clear_evalarg(&raw mut evalarg, args) };
+    unsafe { clear_evalarg(&raw mut evalarg, Some(&mut *excmd)) };
 
-    if ea.skip == 0 && eval_res.is_ok() {
+    if excmd.skip == 0 && eval_res.is_ok() {
         assign(&mut rettv, op.as_ptr());
     }
     if eval_res.is_ok() {

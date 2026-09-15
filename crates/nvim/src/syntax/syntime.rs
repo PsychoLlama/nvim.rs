@@ -16,12 +16,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use super::*;
 
 /// `:syntime {on,off,clear,report}`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub(crate) unsafe fn ex_syntime(args: *mut ExArg) {
-    let arg = unsafe { CStr::from_ptr((*args).arg) };
+pub(crate) fn ex_syntime(excmd: &mut ExArg) {
+    let arg = unsafe { CStr::from_ptr(excmd.arg) };
     match arg.to_bytes() {
         b"on" => syn_time_on.set(true),
         b"off" => syn_time_on.set(false),
@@ -29,7 +25,7 @@ pub(crate) unsafe fn ex_syntime(args: *mut ExArg) {
         b"report" => syntime_report(),
         _ => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str((*args).arg) };
+            let arg = unsafe { c_str(excmd.arg) };
             semsg!("E475: Invalid argument: {arg}");
         }
     }

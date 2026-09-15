@@ -540,7 +540,7 @@ pub(crate) unsafe fn set_one_cmd_context(
     }
 
     // Get the command index.
-    let mut p = unsafe { set_cmd_index(cmd, &raw mut ea, expand.raw(), &raw mut context) };
+    let mut p = unsafe { set_cmd_index(cmd, &mut ea, expand.raw(), &raw mut context) };
     if p.is_null() {
         return ptr::null();
     }
@@ -683,7 +683,7 @@ pub(crate) unsafe fn set_one_cmd_context(
     if ea.argt.has(ExArgt::XFILE) {
         unsafe {
             set_context_for_wildcard_arg(
-                &raw mut ea,
+                Some(&mut ea),
                 arg,
                 usefilter,
                 expand.raw(),
@@ -737,7 +737,7 @@ pub unsafe fn set_cmd_context(
             let mut context = expand.xp_context;
             unsafe {
                 set_context_for_wildcard_arg(
-                    ptr::null_mut(),
+                    None,
                     expand.xp_pattern,
                     false,
                     expand.raw(),

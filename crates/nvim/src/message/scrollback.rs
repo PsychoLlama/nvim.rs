@@ -159,7 +159,7 @@ pub fn show_sb_text() {
             skip: 1,
             ..ExArg::default()
         };
-        unsafe { ex_messages(&raw mut ea) };
+        ex_messages(&mut ea);
         return;
     }
     // Only show something when there is more than one line: a command

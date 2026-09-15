@@ -251,10 +251,7 @@ pub(crate) fn aborted_in_try() -> bool {
 }
 
 /// `:eval {expr}`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_eval(args: *mut ExArg) {
+pub(crate) fn ex_eval(excmd: &mut ExArg) {
     let mut tv = TV_INITIAL_VALUE;
     let mut evalarg = EvalArg {
         eval_flags: 0,
@@ -262,23 +259,22 @@ pub(crate) unsafe fn ex_eval(args: *mut ExArg) {
         eval_cookie: ptr::null_mut(),
         eval_tofree: ptr::null_mut(),
     };
+    let skip = excmd.skip != 0;
     // SAFETY: module contract.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, args, (*args).skip != 0) };
-    if unsafe { eval0((*args).arg, &mut tv, args, &raw mut evalarg) }.is_ok() {
+    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
+    let arg = excmd.arg;
+    if unsafe { eval0(arg, &mut tv, Some(excmd), &raw mut evalarg) }.is_ok() {
         tv_clear(&mut tv);
     }
-    unsafe { clear_evalarg(&raw mut evalarg, args) };
+    unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
 }
 
 /// `:if {expr}`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_if(args: *mut ExArg) {
+pub(crate) fn ex_if(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     if unsafe { (*cstack).cs_idx } == CSTACK_LEN - 1 {
-        unsafe { (*args).errmsg = Some(c"E579: :if nesting too deep".to_owned()) };
+        excmd.errmsg = Some(c"E579: :if nesting too deep".to_owned());
         return;
     }
     unsafe { (*cstack).cs_idx += 1 };
@@ -287,7 +283,7 @@ pub(crate) unsafe fn ex_if(args: *mut ExArg) {
 
     let skip = unsafe { check_skip(cstack) };
     let mut error = false;
-    let result = unsafe { eval_to_bool((*args).arg, &raw mut error, args, skip, false) };
+    let result = unsafe { eval_to_bool(excmd.arg, &raw mut error, Some(excmd), skip, false) };
 
     let flags = if skip || error {
         // Set TRUE, so this conditional never becomes active.
@@ -301,18 +297,15 @@ pub(crate) unsafe fn ex_if(args: *mut ExArg) {
 }
 
 /// `:endif`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_endif(args: *mut ExArg) {
+pub(crate) fn ex_endif(excmd: &mut ExArg) {
     did_endif.set(true);
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     if unsafe { (*cstack).cs_idx } < 0
         || unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }
             .has(CsFlags::LOOP | CsFlags::TRY)
     {
-        unsafe { (*args).errmsg = Some(c"E580: :endif without :if".to_owned()) };
+        excmd.errmsg = Some(c"E580: :endif without :if".to_owned());
         return;
     }
     // When debugging or at a breakpoint, show the prompt if it has not
@@ -322,7 +315,7 @@ pub(crate) unsafe fn ex_endif(args: *mut ExArg) {
     // appropriate -- doing it here stops the exception for a parsing
     // error being discarded by that interrupt exception later on.
     if !unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::TRUE)
-        && unsafe { dbg_check_skipped(args) }
+        && dbg_check_skipped(excmd)
     {
         unsafe { do_intthrow(cstack) };
     }
@@ -330,37 +323,34 @@ pub(crate) unsafe fn ex_endif(args: *mut ExArg) {
 }
 
 /// `:else` and `:elseif {expr}`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_else(args: *mut ExArg) {
+pub(crate) fn ex_else(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     let mut skip = unsafe { check_skip(cstack) };
 
     if unsafe { (*cstack).cs_idx } < 0
         || unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }
             .has(CsFlags::LOOP | CsFlags::TRY)
     {
-        if unsafe { (*args).cmdidx } == CmdIdx::r#else {
-            unsafe { (*args).errmsg = Some(c"E581: :else without :if".to_owned()) };
+        if excmd.cmdidx == CmdIdx::r#else {
+            excmd.errmsg = Some(c"E581: :else without :if".to_owned());
             return;
         }
-        unsafe { (*args).errmsg = Some(c"E582: :elseif without :if".to_owned()) };
+        excmd.errmsg = Some(c"E582: :elseif without :if".to_owned());
         skip = true;
     } else if unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::ELSE) {
-        if unsafe { (*args).cmdidx } == CmdIdx::r#else {
-            unsafe { (*args).errmsg = Some(E_MULTIPLE_ELSE.to_owned()) };
+        if excmd.cmdidx == CmdIdx::r#else {
+            excmd.errmsg = Some(E_MULTIPLE_ELSE.to_owned());
             return;
         }
-        unsafe { (*args).errmsg = Some(c"E584: :elseif after :else".to_owned()) };
+        excmd.errmsg = Some(c"E584: :elseif after :else".to_owned());
         skip = true;
     }
 
     let idx = unsafe { (*cstack).cs_idx } as usize;
     // Skipping, or the ":if" was TRUE: reset ACTIVE. Otherwise set it.
     if skip || unsafe { (*cstack).cs_flags[idx] }.has(CsFlags::TRUE) {
-        if unsafe { (*args).errmsg.is_none() } {
+        if excmd.errmsg.is_none() {
             unsafe { (*cstack).cs_flags[idx] = CsFlags::TRUE };
         }
         // Don't evaluate an ":elseif".
@@ -375,12 +365,12 @@ pub(crate) unsafe fn ex_else(args: *mut ExArg) {
     // counts as an interrupt before it, so set "skip" and throw an
     // interrupt exception -- doing it here stops the exception for a
     // parsing error being discarded by that interrupt exception later.
-    if !skip && unsafe { dbg_check_skipped(args) } && got_int.get() {
+    if !skip && dbg_check_skipped(excmd) && got_int.get() {
         unsafe { do_intthrow(cstack) };
         skip = true;
     }
 
-    if unsafe { (*args).cmdidx } != CmdIdx::elseif {
+    if excmd.cmdidx != CmdIdx::elseif {
         unsafe { (*cstack).cs_flags[idx] |= CsFlags::ELSE };
         return;
     }
@@ -391,14 +381,14 @@ pub(crate) unsafe fn ex_else(args: *mut ExArg) {
     // is wrong -- perhaps it should have been ":else". A double quote
     // here starts a string, it is not a comment.
     if skip
-        && unsafe { *(*args).arg } != b'"' as c_char
-        && ends_excmd(unsafe { *(*args).arg } as c_int) != 0
+        && unsafe { *excmd.arg } != b'"' as c_char
+        && ends_excmd(unsafe { *excmd.arg } as c_int) != 0
     {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str((*args).arg) };
+        let arg = unsafe { c_str(excmd.arg) };
         semsg!("E15: Invalid expression: \"{arg}\"");
     } else {
-        result = unsafe { eval_to_bool((*args).arg, &raw mut error, args, skip, false) };
+        result = unsafe { eval_to_bool(excmd.arg, &raw mut error, Some(excmd), skip, false) };
     }
 
     // The first of several errors in a row is the one to throw. That is
@@ -412,21 +402,18 @@ pub(crate) unsafe fn ex_else(args: *mut ExArg) {
             CsFlags::NONE
         };
         unsafe { (*cstack).cs_flags[idx] = flags };
-    } else if unsafe { (*args).errmsg.is_none() } {
+    } else if excmd.errmsg.is_none() {
         // Set TRUE, so this conditional never becomes active.
         unsafe { (*cstack).cs_flags[idx] = CsFlags::TRUE };
     }
 }
 
 /// `:while {expr}` and `:for {var} in {expr}`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_while(args: *mut ExArg) {
+pub(crate) fn ex_while(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     if unsafe { (*cstack).cs_idx } == CSTACK_LEN - 1 {
-        unsafe { (*args).errmsg = Some(c"E585: :while/:for nesting too deep".to_owned()) };
+        excmd.errmsg = Some(c"E585: :while/:for nesting too deep".to_owned());
         return;
     }
 
@@ -440,7 +427,7 @@ pub(crate) unsafe fn ex_while(args: *mut ExArg) {
         unsafe { (*cstack).cs_line[(*cstack).cs_idx as usize] = -1 };
     }
     let idx = unsafe { (*cstack).cs_idx } as usize;
-    let is_while = unsafe { (*args).cmdidx } == CmdIdx::r#while;
+    let is_while = excmd.cmdidx == CmdIdx::r#while;
     let flags = if is_while {
         CsFlags::WHILE
     } else {
@@ -451,9 +438,9 @@ pub(crate) unsafe fn ex_while(args: *mut ExArg) {
     let skip = unsafe { check_skip(cstack) };
     let mut error = false;
     let result = if is_while {
-        unsafe { eval_to_bool((*args).arg, &raw mut error, args, skip, false) }
+        unsafe { eval_to_bool(excmd.arg, &raw mut error, Some(excmd), skip, false) }
     } else {
-        unsafe { for_next_item(args, cstack, idx, jumped_back, skip, &mut error) }
+        unsafe { for_next_item(excmd, cstack, idx, jumped_back, skip, &mut error) }
     };
 
     if !skip && !error && result {
@@ -476,7 +463,7 @@ pub(crate) unsafe fn ex_while(args: *mut ExArg) {
 /// # Safety
 /// Module contract; `idx` is `cstack->cs_idx`.
 unsafe fn for_next_item(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     cstack: *mut CondStack,
     idx: usize,
     jumped_back: bool,
@@ -490,37 +477,34 @@ unsafe fn for_next_item(
         eval_tofree: ptr::null_mut(),
     };
     // SAFETY: module contract.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, args, skip) };
+    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
     let fi = if jumped_back {
         // Jumped here from a ":continue" or ":endfor": reuse the list
         // that was evaluated then.
         *error = false;
         unsafe { (*cstack).cs_forinfo[idx] }
     } else {
-        let fi = unsafe { eval_for_line((*args).arg, error, args, &raw mut evalarg) };
+        let fi = unsafe { eval_for_line(excmd.arg, error, excmd, &raw mut evalarg) };
         unsafe { (*cstack).cs_forinfo[idx] = fi };
         fi
     };
 
     // Use the element at the start of the list and advance.
-    let result = !*error && !fi.is_null() && !skip && unsafe { next_for_item(fi, (*args).arg) };
+    let result = !*error && !fi.is_null() && !skip && unsafe { next_for_item(fi, excmd.arg) };
     if !result {
         unsafe { free_for_info(fi) };
         unsafe { (*cstack).cs_forinfo[idx] = ptr::null_mut() };
     }
-    unsafe { clear_evalarg(&raw mut evalarg, args) };
+    unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
     result
 }
 
 /// `:continue`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_continue(args: *mut ExArg) {
+pub(crate) fn ex_continue(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     if unsafe { (*cstack).cs_looplevel } <= 0 || unsafe { (*cstack).cs_idx } < 0 {
-        unsafe { (*args).errmsg = Some(c"E586: :continue without :while or :for".to_owned()) };
+        excmd.errmsg = Some(c"E586: :continue without :while or :for".to_owned());
         return;
     }
     // Find the matching ":while". This may stop at a try conditional not
@@ -541,14 +525,11 @@ pub(crate) unsafe fn ex_continue(args: *mut ExArg) {
 }
 
 /// `:break`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_break(args: *mut ExArg) {
+pub(crate) fn ex_break(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     if unsafe { (*cstack).cs_looplevel } <= 0 || unsafe { (*cstack).cs_idx } < 0 {
-        unsafe { (*args).errmsg = Some(c"E587: :break without :while or :for".to_owned()) };
+        excmd.errmsg = Some(c"E587: :break without :while or :for".to_owned());
         return;
     }
     // Deactivate conditionals until the matching ":while" or a try
@@ -562,13 +543,10 @@ pub(crate) unsafe fn ex_break(args: *mut ExArg) {
 }
 
 /// `:endwhile` and `:endfor`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_endwhile(args: *mut ExArg) {
+pub(crate) fn ex_endwhile(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
-    let ending_while = unsafe { (*args).cmdidx } == CmdIdx::endwhile;
+    let cstack = excmd.cstack;
+    let ending_while = excmd.cmdidx == CmdIdx::endwhile;
     let err = if ending_while {
         err_msg(e_while)
     } else {
@@ -581,7 +559,7 @@ pub(crate) unsafe fn ex_endwhile(args: *mut ExArg) {
     };
 
     if unsafe { (*cstack).cs_looplevel } <= 0 || unsafe { (*cstack).cs_idx } < 0 {
-        unsafe { (*args).errmsg = err };
+        excmd.errmsg = err;
         return;
     }
 
@@ -590,16 +568,16 @@ pub(crate) unsafe fn ex_endwhile(args: *mut ExArg) {
         // In a ":while"/":for" but with the wrong endloop command: do
         // not rewind to the next enclosing one.
         if fl.has(CsFlags::WHILE) {
-            unsafe { (*args).errmsg = Some(c"E732: Using :endfor with :while".to_owned()) };
+            excmd.errmsg = Some(c"E732: Using :endfor with :while".to_owned());
         } else if fl.has(CsFlags::FOR) {
-            unsafe { (*args).errmsg = Some(c"E733: Using :endwhile with :for".to_owned()) };
+            excmd.errmsg = Some(c"E733: Using :endwhile with :for".to_owned());
         }
     }
     if !fl.has(CsFlags::LOOP) {
         if !fl.has(CsFlags::TRY) {
-            unsafe { (*args).errmsg = err_msg(e_endif) };
+            excmd.errmsg = err_msg(e_endif);
         } else if fl.has(CsFlags::FINALLY) {
-            unsafe { (*args).errmsg = err_msg(e_endtry) };
+            excmd.errmsg = err_msg(e_endtry);
         }
         // Find the matching ":while" and report what is missing.
         let mut idx = unsafe { (*cstack).cs_idx };
@@ -608,7 +586,7 @@ pub(crate) unsafe fn ex_endwhile(args: *mut ExArg) {
             if fl.has(CsFlags::TRY) && !fl.has(CsFlags::FINALLY) {
                 // Give up at a try conditional not in its finally
                 // clause, and ignore the ":endwhile"/":endfor".
-                unsafe { (*args).errmsg = err };
+                excmd.errmsg = err;
                 return;
             }
             if fl.has(csf) {
@@ -621,7 +599,7 @@ pub(crate) unsafe fn ex_endwhile(args: *mut ExArg) {
         unsafe { rewind_conditionals(cstack, idx, CsFlags::TRY, &raw mut (*cstack).cs_trylevel) };
     } else if unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::TRUE)
         && !unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::ACTIVE)
-        && unsafe { dbg_check_skipped(args) }
+        && dbg_check_skipped(excmd)
     {
         // When debugging or at a breakpoint, show the prompt if it has
         // not been shown: an ":endwhile"/":endfor" runs when the
@@ -817,10 +795,7 @@ pub(crate) unsafe fn rewind_conditionals(
 }
 
 /// `:endfunction` when there was no `:function`.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_endfunction(_args: *mut ExArg) {
+pub(crate) fn ex_endfunction(_excmd: &mut ExArg) {
     // SAFETY: module contract.
     semsg!("E193: {} not inside a function", ":endfunction");
 }

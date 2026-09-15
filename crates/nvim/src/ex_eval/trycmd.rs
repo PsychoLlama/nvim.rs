@@ -74,30 +74,27 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 /// `:throw {expr}`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_throw(args: *mut ExArg) {
+pub(crate) fn ex_throw(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let arg = unsafe { (*args).arg };
+    let arg = excmd.arg;
     let value = if unsafe { *arg } != NUL as c_char
         && unsafe { *arg } != b'|' as c_char
         && unsafe { *arg } != b'\n' as c_char
     {
-        unsafe { eval_to_string_skip(arg, args, (*args).skip != 0) }
+        unsafe { eval_to_string_skip(arg, excmd, excmd.skip != 0) }
     } else {
         unsafe { emsg_ptr(message(e_argreq)) };
         ptr::null_mut()
     };
 
     // Do not throw on an error, or when the argument evaluation threw.
-    if unsafe { (*args).skip } != 0 || value.is_null() {
+    if excmd.skip != 0 || value.is_null() {
         return;
     }
     if unsafe { throw_exception(value.cast(), ET_USER, ptr::null_mut()) }.is_err() {
         unsafe { xfree(value.cast()) };
     } else {
-        unsafe { do_throw((*args).cstack) };
+        unsafe { do_throw(excmd.cstack) };
     }
 }
 
@@ -137,14 +134,11 @@ pub(crate) unsafe fn do_throw(cstack: *mut CondStack) {
 }
 
 /// `:try`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_try(args: *mut ExArg) {
+pub(crate) fn ex_try(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     if unsafe { (*cstack).cs_idx } == CSTACK_LEN - 1 {
-        unsafe { (*args).errmsg = Some(c"E601: :try nesting too deep".to_owned()) };
+        excmd.errmsg = Some(c"E601: :try nesting too deep".to_owned());
         return;
     }
     unsafe { (*cstack).cs_idx += 1 };
@@ -179,24 +173,21 @@ pub(crate) unsafe fn ex_try(args: *mut ExArg) {
 }
 
 /// `:catch /{pattern}/` and bare `:catch`.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_catch(args: *mut ExArg) {
+pub(crate) fn ex_catch(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     let mut idx: c_int = 0;
     let mut give_up = false;
     let mut skip = false;
 
     if unsafe { (*cstack).cs_trylevel } <= 0 || unsafe { (*cstack).cs_idx } < 0 {
-        unsafe { (*args).errmsg = Some(c"E603: :catch without :try".to_owned()) };
+        excmd.errmsg = Some(c"E603: :catch without :try".to_owned());
         give_up = true;
     } else {
         if !unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::TRY) {
             // Report what is missing if the matching ":try" is not in
             // its finally clause.
-            unsafe { (*args).errmsg = get_end_emsg(cstack) };
+            unsafe { excmd.errmsg = get_end_emsg(cstack) };
             skip = true;
         }
         idx = unsafe { (*cstack).cs_idx };
@@ -205,7 +196,7 @@ pub(crate) unsafe fn ex_catch(args: *mut ExArg) {
         }
         if unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINALLY) {
             // Give up on a ":catch" after ":finally" and just parse it.
-            unsafe { (*args).errmsg = Some(c"E604: :catch after :finally".to_owned()) };
+            excmd.errmsg = Some(c"E604: :catch after :finally".to_owned());
             give_up = true;
         } else {
             unsafe {
@@ -216,14 +207,14 @@ pub(crate) unsafe fn ex_catch(args: *mut ExArg) {
 
     let pat;
     let end;
-    if ends_excmd(unsafe { *(*args).arg } as c_int) != 0 {
+    if ends_excmd(unsafe { *excmd.arg } as c_int) != 0 {
         // No argument: catch everything.
         pat = c".*".as_ptr().cast_mut();
         end = ptr::null_mut();
-        unsafe { (*args).nextcmd = find_nextcmd((*args).arg) };
+        unsafe { excmd.nextcmd = find_nextcmd(excmd.arg) };
     } else {
-        pat = unsafe { (*args).arg.add(1) };
-        end = unsafe { skip_regexp_err(pat, *(*args).arg as c_int, true as c_int) };
+        pat = unsafe { excmd.arg.add(1) };
+        end = unsafe { skip_regexp_err(pat, *excmd.arg as c_int, true as c_int) };
         if end.is_null() {
             give_up = true;
         }
@@ -259,7 +250,7 @@ pub(crate) unsafe fn ex_catch(args: *mut ExArg) {
             // hint when the pattern does not match. A ">quit" there
             // counts as an interrupt before the ":catch", which replaces
             // the exception and so is not caught by this block.
-            if !unsafe { dbg_check_skipped(args) } || !unsafe { do_intthrow(cstack) } {
+            if !dbg_check_skipped(excmd) || !unsafe { do_intthrow(cstack) } {
                 caught = unsafe { pattern_catches(pat, end) };
             }
         }
@@ -296,7 +287,7 @@ pub(crate) unsafe fn ex_catch(args: *mut ExArg) {
     }
 
     if !end.is_null() {
-        unsafe { (*args).nextcmd = find_nextcmd(end) };
+        unsafe { excmd.nextcmd = find_nextcmd(end) };
     }
 }
 
@@ -346,12 +337,9 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
 }
 
 /// `:finally`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_finally(args: *mut ExArg) {
+pub(crate) fn ex_finally(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     let mut pending: c_int = CSTP_NONE;
 
     let mut idx = unsafe { (*cstack).cs_idx };
@@ -359,12 +347,12 @@ pub(crate) unsafe fn ex_finally(args: *mut ExArg) {
         idx -= 1;
     }
     if unsafe { (*cstack).cs_trylevel } <= 0 || idx < 0 {
-        unsafe { (*args).errmsg = Some(c"E606: :finally without :try".to_owned()) };
+        excmd.errmsg = Some(c"E606: :finally without :try".to_owned());
         return;
     }
 
     if !unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::TRY) {
-        unsafe { (*args).errmsg = get_end_emsg(cstack) };
+        unsafe { excmd.errmsg = get_end_emsg(cstack) };
         // Make this error pending so that the following finally clause
         // still runs. It overrules a pending ":continue", ":break",
         // ":return" or ":finish" too.
@@ -373,7 +361,7 @@ pub(crate) unsafe fn ex_finally(args: *mut ExArg) {
 
     if unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINALLY) {
         // Give up on a second ":finally" and ignore it.
-        unsafe { (*args).errmsg = Some(super::E_MULTIPLE_FINALLY.to_owned()) };
+        excmd.errmsg = Some(super::E_MULTIPLE_FINALLY.to_owned());
         return;
     }
     unsafe { rewind_conditionals(cstack, idx, CsFlags::LOOP, &raw mut (*cstack).cs_looplevel) };
@@ -390,7 +378,7 @@ pub(crate) unsafe fn ex_finally(args: *mut ExArg) {
     // When debugging, show the prompt so the user knows the finally
     // clause is running. A ">quit" counts as an interrupt before the
     // ":finally", replacing the original exception.
-    if unsafe { dbg_check_skipped(args) } {
+    if dbg_check_skipped(excmd) {
         unsafe { do_intthrow(cstack) };
     }
 
@@ -446,12 +434,9 @@ pub(crate) unsafe fn ex_finally(args: *mut ExArg) {
 }
 
 /// `:endtry`
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_endtry(args: *mut ExArg) {
+pub(crate) fn ex_endtry(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let cstack = unsafe { (*args).cstack };
+    let cstack = excmd.cstack;
     let mut rethrow = false;
     let mut pending: c_char = CSTP_NONE as c_char;
     let mut rettv: *mut c_void = ptr::null_mut();
@@ -461,7 +446,7 @@ pub(crate) unsafe fn ex_endtry(args: *mut ExArg) {
         idx -= 1;
     }
     if unsafe { (*cstack).cs_trylevel } <= 0 || idx < 0 {
-        unsafe { (*args).errmsg = Some(c"E602: :endtry without :try".to_owned()) };
+        excmd.errmsg = Some(c"E602: :endtry without :try".to_owned());
         return;
     }
 
@@ -477,7 +462,7 @@ pub(crate) unsafe fn ex_endtry(args: *mut ExArg) {
         || !unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::TRUE);
 
     if !unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] }.has(CsFlags::TRY) {
-        unsafe { (*args).errmsg = get_end_emsg(cstack) };
+        unsafe { excmd.errmsg = get_end_emsg(cstack) };
         // Find the matching ":try" and report what is missing.
         unsafe { rewind_conditionals(cstack, idx, CsFlags::LOOP, &raw mut (*cstack).cs_looplevel) };
         skip = true;
@@ -514,7 +499,7 @@ pub(crate) unsafe fn ex_endtry(args: *mut ExArg) {
         || (!skip
             && !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::FINALLY)
             && unsafe { (*cstack).cs_pending[idx as usize] } == 0))
-        && unsafe { dbg_check_skipped(args) }
+        && dbg_check_skipped(excmd)
         && got_int.get()
     {
         // A ">quit" counts as an interrupt before the ":endtry".
@@ -572,12 +557,12 @@ pub(crate) unsafe fn ex_endtry(args: *mut ExArg) {
         // afterwards, or if the finally clause produced something new.
         match pending as c_int {
             CSTP_NONE => {}
-            CSTP_CONTINUE => unsafe { ex_continue(args) },
-            CSTP_BREAK => unsafe { ex_break(args) },
+            CSTP_CONTINUE => ex_continue(excmd),
+            CSTP_BREAK => ex_break(excmd),
             CSTP_RETURN => {
-                unsafe { do_return(args, false, false, rettv) };
+                unsafe { do_return(excmd, false, false, rettv) };
             }
-            CSTP_FINISH => unsafe { do_finish(args, false) },
+            CSTP_FINISH => do_finish(excmd, false),
             // The finally clause was entered because of an error,
             // interrupt or throw rather than a control-flow command:
             // restore those. Skipped if the finally clause produced

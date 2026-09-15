@@ -16,7 +16,7 @@ use crate::cstr;
 use crate::eval::typval::PartialRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::semsg;
-use crate::winlayer::{Ea, Live};
+use crate::winlayer::Live;
 use core::ffi::{c_char, c_int};
 use core::ptr::{null_mut, write_bytes};
 
@@ -161,26 +161,30 @@ unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
 /// continuation, handing it back to the Ex command line when there is one.
 ///
 /// # Safety
-/// `evalarg` may be null; `args` may be null.
-pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, args: *mut ExArg) {
+/// `evalarg` may be null; `excmd` may be null.
+pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, excmd: Option<&mut ExArg>) {
     // SAFETY: the caller's promise -- `evalarg` is null or valid.
     if evalarg.is_null() || unsafe { (*evalarg).eval_tofree }.is_null() {
         return;
     }
     // SAFETY: as above, and `evalarg` is not null.
     let mut ev = unsafe { Live::new(evalarg) };
-    if args.is_null() {
-        // SAFETY: `eval_tofree` is the line this `evalarg` owns.
-        unsafe { xfree(ev.eval_tofree.cast()) };
-    } else {
-        // SAFETY: the caller's promise -- `args` is not null here, and its
-        // `cmdlinep` names the command line being run.
-        let mut ea = unsafe { Ea::new(args) };
-        // SAFETY: `cmdline_tofree` is the line the command owns.
-        unsafe { xfree(ea.cmdline_tofree.cast()) };
-        // SAFETY: as above -- `cmdlinep` is a live `*mut c_char`.
-        ea.cmdline_tofree = unsafe { *ea.cmdlinep };
-        unsafe { *ea.cmdlinep = ev.eval_tofree };
+    match excmd {
+        None => {
+            // SAFETY: `eval_tofree` is the line this `evalarg` owns.
+            unsafe { xfree(ev.eval_tofree.cast()) };
+        }
+        Some(command) => {
+            // The command takes the continued line over: what it was
+            // running is freed, and `cmdlinep` names the new one.
+            // SAFETY: `cmdline_tofree` is the line the command owns, and
+            // `cmdlinep` is a live `*mut c_char`.
+            unsafe {
+                xfree(command.cmdline_tofree.cast());
+                command.cmdline_tofree = *command.cmdlinep;
+                *command.cmdlinep = ev.eval_tofree;
+            }
+        }
     }
     ev.eval_tofree = null_mut();
 }
@@ -188,11 +192,11 @@ pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, args: *mut ExArg) {
 /// Evaluate a whole expression, which must be all that is left of the line.
 ///
 /// # Safety
-/// `arg` must be a NUL-terminated expression; `args` may be null.
+/// `arg` must be a NUL-terminated expression; `excmd` may be null.
 pub unsafe fn eval0(
     arg: *mut c_char,
     result: &mut TypVal,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     let did_emsg_before = did_emsg.get();
@@ -224,18 +228,21 @@ pub unsafe fn eval0(
                 semsg!("E15: Invalid expression: \"{whole}\"");
             }
         }
-        if !args.is_null() && !p.is_null() {
-            // SAFETY: `p` is inside the expression; `args` is not null.
+        if let Some(command) = excmd
+            && !p.is_null()
+        {
+            // SAFETY: `p` is inside the expression.
             let nextcmd = unsafe { check_nextcmd(p) };
+            // SAFETY: as above.
             if !nextcmd.is_null() && unsafe { *nextcmd } != b'|' as c_char {
-                unsafe { (*args).nextcmd = nextcmd };
+                command.nextcmd = nextcmd;
             }
         }
         return Err(Failed);
     }
-    if !args.is_null() {
-        // SAFETY: as above.
-        unsafe { (*args).nextcmd = check_nextcmd(p) };
+    if let Some(command) = excmd {
+        // SAFETY: `p` is inside the expression.
+        command.nextcmd = unsafe { check_nextcmd(p) };
     }
     ret
 }
@@ -286,12 +293,12 @@ pub(crate) unsafe fn may_call_simple_func(
 pub(crate) unsafe fn eval0_simple_funccal(
     arg: *mut c_char,
     result: &mut TypVal,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, handed straight on to both.
     match unsafe { may_call_simple_func(arg, result) }? {
-        Parsed::NotThis => unsafe { eval0(arg, result, args, evalarg) },
+        Parsed::NotThis => unsafe { eval0(arg, result, excmd, evalarg) },
         Parsed::Done => Ok(()),
     }
 }
@@ -393,7 +400,7 @@ pub(crate) unsafe fn eval1(
 
     if evalarg.is_null() {
         // SAFETY: the substitute is this frame's own, and there is no `args`.
-        unsafe { clear_evalarg(&raw mut local_evalarg, null_mut()) };
+        unsafe { clear_evalarg(&raw mut local_evalarg, None) };
     } else {
         used.eval_flags = orig_flags;
     }
@@ -471,7 +478,7 @@ unsafe fn eval_logical(
 
     if evalarg.is_null() {
         // SAFETY: the substitute is this frame's own, and there is no `args`.
-        unsafe { clear_evalarg(&raw mut local_evalarg, null_mut()) };
+        unsafe { clear_evalarg(&raw mut local_evalarg, None) };
     } else {
         used.eval_flags = orig_flags;
     }

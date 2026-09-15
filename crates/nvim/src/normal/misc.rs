@@ -28,7 +28,7 @@ use crate::getchar::{
     getcmdkeycmd, map_execute_lua, paste_repeat, stuff_readbuf, stuff_readbuf_char,
     stuff_readbuf_number,
 };
-use crate::help::ex_help;
+use crate::help::open_help;
 use crate::memline::ml_get_len;
 use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};
@@ -89,7 +89,7 @@ pub(crate) unsafe fn nv_help(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if !check_clear_op_quit(ca.op()) {
-        unsafe { ex_help(ptr::null_mut()) };
+        open_help(None);
     }
 }
 

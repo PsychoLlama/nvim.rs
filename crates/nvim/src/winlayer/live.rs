@@ -80,7 +80,7 @@
 
 use core::ops::{Deref, DerefMut};
 
-use crate::types::{CmdlineInfo, ExArg};
+use crate::types::CmdlineInfo;
 
 /// A `*mut T` the caller has promised is live, with checked field access.
 ///
@@ -169,17 +169,8 @@ impl<T> DerefMut for Live<T> {
 // The shared aliases.
 //
 // A pointee two or more families pass around gets its name here rather than in
-// whichever module needed it first: `Ea` was declared twice and wanted a
-// third time, and the private copies shadowed each other. A family that owns
-// its pointee (`Op`, `Sug`, `Df`) still names it at home.
-
-/// The Ex command being run, whose caller has promised it outlives the value.
-///
-/// The promise is discharged by the `do_cmdline` frame that owns the
-/// `ExArg`: it outlives every command run out of it. Wrapping is the unsafe
-/// step, once per entry point; every `(*eap).field` after it is ordinary
-/// checked code.
-pub(crate) type Ea = Live<ExArg>;
+// whichever module needed it first: the private copies shadowed each other.
+// A family that owns its pointee (`Op`, `Sug`, `Df`) still names it at home.
 
 /// The command line being edited, whose caller has promised it outlives the
 /// value.

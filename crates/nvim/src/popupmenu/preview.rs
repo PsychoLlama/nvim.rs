@@ -334,7 +334,7 @@ unsafe fn pum_show_info(
                     0,
                     ::core::ptr::null_mut(),
                     ::core::ptr::null_mut(),
-                    ::core::ptr::null_mut(),
+                    None,
                     newlnum::ONE,
                     EcmdFlags::NONE,
                     None,

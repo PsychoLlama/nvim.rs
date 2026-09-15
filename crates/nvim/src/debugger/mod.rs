@@ -221,13 +221,10 @@ static debug_skipped_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_m
 /// the command is really being executed.
 ///
 /// Called from `do_one_cmd` before every command.
-///
-/// # Safety
-/// `args` must be the live `ExArg`.
-pub unsafe fn dbg_check_breakpoint(args: *mut ExArg) {
+pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
     debug_skipped.set(false);
     // SAFETY: caller contract.
-    let skip = unsafe { (*args).skip != 0 };
+    let skip = excmd.skip != 0;
     let name = debug_breakpoint_name.get();
 
     if name.is_null() {
@@ -240,7 +237,7 @@ pub unsafe fn dbg_check_breakpoint(args: *mut ExArg) {
             return;
         }
         // SAFETY: caller contract.
-        unsafe { do_debug((*args).cmd) };
+        unsafe { do_debug(excmd.cmd) };
         return;
     }
 
@@ -271,15 +268,12 @@ pub unsafe fn dbg_check_breakpoint(args: *mut ExArg) {
         debug_breakpoint_lnum.get() as int64_t
     );
     debug_breakpoint_name.set(ptr::null_mut());
-    unsafe { do_debug((*args).cmd) };
+    unsafe { do_debug(excmd.cmd) };
 }
 
 /// Enter debug mode after all, for a command that [`dbg_check_breakpoint`]
 /// skipped because `args.skip` was set. True when the prompt was shown.
-///
-/// # Safety
-/// As [`dbg_check_breakpoint`].
-pub unsafe fn dbg_check_skipped(args: *mut ExArg) -> bool {
+pub fn dbg_check_skipped(excmd: &mut ExArg) -> bool {
     if !debug_skipped.get() {
         return false;
     }
@@ -289,9 +283,9 @@ pub unsafe fn dbg_check_skipped(args: *mut ExArg) -> bool {
     got_int.set(false);
     debug_breakpoint_name.set(debug_skipped_name.get());
     // SAFETY: caller contract; `args.skip` is true on entry, and is put back.
-    unsafe { (*args).skip = 0 };
-    unsafe { dbg_check_breakpoint(args) };
-    unsafe { (*args).skip = 1 };
+    excmd.skip = 0;
+    dbg_check_breakpoint(excmd);
+    excmd.skip = 1;
     got_int.set(got_int.get() | prev_got_int);
     true
 }
@@ -313,7 +307,7 @@ pub fn dbg_breakpoint(name: *mut c_char, lnum: LineNr) {
 unsafe fn eval_expr_no_emsg(breakpoint: *mut Breakpoint) -> *mut TypVal {
     let _no_emsg = Suppress::emsg();
     // SAFETY: caller contract.
-    unsafe { eval_expr((*breakpoint).dbg_name, ptr::null_mut()) }
+    unsafe { eval_expr((*breakpoint).dbg_name, None) }
 }
 
 /// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into a
@@ -444,12 +438,9 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
 }
 
 /// `:breakadd`, and `:profile func`/`:profile file`.
-///
-/// # Safety
-/// `args` must be the live `ExArg`.
-pub unsafe fn ex_breakadd(args: *mut ExArg) {
+pub fn ex_breakadd(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    let (list, arg, forceit) = unsafe { (BreakList::of(&*args), (*args).arg, (*args).forceit) };
+    let (list, arg, forceit) = (BreakList::of(&*excmd), excmd.arg, excmd.forceit);
     // SAFETY: `arg` is the NUL-terminated argument.
     let Ok(mut bp) = (unsafe { dbg_parsearg(arg, list) }) else {
         return;
@@ -509,12 +500,9 @@ fn update_has_expr_breakpoint() {
 }
 
 /// `:breakdel` and `:profdel`.
-///
-/// # Safety
-/// `args` must be the live `ExArg`.
-pub unsafe fn ex_breakdel(args: *mut ExArg) {
+pub fn ex_breakdel(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    let (list, arg, cmdidx) = unsafe { (BreakList::of(&*args), (*args).arg, (*args).cmdidx) };
+    let (list, arg, cmdidx) = (BreakList::of(&*excmd), excmd.arg, excmd.cmdidx);
     // SAFETY: `arg` is NUL-terminated.
     let first = unsafe { *arg as c_int };
 
@@ -600,10 +588,7 @@ pub unsafe fn ex_breakdel(args: *mut ExArg) {
 }
 
 /// `:breaklist`.
-///
-/// # Safety
-/// `args` is unused, but the signature is the Ex-command one.
-pub unsafe fn ex_breaklist(_args: *mut ExArg) {
+pub fn ex_breaklist(_excmd: &mut ExArg) {
     let list = BreakList::Debug;
     if list.is_empty() {
         smsg!(0, "No breakpoints defined");

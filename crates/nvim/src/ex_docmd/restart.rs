@@ -37,7 +37,6 @@ use crate::types::{
     NUL, Object, String_0, VarNumber, Vv, key_value_pair, ptrdiff_t, size_t, uint16_t, uint64_t,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
-use crate::winlayer::Ea;
 
 /// An `Object` holding a copy of a NUL-terminated string.
 fn obj_str(s: *const c_char) -> Object {
@@ -75,12 +74,7 @@ fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
 /// UIs to. Only then does this server try to quit — and if it *cannot*
 /// (an unsaved buffer, a `+cmd` that did not quit), the new server is
 /// killed again and nothing has changed.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
+pub(crate) fn ex_restart(excmd: &mut ExArg) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut err = Error::none();
@@ -202,11 +196,11 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
 
             // `:restart {cmd}` runs {cmd} over there, once a UI has
             // arrived.
-            if byte(args.arg) != NUL {
+            if byte(excmd.arg) != NUL {
                 let opt_items = [
                     entry(c"once", obj_bool(true)),
                     entry(c"nested", obj_bool(true)),
-                    entry(c"command", obj_str(args.arg)),
+                    entry(c"command", obj_str(excmd.arg)),
                 ];
                 let autocmd_items = [
                     obj_str(c"UIEnter".as_ptr()),
@@ -252,10 +246,10 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
 
             set_vim_var_string(Vv::Exitreason, c"restart".as_ptr(), 7 as ptrdiff_t);
 
-            let mut quit_cmd = if args.do_ecmd_cmd.is_null() {
+            let mut quit_cmd = if excmd.do_ecmd_cmd.is_null() {
                 c"qall".as_ptr() as *mut c_char
             } else {
-                args.do_ecmd_cmd
+                excmd.do_ecmd_cmd
             };
             let mut quit_cmd_copy: *mut c_char = ptr::null_mut();
             if cmdmod_has(CmdModFlags::CONFIRM) {
@@ -324,19 +318,19 @@ fn blank_callback() -> Callback {
 }
 
 /// `:detach` — let the UI go, and keep running headless.
-///
-/// Called with a null `args` by `:connect`, which has already attached
-/// somewhere else.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_detach(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    if !args.raw().is_null() && args.forceit != 0 {
+pub(crate) fn ex_detach(excmd: &mut ExArg) {
+    if excmd.forceit != 0 {
         emsg(c"bang (!) not supported yet".as_ptr());
         return;
     }
+    detach_ui();
+}
+
+/// Let the current UI go without taking the server down with it.
+///
+/// Split from the handler because `:connect` detaches once it has attached
+/// somewhere else, and has no bang of its own to answer for.
+fn detach_ui() {
     if current_ui.get() == 0 {
         emsg(c"UI not attached".as_ptr());
         return;
@@ -376,18 +370,13 @@ pub(crate) unsafe fn ex_detach(args: *mut ExArg) {
 ///
 /// `:connect!` also *exits* when this was the only UI, so that the session
 /// really moves rather than being left running.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_connect(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    let stop_server = args.forceit != 0 && ui_active() == 1;
-    if let Err(e) = unsafe { remote_ui_connect(current_ui.get(), args.arg) } {
+pub(crate) fn ex_connect(excmd: &mut ExArg) {
+    let stop_server = excmd.forceit != 0 && ui_active() == 1;
+    if let Err(e) = unsafe { remote_ui_connect(current_ui.get(), excmd.arg) } {
         emsg(e.message_or_empty().as_ptr());
         return;
     }
-    unsafe { ex_detach(ptr::null_mut()) };
+    detach_ui();
     if stop_server {
         exiting.set(true);
         getout(0);

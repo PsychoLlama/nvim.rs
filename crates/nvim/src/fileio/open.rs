@@ -44,12 +44,12 @@ fn filemess_note(fname: *mut c_char, note: &'static CStr) {
 /// `for_file` picks the `File*` form, which names a file rather than a buffer.
 ///
 /// # Safety
-/// `sfname` must be null or the name the read uses, and `args` the caller's
+/// `sfname` must be null or the name the read uses, and `excmd` the caller's
 /// command or null.
 unsafe fn read_autocmd(
     event: AutoEvent,
     sfname: *mut c_char,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     for_file: bool,
 ) -> bool {
     let (iofile, buf) = if for_file {
@@ -57,8 +57,8 @@ unsafe fn read_autocmd(
     } else {
         (ptr::null_mut(), Buf::current_or_none())
     };
-    // SAFETY: the current buffer is live and `args` is the caller's command.
-    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, buf, args) }
+    // SAFETY: the current buffer is live and `excmd` is the caller's command.
+    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, buf, excmd) }
 }
 
 /// The file, open and ready to read.
@@ -83,14 +83,14 @@ pub(crate) struct Opened {
 ///
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
 /// `sfname` must point at a NUL-terminated string, unaliased for the call.
-/// `args` must point at the command's `ExArg`. `how` must be an initialized
+/// `excmd` must point at the command's `ExArg`. `how` must be an initialized
 /// `How` whose pointer fields point at live data for the call.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn open_source(
     fname: *mut c_char,
     sfname: *mut c_char,
     from: LineNr,
-    args: *mut ExArg,
+    mut excmd: Option<&mut ExArg>,
     how: How,
     silent: bool,
     msg_save: c_int,
@@ -148,7 +148,7 @@ pub(crate) unsafe fn open_source(
         Buf::current().b_op_start.col = 0;
 
         if how.newfile {
-            if unsafe { read_autocmd(AutoEvent::BufReadCmd, sfname, args, false) } {
+            if unsafe { read_autocmd(AutoEvent::BufReadCmd, sfname, excmd.as_deref_mut(), false) } {
                 retval = if aborting() {
                     Err(Failed)
                 } else {
@@ -163,7 +163,9 @@ pub(crate) unsafe fn open_source(
                 }
                 return Err(retval);
             }
-        } else if unsafe { read_autocmd(AutoEvent::FileReadCmd, sfname, args, true) } {
+        } else if unsafe {
+            read_autocmd(AutoEvent::FileReadCmd, sfname, excmd.as_deref_mut(), true)
+        } {
             retval = if aborting() {
                 Err(Failed)
             } else {
@@ -235,7 +237,7 @@ pub(crate) unsafe fn open_source(
     }
 
     // Set the default or forced 'fileformat' and 'binary'.
-    unsafe { set_file_options(set_options, args) };
+    set_file_options(set_options, excmd.as_deref_mut());
 
     // When opening a new file take the readonly flag from the file.
     // The default is r/w and can be set to r/o below; don't reset it
@@ -322,12 +324,19 @@ pub(crate) unsafe fn open_source(
             // edited before and deleted. Get the old marks.
             check_marks_read();
             // Set the forced 'fileencoding'.
-            if !args.is_null() {
-                unsafe { set_forced_fenc(args) };
+            if let Some(command) = excmd.as_deref_mut() {
+                set_forced_fenc(command);
             }
             let event = AutoEvent::BufNewFile;
             unsafe {
-                apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_or_none(), args)
+                apply_autocmds_exarg(
+                    event,
+                    sfname,
+                    sfname,
+                    false,
+                    Buf::current_or_none(),
+                    excmd.as_deref_mut(),
+                )
             };
             // Remember the current fileformat.
             save_file_ff(Buf::current());
@@ -442,13 +451,20 @@ pub(crate) unsafe fn open_source(
         // if no output was done.
         msg_scroll.set(true as c_int);
         if how.filtering {
-            unsafe { read_autocmd(AutoEvent::FilterReadPre, sfname, args, false) };
+            unsafe {
+                read_autocmd(
+                    AutoEvent::FilterReadPre,
+                    sfname,
+                    excmd.as_deref_mut(),
+                    false,
+                )
+            };
         } else if how.stdin {
-            unsafe { read_autocmd(AutoEvent::StdinReadPre, sfname, args, false) };
+            unsafe { read_autocmd(AutoEvent::StdinReadPre, sfname, excmd.as_deref_mut(), false) };
         } else if how.newfile {
-            unsafe { read_autocmd(AutoEvent::BufReadPre, sfname, args, false) };
+            unsafe { read_autocmd(AutoEvent::BufReadPre, sfname, excmd.as_deref_mut(), false) };
         } else {
-            unsafe { read_autocmd(AutoEvent::FileReadPre, sfname, args, true) };
+            unsafe { read_autocmd(AutoEvent::FileReadPre, sfname, excmd, true) };
         }
 
         // The autocommands may have changed 'fileformats'.

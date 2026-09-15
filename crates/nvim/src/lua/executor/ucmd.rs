@@ -115,7 +115,7 @@ pub unsafe fn nlua_set_sctx(current: *mut ScriptCtx) {
 /// # Safety
 /// `cmd` and `eap` must be live, and the command must carry the `LuaRef`
 /// this is being asked for.
-pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, eap: *mut ExArg, preview: bool) -> c_int {
+pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) -> c_int {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(
@@ -133,38 +133,38 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, eap: *mut ExArg, preview: bool) ->
 
         lua_pushstring(lstate, (*cmd).uc_name);
         set(c"name");
-        lua_pushboolean(lstate, ((*eap).forceit == 1) as c_int);
+        lua_pushboolean(lstate, (excmd.forceit == 1) as c_int);
         set(c"bang");
-        lua_pushinteger(lstate, (*eap).line1 as lua_Integer);
+        lua_pushinteger(lstate, excmd.line1 as lua_Integer);
         set(c"line1");
-        lua_pushinteger(lstate, (*eap).line2 as lua_Integer);
+        lua_pushinteger(lstate, excmd.line2 as lua_Integer);
         set(c"line2");
 
-        // `args` is the raw argument text; `fargs` the split one. The raw
+        // `excmd` is the raw argument text; `fargs` the split one. The raw
         // string is pushed once and stored twice.
         lua_newtable(lstate);
-        lua_pushstring(lstate, (*eap).arg);
+        lua_pushstring(lstate, excmd.arg);
         lua_pushvalue(lstate, -1);
         lua_setfield(lstate, -4, c"args".as_ptr());
         if (*cmd).uc_argt.has(ExArgt::NOSPC) {
             // At most one argument: `fargs` is the whole of it, or empty.
-            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || !cstr::bytes_at((*eap).arg).is_empty() {
+            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || !cstr::bytes_at(excmd.arg).is_empty() {
                 lua_rawseti(lstate, -2, 1);
             } else {
                 lua_pop(lstate, 1);
             }
-        } else if (*eap).args.is_null() {
+        } else if excmd.args.is_null() {
             lua_pop(lstate, 1);
             // Not pre-split (`:command` rather than `nvim_cmd`): split here,
             // honouring backslash escapes.
-            let length = cstr::bytes_at((*eap).arg).len();
+            let length = cstr::bytes_at(excmd.arg).len();
             let mut end: size_t = 0;
             let mut len: size_t = 0;
             let mut i: c_int = 1;
             let buf = xcalloc(length, size_of::<c_char>()).cast::<c_char>();
             let mut done = false;
             while !done {
-                done = uc_split_args_iter((*eap).arg, length, &raw mut end, buf, &raw mut len);
+                done = uc_split_args_iter(excmd.arg, length, &raw mut end, buf, &raw mut len);
                 if len > 0 {
                     lua_pushlstring(lstate, buf, len);
                     lua_rawseti(lstate, -2, i);
@@ -174,20 +174,20 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, eap: *mut ExArg, preview: bool) ->
             xfree(buf.cast::<c_void>());
         } else {
             lua_pop(lstate, 1);
-            for i in 0..(*eap).argc {
-                lua_pushlstring(lstate, *(*eap).args.add(i), *(*eap).arglens.add(i));
+            for i in 0..excmd.argc {
+                lua_pushlstring(lstate, *excmd.args.add(i), *excmd.arglens.add(i));
                 lua_rawseti(lstate, -2, i as c_int + 1);
             }
         }
         set(c"fargs");
 
-        let reg = [(*eap).regname as c_char, 0];
+        let reg = [excmd.regname as c_char, 0];
         lua_pushstring(lstate, reg.as_ptr());
         set(c"reg");
-        lua_pushinteger(lstate, (*eap).addr_count as lua_Integer);
+        lua_pushinteger(lstate, excmd.addr_count as lua_Integer);
         set(c"range");
-        if (*eap).addr_count > 0 {
-            lua_pushinteger(lstate, (*eap).line2 as lua_Integer);
+        if excmd.addr_count > 0 {
+            lua_pushinteger(lstate, excmd.line2 as lua_Integer);
         } else {
             lua_pushinteger(lstate, (*cmd).uc_def as lua_Integer);
         }

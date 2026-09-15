@@ -233,9 +233,9 @@ pub unsafe fn nvim_parse_cmd(
     // the arena copy outlives everything `parse_cmdline` leaves pointing into
     // it, including `ea.arg` and `ea.nextcmd`.
     let mut cmdline = unsafe { arena_memdupz(arena, str.data(), str.len()) };
-    let (line, e, info) = (&raw mut cmdline, &raw mut ea, &raw mut cmdinfo);
+    let (line, info) = (&raw mut cmdline, &raw mut cmdinfo);
     // SAFETY: as above; the three out-parameters are this frame's.
-    let parsed = unsafe { parse_cmdline(line, e, info, &mut errormsg) };
+    let parsed = unsafe { parse_cmdline(line, &mut ea, info, &mut errormsg) };
     if !parsed {
         match &errormsg {
             // SAFETY: `err` is live; the message takes no argument.

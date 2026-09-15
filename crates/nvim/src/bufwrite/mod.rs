@@ -274,13 +274,13 @@ impl WriteRequest {
 ///
 /// This function must NOT use `NameBuff`: `autowrite()` calls it.
 ///
-/// `args` may be null; it carries a forced `'ff'`/`'fenc'`.
+/// `excmd` may be null; it carries a forced `'ff'`/`'fenc'`.
 ///
 /// # Safety
 ///
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
 /// `sfname` must point at a NUL-terminated string, unaliased for the call.
-/// `args` must point at the command's `ExArg`. `req` must be an initialized
+/// `excmd` must point at the command's `ExArg`. `req` must be an initialized
 /// `WriteRequest` whose pointer fields point at live data for the call.
 pub unsafe fn buf_write(
     buffer: Buf,
@@ -288,7 +288,7 @@ pub unsafe fn buf_write(
     sfname: *mut ::core::ffi::c_char,
     start: LineNr,
     end: LineNr,
-    args: *mut ExArg,
+    mut excmd: Option<&mut ExArg>,
     req: WriteRequest,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, taken once for the whole body.
@@ -374,7 +374,15 @@ pub unsafe fn buf_write(
         sfname,
         ffname,
     };
-    let pre = unsafe { buf_write_do_autocmds(buf, &mut names, start, &mut end, args, mode, orig) };
+    let pre = buf_write_do_autocmds(
+        buf,
+        &mut names,
+        start,
+        &mut end,
+        excmd.as_deref_mut(),
+        mode,
+        orig,
+    );
     // The autocommands may have renamed the buffer out from under them.
     let WriteNames {
         fname,
@@ -531,9 +539,11 @@ pub unsafe fn buf_write(
                 wfname = fname;
 
                 // A forced 'fileencoding' from a "++opt=val" argument.
-                let fenc = if !args.is_null() && unsafe { (*args).force_enc } != 0 {
+                let forced_enc = excmd.as_deref().filter(|command| command.force_enc != 0);
+                let fenc = if let Some(command) = forced_enc {
+                    // SAFETY: `force_enc` is an offset into the command's line.
                     fenc_tofree =
-                        unsafe { enc_canonize((*args).cmd.offset((*args).force_enc as isize)) };
+                        unsafe { enc_canonize(command.cmd.offset(command.force_enc as isize)) };
                     fenc_tofree
                 } else {
                     b.b_p_fenc
@@ -616,10 +626,9 @@ pub unsafe fn buf_write(
                     err = None;
 
                     // use "++bin", "++nobin" or 'binary'
-                    let write_bin = if !args.is_null() && unsafe { (*args).force_bin } != 0 {
-                        unsafe { (*args).force_bin == FORCE_BIN }
-                    } else {
-                        b.b_p_bin != 0
+                    let write_bin = match excmd.as_deref().map(|command| command.force_bin) {
+                        Some(forced) if forced != 0 => forced == FORCE_BIN,
+                        _ => b.b_p_bin != 0,
                     };
 
                     let mut bom_chars = 0;
@@ -654,7 +663,7 @@ pub unsafe fn buf_write(
 
                     writer.clear();
                     writer.flags = wb_flags;
-                    fileformat = unsafe { get_fileformat_force(b, args) };
+                    fileformat = get_fileformat_force(b, excmd.as_deref());
                     let hash = write_undo_file.then_some(&mut sha_ctx);
                     let lines = (start, end);
                     written = write_lines(buf, lines, &mut writer, fileformat, write_bin, hash);
@@ -829,7 +838,7 @@ pub unsafe fn buf_write(
     }
 
     if !should_abort_err(retval) {
-        unsafe { buf_write_do_post_autocmds(buf, fname, args, mode) };
+        unsafe { buf_write_do_post_autocmds(buf, fname, excmd, mode) };
         if aborting() {
             retval = Err(Failed); // autocmds may abort script processing
         }

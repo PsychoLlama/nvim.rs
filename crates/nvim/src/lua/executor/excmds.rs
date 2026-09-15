@@ -47,15 +47,12 @@ const PRINT_WRAPPER: &CStr = c"vim._print(true, %s)";
 const STDIN_CHUNK: size_t = 64;
 
 /// `:lua {chunk}`, `:lua ={expr}` and `:={expr}`.
-///
-/// # Safety
-/// `eap` must be a live command argument block.
-pub unsafe fn ex_lua(eap: *mut ExArg) {
+pub fn ex_lua(excmd: &mut ExArg) {
     unsafe {
-        if *(*eap).arg == 0 {
+        if *excmd.arg == 0 {
             // `:{range}lua` with no body sources the range as Lua.
-            if (*eap).addr_count > 0 {
-                cmd_source_buffer(eap, true);
+            if excmd.addr_count > 0 {
+                cmd_source_buffer(excmd, true);
             } else {
                 emsg(gettext(e_argreq));
             }
@@ -63,15 +60,15 @@ pub unsafe fn ex_lua(eap: *mut ExArg) {
         }
 
         let mut len: size_t = 0;
-        let mut code = script_get(eap, &raw mut len);
-        if (*eap).skip != 0 || code.is_null() {
+        let mut code = script_get(excmd, &raw mut len);
+        if excmd.skip != 0 || code.is_null() {
             xfree(code.cast::<c_void>());
             return;
         }
 
-        if (*eap).cmdidx == CmdIdx::equal || *code == b'=' as c_char {
+        if excmd.cmdidx == CmdIdx::equal || *code == b'=' as c_char {
             // `:=expr` has no `=` to skip; `:lua =expr` does.
-            let off: size_t = if (*eap).cmdidx == CmdIdx::equal { 0 } else { 1 };
+            let off: size_t = if excmd.cmdidx == CmdIdx::equal { 0 } else { 1 };
             len += PRINT_WRAPPER.count_bytes() - 2 - off;
             let code_buf = xmallocz(len).cast::<c_char>();
             vim_snprintf(code_buf, len + 1, PRINT_WRAPPER.as_ptr(), code.add(off));
@@ -90,19 +87,16 @@ pub unsafe fn ex_lua(eap: *mut ExArg) {
 /// The loop stops early if the body changed buffers or shortened the one it
 /// is walking, which is the only protection against it editing under itself.
 /// A NUL in the result stands for a newline, as `:s` treats it.
-///
-/// # Safety
-/// `eap` must be a live command argument block.
-pub unsafe fn ex_luado(eap: *mut ExArg) {
+pub fn ex_luado(excmd: &mut ExArg) {
     // Where the wrapped chunk is assembled when it fits; upstream shares
     // `IObuff` for it, which the loop body may overwrite.
     let mut chunk = [0 as c_char; IOSIZE as usize];
     unsafe {
-        if u_save((*eap).line1 - 1, (*eap).line2 + 1).is_err() {
+        if u_save(excmd.line1 - 1, excmd.line2 + 1).is_err() {
             emsg(gettext(c"cannot save undo information"));
             return;
         }
-        let cmd = (*eap).arg;
+        let cmd = excmd.arg;
         let cmd_len = cstr::bytes_at(cmd).len();
         let lstate = get_global_lstate();
 
@@ -139,8 +133,8 @@ pub unsafe fn ex_luado(eap: *mut ExArg) {
         }
 
         let was_curbuf: *mut Buffer = Buf::current_raw();
-        let mut l: LineNr = (*eap).line1;
-        while l <= (*eap).line2 {
+        let mut l: LineNr = excmd.line1;
+        while l <= excmd.line2 {
             if l > Buf::current().b_ml.ml_line_count {
                 break;
             }
@@ -179,12 +173,9 @@ pub unsafe fn ex_luado(eap: *mut ExArg) {
 }
 
 /// `:luafile {path}`.
-///
-/// # Safety
-/// `eap` must be a live command argument block.
-pub unsafe fn ex_luafile(eap: *mut ExArg) {
+pub fn ex_luafile(excmd: &mut ExArg) {
     unsafe {
-        nlua_exec_file((*eap).arg);
+        nlua_exec_file(excmd.arg);
     }
 }
 

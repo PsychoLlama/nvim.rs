@@ -434,13 +434,9 @@ pub(crate) fn qf_get_entry(
 }
 
 /// How many entries the current list holds. Zero when there is no list.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn qf_get_size(args: *mut ExArg) -> size_t {
+pub fn qf_get_size(excmd: &mut ExArg) -> size_t {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(args, false) };
+    let qi = unsafe { qf_cmd_get_stack(excmd, false) };
     if qi.is_null() {
         return 0;
     }
@@ -450,18 +446,13 @@ pub unsafe fn qf_get_size(args: *mut ExArg) -> size_t {
 
 /// How many entries `:cdo`/`:ldo` would visit, or how many files
 /// `:cfdo`/`:lfdo` would.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn qf_get_valid_size(args: *mut ExArg) -> size_t {
+pub fn qf_get_valid_size(excmd: &mut ExArg) -> size_t {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(args, false) };
+    let qi = unsafe { qf_cmd_get_stack(excmd, false) };
     if qi.is_null() {
         return 0;
     }
-    let per_entry =
-        unsafe { (*args).cmdidx } == CmdIdx::cdo || unsafe { (*args).cmdidx } == CmdIdx::ldo;
+    let per_entry = excmd.cmdidx == CmdIdx::cdo || excmd.cmdidx == CmdIdx::ldo;
     let qfl = unsafe { qf_get_curlist(qi) };
     let mut prev_fnum = 0;
     let mut size: size_t = 0;
@@ -483,13 +474,9 @@ pub unsafe fn qf_get_valid_size(args: *mut ExArg) -> size_t {
 }
 
 /// Which entry of the current list is current. Zero when there is no list.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn qf_get_cur_idx(args: *mut ExArg) -> size_t {
+pub fn qf_get_cur_idx(excmd: &mut ExArg) -> size_t {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(args, false) };
+    let qi = unsafe { qf_cmd_get_stack(excmd, false) };
     if qi.is_null() {
         return 0;
     }
@@ -499,13 +486,9 @@ pub unsafe fn qf_get_cur_idx(args: *mut ExArg) -> size_t {
 
 /// Which entry is current, counting only the entries `:cdo` would visit —
 /// or, for `:cfdo`/`:lfdo`, only the files. One when there are none.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn qf_get_cur_valid_idx(args: *mut ExArg) -> c_int {
+pub fn qf_get_cur_valid_idx(excmd: &mut ExArg) -> c_int {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(args, false) };
+    let qi = unsafe { qf_cmd_get_stack(excmd, false) };
     if qi.is_null() {
         return 1;
     }
@@ -513,8 +496,7 @@ pub unsafe fn qf_get_cur_valid_idx(args: *mut ExArg) -> c_int {
     if !unsafe { qf_list_has_valid_entries(qfl) } {
         return 1;
     }
-    let per_file =
-        unsafe { (*args).cmdidx } == CmdIdx::cfdo || unsafe { (*args).cmdidx } == CmdIdx::lfdo;
+    let per_file = excmd.cmdidx == CmdIdx::cfdo || excmd.cmdidx == CmdIdx::lfdo;
     let mut prev_fnum = 0;
     let mut eidx = 0;
     let mut i = 1;

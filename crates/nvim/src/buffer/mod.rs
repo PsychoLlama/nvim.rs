@@ -505,13 +505,13 @@ pub(crate) fn edit_file(
     fnum: c_int,
     ffname: *mut c_char,
     sfname: *mut c_char,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     newlnum: LineNr,
     flags: EcmdFlags,
     win: Win,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's own arguments passed on.
-    unsafe { do_ecmd(fnum, ffname, sfname, args, newlnum, flags, Some(win.id())) }
+    unsafe { do_ecmd(fnum, ffname, sfname, excmd, newlnum, flags, Some(win.id())) }
 }
 
 fn layout_lock() {

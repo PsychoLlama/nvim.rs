@@ -621,13 +621,10 @@ fn append_sorted(
 }
 
 /// `:sort`.
-///
-/// # Safety
-/// `args` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_sort(args: *mut ExArg) {
+pub fn ex_sort(excmd: &mut ExArg) {
     // SAFETY: caller's contract.  The dispatcher's `ExArg` outlives the
     // command and is reached through no other pointer while it runs.
-    unsafe { sort_range(&mut *args) };
+    sort_range(excmd);
 }
 
 /// `:sort`, with the command's argument block borrowed.
@@ -794,12 +791,9 @@ impl UniqScan {
 }
 
 /// `:uniq`.
-///
-/// # Safety
-/// `args` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_uniq(args: *mut ExArg) {
+pub fn ex_uniq(excmd: &mut ExArg) {
     // SAFETY: caller's contract, as [`ex_sort`].
-    unsafe { uniq_range(&mut *args) };
+    uniq_range(excmd);
 }
 
 /// `:uniq`, with the command's argument block borrowed.

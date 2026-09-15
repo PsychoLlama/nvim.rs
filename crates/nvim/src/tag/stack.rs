@@ -218,10 +218,7 @@ pub fn tagstack_clear_entry(item: &mut Taggy) {
 }
 
 /// `:tags` — print the tag stack of the current window.
-///
-/// # Safety
-/// Must be called with a live `curwin`.
-pub unsafe fn do_tags(_args: *mut ExArg) {
+pub fn do_tags(_excmd: &mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     let mut stack = TagStack::of(Win::current());
     let curidx = stack.curidx();

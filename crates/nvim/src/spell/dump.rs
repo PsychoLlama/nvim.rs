@@ -73,7 +73,7 @@ const DUMPFLAG_ALLCAP: c_int = 16;
 
 /// `:spellinfo` — where each loaded language came from, and whatever its
 /// `.spl` file recorded about itself.
-pub fn ex_spellinfo(_args: *mut ExArg) {
+pub fn ex_spellinfo(_excmd: &mut ExArg) {
     if no_spell_checking(Win::current()) {
         return;
     }
@@ -105,11 +105,7 @@ pub fn ex_spellinfo(_args: *mut ExArg) {
 /// `:spelldump` — open a new window holding every word of the current
 /// `'spelllang'`, in `:mkspell` input format. With `!` each word gets its
 /// `COMMON` count appended.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_spelldump(args: *mut ExArg) {
+pub fn ex_spelldump(excmd: &mut ExArg) {
     if no_spell_checking(Win::current()) {
         return;
     }
@@ -127,7 +123,7 @@ pub unsafe fn ex_spelldump(args: *mut ExArg) {
         return;
     }
 
-    let dumpflags = if unsafe { (*args).forceit } != 0 {
+    let dumpflags = if excmd.forceit != 0 {
         DUMPFLAG_COUNT
     } else {
         0

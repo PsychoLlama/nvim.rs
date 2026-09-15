@@ -56,7 +56,7 @@ pub(crate) unsafe fn restore_start_dir(dirname_start: *const c_char) {
         },
         ..Default::default()
     };
-    unsafe { ex_cd(&raw mut ea) };
+    ex_cd(&mut ea);
 }
 
 /// Load `fname` into a dummy buffer and answer it, or `None` when the file
@@ -105,10 +105,9 @@ pub(crate) unsafe fn load_dummy_buffer(
         let mut newbuf_to_wipe = BufRef::NONE;
         let sfname = ptr::null_mut();
         let lines_to_read = MAXLNUM;
-        let eap = ptr::null_mut();
         let flags = (READ_NEW | READ_DUMMY).cast_signed();
         let readfile_result =
-            unsafe { readfile(fname, sfname, 0, 0, lines_to_read, eap, flags, false) };
+            unsafe { readfile(fname, sfname, 0, 0, lines_to_read, None, flags, false) };
         newbuf.b_locked -= 1;
         if readfile_result.is_ok() && !got_int.get() && !Buf::current().b_flags.has(BufFlags::NEW) {
             failed = false;

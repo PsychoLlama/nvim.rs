@@ -16,7 +16,7 @@ use crate::message_fmt::{c_str, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::tr_c;
 use crate::types::NUL;
-use crate::winlayer::{Buf, Ea};
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
@@ -556,16 +556,12 @@ pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: b
 /// `:map`, `:abbrev` and every prefixed variant of either, from the command
 /// table's point of view: work out the mode and the map type from the command
 /// name, then report whatever [`buf_do_map`] answers.
-///
-/// # Safety
-/// `args` must be a live `ExArg`.
-unsafe fn do_exmap(args: *mut ExArg, isabbrev: bool) {
-    // SAFETY: the caller's promise — `args` is a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
-    let mut cmdp = args.cmd;
+fn do_exmap(excmd: &mut ExArg, isabbrev: bool) {
+    // SAFETY: the caller's promise — `excmd` is a live `ExArg`.
+    let mut cmdp = excmd.cmd;
     // SAFETY: `cmd` is the command name the dispatcher matched, so it is live
     // and NUL-terminated.
-    let mode = unsafe { get_map_mode(&raw mut cmdp, args.forceit != 0 || isabbrev) };
+    let mode = unsafe { get_map_mode(&raw mut cmdp, excmd.forceit != 0 || isabbrev) };
 
     // SAFETY: `get_map_mode` left `cmdp` inside the same name.
     let maptype = match unsafe { *cmdp } as u8 {
@@ -576,7 +572,7 @@ unsafe fn do_exmap(args: *mut ExArg, isabbrev: bool) {
     let mut parsed = MapArguments::default();
     let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
     // SAFETY: `arg` is the command's own NUL-terminated argument.
-    if unsafe { str_to_mapargs(args.arg, is_unmap, &mut parsed) } != 0 {
+    if unsafe { str_to_mapargs(excmd.arg, is_unmap, &mut parsed) } != 0 {
         emsg(gettext(e_invarg)); // invalid arguments
         return;
     }
@@ -605,55 +601,40 @@ unsafe fn do_exmap(args: *mut ExArg, isabbrev: bool) {
 }
 
 /// `:abbreviate` and friends.
-///
-/// # Safety
-/// `args` must be a live `ExArg`.
-pub unsafe fn ex_abbreviate(args: *mut ExArg) {
-    // SAFETY (this body): the caller's promise -- `args` is a live `ExArg`.
-    unsafe { do_exmap(args, true) } // almost the same as mapping
+pub fn ex_abbreviate(excmd: &mut ExArg) {
+    // SAFETY (this body): the caller's promise -- `excmd` is a live `ExArg`.
+    do_exmap(excmd, true) // almost the same as mapping
 }
 
 /// `:map` and friends.
-///
-/// # Safety
-/// `args` must be a live `ExArg`.
-pub unsafe fn ex_map(args: *mut ExArg) {
+pub fn ex_map(excmd: &mut ExArg) {
     // In a secure mode we print the mappings, for security reasons.
     if secure.get() != 0 {
         secure.set(2);
-        // SAFETY: the caller's promise — `args` is live, so `cmd` is its own
+        // SAFETY: the caller's promise — `excmd` is live, so `cmd` is its own
         // NUL-terminated command name.
-        msg_display(unsafe { cstr::at((*args).cmd) }, 0, false);
+        msg_display(unsafe { cstr::at(excmd.cmd) }, 0, false);
         msg_putchar(c_int::from(b'\n'));
     }
     // SAFETY: as above.
-    unsafe { do_exmap(args, false) };
+    do_exmap(excmd, false);
 }
 
 /// `:unmap` and friends.
-///
-/// # Safety
-/// `args` must be a live `ExArg`.
-pub unsafe fn ex_unmap(args: *mut ExArg) {
+pub fn ex_unmap(excmd: &mut ExArg) {
     // SAFETY (this body): as [`ex_abbreviate`].
-    unsafe { do_exmap(args, false) }
+    do_exmap(excmd, false)
 }
 
 /// `:mapclear` and friends.
-///
-/// # Safety
-/// `args` must be a live `ExArg`.
-pub unsafe fn ex_mapclear(args: *mut ExArg) {
-    // SAFETY: the caller's promise — `args` is a live `ExArg`, so `cmd` and
+pub fn ex_mapclear(excmd: &mut ExArg) {
+    // SAFETY: the caller's promise — `excmd` is a live `ExArg`, so `cmd` and
     // `arg` are its own NUL-terminated strings.
-    unsafe { do_mapclear((*args).cmd, (*args).arg, (*args).forceit != 0, false) }
+    unsafe { do_mapclear(excmd.cmd, excmd.arg, excmd.forceit != 0, false) }
 }
 
 /// `:abclear` and friends.
-///
-/// # Safety
-/// `args` must be a live `ExArg`.
-pub unsafe fn ex_abclear(args: *mut ExArg) {
+pub fn ex_abclear(excmd: &mut ExArg) {
     // SAFETY: as [`ex_mapclear`].
-    unsafe { do_mapclear((*args).cmd, (*args).arg, true, true) }
+    unsafe { do_mapclear(excmd.cmd, excmd.arg, true, true) }
 }

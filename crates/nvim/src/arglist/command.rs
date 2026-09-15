@@ -22,14 +22,9 @@ use crate::winlayer::{Buf, Win};
 // The Ex commands.
 
 /// `:args`, `:arglocal` and `:argglobal`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_args(args: *mut ExArg) {
+pub fn ex_args(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
-    let cmdidx = eap.cmdidx;
+    let cmdidx = excmd.cmdidx;
     if cmdidx != CmdIdx::args {
         if arglist_is_locked() {
             return;
@@ -46,12 +41,12 @@ pub unsafe fn ex_args(args: *mut ExArg) {
     // ":args file ..": define a new argument list, handled like ":next".
     // Also for ":arglocal file .." and ":argglobal file ..".
     // SAFETY: an ex-command argument is NUL-terminated.
-    if unsafe { *eap.arg } as c_int != NUL {
+    if unsafe { *excmd.arg } as c_int != NUL {
         if arglist_is_locked() {
             return;
         }
         // SAFETY: caller contract.
-        unsafe { ex_next(eap.raw()) };
+        ex_next(excmd);
         return;
     }
     if cmdidx == CmdIdx::args {
@@ -102,15 +97,10 @@ fn copy_global_arglist() {
 }
 
 /// `:previous`, `:sprevious`, `:Next` and `:sNext`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_previous(args: *mut ExArg) {
+pub fn ex_previous(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the count is the command's range.
-    let back = cur_arg_idx() - args.line2 as c_int;
+    let back = cur_arg_idx() - excmd.line2 as c_int;
     // If already past the last one, go to the last one.
     let argn = if back >= argcount() {
         argcount() - 1
@@ -118,45 +108,32 @@ pub unsafe fn ex_previous(args: *mut ExArg) {
         back
     };
     // SAFETY: caller contract.
-    unsafe { do_argfile(args.raw(), argn) };
+    do_argfile(excmd, argn);
 }
 
 /// `:rewind`, `:first`, `:sfirst` and `:srewind`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_rewind(args: *mut ExArg) {
+pub fn ex_rewind(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    unsafe { do_argfile(args, 0) };
+    do_argfile(excmd, 0);
 }
 
 /// `:last` and `:slast`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_last(args: *mut ExArg) {
+pub fn ex_last(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    unsafe { do_argfile(args, argcount() - 1) };
+    do_argfile(excmd, argcount() - 1);
 }
 
 /// `:argument` and `:sargument`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_argument(args: *mut ExArg) {
+pub fn ex_argument(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the argument number is the command's range.
-    let argn = if args.addr_count > 0 {
-        args.line2 as c_int - 1
+    let argn = if excmd.addr_count > 0 {
+        excmd.line2 as c_int - 1
     } else {
         cur_arg_idx()
     };
     // SAFETY: caller contract.
-    unsafe { do_argfile(args.raw(), argn) };
+    do_argfile(excmd, argn);
 }
 
 /// Why argument `argn` cannot be reached.
@@ -200,18 +177,13 @@ unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
 
 /// Edit argument `argn`. A `:s…` command splits a window first; `:tab` opens
 /// a tab page.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
+pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
     // SAFETY: caller contract.
     // SAFETY: `cmd` points at the command's own text, which is not empty.
-    let is_split_cmd = unsafe { *args.cmd } as c_int == 's' as c_int;
-    let forceit = args.forceit != 0;
-    let cmdidx = args.cmdidx;
+    let is_split_cmd = unsafe { *excmd.cmd } as c_int == 's' as c_int;
+    let forceit = excmd.forceit != 0;
+    let cmdidx = excmd.cmdidx;
     let old_arg_idx = cur_arg_idx();
     if argn < 0 || argn >= argcount() {
         report_no_such_arg(argn);
@@ -224,7 +196,7 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
     let entry_fnum = unsafe { (*arg(argn)).ae_fnum };
     let refused = !is_split_cmd
         && entry_fnum != Buf::current().handle
-        && !check_can_set_curbuf_forceit(args.forceit);
+        && !check_can_set_curbuf_forceit(excmd.forceit);
     if refused {
         return;
     }
@@ -250,7 +222,7 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
         arg_had_last.set(true);
     }
     // Edit the file, always at the last known line number.
-    // SAFETY: the argument name outlives `do_ecmd`'s use of it, and `args` is
+    // SAFETY: the argument name outlives `do_ecmd`'s use of it, and `excmd` is
     // the caller's own live command block.
     let wp = Win::current();
     let hidden = buf_hide(wp.buffer());
@@ -260,7 +232,7 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
     let none = ptr::null_mut();
     // SAFETY: as above; `do_ecmd` may fire autocommands, and nothing here
     // is held across it.
-    let opened = unsafe { do_ecmd(0, name, none, args.raw(), last, flags, Some(wp.id())) };
+    let opened = unsafe { do_ecmd(0, name, none, Some(excmd), last, flags, Some(wp.id())) };
     if opened.is_err() {
         // It failed (Abort for an already-edited file, say): restore the
         // argument index of whichever window is current now.
@@ -272,17 +244,12 @@ pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
 }
 
 /// `:next` and the commands that behave like it.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_next(args: *mut ExArg) {
+pub fn ex_next(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
-    let forceit = args.forceit != 0;
-    let is_snext = args.cmdidx == CmdIdx::snext;
+    let forceit = excmd.forceit != 0;
+    let is_snext = excmd.cmdidx == CmdIdx::snext;
     // SAFETY: `arg` points at the command's own text.
-    let has_arg = unsafe { *args.arg } as c_int != NUL;
+    let has_arg = unsafe { *excmd.arg } as c_int != NUL;
     // Check for a changed buffer now: if this fails the argument list is not
     // redefined.
     // SAFETY: curbuf is valid; `check_changed` only reads it and may prompt.
@@ -295,20 +262,20 @@ pub unsafe fn ex_next(args: *mut ExArg) {
     let argn = if has_arg {
         // Redefine the file list.
         // SAFETY: caller contract.
-        if !unsafe { do_arglist(args.arg, ArgListOp::Set, 0, true) } {
+        if !unsafe { do_arglist(excmd.arg, ArgListOp::Set, 0, true) } {
             return;
         }
         0
     } else {
         // SAFETY: caller contract; the count is the command's range.
-        cur_arg_idx() + args.line2 as c_int
+        cur_arg_idx() + excmd.line2 as c_int
     };
     // SAFETY: caller contract.
-    unsafe { do_argfile(args.raw(), argn) };
+    do_argfile(excmd, argn);
 }
 
 /// `:argdedupe` — drop every later argument naming the same file.
-pub fn ex_argdedupe(_args: *mut ExArg) {
+pub fn ex_argdedupe(_excmd: &mut ExArg) {
     let mut i = 0;
     while i < argcount() {
         // Expand each argument to a full path, to catch different paths
@@ -343,23 +310,18 @@ pub fn ex_argdedupe(_args: *mut ExArg) {
 }
 
 /// `:argedit` — add the file to the list and edit it.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_argedit(args: *mut ExArg) {
+pub fn ex_argedit(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the insertion point is the command's range.
-    let mut argn = if args.addr_count != 0 {
-        args.line2 as c_int
+    let mut argn = if excmd.addr_count != 0 {
+        excmd.line2 as c_int
     } else {
         cur_arg_idx() + 1
     };
     // Whether curbuf will be reused, in which case b_ffname will be set.
     let curbuf_is_reusable = curbuf_reusable();
     // SAFETY: caller contract; the argument is NUL-terminated.
-    if !unsafe { do_arglist(args.arg, ArgListOp::Add, argn, true) } {
+    if !unsafe { do_arglist(excmd.arg, ArgListOp::Add, argn, true) } {
         return;
     }
     maketitle();
@@ -372,76 +334,61 @@ pub unsafe fn ex_argedit(args: *mut ExArg) {
     // Edit the argument.
     if argn < argcount() {
         // SAFETY: caller contract.
-        unsafe { do_argfile(args.raw(), argn) };
+        do_argfile(excmd, argn);
     }
 }
 
 /// `:argadd` — add the files to the list without editing them.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_argadd(args: *mut ExArg) {
+pub fn ex_argadd(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the insertion point is the command's range.
-    let after = if args.addr_count > 0 {
-        args.line2 as c_int
+    let after = if excmd.addr_count > 0 {
+        excmd.line2 as c_int
     } else {
         cur_arg_idx() + 1
     };
     // SAFETY: caller contract; the argument is NUL-terminated.
-    unsafe { do_arglist(args.arg, ArgListOp::Add, after, false) };
+    unsafe { do_arglist(excmd.arg, ArgListOp::Add, after, false) };
     maketitle();
 }
 
 /// `:argdelete` — by range (`:2,3argdelete`, or bare for the current entry)
 /// or by file pattern.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_argdelete(args: *mut ExArg) {
+pub fn ex_argdelete(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
     if arglist_is_locked() {
         return;
     }
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let by_range = unsafe { args.addr_count > 0 || *args.arg as c_int == NUL };
+    let by_range = unsafe { excmd.addr_count > 0 || *excmd.arg as c_int == NUL };
     // SAFETY: caller contract.
     if by_range {
-        unsafe { delete_arg_range(args.raw()) };
+        delete_arg_range(excmd);
     } else {
-        unsafe { do_arglist(args.arg, ArgListOp::Delete, 0, false) };
+        unsafe { do_arglist(excmd.arg, ArgListOp::Delete, 0, false) };
     }
     maketitle();
 }
 
 /// The range half of `:argdelete`. Without a range it deletes the current
 /// entry; a range reaching past the end is clamped to it.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-unsafe fn delete_arg_range(args: *mut ExArg) {
+fn delete_arg_range(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let mut args = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let (addr_count, has_arg) = unsafe { (args.addr_count, *args.arg as c_int != NUL) };
+    let (addr_count, has_arg) = unsafe { (excmd.addr_count, *excmd.arg as c_int != NUL) };
     if addr_count == 0 {
         // ":argdel" works like ":.argdel".
         if cur_arg_idx() >= argcount() {
             crate::semsg!("E610: No argument to delete");
             return;
         }
-        args.line2 = cur_arg_idx() + 1;
-        args.line1 = args.line2;
+        excmd.line2 = cur_arg_idx() + 1;
+        excmd.line1 = excmd.line2;
     // ":1,4argdel": delete all the arguments in the range.
-    } else if args.line2 > argcount() {
-        args.line2 = argcount();
+    } else if excmd.line2 > argcount() {
+        excmd.line2 = argcount();
     }
-    let (line1, line2) = (args.line1, args.line2);
+    let (line1, line2) = (excmd.line1, excmd.line2);
     let count = line2 - line1 + 1;
     if has_arg {
         // Can't have both a range and an argument.

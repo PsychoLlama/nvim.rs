@@ -33,21 +33,16 @@ struct At {
 
 /// `:cc`, `:ll`, `:crewind`, `:cfirst`, `:clast` and their `:l…` twins,
 /// plus `:cdo`/`:cfdo`, which start by jumping to the entry they run on.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn ex_cc(args: *mut ExArg) {
+pub fn ex_cc(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
-    let Some(qi) = qf_cmd_stack(args, true) else {
+    let Some(qi) = qf_cmd_stack(excmd, true) else {
         return;
     };
 
-    let mut errornr = if args.addr_count > 0 {
-        args.line2 as c_int
+    let mut errornr = if excmd.addr_count > 0 {
+        excmd.line2 as c_int
     } else {
-        match args.cmdidx {
+        match excmd.cmdidx {
             // The current entry.
             CmdIdx::cc | CmdIdx::ll => 0,
             CmdIdx::crewind | CmdIdx::lrewind | CmdIdx::cfirst | CmdIdx::lfirst => 1,
@@ -59,51 +54,46 @@ pub unsafe fn ex_cc(args: *mut ExArg) {
     // :cdo/:ldo jump to the nth valid entry, :cfdo/:lfdo to the first
     // valid entry of the nth file.
     let is_do = matches!(
-        args.cmdidx,
+        excmd.cmdidx,
         CmdIdx::cdo | CmdIdx::ldo | CmdIdx::cfdo | CmdIdx::lfdo
     );
     if is_do {
-        let n = if args.addr_count > 0 {
-            size_t::try_from(args.line1).expect("an ex range line is never negative")
+        let n = if excmd.addr_count > 0 {
+            size_t::try_from(excmd.line1).expect("an ex range line is never negative")
         } else {
             1
         };
-        let per_file = matches!(args.cmdidx, CmdIdx::cfdo | CmdIdx::lfdo);
+        let per_file = matches!(excmd.cmdidx, CmdIdx::cfdo | CmdIdx::lfdo);
         let valid_entry = qf_get_nth_valid_entry(qf_current_list(qi), n, per_file);
         errornr = c_int::try_from(valid_entry).expect("a quickfix list is shorter than INT_MAX");
     }
 
-    qf_goto(qi, 0, errornr, args.forceit);
+    qf_goto(qi, 0, errornr, excmd.forceit);
 }
 
 /// `:cnext`, `:cprevious`, `:cnfile`, `:cpfile` and their `:l…` twins, plus
 /// the `:cdo`/`:cfdo` family's step to the next entry or file.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn ex_cnext(args: *mut ExArg) {
+pub fn ex_cnext(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
-    let Some(qi) = qf_cmd_stack(args, true) else {
+    let Some(qi) = qf_cmd_stack(excmd, true) else {
         return;
     };
 
     // A count says how many entries to move — except for the :cdo
     // family, whose count is the entry it started at.
     let is_do = matches!(
-        args.cmdidx,
+        excmd.cmdidx,
         CmdIdx::cdo | CmdIdx::ldo | CmdIdx::cfdo | CmdIdx::lfdo
     );
-    let errornr = if args.addr_count > 0 && !is_do {
-        args.line2 as c_int
+    let errornr = if excmd.addr_count > 0 && !is_do {
+        excmd.line2 as c_int
     } else {
         1
     };
 
     // Depending on the command, jump to either the next or the previous
     // entry, or to one in the next or previous file.
-    let dir = match args.cmdidx {
+    let dir = match excmd.cmdidx {
         CmdIdx::cprevious | CmdIdx::lprevious | CmdIdx::cNext | CmdIdx::lNext => BACKWARD,
         CmdIdx::cnfile | CmdIdx::lnfile | CmdIdx::cfdo | CmdIdx::lfdo => FORWARD_FILE,
         CmdIdx::cpfile | CmdIdx::lpfile | CmdIdx::cNfile | CmdIdx::lNfile => BACKWARD_FILE,
@@ -111,7 +101,7 @@ pub unsafe fn ex_cnext(args: *mut ExArg) {
         _ => FORWARD,
     };
 
-    qf_goto(qi, dir, errornr, args.forceit);
+    qf_goto(qi, dir, errornr, excmd.forceit);
 }
 
 /// The first entry of the list that belongs to buffer `bnr`.
@@ -361,22 +351,17 @@ unsafe fn nth_adjacent_entry(
 ///
 /// `:cabove`/`:cbelow` work in whole lines, `:cbefore`/`:cafter` in
 /// line-and-column positions.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn ex_cbelow(args: *mut ExArg) {
+pub fn ex_cbelow(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
-    if args.addr_count > 0 && args.line2 <= 0 {
+    if excmd.addr_count > 0 && excmd.line2 <= 0 {
         qf_emsg(e_invrange.as_ptr());
         return;
     }
 
     // Does the current buffer have any entry of the right kind?
     let quickfix = matches!(
-        args.cmdidx,
+        excmd.cmdidx,
         CmdIdx::cabove | CmdIdx::cbelow | CmdIdx::cbefore | CmdIdx::cafter
     );
     let buf_has_flag = if quickfix {
@@ -389,7 +374,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
         return;
     }
 
-    let Some(qi) = qf_cmd_stack(args, true) else {
+    let Some(qi) = qf_cmd_stack(excmd, true) else {
         return;
     };
     let qfl = qf_current_list(qi);
@@ -399,7 +384,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
     }
 
     let dir = if matches!(
-        args.cmdidx,
+        excmd.cmdidx,
         CmdIdx::cbelow | CmdIdx::lbelow | CmdIdx::cafter | CmdIdx::lafter
     ) {
         FORWARD
@@ -407,7 +392,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
         BACKWARD
     };
     let linewise = matches!(
-        args.cmdidx,
+        excmd.cmdidx,
         CmdIdx::cbelow | CmdIdx::lbelow | CmdIdx::cabove | CmdIdx::labove
     );
 
@@ -416,7 +401,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
     pos.col += 1;
     let bnr2 = Buf::current().handle;
     let pos2 = &raw const pos;
-    let n2 = if args.addr_count > 0 { args.line2 } else { 0 };
+    let n2 = if excmd.addr_count > 0 { excmd.line2 } else { 0 };
     let errornr = unsafe { nth_adjacent_entry(qfl.raw(), bnr2, pos2, n2, dir, linewise) };
 
     if errornr > 0 {

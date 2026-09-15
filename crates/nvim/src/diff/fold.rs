@@ -116,7 +116,7 @@ pub unsafe fn diff_check_with_linestatus(
     let buf = window.buffer();
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
-        unsafe { ex_diffupdate(::core::ptr::null_mut()) };
+        diff_update(None);
     }
     if tp.tp_first_diff.is_null() || window.w_onebuf_opt.wo_diff == 0 {
         return 0;
@@ -252,7 +252,7 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
 
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
-        unsafe { ex_diffupdate(::core::ptr::null_mut()) };
+        diff_update(None);
     }
     if tp.tp_first_diff.is_null() {
         return true;

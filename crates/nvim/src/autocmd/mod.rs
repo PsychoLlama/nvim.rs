@@ -110,7 +110,6 @@ pub struct AutoCmdEvent {
     pub fname_io: *mut ::core::ffi::c_char,
     pub buf: BufferHandle,
     pub group: ::core::ffi::c_int,
-    pub eap: *mut ExArg,
     pub data: *mut Object,
 }
 pub const AUGROUP_DELETED: ::core::ffi::c_int = -4;

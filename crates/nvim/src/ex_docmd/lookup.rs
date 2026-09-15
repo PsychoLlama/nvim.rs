@@ -26,7 +26,6 @@ use crate::startup::getout;
 
 use crate::types::{CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, size_t};
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
-use crate::winlayer::Ea;
 
 /// Is this index a *user* command rather than a row of `cmdnames`?
 ///
@@ -113,12 +112,11 @@ pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut CmdIdx) -> bool {
 ///
 /// # Safety
 ///
-/// `args` must point at the command's `ExArg`, unaliased for the call. `full`
+/// `excmd` must point at the command's `ExArg`, unaliased for the call. `full`
 /// must point at a writable `int` the caller owns.
-pub unsafe fn find_ex_command(args: *mut ExArg, full: *mut c_int) -> *mut c_char {
-    let mut ea = unsafe { Ea::new(args) };
-    let mut p = ea.cmd;
-    if one_letter_cmd(p, ea.cmdidx_ptr()) {
+pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_char {
+    let mut p = excmd.cmd;
+    if one_letter_cmd(p, &raw mut excmd.cmdidx) {
         if !full.is_null() {
             unsafe { *full = 1 };
         }
@@ -130,21 +128,21 @@ pub unsafe fn find_ex_command(args: *mut ExArg, full: *mut c_int) -> *mut c_char
     }
     // `:py3`, `:python3` and `:py3file` are the only commands with a
     // digit in the name.
-    if byte(ea.cmd) == 'p' as c_int && byte_at(ea.cmd, 1) == 'y' as c_int {
+    if byte(excmd.cmd) == 'p' as c_int && byte_at(excmd.cmd, 1) == 'y' as c_int {
         while (ubyte(p)).is_ascii_alphanumeric() {
             p = unsafe { p.add(1) };
         }
     }
     // A command that is punctuation rather than a word.
-    if p == ea.cmd && c"@!=><&~#".to_bytes().contains(&(ubyte(p))) {
+    if p == excmd.cmd && c"@!=><&~#".to_bytes().contains(&(ubyte(p))) {
         p = unsafe { p.add(1) };
     }
 
-    let mut len = unsafe { p.offset_from(ea.cmd) } as c_int;
+    let mut len = unsafe { p.offset_from(excmd.cmd) } as c_int;
     // `:dl` and `:dp` are `:delete` with a trailing `l`/`p` flag stuck
     // to it, and only when the rest really is an abbreviation of
     // "delete" — `:dj` is `:djump`.
-    if byte(ea.cmd) == 'd' as c_int
+    if byte(excmd.cmd) == 'd' as c_int
         && (byte_at(p, -1) == 'l' as c_int || byte_at(p, -1) == 'p' as c_int)
     {
         // `with_nul`, not `to_bytes`: the walk is over the *typed*
@@ -153,33 +151,33 @@ pub unsafe fn find_ex_command(args: *mut ExArg, full: *mut c_int) -> *mut c_char
         // index past the end.
         let delete = c"delete".to_bytes_with_nul();
         let mut i = 0;
-        while i < len && ubyte_at(ea.cmd, i as isize) == delete[i as usize] {
+        while i < len && ubyte_at(excmd.cmd, i as isize) == delete[i as usize] {
             i += 1;
         }
         if i == len - 1 {
             len -= 1;
             if byte_at(p, -1) == 'l' as c_int {
-                ea.flags |= EXFLAG_LIST;
+                excmd.flags |= EXFLAG_LIST;
             } else {
-                ea.flags |= EXFLAG_PRINT;
+                excmd.flags |= EXFLAG_PRINT;
             }
         }
     }
 
-    ea.cmdidx = CmdIdx::SIZE;
+    excmd.cmdidx = CmdIdx::SIZE;
     // `:def` is Vim9 script's, which this editor does not have; it must
     // not resolve to `:defer`.
-    if !(len == 3 && prefix_eq(ea.cmd, c"def".as_ptr(), 3)) {
+    if !(len == 3 && prefix_eq(excmd.cmd, c"def".as_ptr(), 3)) {
         // The scan walks rows rather than `CmdIdx`es and names what it
         // stopped at once: stepping an enum would be a conversion per row.
-        let mut row = unsafe { start_index(ea.cmd, len) };
+        let mut row = unsafe { start_index(excmd.cmd, len) };
         while row < ROWS {
             let name = cmdnames[row].cmd_name;
-            if prefix_eq(name, ea.cmd, len as size_t) {
+            if prefix_eq(name, excmd.cmd, len as size_t) {
                 if !full.is_null() && byte_at(name, len as isize) == NUL {
                     unsafe { *full = 1 };
                 }
-                ea.cmdidx = CmdIdx::at_row(row);
+                excmd.cmdidx = CmdIdx::at_row(row);
                 break;
             }
             row += 1;
@@ -188,14 +186,14 @@ pub unsafe fn find_ex_command(args: *mut ExArg, full: *mut c_int) -> *mut c_char
 
     // Nothing in the table, and it starts with an upper-case letter:
     // it may be a user command, whose name may hold digits too.
-    if ea.cmdidx == CmdIdx::SIZE && (ubyte(ea.cmd)).is_ascii_uppercase() {
+    if excmd.cmdidx == CmdIdx::SIZE && (ubyte(excmd.cmd)).is_ascii_uppercase() {
         while (ubyte(p)).is_ascii_alphanumeric() {
             p = unsafe { p.add(1) };
         }
-        p = unsafe { find_ucmd(args, p, full, ptr::null_mut(), ptr::null_mut()) };
+        p = unsafe { find_ucmd(excmd, p, full, ptr::null_mut(), ptr::null_mut()) };
     }
-    if p == ea.cmd {
-        ea.cmdidx = CmdIdx::SIZE;
+    if p == excmd.cmd {
+        excmd.cmdidx = CmdIdx::SIZE;
     }
     p
 }
@@ -261,7 +259,7 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
         name
     } as *mut c_char;
     let mut full: c_int = 0;
-    let p = unsafe { find_ex_command(&raw mut ea, &raw mut full) };
+    let p = unsafe { find_ex_command(&mut ea, &raw mut full) };
     if p.is_null() {
         return 3;
     }
@@ -300,7 +298,7 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     } else {
         name
     };
-    let p = unsafe { find_ex_command(&raw mut ea, ptr::null_mut()) };
+    let p = unsafe { find_ex_command(&mut ea, ptr::null_mut()) };
     if p.is_null() || ea.cmdidx == CmdIdx::SIZE {
         return;
     }

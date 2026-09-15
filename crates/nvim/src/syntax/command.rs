@@ -312,16 +312,10 @@ pub(crate) static SUBCOMMANDS: [SubCommand; 19] = [
 ];
 
 /// `:syntax`. Finds the subcommand name in [`SUBCOMMANDS`] and calls it.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub(crate) unsafe fn ex_syntax(args: *mut ExArg) {
+pub(crate) fn ex_syntax(excmd: &mut ExArg) {
     // SAFETY: the command table's promise -- the argument block of the
-    // `:` command being run, which nothing else holds while it runs.
-    let args = unsafe { &mut *args };
-    let arg = args.arg;
-    syn_cmdlinep.set(args.cmdlinep);
+    let arg = excmd.arg;
+    syn_cmdlinep.set(excmd.cmdlinep);
 
     // Isolate the subcommand name.
     let mut subcmd_end = arg;
@@ -332,11 +326,11 @@ pub(crate) unsafe fn ex_syntax(args: *mut ExArg) {
     let subcmd_name = unsafe { name_at(arg, subcmd_end.offset_from(arg) as usize) };
 
     // Skip the error messages of every subcommand too.
-    let _skipping = (args.skip != 0).then(Suppress::emsg_skip);
+    let _skipping = (excmd.skip != 0).then(Suppress::emsg_skip);
     match SUBCOMMANDS.iter().find(|sub| *sub.name == *subcmd_name) {
         Some(sub) => {
-            args.arg = unsafe { skipwhite(subcmd_end) };
-            (sub.func)(args, 0);
+            excmd.arg = unsafe { skipwhite(subcmd_end) };
+            (sub.func)(excmd, 0);
         }
         None => {
             // SAFETY: `subcmd_name` is live for the whole message.
@@ -349,13 +343,7 @@ pub(crate) unsafe fn ex_syntax(args: *mut ExArg) {
 /// `:ownsyntax {name}` — give this window its own syntax block.
 ///
 /// Upstream marks this `@deprecated`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
-    // SAFETY: the command table's promise, as `ex_syntax`'s.
-    let args = unsafe { &mut *args };
+pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
     let mut numbuf = NumBuf::new();
     if Win::current().w_s == unsafe { &raw mut (*Win::current().w_buffer).b_s } {
         Win::current().w_s = Box::into_raw(empty_synblock());
@@ -380,7 +368,7 @@ pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buffer = Buf::current();
-    let (fname, arg) = (buffer.b_fname, args.arg);
+    let (fname, arg) = (buffer.b_fname, excmd.arg);
     // SAFETY: a live buffer, and the command's own NUL-terminated argument.
     unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Some(buffer)) };
 

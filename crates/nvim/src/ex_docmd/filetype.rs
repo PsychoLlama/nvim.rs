@@ -43,38 +43,28 @@ use crate::runtime::RuntimeOpts;
 
 use crate::types::{Array, ExArg, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, size_t};
 use crate::usercmd::add_win_cmd_modifiers;
-use crate::winlayer::{Buf, Ea};
+use crate::winlayer::Buf;
 
 /// `:autocmd` and `:augroup`.
 ///
 /// Both are refused in a 'secure' context — a modeline or an untrusted
 /// config — because an autocommand can run anything later.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_autocmd(args: *mut ExArg) {
-    let mut args = unsafe { Ea::new(args) };
+pub(crate) fn ex_autocmd(excmd: &mut ExArg) {
     if secure.get() != 0 {
         // 2 means "an error was already reported for this".
         secure.set(2);
-        args.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
-    } else if args.cmdidx == CmdIdx::autocmd {
-        unsafe { do_autocmd(args.raw(), args.arg, args.forceit) };
+        excmd.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
+    } else if excmd.cmdidx == CmdIdx::autocmd {
+        unsafe { do_autocmd(excmd, excmd.arg, excmd.forceit) };
     } else {
-        unsafe { do_augroup(args.arg, args.forceit != 0) };
+        unsafe { do_augroup(excmd.arg, excmd.forceit != 0) };
     }
 }
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_doautocmd(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    let mut arg = args.arg;
+pub(crate) fn ex_doautocmd(excmd: &mut ExArg) {
+    let mut arg = excmd.arg;
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
     let _ = do_doautocmd(arg, false, &raw mut did_aucmd);
@@ -84,18 +74,13 @@ pub(crate) unsafe fn ex_doautocmd(args: *mut ExArg) {
 }
 
 /// `:filetype [plugin] [indent] on|off|detect`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_filetype(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    if byte(args.arg) == NUL {
+pub(crate) fn ex_filetype(excmd: &mut ExArg) {
+    if byte(excmd.arg) == NUL {
         report_filetype_state();
         return;
     }
 
-    let mut arg = args.arg;
+    let mut arg = excmd.arg;
     let mut plugin = false;
     let mut indent = false;
     loop {
@@ -213,16 +198,11 @@ pub fn filetype_maybe_enable() {
 /// A `FALLBACK ` prefix means "only if nothing better is found later", and
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
+pub(crate) fn ex_setfiletype(excmd: &mut ExArg) {
     if Buf::current().b_did_filetype {
         return;
     }
-    let mut arg = args.arg;
+    let mut arg = excmd.arg;
     if starts_with(arg, b"FALLBACK ") {
         arg = unsafe { arg.add(9) };
     }
@@ -231,19 +211,14 @@ pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
         OptVal::string(cstr_to_string(arg)),
         OptionSetFlags::LOCAL,
     );
-    if arg != args.arg {
+    if arg != excmd.arg {
         Buf::current().b_did_filetype = false;
     }
 }
 
 /// `:checkhealth` — hand the window modifiers and the argument to
 /// `vim.health._check`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
+pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
     let mut env = env_buf();
 
     // The modifiers are passed as text, because the health check opens
@@ -263,7 +238,7 @@ pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
     let mods = unsafe { core::slice::from_raw_parts(mods.as_ptr().cast::<u8>(), mods_len) };
     let argv = Array::from(vec![
         Object::string(String_0::from_bytes(mods)),
-        Object::string(cstr_to_string(args.arg)),
+        Object::string(cstr_to_string(excmd.arg)),
     ]);
 
     let ran = unsafe {

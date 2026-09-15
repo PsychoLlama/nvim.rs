@@ -26,7 +26,7 @@ use crate::os::cshim::gettext_ptr;
 use crate::types::AutoEvent;
 
 use crate::types::{Failed, Refcount};
-use crate::winlayer::{Buf, Ea, Live, Win, windows};
+use crate::winlayer::{Buf, Live, Win, windows};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -157,9 +157,9 @@ pub(crate) fn qf_opt(qi: *mut QfInfo) -> Option<Qi> {
 }
 
 /// [`qf_cmd_get_stack`], as a stack that may be absent.
-pub(crate) fn qf_cmd_stack(args: Ea, print_emsg: bool) -> Option<Qi> {
-    // SAFETY: `args`'s promise — a live command.
-    qf_opt(unsafe { qf_cmd_get_stack(args.raw(), print_emsg) })
+pub(crate) fn qf_cmd_stack(excmd: &mut ExArg, print_emsg: bool) -> Option<Qi> {
+    // SAFETY: `excmd`'s promise — a live command.
+    qf_opt(unsafe { qf_cmd_get_stack(excmd, print_emsg) })
 }
 
 /// The stack an Ex command works on, allocating a location list stack for
@@ -168,8 +168,8 @@ pub(crate) fn qf_cmd_stack(args: Ea, print_emsg: bool) -> Option<Qi> {
 /// The window comes back with it: a location list command works on the
 /// current window's stack and the caller has to know whose it was, while a
 /// quickfix command works on the global one and answers `None`.
-pub(crate) fn qf_cmd_stack_or_alloc(args: Ea) -> (Qi, Option<Win>) {
-    if !is_loclist_cmd(args.cmdidx) {
+pub(crate) fn qf_cmd_stack_or_alloc(excmd: &mut ExArg) -> (Qi, Option<Win>) {
+    if !is_loclist_cmd(excmd.cmdidx) {
         return (QfStack::Global.qi(), None);
     }
     let wp = Win::current();
@@ -622,11 +622,10 @@ pub(crate) fn ll_get_or_alloc_list(mut window: Win) -> *mut QfInfo {
 ///
 /// # Safety
 ///
-/// `args` must be a live command.
-pub(crate) unsafe fn qf_cmd_get_stack(args: *mut ExArg, print_emsg: bool) -> *mut QfInfo {
+/// `excmd` must be a live command.
+pub(crate) unsafe fn qf_cmd_get_stack(excmd: &mut ExArg, print_emsg: bool) -> *mut QfInfo {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let args = unsafe { Ea::new(args) };
-    if !is_loclist_cmd(args.cmdidx) {
+    if !is_loclist_cmd(excmd.cmdidx) {
         return QfStack::Global.raw();
     }
     let qi = win_loclist(Win::current());

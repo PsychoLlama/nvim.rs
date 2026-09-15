@@ -53,20 +53,16 @@ struct MenuArg {
 
 /// `:menu` and its forty-odd relatives -- every mode prefix, `:noremenu`,
 /// `:unmenu` and `:menu enable`/`disable`.
-///
-/// # Safety
-/// `args` must name the live `ExArg` of a menu command, whose `arg` points
-/// into the command line this rewrites in place.
-pub(crate) unsafe fn ex_menu(args: *mut ExArg) {
+pub(crate) fn ex_menu(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation. `cmd` and `arg` name the command line,
     // which `ex_docmd` lets a command edit.
     let (cmd, arg, forceit, ranged) = unsafe {
-        let args = &*args;
+        let excmd = &*excmd;
         (
-            CStr::from_ptr(args.cmd),
-            CText::new(args.arg),
-            args.forceit != 0,
-            (args.addr_count != 0 && args.line2 != 0).then_some(args.line2 as c_int),
+            CStr::from_ptr(excmd.cmd),
+            CText::new(excmd.arg),
+            excmd.forceit != 0,
+            (excmd.addr_count != 0 && excmd.line2 != 0).then_some(excmd.line2 as c_int),
         )
     };
     let (modes, noremap, unmenu) = cmd_modes(cmd.to_bytes(), forceit);

@@ -153,7 +153,7 @@ pub(crate) unsafe fn sub_joining_lines(
         sub_nlines.set(1 as LineNr);
         do_sub_msg(false);
         // SAFETY: the command block is the one borrowed here.
-        unsafe { ex_may_print(&raw mut *args) };
+        ex_may_print(args);
     }
 
     if save {

@@ -38,15 +38,18 @@ use crate::winlayer::Win;
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};
 
-/// `:ascii` and `ga` -- describe the code point under the cursor.
+/// `:ascii`.
+pub fn do_ascii(_excmd: &mut ExArg) {
+    describe_cursor_char();
+}
+
+/// Describe the code point under the cursor -- what `:ascii` and Normal
+/// mode's `ga` both do.
 ///
 /// The first line describes the base character, and one further line each
-/// combining character stacked on it.  `args` is unused: `ga` calls this with
-/// no Ex command at all.
-///
-/// # Safety
-/// The cursor must be on a valid position of the current buffer.
-pub unsafe fn do_ascii(_args: *mut ExArg) {
+/// combining character stacked on it. Split from the handler because `ga`
+/// has no Ex command to hand it.
+pub(crate) fn describe_cursor_char() {
     // SAFETY: caller's contract; the cursor is on a live line.
     let data = get_cursor_pos_ptr();
     // SAFETY: `data` points into a NUL-terminated buffer line.
@@ -231,13 +234,8 @@ unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool)
 }
 
 /// `:left`, `:center` and `:right` -- re-indent every line of the range.
-///
-/// # Safety
-/// `args` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_align(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
-    let (mut cmdidx, arg, line1, line2) = (args.cmdidx, args.arg, args.line1, args.line2);
+pub fn ex_align(excmd: &mut ExArg) {
+    let (mut cmdidx, arg, line1, line2) = (excmd.cmdidx, excmd.arg, excmd.line1, excmd.line2);
 
     if Win::current().w_onebuf_opt.wo_rl != 0 {
         // Switch left and right aligning.  Upstream rewrites the command
@@ -247,7 +245,7 @@ pub unsafe fn ex_align(args: *mut ExArg) {
             CmdIdx::left => CmdIdx::right,
             other => other,
         };
-        args.cmdidx = cmdidx;
+        excmd.cmdidx = cmdidx;
     }
 
     // SAFETY: `arg` is the command's NUL-terminated argument.

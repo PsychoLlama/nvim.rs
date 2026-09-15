@@ -178,12 +178,9 @@ pub(crate) fn has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
 
 /// `:version`. Vim's `:version 9.99` ("this script needs Vim 9.99") is
 /// silently ignored rather than printing anything.
-///
-/// # Safety
-/// `args` is a live `ExArg`.
-pub(crate) unsafe fn ex_version(args: *mut ExArg) {
+pub(crate) fn ex_version(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation; `arg` is NUL-terminated.
-    if unsafe { *(*args).arg } != 0 {
+    if unsafe { *excmd.arg } != 0 {
         return;
     }
     // Start the banner below the ":version" the user typed. The message
@@ -559,10 +556,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
 }
 
 /// `:intro` -- the intro screen on demand, until a key is pressed.
-///
-/// # Safety
-/// The editor's globals must be live.
-pub(crate) unsafe fn ex_intro(_args: *mut ExArg) {
+pub(crate) fn ex_intro(_excmd: &mut ExArg) {
     screenclear();
     intro_message(true);
     plain_vgetc();

@@ -25,7 +25,7 @@ use core::ptr;
 use crate::autocmd::state::{last_cursormoved, last_cursormoved_win};
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_get_changedtick, fileinfo};
-use crate::diff::ex_diffupdate;
+use crate::diff::diff_update;
 use crate::diff::state::diff_need_scrollbind;
 use crate::drawscreen::state::{
     clear_cmdline, do_redraw, must_redraw, redraw_cmdline, redraw_mode, skip_redraw,
@@ -604,7 +604,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
         normal_check_buffer_modified();
         normal_check_safe_state();
         if TabPage::current().tp_diff_update != 0 || TabPage::current().tp_diff_invalid != 0 {
-            unsafe { ex_diffupdate(ptr::null_mut()) };
+            diff_update(None);
             TabPage::current().tp_diff_update = 0;
         }
         if diff_need_scrollbind.get() {

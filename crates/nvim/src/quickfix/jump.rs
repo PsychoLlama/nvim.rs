@@ -105,7 +105,7 @@ unsafe fn qf_jump_edit_buffer(
                 qf_ptr.qf_fnum,
                 ptr::null_mut(),
                 ptr::null_mut(),
-                ptr::null_mut(),
+                None,
                 1,
                 EcmdFlags::HIDE | EcmdFlags::SET_HELP,
                 (prev_winid == Win::current().handle).then(|| Win::current().id()),

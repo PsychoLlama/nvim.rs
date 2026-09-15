@@ -191,15 +191,15 @@ struct Ecmd {
 
 /// The immutable half of what [`do_ecmd`] was asked for, once the file name
 /// has been resolved.
-struct EcmdArgs {
+struct EcmdArgs<'a> {
     /// The buffer number to switch to, or zero to go by name.
     fnum: c_int,
     /// The full path of the file to edit.
     ffname: *mut c_char,
     /// Its short name.
     sfname: *mut c_char,
-    /// The Ex command that asked, or NULL.
-    eap: *mut ExArg,
+    /// The Ex command that asked, when one did.
+    excmd: Option<&'a mut ExArg>,
     flags: EcmdFlags,
     /// The `+cmd` to run once the file is loaded, or NULL.
     command: *mut c_char,
@@ -238,7 +238,7 @@ pub(crate) unsafe fn do_ecmd(
     fnum: c_int,
     ffname: *mut c_char,
     sfname: *mut c_char,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: Option<WinId>,
@@ -265,12 +265,10 @@ pub(crate) unsafe fn do_ecmd(
     // SAFETY: `curwin` is the live current window, and the handle is used
     // only inside this call.
     let so = ScrollOff::of(Win::current(), ScrollMargin::Lines);
-    // SAFETY: `eap` is live when non-NULL.
-    let command = if args.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { (*args).do_ecmd_cmd }
-    };
+    let command = excmd
+        .as_deref()
+        .map_or(ptr::null_mut(), |asked| asked.do_ecmd_cmd);
+    let has_command = excmd.is_some();
 
     let mut old_curbuf = BufRef::of_opt(current_buf());
     let mut did_set_swapcommand = false;
@@ -284,11 +282,11 @@ pub(crate) unsafe fn do_ecmd(
                 Target::Nothing => break 'theend,
                 Target::Editing(other) => other,
             };
-        let ecmd = EcmdArgs {
+        let mut ecmd = EcmdArgs {
             fnum,
             ffname,
             sfname,
-            eap: args,
+            excmd,
             flags,
             command,
         };
@@ -321,7 +319,7 @@ pub(crate) unsafe fn do_ecmd(
         if flags.has(EcmdFlags::FORCEIT) {
             ccgd |= CCGD_FORCEIT as c_int;
         }
-        if !args.is_null() {
+        if has_command {
             ccgd |= CCGD_EXCMD as c_int;
         }
         // SAFETY: as above.
@@ -349,7 +347,7 @@ pub(crate) unsafe fn do_ecmd(
         // If we are starting to edit another file, open a (new) buffer.
         // Otherwise we re-use the current buffer.
         if other_file {
-            match switch_to_other_buffer(&ecmd, &mut oldwin, &mut old_curbuf, &mut state) {
+            match switch_to_other_buffer(&mut ecmd, &mut oldwin, &mut old_curbuf, &mut state) {
                 Switch::Abandon => break 'theend,
                 Switch::Ready => {}
             }
@@ -411,7 +409,7 @@ pub(crate) unsafe fn do_ecmd(
         check_arg_idx(Win::current());
 
         if !state.auto_buf {
-            enter_new_buffer(&ecmd, &mut old_curbuf, &mut state, &mut retval);
+            enter_new_buffer(&mut ecmd, &mut old_curbuf, &mut state, &mut retval);
         }
 
         // Tell the diff stuff that this buffer is new and/or needs updating.
@@ -611,12 +609,12 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
 /// Set the cursor and initialise the window, then read the file (or fire
 /// BufEnter/BufWinEnter when there is nothing to read).
 fn enter_new_buffer(
-    args: &EcmdArgs,
+    args: &mut EcmdArgs<'_>,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
     retval: &mut Result<(), Failed>,
 ) {
-    let (eap, flags) = (args.eap, args.flags);
+    let flags = args.flags;
     // Set cursor and init window before reading the file and executing
     // autocommands.  This allows for the autocommands to position the cursor.
     curwin_init();
@@ -648,7 +646,7 @@ fn enter_new_buffer(
         if flags.has(EcmdFlags::NOWINENTER) {
             state.readfile_flags |= READ_NOWINENTER as c_int;
         }
-        let opened = unsafe { open_buffer(false, eap, state.readfile_flags) };
+        let opened = open_buffer(false, args.excmd.as_deref_mut(), state.readfile_flags);
         if should_abort_err(opened) {
             *retval = Err(Failed);
         }

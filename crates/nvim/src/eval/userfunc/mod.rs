@@ -100,7 +100,7 @@ use crate::types::{
 };
 use crate::ui::state::Rows;
 use crate::ui::ui_has;
-pub(crate) use crate::winlayer::{Ea, Live};
+pub(crate) use crate::winlayer::Live;
 use ::libc::{abort, strcpy};
 
 // The carve of the transpiled module; see each child's docs.

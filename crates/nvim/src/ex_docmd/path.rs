@@ -14,7 +14,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
 use crate::winlayer::TabPage;
-use crate::winlayer::{Buf, Ea, Win};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -352,20 +352,15 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 }
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub unsafe fn ex_cd(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    let new_dir = args.arg;
+pub fn ex_cd(excmd: &mut ExArg) {
+    let new_dir = excmd.arg;
     // Without 'cdhome', a bare `:cd` reports the directory instead of
     // changing it — Vi's behaviour.
     if byte(new_dir) == NUL && p_cdh.get() == 0 {
-        unsafe { ex_pwd(ptr::null_mut()) };
+        report_working_dir();
         return;
     }
-    let idx = args.cmdidx;
+    let idx = excmd.cmdidx;
     let scope = if idx == CmdIdx::tcd || idx == CmdIdx::tchdir {
         kCdScopeTabpage
     } else if idx == CmdIdx::lcd || idx == CmdIdx::lchdir {
@@ -376,16 +371,21 @@ pub unsafe fn ex_cd(args: *mut ExArg) {
     if unsafe { changedir_func(new_dir, scope) }
         && (KeyTyped.get() || p_verbose.get() >= 5 as OptInt)
     {
-        unsafe { ex_pwd(args.raw()) };
+        report_working_dir();
     }
 }
 
-/// `:pwd` — and with 'verbose' set, which scope the directory came from.
+/// `:pwd`.
+pub(crate) fn ex_pwd(_excmd: &mut ExArg) {
+    report_working_dir();
+}
+
+/// Say what the working directory is — and with 'verbose' set, which scope
+/// it came from.
 ///
-/// # Safety
-///
-/// `_args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_pwd(_args: *mut ExArg) {
+/// Split from the handler because a bare `:cd` reports the directory too,
+/// and has its own command to answer for.
+fn report_working_dir() {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_err() {
         emsg(gettext(c"E187: Unknown".as_ptr()));

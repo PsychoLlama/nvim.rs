@@ -199,20 +199,18 @@ pub(crate) fn ucmd_name(cmd: &UserCmd) -> &[u8] {
 /// and `complp` given the command's completion type; each may be null.
 ///
 /// # Safety
-/// Module contract; `args` must be the command being looked up, and `full`,
+/// Module contract; `excmd` must be the command being looked up, and `full`,
 /// `expand` and `complp` null or writable.
 pub(crate) unsafe fn find_ucmd(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     p: *mut c_char,
     full: *mut c_int,
     expand: *mut Expand,
     complp: *mut ExpandContext,
 ) -> *mut c_char {
-    // SAFETY: caller contract.
-    let args = unsafe { &mut *args };
     // SAFETY: caller contract; `p` points into the same line as `args.cmd`.
     let typed =
-        unsafe { slice::from_raw_parts(args.cmd.cast::<u8>(), p.offset_from(args.cmd) as _) };
+        unsafe { slice::from_raw_parts(excmd.cmd.cast::<u8>(), p.offset_from(excmd.cmd) as _) };
 
     let mut matchlen = 0;
     let mut found = false;
@@ -247,14 +245,14 @@ pub(crate) unsafe fn find_ucmd(
             } else {
                 possible = true;
             }
-            args.cmdidx = if scope == Scope::Global {
+            excmd.cmdidx = if scope == Scope::Global {
                 CmdIdx::USER
             } else {
                 CmdIdx::USER_BUF
             };
-            args.argt = uc.uc_argt;
-            args.useridx = j as c_int;
-            args.addr_type = uc.uc_addr_type;
+            excmd.argt = uc.uc_argt;
+            excmd.useridx = j as c_int;
+            excmd.addr_type = uc.uc_addr_type;
             if !complp.is_null() {
                 // SAFETY: caller contract.
                 unsafe { *complp = uc.uc_compl };
@@ -510,10 +508,7 @@ unsafe fn free_new_command(
 }
 
 /// `:command` -- define one, or list them.
-///
-/// # Safety
-/// Module contract; `args` must be the command being executed.
-pub(crate) unsafe fn ex_command(args: *mut ExArg) {
+pub(crate) fn ex_command(excmd: &mut ExArg) {
     let mut argt = ExArgt::NONE;
     let mut def: c_int = -1;
     let mut flags: c_int = 0;
@@ -522,7 +517,7 @@ pub(crate) unsafe fn ex_command(args: *mut ExArg) {
     let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
 
     // SAFETY: caller contract.
-    let (arg, forceit) = unsafe { ((*args).arg, (*args).forceit != 0) };
+    let (arg, forceit) = (excmd.arg, excmd.forceit != 0);
     // SAFETY: caller contract; `arg` is NUL-terminated.
     let has_attr = unsafe { *arg } == b'-' as c_char;
     let mut p = arg;
@@ -617,10 +612,7 @@ pub(crate) unsafe fn ex_command(args: *mut ExArg) {
 }
 
 /// `:comclear` -- forget every user command, global and buffer-local.
-///
-/// # Safety
-/// Module contract.
-pub(crate) unsafe fn ex_comclear(_args: *mut ExArg) {
+pub(crate) fn ex_comclear(_excmd: &mut ExArg) {
     uc_clear(Table::Global);
     if let Some(buffer) = Buf::current_or_none() {
         uc_clear(Table::Buffer(buffer));
@@ -661,13 +653,10 @@ pub(crate) fn uc_clear(table: Table) {
 }
 
 /// `:delcommand` -- remove one user command.
-///
-/// # Safety
-/// Module contract; `args` must be the command being executed.
-pub(crate) unsafe fn ex_delcommand(args: *mut ExArg) {
+pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
     // SAFETY: caller contract; `args.arg` is NUL-terminated.
     let (mut arg, buffer_only) = unsafe {
-        let arg = (*args).arg.cast_const();
+        let arg = excmd.arg.cast_const();
         let local = CStr::from_ptr(arg).to_bytes().starts_with(b"-buffer")
             && ascii_iswhite(*arg.add(7) as c_int);
         (arg, local)

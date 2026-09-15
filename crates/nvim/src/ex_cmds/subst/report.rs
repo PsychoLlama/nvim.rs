@@ -346,39 +346,31 @@ pub(crate) fn show_sub(
 }
 
 /// The `:substitute` command.
-///
-/// # Safety
-/// Main thread; `args` must be the live Ex-command argument.
-pub unsafe fn ex_substitute(args: *mut ExArg) {
+pub fn ex_substitute(excmd: &mut ExArg) {
     // SAFETY: caller's contract.
-    unsafe { do_sub(&mut *args, profile_zero(), 0 as c_int, 0 as Handle) };
+    do_sub(excmd, profile_zero(), 0 as c_int, 0 as Handle);
 }
 
 /// The `:substitute` command's `'inccommand'` preview callback.
-///
-/// # Safety
-/// Main thread; `args` must be the live Ex-command argument.
-pub unsafe fn ex_substitute_preview(
-    args: *mut ExArg,
+pub fn ex_substitute_preview(
+    excmd: &mut ExArg,
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: Handle,
 ) -> c_int {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
     // Only preview once the pattern delimiter has been typed.
     // SAFETY: the argument is NUL-terminated.
-    let first = unsafe { *args.arg } as u8;
+    let first = unsafe { *excmd.arg } as u8;
     if first == 0 || first.is_ascii_alphabetic() || ascii_isdigit(first as c_int) {
         return 0 as c_int;
     }
     // `do_sub` may move `args.arg`, which the caller still needs where it was.
-    let save_arg = args.arg;
+    let save_arg = excmd.arg;
     let retv = do_sub(
-        args,
+        excmd,
         profile_setlimit(p_rdt.get() as int64_t),
         cmdpreview_ns,
         cmdpreview_bufnr,
     );
-    args.arg = save_arg;
+    excmd.arg = save_arg;
     retv
 }

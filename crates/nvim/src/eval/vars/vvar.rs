@@ -325,10 +325,10 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
     ptr::null_mut()
 }
 
-/// Set `v:cmdarg` to the `++opt` arguments of `args`, answering the old value
+/// Set `v:cmdarg` to the `++opt` arguments of `excmd`, answering the old value
 /// for the caller to restore.
 ///
-/// A NULL `args` is the restore half: `oldarg` goes back and the value that
+/// A NULL `excmd` is the restore half: `oldarg` goes back and the value that
 /// was there is freed.  The same happens if any of the pieces fails to
 /// format, which is why the answer is NULL on that path -- there is nothing
 /// left for the caller to put back.
@@ -338,42 +338,39 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
 /// what makes the closing bound check meaningful.
 ///
 /// # Safety
-/// `args` is NULL or a live command; `oldarg` is NULL or an owned string.
-pub unsafe fn set_cmdarg(args: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
+/// `oldarg` is NULL or an owned string.
+pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Cmdarg);
     // SAFETY: `v:cmdarg` is declared a String.
     let oldval = tv.string_or_null();
 
     'error: {
-        if args.is_null() {
+        let Some(command) = excmd else {
             break 'error;
-        }
-        // SAFETY: the caller's obligation -- a live command, which outlives
-        // this frame because the `do_cmdline` that owns it does.
-        let args = unsafe { Ea::new(args) };
+        };
         let mut len: size_t = 0;
-        if args.force_bin == FORCE_BIN {
+        if command.force_bin == FORCE_BIN {
             len += 6; // " ++bin"
-        } else if args.force_bin == FORCE_NOBIN {
+        } else if command.force_bin == FORCE_NOBIN {
             len += 8; // " ++nobin"
         }
-        if args.read_edit != 0 {
+        if command.read_edit != 0 {
             len += 7; // " ++edit"
         }
-        if args.force_ff != 0 {
+        if command.force_ff != 0 {
             len += 10; // " ++ff=unix"
         }
-        if args.force_enc != 0 {
+        if command.force_enc != 0 {
             // The encoding name lives inside the command line the `++enc=`
             // was parsed out of, at the offset `force_enc` records.
-            // SAFETY: a live command's `cmd` with its own recorded offset.
-            let enc = unsafe { args.cmd.offset(args.force_enc as isize) };
+            // SAFETY: the command's own line with its own recorded offset.
+            let enc = unsafe { command.cmd.offset(command.force_enc as isize) };
             len += unsafe { cstr::bytes_at(enc) }.len() + 7;
         }
-        if args.bad_char != 0 {
+        if command.bad_char != 0 {
             len += 7 + 4; // " ++bad=" + "keep" or "drop"
         }
-        if args.mkdir_p != 0 {
+        if command.mkdir_p != 0 {
             len += 4; // " ++p"
         }
 
@@ -398,38 +395,38 @@ pub unsafe fn set_cmdarg(args: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
             }};
         }
 
-        if args.force_bin == FORCE_BIN {
+        if command.force_bin == FORCE_BIN {
             put!(c" ++bin".as_ptr());
-        } else if args.force_bin == FORCE_NOBIN {
+        } else if command.force_bin == FORCE_NOBIN {
             put!(c" ++nobin".as_ptr());
         } else {
             // SAFETY: at least one byte was allocated.
             unsafe { *newval = NUL as c_char };
         }
-        if args.read_edit != 0 {
+        if command.read_edit != 0 {
             put!(c" ++edit".as_ptr());
         }
-        if args.force_ff != 0 {
-            let ff = match args.force_ff as u8 {
+        if command.force_ff != 0 {
+            let ff = match command.force_ff as u8 {
                 b'u' => c"unix",
                 b'd' => c"dos",
                 _ => c"mac",
             };
             put!(c" ++ff=%s".as_ptr(), ff.as_ptr());
         }
-        if args.force_enc != 0 {
+        if command.force_enc != 0 {
             // SAFETY: as the length pass above.
-            let enc = unsafe { args.cmd.offset(args.force_enc as isize) };
+            let enc = unsafe { command.cmd.offset(command.force_enc as isize) };
             put!(c" ++enc=%s".as_ptr(), enc);
         }
-        if args.bad_char == BAD_KEEP {
+        if command.bad_char == BAD_KEEP {
             put!(c" ++bad=keep".as_ptr());
-        } else if args.bad_char == BAD_DROP {
+        } else if command.bad_char == BAD_DROP {
             put!(c" ++bad=drop".as_ptr());
-        } else if args.bad_char != 0 {
-            put!(c" ++bad=%c".as_ptr(), args.bad_char);
+        } else if command.bad_char != 0 {
+            put!(c" ++bad=%c".as_ptr(), command.bad_char);
         }
-        if args.mkdir_p != 0 {
+        if command.mkdir_p != 0 {
             put!(c" ++p".as_ptr());
         }
         debug_assert!(xlen <= newval_len);

@@ -84,11 +84,11 @@ fn buf_is_valid(window: Win) -> bool {
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
 /// when it is zero, without entering the window.
 fn load_buffer(fnum: c_int, flags: EcmdFlags, oldwin: Option<Win>) -> Result<(), Failed> {
-    let (no_name, no_cmd) = (ptr::null_mut(), ptr::null_mut());
+    let no_name = ptr::null_mut();
     let one = newlnum::ONE as LineNr;
     let oldwin = oldwin.map(Win::id);
     // SAFETY: a buffer number the caller has just looked up.
-    unsafe { do_ecmd(fnum, no_name, no_name, no_cmd, one, flags, oldwin) }
+    unsafe { do_ecmd(fnum, no_name, no_name, None, one, flags, oldwin) }
 }
 
 fn set_title_var(title: *mut c_char) {
@@ -115,14 +115,10 @@ fn clamp_cursor(window: Win) {
     check_cursor(window);
 }
 
-/// The stack `args`'s command names, or none when there is not one.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-unsafe fn stack_of(args: *mut ExArg, print_emsg: bool) -> Option<Qi> {
+/// The stack `excmd`'s command names, or none when there is not one.
+fn stack_of(excmd: &mut ExArg, print_emsg: bool) -> Option<Qi> {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(args, print_emsg) };
+    let qi = unsafe { qf_cmd_get_stack(excmd, print_emsg) };
     (!qi.is_null()).then_some(unsafe { Qi::new(qi) })
 }
 
@@ -320,19 +316,15 @@ pub(crate) fn qf_update_win_titlevar(qi: Qi) {
 }
 
 /// `:copen`/`:lopen`: open a window showing the list.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn ex_copen(args: *mut ExArg) {
+pub fn ex_copen(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = (unsafe { stack_of(args, true) }) else {
+    let Some(qi) = stack_of(excmd, true) else {
         return;
     };
     incr_quickfix_busy();
 
     // SAFETY: the caller's promise -- a live command.
-    let (addr_count, line2) = unsafe { ((*args).addr_count, (*args).line2) };
+    let (addr_count, line2) = (excmd.addr_count, excmd.line2);
     let height = if addr_count != 0 {
         line2 as c_int
     } else {
@@ -367,13 +359,9 @@ pub unsafe fn ex_copen(args: *mut ExArg) {
 
 /// `:cwindow`/`:lwindow`: open the window if there is something to show,
 /// close it if there is not.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn ex_cwindow(args: *mut ExArg) {
+pub fn ex_cwindow(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = (unsafe { stack_of(args, true) }) else {
+    let Some(qi) = stack_of(excmd, true) else {
         return;
     };
     let qfl = qi.curlist();
@@ -381,22 +369,18 @@ pub unsafe fn ex_cwindow(args: *mut ExArg) {
     if qi.is_empty() || qfl.qf_nonevalid || qfl.is_empty() {
         if win.is_some() {
             // SAFETY: the caller's promise -- a live command.
-            unsafe { ex_cclose(args) };
+            ex_cclose(excmd);
         }
     } else if win.is_none() {
         // SAFETY: the caller's promise -- a live command.
-        unsafe { ex_copen(args) };
+        ex_copen(excmd);
     }
 }
 
 /// `:cclose`/`:lclose`: close the window showing the list.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn ex_cclose(args: *mut ExArg) {
+pub fn ex_cclose(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = (unsafe { stack_of(args, false) }) else {
+    let Some(qi) = stack_of(excmd, false) else {
         return;
     };
     if let Some(win) = qf_find_win(qi) {
@@ -422,13 +406,9 @@ fn win_goto_line(mut win: Win, lnum: LineNr) {
 }
 
 /// `:cbottom`/`:lbottom`: put the cursor on the last line of the window.
-///
-/// # Safety
-///
-/// `args` must be a live command.
-pub unsafe fn ex_cbottom(args: *mut ExArg) {
+pub fn ex_cbottom(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = (unsafe { stack_of(args, true) }) else {
+    let Some(qi) = stack_of(excmd, true) else {
         return;
     };
     if let Some(win) = qf_find_win(qi) {

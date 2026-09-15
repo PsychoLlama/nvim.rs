@@ -28,10 +28,10 @@ const CALLBACK_INIT: Callback = Callback::None;
 ///
 /// # Safety
 ///
-/// `args` must point at the command's `ExArg`. `arg_in` must point at a NUL-
+/// `excmd` must point at the command's `ExArg`. `arg_in` must point at a NUL-
 /// terminated string, unaliased for the call.
 pub unsafe fn do_autocmd(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     arg_in: *mut ::core::ffi::c_char,
     forceit: ::core::ffi::c_int,
 ) {
@@ -43,7 +43,7 @@ pub unsafe fn do_autocmd(
     let mut once = false;
 
     let group = if unsafe { *arg } == b'|' as ::core::ffi::c_char {
-        unsafe { (*args).nextcmd = arg.add(1) };
+        unsafe { excmd.nextcmd = arg.add(1) };
         arg = c"".as_ptr().cast_mut();
         AUGROUP_ALL
     } else {
@@ -58,7 +58,7 @@ pub unsafe fn do_autocmd(
 
     pat = unsafe { skipwhite(pat) };
     if unsafe { *pat } == b'|' as ::core::ffi::c_char {
-        unsafe { (*args).nextcmd = pat.add(1) };
+        unsafe { excmd.nextcmd = pat.add(1) };
         pat = c"".as_ptr().cast_mut();
         cmd = c"".as_ptr().cast_mut();
     } else {

@@ -423,15 +423,11 @@ pub fn f_histnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// ":history" command: list history entries, optionally filtered by
 /// history name ("cmd", ":", "all", ...) and a number range.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_history(args: *mut ExArg) {
+pub fn ex_history(excmd: &mut ExArg) {
     // SAFETY: caller contract; the message kind is a static string.
     let arg = unsafe {
         msg_ext_set_kind(c"list_cmd".as_ptr());
-        (*args).arg
+        excmd.arg
     };
     if get_hislen() == 0 {
         msg(gettext(c"'history' option is zero"), 0);

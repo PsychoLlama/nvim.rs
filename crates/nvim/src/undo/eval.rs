@@ -60,11 +60,7 @@ fn undolist_row(uh: &UndoHeader, changes: c_int) -> CString {
 }
 
 /// `:undolist` — every leaf of the undo tree, oldest first.
-///
-/// # Safety
-///
-/// A live current buffer.
-pub unsafe fn ex_undolist(_args: *mut ExArg) {
+pub fn ex_undolist(_excmd: &mut ExArg) {
     let buf = Buf::current();
     // A leaf is a header nothing branches off downwards, and the whole tree
     // has to be walked to find them all.

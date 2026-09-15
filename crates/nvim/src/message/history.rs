@@ -301,32 +301,29 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
 }
 
 /// `:messages`.
-///
-/// # Safety
-/// `args` must point at a valid command argument block.
-pub unsafe fn ex_messages(args: *mut ExArg) {
-    if unsafe { cstr::eq_bytes((*args).arg, b"clear") } {
-        let keep = if unsafe { (*args).addr_count } != 0 {
-            unsafe { (*args).line2 as c_int }
+pub fn ex_messages(excmd: &mut ExArg) {
+    if unsafe { cstr::eq_bytes(excmd.arg, b"clear") } {
+        let keep = if excmd.addr_count != 0 {
+            excmd.line2 as c_int
         } else {
             0
         };
         msg_hist_clear(keep);
         return;
     }
-    if unsafe { *(*args).arg } != 0 {
+    if unsafe { *excmd.arg } != 0 {
         emsg(gettext(e_invarg));
         return;
     }
 
     let mut entries = EMPTY_ARRAY;
-    let mut p = if unsafe { (*args).skip } != 0 {
+    let mut p = if excmd.skip != 0 {
         msg_hist_temp.get()
     } else {
         msg_hist_first.get()
     };
-    let mut skip = if unsafe { (*args).addr_count } != 0 {
-        msg_hist_len.get() - unsafe { (*args).line2 as c_int }
+    let mut skip = if excmd.addr_count != 0 {
+        msg_hist_len.get() - excmd.line2 as c_int
     } else {
         0
     };
@@ -335,7 +332,7 @@ pub unsafe fn ex_messages(args: *mut ExArg) {
         // Skip over count or temporary "g<" messages. The decrement sits
         // inside the short circuit: a temporary entry does not consume one
         // of the counted lines.
-        let temporary = unsafe { (*p).temp } && unsafe { (*args).skip } == 0;
+        let temporary = unsafe { (*p).temp } && excmd.skip == 0;
         let counted_out = !temporary && {
             let remaining = skip;
             skip -= 1;
@@ -368,6 +365,6 @@ pub unsafe fn ex_messages(args: *mut ExArg) {
     }
 
     if !entries.is_empty() {
-        ui_call_msg_history_show(entries, unsafe { (*args).skip } != 0);
+        ui_call_msg_history_show(entries, excmd.skip != 0);
     }
 }

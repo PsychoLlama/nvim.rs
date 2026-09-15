@@ -695,13 +695,9 @@ pub fn load_start_packages() {
 }
 
 /// `:packloadall[!]`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_packloadall(args: *mut ExArg) {
-    // SAFETY: `args` is the live command.
-    if did_source_packages.get() && unsafe { (*args).forceit } == 0 {
+pub fn ex_packloadall(excmd: &mut ExArg) {
+    // SAFETY: `excmd` is the live command.
+    if did_source_packages.get() && excmd.forceit == 0 {
         return;
     }
     // One round to add every directory to 'runtimepath', then a second to
@@ -762,16 +758,12 @@ fn time_msg_now(msg: &CStr) {
 const PACKADD_PATTERN: &CStr = c"pack/*/%s/%s";
 
 /// `:packadd[!] {name}`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_packadd(args: *mut ExArg) {
-    // SAFETY: `args` is the live command; `pat` is owned and freed below.
-    let arg = unsafe { (*args).arg };
+pub fn ex_packadd(excmd: &mut ExArg) {
+    // SAFETY: `excmd` is the live command; `pat` is owned and freed below.
+    let arg = excmd.arg;
     let len = PACKADD_PATTERN.count_bytes() + 1 + unsafe { cstr::bytes_at(arg) }.len() + 5;
     let pat = unsafe { xmallocz(len) }.cast::<c_char>();
-    let cookie = if unsafe { (*args).forceit } != 0 {
+    let cookie = if excmd.forceit != 0 {
         PackWork::AddDir
     } else {
         PackWork::Both

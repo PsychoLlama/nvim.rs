@@ -202,11 +202,6 @@ pub unsafe fn do_autocmd_progress(msg_id: Object, msg: HlMessage, msg_data: *mut
     let group = AUGROUP_ALL as c_int;
     let no_fname = ptr::null_mut();
     let no_buf = None;
-    let no_eap = ptr::null_mut();
     let fired = AutoEvent::Progress;
-    unsafe {
-        apply_autocmds_group(
-            fired, pattern, no_fname, true, group, no_buf, no_eap, payload,
-        )
-    };
+    unsafe { apply_autocmds_group(fired, pattern, no_fname, true, group, no_buf, None, payload) };
 }

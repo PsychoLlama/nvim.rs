@@ -13,7 +13,7 @@ use std::ffi::CString;
 
 use crate::semsg;
 use crate::tr_plural;
-use crate::winlayer::{Buf, Ea, Live, Win};
+use crate::winlayer::{Buf, Live, Win};
 
 /// The completion context, whose caller has promised it outlives the value.
 type Xp = Live<Expand>;
@@ -89,13 +89,13 @@ pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
 /// # Safety
 ///
 /// `p` must point at a NUL-terminated string.
-pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut args: Ea) -> Result<(), Failed> {
+pub(crate) unsafe fn get_bad_opt(p: *const c_char, excmd: &mut ExArg) -> Result<(), Failed> {
     if strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) == 0 {
-        args.bad_char = BAD_KEEP;
+        excmd.bad_char = BAD_KEEP;
     } else if strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) == 0 {
-        args.bad_char = BAD_DROP;
+        excmd.bad_char = BAD_DROP;
     } else if utf8len_tab[ubyte(p) as usize] == 1 && byte_at(p, 1) == NUL {
-        args.bad_char = ubyte(p) as c_int;
+        excmd.bad_char = ubyte(p) as c_int;
     } else {
         return Err(Failed);
     }
@@ -119,53 +119,48 @@ pub(crate) fn get_bad_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
 /// rather than as pointers, because the command line is reallocated by the
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub unsafe fn getargopt(args: *mut ExArg) -> Result<(), Failed> {
-    let mut ea = unsafe { Ea::new(args) };
-    let mut arg = unsafe { ea.arg.add(2) };
+pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
+    let mut arg = unsafe { excmd.arg.add(2) };
     let mut bad_char_idx: c_int = 0;
 
     // `++bin`/`++nobin` and `++binary`/`++nobinary`.
     if starts_with(arg, b"bin") || starts_with(arg, b"nobin") {
         if byte(arg) == 'n' as c_int {
             arg = unsafe { arg.add(2) };
-            ea.force_bin = FORCE_NOBIN;
+            excmd.force_bin = FORCE_NOBIN;
         } else {
-            ea.force_bin = FORCE_BIN;
+            excmd.force_bin = FORCE_BIN;
         }
         if !unsafe { checkforcmd(&raw mut arg, c"binary".as_ptr(), 3) } {
             return Err(Failed);
         }
-        ea.arg = skipwhite(arg);
+        excmd.arg = skipwhite(arg);
         return Ok(());
     }
 
     // `++edit`, and not `++editsomething`.
     if starts_with(arg, b"edit") && !(ubyte_at(arg, 4)).is_ascii_alphabetic() {
-        ea.read_edit = 1;
-        ea.arg = unsafe { skipwhite(arg.add(4)) };
+        excmd.read_edit = 1;
+        excmd.arg = unsafe { skipwhite(arg.add(4)) };
         return Ok(());
     }
 
     // `++p`, and not `++psomething`.
     if byte(arg) == 'p' as c_int && !(ubyte_at(arg, 1)).is_ascii_alphabetic() {
-        ea.mkdir_p = 1;
-        ea.arg = unsafe { skipwhite(arg.add(1)) };
+        excmd.mkdir_p = 1;
+        excmd.arg = unsafe { skipwhite(arg.add(1)) };
         return Ok(());
     }
 
     let pp: *mut c_int = if starts_with(arg, b"ff") {
         arg = unsafe { arg.add(2) };
-        ea.force_ff_ptr()
+        &raw mut excmd.force_ff
     } else if starts_with(arg, b"fileformat") {
         arg = unsafe { arg.add(10) };
-        ea.force_ff_ptr()
+        &raw mut excmd.force_ff
     } else if starts_with(arg, b"enc") {
         arg = unsafe { arg.add(if starts_with(arg, b"encoding") { 8 } else { 3 }) };
-        ea.force_enc_ptr()
+        &raw mut excmd.force_enc
     } else if starts_with(arg, b"bad") {
         arg = unsafe { arg.add(3) };
         &raw mut bad_char_idx
@@ -177,24 +172,24 @@ pub unsafe fn getargopt(args: *mut ExArg) -> Result<(), Failed> {
         return Err(Failed);
     }
     arg = unsafe { arg.add(1) };
-    unsafe { *pp = arg.offset_from(ea.cmd) as c_int };
+    unsafe { *pp = arg.offset_from(excmd.cmd) as c_int };
     arg = skip_cmd_arg(arg, false);
-    ea.arg = skipwhite(arg);
+    excmd.arg = skipwhite(arg);
     unsafe { *arg = NUL as c_char };
 
-    if pp == ea.force_ff_ptr() {
-        if unsafe { check_ff_value(ea.cmd.offset(ea.force_ff as isize)) } == FAIL {
+    if pp == &raw mut excmd.force_ff {
+        if unsafe { check_ff_value(excmd.cmd.offset(excmd.force_ff as isize)) } == FAIL {
             return Err(Failed);
         }
         // Only the first letter is kept: 'u', 'd' or 'm'.
-        ea.force_ff = ubyte_at(ea.cmd, ea.force_ff as isize) as c_int;
-    } else if pp == ea.force_enc_ptr() {
-        let mut p = unsafe { ea.cmd.offset(ea.force_enc as isize) };
+        excmd.force_ff = ubyte_at(excmd.cmd, excmd.force_ff as isize) as c_int;
+    } else if pp == &raw mut excmd.force_enc {
+        let mut p = unsafe { excmd.cmd.offset(excmd.force_enc as isize) };
         while byte(p) != NUL {
             unsafe { *p = (*p as u8).to_ascii_lowercase() as c_char };
             p = unsafe { p.add(1) };
         }
-    } else if unsafe { get_bad_opt(ea.cmd.offset(bad_char_idx as isize), ea) }.is_err() {
+    } else if unsafe { get_bad_opt(excmd.cmd.offset(bad_char_idx as isize), excmd) }.is_err() {
         return Err(Failed);
     }
     Ok(())
@@ -290,17 +285,22 @@ pub unsafe fn expand_argopt(
 /// command refuses it — that is `unaccept_arg0`. An argument may be
 /// absolute (`3`, `$`, `#`), relative (`+2`, `-1`), a range before the
 /// command (`:2tabnext`), or absent.
-pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
+pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
     let mut tab_number: c_int = 0;
-    let unaccept_arg0 = if ea.cmdidx == CmdIdx::tabmove { 0 } else { 1 };
+    let unaccept_arg0 = if excmd.cmdidx == CmdIdx::tabmove {
+        0
+    } else {
+        1
+    };
     let last_tab = || current_tab_nr(None);
-    let invarg2 = |mut ea: Ea| {
-        ea.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), ea.arg));
+    let invarg2 = |command: &mut ExArg| {
+        // SAFETY: the argument is a tail of the command line.
+        command.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), command.arg));
     };
 
     'theend: {
-        if !ea.arg.is_null() && byte(ea.arg) != NUL {
-            let mut p = ea.arg;
+        if !excmd.arg.is_null() && byte(excmd.arg) != NUL {
+            let mut p = excmd.arg;
             // `+N`/`-N` means N places to the right/left of here.
             let relative = match byte(p) {
                 c if c == '-' as c_int => {
@@ -322,7 +322,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     tab_number = last_tab();
                 } else if equals(p, b"#") {
                     if last_used_tab().is_none() {
-                        ea.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), ea.arg));
+                        excmd.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), excmd.arg));
                         tab_number = 0;
                         break 'theend;
                     }
@@ -333,7 +333,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     || tab_number > last_tab()
                 {
                     // Not a number.
-                    invarg2(ea);
+                    invarg2(excmd);
                     break 'theend;
                 }
             } else {
@@ -345,7 +345,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     || byte(p) != NUL
                     || tab_number == 0
                 {
-                    invarg2(ea);
+                    invarg2(excmd);
                     break 'theend;
                 }
                 // `int` arithmetic on a number the user typed: the C
@@ -362,22 +362,22 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                 }
             }
             if tab_number < unaccept_arg0 || tab_number > last_tab() {
-                invarg2(ea);
+                invarg2(excmd);
             }
-        } else if ea.addr_count > 0 {
-            if unaccept_arg0 != 0 && ea.line2 == 0 {
-                ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
+        } else if excmd.addr_count > 0 {
+            if unaccept_arg0 != 0 && excmd.line2 == 0 {
+                excmd.errmsg = Some(ex_msg(e_invrange.as_ptr()));
                 tab_number = 0;
             } else {
-                tab_number = ea.line2 as c_int;
+                tab_number = excmd.line2 as c_int;
                 if unaccept_arg0 == 0 {
                     // `:-tabmove` is spelled as a range, so the sign has
                     // to be read back off the command line — the range
                     // parser has already turned it into a number.
-                    let mut cmdp = ea.cmd;
+                    let mut cmdp = excmd.cmd;
                     loop {
                         cmdp = unsafe { cmdp.offset(-1) };
-                        if !(cmdp > unsafe { *ea.cmdlinep }
+                        if !(cmdp > unsafe { *excmd.cmdlinep }
                             && (ascii_iswhite(byte(cmdp)) || ascii_isdigit(byte(cmdp))))
                         {
                             break;
@@ -386,17 +386,17 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                     if byte(cmdp) == '-' as c_int {
                         tab_number = tab_number.wrapping_sub(1);
                         if tab_number < unaccept_arg0 {
-                            ea.errmsg = Some(ex_msg(e_invrange.as_ptr()));
+                            excmd.errmsg = Some(ex_msg(e_invrange.as_ptr()));
                         }
                     }
                 }
             }
         } else {
             // No argument at all.
-            tab_number = if ea.cmdidx == CmdIdx::tabnext {
+            tab_number = if excmd.cmdidx == CmdIdx::tabnext {
                 let next = tab_index(TabPage::current()) + 1;
                 if next > last_tab() { 1 } else { next }
-            } else if ea.cmdidx == CmdIdx::tabmove {
+            } else if excmd.cmdidx == CmdIdx::tabmove {
                 last_tab()
             } else {
                 tab_index(TabPage::current())

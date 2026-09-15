@@ -59,19 +59,18 @@ pub(super) enum Switch {
 /// Make the target file's buffer the one the current window shows, firing
 /// BufLeave for the old one and closing it when it is no longer wanted.
 pub(super) fn switch_to_other_buffer(
-    args: &EcmdArgs,
+    args: &mut EcmdArgs<'_>,
     oldwin: &mut Option<WinId>,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
 ) -> Switch {
-    let EcmdArgs {
-        fnum,
-        ffname,
-        sfname,
-        flags,
-        command,
-        ..
-    } = *args;
+    let (fnum, ffname, sfname, flags, command) = (
+        args.fnum,
+        args.ffname,
+        args.sfname,
+        args.flags,
+        args.command,
+    );
     // SAFETY: `curwin` is live.
     let prev_alt_fnum = Win::current().w_alt_fnum;
 
@@ -203,12 +202,12 @@ pub(super) fn switch_to_other_buffer(
 /// wanted, and make `buffer` the current window's.
 fn leave_for_buffer(
     mut buffer: Buf,
-    args: &EcmdArgs,
+    args: &mut EcmdArgs<'_>,
     oldwin: Option<WinId>,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
 ) -> Switch {
-    let (eap, flags) = (args.eap, args.flags);
+    let flags = args.flags;
     // Should only be possible to get here if the cmdwin is closed, or if it's
     // opening and its buffer hasn't been set yet (the new buffer is for it).
     debug_assert!(cmdwin_buf.get().is_none(), "cmdwin_buf == NULL");
@@ -345,9 +344,12 @@ fn leave_for_buffer(
         Buf::current().b_nwindows += 1;
 
         // Set 'fileformat', 'binary' and 'fenc' when forced.
-        if !state.oldbuf && !eap.is_null() {
-            unsafe { set_file_options(true, eap) };
-            unsafe { set_forced_fenc(eap) };
+        if !state.oldbuf
+            && let Some(asked) = args.excmd.as_deref_mut()
+        {
+            // SAFETY: the command's `++ff=`/`++enc=` offsets into its own line.
+            set_file_options(true, Some(asked));
+            set_forced_fenc(asked);
         }
     }
 

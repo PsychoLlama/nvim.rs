@@ -32,7 +32,7 @@ use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::{Failed, MAXPATHL, NUL, OptionSetFlags};
 use crate::winlayer::graph::{switch_to, switch_window};
-use crate::winlayer::{Buf, Live, TabPage, Win, windows};
+use crate::winlayer::{Buf, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -65,12 +65,7 @@ fn emsg_gettext(msg: *const c_char) {
 /// `.orig` and `.rej` files next to its output and the user's directory is
 /// not the place for them; the original directory is restored afterwards.
 /// `'patchexpr'` replaces the shell-out entirely.
-///
-/// # Safety
-/// `args` must be a live command.
-pub unsafe fn ex_diffpatch(args: *mut ExArg) {
-    // SAFETY: the caller's command.
-    let mut args = unsafe { Live::<ExArg>::new(args) };
+pub fn ex_diffpatch(excmd: &mut ExArg) {
     let old_curwin = Win::current();
     let mut newname: *mut c_char = ptr::null_mut();
     let mut esc_name: *mut c_char = ptr::null_mut();
@@ -80,9 +75,9 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
 
     if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
         // SAFETY: `args.arg` is the command's own argument string.
-        fullname = unsafe { full_name_save(args.arg, false) };
+        fullname = unsafe { full_name_save(excmd.arg, false) };
         let name = if fullname.is_null() {
-            args.arg
+            excmd.arg
         } else {
             fullname
         };
@@ -155,20 +150,20 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
             let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
             let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
             if win_split(0, flags).is_ok() {
-                args.cmdidx = CmdIdx::split;
-                args.arg = tmp_new;
+                excmd.cmdidx = CmdIdx::split;
+                excmd.arg = tmp_new;
                 // SAFETY: the caller's command, and a window that was live
                 // when it was read.
-                unsafe { do_exedit(args.raw(), Some(old_curwin.id())) };
+                do_exedit(excmd, Some(old_curwin.id()));
                 if !old_curwin.is_current() && win_valid(old_curwin.id()) {
                     // SAFETY: both windows are live, as just checked.
                     diff_win_options(Win::current(), true);
                     diff_win_options(old_curwin, true);
                     if !newname.is_null() {
-                        args.arg = newname;
+                        excmd.arg = newname;
                         // SAFETY: the caller's command; the group name and
                         // the command line are static strings.
-                        unsafe { ex_file(args.raw()) };
+                        ex_file(excmd);
                         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
                             let _ =
                                 unsafe { do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr()) };
@@ -193,7 +188,7 @@ fn write_orig(tmp_orig: *mut c_char) -> Result<(), Failed> {
     let req = WriteRequest::filter();
     // SAFETY: the current buffer is live and the name is our own temp file;
     // no shortname and no `ExArg` are wanted.
-    unsafe { buf_write(cb, tmp_orig, ptr::null_mut(), 1, end, ptr::null_mut(), req) }
+    unsafe { buf_write(cb, tmp_orig, ptr::null_mut(), 1, end, None, req) }
 }
 
 /// Record the working directory into `dirbuf`, answering whether it can be
@@ -224,12 +219,7 @@ fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
 
 /// `:diffsplit {file}`: open `file` in a new window and diff it against the
 /// current buffer.
-///
-/// # Safety
-/// `args` must be a live command.
-pub unsafe fn ex_diffsplit(args: *mut ExArg) {
-    // SAFETY: the caller's command.
-    let mut args = unsafe { Live::<ExArg>::new(args) };
+pub fn ex_diffsplit(excmd: &mut ExArg) {
     let old_curwin = Win::current();
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
@@ -241,10 +231,10 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     if win_split(0, flags).is_err() {
         return;
     }
-    args.cmdidx = CmdIdx::split;
+    excmd.cmdidx = CmdIdx::split;
     Win::current().w_onebuf_opt.wo_diff = 1;
     // SAFETY: the caller's command, and a window that was live when read.
-    unsafe { do_exedit(args.raw(), Some(old_curwin.id())) };
+    do_exedit(excmd, Some(old_curwin.id()));
     if old_curwin.is_current() {
         return;
     }
@@ -263,10 +253,7 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
 }
 
 /// `:diffthis`: put the current window in diff mode.
-///
-/// # Safety
-/// The editor must be running.
-pub unsafe fn ex_diffthis(_args: *mut ExArg) {
+pub fn ex_diffthis(_excmd: &mut ExArg) {
     diff_win_options(Win::current(), true);
 }
 
@@ -385,16 +372,11 @@ fn strdup_of(p: *const c_char) -> *mut c_char {
 /// Each option goes back to its `w_p_*_save` value, but only where the
 /// window still holds the value diff mode gave it: a value the user changed
 /// in the meantime is left alone.
-///
-/// # Safety
-/// `args` must be a live command.
-pub unsafe fn ex_diffoff(args: *mut ExArg) {
-    // SAFETY: the caller's command.
-    let args = unsafe { Live::<ExArg>::new(args) };
+pub fn ex_diffoff(excmd: &mut ExArg) {
     let mut diffwin = false;
     // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: always the `firstwin` list.
     for mut wp in windows() {
-        let wanted = if args.forceit != 0 {
+        let wanted = if excmd.forceit != 0 {
             wp.w_onebuf_opt.wo_diff != 0
         } else {
             wp.is_current()
@@ -442,7 +424,7 @@ pub unsafe fn ex_diffoff(args: *mut ExArg) {
         }
         diffwin = diffwin || wp.w_onebuf_opt.wo_diff != 0;
     }
-    if args.forceit != 0 {
+    if excmd.forceit != 0 {
         diff_buf_clear();
     }
     let mut tp = TabPage::current();

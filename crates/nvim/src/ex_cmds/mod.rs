@@ -317,12 +317,7 @@ pub unsafe fn skip_vimgrep_pat(
 }
 /// `:oldfiles` -- list `v:oldfiles`, numbered; under `:browse`, then ask for
 /// a number and edit that file.
-///
-/// # Safety
-/// `args` must be the live Ex-command argument.
-pub unsafe fn ex_oldfiles(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
+pub fn ex_oldfiles(excmd: &mut ExArg) {
     let list = get_vim_var_list(Vv::Oldfiles);
     if list.is_null() {
         msg(gettext(c"No old files"), 0);
@@ -354,12 +349,12 @@ pub unsafe fn ex_oldfiles(args: *mut ExArg) {
     }
     // SAFETY: `picked` is a live string, and the expansion is ours to free.
     let expanded = Owned(unsafe { expand_env_save(picked.cast_mut()) });
-    args.arg = expanded.0;
-    args.cmdidx = CmdIdx::edit;
+    excmd.arg = expanded.0;
+    excmd.cmdidx = CmdIdx::edit;
     cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
     // SAFETY: the command block is the one borrowed here; the argument it
     // points at outlives the call.
-    unsafe { do_exedit(&raw mut *args, None) };
+    do_exedit(excmd, None);
 }
 
 /// Number and print every entry of `list`, stopping on an interrupt.

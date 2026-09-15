@@ -384,25 +384,22 @@ unsafe fn get_match(window: Win, id: c_int) -> *mut MatchItem {
 /// Also runs while commands are being *skipped* (inside a false `:if`), in
 /// which case nothing is added and only `args.nextcmd` is set — which is why
 /// it has to parse the pattern either way.
-///
-/// # Safety
-/// `args` must be a live Ex-command argument block with a writable `arg`.
-pub(crate) unsafe fn ex_match(args: *mut ExArg) {
+pub(crate) fn ex_match(excmd: &mut ExArg) {
     // SAFETY: the caller's command.
     // The command's count is the match id: `:match`, `:2match`, `:3match`.
-    if unsafe { (*args).line2 } > 3 {
+    if excmd.line2 > 3 {
         emsg(e_invcmd);
         return;
     }
-    let id = unsafe { (*args).line2 } as c_int;
-    let skip = unsafe { (*args).skip } != 0;
+    let id = excmd.line2 as c_int;
+    let skip = excmd.skip != 0;
 
     // Whatever happens next, the old pattern for this id goes.
     if !skip {
         match_delete(Win::current(), id, false);
     }
 
-    let arg = unsafe { (*args).arg };
+    let arg = excmd.arg;
     let end;
     if ends_excmd(unsafe { *arg } as c_int) != 0 {
         // `:match` on its own: just clear.
@@ -436,7 +433,7 @@ pub(crate) unsafe fn ex_match(args: *mut ExArg) {
                 && ends_excmd(unsafe { *skipwhite(end.offset(1)) } as c_int) == 0
             {
                 unsafe { xfree(g.cast()) };
-                unsafe { (*args).errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), end)) };
+                unsafe { excmd.errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), end)) };
                 return;
             }
             if unsafe { *end } != unsafe { *p } {
@@ -462,5 +459,5 @@ pub(crate) unsafe fn ex_match(args: *mut ExArg) {
             unsafe { *end = c as c_char };
         }
     }
-    unsafe { (*args).nextcmd = find_nextcmd(end) };
+    unsafe { excmd.nextcmd = find_nextcmd(end) };
 }

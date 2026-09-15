@@ -31,20 +31,14 @@ use crate::tag::state::{
     g_do_tagpreview, postponed_split, postponed_split_flags, postponed_split_tab,
 };
 use crate::types::{ExArg, NUL};
-use crate::winlayer::Ea;
 
 /// `:isearch`, `:ilist`, `:ijump`, `:isplit` and their `:d…` twins.
 ///
 /// The third letter of the name says what to do with what is found, and
 /// the first says whether the search is for a *definition* or for any
 /// occurrence.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_findpat(args: *mut ExArg) {
-    let mut ea = unsafe { Ea::new(args) };
-    let name = cmdnames[ea.cmdidx.index()].cmd_name;
+pub(crate) fn ex_findpat(excmd: &mut ExArg) {
+    let name = cmdnames[excmd.cmdidx.index()].cmd_name;
     let action = match ubyte_at(name, 2) {
         // `:isearch`/`:dsearch` show the first match; `:psearch` goes
         // to it in the preview window.
@@ -62,47 +56,47 @@ pub(crate) unsafe fn ex_findpat(args: *mut ExArg) {
 
     // A leading count is which match to take.
     let mut n = 1;
-    if ascii_isdigit(byte(ea.arg)) {
-        n = unsafe { getdigits_int(ea.arg_ptr(), false, 0) };
-        ea.arg = skipwhite(ea.arg);
+    if ascii_isdigit(byte(excmd.arg)) {
+        n = unsafe { getdigits_int(&raw mut excmd.arg, false, 0) };
+        excmd.arg = skipwhite(excmd.arg);
     }
 
     // `/pat/` searches for a pattern rather than for a whole word, and
     // the rest of the line after it may be another command.
     let mut whole = true;
-    if byte(ea.arg) == '/' as c_int {
+    if byte(excmd.arg) == '/' as c_int {
         whole = false;
-        ea.arg = unsafe { ea.arg.add(1) };
-        let mut p = unsafe { skip_regexp(ea.arg, '/' as c_int, magic_isset() as c_int) };
+        excmd.arg = unsafe { excmd.arg.add(1) };
+        let mut p = unsafe { skip_regexp(excmd.arg, '/' as c_int, magic_isset() as c_int) };
         if unsafe { *p } != 0 {
             unsafe { *p = NUL as c_char };
             p = unsafe { skipwhite(p.add(1)) };
             if ends_excmd(byte(p)) == 0 {
-                ea.errmsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), p) });
+                excmd.errmsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), p) });
             } else {
-                ea.nextcmd = unsafe { check_nextcmd(p) };
+                excmd.nextcmd = unsafe { check_nextcmd(p) };
             }
         }
     }
 
-    if ea.skip == 0 {
+    if excmd.skip == 0 {
         unsafe {
             find_pattern_in_path(
-                ea.arg,
+                excmd.arg,
                 kDirectionNotSet,
-                cstr::bytes_at(ea.arg).len(),
+                cstr::bytes_at(excmd.arg).len(),
                 whole,
-                ea.forceit == 0,
-                if *ea.cmd as c_int == 'd' as c_int {
+                excmd.forceit == 0,
+                if *excmd.cmd as c_int == 'd' as c_int {
                     FIND_DEFINE as c_int
                 } else {
                     FIND_ANY as c_int
                 },
                 n,
                 action,
-                ea.line1,
-                ea.line2,
-                ea.forceit != 0,
+                excmd.line1,
+                excmd.line2,
+                excmd.forceit != 0,
                 false,
             )
         };
@@ -110,40 +104,25 @@ pub(crate) unsafe fn ex_findpat(args: *mut ExArg) {
 }
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_ptag(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
+pub(crate) fn ex_ptag(excmd: &mut ExArg) {
     g_do_tagpreview.set(p_pvh.get() as c_int);
-    unsafe { ex_tag_cmd(args, cmdnames[args.cmdidx.index()].cmd_name.add(1)) };
+    unsafe { ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name.add(1)) };
 }
 
 /// `:stag` and friends — the same as `:tag`, in a new window.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_stag(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
+pub(crate) fn ex_stag(excmd: &mut ExArg) {
     // `-1` means "split, and let the tag code choose the size".
     postponed_split.set(-1);
     postponed_split_flags.set(cmdmod_split());
     postponed_split_tab.set(cmdmod_tab());
-    unsafe { ex_tag_cmd(args, cmdnames[args.cmdidx.index()].cmd_name.add(1)) };
+    unsafe { ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name.add(1)) };
     postponed_split_flags.set(0);
     postponed_split_tab.set(0);
 }
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_tag(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    unsafe { ex_tag_cmd(args, cmdnames[args.cmdidx.index()].cmd_name) };
+pub(crate) fn ex_tag(excmd: &mut ExArg) {
+    unsafe { ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name) };
 }
 
 /// Run a tag command named by `name`, whose *second* letter says which one
@@ -156,7 +135,7 @@ pub(crate) unsafe fn ex_tag(args: *mut ExArg) {
 /// # Safety
 ///
 /// `name` must point at a NUL-terminated string.
-unsafe fn ex_tag_cmd(args: Ea, name: *const c_char) {
+unsafe fn ex_tag_cmd(excmd: &mut ExArg, name: *const c_char) {
     let mut cmd = match ubyte_at(name, 1) {
         b'j' => DT_JUMP,
         b's' => DT_SELECT,
@@ -172,14 +151,14 @@ unsafe fn ex_tag_cmd(args: Ea, name: *const c_char) {
     }
     unsafe {
         do_tag(
-            args.arg,
+            excmd.arg,
             cmd,
-            if args.addr_count > 0 {
-                args.line2 as c_int
+            if excmd.addr_count > 0 {
+                excmd.line2 as c_int
             } else {
                 1
             },
-            args.forceit,
+            excmd.forceit,
             true,
         )
     };

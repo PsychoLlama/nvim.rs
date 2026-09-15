@@ -642,17 +642,13 @@ fn source_keymap_file(keymap: &[u8], enc: Option<&[u8]>) -> bool {
 }
 
 /// `:loadkeymap` — read language mappings from the file being sourced.
-///
-/// # Safety
-///
-/// `args` must be a valid command block (ex-command contract).
-pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
+pub fn ex_loadkeymap(excmd: &mut ExArg) {
     // SAFETY: caller contract; the getter and its cookie are the sourcing
     // machinery's, and `getline_equal` only compares them.
     let sourced = unsafe {
         getline_equal(
-            (*args).ea_getline,
-            (*args).cookie,
+            excmd.ea_getline,
+            excmd.cookie,
             Some(getsourceline as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
         )
     };
@@ -671,7 +667,7 @@ pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
     p_cpo.set(c"C".as_ptr() as *mut c_char);
     // SAFETY: caller contract; the line getter was just checked to be the
     // sourcing one, and `buf`'s entry list was just emptied.
-    unsafe { read_keymap_entries(args, buf) };
+    read_keymap_entries(excmd, buf);
     apply_keymap_entries(buf);
     p_cpo.set(save_cpo);
     buf.b_kmap_state |= KEYMAP_LOADED as int16_t;
@@ -682,18 +678,12 @@ pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
 /// entries, until the line getter runs out. Blank lines and `"` comments are
 /// skipped; an over-long or half-empty entry is dropped, and an empty `to`
 /// reports E791.
-///
-/// # Safety
-///
-/// `args` must be a live command block whose line getter is the sourcing one,
-/// and `buffer` a valid buffer.
-unsafe fn read_keymap_entries(args: *mut ExArg, mut buffer: Buf) {
+fn read_keymap_entries(excmd: &mut ExArg, mut buffer: Buf) {
     loop {
         // SAFETY: caller contract; the getter answers an owned heap line or
         // null at end of file.
-        let line = unsafe {
-            (*args).ea_getline.expect("non-null line getter")(0, (*args).cookie, 0, true)
-        };
+        let line =
+            unsafe { excmd.ea_getline.expect("non-null line getter")(0, excmd.cookie, 0, true) };
         if line.is_null() {
             break;
         }

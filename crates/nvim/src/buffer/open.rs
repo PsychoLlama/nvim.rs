@@ -65,12 +65,12 @@ fn read_file(
     lnum: LineNr,
     from: LineNr,
     to: LineNr,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
-    // SAFETY: two NUL-terminated names or nulls, and the caller's own `args`.
-    unsafe { readfile(ffname, fname, lnum, from, to, args, flags, silent) }
+    // SAFETY: two NUL-terminated names or nulls, and the caller's own `excmd`.
+    unsafe { readfile(ffname, fname, lnum, from, to, excmd, flags, silent) }
 }
 
 /// Open the memline (and the swap file) for `buffer`.
@@ -126,7 +126,7 @@ fn bail_out(n: c_int) {
 /// paths need.
 fn prepare_exarg(args: &mut ExArg, buffer: Buf) {
     // SAFETY: a local to fill in.
-    unsafe { prep_exarg(args, buffer) };
+    prep_exarg(args, buffer);
 }
 
 fn set_option_string(id: c_int, value: &'static CStr) {
@@ -198,7 +198,11 @@ pub fn get_highest_fnum() -> c_int {
 /// This is the retry `'fileformat'`/`'fileencoding'` guessed wrong needs: the
 /// bytes are already in the buffer, so re-reading them with the corrected
 /// options costs no file access.
-fn read_buffer(read_stdin: bool, args: *mut ExArg, flags: c_int) -> Result<Loaded, Failed> {
+fn read_buffer(
+    read_stdin: bool,
+    excmd: Option<&mut ExArg>,
+    flags: c_int,
+) -> Result<Loaded, Failed> {
     let silent = shortmess(ShmFlag::FILEINFO);
 
     let line_count = Buf::current().line_count();
@@ -213,7 +217,7 @@ fn read_buffer(read_stdin: bool, args: *mut ExArg, flags: c_int) -> Result<Loade
         line_count,
         0,
         last,
-        args,
+        excmd,
         flags | READ_BUFFER as c_int,
         silent,
     );
@@ -256,29 +260,27 @@ pub fn buf_ensure_loaded(buffer: Buf) -> bool {
     }
     // Make sure the buffer is in a window.  `status` can be OK or NOTDONE
     // (which also means ok/done).
-    let status = in_buffer(buffer, || open_buffer_inner(false, ptr::null_mut(), 0));
+    let status = in_buffer(buffer, || open_buffer_inner(false, None, 0));
     status.is_ok()
 }
 
 /// Open the current buffer: open the memfile and read the file into memory.
 ///
-/// With `read_stdin` the text comes from standard input instead; `args` forces
+/// With `read_stdin` the text comes from standard input instead; `excmd` forces
 /// `'fileformat'`/`'fileencoding'` and `flags_arg` is passed on to
 /// `readfile()`.
 ///
-/// # Safety
-/// `curbuf` and `curwin` must be set, and `args` be null or a live `ExArg`.
-pub unsafe fn open_buffer(
+pub fn open_buffer(
     read_stdin: bool,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     flags_arg: c_int,
 ) -> Result<Loaded, Failed> {
-    open_buffer_inner(read_stdin, args, flags_arg)
+    open_buffer_inner(read_stdin, excmd, flags_arg)
 }
 
 fn open_buffer_inner(
     read_stdin: bool,
-    args: *mut ExArg,
+    mut excmd: Option<&mut ExArg>,
     flags_arg: c_int,
 ) -> Result<Loaded, Failed> {
     let mut flags = flags_arg;
@@ -331,13 +333,22 @@ fn open_buffer_inner(
         let fifo = if read_fifo { READ_FIFO as c_int } else { 0 };
         let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM);
         let read = flags | READ_NEW as c_int | fifo;
-        retval = read_file(ffname, fname, 0, 0, last, args, read, silent);
+        retval = read_file(
+            ffname,
+            fname,
+            0,
+            0,
+            last,
+            excmd.as_deref_mut(),
+            read,
+            silent,
+        );
         if read_fifo {
             Buf::current().b_p_bin = save_bin;
             if retval == Ok(Loaded::Read) {
                 // don't add READ_FIFO here, otherwise we won't be able to
                 // detect the encoding
-                retval = read_buffer(false, args, flags);
+                retval = read_buffer(false, excmd.as_deref_mut(), flags);
             }
         }
         // Help buffer: populate *local-additions* in help.txt
@@ -353,10 +364,10 @@ fn open_buffer_inner(
         buf.b_p_bin = 1;
         let (none, last) = (ptr::null_mut::<c_char>(), MAXLNUM);
         let read = flags | (READ_NEW as c_int + READ_STDIN as c_int);
-        retval = read_file(none, none, 0, 0, last, ptr::null_mut(), read, silent);
+        retval = read_file(none, none, 0, 0, last, None, read, silent);
         Buf::current().b_p_bin = save_bin;
         if retval == Ok(Loaded::Read) {
-            retval = read_buffer(true, args, flags);
+            retval = read_buffer(true, excmd, flags);
         }
     }
 
@@ -504,7 +515,7 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
         let read = READ_NEW as c_int | READ_DUMMY as c_int;
         let (ffname, fname, last) = (buffer.b_ffname, buffer.b_fname, MAXLNUM);
         if open_memline(Buf::current()).is_ok()
-            && read_file(ffname, fname, 0, 0, last, &raw mut ea, read, false) == Ok(Loaded::Read)
+            && read_file(ffname, fname, 0, 0, last, Some(&mut ea), read, false) == Ok(Loaded::Read)
             && buffer.line_count() == Buf::current().line_count()
         {
             differ = (1..=Buf::current().line_count()).any(|lnum| lines_differ(buffer, lnum));
@@ -532,15 +543,7 @@ pub unsafe fn buf_open_scratch(bufnr: Handle, bufname: *mut c_char) -> Result<()
     let none = ptr::null_mut::<c_char>();
     let one = newlnum::ONE as LineNr;
     let hide = EcmdFlags::HIDE;
-    edit_file(
-        bufnr,
-        none,
-        none,
-        ptr::null_mut(),
-        one,
-        hide,
-        Win::current(),
-    )?;
+    edit_file(bufnr, none, none, None, one, hide, Win::current())?;
     if !bufname.is_null() {
         fire(AutoEvent::BufFilePre, Buf::current());
         // SAFETY: the current buffer, and the caller's NUL-terminated name.

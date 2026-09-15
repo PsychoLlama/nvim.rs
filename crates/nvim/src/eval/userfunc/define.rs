@@ -119,15 +119,12 @@ pub(crate) unsafe fn list_func_head(
 /// it, over a dozen locals that outlived the jumps. Those locals are these
 /// fields, and each label is the tail of the method whose refusal names it.
 ///
-/// The same shape as [`Live<T>`](crate::winlayer::Live): whoever builds one
-/// promises that `ea`/`args` name the live `:function` command being run and
-/// that `cursor` walks its NUL-terminated argument, so every method below is
-/// ordinary checked code resting on that.
-struct Definition {
+/// Whoever builds one promises that `cursor` walks the command's
+/// NUL-terminated argument, so every method below is ordinary checked code
+/// resting on that.
+struct Definition<'a> {
     /// The command being run.
-    ea: Ea,
-    /// The same, for the callees that still take the pointer.
-    args: *mut ExArg,
+    excmd: &'a mut ExArg,
     /// Where in the command's argument the parse has got to.
     cursor: Cur,
     /// The name being defined, owned until it is handed to the function.
@@ -175,7 +172,7 @@ enum Refusal {
 /// The number the nameless (dictionary) functions are given.
 static func_nr: GlobalCell<c_int> = GlobalCell::new(0);
 
-impl Definition {
+impl Definition<'_> {
     /// `:function Name(...)`: everything between the name and the table.
     ///
     /// `paren` says the command defines rather than lists.
@@ -183,16 +180,16 @@ impl Definition {
         if !paren {
             // ":function func": list that one function.
             // SAFETY: the live command, and the name and cursor into it.
-            let _ = unsafe { list_one_function(self.args, self.name, self.cursor.get()) };
+            let _ = unsafe { list_one_function(self.excmd, self.name, self.cursor.get()) };
             return;
         }
 
         self.cursor.skip(0);
         if self.cursor.byte() != b'(' {
-            if self.ea.skip == 0 {
+            if self.excmd.skip == 0 {
                 // SAFETY: a message argument the caller holds as a
                 // NUL-terminated string.
-                let arg = unsafe { c_str(self.ea.arg) };
+                let arg = unsafe { c_str(self.excmd.arg) };
                 semsg!("E124: Missing '(': {arg}");
                 return;
             }
@@ -212,7 +209,7 @@ impl Definition {
         // SAFETY: as above.
         unsafe { ga_init(&raw mut self.newlines, slot, 3) };
 
-        if self.ea.skip == 0 && self.check_name().is_none() {
+        if self.excmd.skip == 0 && self.check_name().is_none() {
             return;
         }
         if self.install().is_none() {
@@ -270,7 +267,7 @@ impl Definition {
     fn install(&mut self) -> Option<()> {
         let (argp, names) = (self.cursor.raw(), &raw mut self.newargs);
         let (varp, defs) = (&raw mut self.varargs, &raw mut self.default_args);
-        let skip = self.ea.skip != 0;
+        let skip = self.excmd.skip != 0;
         // SAFETY: the cursor walks the command's argument and the three
         // out-parameters are this record's own.
         let parsed = unsafe { get_function_args(argp, b')' as c_char, names, varp, defs, skip) };
@@ -278,7 +275,7 @@ impl Definition {
             if KeyTyped.get() && ui_has(kUICmdline) {
                 self.show_block = true;
                 // SAFETY: the live command's own text.
-                unsafe { ui_ext_cmdline_block_append(0, self.ea.cmd) };
+                unsafe { ui_ext_cmdline_block_append(0, self.excmd.cmd) };
             }
             match self.build() {
                 Ok(()) => return Some(()),
@@ -321,12 +318,11 @@ impl Definition {
         // Do not define the function when reading the body fails, and not
         // when skipping.
         let (lines, freep) = (&raw mut self.newlines, &raw mut self.line_to_free);
-        // SAFETY: the live command, and both out-parameters are this
-        // record's own.
-        let (args, line_arg, block) = (self.args, self.line_arg, self.show_block);
-        // SAFETY: as above.
-        let read = unsafe { get_function_body(args, lines, line_arg, freep, block) };
-        if read == FAIL || self.ea.skip != 0 {
+        let (line_arg, block) = (self.line_arg, self.show_block);
+        // SAFETY: both out-parameters are this record's own fields, and
+        // neither is the command.
+        let read = unsafe { get_function_body(self.excmd, lines, line_arg, freep, block) };
+        if read == FAIL || self.excmd.skip != 0 {
             return Err(Refusal::Unwind);
         }
 
@@ -380,7 +376,7 @@ impl Definition {
             self.line_arg = unsafe { self.cursor.get().add(1) };
         } else if self.cursor.byte() != NUL as u8
             && self.cursor.byte() != b'"'
-            && self.ea.skip == 0
+            && self.excmd.skip == 0
             && did_emsg.get() == 0
         {
             // SAFETY: the cursor walks a NUL-terminated string.
@@ -390,7 +386,7 @@ impl Definition {
 
         if KeyTyped.get() {
             self.report_existing();
-            if self.ea.skip == 0 && did_emsg.get() != 0 {
+            if self.excmd.skip == 0 && did_emsg.get() != 0 {
                 return Err(Refusal::Unwind);
             }
             if !ui_has(kUICmdline) {
@@ -405,7 +401,7 @@ impl Definition {
     /// Report a function of this name that already exists, which for a body
     /// being typed in is worth saying before the whole of it is.
     fn report_existing(&self) {
-        if self.ea.skip != 0 || self.ea.forceit != 0 {
+        if self.excmd.skip != 0 || self.excmd.forceit != 0 {
             return;
         }
         if !self.fudi.fd_dict.is_null() && self.fudi.fd_newkey.is_null() {
@@ -450,7 +446,7 @@ impl Definition {
         // table answered, and `name` its NUL-terminated name.
         let (sid, seq) = unsafe { ((*func).uf_script_ctx.sc_sid, (*func).uf_script_ctx.sc_seq) };
         let sctx = current_sctx.get();
-        if self.ea.forceit == 0 && (sid != sctx.sc_sid || seq == sctx.sc_seq) {
+        if self.excmd.forceit == 0 && (sid != sctx.sc_sid || seq == sctx.sc_seq) {
             unsafe { emsg_funcname(E_FUNCEXTS.as_ptr(), self.name) };
             return Err(Refusal::Keep);
         }
@@ -492,7 +488,7 @@ impl Definition {
     /// sequential number, reachable only through a Funcref.
     fn number_dict_function(&mut self) -> Result<size_t, Refusal> {
         self.func = ptr::null_mut();
-        if self.fudi.fd_newkey.is_null() && self.ea.forceit == 0 {
+        if self.fudi.fd_newkey.is_null() && self.excmd.forceit == 0 {
             emsg(gettext(E_FUNCDICT));
             return Err(Refusal::Unwind);
         }
@@ -501,10 +497,10 @@ impl Definition {
         let locked = unsafe {
             if self.fudi.fd_di.is_null() {
                 // Can't add a function to a locked dictionary.
-                value_check_lock((*self.fudi.fd_dict).dv_lock, self.ea.arg, TV_CSTRING)
+                value_check_lock((*self.fudi.fd_dict).dv_lock, self.excmd.arg, TV_CSTRING)
             } else {
                 // Can't change an existing function if it is locked.
-                value_check_lock((*self.fudi.fd_di).di_lock, self.ea.arg, TV_CSTRING)
+                value_check_lock((*self.fudi.fd_di).di_lock, self.excmd.arg, TV_CSTRING)
             }
         };
         if locked {
@@ -698,32 +694,28 @@ fn reads_as_identifier(name: &CStr) -> bool {
 /// Four commands in one: with no argument it lists everything, with a
 /// `/pattern/` it lists the matches, with a bare name it lists that one, and
 /// with a `(` it defines.
-///
-/// # Safety
-/// `args` is a live `:function` command.
-pub unsafe fn ex_function(args: *mut ExArg) {
-    // SAFETY: the caller's promise -- `args` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(args) };
+pub fn ex_function(excmd: &mut ExArg) {
+    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
 
     // ":function" without argument: list functions.
     // SAFETY: `ea.arg` is the command's NUL-terminated argument.
-    if ends_excmd(unsafe { *ea.arg } as c_int) != 0 {
-        if ea.skip == 0 {
+    if ends_excmd(unsafe { *excmd.arg } as c_int) != 0 {
+        if excmd.skip == 0 {
             // SAFETY: no pattern means every function.
             unsafe { list_functions(ptr::null_mut()) };
         }
         // SAFETY: as above.
-        ea.nextcmd = unsafe { check_nextcmd(ea.arg) };
+        excmd.nextcmd = unsafe { check_nextcmd(excmd.arg) };
         return;
     }
 
     // ":function /pat": list functions matching the pattern.
     // SAFETY: as above.
-    if unsafe { *ea.arg } == b'/' as c_char {
+    if unsafe { *excmd.arg } == b'/' as c_char {
         // SAFETY: the live command.
-        let p = unsafe { list_functions_matching_pat(args) };
+        let p = unsafe { list_functions_matching_pat(excmd) };
         // SAFETY: `p` is the cursor that listing left.
-        ea.nextcmd = unsafe { check_nextcmd(p) };
+        excmd.nextcmd = unsafe { check_nextcmd(p) };
         return;
     }
 
@@ -737,14 +729,14 @@ pub unsafe fn ex_function(args: *mut ExArg) {
     //              "name" == NULL, fd_dict and fd_di set
     //   s:func     a script-local name; g:func is the same as func
     let mut fudi = FUNCDICT_INIT;
-    let mut p = ea.arg;
+    let mut p = excmd.arg;
     // SAFETY: the command's argument, and both out-parameters are this
     // frame's own.
     let name =
-        unsafe { save_function_name(&raw mut p, ea.skip != 0, TFN_NO_AUTOLOAD, &raw mut fudi) };
+        unsafe { save_function_name(&raw mut p, excmd.skip != 0, TFN_NO_AUTOLOAD, &raw mut fudi) };
     // SAFETY: `p` is the cursor into the NUL-terminated argument.
     let paren = has_char(unsafe { cstr::at(p) }, b'(' as c_int);
-    if name.is_null() && (fudi.fd_dict.is_null() || !paren) && ea.skip == 0 {
+    if name.is_null() && (fudi.fd_dict.is_null() || !paren) && excmd.skip == 0 {
         // Return on an invalid expression in braces, unless the evaluation
         // was cancelled by an aborting error, an interrupt or an exception.
         if !aborting() {
@@ -758,7 +750,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
             unsafe { xfree(fudi.fd_newkey as *mut c_void) };
             return;
         }
-        ea.skip = 1;
+        excmd.skip = 1;
     }
 
     // An error in a function call while evaluating an expression in magic
@@ -767,8 +759,7 @@ pub unsafe fn ex_function(args: *mut ExArg) {
     did_emsg.set(0);
 
     let mut definition = Definition {
-        ea,
-        args,
+        excmd,
         // SAFETY: `p` is this frame's own from here on, walking the
         // command's NUL-terminated argument.
         cursor: unsafe { Cur::new(&raw mut p) },

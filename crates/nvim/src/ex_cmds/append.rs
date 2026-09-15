@@ -65,14 +65,9 @@ impl Drop for Line {
 static append_indent: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// `:insert` and `:append`, also used by [`ex_change`].
-///
-/// # Safety
-/// `args` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_append(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
+pub fn ex_append(excmd: &mut ExArg) {
     let mut did_undo = false;
-    let (cmdidx, forceit, line2) = (args.cmdidx, args.forceit, args.line2);
+    let (cmdidx, forceit, line2) = (excmd.cmdidx, excmd.forceit, excmd.line2);
     let mut lnum = line2;
     let mut indent = 0;
     // SAFETY: `curbuf` is the live current buffer.
@@ -115,7 +110,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
             }
         }
 
-        let Some(theline) = next_append_line(args, indent) else {
+        let Some(theline) = next_append_line(excmd, indent) else {
             break;
         };
         lines_left.set(Rows.get() - 1);
@@ -260,13 +255,8 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
 }
 
 /// `:change` -- delete the range, then append in its place.
-///
-/// # Safety
-/// `args` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_change(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
-    let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
+pub fn ex_change(excmd: &mut ExArg) {
+    let (forceit, line1, line2) = (excmd.forceit, excmd.line1, excmd.line2);
     // SAFETY: the range is inside the current buffer.
     if line2 >= line1 && u_save(line1 - 1, line2 + 1).is_err() {
         return;
@@ -298,24 +288,21 @@ pub unsafe fn ex_change(args: *mut ExArg) {
     check_cursor_lnum(Win::current());
     deleted_lines_mark(line1, line2 - lnum);
     // ":append" on the line above the deleted lines.
-    args.line2 = line1;
+    excmd.line2 = line1;
     // SAFETY: the command block is the one borrowed here.
-    unsafe { ex_append(&raw mut *args) };
+    ex_append(excmd);
 }
 
 /// `:z` -- print a window of lines around the range's last line.
-///
-/// # Safety
-/// `args` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_z(args: *mut ExArg) {
+pub fn ex_z(excmd: &mut ExArg) {
     // SAFETY: caller's contract.
-    let args = unsafe { &*args };
+    let excmd = &*excmd;
     let (arg, forceit, addr_count, flags, lnum) = (
-        args.arg,
-        args.forceit,
-        args.addr_count,
-        args.flags,
-        args.line2,
+        excmd.arg,
+        excmd.forceit,
+        excmd.addr_count,
+        excmd.flags,
+        excmd.line2,
     );
     let mut bigness = default_bigness(forceit).max(1);
 

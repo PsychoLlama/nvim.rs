@@ -864,17 +864,14 @@ unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
 }
 
 /// `:retab`.
-///
-/// # Safety
-/// `args` must be a live Ex-command argument.
-pub unsafe fn ex_retab(args: *mut ExArg) {
+pub fn ex_retab(excmd: &mut ExArg) {
     // SAFETY: the caller's Ex-command argument; the line range it names is
     // the current buffer's.
     let mut win = Win::current();
     let buf = Buf::current();
     let save_list = win.w_onebuf_opt.wo_list;
     win.w_onebuf_opt.wo_list = 0; // 'list' mode is not wanted here
-    let __v = unsafe { parse_retab_arg((*args).arg) };
+    let __v = unsafe { parse_retab_arg(excmd.arg) };
     let Some(tabs) = __v else {
         // Upstream returns here without restoring 'list', which it has
         // already cleared. Kept: a `:retab` with a malformed tabstop
@@ -889,9 +886,9 @@ pub unsafe fn ex_retab(args: *mut ExArg) {
         first_line: 0,
         last_line: 0,
     };
-    let mut lnum = unsafe { (*args).line1 };
-    while !got_int.get() && lnum <= unsafe { (*args).line2 } {
-        if !unsafe { retab.line(lnum, &tabs, (*args).forceit != 0) } {
+    let mut lnum = excmd.line1;
+    while !got_int.get() && lnum <= excmd.line2 {
+        if !retab.line(lnum, &tabs, excmd.forceit != 0) {
             break;
         }
         line_breakcheck();

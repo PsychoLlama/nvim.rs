@@ -8,7 +8,6 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Suppress;
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::winlayer::Ea;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr::null_mut;
 
@@ -61,14 +60,10 @@ fn ends_args(c: c_char) -> bool {
 }
 
 /// `:echo` and `:echon`.
-///
-/// # Safety
-/// `args` must be valid.
-pub unsafe fn ex_echo(args: *mut ExArg) {
+pub fn ex_echo(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the `ExArg` outlives the command,
     // which the `do_cmdline` frame that owns it discharges.
-    let mut args = unsafe { Ea::new(args) };
-    let mut arg: *mut c_char = args.arg;
+    let mut arg: *mut c_char = excmd.arg;
     let mut rettv = UNSET_TV;
     let mut atstart = true;
     let mut need_clear = true;
@@ -76,9 +71,9 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
     let called_emsg_before = called_emsg.get();
 
     let mut evalarg = UNSET_EVALARG;
-    let (ea, skip) = (args.raw(), args.skip != 0);
-    // SAFETY: `evalarg` is this frame's and `ea` the caller's `ExArg`.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, ea, skip) };
+    let skip = excmd.skip != 0;
+    // SAFETY: `evalarg` is this frame's.
+    unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
     let _skipping = skip.then(Suppress::emsg_skip);
 
     // SAFETY: `arg` walks the command line, which is NUL-terminated.
@@ -103,19 +98,19 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
         }
         need_clr_eos.set(false);
 
-        if args.skip == 0 {
+        if excmd.skip == 0 {
             if atstart {
                 atstart = false;
-                msg_ext_set_append(args.cmdidx == CmdIdx::echon);
+                msg_ext_set_append(excmd.cmdidx == CmdIdx::echon);
                 // SAFETY: the kind is a NUL-terminated literal.
                 unsafe { msg_ext_set_kind(c"echo".as_ptr()) };
-                if args.cmdidx == CmdIdx::echo {
+                if excmd.cmdidx == CmdIdx::echo {
                     if !msg_didout.get() {
                         msg_sb_eol();
                     }
                     msg_start();
                 }
-            } else if args.cmdidx == CmdIdx::echo {
+            } else if excmd.cmdidx == CmdIdx::echo {
                 // `:echo` separates its arguments; `:echon` does not.
                 // SAFETY: the separator is a NUL-terminated literal.
                 msg_str_hl(c" ", echo_hl_id.get(), false);
@@ -136,33 +131,30 @@ pub unsafe fn ex_echo(args: *mut ExArg) {
     }
 
     // SAFETY: `arg` is the tail of the command line.
-    args.nextcmd = unsafe { check_nextcmd(arg) };
-    // SAFETY: `evalarg` is this frame's and `ea` the caller's `ExArg`.
-    unsafe { clear_evalarg(&raw mut evalarg, ea) };
+    excmd.nextcmd = unsafe { check_nextcmd(arg) };
+    // SAFETY: `evalarg` is this frame's.
+    unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
     msg_ext_set_append(false);
 
-    if args.skip != 0 {
+    if excmd.skip != 0 {
         return;
     }
     // SAFETY: the command's argument is NUL-terminated.
-    if ui_has(kUIMessages) && ends_args(unsafe { *args.arg }) {
+    if ui_has(kUIMessages) && ends_args(unsafe { *excmd.arg }) {
         // A bare `:echo` still has to produce an (empty) message.
         msg_bytes(b"", 0, false);
     } else if need_clear {
         msg_clr_eos();
     }
-    if args.cmdidx == CmdIdx::echo {
+    if excmd.cmdidx == CmdIdx::echo {
         msg_end();
     }
 }
 
 /// `:echohl`.
-///
-/// # Safety
-/// `args` must be valid.
-pub unsafe fn ex_echohl(args: *mut ExArg) {
+pub fn ex_echohl(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the argument is NUL-terminated.
-    echo_hl_id.set(unsafe { syn_name2id((*args).arg) });
+    echo_hl_id.set(unsafe { syn_name2id(excmd.arg) });
 }
 
 /// The highlight group `:echohl` last named.
@@ -173,14 +165,10 @@ pub fn get_echo_hl_id() -> c_int {
 /// `:execute`, `:echomsg` and `:echoerr` — the three that evaluate every
 /// argument, join the results with spaces, and then do something with the
 /// one string.
-///
-/// # Safety
-/// `args` must be valid.
-pub unsafe fn ex_execute(args: *mut ExArg) {
+pub fn ex_execute(excmd: &mut ExArg) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise -- the `ExArg` outlives the command.
-    let mut args = unsafe { Ea::new(args) };
-    let mut arg: *mut c_char = args.arg;
+    let mut arg: *mut c_char = excmd.arg;
     let mut rettv = UNSET_TV;
     let mut ret = Ok(());
     let mut text = Vec::<u8>::new();
@@ -188,18 +176,18 @@ pub unsafe fn ex_execute(args: *mut ExArg) {
     // there is no message, which is not the same as an empty one.
     let mut built = false;
 
-    let _skipping = (args.skip != 0).then(Suppress::emsg_skip);
+    let _skipping = (excmd.skip != 0).then(Suppress::emsg_skip);
     // SAFETY: `arg` walks the command line, which is NUL-terminated.
     while !ends_args(unsafe { *arg }) {
-        // SAFETY: `arg` and `rettv` are this frame's, `args` the caller's.
-        ret = unsafe { eval1_emsg(&raw mut arg, &mut rettv, args.raw()) };
+        // SAFETY: `arg` and `rettv` are this frame's, `excmd` the caller's.
+        ret = unsafe { eval1_emsg(&raw mut arg, &mut rettv, Some(excmd)) };
         if ret.is_err() {
             break;
         }
-        if args.skip == 0 {
+        if excmd.skip == 0 {
             // `:execute` coerces; the two message commands render, and
             // so own what they produce.
-            let owned = args.cmdidx != CmdIdx::execute;
+            let owned = excmd.cmdidx != CmdIdx::execute;
             // SAFETY: `rettv` is this frame's, holding the value just
             // evaluated; each of the three renderings is NUL-terminated.
             let argstr: *const c_char = if !owned {
@@ -229,12 +217,12 @@ pub unsafe fn ex_execute(args: *mut ExArg) {
     if ret.is_ok() && built {
         text.push(0);
         let line = text.as_mut_ptr().cast::<c_char>();
-        if args.cmdidx == CmdIdx::echomsg {
+        if excmd.cmdidx == CmdIdx::echomsg {
             // SAFETY: the kind is a NUL-terminated literal.
             unsafe { msg_ext_set_kind(c"echomsg".as_ptr()) };
             // SAFETY: `line` is the NUL-terminated message built above.
             unsafe { msg_ptr(line, echo_hl_id.get()) };
-        } else if args.cmdidx == CmdIdx::echoerr {
+        } else if excmd.cmdidx == CmdIdx::echoerr {
             // `:echoerr` reports without counting as an error unless
             // something is already unwinding.
             let save_did_emsg = did_emsg.get();
@@ -244,8 +232,8 @@ pub unsafe fn ex_execute(args: *mut ExArg) {
             if !force_abort.get() {
                 did_emsg.set(save_did_emsg);
             }
-        } else if args.cmdidx == CmdIdx::execute {
-            let (getline, cookie) = (args.ea_getline, args.cookie);
+        } else if excmd.cmdidx == CmdIdx::execute {
+            let (getline, cookie) = (excmd.ea_getline, excmd.cookie);
             let opts = DoCmdOpts::NOWAIT | DoCmdOpts::VERBOSE;
             // SAFETY: `line` is the NUL-terminated command built above, and
             // the getline pair is the caller's own.
@@ -253,7 +241,7 @@ pub unsafe fn ex_execute(args: *mut ExArg) {
         }
     }
     // SAFETY: `arg` is the tail of the command line.
-    args.nextcmd = unsafe { check_nextcmd(arg) };
+    excmd.nextcmd = unsafe { check_nextcmd(arg) };
 }
 
 /// Which persistence a global variable's name asks for: `ALLCAPS` goes to

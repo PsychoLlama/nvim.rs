@@ -545,7 +545,7 @@ pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
     let last = newlnum::LAST as LineNr;
     let win = Some(Win::current().id());
     // SAFETY: `name` is a NUL-terminated file name.
-    let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };
+    let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), None, last, hide, win) };
     if opened.is_ok() && unsafe { (*cmd_arg).nchar } == 'F' as c_int && lnum >= 0 {
         Win::current().w_cursor.lnum = lnum;
         check_cursor_lnum(Win::current());

@@ -141,7 +141,7 @@ pub unsafe fn parse_pattern_and_range(
 
     // Uninitialised in the C; `parse_command_modifiers` only writes it.
     let mut dummy_cmdmod = CmdMod::default();
-    let _ = unsafe { parse_command_modifiers(&raw mut ea, &mut dummy, &mut dummy_cmdmod, true) };
+    let _ = parse_command_modifiers(&mut ea, &mut dummy, &mut dummy_cmdmod, true);
 
     // Skip over the range to find the command.
     let cmd = unsafe { skip_range(ea.cmd, ::core::ptr::null_mut::<ExpandContext>()) };
@@ -260,7 +260,7 @@ pub unsafe fn parse_pattern_and_range(
     let save_cursor = Win::current().w_cursor;
     Win::current().w_cursor = incsearch_start;
 
-    unsafe { parse_cmd_address(&raw mut ea, &mut dummy, true) };
+    parse_cmd_address(&mut ea, &mut dummy, true);
 
     if ea.addr_count > 0 {
         // Allow for a reverse match.

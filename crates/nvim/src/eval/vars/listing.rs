@@ -124,16 +124,16 @@ pub(crate) unsafe fn list_script_vars(first: *mut c_int) {
 /// on its own.  Answers where it stopped.
 ///
 /// # Safety
-/// `args` is live, `arg` a NUL-terminated string and `first` writable.
+/// `excmd` is live, `arg` a NUL-terminated string and `first` writable.
 pub(crate) unsafe fn list_arg_vars(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     mut arg: *const c_char,
     first: *mut c_int,
 ) -> *const c_char {
     let mut evalarg = EVALARG_EVALUATE;
     let mut error = false;
     while ends_excmd(unsafe { *arg } as c_int) == 0 && !got_int.get() {
-        if error || unsafe { (*args).skip } != 0 {
+        if error || excmd.skip != 0 {
             // Nothing is being printed any more; just check that what is
             // left parses as names.
             let flags = FNE_INCL_BR | FNE_CHECK_START;

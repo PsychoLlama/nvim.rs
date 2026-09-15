@@ -49,13 +49,10 @@ struct Translation {
 static TRANSLATIONS: GlobalCell<Vec<Translation>> = GlobalCell::new(Vec::new());
 
 /// `:menutranslate from to`, and `:menutranslate clear`.
-///
-/// # Safety
-/// `args` must name the live `ExArg` of the command.
-pub(crate) unsafe fn ex_menutranslate(args: *mut ExArg) {
+pub(crate) fn ex_menutranslate(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation; `arg` names the command line, which
     // this takes apart in place.
-    let arg = unsafe { CText::new((*args).arg) };
+    let arg = unsafe { CText::new(excmd.arg) };
 
     if arg.starts_with(b"clear") && ends_of_command(skip_white(arg.at(5))) {
         TRANSLATIONS.with_mut(Vec::clear);

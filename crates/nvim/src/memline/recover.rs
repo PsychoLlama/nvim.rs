@@ -45,9 +45,8 @@ fn read_original(
     flags: c_int,
 ) -> Result<Loaded, Failed> {
     let (name, short) = (Buf::current().b_ffname, core::ptr::null_mut());
-    let no_cmd = core::ptr::null_mut();
-    // SAFETY: the name is the buffer's own, and a null `eap` is "no command".
-    unsafe { readfile(name, short, from, skip, lines, no_cmd, flags, false) }
+    // SAFETY: the name is the buffer's own.
+    unsafe { readfile(name, short, from, skip, lines, None, flags, false) }
 }
 
 pub fn ml_recover(checkext: bool) {

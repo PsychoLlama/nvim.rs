@@ -656,13 +656,10 @@ unsafe fn expand_args(
 ///
 /// `preview` runs the `'inccommand'` callback instead, which only a Lua
 /// command can have.
-///
-/// # Safety
-/// Module contract; `args` must be the command being executed.
-pub(crate) unsafe fn do_ucmd(args: *mut ExArg, preview: bool) -> c_int {
+pub(crate) fn do_ucmd(excmd: &mut ExArg, preview: bool) -> c_int {
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
-    let (cmdidx, useridx) = unsafe { ((*args).cmdidx, (*args).useridx as usize) };
+    let (cmdidx, useridx) = (excmd.cmdidx, excmd.useridx as usize);
     let scope = if cmdidx == CmdIdx::USER {
         Scope::Global
     } else {
@@ -674,16 +671,16 @@ pub(crate) unsafe fn do_ucmd(args: *mut ExArg, preview: bool) -> c_int {
     if preview {
         debug_assert!(cmd.uc_preview_luaref > 0, "cmd->uc_preview_luaref > 0");
         // SAFETY: module contract.
-        return unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), args, true) };
+        return unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), excmd, true) };
     }
     if cmd.uc_luaref > 0 {
         // SAFETY: module contract.
-        unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), args, false) };
+        unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), excmd, false) };
         return 0;
     }
 
     // SAFETY: module contract.
-    let buf = unsafe { expand_replacement(cmd, &*args) };
+    let buf = unsafe { expand_replacement(cmd, &*excmd) };
 
     // The command body runs with the defining script's id, unless it asked
     // to keep the caller's.
@@ -695,7 +692,7 @@ pub(crate) unsafe fn do_ucmd(args: *mut ExArg, preview: bool) -> c_int {
     let opts = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED;
     // SAFETY: module contract; `buf` is the expanded body this frame owns.
     unsafe {
-        let (getline, cookie) = ((*args).ea_getline, (*args).cookie);
+        let (getline, cookie) = (excmd.ea_getline, excmd.cookie);
         let _ = do_cmdline(buf, getline, cookie, opts);
     };
     drop(script_ctx);

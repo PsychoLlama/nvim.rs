@@ -102,7 +102,7 @@ use crate::undo::{
     buf_is_changed, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,
     u_read_undo, u_savecommon, u_sync, u_unchanged, u_write_undo,
 };
-use crate::winlayer::{Buf, Ea};
+use crate::winlayer::Buf;
 use ::libc::{
     __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, iconv, iconv_close, lseek,
     memchr, read, readlink, symlink, umask, write,
@@ -646,73 +646,62 @@ pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 pub const NAME_MAX: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 
-/// Fill `args` so that `'fileencoding'`, `'fileformat'` and `'binary'` are
+/// Fill `excmd` so that `'fileencoding'`, `'fileformat'` and `'binary'` are
 /// forced to what buffer `buffer` already has. Used when calling `readfile` to
 /// re-read a buffer that is already open.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn prep_exarg(args: *mut ExArg, buffer: Buf) {
+pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
     // SAFETY: the caller's command, live for the call.
-    let mut ea = unsafe { Ea::new(args) };
     // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
     let cmd_len = 15 + unsafe { cstr::bytes_at(buffer.b_p_fenc) }.len();
-    ea.cmd = unsafe { xmalloc(cmd_len) }.cast();
-    unsafe { snprintf(ea.cmd, cmd_len, c"e ++enc=%s".as_ptr(), buffer.b_p_fenc) };
+    excmd.cmd = unsafe { xmalloc(cmd_len) }.cast();
+    unsafe { snprintf(excmd.cmd, cmd_len, c"e ++enc=%s".as_ptr(), buffer.b_p_fenc) };
     // Where the encoding name starts in that command.
-    ea.force_enc = 8;
-    ea.bad_char = buffer.b_bad_char;
+    excmd.force_enc = 8;
+    excmd.bad_char = buffer.b_bad_char;
     // SAFETY: 'fileformat' is the buffer's own one-character option string.
-    ea.force_ff = unsafe { *buffer.b_p_ff } as u8 as c_int;
-    ea.force_bin = if buffer.b_p_bin != 0 {
+    excmd.force_ff = unsafe { *buffer.b_p_ff } as u8 as c_int;
+    excmd.force_bin = if buffer.b_p_bin != 0 {
         FORCE_BIN
     } else {
         FORCE_NOBIN
     };
-    ea.read_edit = false as c_int;
-    ea.forceit = false as c_int;
+    excmd.read_edit = false as c_int;
+    excmd.forceit = false as c_int;
 }
 
 /// Set the default or forced `'fileformat'` and `'binary'`.
 ///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn set_file_options(set_options: bool, args: *mut ExArg) {
+pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
+    let forced = excmd.as_deref();
     // Set the default 'fileformat'.
     if set_options {
-        if !args.is_null() && unsafe { (*args).force_ff } != 0 {
+        if forced.is_some_and(|command| command.force_ff != 0) {
             set_fileformat(
-                unsafe { get_fileformat_force(Buf::current(), args) },
+                get_fileformat_force(Buf::current(), forced),
                 OptionSetFlags::LOCAL,
             );
+        // SAFETY: 'fileformats' is a string option; it is never null.
         } else if unsafe { *p_ffs.get() } != 0 {
             set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
         }
     }
 
     // Set or reset 'binary'.
-    if !args.is_null() && unsafe { (*args).force_bin } != 0 {
+    if let Some(forced_bin) = forced.map(|command| command.force_bin).filter(|&b| b != 0) {
         let oldval = Buf::current().b_p_bin;
-        Buf::current().b_p_bin = (unsafe { (*args).force_bin } == FORCE_BIN) as c_int;
+        Buf::current().b_p_bin = (forced_bin == FORCE_BIN) as c_int;
         let bin = Buf::current().b_p_bin != 0;
         set_options_bin(oldval != 0, bin, OptionSetFlags::LOCAL);
     }
 }
 
 /// Set the forced `'fileencoding'` from a `++enc=` argument.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn set_forced_fenc(args: *mut ExArg) {
+pub fn set_forced_fenc(excmd: &mut ExArg) {
     // SAFETY: the caller's command, live for the call.
-    let ea = unsafe { Ea::new(args) };
-    if ea.force_enc == 0 {
+    if excmd.force_enc == 0 {
         return;
     }
-    let fenc = unsafe { enc_canonize(ea.cmd.offset(ea.force_enc as isize)) };
+    let fenc = unsafe { enc_canonize(excmd.cmd.offset(excmd.force_enc as isize)) };
     set_option_direct(
         kOptFileencoding,
         OptVal::string(unsafe { cstr_to_string(fenc) }),

@@ -142,7 +142,7 @@ mod read;
 pub use self::read::*;
 mod stack;
 pub use self::stack::*;
-pub(crate) use crate::winlayer::{Buf, Ea, Win};
+pub(crate) use crate::winlayer::{Buf, Win};
 mod list;
 pub use self::list::*;
 mod entry;

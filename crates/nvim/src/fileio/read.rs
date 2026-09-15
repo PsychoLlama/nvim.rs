@@ -55,7 +55,7 @@ pub(crate) struct How {
 /// Read the lines of `fname` into the current buffer, after line `from`.
 ///
 /// The caller must check that `fname` is not NULL unless `READ_STDIN` is
-/// used. `args` may be NULL. When not recovering, `lines_to_skip` is 0 and
+/// used. `excmd` may be NULL. When not recovering, `lines_to_skip` is 0 and
 /// `lines_to_read` is `MAXLNUM`.
 ///
 /// Answers [`Loaded::Skipped`] for a directory or a `BufReadCmd` that did
@@ -65,14 +65,14 @@ pub(crate) struct How {
 ///
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
 /// `sfname` must point at a NUL-terminated string, unaliased for the call.
-/// `args` must point at the command's `ExArg`.
+/// `excmd` must point at the command's `ExArg`.
 pub(crate) unsafe fn readfile(
     fname: *mut c_char,
     sfname: *mut c_char,
     from: LineNr,
     lines_to_skip: LineNr,
     lines_to_read: LineNr,
-    args: *mut ExArg,
+    mut excmd: Option<&mut ExArg>,
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
@@ -87,7 +87,9 @@ pub(crate) unsafe fn readfile(
         nofile: flags & READ_NOFILE as c_int != 0,
         keep_undo: flags & READ_KEEP_UNDO as c_int != 0,
         set_options: flags & (READ_NEW | READ_BUFFER) as c_int != 0
-            || (!args.is_null() && unsafe { (*args).read_edit } != 0),
+            || excmd
+                .as_deref()
+                .is_some_and(|command| command.read_edit != 0),
     };
     let set_options = how.set_options;
 
@@ -161,7 +163,17 @@ pub(crate) unsafe fn readfile(
             mut fd,
             perm,
             mut guess,
-        } = match unsafe { open_source(fname, sfname, from, args, how, silent, msg_save) } {
+        } = match unsafe {
+            open_source(
+                fname,
+                sfname,
+                from,
+                excmd.as_deref_mut(),
+                how,
+                silent,
+                msg_save,
+            )
+        } {
             Ok(opened) => opened,
             Err(early) => {
                 retval = early;
@@ -190,18 +202,23 @@ pub(crate) unsafe fn readfile(
         linecnt = Buf::current().b_ml.ml_line_count;
 
         // The "++bad=" argument.
-        if !args.is_null() && unsafe { (*args).bad_char } != 0 {
-            conv.bad_char = unsafe { (*args).bad_char };
+        if let Some(command) = excmd.as_deref()
+            && command.bad_char != 0
+        {
+            conv.bad_char = command.bad_char;
             if set_options {
-                Buf::current().b_bad_char = unsafe { (*args).bad_char };
+                Buf::current().b_bad_char = command.bad_char;
             }
         } else {
             Buf::current().b_bad_char = 0;
         }
 
         // Decide which 'fileencoding' to use, or to start with.
-        if !args.is_null() && unsafe { (*args).force_enc } != 0 {
-            fenc = unsafe { enc_canonize((*args).cmd.offset((*args).force_enc as isize)) };
+        if let Some(command) = excmd.as_deref()
+            && command.force_enc != 0
+        {
+            // SAFETY: `force_enc` is an offset into the command's own line.
+            fenc = unsafe { enc_canonize(command.cmd.offset(command.force_enc as isize)) };
             fenc_alloced = true;
             keep_dest_enc = true;
         } else if Buf::current().b_p_bin != 0 {
@@ -262,8 +279,10 @@ pub(crate) unsafe fn readfile(
             if keep_fileformat {
                 keep_fileformat = false;
             } else {
-                if !args.is_null() && unsafe { (*args).force_ff } != 0 {
-                    fileformat = unsafe { get_fileformat_force(Buf::current(), args) };
+                if let Some(command) = excmd.as_deref()
+                    && command.force_ff != 0
+                {
+                    fileformat = get_fileformat_force(Buf::current(), Some(command));
                     guess.try_unix = 0;
                     guess.try_dos = false;
                     guess.try_mac = 0;
@@ -283,7 +302,10 @@ pub(crate) unsafe fn readfile(
                 // Try the next entry in 'fileencodings'.
                 advance_fenc = false;
 
-                if !args.is_null() && unsafe { (*args).force_enc } != 0 {
+                if excmd
+                    .as_deref()
+                    .is_some_and(|command| command.force_enc != 0)
+                {
                     // The conversion given with "++enc=" wasn't possible;
                     // read without conversion.
                     notconverted = true;
@@ -884,7 +906,7 @@ pub(crate) unsafe fn readfile(
         if !how.stdin
             && !how.fifo
             && (!how.buffer || !sfname.is_null())
-            && !unsafe { run_read_autocmds(sfname, args, how, set_options) }
+            && !unsafe { run_read_autocmds(sfname, excmd, how, set_options) }
         {
             // Autocommands may abort script processing. Note that this
             // skips the swap-file sync below, as upstream does.

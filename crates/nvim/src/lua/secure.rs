@@ -127,15 +127,11 @@ fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
 
 /// `:trust [++deny|++remove] [path]`. Without a path it acts on the
 /// current buffer.
-///
-/// # Safety
-/// `eap` must point at a live `ExArg` whose `arg` is NUL-terminated, and
-/// the editor's Lua state must be up.
-pub unsafe fn ex_trust(eap: *mut ExArg) {
+pub fn ex_trust(excmd: &mut ExArg) {
     // SAFETY: the caller's `ExArg`; `arg` is the NUL-terminated command
     // line, so the first word is inside it.
     let (arg, word) = unsafe {
-        let arg = (*eap).arg;
+        let arg = excmd.arg;
         let rest = skiptowhite(arg);
         (
             rest,

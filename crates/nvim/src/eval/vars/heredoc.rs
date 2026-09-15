@@ -141,16 +141,15 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
 /// missing end marker is not an error.
 ///
 /// # Safety
-/// `args` is a live command and `cmd` points into its argument, writable in
+/// `excmd` is a live command and `cmd` points into its argument, writable in
 /// place.
 pub unsafe fn heredoc_get(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     mut cmd: *mut c_char,
     script_get: bool,
 ) -> Option<ListRef> {
     // SAFETY: the caller's obligation -- a live command, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
-    let mut ea = unsafe { Ea::new(args) };
     let mut marker_indent_len: c_int = 0;
     let mut text_indent_len: c_int = 0;
     let mut text_indent: *mut c_char = ptr::null_mut();
@@ -164,7 +163,7 @@ pub unsafe fn heredoc_get(
     if heredoc_in_string {
         line_arg = unsafe { nl_ptr.add(1) };
         unsafe { *nl_ptr = NUL as c_char };
-    } else if ea.ea_getline.is_none() {
+    } else if excmd.ea_getline.is_none() {
         emsg_static(e_cannot_use_heredoc_here);
         return None;
     }
@@ -191,7 +190,7 @@ pub unsafe fn heredoc_get(
             // indentation stripped; the body's comes from its first
             // line, which `text_indent_len == -1` asks for below.
             // SAFETY: a live command's own command line.
-            let mut p = unsafe { *ea.cmdlinep };
+            let mut p = unsafe { *excmd.cmdlinep };
             while ascii_iswhite(c_int::from(unsafe { *p })) {
                 p = unsafe { p.add(1) };
                 marker_indent_len += 1;
@@ -262,8 +261,8 @@ pub unsafe fn heredoc_get(
             unsafe { xfree(theline.cast()) };
             // SAFETY: a live command, whose line getter reads its own
             // cookie.
-            let getline = ea.ea_getline.expect("non-null function pointer");
-            theline = unsafe { getline(NUL as c_int, ea.cookie, 0, false) };
+            let getline = excmd.ea_getline.expect("non-null function pointer");
+            theline = unsafe { getline(NUL as c_int, excmd.cookie, 0, false) };
             if theline.is_null() {
                 if !script_get {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -278,7 +277,7 @@ pub unsafe fn heredoc_get(
         // looking for the marker.
         let mut mi = 0;
         let indent = marker_indent_len as size_t;
-        if marker_indent_len > 0 && unsafe { cstr::prefix_eq(theline, *ea.cmdlinep, indent) } {
+        if marker_indent_len > 0 && unsafe { cstr::prefix_eq(theline, *excmd.cmdlinep, indent) } {
             mi = marker_indent_len;
         }
         if unsafe { cstr::eq(marker, theline.offset(mi as isize)) } {
@@ -313,7 +312,7 @@ pub unsafe fn heredoc_get(
         }
 
         let str = unsafe { theline.offset(ti as isize) };
-        if evalstr && ea.skip == 0 {
+        if evalstr && excmd.skip == 0 {
             let evaluated = unsafe { eval_all_expr_in_str(str) };
             if evaluated.is_null() {
                 eval_failed = true;
@@ -327,7 +326,7 @@ pub unsafe fn heredoc_get(
 
     if heredoc_in_string {
         // The next command follows the here-document in the string.
-        ea.nextcmd = line_arg;
+        excmd.nextcmd = line_arg;
     } else {
         unsafe { xfree(theline.cast()) };
     }

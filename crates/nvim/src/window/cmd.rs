@@ -55,7 +55,7 @@ use crate::strings::vim_snprintf;
 use crate::tag::state::{g_do_tagpreview, postponed_split};
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{ExArg, Failed, LineNr, NUL, OpArg, WinConfig, int64_t, size_t};
+use crate::types::{Failed, LineNr, NUL, OpArg, WinConfig, int64_t, size_t};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
@@ -733,10 +733,10 @@ fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> *mut c_char {
 
 /// `do_ecmd()`: edit file `name` in the current window, keeping the alternate.
 fn edit_file(name: *mut c_char) -> Result<(), Failed> {
-    let (sfname, eap) = (ptr::null_mut(), ptr::null_mut::<ExArg>());
+    let sfname = ptr::null_mut();
     let lnum = newlnum::LASTL as LineNr;
     // SAFETY: a NUL-terminated file name; every other argument is optional.
-    unsafe { do_ecmd(0, name, sfname, eap, lnum, EcmdFlags::HIDE, None) }
+    unsafe { do_ecmd(0, name, sfname, None, lnum, EcmdFlags::HIDE, None) }
 }
 
 /// Clamp `window`'s cursor line into its buffer.

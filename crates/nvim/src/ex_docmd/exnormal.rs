@@ -39,7 +39,7 @@ use crate::normal::{normal_cmd, set_cursor_for_append_to_line, visual_active};
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{ColNr, ExArg, NUL, OpArg, SaveState, size_t};
 
-use crate::winlayer::{Buf, Ea, Win};
+use crate::winlayer::{Buf, Win};
 
 /// Save the state `:normal` is about to disturb.
 ///
@@ -95,12 +95,7 @@ pub unsafe fn restore_current_state(sst: *mut SaveState) {
 }
 
 /// `:normal` — run the argument as normal-mode keys.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
-    let mut args = unsafe { Ea::new(args) };
+pub(crate) fn ex_normal(excmd: &mut ExArg) {
     if !Buf::current().terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
         emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
         return;
@@ -114,23 +109,23 @@ pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
         return;
     }
 
-    let arg = unsafe { escape_k_special(args.arg) };
+    let arg = unsafe { escape_k_special(excmd.arg) };
     let busy = Depth::of(&ex_normal_busy);
     let mut save_state = SaveState::default();
     if unsafe { save_current_state(&raw mut save_state) } {
         loop {
             // With a range, the keys are run once per line, from the
             // first column.
-            if args.addr_count != 0 {
-                Win::current().w_cursor.lnum = args.line1;
-                args.line1 += 1;
+            if excmd.addr_count != 0 {
+                Win::current().w_cursor.lnum = excmd.line1;
+                excmd.line1 += 1;
                 Win::current().w_cursor.col = 0 as ColNr;
                 check_cursor_moved(Win::current());
             }
             unsafe {
                 exec_normal_cmd(
-                    if arg.is_null() { args.arg } else { arg },
-                    if args.forceit != 0 {
+                    if arg.is_null() { excmd.arg } else { arg },
+                    if excmd.forceit != 0 {
                         REMAP_NONE as c_int
                     } else {
                         REMAP_YES as c_int
@@ -138,7 +133,7 @@ pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
                     false,
                 )
             };
-            if !(args.addr_count > 0 && args.line1 <= args.line2 && !got_int.get()) {
+            if !(excmd.addr_count > 0 && excmd.line1 <= excmd.line2 && !got_int.get()) {
                 break;
             }
         }
@@ -207,13 +202,8 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
 }
 
 /// `:startinsert`, `:startreplace` and `:startgreplace`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    if args.forceit != 0 {
+pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
+    if excmd.forceit != 0 {
         if Win::current().w_cursor.lnum == 0 {
             Win::current().w_cursor.lnum = 1;
         }
@@ -222,7 +212,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
     if State.get() & MODE_INSERT != 0 {
         return;
     }
-    let idx = args.cmdidx;
+    let idx = excmd.cmdidx;
     // The upper-case forms are what `edit()` reads as "started from
     // here" rather than "restarted".
     restart_edit.set(if idx == CmdIdx::startinsert {
@@ -232,7 +222,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
     } else {
         'V' as c_int
     });
-    if args.forceit == 0 {
+    if excmd.forceit == 0 {
         if idx == CmdIdx::startinsert {
             restart_edit.set('i' as c_int);
         }
@@ -244,11 +234,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
 }
 
 /// `:stopinsert`.
-///
-/// # Safety
-///
-/// `_args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_stopinsert(_args: *mut ExArg) {
+pub(crate) fn ex_stopinsert(_excmd: &mut ExArg) {
     restart_edit.set(0);
     stop_insert_mode.set(true);
     clearmode();

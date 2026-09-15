@@ -259,7 +259,7 @@ impl Drop for TempFile {
 /// Either side travels through a pipe unless 'shelltemp' asks for files.
 ///
 /// # Safety
-/// `args` and `cmd` must be live, and the range must be lines of the current
+/// `cmd` must be live, and the range must be lines of the current
 /// buffer.
 unsafe fn do_filter(
     line1: LineNr,
@@ -351,7 +351,7 @@ unsafe fn do_filter(
         // Vi also doesn't do this and the messages are not very informative.
         no_prompt = Some(Suppress::wait_return()); // don't wait_return() while busy
         if itmp.is_some()
-            // SAFETY: `args` is live and the range is the current buffer's.
+            // SAFETY: the range is the current buffer's.
             && unsafe {
                 buf_write(
                     Buf::current(),
@@ -359,7 +359,7 @@ unsafe fn do_filter(
                     ptr::null_mut(),
                     line1,
                     line2,
-                    &raw mut *args,
+                    Some(args,),
                     WriteRequest::filter(),
                 )
             }.is_err()
@@ -433,7 +433,7 @@ unsafe fn do_filter(
             }
 
             if otmp.is_some() {
-                // SAFETY: `otmp` is a live file name and `args` the caller's.
+                // SAFETY: `otmp` is a live file name.
                 let read = unsafe {
                     readfile(
                         TempFile::name(&otmp),
@@ -441,7 +441,7 @@ unsafe fn do_filter(
                         line2,
                         0,
                         MAXLNUM,
-                        &raw mut *args,
+                        Some(args),
                         READ_FILTER as c_int,
                         false,
                     )

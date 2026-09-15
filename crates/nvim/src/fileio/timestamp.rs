@@ -550,7 +550,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     let mut ea = ExArg::default();
     if !reload_options {
         // SAFETY: `ea` is this frame's.
-        unsafe { prep_exarg(&raw mut ea, buffer) };
+        prep_exarg(&mut ea, buffer);
     }
 
     let old_cursor = Win::current().w_cursor;
@@ -609,9 +609,8 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         let (ffname, fname) = (buffer.b_ffname, buffer.b_fname);
         let last = MAXLNUM;
         let quiet = shortmess(ShmFlag::FILEINFO);
-        let at = &raw mut ea;
         // SAFETY: a live buffer's own names, and `ea` is a local.
-        if unsafe { readfile(ffname, fname, 0, 0, last, at, flags, quiet) }.is_err() {
+        if unsafe { readfile(ffname, fname, 0, 0, last, Some(&mut ea), flags, quiet) }.is_err() {
             if !aborting() {
                 let fname = buffer.b_fname;
                 // SAFETY: a static format string with one `%s`, and the // buffer's own file name.

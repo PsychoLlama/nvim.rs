@@ -134,7 +134,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     }
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
-        unsafe { ex_diffupdate(::core::ptr::null_mut()) };
+        diff_update(None);
     }
     let fromidx = fromidx as usize;
     // Read after the recompute, which runs `DiffUpdated` autocommands.
@@ -198,7 +198,7 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     }
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
-        unsafe { ex_diffupdate(::core::ptr::null_mut()) };
+        diff_update(None);
     }
     let Some(first) = Df::first(tp) else {
         return Err(Failed);
@@ -248,7 +248,7 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
     }
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
-        unsafe { ex_diffupdate(::core::ptr::null_mut()) };
+        diff_update(None);
     }
     if tp.tp_first_diff.is_null() {
         return lnum1;
@@ -302,7 +302,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     }
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
-        unsafe { ex_diffupdate(::core::ptr::null_mut()) };
+        diff_update(None);
     }
     let idx = idx as usize;
 

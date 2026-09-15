@@ -15,7 +15,7 @@ use crate::memory::xfree;
 use crate::message::state::{capture_ga, did_emsg, msg_col, redir_off};
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, Array, Boolean, Dict, Error, ExArg, ExprAST, ExprASTNode, ExprASTNodeType,
+    ApiDict, Array, Boolean, Dict, Error, ExprAST, ExprASTNode, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
     FuncExe, GArray, Integer, KeyDict_exec_opts, LineNr, Object, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Partial, String_0, TryState,

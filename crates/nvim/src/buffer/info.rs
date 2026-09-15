@@ -123,15 +123,11 @@ fn remembered_lnum(buffer: Buf) -> LineNr {
 // :ls / :buffers
 
 /// List the buffers, one line each, as `:ls` and `:files` do.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn buflist_list(args: *mut ExArg) {
+pub fn buflist_list(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
-    let arg = unsafe { (*args).arg };
+    let arg = excmd.arg;
     // SAFETY: as above.
-    let forceit = unsafe { (*args).forceit };
+    let forceit = excmd.forceit;
     // SAFETY: a NUL-terminated literal naming the message kind.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
 

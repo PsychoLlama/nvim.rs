@@ -179,27 +179,23 @@ fn with_clean_error_state(f: impl FnOnce()) {
 // :ball
 
 /// Open a window for every listed buffer, closing the superfluous ones.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_buffer_all(args: *mut ExArg) {
+pub fn ex_buffer_all(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
-    let args = unsafe { &*args };
+    let excmd = &*excmd;
     let mut split_ret = Ok(());
     let mut open_wins = 0;
     let had_tab = cmdmod.with(|m| m.cmod_tab);
 
     // The maximum number of windows to open: as many as possible, or as many
     // as the count asked for.
-    let count: LineNr = if args.addr_count == 0 {
+    let count: LineNr = if excmd.addr_count == 0 {
         9999 as LineNr
     } else {
-        args.line2
+        excmd.line2
     };
 
     // Whether to load inactive buffers too.
-    let all = args.cmdidx != CmdIdx::unhide && args.cmdidx != CmdIdx::sunhide;
+    let all = excmd.cmdidx != CmdIdx::unhide && excmd.cmdidx != CmdIdx::sunhide;
 
     // Stop Visual mode: the cursor and "VIsual" may very well be invalid
     // after switching to another buffer.

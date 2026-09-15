@@ -685,9 +685,7 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
     // `eval0` takes a mutable buffer: it writes the terminator back over
     // what it consumed.
     let mut arg: Vec<c_char> = expr.bytes().map(|b| b as c_char).chain([0]).collect();
-    let ok = unsafe {
-        neovim::eval::eval0(arg.as_mut_ptr(), &mut tv, ptr::null_mut(), &raw mut evalarg)
-    };
+    let ok = unsafe { neovim::eval::eval0(arg.as_mut_ptr(), &mut tv, None, &raw mut evalarg) };
     ok.is_ok().then_some(tv)
 }
 

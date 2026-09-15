@@ -104,14 +104,7 @@ fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
     let mut errormsg: Option<CString> = None;
     // SAFETY: all three out-parameters are locals of this frame, unaliased
     // for the call, and `cmdline` names the buffer above.
-    let ok = unsafe {
-        parse_cmdline(
-            &raw mut cmdline,
-            &raw mut args,
-            &raw mut info,
-            &mut errormsg,
-        )
-    };
+    let ok = unsafe { parse_cmdline(&raw mut cmdline, &mut args, &raw mut info, &mut errormsg) };
     if !ok {
         return Err(errormsg.map_or_else(String::new, |m| m.to_string_lossy().into_owned()));
     }
@@ -140,14 +133,7 @@ fn parse_mods(_editor: &Editor, line: &str) -> (CmdModFlags, c_int) {
     let mut info: CmdParseInfo = unsafe { std::mem::zeroed() };
     let mut errormsg: Option<CString> = None;
     // SAFETY: as in `parse`.
-    let ok = unsafe {
-        parse_cmdline(
-            &raw mut cmdline,
-            &raw mut args,
-            &raw mut info,
-            &mut errormsg,
-        )
-    };
+    let ok = unsafe { parse_cmdline(&raw mut cmdline, &mut args, &raw mut info, &mut errormsg) };
     assert!(ok, "{line:?} did not parse");
     (info.cmdmod.cmod_flags, info.cmdmod.cmod_verbose)
 }
@@ -266,8 +252,7 @@ fn argopts(_editor: &Editor, line: &str) -> Result<ArgOpts, ()> {
     // SAFETY: `args` is this frame's, unaliased, and its `cmd`/`arg` point
     // into the NUL-terminated buffer above.
     while unsafe { std::slice::from_raw_parts(args.arg.cast::<u8>(), 2) } == b"++" {
-        // SAFETY: as above.
-        if unsafe { getargopt(&raw mut args) }.is_err() {
+        if getargopt(&mut args).is_err() {
             return Err(());
         }
     }

@@ -21,7 +21,7 @@ use crate::cursor::{
     get_cursor_pos_ptr,
 };
 use crate::edit::{BeginlineOpts, beginline, cursor_down, cursor_up, oneleft, oneright};
-use crate::ex_cmds::do_ascii;
+use crate::ex_cmds::describe_cursor_char;
 use crate::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
 use crate::fold::has_any_folding;
 use crate::getchar::state::mod_mask;
@@ -432,7 +432,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         Ok(b'`') => unsafe { nv_gomark(cmd_arg) },
         Ok(b's') => do_sleep(int64_t::from(ca.count1 * 1000), false),
         // `ga`: describe the character under the cursor.
-        Ok(b'a') => unsafe { do_ascii(ptr::null_mut()) },
+        Ok(b'a') => describe_cursor_char(),
         // `g8` shows the byte sequence; `8g8` finds an illegal one.
         Ok(b'8') => {
             if ca.count0 == 8 {

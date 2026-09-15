@@ -35,7 +35,7 @@ use crate::highlight::hl_add_url;
 use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    Event, ExArg, Handle, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
+    Event, Handle, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
     VTermTerminator, VTermValue, Vv, size_t,
 };
 use crate::vterm::pen::set_pen_attr;
@@ -145,11 +145,11 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
     // Pre-bound so that the eight-argument call still fits on one line.
     let mut event = data.object();
     let (data, none) = (&mut event, ::core::ptr::null_mut());
-    let (exarg, group) = (::core::ptr::null_mut::<ExArg>(), AUGROUP_ALL);
+    let group = AUGROUP_ALL;
     // SAFETY: TermRequest against a live buffer; nothing of the terminal is
     // borrowed across it.
     let (event, buffer) = (AutoEvent::TermRequest, Some(buffer));
-    unsafe { apply_autocmds_group(event, none, none, true, group, buffer, exarg, data) };
+    unsafe { apply_autocmds_group(event, none, none, true, group, buffer, None, data) };
     term.refcount.release();
 
     // Let writes through again before flushing what the handler wrote, or

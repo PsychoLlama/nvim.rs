@@ -44,20 +44,15 @@ use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
 use crate::types::{ExArg, FILE, Failed, NUL, VarNumber, Vv, ssize_t};
 
-use crate::winlayer::{Ea, Win};
+use crate::winlayer::Win;
 use ::libc::{fclose, strcasecmp};
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_colorscheme(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    if byte(args.arg) != NUL {
-        if unsafe { load_colors(args.arg) }.is_err() {
+pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
+    if byte(excmd.arg) != NUL {
+        if unsafe { load_colors(excmd.arg) }.is_err() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(args.arg) };
+            let arg = unsafe { c_str(excmd.arg) };
             semsg!("E185: Cannot find color scheme '{arg}'");
         }
         return;
@@ -80,16 +75,11 @@ pub(crate) unsafe fn ex_colorscheme(args: *mut ExArg) {
 }
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_highlight(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    if byte(args.arg) == NUL && byte_at(args.cmd, 2) == '!' as c_int {
+pub(crate) fn ex_highlight(excmd: &mut ExArg) {
+    if byte(excmd.arg) == NUL && byte_at(excmd.cmd, 2) == '!' as c_int {
         msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
-    unsafe { do_highlight(args.arg, args.forceit != 0, false) };
+    unsafe { do_highlight(excmd.arg, excmd.forceit != 0, false) };
 }
 
 /// `:redir` — send message output to a file, a register or a variable
@@ -97,14 +87,9 @@ pub(crate) unsafe fn ex_highlight(args: *mut ExArg) {
 ///
 /// Only one destination at a time: every form closes whatever was open
 /// first.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    let mut arg = args.arg;
-    if unsafe { strcasecmp(args.arg, c"END".as_ptr() as *mut c_char) } == 0 {
+pub(crate) fn ex_redir(excmd: &mut ExArg) {
+    let mut arg = excmd.arg;
+    if unsafe { strcasecmp(excmd.arg, c"END".as_ptr() as *mut c_char) } == 0 {
         close_redir();
     } else if byte(arg) == '>' as c_int {
         // `:redir > file` truncates, `:redir >> file` appends.
@@ -121,7 +106,7 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
         if fname.is_null() {
             return;
         }
-        redir_fd.set(unsafe { open_exfile(fname, args.forceit, mode) });
+        redir_fd.set(unsafe { open_exfile(fname, excmd.forceit, mode) });
         xfree(fname as *mut c_void);
     } else if byte(arg) == '@' as c_int {
         close_redir();
@@ -146,7 +131,7 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
         if byte(arg) != NUL {
             redir_reg.set(0);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(args.arg) };
+            let arg = unsafe { c_str(excmd.arg) };
             semsg!("E475: Invalid argument: {arg}");
         }
     } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
@@ -161,7 +146,7 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
         }
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(args.arg) };
+        let arg = unsafe { c_str(excmd.arg) };
         semsg!("E475: Invalid argument: {arg}");
     }
     // Whichever form succeeded, output is being captured again.
@@ -172,19 +157,14 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
 
 /// `:redraw` — draw now, with 'lazyredraw' and the redraw suppression
 /// counter out of the way.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_redraw(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
+pub(crate) fn ex_redraw(excmd: &mut ExArg) {
     if cmdpreview.get() {
         return;
     }
     let lazyredraw_off = suspend_lazyredraw();
     validate_cursor(Win::current());
     update_topline(Win::current());
-    if args.forceit != 0 {
+    if excmd.forceit != 0 {
         redraw_all_later(UPD_NOT_VALID);
         redraw_cmdline.set(true);
     } else if visual_active() {
@@ -204,16 +184,11 @@ pub(crate) unsafe fn ex_redraw(args: *mut ExArg) {
 
 /// `:redrawstatus` — the status lines only, unless a full redraw is
 /// needed to show them.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_redrawstatus(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
+pub(crate) fn ex_redrawstatus(excmd: &mut ExArg) {
     if cmdpreview.get() {
         return;
     }
-    if args.forceit != 0 {
+    if excmd.forceit != 0 {
         status_redraw_all();
     } else {
         status_redraw_curbuf();
@@ -232,11 +207,7 @@ pub(crate) unsafe fn ex_redrawstatus(args: *mut ExArg) {
 }
 
 /// `:redrawtabline`.
-///
-/// # Safety
-///
-/// `_args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_redrawtabline(_args: *mut ExArg) {
+pub(crate) fn ex_redrawtabline(_excmd: &mut ExArg) {
     let lazyredraw_off = suspend_lazyredraw();
     draw_tabline();
     drop(lazyredraw_off);
@@ -280,16 +251,11 @@ pub(crate) fn close_redir() {
 }
 
 /// `:digraphs` — define digraphs, or list them.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_digraphs(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    if byte(args.arg) != NUL {
-        putdigraph(unsafe { core::ffi::CStr::from_ptr(args.arg) }.to_bytes());
+pub(crate) fn ex_digraphs(excmd: &mut ExArg) {
+    if byte(excmd.arg) != NUL {
+        putdigraph(unsafe { core::ffi::CStr::from_ptr(excmd.arg) }.to_bytes());
     } else {
-        listdigraphs(args.forceit != 0);
+        listdigraphs(excmd.forceit != 0);
     }
 }
 
@@ -303,11 +269,7 @@ pub fn set_no_hlsearch(flag: bool) {
 }
 
 /// `:nohlsearch`.
-///
-/// # Safety
-///
-/// `_args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_nohlsearch(_args: *mut ExArg) {
+pub(crate) fn ex_nohlsearch(_excmd: &mut ExArg) {
     set_no_hlsearch(true);
     redraw_all_later(UPD_SOME_VALID);
 }

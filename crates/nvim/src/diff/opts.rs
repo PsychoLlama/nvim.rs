@@ -130,7 +130,7 @@ pub(crate) unsafe fn parse_diffanchors(
         let mut errormsg = None;
         let lnum = unsafe {
             get_address(
-                ::core::ptr::null_mut(),
+                None,
                 &raw mut dia,
                 CmdAddr::Lines,
                 check_only,

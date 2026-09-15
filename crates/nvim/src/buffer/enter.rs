@@ -102,7 +102,7 @@ fn diff_add(buffer: Buf) {
 /// Load the buffer that has just been made current.
 fn load_current_buffer() {
     // SAFETY: `curbuf` and `curwin` are set; a null `eap` is the no-command form.
-    let _ = unsafe { open_buffer(false, ptr::null_mut(), 0) };
+    let _ = open_buffer(false, None, 0);
 }
 
 /// Warn if the file changed on disk since the buffer was read.

@@ -136,7 +136,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
                 let mut context = ExpandContext::ShellCmdLine;
                 unsafe {
                     set_context_for_wildcard_arg(
-                        ptr::null_mut(),
+                        None,
                         xpc.xp_pattern,
                         false,
                         &raw mut xpc,

@@ -25,7 +25,7 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 
 use crate::types::{CmdAddr, ExArg, LineNr};
-use crate::winlayer::{Buf, Ea, Win};
+use crate::winlayer::{Buf, Win};
 
 /// `:wincmd`'s address kind depends on the window command it is given: `w`
 /// counts windows, `^` counts buffers, most of the tree counts something
@@ -42,9 +42,9 @@ const WINCMD_NONE: &[u8] = b"zPtbp=\x1a\x14\x02\x10\x0d";
 /// # Safety
 ///
 /// `arg` must point at a NUL-terminated string.
-pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut args: Ea) {
+pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, excmd: &mut ExArg) {
     let c = ubyte(arg);
-    args.addr_type = if WINCMD_OTHER.contains(&c) {
+    excmd.addr_type = if WINCMD_OTHER.contains(&c) {
         CmdAddr::Other
     } else if WINCMD_BUFFERS.contains(&c) {
         CmdAddr::Buffers
@@ -63,36 +63,31 @@ pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut args: Ea) {
 ///
 /// # Safety
 ///
-/// `args` must point at the command's `ExArg`, unaliased for the call. `p`
+/// `excmd` must point at the command's `ExArg`, unaliased for the call. `p`
 /// must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn set_cmd_addr_type(args: *mut ExArg, p: *mut c_char) {
-    let mut ea = unsafe { Ea::new(args) };
-    if is_user_cmd(ea.cmdidx) {
+pub unsafe fn set_cmd_addr_type(excmd: &mut ExArg, p: *mut c_char) {
+    if is_user_cmd(excmd.cmdidx) {
         return;
     }
-    ea.addr_type = if ea.cmdidx != CmdIdx::SIZE {
-        cmdnames[ea.cmdidx.index()].cmd_addr_type
+    excmd.addr_type = if excmd.cmdidx != CmdIdx::SIZE {
+        cmdnames[excmd.cmdidx.index()].cmd_addr_type
     } else {
         CmdAddr::Lines
     };
-    if ea.cmdidx == CmdIdx::wincmd && !p.is_null() {
-        unsafe { get_wincmd_addr_type(skipwhite(p), ea) };
+    if excmd.cmdidx == CmdIdx::wincmd && !p.is_null() {
+        unsafe { get_wincmd_addr_type(skipwhite(p), excmd) };
     }
     // `:cc`/`:ll` in a quickfix window address the window's entries.
-    if (ea.cmdidx == CmdIdx::cc || ea.cmdidx == CmdIdx::ll) && buf_is_quickfix(current_buf()) {
-        ea.addr_type = CmdAddr::Other;
+    if (excmd.cmdidx == CmdIdx::cc || excmd.cmdidx == CmdIdx::ll) && buf_is_quickfix(current_buf())
+    {
+        excmd.addr_type = CmdAddr::Other;
     }
 }
 
 /// The address `.` stands for, which is also what a bare `+N`/`-N` counts
 /// from.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
-    let args = unsafe { Ea::new(args) };
-    match args.addr_type {
+pub fn get_cmd_default_range(excmd: &mut ExArg) -> LineNr {
+    match excmd.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
             // Not the cursor line but the *last* line when the cursor is
             // past it, which a buffer shrinking under a command allows.
@@ -113,53 +108,48 @@ pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle as LineNr,
         CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
-        CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
+        CmdAddr::Quickfix => qf_get_cur_idx(excmd) as LineNr,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(excmd) as LineNr,
         _ => 0,
     }
 }
 
 /// The range an `ExArgt::DFLALL` command means by "no range": everything.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub unsafe fn set_cmd_dflall_range(args: *mut ExArg) {
-    let mut ea = unsafe { Ea::new(args) };
-    ea.line1 = 1;
-    match ea.addr_type {
+pub fn set_cmd_dflall_range(excmd: &mut ExArg) {
+    excmd.line1 = 1;
+    match excmd.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
-            ea.line2 = Buf::current().b_ml.ml_line_count;
+            excmd.line2 = Buf::current().b_ml.ml_line_count;
         }
         CmdAddr::LoadedBuffers => {
             let (first, last) = loaded_buffer_range();
-            ea.line1 = first;
-            ea.line2 = last;
+            excmd.line1 = first;
+            excmd.line2 = last;
         }
         CmdAddr::Buffers => {
-            ea.line1 = head().handle as LineNr;
-            ea.line2 = tail().handle as LineNr;
+            excmd.line1 = head().handle as LineNr;
+            excmd.line2 = tail().handle as LineNr;
         }
         CmdAddr::Windows => {
-            ea.line2 = current_win_nr(None) as LineNr;
+            excmd.line2 = current_win_nr(None) as LineNr;
         }
         CmdAddr::Tabs => {
-            ea.line2 = current_tab_nr(None) as LineNr;
+            excmd.line2 = current_tab_nr(None) as LineNr;
         }
-        CmdAddr::TabsRelative => ea.line2 = 1,
+        CmdAddr::TabsRelative => excmd.line2 = 1,
         CmdAddr::Arguments => {
             let len = arglist_len();
             if len == 0 {
-                ea.line2 = 0;
-                ea.line1 = 0;
+                excmd.line2 = 0;
+                excmd.line1 = 0;
             } else {
-                ea.line2 = len as LineNr;
+                excmd.line2 = len as LineNr;
             }
         }
         CmdAddr::QuickfixValid => {
-            ea.line2 = qf_get_valid_size(args) as LineNr;
-            if ea.line2 == 0 {
-                ea.line2 = 1;
+            excmd.line2 = qf_get_valid_size(excmd) as LineNr;
+            if excmd.line2 == 0 {
+                excmd.line2 = 1;
             }
         }
         t if t == CmdAddr::NoRange || t == CmdAddr::Unsigned || t == CmdAddr::Quickfix => {

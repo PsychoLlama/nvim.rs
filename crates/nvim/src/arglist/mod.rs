@@ -62,7 +62,7 @@ use crate::window::{
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
 use crate::winlayer::graph::{cmdwin_type, firstwin, lastused_tabpage, lastwin};
-use crate::winlayer::{Buf, Ea, Live, Win, tab_windows};
+use crate::winlayer::{Buf, Live, Win, tab_windows};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
@@ -74,7 +74,7 @@ pub use command::{
 pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
 
 /// An argument list — the global one, or a window's own copy — the same
-/// promise as [`Ea`]. A list is reference counted and outlives any command
+/// promise as the command's own borrow. A list is reference counted and outlives any command
 /// walking it.
 pub(crate) type Al = Live<ArgList>;
 

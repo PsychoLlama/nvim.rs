@@ -141,25 +141,20 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
 }
 
 /// `:file[!] [fname]`.
-///
-/// # Safety
-/// `args` must be the live Ex-command argument.
-pub unsafe fn ex_file(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
+pub fn ex_file(excmd: &mut ExArg) {
     // SAFETY: `args.arg` is the command's NUL-terminated argument.
-    let no_arg = unsafe { *args.arg } as c_int == NUL;
+    let no_arg = unsafe { *excmd.arg } as c_int == NUL;
 
     // ":0file" removes the file name.  Check for illegal uses ":3file",
     // "0file name", etc.
-    if args.addr_count > 0 && (!no_arg || args.line2 > 0 || args.addr_count > 1) {
+    if excmd.addr_count > 0 && (!no_arg || excmd.line2 > 0 || excmd.addr_count > 1) {
         emsg(gettext(e_invarg));
         return;
     }
 
-    if !no_arg || args.addr_count == 1 {
+    if !no_arg || excmd.addr_count == 1 {
         // SAFETY: as above.
-        if unsafe { rename_buffer(args.arg) }.is_err() {
+        if unsafe { rename_buffer(excmd.arg) }.is_err() {
             return;
         }
         redraw_tabline.set(true);
@@ -167,45 +162,35 @@ pub unsafe fn ex_file(args: *mut ExArg) {
 
     // print file name if no argument or 'F' is not in 'shortmess'
     if no_arg || !shortmess(ShmFlag::FILEINFO) {
-        fileinfo(0, 0, args.forceit != 0);
+        fileinfo(0, 0, excmd.forceit != 0);
     }
 }
 
 /// `:update` -- write only when there is something to write.
-///
-/// # Safety
-/// `args` must be the live Ex-command argument.
-pub unsafe fn ex_update(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
+pub fn ex_update(excmd: &mut ExArg) {
     // SAFETY: `curbuf` is live.
     if curbuf_is_changed()
         || (!buf_is_nofilename(current_buf())
             && !Buf::current().b_ffname.is_null()
             && !unsafe { os_path_exists(Buf::current().b_ffname) })
     {
-        let _ = do_write(args);
+        let _ = do_write(excmd);
     }
 }
 
 /// `:write` and `:saveas`.
-///
-/// # Safety
-/// `args` must be the live Ex-command argument.
-pub unsafe fn ex_write(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
-    if args.cmdidx == CmdIdx::saveas {
+pub fn ex_write(excmd: &mut ExArg) {
+    if excmd.cmdidx == CmdIdx::saveas {
         // :saveas does not take a range, uses all lines.
-        args.line1 = 1;
-        args.line2 = Buf::current().b_ml.ml_line_count;
+        excmd.line1 = 1;
+        excmd.line2 = Buf::current().b_ml.ml_line_count;
     }
 
-    if args.usefilter != 0 {
+    if excmd.usefilter != 0 {
         // input lines to shell command
-        do_bang(1, args, false, true, false);
+        do_bang(1, excmd, false, true, false);
     } else {
-        let _ = do_write(args);
+        let _ = do_write(excmd);
     }
 }
 
@@ -336,7 +321,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
             fname,
             line1,
             line2,
-            &raw mut *args,
+            Some(args),
             request,
         )
     };
@@ -582,42 +567,32 @@ fn swap_dir() -> Vec<u8> {
 
 /// `:wnext`, `:wNext` and `:wprevious` -- write, then step through the
 /// argument list.
-///
-/// # Safety
-/// `args` must be the live Ex-command argument.
-pub unsafe fn ex_wnext(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
-    let step = args.line2 as c_int;
+pub fn ex_wnext(excmd: &mut ExArg) {
+    let step = excmd.line2 as c_int;
     // SAFETY: the command name is at least two bytes long.
-    let forwards = unsafe { *args.cmd.add(1) } as c_int == 'n' as c_int;
+    let forwards = unsafe { *excmd.cmd.add(1) } as c_int == 'n' as c_int;
     let i = if forwards {
         Win::current().w_arg_idx + step
     } else {
         Win::current().w_arg_idx - step
     };
-    args.line1 = 1;
-    args.line2 = Buf::current().b_ml.ml_line_count;
+    excmd.line1 = 1;
+    excmd.line2 = Buf::current().b_ml.ml_line_count;
     // SAFETY: main thread; the command block is the one borrowed here.
-    if do_write(args).is_ok() {
-        unsafe { do_argfile(&raw mut *args, i) };
+    if do_write(excmd).is_ok() {
+        do_argfile(excmd, i);
     }
 }
 
 /// `:wall`, `:wqall` and `:xall`: write all changed files (and exit).
-///
-/// # Safety
-/// `args` must be the live Ex-command argument.
-pub unsafe fn do_wqall(args: *mut ExArg) {
-    // SAFETY: caller's contract.
-    let args = unsafe { &mut *args };
+pub fn do_wqall(excmd: &mut ExArg) {
     let mut error = 0;
-    let save_forceit = args.forceit;
+    let save_forceit = excmd.forceit;
     let save_exiting = exiting.get();
 
-    if args.cmdidx == CmdIdx::xall || args.cmdidx == CmdIdx::wqall {
+    if excmd.cmdidx == CmdIdx::xall || excmd.cmdidx == CmdIdx::wqall {
         // SAFETY: the command block is the one borrowed here.
-        if unsafe { before_quit_all(&raw mut *args) }.is_err() {
+        if before_quit_all(excmd).is_err() {
             return;
         }
         exiting.set(true);
@@ -628,7 +603,7 @@ pub unsafe fn do_wqall(args: *mut ExArg) {
     // the head has to be re-read, and no iterator re-reads it.
     let mut cur = first_buffer();
     while let Some(buf) = cur {
-        match write_one_buffer(args, buf, save_forceit, &mut error) {
+        match write_one_buffer(excmd, buf, save_forceit, &mut error) {
             WriteAll::Stop => break,
             // The buffer was deleted under us.  Upstream restarts from
             // `firstbuf` and then takes the step below, so the first buffer
@@ -859,7 +834,7 @@ pub unsafe fn getfile(
             fnum,
             ffname,
             sfname,
-            ptr::null_mut(),
+            None,
             lnum,
             EcmdFlags::HIDE.when(buf_hide(Buf::current())) | EcmdFlags::FORCEIT.when(forceit),
             Some(Win::current().id()),

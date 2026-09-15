@@ -632,11 +632,7 @@ pub fn u_sync(force: bool) {
 }
 
 /// `:undojoin` — fold the next change into the header the last one made.
-///
-/// # Safety
-///
-/// The ex-command contract: `args` is a live command block.
-pub unsafe fn ex_undojoin(_args: *mut ExArg) {
+pub fn ex_undojoin(_excmd: &mut ExArg) {
     let mut b = Buf::current();
     if b.b_u_newhead.is_none() {
         return;

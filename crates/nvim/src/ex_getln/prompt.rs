@@ -31,30 +31,30 @@ use core::mem::ManuallyDrop;
 ///
 /// # Safety
 ///
-/// `args` must point at the command's `ExArg`. `lenp` must point at a
+/// `excmd` must point at the command's `ExArg`. `lenp` must point at a
 /// writable `size_t` the caller owns.
-pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
+pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
     let mut numbuf = NumBuf::new();
-    let mut cmd = unsafe { (*args).arg };
+    let mut cmd = excmd.arg;
     if unsafe { *cmd.offset(0) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
         || unsafe { *cmd.offset(1) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-        || unsafe { (*args).ea_getline }.is_none()
+        || excmd.ea_getline.is_none()
     {
-        unsafe { *lenp = cstr::bytes_at((*args).arg).len() };
-        if unsafe { (*args).skip } != 0 {
+        unsafe { *lenp = cstr::bytes_at(excmd.arg).len() };
+        if excmd.skip != 0 {
             return ::core::ptr::null_mut();
         }
-        return unsafe { xmemdupz((*args).arg as *const ::core::ffi::c_void, *lenp) }
+        return unsafe { xmemdupz(excmd.arg as *const ::core::ffi::c_void, *lenp) }
             as *mut ::core::ffi::c_char;
     }
     cmd = unsafe { cmd.offset(2) };
 
-    let Some(held) = (unsafe { heredoc_get(args, cmd, true) }) else {
+    let Some(held) = (unsafe { heredoc_get(excmd, cmd, true) }) else {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     };
     let l = held.as_ptr();
 
-    let skip = unsafe { (*args).skip } != 0;
+    let skip = excmd.skip != 0;
     let mut text = Vec::<u8>::new();
     for li in list_iter(unsafe { l.as_ref() }) {
         if !skip {

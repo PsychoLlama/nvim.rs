@@ -97,7 +97,7 @@ pub unsafe fn do_doautocmd(
                 true,
                 group,
                 Buf::current_or_none(),
-                ::core::ptr::null_mut(),
+                None,
                 ::core::ptr::null_mut(),
             )
         };
@@ -126,15 +126,11 @@ pub unsafe fn do_doautocmd(
 /// ([`aucmd_prepbuf`]), because commands expect `curwin->w_buffer ==
 /// curbuf`.  An autocommand that deletes the buffer under us stops the
 /// sweep, which is what the `bufref` is for.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`.
-pub unsafe fn ex_doautoall(args: *mut ExArg) {
+pub fn ex_doautoall(excmd: &mut ExArg) {
     let mut aco = AcoSave::default();
     // SAFETY: a live command block, by the contract above, and
     // `check_nomodeline` only advances `arg` inside its own argument.
-    let mut arg = unsafe { (*args).arg };
+    let mut arg = excmd.arg;
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
 
@@ -194,15 +190,14 @@ pub unsafe fn ex_doautoall(args: *mut ExArg) {
 /// `event` must be an initialized `AutoEvent` whose pointer fields point at
 /// live data for the call. `fname` must point at a NUL-terminated string,
 /// unaliased for the call. `fname_io` must point at a NUL-terminated string,
-/// unaliased for the call. `args` must point at the command's `ExArg`. `data`
-/// must point at a live `Object`, unaliased for the call.
+/// unaliased for the call. `data` must point at a live `Object`, unaliased
+/// for the call.
 pub unsafe fn aucmd_defer(
     event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     group: ::core::ffi::c_int,
     buffer: Buf,
-    args: *mut ExArg,
     data: *mut Object,
 ) {
     // SAFETY: `fname`/`fname_io` are the caller's NUL-terminated names or
@@ -225,7 +220,6 @@ pub unsafe fn aucmd_defer(
     // The *handle* is stored, not the pointer: the buffer may be gone by the
     // time the queued event runs, and `deferred_event` looks it up again.
     unsafe { (*evdata).buf = buffer.handle as BufferHandle };
-    unsafe { (*evdata).eap = args };
     // SAFETY: `data` is the caller's object or NULL; the copy is owned by
     // the event from here on.
     unsafe {
@@ -266,7 +260,6 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     let fname = unsafe { (*e).fname };
     let fname_io = unsafe { (*e).fname_io };
     let group = unsafe { (*e).group };
-    let eap = unsafe { (*e).eap };
     let data = unsafe { (*e).data };
 
     let mut err = Error::none();
@@ -303,7 +296,9 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
         // SAFETY: `aco` is this frame's own, `buf` was just proved live, and
         // the `prepbuf`/`restbuf` pair brackets the firing.
         unsafe { aucmd_prepbuf(&raw mut aco, buf) };
-        unsafe { apply_autocmds_group(event, fname, fname_io, false, group, Some(buf), eap, data) };
+        unsafe {
+            apply_autocmds_group(event, fname, fname_io, false, group, Some(buf), None, data)
+        };
         unsafe { aucmd_restbuf(&raw mut aco) };
         // SAFETY: the pair `get_v_event` above opened.
         unsafe { restore_v_event(v_event, &raw mut save_v_event) };
@@ -339,7 +334,7 @@ pub unsafe fn do_termresponse_autocmd(sequence: String_0) {
             true,
             AUGROUP_ALL,
             None,
-            ::core::ptr::null_mut(),
+            None,
             &raw mut event_data,
         )
     };

@@ -16,7 +16,7 @@ use crate::types::OptStr;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 
-use crate::winlayer::{Buf, Ea, Win};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -116,18 +116,13 @@ pub fn cmd_has_expr_args(cmdidx: CmdIdx) -> bool {
 ///
 /// `skip_only` is `nvim_parse_cmd`'s mode: recognise everything, allocate
 /// and evaluate nothing.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn parse_command_modifiers(
-    args: *mut ExArg,
+pub(crate) fn parse_command_modifiers(
+    excmd: &mut ExArg,
     errormsg: &mut Option<CString>,
     cm: &mut CmdMod,
     skip_only: bool,
 ) -> Result<(), Failed> {
-    let mut ea = unsafe { Ea::new(args) };
-    let orig_cmd = ea.cmd;
+    let orig_cmd = excmd.cmd;
     let mut cmd_start: *mut c_char = ptr::null_mut();
     let mut use_plus_cmd = false;
     let mut has_visual_range = false;
@@ -137,49 +132,49 @@ pub(crate) unsafe fn parse_command_modifiers(
     // there) is stepped over so a modifier after it is still seen, and
     // put back below — the range has to reach the command, not the
     // modifier scan.
-    if unsafe { cstr::starts_with(ea.cmd, b"'<,'>") } {
-        let p = unsafe { skipwhite(ea.cmd.add(5)) };
+    if unsafe { cstr::starts_with(excmd.cmd, b"'<,'>") } {
+        let p = unsafe { skipwhite(excmd.cmd.add(5)) };
         if byte(p) != NUL && byte(p) != '|' as c_int {
-            ea.cmd = unsafe { ea.cmd.add(5) };
-            cmd_start = ea.cmd;
+            excmd.cmd = unsafe { excmd.cmd.add(5) };
+            cmd_start = excmd.cmd;
             has_visual_range = true;
         }
     }
 
     loop {
-        while byte(ea.cmd) == ' ' as c_int
-            || byte(ea.cmd) == '\t' as c_int
-            || byte(ea.cmd) == ':' as c_int
+        while byte(excmd.cmd) == ' ' as c_int
+            || byte(excmd.cmd) == '\t' as c_int
+            || byte(excmd.cmd) == ':' as c_int
         {
-            ea.cmd = unsafe { ea.cmd.add(1) };
+            excmd.cmd = unsafe { excmd.cmd.add(1) };
         }
 
         // In Ex mode an empty line means "print the next one", which is
         // spelled by substituting a `+` command.
-        if byte(ea.cmd) == NUL
+        if byte(excmd.cmd) == NUL
             && exmode_active.get()
-            && unsafe { getline_equal(ea.ea_getline, ea.cookie, Some(getexline)) }
+            && unsafe { getline_equal(excmd.ea_getline, excmd.cookie, Some(getexline)) }
             && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
         {
-            ea.cmd = exmode_plus.as_ptr().cast_mut();
+            excmd.cmd = exmode_plus.as_ptr().cast_mut();
             use_plus_cmd = true;
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
             break;
         }
-        if byte(ea.cmd) == '"' as c_int {
-            ea.nextcmd = unsafe { vim_strchr(ea.cmd, '\n' as c_int) };
-            if !ea.nextcmd.is_null() {
-                ea.nextcmd = unsafe { ea.nextcmd.add(1) };
+        if byte(excmd.cmd) == '"' as c_int {
+            excmd.nextcmd = unsafe { vim_strchr(excmd.cmd, '\n' as c_int) };
+            if !excmd.nextcmd.is_null() {
+                excmd.nextcmd = unsafe { excmd.nextcmd.add(1) };
             }
             return Err(Failed);
         }
-        if byte(ea.cmd) == '\n' as c_int {
-            ea.nextcmd = unsafe { ea.cmd.add(1) };
+        if byte(excmd.cmd) == '\n' as c_int {
+            excmd.nextcmd = unsafe { excmd.cmd.add(1) };
             return Err(Failed);
         }
-        if byte(ea.cmd) == NUL {
+        if byte(excmd.cmd) == NUL {
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
@@ -189,39 +184,39 @@ pub(crate) unsafe fn parse_command_modifiers(
         // A modifier may follow a range (`:1,2 silent print`), so the
         // name is looked for past one — but `args.cmd` only moves for
         // the modifiers that accept that.
-        let mut p = unsafe { skip_range(ea.cmd, ptr::null_mut()) };
+        let mut p = unsafe { skip_range(excmd.cmd, ptr::null_mut()) };
         match ubyte(p) {
             b'a' => {
-                if !checkforcmd(ea.cmd_ptr(), c"aboveleft".as_ptr(), 3) {
+                if !checkforcmd(&raw mut excmd.cmd, c"aboveleft".as_ptr(), 3) {
                     break;
                 }
                 cm.cmod_split |= WSP_ABOVE as c_int;
             }
             b'b' => {
-                if checkforcmd(ea.cmd_ptr(), c"belowright".as_ptr(), 3) {
+                if checkforcmd(&raw mut excmd.cmd, c"belowright".as_ptr(), 3) {
                     cm.cmod_split |= WSP_BELOW as c_int;
-                } else if checkforcmd(ea.cmd_ptr(), c"browse".as_ptr(), 3) {
+                } else if checkforcmd(&raw mut excmd.cmd, c"browse".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::BROWSE;
-                } else if checkforcmd(ea.cmd_ptr(), c"botright".as_ptr(), 2) {
+                } else if checkforcmd(&raw mut excmd.cmd, c"botright".as_ptr(), 2) {
                     cm.cmod_split |= WSP_BOT as c_int;
                 } else {
                     break;
                 }
             }
             b'c' => {
-                if !checkforcmd(ea.cmd_ptr(), c"confirm".as_ptr(), 4) {
+                if !checkforcmd(&raw mut excmd.cmd, c"confirm".as_ptr(), 4) {
                     break;
                 }
                 cm.cmod_flags |= CmdModFlags::CONFIRM;
             }
             b'k' => {
-                if checkforcmd(ea.cmd_ptr(), c"keepmarks".as_ptr(), 3) {
+                if checkforcmd(&raw mut excmd.cmd, c"keepmarks".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::KEEPMARKS;
-                } else if checkforcmd(ea.cmd_ptr(), c"keepalt".as_ptr(), 5) {
+                } else if checkforcmd(&raw mut excmd.cmd, c"keepalt".as_ptr(), 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPALT;
-                } else if checkforcmd(ea.cmd_ptr(), c"keeppatterns".as_ptr(), 5) {
+                } else if checkforcmd(&raw mut excmd.cmd, c"keeppatterns".as_ptr(), 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPPATTERNS;
-                } else if checkforcmd(ea.cmd_ptr(), c"keepjumps".as_ptr(), 5) {
+                } else if checkforcmd(&raw mut excmd.cmd, c"keepjumps".as_ptr(), 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPJUMPS;
                 } else {
                     break;
@@ -259,12 +254,12 @@ pub(crate) unsafe fn parse_command_modifiers(
                         break;
                     }
                 }
-                ea.cmd = p;
+                excmd.cmd = p;
             }
             b'h' => {
-                if checkforcmd(ea.cmd_ptr(), c"horizontal".as_ptr(), 3) {
+                if checkforcmd(&raw mut excmd.cmd, c"horizontal".as_ptr(), 3) {
                     cm.cmod_split |= WSP_HOR as c_int;
-                } else if p == ea.cmd
+                } else if p == excmd.cmd
                     && checkforcmd(&raw mut p, c"hide".as_ptr(), 3)
                     && byte(p) != NUL
                     && ends_excmd(byte(p)) == 0
@@ -272,46 +267,46 @@ pub(crate) unsafe fn parse_command_modifiers(
                     // `:hide` is a command in its own right, so it is
                     // only a modifier when a command follows it and no
                     // range precedes it.
-                    ea.cmd = p;
+                    excmd.cmd = p;
                     cm.cmod_flags |= CmdModFlags::HIDE;
                 } else {
                     break;
                 }
             }
             b'l' => {
-                if checkforcmd(ea.cmd_ptr(), c"lockmarks".as_ptr(), 3) {
+                if checkforcmd(&raw mut excmd.cmd, c"lockmarks".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::LOCKMARKS;
-                } else if checkforcmd(ea.cmd_ptr(), c"leftabove".as_ptr(), 5) {
+                } else if checkforcmd(&raw mut excmd.cmd, c"leftabove".as_ptr(), 5) {
                     cm.cmod_split |= WSP_ABOVE as c_int;
                 } else {
                     break;
                 }
             }
             b'n' => {
-                if checkforcmd(ea.cmd_ptr(), c"noautocmd".as_ptr(), 3) {
+                if checkforcmd(&raw mut excmd.cmd, c"noautocmd".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::NOAUTOCMD;
-                } else if checkforcmd(ea.cmd_ptr(), c"noswapfile".as_ptr(), 3) {
+                } else if checkforcmd(&raw mut excmd.cmd, c"noswapfile".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::NOSWAPFILE;
                 } else {
                     break;
                 }
             }
             b'r' => {
-                if !checkforcmd(ea.cmd_ptr(), c"rightbelow".as_ptr(), 6) {
+                if !checkforcmd(&raw mut excmd.cmd, c"rightbelow".as_ptr(), 6) {
                     break;
                 }
                 cm.cmod_split |= WSP_BELOW as c_int;
             }
             b's' => {
-                if checkforcmd(ea.cmd_ptr(), c"sandbox".as_ptr(), 3) {
+                if checkforcmd(&raw mut excmd.cmd, c"sandbox".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::SANDBOX;
-                } else if checkforcmd(ea.cmd_ptr(), c"silent".as_ptr(), 3) {
+                } else if checkforcmd(&raw mut excmd.cmd, c"silent".as_ptr(), 3) {
                     cm.cmod_flags |= CmdModFlags::SILENT;
                     // `:silent!` only means "and silence errors" when
                     // the `!` is stuck to the word: `:silent !cmd` runs
                     // a shell command quietly.
-                    if byte(ea.cmd) == '!' as c_int && !ascii_iswhite(byte_at(ea.cmd, -1)) {
-                        ea.cmd = unsafe { skipwhite(ea.cmd.add(1)) };
+                    if byte(excmd.cmd) == '!' as c_int && !ascii_iswhite(byte_at(excmd.cmd, -1)) {
+                        excmd.cmd = unsafe { skipwhite(excmd.cmd.add(1)) };
                         cm.cmod_flags |= CmdModFlags::ERRSILENT;
                     }
                 } else {
@@ -321,19 +316,24 @@ pub(crate) unsafe fn parse_command_modifiers(
             b't' => {
                 if checkforcmd(&raw mut p, c"tab".as_ptr(), 3) {
                     if !skip_only {
+                        // The scan advances a cursor of its own; see
+                        // `parse_cmd_address`.
+                        let mut cursor = excmd.cmd;
+                        let skip = excmd.skip != 0;
                         let tabnr = unsafe {
                             get_address(
-                                args,
-                                ea.cmd_ptr(),
+                                Some(excmd),
+                                &raw mut cursor,
                                 CmdAddr::Tabs,
-                                ea.skip != 0,
+                                skip,
                                 skip_only,
                                 0,
                                 1,
                                 errormsg,
                             )
                         } as c_int;
-                        if ea.cmd.is_null() {
+                        excmd.cmd = cursor;
+                        if excmd.cmd.is_null() {
                             return Err(Failed);
                         }
                         if tabnr == MAXLNUM {
@@ -346,21 +346,21 @@ pub(crate) unsafe fn parse_command_modifiers(
                             cm.cmod_tab = tabnr + 1;
                         }
                     }
-                    ea.cmd = p;
-                } else if checkforcmd(ea.cmd_ptr(), c"topleft".as_ptr(), 2) {
+                    excmd.cmd = p;
+                } else if checkforcmd(&raw mut excmd.cmd, c"topleft".as_ptr(), 2) {
                     cm.cmod_split |= WSP_TOP as c_int;
                 } else {
                     break;
                 }
             }
             b'u' => {
-                if !checkforcmd(ea.cmd_ptr(), c"unsilent".as_ptr(), 3) {
+                if !checkforcmd(&raw mut excmd.cmd, c"unsilent".as_ptr(), 3) {
                     break;
                 }
                 cm.cmod_flags |= CmdModFlags::UNSILENT;
             }
             b'v' => {
-                if checkforcmd(ea.cmd_ptr(), c"vertical".as_ptr(), 4) {
+                if checkforcmd(&raw mut excmd.cmd, c"vertical".as_ptr(), 4) {
                     cm.cmod_split |= WSP_VERT as c_int;
                 } else if checkforcmd(&raw mut p, c"verbose".as_ptr(), 4) {
                     // The count is read from `args.cmd`, which
@@ -368,12 +368,12 @@ pub(crate) unsafe fn parse_command_modifiers(
                     // Saturating: the count is whatever the user typed,
                     // so `:2147483647verbose set` would otherwise add one
                     // to `INT_MAX` and end the process.  C wraps here.
-                    cm.cmod_verbose = if ascii_isdigit(byte(ea.cmd)) {
-                        unsafe { atoi(ea.cmd) }.saturating_add(1)
+                    cm.cmod_verbose = if ascii_isdigit(byte(excmd.cmd)) {
+                        unsafe { atoi(excmd.cmd) }.saturating_add(1)
                     } else {
                         2
                     };
-                    ea.cmd = p;
+                    excmd.cmd = p;
                 } else {
                     break;
                 }
@@ -382,7 +382,7 @@ pub(crate) unsafe fn parse_command_modifiers(
         }
     }
 
-    unsafe { restore_visual_range(ea, orig_cmd, cmd_start, has_visual_range, use_plus_cmd) };
+    unsafe { restore_visual_range(excmd, orig_cmd, cmd_start, has_visual_range, use_plus_cmd) };
     Ok(())
 }
 
@@ -399,7 +399,7 @@ pub(crate) unsafe fn parse_command_modifiers(
 /// `orig_cmd` must point at a NUL-terminated string, unaliased for the call.
 /// `cmd_start` must point at a NUL-terminated string, unaliased for the call.
 unsafe fn restore_visual_range(
-    mut ea: Ea,
+    excmd: &mut ExArg,
     orig_cmd: *mut c_char,
     cmd_start: *mut c_char,
     has_visual_range: bool,
@@ -407,11 +407,11 @@ unsafe fn restore_visual_range(
 ) {
     if !has_visual_range {
         if use_plus_cmd {
-            ea.cmd = exmode_plus.as_ptr().cast_mut();
+            excmd.cmd = exmode_plus.as_ptr().cast_mut();
         }
         return;
     }
-    if ea.cmd > cmd_start {
+    if excmd.cmd > cmd_start {
         if use_plus_cmd {
             let len = unsafe { cstr::bytes_at(cmd_start) }.len();
             move_bytes(orig_cmd, cmd_start, len);
@@ -419,16 +419,16 @@ unsafe fn restore_visual_range(
         } else {
             // SAFETY: the five bytes before `cmd_start` are the `:'<,'>` this
             // is making room for, and both ends are inside the command line.
-            let (into, kept) = unsafe { (cmd_start.offset(-5), ea.cmd.offset_from(cmd_start)) };
+            let (into, kept) = unsafe { (cmd_start.offset(-5), excmd.cmd.offset_from(cmd_start)) };
             move_bytes(into, cmd_start, kept as size_t);
-            ea.cmd = unsafe { ea.cmd.offset(-5) };
-            let at = unsafe { ea.cmd.offset(-1) };
+            excmd.cmd = unsafe { excmd.cmd.offset(-5) };
+            let at = unsafe { excmd.cmd.offset(-1) };
             move_bytes(at, c":'<,'>".as_ptr(), 6);
         }
     } else if use_plus_cmd {
-        ea.cmd = c"'<,'>+".as_ptr() as *mut c_char;
+        excmd.cmd = c"'<,'>+".as_ptr() as *mut c_char;
     } else {
-        ea.cmd = orig_cmd;
+        excmd.cmd = orig_cmd;
     }
 }
 
@@ -666,22 +666,19 @@ impl CmdModScope {
         scope
     }
 
-    /// Read the run of modifiers at the head of `args`'s command line into
+    /// Read the run of modifiers at the head of `excmd`'s command line into
     /// the cell, which stays *cleared* for the whole parse — an error
     /// raised while the modifiers are still being read is no longer inside
     /// the enclosing `:silent` or `:filter`, which is what the C's opening
     /// `CLEAR_FIELD(cmdmod)` amounts to.
-    ///
-    /// # Safety
-    /// As [`parse_command_modifiers`].
-    pub(crate) unsafe fn parse(
+    pub(crate) fn parse(
         &self,
-        args: *mut ExArg,
+        excmd: &mut ExArg,
         errormsg: &mut Option<CString>,
     ) -> Result<(), Failed> {
         let mut parsed = CmdMod::default();
         // SAFETY: the caller's contract.
-        let read = unsafe { parse_command_modifiers(args, errormsg, &mut parsed, false) };
+        let read = parse_command_modifiers(excmd, errormsg, &mut parsed, false);
         cmdmod.set(parsed);
         read
     }

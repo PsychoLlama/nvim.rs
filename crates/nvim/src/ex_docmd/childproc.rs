@@ -23,7 +23,6 @@ use crate::os::shell::{shell_build_argv, shell_free_argv};
 
 use crate::types::{Array, ExArg, NUL, Object, String_0, size_t};
 use crate::usercmd::add_win_cmd_modifiers;
-use crate::winlayer::Ea;
 
 /// `:terminal` — spelled as a command line, not as a call.
 ///
@@ -32,12 +31,7 @@ use crate::winlayer::Ea;
 /// attaches a terminal to a buffer, and it is a vimscript function. The
 /// argument therefore has to survive being read as a vimscript string
 /// literal, which is what the `"` and `\` escaping is for.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
+pub(crate) fn ex_terminal(excmd: &mut ExArg) {
     const CMD_LEN: usize = 1024;
     let mut ex_cmd: [c_char; CMD_LEN] = [0; CMD_LEN];
     let mut len: size_t = 0;
@@ -65,7 +59,7 @@ pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
                 &raw mut ex_cmd as *mut c_char,
                 CMD_LEN,
                 c"enew%s".as_ptr(),
-                if args.forceit != 0 {
+                if excmd.forceit != 0 {
                     c"!".as_ptr()
                 } else {
                     c"".as_ptr()
@@ -77,8 +71,8 @@ pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
     }
     debug_assert!(len < CMD_LEN);
 
-    if byte(args.arg) != NUL {
-        let name = vim_strsave_escaped(args.arg, c"\"\\".as_ptr());
+    if byte(excmd.arg) != NUL {
+        let name = vim_strsave_escaped(excmd.arg, c"\"\\".as_ptr());
         unsafe {
             snprintf(
                 (&raw mut ex_cmd as *mut c_char).add(len as usize),
@@ -135,20 +129,15 @@ pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
 }
 
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_lsp(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+pub(crate) fn ex_lsp(excmd: &mut ExArg) {
     // SAFETY: the command line's own NUL-terminated argument.
-    let args = Array::from(vec![Object::string(unsafe { cstr_to_string(eap.arg) })]);
+    let excmd = Array::from(vec![Object::string(unsafe { cstr_to_string(excmd.arg) })]);
     const CHUNK: &core::ffi::CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
     let ran = unsafe {
         nlua_exec(
             &String_0::from_cstr(CHUNK),
             ptr::null(),
-            args,
+            excmd,
             kRetNilBool,
             ptr::null_mut(),
         )

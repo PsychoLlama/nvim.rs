@@ -20,39 +20,31 @@ use super::*;
 use crate::types::{Failed, NUL};
 
 /// `:unlet`.
-///
-/// # Safety
-/// `args` is a live `:unlet` command.
-pub unsafe fn ex_unlet(args: *mut ExArg) {
+pub fn ex_unlet(excmd: &mut ExArg) {
     // `:unlet!` means "do not complain", which reaches `get_lval` as
     // GLV_QUIET and `do_unlet` as `forceit`.
     // SAFETY: the caller's obligation -- a live command, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
-    let ea = unsafe { Ea::new(args) };
-    let glv_flags = if ea.forceit != 0 { GLV_QUIET } else { 0 };
-    let arg = ea.arg;
-    unsafe { ex_unletlock(args, arg, 0, glv_flags, do_unlet_var) };
+    let glv_flags = if excmd.forceit != 0 { GLV_QUIET } else { 0 };
+    let arg = excmd.arg;
+    unsafe { ex_unletlock(excmd, arg, 0, glv_flags, do_unlet_var) };
 }
 
 /// `:lockvar` and `:unlockvar`.
-///
-/// # Safety
-/// `args` is a live `:lockvar`/`:unlockvar` command.
-pub unsafe fn ex_lockvar(args: *mut ExArg) {
+pub fn ex_lockvar(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation -- a live command whose argument text
     // is NUL-terminated.
-    let ea = unsafe { Ea::new(args) };
-    let mut arg = ea.arg;
+    let mut arg = excmd.arg;
     // Two levels by default: the variable and what it directly holds.
     // `!` is everything, and an explicit count says how deep.
     let mut deep = 2;
-    if ea.forceit != 0 {
+    if excmd.forceit != 0 {
         deep = -1;
     } else if ascii_isdigit(c_int::from(unsafe { *arg })) {
         deep = unsafe { getdigits_int(&raw mut arg, false, -1) };
         arg = unsafe { skipwhite(arg) };
     }
-    unsafe { ex_unletlock(args, arg, deep, 0, do_lock_var) };
+    unsafe { ex_unletlock(excmd, arg, deep, 0, do_lock_var) };
 }
 
 /// The argument walk `:unlet`, `:lockvar` and `:unlockvar` share, calling
@@ -62,9 +54,9 @@ pub unsafe fn ex_lockvar(args: *mut ExArg) {
 /// arguments are still checked, but `error` suppresses every later callback.
 ///
 /// # Safety
-/// `args` is a live command and `argstart` a NUL-terminated string.
+/// `excmd` is a live command and `argstart` a NUL-terminated string.
 unsafe fn ex_unletlock(
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     argstart: *mut c_char,
     deep: c_int,
     glv_flags: c_int,
@@ -72,7 +64,6 @@ unsafe fn ex_unletlock(
 ) {
     // SAFETY: the caller's obligation -- a live command and a NUL-terminated
     // argument text, which `arg` and `name_end` both stay inside.
-    let mut ea = unsafe { Ea::new(args) };
     let mut arg = argstart;
     let mut name_end;
     let mut error = false;
@@ -92,12 +83,12 @@ unsafe fn ex_unletlock(
                 semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
-            if !error && ea.skip == 0 && unsafe { callback(lvp, arg, args, deep) }.is_err() {
+            if !error && excmd.skip == 0 && unsafe { callback(lvp, arg, excmd, deep) }.is_err() {
                 error = true;
             }
             name_end = arg;
         } else {
-            let quiet = ea.skip != 0 || error;
+            let quiet = excmd.skip != 0 || error;
             name_end = unsafe { get_lval(arg, None, lvp, true, quiet, glv_flags, FNE_CHECK_START) };
             if lv.ll_name.is_null() {
                 // An error, but carry on parsing.
@@ -113,16 +104,17 @@ unsafe fn ex_unletlock(
                     let name_end = unsafe { c_str(name_end) };
                     semsg!("E488: Trailing characters: {name_end}");
                 }
-                if !(ea.skip != 0 || error) {
+                if !(excmd.skip != 0 || error) {
                     unsafe { clear_lval(lvp) };
                 }
                 break;
             }
 
-            if !error && ea.skip == 0 && unsafe { callback(lvp, name_end, args, deep) }.is_err() {
+            if !error && excmd.skip == 0 && unsafe { callback(lvp, name_end, excmd, deep) }.is_err()
+            {
                 error = true;
             }
-            if ea.skip == 0 {
+            if excmd.skip == 0 {
                 unsafe { clear_lval(lvp) };
             }
         }
@@ -132,24 +124,23 @@ unsafe fn ex_unletlock(
         }
     }
 
-    ea.nextcmd = unsafe { check_nextcmd(arg) };
+    excmd.nextcmd = unsafe { check_nextcmd(arg) };
 }
 
 /// `:unlet`'s callback: delete what `lval` names.
 ///
 /// # Safety
 /// `lval` is a resolved lvalue, `name_end` points into the command line and
-/// `args` is live.
+/// `excmd` is live.
 unsafe fn do_unlet_var(
     lval: *mut LVal,
     name_end: *mut c_char,
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     _deep: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
     let mut lval = unsafe { Lv::new(lval) };
-    let ea = unsafe { Ea::new(args) };
     if lval.ll_tv.is_null() {
         // A whole variable: an environment variable, a plain name or an
         // expanded one.  Terminate the name in place, so that the error
@@ -162,7 +153,7 @@ unsafe fn do_unlet_var(
             unsafe { vim_unsetenv_ext(lval.ll_name.add(1)) };
             Ok(())
         } else {
-            unsafe { do_unlet(lval.ll_name, lval.ll_name_len, ea.forceit != 0) }
+            unsafe { do_unlet(lval.ll_name, lval.ll_name_len, excmd.forceit != 0) }
         };
         unsafe { *name_end = cc };
         return ret;
@@ -333,14 +324,13 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
 unsafe fn do_lock_var(
     lval: *mut LVal,
     _name_end: *mut c_char,
-    args: *mut ExArg,
+    excmd: &mut ExArg,
     deep: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
     let mut lval = unsafe { Lv::new(lval) };
-    let ea = unsafe { Ea::new(args) };
-    let lock = ea.cmdidx == CmdIdx::lockvar;
+    let lock = excmd.cmdidx == CmdIdx::lockvar;
     let name = lval.ll_name;
 
     if lval.ll_tv.is_null() {

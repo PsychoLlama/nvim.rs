@@ -67,10 +67,10 @@ use crate::types::String_0;
 use crate::types::builders::DictBuf;
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    AcoSave, BufferHandle, ColNr, Dict, Event, ExArg, ExtmarkOp, Handle, HlAttrs, LineNr,
-    MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue, SaveVEvent,
-    Terminal, TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs,
-    VTermState, VTermValue, VarNumber, int16_t, size_t, uint8_t,
+    AcoSave, BufferHandle, ColNr, Dict, Event, ExtmarkOp, Handle, HlAttrs, LineNr, MarkAdjustMode,
+    Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue, SaveVEvent, Terminal,
+    TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState,
+    VTermValue, VarNumber, int16_t, size_t, uint8_t,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -519,12 +519,12 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     let mut event = payload.object();
     // Pre-bound so that the eight-argument call still fits on one line.
     let (data, none) = (&mut event, ::core::ptr::null_mut());
-    let (exarg, exited) = (::core::ptr::null_mut::<ExArg>(), status >= 0);
+    let exited = status >= 0;
     let (group, buf) = (AUGROUP_ALL, Some(buf));
     // SAFETY: TermClose against a live buffer; nothing of the terminal is
     // borrowed across it.
     let event = AutoEvent::TermClose;
-    unsafe { apply_autocmds_group(event, none, none, exited, group, buf, exarg, data) };
+    unsafe { apply_autocmds_group(event, none, none, exited, group, buf, None, data) };
     // SAFETY: paired with the `get_v_event` above.
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
 }

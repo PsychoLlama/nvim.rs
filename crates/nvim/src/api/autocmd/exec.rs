@@ -130,7 +130,7 @@ pub unsafe fn nvim_exec_autocmds(
                         true,
                         au_group,
                         buffer,
-                        ::core::ptr::null_mut::<ExArg>(),
+                        None,
                         data,
                     )
                 } as ::core::ffi::c_int

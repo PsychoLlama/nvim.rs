@@ -75,7 +75,7 @@ use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
 use crate::types::{CmdAddr, CondStack, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, NUL, size_t};
-use crate::winlayer::{Buf, Ea, Live, Win};
+use crate::winlayer::{Buf, Live, Win};
 
 /// The conditional stack the command is running under, whose caller has
 /// promised it outlives the value.
@@ -101,7 +101,7 @@ pub(crate) fn fresh_exarg() -> ExArg {
 /// Ex-command callbacks are identified by address, as the C code did; the
 /// comparison is spelled out so the intent survives the
 /// `unpredictable_function_pointer_comparisons` lint.
-pub(crate) fn ex_func_is(func: ExFunc, f: unsafe fn(*mut ExArg)) -> bool {
+pub(crate) fn ex_func_is(func: ExFunc, f: fn(&mut ExArg)) -> bool {
     func.is_some_and(|g| ptr::fn_addr_eq(g, f))
 }
 
@@ -118,28 +118,28 @@ pub fn is_cmd_ni(cmdidx: CmdIdx) -> bool {
 /// With no arguments left, `eap->arg` answers the end of the *old* first
 /// argument rather than null — a command that reads `eap->arg` as a string
 /// then sees an empty one.
-pub(crate) fn shift_cmd_args(mut ea: Ea) {
-    debug_assert!(!ea.args.is_null() && ea.argc > 0);
-    let oldargs = ea.args;
-    let oldarglens = ea.arglens;
+pub(crate) fn shift_cmd_args(excmd: &mut ExArg) {
+    debug_assert!(!excmd.args.is_null() && excmd.argc > 0);
+    let oldargs = excmd.args;
+    let oldarglens = excmd.arglens;
 
-    ea.argc -= 1;
-    ea.args = if ea.argc > 0 {
-        xcalloc(ea.argc, size_of::<*mut c_char>()) as *mut *mut c_char
+    excmd.argc -= 1;
+    excmd.args = if excmd.argc > 0 {
+        xcalloc(excmd.argc, size_of::<*mut c_char>()) as *mut *mut c_char
     } else {
         ptr::null_mut()
     };
-    ea.arglens = if ea.argc > 0 {
-        xcalloc(ea.argc, size_of::<size_t>()) as *mut size_t
+    excmd.arglens = if excmd.argc > 0 {
+        xcalloc(excmd.argc, size_of::<size_t>()) as *mut size_t
     } else {
         ptr::null_mut()
     };
-    for i in 0..ea.argc {
-        unsafe { *ea.args.add(i) = *oldargs.add(i + 1) };
-        unsafe { *ea.arglens.add(i) = *oldarglens.add(i + 1) };
+    for i in 0..excmd.argc {
+        unsafe { *excmd.args.add(i) = *oldargs.add(i + 1) };
+        unsafe { *excmd.arglens.add(i) = *oldarglens.add(i + 1) };
     }
-    ea.arg = if ea.argc > 0 {
-        unsafe { *ea.args }
+    excmd.arg = if excmd.argc > 0 {
+        unsafe { *excmd.args }
     } else {
         unsafe { (*oldargs).add(*oldarglens) }
     };
@@ -162,8 +162,8 @@ pub(crate) fn shift_cmd_args(mut ea: Ea) {
 /// command, and walking 78 enum values is that many calls to the
 /// derived `PartialEq` at `-O0`, which is what the test suites build.
 #[rustfmt::skip]
-pub(crate) fn skip_cmd(args: Ea) -> bool {
-    args.skip != 0 && !matches!(args.cmdidx,
+pub(crate) fn skip_cmd(excmd: &mut ExArg) -> bool {
+    excmd.skip != 0 && !matches!(excmd.cmdidx,
         CmdIdx::r#while | CmdIdx::endwhile | CmdIdx::r#for | CmdIdx::endfor |
         CmdIdx::r#if | CmdIdx::elseif | CmdIdx::r#else | CmdIdx::endif | CmdIdx::r#try |
         CmdIdx::catch | CmdIdx::finally | CmdIdx::endtry | CmdIdx::function |
@@ -240,7 +240,7 @@ pub(crate) unsafe fn do_one_cmd(
         ea.cookie = cookie;
         ea.cstack = cstack;
 
-        if unsafe { mods.parse(&raw mut ea, &mut errormsg) }.is_err() {
+        if mods.parse(&mut ea, &mut errormsg).is_err() {
             break 'doend;
         }
         mods.apply();
@@ -259,22 +259,22 @@ pub(crate) unsafe fn do_one_cmd(
         // The command name is needed before the range can be read: it is
         // what says whether an address counts lines, windows, buffers or
         // tab pages.
-        let mut p = find_excmd_after_range(unsafe { Ea::new(&raw mut ea) });
-        unsafe { profile_cmd(&raw mut ea, cstack, fgetline, cookie) };
+        let mut p = find_excmd_after_range(&mut ea);
+        unsafe { profile_cmd(&ea, cstack, fgetline, cookie) };
 
         if !exiting.get() {
             // May go to debug mode. If the `>quit` debug command is used
             // there, an interrupt exception is thrown and this command
             // is skipped.
-            unsafe { dbg_check_breakpoint(&raw mut ea) };
+            dbg_check_breakpoint(&mut ea);
         }
         if ea.skip == 0 && got_int.get() {
             ea.skip = 1;
             unsafe { do_intthrow(cstack) };
         }
 
-        unsafe { set_cmd_addr_type(&raw mut ea, p) };
-        if unsafe { parse_cmd_address(&raw mut ea, &mut errormsg, false) } == FAIL {
+        unsafe { set_cmd_addr_type(&mut ea, p) };
+        if parse_cmd_address(&mut ea, &mut errormsg, false) == FAIL {
             break 'doend;
         }
 
@@ -289,7 +289,7 @@ pub(crate) unsafe fn do_one_cmd(
         } {
             if ea.skip == 0 {
                 debug_assert!(errormsg.is_none());
-                errormsg = unsafe { ex_range_without_command(&raw mut ea) };
+                errormsg = ex_range_without_command(&mut ea);
             }
             break 'doend;
         }
@@ -315,7 +315,7 @@ pub(crate) unsafe fn do_one_cmd(
             // Look again only if the autocommands did something and did
             // not fail.
             p = if ret && !aborting() {
-                unsafe { find_ex_command(&raw mut ea, ptr::null_mut()) }
+                unsafe { find_ex_command(&mut ea, ptr::null_mut()) }
             } else {
                 ea.cmd
             };
@@ -354,7 +354,7 @@ pub(crate) unsafe fn do_one_cmd(
         // relaxed, because there is nothing to check them against.
         let ni = is_cmd_ni(ea.cmdidx);
 
-        ea.forceit = unsafe { parse_bang(Ea::new(&raw mut ea), &raw mut p) } as c_int;
+        ea.forceit = unsafe { parse_bang(&mut ea, &raw mut p) } as c_int;
 
         if !is_user_cmd(ea.cmdidx) {
             ea.argt = cmdnames[ea.cmdidx.index()].cmd_argt;
@@ -408,7 +408,7 @@ pub(crate) unsafe fn do_one_cmd(
                 }
                 core::mem::swap(&mut ea.line1, &mut ea.line2);
             }
-            errormsg = invalid_range(&raw mut ea);
+            errormsg = invalid_range(&mut ea);
             if errormsg.is_some() {
                 break 'doend;
             }
@@ -419,7 +419,7 @@ pub(crate) unsafe fn do_one_cmd(
             ea.line2 = 1;
         }
 
-        correct_range(unsafe { Ea::new(&raw mut ea) });
+        correct_range(&mut ea);
 
         // Put the first line at the start of a closed fold and the last
         // line at its end.
@@ -433,7 +433,7 @@ pub(crate) unsafe fn do_one_cmd(
 
         // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line
         // here, so that `%` and friends expand inside it.
-        p = unsafe { replace_makeprg(&raw mut ea, p, cmdlinep) };
+        p = unsafe { replace_makeprg(&mut ea, p, cmdlinep) };
         if p.is_null() {
             break 'doend;
         }
@@ -452,7 +452,7 @@ pub(crate) unsafe fn do_one_cmd(
         // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
         if ea.argt.has(ExArgt::ARGOPT) {
             while byte_at(ea.arg, 0) == '+' as c_int && byte_at(ea.arg, 1) == '+' as c_int {
-                if unsafe { getargopt(&raw mut ea) }.is_err() && !ni {
+                if getargopt(&mut ea).is_err() && !ni {
                     errormsg = Some(ex_msg(e_invarg.as_ptr()));
                     break 'doend;
                 }
@@ -500,7 +500,7 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         if ea.argt.has(ExArgt::TRLBAR) && ea.usefilter == 0 {
-            unsafe { separate_nextcmd(&raw mut ea) };
+            separate_nextcmd(&mut ea);
         } else if ea.cmdidx == CmdIdx::bang
             || ea.cmdidx == CmdIdx::terminal
             || ea.cmdidx == CmdIdx::global
@@ -524,16 +524,16 @@ pub(crate) unsafe fn do_one_cmd(
         }
 
         if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
-            unsafe { set_cmd_dflall_range(&raw mut ea) };
+            set_cmd_dflall_range(&mut ea);
         }
 
-        unsafe { parse_register(&raw mut ea) };
-        if unsafe { parse_count(&raw mut ea, &mut errormsg, true) }.is_err() {
+        parse_register(&mut ea);
+        if parse_count(&mut ea, &mut errormsg, true).is_err() {
             break 'doend;
         }
 
         if ea.argt.has(ExArgt::FLAGS) {
-            get_flags(unsafe { Ea::new(&raw mut ea) });
+            get_flags(&mut ea);
         }
         if !ni
             && !ea.argt.has(ExArgt::EXTRA)
@@ -549,12 +549,12 @@ pub(crate) unsafe fn do_one_cmd(
             break 'doend;
         }
 
-        if skip_cmd(unsafe { Ea::new(&raw mut ea) }) {
+        if skip_cmd(&mut ea) {
             break 'doend;
         }
 
         let mut retv: c_int = 0;
-        if unsafe { execute_cmd0(&raw mut retv, &raw mut ea, &mut errormsg, false) }.is_err() {
+        if unsafe { execute_cmd0(&raw mut retv, &mut ea, &mut errormsg, false) }.is_err() {
             break 'doend;
         }
 
@@ -565,11 +565,11 @@ pub(crate) unsafe fn do_one_cmd(
             unsafe { do_throw(cstack) };
         } else if check_cstack.get() {
             if unsafe { source_finished(fgetline, cookie) } {
-                unsafe { do_finish(&raw mut ea, true) };
+                do_finish(&mut ea, true);
             } else if getline_equal(fgetline, cookie, Some(get_func_line))
                 && current_func_returned() != 0
             {
-                unsafe { do_return(&raw mut ea, true, false, ptr::null_mut()) };
+                unsafe { do_return(&mut ea, true, false, ptr::null_mut()) };
             }
         }
         check_cstack.set(false);
@@ -638,11 +638,11 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 ///
 /// # Safety
 ///
-/// `args` must point at the command's `ExArg`. `cstack` must point at a live
+/// `excmd` must point at the command's `ExArg`. `cstack` must point at a live
 /// `CondStack`, unaliased for the call. `cookie` must be the payload
 /// `fgetline` was registered with, live for the call.
 pub(crate) unsafe fn profile_cmd(
-    args: *const ExArg,
+    excmd: &ExArg,
     cstack: *mut CondStack,
     fgetline: LineGetter,
     cookie: *mut c_void,
@@ -650,7 +650,7 @@ pub(crate) unsafe fn profile_cmd(
     // SAFETY: the caller's conditional stack, live for the command.
     let cs = unsafe { Cs::new(cstack) };
     if do_profiling.get() != PROF_YES
-        || !(unsafe { (*args).skip } == 0
+        || !(excmd.skip == 0
             || cs.cs_idx == 0
             || (cs.cs_idx > 0 && cs.cs_flags[cs.cs_idx as usize - 1].has(CsFlags::ACTIVE)))
     {
@@ -658,7 +658,7 @@ pub(crate) unsafe fn profile_cmd(
     }
     let mut skip = did_emsg.get() != 0 || got_int.get() || did_throw.get();
     let idx = cs.cs_idx;
-    match unsafe { (*args).cmdidx } {
+    match excmd.cmdidx {
         CmdIdx::catch => {
             skip = !skip
                 && !(idx >= 0
@@ -673,7 +673,7 @@ pub(crate) unsafe fn profile_cmd(
         // The four block-enders are the only commands left that keep the
         // caller's `skip`; everything else takes it.
         CmdIdx::endif | CmdIdx::endfor | CmdIdx::endtry | CmdIdx::endwhile => {}
-        _ => skip = unsafe { (*args).skip } != 0,
+        _ => skip = excmd.skip != 0,
     }
     if skip {
         return;
@@ -718,30 +718,25 @@ fn refuses_here(ea: &ExArg) -> Option<CString> {
 /// range, or Ex mode, means print. `exmode_plus + 1` is the empty string Ex
 /// mode substitutes for a bare `+`; it is recognised by *address*, not by
 /// content.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_range_without_command(args: *mut ExArg) -> Option<CString> {
-    let mut ea = unsafe { Ea::new(args) };
+pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
     let mut errormsg: Option<CString> = None;
-    if byte(ea.cmd) == '|' as c_int
-        || (exmode_active.get() && !ptr::eq(ea.cmd, unsafe { exmode_plus.as_ptr().add(1) }))
+    if byte(excmd.cmd) == '|' as c_int
+        || (exmode_active.get() && !ptr::eq(excmd.cmd, unsafe { exmode_plus.as_ptr().add(1) }))
     {
-        ea.cmdidx = CmdIdx::print;
-        ea.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;
-        errormsg = invalid_range(ea.raw());
+        excmd.cmdidx = CmdIdx::print;
+        excmd.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;
+        errormsg = invalid_range(excmd);
         if errormsg.is_none() {
-            correct_range(ea);
-            unsafe { ex_print(ea.raw()) };
+            correct_range(excmd);
+            ex_print(excmd);
         }
-    } else if ea.addr_count != 0 {
-        ea.line2 = ea.line2.min(Buf::current().b_ml.ml_line_count);
-        if ea.line2 < 0 {
+    } else if excmd.addr_count != 0 {
+        excmd.line2 = excmd.line2.min(Buf::current().b_ml.ml_line_count);
+        if excmd.line2 < 0 {
             errormsg = Some(ex_msg(e_invrange.as_ptr()));
         } else {
             // Line 0 is not a position; the cursor goes to line 1.
-            Win::current().w_cursor.lnum = if ea.line2 == 0 { 1 } else { ea.line2 };
+            Win::current().w_cursor.lnum = if excmd.line2 == 0 { 1 } else { excmd.line2 };
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     }
@@ -800,31 +795,21 @@ const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this 
 ///
 /// Keeps the raw signature: it is a `cmd_func` in the command table, and
 /// `is_cmd_ni` recognises a command by comparing against its address.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub unsafe fn ex_ni(args: *mut ExArg) {
-    let mut args = unsafe { Ea::new(args) };
-    if args.skip == 0 {
-        args.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
+pub fn ex_ni(excmd: &mut ExArg) {
+    if excmd.skip == 0 {
+        excmd.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
     }
 }
 
 /// The same, for a command whose argument may be a here-document
 /// (`:perl <<EOF`) — the body has to be consumed even when the command
 /// cannot run, or its lines would be read as commands.
-///
-/// # Safety
-///
-/// `args` must point at the command's `ExArg`, unaliased for the call.
-pub(crate) unsafe fn ex_script_ni(args: *mut ExArg) {
-    let args = unsafe { Ea::new(args) };
-    if args.skip == 0 {
-        unsafe { ex_ni(args.raw()) };
+pub(crate) fn ex_script_ni(excmd: &mut ExArg) {
+    if excmd.skip == 0 {
+        ex_ni(excmd);
     } else {
         let mut len: size_t = 0;
-        unsafe { xfree(script_get(args.raw(), &raw mut len) as *mut c_void) };
+        unsafe { xfree(script_get(excmd, &raw mut len) as *mut c_void) };
     }
 }
 
@@ -846,9 +831,9 @@ fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) ->
 }
 
 /// `invalid_range()` as checked code.
-fn invalid_range(args: *mut ExArg) -> Option<CString> {
+fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::address::invalid_range(args) }
+    crate::ex_docmd::address::invalid_range(excmd)
 }
 
 /// `skipwhite()` as checked code.

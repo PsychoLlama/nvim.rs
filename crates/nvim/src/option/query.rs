@@ -14,7 +14,6 @@ use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uchar, c_uint, c_void};
 use core::mem::ManuallyDrop;
-use core::ptr;
 
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
@@ -183,7 +182,7 @@ pub(crate) unsafe fn option_set_callback_func(
         || unsafe { cstr::starts_with(optval, b"function(") }
         || unsafe { cstr::starts_with(optval, b"funcref(") }
     {
-        let tv = unsafe { eval_expr(optval, ptr::null_mut::<ExArg>()) };
+        let tv = unsafe { eval_expr(optval, None) };
         if tv.is_null() {
             return Err(Failed);
         }
@@ -281,18 +280,9 @@ pub(crate) fn get_fileformat(buffer: Buf) -> c_int {
 
 /// [`get_fileformat`] with a command's `++ff`/`++bin` overriding the buffer.
 ///
-/// # Safety
-///
-/// `args`, when non-null, must be a live command.
-pub(crate) unsafe fn get_fileformat_force(buffer: Buf, args: *const ExArg) -> c_int {
-    // SAFETY: the caller's command, where they gave one. Reading both
-    // fields together is the same answer: they are plain fields of a live
-    // `ExArg`, and only their values decide anything below.
-    let (force_ff, force_bin) = if args.is_null() {
-        (0, 0)
-    } else {
-        unsafe { ((*args).force_ff, (*args).force_bin) }
-    };
+pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int {
+    let (force_ff, force_bin) =
+        excmd.map_or((0, 0), |command| (command.force_ff, command.force_bin));
     let c = if force_ff != 0 {
         force_ff
     } else {

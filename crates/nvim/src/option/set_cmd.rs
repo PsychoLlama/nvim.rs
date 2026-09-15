@@ -80,22 +80,18 @@ enum Prefix {
 }
 
 /// `:set`, `:setlocal` and `:setglobal`.
-///
-/// # Safety
-///
-/// `args` must be the command's own argument block.
-pub(crate) unsafe fn ex_set(args: *mut ExArg) {
+pub(crate) fn ex_set(excmd: &mut ExArg) {
     // SAFETY: the caller's argument block.
-    let mut flags = match unsafe { (*args).cmdidx } {
+    let mut flags = match excmd.cmdidx {
         CmdIdx::setlocal => OptionSetFlags::LOCAL,
         CmdIdx::setglobal => OptionSetFlags::GLOBAL,
         _ => OptionSetFlags::NONE,
     };
     // `:set!` lists one option per line.
-    if unsafe { (*args).forceit } != 0 {
+    if excmd.forceit != 0 {
         flags |= OptionSetFlags::ONECOLUMN;
     }
-    let _ = unsafe { do_set((*args).arg, flags) };
+    let _ = unsafe { do_set(excmd.arg, flags) };
 }
 
 /// The operator at `arg`, if the two characters there are one.

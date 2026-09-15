@@ -133,7 +133,7 @@ pub unsafe fn apply_autocmds(
             force,
             AUGROUP_ALL,
             buffer,
-            ::core::ptr::null_mut(),
+            None,
             ::core::ptr::null_mut(),
         )
     }
@@ -147,17 +147,17 @@ pub unsafe fn apply_autocmds(
 /// `event` must be an initialized `AutoEvent` whose pointer fields point at
 /// live data for the call. `fname` must point at a NUL-terminated string,
 /// unaliased for the call. `fname_io` must point at a NUL-terminated string,
-/// unaliased for the call. `args` must point at the command's `ExArg`.
+/// unaliased for the call. `excmd` must point at the command's `ExArg`.
 pub unsafe fn apply_autocmds_exarg(
     event: AutoEvent,
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
     buffer: Option<Buf>,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
 ) -> bool {
     // SAFETY: every pointer is the caller's, handed straight on;
-    // `apply_autocmds_group` asks of them exactly what this does, `args`
+    // `apply_autocmds_group` asks of them exactly what this does, `excmd`
     // included -- it only reads its `forceit` and its command argument.
     unsafe {
         apply_autocmds_group(
@@ -167,7 +167,7 @@ pub unsafe fn apply_autocmds_exarg(
             force,
             AUGROUP_ALL,
             buffer,
-            args,
+            excmd,
             ::core::ptr::null_mut(),
         )
     }
@@ -203,7 +203,7 @@ pub unsafe fn apply_autocmds_retval(
             force,
             AUGROUP_ALL,
             Some(buffer),
-            ::core::ptr::null_mut(),
+            None,
             ::core::ptr::null_mut(),
         )
     };
@@ -227,7 +227,7 @@ pub unsafe fn apply_autocmds_retval(
 /// `event` must be an initialized `AutoEvent` whose pointer fields point at
 /// live data for the call. `fname` must point at a NUL-terminated string,
 /// unaliased for the call. `fname_io` must point at a NUL-terminated string,
-/// unaliased for the call. `args` must point at the command's `ExArg`. `data`
+/// unaliased for the call. `excmd` must point at the command's `ExArg`. `data`
 /// must point at a live `Object`, unaliased for the call.
 pub unsafe fn apply_autocmds_group(
     event: AutoEvent,
@@ -236,7 +236,7 @@ pub unsafe fn apply_autocmds_group(
     force: bool,
     group: ::core::ffi::c_int,
     buffer: Option<Buf>,
-    args: *mut ExArg,
+    excmd: Option<&mut ExArg>,
     data: *mut Object,
 ) -> bool {
     static nesting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -461,12 +461,15 @@ pub unsafe fn apply_autocmds_group(
 
             // `v:cmdarg`/`v:cmdbang`, only when a pattern matched.
             let save_cmdbang = get_vim_var_nr(Vv::Cmdbang);
-            let save_cmdarg = if args.is_null() {
-                ::core::ptr::null_mut()
-            } else {
-                let saved = unsafe { set_cmdarg(args, ::core::ptr::null_mut()) };
-                unsafe { set_vim_var_nr(Vv::Cmdbang, VarNumber::from((*args).forceit)) };
-                saved
+            let bang = excmd.as_deref().map(|command| command.forceit);
+            let save_cmdarg = match excmd {
+                None => ::core::ptr::null_mut(),
+                Some(command) => {
+                    // SAFETY: a fresh value, so nothing is being freed.
+                    let saved = unsafe { set_cmdarg(Some(command), ::core::ptr::null_mut()) };
+                    set_vim_var_nr(Vv::Cmdbang, VarNumber::from(bang.unwrap_or(0)));
+                    saved
+                }
             };
             retval = true;
 
@@ -500,8 +503,9 @@ pub unsafe fn apply_autocmds_group(
                 reset_lnums();
             }
 
-            if !args.is_null() {
-                unsafe { set_cmdarg(::core::ptr::null_mut(), save_cmdarg) };
+            if bang.is_some() {
+                // SAFETY: the string the call above put aside.
+                unsafe { set_cmdarg(None, save_cmdarg) };
                 set_vim_var_nr(Vv::Cmdbang, save_cmdbang);
             }
             // Unlink -- guarded, because a nested walk may already

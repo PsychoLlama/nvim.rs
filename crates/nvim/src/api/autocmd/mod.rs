@@ -21,7 +21,7 @@ use crate::memory::{strequal, xfree};
 use crate::strings::printf_string;
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Array, AutoCmd, AutoCmdVec, AutoPat, BufferHandle, Callback, Error, ExArg, Exception,
+    ApiDict, Array, AutoCmd, AutoCmdVec, AutoPat, BufferHandle, Callback, Error, Exception,
     Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
     KeyDict_exec_autocmds, KeyDict_get_autocmds, MsgList, Object, String_0, TryState, int64_t,
     kErrorTypeValidation, kObjectTypeString, size_t, uint64_t,

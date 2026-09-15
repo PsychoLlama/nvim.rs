@@ -501,22 +501,16 @@ unsafe fn do_showbacktrace(cmd: *mut c_char) {
 }
 
 /// `:debug {cmd}`: run one command with the debugger stopping at everything.
-///
-/// # Safety
-/// `args` must be the live `ExArg`.
-pub unsafe fn ex_debug(args: *mut ExArg) {
+pub fn ex_debug(excmd: &mut ExArg) {
     let outer_level = debug_break_level.replace(9999);
     // SAFETY: caller contract; `args.arg` is the NUL-terminated argument.
-    let _ = unsafe { do_cmdline_cmd((*args).arg) };
+    let _ = unsafe { do_cmdline_cmd(excmd.arg) };
     debug_break_level.set(outer_level);
 }
 
 /// `:debuggreedy`, whose `0` argument turns it back off.
-///
-/// # Safety
-/// `args` must be the live `ExArg`.
-pub unsafe fn ex_debuggreedy(args: *mut ExArg) {
+pub fn ex_debuggreedy(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    let (addr_count, line2) = unsafe { ((*args).addr_count, (*args).line2) };
+    let (addr_count, line2) = (excmd.addr_count, excmd.line2);
     debug_greedy.set(addr_count == 0 || line2 != 0 as LineNr);
 }

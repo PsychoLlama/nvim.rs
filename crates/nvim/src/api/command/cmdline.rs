@@ -14,7 +14,6 @@ use crate::ascii::ascii_iswhite;
 use crate::cstr;
 use crate::memory::handoff::owned_cstr;
 use crate::types::ExArgt;
-use crate::winlayer::Ea;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -117,13 +116,12 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
 /// the call.
 pub(crate) unsafe fn build_cmdline_str(
     cmdlinep: *mut *mut c_char,
-    cmd: *mut ExArg,
+    excmd: &mut ExArg,
     cmdinfo: *mut CmdParseInfo,
     args: Array,
 ) {
     // SAFETY: the caller's promise -- `cmd` is the command being built and
     // is live for the call.
-    let mut cmd = unsafe { Ea::new(cmd) };
     let argc: size_t = args.len();
     // Upstream's `kv_resize(cmdline, 32)`: a size hint, nothing more.
     let mut cmdline: Vec<u8> = Vec::with_capacity(32);
@@ -131,41 +129,41 @@ pub(crate) unsafe fn build_cmdline_str(
     let cmdmod = unsafe { &(*cmdinfo).cmdmod };
     concat_cmdmods(&mut cmdline, cmdmod);
 
-    if cmd.argt.has(ExArgt::RANGE) {
-        if cmd.addr_count == 1 {
-            let line2 = cmd.line2;
+    if excmd.argt.has(ExArgt::RANGE) {
+        if excmd.addr_count == 1 {
+            let line2 = excmd.line2;
             cmdline.extend_from_slice(format!("{line2}").as_bytes());
-        } else if cmd.addr_count > 1 {
-            let (line1, line2) = (cmd.line1, cmd.line2);
+        } else if excmd.addr_count > 1 {
+            let (line1, line2) = (excmd.line1, excmd.line2);
             cmdline.extend_from_slice(format!("{line1},{line2}").as_bytes());
             // Only two of them made it into the string.
-            cmd.addr_count = 2;
+            excmd.addr_count = 2;
         }
     }
     let cmdname_idx: size_t = cmdline.len();
-    let name = cmd.cmd;
+    let name = excmd.cmd;
     // SAFETY: `cmd.cmd` is the command name, NUL-terminated.
     unsafe { cmdline_concat(&mut cmdline, name, cstr::bytes_at(name).len()) };
-    if cmd.argt.has(ExArgt::BANG) && cmd.forceit != 0 {
+    if excmd.argt.has(ExArgt::BANG) && excmd.forceit != 0 {
         cmdline_concat_str(&mut cmdline, c"!");
     }
-    if cmd.argt.has(ExArgt::REGSTR) && cmd.regname != 0 {
+    if excmd.argt.has(ExArgt::REGSTR) && excmd.regname != 0 {
         // `%c`: the low byte of the register name, not its UTF-8 encoding.
         cmdline.push(b' ');
-        cmdline.push(cmd.regname as u8);
+        cmdline.push(excmd.regname as u8);
     }
 
     // Each argument is preceded by one space, which is what lets the
     // offsets below be recovered from the lengths alone.
-    cmd.argc = argc;
-    cmd.arglens = if argc > 0 {
+    excmd.argc = argc;
+    excmd.arglens = if argc > 0 {
         // SAFETY: `xcalloc` answers `argc` zeroed slots.
         unsafe { xcalloc(argc, size_of::<size_t>()) }.cast::<size_t>()
     } else {
         ptr::null_mut::<size_t>()
     };
     let argstart_idx: size_t = cmdline.len();
-    let arglens = cmd.arglens;
+    let arglens = excmd.arglens;
     for (i, item) in args.iter().enumerate().take(argc) {
         let s = item
             .as_string()
@@ -184,14 +182,14 @@ pub(crate) unsafe fn build_cmdline_str(
     let items = owned_cstr(cmdline);
 
     // SAFETY: `cmdname_idx` is an offset into the buffer just built.
-    cmd.cmd = unsafe { items.add(cmdname_idx) };
-    cmd.args = if argc > 0 {
+    excmd.cmd = unsafe { items.add(cmdname_idx) };
+    excmd.args = if argc > 0 {
         // SAFETY: `xcalloc` answers `argc` zeroed slots.
         unsafe { xcalloc(argc, size_of::<*mut c_char>()) }.cast::<*mut c_char>()
     } else {
         ptr::null_mut::<*mut c_char>()
     };
-    let eap_args = cmd.args;
+    let eap_args = excmd.args;
     let mut offset: size_t = argstart_idx;
     for i in 0..argc {
         offset += 1;
@@ -202,8 +200,8 @@ pub(crate) unsafe fn build_cmdline_str(
             offset += *arglens.add(i);
         }
     }
-    cmd.arg = if argc > 0 {
-        // SAFETY: `args` has at least one slot, filled in above.
+    excmd.arg = if argc > 0 {
+        // SAFETY: `excmd` has at least one slot, filled in above.
         unsafe { *eap_args }
     } else {
         // SAFETY: `end_idx` is where the terminator went.
@@ -213,20 +211,20 @@ pub(crate) unsafe fn build_cmdline_str(
     unsafe { *cmdlinep = items };
 
     // `:make`/`:grep` rewrite their own argument, and the rewrite has no
-    // relation to the `args` array that was just built.
-    let arg = cmd.arg;
+    // relation to the `excmd` array that was just built.
+    let arg = excmd.arg;
     // SAFETY: `cmd` is the command being built and `cmdlinep` the caller's
     // slot, which `replace_makeprg` may reallocate.
-    let p: *mut c_char = unsafe { replace_makeprg(cmd.raw(), arg, cmdlinep) };
+    let p: *mut c_char = unsafe { replace_makeprg(excmd, arg, cmdlinep) };
     if p != arg {
-        cmd.arg = p;
+        excmd.arg = p;
         // SAFETY: both arrays are this function's own allocations.
         unsafe {
             xfree(eap_args.cast());
             xfree(arglens.cast());
         }
-        cmd.args = ptr::null_mut::<*mut c_char>();
-        cmd.arglens = ptr::null_mut::<size_t>();
-        cmd.argc = 0;
+        excmd.args = ptr::null_mut::<*mut c_char>();
+        excmd.arglens = ptr::null_mut::<size_t>();
+        excmd.argc = 0;
     }
 }

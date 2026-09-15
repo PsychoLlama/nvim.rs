@@ -189,10 +189,10 @@ pub(crate) fn read_stdin() {
         let initial_buf_handle: Handle = Buf::current().handle;
         set_curbuf(stdin_buf.expect("a live handle"), 0, false);
         let last = MAXLNUM as LineNr;
-        let null_ea = ptr::null_mut::<ExArg>();
+        let _null_ea = ptr::null_mut::<ExArg>();
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
-        let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
+        let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, None, flags, true) };
         let stdin_buf_handle: Handle = stdin_buf.map_or(0, |b| b.handle);
         let stdin_buf_empty = buf_is_empty(Buf::current());
 
@@ -211,7 +211,7 @@ pub(crate) fn read_stdin() {
         }
     } else {
         set_buflisted(1);
-        let _ = unsafe { open_buffer(true, ptr::null_mut::<ExArg>(), 0) };
+        let _ = open_buffer(true, None, 0);
         if buf_is_empty(Buf::current()) && Buf::current().b_next.is_some() {
             let _ = unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
             let _ = unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
@@ -317,7 +317,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
             // Ask, rather than print, if the swap file is in the way.
             swap_exists_action.set(SEA_DIALOG);
             set_buflisted(1);
-            let _ = unsafe { open_buffer(false, ptr::null_mut::<ExArg>(), 0) };
+            let _ = open_buffer(false, None, 0);
 
             if swap_exists_action.get() == SEA_QUIT {
                 if got_int.get() || only_one_window() {
@@ -422,9 +422,9 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 ptr::null_mut()
             };
             let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
-            let null_ea = ptr::null_mut::<ExArg>();
+            let _null_ea = ptr::null_mut::<ExArg>();
             let win = Win::current().id();
-            let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, Some(win)) };
+            let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), None, last, hide, Some(win)) };
             if swap_exists_did_quit.get() {
                 if got_int.get() || only_one_window() {
                     quit_on_swap_exists(true);

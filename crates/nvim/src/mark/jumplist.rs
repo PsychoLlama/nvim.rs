@@ -337,10 +337,7 @@ pub unsafe fn free_jumplist(mut window: Win) {
 }
 
 /// print the jumplist
-///
-/// # Safety
-/// The editor's globals must be live.
-pub unsafe fn ex_jumps(_args: *mut ExArg) {
+pub fn ex_jumps(_excmd: &mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     let win = Win::current();
     cleanup_jumplist(win, true);
@@ -404,9 +401,7 @@ pub unsafe fn ex_jumps(_args: *mut ExArg) {
     }
 }
 
-/// # Safety
-/// The editor's globals must be live.
-pub unsafe fn ex_clearjumps(_args: *mut ExArg) {
+pub fn ex_clearjumps(_excmd: &mut ExArg) {
     let mut win = Win::current();
     // SAFETY: as above.
     unsafe { free_jumplist(win) };
@@ -415,10 +410,7 @@ pub unsafe fn ex_clearjumps(_args: *mut ExArg) {
 }
 
 /// print the changelist
-///
-/// # Safety
-/// The editor's globals must be live.
-pub unsafe fn ex_changes(_args: *mut ExArg) {
+pub fn ex_changes(_excmd: &mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     let (buf, win) = (Buf::current(), Win::current());
     // SAFETY: as above.
