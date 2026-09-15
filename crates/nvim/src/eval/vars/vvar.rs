@@ -601,7 +601,7 @@ pub(crate) unsafe fn set_vvar_item(
     // `cur` survives the store.
     let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
     // SAFETY: the caller's obligation, and the `v:` dictionary is a static.
-    let varname = unsafe { (*di).key().as_ptr() };
+    let varname = unsafe { (*di).di_key.as_ptr() };
     let watched = dict_is_watched(unsafe { (get_vimvar_dict()).as_ref() });
 
     // `+=` and friends act on the current value, so evaluate them into a

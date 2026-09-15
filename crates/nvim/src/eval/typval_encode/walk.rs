@@ -645,8 +645,14 @@ unsafe fn walk<S: TypvalSink>(
                     *slot_field = slot;
                     *todo_slot = todo;
                 }
-                let key = unsafe { (*di).key().as_ptr() };
-                walk_hook!(sink.conv_dict_key(unsafe { cstr::bytes_at(key) }));
+                // The key is read as bytes the item already knows the length
+                // of. Spelling it `&CStr` here validates the key, and asking
+                // `strlen` for the length scans it again -- on every entry of
+                // every encode, which is every `string()`, every `json_*`,
+                // every value that crosses into Lua and every `tv_clear`.
+                // SAFETY: the walk's own item, which owns its key.
+                let key = unsafe { (*di).key() };
+                walk_hook!(sink.conv_dict_key(key));
                 sink.conv_dict_after_key(Some(dictp));
                 tv = di_tv(di);
             }

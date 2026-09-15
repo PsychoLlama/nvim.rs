@@ -515,7 +515,7 @@ impl DictItemRef {
     /// The key: the item's own bytes, without the terminator.
     #[inline(always)]
     pub(crate) fn key(self) -> &'static [u8] {
-        self.get().key_bytes()
+        self.get().key()
     }
 
     /// The value; see [`Item::tv`] for why it is not a borrow.

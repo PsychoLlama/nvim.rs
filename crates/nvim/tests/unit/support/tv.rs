@@ -515,7 +515,7 @@ pub(crate) unsafe fn dict_items(d: *const Dict) -> Vec<(Vec<u8>, *mut DictItem)>
     let mut out = Vec::new();
     for hi in ht.items() {
         let di = hi.hi_key.item();
-        out.push((unsafe { (*di).key_bytes() }.to_vec(), di));
+        out.push((unsafe { (*di).key() }.to_vec(), di));
     }
     out
 }

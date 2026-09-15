@@ -344,14 +344,22 @@ const _: () = {
 };
 
 impl DictItem {
-    /// The item's key as a C string.
-    pub fn key(&self) -> &::core::ffi::CStr {
-        self.di_key.as_c_str()
+    /// The item's key, without the terminating NUL.
+    ///
+    /// The cheap spelling, and the one that shares its name with
+    /// `DictItemRef::key`: both answer bytes in constant time, so a caller
+    /// reaching for "the key" gets the same thing on either type.
+    pub fn key(&self) -> &[uint8_t] {
+        self.di_key.bytes()
     }
 
-    /// The item's key, without the terminating NUL.
-    pub fn key_bytes(&self) -> &[uint8_t] {
-        self.di_key.bytes()
+    /// The item's key as a C string, for a caller that wants a *string*.
+    ///
+    /// **Not for a hot path.** Building one validates the key (see
+    /// [`DictKey::as_c_str`]); a caller that wants a pointer to pass on
+    /// wants [`DictKey::as_ptr`] on [`di_key`](Self::di_key) instead.
+    pub fn key_cstr(&self) -> &::core::ffi::CStr {
+        self.di_key.as_c_str()
     }
 }
 

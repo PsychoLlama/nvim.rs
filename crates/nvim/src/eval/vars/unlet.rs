@@ -207,7 +207,7 @@ unsafe fn do_unlet_var(
             let tv = di.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
             unsafe { tv_copy(&*tv, &mut oldtv) };
             // The key has to be saved: removing the item frees it.
-            key = unsafe { xstrdup((*di.raw()).key().as_ptr()) };
+            key = unsafe { xstrdup((*di.raw()).di_key.as_ptr()) };
         }
 
         unsafe { tv_dict_item_remove(d, di.raw()) };

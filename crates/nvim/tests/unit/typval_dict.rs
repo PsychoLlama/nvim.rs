@@ -253,7 +253,7 @@ fn finding_reads_exactly_the_key_length_asked_for() {
         // so the prefixes the spec asks for are slices of one literal.
         let find = |key: &[u8]| -> Option<(Tv, Vec<u8>)> {
             let di = dict_find(d.as_ref(), key)?;
-            Some((tv::read(&raw const di.di_tv), di.key_bytes().to_vec()))
+            Some((tv::read(&raw const di.di_tv), di.key().to_vec()))
         };
 
         assert_eq!(find(b""), Some((f(0.0), b"".to_vec())));

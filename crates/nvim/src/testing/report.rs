@@ -208,7 +208,7 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
     // SAFETY: the caller's two live dictionaries.
     let (exp_ref, got_ref) = unsafe { (&*exp_d, &*got_d) };
     for item in exp_ref.items() {
-        let key = item.key_bytes();
+        let key = item.key();
         let item2 = got_ref.find(key);
         if item2.is_some_and(|other| tv_equal(&item.di_tv, &other.di_tv, false)) {
             omitted += 1;
@@ -226,7 +226,7 @@ unsafe fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> (TypVal, T
 
     // Entries only the actual value has.
     for item in got_ref.items() {
-        let key = item.key_bytes();
+        let key = item.key();
         if !exp_ref.has_key(key) {
             // SAFETY: the dictionary this call owns.
             let _ = unsafe { (*got).add_tv(key, &item.di_tv) };

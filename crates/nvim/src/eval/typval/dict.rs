@@ -722,7 +722,7 @@ pub fn dict_equal(d1: Option<&Dict>, d2: Option<&Dict>, ic: bool) -> bool {
     };
 
     for di1 in d1.items() {
-        let Some(di2) = d2.find(di1.key_bytes()) else {
+        let Some(di2) = d2.find(di1.key()) else {
             return false;
         };
         if !tv_equal(&di1.di_tv, &di2.di_tv, ic) {
@@ -784,8 +784,10 @@ pub unsafe fn dict_copy(
         let di_key = unsafe { &(*di).di_key };
         // SAFETY: the caller's converter, read only for its kind.
         let new_di = if conv.is_null() || unsafe { (*conv).vc_type } == CONV_NONE {
-            // SAFETY: the item's own NUL-terminated key.
-            unsafe { tv_dict_item_alloc(di_key.as_ptr()) }
+            // The length comes off the key rather than out of a `strlen`:
+            // this is every item of every `copy()` and `deepcopy()`.
+            // SAFETY: the item's own key, readable for its own length.
+            unsafe { tv_dict_item_alloc_len(di_key.as_ptr(), di_key.len()) }
         } else {
             let mut len = di_key.len();
             // SAFETY: the caller's converter and the item's own key.
@@ -935,7 +937,7 @@ mod tests {
     /// The keys of `d` in slot order -- the order `keys()` shows.
     fn slot_order(d: &Dict) -> Vec<String> {
         d.items()
-            .map(|di| String::from_utf8(di.key_bytes().to_vec()).expect("an ASCII key"))
+            .map(|di| String::from_utf8(di.key().to_vec()).expect("an ASCII key"))
             .collect()
     }
 

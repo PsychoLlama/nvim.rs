@@ -205,7 +205,7 @@ pub unsafe fn set_var_const(
     unsafe { *di_lock(di) = VarLock::Unlocked };
 
     if watched {
-        let key = unsafe { (*di).key().as_ptr() };
+        let key = unsafe { (*di).di_key.as_ptr() };
         unsafe {
             dict_watcher_notify(
                 dict,

@@ -144,8 +144,8 @@ fn a_dict_item_owns_exactly_the_key_it_was_given() {
                 Some(len) => tv_dict_item_alloc_len(c_key.as_ptr(), len),
             };
             let len = len.unwrap_or(key.len());
-            assert_eq!((*di).key_bytes(), &key.as_bytes()[..len], "{key:?}/{len}");
-            assert_eq!((*di).key().to_bytes(), &key.as_bytes()[..len]);
+            assert_eq!((*di).key(), &key.as_bytes()[..len], "{key:?}/{len}");
+            assert_eq!((*di).key_cstr().to_bytes(), &key.as_bytes()[..len]);
             assert_eq!(
                 (*di).di_tv.v_type(),
                 VAR_UNKNOWN,

@@ -45,7 +45,7 @@ pub unsafe fn list_hashtable_vars(
         let di = tv_dict_hi2di(hi);
         let mut buf = [0 as c_char; IOSIZE as usize];
         unsafe { xstrlcpy(buf.as_mut_ptr(), prefix, IOSIZE as size_t) };
-        unsafe { xstrlcat(buf.as_mut_ptr(), (*di).key().as_ptr(), IOSIZE as size_t) };
+        unsafe { xstrlcat(buf.as_mut_ptr(), (*di).di_key.as_ptr(), IOSIZE as size_t) };
         if message_filtered(unsafe { cstr::at(buf.as_mut_ptr()) }) {
             continue;
         }
@@ -243,10 +243,10 @@ unsafe fn list_one_var(v: *mut DictItem, prefix: *const c_char, first: *mut c_in
     // SAFETY: the caller's obligation -- a live item, whose key and value
     // are its own.
     let item = unsafe { Di::new(v) };
-    let key = unsafe { (*v).key().as_ptr() };
+    let key = unsafe { (*v).di_key.as_ptr() };
+    let len = unsafe { (*v).di_key.len() } as ptrdiff_t;
     let tv = item.field_ptr::<TypVal>(offset_of!(DictItem, di_tv));
     let s = unsafe { encode_tv2echo(&*tv, ptr::null_mut()) };
-    let len = unsafe { cstr::bytes_at(key) }.len() as ptrdiff_t;
     let text = if s.is_null() { c"".as_ptr() } else { s };
     let ty = item.di_tv.v_type();
     unsafe { list_one_var_a(prefix, key, len, ty, text, first) };
