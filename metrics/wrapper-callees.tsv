@@ -27,7 +27,7 @@ count	callee	no_raw	defs	def
 77	apply_autocmds	0	1	crates/nvim/src/autocmd/fire.rs
 69	prefix_eq	0	1	crates/nvim/src/cstr.rs
 68	from_raw_parts_mut	0	0	
-65	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
+64	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 62	nlua_pop_integer	0	1	crates/nvim/src/lua/converter/pop.rs
 61	strequal	0	1	crates/nvim/src/memory/mod.rs
 59	strcpy	0	0	

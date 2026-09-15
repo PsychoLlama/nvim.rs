@@ -186,6 +186,402 @@ pub(crate) fn skip_cmd(excmd: &mut ExArg) -> bool {
     )
 }
 
+/// A stage of the parse that refused to go on.
+///
+/// Whatever it has to say is in the caller's `errormsg`; an empty one is a
+/// silent refusal, which is what a skipped command and a locked buffer both
+/// are. C spelled all of these `goto doend`.
+struct Refused;
+
+/// Read the modifiers and the range, and find the command word.
+///
+/// Answers where the argument starts, which is what the rest of the parse
+/// walks. The command name has to be found *before* the range can be read,
+/// because it is what says whether an address counts lines, windows,
+/// buffers or tab pages -- so the two are one stage.
+///
+/// The position is left in `excmd.arg`, which nothing has read yet.
+fn locate_command(
+    excmd: &mut ExArg,
+    mods: &CmdModScope,
+    flags: DoCmdOpts,
+    errormsg: &mut Option<CString>,
+) -> Result<(), Refused> {
+    // "#!anything" is a comment, so that a script can carry a shebang line.
+    // SAFETY: `cmdlinep` is the caller's, and names the command line.
+    let line = unsafe { *excmd.cmdlinep };
+    if byte_at(line, 0) == '#' as c_int && byte_at(line, 1) == '!' as c_int {
+        return Err(Refused);
+    }
+
+    mods.parse(excmd, errormsg).map_err(|_| Refused)?;
+    mods.apply();
+    let after_modifier = excmd.cmd;
+
+    let cstack = excmd.cstack;
+    // SAFETY: `cstack` is the caller's conditional stack, live for the
+    // whole of this command.
+    excmd.skip = did_emsg.get() != 0
+        || got_int.get()
+        || did_throw.get()
+        || unsafe {
+            (*cstack).cs_idx >= 0
+                && !(*cstack).cs_flags[(*cstack).cs_idx as usize].has(CsFlags::ACTIVE)
+        };
+
+    let mut p = find_excmd_after_range(excmd);
+    let (fgetline, cookie) = (excmd.ea_getline, excmd.cookie);
+    // SAFETY: the command's own line source and conditional stack.
+    unsafe { profile_cmd(excmd, cstack, fgetline, cookie) };
+
+    if !exiting.get() {
+        // May go to debug mode. If the `>quit` debug command is used there,
+        // an interrupt exception is thrown and this command is skipped.
+        dbg_check_breakpoint(excmd);
+    }
+    if !excmd.skip && got_int.get() {
+        excmd.skip = true;
+        // SAFETY: the caller's conditional stack.
+        unsafe { do_intthrow(cstack) };
+    }
+
+    // SAFETY: `p` is inside the command line, or null.
+    unsafe { set_cmd_addr_type(excmd, p) };
+    if parse_cmd_address(excmd, errormsg, false) == FAIL {
+        return Err(Refused);
+    }
+
+    // SAFETY: `cmd` walks the command line.
+    excmd.cmd = unsafe { skip_colon_white(excmd.cmd, true) };
+
+    // A range with no command after it. Vi's behaviour, preserved: `:3`
+    // jumps to line 3, `:3|…` *prints* line 3, and `:|` prints the current
+    // line.
+    if byte(excmd.cmd) == NUL || byte(excmd.cmd) == '"' as c_int || {
+        // SAFETY: as above.
+        excmd.nextcmd = unsafe { check_nextcmd(excmd.cmd) };
+        !excmd.nextcmd.is_null()
+    } {
+        if !excmd.skip {
+            debug_assert!(errormsg.is_none());
+            *errormsg = ex_range_without_command(excmd);
+        }
+        return Err(Refused);
+    }
+
+    // An unknown command spelled like a user command, with a CmdUndefined
+    // autocommand waiting to define it.
+    if !p.is_null()
+        && excmd.cmdidx == CmdIdx::SIZE
+        && !excmd.skip
+        && (ubyte(excmd.cmd)).is_ascii_uppercase()
+        && has_event(AutoEvent::CmdUndefined)
+    {
+        // SAFETY (this block): `cmd` is inside the NUL-terminated command
+        // line, and `cmdname` is the copy made here, freed here.
+        let mut end = excmd.cmd;
+        while (ubyte(end)).is_ascii_alphanumeric() {
+            end = unsafe { end.add(1) };
+        }
+        let cmdname = unsafe {
+            xmemdupz(
+                excmd.cmd as *const c_void,
+                end.offset_from(excmd.cmd) as size_t,
+            ) as *mut c_char
+        };
+        let event = AutoEvent::CmdUndefined;
+        let ret = unsafe { apply_autocmds(event, cmdname, cmdname, true, None) };
+        xfree(cmdname as *mut c_void);
+        // Look again only if the autocommands did something and did not
+        // fail.
+        p = if ret && !aborting() {
+            unsafe { find_ex_command(excmd, ptr::null_mut()) }
+        } else {
+            excmd.cmd
+        };
+    }
+
+    if p.is_null() {
+        if !excmd.skip {
+            *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
+        }
+        return Err(Refused);
+    }
+
+    if excmd.cmdidx == CmdIdx::SIZE {
+        if !excmd.skip {
+            // The modifiers parsed, so the error is in what follows them.
+            let cmdname = if after_modifier.is_null() {
+                // SAFETY: the caller's command line.
+                unsafe { *excmd.cmdlinep }
+            } else {
+                after_modifier
+            };
+            let msg = ex_msg(e_not_an_editor_command.as_ptr());
+            *errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
+                // The whole line is appended by `do_one_cmd` instead.
+                msg
+            } else {
+                // SAFETY: `cmdname` is inside the command line.
+                unsafe { append_command(&msg, cmdname) }
+            });
+            did_emsg_syntax.set(true);
+            // SAFETY: as above.
+            unsafe { verify_command(cmdname) };
+        }
+        return Err(Refused);
+    }
+    excmd.arg = p;
+    Ok(())
+}
+
+/// Everything about *where* the command may run: the buffer it would edit,
+/// the range it was given and the `!` it was not allowed.
+///
+/// `ni` is set for a command this build does not implement, which relaxes
+/// every check here: there is nothing to check them against.
+fn check_may_run(
+    excmd: &mut ExArg,
+    ni: bool,
+    flags: DoCmdOpts,
+    errormsg: &mut Option<CString>,
+) -> Result<(), Refused> {
+    if !excmd.skip {
+        if let Some(msg) = refuses_here(excmd) {
+            *errormsg = Some(msg);
+            return Err(Refused);
+        }
+        // `curbuf->b_ro_locked` forbids editing another buffer.
+        // `:checktime` is postponed rather than refused, and `:edit` and
+        // `:file` are checked again once their argument is known.
+        if !excmd.argt.has(ExArgt::CMDWIN)
+            && excmd.cmdidx != CmdIdx::checktime
+            && excmd.cmdidx != CmdIdx::edit
+            && excmd.cmdidx != CmdIdx::file
+            && !is_user_cmd(excmd.cmdidx)
+            && curbuf_locked()
+        {
+            return Err(Refused);
+        }
+        if !ni && !excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
+            *errormsg = Some(ex_msg(e_norange.as_ptr()));
+            return Err(Refused);
+        }
+    }
+
+    if !ni && !excmd.argt.has(ExArgt::BANG) && excmd.forceit {
+        *errormsg = Some(ex_msg(e_nobang.as_ptr()));
+        return Err(Refused);
+    }
+
+    // A range that is not used is not complained about, which can happen
+    // when a line count is accidentally zero.
+    if !excmd.skip && !ni && excmd.argt.has(ExArgt::RANGE) {
+        // A backwards range is offered for swapping. `:global` is busy
+        // running a command per line and would fail below anyway, so it is
+        // not asked.
+        if global_busy.get() == 0 && excmd.line1 > excmd.line2 {
+            if msg_silent.get() == 0 {
+                if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
+                    *errormsg = Some(ex_msg(c"E493: Backwards range given".as_ptr()));
+                    return Err(Refused);
+                }
+                // SAFETY: a static NUL-terminated prompt.
+                if unsafe { ask_yesno(gettext(c"Backwards range given, OK to swap").as_ptr()) }
+                    != 'y' as c_int
+                {
+                    return Err(Refused);
+                }
+            }
+            core::mem::swap(&mut excmd.line1, &mut excmd.line2);
+        }
+        *errormsg = invalid_range(excmd);
+        if errormsg.is_some() {
+            return Err(Refused);
+        }
+    }
+
+    // `CmdAddr::Other` counts from 1 rather than from the cursor.
+    if excmd.addr_type == CmdAddr::Other && excmd.addr_count == 0 {
+        excmd.line2 = 1;
+    }
+    correct_range(excmd);
+
+    // Put the first line at the start of a closed fold and the last line at
+    // its end.
+    if (excmd.argt.has(ExArgt::WHOLEFOLD) || excmd.addr_count >= 2)
+        && global_busy.get() == 0
+        && excmd.addr_type == CmdAddr::Lines
+    {
+        has_folding(Win::current(), excmd.line1, Some(&mut excmd.line1), None);
+        has_folding(Win::current(), excmd.line2, None, Some(&mut excmd.line2));
+    }
+    Ok(())
+}
+
+/// Everything after the command word: the `++opt`s, the `+cmd`, the
+/// redirections `:write` and `:read` spell with `>`/`!`, the register and
+/// the count, and where the *next* command starts.
+///
+/// On entry `excmd.arg` is where the command word ended, which is what
+/// [`locate_command`] left there.
+fn read_command_args(
+    excmd: &mut ExArg,
+    ni: bool,
+    errormsg: &mut Option<CString>,
+) -> Result<(), Refused> {
+    // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line here, so
+    // that `%` and friends expand inside it.
+    let (start, cmdlinep) = (excmd.arg, excmd.cmdlinep);
+    // SAFETY: both are the command's own cursors into its line.
+    let p = unsafe { replace_makeprg(excmd, start, cmdlinep) };
+    if p.is_null() {
+        return Err(Refused);
+    }
+
+    // `:!` keeps the space: `:!! -l` needs it.
+    excmd.arg = if excmd.cmdidx == CmdIdx::bang {
+        p
+    } else {
+        skipwhite(p)
+    };
+
+    if excmd.cmdidx == CmdIdx::file && byte(excmd.arg) != NUL && curbuf_locked() {
+        return Err(Refused);
+    }
+
+    // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
+    if excmd.argt.has(ExArgt::ARGOPT) {
+        while byte_at(excmd.arg, 0) == '+' as c_int && byte_at(excmd.arg, 1) == '+' as c_int {
+            if getargopt(excmd).is_err() && !ni {
+                *errormsg = Some(ex_msg(e_invarg.as_ptr()));
+                return Err(Refused);
+            }
+        }
+    }
+
+    // SAFETY (through the redirections): `arg` walks the command line.
+    if excmd.cmdidx == CmdIdx::write || excmd.cmdidx == CmdIdx::update {
+        if byte(excmd.arg) == '>' as c_int {
+            excmd.arg = unsafe { excmd.arg.add(1) };
+            if byte(excmd.arg) != '>' as c_int {
+                *errormsg = Some(ex_msg(c"E494: Use w or w>>".as_ptr()));
+                return Err(Refused);
+            }
+            excmd.arg = unsafe { skipwhite(excmd.arg.add(1)) };
+            excmd.append = true;
+        } else if byte(excmd.arg) == '!' as c_int && excmd.cmdidx == CmdIdx::write {
+            // `:w !filter`
+            excmd.arg = unsafe { excmd.arg.add(1) };
+            excmd.usefilter = true;
+        }
+    } else if excmd.cmdidx == CmdIdx::read {
+        if excmd.forceit {
+            // `:r!filter`
+            excmd.usefilter = true;
+            excmd.forceit = false;
+        } else if byte(excmd.arg) == '!' as c_int {
+            // `:r !filter`
+            excmd.arg = unsafe { excmd.arg.add(1) };
+            excmd.usefilter = true;
+        }
+    } else if excmd.cmdidx == CmdIdx::lshift || excmd.cmdidx == CmdIdx::rshift {
+        // How far to shift is how many `<` or `>` were typed.
+        excmd.amount = 1;
+        while byte(excmd.arg) == byte(excmd.cmd) {
+            excmd.arg = unsafe { excmd.arg.add(1) };
+            excmd.amount += 1;
+        }
+        excmd.arg = skipwhite(excmd.arg);
+    }
+
+    // `+command`, before the next command is looked for. Not for
+    // `:read !cmd` and `:write !cmd`.
+    if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
+        // SAFETY: `arg` is the command's own cursor into its line.
+        excmd.do_ecmd_cmd = unsafe { getargcmd(&raw mut excmd.arg) };
+    }
+
+    if excmd.argt.has(ExArgt::TRLBAR) && !excmd.usefilter {
+        separate_nextcmd(excmd);
+    } else if excmd.cmdidx == CmdIdx::bang
+        || excmd.cmdidx == CmdIdx::terminal
+        || excmd.cmdidx == CmdIdx::global
+        || excmd.cmdidx == CmdIdx::vglobal
+        || excmd.usefilter
+    {
+        separate_at_newline(excmd);
+    }
+
+    if excmd.argt.has(ExArgt::DFLALL) && excmd.addr_count == 0 {
+        set_cmd_dflall_range(excmd);
+    }
+
+    parse_register(excmd);
+    parse_count(excmd, errormsg, true).map_err(|_| Refused)?;
+
+    if excmd.argt.has(ExArgt::FLAGS) {
+        get_flags(excmd);
+    }
+    if !ni
+        && !excmd.argt.has(ExArgt::EXTRA)
+        && byte(excmd.arg) != NUL
+        && byte(excmd.arg) != '"' as c_int
+        && (byte(excmd.arg) != '|' as c_int || !excmd.argt.has(ExArgt::TRLBAR))
+    {
+        // SAFETY: the argument is a tail of the command line.
+        *errormsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), excmd.arg) });
+        return Err(Refused);
+    }
+    if !ni && excmd.argt.has(ExArgt::NEEDARG) && byte(excmd.arg) == NUL {
+        *errormsg = Some(ex_msg(e_argreq.as_ptr()));
+        return Err(Refused);
+    }
+    Ok(())
+}
+
+/// A shell command ends at a newline rather than at a `|`, and one
+/// backslash before that newline is removed.
+fn separate_at_newline(excmd: &mut ExArg) {
+    // SAFETY (throughout): `s` walks the command's own NUL-terminated
+    // argument, which is writable.
+    let mut s = excmd.arg;
+    while unsafe { *s } != 0 {
+        if byte(s) == '\\' as c_int && byte_at(s, 1) == '\n' as c_int {
+            let into = s.cast::<u8>();
+            unsafe { into.copy_from(s.add(1).cast(), len_of(s.add(1)) + 1) };
+        } else if byte(s) == '\n' as c_int {
+            excmd.nextcmd = unsafe { s.add(1) };
+            unsafe { *s = NUL as c_char };
+            break;
+        }
+        s = unsafe { s.add(1) };
+    }
+}
+
+/// Re-raise what a nested `do_cmdline` left for the *outer* conditional
+/// stack: a throw, a `:return` or a `:finish`.
+///
+fn rethrow_from_nested(excmd: &mut ExArg) {
+    let (cstack, fgetline, cookie) = (excmd.cstack, excmd.ea_getline, excmd.cookie);
+    if need_rethrow.get() {
+        // SAFETY: the caller's conditional stack.
+        unsafe { do_throw(cstack) };
+    } else if check_cstack.get() {
+        // SAFETY: the caller's line source.
+        if unsafe { source_finished(fgetline, cookie) } {
+            do_finish(excmd, true);
+        } else if getline_equal(fgetline, cookie, Some(get_func_line))
+            && current_func_returned() != 0
+        {
+            // SAFETY: a null `rettv` is "no value".
+            unsafe { do_return(excmd, true, false, ptr::null_mut()) };
+        }
+    }
+    check_cstack.set(false);
+    need_rethrow.set(false);
+}
+
 /// Parse and execute one Ex command, and answer where the next one starts.
 ///
 /// `fgetline`/`cookie` are the line source the command may read further
@@ -223,357 +619,45 @@ pub(crate) unsafe fn do_one_cmd(
     // guard owns the `:filter` pattern and program of the set it took
     // out until it puts them back.
     let mods = CmdModScope::cleared();
-    let after_modifier: *mut c_char;
 
-    'doend: {
-        // "#!anything" is a comment, so that a script can carry a
-        // shebang line.
-        // SAFETY: `cmdlinep` is the caller's, and names the command line.
-        let line = unsafe { *cmdlinep };
-        if byte_at(line, 0) == '#' as c_int && byte_at(line, 1) == '!' as c_int {
-            break 'doend;
-        }
+    // SAFETY: the caller's command line.
+    ea.cmd = unsafe { *cmdlinep };
+    ea.cmdlinep = cmdlinep;
+    ea.ea_getline = fgetline;
+    ea.cookie = cookie;
+    ea.cstack = cstack;
 
-        ea.cmd = unsafe { *cmdlinep };
-        ea.cmdlinep = cmdlinep;
-        ea.ea_getline = fgetline;
-        ea.cookie = cookie;
-        ea.cstack = cstack;
+    // Each stage refuses by answering `Err`, having left whatever it has to
+    // say in `errormsg`; the reporting below is shared by all of them.
+    let ran = (|| {
+        locate_command(&mut ea, &mods, flags, &mut errormsg)?;
 
-        if mods.parse(&mut ea, &mut errormsg).is_err() {
-            break 'doend;
-        }
-        mods.apply();
-        after_modifier = ea.cmd;
-
-        // SAFETY: `cstack` is the caller's conditional stack, live for the
-        // whole of this command.
-        ea.skip = did_emsg.get() != 0
-            || got_int.get()
-            || did_throw.get()
-            || unsafe {
-                (*cstack).cs_idx >= 0
-                    && !(*cstack).cs_flags[(*cstack).cs_idx as usize].has(CsFlags::ACTIVE)
-            };
-
-        // The command name is needed before the range can be read: it is
-        // what says whether an address counts lines, windows, buffers or
-        // tab pages.
-        let mut p = find_excmd_after_range(&mut ea);
-        unsafe { profile_cmd(&ea, cstack, fgetline, cookie) };
-
-        if !exiting.get() {
-            // May go to debug mode. If the `>quit` debug command is used
-            // there, an interrupt exception is thrown and this command
-            // is skipped.
-            dbg_check_breakpoint(&mut ea);
-        }
-        if !ea.skip && got_int.get() {
-            ea.skip = true;
-            unsafe { do_intthrow(cstack) };
-        }
-
-        unsafe { set_cmd_addr_type(&mut ea, p) };
-        if parse_cmd_address(&mut ea, &mut errormsg, false) == FAIL {
-            break 'doend;
-        }
-
-        ea.cmd = unsafe { skip_colon_white(ea.cmd, true) };
-
-        // A range with no command after it. Vi's behaviour, preserved:
-        // `:3` jumps to line 3, `:3|…` *prints* line 3, and `:|` prints
-        // the current line.
-        if byte(ea.cmd) == NUL || byte(ea.cmd) == '"' as c_int || {
-            ea.nextcmd = unsafe { check_nextcmd(ea.cmd) };
-            !ea.nextcmd.is_null()
-        } {
-            if !ea.skip {
-                debug_assert!(errormsg.is_none());
-                errormsg = ex_range_without_command(&mut ea);
-            }
-            break 'doend;
-        }
-
-        // An unknown command spelled like a user command, with a
-        // CmdUndefined autocommand waiting to define it.
-        if !p.is_null()
-            && ea.cmdidx == CmdIdx::SIZE
-            && !ea.skip
-            && (ubyte(ea.cmd)).is_ascii_uppercase()
-            && has_event(AutoEvent::CmdUndefined)
-        {
-            let mut end = ea.cmd;
-            while (ubyte(end)).is_ascii_alphanumeric() {
-                end = unsafe { end.add(1) };
-            }
-            let cmdname =
-                unsafe { xmemdupz(ea.cmd as *const c_void, end.offset_from(ea.cmd) as size_t) }
-                    as *mut c_char;
-            let event = AutoEvent::CmdUndefined;
-            let ret = unsafe { apply_autocmds(event, cmdname, cmdname, true, None) };
-            xfree(cmdname as *mut c_void);
-            // Look again only if the autocommands did something and did
-            // not fail.
-            p = if ret && !aborting() {
-                unsafe { find_ex_command(&mut ea, ptr::null_mut()) }
-            } else {
-                ea.cmd
-            };
-        }
-
-        if p.is_null() {
-            if !ea.skip {
-                errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
-            }
-            break 'doend;
-        }
-
-        if ea.cmdidx == CmdIdx::SIZE {
-            if !ea.skip {
-                // The modifiers parsed, so the error is in what follows
-                // them.
-                let cmdname = if after_modifier.is_null() {
-                    unsafe { *cmdlinep }
-                } else {
-                    after_modifier
-                };
-                let msg = ex_msg(e_not_an_editor_command.as_ptr());
-                errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
-                    // The whole line is appended below instead.
-                    msg
-                } else {
-                    unsafe { append_command(&msg, cmdname) }
-                });
-                did_emsg_syntax.set(true);
-                unsafe { verify_command(cmdname) };
-            }
-            break 'doend;
-        }
-
-        // Not implemented in this build: the argument checks below are
-        // relaxed, because there is nothing to check them against.
+        // Not implemented in this build: the argument checks are relaxed,
+        // because there is nothing to check them against.
         let ni = is_cmd_ni(ea.cmdidx);
 
-        ea.forceit = unsafe { parse_bang(&mut ea, &raw mut p) };
-
+        // The bang is read through a cursor of its own: the command is lent
+        // to the scan, so its `arg` cannot be lent as well.
+        let mut cursor = ea.arg;
+        // SAFETY: `cursor` is this frame's own, over the command's line.
+        ea.forceit = unsafe { parse_bang(&mut ea, &raw mut cursor) };
+        ea.arg = cursor;
         if !is_user_cmd(ea.cmdidx) {
             ea.argt = cmdnames[ea.cmdidx.index()].cmd_argt;
         }
 
-        if !ea.skip {
-            if let Some(msg) = refuses_here(&ea) {
-                errormsg = Some(msg);
-                break 'doend;
-            }
-            // `curbuf->b_ro_locked` forbids editing another buffer.
-            // `:checktime` is postponed rather than refused, and `:edit`
-            // and `:file` are checked again once their argument is known.
-            if !ea.argt.has(ExArgt::CMDWIN)
-                && ea.cmdidx != CmdIdx::checktime
-                && ea.cmdidx != CmdIdx::edit
-                && ea.cmdidx != CmdIdx::file
-                && !is_user_cmd(ea.cmdidx)
-                && curbuf_locked()
-            {
-                break 'doend;
-            }
-            if !ni && !ea.argt.has(ExArgt::RANGE) && ea.addr_count > 0 {
-                errormsg = Some(ex_msg(e_norange.as_ptr()));
-                break 'doend;
-            }
-        }
-
-        if !ni && !ea.argt.has(ExArgt::BANG) && ea.forceit {
-            errormsg = Some(ex_msg(e_nobang.as_ptr()));
-            break 'doend;
-        }
-
-        // A range that is not used is not complained about, which can
-        // happen when a line count is accidentally zero.
-        if !ea.skip && !ni && ea.argt.has(ExArgt::RANGE) {
-            // A backwards range is offered for swapping. `:global` is
-            // busy running a command per line and would fail below
-            // anyway, so it is not asked.
-            if global_busy.get() == 0 && ea.line1 > ea.line2 {
-                if msg_silent.get() == 0 {
-                    if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
-                        errormsg = Some(ex_msg(c"E493: Backwards range given".as_ptr()));
-                        break 'doend;
-                    }
-                    if unsafe { ask_yesno(gettext(c"Backwards range given, OK to swap").as_ptr()) }
-                        != 'y' as c_int
-                    {
-                        break 'doend;
-                    }
-                }
-                core::mem::swap(&mut ea.line1, &mut ea.line2);
-            }
-            errormsg = invalid_range(&mut ea);
-            if errormsg.is_some() {
-                break 'doend;
-            }
-        }
-
-        // `CmdAddr::Other` counts from 1 rather than from the cursor.
-        if ea.addr_type == CmdAddr::Other && ea.addr_count == 0 {
-            ea.line2 = 1;
-        }
-
-        correct_range(&mut ea);
-
-        // Put the first line at the start of a closed fold and the last
-        // line at its end.
-        if (ea.argt.has(ExArgt::WHOLEFOLD) || ea.addr_count >= 2)
-            && global_busy.get() == 0
-            && ea.addr_type == CmdAddr::Lines
-        {
-            has_folding(Win::current(), ea.line1, Some(&mut ea.line1), None);
-            has_folding(Win::current(), ea.line2, None, Some(&mut ea.line2));
-        }
-
-        // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line
-        // here, so that `%` and friends expand inside it.
-        p = unsafe { replace_makeprg(&mut ea, p, cmdlinep) };
-        if p.is_null() {
-            break 'doend;
-        }
-
-        // `:!` keeps the space: `:!! -l` needs it.
-        ea.arg = if ea.cmdidx == CmdIdx::bang {
-            p
-        } else {
-            skipwhite(p)
-        };
-
-        if ea.cmdidx == CmdIdx::file && byte(ea.arg) != NUL && curbuf_locked() {
-            break 'doend;
-        }
-
-        // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
-        if ea.argt.has(ExArgt::ARGOPT) {
-            while byte_at(ea.arg, 0) == '+' as c_int && byte_at(ea.arg, 1) == '+' as c_int {
-                if getargopt(&mut ea).is_err() && !ni {
-                    errormsg = Some(ex_msg(e_invarg.as_ptr()));
-                    break 'doend;
-                }
-            }
-        }
-
-        if ea.cmdidx == CmdIdx::write || ea.cmdidx == CmdIdx::update {
-            if byte(ea.arg) == '>' as c_int {
-                ea.arg = unsafe { ea.arg.add(1) };
-                if byte(ea.arg) != '>' as c_int {
-                    errormsg = Some(ex_msg(c"E494: Use w or w>>".as_ptr()));
-                    break 'doend;
-                }
-                ea.arg = unsafe { skipwhite(ea.arg.add(1)) };
-                ea.append = true;
-            } else if byte(ea.arg) == '!' as c_int && ea.cmdidx == CmdIdx::write {
-                // `:w !filter`
-                ea.arg = unsafe { ea.arg.add(1) };
-                ea.usefilter = true;
-            }
-        } else if ea.cmdidx == CmdIdx::read {
-            if ea.forceit {
-                // `:r!filter`
-                ea.usefilter = true;
-                ea.forceit = false;
-            } else if byte(ea.arg) == '!' as c_int {
-                // `:r !filter`
-                ea.arg = unsafe { ea.arg.add(1) };
-                ea.usefilter = true;
-            }
-        } else if ea.cmdidx == CmdIdx::lshift || ea.cmdidx == CmdIdx::rshift {
-            // How far to shift is how many `<` or `>` were typed.
-            ea.amount = 1;
-            while byte(ea.arg) == byte(ea.cmd) {
-                ea.arg = unsafe { ea.arg.add(1) };
-                ea.amount += 1;
-            }
-            ea.arg = skipwhite(ea.arg);
-        }
-
-        // `+command`, before the next command is looked for. Not for
-        // `:read !cmd` and `:write !cmd`.
-        if ea.argt.has(ExArgt::CMDARG) && !ea.usefilter {
-            ea.do_ecmd_cmd = unsafe { getargcmd(&raw mut ea.arg) };
-        }
-
-        if ea.argt.has(ExArgt::TRLBAR) && !ea.usefilter {
-            separate_nextcmd(&mut ea);
-        } else if ea.cmdidx == CmdIdx::bang
-            || ea.cmdidx == CmdIdx::terminal
-            || ea.cmdidx == CmdIdx::global
-            || ea.cmdidx == CmdIdx::vglobal
-            || ea.usefilter
-        {
-            // A shell command ends at a newline instead, and one
-            // backslash before that newline is removed.
-            let mut s = ea.arg;
-            while unsafe { *s } != 0 {
-                if byte(s) == '\\' as c_int && byte_at(s, 1) == '\n' as c_int {
-                    let into = s.cast::<u8>();
-                    unsafe { into.copy_from(s.add(1).cast(), len_of(s.add(1)) + 1) };
-                } else if byte(s) == '\n' as c_int {
-                    ea.nextcmd = unsafe { s.add(1) };
-                    unsafe { *s = NUL as c_char };
-                    break;
-                }
-                s = unsafe { s.add(1) };
-            }
-        }
-
-        if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
-            set_cmd_dflall_range(&mut ea);
-        }
-
-        parse_register(&mut ea);
-        if parse_count(&mut ea, &mut errormsg, true).is_err() {
-            break 'doend;
-        }
-
-        if ea.argt.has(ExArgt::FLAGS) {
-            get_flags(&mut ea);
-        }
-        if !ni
-            && !ea.argt.has(ExArgt::EXTRA)
-            && byte(ea.arg) != NUL
-            && byte(ea.arg) != '"' as c_int
-            && (byte(ea.arg) != '|' as c_int || !ea.argt.has(ExArgt::TRLBAR))
-        {
-            errormsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), ea.arg) });
-            break 'doend;
-        }
-        if !ni && ea.argt.has(ExArgt::NEEDARG) && byte(ea.arg) == NUL {
-            errormsg = Some(ex_msg(e_argreq.as_ptr()));
-            break 'doend;
-        }
+        check_may_run(&mut ea, ni, flags, &mut errormsg)?;
+        read_command_args(&mut ea, ni, &mut errormsg)?;
 
         if skip_cmd(&mut ea) {
-            break 'doend;
+            return Err(Refused);
         }
-
         let mut retv: c_int = 0;
-        if unsafe { execute_cmd0(&raw mut retv, &mut ea, &mut errormsg, false) }.is_err() {
-            break 'doend;
-        }
-
-        // A command that called `do_cmdline` may have left a throw, a
-        // `:return` or a `:finish` that the *outer* conditional stack
-        // still has to see. Re-raise it here.
-        if need_rethrow.get() {
-            unsafe { do_throw(cstack) };
-        } else if check_cstack.get() {
-            if unsafe { source_finished(fgetline, cookie) } {
-                do_finish(&mut ea, true);
-            } else if getline_equal(fgetline, cookie, Some(get_func_line))
-                && current_func_returned() != 0
-            {
-                unsafe { do_return(&mut ea, true, false, ptr::null_mut()) };
-            }
-        }
-        check_cstack.set(false);
-        need_rethrow.set(false);
+        // SAFETY: `retv` is this frame's own.
+        unsafe { execute_cmd0(&raw mut retv, &mut ea, &mut errormsg, false) }.map_err(|_| Refused)
+    })();
+    if ran.is_ok() {
+        rethrow_from_nested(&mut ea);
     }
 
     // Can happen with a zero line number.
@@ -587,12 +671,14 @@ pub(crate) unsafe fn do_one_cmd(
         && did_emsg.get() == 0
     {
         let msg = if flags.has(DoCmdOpts::VERBOSE) {
+            // SAFETY: the command line the command was parsed out of.
             unsafe { append_command(&msg, *ea.cmdlinep) }
         } else {
             msg
         };
         emsg(&msg);
     }
+    // SAFETY: the caller's conditional stack, and a name from the table.
     unsafe {
         do_errthrow(
             cstack,
