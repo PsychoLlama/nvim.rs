@@ -25,6 +25,7 @@ mod encode_sinks;
 mod env;
 mod eval_decode;
 mod eval_encode;
+mod ex_docmd;
 mod expressions;
 mod fileio;
 mod fileio_names;
