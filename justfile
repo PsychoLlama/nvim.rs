@@ -188,13 +188,23 @@ cargo-test *args:
 
 # Run the cargo-test lane under Miri: UB detection (aliasing, provenance,
 # uninitialized memory) on the pure-logic tests — the class of bug ASan
-# structurally cannot see. Slow (it interprets MIR), so it is not part of
-# minimal-ci or the pre-commit hooks; run it before merging any rewrite.
+# structurally cannot see. Slow (it interprets MIR): the whole lane is ~15
+# minutes, so it is not a pre-commit hook; run it before merging any rewrite.
 # Uses its own target dir (target/miri), so it doesn't clobber normal builds.
 # Isolation is off because the unibi terminfo tests build real directory trees
 # in a tempdir; UB detection is unaffected.
 miri *args:
   MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib --tests {{ args }}
+
+# The `--lib` half of that lane, and the half minimal-ci runs: the crate's
+# #[cfg(test)] modules alone, without the integration tests under tests/.
+# ~6.5 minutes against the full lane's ~15, and it is the half that covers the
+# safe cores a rewrite actually moves — the tests/ half drives a live editor
+# and spends its time in setup. A UB gate nothing runs is not a gate, so this
+# one is wired into the push gate rather than left to a reviewer's habit; the
+# full lane is a phase-close step.
+miri-lib *args:
+  MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib {{ args }}
 
 # Run the cargo-test lane with the struct layouts shuffled, to catch code
 # that assumes a `repr(Rust)` type's field order or size. `seed` picks the
@@ -321,9 +331,14 @@ refresh *args: apigen keycodes-lua fmt ffigen abi-ledger visibility-ledger (ratc
 # compiles with `debug_assertions` off: a `#[cfg(debug_assertions)]` block can
 # leave an import or a helper unused in release, which `-D warnings` rejects,
 # and that break once sat unnoticed for a whole phase. It costs ~40 s.
-# `lint` and `doc` come last: the clippy pass is the slowest step here by
-# minutes, and rustdoc's ~10 s wants the crate already compiled. `lint-tools`
-# stays listed on its own so the seconds-long generator lint still runs before
-# anything expensive; just runs a recipe once per invocation, so naming it
-# twice costs nothing.
-minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build build-release cargo-test lint doc
+# `lint` and `doc` come last before Miri: the clippy pass is the slowest
+# non-Miri step here by minutes, and rustdoc's ~10 s wants the crate already
+# compiled. `lint-tools` stays listed on its own so the seconds-long generator
+# lint still runs before anything expensive; just runs a recipe once per
+# invocation, so naming it twice costs nothing.
+# `miri-lib` is last and is the single most expensive step (~6.5 min, roughly
+# doubling the gate). It is here because a UB gate nothing runs is not a gate:
+# the lane sat green and unwatched for a phase, and this migration's whole
+# subject is aliasing and provenance. The full lane (`just miri`, ~15 min)
+# stays a phase-close step.
+minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build build-release cargo-test lint doc miri-lib
