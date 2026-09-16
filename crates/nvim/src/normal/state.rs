@@ -54,8 +54,8 @@ use crate::message::state::{
 };
 use crate::message::{may_clear_sb_text, msg_delay, msg_ptr, wait_return};
 use crate::normal::{
-    NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep, clearopbeep, current_oap,
-    end_visual_mode, find_command, normal_execute, nv_cmds, unshift_special, visual_active,
+    NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep, current_oap, end_visual_mode,
+    find_command, normal_execute, nv_cmds, unshift_special, visual_active,
 };
 use crate::option::shortmess;
 use crate::option::vars::{fdo_flags, p_smd};
@@ -104,6 +104,16 @@ impl NormalStateRef {
     /// The pointer, for a callee that still takes one.
     pub(crate) fn raw(self) -> *mut NormalState {
         self.0
+    }
+
+    /// The operator the frame carries, which is the one `current_oap` names.
+    ///
+    /// [`Op::start`]'s trick one level up: a live state's `oa` field is a live
+    /// operator, and saying where it is needs no dereference.
+    pub(crate) fn op(self) -> Op {
+        // SAFETY: the constructor's promise -- a live state, so its `oa` is a
+        // live operator.
+        unsafe { Op::new(&raw mut (*self.0).oa) }
     }
 }
 
@@ -297,7 +307,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
             unshift_special(&mut ns.ca);
             ns.idx = find_command(ns.ca.cmdchar);
             if ns.idx < 0 {
-                unsafe { clearopbeep(&raw mut ns.oa) };
+                clear_op_beep(ns.op());
                 return true;
             }
         } else if flags.has(NvFlags::SSS) && mod_mask.get().has(ModMask::SHIFT) {

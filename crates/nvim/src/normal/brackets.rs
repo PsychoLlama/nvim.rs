@@ -346,7 +346,13 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
     } else if (Key::Rightrelease.code()..=Key::Leftmouse.code()).contains(&nchar) {
         // A mouse click after `[` or `]` pastes at the click, reindenting.
         let (dir, n) = (direction(cmd_arg), cmd_arg.count1);
-        unsafe { do_mouse(cmd_arg.oap, nchar, dir, n, PUT_FIXINDENT as c_int != 0) };
+        do_mouse(
+            Some(cmd_arg.op()),
+            nchar,
+            dir,
+            n,
+            PUT_FIXINDENT as c_int != 0,
+        );
     } else if nchar == 'z' as c_int {
         if fold_move_to(false, direction(cmd_arg), cmd_arg.count1) == 0 {
             clear_op_beep(cmd_arg.op());

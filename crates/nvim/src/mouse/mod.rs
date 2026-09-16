@@ -559,9 +559,8 @@ pub(crate) fn nv_mousescroll(cmd_arg: &mut CmdArg) {
 
 /// Mouse clicks and drags.
 pub(crate) fn nv_mouse(cmd_arg: &mut CmdArg) {
-    let (op, cmdchar, count1) = (cmd_arg.oap, cmd_arg.cmdchar, cmd_arg.count1);
-    // SAFETY: `op` is the live operator the command carries, or null.
-    unsafe { do_mouse(op, cmdchar, BACKWARD as c_int, count1, false) };
+    let (op, cmdchar, count1) = (cmd_arg.op(), cmd_arg.cmdchar, cmd_arg.count1);
+    do_mouse(Some(op), cmdchar, BACKWARD as c_int, count1, false);
 }
 
 /// Set UI mouse depending on current mode and `'mouse'`.

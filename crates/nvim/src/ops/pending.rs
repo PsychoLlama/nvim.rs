@@ -179,7 +179,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
         Win::current().coladvance(Win::current().w_curswant);
     }
     // SAFETY: a live `OpArg`.
-    unsafe { clearop(op.raw()) };
+    clear_op(op);
     motion_force.set(NUL);
 
     restore_lbr(lbr_saved != 0);
@@ -786,7 +786,7 @@ fn run_operator(
             check_cursor_col(Win::current());
         }
 
-        _ => unsafe { clearopbeep(op.raw()) },
+        _ => clear_op_beep(op),
     }
 }
 

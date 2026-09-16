@@ -49,8 +49,7 @@ pub(crate) fn ins_mouse(c: c_int) {
     undisplay_dollar();
     let mut tpos = old_curwin.w_cursor;
 
-    // SAFETY: `do_mouse` accepts a null operator.
-    if unsafe { do_mouse(ptr::null_mut(), c, BACKWARD as c_int, 1, false) } {
+    if do_mouse(None, c, BACKWARD as c_int, 1, false) {
         let new_curwin = Win::current();
         if new_curwin != old_curwin && old_curwin.is_valid() {
             // Mouse took us to another window.  We need to go back to the

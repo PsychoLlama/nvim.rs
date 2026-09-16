@@ -21,11 +21,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::keycodes::ModMask;
-use crate::keycodes::{
-    Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, Key, get_mouse_button,
-};
-use core::ops::{Deref, DerefMut};
+use core::mem::offset_of;
 
 use super::*;
 use crate::ascii::ascii_iswhite;
@@ -43,6 +39,10 @@ use crate::getchar::{
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
+use crate::keycodes::ModMask;
+use crate::keycodes::{
+    Ctrl_G, Ctrl_O, Ctrl_P, Ctrl_R, Ctrl_RSB, Ctrl_T, Ctrl_V, Key, get_mouse_button,
+};
 use crate::memline::{gchar_pos, inc};
 use crate::message::state::msg_silent;
 use crate::mouse::state::{
@@ -50,10 +50,11 @@ use crate::mouse::state::{
 };
 use crate::r#move::scroll_redraw;
 use crate::normal::{
-    VisualMode, clearop, clearopbeep, end_visual_mode, may_start_select, prep_redo,
+    VisualMode, clear_op, clear_op_beep, end_visual_mode, may_start_select, prep_redo,
     set_visual_active, set_visual_anchor, set_visual_mode, visual_active, visual_anchor,
     visual_mode, visual_select, with_visual_anchor,
 };
+use crate::ops::Op;
 use crate::option::vars::p_smd;
 use crate::pos::{equalpos, lt};
 use crate::register::{do_put, insert_reg, yank_register_mline};
@@ -63,7 +64,7 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
-use crate::types::{NUL, OpArg, OpType, PUT_CURSEND, PUT_FIXINDENT, YankReg};
+use crate::types::{NUL, OpArg, PUT_CURSEND, PUT_FIXINDENT, YankReg};
 use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
@@ -79,55 +80,13 @@ static orig_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
     coladd: 0,
 });
 
-/// The operator the command was given, when it was given one.
-#[derive(Clone, Copy)]
-struct Oap(*mut OpArg);
-
-impl Deref for Oap {
-    type Target = OpArg;
-
-    fn deref(&self) -> &OpArg {
-        // SAFETY: the constructor's promise -- a live operator argument.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for Oap {
-    fn deref_mut(&mut self) -> &mut OpArg {
-        // SAFETY: the constructor's promise -- a live operator argument.
-        unsafe { &mut *self.0 }
-    }
-}
-
-impl Oap {
-    /// Whether an operator is pending on it.
-    fn pending(self) -> bool {
-        self.op_type != OpType::Nop
-    }
-
-    /// Clear the operator, and beep.
-    fn clear_and_beep(self) {
-        // SAFETY: the constructor's promise.
-        unsafe { clearopbeep(self.0) };
-    }
-
-    /// Clear the operator without beeping.
-    fn clear(self) {
-        // SAFETY: the constructor's promise.
-        unsafe { clearop(self.0) };
-    }
-
-    /// The match for the item under the cursor, as `%` would find it.
-    fn findmatch(self) -> Option<Pos> {
-        // SAFETY: the constructor's promise.
-        unsafe { findmatch(self.0, NUL) }
-    }
-
-    /// Where `jump_to_mouse` records whether the motion is inclusive.
-    fn inclusive(self) -> *mut bool {
-        // SAFETY: the constructor's promise.
-        unsafe { &raw mut (*self.0).inclusive }
-    }
+/// Where `jump_to_mouse` records whether the motion is inclusive.
+///
+/// [`Live::field_ptr`](crate::winlayer::Live::field_ptr)'s trick: a field's
+/// address is the object's plus a constant, so saying where it is needs no
+/// dereference.
+fn op_inclusive(op: Op) -> *mut bool {
+    op.field_ptr(offset_of!(OpArg, inclusive))
 }
 
 /// Do the appropriate action for the current mouse click in the current mode.
@@ -173,19 +132,13 @@ impl Oap {
 /// @param fixindent  `PUT_FIXINDENT` if fixing indent necessary
 ///
 /// @return           true if `start_arrow()` should be called for edit mode.
-///
-/// # Safety
-/// `op` must be a live operator argument or null.
-pub(crate) unsafe fn do_mouse(
-    op: *mut OpArg,
+pub(crate) fn do_mouse(
+    op: Option<Op>,
     c: c_int,
     dir: c_int,
     count: c_int,
     fixindent: bool,
 ) -> bool {
-    // SAFETY: the caller's promise.
-    // The caller's promise makes every deref below sound.
-    let op = (!op.is_null()).then_some(Oap(op));
     let (mut which_button, is_click, is_drag) = coalesce_drags(c);
 
     if c == Key::Mousemove.code() {
@@ -286,7 +239,7 @@ pub(crate) unsafe fn do_mouse(
     // Even though we gate *_VIS flags above, we want to make sure the cursor
     // doesn't move in visual mode unless it is set as a mouse option.
     if !visual_active() || mouse_can_visual {
-        let inclusive = op.map_or(ptr::null_mut(), Oap::inclusive);
+        let inclusive = op.map_or(ptr::null_mut(), op_inclusive);
         // SAFETY: `inclusive` is a field of the live operator, or null.
         jump_flags = unsafe { jump_to_mouse(jump_flags, inclusive, which_button) };
     }
@@ -310,7 +263,7 @@ pub(crate) unsafe fn do_mouse(
     // When jumping to another window, clear a pending operator.  That's a bit
     // friendlier than beeping and not jumping to that window.
     if let Some(op) = op.filter(|o| win != old_curwin && o.pending()) {
-        op.clear();
+        clear_op(op);
     }
 
     if mod_mask.get().is_empty()
@@ -489,12 +442,12 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
 ///
 /// Answers `None` only in Normal mode with nothing selected and no operator
 /// pending -- the rest is below `jump_to_mouse()`.
-fn middle_button_insert(op: Option<Oap>, mut regname: c_int, fixindent: bool) -> Option<bool> {
+fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> Option<bool> {
     if State.get() == MODE_NORMAL {
         // If an operator was pending, we don't know what the user wanted to
         // do.  Go back to normal mode: Clear the operator and beep().
         if let Some(op) = op.filter(|o| o.pending()) {
-            op.clear_and_beep();
+            clear_op_beep(op);
             return Some(false);
         }
         // If visual was active, yank the highlighted text and put it before
@@ -695,7 +648,7 @@ fn click_definition(
 /// belongs: the middle-button paste, the quickfix and tag jumps, the
 /// Shift-click search and the multi-click word or block selection.
 struct Action {
-    op: Option<Oap>,
+    op: Option<Op>,
     which_button: c_int,
     is_click: bool,
     is_drag: bool,
@@ -829,7 +782,7 @@ fn dispatch_action(a: Action, win: Win) {
 
 /// A double, triple or quadruple click starts or widens a Visual selection: a
 /// word, a line, or -- for a double click on a bracket -- the block it opens.
-fn multi_click(mut win: Win, op: Option<Oap>, is_click: bool, is_drag: bool, mods: ModMask) {
+fn multi_click(mut win: Win, op: Option<Op>, is_click: bool, is_drag: bool, mods: ModMask) {
     if is_click || !visual_active() {
         if visual_active() {
             orig_cursor.set(visual_anchor());
@@ -888,7 +841,7 @@ fn multi_click(mut win: Win, op: Option<Oap>, is_click: bool, is_drag: bool, mod
 /// If the character under the cursor (skipping white space) is not a word
 /// character, try finding a match and select a (), {}, [], #if/#endif, etc.
 /// block.  Answers whether one was found.
-fn select_matching_block(mut win: Win, op: Option<Oap>) -> bool {
+fn select_matching_block(mut win: Win, op: Option<Op>) -> bool {
     let mut end_visual = win.w_cursor;
     // SAFETY: a live local position in the current buffer.
     let probe = unsafe { PosRef::new(&raw mut end_visual) };
@@ -910,7 +863,9 @@ fn select_matching_block(mut win: Win, op: Option<Oap>) -> bool {
     if !equalpos(win.w_cursor, visual_anchor()) {
         return false;
     }
-    let Some(pos) = op.findmatch() else {
+    // SAFETY: a live operator, and the current window and buffer are the ones
+    // the click landed in.
+    let Some(pos) = (unsafe { findmatch(op.raw(), NUL) }) else {
         return false;
     };
 

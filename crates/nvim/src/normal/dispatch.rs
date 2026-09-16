@@ -59,7 +59,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::{
-    CmdArg, CpoFlag, GraphemeState, NUL, OpArg, OpType, OptInt, Outcome, int16_t, int64_t,
+    CmdArg, CpoFlag, GraphemeState, NUL, OpType, OptInt, Outcome, int16_t, int64_t,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
@@ -522,7 +522,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
             && ns.oa.op_type == OpType::Nop
             && (ns.idx < 0 || !nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::KEEPREG))
         {
-            unsafe { clearop(&raw mut ns.oa) };
+            clear_op(ns.op());
             set_reg_var(get_default_register_name());
         }
         if ns.old_mapped_len > 0 {
@@ -681,7 +681,7 @@ pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
     ns.idx = find_command(ns.ca.cmdchar);
 
     if ns.idx < 0 {
-        unsafe { clearopbeep(&raw mut ns.oa) };
+        clear_op_beep(ns.op());
         ns.command_finished = true;
     } else if (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::NCW)
         && unsafe { check_text_or_curbuf_locked(&raw mut ns.oa) })
@@ -708,7 +708,7 @@ pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
         State.set(MODE_NORMAL);
 
         if ns.ca.nchar == ESC || ns.ca.extra_char == ESC {
-            unsafe { clearop(&raw mut ns.oa) };
+            clear_op(ns.op());
             ns.command_finished = true;
         } else {
             if ns.ca.cmdchar != Key::Ignore.code() {
@@ -811,9 +811,9 @@ pub(crate) fn prep_redo_num2(
 }
 
 // A live operator is all the `clear*` entry points need, and [`Op`] already
-// carries that promise, so they are safe functions. `clearop` and
-// `clearopbeep` keep a raw-pointer shim beside them for the callers outside
-// `normal/` that still hold one.
+// carries that promise, so they are safe functions. A caller holding the
+// state machine's frame asks it for the operator with
+// [`NormalStateRef::op`](crate::normal::NormalStateRef::op).
 
 /// Beep and clear the operator if one is pending. Answers whether it was.
 pub(crate) fn check_clear_op(op: Op) -> bool {
@@ -843,15 +843,6 @@ pub(crate) fn clear_op(mut op: Op) {
     motion_force.set(NUL);
 }
 
-/// [`clear_op`] through a raw pointer.
-///
-/// # Safety
-/// `op` must be a live operator.
-pub(crate) unsafe fn clearop(op: *mut OpArg) {
-    // SAFETY: the caller promises a live operator.
-    clear_op(unsafe { Op::new(op) });
-}
-
 /// [`clear_op`], and say so.
 ///
 /// The beep also flushes the typeahead, which is what makes a failed command
@@ -860,15 +851,6 @@ pub(crate) fn clear_op_beep(op: Op) {
     clear_op(op);
     // SAFETY: touches only message and typeahead state.
     beep_flush();
-}
-
-/// [`clear_op_beep`] through a raw pointer.
-///
-/// # Safety
-/// `op` must be a live operator.
-pub(crate) unsafe fn clearopbeep(op: *mut OpArg) {
-    // SAFETY: the caller promises a live operator.
-    clear_op_beep(unsafe { Op::new(op) });
 }
 
 /// Read one more key for a command that takes several, with mappings and

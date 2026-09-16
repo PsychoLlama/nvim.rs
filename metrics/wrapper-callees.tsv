@@ -118,7 +118,6 @@ count	callee	no_raw	defs	def
 21	try_leave	0	1	crates/nvim/src/api/private/helpers/mod.rs
 21	win_charsize	0	1	crates/nvim/src/plines/mod.rs
 20	Buf::new	0	1	crates/nvim/src/winlayer.rs
-20	Op::new	0	68	
 20	find	0	5	
 20	gchar_pos	0	1	crates/nvim/src/memline/lines.rs
 20	home_replace	0	1	crates/nvim/src/os/env/dirs.rs
@@ -127,6 +126,7 @@ count	callee	no_raw	defs	def
 20	nlua_push_object	0	1	crates/nvim/src/lua/converter/push_object.rs
 20	path_fnamecmp	0	0	
 20	try_enter	0	1	crates/nvim/src/api/private/helpers/mod.rs
+19	Op::new	0	68	
 19	api_free_luaref	1	1	crates/nvim/src/lua/executor/refs.rs
 19	arena_mem_free	0	1	crates/nvim/src/memory/arena.rs
 19	channel_decref	0	1	crates/nvim/src/channel/mod.rs
@@ -745,8 +745,6 @@ count	callee	no_raw	defs	def
 4	check_string_option	0	1	crates/nvim/src/optionstr/check.rs
 4	clear_diffblock	0	1	crates/nvim/src/diff/block.rs
 4	clear_fmark	0	1	crates/nvim/src/mark/mod.rs
-4	clearop	0	1	crates/nvim/src/normal/dispatch.rs
-4	clearopbeep	0	1	crates/nvim/src/normal/dispatch.rs
 4	col_print	0	1	crates/nvim/src/buffer/info.rs
 4	compare_to_pos	0	1	crates/nvim/src/quickfix/navigate.rs
 4	decor_virt_lines	0	1	crates/nvim/src/decoration/query.rs
@@ -758,7 +756,6 @@ count	callee	no_raw	defs	def
 4	discard_exception	0	1	crates/nvim/src/ex_eval/exception.rs
 4	do_autocmd_dirchanged	0	1	crates/nvim/src/file_search/chdir.rs
 4	do_highlight	0	1	crates/nvim/src/highlight_group/command.rs
-4	do_mouse	0	1	crates/nvim/src/mouse/domouse.rs
 4	do_path_expand	0	1	crates/nvim/src/path/glob.rs
 4	do_return	0	1	crates/nvim/src/eval/userfunc/ret.rs
 4	eexe_mod_op	0	1	crates/nvim/src/eval/executor.rs

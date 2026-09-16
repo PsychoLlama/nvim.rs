@@ -69,7 +69,7 @@ use crate::mouse::setmouse;
 use crate::mouse::state::mouse_dragging;
 use crate::r#move::validate_virtcol;
 use crate::normal::{
-    clearop, clearopbeep, may_clear_cmdline, prep_redo, prep_redo_num2, restore_visual_mode,
+    clear_op, clear_op_beep, may_clear_cmdline, prep_redo, prep_redo_num2, restore_visual_mode,
     unadjust_for_sel,
 };
 use crate::option::vars::{
@@ -215,6 +215,13 @@ impl Op {
     pub(crate) fn end(self) -> PosRef {
         // SAFETY: as [`Op::start`].
         unsafe { PosRef::new(self.field_ptr(offset_of!(OpArg, end))) }
+    }
+
+    /// Whether an operator is pending on it, which is what every caller means
+    /// by the `op_type != OpType::Nop` it used to spell out.
+    #[inline(always)]
+    pub(crate) fn pending(self) -> bool {
+        self.op_type != OpType::Nop
     }
 }
 

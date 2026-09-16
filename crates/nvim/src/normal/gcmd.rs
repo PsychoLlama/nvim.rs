@@ -277,7 +277,13 @@ fn nv_g_key(cmd_arg: &mut CmdArg, nchar: c_int) -> bool {
             | Key::X2release,
         ) => {
             mod_mask.set(ModMask::CTRL);
-            unsafe { do_mouse(cmd_arg.oap, nchar, BACKWARD as c_int, cmd_arg.count1, false) };
+            do_mouse(
+                Some(cmd_arg.op()),
+                nchar,
+                BACKWARD as c_int,
+                cmd_arg.count1,
+                false,
+            );
         }
         Ok(Key::Ignore) => {}
         _ => return false,
