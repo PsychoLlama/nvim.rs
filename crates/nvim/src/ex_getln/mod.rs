@@ -132,7 +132,7 @@ use crate::search::{
 };
 use crate::state::mode::{State, exmode_active, no_abbr, restart_edit};
 use crate::state::{
-    MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, may_trigger_modechanged,
+    MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, ModeState, may_trigger_modechanged,
     may_trigger_safestate, state_enter, state_handle_k_event,
 };
 use crate::strings::{vim_strsave_escaped, xstrnsave};
@@ -152,8 +152,8 @@ use crate::types::{
     HistoryType, Integer, LineNr, Magic, MotionType, MsgList, Object, OpArg, OptInt, OptMagic,
     OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
     Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg, String_0, TryState, TypVal,
-    UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window, XpPrefix, size_t, time_t,
-    uint8_t, uint32_t,
+    UVarNumber, UndoLink, UndoObjectType, VarNumber, Window, XpPrefix, size_t, time_t, uint8_t,
+    uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -232,12 +232,7 @@ pub const HIST_INVALID: HistoryType = -1;
 pub const REMAP_NONE: RemapValues = -1;
 pub const VSE_BUFFER: ::core::ffi::c_int = 2;
 pub const VSE_SHELL: ::core::ffi::c_int = 1;
-/// `#[repr(C)]`: `state_enter` takes `&mut self.state` and the callbacks
-/// cast that `*mut VimState` back to this type, which only works while
-/// `state` is guaranteed to be the first field.
-#[repr(C)]
 pub struct CommandLineState {
-    pub state: VimState,
     pub firstc: ::core::ffi::c_int,
     pub count: ::core::ffi::c_int,
     pub indent: ::core::ffi::c_int,

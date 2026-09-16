@@ -28,7 +28,7 @@ use crate::keycodes::{
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
     CmdArg, Direction, GetFileFlags, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, OpArg, Pos,
-    SpellAddType, SpellMoveType, VimState, int16_t, uint16_t,
+    SpellAddType, SpellMoveType, int16_t, uint16_t,
 };
 use core::ffi::{CStr, c_int, c_uint, c_void};
 
@@ -124,12 +124,7 @@ pub(crate) const ACTION_SHOW_ALL: c_uint = 4;
 pub(crate) const FIND_ANY: c_uint = 1;
 pub(crate) const FIND_DEFINE: c_uint = 2;
 pub(crate) const DT_POP: c_uint = 2;
-/// `#[repr(C)]`: `state_enter` takes `&mut self.state` and the callbacks
-/// cast that `*mut VimState` back to this type, which only works while
-/// `state` is guaranteed to be the first field.
-#[repr(C)]
 pub(crate) struct NormalState {
-    pub state: VimState,
     pub command_finished: bool,
     pub ctrl_w: bool,
     pub need_flushbuf: bool,

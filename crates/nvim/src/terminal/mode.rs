@@ -45,9 +45,11 @@ use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
 use crate::optionstr::free_string_option;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
-use crate::state::{MODE_TERMINAL, may_trigger_modechanged, state_enter, state_handle_k_event};
+use crate::state::{
+    MODE_TERMINAL, ModeState, may_trigger_modechanged, state_enter, state_handle_k_event,
+};
 use crate::types::AutoEvent;
-use crate::types::{ColNr, LineNr, OptInt, Pos, VimState, WinOpt, uint8_t};
+use crate::types::{ColNr, LineNr, OptInt, Pos, WinOpt, uint8_t};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
@@ -65,16 +67,9 @@ use crate::search::FORWARD;
 const DOBUF_WIPE: c_int = 4;
 const DOBUF_FIRST: c_int = 1;
 
-/// One terminal-mode session, as the editor's state stack sees it.
-///
-/// `state` is first so that a `*mut TerminalState` and the `*mut VimState`
-/// the stack hands back to the callbacks are the same address.
-#[repr(C)]
+/// One terminal-mode session, as the editor's state loop sees it.
 pub(crate) struct TerminalState {
-    pub state: VimState,
     pub term: Term,
-    /// `RedrawingDisabled` on entry. Terminal mode has to redraw.
-    pub save_rd: c_int,
     /// The terminal ended while its mode was running; wipe it on the way
     /// out rather than mid-callback.
     pub close: bool,
@@ -103,12 +98,7 @@ pub(crate) struct TerminalState {
 impl TerminalState {
     fn new(term: Term) -> Self {
         Self {
-            state: VimState {
-                check: Some(terminal_check),
-                execute: Some(terminal_execute),
-            },
             term,
-            save_rd: 0,
             close: false,
             got_bsl: false,
             got_bsl_o: false,
@@ -126,10 +116,10 @@ impl TerminalState {
 
 /// One terminal-mode session the caller has promised is live.
 ///
-/// The editor's state stack holds the session by pointer and hands it back
-/// to [`terminal_check`] and [`terminal_execute`] as the [`VimState`] it
-/// starts with, and everything either of those reaches can run Vimscript
-/// that comes back through them — so the pointer stays raw and `Session` is
+/// The editor's state loop holds the session by pointer and hands it back
+/// to [`terminal_check`] and [`terminal_execute`], and everything either of
+/// those reaches can run Vimscript that comes back through them — so the
+/// pointer stays raw and `Session` is
 /// [`Copy`], exactly as [`Term`] is for the terminal. Every borrow it
 /// produces lives for one expression.
 #[derive(Clone, Copy)]
@@ -161,21 +151,10 @@ impl Session {
         Self(s)
     }
 
-    /// The session a `VimState` the state stack handed back belongs to.
-    ///
-    /// # Safety
-    /// `state` must be the state of a live [`TerminalState`], which is the
-    /// only thing this module's callbacks are ever installed on.
+    /// The pointer back, for the loop that drives the session.
     #[inline(always)]
-    const unsafe fn of(state: *mut VimState) -> Self {
-        Self(state.cast())
-    }
-
-    /// The half the editor's state stack takes. `state` is the session's
-    /// first field, so the two addresses are the same one.
-    #[inline(always)]
-    fn vim_state(self) -> *mut VimState {
-        self.0.cast()
+    const fn raw(self) -> *mut TerminalState {
+        self.0
     }
 }
 
@@ -371,9 +350,8 @@ pub(crate) fn terminal_enter() -> bool {
         s.close = true;
     }
 
-    // SAFETY: the stack drives the session through its own `VimState`, and
-    // gives it back before this returns.
-    unsafe { state_enter(s.vim_state()) };
+    // SAFETY: the session outlives the loop -- it is this frame's.
+    state_enter(unsafe { ModeState::terminal(s.raw()) });
 
     if !s.got_bsl_o {
         restart_edit.set(0);
@@ -503,10 +481,10 @@ fn terminal_check_focus(mut s: Session) -> bool {
 ///
 /// # Safety
 ///
-/// `state` must point at a live `VimState`, unaliased for the call.
-unsafe fn terminal_check(state: *mut VimState) -> c_int {
-    // SAFETY: the state stack hands back the session this module pushed.
-    let mut s = unsafe { Session::of(state) };
+/// `state` must point at a live `TerminalState`, unaliased for the call.
+pub(crate) unsafe fn terminal_check(state: *mut TerminalState) -> c_int {
+    // SAFETY: the loop hands back the session this module gave it.
+    let mut s = unsafe { Session::new(state) };
     debug_assert!(
         !s.close || (s.term.buf_handle == 0 && s.term.raw() != current_buf().terminal),
         "a terminal marked closed is still the current buffer's"
@@ -569,10 +547,10 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
 ///
 /// # Safety
 ///
-/// `state` must point at a live `VimState`, unaliased for the call.
-unsafe fn terminal_execute(state: *mut VimState, key: c_int) -> c_int {
-    // SAFETY: the state stack hands back the session this module pushed.
-    let mut s = unsafe { Session::of(state) };
+/// `state` must point at a live `TerminalState`, unaliased for the call.
+pub(crate) unsafe fn terminal_execute(state: *mut TerminalState, key: c_int) -> c_int {
+    // SAFETY: the loop hands back the session this module gave it.
+    let mut s = unsafe { Session::new(state) };
     // `merge_modifiers` folds a pending modifier into the key so that e.g.
     // `<C-\>` is one code to compare against.
     let mut mods = mod_mask.get();

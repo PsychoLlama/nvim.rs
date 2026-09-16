@@ -67,11 +67,11 @@ use crate::state::mode::{
     State, exmode_active, finish_op, km_startsel, km_stopsel, opcount, restart_edit,
 };
 use crate::state::{
-    MODE_INSERT, MODE_NORMAL, MODE_NORMAL_BUSY, may_trigger_modechanged, may_trigger_safestate,
-    state_enter, state_no_longer_safe,
+    MODE_INSERT, MODE_NORMAL, MODE_NORMAL_BUSY, ModeState, may_trigger_modechanged,
+    may_trigger_safestate, state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{CmdArg, NUL, OpArg, OpType, Outcome, ShmFlag, VimState, int64_t};
+use crate::types::{CmdArg, NUL, OpArg, OpType, Outcome, ShmFlag, int64_t};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;
@@ -80,12 +80,18 @@ use core::ffi::{c_int, c_uint, c_void};
 
 use crate::r#move::{update_curswant, update_topline, validate_cursor};
 
-/// One pass of the normal-mode loop, which the caller has promised is live.
-/// [`Op`]'s shape.
+/// The normal-mode state machine's own state, which the caller has promised
+/// is live. [`Op`]'s shape.
 ///
-/// The state has to be reached through a pointer rather than a `&mut`: the
-/// loop publishes the address of its own `oa` in `current_oap`, so a `&mut`
-/// spanning a handler would alias what [`op_pending`] reads.
+/// **This is why the state is not a `&mut`, and why it will not be one until
+/// `current_oap` changes.** `normal_enter` publishes the address of its own
+/// `oa` field there, and `op_pending` -- which `state()` and
+/// `may_trigger_safestate` both reach -- reads it from inside whatever the
+/// running handler re-entered. A `&mut NormalState` spanning a handler is
+/// `noalias` to LLVM and covers `oa`, so it is a promise the editor breaks
+/// on the first `state()` call inside an autocommand. Every borrow this
+/// hands out lives for one field access, which is the same rule
+/// [`Live`](crate::winlayer::Live) is built on.
 #[derive(Clone, Copy)]
 pub(crate) struct NormalStateRef(*mut NormalState);
 
@@ -132,21 +138,18 @@ impl CmdArg {
     }
 }
 
-/// A zeroed state with its two callbacks installed.
+/// A zeroed state.
 ///
-/// Upstream declares the structure, memsets it and then sets the callbacks;
-/// the transpile spelled the declaration as a 70-line literal naming every
-/// field, all of which the memset immediately overwrote. `zeroed()` is that
-/// memset, and `kMTCharWise` -- the one field the literal gave a name rather
-/// than a zero -- is itself 0.
+/// Upstream declares the structure and memsets it; the transpile spelled the
+/// declaration as a 70-line literal naming every field, all of which the
+/// memset immediately overwrote. `zeroed()` is that memset, and
+/// `kMTCharWise` -- the one field the literal gave a name rather than a zero
+/// -- is itself 0.
 fn new_state() -> NormalState {
     // SAFETY: `NormalState` is scalars, raw pointers and nested C structs
     // with no niche; all-zero is a valid value for every field, and it is
     // exactly what the C original memsets it to.
-    let mut s: NormalState = unsafe { core::mem::zeroed() };
-    s.state.check = Some(normal_check);
-    s.state.execute = Some(normal_execute);
-    s
+    unsafe { core::mem::zeroed() }
 }
 
 /// Refuse a command that would change text while the text is locked.
@@ -221,7 +224,7 @@ pub(crate) fn normal_enter(cmdwin: bool, noexmode: bool) {
     state.noexmode = noexmode;
     state.toplevel = (!cmdwin || cmdwin_result.get() == 0) && !noexmode;
     // SAFETY: `state` outlives the call.
-    unsafe { state_enter(&raw mut state.state) };
+    state_enter(unsafe { ModeState::normal(&raw mut state) });
     current_oap.set(prev_oap);
 }
 
@@ -543,17 +546,12 @@ fn normal_redraw() {
 /// Answers 1 to go on and read a command, 0 to leave normal mode, and -1 to
 /// leave it because Ex mode ran instead.
 ///
-/// Keeps the raw signature: it is installed as a `state_check_callback` and
-/// `state_enter` calls it through that pointer.
-///
 /// # Safety
 ///
-/// `state` must point at a live `VimState`, unaliased for the call.
-pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
-    // SAFETY (throughout): `state` is the `VimState` at the head of our own `NormalState`,
-    // which is what we handed to `state_enter`.
-    let s = state as *mut NormalState;
-    // SAFETY: `state` is the caller's live normal-mode state.
+/// `s` must point at the Normal-mode state machine's state, unaliased for
+/// the call.
+pub(crate) unsafe fn normal_check(s: *mut NormalState) -> c_int {
+    // SAFETY: `s` is the caller's live normal-mode state.
     let ns = unsafe { NormalStateRef::new(s) };
     normal_check_stuff_buffer();
     unsafe { normal_check_interrupt(ns.raw()) };
@@ -646,7 +644,7 @@ pub(crate) unsafe fn normal_cmd(op: *mut OpArg, toplevel: bool) {
     // SAFETY: `op` is the caller's live operator, and `s` outlives the call.
     s.oa = unsafe { *op };
     unsafe { normal_prepare(&raw mut s) };
-    unsafe { normal_execute(&raw mut s.state, safe_vgetc()) };
+    unsafe { normal_execute(&raw mut s, safe_vgetc()) };
     unsafe { *op = s.oa };
 }
 

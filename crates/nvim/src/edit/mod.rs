@@ -170,7 +170,7 @@ use crate::state::mode::{
     restart_VIsual_select, restart_edit, stop_insert_mode, vr_lines_changed, where_paste_started,
 };
 use crate::state::{
-    MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_REPLACE, MODE_VREPLACE,
+    MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_REPLACE, MODE_VREPLACE, ModeState,
     REPLACE_FLAG, VREPLACE_FLAG, may_trigger_modechanged, may_trigger_safestate, state_enter,
     state_handle_k_event, virtual_active,
 };
@@ -186,7 +186,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX,
     LineNr, MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, Pos, ScreenChar, StrCharInfo,
-    String_0, VarNumber, VimState, Vv, int32_t, int64_t, ptrdiff_t, size_t, uint8_t,
+    String_0, VarNumber, Vv, int32_t, int64_t, ptrdiff_t, size_t, uint8_t,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;
@@ -232,12 +232,7 @@ pub(crate) const OPENLINE_DO_COM: ::core::ffi::c_int = 2;
 pub(crate) const INDENT_DEC: ::core::ffi::c_int = 3;
 pub(crate) const INDENT_INC: ::core::ffi::c_int = 2;
 pub(crate) const INDENT_SET: ::core::ffi::c_int = 1;
-/// `#[repr(C)]`: `state_enter` takes `&mut self.state` and the callbacks
-/// cast that `*mut VimState` back to this type, which only works while
-/// `state` is guaranteed to be the first field.
-#[repr(C)]
 pub(crate) struct InsertState {
-    pub state: VimState,
     pub mincol: ::core::ffi::c_int,
     pub cmdchar: ::core::ffi::c_int,
     pub cmdchar_todo: ::core::ffi::c_int,

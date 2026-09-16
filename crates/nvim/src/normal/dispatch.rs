@@ -59,7 +59,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::{
-    CmdArg, CpoFlag, GraphemeState, NUL, OpArg, OpType, OptInt, Outcome, VimState, int16_t, int64_t,
+    CmdArg, CpoFlag, GraphemeState, NUL, OpArg, OpType, OptInt, Outcome, int16_t, int64_t,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
@@ -601,17 +601,12 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
 
 /// One normal-mode command, from its first key to the end of its effects.
 ///
-/// Keeps the raw signature: it is installed as a `state_execute_callback` and
-/// `state_enter` calls it through that pointer.
-///
 /// # Safety
 ///
-/// `state` must point at a live `VimState`, unaliased for the call.
-pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
-    // SAFETY: `state` is the `VimState` at the head of the `NormalState` the
-    // caller handed to `state_enter`.
-    let s = state as *mut NormalState;
-    // SAFETY: `state` is the caller's live normal-mode state.
+/// `s` must point at the Normal-mode state machine's state, unaliased for
+/// the call.
+pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
+    // SAFETY: `s` is the caller's live normal-mode state.
     let mut ns = unsafe { NormalStateRef::new(s) };
     ns.command_finished = false;
     ns.ctrl_w = false;

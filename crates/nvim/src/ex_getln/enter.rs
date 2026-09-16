@@ -53,11 +53,6 @@ impl Cls {
         self.field_ptr(core::mem::offset_of!(CommandLineState, xpc))
     }
 
-    /// `&s->state`, the `VimState` header `state_enter` is handed.
-    pub(crate) fn vim_state(self) -> *mut VimState {
-        self.field_ptr(core::mem::offset_of!(CommandLineState, state))
-    }
-
     /// C's `nextwild(&s->xpc, mode, options, s->firstc != '@')`, which every
     /// wildmenu key spells with the same two trailing arguments.
     pub(crate) fn next_wild(self, mode: WildMode, options: WildOpts) -> ::core::ffi::c_int {
@@ -90,10 +85,6 @@ impl Cls {
 /// An all-zero [`CommandLineState`]: the fields C's designated initialiser
 /// leaves out, which the C zeroes for it.
 const COMMAND_LINE_STATE_INIT: CommandLineState = CommandLineState {
-    state: VimState {
-        check: None,
-        execute: None,
-    },
     firstc: 0,
     count: 0,
     indent: 0,
@@ -376,10 +367,8 @@ pub(crate) fn command_line_enter(
 
         did_emsg.set(0);
         got_int.set(false);
-        s.state.check = Some(command_line_check);
-        s.state.execute = Some(command_line_execute);
-
-        unsafe { state_enter(s.vim_state()) };
+        // SAFETY: `s` is this call's live `CommandLineState`.
+        state_enter(unsafe { ModeState::command_line(s.raw()) });
 
         // Trigger CmdlineLeavePre autocommands if not already triggered.
         if !s.event_cmdlineleavepre_triggered {
@@ -544,16 +533,15 @@ pub(crate) fn command_line_enter(
     answer as *mut uint8_t
 }
 
-/// The key loop's `state_check` callback, run before every key is fetched.
-/// Installed in a `VimState`, so this one keeps its C ABI.
+/// The key loop's check, run before every key is fetched.
 ///
 /// # Safety
 ///
-/// `state` must point at a live `VimState`, unaliased for the call.
-pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_int {
-    // SAFETY: `state_enter` hands back the `VimState` header of the
-    // `CommandLineState` it was given, live for the whole of the loop.
-    let mut s = unsafe { Cls::new(state.cast::<CommandLineState>()) };
+/// `state` must point at a live `CommandLineState`, unaliased for the call.
+pub(crate) unsafe fn command_line_check(state: *mut CommandLineState) -> ::core::ffi::c_int {
+    // SAFETY: the loop hands back the state it was given, live for the whole
+    // of the loop.
+    let mut s = unsafe { Cls::new(state) };
     let cc = Cc::current();
 
     s.prev_cmdpos = cc.cmdpos;

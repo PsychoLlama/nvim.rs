@@ -174,12 +174,8 @@ fn insert_enter(s: &mut InsertState) {
     // The mode ends when `ins_esc` says so: a count means the whole
     // insert is typed again.
     loop {
-        // The callbacks cast their `VimState` back to the whole `InsertState`
-        // it is the first field of, so the pointer handed to `state_enter`
-        // has to carry the whole struct, not just that one field.
-        let whole: *mut InsertState = &raw mut *s;
-        // SAFETY: `whole` addresses this call's live `InsertState`.
-        unsafe { state_enter(&raw mut (*whole).state) };
+        // SAFETY: `s` is this call's live `InsertState`.
+        state_enter(unsafe { ModeState::insert(&raw mut *s) });
         if ins_esc(&mut s.count, s.cmdchar, s.nomove) {
             break;
         }
@@ -277,11 +273,10 @@ fn restore_ctrl_o_column() {
 /// Answers 0 to leave Insert mode, and 1 to go on.
 ///
 /// # Safety
-/// `state` must be an `InsertState`.
-unsafe fn insert_check(state: *mut VimState) -> c_int {
-    // SAFETY: the caller promises `state` is the `state` field of a live
-    // `InsertState`, which it is the first field of.
-    let s = unsafe { &mut *(state as *mut InsertState) };
+/// `state` must point at a live `InsertState`, unaliased for the call.
+pub(crate) unsafe fn insert_check(state: *mut InsertState) -> c_int {
+    // SAFETY: the caller's promise.
+    let s = unsafe { &mut *state };
 
     if revins_legal.get() == 0 {
         revins_scol.set(-1); // reset on an illegal motion
@@ -438,11 +433,10 @@ fn may_scroll_for_wrap(s: &mut InsertState) {
 /// go on.
 ///
 /// # Safety
-/// `state` must be an `InsertState`.
-unsafe fn insert_execute(state: *mut VimState, key: c_int) -> c_int {
-    // SAFETY: the caller promises `state` is the `state` field of a live
-    // `InsertState`, which it is the first field of.
-    let s = unsafe { &mut *(state as *mut InsertState) };
+/// `state` must point at a live `InsertState`, unaliased for the call.
+pub(crate) unsafe fn insert_execute(state: *mut InsertState, key: c_int) -> c_int {
+    // SAFETY: the caller's promise.
+    let s = unsafe { &mut *state };
 
     if stop_insert_mode.get() {
         // Insert mode ended while the key was being read; give it back so
@@ -704,10 +698,6 @@ pub(crate) fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
     }
 
     let mut s = InsertState {
-        state: VimState {
-            check: Some(insert_check as unsafe fn(*mut VimState) -> c_int),
-            execute: Some(insert_execute as unsafe fn(*mut VimState, c_int) -> c_int),
-        },
         mincol: 0,
         cmdchar,
         cmdchar_todo: 0,

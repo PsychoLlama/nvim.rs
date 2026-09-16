@@ -1,6 +1,6 @@
 //! One key, dispatched: the key loop's per-key state machine.
 //!
-//! [`command_line_execute`] is the `state_execute` callback — it reads a key,
+//! [`command_line_execute`] is the key half of the loop — it reads a key,
 //! gives the wildmenu and `<C-\>` their chance at it, and hands the rest to
 //! [`super::handlekey::command_line_handle_key`].  [`command_line_changed`]
 //! is the other half: what runs after a key that edited the line.
@@ -144,15 +144,14 @@ pub(crate) fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: ::core::
     wildmenu_cleanup(Cc::current());
 }
 
-/// The key loop's `state_execute` callback: one key, dispatched.  Installed
-/// in a `VimState`, so this one keeps its C ABI.  Answers -1 to fetch
-/// another key, 0 to leave the command line and 1 to keep going.
+/// One key, dispatched. Answers -1 to fetch another key, 0 to leave the
+/// command line and 1 to keep going.
 ///
 /// # Safety
 ///
-/// `state` must point at a live `VimState`, unaliased for the call.
+/// `state` must point at a live `CommandLineState`, unaliased for the call.
 pub(crate) unsafe fn command_line_execute(
-    state: *mut VimState,
+    state: *mut CommandLineState,
     key: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
     if key == Key::Ignore.code() || key == Key::Nop.code() {
@@ -160,9 +159,8 @@ pub(crate) unsafe fn command_line_execute(
     }
 
     let display_tick_saved: DispTick = Win::current().w_display_tick;
-    // SAFETY: as [`command_line_check`] -- the header of the live
-    // `CommandLineState`.
-    let mut s = unsafe { Cls::new(state.cast::<CommandLineState>()) };
+    // SAFETY: as [`command_line_check`] -- the caller's live state.
+    let mut s = unsafe { Cls::new(state) };
     let mut cc = Cc::current();
     s.c = key;
 

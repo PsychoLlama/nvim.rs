@@ -13,11 +13,11 @@
 //! The editor's mode: the loop every modal state machine runs on, and the
 //! `mode()` string that names where it currently is.
 //!
-//! A `VimState` is a pair of function pointers — `check` before each key,
-//! `execute` for the key — and [`state_enter`] is the loop that drives them.
-//! Normal, insert, terminal and command-line mode are all one of these; the
-//! loop is what makes `K_EVENT` (an event-queue wakeup rather than a key)
-//! look like input to all of them.
+//! A [`ModeState`] names which of the four machines is running — normal,
+//! insert, terminal or command-line — and [`state_enter`] is the loop that
+//! alternates its `check` (before each key) and its `execute` (for the key).
+//! The loop is what makes `K_EVENT` (an event-queue wakeup rather than a
+//! key) look like input to all of them.
 
 pub(crate) mod mode;
 use crate::cstr;
@@ -32,10 +32,12 @@ use crate::channel::main_loop_events;
 use crate::debugger::state::debug_mode;
 use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{setcursor, update_screen};
+use crate::edit::{InsertState, insert_check, insert_execute};
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_get};
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::cmdline_overstrike;
+use crate::ex_getln::{CommandLineState, command_line_check, command_line_execute};
 use crate::getchar::state::{got_int, mod_mask};
 use crate::getchar::{
     check_end_reg_executing, may_sync_undo, safe_vgetc, stuff_empty, typeahead, using_script,
@@ -46,7 +48,9 @@ use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message::state::need_wait_return;
 use crate::message_fmt::{c_str, msg_cstr};
-use crate::normal::{visual_active, visual_mode, visual_select};
+use crate::normal::{
+    NormalState, normal_check, normal_execute, visual_active, visual_mode, visual_select,
+};
 use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
@@ -54,7 +58,8 @@ use crate::state::mode::{
     State, exmode_active, finish_op, last_mode, motion_force, restart_VIsual_select, restart_edit,
     virtual_op,
 };
-use crate::types::{Direction, HashTab, NUL, ProcType, SaveVEvent, VimState, uint8_t};
+use crate::terminal::{TerminalState, terminal_check, terminal_execute};
+use crate::types::{Direction, HashTab, NUL, ProcType, SaveVEvent, uint8_t};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 
@@ -84,23 +89,90 @@ pub const MODE_OP_PENDING: ModeFlags = 4;
 pub const MODE_VISUAL: ModeFlags = 2;
 pub const MODE_NORMAL: ModeFlags = 1;
 
+/// Which modal state machine [`state_enter`] is driving, and where its state
+/// is.
+///
+/// Upstream makes the loop polymorphic by putting a `VimState` — a `check`
+/// and an `execute` function pointer — first in every state struct, handing
+/// the loop a `*mut VimState` and casting it back to the struct's own type
+/// inside each callback. That is what the four `#[repr(C)]` attributes were
+/// for, and the one thing that made the cast sound was a field order nothing
+/// checked. Naming the machine instead makes the dispatch a `match` and the
+/// layout nobody's business.
+///
+/// The address is raw rather than a `&mut`, and the promise that it is live
+/// is booked at the constructor the way every other handle in the tree books
+/// it: a `check` or an `execute` re-enters the editor, and the frames below
+/// it reach the same state through the globals that name it — `current_oap`
+/// is the one with a comment about it — so a `&mut` spanning the loop would
+/// be a promise the editor does not keep.
+pub(crate) struct ModeState(Machine);
+
+/// [`ModeState`]'s arms. Private, so the only way to make one is through a
+/// constructor that takes the liveness promise.
+enum Machine {
+    Normal(*mut NormalState),
+    Insert(*mut InsertState),
+    CommandLine(*mut CommandLineState),
+    Terminal(*mut TerminalState),
+}
+
+impl ModeState {
+    /// # Safety
+    /// `s` must stay a live `NormalState` for the whole of [`state_enter`].
+    pub(crate) const unsafe fn normal(s: *mut NormalState) -> Self {
+        Self(Machine::Normal(s))
+    }
+
+    /// # Safety
+    /// `s` must stay a live `InsertState` for the whole of [`state_enter`].
+    pub(crate) const unsafe fn insert(s: *mut InsertState) -> Self {
+        Self(Machine::Insert(s))
+    }
+
+    /// # Safety
+    /// `s` must stay a live `CommandLineState` for the whole of
+    /// [`state_enter`].
+    pub(crate) const unsafe fn command_line(s: *mut CommandLineState) -> Self {
+        Self(Machine::CommandLine(s))
+    }
+
+    /// # Safety
+    /// `s` must stay a live `TerminalState` for the whole of [`state_enter`].
+    pub(crate) const unsafe fn terminal(s: *mut TerminalState) -> Self {
+        Self(Machine::Terminal(s))
+    }
+
+    /// Before each key: 0 ends the state, -1 asks for the check to be run
+    /// again (something it did invalidated what came after), anything else
+    /// goes on to read a key.
+    fn check(&self) -> c_int {
+        // SAFETY (throughout): the constructor's promise -- a live state of
+        // the named kind.
+        match self.0 {
+            Machine::Normal(s) => unsafe { normal_check(s) },
+            Machine::Insert(s) => unsafe { insert_check(s) },
+            Machine::CommandLine(s) => unsafe { command_line_check(s) },
+            Machine::Terminal(s) => unsafe { terminal_check(s) },
+        }
+    }
+
+    /// The key, answered the same three ways as [`Self::check`].
+    fn execute(&self, key: c_int) -> c_int {
+        // SAFETY (throughout): as [`Self::check`].
+        match self.0 {
+            Machine::Normal(s) => unsafe { normal_execute(s, key) },
+            Machine::Insert(s) => unsafe { insert_execute(s, key) },
+            Machine::CommandLine(s) => unsafe { command_line_execute(s, key) },
+            Machine::Terminal(s) => unsafe { terminal_execute(s, key) },
+        }
+    }
+}
+
 /// Run `s` until its `execute` says to stop.
-///
-/// `check` runs before every key: 0 ends the state, -1 asks for it to be run
-/// again (something it did invalidated what came after), anything else goes
-/// on to read a key. `execute` answers the same three ways for the key.
-///
-/// # Safety
-/// `s` must point at a live `VimState` whose two callbacks are safe to run,
-/// and the editor must be initialized.
-pub unsafe fn state_enter(s: *mut VimState) {
+pub(crate) fn state_enter(s: ModeState) {
     'state: loop {
-        // SAFETY: the caller's `VimState`, live for the whole call.
-        let check_result = match unsafe { (*s).check } {
-            // SAFETY: as above — the callback is the state's own.
-            Some(check) => unsafe { check(s) },
-            None => 1,
-        };
+        let check_result = s.check();
         if check_result == 0 {
             break;
         }
@@ -125,9 +197,7 @@ pub unsafe fn state_enter(s: *mut VimState) {
             // SAFETY: the name just rendered into this frame's buffer.
             let keyname = unsafe { c_str(keyname) };
             logmsg!(LOGLVL_DBG, c"state_enter", 97, "input: {keyname}");
-            // SAFETY: the caller's `VimState`; `execute` is the state's own.
-            let execute_result =
-                unsafe { (*s).execute.expect("non-null function pointer")(s, key) };
+            let execute_result = s.execute(key);
             if execute_result == 0 {
                 break 'state;
             }
