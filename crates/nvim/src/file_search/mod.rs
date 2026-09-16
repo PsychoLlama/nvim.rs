@@ -49,7 +49,7 @@ use crate::path::{
 use crate::strings::{vim_snprintf, xstrnsave};
 use crate::types::AutoEvent;
 use crate::types::{
-    BoolVarValue, CdCause, CdScope, CmdArg, FileID, LineNr, MAXPATHL, SaveVEvent, ptrdiff_t, size_t,
+    BoolVarValue, CdCause, CdScope, FileID, LineNr, MAXPATHL, SaveVEvent, ptrdiff_t, size_t,
 };
 use crate::winlayer::Buf;
 use ::libc::{abort, strcpy};

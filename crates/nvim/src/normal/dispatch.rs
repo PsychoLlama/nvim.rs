@@ -41,10 +41,10 @@ use crate::mbyte::{
 use crate::memory::xfree;
 use crate::message::state::{msg_col, msg_didout, msg_nowait};
 use crate::normal::{
-    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CmdArgRef, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS,
-    NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, NormalStateRef,
-    add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
-    do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
+    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS, NV_CMDS_SIZE,
+    NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, NormalStateRef, add_to_showcmd,
+    check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
+    normal_handle_special_visual_command, normal_need_additional_char,
     normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
     set_visual_select, start_selection, visual_active, visual_select,
 };
@@ -475,7 +475,8 @@ pub(crate) unsafe fn normal_get_command_count(s: *mut NormalState) -> bool {
             ns.ca.count0 = ns.ca.count0 * 10 + (ns.c - '0' as c_int);
         }
         if ns.toplevel && readbuf1_empty() {
-            unsafe { set_vcount_ca(&raw mut ns.ca, &mut ns.set_prevcount) };
+            set_vcount_ca(&ns.ca, ns.set_prevcount);
+            ns.set_prevcount = false;
         }
         let raw_key = ns.ctrl_w.then(Keys::unmapped_with_codes);
         // A '0' here is a count digit, not the "go to column 0" command,
@@ -532,7 +533,8 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
         if ns.ca.cmdchar != Key::Ignore.code() && ns.ca.cmdchar != Key::Mousemove.code() {
             did_visual_op =
                 visual_active() && ns.oa.op_type != OpType::Nop && ns.oa.op_type != OpType::Colon;
-            unsafe { do_pending_operator(&raw mut ns.ca, ns.old_col, false) };
+            let old_col = ns.old_col;
+            do_pending_operator(&mut ns.ca, old_col, false);
         }
         if unsafe { normal_need_redraw_mode_message(ns.raw()) } {
             normal_redraw_mode_message();
@@ -728,7 +730,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
                 let flags = nv_cmds[ns.idx as usize].cmd_flags as c_int;
                 if flags & NV_SS != 0 {
                     start_selection();
-                    unsafe { unshift_special(&raw mut ns.ca) };
+                    unshift_special(&mut ns.ca);
                     ns.idx = find_command(ns.ca.cmdchar);
                     debug_assert!(ns.idx >= 0);
                 } else if flags & NV_SSS != 0 && mod_mask.get().has(ModMask::SHIFT) {
@@ -738,10 +740,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
             }
 
             ns.ca.arg = nv_cmds[ns.idx as usize].cmd_arg as c_int;
-            let run = nv_cmds[ns.idx as usize]
-                .cmd_func
-                .expect("every nv_cmds row has a handler");
-            unsafe { run(&raw mut ns.ca) };
+            (nv_cmds[ns.idx as usize].cmd_func)(&mut ns.ca);
         }
     }
     unsafe { normal_finish_command(ns.raw()) };
@@ -749,19 +748,21 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
 }
 
 /// Record a command for `.`, taking its second character from `cmd_arg`.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn prep_redo_cmd(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    prep_redo(ca.op().regname, ca.count0, NUL, ca.cmdchar, NUL, NUL, NUL);
+pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
+    prep_redo(
+        cmd_arg.op().regname,
+        cmd_arg.count0,
+        NUL,
+        cmd_arg.cmdchar,
+        NUL,
+        NUL,
+        NUL,
+    );
     // A character with a combining tail is replayed as its whole encoding.
-    if ca.nchar_len > 0 {
-        unsafe { append_to_redobuff(ca.nchar_composing.as_mut_ptr()) };
+    if cmd_arg.nchar_len > 0 {
+        unsafe { append_to_redobuff(cmd_arg.nchar_composing.as_mut_ptr()) };
     } else {
-        append_to_redobuff_char(ca.nchar);
+        append_to_redobuff_char(cmd_arg.nchar);
     }
 }
 
@@ -892,36 +893,24 @@ pub(crate) fn read_command_char() -> c_int {
 /// Open a fold the cursor has landed in, if the 'foldopen' flag for this kind
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn may_fold_open(cmd_arg: *mut CmdArg, fdo_flag: c_uint) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OpType::Nop {
+pub(crate) fn may_fold_open(cmd_arg: &mut CmdArg, fdo_flag: c_uint) {
+    if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && cmd_arg.op().op_type == OpType::Nop {
         fold_open_cursor();
     }
 }
 
 /// Turn a shifted special key into its unshifted self.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn unshift_special(cmd_arg: *mut CmdArg) {
-    // SAFETY: `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    ca.cmdchar = match Key::try_from(ca.cmdchar) {
+pub(crate) fn unshift_special(cmd_arg: &mut CmdArg) {
+    cmd_arg.cmdchar = match Key::try_from(cmd_arg.cmdchar) {
         Ok(Key::SRight) => Key::Right.code(),
         Ok(Key::SLeft) => Key::Left.code(),
         Ok(Key::SUp) => Key::Up.code(),
         Ok(Key::SDown) => Key::Down.code(),
         Ok(Key::SHome) => Key::Home.code(),
         Ok(Key::SEnd) => Key::End.code(),
-        _ => ca.cmdchar,
+        _ => cmd_arg.cmdchar,
     };
-    ca.cmdchar = simplify_mod_mask(ca.cmdchar);
+    cmd_arg.cmdchar = simplify_mod_mask(cmd_arg.cmdchar);
 }
 
 /// Make room on the command line for whatever is about to be shown there.

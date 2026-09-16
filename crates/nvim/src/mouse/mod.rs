@@ -535,10 +535,7 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
 
 /// Normal and Visual modes implementation for scrolling in direction
 /// `cmd_arg.arg`, which is one of the `MSCR_` values.
-///
-/// # Safety
-/// `cmd_arg` must be a live command argument.
-pub(crate) unsafe fn nv_mousescroll(cmd_arg: *mut CmdArg) {
+pub(crate) fn nv_mousescroll(cmd_arg: &mut CmdArg) {
     let old_curwin = Win::current();
 
     if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
@@ -552,8 +549,7 @@ pub(crate) unsafe fn nv_mousescroll(cmd_arg: *mut CmdArg) {
         win.buffer().make_current();
     }
 
-    // SAFETY: the caller's promise, and `curwin` is a live window.
-    unsafe { do_mousescroll(cmd_arg) };
+    do_mousescroll(cmd_arg);
     Win::current().w_redr_status = true;
     // `old_curwin` was live when it was taken and nothing above closes a
     // window, so it is still the window to go back to.
@@ -562,12 +558,8 @@ pub(crate) unsafe fn nv_mousescroll(cmd_arg: *mut CmdArg) {
 }
 
 /// Mouse clicks and drags.
-///
-/// # Safety
-/// `cmd_arg` must be a live command argument.
-pub(crate) unsafe fn nv_mouse(cmd_arg: *mut CmdArg) {
-    // SAFETY: the caller's promise.
-    let (op, cmdchar, count1) = unsafe { ((*cmd_arg).oap, (*cmd_arg).cmdchar, (*cmd_arg).count1) };
+pub(crate) fn nv_mouse(cmd_arg: &mut CmdArg) {
+    let (op, cmdchar, count1) = (cmd_arg.oap, cmd_arg.cmdchar, cmd_arg.count1);
     // SAFETY: `op` is the live operator the command carries, or null.
     unsafe { do_mouse(op, cmdchar, BACKWARD as c_int, count1, false) };
 }

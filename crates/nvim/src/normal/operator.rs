@@ -28,8 +28,8 @@ use crate::guard::Keys;
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
 use crate::message::emsg;
 use crate::normal::{
-    CmdArgRef, check_clear_op, check_clear_op_quit, clear_op_beep, e_cmdline_window_already_open,
-    kMTLineWise, langmap_adjust, visual_active, visual_select,
+    check_clear_op, check_clear_op_quit, clear_op_beep, e_cmdline_window_already_open, kMTLineWise,
+    langmap_adjust, visual_active, visual_select,
 };
 use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
@@ -42,31 +42,19 @@ use crate::winlayer::graph::cmdwin_type;
 use core::ffi::{c_char, c_int};
 
 /// Re-run this command as the two-character `g<nchar>` operator instead.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-unsafe fn as_g_operator(cmd_arg: *mut CmdArg, nchar: u8) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    ca.cmdchar = 'g' as c_int;
-    ca.nchar = c_int::from(nchar);
-    unsafe { nv_operator(cmd_arg) };
+fn as_g_operator(cmd_arg: &mut CmdArg, nchar: u8) {
+    cmd_arg.cmdchar = 'g' as c_int;
+    cmd_arg.nchar = c_int::from(nchar);
+    nv_operator(cmd_arg);
 }
 
 /// Play a register back `count1` times, stopping at the first failure or
 /// interrupt.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-unsafe fn replay(cmd_arg: *mut CmdArg, regname: c_int) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    while ca.count1 != 0 && !got_int.get() {
-        ca.count1 -= 1;
+fn replay(cmd_arg: &mut CmdArg, regname: c_int) {
+    while cmd_arg.count1 != 0 && !got_int.get() {
+        cmd_arg.count1 -= 1;
         if do_execreg(regname, 0, 0, 0).is_err() {
-            clear_op_beep(ca.op());
+            clear_op_beep(cmd_arg.op());
             break;
         }
         line_breakcheck();
@@ -74,81 +62,51 @@ unsafe fn replay(cmd_arg: *mut CmdArg, regname: c_int) {
 }
 
 /// `@@`: replay whatever `@` last played.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_regreplay(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if check_clear_op(ca.op()) {
+pub(crate) fn nv_regreplay(cmd_arg: &mut CmdArg) {
+    if check_clear_op(cmd_arg.op()) {
         return;
     }
-    unsafe { replay(cmd_arg, reg_recorded.get()) };
+    replay(cmd_arg, reg_recorded.get());
 }
 
 /// `@`: replay a named register.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_at(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if check_clear_op(ca.op()) {
+pub(crate) fn nv_at(cmd_arg: &mut CmdArg) {
+    if check_clear_op(cmd_arg.op()) {
         return;
     }
     // `@=` prompts for an expression; a cancelled prompt does nothing.
-    if ca.nchar == '=' as c_int && get_expr_register() == NUL {
+    if cmd_arg.nchar == '=' as c_int && get_expr_register() == NUL {
         return;
     }
-    unsafe { replay(cmd_arg, ca.nchar) };
+    replay(cmd_arg, cmd_arg.nchar);
 }
 
 /// `u`: undo, or the `gu` operator when one is already pending or a Visual
 /// selection is up.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_undo(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if ca.op().op_type == OpType::Lower || visual_active() {
-        unsafe { as_g_operator(cmd_arg, b'u') };
+pub(crate) fn nv_undo(cmd_arg: &mut CmdArg) {
+    if cmd_arg.op().op_type == OpType::Lower || visual_active() {
+        as_g_operator(cmd_arg, b'u');
     } else {
-        unsafe { nv_kundo(cmd_arg) };
+        nv_kundo(cmd_arg);
     }
 }
 
 /// `u` proper.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_kundo(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if check_clear_op_quit(ca.op()) {
+pub(crate) fn nv_kundo(cmd_arg: &mut CmdArg) {
+    if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    u_undo(ca.count1);
+    u_undo(cmd_arg.count1);
     Win::current().w_set_curswant = true;
 }
 
 /// `U`: undo the whole line, or the `gU` operator.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_undo_line(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if ca.op().op_type == OpType::Upper || visual_active() {
-        unsafe { as_g_operator(cmd_arg, b'U') };
+pub(crate) fn nv_undo_line(cmd_arg: &mut CmdArg) {
+    if cmd_arg.op().op_type == OpType::Upper || visual_active() {
+        as_g_operator(cmd_arg, b'U');
         return;
     }
-    if check_clear_op_quit(ca.op()) {
+    if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
     u_undoline();
@@ -156,58 +114,40 @@ pub(crate) unsafe fn nv_undo_line(cmd_arg: *mut CmdArg) {
 }
 
 /// `"`: name the register the next command works on.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_regname(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if check_clear_op(ca.op()) {
+pub(crate) fn nv_regname(cmd_arg: &mut CmdArg) {
+    if check_clear_op(cmd_arg.op()) {
         return;
     }
     // `"=` prompts for the expression register's contents up front.
-    if ca.nchar == '=' as c_int {
-        ca.nchar = get_expr_register();
+    if cmd_arg.nchar == '=' as c_int {
+        cmd_arg.nchar = get_expr_register();
     }
-    if ca.nchar != NUL && valid_yank_reg(ca.nchar, false) {
-        ca.op().regname = ca.nchar;
+    if cmd_arg.nchar != NUL && valid_yank_reg(cmd_arg.nchar, false) {
+        cmd_arg.op().regname = cmd_arg.nchar;
         // The count so far belongs to the command, not to the `"`.
-        ca.opcount = ca.count0;
-        set_reg_var(ca.op().regname);
+        cmd_arg.opcount = cmd_arg.count0;
+        set_reg_var(cmd_arg.op().regname);
     } else {
-        clear_op_beep(ca.op());
+        clear_op_beep(cmd_arg.op());
     }
 }
 
 /// `.`: repeat the last change.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_dot(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if check_clear_op_quit(ca.op()) {
+pub(crate) fn nv_dot(cmd_arg: &mut CmdArg) {
+    if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
     // The insert half is only replayed when insert mode was left by a
     // command rather than by an arrow key, which ends the change.
     let repeat_insert = restart_edit.get() != 0 && !arrow_used.get();
-    if start_redo(ca.count0, repeat_insert).is_err() {
-        clear_op_beep(ca.op());
+    if start_redo(cmd_arg.count0, repeat_insert).is_err() {
+        clear_op_beep(cmd_arg.op());
     }
 }
 
 /// `CTRL-R`: redo -- or, in Select mode, the register the replacement text
 /// should go to.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_redo_or_register(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
     if visual_select() && visual_active() {
         // SAFETY: reads one key with mappings suppressed.
         let unmapped = Keys::unmapped();
@@ -221,33 +161,27 @@ pub(crate) unsafe fn nv_redo_or_register(cmd_arg: *mut CmdArg) {
         VIsual_select_reg.set(if valid_yank_reg(reg, true) { reg } else { 0 });
         return;
     }
-    if check_clear_op_quit(ca.op()) {
+    if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    u_redo(ca.count1);
+    u_redo(cmd_arg.count1);
     Win::current().w_set_curswant = true;
 }
 
 /// Start an operator, or apply the pending one to whole lines when it is the
 /// same one again (`dd`, `yy`, `gugu`).
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_operator(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let op_type = get_op_type(ca.cmdchar, ca.nchar);
+pub(crate) fn nv_operator(cmd_arg: &mut CmdArg) {
+    let op_type = get_op_type(cmd_arg.cmdchar, cmd_arg.nchar);
     // A prompt buffer only lets its own last line be changed.
     if buf_is_prompt(current_buf()) && op_is_change(op_type) && !prompt_curpos_editable() {
-        clear_op_beep(ca.op());
+        clear_op_beep(cmd_arg.op());
         return;
     }
-    if op_type == ca.op().op_type {
-        unsafe { nv_lineop(cmd_arg) };
-    } else if !check_clear_op(ca.op()) {
-        ca.op().start = Win::current().w_cursor;
-        ca.op().op_type = op_type;
+    if op_type == cmd_arg.op().op_type {
+        nv_lineop(cmd_arg);
+    } else if !check_clear_op(cmd_arg.op()) {
+        cmd_arg.op().start = Win::current().w_cursor;
+        cmd_arg.op().op_type = op_type;
         set_op_var(op_type);
     }
 }
@@ -271,16 +205,10 @@ pub(crate) fn set_op_var(optype: OpType) {
 }
 
 /// The linewise form of an operator: `count1` lines from this one.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_lineop(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    ca.op().motion_type = kMTLineWise;
-    let op = ca.op();
-    if cursor_down(ca.count1 - 1, op.op_type == OpType::Nop).is_err() {
+pub(crate) fn nv_lineop(cmd_arg: &mut CmdArg) {
+    cmd_arg.op().motion_type = kMTLineWise;
+    let op = cmd_arg.op();
+    if cursor_down(cmd_arg.count1 - 1, op.op_type == OpType::Nop).is_err() {
         clear_op_beep(op);
     } else if (op.op_type == OpType::Delete
         && op.motion_force != 'v' as c_int
@@ -298,29 +226,26 @@ pub(crate) unsafe fn nv_lineop(cmd_arg: *mut CmdArg) {
 
 /// `q`: start or stop a recording -- or open the command-line window, or the
 /// `gq` operator when that is what is pending.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_record(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if ca.op().op_type == OpType::Format {
-        unsafe { as_g_operator(cmd_arg, b'q') };
+pub(crate) fn nv_record(cmd_arg: &mut CmdArg) {
+    if cmd_arg.op().op_type == OpType::Format {
+        as_g_operator(cmd_arg, b'q');
         return;
     }
-    if check_clear_op(ca.op()) {
+    if check_clear_op(cmd_arg.op()) {
         return;
     }
     // `q:`, `q/` and `q?` open the command-line window instead.
-    if ca.nchar == ':' as c_int || ca.nchar == '/' as c_int || ca.nchar == '?' as c_int {
+    if cmd_arg.nchar == ':' as c_int
+        || cmd_arg.nchar == '/' as c_int
+        || cmd_arg.nchar == '?' as c_int
+    {
         if cmdwin_type.get() != 0 {
             emsg(gettext(e_cmdline_window_already_open));
             return;
         }
-        stuff_readbuf_char(ca.nchar);
+        stuff_readbuf_char(cmd_arg.nchar);
         stuff_readbuf_char(-(253 + (KE_CMDWIN.cast_signed() << 8)));
-    } else if reg_executing.get() == 0 && do_record(ca.nchar).is_err() {
-        clear_op_beep(ca.op());
+    } else if reg_executing.get() == 0 && do_record(cmd_arg.nchar).is_err() {
+        clear_op_beep(cmd_arg.op());
     }
 }

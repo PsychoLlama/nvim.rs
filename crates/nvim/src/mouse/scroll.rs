@@ -91,14 +91,10 @@ pub(crate) fn ins_mouse(c: c_int) {
 ///
 /// `curwin` may have been changed to the window that should be scrolled and
 /// differ from the window that actually has focus.
-///
-/// # Safety
-/// `cmd_arg` must be a live command argument.
-pub(crate) unsafe fn do_mousescroll(cmd_arg: *mut CmdArg) {
+pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
     let shift_or_ctrl = mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL);
     let win = Win::current();
-    // SAFETY: the caller's promise.
-    let arg = unsafe { (*cmd_arg).arg };
+    let arg = cmd_arg.arg;
 
     if arg == MSCR_UP || arg == MSCR_DOWN {
         // Vertical scrolling.
@@ -113,13 +109,12 @@ pub(crate) unsafe fn do_mousescroll(cmd_arg: *mut CmdArg) {
         } else {
             number_as_int(p_mousescroll_vert.get())
         };
-        // The count is written even when it is zero, as the C is.
-        // SAFETY: the caller's promise, and `nv_scroll_line` reads the counts
-        // just written.
-        unsafe { (*cmd_arg).count1 = count };
+        // The count is written even when it is zero, as the C is, and
+        // `nv_scroll_line` reads the counts just written.
+        cmd_arg.count1 = count;
         if count > 0 {
-            unsafe { (*cmd_arg).count0 = count };
-            unsafe { nv_scroll_line(cmd_arg) };
+            cmd_arg.count0 = count;
+            nv_scroll_line(cmd_arg);
         }
         return;
     }
@@ -179,8 +174,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
     let orig_cursor = win.w_cursor;
 
     // Call the common mouse scroll function shared with other modes.
-    // SAFETY: `cmd_arg` is a live local command argument.
-    unsafe { do_mousescroll(&raw mut cmd_arg) };
+    do_mousescroll(&mut cmd_arg);
 
     win = Win::current();
     win.w_redr_status = true;

@@ -38,9 +38,7 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mu
 
     let mut len: size_t = 0;
     let mut ptr: *mut c_char = ptr::null_mut();
-    if unsafe { get_visual_text(ptr::null_mut::<CmdArg>(), &raw mut ptr, &raw mut len) } as c_int
-        == FAIL
-    {
+    if unsafe { get_visual_text(None, &raw mut ptr, &raw mut len) } as c_int == FAIL {
         return ptr::null_mut();
     }
     // Only recognize ":123" here.

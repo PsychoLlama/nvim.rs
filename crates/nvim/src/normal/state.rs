@@ -82,7 +82,7 @@ use core::ffi::{c_int, c_uint, c_void};
 use crate::r#move::{update_curswant, update_topline, validate_cursor};
 
 /// One pass of the normal-mode loop, which the caller has promised is live.
-/// [`CmdArgRef`]'s shape.
+/// [`Op`]'s shape.
 ///
 /// The state has to be reached through a pointer rather than a `&mut`: the
 /// loop publishes the address of its own `oa` in `current_oap`, so a `&mut`
@@ -118,43 +118,18 @@ impl DerefMut for NormalStateRef {
     }
 }
 
-/// The command argument a normal-mode handler is running, which the caller
-/// has promised is live.
+/// The operator a normal-mode command is pending on.
 ///
-/// One pointer, and building one reads nothing: [`crate::winlayer::Win`]'s
-/// shape, for the two structures every `nv_*` handler is threaded through.
-/// Field access goes through `Deref`, so it costs no `unsafe` at the site;
-/// the operator it is pending on is [`crate::ops::Op`], the same shape.
-#[derive(Clone, Copy)]
-pub(crate) struct CmdArgRef(*mut CmdArg);
-
-impl CmdArgRef {
-    /// # Safety
-    /// `cmd_arg` must stay a live command argument for as long as the value is
-    /// used.
-    pub(crate) const unsafe fn new(cmd_arg: *mut CmdArg) -> Self {
-        Self(cmd_arg)
-    }
-    /// The operator this command is pending on.
-    pub(crate) fn op(self) -> Op {
-        // SAFETY: a live command argument's operator is live.
+/// `oap` is a raw pointer because the operator lives in a *sibling* field of
+/// the state machine's frame -- `NormalState::oa`, which `current_oap` also
+/// names -- so a `&mut` to it would have to span the handler and alias what
+/// [`op_pending`] reads. [`Op`] is that promise written down; this is the one
+/// place a `CmdArg` makes one.
+impl CmdArg {
+    pub(crate) fn op(&self) -> Op {
+        // SAFETY: a live command argument's operator is live: `normal_prepare`
+        // aims `oap` at the frame that owns the `CmdArg` and nothing moves it.
         unsafe { Op::new(self.oap) }
-    }
-}
-
-impl Deref for CmdArgRef {
-    type Target = CmdArg;
-    fn deref(&self) -> &CmdArg {
-        // SAFETY: the constructor's promise -- a live command argument.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for CmdArgRef {
-    fn deref_mut(&mut self) -> &mut CmdArg {
-        // SAFETY: as `deref`; the borrow lasts only as long as the field
-        // access that asked for it.
-        unsafe { &mut *self.0 }
     }
 }
 
@@ -290,7 +265,8 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
     ns.mapped_len = typeahead().maplen();
     State.set(MODE_NORMAL_BUSY);
     if ns.toplevel && readbuf1_empty() {
-        unsafe { set_vcount_ca(&raw mut ns.ca, &mut ns.set_prevcount) };
+        set_vcount_ca(&ns.ca, ns.set_prevcount);
+        ns.set_prevcount = false;
     }
 }
 
@@ -316,7 +292,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
         if flags & NV_SS != 0 {
             // A shifted special key becomes its unshifted self, and the
             // table has to be consulted again for the new character.
-            unsafe { unshift_special(&raw mut ns.ca) };
+            unshift_special(&mut ns.ca);
             ns.idx = find_command(ns.ca.cmdchar);
             if ns.idx < 0 {
                 unsafe { clearopbeep(&raw mut ns.oa) };
@@ -646,18 +622,16 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
 /// An operator's count and the motion's multiply; a zero count reports as 1
 /// in `v:count1` and as itself in `v:count`.
 ///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn set_vcount_ca(cmd_arg: *mut CmdArg, set_prevcount: &mut bool) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut count = ca.count0 as int64_t;
-    if ca.opcount != 0 {
-        count = ca.opcount as int64_t * if count == 0 { 1 } else { count };
+/// `set_prevcount` publishes `v:prevcount` too, which only the first
+/// publication of a command does; the caller clears its own flag afterwards,
+/// because the flag and the command are sibling fields of one frame and a
+/// callee cannot borrow both.
+pub(crate) fn set_vcount_ca(cmd_arg: &CmdArg, set_prevcount: bool) {
+    let mut count = cmd_arg.count0 as int64_t;
+    if cmd_arg.opcount != 0 {
+        count = cmd_arg.opcount as int64_t * if count == 0 { 1 } else { count };
     }
-    set_vcount(count, if count == 0 { 1 } else { count }, *set_prevcount);
-    *set_prevcount = false;
+    set_vcount(count, if count == 0 { 1 } else { count }, set_prevcount);
 }
 
 /// Run exactly one normal-mode command, from an operator the caller owns.

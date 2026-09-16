@@ -30,10 +30,10 @@ use crate::memline::goto_byte;
 use crate::message::show_sb_text;
 use crate::mouse::do_mouse;
 use crate::normal::{
-    CmdArgRef, adjust_for_sel, check_clear_op, check_clear_op_quit, check_text_locked,
-    clear_op_beep, invoke_edit, kMTCharWise, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark,
-    nv_goto, nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put,
-    nv_replace_mode, nv_screengo, nv_visual, nv_vreplace, visual_active,
+    adjust_for_sel, check_clear_op, check_clear_op_quit, check_text_locked, clear_op_beep,
+    invoke_edit, kMTCharWise, kMTLineWise, nv_addsub, nv_edit, nv_gd, nv_gomark, nv_goto,
+    nv_gotofile, nv_gv_cmd, nv_ident, nv_join, nv_operator, nv_pcmark, nv_put, nv_replace_mode,
+    nv_screengo, nv_visual, nv_vreplace, visual_active,
 };
 use crate::ops::cursor_pos_info;
 use crate::plines::linetabsize;
@@ -67,17 +67,11 @@ const POUND_BYTE: u8 = 0xa3;
 /// line rather than of the buffer line.
 ///
 /// Also called from `move.rs` for a mouse click landing left of the text.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
-    let to_first_non_blank = ca.nchar == '^' as c_int;
-    ca.op().motion_type = kMTCharWise;
-    ca.op().inclusive = false;
+    let to_first_non_blank = cmd_arg.nchar == '^' as c_int;
+    cmd_arg.op().motion_type = kMTCharWise;
+    cmd_arg.op().inclusive = false;
     let mut i;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
         // A wrapped line's first screen row can be narrower than the rest,
@@ -100,7 +94,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
     } else {
         i = win.w_leftcol;
     }
-    if ca.nchar == 'm' as c_int {
+    if cmd_arg.nchar == 'm' as c_int {
         i += (win.w_view_width - win.col_off()
             + if win.w_onebuf_opt.wo_wrap != 0 && i > 0 {
                 win_col_off2(win)
@@ -127,19 +121,13 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cmd_arg: *mut CmdArg) {
 }
 
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_g_underscore_cmd(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
-    ca.op().motion_type = kMTCharWise;
-    ca.op().inclusive = true;
+    cmd_arg.op().motion_type = kMTCharWise;
+    cmd_arg.op().inclusive = true;
     win.w_curswant = MAXCOL as ColNr;
-    if cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop).is_err() {
-        clear_op_beep(ca.op());
+    if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type == OpType::Nop).is_err() {
+        clear_op_beep(cmd_arg.op());
         return;
     }
     let line = get_cursor_line_ptr();
@@ -153,27 +141,21 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cmd_arg: *mut CmdArg) {
         win.w_cursor.col -= 1;
     }
     win.w_set_curswant = true;
-    unsafe { adjust_for_sel(cmd_arg) };
+    adjust_for_sel(cmd_arg);
 }
 
 /// `g$` and `g<End>`: the end of the *screen* line.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
-    let mut op = ca.op();
+    let mut op = cmd_arg.op();
     let col_off = win.col_off();
     // `<End>` also skips back over trailing white space.
-    let to_last_non_blank = ca.nchar == Key::End.code() || ca.nchar == Key::Kend.code();
+    let to_last_non_blank = cmd_arg.nchar == Key::End.code() || cmd_arg.nchar == Key::Kend.code();
     op.motion_type = kMTCharWise;
     op.inclusive = true;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
         win.w_curswant = MAXCOL as ColNr;
-        if ca.count1 == 1 {
+        if cmd_arg.count1 == 1 {
             let width1 = win.w_view_width - col_off;
             let width2 = width1 + win_col_off2(win);
             validate_virtcol(win);
@@ -188,13 +170,13 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
             if win.w_cursor.col > 0 && win.w_onebuf_opt.wo_wrap != 0 && win.w_virtcol > i {
                 win.w_cursor.col -= 1;
             }
-        } else if !unsafe { nv_screengo(op.raw(), FORWARD as c_int, ca.count1 - 1, false) } {
+        } else if !unsafe { nv_screengo(op.raw(), FORWARD as c_int, cmd_arg.count1 - 1, false) } {
             clear_op_beep(op);
         }
     } else {
         // Without 'wrap' the screen line is what 'sidescroll' left showing.
-        if ca.count1 > 1 {
-            let _ = cursor_down(ca.count1 - 1, false);
+        if cmd_arg.count1 > 1 {
+            let _ = cursor_down(cmd_arg.count1 - 1, false);
         }
         let i = win.w_leftcol + win.w_view_width - col_off - 1;
         coladvance(win, i);
@@ -214,13 +196,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cmd_arg: *mut CmdArg) {
 
 /// `gi`: insert where insert mode was left, even if the line has since got
 /// shorter.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_gi_cmd(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
+pub(crate) fn nv_gi_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
     if Buf::current().b_last_insert.mark.lnum != 0 {
         win.w_cursor = Buf::current().b_last_insert.mark;
@@ -234,44 +210,32 @@ pub(crate) unsafe fn nv_gi_cmd(cmd_arg: *mut CmdArg) {
             win.w_cursor.col = len;
         }
     }
-    ca.cmdchar = 'i' as c_int;
-    unsafe { nv_edit(cmd_arg) };
+    cmd_arg.cmdchar = 'i' as c_int;
+    nv_edit(cmd_arg);
 }
 
 /// `gh`, `gH` and `g CTRL-H`: start Select mode in the matching Visual kind.
 /// `v`, `V` and CTRL-V sit exactly `'v' - 'h'` above `h`, `H` and CTRL-H.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-unsafe fn nv_g_select(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    ca.cmdchar = ca.nchar + ('v' as c_int - 'h' as c_int);
-    ca.arg = 1;
-    unsafe { nv_visual(cmd_arg) };
+fn nv_g_select(cmd_arg: &mut CmdArg) {
+    cmd_arg.cmdchar = cmd_arg.nchar + ('v' as c_int - 'h' as c_int);
+    cmd_arg.arg = 1;
+    nv_visual(cmd_arg);
 }
 
 /// `gj` and `gk`: down and up by *screen* line -- which is the plain line move
 /// when 'wrap' is off.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-unsafe fn nv_g_screen_line(cmd_arg: *mut CmdArg, dir: c_int) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut op = ca.op();
+fn nv_g_screen_line(cmd_arg: &mut CmdArg, dir: c_int) {
+    let mut op = cmd_arg.op();
     let moved = if Win::current().w_onebuf_opt.wo_wrap == 0 {
         op.motion_type = kMTLineWise;
         let stop_at_end = op.op_type == OpType::Nop;
         if dir == FORWARD as c_int {
-            cursor_down(ca.count1, stop_at_end).is_ok()
+            cursor_down(cmd_arg.count1, stop_at_end).is_ok()
         } else {
-            cursor_up(ca.count1 as LineNr, stop_at_end).is_ok()
+            cursor_up(cmd_arg.count1 as LineNr, stop_at_end).is_ok()
         }
     } else {
-        unsafe { nv_screengo(op.raw(), dir, ca.count1, false) }
+        unsafe { nv_screengo(op.raw(), dir, cmd_arg.count1, false) }
     };
     if !moved {
         clear_op_beep(op);
@@ -282,23 +246,17 @@ unsafe fn nv_g_screen_line(cmd_arg: *mut CmdArg, dir: c_int) {
 ///
 /// Answers `false` for anything else, which sends the caller on to the byte
 /// half of the tree.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-unsafe fn nv_g_key(cmd_arg: *mut CmdArg, nchar: c_int) -> bool {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
+fn nv_g_key(cmd_arg: &mut CmdArg, nchar: c_int) -> bool {
     match Key::try_from(nchar) {
         // `g<BS>` is `g CTRL-H`.
         Ok(Key::Bs) => {
-            ca.nchar = Ctrl_H;
-            unsafe { nv_g_select(cmd_arg) };
+            cmd_arg.nchar = Ctrl_H;
+            nv_g_select(cmd_arg);
         }
-        Ok(Key::Down) => unsafe { nv_g_screen_line(cmd_arg, FORWARD as c_int) },
-        Ok(Key::Up) => unsafe { nv_g_screen_line(cmd_arg, BACKWARD as c_int) },
-        Ok(Key::Home | Key::Khome) => unsafe { nv_g_home_m_cmd(cmd_arg) },
-        Ok(Key::End | Key::Kend) => unsafe { nv_g_dollar_cmd(cmd_arg) },
+        Ok(Key::Down) => nv_g_screen_line(cmd_arg, FORWARD as c_int),
+        Ok(Key::Up) => nv_g_screen_line(cmd_arg, BACKWARD as c_int),
+        Ok(Key::Home | Key::Khome) => nv_g_home_m_cmd(cmd_arg),
+        Ok(Key::End | Key::Kend) => nv_g_dollar_cmd(cmd_arg),
         // A mouse click after `g` acts as the CTRL-modified click.
         Ok(
             Key::Middlemouse
@@ -319,7 +277,7 @@ unsafe fn nv_g_key(cmd_arg: *mut CmdArg, nchar: c_int) -> bool {
             | Key::X2release,
         ) => {
             mod_mask.set(ModMask::CTRL);
-            unsafe { do_mouse(ca.oap, nchar, BACKWARD as c_int, ca.count1, false) };
+            unsafe { do_mouse(cmd_arg.oap, nchar, BACKWARD as c_int, cmd_arg.count1, false) };
         }
         Ok(Key::Ignore) => {}
         _ => return false,
@@ -328,16 +286,10 @@ unsafe fn nv_g_key(cmd_arg: *mut CmdArg, nchar: c_int) -> bool {
 }
 
 /// `g`, whose second character says what the command is.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let mut op = ca.op();
-    let nchar = ca.nchar;
-    if unsafe { nv_g_key(cmd_arg, nchar) } {
+pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
+    let mut op = cmd_arg.op();
+    let nchar = cmd_arg.nchar;
+    if nv_g_key(cmd_arg, nchar) {
         return;
     }
     // `u8::try_from` rather than `as u8`: a multibyte character after `g`
@@ -348,94 +300,94 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         // mode.
         Ok(CTRL_A | CTRL_X) => {
             if visual_active() {
-                ca.arg = 1;
-                ca.cmdchar = nchar;
-                ca.nchar = NUL;
-                unsafe { nv_addsub(cmd_arg) };
+                cmd_arg.arg = 1;
+                cmd_arg.cmdchar = nchar;
+                cmd_arg.nchar = NUL;
+                nv_addsub(cmd_arg);
             } else {
                 clear_op_beep(op);
             }
         }
         // `gR`: virtual replace mode.
         Ok(b'R') => {
-            ca.arg = 1;
-            unsafe { nv_replace_mode(cmd_arg) };
+            cmd_arg.arg = 1;
+            nv_replace_mode(cmd_arg);
         }
         // `gr`: replace one character virtually.
-        Ok(b'r') => unsafe { nv_vreplace(cmd_arg) },
+        Ok(b'r') => nv_vreplace(cmd_arg),
         // `g&`: repeat the last `:substitute` over the whole file, keeping
         // the flags.
         Ok(b'&') => {
             let _ = unsafe { do_cmdline_cmd(c"%s//~/&".as_ptr()) };
         }
         // `gv`: reselect the previous selection.
-        Ok(b'v') => unsafe { nv_gv_cmd(cmd_arg) },
+        Ok(b'v') => nv_gv_cmd(cmd_arg),
         // `gV`: do not reselect it after the next Select-mode edit.
         Ok(b'V') => VIsual_reselect.set(0),
-        Ok(b'h' | b'H' | CTRL_H) => unsafe { nv_g_select(cmd_arg) },
+        Ok(b'h' | b'H' | CTRL_H) => nv_g_select(cmd_arg),
         // `gn`/`gN`: select the next/previous match of the last search.
         Ok(b'N' | b'n') => {
-            if current_search(ca.count1, nchar == 'n' as c_int).is_err() {
+            if current_search(cmd_arg.count1, nchar == 'n' as c_int).is_err() {
                 clear_op_beep(op);
             }
         }
-        Ok(b'j') => unsafe { nv_g_screen_line(cmd_arg, FORWARD as c_int) },
-        Ok(b'k') => unsafe { nv_g_screen_line(cmd_arg, BACKWARD as c_int) },
+        Ok(b'j') => nv_g_screen_line(cmd_arg, FORWARD as c_int),
+        Ok(b'k') => nv_g_screen_line(cmd_arg, BACKWARD as c_int),
         // `gJ`: join without inserting or removing spaces.
-        Ok(b'J') => unsafe { nv_join(cmd_arg) },
-        Ok(b'^' | b'0' | b'm') => unsafe { nv_g_home_m_cmd(cmd_arg) },
+        Ok(b'J') => nv_join(cmd_arg),
+        Ok(b'^' | b'0' | b'm') => nv_g_home_m_cmd(cmd_arg),
         // `gM`: the middle of the line by *text* width, or the count'th
         // percentage of it.
         Ok(b'M') => {
             op.motion_type = kMTCharWise;
             op.inclusive = false;
             let width = linetabsize(Win::current(), Win::current().w_cursor.lnum);
-            if ca.count0 > 0 && ca.count0 <= 100 {
-                coladvance(Win::current(), width * ca.count0 / 100);
+            if cmd_arg.count0 > 0 && cmd_arg.count0 <= 100 {
+                coladvance(Win::current(), width * cmd_arg.count0 / 100);
             } else {
                 coladvance(Win::current(), width / 2);
             }
             Win::current().w_set_curswant = true;
         }
-        Ok(b'_') => unsafe { nv_g_underscore_cmd(cmd_arg) },
-        Ok(b'$') => unsafe { nv_g_dollar_cmd(cmd_arg) },
+        Ok(b'_') => nv_g_underscore_cmd(cmd_arg),
+        Ok(b'$') => nv_g_dollar_cmd(cmd_arg),
         // `g*`, `g#`, `g]` and `g CTRL-]`: the identifier searches that do
         // not anchor at a word boundary.
-        Ok(b'*' | b'#' | POUND_BYTE | CTRL_RSB | b']') => unsafe { nv_ident(cmd_arg) },
+        Ok(b'*' | b'#' | POUND_BYTE | CTRL_RSB | b']') => nv_ident(cmd_arg),
         // `ge`/`gE`: back to the end of the previous word.
         Ok(b'e' | b'E') => {
             op.motion_type = kMTCharWise;
             Win::current().w_set_curswant = true;
             op.inclusive = true;
-            if bckend_word(ca.count1, nchar == 'E' as c_int, false).is_err() {
+            if bckend_word(cmd_arg.count1, nchar == 'E' as c_int, false).is_err() {
                 clear_op_beep(op);
             }
         }
         // `g CTRL-G`: count the words, lines and bytes.
         Ok(CTRL_G) => unsafe { cursor_pos_info(ptr::null_mut()) },
-        Ok(b'i') => unsafe { nv_gi_cmd(cmd_arg) },
+        Ok(b'i') => nv_gi_cmd(cmd_arg),
         // `gI`: insert in column 1 regardless of indent.
         Ok(b'I') => {
             beginline(BeginlineOpts::NONE);
             if !check_clear_op_quit(op) {
-                unsafe { invoke_edit(cmd_arg, 0, 'g' as c_int, 0) };
+                invoke_edit(cmd_arg, 0, 'g' as c_int, 0);
             }
         }
         // `gf`/`gF`: edit the file named under the cursor.
-        Ok(b'f' | b'F') => unsafe { nv_gotofile(cmd_arg) },
+        Ok(b'f' | b'F') => nv_gotofile(cmd_arg),
         // `g'` and `` g` ``: jump to a mark without touching the jump
         // list. The argument is what tells `nv_gomark` it is linewise.
         Ok(b'\'') => {
-            ca.arg = 1;
-            unsafe { nv_gomark(cmd_arg) };
+            cmd_arg.arg = 1;
+            nv_gomark(cmd_arg);
         }
-        Ok(b'`') => unsafe { nv_gomark(cmd_arg) },
-        Ok(b's') => do_sleep(int64_t::from(ca.count1 * 1000), false),
+        Ok(b'`') => nv_gomark(cmd_arg),
+        Ok(b's') => do_sleep(int64_t::from(cmd_arg.count1 * 1000), false),
         // `ga`: describe the character under the cursor.
         Ok(b'a') => describe_cursor_char(),
         // `g8` shows the byte sequence; `8g8` finds an illegal one.
         Ok(b'8') => {
-            if ca.count0 == 8 {
+            if cmd_arg.count0 == 8 {
                 utf_find_illegal();
             } else {
                 show_utf8();
@@ -445,25 +397,25 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         Ok(b'<') => show_sb_text(),
         // `gg`: to the first line, or the count'th.
         Ok(b'g') => {
-            ca.arg = 0;
-            unsafe { nv_goto(cmd_arg) };
+            cmd_arg.arg = 0;
+            nv_goto(cmd_arg);
         }
         // `gq` and `gw` both format; `gw` returns the cursor to where it
         // was, which is what the remembered position is for.
         Ok(b'q' | b'w') => {
             op.cursor_start = Win::current().w_cursor;
-            unsafe { nv_operator(cmd_arg) };
+            nv_operator(cmd_arg);
         }
         // The rest of the two-character operators: `g~ gu gU g? g@`.
-        Ok(b'~' | b'u' | b'U' | b'?' | b'@') => unsafe { nv_operator(cmd_arg) },
+        Ok(b'~' | b'u' | b'U' | b'?' | b'@') => nv_operator(cmd_arg),
         // `gd`/`gD`: jump to the local or global declaration.
-        Ok(b'd' | b'D') => unsafe { nv_gd(op.raw(), nchar, ca.count0) },
+        Ok(b'd' | b'D') => unsafe { nv_gd(op.raw(), nchar, cmd_arg.count0) },
         // `gp`/`gP`: put and leave the cursor after the new text.
-        Ok(b'p' | b'P') => unsafe { nv_put(cmd_arg) },
+        Ok(b'p' | b'P') => nv_put(cmd_arg),
         // `go`: to a byte offset in the buffer.
         Ok(b'o') => {
             op.inclusive = false;
-            goto_byte(ca.count0);
+            goto_byte(cmd_arg.count0);
         }
         // `gQ`: Ex mode.
         Ok(b'Q') => {
@@ -472,20 +424,20 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
             }
         }
         // `g,` and `g;`: forwards and backwards through the change list.
-        Ok(b',') => unsafe { nv_pcmark(cmd_arg) },
+        Ok(b',') => nv_pcmark(cmd_arg),
         Ok(b';') => {
-            ca.count1 = -ca.count1;
-            unsafe { nv_pcmark(cmd_arg) };
+            cmd_arg.count1 = -cmd_arg.count1;
+            nv_pcmark(cmd_arg);
         }
         // `gt`/`gT`: the next or previous tab page.
         Ok(b't') => {
             if !check_clear_op(op) {
-                goto_tabpage(ca.count0);
+                goto_tabpage(cmd_arg.count0);
             }
         }
         Ok(b'T') => {
             if !check_clear_op(op) {
-                goto_tabpage(-ca.count1);
+                goto_tabpage(-cmd_arg.count1);
             }
         }
         // `g<Tab>`: the tab page used before this one.
@@ -498,9 +450,9 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         Ok(b'+' | b'-') => {
             if !check_clear_op_quit(op) {
                 let count = if nchar == '-' as c_int {
-                    -ca.count1
+                    -cmd_arg.count1
                 } else {
-                    ca.count1
+                    cmd_arg.count1
                 };
                 undo_time(count, false, false, false);
             }

@@ -412,9 +412,7 @@ fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
     cap.oap = &raw mut oa;
     cap.cmdchar = key;
     cap.arg = direction;
-    // SAFETY: a command argument of this frame's own, naming the operator
-    // above; it scrolls the window the two globals were just set to.
-    unsafe { do_mousescroll(&raw mut cap) };
+    do_mousescroll(&mut cap);
 
     // Whatever the scroll left as the current window, which need not be the
     // one it started in.

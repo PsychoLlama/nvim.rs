@@ -21,8 +21,8 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::getchar::state::mod_mask;
 use crate::global_cell::GlobalCell;
 use crate::normal::{
-    CmdArgRef, check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active,
-    set_visual_select, visual_active, visual_select,
+    check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active, set_visual_select,
+    visual_active, visual_select,
 };
 use crate::option::vars::p_sbo;
 use crate::plines::plines_m_win_fill;
@@ -152,81 +152,57 @@ pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
 
 /// `CTRL-F` and `CTRL-B`: a page forwards or backwards. With CTRL held they
 /// are a tab page instead.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_page(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if check_clear_op(ca.op()) {
+pub(crate) fn nv_page(cmd_arg: &mut CmdArg) {
+    if check_clear_op(cmd_arg.op()) {
         return;
     }
     if mod_mask.get().has(ModMask::CTRL) {
-        if ca.arg == BACKWARD as c_int {
-            goto_tabpage(-ca.count1);
+        if cmd_arg.arg == BACKWARD as c_int {
+            goto_tabpage(-cmd_arg.count1);
         } else {
-            goto_tabpage(ca.count0);
+            goto_tabpage(cmd_arg.count0);
         }
     } else {
-        pagescroll(ca.arg as Direction, ca.count1, false);
+        pagescroll(cmd_arg.arg as Direction, cmd_arg.count1, false);
     }
 }
 
 /// `CTRL-E` and `CTRL-Y`: scroll one line, leaving the cursor where it is on
 /// the screen for as long as it can.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_scroll_line(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if !check_clear_op(ca.op()) {
-        scroll_redraw(ca.arg, ca.count1 as LineNr);
+pub(crate) fn nv_scroll_line(cmd_arg: &mut CmdArg) {
+    if !check_clear_op(cmd_arg.op()) {
+        scroll_redraw(cmd_arg.arg, cmd_arg.count1 as LineNr);
     }
 }
 
 /// `CTRL-D` and `CTRL-U`: half a page.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_halfpage(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if !check_clear_op(ca.op()) {
-        let dir = if ca.cmdchar == Ctrl_D {
+pub(crate) fn nv_halfpage(cmd_arg: &mut CmdArg) {
+    if !check_clear_op(cmd_arg.op()) {
+        let dir = if cmd_arg.cmdchar == Ctrl_D {
             FORWARD as c_int
         } else {
             BACKWARD as c_int
         };
         // A count here also sets 'scroll', which `pagescroll` does.
-        pagescroll(dir as Direction, ca.count0, true);
+        pagescroll(dir as Direction, cmd_arg.count0, true);
     }
 }
 
 /// `ZZ`, `ZQ` and `ZR`: the two-key ways out.
-///
-/// # Safety
-///
-/// `cmd_arg` must point at the command's `CmdArg`, unaliased for the call.
-pub(crate) unsafe fn nv_exit_command(cmd_arg: *mut CmdArg) {
-    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    if check_clear_op_quit(ca.op()) {
+pub(crate) fn nv_exit_command(cmd_arg: &mut CmdArg) {
+    if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    let cmd = match u8::try_from(ca.nchar) {
+    let cmd = match u8::try_from(cmd_arg.nchar) {
         // Write this file if it changed, then quit.
         Ok(b'Z') => c"x",
         // Quit without writing.
         Ok(b'Q') => c"q!",
         // Restart. A count means "and abandon every other window too".
-        Ok(b'R') if ca.count0 >= 1 => c"restart +qall!",
+        Ok(b'R') if cmd_arg.count0 >= 1 => c"restart +qall!",
         Ok(b'R') => c"restart",
         _ => {
-            clear_op_beep(ca.op());
+            clear_op_beep(cmd_arg.op());
             return;
         }
     };

@@ -115,8 +115,7 @@ pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
         // SAFETY: the caller's promise -- this moves `curwin`'s cursor.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else if p_sol.get() != 0 {
-        // SAFETY: the caller's promise; `ca` is a command of this frame.
-        unsafe { nv_g_home_m_cmd(&raw mut ca) };
+        nv_g_home_m_cmd(&mut ca);
     }
 
     if did_move { OK } else { FAIL }

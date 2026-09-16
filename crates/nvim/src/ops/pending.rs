@@ -32,7 +32,6 @@
 use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_void};
-use core::ops::{Deref, DerefMut};
 
 use super::*;
 use crate::r#move::WinValid;
@@ -55,42 +54,6 @@ static REDO_VISUAL: GlobalCell<RedoVisual> = GlobalCell::new(RedoVisual {
     rv_arg: 0,
 });
 
-/// A `CmdArg` the caller has promised is live: the normal-mode command that
-/// carried the operator here.
-///
-/// [`Op`]'s shape, for the other half of the pair `do_pending_operator` is
-/// handed.
-#[derive(Clone, Copy)]
-struct Cmd(*mut CmdArg);
-
-impl Cmd {
-    /// # Safety
-    /// `cmd_arg` must stay a live `CmdArg` for as long as the value is used.
-    #[inline(always)]
-    const unsafe fn new(cmd_arg: *mut CmdArg) -> Self {
-        Self(cmd_arg)
-    }
-}
-
-impl Deref for Cmd {
-    type Target = CmdArg;
-
-    #[inline(always)]
-    fn deref(&self) -> &CmdArg {
-        // SAFETY: the constructor's promise -- a live `CmdArg`.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for Cmd {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut CmdArg {
-        // SAFETY: the constructor's promise -- a live `CmdArg`. The borrow
-        // lasts only as long as the field access that asked for it.
-        unsafe { &mut *self.0 }
-    }
-}
-
 /// Zero an `OpArg` between commands.
 ///
 /// # Safety
@@ -102,7 +65,7 @@ pub unsafe fn clear_oparg(op: *mut OpArg) {
 /// Was the operator reached through a command line rather than a key?
 ///
 /// `:` and `<Cmd>` both arrive here as an operator over the Visual area.
-fn is_ex_cmdchar(cmd_arg: Cmd) -> bool {
+fn is_ex_cmdchar(cmd_arg: &CmdArg) -> bool {
     cmd_arg.cmdchar == ':' as c_int || cmd_arg.cmdchar == Key::Command.code()
 }
 
@@ -115,12 +78,8 @@ fn is_ex_cmdchar(cmd_arg: Cmd) -> bool {
 /// # Safety
 /// `cmd_arg` must point to a live `CmdArg` whose `op` describes a region of the
 /// current buffer.
-pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank: bool) {
-    // SAFETY: the caller's promise -- a live `CmdArg` whose `op` is a live
-    // `OpArg`. The two wrappers carry that promise on from here, so every
-    // field access below is the compiler's business rather than a note.
-    let cmd_arg = unsafe { Cmd::new(cmd_arg) };
-    let mut op = unsafe { Op::new(cmd_arg.oap) };
+pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool) {
+    let mut op = cmd_arg.op();
     let lbr_saved = Win::current().w_onebuf_opt.wo_lbr;
     let old_cursor = Win::current().w_cursor;
 
@@ -256,7 +215,7 @@ fn apply_motion_force(mut op: Op) {
 /// Yank is only redoable under 'cpoptions' `y`, `zf` never is, and neither is
 /// any of the fold operators; a search or a `:` command has to have its own
 /// text appended so that the repeat really is the same command.
-fn record_operator_redo(cmd_arg: Cmd, op: Op, redo_yank: bool) {
+fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
     let is_fold_op = matches!(
         op.op_type,
         OpType::Fold
@@ -322,7 +281,7 @@ fn record_operator_redo(cmd_arg: Cmd, op: Op, redo_yank: bool) {
 
 /// `.` replaying a Visual operator: rebuild a region of the recorded size at
 /// the cursor.
-fn resume_redo_visual(mut cmd_arg: Cmd, mut op: Op) {
+fn resume_redo_visual(cmd_arg: &mut CmdArg, mut op: Op) {
     let redo = REDO_VISUAL.get();
     op.start = Win::current().w_cursor;
     Win::current().w_cursor.lnum += redo.rv_line_count - 1;
@@ -446,7 +405,7 @@ fn order_region(mut op: Op) {
 /// build one like it.
 ///
 /// A Visual selection must be active or being replayed.
-fn prepare_visual_redo(cmd_arg: Cmd, mut op: Op, gui_yank: bool, redo_yank: bool) {
+fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: bool) {
     if !redo_VIsual_busy.get() && !gui_yank {
         resel_VIsual_mode.set(visual_mode());
         if Win::current().w_curswant == MAXCOL {
@@ -617,7 +576,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
 ///
 /// And if the start is on or before that line's first non-blank, the operator
 /// becomes linewise -- strange, but that is what vi does.
-fn adjust_region_end(cmd_arg: Cmd, mut op: Op) {
+fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
     // SAFETY: 'sel' is a NUL-terminated option string.
     if !(op.motion_type == kMTCharWise
         && !op.inclusive
@@ -654,7 +613,7 @@ fn adjust_region_end(cmd_arg: Cmd, mut op: Op) {
 /// give control away (Insert mode, 'operatorfunc', an external filter) have to
 /// put it back first, because the user is about to look at the screen.
 fn run_operator(
-    cmd_arg: Cmd,
+    cmd_arg: &mut CmdArg,
     mut op: Op,
     empty_region_error: bool,
     gui_yank: bool,
@@ -860,7 +819,7 @@ fn indent_or_colon(op: Op) {
 }
 
 /// The `c` arm: run `op_change`, which enters Insert mode.
-fn run_change(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
+fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     // A new edit command, not a restart. Remembering that is what makes
     // `i_CTRL-O` work with a mapping for Visual mode -- but only when the
     // key was not typed.
@@ -886,7 +845,7 @@ fn run_change(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
 }
 
 /// The `I`/`A` arm: run `op_insert`, which enters Insert mode.
-fn run_block_insert(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
+fn run_block_insert(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     let restart_edit_save = restart_edit.get();
     restart_edit.set(0);
 
