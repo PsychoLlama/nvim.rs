@@ -7,6 +7,12 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote how every Ex command (`:`) and every Normal-mode command reaches the
+  code that runs it, and what that code is handed. No command changed what it
+  does.
+
 ## [2026.09.12-3ebebe0c9b]
 
 A cycle of value-model rewrites: the values Vimscript passes around, and the
