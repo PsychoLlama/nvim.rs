@@ -108,8 +108,9 @@ pub(super) fn tail() -> Buf {
 /// Where the command word starts, without consuming the range.
 pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> *mut c_char {
     let cmd = excmd.cmd;
+    // SAFETY (both): `cmd` walks the command's own NUL-terminated line, and
+    // a null `full` is "do not report whether the name was spelled out".
     excmd.cmd = unsafe { skip_range(excmd.cmd, ptr::null_mut()) };
-    // SAFETY: the command is the caller's, promised live by `Ea`.
     let p = unsafe { find_ex_command(excmd, ptr::null_mut()) };
     excmd.cmd = cmd;
     p
