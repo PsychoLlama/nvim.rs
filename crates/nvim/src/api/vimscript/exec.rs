@@ -126,11 +126,7 @@ pub unsafe fn exec_impl(
     thrown.map(|()| String_0::NULL)
 }
 
-/// # Safety
-///
-/// `cmd` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_command(cmd: String_0) -> Result<(), Error> {
+pub fn nvim_command(cmd: String_0) -> Result<(), Error> {
     api_try(|| {
         // SAFETY: `cmd` is the caller's NUL-terminated command line.
         let _ = unsafe { do_cmdline_cmd(cmd.data()) };

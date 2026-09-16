@@ -256,7 +256,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
                 quit_cmd_copy = unsafe { concat_str(c"confirm ".as_ptr(), quit_cmd) };
                 quit_cmd = quit_cmd_copy;
             }
-            if let Err(e) = unsafe { nvim_command(cstr_to_string(quit_cmd)) } {
+            if let Err(e) = nvim_command(cstr_to_string(quit_cmd)) {
                 err = e;
             }
             xfree(quit_cmd_copy as *mut c_void);

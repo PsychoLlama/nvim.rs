@@ -79,9 +79,7 @@ pub unsafe fn handle_nvim_win_del_var(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_del_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_win_del_var(arg_1, arg_2) }?;
+    nvim_win_del_var(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -319,9 +317,7 @@ pub unsafe fn handle_nvim_win_get_var(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_get_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_win_get_var(arg_1, arg_2) }
+    nvim_win_get_var(arg_1, arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_get_width`.
@@ -501,9 +497,7 @@ pub unsafe fn handle_nvim_win_set_cursor(
             c"ArrayOf(Integer, 2)",
         ));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_win_set_cursor(arg_1, arg_2) }?;
+    nvim_win_set_cursor(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -612,9 +606,7 @@ pub unsafe fn handle_nvim_win_set_var(
         return Err(wrong_type(2, c"nvim_win_set_var", c"String"));
     };
     let arg_3 = args[2].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_win_set_var(arg_1, arg_2, arg_3) }?;
+    nvim_win_set_var(arg_1, arg_2, arg_3)?;
     Ok(Object::Nil)
 }
 

@@ -60,8 +60,7 @@ fn config_put_bordertext(
     } else {
         (fconfig.title_chunks, fconfig.title_pos)
     };
-    // SAFETY: the chunks are the window's own, and `arena` is the caller's.
-    let bordertext = Object::array(unsafe { virt_text_to_array(vt, true) });
+    let bordertext = Object::array(virt_text_to_array(vt, true));
     let pos = String_0::from_cstr(ALIGN_TEXT_STR[align as usize]);
     if footer {
         config.footer = Some(bordertext);
@@ -141,8 +140,6 @@ pub unsafe fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_confi
                 if config.bufpos.lnum >= 0 {
                     let mut pos = Array::with_capacity(2);
                     let (lnum, col) = (config.bufpos.lnum, config.bufpos.col);
-                    // SAFETY: `pos` is the two-slot block `arena` just handed
-                    // back.
                     pos.push(Object::integer(Integer::from(lnum)));
                     pos.push(Object::integer(Integer::from(col)));
                     rv.bufpos = Some(pos);

@@ -22,10 +22,7 @@ use crate::message_fmt::c_str;
 use crate::types::{Error, Integer, Object, String_0, Vv, kObjectTypeString, uint64_t};
 
 /// Log the failure a client reported for a request it had sent us.
-///
-/// # Safety
-/// `msg` must point at its own bytes.
-pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: String_0) {
+pub fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: String_0) {
     // `msg` is the caller's, per this function's contract, and it is
     // NUL-terminated wherever it is not empty -- the RPC decoder terminates
     // every string it builds.
@@ -47,10 +44,7 @@ pub unsafe fn nvim_error_event(channel_id: uint64_t, _type_0: Integer, msg: Stri
 /// Take delivery of a terminal event the UI forwarded. Only `termresponse` is
 /// understood; anything else is ignored, so that a newer UI can send events
 /// this build has never heard of.
-///
-/// # Safety
-/// `event` and `value` must own their bytes.
-pub unsafe fn nvim_ui_term_event(
+pub fn nvim_ui_term_event(
     _channel_id: uint64_t,
     event: String_0,
     value: Object,

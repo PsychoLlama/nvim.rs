@@ -19,11 +19,7 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::err_bad_value;
 use crate::winlayer::Win;
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
+pub fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
     let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
@@ -32,8 +28,6 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
         return Ok(res as Boolean);
     };
     if !(name.len() == 1 as size_t) {
-        // SAFETY: the value the keyset carried, live for this call.
-        // SAFETY: the caller's mark name is NUL-terminated.
         let name = name.as_cstr();
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
@@ -52,7 +46,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
         return (res as Boolean).reported(error);
     }
     if unsafe { (*fm).mark.lnum } != 0 as LineNr && unsafe { (*fm).fnum } == b.handle {
-        unsafe { set_mark(Some(b), name, 0 as Integer, 0 as Integer) }?;
+        set_mark(Some(b), name, 0 as Integer, 0 as Integer)?;
         res = true;
     }
     (res as Boolean).reported(error)
@@ -76,21 +70,16 @@ pub unsafe fn nvim_buf_set_mark(
         return Ok(res as Boolean);
     };
     if !(name.len() == 1 as size_t) {
-        // SAFETY: the value the keyset carried, live for this call.
-        // SAFETY: the caller's mark name is NUL-terminated.
         let name = name.as_cstr();
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
-    unsafe { set_mark(Some(b), name, line, col) }?;
+    set_mark(Some(b), name, line, col)?;
     res = true;
     (res as Boolean).reported(error)
 }
 
-/// # Safety
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Error> {
+pub fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Array, Error> {
     let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
@@ -99,8 +88,6 @@ pub unsafe fn nvim_buf_get_mark(buf: BufferHandle, name: String_0) -> Result<Arr
         return Ok(rv);
     };
     if !(name.len() == 1 as size_t) {
-        // SAFETY: the value the keyset carried, live for this call.
-        // SAFETY: the caller's mark name is NUL-terminated.
         let name = name.as_cstr();
         error = err_bad_value(c"mark name (must be a single char)", name);
         return rv.reported(error);

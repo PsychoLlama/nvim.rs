@@ -109,7 +109,6 @@ pub unsafe fn nvim_echo(
             true
         } else if is_progress && !status_named(status.clone()) {
             let names = c"success|failed|running|cancel";
-            // SAFETY: the keyset's string names its own NUL-terminated bytes.
             let got = crate::cstr::at_opt(status.data());
             error = err_expected(c"status", names, got);
             true
@@ -183,10 +182,7 @@ pub unsafe fn nvim_echo(
 
 /// Whether `status` is one of the four a progress message may carry. The
 /// empty string is not one of them.
-///
-/// # Safety
-/// `status` must be NUL-terminated.
-unsafe fn status_named(status: String_0) -> bool {
+fn status_named(status: String_0) -> bool {
     PROGRESS_STATUS
         .iter()
         // SAFETY: the caller's promise.

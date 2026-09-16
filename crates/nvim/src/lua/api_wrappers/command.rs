@@ -92,8 +92,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_buf_del_user_command(
         let arg_1 = unsafe { nlua_pop_handle(lstate, arena) }
             .inspect_err(|_| *err_param = c"buf".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_buf_del_user_command(arg_1, arg_2) }?;
+        nvim_buf_del_user_command(arg_1, arg_2)?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -228,8 +227,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_del_user_command(lstate: *mut lua_
         let arg_1 = unsafe { nlua_pop_string(lstate, arena) }
             .inspect_err(|_| *err_param = c"name".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_del_user_command(arg_1) }?;
+        nvim_del_user_command(arg_1)?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.

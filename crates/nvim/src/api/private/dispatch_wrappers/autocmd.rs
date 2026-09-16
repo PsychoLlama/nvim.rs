@@ -206,9 +206,7 @@ pub unsafe fn handle_nvim_del_augroup_by_name(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_del_augroup_by_name", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_del_augroup_by_name(arg_1) }?;
+    nvim_del_augroup_by_name(arg_1)?;
     Ok(Object::Nil)
 }
 

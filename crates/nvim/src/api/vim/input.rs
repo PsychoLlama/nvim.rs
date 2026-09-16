@@ -23,12 +23,7 @@ use crate::keycodes::{
 };
 use crate::message_fmt::msg_bytes;
 
-/// # Safety
-///
-/// `keys` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `mode` must be a well-formed API string: `size` readable
-/// bytes with a NUL at `data[size]`.
-pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
+pub fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) {
     let mut remap: bool = true;
     let mut insert: bool = false;
     let mut typed: bool = false;
@@ -101,22 +96,12 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
     }
 }
 
-/// # Safety
-///
-/// `keys` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer {
+pub fn nvim_input(channel_id: uint64_t, keys: String_0) -> Integer {
     may_trigger_vim_suspend_resume(false);
     unsafe { input_enqueue(channel_id, keys) as Integer }
 }
 
-/// # Safety
-///
-/// `button` must be a well-formed API string: `size` readable bytes with a
-/// NUL at `data[size]`. `action` must be a well-formed API string: `size`
-/// readable bytes with a NUL at `data[size]`. `modifier` must be a well-
-/// formed API string: `size` readable bytes with a NUL at `data[size]`.
-pub unsafe fn nvim_input_mouse(
+pub fn nvim_input_mouse(
     button: String_0,
     action: String_0,
     modifier: String_0,
@@ -203,11 +188,7 @@ pub unsafe fn nvim_input_mouse(
     ().reported(error)
 }
 
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_replace_termcodes(
+pub fn nvim_replace_termcodes(
     str: String_0,
     from_part: Boolean,
     do_lt: Boolean,
@@ -236,10 +217,7 @@ pub unsafe fn nvim_replace_termcodes(
     unsafe { cstr_to_string(ptr) }
 }
 
-/// # Safety
-/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_get_keymap(mode: String_0) -> Array {
+pub fn nvim_get_keymap(mode: String_0) -> Array {
     keymap_array(mode, None)
 }
 
@@ -262,17 +240,8 @@ pub unsafe fn nvim_set_keymap(
     unsafe { modify_keymap(channel_id, all_buffers, false, mode, lhs, rhs, opts) }
 }
 
-/// # Safety
-///
-/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `lhs` must be a well-formed API string: `size` readable
-/// bytes with a NUL at `data[size]`.
-pub unsafe fn nvim_del_keymap(
-    channel_id: uint64_t,
-    mode: String_0,
-    lhs: String_0,
-) -> Result<(), Error> {
-    unsafe { nvim_buf_del_keymap(channel_id, -1 as BufferHandle, mode, lhs) }
+pub fn nvim_del_keymap(channel_id: uint64_t, mode: String_0, lhs: String_0) -> Result<(), Error> {
+    nvim_buf_del_keymap(channel_id, -1 as BufferHandle, mode, lhs)
 }
 
 /// # Safety

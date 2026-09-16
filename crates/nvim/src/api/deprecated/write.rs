@@ -29,11 +29,7 @@ pub fn nvim_subscribe(_channel_id: uint64_t, _event: String_0) {}
 
 pub fn nvim_unsubscribe(_channel_id: uint64_t, _event: String_0) {}
 
-/// # Safety
-///
-/// `message` must be a well-formed API string: `size` readable bytes with a
-/// NUL at `data[size]`.
-unsafe fn write_msg(message: String_0, to_err: bool, writeln: bool) {
+fn write_msg(message: String_0, to_err: bool, writeln: bool) {
     static out_line_buf: GlobalCell<StringBuilder> = GlobalCell::new(StringBuilder {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -134,31 +130,16 @@ unsafe fn write_msg(message: String_0, to_err: bool, writeln: bool) {
     msg_end();
 }
 
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_out_write(str: String_0) {
-    // SAFETY: `str` is the caller's, live for the call.
-    unsafe { write_msg(str, false, false) };
+pub fn nvim_out_write(str: String_0) {
+    write_msg(str, false, false);
 }
 
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_err_write(str: String_0) {
-    // SAFETY: as `nvim_out_write`.
-    unsafe { write_msg(str, true, false) };
+pub fn nvim_err_write(str: String_0) {
+    write_msg(str, true, false);
 }
 
-/// # Safety
-///
-/// `str` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_err_writeln(str: String_0) {
-    // SAFETY: as `nvim_out_write`.
-    unsafe { write_msg(str, true, true) };
+pub fn nvim_err_writeln(str: String_0) {
+    write_msg(str, true, true);
 }
 
 /// # Safety

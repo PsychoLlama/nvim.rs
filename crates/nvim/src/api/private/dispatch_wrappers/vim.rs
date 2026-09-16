@@ -239,9 +239,7 @@ pub unsafe fn handle_nvim__id(
         return Err(wrong_arity(1, args.len()));
     }
     let arg_1 = args[0].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    Ok(unsafe { nvim__id(arg_1) })
+    Ok(nvim__id(arg_1))
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim__id_array`.
@@ -275,9 +273,7 @@ pub unsafe fn handle_nvim__id_array(
     let Some(arg_1) = as_array(args[0].take()) else {
         return Err(wrong_type(1, c"nvim__id_array", c"Array"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim__id_array(arg_1) };
+    let rv = nvim__id_array(arg_1);
     Ok(Object::array(rv))
 }
 
@@ -601,9 +597,7 @@ pub unsafe fn handle_nvim__unpack(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim__unpack", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim__unpack(arg_1) }
+    nvim__unpack(arg_1)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_chan_send`.
@@ -638,9 +632,7 @@ pub unsafe fn handle_nvim_chan_send(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_chan_send", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_chan_send(arg_1, arg_2) }?;
+    nvim_chan_send(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -746,9 +738,7 @@ pub unsafe fn handle_nvim_del_keymap(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_del_keymap", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_del_keymap(channel_id, arg_1, arg_2) }?;
+    nvim_del_keymap(channel_id, arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -781,9 +771,7 @@ pub unsafe fn handle_nvim_del_mark(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_del_mark", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_del_mark(arg_1) }?;
+    let rv = nvim_del_mark(arg_1)?;
     Ok(Object::Boolean(rv))
 }
 
@@ -816,9 +804,7 @@ pub unsafe fn handle_nvim_del_var(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_del_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_del_var(arg_1) }?;
+    nvim_del_var(arg_1)?;
     Ok(Object::Nil)
 }
 
@@ -953,4 +939,43 @@ pub unsafe fn handle_nvim_exec_lua(
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
     unsafe { nvim_exec_lua(arg_1, arg_2, arena) }
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_feedkeys`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
+pub unsafe fn handle_nvim_feedkeys(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: *mut Arena,
+) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_nvim_feedkeys",
+        c"nvim_feedkeys",
+        line!() as c_int,
+        channel_id,
+    );
+    if args.len() != 3 {
+        return Err(wrong_arity(3, args.len()));
+    }
+    let Some(arg_1) = as_string(args[0].take()) else {
+        return Err(wrong_type(1, c"nvim_feedkeys", c"String"));
+    };
+    let Some(arg_2) = as_string(args[1].take()) else {
+        return Err(wrong_type(2, c"nvim_feedkeys", c"String"));
+    };
+    let Some(arg_3) = as_boolean(args[2].take()) else {
+        return Err(wrong_type(3, c"nvim_feedkeys", c"Boolean"));
+    };
+    nvim_feedkeys(arg_1, arg_2, arg_3);
+    Ok(Object::Nil)
 }

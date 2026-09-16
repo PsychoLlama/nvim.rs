@@ -91,9 +91,7 @@ pub unsafe fn handle_nvim_buf_del_user_command(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_buf_del_user_command", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_buf_del_user_command(arg_1, arg_2) }?;
+    nvim_buf_del_user_command(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -268,9 +266,7 @@ pub unsafe fn handle_nvim_del_user_command(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_del_user_command", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_del_user_command(arg_1) }?;
+    nvim_del_user_command(arg_1)?;
     Ok(Object::Nil)
 }
 

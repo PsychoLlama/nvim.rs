@@ -406,9 +406,7 @@ pub unsafe fn handle_nvim_create_namespace(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_create_namespace", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_create_namespace(arg_1) };
+    let rv = nvim_create_namespace(arg_1);
     Ok(Object::Integer(rv))
 }
 

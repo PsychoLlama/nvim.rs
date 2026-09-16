@@ -30,15 +30,11 @@ pub unsafe fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict,
     hl_get_attr_by_id(Integer::from(attrcode), rgb)
 }
 
-/// # Safety
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_get_hl_by_name(name: String_0, rgb: Boolean) -> Result<ApiDict, Error> {
+pub fn nvim_get_hl_by_name(name: String_0, rgb: Boolean) -> Result<ApiDict, Error> {
     let error;
     // SAFETY: `name` is the caller's NUL-terminated group name.
     let id = unsafe { syn_name2id(name.data()) };
     if id == 0 {
-        // SAFETY: the caller's highlight name is NUL-terminated.
         error = err_bad_value(c"highlight name", name.as_cstr());
         return ApiDict::EMPTY.reported(error);
     }

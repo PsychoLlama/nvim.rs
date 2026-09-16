@@ -201,8 +201,6 @@ pub unsafe fn nvim_ui_attach(
     ui.packer.anydata = raw.cast();
 
     for option in &options {
-        // SAFETY: `raw` is live, and the value lives as long as the
-        // caller's dictionary.
         let name = String_0::from_bytes(option.key.bytes());
         let set = unsafe { ui_set_option(raw, true, name, option.value.clone()) };
         if let Err(e) = set {
@@ -356,15 +354,7 @@ pub fn nvim_ui_try_resize(channel_id: u64, width: Integer, height: Integer) -> R
 }
 
 /// Changes one negotiated option after attaching.
-///
-/// # Safety
-///
-/// `value` must stay valid for the duration.
-pub unsafe fn nvim_ui_set_option(
-    channel_id: u64,
-    name: String_0,
-    value: Object,
-) -> Result<(), Error> {
+pub fn nvim_ui_set_option(channel_id: u64, name: String_0, value: Object) -> Result<(), Error> {
     let ui = get_ui_or_err(channel_id)?;
     // SAFETY: the UI just looked up, and the caller's value.
     unsafe { ui_set_option(ui, false, name, value) }
@@ -420,7 +410,6 @@ unsafe fn ui_set_option(
         // side gets its own allocation, since both are freed separately.
         // SAFETY: `term` is the caller's string, live for the call.
         unsafe { set_tty_option(c"term", string_to_cstr(&term)) };
-        // SAFETY: as above.
         ui.term_name = string_to_cstr(&term);
         return Ok(());
     }
@@ -477,7 +466,6 @@ unsafe fn ui_set_option(
             continue;
         }
         let Some(active) = value.as_boolean() else {
-            // SAFETY: `name` is the caller's NUL-terminated option name.
             let name = name.as_cstr();
             return Err(wrong_type(name, kObjectTypeBoolean, value));
         };
@@ -494,7 +482,6 @@ unsafe fn ui_set_option(
         return Ok(());
     }
 
-    // SAFETY: the caller's option name is NUL-terminated.
     let unknown = name.as_cstr();
     Err(err_bad_value(c"UI option", unknown))
 }

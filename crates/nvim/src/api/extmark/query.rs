@@ -24,11 +24,7 @@ const DETAILS_KEYS: size_t = 36;
 ///
 /// A run of text-less chunks is the stack of highlights the chunk that ends
 /// it carries, so those become one array rather than chunks of their own.
-///
-/// # Safety
-///
-/// `vt` must be a well-formed chunk vector, its `size` items initialized.
-pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool) -> Array {
+pub fn virt_text_to_array(vt: VirtText, hl_name: bool) -> Array {
     // SAFETY: the caller's promise: `size` initialized chunks. An empty
     // vector has never allocated, so its `items` is null and Rust will not
     // make a slice over one.
@@ -85,17 +81,13 @@ fn extmark_to_array(extmark: MTPair, id: bool, add_dict: bool, hl_name: bool) ->
         let mut dict = ApiDict::with_capacity(DETAILS_KEYS);
         dict.insert(c"ns_id", Object::integer(start.ns as Integer));
         let d_right_gravity = Object::boolean(mt_right(start));
-        // SAFETY: the collection is this call's own.
         dict.insert(c"right_gravity", d_right_gravity);
         if mt_paired(start) {
             let d_end_row = Object::integer(extmark.end_pos.row as Integer);
-            // SAFETY: the collection is this call's own.
             dict.insert(c"end_row", d_end_row);
             let d_end_col = Object::integer(extmark.end_pos.col as Integer);
-            // SAFETY: the collection is this call's own.
             dict.insert(c"end_col", d_end_col);
             let gravity = Object::boolean(extmark.end_right_gravity);
-            // SAFETY: `dict` is this call's own.
             dict.insert(c"end_right_gravity", gravity);
         }
         if mt_no_undo(start) {

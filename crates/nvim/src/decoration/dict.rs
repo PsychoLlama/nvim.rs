@@ -74,7 +74,6 @@ const HL_MODE_STR: [&CStr; 4] = [c"", c"replace", c"combine", c"blend"];
 /// from `_arena` any more: the dictionary owns its entries. It is valid or
 /// null.
 pub unsafe fn decor_to_dict_legacy(dict: &mut ApiDict, decor: DecorInline, hl_name: bool) {
-    // SAFETY: the caller's decoration and dictionary.
     let mut sh_hl: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
     let mut sh_sign: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
     let mut virt_text: *mut DecorVirtText = ptr::null_mut();
@@ -167,14 +166,13 @@ pub unsafe fn decor_to_dict_legacy(dict: &mut ApiDict, decor: DecorInline, hl_na
 /// # Safety
 /// `vt` must be a live virtual *text* item, not a virtual-lines one.
 unsafe fn put_virt_text(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
-    // SAFETY: the caller's virtual text.
     if vt.hl_mode != 0 {
         let mode = HL_MODE_STR[vt.hl_mode as usize];
         let value = Object::string(String_0::from_cstr(mode));
         put(dict, c"hl_mode", value);
     }
 
-    let chunks = unsafe { virt_text_to_array(vt.data.text(), hl_name) };
+    let chunks = virt_text_to_array(vt.data.text(), hl_name);
     put(dict, c"virt_text", Object::array(chunks));
     let value = Object::boolean(vt.flags as c_int & kVTHide as c_int != 0);
     put(dict, c"virt_text_hide", value);
@@ -197,14 +195,13 @@ unsafe fn put_virt_text(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
 /// # Safety
 /// `vt` must be a live virtual *lines* item.
 unsafe fn put_virt_lines(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool) {
-    // SAFETY: the caller's virtual lines.
     let lines = vt.data.lines();
     let mut all_chunks: Array = Array::with_capacity(lines.size);
     let mut line_flags: c_int = 0;
     for i in 0..lines.size {
         let line = unsafe { *lines.items.add(i) };
         line_flags = line.flags;
-        let chunks = unsafe { virt_text_to_array(line.line, hl_name) };
+        let chunks = virt_text_to_array(line.line, hl_name);
         all_chunks.push(Object::array(chunks));
     }
 

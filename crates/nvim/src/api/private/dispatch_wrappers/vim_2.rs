@@ -8,47 +8,6 @@
 
 use super::*;
 
-/// The msgpack-RPC dispatch wrapper for `nvim_feedkeys`.
-///
-/// Decodes the argument array against the signature, answers `Err` if
-/// the arity or a type is wrong, and encodes the answer as an
-/// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_feedkeys(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: *mut Arena,
-) -> Result<Object, Error> {
-    let mut args = args;
-    log_invoke(
-        c"handle_nvim_feedkeys",
-        c"nvim_feedkeys",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 3 {
-        return Err(wrong_arity(3, args.len()));
-    }
-    let Some(arg_1) = as_string(args[0].take()) else {
-        return Err(wrong_type(1, c"nvim_feedkeys", c"String"));
-    };
-    let Some(arg_2) = as_string(args[1].take()) else {
-        return Err(wrong_type(2, c"nvim_feedkeys", c"String"));
-    };
-    let Some(arg_3) = as_boolean(args[2].take()) else {
-        return Err(wrong_type(3, c"nvim_feedkeys", c"Boolean"));
-    };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_feedkeys(arg_1, arg_2, arg_3) };
-    Ok(Object::Nil)
-}
-
 /// The msgpack-RPC dispatch wrapper for `nvim_get_api_info`.
 ///
 /// Decodes the argument array against the signature, answers `Err` if
@@ -144,9 +103,7 @@ pub unsafe fn handle_nvim_get_color_by_name(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_color_by_name", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_color_by_name(arg_1) };
+    let rv = nvim_get_color_by_name(arg_1);
     Ok(Object::Integer(rv))
 }
 
@@ -411,9 +368,7 @@ pub unsafe fn handle_nvim_get_hl_id_by_name(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_hl_id_by_name", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_hl_id_by_name(arg_1) };
+    let rv = nvim_get_hl_id_by_name(arg_1);
     Ok(Object::Integer(rv))
 }
 
@@ -486,9 +441,7 @@ pub unsafe fn handle_nvim_get_keymap(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_keymap", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_keymap(arg_1) };
+    let rv = nvim_get_keymap(arg_1);
     Ok(Object::array(rv))
 }
 
@@ -702,9 +655,7 @@ pub unsafe fn handle_nvim_get_var(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_get_var(arg_1) }
+    nvim_get_var(arg_1)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_get_vvar`.
@@ -736,9 +687,7 @@ pub unsafe fn handle_nvim_get_vvar(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_get_vvar", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_get_vvar(arg_1) }
+    nvim_get_vvar(arg_1)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_input`.
@@ -770,9 +719,7 @@ pub unsafe fn handle_nvim_input(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_input", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_input(channel_id, arg_1) };
+    let rv = nvim_input(channel_id, arg_1);
     Ok(Object::Integer(rv))
 }
 
@@ -820,9 +767,7 @@ pub unsafe fn handle_nvim_input_mouse(
     let Some(arg_6) = as_integer(args[5].take()) else {
         return Err(wrong_type(6, c"nvim_input_mouse", c"Integer"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_input_mouse(arg_1, arg_2, arg_3, arg_4, arg_5, arg_6) }?;
+    nvim_input_mouse(arg_1, arg_2, arg_3, arg_4, arg_5, arg_6)?;
     Ok(Object::Nil)
 }
 
@@ -978,5 +923,36 @@ pub unsafe fn handle_nvim_list_uis(
     // SAFETY: each argument was checked against the type the signature declares,
     // and `arena` is the dispatcher's own.
     let rv = unsafe { nvim_list_uis() };
+    Ok(Object::array(rv))
+}
+
+/// The msgpack-RPC dispatch wrapper for `nvim_list_wins`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+///
+/// # Safety
+/// The dispatcher's contract, which is what every `unsafe` below rests
+/// on: `arena` is the caller's own and live for the call. The argument
+/// array is this wrapper's: each value it uses is taken out of its slot
+/// and whatever is left drops with the array.
+pub unsafe fn handle_nvim_list_wins(
+    channel_id: uint64_t,
+    args: Array,
+    _arena: *mut Arena,
+) -> Result<Object, Error> {
+    log_invoke(
+        c"handle_nvim_list_wins",
+        c"nvim_list_wins",
+        line!() as c_int,
+        channel_id,
+    );
+    if !args.is_empty() {
+        return Err(wrong_arity(0, args.len()));
+    }
+    // SAFETY: each argument was checked against the type the signature declares,
+    // and `arena` is the dispatcher's own.
+    let rv = unsafe { nvim_list_wins() };
     Ok(Object::array(rv))
 }

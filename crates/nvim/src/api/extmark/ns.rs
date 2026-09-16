@@ -74,10 +74,7 @@ fn hide_ns_in_window(win: Win, ns_id: uint32_t) {
     unsafe { &mut (*win.raw()).w_ns_set }.remove(&ns_id);
 }
 
-/// # Safety
-/// `name` must be a live api string.
-pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
-    // SAFETY: the caller's api string.
+pub fn nvim_create_namespace(name: String_0) -> Integer {
     let bytes = name.as_bytes();
     if let Some(id) = namespace_id_for(bytes)
         && id > 0
@@ -106,7 +103,6 @@ pub unsafe fn nvim_get_namespaces() -> ApiDict {
             // truncated, as it was when the key was a `String_0`.
             let key = unsafe { crate::cstr::bytes_at(name.as_ptr().cast::<::core::ffi::c_char>()) };
             let value = Object::integer(*id as Integer);
-            // SAFETY: `retval` is this call's own dict.
             retval.insert(key, value);
         }
         retval

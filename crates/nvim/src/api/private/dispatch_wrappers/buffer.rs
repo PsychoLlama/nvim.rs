@@ -126,9 +126,7 @@ pub unsafe fn handle_nvim_buf_del_keymap(
     let Some(arg_3) = as_string(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_buf_del_keymap", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_buf_del_keymap(channel_id, arg_1, arg_2, arg_3) }?;
+    nvim_buf_del_keymap(channel_id, arg_1, arg_2, arg_3)?;
     Ok(Object::Nil)
 }
 
@@ -164,9 +162,7 @@ pub unsafe fn handle_nvim_buf_del_mark(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_buf_del_mark", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_del_mark(arg_1, arg_2) }?;
+    let rv = nvim_buf_del_mark(arg_1, arg_2)?;
     Ok(Object::Boolean(rv))
 }
 
@@ -202,9 +198,7 @@ pub unsafe fn handle_nvim_buf_del_var(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_buf_del_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_buf_del_var(arg_1, arg_2) }?;
+    nvim_buf_del_var(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -353,9 +347,7 @@ pub unsafe fn handle_nvim_buf_get_keymap(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_buf_get_keymap", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_keymap(arg_1, arg_2) }?;
+    let rv = nvim_buf_get_keymap(arg_1, arg_2)?;
     Ok(Object::array(rv))
 }
 
@@ -444,9 +436,7 @@ pub unsafe fn handle_nvim_buf_get_mark(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_buf_get_mark", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_buf_get_mark(arg_1, arg_2) }?;
+    let rv = nvim_buf_get_mark(arg_1, arg_2)?;
     Ok(Object::array(rv))
 }
 
@@ -617,9 +607,7 @@ pub unsafe fn handle_nvim_buf_get_var(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_buf_get_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_buf_get_var(arg_1, arg_2) }
+    nvim_buf_get_var(arg_1, arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_buf_is_loaded`.
@@ -907,9 +895,7 @@ pub unsafe fn handle_nvim_buf_set_name(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_buf_set_name", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_buf_set_name(arg_1, arg_2) }?;
+    nvim_buf_set_name(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 

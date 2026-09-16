@@ -249,9 +249,7 @@ pub unsafe fn handle_nvim_ui_set_option(
         return Err(wrong_type(1, c"nvim_ui_set_option", c"String"));
     };
     let arg_2 = args[1].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_ui_set_option(channel_id, arg_1, arg_2) }?;
+    nvim_ui_set_option(channel_id, arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 

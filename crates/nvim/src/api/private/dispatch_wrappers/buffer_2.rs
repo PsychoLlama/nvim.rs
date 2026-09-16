@@ -41,8 +41,6 @@ pub unsafe fn handle_nvim_buf_set_var(
         return Err(wrong_type(2, c"nvim_buf_set_var", c"String"));
     };
     let arg_3 = args[2].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_buf_set_var(arg_1, arg_2, arg_3) }?;
+    nvim_buf_set_var(arg_1, arg_2, arg_3)?;
     Ok(Object::Nil)
 }

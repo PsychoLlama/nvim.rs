@@ -148,15 +148,14 @@ unsafe fn prepare_cmd(
     cmdinfo: &mut CmdParseInfo,
     cmdline: &mut *mut c_char,
 ) -> Result<bool, Error> {
-    // SAFETY (all): the keyset and the command the caller was handed.
-    let Some(range_only) = unsafe { resolve_command(cmd, excmd) }? else {
+    let Some(range_only) = resolve_command(cmd, excmd)? else {
         return Ok(false);
     };
 
     let mut args = EMPTY_ARRAY;
     let mut count_from_first_arg = false;
     if let Some(given) = cmd.args.as_ref() {
-        count_from_first_arg = unsafe { collect_args(given, excmd, &mut args) }?;
+        count_from_first_arg = collect_args(given, excmd, &mut args)?;
     }
 
     if !range_only {
@@ -196,11 +195,7 @@ unsafe fn prepare_cmd(
 /// `Ok(Some(range_only))` on success -- a "range only" command such as `:1`
 /// has no name at all. `Ok(None)` means stop with nothing executed, per
 /// [`prepare_cmd`].
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-unsafe fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>, Error> {
+fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>, Error> {
     let Some(name) = cmd.cmd.as_ref() else {
         return Err(err_required(c"cmd"));
     };
@@ -302,11 +297,7 @@ unsafe fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option
 /// from, and check the count against `argt`.
 ///
 /// `Ok(true)` means the one argument was consumed as the command's count.
-///
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-unsafe fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bool, Error> {
+fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bool, Error> {
     // For a command that takes a count but no regular arguments, a lone
     // numeric argument *is* the count.
     if given.len() == 1 && excmd.argt.has(ExArgt::COUNT) && !excmd.argt.has(ExArgt::EXTRA) {
@@ -399,7 +390,6 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
 
         excmd.addr_count = range.len() as c_int;
         for i in 0..range.len() {
-            // SAFETY: `i` is in bounds.
             let bound = &range[i];
             if bound.as_integer().is_none_or(|n| n < 0) {
                 return Err(err_expected_at(
@@ -411,7 +401,6 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
         }
         // One element gives both bounds.
         if !range.is_empty() {
-            // SAFETY: both indices are in bounds.
             let last_idx = range.len() - 1;
             let (first, last) = (&range[0], &range[last_idx]);
             // Every item is an Integer, checked above.
@@ -423,7 +412,6 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
             excmd.line1 = first as LineNr;
             excmd.line2 = last as LineNr;
         }
-        // SAFETY: `excmd` is resolved.
         if invalid_range(excmd).is_some() {
             return Err(err_bad_value(c"range", c""));
         }
@@ -431,11 +419,8 @@ fn apply_range(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<(), Error> {
 
     if excmd.addr_count == 0 {
         if excmd.argt.has(ExArgt::DFLALL) {
-            // SAFETY: `excmd` is resolved; both entry points read it and the
-            // editor globals, per the module contract.
             set_cmd_dflall_range(excmd);
         } else {
-            // SAFETY: as above.
             excmd.line2 = get_cmd_default_range(excmd);
             excmd.line1 = excmd.line2;
             if excmd.addr_type == CmdAddr::Other {
@@ -470,8 +455,6 @@ fn apply_count(
             ptr::null(),
         ));
     }
-    // SAFETY: `excmd` is resolved; `set_cmd_count` only writes its address
-    // fields.
     set_cmd_count(excmd, count as LineNr, true);
     Ok(())
 }
@@ -662,8 +645,6 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Resu
     // A bare `filter!` with an empty pattern still inverts the match.
     // SAFETY: `pattern` is a NUL-terminated keydict String.
     if unsafe { *pattern.data() } as c_int != NUL || cmdinfo.cmdmod.cmod_filter_force {
-        // SAFETY: the pattern outlives the compiled program, which
-        // `undo_cmdmod` frees.
         let pat = string_to_cstr(pattern);
         cmdinfo.cmdmod.cmod_filter_pat = pat;
         // SAFETY: as above.
@@ -687,7 +668,6 @@ fn apply_argopt(excmd: &mut ExArg) -> Result<(), Error> {
             return Ok(());
         }
         let orig_arg = excmd.arg;
-        // SAFETY: as above.
         if getargopt(excmd).is_err() && !is_cmd_ni(excmd.cmdidx) {
             return Err(err_invalid_at(c"argument ", orig_arg));
         }

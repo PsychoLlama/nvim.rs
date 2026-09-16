@@ -113,8 +113,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_del_var(lstate: *mut lua_State
         let arg_1 = unsafe { nlua_pop_handle(lstate, arena) }
             .inspect_err(|_| *err_param = c"win".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_win_del_var(arg_1, arg_2) }?;
+        nvim_win_del_var(arg_1, arg_2)?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -334,8 +333,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_get_var(lstate: *mut lua_State
         let arg_1 = unsafe { nlua_pop_handle(lstate, arena) }
             .inspect_err(|_| *err_param = c"win".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        let mut ret = unsafe { nvim_win_get_var(arg_1, arg_2) }?;
+        let mut ret = nvim_win_get_var(arg_1, arg_2)?;
         // SAFETY: as above.
         unsafe { nlua_push_object(lstate, &raw mut ret, PUSH_SPECIAL) };
         Ok(())
@@ -498,8 +496,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_cursor(lstate: *mut lua_St
         let arg_1 = unsafe { nlua_pop_handle(lstate, arena) }
             .inspect_err(|_| *err_param = c"win".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_win_set_cursor(arg_1, arg_2) }?;
+        nvim_win_set_cursor(arg_1, arg_2)?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.
@@ -598,8 +595,7 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim_win_set_var(lstate: *mut lua_State
         let arg_1 = unsafe { nlua_pop_handle(lstate, arena) }
             .inspect_err(|_| *err_param = c"win".as_ptr().cast_mut())?;
         let _lstate = Restore::of(&active_lstate, lstate);
-        // SAFETY: as above; the arguments are this binding's own.
-        unsafe { nvim_win_set_var(arg_1, arg_2, arg_3) }?;
+        nvim_win_set_var(arg_1, arg_2, arg_3)?;
         Ok(())
     }
     // SAFETY: `lstate` is the state Lua called this binding on.

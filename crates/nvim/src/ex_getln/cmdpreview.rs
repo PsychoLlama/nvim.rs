@@ -218,7 +218,6 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
             kv_push!(cpinfo.buf_info, cp_bufinfo);
             saved_bufs.insert(buf.raw());
 
-            // SAFETY: `buf` is a live buffer of the current tab page.
             u_clearall(buf);
             // Make sure every change can be undone.
             buf.b_p_ul = INT_MAX as OptInt;
@@ -253,7 +252,6 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
     cmdmod_set_tab(0);
     cmdmod_add_flags(CmdModFlags::NOSWAPFILE);
 
-    // SAFETY: syncing undo needs only a live editor.
     u_sync(true);
 }
 
@@ -287,7 +285,6 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             // paired with the `restbuf` that follows it.
             unsafe { aucmd_prepbuf(&raw mut aco, buf) };
             if Buf::current().b_u_synced as ::core::ffi::c_int == 0 {
-                // SAFETY: syncing undo needs only a live editor.
                 u_sync(true);
             }
             // SAFETY: undoing `count` states of the buffer just entered.
@@ -299,14 +296,12 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             unsafe { aucmd_restbuf(&raw mut aco) };
         }
 
-        // SAFETY: `buf` is live, and its undo state is its own.
         u_blockfree(buf);
         cmdpreview_restore_undo(&cp_bufinfo.undo_info, buf);
 
         buf.b_op_start = cp_bufinfo.save_b_op_start;
         buf.b_op_end = cp_bufinfo.save_b_op_end;
 
-        // SAFETY: the changed-tick lives in `buf`'s own variable dictionary.
         let tick = buf_get_changedtick(buf);
         if cp_bufinfo.save_changedtick != tick {
             buf_set_changedtick(buf, cp_bufinfo.save_changedtick);
@@ -328,7 +323,6 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
         restore_viewstate(win, cp_wininfo.save_viewstate);
         win.w_onebuf_opt.wo_cul = cp_wininfo.save_w_p_cul;
         win.w_onebuf_opt.wo_cuc = cp_wininfo.save_w_p_cuc;
-        // SAFETY: `win` is live.
         update_topline(win);
         i += 1;
     }
@@ -423,8 +417,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         }
         // Set up the preview namespace if it is not already set.
         if cmdpreview_ns.get() == 0 {
-            cmdpreview_ns
-                .set(unsafe { nvim_create_namespace(String_0::NULL) } as ::core::ffi::c_int);
+            cmdpreview_ns.set(nvim_create_namespace(String_0::NULL) as ::core::ffi::c_int);
         }
 
         cmdpreview.set(true);

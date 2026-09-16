@@ -179,10 +179,7 @@ fn style_slots(style: &BorderStyle) -> Slots {
 }
 
 /// One entry of a `border = { ... }` array: a cell and its highlight group.
-///
-/// # Safety
-/// `item` must be a live API object.
-unsafe fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
+fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
     if let Object::Array(arr) = item {
         if arr.is_empty() || arr.len() > 2 {
             return Err(err_border(c"1 or 2-item Array", None));
@@ -208,10 +205,7 @@ unsafe fn parse_border_item(item: &Object) -> Result<(String_0, c_int), Error> {
 }
 
 /// A `String_0` as one border cell, truncated to what a slot holds.
-///
-/// # Safety
-/// `string` must be a live API string.
-unsafe fn cell_of(string: String_0) -> BorderChar {
+fn cell_of(string: String_0) -> BorderChar {
     let mut out = BLANK_CHAR;
     let len = string.len().min(MAX_SCHAR_SIZE as usize - 1);
     if len != 0 {
@@ -232,10 +226,7 @@ type Slots = ([BorderChar; 8], [c_int; 8]);
 /// The "corner char between edge chars" complaint is raised only after the
 /// slots are filled, as upstream does; every caller discards the whole config
 /// on a refusal, so what it filled in never reaches the window.
-///
-/// # Safety
-/// `arr` must be a live API array.
-unsafe fn parse_border_array(arr: &Array) -> Result<Slots, Error> {
+fn parse_border_array(arr: &Array) -> Result<Slots, Error> {
     let size = arr.len();
     if size == 0 || size > 8 || !size.is_power_of_two() {
         return Err(err_border(c"1, 2, 4, or 8 chars", None));
@@ -244,16 +235,13 @@ unsafe fn parse_border_array(arr: &Array) -> Result<Slots, Error> {
     let mut chars = [BLANK_CHAR; 8];
     let mut hl_ids = [0 as c_int; 8];
     for i in 0..size {
-        // SAFETY: `i` is below the array's own size.
         let item = &arr[i];
-        // SAFETY: an item of a live array.
-        let (string, hl_id) = unsafe { parse_border_item(item) }?;
+        let (string, hl_id) = parse_border_item(item)?;
         // SAFETY: a live API string.
         if !string.is_empty() && unsafe { mb_string2cells_len(string.data(), string.len()) } > 1 {
             return Err(err_border(c"only one-cell chars", None));
         }
-        // SAFETY: as above.
-        chars[i] = unsafe { cell_of(string) };
+        chars[i] = cell_of(string);
         hl_ids[i] = hl_id;
     }
 
@@ -293,8 +281,7 @@ pub unsafe fn parse_border_style(style: &Object, fconfig: *mut WinConfig) -> Res
     cfg.border = true;
 
     let slots = if let Some(array) = style.as_array() {
-        // SAFETY: the caller's live array.
-        Some(unsafe { parse_border_array(array) }?)
+        Some(parse_border_array(array)?)
     } else if let Some(str) = style.as_string() {
         if str.is_empty() || str.as_cstr() == BORDER_NONE {
             // Border text does not work without a border.
@@ -305,7 +292,6 @@ pub unsafe fn parse_border_style(style: &Object, fconfig: *mut WinConfig) -> Res
         }
         // SAFETY: as above.
         let Some(style) = (unsafe { find_style(str.data()) }) else {
-            // SAFETY: the keyset's string is NUL-terminated.
             return Err(err_bad_value(c"border", str.as_cstr()));
         };
         Some(style_slots(style))
@@ -389,7 +375,6 @@ unsafe fn border_cell_list(border_opt: *mut c_char) -> Option<Array> {
         let empty =
             full || unsafe { copy_option_part(next, into, room, comma) } == 0 || part[0] == 0;
         if empty {
-            // SAFETY: the array holds only strings this loop allocated.
             drop(cells);
             return None;
         }
@@ -401,7 +386,6 @@ unsafe fn border_cell_list(border_opt: *mut c_char) -> Option<Array> {
         };
     }
     if cells.len() != 8 {
-        // SAFETY: as above.
         drop(cells);
         return None;
     }

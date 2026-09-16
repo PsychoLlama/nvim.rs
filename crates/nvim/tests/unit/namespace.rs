@@ -32,20 +32,17 @@ unsafe fn namespace_names() -> Vec<Vec<u8>> {
 #[test]
 fn a_name_keeps_its_id() {
     let _sandbox = Sandbox::globals();
-    // SAFETY: the sandbox holds the editor lock, and the names are live.
-    unsafe {
-        let first = nvim_create_namespace(String_0::from_cstr(c"unit-keeps-1"));
-        let second = nvim_create_namespace(String_0::from_cstr(c"unit-keeps-2"));
-        assert!(first > 0 && second > first);
-        assert_eq!(
-            nvim_create_namespace(String_0::from_cstr(c"unit-keeps-1")),
-            first
-        );
-        // An empty name is never interned: every call is a fresh id.
-        let anon = nvim_create_namespace(String_0::NULL);
-        assert!(anon > second);
-        assert!(nvim_create_namespace(String_0::NULL) > anon);
-    }
+    let first = nvim_create_namespace(String_0::from_cstr(c"unit-keeps-1"));
+    let second = nvim_create_namespace(String_0::from_cstr(c"unit-keeps-2"));
+    assert!(first > 0 && second > first);
+    assert_eq!(
+        nvim_create_namespace(String_0::from_cstr(c"unit-keeps-1")),
+        first
+    );
+    // An empty name is never interned: every call is a fresh id.
+    let anon = nvim_create_namespace(String_0::NULL);
+    assert!(anon > second);
+    assert!(nvim_create_namespace(String_0::NULL) > anon);
 }
 
 /// The listing order is creation order — the khash property this table's
@@ -76,8 +73,7 @@ fn namespaces_are_listed_in_creation_order() {
 #[test]
 fn describe_ns_answers_the_interned_name() {
     let _editor = editor_lock();
-    // SAFETY: the lock is held; the name is live for the call.
-    let id = unsafe { nvim_create_namespace(String_0::from_cstr(c"unit-describe")) };
+    let id = nvim_create_namespace(String_0::from_cstr(c"unit-describe"));
     let name = describe_ns(id.try_into().unwrap(), c"(none)".as_ptr());
     // SAFETY: the answer points into the table's own key, which is a `Box`
     // the table never moves and never frees.

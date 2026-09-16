@@ -81,8 +81,7 @@ pub unsafe fn nvim_eval_statusline(
         text: [0; 2],
         hl_id: 0,
     }; SIGN_SHOW_MAX as usize];
-    // SAFETY: the editor's own window list.
-    let ctx = unsafe { Context::of(opts, &mut statuscol, &mut sattrs) }?;
+    let ctx = Context::of(opts, &mut statuscol, &mut sattrs)?;
 
     // SAFETY: an arena the caller owns, whose allocations outlive the reply.
     let (mut result, buf) = unsafe {
@@ -143,10 +142,7 @@ pub unsafe fn nvim_eval_statusline(
 impl Context {
     /// Validate the options and settle the window, the fill character and
     /// the width.
-    ///
-    /// # Safety
-    /// `statuscol`/`sattrs` must outlive the expansion.
-    unsafe fn of(
+    fn of(
         opts: &KeyDict_eval_statusline,
         statuscol: &mut StatusCol,
         sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
@@ -204,9 +200,7 @@ impl Context {
 
         let (mut stc_hl_id, mut scl_hl_id) = (0, 0);
         if statuscol_lnum != 0 {
-            // SAFETY: a live window and a line of its buffer.
-            (stc_hl_id, scl_hl_id) =
-                unsafe { statuscol_state(win, statuscol_lnum, statuscol, sattrs) };
+            (stc_hl_id, scl_hl_id) = statuscol_state(win, statuscol_lnum, statuscol, sattrs);
         } else if fillchar == 0 && !use_tabline {
             fillchar = if use_winbar {
                 win.w_p_fcs_chars.wbr
@@ -242,11 +236,7 @@ impl Context {
 ///
 /// Answers the group the column defaults to and the one a `%s` item
 /// combines with.
-///
-/// # Safety
-/// `win` must be live, `lnum` one of its buffer's lines, and `statuscol`
-/// and `sattrs` must outlive the expansion.
-unsafe fn statuscol_state(
+fn statuscol_state(
     win: Win,
     lnum: c_int,
     statuscol: &mut StatusCol,

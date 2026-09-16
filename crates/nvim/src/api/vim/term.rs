@@ -153,11 +153,7 @@ unsafe fn term_close(data: *mut ::core::ffi::c_void) {
     unsafe { channel_decref(chan) };
 }
 
-/// # Safety
-///
-/// `data` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
+pub fn nvim_chan_send(chan: Integer, data: String_0) -> Result<(), Error> {
     let mut slot = Error::none();
     let mut error: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
     if data.is_empty() {

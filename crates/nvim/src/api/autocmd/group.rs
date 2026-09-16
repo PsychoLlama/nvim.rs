@@ -77,11 +77,7 @@ pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     Ok(())
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
+pub fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<Exception>(),
         private_msg_list: ::core::ptr::null_mut::<MsgList>(),
@@ -99,9 +95,7 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
 
 /// The group a `group` key names: absent is the default group, a String is
 /// looked up by name and an Integer is checked for existence.
-pub(crate) unsafe fn get_augroup_from_object(
-    group: Option<&Object>,
-) -> Result<::core::ffi::c_int, Error> {
+pub(crate) fn get_augroup_from_object(group: Option<&Object>) -> Result<::core::ffi::c_int, Error> {
     let au_group: ::core::ffi::c_int;
     let name: *mut ::core::ffi::c_char;
     let Some(group) = group.filter(|group| !group.is_nil()) else {
@@ -112,7 +106,6 @@ pub(crate) unsafe fn get_augroup_from_object(
         Object::String(s) => {
             au_group = unsafe { augroup_find(s.data()) };
             if !(au_group != AUGROUP_ERROR as ::core::ffi::c_int) {
-                // SAFETY: the string's bytes outlive this call.
                 let name = s.as_cstr();
                 return Err(err_bad_value(c"group", name));
             }

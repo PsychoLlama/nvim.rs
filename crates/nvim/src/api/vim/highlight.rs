@@ -13,11 +13,7 @@ use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
+pub fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
     unsafe { syn_check_group(name.data(), name.len()) as Integer }
 }
 
@@ -46,7 +42,6 @@ pub unsafe fn nvim_set_hl(
 ) -> Result<(), Error> {
     let hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
     if !(hl_id != 0 as ::core::ffi::c_int) {
-        // SAFETY: the caller's highlight name is NUL-terminated.
         return Err(err_bad_value(c"highlight name", name.as_cstr()));
     }
     let mut link_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
@@ -98,11 +93,7 @@ pub fn nvim_set_hl_ns_fast(ns_id: Integer) {
     hl_check_ns();
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
+pub fn nvim_get_color_by_name(name: String_0) -> Integer {
     // An API string is NUL-terminated.
     name_to_color(unsafe { ::core::ffi::CStr::from_ptr(name.data()) }).0 as Integer
 }

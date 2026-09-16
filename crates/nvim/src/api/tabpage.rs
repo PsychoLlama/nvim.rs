@@ -46,8 +46,6 @@ pub unsafe fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Er
     // Counted first, because the arena block has to be sized before it is
     // filled and `array_add` asserts against its capacity.
     let n = windows_in_tab(tab).count() as size_t;
-    // SAFETY: `arena` is the caller's, and `rv` is the block it just handed
-    // back, sized for exactly the windows appended below.
     rv = Array::with_capacity(n);
     for wp in windows_in_tab(tab) {
         rv.push(Object::window(wp.handle));
@@ -56,13 +54,7 @@ pub unsafe fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Er
 }
 
 /// The tab-scoped variable `name`.
-///
-/// # Safety
-/// `name` must point at its own bytes.
-pub unsafe fn nvim_tabpage_get_var(
-    tabpage: TabpageHandle,
-    name: String_0,
-) -> Result<Object, Error> {
+pub fn nvim_tabpage_get_var(tabpage: TabpageHandle, name: String_0) -> Result<Object, Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
@@ -72,10 +64,7 @@ pub unsafe fn nvim_tabpage_get_var(
 }
 
 /// Set the tab-scoped variable `name`.
-///
-/// # Safety
-/// `name` and `value` must own their bytes: the store takes them over.
-pub unsafe fn nvim_tabpage_set_var(
+pub fn nvim_tabpage_set_var(
     tabpage: TabpageHandle,
     name: String_0,
     value: Object,
@@ -83,21 +72,15 @@ pub unsafe fn nvim_tabpage_set_var(
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
-    // SAFETY: as `nvim_tabpage_get_var`; `value` is the caller's and the
-    // store takes it over.
     let vars = tab.tp_vars;
     unsafe { dict_set_var(vars, &name, value, false, false) }.map(|_| ())
 }
 
 /// Remove the tab-scoped variable `name`.
-///
-/// # Safety
-/// `name` must point at its own bytes.
-pub unsafe fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<(), Error> {
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
-    // SAFETY: as `nvim_tabpage_set_var`, with the deleting flag set.
     let vars = tab.tp_vars;
     unsafe { dict_set_var(vars, &name, Object::Nil, true, false) }.map(|_| ())
 }
@@ -130,7 +113,6 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
     let Some(wp) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    // SAFETY: both handles named a live object, which is all these ask.
     if !tabpage_win_valid(tp, wp.id()) {
         let handle = tp.handle;
         return Err(api_error!(

@@ -48,11 +48,7 @@ pub unsafe fn nvim__exec_lua_fast(
     unsafe { nvim_exec_lua(code, args, arena) }
 }
 
-/// # Safety
-///
-/// `text` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
+pub fn nvim_strwidth(text: String_0) -> Result<Integer, Error> {
     if text.len() > ::core::ffi::c_int::MAX as size_t {
         return Err(too_long(c"text length"));
     }
@@ -180,8 +176,6 @@ pub unsafe fn nvim__get_runtime(
     let res: Array = runtime_get_named(is_lua, &pat, all);
     if should_source {
         for i in 0..res.len() {
-            // SAFETY: `res` is the array `runtime_get_named` just built, of
-            // `size` Strings.
             let name = &res[i]
                 .as_string()
                 .expect("`runtime_get_named` answers an array of Strings");
@@ -198,11 +192,7 @@ fn too_long(name: &CStr) -> Error {
     err_bad_value(name, c"(too long)")
 }
 
-/// # Safety
-///
-/// `dir` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
+pub fn nvim_set_current_dir(dir: String_0) -> Result<(), Error> {
     let error = Error::none();
     if dir.len() >= 4096 as size_t {
         return Err(too_long(c"directory name"));

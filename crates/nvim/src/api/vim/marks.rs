@@ -24,42 +24,29 @@ use core::ffi::{CStr, c_char, c_int};
 /// uppercase letter, or a digit for one of the numbered file marks.
 ///
 /// Refuses when it is neither, or is not one character.
-///
-/// # Safety
-/// `name` must name its own bytes.
-unsafe fn global_mark_name(name: &String_0) -> Result<c_char, Error> {
+fn global_mark_name(name: &String_0) -> Result<c_char, Error> {
     if name.len() != 1 {
-        // SAFETY: the caller's promise about `name`.
-        return Err(unsafe { reject(c"mark name (must be a single char)", name.clone()) });
+        return Err(reject(c"mark name (must be a single char)", name.clone()));
     }
     // SAFETY: the caller's promise -- `name` has the one byte read here.
     let mark = unsafe { *name.data() };
     if !(mark.cast_unsigned().is_ascii_uppercase() || ascii_isdigit(c_int::from(mark))) {
-        // SAFETY: as above.
-        return Err(unsafe { reject(c"mark name (must be file/uppercase)", name.clone()) });
+        return Err(reject(c"mark name (must be file/uppercase)", name.clone()));
     }
     Ok(mark)
 }
 
 /// "Invalid `what`: '`name`'".
-///
-/// # Safety
-/// `name` must be NUL-terminated.
-unsafe fn reject(what: &CStr, name: String_0) -> Error {
+fn reject(what: &CStr, name: String_0) -> Error {
     let (what, got) = (what.as_ptr(), name.data());
     // SAFETY: the names and values are NUL-terminated strings.
     err_bad_value(unsafe { cstr::at(what) }, unsafe { cstr::at(got) })
 }
 
 /// Remove the global mark `name`.
-///
-/// # Safety
-/// `name` must name its own bytes.
-pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
-    // SAFETY: `name` is the caller's.
-    unsafe { global_mark_name(&name) }?;
-    // SAFETY: a global mark takes no buffer.
-    unsafe { set_mark(None, name, 0, 0) }?;
+pub fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
+    global_mark_name(&name)?;
+    set_mark(None, name, 0, 0)?;
     Ok(true)
 }
 
@@ -71,8 +58,7 @@ pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
 /// # Safety
 /// `name` must name its own bytes and `arena` must be the caller's.
 pub unsafe fn nvim_get_mark(name: String_0, _opts: *mut KeyDict_empty) -> Result<Array, Error> {
-    // SAFETY: `name` is the caller's.
-    let mark = unsafe { global_mark_name(&name) }?;
+    let mark = global_mark_name(&name)?;
     // SAFETY: `mark_get_global` answers a live global mark for every name
     // this one accepts -- the slot exists whether or not it is set.
     let (pos, fnum, fname) = unsafe {
@@ -106,7 +92,6 @@ pub unsafe fn nvim_get_mark(name: String_0, _opts: *mut KeyDict_empty) -> Result
     // SAFETY: `filename` is NUL-terminated and `arena` is the caller's, so
     // the copy outlives the answer.
     let path = unsafe { Object::string(cstr_to_string(filename)) };
-    // SAFETY: `rv` is the four-slot block the arena just handed back.
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
     rv.push(Object::integer(Integer::from(bufnr)));

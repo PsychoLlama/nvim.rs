@@ -8,37 +8,6 @@
 
 use super::*;
 
-/// The msgpack-RPC dispatch wrapper for `nvim_list_wins`.
-///
-/// Decodes the argument array against the signature, answers `Err` if
-/// the arity or a type is wrong, and encodes the answer as an
-/// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_list_wins(
-    channel_id: uint64_t,
-    args: Array,
-    _arena: *mut Arena,
-) -> Result<Object, Error> {
-    log_invoke(
-        c"handle_nvim_list_wins",
-        c"nvim_list_wins",
-        line!() as c_int,
-        channel_id,
-    );
-    if !args.is_empty() {
-        return Err(wrong_arity(0, args.len()));
-    }
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_list_wins() };
-    Ok(Object::array(rv))
-}
-
 /// The msgpack-RPC dispatch wrapper for `nvim_load_context`.
 ///
 /// Decodes the argument array against the signature, answers `Err` if
@@ -248,9 +217,7 @@ pub unsafe fn handle_nvim_replace_termcodes(
     let Some(arg_4) = as_boolean(args[3].take()) else {
         return Err(wrong_type(4, c"nvim_replace_termcodes", c"Boolean"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_replace_termcodes(arg_1, arg_2, arg_3, arg_4) };
+    let rv = nvim_replace_termcodes(arg_1, arg_2, arg_3, arg_4);
     Ok(Object::string(rv))
 }
 
@@ -348,9 +315,7 @@ pub unsafe fn handle_nvim_set_client_info(
     let Some(arg_5) = as_dict(args[4].take()) else {
         return Err(wrong_type(5, c"nvim_set_client_info", c"Dict"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_set_client_info(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5) };
+    nvim_set_client_info(channel_id, arg_1, arg_2, arg_3, arg_4, arg_5);
     Ok(Object::Nil)
 }
 
@@ -420,9 +385,7 @@ pub unsafe fn handle_nvim_set_current_dir(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_set_current_dir", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_set_current_dir(arg_1) }?;
+    nvim_set_current_dir(arg_1)?;
     Ok(Object::Nil)
 }
 
@@ -729,9 +692,7 @@ pub unsafe fn handle_nvim_set_var(
         return Err(wrong_type(1, c"nvim_set_var", c"String"));
     };
     let arg_2 = args[1].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_set_var(arg_1, arg_2) }?;
+    nvim_set_var(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -765,9 +726,7 @@ pub unsafe fn handle_nvim_set_vvar(
         return Err(wrong_type(1, c"nvim_set_vvar", c"String"));
     };
     let arg_2 = args[1].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_set_vvar(arg_1, arg_2) }?;
+    nvim_set_vvar(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -800,8 +759,6 @@ pub unsafe fn handle_nvim_strwidth(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_strwidth", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_strwidth(arg_1) }?;
+    let rv = nvim_strwidth(arg_1)?;
     Ok(Object::Integer(rv))
 }

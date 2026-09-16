@@ -31,18 +31,13 @@ struct ConvFrame {
     ret_node_p: *mut Object,
 }
 
-/// # Safety
-/// `expr` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `flags` must be a well-formed API string: `size` readable
-/// bytes with a NUL at `data[size]`.
-pub unsafe fn nvim_parse_expression(
+pub fn nvim_parse_expression(
     expr: String_0,
     flags: String_0,
     hl: Boolean,
 ) -> Result<ApiDict, Error> {
     let error = Error::none();
-    // SAFETY: `flags` is the caller's string.
-    let pflags = unsafe { parse_flags(flags) }?;
+    let pflags = parse_flags(flags)?;
 
     let mut parser_lines: [ParserLine; 2] = [
         ParserLine {
@@ -97,7 +92,6 @@ pub unsafe fn nvim_parse_expression(
     // Every container here is sized for exactly the pairs that follow, so
     // the one promise `dict_put`/`array_add` ask for is this function's own
     // invariant -- stated here once rather than at every call site.
-    // SAFETY: as above.
     ret.insert(c"len", Object::integer(consumed as Integer));
 
     if !east.err.msg.is_null() {
@@ -129,7 +123,6 @@ pub unsafe fn nvim_parse_expression(
                 hl_arr.push(Object::array(chunk_arr));
             }
         }
-        // SAFETY: as above.
         ret.insert(c"highlight", Object::array(hl_arr));
     }
     // The vector `colors` describes is either its inline array or one heap
@@ -148,7 +141,6 @@ pub unsafe fn nvim_parse_expression(
     // SAFETY: `east.root` and `ast` are this frame's, and `arena` the
     // caller's.
     unsafe { convert_ast(&raw mut east.root, &raw mut ast) };
-    // SAFETY: as above.
     ret.insert(c"ast", ast);
     debug_assert!(ret.len() == ret.capacity(), "ret.len() == ret.capacity()");
 
@@ -160,10 +152,7 @@ pub unsafe fn nvim_parse_expression(
 }
 
 /// The `flags` argument as `ExprParserFlags`, or which character was not one.
-///
-/// # Safety
-/// `flags` must name its own bytes.
-unsafe fn parse_flags(flags: String_0) -> Result<c_int, Error> {
+fn parse_flags(flags: String_0) -> Result<c_int, Error> {
     let mut pflags: c_int = 0;
     for i in 0..flags.len() {
         // SAFETY: `i` is below `len`, so the byte is inside the string.
@@ -241,8 +230,6 @@ unsafe fn convert_ast(root_p: *mut *mut ExprASTNode, out: *mut Object) {
             // SAFETY: `children` is the first of them.
             let num_children = 1 + size_t::from(!unsafe { (*children).next }.is_null());
             let mut children_array: Array = Array::with_capacity(num_children);
-            // SAFETY: the array was sized for exactly these pushes, and the
-            // dictionary for this pair.
             for _ in 0..num_children {
                 children_array.push(Object::Nil);
             }
@@ -323,7 +310,6 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
     // here, which is the one promise `dict_put` asks for -- stated once
     // rather than at each of the fifteen call sites below.
     let put = |dict: &mut ApiDict, key: &'static CStr, value: Object| {
-        // SAFETY: as above.
         dict.insert(key, value);
     };
     // The three name tables hold static C strings.
@@ -343,7 +329,6 @@ unsafe fn finish_node(node: *mut ExprASTNode, ret_node: &mut ApiDict) {
     put(ret_node, c"type", table_name(type_name));
 
     let mut start_array: Array = Array::with_capacity(2);
-    // SAFETY: the array was sized for exactly these two pushes.
     start_array.push(Object::integer(node.start.line as Integer));
     start_array.push(Object::integer(node.start.col as Integer));
     put(ret_node, c"start", Object::array(start_array));

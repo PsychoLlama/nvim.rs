@@ -27,8 +27,7 @@ pub fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
 /// caller passed and answering the reserved "no namespace" id for a negative.
 fn src2ns(src_id: &mut Integer) -> uint32_t {
     if *src_id == 0 {
-        // SAFETY: the null string names no namespace, so nothing is read.
-        *src_id = unsafe { nvim_create_namespace(String_0::NULL) };
+        *src_id = nvim_create_namespace(String_0::NULL);
     }
     if *src_id < 0 {
         return (1u32 << 31).wrapping_sub(1);
@@ -83,11 +82,7 @@ pub fn nvim_buf_clear_highlight(
     nvim_buf_clear_namespace(buffer, ns_id, line_start, line_end)
 }
 
-/// # Safety
-///
-/// `hl_group` must be a well-formed API string: `size` readable bytes with a
-/// NUL at `data[size]`.
-pub unsafe fn nvim_buf_add_highlight(
+pub fn nvim_buf_add_highlight(
     buffer: BufferHandle,
     mut ns_id: Integer,
     hl_group: String_0,

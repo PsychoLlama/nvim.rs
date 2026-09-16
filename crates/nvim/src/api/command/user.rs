@@ -45,13 +45,8 @@ pub unsafe fn nvim_create_user_command(
     unsafe { create_user_command(channel_id, name, cmd, opts, 0) }
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_del_user_command(name: String_0) -> Result<(), Error> {
-    // SAFETY: `name` is the caller's command name.
-    unsafe { nvim_buf_del_user_command(-1, name) }
+pub fn nvim_del_user_command(name: String_0) -> Result<(), Error> {
+    nvim_buf_del_user_command(-1, name)
 }
 
 /// # Safety
@@ -80,11 +75,7 @@ pub unsafe fn nvim_buf_create_user_command(
     made
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     let table = if buf == -1 {
         Table::Global
@@ -146,14 +137,12 @@ pub unsafe fn create_user_command(
         // SAFETY: `cmd_name` is the caller's NUL-terminated command name.
         let named = !unsafe { uc_validate_name(cmd_name) }.is_null();
         if !named {
-            // SAFETY: the caller's command name is NUL-terminated.
             failed = Some(err_bad_value(c"command name", name.as_cstr()));
             break '_err;
         }
         // SAFETY: the name validated, so it has at least one byte.
         if mb_islower(unsafe { *cmd_name } as ::core::ffi::c_int) {
             let what = c"command name (must start with uppercase)";
-            // SAFETY: the caller's command name is NUL-terminated.
             failed = Some(err_bad_value(what, name.as_cstr()));
             break '_err;
         }
@@ -180,7 +169,6 @@ pub unsafe fn create_user_command(
         } else if let Some(nargs) = given_nargs.and_then(Object::as_string) {
             let value = nargs.data();
             if nargs.len() > 1 {
-                // SAFETY: the keyset's string is NUL-terminated.
                 failed = Some(err_bad_value(c"nargs", nargs.as_cstr()));
                 break '_err;
             }
@@ -192,7 +180,6 @@ pub unsafe fn create_user_command(
                 b'?' => argt |= ExArgt::EXTRA | ExArgt::NOSPC,
                 b'+' => argt |= ExArgt::EXTRA | ExArgt::NEEDARG,
                 _ => {
-                    // SAFETY: the keyset's string is NUL-terminated.
                     failed = Some(err_bad_value(c"nargs", nargs.as_cstr()));
                     break '_err;
                 }
@@ -259,7 +246,6 @@ pub unsafe fn create_user_command(
             // `vallen` readable bytes, and `slot` is this frame's.
             let parsed = unsafe { parse_addr_type_arg(value, vallen, slot) };
             if parsed.is_err() {
-                // SAFETY: the keyset's string is NUL-terminated.
                 failed = Some(err_bad_value(c"addr", addr.as_cstr()));
                 break '_err;
             }
@@ -309,7 +295,6 @@ pub unsafe fn create_user_command(
             let parsed =
                 unsafe { parse_compl_arg(value, vallen, &mut context, &mut argt, &mut compl_arg) };
             if parsed.is_err() {
-                // SAFETY: the keyset's string is NUL-terminated.
                 failed = Some(err_bad_value(c"complete", complete.as_cstr()));
                 break '_err;
             }

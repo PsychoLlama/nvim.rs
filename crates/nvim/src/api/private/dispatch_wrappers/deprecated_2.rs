@@ -8,46 +8,6 @@
 
 use super::*;
 
-/// The msgpack-RPC dispatch wrapper for `nvim_notify`.
-///
-/// Decodes the argument array against the signature, answers `Err` if
-/// the arity or a type is wrong, and encodes the answer as an
-/// `Object`.
-///
-/// # Safety
-/// The dispatcher's contract, which is what every `unsafe` below rests
-/// on: `arena` is the caller's own and live for the call. The argument
-/// array is this wrapper's: each value it uses is taken out of its slot
-/// and whatever is left drops with the array.
-pub unsafe fn handle_nvim_notify(
-    channel_id: uint64_t,
-    args: Array,
-    arena: *mut Arena,
-) -> Result<Object, Error> {
-    let mut args = args;
-    log_invoke(
-        c"handle_nvim_notify",
-        c"nvim_notify",
-        line!() as c_int,
-        channel_id,
-    );
-    if args.len() != 3 {
-        return Err(wrong_arity(3, args.len()));
-    }
-    let Some(arg_1) = as_string(args[0].take()) else {
-        return Err(wrong_type(1, c"nvim_notify", c"String"));
-    };
-    let Some(arg_2) = as_integer(args[1].take()) else {
-        return Err(wrong_type(2, c"nvim_notify", c"Integer"));
-    };
-    let Some(arg_3) = as_dict(args[2].take()) else {
-        return Err(wrong_type(3, c"nvim_notify", c"Dict"));
-    };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_notify(arg_1, arg_2, arg_3, arena) }
-}
-
 /// The msgpack-RPC dispatch wrapper for `nvim_out_write`.
 ///
 /// Decodes the argument array against the signature, answers `Err` if
@@ -77,9 +37,7 @@ pub unsafe fn handle_nvim_out_write(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_out_write", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_out_write(arg_1) };
+    nvim_out_write(arg_1);
     Ok(Object::Nil)
 }
 
@@ -113,9 +71,7 @@ pub unsafe fn handle_nvim_set_option(
         return Err(wrong_type(1, c"nvim_set_option", c"String"));
     };
     let arg_2 = args[1].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_set_option(channel_id, arg_1, arg_2) }?;
+    nvim_set_option(channel_id, arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 
@@ -217,9 +173,7 @@ pub unsafe fn handle_nvim_win_get_option(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_win_get_option", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_win_get_option(arg_1, arg_2) }
+    nvim_win_get_option(arg_1, arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_win_set_option`.
@@ -255,9 +209,7 @@ pub unsafe fn handle_nvim_win_set_option(
         return Err(wrong_type(2, c"nvim_win_set_option", c"String"));
     };
     let arg_3 = args[2].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_win_set_option(channel_id, arg_1, arg_2, arg_3) }?;
+    nvim_win_set_option(channel_id, arg_1, arg_2, arg_3)?;
     Ok(Object::Nil)
 }
 
@@ -293,9 +245,7 @@ pub unsafe fn handle_tabpage_del_var(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"tabpage_del_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { tabpage_del_var(arg_1, arg_2) }
+    tabpage_del_var(arg_1, arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `tabpage_set_var`.
@@ -331,9 +281,7 @@ pub unsafe fn handle_tabpage_set_var(
         return Err(wrong_type(2, c"tabpage_set_var", c"String"));
     };
     let arg_3 = args[2].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { tabpage_set_var(arg_1, arg_2, arg_3) }
+    tabpage_set_var(arg_1, arg_2, arg_3)
 }
 
 /// The msgpack-RPC dispatch wrapper for `vim_del_var`.
@@ -365,9 +313,7 @@ pub unsafe fn handle_vim_del_var(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"vim_del_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { vim_del_var(arg_1) }
+    vim_del_var(arg_1)
 }
 
 /// The msgpack-RPC dispatch wrapper for `vim_set_var`.
@@ -400,9 +346,7 @@ pub unsafe fn handle_vim_set_var(
         return Err(wrong_type(1, c"vim_set_var", c"String"));
     };
     let arg_2 = args[1].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { vim_set_var(arg_1, arg_2) }
+    vim_set_var(arg_1, arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `window_del_var`.
@@ -437,9 +381,7 @@ pub unsafe fn handle_window_del_var(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"window_del_var", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { window_del_var(arg_1, arg_2) }
+    window_del_var(arg_1, arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `window_set_var`.
@@ -475,7 +417,5 @@ pub unsafe fn handle_window_set_var(
         return Err(wrong_type(2, c"window_set_var", c"String"));
     };
     let arg_3 = args[2].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { window_set_var(arg_1, arg_2, arg_3) }
+    window_set_var(arg_1, arg_2, arg_3)
 }

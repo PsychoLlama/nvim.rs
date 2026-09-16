@@ -41,9 +41,7 @@ pub unsafe fn handle_nvim_call_dict_function(
     let Some(arg_3) = as_array(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_call_dict_function", c"Array"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_call_dict_function(arg_1, arg_2, arg_3) }
+    nvim_call_dict_function(arg_1, arg_2, arg_3)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_call_function`.
@@ -78,9 +76,7 @@ pub unsafe fn handle_nvim_call_function(
     let Some(arg_2) = as_array(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_call_function", c"Array"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_call_function(arg_1, arg_2) }
+    nvim_call_function(arg_1, arg_2)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_command`.
@@ -112,9 +108,7 @@ pub unsafe fn handle_nvim_command(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_command", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_command(arg_1) }?;
+    nvim_command(arg_1)?;
     Ok(Object::Nil)
 }
 
@@ -147,9 +141,7 @@ pub unsafe fn handle_nvim_eval(
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim_eval", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_eval(arg_1) }
+    nvim_eval(arg_1)
 }
 
 /// The msgpack-RPC dispatch wrapper for `nvim_exec2`.
@@ -230,8 +222,6 @@ pub unsafe fn handle_nvim_parse_expression(
     let Some(arg_3) = as_boolean(args[2].take()) else {
         return Err(wrong_type(3, c"nvim_parse_expression", c"Boolean"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_parse_expression(arg_1, arg_2, arg_3) }?;
+    let rv = nvim_parse_expression(arg_1, arg_2, arg_3)?;
     Ok(Object::dict(rv))
 }

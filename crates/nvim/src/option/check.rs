@@ -332,8 +332,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
     let mut ns_hl: c_int = 0;
     if let Some(mut w) = window {
         if w.w_ns_hl_winhl == 0 {
-            // SAFETY: a namespace with no name.
-            let ns = unsafe { nvim_create_namespace(String_0::NULL) };
+            let ns = nvim_create_namespace(String_0::NULL);
             w.w_ns_hl_winhl = c_int::try_from(ns).expect("a namespace id fits an int");
         } else {
             // Reusing the namespace: bump the generation so attributes

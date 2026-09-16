@@ -80,22 +80,17 @@ pub unsafe fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
         Integer::from(w.w_cursor.lnum),
         Integer::from(w.w_cursor.col),
     );
-    // SAFETY: `rv` is the two-slot block the arena just handed back.
     rv.push(Object::integer(lnum));
     rv.push(Object::integer(col));
     Ok(rv)
 }
 
 /// Move `win`'s cursor to the `[line, column]` `pos` names.
-///
-/// # Safety
-/// `pos` must point at its own elements.
-pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
+pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(mut w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    // SAFETY: `pos` is the caller's array, per this function's contract.
     let items = (pos.len() == 2).then(|| (&pos[0], &pos[1]));
     let rowcol = items
         .and_then(|(row, col)| row.as_integer().zip(col.as_integer()))
@@ -113,8 +108,6 @@ pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), E
     w.w_cursor.lnum = number_as_int(row);
     w.w_cursor.col = number_as_int(col);
     w.w_cursor.coladd = 0;
-    // SAFETY: `w` is live, and `switchwin` is this frame's own -- nothing the
-    // callees run can reach it.
     check_cursor_col(w);
     w.w_set_curswant = true;
     let mut switchwin = SwitchWin::default();
@@ -164,10 +157,7 @@ pub fn nvim_win_set_width(win: WindowHandle, width: Integer) -> Result<(), Error
 }
 
 /// The window-scoped variable `name`.
-///
-/// # Safety
-/// `name` must point at its own bytes.
-pub unsafe fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Object, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Object::Nil);
     };
@@ -177,14 +167,7 @@ pub unsafe fn nvim_win_get_var(win: WindowHandle, name: String_0) -> Result<Obje
 }
 
 /// Set the window-scoped variable `name`.
-///
-/// # Safety
-/// `name` and `value` must own their bytes: the store takes them over.
-pub unsafe fn nvim_win_set_var(
-    win: WindowHandle,
-    name: String_0,
-    value: Object,
-) -> Result<(), Error> {
+pub fn nvim_win_set_var(win: WindowHandle, name: String_0, value: Object) -> Result<(), Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
@@ -193,10 +176,7 @@ pub unsafe fn nvim_win_set_var(
 }
 
 /// Remove the window-scoped variable `name`.
-///
-/// # Safety
-/// `name` must point at its own bytes.
-pub unsafe fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_win_del_var(win: WindowHandle, name: String_0) -> Result<(), Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
@@ -215,7 +195,6 @@ pub unsafe fn nvim_win_get_position(win: WindowHandle) -> Result<Array, Error> {
     };
     let mut rv = Array::with_capacity(2 as size_t);
     let (row, col) = (Integer::from(w.w_winrow), Integer::from(w.w_wincol));
-    // SAFETY: as `nvim_win_get_cursor`.
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
     Ok(rv)
@@ -423,7 +402,6 @@ pub unsafe fn nvim_win_text_height(
         fill += end_fill;
         all += end_fill;
     }
-    // SAFETY: `rv` is the four-slot arena block allocated above.
     rv.insert(c"all", Object::integer(all));
     rv.insert(c"fill", Object::integer(fill));
     let end_row = Object::integer(Integer::from(end_lnum - 1));

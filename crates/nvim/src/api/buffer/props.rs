@@ -22,10 +22,7 @@ use crate::types::Failed;
 
 use crate::winlayer::Buf;
 
-/// # Safety
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_buf_get_var(buf: BufferHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_buf_get_var(buf: BufferHandle, name: String_0) -> Result<Object, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Object::Nil);
     };
@@ -39,10 +36,7 @@ pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
     Ok(buf_get_changedtick(b))
 }
 
-/// # Safety
-/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_buf_get_keymap(buf: BufferHandle, mode: String_0) -> Result<Array, Error> {
+pub fn nvim_buf_get_keymap(buf: BufferHandle, mode: String_0) -> Result<Array, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Array::EMPTY);
     };
@@ -67,12 +61,7 @@ pub unsafe fn nvim_buf_set_keymap(
     unsafe { modify_keymap(channel_id, buf, false, mode, lhs, rhs, opts) }
 }
 
-/// # Safety
-///
-/// `mode` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `lhs` must be a well-formed API string: `size` readable
-/// bytes with a NUL at `data[size]`.
-pub unsafe fn nvim_buf_del_keymap(
+pub fn nvim_buf_del_keymap(
     channel_id: uint64_t,
     buf: BufferHandle,
     mode: String_0,
@@ -84,16 +73,7 @@ pub unsafe fn nvim_buf_del_keymap(
     unsafe { modify_keymap(channel_id, buf, true, mode, lhs, rhs, no_opts) }
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `value` must be a well-formed API object the caller owns
-/// for the call.
-pub unsafe fn nvim_buf_set_var(
-    buf: BufferHandle,
-    name: String_0,
-    value: Object,
-) -> Result<(), Error> {
+pub fn nvim_buf_set_var(buf: BufferHandle, name: String_0, value: Object) -> Result<(), Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
@@ -102,11 +82,7 @@ pub unsafe fn nvim_buf_set_var(
     unsafe { dict_set_var(vars, &name, value, false, false) }.map(|_| ())
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
@@ -123,11 +99,7 @@ pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
     Ok(unsafe { cstr_to_string(b.b_ffname) })
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {
+pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());

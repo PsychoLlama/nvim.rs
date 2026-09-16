@@ -23,42 +23,22 @@ use crate::types::OptionSetFlags;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_void};
 
-/// # Safety
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_get_option_info(name: String_0) -> Result<ApiDict, Error> {
+pub fn nvim_get_option_info(name: String_0) -> Result<ApiDict, Error> {
     let (buf, win) = (Buf::current(), Win::current());
     get_vimoption(name, OptionSetFlags::GLOBAL, buf, win)
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `value` must be a well-formed API object the caller owns
-/// for the call.
-pub unsafe fn nvim_set_option(
-    channel_id: uint64_t,
-    name: String_0,
-    value: Object,
-) -> Result<(), Error> {
+pub fn nvim_set_option(channel_id: uint64_t, name: String_0, value: Object) -> Result<(), Error> {
     // SAFETY: the global scope names no object, so `NULL` is what it takes.
     unsafe { set_option_to(channel_id, NULL, kOptScopeGlobal, name, value) }
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
+pub fn nvim_get_option(name: String_0) -> Result<Object, Error> {
     // SAFETY: as `nvim_set_option`.
     unsafe { get_option_from(NULL, kOptScopeGlobal, name) }
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
@@ -68,12 +48,7 @@ pub unsafe fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Resul
     unsafe { get_option_from(from, kOptScopeBuf, name) }
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `value` must be a well-formed API object the caller owns
-/// for the call.
-pub unsafe fn nvim_buf_set_option(
+pub fn nvim_buf_set_option(
     channel_id: uint64_t,
     buffer: BufferHandle,
     name: String_0,
@@ -87,11 +62,7 @@ pub unsafe fn nvim_buf_set_option(
     unsafe { set_option_to(channel_id, to, kOptScopeBuf, name, value) }
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Result<Object, Error> {
+pub fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Result<Object, Error> {
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
@@ -101,12 +72,7 @@ pub unsafe fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Resul
     unsafe { get_option_from(from, kOptScopeWin, name) }
 }
 
-/// # Safety
-///
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `value` must be a well-formed API object the caller owns
-/// for the call.
-pub unsafe fn nvim_win_set_option(
+pub fn nvim_win_set_option(
     channel_id: uint64_t,
     window: WindowHandle,
     name: String_0,

@@ -92,7 +92,7 @@ pub unsafe fn nvim_create_autocmd(
                     error = err_required(c"'command' or 'callback'");
                     break '_cleanup;
                 }
-                au_group = match unsafe { get_augroup_from_object(opts.group.as_ref()) } {
+                au_group = match get_augroup_from_object(opts.group.as_ref()) {
                     Ok(au_group) => au_group,
                     Err(e) => {
                         error = e;
@@ -240,7 +240,7 @@ pub unsafe fn nvim_clear_autocmds(opts: *mut KeyDict_clear_autocmds) -> Result<(
         error = err_conflict(c"pattern", c"buf");
         return ().reported(error);
     }
-    let au_group: ::core::ffi::c_int = unsafe { get_augroup_from_object(opts.group.as_ref()) }?;
+    let au_group: ::core::ffi::c_int = get_augroup_from_object(opts.group.as_ref())?;
     let patterns: Array = unsafe {
         get_patterns_from_pattern_or_buf(
             opts.pattern.as_ref(),
@@ -270,7 +270,6 @@ pub unsafe fn nvim_clear_autocmds(opts: *mut KeyDict_clear_autocmds) -> Result<(
                 .as_string()
                 .expect("`unpack_string_or_array` answers Strings only");
             let Some(event_nr) = event_name2nr_str(event_str) else {
-                // SAFETY: the value the keyset carried, live for this call.
                 error = err_bad_value(c"event", event_str.as_cstr());
                 return ().reported(error);
             };

@@ -34,14 +34,7 @@ pub unsafe fn nvim_get_api_info(channel_id: uint64_t) -> Array {
     rv
 }
 
-/// # Safety
-/// `name` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`. `mut version` must be a well-formed API dictionary, its
-/// `size` entries initialized. `type_0` must be a well-formed API string:
-/// `size` readable bytes with a NUL at `data[size]`. `methods` must be a well-
-/// formed API dictionary, its `size` entries initialized. `attributes` must be
-/// a well-formed API dictionary, its `size` entries initialized.
-pub unsafe fn nvim_set_client_info(
+pub fn nvim_set_client_info(
     channel_id: uint64_t,
     name: String_0,
     mut version: ApiDict,

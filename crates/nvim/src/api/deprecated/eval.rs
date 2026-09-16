@@ -22,15 +22,7 @@ use crate::api::private::validate::err_expected;
 use crate::api::vim::nvim_exec_lua;
 use crate::api::vimscript::exec_impl;
 
-/// # Safety
-///
-/// `src` must be a well-formed API string: `size` readable bytes with a NUL
-/// at `data[size]`.
-pub unsafe fn nvim_exec(
-    channel_id: uint64_t,
-    src: String_0,
-    output: Boolean,
-) -> Result<String_0, Error> {
+pub fn nvim_exec(channel_id: uint64_t, src: String_0, output: Boolean) -> Result<String_0, Error> {
     let mut opts = KeyDict_exec_opts {
         output: Some(output),
     };
@@ -38,14 +30,7 @@ pub unsafe fn nvim_exec(
     unsafe { exec_impl(channel_id, src, &raw mut opts) }
 }
 
-/// # Safety
-///
-/// `command` must be a well-formed API string: `size` readable bytes with a
-/// NUL at `data[size]`.
-pub unsafe fn nvim_command_output(
-    channel_id: uint64_t,
-    command: String_0,
-) -> Result<String_0, Error> {
+pub fn nvim_command_output(channel_id: uint64_t, command: String_0) -> Result<String_0, Error> {
     let mut opts = KeyDict_exec_opts { output: Some(true) };
     // SAFETY: as `nvim_exec`.
     unsafe { exec_impl(channel_id, command, &raw mut opts) }
@@ -89,18 +74,14 @@ pub unsafe fn nvim_call_atomic(
     // answers nothing at all -- not even the results already collected.
     '_theend: {
         while i < calls.len() {
-            // SAFETY: `i` is below `size`, so the item is inside `items`.
             let item = &calls[i];
             let Some(call) = item.as_array() else {
                 let (want, got) = (api_typename(kObjectTypeArray), api_typename(item.kind()));
-                // SAFETY: `err` is this frame's slot and the names are
-                // `api_typename`'s own statics.
                 error = err_expected(c"'calls' item", want, Some(got));
                 break '_theend;
             };
             if call.len() != 2 as size_t {
                 let want = c"2-item Array";
-                // SAFETY: as above.
                 error = err_expected(c"'calls' item", want, None);
                 break '_theend;
             }
@@ -108,13 +89,11 @@ pub unsafe fn nvim_call_atomic(
             let (head, tail) = (&call[0], &call[1]);
             let Some(name) = head.as_string() else {
                 let (want, got) = (api_typename(kObjectTypeString), api_typename(head.kind()));
-                // SAFETY: as above.
                 error = err_expected(c"name", want, Some(got));
                 break '_theend;
             };
             let Some(args) = tail.as_array() else {
                 let (want, got) = (api_typename(kObjectTypeArray), api_typename(tail.kind()));
-                // SAFETY: as above.
                 error = err_expected(c"call args", want, Some(got));
                 break '_theend;
             };
@@ -144,7 +123,6 @@ pub unsafe fn nvim_call_atomic(
             results.push(result);
             i = i.wrapping_add(1);
         }
-        // SAFETY: `rv` was sized for exactly these two pushes.
         rv.push(Object::array(results));
         if nested_error.is_set() {
             let mut errval: Array = Array::with_capacity(3 as size_t);
@@ -160,11 +138,9 @@ pub unsafe fn nvim_call_atomic(
                 rv.push(Object::array(errval));
             }
         } else {
-            // SAFETY: as above.
             rv.push(Object::Nil);
         }
     }
-    // SAFETY: `nested_error` is this frame's slot.
     nested_error.clear();
     rv.reported(error)
 }

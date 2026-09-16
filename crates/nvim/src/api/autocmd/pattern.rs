@@ -67,10 +67,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
 ) -> Result<Array, Error> {
     /// One pattern string per `,`-separated span of `text`, which is what
     /// `aucmd_span_pattern` walks.
-    ///
-    /// # Safety
-    /// `text` must name its own NUL-terminated bytes.
-    unsafe fn push_spans(patterns: &mut Array, text: &String_0) {
+    fn push_spans(patterns: &mut Array, text: &String_0) {
         let mut pat: *const ::core::ffi::c_char = text.data();
         // SAFETY: the caller's promise.
         let mut patlen: size_t = unsafe { aucmd_span_pattern(pat, &raw mut pat) };
@@ -86,16 +83,14 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     let mut patterns = Array::EMPTY;
     let pattern = pattern.filter(|pattern| !pattern.is_nil());
     if let Some(string) = pattern.and_then(Object::as_string) {
-        // SAFETY: a keyset string names its own NUL-terminated bytes.
-        unsafe { push_spans(&mut patterns, string) };
+        push_spans(&mut patterns, string);
     } else if let Some(array) = pattern.and_then(Object::as_array) {
         check_string_array(array, c"pattern", true)?;
         for entry in array {
             let entry = entry
                 .as_string()
                 .expect("`check_string_array` accepted only Strings");
-            // SAFETY: as above.
-            unsafe { push_spans(&mut patterns, entry) };
+            push_spans(&mut patterns, entry);
         }
     } else if let Some(pattern) = pattern {
         let want = c"String or Table";

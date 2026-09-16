@@ -40,9 +40,7 @@ pub unsafe fn handle_nvim_error_event(
     let Some(arg_2) = as_string(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_error_event", c"String"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_error_event(channel_id, arg_1, arg_2) };
+    nvim_error_event(channel_id, arg_1, arg_2);
     Ok(Object::Nil)
 }
 
@@ -76,8 +74,6 @@ pub unsafe fn handle_nvim_ui_term_event(
         return Err(wrong_type(1, c"nvim_ui_term_event", c"String"));
     };
     let arg_2 = args[1].take();
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    unsafe { nvim_ui_term_event(channel_id, arg_1, arg_2) }?;
+    nvim_ui_term_event(channel_id, arg_1, arg_2)?;
     Ok(Object::Nil)
 }
