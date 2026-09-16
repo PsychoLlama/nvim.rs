@@ -36,10 +36,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use neovim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
-use neovim::types::RegMatch;
+use neovim::eval::eval_to_string;
+use neovim::ex_docmd::do_cmdline_cmd;
+use neovim::regexp::{
+    RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree,
+};
+use neovim::types::{RegMMatch, RegMatch};
+use neovim::winlayer::Buf;
 
-use crate::support::Sandbox;
+use crate::support::{Sandbox, cstr};
 
 /// Prefixes that pin the engine. `\%#=N` is stripped by `vim_regcomp` before
 /// the pattern proper, so it composes with a following `\v`/`\M`/`\V`.
@@ -1498,4 +1503,172 @@ fn random_patterns_are_rejected_or_matched_but_never_hang() {
             }
         }
     });
+}
+
+// ---------------------------------------------------------------------------
+// The two entry points that take a position rather than just a subject
+//
+// Everything above matches a whole string from column zero. The engines'
+// other two callers do not: a search resumes at a column inside the line,
+// and a multi-line match runs over buffer lines the engine reads for
+// itself. Both are about to be retyped -- `line: *const c_char` becomes a
+// slice and `startp`/`endp` become offsets -- so the answers they give are
+// pinned here first.
+
+/// Compile `pat` and match it against `line` starting at byte `col`,
+/// answering the same shape [`run`] does. The subject is *not* re-anchored:
+/// `^` still means the start of the string, not the start of `col`.
+fn run_at(pat: &str, line: &str, col: usize) -> String {
+    let pattern = CString::new(pat).expect("a pattern holds no NUL");
+    // SAFETY: a NUL-terminated pattern that outlives the call.
+    let prog = unsafe { vim_regcomp(pattern.as_ptr(), RE_MAGIC | RE_STRING) };
+    assert!(!prog.is_null(), "/{pat}/ did not compile");
+    let mut rm = RegMatch {
+        regprog: prog,
+        ..Default::default()
+    };
+    let text = CString::new(line).expect("a subject holds no NUL");
+    let base = text.as_ptr();
+    // SAFETY: `base` is NUL-terminated and outlives the match, and `col` is
+    // inside it.
+    let hit = unsafe { vim_regexec(&raw mut rm, base, col as neovim::types::ColNr) };
+    let answer = if hit {
+        // SAFETY: on a hit both ends point inside `text`.
+        unsafe {
+            format!(
+                "{}-{}",
+                rm.startp[0].cast_const().offset_from(base),
+                rm.endp[0].cast_const().offset_from(base)
+            )
+        }
+    } else {
+        "nomatch".to_string()
+    };
+    // SAFETY: `regprog` is what the match left behind.
+    unsafe { vim_regfree(rm.regprog) };
+    answer
+}
+
+#[test]
+fn a_column_offset_moves_where_the_search_starts_not_where_the_text_begins() {
+    let _sandbox = Sandbox::globals();
+    // The first `ab` is before the column, so the match is the second one,
+    // and the offsets it reports are still measured from the start of the
+    // whole subject.
+    assert_eq!(run_at("ab", "ab-ab-ab", 0), "0-2");
+    assert_eq!(run_at("ab", "ab-ab-ab", 1), "3-5");
+    assert_eq!(run_at("ab", "ab-ab-ab", 4), "6-8");
+    assert_eq!(run_at("ab", "ab-ab-ab", 7), "nomatch");
+
+    // `^` anchors to the start of the *string*, not to the column, which is
+    // what makes a resumed search different from a search over the tail.
+    assert_eq!(run_at("^ab", "ab-ab", 0), "0-2");
+    assert_eq!(run_at("^ab", "ab-ab", 1), "nomatch");
+    // `\%>3c` counts columns from the start of the string too.
+    assert_eq!(run_at(r"\%>3cab", "ab-ab", 0), "3-5");
+    // And `$` still means the end of the subject.
+    assert_eq!(run_at("ab$", "ab-ab", 1), "3-5");
+}
+
+#[test]
+fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
+    let _sandbox = Sandbox::globals();
+    let put = |line: &str| {
+        let text = cstr(line);
+        // SAFETY: NUL-terminated, and outlives the call.
+        let _ = unsafe { do_cmdline_cmd(text.as_ptr()) };
+    };
+    put("silent! keepjumps keepmarks %delete _");
+    put("call setline(1, ['alpha', 'beta', 'gamma', 'delta'])");
+
+    let pattern = CString::new(r"beta\ngamma").expect("a pattern holds no NUL");
+    // SAFETY: a NUL-terminated pattern that outlives the call.
+    let prog = unsafe { vim_regcomp(pattern.as_ptr(), RE_MAGIC) };
+    assert!(!prog.is_null(), "the pattern compiles");
+    let mut rmm = RegMMatch {
+        regprog: prog,
+        ..Default::default()
+    };
+    // The match has to *start* on the line it is given: this entry point
+    // tries one starting line, and it is `do_search`'s loop that walks the
+    // buffer. Line 2 is where `beta` is.
+    // SAFETY: `rmm` holds a live program and is this frame's own; no time
+    // limit and no timeout slot, which is what every plain caller passes.
+    let spanned = unsafe {
+        vim_regexec_multi(
+            &raw mut rmm,
+            None,
+            Buf::current(),
+            2,
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    // The answer is how many lines the match covers: it starts on line 2
+    // and ends on line 3, so two.
+    assert_eq!(spanned, 2, "a two-line match");
+    // The positions are `lnum` *relative to the line the search started on*
+    // and a byte column, which is the shape the retype has to keep.
+    assert_eq!((rmm.startpos[0].lnum, rmm.startpos[0].col), (0, 0));
+    assert_eq!((rmm.endpos[0].lnum, rmm.endpos[0].col), (1, 5));
+
+    // A start line the pattern does not begin on does not match, and one
+    // whose continuation runs off the end of the buffer does not either.
+    // SAFETY: as above.
+    let missing = unsafe {
+        vim_regexec_multi(
+            &raw mut rmm,
+            None,
+            Buf::current(),
+            3,
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    assert_eq!(missing, 0, "no match from line 3");
+    // SAFETY: `regprog` is what the last match left behind.
+    unsafe { vim_regfree(rmm.regprog) };
+    put("silent! keepjumps keepmarks %delete _");
+}
+
+#[test]
+fn substitute_remembers_its_last_replacement_for_tilde_and_evaluates_a_backslash_equals() {
+    let _sandbox = Sandbox::globals();
+    let put = |line: &str| {
+        let text = cstr(line);
+        // SAFETY: NUL-terminated, and outlives the call.
+        let _ = unsafe { do_cmdline_cmd(text.as_ptr()) };
+    };
+    let read = |expr: &str| {
+        let text = cstr(expr);
+        // SAFETY: NUL-terminated, and outlives the call; the answer is an
+        // allocation this takes over.
+        let got = unsafe { eval_to_string(text.as_ptr().cast_mut(), false, false) };
+        assert!(!got.is_null(), "{expr} evaluated to nothing");
+        // SAFETY: `eval_to_string` answers an `xmalloc`ed C string.
+        unsafe { crate::support::internalize(got) }
+    };
+
+    put("silent! keepjumps keepmarks %delete _");
+    put("call setline(1, ['one one', 'two two', 'three three'])");
+
+    // `\=` evaluates its replacement per match, with `submatch(0)` naming
+    // what matched -- which means the engine re-enters the evaluator in the
+    // middle of a match, holding pointers into the line it is rewriting.
+    put(r"1substitute/one/\=toupper(submatch(0))/g");
+    assert_eq!(read("getline(1)"), "ONE ONE");
+
+    // `~` in a replacement stands for the previous one (`reg_prev_sub`), so
+    // the second `:s` writes what the first one did.
+    put("2substitute/two/X/");
+    assert_eq!(read("getline(2)"), "X two");
+    put("3substitute/three/~/");
+    assert_eq!(read("getline(3)"), "X three");
+    // ... and an escaped tilde is a literal one.
+    put(r"3substitute/three/\~/");
+    assert_eq!(read("getline(3)"), "X ~");
+
+    put("silent! keepjumps keepmarks %delete _");
 }

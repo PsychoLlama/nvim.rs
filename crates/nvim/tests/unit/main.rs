@@ -50,6 +50,7 @@ mod msgpack;
 mod multiqueue;
 mod namespace;
 mod normal;
+mod options;
 mod optionstr;
 mod packer;
 mod parser;

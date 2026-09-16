@@ -19,8 +19,8 @@ use std::ffi::{CString, c_char, c_int};
 
 use neovim::eval::{eval_to_number, eval_to_string};
 use neovim::ex_docmd::{FORCE_BIN, FORCE_NOBIN};
-use neovim::ex_docmd::{do_cmdline_cmd, getargopt, parse_cmdline};
-use neovim::types::{CmdIdx, CmdModFlags, CmdParseInfo, ExArg, LineNr, Pos};
+use neovim::ex_docmd::{do_cmdline_cmd, getargopt, parse_cmdline, separate_nextcmd};
+use neovim::types::{CmdIdx, CmdModFlags, CmdParseInfo, ExArg, ExArgt, LineNr, Pos};
 use neovim::winlayer::Win;
 
 use crate::support::{Editor, Sandbox, check_emsg, cstr, editor_lock};
@@ -572,4 +572,163 @@ fn the_command_table_agrees_with_what_the_parse_reports() {
     // `:!` keeps the space after it; every other command drops it.
     assert_eq!(parse(&editor, "! -l").unwrap().arg, " -l");
     assert_eq!(parse(&editor, "edit  x").unwrap().arg, "x");
+}
+
+// ---------------------------------------------------------------------------
+// The line the parse walks, and what moves it
+
+#[test]
+fn an_expansion_that_grows_the_line_repoints_every_cursor_into_it() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    // `expand_filename` replaces `<cword>` with a word far longer than the
+    // line it sits in, which means `repl_cmdline` allocates a new line and
+    // frees the old one *while the parse is still holding cursors into it*
+    // -- `eap->arg`, `eap->cmd`, `eap->args` and `eap->nextcmd` are all
+    // offsets into the buffer that just went away. This is the case the
+    // `CmdLine` rewrite has to keep true, and nothing pinned it before.
+    let long = "w".repeat(400);
+    run(&editor, &format!("call setline(1, ['{long}'])"));
+    run(&editor, "1");
+    run(&editor, "normal! 0");
+    run(
+        &editor,
+        "command! -bar -nargs=* -complete=file Grown let g:grown = <q-args>",
+    );
+    run(&editor, "unlet! g:grown | unlet! g:after");
+
+    run(&editor, "Grown <cword> | let g:after = 1");
+
+    // The handler read its argument out of the *new* allocation...
+    assert_eq!(string(&editor, "g:grown"), long);
+    // ... and the command after the `|` was found in it too, which is the
+    // half `repl_cmdline` has to copy by hand.
+    assert_eq!(num(&editor, "g:after"), 1);
+
+    // The same line with two arguments: `eap->args` is repointed entry by
+    // entry, and an argument *before* the replacement must not move while
+    // one after it does.
+    run(&editor, "unlet! g:grown | unlet! g:after");
+    run(&editor, "Grown head <cword> tail | let g:after = 2");
+    assert_eq!(string(&editor, "g:grown"), format!("head {long} tail"));
+    assert_eq!(num(&editor, "g:after"), 2);
+
+    run(&editor, "delcommand Grown");
+}
+
+#[test]
+fn separate_nextcmd_cuts_the_argument_at_the_bar_that_ends_it() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+
+    // The argument, and what the scan left as the next command. `nextcmd`
+    // points at the byte *after* the separator, which is why the expected
+    // text keeps its leading space -- while the argument loses its trailing
+    // one, which `del_trailing_spaces` takes off on the way out.
+    #[track_caller]
+    fn split(argt: ExArgt, cmdidx: CmdIdx, line: &str) -> (String, Option<String>) {
+        let mut buf: Vec<c_char> = line.bytes().chain([0]).map(|b| b as c_char).collect();
+        let mut excmd = ExArg {
+            cmdidx,
+            argt,
+            arg: buf.as_mut_ptr(),
+            ..ExArg::default()
+        };
+        separate_nextcmd(&mut excmd);
+        let arg = text_at(excmd.arg);
+        let next = (!excmd.nextcmd.is_null()).then(|| text_at(excmd.nextcmd));
+        (arg, next)
+    }
+
+    let plain = ExArgt::EXTRA | ExArgt::TRLBAR;
+    // A bare `|` ends the argument and starts the next command.
+    assert_eq!(
+        split(plain, CmdIdx::print, "one | two"),
+        ("one".to_string(), Some(" two".to_string()))
+    );
+    // A backslash before it escapes it: the backslash is removed and the
+    // bar stays in the argument.
+    assert_eq!(
+        split(plain, CmdIdx::print, r"one \| two"),
+        ("one | two".to_string(), None)
+    );
+    // Only the *first* unescaped bar separates; the rest belong to the
+    // next command's own line.
+    assert_eq!(
+        split(plain, CmdIdx::print, "a | b | c"),
+        ("a".to_string(), Some(" b | c".to_string()))
+    );
+    // A `"` starts a trailing comment for a command that does not take one
+    // literally, and ends the argument just as a bar does.
+    assert_eq!(
+        split(plain, CmdIdx::print, "one \" a comment"),
+        ("one".to_string(), None)
+    );
+    // ... and does not, for a command that reads the rest of the line.
+    assert_eq!(
+        split(
+            ExArgt::EXTRA | ExArgt::NOTRLCOM,
+            CmdIdx::print,
+            "one \" not a comment"
+        ),
+        ("one \" not a comment".to_string(), None)
+    );
+    // `:append`, `:change` and `:insert` read the following lines, so a
+    // bar is part of their argument.
+    assert_eq!(
+        split(plain, CmdIdx::append, "text | more"),
+        ("text | more".to_string(), None)
+    );
+}
+
+#[test]
+fn parse_cmd_reports_a_user_commands_name_and_every_argument() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    run(
+        &editor,
+        "command! -bar -nargs=* -range -bang Parsed let g:parsed = <q-args>",
+    );
+
+    // `nvim_parse_cmd` is the external observer of everything `do_one_cmd`
+    // works out before it dispatches, and a `-nargs=*` user command is the
+    // case where the argument list is split rather than handed over whole.
+    assert_eq!(
+        string(&editor, "nvim_parse_cmd('Parsed one two three', {}).cmd"),
+        "Parsed"
+    );
+    assert_eq!(
+        string(
+            &editor,
+            "join(nvim_parse_cmd('Parsed one two three', {}).args, ',')"
+        ),
+        "one,two,three"
+    );
+    // An escaped space keeps two words in one argument, and the escape is
+    // gone by the time the argument is reported.
+    assert_eq!(
+        string(
+            &editor,
+            r"join(nvim_parse_cmd('Parsed one\ two three', {}).args, ',')"
+        ),
+        "one two,three"
+    );
+    // The bang and the range come back beside them.
+    assert_eq!(num(&editor, "nvim_parse_cmd('2,4Parsed! x', {}).bang"), 1);
+    assert_eq!(
+        string(
+            &editor,
+            "join(nvim_parse_cmd('2,4Parsed! x', {}).range, ',')"
+        ),
+        "2,4"
+    );
+    // And a `|` is reported as the next command rather than swallowed --
+    // which it only is because the command was declared `-bar`; without it
+    // a bar is one of the command's own arguments.
+    assert_eq!(
+        string(&editor, "nvim_parse_cmd('Parsed x | echo 1', {}).nextcmd"),
+        "echo 1"
+    );
+
+    run(&editor, "delcommand Parsed");
 }
