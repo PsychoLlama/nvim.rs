@@ -332,7 +332,11 @@ plus these whole-tree metrics, which are not per-file:
                         declare them and they retire with their callees.
                       ok_fail         `return OK`/`return FAIL` and `== `/
                         `!= OK`/`FAIL` — the values those returns carry.
-                      error_out_params  `*mut Error`, api/'s out-parameter.
+                      error_out_params  `*mut Error` *parameters*,
+                        api/'s out-parameter. A field of that type is the
+                        owning struct's storage rather than a lent channel,
+                        so it is not counted; the needle was tree-wide and
+                        that is what kept the number off zero.
                       semsg_c         `semsg_c!`, `semsg_multiline_c!`,
                         `tr_c!` and `tr_plural!` — message *templates* that
                         are data rather than literals, so `format_args!`
@@ -1082,7 +1086,6 @@ VOCABULARY = {
     # The comparisons are written `[=!]=` rather than `==|!=` so that `>=`/`<=`
     # do not match; `>= OK` is not a status-code test.
     "ok_fail": re.compile(r"\breturn\s+(?:OK|FAIL)\b|[=!]=\s*(?:OK|FAIL)\b"),
-    "error_out_params": re.compile(r"\*mut\s+Error\b"),
     # The `_c` macros no longer exist; keeping them in the needle is what
     # makes bringing one back visible. `tr_c!`/`tr_plural!` are the escape
     # hatch that replaced them: a message whose template arrives at runtime.
@@ -1131,6 +1134,17 @@ VOCABULARY_OUTSIDE = {
 # `unsafe_stmts` still are, so a new one has to say why.
 VOCABULARY_INSIDE = {
     "repr_c_ffi_types": (REPR_C, FOREIGN_ABI_TYPES),
+}
+# ... and counted inside a `fn`'s *parameter list* only, the shape
+# `INSTRUMENTS_PARAMS` uses for the same reason. A `*mut Error` in a struct
+# *field* is the owning struct's own storage, not a channel a caller lends a
+# callee -- p31-2's ruling that a struct's raw fields are the struct's
+# invariant and not each method's -- so it was never this number's debt. The
+# tree-wide needle this replaces booked exactly one such field,
+# `lua/xdiff.rs`'s `HunkContext.err`, and that row is what kept a metric whose
+# subject is retired off zero.
+VOCABULARY_PARAMS = {
+    "error_out_params": re.compile(r"\*mut\s+Error\b"),
 }
 # The two halves of `const_int_alias`, which needs a pass over the whole tree
 # before it can count anything: first every `type X = Y;` in the tree, then
@@ -2706,7 +2720,9 @@ def sync_perimeter_doc(stats, check):
 
 def vocabulary(tree):
     """The C-vocabulary counts. See "the C vocabulary" in the doc block."""
-    counts = dict.fromkeys((*VOCABULARY, *VOCABULARY_OUTSIDE, *VOCABULARY_INSIDE), 0)
+    counts = dict.fromkeys(
+        (*VOCABULARY, *VOCABULARY_OUTSIDE, *VOCABULARY_INSIDE, *VOCABULARY_PARAMS), 0
+    )
     for file, masked in tree.items():
         for name, needle in VOCABULARY.items():
             counts[name] += len(needle.findall(masked))
@@ -2730,6 +2746,8 @@ def vocabulary(tree):
             aliases.setdefault(alias, set()).add(target)
         constants.extend(type_ for _, type_ in PUB_CONST_DECL.findall(masked))
         declarations = list(fn_signatures(masked))
+        for name, needle in VOCABULARY_PARAMS.items():
+            counts[name] += sum(len(needle.findall(sig.params)) for sig in declarations)
         spans = [sig.text for sig in declarations]
         if not in_home(file, WINLAYER):
             signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
@@ -3093,6 +3111,7 @@ VOCABULARY_KEYS = (
     *VOCABULARY,
     *VOCABULARY_OUTSIDE,
     *VOCABULARY_INSIDE,
+    *VOCABULARY_PARAMS,
     "const_int_alias",
     "t_suffix_types",
     "raw_win_buf_sigs",
@@ -3778,6 +3797,7 @@ SELF_TEST_VOCABULARY = [
             "crates/nvim/src/a.rs": "fn f(err: *mut Error) {\n}\n"
             "fn g(err: &mut Error) {\n}\n"
             "fn h(err: *mut ErrorType) {\n}\n"
+            "struct S {\n    err: *mut Error,\n}\n"
         },
         {"error_out_params": 1},
     ),

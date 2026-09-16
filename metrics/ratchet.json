@@ -7,7 +7,7 @@
   "unsafe_stmts_outside_perimeter": 30162,
   "c_int_returns": 1763,
   "ok_fail": 149,
-  "error_out_params": 1,
+  "error_out_params": 0,
   "semsg_c": 45,
   "raw_cstr": 5045,
   "libc_strings": 121,
