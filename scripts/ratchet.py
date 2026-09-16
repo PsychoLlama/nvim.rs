@@ -677,6 +677,21 @@ plus these whole-tree metrics, which are not per-file:
                         type (`::core::ffi::c_char`, `libc::c_char`, …) so
                         that qualifying a forwarder cannot move the count.
                         Phase 29.
+                      raw_cstr_fields  the same type again, counted in a
+                        braced `struct`/`union`'s *fields* rather than in a
+                        signature. A field is storage and not a channel, so
+                        it is a different rewrite from a parameter -- the
+                        struct grows an owner (`XString`, `Vec<u8>`) or a
+                        borrow, and every caller's lifetime argument changes
+                        with it -- and it was invisible to every other needle:
+                        `raw_cstr` counts the *type* tree-wide and cannot say
+                        whether a site is a field, a local or a cast. One per
+                        field however many pointers the type holds, so an
+                        array (`[*mut c_char; 10]`, `RegMatch.startp`) is one
+                        field of debt and not ten. Enum payloads are out of
+                        scope: `OptSlot::String(*mut *mut c_char)` is a
+                        selector and not storage, and it retires with the
+                        options table. Phase 32.
                       ml_get_raw · mbyte_raw · msg_raw · bytes_at  the four
                         families that hand a raw pointer *back*: a buffer line
                         (`ml_get*`), a multibyte cursor (`utf_ptr2*`, pointer
@@ -1369,6 +1384,32 @@ INSTRUMENTS_RETURNS = {
     "raw_cstr_returns": re.compile(rf"\*(?:mut|const)\s+{C_CHAR}\b"),
 }
 
+# The head of a *braced* `struct`/`union` item -- the same exclusions
+# `derive_copy` makes, and for the same reason: a tuple struct's members are
+# positional and an enum's payload is a selector, neither of which is the
+# named storage this counts. The generic list and a `where` clause may sit
+# between the name and the brace, and `[^{;]*` is what stops either running
+# past the body's opening brace or a bodyless declaration's `;`.
+STRUCT_HEAD = re.compile(
+    r"\b(?:struct|union)\s+[A-Za-z_][A-Za-z0-9_]*\s*(?:<[^{;]*>)?\s*(?:where[^{;]*)?\{"
+)
+
+
+# ... and inside a braced aggregate's field list only, over `struct_bodies`.
+# One match per *field*: the leading run is `[ \t]*` and not `\s*` so that a
+# match cannot start on the blank line above and be attributed to the wrong
+# field, and the type is read to the field's comma, which is what makes
+# `[*mut c_char; 10]` one field of debt rather than ten. A field whose type
+# merely *mentions* the pointer -- `Option<*mut c_char>`, `*mut *mut c_char`,
+# `[[*const c_char; 2]; 16]` -- is the same storage and counts once.
+INSTRUMENTS_FIELDS = {
+    "raw_cstr_fields": re.compile(
+        r"^[ \t]*(?:pub(?:\s*\([^)]*\))?[ \t]+)?[A-Za-z_][A-Za-z0-9_]*[ \t]*:"
+        rf"[^,;\n]*\*(?:mut|const)[ \t]+{C_CHAR}\b",
+        re.M,
+    ),
+}
+
 # A character literal cast to C's `int`, in every spelling of the type
 # `c_int_returns` accepts. This is the one needle that cannot run against the
 # masked source -- `mask()` blanks a char literal, quotes and all -- so it is
@@ -1441,6 +1482,7 @@ INSTRUMENT_KEYS = (
     "raw_ptr_params",
     "raw_cstr_params",
     "raw_cstr_returns",
+    "raw_cstr_fields",
     "ml_get_raw",
     "mbyte_raw",
     "msg_raw",
@@ -2015,6 +2057,13 @@ def matching_brace(masked, open_at):
             if not depth:
                 return i
     return len(masked) - 1
+
+
+def struct_bodies(masked):
+    """The text between the braces of every braced `struct`/`union` item."""
+    for head in STRUCT_HEAD.finditer(masked):
+        open_at = head.end() - 1
+        yield masked[open_at + 1 : matching_brace(masked, open_at)]
 
 
 # A `{` that opens a *struct literal* rather than a block: an UpperCamel head
@@ -2842,6 +2891,10 @@ def instrument_sites(tree, sources, wrappers=None):
         for name, needle in INSTRUMENTS_RETURNS.items():
             if found := sum(len(needle.findall(s.returns)) for s in declarations):
                 sites[name][file] = found
+        fields = list(struct_bodies(masked))
+        for name, needle in INSTRUMENTS_FIELDS.items():
+            if found := sum(len(needle.findall(body)) for body in fields):
+                sites[name][file] = found
         if found := sum(1 for _ in unsafe_fn_items(masked)):
             sites["unsafe_fns"][file] = found
         if found := unsafe_fns_without_raw(masked, file, allow, aliases):
@@ -3086,6 +3139,7 @@ WHOLE_TREE_LABEL = {
     "raw_ptr_params": "raw-pointer parameters",
     "raw_cstr_params": "raw `c_char` pointers in a parameter list",
     "raw_cstr_returns": "raw `c_char` pointer returns",
+    "raw_cstr_fields": "raw `c_char` pointers in a struct's fields",
     "ml_get_raw": "pointer-form ml_get* calls",
     "mbyte_raw": "pointer-form multibyte cursor calls",
     "msg_raw": "pointer-form message calls",
@@ -4059,6 +4113,26 @@ SELF_TEST_INSTRUMENTS = [
             "raw_cstr_returns": 1,
             "raw_ptr_params": 3,
         },
+    ),
+    # A struct's *fields* are storage and are counted per field, whatever the
+    # type wraps them in; a tuple struct, an enum payload, a `fn` line and a
+    # local are not fields and are not counted.
+    (
+        {
+            "crates/nvim/src/a.rs": "pub struct S {\n"
+            "    pub name: *mut c_char,\n"
+            "    home: Option<*const ::core::ffi::c_char>,\n"
+            "    argv: *mut *mut libc::c_char,\n"
+            "    startp: [*mut c_char; 10],\n"
+            "    keys: [[*const c_char; 2]; 16],\n"
+            "    lnum: LineNr,\n"
+            "}\n"
+            "pub union U {\n    text: *mut c_char,\n}\n"
+            "struct T(*mut c_char);\n"
+            "enum E {\n    Str(*mut *mut c_char),\n}\n"
+            "fn f(name: *mut c_char) {\n    let p: *mut c_char = name;\n}\n",
+        },
+        {"raw_cstr_fields": 6},
     ),
     # The pointer forms count and the `_len` bodies underneath them do not.
     (

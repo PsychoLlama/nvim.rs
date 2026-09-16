@@ -35,6 +35,7 @@
   "raw_ptr_params": 7288,
   "raw_cstr_params": 3028,
   "raw_cstr_returns": 810,
+  "raw_cstr_fields": 485,
   "ml_get_raw": 213,
   "mbyte_raw": 463,
   "msg_raw": 0,
