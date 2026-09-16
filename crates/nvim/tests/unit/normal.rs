@@ -208,13 +208,13 @@ fn a_command_that_does_not_keep_the_register_releases_it() {
     let _restore = Restore::new(&editor);
     fresh(&editor);
     run(&editor, "let @a = 'kept'");
-    // `j` has no NV_KEEPREG, so the register named in front of it is
+    // `j` does not claim the register, so the one named in front of it is
     // dropped rather than carried to the yank after it.
     keys(&editor, "\\\"ajyy");
     assert_eq!(string(&editor, "@a"), "kept");
     assert_eq!(string(&editor, "@\""), "gamma delta\n");
-    // `x` *does* claim NV_KEEPREG, so the register in front of it is the
-    // one it writes to.
+    // `x` *does* claim it, so the register in front of it is where the
+    // deleted character goes.
     keys(&editor, "\\\"bx");
     assert_eq!(string(&editor, "@b"), "g");
 }
@@ -376,8 +376,8 @@ fn a_dot_repeats_the_last_change_with_its_own_count() {
     // A count in front of `.` replaces the original one.
     keys(&editor, "3.");
     assert_eq!(text(&editor).split('/').next(), Some(" beta"));
-    // `.` itself is NV_KEEPREG, so the register a repeat uses is the one
-    // the original command was given.
+    // `.` claims the register too, so a repeat writes to the one the
+    // original command was given.
     fresh(&editor);
     keys(&editor, "\\\"adw");
     keys(&editor, ".");

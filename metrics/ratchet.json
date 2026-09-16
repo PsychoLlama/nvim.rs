@@ -51,7 +51,7 @@
   "labeled_blocks": 126,
   "lua_raw_stack": 836,
   "long_fns": 69,
-  "dup_consts": 1248,
+  "dup_consts": 1246,
   "types_files": 116,
   "untested_dirs": 39,
   "files_without_deny_unsafe_op": 0,

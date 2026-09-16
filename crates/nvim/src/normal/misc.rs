@@ -33,16 +33,16 @@ use crate::memline::ml_get_len;
 use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
-    CA_COMMAND_BUSY, GETF_ALT, GETF_SETMARK, NULL, check_clear_op, check_clear_op_quit, clear_op,
-    clear_op_beep, end_visual_mode, kMTCharWise, nv_left, nv_operator, nv_pcmark,
-    set_visual_select, v_visop, visual_active, visual_select,
+    GETF_ALT, GETF_SETMARK, NULL, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
+    end_visual_mode, kMTCharWise, nv_left, nv_operator, nv_pcmark, set_visual_select, v_visop,
+    visual_active, visual_select,
 };
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
 use crate::state::mode::{finish_op, restart_VIsual_select, restart_edit};
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
-use crate::types::{CmdArg, LineGetter, LineNr, NUL, OpType};
+use crate::types::{CmdArg, LineGetter, LineNr, NUL, OpType, Outcome};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
@@ -52,7 +52,7 @@ use core::ffi::{c_int, c_uint};
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.
 pub(crate) fn nv_ignore(cmd_arg: &mut CmdArg) {
-    cmd_arg.retval |= CA_COMMAND_BUSY.cast_signed();
+    cmd_arg.outcome |= Outcome::COMMAND_BUSY;
 }
 
 /// A key with no effect at all -- unlike [`nv_ignore`], the command still
@@ -298,6 +298,6 @@ pub(crate) fn nv_event(cmd_arg: &mut CmdArg) {
         // The callback may have left insert or Select mode pending, and
         // the command loop must not treat this key as having finished a
         // command.
-        cmd_arg.retval |= CA_COMMAND_BUSY.cast_signed();
+        cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
 }

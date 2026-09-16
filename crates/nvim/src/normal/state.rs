@@ -54,9 +54,8 @@ use crate::message::state::{
 };
 use crate::message::{may_clear_sb_text, msg_delay, msg_ptr, wait_return};
 use crate::normal::{
-    CA_COMMAND_BUSY, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS, NormalState,
-    check_scrollbind, clear_op, clear_op_beep, clearopbeep, current_oap, end_visual_mode,
-    find_command, normal_execute, nv_cmds, unshift_special, visual_active,
+    NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep, clearopbeep, current_oap,
+    end_visual_mode, find_command, normal_execute, nv_cmds, unshift_special, visual_active,
 };
 use crate::option::shortmess;
 use crate::option::vars::{fdo_flags, p_smd};
@@ -72,7 +71,7 @@ use crate::state::{
     state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{CmdArg, NUL, OpArg, OpType, ShmFlag, VimState, int64_t};
+use crate::types::{CmdArg, NUL, OpArg, OpType, Outcome, ShmFlag, VimState, int64_t};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;
@@ -282,14 +281,14 @@ pub(crate) unsafe fn normal_prepare(s: *mut NormalState) {
 pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
     let mut ns = unsafe { NormalStateRef::new(s) };
-    let flags = nv_cmds[ns.idx as usize].cmd_flags as c_int;
+    let flags = nv_cmds[ns.idx as usize].cmd_flags;
     // "stopsel": an unshifted movement ends the selection.
-    if km_stopsel.get() && flags & NV_STS != 0 && !mod_mask.get().has(ModMask::SHIFT) {
+    if km_stopsel.get() && flags.has(NvFlags::STS) && !mod_mask.get().has(ModMask::SHIFT) {
         end_visual_mode();
         redraw_curbuf_later(UPD_INVERTED);
     }
     if km_startsel.get() {
-        if flags & NV_SS != 0 {
+        if flags.has(NvFlags::SS) {
             // A shifted special key becomes its unshifted self, and the
             // table has to be consulted again for the new character.
             unshift_special(&mut ns.ca);
@@ -298,7 +297,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
                 unsafe { clearopbeep(&raw mut ns.oa) };
                 return true;
             }
-        } else if flags & NV_SSS != 0 && mod_mask.get().has(ModMask::SHIFT) {
+        } else if flags.has(NvFlags::SSS) && mod_mask.get().has(ModMask::SHIFT) {
             mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
         }
     }
@@ -320,12 +319,12 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
 pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
     let ns = unsafe { NormalStateRef::new(s) };
-    let flags = nv_cmds[ns.idx as usize].cmd_flags as c_int;
+    let flags = nv_cmds[ns.idx as usize].cmd_flags;
     let pending_op = ns.oa.op_type != OpType::Nop;
     let cmdchar = ns.ca.cmdchar;
-    flags & NV_NCH != 0
-        && (flags & NV_NCH_NOP == NV_NCH_NOP && !pending_op
-            || flags & NV_NCH_ALW == NV_NCH_ALW
+    flags.has(NvFlags::NCH)
+        && (flags.has_all(NvFlags::NCH_NOP) && !pending_op
+            || flags.has_all(NvFlags::NCH_ALW)
             || cmdchar == 'q' as c_int
                 && !pending_op
                 && reg_recording.get() == 0
@@ -363,7 +362,7 @@ pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> boo
 
     (showing_mode || error_on_display)
         && ns.oa.regname == 0
-        && ns.ca.retval & CA_COMMAND_BUSY as c_int == 0
+        && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
         && stuff_empty()
         && typeahead().maplen() == 0
         && emsg_silent.get() == 0

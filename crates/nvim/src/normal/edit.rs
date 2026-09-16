@@ -38,10 +38,10 @@ use crate::message::e_modifiable;
 use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::{
-    CA_COMMAND_BUSY, CAR, DEL, ESC, ML_DEL_MESSAGE, NL, OPENLINE_DO_COM, REPLACE_CR_NCHAR,
-    REPLACE_NL_NCHAR, TAB, VIsual_mode_orig, VisualMode, check_clear_op, check_clear_op_quit,
-    clear_op, clear_op_beep, nv_object, nv_operator, prep_redo, prep_redo_cmd, set_visual_active,
-    set_visual_mode, v_swap_corners, v_visop, visual_active, visual_mode,
+    CAR, DEL, ESC, ML_DEL_MESSAGE, NL, OPENLINE_DO_COM, REPLACE_CR_NCHAR, REPLACE_NL_NCHAR, TAB,
+    VIsual_mode_orig, VisualMode, check_clear_op, check_clear_op_quit, clear_op, clear_op_beep,
+    nv_object, nv_operator, prep_redo, prep_redo_cmd, set_visual_active, set_visual_mode,
+    v_swap_corners, v_visop, visual_active, visual_mode,
 };
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
@@ -55,8 +55,8 @@ use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{
-    CmdArg, ColNr, FoFlag, LineNr, NUL, OpType, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT,
-    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg, size_t,
+    CmdArg, ColNr, FoFlag, LineNr, NUL, OpType, Outcome, PUT_BLOCK_INNER, PUT_CURSEND,
+    PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg, size_t,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -551,7 +551,7 @@ pub(crate) fn invoke_edit(cmd_arg: &mut CmdArg, repl: c_int, cmd: c_int, startln
         Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
     }
     if edit(cmd, startln != 0, cmd_arg.count1) {
-        cmd_arg.retval |= CA_COMMAND_BUSY as c_int;
+        cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
     if restart_edit.get() == 0 {
         restart_edit.set(restart_edit_save);

@@ -28,8 +28,8 @@ use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::normal::{
-    CA_NO_ADJ_OP_END, CAR, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise,
-    may_fold_open, nv_page, unadjust_for_sel, visual_active, visual_mode,
+    CAR, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
+    unadjust_for_sel, visual_active, visual_mode,
 };
 use crate::option::vars::{p_sel, p_ww};
 use crate::option::{cpo_has, get_showbreak_value, get_ve_flags};
@@ -43,7 +43,7 @@ use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::state::mode::{VIsual_select_exclu_adj, ins_at_eol, restart_edit};
 use crate::state::virtual_active;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
-use crate::types::{CmdArg, ColNr, CpoFlag, Direction, LineNr, NUL, OpArg, OpType};
+use crate::types::{CmdArg, ColNr, CpoFlag, Direction, LineNr, NUL, OpArg, OpType, Outcome};
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
 use core::ffi::{c_int, c_uint};
 
@@ -424,7 +424,7 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
                     if unsafe { *cp } as c_int != NUL {
                         unsafe { win.w_cursor.col += utfc_ptr2len(cp) };
                     }
-                    cmd_arg.retval |= CA_NO_ADJ_OP_END as c_int;
+                    cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
                 }
             } else {
                 if cmd_arg.op().op_type == OpType::Nop && n == cmd_arg.count1 {

@@ -12,9 +12,20 @@
 use super::*;
 
 pub type MotionType = ::core::ffi::c_int;
+
+crate::flag_set! {
+    /// What a handler tells the dispatcher about what it did, in the
+    /// command's own [`CmdArg::outcome`].
+    pub struct Outcome;
+
+    /// The command is not finished: it left insert mode or a command line
+    /// running, so nothing that would start one may run after it.
+    const COMMAND_BUSY = 1;
+    /// Leave the operator's end where the handler put it.
+    const NO_ADJ_OP_END = 2;
+}
 pub struct CmdArg {
     pub oap: *mut OpArg,
-    pub prechar: ::core::ffi::c_int,
     pub cmdchar: ::core::ffi::c_int,
     pub nchar: ::core::ffi::c_int,
     pub nchar_composing: [::core::ffi::c_char; 32],
@@ -24,7 +35,7 @@ pub struct CmdArg {
     pub count0: ::core::ffi::c_int,
     pub count1: ::core::ffi::c_int,
     pub arg: ::core::ffi::c_int,
-    pub retval: ::core::ffi::c_int,
+    pub outcome: Outcome,
     pub searchbuf: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]

@@ -41,12 +41,11 @@ use crate::mbyte::{
 use crate::memory::xfree;
 use crate::message::state::{msg_col, msg_didout, msg_nowait};
 use crate::normal::{
-    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS, NV_CMDS_SIZE,
-    NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, NormalStateRef, add_to_showcmd,
-    check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd, do_check_scrollbind,
-    normal_handle_special_visual_command, normal_need_additional_char,
-    normal_need_redraw_mode_message, normal_redraw_mode_message, nv_cmds, set_vcount_ca,
-    set_visual_select, start_selection, visual_active, visual_select,
+    B_IMODE_LMAP, CAR, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS, NV_CMDS_SIZE, NormalState,
+    NormalStateRef, NvFlags, add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd,
+    del_from_showcmd, do_check_scrollbind, normal_handle_special_visual_command,
+    normal_need_additional_char, normal_need_redraw_mode_message, normal_redraw_mode_message,
+    nv_cmds, set_vcount_ca, set_visual_select, start_selection, visual_active, visual_select,
 };
 use crate::ops::{Op, do_pending_operator, get_op_type};
 use crate::option::vars::{fdo_flags, p_langmap, p_lrm, p_tm, p_ttm};
@@ -60,7 +59,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::{
-    CmdArg, CpoFlag, GraphemeState, NUL, OpArg, OpType, OptInt, VimState, int16_t, int64_t,
+    CmdArg, CpoFlag, GraphemeState, NUL, OpArg, OpType, OptInt, Outcome, VimState, int16_t, int64_t,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
@@ -344,7 +343,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
     did_cursorhold.set(true);
 
     let (slot, lit, repl) = unsafe { additional_char_slot(ns.raw()) };
-    let lang = repl || nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_LANG != 0;
+    let lang = repl || nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::LANG);
 
     if slot != Slot::None {
         // SAFETY: `s` is the caller's live state.
@@ -372,8 +371,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
         if !lit {
             // CTRL-K starts a digraph, unless 'cpoptions' says otherwise.
             if unsafe { *cp } == Ctrl_K
-                && (nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_LANG != 0
-                    || slot == Slot::Extra)
+                && (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::LANG) || slot == Slot::Extra)
                 && !cpo_has(CpoFlag::DIGRAPH)
             {
                 ns.c = get_digraph(false);
@@ -519,10 +517,10 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     let mut did_visual_op = false;
     if !ns.command_finished {
         // A command that is not itself an operator, and does not claim
-        // NV_KEEPREG, releases the register it was given.
+        // releases the register it was given.
         if !finish_op.get()
             && ns.oa.op_type == OpType::Nop
-            && (ns.idx < 0 || nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_KEEPREG == 0)
+            && (ns.idx < 0 || !nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::KEEPREG))
         {
             unsafe { clearop(&raw mut ns.oa) };
             set_reg_var(get_default_register_name());
@@ -579,7 +577,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     let want_insert = restart_edit.get() != 0 && !visual_active() && ns.old_mapped_len == 0;
     if ns.oa.op_type == OpType::Nop
         && (want_insert || restart_VIsual_select.get() == 1)
-        && ns.ca.retval & CA_COMMAND_BUSY as c_int == 0
+        && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
         && stuff_empty()
         && ns.oa.regname == 0
     {
@@ -690,7 +688,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     if ns.idx < 0 {
         unsafe { clearopbeep(&raw mut ns.oa) };
         ns.command_finished = true;
-    } else if (nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_NCW != 0
+    } else if (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::NCW)
         && unsafe { check_text_or_curbuf_locked(&raw mut ns.oa) })
         || (visual_active() && unsafe { normal_handle_special_visual_command(ns.raw()) })
     {
@@ -699,7 +697,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
         if Win::current().w_onebuf_opt.wo_rl != 0
             && KeyTyped.get()
             && KeyStuffed.get() == 0
-            && nv_cmds[ns.idx as usize].cmd_flags as c_int & NV_RL != 0
+            && nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::RL)
         {
             unsafe { normal_invert_horizontal(ns.raw()) };
         }
@@ -727,13 +725,13 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
             // 'keymodel' startsel: a shifted special key starts a
             // selection and then acts as its unshifted self.
             if !visual_active() && km_startsel.get() {
-                let flags = nv_cmds[ns.idx as usize].cmd_flags as c_int;
-                if flags & NV_SS != 0 {
+                let flags = nv_cmds[ns.idx as usize].cmd_flags;
+                if flags.has(NvFlags::SS) {
                     start_selection();
                     unshift_special(&mut ns.ca);
                     ns.idx = find_command(ns.ca.cmdchar);
                     debug_assert!(ns.idx >= 0);
-                } else if flags & NV_SSS != 0 && mod_mask.get().has(ModMask::SHIFT) {
+                } else if flags.has(NvFlags::SSS) && mod_mask.get().has(ModMask::SHIFT) {
                     start_selection();
                     mod_mask.set(mod_mask.get().without(ModMask::SHIFT));
                 }

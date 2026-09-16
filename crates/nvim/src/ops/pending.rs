@@ -40,7 +40,7 @@ use crate::normal::{
     visual_active, visual_anchor, visual_mode, visual_select,
 };
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, FoFlag, NUL};
+use crate::types::{CpoFlag, FoFlag, NUL, Outcome};
 
 /// The Visual area a `.` replays: its mode and size, not its position.
 ///
@@ -580,7 +580,7 @@ fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
     // SAFETY: 'sel' is a NUL-terminated option string.
     if !(op.motion_type == kMTCharWise
         && !op.inclusive
-        && cmd_arg.retval & CA_NO_ADJ_OP_END as c_int == 0
+        && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
         && op.end.col == 0
         && (!op.is_visual || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
         && op.line_count > 1)
@@ -837,7 +837,7 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
 
     if unsafe { op_change(op.raw()) } != 0 {
         // `edit()` returned because of a CTRL-O command.
-        cmd_arg.retval |= CA_COMMAND_BUSY as c_int;
+        cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
     if restart_edit.get() == 0 {
         restart_edit.set(restart_edit_save);
@@ -861,6 +861,6 @@ fn run_block_insert(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     if restart_edit.get() == 0 {
         restart_edit.set(restart_edit_save);
     } else {
-        cmd_arg.retval |= CA_COMMAND_BUSY as c_int;
+        cmd_arg.outcome |= Outcome::COMMAND_BUSY;
     }
 }

@@ -42,7 +42,9 @@ use crate::option::vars::{p_sol, p_window};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::state::mode::restart_edit;
-use crate::types::{CmdArg, ColNr, Direction, FAIL, LineNr, OK, OpArg, OptInt, Pos, Window};
+use crate::types::{
+    CmdArg, ColNr, Direction, FAIL, LineNr, OK, OpArg, OptInt, Outcome, Pos, Window,
+};
 use crate::ui::state::Rows;
 use crate::winlayer::graph::{firstwin, lastwin};
 use crate::winlayer::{Buf, Win, first_window};
@@ -50,7 +52,6 @@ use crate::winlayer::{Buf, Win, first_window};
 /// A command with nothing set, as C's `CmdArg ca = { 0 }` leaves it.
 const CMDARG_ZERO: CmdArg = CmdArg {
     oap: ptr::null_mut(),
-    prechar: 0,
     cmdchar: 0,
     nchar: 0,
     nchar_composing: [0; 32],
@@ -60,7 +61,7 @@ const CMDARG_ZERO: CmdArg = CmdArg {
     count0: 0,
     count1: 0,
     arg: 0,
-    retval: 0,
+    outcome: Outcome::NONE,
     searchbuf: ptr::null_mut(),
 };
 

@@ -33,8 +33,8 @@ use crate::message::state::msg_silent;
 use crate::mouse::setmouse;
 use crate::mouse::state::mouse_dragging;
 use crate::normal::{
-    CA_NO_ADJ_OP_END, TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down, nv_g_cmd,
-    nv_operator, nv_right,
+    TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down, nv_g_cmd, nv_operator,
+    nv_right,
 };
 use crate::ops::adjust_cursor_eol;
 use crate::option::get_ve_flags;
@@ -50,7 +50,7 @@ use crate::state::{may_trigger_modechanged, virtual_active};
 use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
-use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Pos, size_t};
+use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Outcome, Pos, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};
@@ -778,7 +778,7 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
         b't' => {
             // A tag block's end is already where it should be; the
             // operator must not push it back over the closing tag.
-            cmd_arg.retval |= CA_NO_ADJ_OP_END as c_int;
+            cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
             unsafe { current_tagblock(op.raw(), n, include) != 0 }
         }
         b'p' => unsafe { current_par(op.raw(), n, include, 'p' as c_int) != 0 },
