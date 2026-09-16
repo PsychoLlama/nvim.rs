@@ -126,7 +126,6 @@ count	callee	no_raw	defs	def
 20	nlua_push_object	0	1	crates/nvim/src/lua/converter/push_object.rs
 20	path_fnamecmp	0	0	
 20	try_enter	0	1	crates/nvim/src/api/private/helpers/mod.rs
-19	Op::new	0	68	
 19	api_free_luaref	1	1	crates/nvim/src/lua/executor/refs.rs
 19	arena_mem_free	0	1	crates/nvim/src/memory/arena.rs
 19	channel_decref	0	1	crates/nvim/src/channel/mod.rs
@@ -143,6 +142,7 @@ count	callee	no_raw	defs	def
 18	uv_strerror	0	0	
 18	vim_fgets	0	1	crates/nvim/src/fileio/mod.rs
 18	xmallocz	0	1	crates/nvim/src/memory/mod.rs
+17	Op::new	0	68	
 17	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 17	Win::new	0	1	crates/nvim/src/winlayer.rs
 17	add_str	0	5	
@@ -990,7 +990,6 @@ count	callee	no_raw	defs	def
 3	check_signcolumn	0	1	crates/nvim/src/optionstr/check.rs
 3	check_stl_option	0	1	crates/nvim/src/optionstr/check.rs
 3	check_str_opt	0	1	crates/nvim/src/optionstr/flags.rs
-3	check_text_or_curbuf_locked	0	1	crates/nvim/src/normal/state.rs
 3	check_winopt	0	1	crates/nvim/src/option/copy.rs
 3	clear_cpt_callbacks	0	1	crates/nvim/src/insexpand/callbacks.rs
 3	clear_diffout	0	1	crates/nvim/src/diff/update.rs
@@ -1495,7 +1494,6 @@ count	callee	no_raw	defs	def
 2	check_nomodeline	0	1	crates/nvim/src/autocmd/define.rs
 2	check_regexp_delim	1	1	crates/nvim/src/ex_cmds/subst/parse.rs
 2	check_self_reference	0	1	crates/nvim/src/eval/typval_encode/walk.rs
-2	check_text_locked	0	1	crates/nvim/src/normal/state.rs
 2	check_user_func_argcount	0	1	crates/nvim/src/eval/userfunc/args.rs
 2	check_vars	0	1	crates/nvim/src/eval/vars/lookup.rs
 2	clear_autocmd	0	1	crates/nvim/src/api/autocmd/create.rs

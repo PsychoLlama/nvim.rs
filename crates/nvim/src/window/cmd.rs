@@ -55,7 +55,7 @@ use crate::strings::vim_snprintf;
 use crate::tag::state::{g_do_tagpreview, postponed_split};
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{Failed, LineNr, NUL, OpArg, WinConfig, int64_t, size_t};
+use crate::types::{Failed, LineNr, NUL, WinConfig, int64_t, size_t};
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
@@ -721,7 +721,7 @@ fn buffer_locked() -> bool {
 /// [`buffer_locked`] with the text lock as well, saying why when it holds.
 fn text_or_buffer_locked() -> bool {
     // SAFETY: reads the editor's lock state; a null operator means "none".
-    unsafe { check_text_or_curbuf_locked(ptr::null_mut::<OpArg>()) }
+    check_text_or_curbuf_locked(None)
 }
 
 /// The file name under the cursor, `prenum1` names in from it, with the line

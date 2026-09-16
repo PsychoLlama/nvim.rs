@@ -425,7 +425,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         }
         // `gQ`: Ex mode.
         Ok(b'Q') => {
-            if !unsafe { check_text_locked(op.raw()) } && !check_clear_op_quit(op) {
+            if !check_text_locked(Some(op)) && !check_clear_op_quit(op) {
                 do_exmode();
             }
         }

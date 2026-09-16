@@ -684,7 +684,7 @@ pub(crate) unsafe fn normal_execute(s: *mut NormalState, key: c_int) -> c_int {
         clear_op_beep(ns.op());
         ns.command_finished = true;
     } else if (nv_cmds[ns.idx as usize].cmd_flags.has(NvFlags::NCW)
-        && unsafe { check_text_or_curbuf_locked(&raw mut ns.oa) })
+        && check_text_or_curbuf_locked(Some(ns.op())))
         || (visual_active() && unsafe { normal_handle_special_visual_command(ns.raw()) })
     {
         ns.command_finished = true;

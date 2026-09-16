@@ -165,17 +165,12 @@ fn new_state() -> NormalState {
 /// Refuse a command that would change text while the text is locked.
 ///
 /// Beeps and clears the pending operator when there is one to clear.
-///
-/// # Safety
-///
-/// `op` must point at a live `OpArg`, unaliased for the call.
-pub(crate) unsafe fn check_text_locked(op: *mut OpArg) -> bool {
+pub(crate) fn check_text_locked(op: Option<Op>) -> bool {
     if !text_locked() {
         return false;
     }
-    if !op.is_null() {
-        // SAFETY: past the null check, `op` is the caller's live operator.
-        clear_op_beep(unsafe { Op::new(op) });
+    if let Some(op) = op {
+        clear_op_beep(op);
     }
     text_locked_msg();
     true
@@ -183,21 +178,15 @@ pub(crate) unsafe fn check_text_locked(op: *mut OpArg) -> bool {
 
 /// As [`check_text_locked`], and also refuse while the current buffer is
 /// locked. A locked buffer clears the operator without a beep.
-///
-/// # Safety
-///
-/// `op` must point at a live `OpArg`, unaliased for the call.
-pub(crate) unsafe fn check_text_or_curbuf_locked(op: *mut OpArg) -> bool {
-    // SAFETY (throughout): `op` is null or the caller's operator.
-    if unsafe { check_text_locked(op) } {
+pub(crate) fn check_text_or_curbuf_locked(op: Option<Op>) -> bool {
+    if check_text_locked(op) {
         return true;
     }
     if !curbuf_locked() {
         return false;
     }
-    if !op.is_null() {
-        // SAFETY: past the null check, `op` is the caller's live operator.
-        clear_op(unsafe { Op::new(op) });
+    if let Some(op) = op {
+        clear_op(op);
     }
     true
 }
