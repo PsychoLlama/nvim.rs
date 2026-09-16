@@ -690,6 +690,7 @@ mod tests {
     /// the values it indexes are two literals that have to stay the same
     /// length, which is the one thing a lookup by index can get wrong.
     #[test]
+    #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn relative_names_its_six_kinds() {
         let named = [
             (c"editor", kFloatRelativeEditor),
@@ -708,6 +709,7 @@ mod tests {
 
     /// The anchor is two bits, and its default corner is neither of them.
     #[test]
+    #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn the_anchor_is_a_corner_of_two_bits() {
         assert_eq!(float_anchor(c"NW"), Some(0));
         assert_eq!(float_anchor(c"NE"), Some(kFloatAnchorEast));
@@ -721,6 +723,7 @@ mod tests {
 
     /// The enumerated keys fold case, because `striequal` does.
     #[test]
+    #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn a_name_is_matched_whatever_its_case() {
         assert_eq!(float_anchor(c"nw"), Some(0));
         assert_eq!(float_relative(c"EDITOR"), Some(kFloatRelativeEditor));
@@ -739,6 +742,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "strcasecmp is a foreign function")]
     fn split_names_its_four_sides() {
         assert_eq!(config_split(c"left"), Some(kWinSplitLeft));
         assert_eq!(config_split(c"right"), Some(kWinSplitRight));
