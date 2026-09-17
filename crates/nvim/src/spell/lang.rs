@@ -102,7 +102,10 @@ pub fn spell_enc() -> XString {
 unsafe fn int_wordlist_spl(fname: *mut c_char) {
     let fmt = SPL_FNAME_TMPL.as_ptr();
     let (list, enc) = (int_wordlist.get(), spell_enc());
-    unsafe { vim_snprintf(fname, MAXPATHL as size_t, fmt, list, enc) };
+    // `enc` is an `XString`: the formatter's `%s` wants the *bytes*, and a
+    // variadic argument is not type-checked, so the pointer has to be
+    // spelled out. See `spell_load_lang`.
+    unsafe { vim_snprintf(fname, MAXPATHL as size_t, fmt, list, enc.as_ptr()) };
 }
 
 /// Load every spell file for language `lang` (a name without a region)
@@ -135,7 +138,14 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
         let fmt = c"spell/%s.%s.spl".as_ptr();
         let enc = spell_enc();
-        unsafe { vim_snprintf(buf, room, fmt, lang, enc) };
+        // **`enc.as_ptr()`, not `enc`.** A variadic argument is not
+        // type-checked: handing the formatter the `XString` itself lowers a
+        // three-word value into the argument area and `%s` reads whichever
+        // word the ABI happens to put first. It survived a debug build --
+        // that word was the vector's data pointer -- and produced a garbage
+        // file name in a release one, so `:set spelllang=en` could not find
+        // `spell/en.utf-8.spl` and offered to download it instead.
+        unsafe { vim_snprintf(buf, room, fmt, lang, enc.as_ptr()) };
         r = unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl) };
 
         if r.is_err() && sl.sl_lang[0] != 0 {
