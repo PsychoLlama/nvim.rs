@@ -1,5 +1,5 @@
 count	callee	no_raw	defs	def
-889	xfree	0	1	crates/nvim/src/memory/mod.rs
+890	xfree	0	1	crates/nvim/src/memory/mod.rs
 811	.add	0	3	
 467	.offset	0	0	
 443	bytes_at	0	1	crates/nvim/src/cstr.rs

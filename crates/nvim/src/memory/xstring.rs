@@ -197,14 +197,24 @@ impl XString {
 
     /// Give the block to a caller that releases it with `xfree`.
     ///
-    /// The allocation is shrunk to exactly `len() + 1` bytes first, so the
-    /// receiver's `xrealloc` sees the size the block reports; `free` itself
-    /// never cared. Safe to call: what makes the handover legal is that both
-    /// sides draw from one allocator (see the `allocator` module).
+    /// **The block does not move.** Shrinking to `len() + 1` first would be
+    /// tidier -- and is what this did -- but `Vec::into_boxed_slice` is a
+    /// `realloc`, and a caller that read [`as_ptr`](Self::as_ptr) before
+    /// handing the string over is then left holding the old address. The
+    /// option layer does exactly that: it reads the variable, replaces it,
+    /// and frees what the replace handed back. So the spare capacity travels
+    /// with the block, which is the mirror of the "Adopting a foreign block"
+    /// rule in the `allocator` module: `free` never took a size and
+    /// `realloc` reads the block's own, so an *overstated* block is as
+    /// harmless to the receiver as an understated one is to us.
+    ///
+    /// Safe to call: what makes the handover legal is that both sides draw
+    /// from one allocator.
     pub fn into_raw(self) -> *mut c_char {
         // Never empty -- the terminator is always there -- so this is a heap
-        // address, not the dangling one an empty boxed slice would give.
-        Box::into_raw(self.0.into_boxed_slice()).cast::<c_char>()
+        // address, not a dangling one.
+        let mut bytes = core::mem::ManuallyDrop::new(self.0);
+        bytes.as_mut_ptr().cast::<c_char>()
     }
 
     /// Adopt a block an `xmalloc`-family function produced.
@@ -391,6 +401,20 @@ mod tests {
         assert_eq!(string, b"utf-8".as_slice());
         assert_eq!(string, c"utf-8");
         assert_eq!(format!("{string:?}"), "XString(utf-8)");
+    }
+
+    /// The option layer reads a variable's address, replaces the variable,
+    /// and then frees what the replace handed back — so `into_raw` must give
+    /// back the block `as_ptr` named, spare capacity and all.
+    #[test]
+    fn into_raw_does_not_move_the_block() {
+        let mut string = XString::with_capacity(64);
+        string.push_str("short");
+        let before = string.as_ptr();
+        let raw = string.into_raw();
+        assert_eq!(before, raw.cast_const());
+        // SAFETY: the block `into_raw` just handed over.
+        unsafe { xfree(raw.cast::<c_void>()) };
     }
 
     /// The round trip the perimeter exists for: a block this type gives up
