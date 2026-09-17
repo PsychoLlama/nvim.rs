@@ -62,11 +62,26 @@ unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_ch
 /// The name a deleted-but-still-referenced group lists under, translated
 /// once and cached.
 ///
+/// The cache is not an optimisation: `autocmd_get`'s "is this the deleted
+/// group" test is an *address* comparison against what this answered
+/// earlier, so the answer has to stay the same one for the session even if
+/// `:language` moves the catalogue under it.
+///
 /// Safe: it takes no pointer and only reads the cache and the message
 /// catalogue, both of which are live for as long as the editor is.
 #[inline(always)]
 pub(crate) fn get_deleted_augroup() -> *const ::core::ffi::c_char {
-    gettext(c"--Deleted--").as_ptr()
+    /// See [`get_deleted_augroup`].
+    static DELETED: GlobalCell<Option<&'static ::core::ffi::CStr>> = GlobalCell::new(None);
+
+    DELETED
+        .get()
+        .unwrap_or_else(|| {
+            let translated = gettext(c"--Deleted--");
+            DELETED.set(Some(translated));
+            translated
+        })
+        .as_ptr()
 }
 
 /// The id of the group called `name`, creating one if there is not

@@ -78,11 +78,11 @@ selector!(
 /// The table of fields: one line per option that has a global value.
 ///
 /// The record itself: each line declares one field, the reader everything
-/// outside this module reads it with, and the selector — which is both what the option table's
-/// row holds and how the option is *written* (`P_XX.set(value)`). The reader
-/// projects the field directly rather than through the selector, because
-/// reads are the hot half: `win_line` asks several options per screen line,
-/// and a write is a `:set`.
+/// outside this module reads it with, and the selector — which is both
+/// what the option table's row holds and how the option is *written*
+/// (`P_XX.set(value)`). The reader projects the field directly rather than
+/// through the selector, because reads are the hot half: `win_line` asks
+/// several options per screen line, and a write is a `:set`.
 macro_rules! options {
     (struct $record:ident {
         $(
