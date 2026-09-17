@@ -1,0 +1,19 @@
+# One test thread, for every `cargo test` in this workspace.
+#
+# `tests/unit` shares *the editor* between cases: one process, one set of
+# globals, brought up once by `support::editor_lock`. A case that touches
+# those globals is supposed to hold that lock, and most do — but the lock
+# is a convention, not a type, and the cases that only read (or that reach
+# the editor through a callee two levels down) do not take it.
+#
+# That was survivable while an option's value was a raw `char *`: a racing
+# read saw a stale pointer and answered wrongly. Since the option values
+# own their bytes (phase 32), the same race *frees and clones* them, and a
+# run in eight aborted in the allocator instead. Serialising the lane costs
+# about a second and a half — nearly all of its wall time is two slow cases,
+# not parallelism — and removes the whole class.
+#
+# It is set here rather than in the justfile so that a bare `cargo test`
+# gets it too.
+[env]
+RUST_TEST_THREADS = "1"

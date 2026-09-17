@@ -311,6 +311,7 @@
 {"path":"neovim::option::vars::P_SXQ","kind":"use","file":"crates/nvim/src/option/vars.rs","tests":["crates/nvim/tests/unit/shell.rs"]}
 {"path":"neovim::option::vars::P_UDIR","kind":"use","file":"crates/nvim/src/option/vars.rs","tests":["crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::optionstr::check_ff_value","kind":"fn","file":"crates/nvim/src/optionstr/flags.rs","tests":["crates/nvim/tests/unit/optionstr.rs"]}
+{"path":"neovim::optionstr::init_buf_string_options","kind":"fn","file":"crates/nvim/src/optionstr/check.rs","tests":["crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::os::env::os_env_exists","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::env::os_get_hostname","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}
 {"path":"neovim::os::env::os_get_pid","kind":"fn","file":"crates/nvim/src/os/env/mod.rs","tests":["crates/nvim/tests/unit/env.rs"]}

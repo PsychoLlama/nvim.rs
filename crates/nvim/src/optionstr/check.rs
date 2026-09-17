@@ -114,8 +114,10 @@ pub(crate) fn illegal_char_after_chr(c: c_int) -> OptError {
 /// `Option<XString>`: the niche the `Option` uses is the vector's capacity,
 /// so a zeroed field reads as `Some` over a null pointer. Every string
 /// option is therefore written -- with `write`, which drops nothing --
-/// before anything can read or drop it. The buffer's syntax block has its
-/// own five; [`crate::syntax::init_synblock`] writes those.
+/// before anything can read or drop it. That includes the five in the
+/// buffer's own syntax block, which is part of the buffer;
+/// `crate::syntax::init_synblock` writes the same five for the standalone
+/// block `:ownsyntax` allocates, and writing `None` twice costs nothing.
 ///
 /// This is where upstream's "replace each null option value with the shared
 /// empty string" sweep went: `None` *is* that shared empty string, so the
@@ -183,6 +185,11 @@ pub unsafe fn init_buf_string_options(at: *mut Buffer) {
         (&raw mut (*at).b_p_tsr).write(None);
         (&raw mut (*at).b_p_tsrfu).write(None);
         (&raw mut (*at).b_p_lw).write(None);
+        (&raw mut (*at).b_s.b_p_spc).write(None);
+        (&raw mut (*at).b_s.b_p_spf).write(None);
+        (&raw mut (*at).b_s.b_p_spl).write(None);
+        (&raw mut (*at).b_s.b_p_spo).write(None);
+        (&raw mut (*at).b_s.b_syn_isk).write(None);
     }
 }
 

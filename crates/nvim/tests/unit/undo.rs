@@ -114,6 +114,7 @@ mod write {
 
     use neovim::memory::{XString, xfree};
     use neovim::option::vars::P_UDIR;
+    use neovim::optionstr::init_buf_string_options;
     use neovim::types::Buffer;
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
@@ -155,12 +156,15 @@ mod write {
             let mut buf: Box<Buffer> = {
                 let mut storage = Box::<Buffer>::new_zeroed();
                 // SAFETY: all-zero bytes are what upstream's `xcalloc` hands
-                // a fresh buffer, and the one field a zeroed `Buffer` is
-                // *not* a valid value for -- `b_ucmds`, whose empty `Vec`
-                // holds a non-null dangling pointer -- is written before
-                // anything can read or drop it.
+                // a fresh buffer, except for `b_ucmds`, whose empty `Vec`
+                // holds a non-null dangling pointer, and the string
+                // options, whose `Option<XString>` reads as a `Some` over a
+                // null pointer when zeroed. Both are written before
+                // anything can read or drop them -- and this fixture's
+                // buffer *is* dropped, so a garbage `Some` would be freed.
                 unsafe {
                     (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
+                    init_buf_string_options(storage.as_mut_ptr());
                     storage.assume_init()
                 }
             };
