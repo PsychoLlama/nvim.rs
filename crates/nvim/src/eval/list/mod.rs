@@ -235,10 +235,12 @@ impl ListArg {
         Some(Item { list: self, at })
     }
 
+    /// Reverse the items. A NULL list is empty, so there is nothing to do.
     #[inline(always)]
     pub(crate) fn reverse(self) {
-        // SAFETY: live or NULL.
-        unsafe { (*self.0).reverse() };
+        if let Some(list) = self.get() {
+            list.reverse();
+        }
     }
 
     /// Store the list in `result`, which takes a reference of its own.
@@ -249,10 +251,16 @@ impl ListArg {
     }
 
     /// Append a copy of `tv`.
+    ///
+    /// A NULL list reads as `VarLock::Fixed`, so every caller has already
+    /// been refused by [`check_lock`](crate::eval::typval::tv_check_lock)
+    /// before it gets here; the guard is what makes that a *fact* rather
+    /// than a claim about callers this type cannot see.
     #[inline(always)]
     pub(crate) fn append_tv(self, tv: &TypVal) {
-        // SAFETY: live or NULL, and `tv` is a live value.
-        unsafe { (*self.0).push_copy(tv) };
+        if let Some(list) = self.get() {
+            list.push_copy(tv);
+        }
     }
 
     /// Append `tv`, taking ownership of it.
@@ -263,11 +271,14 @@ impl ListArg {
     }
 
     /// Insert a copy of `tv` before `before`, or at the end when it is None.
+    /// `before` is an item of this very list -- [`find`](Self::find) is the
+    /// only thing that produces one -- and a NULL list has no items, so it
+    /// is `None` and there is nothing to insert into.
     #[inline(always)]
     pub(crate) fn insert_tv(self, tv: &TypVal, before: Option<Item>) {
-        // SAFETY: live, `tv` is a live value, and `before` is an item of this
-        // very list -- `find` is the only thing that produces one.
-        unsafe { (*self.0).insert_copy(tv, before.map(|i| i.at)) };
+        if let Some(list) = self.get() {
+            list.insert_copy(tv, before.map(|i| i.at));
+        }
     }
 
     /// Splice copies of `other`'s items in before `before`.
