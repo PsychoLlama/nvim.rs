@@ -954,7 +954,7 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
 /// `semsg(fmt, buf->b_fname)`.
 fn err_fname(buffer: Buf) {
     // SAFETY: a buffer's own name, NUL-terminated.
-    let name = unsafe { c_str(buffer.b_fname) };
+    let name = unsafe { c_str(buffer.name.shown_ptr()) };
     semsg!("E89: {name} will be killed (add ! to override)");
 }
 

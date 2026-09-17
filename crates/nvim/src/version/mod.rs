@@ -363,7 +363,7 @@ pub(crate) fn list_version() {
 pub(crate) fn may_show_intro() -> bool {
     let empty = buf_is_empty(Buf::current());
     empty
-        && Buf::current().b_fname.is_null()
+        && Buf::current().name.is_unnamed()
         && Buf::current().handle == 1
         && Win::current().handle == LOWEST_WIN_ID as c_int
         && one_window(Win::current(), None)

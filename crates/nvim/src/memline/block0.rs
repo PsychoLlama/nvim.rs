@@ -154,7 +154,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = buffer;
-    if b.b_ffname.is_null() {
+    if b.name.full().is_none() {
         unsafe { (*b0p).b0_fname[0] = NUL as c_char };
     } else {
         // A file under the current user's home directory is recorded as
@@ -168,7 +168,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
         // 900 bytes and every write below lands in the copy.
         let name = unsafe { &mut (*b0p).b0_fname };
         let (out, room) = (name.as_mut_ptr(), B0_FNAME_SIZE_CRYPT as size_t);
-        unsafe { home_replace(None, buffer.b_ffname, out, room, true) };
+        unsafe { home_replace(None, buffer.name.full_ptr(), out, room, true) };
         if name[0] as c_int == '~' as c_int {
             let mut uname: [c_char; B0_UNAME_SIZE as usize] = [0; B0_UNAME_SIZE as usize];
             let named = unsafe { os_get_username(uname.as_mut_ptr(), B0_UNAME_SIZE as size_t) };
@@ -182,7 +182,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
                 unsafe {
                     xstrlcpy(
                         name.as_mut_ptr(),
-                        buffer.b_ffname,
+                        buffer.name.full_ptr(),
                         B0_FNAME_SIZE_CRYPT as size_t,
                     )
                 };
@@ -193,7 +193,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
         }
 
         let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-        if unsafe { os_fileinfo(buffer.b_ffname, &raw mut file_info) } {
+        if unsafe { os_fileinfo(buffer.name.full_ptr(), &raw mut file_info) } {
             let mtime = file_info.stat.st_mtim.tv_sec;
             unsafe { b0_store_number(mtime, &mut (*b0p).b0_mtime) };
             let ino = unsafe { os_fileinfo_inode(&raw mut file_info) } as c_long;
@@ -226,7 +226,12 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: Buf) {
 ///
 /// `b0p` must point at a live `ZeroBlock`, unaliased for the call.
 pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buffer: Buf) {
-    let same = unsafe { same_directory(mf_fname(buffer.b_ml.ml_mfp).cast_mut(), buffer.b_ffname) };
+    let same = unsafe {
+        same_directory(
+            mf_fname(buffer.b_ml.ml_mfp).cast_mut(),
+            buffer.name.full_ptr(),
+        )
+    };
     unsafe { (*b0p).set_flag(B0_SAME_DIR, same) };
 }
 
@@ -510,15 +515,16 @@ pub(crate) unsafe fn swapfile_is_for_other_file(buffer: Buf, fname: *mut c_char)
         let stored = cstr::as_bytes(&b0.b0_fname);
         let stored_tail = cstr::in_bytes(&stored[tail_index(stored)..]);
         if b0.flags() & B0_SAME_DIR == 0
-            || unsafe { path_fnamecmp(cstr::at(path_tail(buffer.b_ffname)), stored_tail) } != 0
-            || !unsafe { same_directory(fname, buffer.b_ffname) }
+            || unsafe { path_fnamecmp(cstr::at(path_tail(buffer.name.full_ptr())), stored_tail) }
+                != 0
+            || !unsafe { same_directory(fname, buffer.name.full_ptr()) }
         {
             // The name in the swap file may be "~user/path/file".
             // Symlinks can point at the same file under two names, so the
             // inode has the last word.
             unsafe { expand_env(b0.b0_fname.as_mut_ptr(), expanded.as_mut_ptr(), MAXPATHL) };
             let (name, ino) = (expanded.as_mut_ptr(), b0_read_number(&b0.b0_ino));
-            differ = unsafe { files_differ(buffer.b_ffname, name, ino) };
+            differ = unsafe { files_differ(buffer.name.full_ptr(), name, ino) };
         }
     }
     differ

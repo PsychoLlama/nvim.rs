@@ -245,7 +245,7 @@ unsafe fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs
     unsafe { set_vim_var_string(Vv::FcsReason, name.as_ptr(), len) };
     unsafe { set_vim_var_string(Vv::FcsChoice, c"".as_ptr(), 0) };
     let locked = Lock::all_buffers();
-    let fname = buffer.b_fname;
+    let fname = buffer.name.shown_ptr();
     // SAFETY: a live buffer and its own file name.
     let handled = unsafe {
         apply_autocmds(
@@ -285,7 +285,7 @@ unsafe fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs
 ///
 /// Safe: [`Buf`] carries the whole of the promise this needs.
 fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reload, bool) {
-    let path = unsafe { home_replace_save(Some(buffer), buffer.b_fname) };
+    let path = unsafe { home_replace_save(Some(buffer), buffer.name.shown_ptr()) };
     // +2 for either '\n' or "; " and +1 for NUL.
     let size = unsafe { cstr::bytes_at(path) }.len() + mesg.count_bytes() + mesg2.count_bytes() + 3;
     let mut tbuf = vec![0 as c_char; size];
@@ -365,7 +365,7 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
     // loaded, 'buftype' is set, we are in the middle of a save, or we are
     // being called recursively: ignore this buffer.
     if !buffer.terminal.is_null()
-        || buffer.b_ffname.is_null()
+        || buffer.name.full().is_none()
         || buffer.b_ml.ml_mfp.is_null()
         || !buf_is_normal(Some(buffer))
         || buffer.b_saving
@@ -385,7 +385,7 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
     let mut file_info = FileInfo::default();
     let mut file_info_ok = false;
     let differs = !buffer.b_flags.has(BufFlags::NOTEDITED) && buffer.b_mtime != 0 && {
-        file_info_ok = unsafe { os_fileinfo(buffer.b_ffname, &raw mut file_info) };
+        file_info_ok = unsafe { os_fileinfo(buffer.name.full_ptr(), &raw mut file_info) };
         !file_info_ok
             || time_differs(&file_info, buffer.b_mtime, buffer.b_mtime_ns)
             || file_info.stat.st_mode as c_int != buffer.b_orig_mode
@@ -409,7 +409,7 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
 
         // Don't do anything for a directory. It might contain the file
         // explorer.
-        if unsafe { os_isdir(buffer.b_fname) } {
+        if unsafe { os_isdir(buffer.name.shown_ptr()) } {
             // Nothing to do.
         } else if (if buffer.b_p_ar >= 0 {
             buffer.b_p_ar != 0
@@ -481,7 +481,7 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
         }
     } else if buffer.b_flags.has(BufFlags::NEW)
         && !buffer.b_flags.has(BufFlags::NEW_W)
-        && unsafe { os_path_exists(buffer.b_ffname) }
+        && unsafe { os_path_exists(buffer.name.full_ptr()) }
     {
         retval = 1;
         mesg = Some(translate!(
@@ -504,7 +504,7 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
     if reload != Reload::No {
         // SAFETY: the caller's promise -- `buffer` survives the reload.
         unsafe { buf_reload(buffer, orig_mode, reload == Reload::Detect) };
-        if bufref.valid() && buffer.b_p_udf != 0 && !buffer.b_ffname.is_null() {
+        if bufref.valid() && buffer.b_p_udf != 0 && !buffer.name.full().is_none() {
             // Any existing undo file is unusable, write it now.
             let mut hash = [0u8; UNDO_HASH_SIZE as usize];
             unsafe { u_compute_hash(buffer, hash.as_mut_ptr()) };
@@ -514,7 +514,7 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
 
     // Trigger FileChangedShellPost when the file was changed in any way.
     if bufref.valid() && retval != 0 {
-        let (post, fname) = (AutoEvent::FileChangedShellPost, buffer.b_fname);
+        let (post, fname) = (AutoEvent::FileChangedShellPost, buffer.name.shown_ptr());
         // SAFETY: a live buffer and its own file name.
         unsafe { apply_autocmds(post, fname, fname, false, Some(buffer)) };
     }
@@ -594,7 +594,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
             || buffer.raw() != Buf::current_raw()
             || savebuf.is_none_or(|scratch| move_lines(buffer, scratch) == FAIL)
         {
-            let fname = buffer.b_fname;
+            let fname = buffer.name.shown_ptr();
             // SAFETY: a static format string with one `%s`, and the buffer's // own file name.
             let fname = unsafe { c_str(fname) };
             semsg!("E462: Could not prepare for reloading \"{fname}\"");
@@ -605,13 +605,13 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     if saved.is_ok() {
         Buf::current().b_flags |= BufFlags::CHECK_RO; // check for RO again
         Buf::current().b_keep_filetype = true; // don't detect 'filetype'
-        let (ffname, fname) = (buffer.b_ffname, buffer.b_fname);
+        let (ffname, fname) = (buffer.name.full_ptr(), buffer.name.shown_ptr());
         let last = MAXLNUM;
         let quiet = shortmess(ShmFlag::FILEINFO);
         // SAFETY: a live buffer's own names, and `ea` is a local.
         if unsafe { readfile(ffname, fname, 0, 0, last, Some(&mut ea), flags, quiet) }.is_err() {
             if !aborting() {
-                let fname = buffer.b_fname;
+                let fname = buffer.name.shown_ptr();
                 // SAFETY: a static format string with one `%s`, and the // buffer's own file name.
                 let fname = unsafe { c_str(fname) };
                 semsg!("E321: Could not reload \"{fname}\"");

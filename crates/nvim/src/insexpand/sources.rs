@@ -679,7 +679,7 @@ pub(crate) unsafe fn get_next_default_completion(
         let fname = if in_curbuf {
             ptr::null_mut()
         } else {
-            ins_buf.b_sfname
+            ins_buf.name.short_ptr()
         };
         let ic = p_ic();
         // SAFETY: `ptr` is `len` readable bytes of the match just found, and

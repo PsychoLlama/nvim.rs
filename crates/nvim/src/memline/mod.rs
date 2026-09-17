@@ -518,7 +518,7 @@ pub fn ml_open_file(buffer: Buf) {
             c_str(if !buf_spname(buffer).is_null() {
                 buf_spname(buffer)
             } else {
-                b.b_fname
+                b.name.shown_ptr()
             })
         };
         semsg!("E303: Unable to open swap file for \"{arg0}\", recovery impossible");

@@ -36,7 +36,7 @@ pub(crate) fn ignore_buf(buffer: Option<Buf>, removable_bufs: &RemovableBufs) ->
     let Some(b) = buffer else {
         return true;
     };
-    b.b_ffname.is_null()
+    b.name.full().is_none()
         || (b.b_p_bl == 0 && b.b_p_initialized)
         || buf_is_quickfix(Some(b))
         || buf_is_terminal(Some(b))
@@ -48,7 +48,7 @@ pub(crate) fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
     for buf in buffers() {
         // SAFETY: a live buffer from the editor's own list, whose name is
         // only read, and the caller's set.
-        if !buf.b_ffname.is_null() && unsafe { shada_removable(buf.b_ffname) } {
+        if !buf.name.full().is_none() && unsafe { shada_removable(buf.name.full_ptr()) } {
             removable_bufs.insert(buf.raw().cast_const());
         }
     }
@@ -69,7 +69,7 @@ pub(crate) fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
         {
             wanted.push(ShadaBufferListItem {
                 pos: buf.b_last_cursor.mark,
-                fname: buf.b_ffname,
+                fname: buf.name.full_ptr(),
                 additional_data: buf.additional_data,
             });
         }
@@ -362,11 +362,11 @@ unsafe fn jump_target(
         return (!fm.fname.is_null()).then_some(fm.fname as *const c_char);
     }
     let buf = find_buf(fm.fmark.fnum);
-    if ignore_buf(buf, removable_bufs) || buf.is_none_or(|b| b.b_ffname.is_null()) {
+    if ignore_buf(buf, removable_bufs) || buf.is_none_or(|b| b.name.full().is_none()) {
         return None;
     }
     let buf = buf.expect("`ignore_buf` answered true for a buffer that is not there");
-    Some(buf.b_ffname)
+    Some(buf.name.full_ptr())
 }
 
 /// Every register, as msgpack.

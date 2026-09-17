@@ -164,7 +164,7 @@ impl TagFiles {
                 FINDFILE_FILE.cast_signed(),
                 self.search.ctx,
                 true,
-                Buf::current().b_ffname,
+                Buf::current().name.full_ptr(),
             )
         };
         self.search.open = !self.search.ctx.is_null();

@@ -151,7 +151,7 @@ pub(crate) unsafe fn readfile(
         // If there is no file name yet, use the one for the read file, and
         // set BufFlags::NOTEDITED to reflect that. Not for a read from a filter,
         // and only when 'cpoptions' contains the 'f' flag.
-        if Buf::current().b_ffname.is_null()
+        if Buf::current().name.full().is_none()
             && !how.filtering
             && !fname.is_null()
             && cpo_has(CpoFlag::FNAMER)
@@ -409,7 +409,7 @@ pub(crate) unsafe fn readfile(
                 conv.restlen = 0;
                 read_undo_file = how.newfile
                     && !how.keep_undo
-                    && !Buf::current().b_ffname.is_null()
+                    && !Buf::current().name.full().is_none()
                     && Buf::current().b_p_udf != 0
                     && !how.filtering
                     && !how.fifo

@@ -557,7 +557,7 @@ unsafe fn keep_or_drop_dummy(
         apply_autocmds(
             AutoEvent::FileType,
             buffer.b_p_ft.value_ptr(),
-            buffer.b_fname,
+            buffer.name.shown_ptr(),
             true,
             __hoisted_0,
         )

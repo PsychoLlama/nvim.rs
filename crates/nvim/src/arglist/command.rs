@@ -327,7 +327,7 @@ pub fn ex_argedit(excmd: &mut ExArg) {
     maketitle();
     // SAFETY: curbuf is valid.
     let empty_curbuf = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY)
-        && (Buf::current().b_ffname.is_null() || curbuf_is_reusable);
+        && (Buf::current().name.full().is_none() || curbuf_is_reusable);
     if cur_arg_idx() == 0 && empty_curbuf {
         argn = 0;
     }

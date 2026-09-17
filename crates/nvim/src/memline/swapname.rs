@@ -327,7 +327,7 @@ unsafe fn attention_message(
     fhname: *mut c_char,
     msg: &mut Vec<u8>,
 ) {
-    debug_assert!(!buffer.b_fname.is_null());
+    debug_assert!(!buffer.name.is_unnamed());
 
     complain(c"E325: ATTENTION");
     push_tr(msg, c"Found a swap file by the name \"");
@@ -336,11 +336,11 @@ unsafe fn attention_message(
     msg.extend_from_slice(b"\"\n");
     let swap_mtime = unsafe { swapfile_info(fname, msg) };
     push_tr(msg, c"While opening file \"");
-    msg.extend_from_slice(unsafe { cstr::bytes_at(buffer.b_fname) });
+    msg.extend_from_slice(unsafe { cstr::bytes_at(buffer.name.shown_ptr()) });
     msg.extend_from_slice(b"\"\n");
 
     let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-    if !unsafe { os_fileinfo(buffer.b_fname, &raw mut file_info) } {
+    if !unsafe { os_fileinfo(buffer.name.shown_ptr(), &raw mut file_info) } {
         push_tr(msg, c"      CANNOT BE FOUND");
     } else {
         push_tr(msg, c"             dated: ");
@@ -364,7 +364,7 @@ unsafe fn attention_message(
         c"    If this is the case, use \":recover\" or \"nvim -r ",
     );
     // SAFETY: the buffer's own name, NUL-terminated.
-    msg.extend_from_slice(unsafe { cstr::bytes_at(buffer.b_fname) });
+    msg.extend_from_slice(unsafe { cstr::bytes_at(buffer.name.shown_ptr()) });
     push_tr(
         msg,
         c"\"\n    to recover the changes (see \":help recovery\").\n",
@@ -388,7 +388,7 @@ unsafe fn do_swapexists(buffer: Buf, fname: *mut c_char) -> SwapExistsChoice {
     // `<afile>` is the file being edited. Changing directory is not
     // allowed from here.
     let locked = Lock::all_buffers();
-    let name = buffer.b_fname;
+    let name = buffer.name.shown_ptr();
     let no_io = core::ptr::null_mut();
     unsafe { apply_autocmds(AutoEvent::SwapExists, name, no_io, false, None) };
     drop(locked);
@@ -436,7 +436,7 @@ unsafe fn resolve_swapfile_clash(
 
     // Deleting it is safe when the file exists and the swap file records
     // no changes and looks intact.
-    if unsafe { os_path_exists(buffer.b_fname) } && unsafe { swapfile_unchanged(fname) } {
+    if unsafe { os_path_exists(buffer.name.shown_ptr()) } && unsafe { swapfile_unchanged(fname) } {
         choice = SEA_CHOICE_DELETE;
         if p_verbose() > 0 {
             unsafe { verb_msg(tr(c"Found a swap file that is not useful, deleting it")) };
@@ -571,7 +571,7 @@ pub(crate) unsafe fn findswapname(
     old_fname: *const c_char,
     found_existing_dir: *mut bool,
 ) -> *mut c_char {
-    let buf_fname = buffer.b_fname;
+    let buf_fname = buffer.name.shown_ptr();
 
     // Isolate one directory name out of *dirp. The rest of the option is
     // the longest one entry can be, so the buffer is its own bound.
@@ -581,7 +581,8 @@ pub(crate) unsafe fn findswapname(
     let dir_name = dir_buf.as_mut_ptr();
     unsafe { copy_option_part(dirp, dir_name, dir_len, c",".as_ptr().cast_mut()) };
 
-    let mut fname = unsafe { makeswapname(buf_fname, buffer.b_ffname, Some(buffer), dir_name) };
+    let mut fname =
+        unsafe { makeswapname(buf_fname, buffer.name.full_ptr(), Some(buffer), dir_name) };
     loop {
         if fname.is_null() {
             break; // out of memory

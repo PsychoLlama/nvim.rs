@@ -243,7 +243,7 @@ fn put_buffer_list(out: SessionFile, only_save_windows: bool) -> bool {
         let wanted = !(only_save_windows && buf.b_nwindows == 0)
             && !(buf.b_help && !opts.has(kOptSsopFlagHelp))
             && !(buf_is_terminal(Some(buf)) && !opts.has(kOptSsopFlagTerminal))
-            && !buf.b_fname.is_null()
+            && !buf.name.is_unnamed()
             && buf.b_p_bl != 0;
         if wanted {
             let lnum = if buf.b_wininfo.size == 0 {
@@ -311,7 +311,7 @@ fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
         for window in windows_in_tab(tab) {
             let buffer = window.buffer();
             if ses_do_win(window)
-                && !buffer.b_ffname.is_null()
+                && !buffer.name.full().is_none()
                 && !buf_is_help(Some(buffer))
                 && !buf_is_nofilename(Some(buffer))
             {

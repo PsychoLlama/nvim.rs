@@ -185,7 +185,7 @@ pub(crate) fn read_stdin() {
     no_wait_return.set(1);
     let save_msg_didany = msg_didany.get();
 
-    if !Buf::current().b_ffname.is_null() {
+    if !Buf::current().name.full().is_none() {
         let stdin_buf =
             unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 0, BLN_LISTED as c_int) };
         if stdin_buf.is_none() {
@@ -419,7 +419,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
         // Only load a file into a window that is still showing the first
         // window's buffer, or an unnamed one.
-        if Buf::current_raw() == first_win().w_buffer || Buf::current().b_ffname.is_null() {
+        if Buf::current_raw() == first_win().w_buffer || Buf::current().name.full().is_none() {
             Win::current().w_arg_idx = arg_idx;
             swap_exists_did_quit.set(false);
             let alist = global_arglist();

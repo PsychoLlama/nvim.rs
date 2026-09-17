@@ -243,12 +243,12 @@ pub unsafe fn find_line_end(text: *mut c_char) -> *mut c_char {
 /// Add every listed buffer's file name that starts with what was typed.
 pub(crate) fn get_next_bufname_token() {
     for b in buffers() {
-        if b.b_p_bl == 0 || b.b_sfname.is_null() {
+        if b.b_p_bl == 0 || b.name.short().is_none() {
             continue;
         }
         // SAFETY: a live buffer from the editor's own list, whose short name
         // is a NUL-terminated string.
-        let tail = unsafe { path_tail(b.b_sfname) };
+        let tail = unsafe { path_tail(b.name.short_ptr()) };
         let (orig_data, orig_len) = compl_orig_text().parts();
         if unsafe { cstr::prefix_eq(tail, orig_data, orig_len) } {
             let flags = if p_ic() { CP_ICASE } else { 0 };

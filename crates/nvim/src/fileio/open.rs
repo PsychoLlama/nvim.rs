@@ -114,14 +114,14 @@ pub(crate) unsafe fn open_source(
     // curbuf->b_fname, to detect nasty autocommands altering them.
     // Also check whether "fname" and "sfname" point at one of them.
     let old_curbuf = Buf::current_raw();
-    let old_b_ffname = Buf::current().b_ffname;
-    let old_b_fname = Buf::current().b_fname;
+    let old_b_ffname = Buf::current().name.full_ptr();
+    let old_b_fname = Buf::current().name.shown_ptr();
     let using_b_ffname = fname == old_b_ffname || sfname == old_b_ffname;
     let using_b_fname = fname == old_b_fname || sfname == old_b_fname;
     let buffer_changed = || {
         Buf::current_raw() != old_curbuf
-            || (using_b_ffname && old_b_ffname != Buf::current().b_ffname)
-            || (using_b_fname && old_b_fname != Buf::current().b_fname)
+            || (using_b_ffname && old_b_ffname != Buf::current().name.full_ptr())
+            || (using_b_fname && old_b_fname != Buf::current().name.shown_ptr())
     };
 
     // After reading a file the cursor line changes, but we don't want

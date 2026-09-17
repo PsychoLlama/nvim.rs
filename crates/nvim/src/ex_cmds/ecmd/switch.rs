@@ -233,8 +233,8 @@ fn leave_for_buffer(
     // earns.  Upstream `xstrdup`s it and frees it at five exits and inside
     // `delbuf_msg`; owning it is one `Drop`.
     // SAFETY: the buffer's own file name is NUL-terminated.
-    let new_name =
-        (!buffer.b_fname.is_null()).then(|| unsafe { CStr::from_ptr(buffer.b_fname) }.into());
+    let new_name = (!buffer.name.is_unnamed())
+        .then(|| unsafe { CStr::from_ptr(buffer.name.shown_ptr()) }.into());
     let new_name: Option<CString> = new_name;
     let save_au_new_curbuf = au_new_curbuf.get();
     au_new_curbuf.set(BufRef::of(buffer).record());

@@ -32,10 +32,10 @@ pub fn find_buffer(avar: &TypVal) -> Option<Buf> {
             // buffer — is not in the name index, so it is matched
             // literally instead.
             buffers().find(|b| {
-                !b.b_fname.is_null()
-                    && (unsafe { path_with_url(cstr::at(b.b_fname)) } != 0
+                !b.name.is_unnamed()
+                    && (unsafe { path_with_url(cstr::at(b.name.shown_ptr())) } != 0
                         || buf_is_nofilename(Some(*b)))
-                    && unsafe { cstr::eq(b.b_fname, name) }
+                    && unsafe { cstr::eq(b.name.shown_ptr(), name) }
             })
         }
         _ => None,
@@ -98,9 +98,9 @@ pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         Some(Buf::current())
     };
     if let Some(buf) = buf
-        && !buf.b_fname.is_null()
+        && !buf.name.is_unnamed()
     {
-        result.write_string(unsafe { xstrdup(buf.b_fname) });
+        result.write_string(unsafe { xstrdup(buf.name.shown_ptr()) });
     }
 }
 

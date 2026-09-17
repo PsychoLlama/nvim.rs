@@ -329,10 +329,10 @@ pub(crate) fn can_unload_buffer(buffer: Buf) -> bool {
     }
 
     if !can_unload {
-        let fname = if buffer.b_fname.is_null() {
-            buffer.b_ffname
+        let fname = if buffer.name.is_unnamed() {
+            buffer.name.full_ptr()
         } else {
-            buffer.b_fname
+            buffer.name.shown_ptr()
         };
         // SAFETY: a buffer's own name, NUL-terminated.
         let name = unsafe { c_str(fname) };
@@ -449,7 +449,7 @@ fn close_buffer_inner(
     }
 
     // Always remove the buffer when there is no file name.
-    if buffer.b_ffname.is_null() {
+    if buffer.name.full().is_none() {
         how.del = true;
     }
 
@@ -603,12 +603,7 @@ fn unlink_and_free(mut buffer: Buf, clear_w_buf: Option<Win>) {
     for wp in tab_windows() {
         forget_file(wp, fnum);
     }
-    if buffer.b_sfname != buffer.b_ffname {
-        xfree_clear(&mut buffer.b_sfname);
-    } else {
-        buffer.b_sfname = ptr::null_mut();
-    }
-    xfree_clear(&mut buffer.b_ffname);
+    buffer.name.clear();
     match buffer.prev() {
         None => firstbuf.set(buffer.b_next),
         Some(mut prev) => prev.b_next = buffer.b_next,

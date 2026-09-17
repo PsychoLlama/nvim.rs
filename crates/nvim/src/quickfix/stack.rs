@@ -134,7 +134,7 @@ pub(crate) fn qf_emsg(msg: *const c_char) {
 pub(crate) fn fire_qf_autocmd(event: AutoEvent, name: &CStr, on_fname: bool) -> bool {
     let pat = name.as_ptr().cast_mut();
     let fname = if on_fname {
-        Buf::current().b_fname
+        Buf::current().name.shown_ptr()
     } else {
         ptr::null_mut()
     };

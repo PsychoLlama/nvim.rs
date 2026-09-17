@@ -70,7 +70,7 @@ pub(crate) unsafe fn sign_list_placed(rbuf: Option<Buf>, group: *const c_char) {
             msg_putchar('\n' as c_int);
             // A live buffer's name is a NUL-terminated string, and the
             // formatting happens inside `msg_buf!`'s own region.
-            let lbuf = msg_buf!(c"Signs for %s:", cbuf.b_fname);
+            let lbuf = msg_buf!(c"Signs for %s:", cbuf.name.shown_ptr());
             msg_str_hl(cstr::in_chars(&lbuf), HLF_D, false);
         }
 

@@ -391,13 +391,13 @@ fn restore_syntax_events(save_ei: Option<XString>) {
                     apply_autocmds(
                         AutoEvent::Syntax,
                         Buf::current().b_p_syn.value_ptr(),
-                        Buf::current().b_fname,
+                        Buf::current().name.shown_ptr(),
                         true,
                         Buf::current_or_none(),
                     )
                 };
             } else {
-                let (syn, name) = (buf.b_p_syn.value_ptr(), buf.b_fname);
+                let (syn, name) = (buf.b_p_syn.value_ptr(), buf.name.shown_ptr());
                 // SAFETY: `aco` is this frame's, `buf` is live, and the two
                 // strings are its own NUL-terminated fields -- read before
                 // the switch, which does not touch them.

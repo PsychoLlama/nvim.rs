@@ -120,7 +120,7 @@ pub(crate) fn put_view(
     // Folds, when 'buftype' is empty and for help files.
     let buf = window.buffer();
     if opts.has(kOptSsopFlagFolds)
-        && !buf.b_ffname.is_null()
+        && !buf.name.full().is_none()
         && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
         && unsafe { put_folds(out.raw(), window) }.is_err()
     {
@@ -152,7 +152,7 @@ fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<bool> {
     let fname_esc = unsafe { ses_escape_fname(ses_get_fname(buffer, opts)) };
     let outcome = if buf_is_help(window.buffer_or_none()) {
         put_help_edit(out, window).then_some(true)
-    } else if !buffer.b_ffname.is_null()
+    } else if !buffer.name.full().is_none()
         && (!buf_is_nofilename(window.buffer_or_none()) || !buffer.terminal.is_null())
     {
         // Editing a file. This may have side effects -- a compressed or
@@ -174,7 +174,7 @@ fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<bool> {
     } else {
         // No file in this buffer: make it empty. It may still have a
         // name that is not a file name.
-        let named = !buffer.b_ffname.is_null();
+        let named = !buffer.name.full().is_none();
         let ok = out.line(c"enew")
             && (!named || (out.puts(c"file ") && unsafe { out.bytes(fname_esc) } && out.eol()));
         ok.then_some(false)
@@ -206,7 +206,7 @@ fn put_alternate(out: SessionFile, window: Win, opts: SessionOpts) -> bool {
     let alt = find_buf(window.w_alt_fnum);
     let restorable = alt.is_some_and(|b| {
         // SAFETY: a live buffer's own file name, which is NUL-terminated.
-        !b.b_fname.is_null() && unsafe { *b.b_fname } != NUL as c_char && b.b_p_bl != 0
+        !b.name.is_unnamed() && unsafe { *b.name.shown_ptr() } != NUL as c_char && b.b_p_bl != 0
     });
     let wanted = opts.is_session()
         && restorable

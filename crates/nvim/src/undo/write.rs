@@ -33,7 +33,7 @@ use crate::winlayer::Buf;
 pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buffer: Buf, hash: *mut uint8_t) {
     let file_name: *mut c_char = if name.is_null() {
         // SAFETY: `b_ffname` is the buffer's own name or NULL.
-        let picked = unsafe { u_get_undo_file_name(buffer.b_ffname, false) };
+        let picked = unsafe { u_get_undo_file_name(buffer.name.full_ptr(), false) };
         if picked.is_null() {
             verbosely(true, || {
                 // SAFETY: a NUL-terminated literal.
@@ -95,9 +95,9 @@ unsafe fn write_undo_file(
     // The undo file inherits the edited file's permissions, minus
     // anything but read/write: it holds the same text.
     let mut perm: c_int = 0o600;
-    if !buffer.b_ffname.is_null() {
+    if !buffer.name.full().is_none() {
         // SAFETY: the buffer's own name, NUL-terminated.
-        perm = unsafe { os_getperm(buffer.b_ffname) } as c_int;
+        perm = unsafe { os_getperm(buffer.name.full_ptr()) } as c_int;
         if perm < 0 {
             perm = 0o600;
         }
@@ -149,8 +149,8 @@ unsafe fn write_undo_file(
         let file_name = unsafe { c_str(file_name) };
         semsg!("E829: Write error in undo file: {file_name}");
     }
-    if !buffer.b_ffname.is_null() {
-        let acl: VimAcl = os_get_acl(buffer.b_ffname);
+    if !buffer.name.full().is_none() {
+        let acl: VimAcl = os_get_acl(buffer.name.full_ptr());
         os_set_acl(file_name, acl);
         os_free_acl(acl);
     }
@@ -207,7 +207,7 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Bu
         uv_gid_t::try_from(info.stat.st_gid).expect("a group id fits a `uv_gid_t`")
     }
 
-    if buffer.b_ffname.is_null() {
+    if buffer.name.full().is_none() {
         return;
     }
     let mut edited = FileInfo::default();
@@ -216,7 +216,7 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Bu
     // NUL-terminated, two writable records of ours, and an open descriptor —
     // all by the contract above.
     let group_stuck = unsafe {
-        os_fileinfo(buffer.b_ffname, &raw mut edited)
+        os_fileinfo(buffer.name.full_ptr(), &raw mut edited)
             && os_fileinfo(file_name, &raw mut written)
             && edited.stat.st_gid != written.stat.st_gid
             && os_fchown(fd, u32::MAX as uv_uid_t, group_of(&edited)) != 0

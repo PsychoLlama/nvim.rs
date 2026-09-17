@@ -468,7 +468,7 @@ pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
 /// May replace the name with an fnum.
 /// Used for marks that come from the .shada file.
 pub fn fmarks_check_names(buffer: Buf) {
-    let name = buffer.b_ffname;
+    let name = buffer.name.full_ptr();
     if name.is_null() {
         return;
     }

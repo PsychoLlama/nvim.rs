@@ -267,7 +267,7 @@ pub(crate) fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed> {
         // never autowrite a "nofile" or "nowrite" buffer
         || buf_is_dontwrite(Some(buffer))
         || (!forceit && buffer.b_p_ro != 0)
-        || buffer.b_ffname.is_null()
+        || buffer.name.full().is_none()
     {
         return Err(Failed);
     }
@@ -333,7 +333,7 @@ pub(crate) fn check_changed(buffer: Buf, flags: c_int) -> bool {
     let mut count = 0;
     if flags & CCGD_ALLBUF != 0 {
         for buf2 in buffers() {
-            if buf_is_changed(buf2) && !buf2.b_ffname.is_null() {
+            if buf_is_changed(buf2) && !buf2.name.full().is_none() {
                 count += 1;
             }
         }
@@ -363,7 +363,7 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
         dialog_msg(
             buff.as_mut_ptr(),
             c"Save changes to \"%s\"?".as_ptr().cast_mut(),
-            buffer.b_fname,
+            buffer.name.shown_ptr(),
         )
     };
     let ret = if checkall {
@@ -373,12 +373,12 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
     };
 
     if ret == VIM_YES as c_int {
-        let empty_bufname = buffer.b_fname.is_null();
+        let empty_bufname = buffer.name.is_unnamed();
         if empty_bufname {
             unsafe { buf_set_name(buffer.handle as c_int, c"Untitled".as_ptr().cast_mut()) };
         }
         let target = buffer;
-        if unsafe { check_overwrite(&mut ea, target, buffer.b_fname, buffer.b_ffname, false) }.is_ok()
+        if unsafe { check_overwrite(&mut ea, target, buffer.name.shown_ptr(), buffer.name.full_ptr(), false) }.is_ok()
             // didn't hit Cancel
             && buf_write_all(buffer, false).is_ok()
         {
@@ -386,11 +386,10 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
         }
         // Restore the empty name when the write failed or was cancelled.
         if empty_bufname {
-            buffer.b_fname = ptr::null_mut();
-            unsafe { xfree(buffer.b_ffname.cast()) };
-            buffer.b_ffname = ptr::null_mut();
-            unsafe { xfree(buffer.b_sfname.cast()) };
-            buffer.b_sfname = ptr::null_mut();
+            // Upstream frees both names here without the
+            // `b_sfname != b_ffname` guard every other site has, which is
+            // a double free the moment the two ever alias.
+            buffer.name.clear();
         }
     } else if ret == VIM_NO as c_int {
         unchanged(buffer, true, false);
@@ -411,11 +410,17 @@ fn write_all_writable() {
     // autocommands can delete the buffer being walked.
     let mut cur = first_buffer();
     while let Some(target) = cur {
-        if buf_is_changed(target) && !target.b_ffname.is_null() && target.b_p_ro == 0 {
+        if buf_is_changed(target) && !target.name.full().is_none() && target.b_p_ro == 0 {
             let bufref = BufRef::of(target);
-            if !target.b_fname.is_null()
+            if !target.name.is_unnamed()
                 && unsafe {
-                    check_overwrite(&mut ea, target, target.b_fname, target.b_ffname, false)
+                    check_overwrite(
+                        &mut ea,
+                        target,
+                        target.name.shown_ptr(),
+                        target.name.full_ptr(),
+                        false,
+                    )
                 }
                 .is_ok()
             {
@@ -434,10 +439,10 @@ fn write_all_writable() {
 pub(crate) fn dialog_close_terminal(buffer: Buf) -> bool {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes.
-    let name = if buffer.b_fname.is_null() {
+    let name = if buffer.name.is_unnamed() {
         c"?".as_ptr().cast_mut()
     } else {
-        buffer.b_fname
+        buffer.name.shown_ptr()
     };
     unsafe {
         dialog_msg(
@@ -572,12 +577,12 @@ fn report_unwritten(buffer: Buf) {
         unsafe {
             semsg!(
                 "E947: Job still running in buffer \"{}\"",
-                c_str(buffer.b_fname)
+                c_str(buffer.name.shown_ptr())
             )
         }
     } else {
         let name = if buf_spname(buffer).is_null() {
-            buffer.b_fname
+            buffer.name.shown_ptr()
         } else {
             buf_spname(buffer)
         };
@@ -599,7 +604,7 @@ fn report_unwritten(buffer: Buf) {
 /// `Err` and an error message when the current buffer has no file name,
 /// `Ok` when it has one.
 pub(crate) fn check_fname() -> Result<(), Failed> {
-    if Buf::current().b_ffname.is_null() {
+    if Buf::current().name.full().is_none() {
         emsg(gettext(c"E32: No file name"));
         return Err(Failed);
     }
@@ -613,8 +618,8 @@ pub(crate) fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
     let retval = unsafe {
         buf_write(
             buffer,
-            buffer.b_ffname,
-            buffer.b_fname,
+            buffer.name.full_ptr(),
+            buffer.name.shown_ptr(),
             1 as LineNr,
             buffer.b_ml.ml_line_count,
             None,

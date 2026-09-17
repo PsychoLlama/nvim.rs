@@ -149,7 +149,7 @@ pub(crate) unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
             new_dir,
             dir_len,
             FileNameOpts::MESS,
-            Buf::current().b_ffname,
+            Buf::current().name.full_ptr(),
             &raw mut file_to_find,
             &raw mut search_ctx,
         )

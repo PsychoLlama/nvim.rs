@@ -189,9 +189,9 @@ impl Env {
             let nb = &mut buf;
             if name.is_null() {
                 let path = if full {
-                    self.buf.b_ffname
+                    self.buf.name.full_ptr()
                 } else {
-                    self.buf.b_fname
+                    self.buf.name.shown_ptr()
                 };
 
                 let __hoisted_0 = Some(self.buf);

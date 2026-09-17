@@ -575,7 +575,7 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     RECURSIVE.set(true);
 
     let buffer = Buf::current();
-    let fname = buffer.b_fname;
+    let fname = buffer.name.shown_ptr();
     // SAFETY: the current buffer, and a NUL-terminated colour scheme name.
     unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, Some(buffer)) };
     let mut pattern = [
@@ -589,7 +589,7 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     let retval = unsafe { source_runtime_vim_lua(pattern, RuntimeOpts::START | RuntimeOpts::OPT) };
     if retval.is_ok() {
         let buffer = Buf::current();
-        let fname = buffer.b_fname;
+        let fname = buffer.name.shown_ptr();
         // SAFETY: as above; the scheme's own file may have changed it.
         unsafe { apply_autocmds(AutoEvent::ColorScheme, name, fname, false, Some(buffer)) };
     }

@@ -252,7 +252,7 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
     let (ff, sc) = (&raw mut file_to_find, &raw mut search_ctx);
-    let (mess, from) = (FileNameOpts::MESS, Buf::current().b_ffname);
+    let (mess, from) = (FileNameOpts::MESS, Buf::current().name.full_ptr());
     // SAFETY: a NUL-terminated argument, and the search's own two slots.
     let found = unsafe { find_file_in_path(arg, n, mess, true, from, ff, sc) };
     free(file_to_find);
@@ -447,7 +447,7 @@ fn list_tab_windows(
 /// its file name with the home directory folded back to `~`.
 fn fill_name(buffer: Buf, out: &mut [c_char; IOSIZE as usize]) {
     let special = buf_spname(buffer);
-    let fname = buffer.b_fname;
+    let fname = buffer.name.shown_ptr();
     let (out, size) = (out.as_mut_ptr(), IOSIZE as size_t);
     if special.is_null() {
         // SAFETY: a live buffer and its own file name, into the buffer.

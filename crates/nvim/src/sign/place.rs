@@ -431,14 +431,14 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: Buf) -> 
         check_cursor_lnum(win);
         beginline(BeginlineOpts::WHITE);
     } else {
-        if buffer.b_fname.is_null() {
+        if buffer.name.is_unnamed() {
             emsg(gettext(
                 c"E934: Cannot jump to a buffer that does not have a name",
             ));
             return -1;
         }
         // SAFETY: a live buffer's name is a NUL-terminated string it owns.
-        let cmdlen = unsafe { cstr::bytes_at(buffer.b_fname) }.len() + 24;
+        let cmdlen = unsafe { cstr::bytes_at(buffer.name.shown_ptr()) }.len() + 24;
         let mut cmd = vec![0 as c_char; cmdlen + 1];
         // SAFETY: as above; `cmd` has room for `cmdlen` bytes plus the NUL.
         unsafe {
@@ -447,7 +447,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: Buf) -> 
                 cmdlen,
                 c"e +%ld %s".as_ptr(),
                 int64_t::from(lnum),
-                buffer.b_fname,
+                buffer.name.shown_ptr(),
             );
             let _ = do_cmdline_cmd(cmd.as_mut_ptr());
         };

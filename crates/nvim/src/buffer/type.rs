@@ -177,8 +177,8 @@ pub fn buf_spname(buffer: Buf) -> *mut c_char {
         return tr_raw(msg_loclist.as_ptr().cast_mut());
     }
     if buf_is_nofilename(Some(b)) {
-        if !b.b_fname.is_null() {
-            return b.b_fname;
+        if !b.name.is_unnamed() {
+            return b.name.shown_ptr();
         }
         if cmdwin_buf.get() == Some(buffer.id()) {
             return tr(c"[Command Line]");
@@ -188,14 +188,14 @@ pub fn buf_spname(buffer: Buf) -> *mut c_char {
         }
         return tr(c"[Scratch]");
     }
-    if b.b_fname.is_null() {
+    if b.name.is_unnamed() {
         return tr(c"[No Name]");
     }
     ptr::null_mut()
 }
 
 pub fn buf_get_fname(buffer: Buf) -> *mut c_char {
-    let name = buffer.b_fname;
+    let name = buffer.name.shown_ptr();
     if name.is_null() {
         return tr(c"[No Name]");
     }

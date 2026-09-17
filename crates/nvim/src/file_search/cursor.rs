@@ -50,7 +50,15 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mu
         let mut p = unsafe { ptr.add(len + 1) };
         unsafe { *file_lnum = getdigits_int32(&raw mut p, false, 0) as LineNr };
     }
-    unsafe { find_file_name_in_path(ptr, len, options, count as c_long, Buf::current().b_ffname) }
+    unsafe {
+        find_file_name_in_path(
+            ptr,
+            len,
+            options,
+            count as c_long,
+            Buf::current().name.full_ptr(),
+        )
+    }
 }
 
 /// The file name under or after the cursor.
@@ -79,7 +87,7 @@ pub(crate) unsafe fn file_name_at_cursor(
             Win::current().w_cursor.col as c_int,
             options,
             count,
-            Buf::current().b_ffname,
+            Buf::current().name.full_ptr(),
             file_lnum,
         )
     }

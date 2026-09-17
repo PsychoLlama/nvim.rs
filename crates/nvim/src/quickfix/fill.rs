@@ -176,22 +176,22 @@ unsafe fn qf_buf_add_line(
             } else {
                 ptr::null_mut()
             };
-            if !errbuf.is_null() && !unsafe { (*errbuf).b_fname.is_null() } {
+            if !errbuf.is_null() && !unsafe { (*errbuf).name.is_unnamed() } {
                 if qfp.qf_type as c_int == 1 {
                     // :helpgrep entries name the help file only.
-                    unsafe { push_cstr(out, path_tail((*errbuf).b_fname)) };
+                    unsafe { push_cstr(out, path_tail((*errbuf).name.shown_ptr())) };
                 } else {
                     // Shorten the file name if not done already. For
                     // speed, only for the first entry of each buffer.
                     if first_bufline
-                        && (unsafe { (*errbuf).b_sfname.is_null() }
-                            || unsafe { path_is_absolute(cstr::at((*errbuf).b_sfname)) })
+                        && (unsafe { (*errbuf).name.short().is_none() }
+                            || unsafe { path_is_absolute(cstr::at((*errbuf).name.short_ptr())) })
                     {
                         // SAFETY: a live buffer and the current directory name.
                         unsafe { shorten_buf_fname(Buf::new(errbuf), dir.get(), false as c_int) };
                     }
                     let start_row = if qfp.qf_fname.is_null() {
-                        unsafe { (*errbuf).b_fname }
+                        unsafe { (*errbuf).name.shown_ptr() }
                     } else {
                         qfp.qf_fname
                     };

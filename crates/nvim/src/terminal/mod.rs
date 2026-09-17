@@ -371,7 +371,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
     );
     buffer.b_locked -= 1;
 
-    let ffname = buffer.b_ffname;
+    let ffname = buffer.name.full_ptr();
     if !ffname.is_null() {
         // SAFETY: a non-null `b_ffname` is a NUL-terminated file name, read
         // before anything here can free it.

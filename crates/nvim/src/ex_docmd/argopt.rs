@@ -425,7 +425,7 @@ pub(crate) fn check_more(message: bool, forceit: bool) -> c_int {
     if !message {
         return FAIL;
     }
-    if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && !Buf::current().b_fname.is_null() {
+    if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && !Buf::current().name.is_unnamed() {
         let mut buff: [c_char; 1000] = [0; 1000];
         let fmt = ngettext(
             c"%d more file to edit.  Quit anyway?",

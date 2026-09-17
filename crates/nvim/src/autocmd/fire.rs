@@ -332,7 +332,7 @@ pub unsafe fn apply_autocmds_group(
         } else if !fname.is_null() && ends_excmd(::core::ffi::c_int::from(unsafe { *fname })) == 0 {
             fname
         } else {
-            buffer.map_or(::core::ptr::null_mut(), |b| b.b_ffname)
+            buffer.map_or(::core::ptr::null_mut(), |b| b.name.full_ptr())
         });
         // The unexpanded `<afile>`, kept for the API's `file` field.
         let mut afile_orig: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
@@ -355,10 +355,10 @@ pub unsafe fn apply_autocmds_group(
                 (Some(b), AutoEvent::Syntax) => fname = b.b_p_syn.value_ptr(),
                 (Some(b), AutoEvent::FileType) => fname = b.b_p_ft.value_ptr(),
                 (Some(b), _) => {
-                    if !b.b_sfname.is_null() {
-                        sfname = unsafe { xstrdup(b.b_sfname) };
+                    if !b.name.short().is_none() {
+                        sfname = unsafe { xstrdup(b.name.short_ptr()) };
                     }
-                    fname = b.b_ffname;
+                    fname = b.name.full_ptr();
                 }
             }
             if fname.is_null() {

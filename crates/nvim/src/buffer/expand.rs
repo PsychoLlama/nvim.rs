@@ -208,15 +208,15 @@ pub unsafe fn expand_buf_names(
                 p = buflist_match(&mut regmatch, buf, p_wic());
             } else {
                 // First try matching with the short file name.
-                score = fuzzy_score(buf.b_sfname, pat);
+                score = fuzzy_score(buf.name.short_ptr(), pat);
                 if score != FUZZY_SCORE_NONE as c_int {
-                    p = buf.b_sfname;
+                    p = buf.name.short_ptr();
                 }
                 if p.is_null() {
                     // Next try matching with the full path file name.
-                    score = fuzzy_score(buf.b_ffname, pat);
+                    score = fuzzy_score(buf.name.full_ptr(), pat);
                     if score != FUZZY_SCORE_NONE as c_int {
-                        p = buf.b_ffname;
+                        p = buf.name.full_ptr();
                     }
                 }
             }
@@ -333,9 +333,9 @@ fn order_by_last_used(matches: *mut BufMatch, files: &mut [*mut c_char]) {
 /// Whether `buffer`'s name matches `rmp`: the short file name first, then the
 /// long one. `rmp->regprog` may become null when the regexp engine switches.
 pub(crate) fn buflist_match(rmp: &mut RegMatch, buffer: Buf, ignore_case: bool) -> *mut c_char {
-    let mut matched = fname_match(rmp, buffer.b_sfname, ignore_case);
+    let mut matched = fname_match(rmp, buffer.name.short_ptr(), ignore_case);
     if matched.is_null() && !rmp.regprog.is_null() {
-        matched = fname_match(rmp, buffer.b_ffname, ignore_case);
+        matched = fname_match(rmp, buffer.name.full_ptr(), ignore_case);
     }
     matched
 }
@@ -391,9 +391,9 @@ pub fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> *mut c_cha
         return ptr::null_mut();
     };
     let name = if fullname != 0 {
-        buf.b_ffname
+        buf.name.full_ptr()
     } else {
-        buf.b_fname
+        buf.name.shown_ptr()
     };
     let tail_only = if helptail != 0 {
         buf.raw()

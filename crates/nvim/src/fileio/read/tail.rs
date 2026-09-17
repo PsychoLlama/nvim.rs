@@ -120,7 +120,10 @@ pub(crate) unsafe fn run_read_autocmds(
     // SAFETY: the current buffer is live and `excmd` is the caller's command.
     unsafe { apply_autocmds_exarg(ev, iofile, sfname, false, buf, excmd) };
     if buf_read && !Buf::current().b_au_did_filetype && Buf::current().b_p_ft.first_byte() != 0 {
-        let (ft, fname) = (Buf::current().b_p_ft.value_ptr(), Buf::current().b_fname);
+        let (ft, fname) = (
+            Buf::current().b_p_ft.value_ptr(),
+            Buf::current().name.shown_ptr(),
+        );
         // SAFETY: the buffer's own option and file name; `curbuf` is re-read
         // because `BufReadPost` may have moved us.
         unsafe { apply_autocmds(AutoEvent::FileType, ft, fname, true, Buf::current_or_none()) };

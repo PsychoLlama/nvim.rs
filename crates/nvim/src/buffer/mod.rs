@@ -404,7 +404,7 @@ pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
 /// the unload/delete/wipe events take.
 pub(crate) fn fire_named(event: AutoEvent, buffer: Buf) -> bool {
-    let name = buffer.b_fname;
+    let name = buffer.name.shown_ptr();
     // SAFETY: a live buffer and its own file name.
     unsafe { apply_autocmds(event, name, name, false, Some(buffer)) }
 }

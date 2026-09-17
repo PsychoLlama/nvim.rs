@@ -145,8 +145,8 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
         if !info_ok || filesize == 0 {
             emsg_gettext(c"E816: Cannot read patch output".as_ptr());
         } else {
-            if !Buf::current().b_fname.is_null() {
-                let fname = Buf::current().b_fname;
+            if !Buf::current().name.is_unnamed() {
+                let fname = Buf::current().name.shown_ptr();
                 // SAFETY: the buffer's own file name, NUL-terminated.
                 let mut patched = XString::from_bytes(unsafe { cstr::bytes_at(fname) });
                 patched.push_str(".new");

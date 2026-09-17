@@ -322,7 +322,7 @@ unsafe fn pum_show_info(
         let mut res = Ok(());
         if !resized
             && Buf::current().b_nwindows == 1
-            && Buf::current().b_fname.is_null()
+            && Buf::current().name.is_unnamed()
             && buf_is_nofile(current_buf())
             && Buf::current().b_p_bh.first_byte() == b'w'
         {

@@ -194,10 +194,10 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
     // The title names the buffer as well as the command. `qf_init_ext`
     // copies it, so this frame can own it.
     let mut qf_title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
-    if !buf.b_sfname.is_null() {
+    if !buf.name.short().is_none() {
         let efile = IOSIZE as size_t;
         let fmt = c"%s (%s)".as_ptr();
-        let sfname = buf.b_sfname;
+        let sfname = buf.name.short_ptr();
         unsafe { vim_snprintf(title.as_mut_ptr(), efile, fmt, qf_title.as_ptr(), sfname) };
         qf_title[..IOSIZE as usize].copy_from_slice(&title);
     }

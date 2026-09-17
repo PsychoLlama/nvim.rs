@@ -209,7 +209,7 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut QfList, new: &NewEntry) {
         unsafe { fix_fname(new.fname) }
     };
     // C's `buf != NULL && buf->b_ffname != NULL && …`, in that order.
-    let buf_ffname = buf.map(|buf| buf.b_ffname).filter(|p| !p.is_null());
+    let buf_ffname = buf.map(|buf| buf.name.full_ptr()).filter(|p| !p.is_null());
     if let Some(buf_ffname) = buf_ffname
         && !fullname.is_null()
         && unsafe { path_fnamecmp(cstr::at(fullname), cstr::at(buf_ffname)) } != 0

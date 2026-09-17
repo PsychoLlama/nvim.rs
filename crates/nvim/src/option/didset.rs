@@ -625,7 +625,7 @@ pub(crate) fn did_set_undofile(args: &mut OptSet) -> Result<(), OptError> {
         // `:setglobal` reach all of them.
         let reaches = bp == f.buf || f.flags.has(OptionSetFlags::GLOBAL) || f.flags.is_empty();
         if reaches && !buf_is_changed(bp) && !bp.b_ml.ml_mfp.is_null() {
-            let (hash, fname) = (hash.as_mut_ptr(), bp.b_fname);
+            let (hash, fname) = (hash.as_mut_ptr(), bp.name.shown_ptr());
             // SAFETY: `hash` is 32 bytes, which is what both want, and
             // `b_fname` is the buffer's own name.
             unsafe { u_compute_hash(bp, hash) };
@@ -761,7 +761,7 @@ pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
         apply_autocmds(
             AutoEvent::Syntax,
             syn,
-            buffer.b_fname,
+            buffer.name.shown_ptr(),
             value_changed || syn_recursive.get() == 1,
             Some(buffer),
         )

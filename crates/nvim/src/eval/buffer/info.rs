@@ -38,10 +38,10 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     nr(c"bufnr", VarNumber::from(buffer.handle));
     str(
         c"name",
-        if buffer.b_ffname.is_null() {
+        if buffer.name.full().is_none() {
             c"".as_ptr()
         } else {
-            buffer.b_ffname as *const c_char
+            buffer.name.full_ptr() as *const c_char
         },
     );
     // The *current* buffer's line is the cursor's; any other's is the one it

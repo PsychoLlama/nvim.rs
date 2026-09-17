@@ -221,8 +221,14 @@ unsafe fn do_source_buffer_init(
         return ptr::null_mut();
     }
     // SAFETY: `buf` is the current buffer and `excmd` the caller's command.
-    let (ffname, handle, line1, line2) =
-        unsafe { ((*buf).b_ffname, (*buf).handle, excmd.line1, excmd.line2) };
+    let (ffname, handle, line1, line2) = unsafe {
+        (
+            (*buf).name.full_ptr(),
+            (*buf).handle,
+            excmd.line1,
+            excmd.line2,
+        )
+    };
     let fname = if ffname.is_null() {
         let mut name = [0 as c_char; IOSIZE as usize];
         let fmt = if ex_lua {
@@ -567,7 +573,8 @@ fn curbuf_is_lua() -> bool {
     // SAFETY: the caller's contract.
     let ft_is_lua = unsafe { strequal(buf.b_p_ft.value_ptr(), c"lua".as_ptr()) };
     ft_is_lua
-        || (!buf.b_fname.is_null() && unsafe { path_with_extension(cstr::at(buf.b_fname), c"lua") })
+        || (!buf.name.is_unnamed()
+            && unsafe { path_with_extension(cstr::at(buf.name.shown_ptr()), c"lua") })
 }
 
 /// Whether treesitter parses `excmd`'s range of the current buffer as Lua --

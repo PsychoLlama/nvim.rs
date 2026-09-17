@@ -643,10 +643,10 @@ unsafe fn do_arglist(str: *mut c_char, op: ArgListOp, after: c_int, will_edit: b
     // expansion below.
     // ":argadd" with no argument adds the current file.
     if op == ArgListOp::Add && unsafe { *str } as c_int == NUL {
-        if Buf::current().b_ffname.is_null() {
+        if Buf::current().name.full().is_none() {
             return false;
         }
-        str = Buf::current().b_fname;
+        str = Buf::current().name.shown_ptr();
         arg_escaped = false;
     }
     // Collect all the file name arguments.
@@ -713,7 +713,7 @@ pub fn editing_arg_idx(win: Win) -> bool {
     let buf = win.buffer();
     // SAFETY: `entry` is in range of the window's list, so it is one of its
     // own entries, and `b_ffname` is that buffer's name or NULL.
-    unsafe { buf.handle == (*entry).ae_fnum || same_file(alist_name(entry), buf.b_ffname) }
+    unsafe { buf.handle == (*entry).ae_fnum || same_file(alist_name(entry), buf.name.full_ptr()) }
 }
 
 /// Refresh `win`'s "am I on the argument I think I am" state, and remember
@@ -749,8 +749,9 @@ pub fn check_arg_idx(mut win: Win) {
     let buf = win.buffer();
     // SAFETY: `last` is the final entry of the global list, and `b_ffname`
     // is the window's buffer's name or NULL.
-    let holds_last =
-        unsafe { buf.handle == (*last).ae_fnum || same_file(alist_name(last), buf.b_ffname) };
+    let holds_last = unsafe {
+        buf.handle == (*last).ae_fnum || same_file(alist_name(last), buf.name.full_ptr())
+    };
     if holds_last {
         arg_had_last.set(true);
     }
@@ -765,8 +766,8 @@ pub fn check_arg_idx(mut win: Win) {
 pub unsafe fn alist_name(aep: *mut ArgEntry) -> *mut c_char {
     // SAFETY: caller contract; a found buffer outlives this call.
     let bp = find_buf(unsafe { (*aep).ae_fnum });
-    match bp.filter(|bp| !bp.b_fname.is_null()) {
+    match bp.filter(|bp| !bp.name.is_unnamed()) {
         None => unsafe { (*aep).ae_fname },
-        Some(bp) => bp.b_fname,
+        Some(bp) => bp.name.shown_ptr(),
     }
 }

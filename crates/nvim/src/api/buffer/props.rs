@@ -93,10 +93,10 @@ pub fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> 
 
 pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
     let rv: String_0 = String_0::NULL;
-    let Some(b) = find_buffer_by_handle(buf)?.filter(|b| !b.b_ffname.is_null()) else {
+    let Some(b) = find_buffer_by_handle(buf)?.filter(|b| !b.name.full().is_none()) else {
         return Ok(rv);
     };
-    Ok(unsafe { cstr_to_string(b.b_ffname) })
+    Ok(unsafe { cstr_to_string(b.name.full_ptr()) })
 }
 
 pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {

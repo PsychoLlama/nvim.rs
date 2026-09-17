@@ -262,7 +262,7 @@ fn handle_signal(signum: c_int) {
                 apply_autocmds(
                     AutoEvent::Signal,
                     signal_name(signum).as_ptr() as *mut c_char,
-                    Buf::current().b_fname,
+                    Buf::current().name.shown_ptr(),
                     true,
                     Buf::current_or_none(),
                 );

@@ -121,10 +121,10 @@ pub(crate) fn buf_write_do_autocmds(
 
     // Which of the three names are the buffer's own, and so have to be
     // re-read if the autocommands rename it.
-    let buf_ffname = names.ffname == buffer.b_ffname;
-    let buf_sfname = sfname == buffer.b_sfname;
-    let buf_fname_f = names.fname == buffer.b_ffname;
-    let buf_fname_s = names.fname == buffer.b_sfname;
+    let buf_ffname = names.ffname == buffer.name.full_ptr();
+    let buf_sfname = sfname == buffer.name.short_ptr();
+    let buf_fname_f = names.fname == buffer.name.full_ptr();
+    let buf_fname_s = names.fname == buffer.name.short_ptr();
 
     // Set curwin/curbuf to buf and save a few things.
     let mut aco = AcoSave::default();
@@ -265,16 +265,16 @@ pub(crate) fn buf_write_do_autocmds(
     // The autocommands may have renamed the buffer; the names that came
     // from it have to be re-read.
     if buf_ffname {
-        names.ffname = unsafe { (*buffer.raw()).b_ffname };
+        names.ffname = unsafe { (*buffer.raw()).name.full_ptr() };
     }
     if buf_sfname {
-        names.sfname = unsafe { (*buffer.raw()).b_sfname };
+        names.sfname = unsafe { (*buffer.raw()).name.short_ptr() };
     }
     if buf_fname_f {
-        names.fname = unsafe { (*buffer.raw()).b_ffname };
+        names.fname = unsafe { (*buffer.raw()).name.full_ptr() };
     }
     if buf_fname_s {
-        names.fname = unsafe { (*buffer.raw()).b_sfname };
+        names.fname = unsafe { (*buffer.raw()).name.short_ptr() };
     }
     PreWrite::Proceed
 }

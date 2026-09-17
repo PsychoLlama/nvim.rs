@@ -274,7 +274,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
         // about to be replaced.
         free(fresult);
         // SAFETY: `curbuf` names the live current buffer.
-        let rel = Buf::current().b_ffname;
+        let rel = Buf::current().name.full_ptr();
         // Only the first round is given the name; the ones after it continue
         // the walk the context remembers.
         let (p, n) = if first {

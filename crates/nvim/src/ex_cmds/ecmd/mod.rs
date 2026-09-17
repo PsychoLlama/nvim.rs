@@ -521,14 +521,14 @@ unsafe fn resolve_target(
         return Target::Editing(true);
     }
     // SAFETY: as above; `curbuf` is live.
-    if unsafe { **ffname } as c_int == NUL && Buf::current().b_ffname.is_null() {
+    if unsafe { **ffname } as c_int == NUL && Buf::current().name.full().is_none() {
         // there is no file name
         return Target::Editing(false);
     }
     if unsafe { **ffname } as c_int == NUL {
         // re-edit with same file name
-        *ffname = Buf::current().b_ffname;
-        *sfname = Buf::current().b_fname;
+        *ffname = Buf::current().name.full_ptr();
+        *sfname = Buf::current().name.shown_ptr();
     }
     // may expand to full path name
     *free_fname = unsafe { fix_fname(*ffname) };
@@ -551,7 +551,7 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     let buf = Buf::current_raw();
     // SAFETY: the buffer's own file name is NUL-terminated; see
     // [`switch`]'s copy for why it is owned rather than borrowed.
-    let name = unsafe { (*buf).b_fname };
+    let name = unsafe { (*buf).name.shown_ptr() };
     // SAFETY: as above.
     let new_name: Option<CString> =
         (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.into());

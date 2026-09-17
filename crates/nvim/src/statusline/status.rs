@@ -120,7 +120,7 @@ pub(crate) fn get_trans_bufname(buffer: Buf, name: &mut [c_char; MAXPATHL as usi
     // each of the three writes below is told.
     unsafe {
         if spname.is_null() {
-            home_replace(Some(buffer), buffer.b_fname, out, room, true);
+            home_replace(Some(buffer), buffer.name.shown_ptr(), out, room, true);
         } else {
             xstrlcpy(out, spname, room);
         }

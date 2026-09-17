@@ -147,7 +147,7 @@ pub fn getout(mut exitval: c_int) -> ! {
                 let live = buffer_at(wp.w_buffer);
                 if let Some(buffer) = live.filter(|b| buf_get_changedtick(*b) != -1) {
                     let bufref = BufRef::of(buffer);
-                    let fname = buffer.b_fname;
+                    let fname = buffer.name.shown_ptr();
                     let event = AutoEvent::BufWinLeave;
                     unsafe { apply_autocmds(event, fname, fname, false, Some(buffer)) };
                     // The event may have wiped it; ask again before writing.
@@ -169,7 +169,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         while let Some(buf) = cur {
             if !buf.b_ml.ml_mfp.is_null() {
                 let bufref = BufRef::of(buf);
-                let (name, some) = (buf.b_fname, Some(buf));
+                let (name, some) = (buf.name.shown_ptr(), Some(buf));
                 unsafe { apply_autocmds(AutoEvent::BufUnload, name, name, false, some) };
                 if !bufref.valid() {
                     // An autocommand deleted the buffer we were standing

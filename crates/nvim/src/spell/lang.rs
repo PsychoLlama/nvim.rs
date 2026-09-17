@@ -160,7 +160,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             if r.is_err() && sl.sl_lang[0] != 0 && round == 1 && {
                 // Re-read each round: the handler may have changed buffers.
                 let buffer = Buf::current();
-                let (fname, event) = (buffer.b_fname, AutoEvent::SpellFileMissing);
+                let (fname, event) = (buffer.name.shown_ptr(), AutoEvent::SpellFileMissing);
                 unsafe { apply_autocmds(event, lang, fname, false, Some(buffer)) }
             } {
                 continue;

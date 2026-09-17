@@ -252,7 +252,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     special(
         '%' as c_int,
         c"\n  c  \"%   ".as_ptr(),
-        Buf::current().b_fname,
+        Buf::current().name.shown_ptr(),
         false,
     );
 

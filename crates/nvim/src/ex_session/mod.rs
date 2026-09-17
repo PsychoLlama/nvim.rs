@@ -268,15 +268,15 @@ pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Faile
 /// the session is sourced is known -- so not for a view, not under 'acd',
 /// and not once a `:lcd` has been written.
 fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> *mut c_char {
-    if !buffer.b_sfname.is_null()
+    if !buffer.name.short().is_none()
         && opts.is_session()
         && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
         && !p_acd()
         && !did_lcd.get()
     {
-        return buffer.b_sfname;
+        return buffer.name.short_ptr();
     }
-    buffer.b_ffname
+    buffer.name.full_ptr()
 }
 
 /// Write `buffer`'s name, and a newline when `add_eol`.
@@ -360,7 +360,7 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
         return false;
     }
     let buf = win.buffer();
-    if buf.b_fname.is_null()
+    if buf.name.is_unnamed()
         // The contents of a "nofile" buffer cannot be restored.
         || (buf.terminal.is_null() && buf_is_nofilename(Some(buf)))
     {
@@ -406,13 +406,13 @@ pub(crate) fn ex_loadview(excmd: &mut ExArg) {
 /// # Safety
 /// Main thread; `curbuf` is live.
 unsafe fn get_view_file(c: c_char) -> *mut c_char {
-    if Buf::current().b_ffname.is_null() {
+    if Buf::current().name.full().is_none() {
         emsg(gettext(e_noname));
         return ptr::null_mut();
     }
     // SAFETY: the current buffer's own file name, and `home_replace_save`
     // answers an owned NUL-terminated string.
-    let sname = unsafe { home_replace_save(None, Buf::current().b_ffname) };
+    let sname = unsafe { home_replace_save(None, Buf::current().name.full_ptr()) };
 
     // SAFETY: 'viewdir' is a NUL-terminated option value.
     let mut view = XString::from_bytes(p_vdir(|value| unsafe {

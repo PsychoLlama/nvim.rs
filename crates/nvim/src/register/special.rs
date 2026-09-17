@@ -137,7 +137,7 @@ pub unsafe fn get_spec_reg(
             if errmsg {
                 let _ = check_fname(); // will give an error message
             }
-            value = Buf::current().b_fname;
+            value = Buf::current().name.shown_ptr();
             true
         }
         // `"#` -- the alternate file name.

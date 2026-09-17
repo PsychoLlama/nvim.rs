@@ -1,13 +1,13 @@
 count	callee	no_raw	defs	def
-883	xfree	0	1	crates/nvim/src/memory/mod.rs
+876	xfree	0	1	crates/nvim/src/memory/mod.rs
 809	.add	0	3	
 467	.offset	0	0	
 442	bytes_at	0	1	crates/nvim/src/cstr.rs
 436	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 288	CStr::from_ptr	0	2	
 243	.offset_from	0	0	
-224	at	0	3	
-189	xstrdup	0	1	crates/nvim/src/memory/mod.rs
+225	at	0	3	
+188	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 165	xmalloc	0	1	crates/nvim/src/memory/mod.rs
@@ -202,6 +202,7 @@ count	callee	no_raw	defs	def
 13	vterm_dealloc	0	1	crates/nvim/src/vterm/vterm.rs
 12	.put	0	3	
 12	Rex::acquire	1	1	crates/nvim/src/regexp/rex.rs
+12	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 12	dict_watcher_notify	0	1	crates/nvim/src/eval/typval/watcher.rs
 12	encode_tv2echo	0	1	crates/nvim/src/eval/encode/mod.rs
 12	eval0	0	1	crates/nvim/src/eval/expr/level.rs
@@ -377,7 +378,6 @@ count	callee	no_raw	defs	def
 7	FoldList::new	0	1	crates/nvim/src/fold/list.rs
 7	Qfl::new	0	68	
 7	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
-7	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 7	add_pathsep	0	1	crates/nvim/src/path/names.rs
 7	additional_data_len	0	1	crates/nvim/src/shada/pack.rs
 7	append_to_redobuff_literally	0	1	crates/nvim/src/getchar/redo.rs
@@ -1409,6 +1409,7 @@ count	callee	no_raw	defs	def
 2	add_timer_info	0	1	crates/nvim/src/eval/timer.rs
 2	add_tv	0	1	crates/nvim/src/quickfix/getprops.rs
 2	adjust_cursor	0	1	crates/nvim/src/normal/motion.rs
+2	adopt_names	0	1	crates/nvim/src/buffer/name.rs
 2	alist_add	0	1	crates/nvim/src/arglist/mod.rs
 2	alist_clear	0	1	crates/nvim/src/arglist/mod.rs
 2	allcap_copy	0	1	crates/nvim/src/spell/chartab.rs

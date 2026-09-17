@@ -18,6 +18,8 @@ use crate::buffer::BufFlags;
 use crate::memory::XString;
 use crate::registry::IdMap;
 use crate::syntax::{SynCluster, SynPat};
+use core::ffi::{CStr, c_char};
+use core::ptr;
 
 /// Namespace id to the highest extmark id handed out in it: `Buffer`'s
 /// `b_extmark_ns`, which upstream declared `Map(uint32_t, uint32_t)[1]` so
@@ -197,6 +199,168 @@ pub(crate) struct KeymapEntry {
 /// upstream's null option variable, which it then replaced with the shared
 /// empty string. `None` is that shared empty string, so a fresh buffer's
 /// options read as `""` with nothing to patch up.
+/// A buffer's file name, in the three forms upstream keeps as three
+/// `char *` fields — and with the aliasing between them stated.
+///
+/// * `b_ffname` is the full path, and is the only one of the three that is
+///   always the buffer's own allocation.
+/// * `b_sfname` is the name as the user gave it. It is *either* its own
+///   allocation, *or* the very pointer `b_ffname` holds (`fname_expand`
+///   makes them one when no short name was supplied and `fix_fname`
+///   answers its argument), *or* null. That is why every free of it in the
+///   C reads `if (buf->b_sfname != buf->b_ffname)` first, and why
+///   [`ShortName`] has three arms rather than being an `Option`.
+/// * `b_fname` is **never** an allocation of its own: every assignment to
+///   it in the tree is `b_fname = b_sfname`, except `shorten_buf_fname`'s
+///   `b_fname = b_ffname`. It is a *choice* between the other two, which
+///   is what [`Shown`] records.
+///
+/// The three pointer accessors answer exactly the addresses upstream's
+/// three fields hold, aliasing included: `shown_ptr` is `full_ptr` or
+/// `short_ptr` and never a third address, so the identity tests the editor
+/// makes ("did the caller hand me this buffer's own name?",
+/// `fileio::open`) still mean what they meant.
+#[derive(Default)]
+pub struct BufName {
+    /// `b_ffname`.
+    full: Option<XString>,
+    /// `b_sfname`.
+    short: ShortName,
+    /// Which of the two `b_fname` names.
+    shown: Shown,
+}
+
+/// The short name: its own allocation, the full name's, or nothing.
+#[derive(Default)]
+enum ShortName {
+    /// A null `b_sfname`.
+    #[default]
+    Unset,
+    /// `b_sfname == b_ffname`: one allocation, named twice.
+    SameAsFull,
+    /// `b_sfname` is the buffer's own second allocation.
+    Own(XString),
+}
+
+/// Which name `b_fname` is.
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Shown {
+    /// `b_fname == b_sfname`, which is what all but one writer sets.
+    #[default]
+    Short,
+    /// `b_fname == b_ffname`, which only `shorten_buf_fname` sets.
+    Full,
+}
+
+impl BufName {
+    /// The full path (`b_ffname`), or `None` for a buffer with no name.
+    pub fn full(&self) -> Option<&CStr> {
+        self.full.as_ref().map(XString::as_cstr)
+    }
+
+    /// The name as it was given (`b_sfname`), or `None` when there is none.
+    pub fn short(&self) -> Option<&CStr> {
+        match &self.short {
+            ShortName::Unset => None,
+            ShortName::SameAsFull => self.full(),
+            ShortName::Own(short) => Some(short.as_cstr()),
+        }
+    }
+
+    /// The name the editor *shows* (`b_fname`), or `None` for an unnamed
+    /// buffer.
+    pub fn shown(&self) -> Option<&CStr> {
+        match self.shown {
+            Shown::Short => self.short(),
+            Shown::Full => self.full(),
+        }
+    }
+
+    /// `b_ffname` as the `char *` a C callee takes; null for no name.
+    pub fn full_ptr(&self) -> *mut c_char {
+        Self::address(self.full())
+    }
+
+    /// `b_sfname` as the `char *` a C callee takes; null for no name.
+    pub fn short_ptr(&self) -> *mut c_char {
+        Self::address(self.short())
+    }
+
+    /// `b_fname` as the `char *` a C callee takes; null for no name.
+    pub fn shown_ptr(&self) -> *mut c_char {
+        Self::address(self.shown())
+    }
+
+    /// A name's address for a C callee, or null when there is none.
+    fn address(name: Option<&CStr>) -> *mut c_char {
+        name.map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut())
+    }
+
+    /// Whether the buffer shows no name at all — upstream's
+    /// `buf->b_fname == NULL`.
+    pub fn is_unnamed(&self) -> bool {
+        self.shown().is_none()
+    }
+
+    /// Whether the short name is the buffer's own second allocation —
+    /// upstream's `buf->b_sfname != buf->b_ffname`, which guards every
+    /// free of it.
+    pub fn short_is_own(&self) -> bool {
+        matches!(self.short, ShortName::Own(_))
+    }
+
+    /// Show the full name — `shorten_buf_fname`'s `b_fname = b_ffname`.
+    pub fn show_full(&mut self) {
+        self.shown = Shown::Full;
+    }
+
+    /// Show the short name — every other writer's `b_fname = b_sfname`.
+    pub fn show_short(&mut self) {
+        self.shown = Shown::Short;
+    }
+
+    /// Forget the name entirely, releasing what it held.
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Give the buffer a full name and, optionally, a short one of its own.
+    /// A `None` short name leaves `b_sfname` null, exactly as upstream's
+    /// `setfname` does when it was handed none.
+    pub fn set(&mut self, full: XString, short: Option<XString>) {
+        self.full = Some(full);
+        self.short = match short {
+            Some(short) => ShortName::Own(short),
+            None => ShortName::Unset,
+        };
+        self.shown = Shown::Short;
+    }
+
+    /// Give the buffer a full name whose short form is the same allocation
+    /// — `fname_expand`'s "no short name given, use ffname".
+    pub fn set_shared(&mut self, full: XString) {
+        self.full = Some(full);
+        self.short = ShortName::SameAsFull;
+        self.shown = Shown::Short;
+    }
+
+    /// Replace the short name, releasing the old one if it was the
+    /// buffer's own, and show it.
+    pub fn set_short(&mut self, short: Option<XString>) {
+        self.short = match short {
+            Some(short) => ShortName::Own(short),
+            None => ShortName::Unset,
+        };
+        self.shown = Shown::Short;
+    }
+
+    /// Drop the short name if it is an allocation of its own, leaving the
+    /// full name alone: `shorten_buf_fname`'s opening move.
+    pub fn drop_own_short(&mut self) {
+        self.short = ShortName::Unset;
+    }
+}
+
 pub struct Buffer {
     pub handle: Handle,
     pub b_ml: MemLine,
@@ -211,9 +375,9 @@ pub struct Buffer {
     pub b_locked: ::core::ffi::c_int,
     pub b_locked_split: ::core::ffi::c_int,
     pub b_ro_locked: ::core::ffi::c_int,
-    pub b_ffname: *mut ::core::ffi::c_char,
-    pub b_sfname: *mut ::core::ffi::c_char,
-    pub b_fname: *mut ::core::ffi::c_char,
+    /// The buffer's file name, in the three forms upstream keeps as
+    /// `b_ffname`, `b_sfname` and `b_fname`. See [`BufName`].
+    pub name: BufName,
     pub file_id_valid: bool,
     pub file_id: FileID,
     pub b_changed: ::core::ffi::c_int,

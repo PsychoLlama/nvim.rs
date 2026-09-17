@@ -29,13 +29,13 @@ use crate::drawscreen::status_redraw_all;
 use crate::ex_docmd::cmdmod_has;
 use crate::mark::fmarks_check_names;
 use crate::memline::{ml_setname, ml_timestamp};
-use crate::memory::{xfree, xstrdup};
+use crate::memory::{XString, xfree, xstrdup};
 use crate::message::e_noalt;
 use crate::message::emsg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::os::fs::{os_fileid, os_fileid_equal};
 use crate::path::{fix_fname, path_fnamecmp};
-use crate::types::{CmdModFlags, Failed, FileID, LineNr};
+use crate::types::{BufName, CmdModFlags, Failed, FileID, LineNr};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 // ---------------------------------------------------------------------------
@@ -58,13 +58,6 @@ fn err(msg: *mut c_char) {
     unsafe { emsg_ptr(msg) };
 }
 
-/// `XFREE_CLEAR`.
-fn xfree_clear(slot: &mut *mut c_char) {
-    // SAFETY: an owned allocation or null; `xfree` accepts both.
-    unsafe { xfree((*slot).cast::<c_void>()) };
-    *slot = ptr::null_mut();
-}
-
 fn free(p: *mut c_char) {
     // SAFETY: an owned allocation or null.
     unsafe { xfree(p.cast::<c_void>()) };
@@ -74,6 +67,29 @@ fn dup(p: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string; upstream passes the short name, which
     // `fname_expand` has just made non-null.
     unsafe { xstrdup(p) }
+}
+
+/// Give `name` the pair [`fname_expand`] leaves behind.
+///
+/// `full` is the block `fix_fname` allocated. `short` is null, its own
+/// block, or -- where `fix_fname` answers the very pointer it was given --
+/// `full` itself, which is the case upstream's `b_sfname != b_ffname`
+/// guard exists for.
+///
+/// # Safety
+///
+/// Both pointers are live `xmalloc`-family blocks, or null, that nobody
+/// else will free.
+unsafe fn adopt_names(name: &mut BufName, full: *mut c_char, short: *mut c_char) {
+    // SAFETY: the caller's promise.
+    let owned_full = unsafe { XString::from_raw(full) };
+    if ptr::eq(short, full) {
+        name.set_shared(owned_full);
+    } else {
+        // SAFETY: the caller's promise.
+        let owned_short = (!short.is_null()).then(|| unsafe { XString::from_raw(short) });
+        name.set(owned_full, owned_short);
+    }
 }
 
 /// The file id of `fname`, and whether the file exists at all.
@@ -124,12 +140,12 @@ pub unsafe fn buflist_name_nr(
     let Some(buf) = find_buf(fnum) else {
         return Err(Failed);
     };
-    if buf.b_fname.is_null() {
+    if buf.name.is_unnamed() {
         return Err(Failed);
     }
     // SAFETY: the caller's promise -- two out-parameters to fill in.
     let (fname, lnum) = unsafe { (&mut *fname, &mut *lnum) };
-    *fname = buf.b_fname;
+    *fname = buf.name.shown_ptr();
     *lnum = buflist_findlnum(buf);
     Ok(())
 }
@@ -163,13 +179,9 @@ pub unsafe fn setfname(
     let mut file_id_valid = false;
 
     if is_empty_name(ffname) {
-        // Removing the name.
-        if b.b_sfname != b.b_ffname {
-            xfree_clear(&mut b.b_sfname);
-        } else {
-            b.b_sfname = ptr::null_mut();
-        }
-        xfree_clear(&mut b.b_ffname);
+        // Removing the name. Upstream's three lines here are the
+        // `b_sfname != b_ffname` dance; the name owns its blocks now.
+        b.name.clear();
     } else {
         // SAFETY: two locals holding a name each.
         unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
@@ -203,15 +215,11 @@ pub unsafe fn setfname(
             // SAFETY: a live, unloaded buffer shown in no window.
             unsafe { close_buffer(None, Buf::new(obuf), DOBUF_WIPE.cast_signed(), false, false) };
         }
-        sfname = dup(sfname);
-        if b.b_sfname != b.b_ffname {
-            free(b.b_sfname);
-        }
-        free(b.b_ffname);
-        b.b_ffname = ffname;
-        b.b_sfname = sfname;
+        // SAFETY: `ffname` is the block `fix_fname` just allocated and
+        // `sfname` the copy taken here; the buffer takes over both, and
+        // what it held is released with them.
+        unsafe { adopt_names(&mut b.name, ffname, dup(sfname)) };
     }
-    b.b_fname = b.b_sfname;
     b.file_id_valid = file_id_valid;
     if file_id_valid {
         b.file_id = file_id;
@@ -232,16 +240,16 @@ pub unsafe fn buf_set_name(fnum: c_int, name: *mut c_char) {
         return;
     };
 
-    if b.b_sfname != b.b_ffname {
-        free(b.b_sfname);
-    }
-    free(b.b_ffname);
-    b.b_ffname = dup(name);
-    b.b_sfname = ptr::null_mut();
-    // Allocate ffname and expand into a full path.
-    // SAFETY: the buffer's own two name slots.
-    unsafe { fname_expand(&raw mut b.b_ffname, &raw mut b.b_sfname) };
-    b.b_fname = b.b_sfname;
+    // Allocate ffname and expand into a full path. The copy `fname_expand`
+    // is handed becomes the *short* name; the full one is what `fix_fname`
+    // answers.
+    let mut ffname = dup(name);
+    let mut sfname = ptr::null_mut();
+    // SAFETY: two locals holding a name each.
+    unsafe { fname_expand(&raw mut ffname, &raw mut sfname) };
+    // SAFETY: the two blocks `fname_expand` left behind, which nothing
+    // else holds.
+    unsafe { adopt_names(&mut b.name, ffname, sfname) };
 }
 
 /// What has to happen once a buffer's name has changed.
@@ -350,10 +358,10 @@ pub(crate) unsafe fn otherfile_buf(
     file_id_p: *mut FileID,
     file_id_valid: bool,
 ) -> bool {
-    if is_empty_name(ffname) || b.b_ffname.is_null() {
+    if is_empty_name(ffname) || b.name.full().is_none() {
         return true;
     }
-    if names_equal(ffname, b.b_ffname) {
+    if names_equal(ffname, b.name.full_ptr()) {
         return false;
     }
 
@@ -380,11 +388,11 @@ pub(crate) unsafe fn otherfile_buf(
 
 /// Record the file id of `buffer`'s file, for recognising it under another name.
 pub fn buf_set_file_id(mut b: Buf) {
-    if b.b_fname.is_null() {
+    if b.name.is_unnamed() {
         b.file_id_valid = false;
         return;
     }
-    let (file_id, valid) = file_id_of(b.b_fname);
+    let (file_id, valid) = file_id_of(b.name.shown_ptr());
     b.file_id_valid = valid;
     if valid {
         b.file_id = file_id;

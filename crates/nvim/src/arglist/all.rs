@@ -97,7 +97,7 @@ fn arg_index_for_window(
     // Reading it here rather than inside the test below costs nothing: the
     // call has no side effect and the chain has no bounds check in it.
     let aucmd_win = is_aucmd_win(window);
-    let unwanted = buffer.b_ffname.is_null()
+    let unwanted = buffer.name.full().is_none()
         || !aall.keep_tabs
             && (buffer.b_nwindows > 1
                 || window.w_width != Columns.get()
@@ -117,7 +117,7 @@ fn arg_index_for_window(
         // SAFETY: `entry` is the `i`th of a list that holds more than `i`,
         // and both file names are NUL-terminated.
         let holds_arg = unsafe { (*entry).ae_fnum } == buffer.handle
-            || unsafe { same_file(alist_name(entry), buffer.b_ffname) };
+            || unsafe { same_file(alist_name(entry), buffer.name.full_ptr()) };
         if !holds_arg {
             i += 1;
             continue;
@@ -352,7 +352,7 @@ fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
     let tab_drop_empty_window = aall.keep_tabs
         && buf_is_empty(Buf::current())
         && Buf::current().b_nwindows == 1
-        && Buf::current().b_ffname.is_null()
+        && Buf::current().name.full().is_none()
         && Buf::current().b_changed == 0;
     if tab_drop_empty_window {
         aall.use_firstwin = true;

@@ -464,11 +464,11 @@ pub unsafe fn eval_vars(
     } else {
         match spec_idx {
             SPEC_PERC => {
-                if Buf::current().b_fname.is_null() {
+                if Buf::current().name.is_unnamed() {
                     result = c"".as_ptr() as *mut c_char;
                     valid = 0;
                 } else {
-                    result = Buf::current().b_fname;
+                    result = Buf::current().name.shown_ptr();
                     tilde_file = equals(result, b"~");
                 }
             }
@@ -523,11 +523,11 @@ pub unsafe fn eval_vars(
                         if !lnump.is_null() {
                             unsafe { *lnump = newlnum::LAST as LineNr };
                         }
-                        if buf.b_fname.is_null() {
+                        if buf.name.is_unnamed() {
                             result = c"".as_ptr() as *mut c_char;
                             valid = 0;
                         } else {
-                            result = buf.b_fname;
+                            result = buf.name.shown_ptr();
                             tilde_file = equals(result, b"~");
                         }
                     }

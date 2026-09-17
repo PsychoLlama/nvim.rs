@@ -425,12 +425,12 @@ impl Writing {
         }
         let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |b| b.raw());
         if buf.is_null()
-            || unsafe { (*buf).b_ffname.is_null() }
+            || unsafe { (*buf).name.full().is_none() }
             || self.removable_bufs.contains(&buf.cast_const())
         {
             return None;
         }
-        Some(unsafe { (*buf).b_ffname })
+        Some(unsafe { (*buf).name.full_ptr() })
     }
 
     /// Every buffer's local marks and change list, keyed by file name so
@@ -447,7 +447,7 @@ impl Writing {
     }
 
     fn collect_one_buffer(&mut self, buffer: Buf) {
-        let fname = buffer.b_ffname;
+        let fname = buffer.name.full_ptr();
         let filemarks = unsafe { self.file_marks_for(fname) };
 
         let mut mark_iter: *const c_void = core::ptr::null();
@@ -524,7 +524,7 @@ impl Writing {
             data: ShadaEntryData::GlobalMark(ShadaFileMark {
                 name: '0' as c_char,
                 mark: Win::current().w_cursor,
-                fname: Buf::current().b_ffname,
+                fname: Buf::current().name.full_ptr(),
             }),
             additional_data: core::ptr::null_mut(),
         };

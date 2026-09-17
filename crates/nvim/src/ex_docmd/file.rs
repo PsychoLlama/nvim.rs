@@ -90,10 +90,12 @@ pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
         return false;
     }
     if !Buf::current().file_id_valid
-        && !Buf::current().b_sfname.is_null()
-        && byte(Buf::current().b_sfname) != NUL
+        && !Buf::current().name.short().is_none()
+        && byte(Buf::current().name.short_ptr()) != NUL
     {
-        return unsafe { path_fnamecmp(cstr::at(ffname), cstr::at(Buf::current().b_sfname)) } != 0;
+        return unsafe {
+            path_fnamecmp(cstr::at(ffname), cstr::at(Buf::current().name.short_ptr()))
+        } != 0;
     }
     unsafe { otherfile(ffname) }
 }
@@ -248,7 +250,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -
             pat_len,
             FileNameOpts::MESS,
             true,
-            Buf::current().b_ffname,
+            Buf::current().name.full_ptr(),
             &raw mut file_to_find,
             &raw mut search_ctx,
         )
@@ -265,7 +267,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -
                 0 as size_t,
                 FileNameOpts::MESS,
                 false,
-                Buf::current().b_ffname,
+                Buf::current().name.full_ptr(),
                 &raw mut file_to_find,
                 &raw mut search_ctx,
             );
@@ -451,8 +453,8 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
             return;
         }
         readfile(
-            Buf::current().b_ffname,
-            Buf::current().b_fname,
+            Buf::current().name.full_ptr(),
+            Buf::current().name.shown_ptr(),
             excmd.line2,
             0,
             MAXLNUM,

@@ -71,7 +71,7 @@ pub(crate) unsafe fn expand_path_option(
             // Relative to the current buffer:
             //     "/path/file" + "."        -> "/path/"
             //     "/path/file" + "./subdir" -> "/path/subdir"
-            let ffname = Buf::current().b_ffname;
+            let ffname = Buf::current().name.full_ptr();
             if ffname.is_null() {
                 continue;
             }

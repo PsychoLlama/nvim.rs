@@ -250,23 +250,23 @@ pub(crate) unsafe fn process_next_cpt_value(
             } else {
                 // Unloaded buffer: scan it like a dictionary.
                 unsafe { (*st).found_all = true };
-                if unsafe { (*(*st).ins_buf).b_fname }.is_null() {
+                if unsafe { (*(*st).ins_buf).name.shown_ptr() }.is_null() {
                     status = INS_COMPL_CPT_CONT;
                     break 'done;
                 }
                 compl_type = CTRL_X_DICTIONARY;
-                unsafe { (*st).dict = (*(*st).ins_buf).b_fname };
+                unsafe { (*st).dict = (*(*st).ins_buf).name.shown_ptr() };
                 unsafe { (*st).dict_f = DICT_EXACT };
             }
             if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
                 // SAFETY: `ins_buf` is the buffer being scanned.
                 let buf = unsafe { Buf::new((*st).ins_buf) };
-                let name = if buf.b_fname.is_null() {
+                let name = if buf.name.is_unnamed() {
                     buf_spname(buf)
-                } else if buf.b_sfname.is_null() {
-                    buf.b_fname
+                } else if buf.name.short().is_none() {
+                    buf.name.shown_ptr()
                 } else {
-                    buf.b_sfname
+                    buf.name.short_ptr()
                 };
                 let fmt = gettext(c"Scanning: %s");
                 let (out, size) = (scratch.as_mut_ptr(), IOSIZE as size_t);
@@ -411,7 +411,7 @@ pub(crate) fn get_next_tag_completion() {
     if ctrl_x_mode_not_default() {
         flags |= TAG_VERBOSE;
     }
-    let (pat, fname) = (compl_pattern().data(), Buf::current().b_ffname);
+    let (pat, fname) = (compl_pattern().data(), Buf::current().name.full_ptr());
     let (count, out) = (&raw mut num_matches, &raw mut matches);
     // SAFETY: `pat` is the running completion's NUL-terminated pattern, and
     // the two out-parameters are this frame's own locals.

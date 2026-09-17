@@ -328,7 +328,7 @@ pub unsafe fn buf_write(
     // With no file name yet, take the one being written to. BufFlags::NOTEDITED
     // records that, in case the write fails. Not for a filter command,
     // not when appending, and only when 'cpoptions' contains "F".
-    if b.b_ffname.is_null()
+    if b.name.full().is_none()
         && req.reset_changed
         && whole
         && buf == Buf::current()
@@ -351,8 +351,8 @@ pub unsafe fn buf_write(
     fname = sfname;
 
     // Writing over the file the buffer came from?
-    let overwriting = !b.b_ffname.is_null()
-        && unsafe { path_fnamecmp(cstr::at(ffname), cstr::at(b.b_ffname)) } == 0;
+    let overwriting = !b.name.full().is_none()
+        && unsafe { path_fnamecmp(cstr::at(ffname), cstr::at(b.name.full_ptr())) } == 0;
     no_wait_return.set(no_wait_return.get() + 1); // don't wait for return yet
 
     let orig = OpMarks {

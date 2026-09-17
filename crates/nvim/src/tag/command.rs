@@ -230,7 +230,7 @@ impl DoTag {
                 view: NO_VIEW,
                 additional_data: ptr::null_mut(),
             },
-            buf_ffname: Buf::current().b_ffname,
+            buf_ffname: Buf::current().name.full_ptr(),
             owned_name: None,
             prev_num_matches: num_matches.get(),
         };
@@ -536,7 +536,7 @@ impl DoTag {
             return;
         }
         if let Some(buf) = find_buf(self.cur_fnum) {
-            self.buf_ffname = buf.b_ffname;
+            self.buf_ffname = buf.name.full_ptr();
         }
     }
 

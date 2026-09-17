@@ -340,7 +340,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
         } else if cstr::starts_with(arg, b"file") {
             (DBG_FILE, false)
         } else if debugger && cstr::starts_with(arg, b"here") {
-            if Buf::current().b_ffname.is_null() {
+            if Buf::current().name.full().is_none() {
                 semsg!("E32: No file name");
                 return Err(Failed);
             }
@@ -401,7 +401,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
             };
             xstrdup(bare)
         } else if here {
-            xstrdup(Buf::current().b_ffname)
+            xstrdup(Buf::current().name.full_ptr())
         } else if kind == DBG_EXPR {
             let expr = xstrdup(p);
             // `eval_expr_no_emsg` reads the entry's `dbg_name`, so the

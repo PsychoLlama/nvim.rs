@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
 
@@ -33,28 +34,25 @@ const S_IFLNK: u64 = 0o120000;
 pub unsafe fn shorten_buf_fname(mut buffer: Buf, dirname: *mut c_char, force: c_int) {
     // SAFETY: each name the buffer holds is NUL-terminated; the null check
     // ahead of `path_is_absolute` guards the name it reads.
-    if buffer.b_fname.is_null()
+    if buffer.name.is_unnamed()
         || buf_is_nofilename(Some(buffer))
-        || unsafe { path_with_url(cstr::at(buffer.b_fname)) } != 0
+        || unsafe { path_with_url(cstr::at(buffer.name.shown_ptr())) } != 0
         || !(force != 0
-            || buffer.b_sfname.is_null()
-            || unsafe { path_is_absolute(cstr::at(buffer.b_sfname)) })
+            || buffer.name.short().is_none()
+            || unsafe { path_is_absolute(cstr::at(buffer.name.short_ptr())) })
     {
         return;
     }
-    if buffer.b_sfname != buffer.b_ffname {
-        // SAFETY: the buffer's own allocation, which it no longer names.
-        unsafe { xfree(buffer.b_sfname.cast()) };
-        buffer.b_sfname = ptr::null_mut();
-    }
+    buffer.name.drop_own_short();
     // SAFETY: the buffer's own file name and the caller's directory name.
-    let p = unsafe { path_shorten_fname(buffer.b_ffname, dirname) };
+    let p = unsafe { path_shorten_fname(buffer.name.full_ptr(), dirname) };
     if p.is_null() {
-        buffer.b_fname = buffer.b_ffname;
+        // The one place in the tree that shows the *full* name.
+        buffer.name.show_full();
     } else {
         // SAFETY: `p` points into the buffer's NUL-terminated full name.
-        buffer.b_sfname = unsafe { xstrdup(p) };
-        buffer.b_fname = buffer.b_sfname;
+        let short = XString::from_cstr(unsafe { cstr::at(p) });
+        buffer.name.set_short(Some(short));
     }
 }
 

@@ -115,7 +115,7 @@ mod write {
     use neovim::memory::{XString, xfree};
     use neovim::option::vars::P_UDIR;
     use neovim::optionstr::init_buf_string_options;
-    use neovim::types::Buffer;
+    use neovim::types::{BufName, Buffer};
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
     use neovim::winlayer::Buf;
@@ -135,9 +135,9 @@ mod write {
         dir: PathBuf,
         buf: Box<Buffer>,
         hash: [u8; UNDO_HASH_SIZE as usize],
-        // Owns the bytes `p_udir`/`b_ffname` point at for the case's life.
+        // Owns the bytes `p_udir` points at for the case's life; the
+        // buffer's own name it owns itself.
         _udir: CString,
-        ffname: Option<CString>,
         old_udir: Option<XString>,
         old_synced: bool,
     }
@@ -164,6 +164,7 @@ mod write {
                 // buffer *is* dropped, so a garbage `Some` would be freed.
                 unsafe {
                     (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
+                    (&raw mut (*storage.as_mut_ptr()).name).write(BufName::default());
                     init_buf_string_options(storage.as_mut_ptr());
                     storage.assume_init()
                 }
@@ -189,7 +190,6 @@ mod write {
                 buf,
                 hash: [0; UNDO_HASH_SIZE as usize],
                 _udir: udir,
-                ffname: None,
                 old_udir,
                 old_synced,
             };
@@ -206,14 +206,13 @@ mod write {
         /// absolute name, which is what `u_get_undo_file_name` mangles.
         fn set_ffname(&mut self, path: &std::path::Path) {
             let ffname = CString::new(path.to_str().unwrap()).unwrap();
-            self.buf.b_ffname = ffname.as_ptr().cast_mut();
-            self.ffname = Some(ffname);
+            self.buf.name.set(XString::from_cstr(&ffname), None);
         }
 
         /// Where `u_write_undo(NULL, ..)` puts this buffer's undo file.
         fn undo_file_name(&self) -> PathBuf {
             // SAFETY: `b_ffname` is this fixture's own NUL-terminated name.
-            let name = unsafe { u_get_undo_file_name(self.buf.b_ffname, false) };
+            let name = unsafe { u_get_undo_file_name(self.buf.name.full_ptr(), false) };
             assert!(!name.is_null(), "no undo file name for the buffer");
             // SAFETY: an `xmalloc`ed NUL-terminated string, ours to free.
             let owned = unsafe { std::ffi::CStr::from_ptr(name).to_bytes().to_vec() };

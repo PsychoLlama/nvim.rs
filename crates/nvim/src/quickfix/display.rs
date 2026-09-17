@@ -95,7 +95,7 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
         };
         if !buf.is_null() {
             fname = if qfp.qf_fname.is_null() {
-                unsafe { (*buf).b_fname }
+                unsafe { (*buf).name.shown_ptr() }
             } else {
                 qfp.qf_fname
             };

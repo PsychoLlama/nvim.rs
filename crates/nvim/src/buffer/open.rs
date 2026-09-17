@@ -208,7 +208,10 @@ fn read_buffer(
     let line_count = Buf::current().line_count();
     let (ffname, fname) = match read_stdin {
         true => (ptr::null_mut(), ptr::null_mut()),
-        false => (Buf::current().b_ffname, Buf::current().b_fname),
+        false => (
+            Buf::current().name.full_ptr(),
+            Buf::current().name.shown_ptr(),
+        ),
     };
     let last = MAXLNUM;
     let mut retval = read_file(
@@ -293,7 +296,7 @@ fn open_buffer_inner(
     // When re-entering the same buffer, it should not change, because the
     // user may have reset the flag by hand.
     let mut buf = Buf::current();
-    if readonlymode.get() && !buf.b_ffname.is_null() && buf.b_flags.has(BufFlags::NEVERLOADED) {
+    if readonlymode.get() && !buf.name.full().is_none() && buf.b_flags.has(BufFlags::NEVERLOADED) {
         buf.b_p_ro = 1;
     }
 
@@ -319,9 +322,9 @@ fn open_buffer_inner(
     }
 
     // Read the file if there is one.
-    if !buf.b_ffname.is_null() {
+    if !buf.name.full().is_none() {
         let save_bin = buf.b_p_bin;
-        let perm = permissions_of(buf.b_ffname);
+        let perm = permissions_of(buf.name.full_ptr());
         // `S_ISFIFO(perm) || S_ISSOCK(perm)`; the literals stay literals so
         // that ffigen does not export them as new C declarations.
         if perm >= 0 && (perm & __S_IFMT == 0o10000 || perm & __S_IFMT == 0o140000) {
@@ -331,7 +334,7 @@ fn open_buffer_inner(
             buf.b_p_bin = 1;
         }
         let fifo = if read_fifo { READ_FIFO as c_int } else { 0 };
-        let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM);
+        let (ffname, fname, last) = (buf.name.full_ptr(), buf.name.shown_ptr(), MAXLNUM);
         let read = flags | READ_NEW as c_int | fifo;
         retval = read_file(
             ffname,
@@ -513,7 +516,7 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
     in_buffer(newbuf, || {
         block_autocmds_now();
         let read = READ_NEW as c_int | READ_DUMMY as c_int;
-        let (ffname, fname, last) = (buffer.b_ffname, buffer.b_fname, MAXLNUM);
+        let (ffname, fname, last) = (buffer.name.full_ptr(), buffer.name.shown_ptr(), MAXLNUM);
         if open_memline(Buf::current()).is_ok()
             && read_file(ffname, fname, 0, 0, last, Some(&mut ea), read, false) == Ok(Loaded::Read)
             && buffer.line_count() == Buf::current().line_count()

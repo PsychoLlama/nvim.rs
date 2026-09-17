@@ -805,8 +805,8 @@ fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
     for buf in buffers() {
         // SAFETY: the entry's own NUL-terminated file name, and a live
         // buffer's from the editor's own list.
-        if !buf.b_ffname.is_null()
-            && unsafe { path_fnamecmp(cstr::at(name), cstr::at(buf.b_ffname)) } == 0
+        if !buf.name.full().is_none()
+            && unsafe { path_fnamecmp(cstr::at(name), cstr::at(buf.name.full_ptr())) } == 0
         {
             let mut fm: FileMark = FileMark::UNSET;
             let name = entry.data.filemark().name as c_int;

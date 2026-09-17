@@ -42,7 +42,6 @@ use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::guard::Suppress;
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
-use crate::memory::xfree;
 use crate::message::state::emsg_silent;
 use crate::message::{e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly};
 use crate::message::{emsg, vim_dialog_yesno};
@@ -114,28 +113,29 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
     // A new (unlisted) buffer entry needs to be made to hold the old file
     // name, which will become the alternate file name.  But don't set the
     // alternate file name if the buffer didn't have a name.
-    let (fname, sfname, xfname) = (
-        Buf::current().b_ffname,
-        Buf::current().b_sfname,
-        Buf::current().b_fname,
-    );
-    Buf::current().b_ffname = ptr::null_mut();
-    Buf::current().b_sfname = ptr::null_mut();
-    // SAFETY: caller's contract; the names are handed back on failure.
+    // The old name is taken *out* of the buffer rather than copied:
+    // `setfname` would release what it found, and the entry made below
+    // wants the name the buffer had. `saved` owns it until this returns.
+    let saved = core::mem::take(&mut Buf::current().name);
+    // SAFETY: caller's contract; the name is handed back on failure.
     if unsafe { setfname(Buf::current(), new_fname, ptr::null_mut(), true) }.is_err() {
-        Buf::current().b_ffname = fname;
-        Buf::current().b_sfname = sfname;
+        Buf::current().name = saved;
         return Err(Failed);
     }
     Buf::current().b_flags |= BufFlags::NOTEDITED;
-    if !xfname.is_null() && unsafe { *xfname } as c_int != NUL {
-        let alt = unsafe { buflist_new(fname, xfname, Win::current().w_cursor.lnum, 0) };
+    if saved
+        .shown()
+        .is_some_and(|shown| !shown.to_bytes().is_empty())
+    {
+        let (full, shown) = (saved.full_ptr(), saved.shown_ptr());
+        // SAFETY: two NUL-terminated names `saved` keeps alive across the
+        // call, which copies whatever it keeps.
+        let alt = unsafe { buflist_new(full, shown, Win::current().w_cursor.lnum, 0) };
         if let Some(alt) = alt.filter(|_| !cmdmod_has(CmdModFlags::KEEPALT)) {
             Win::current().w_alt_fnum = alt.handle as c_int;
         }
     }
-    unsafe { xfree(fname.cast()) };
-    unsafe { xfree(sfname.cast()) };
+    drop(saved);
     buf_autocmd(AutoEvent::BufFilePost, Buf::current());
     // Change directories when the 'acd' option is set.
     do_autochdir();
@@ -173,8 +173,8 @@ pub fn ex_update(excmd: &mut ExArg) {
     // SAFETY: `curbuf` is live.
     if curbuf_is_changed()
         || (!buf_is_nofilename(current_buf())
-            && !Buf::current().b_ffname.is_null()
-            && !unsafe { os_path_exists(Buf::current().b_ffname) })
+            && !Buf::current().name.full().is_none()
+            && !unsafe { os_path_exists(Buf::current().name.full_ptr()) })
     {
         let _ = do_write(excmd);
     }
@@ -285,7 +285,10 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         if cannot_write_curbuf(args) {
             return Err(Failed);
         }
-        (ffname, fname) = (Buf::current().b_ffname, Buf::current().b_fname);
+        (ffname, fname) = (
+            Buf::current().name.full_ptr(),
+            Buf::current().name.shown_ptr(),
+        );
         if !confirm_partial_write(args) {
             return Err(Failed);
         }
@@ -306,7 +309,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     // SAFETY: `fname` is live.
     unsafe { handle_mkdir_p_arg(args, fname) }?;
 
-    let name_was_missing = Buf::current().b_ffname.is_null();
+    let name_was_missing = Buf::current().name.full().is_none();
     let request = WriteRequest {
         append: args.append,
         forceit: args.forceit,
@@ -351,7 +354,7 @@ fn cannot_write_curbuf(args: &mut ExArg) -> bool {
     unsafe {
         buf_dontwrite_msg(current_buf())
             || check_fname().is_err()
-            || check_writable(Buf::current().b_ffname).is_err()
+            || check_writable(Buf::current().name.full_ptr()).is_err()
             || check_readonly(&mut args.forceit, Buf::current())
     }
 }
@@ -405,13 +408,13 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
         return None;
     }
 
-    // Exchange the file names for the current and the alternate buffer.
-    // SAFETY: both buffers are live, so every field address below is.
-    unsafe {
-        ptr::swap(&raw mut alt_buf.b_fname, &raw mut Buf::current().b_fname);
-        ptr::swap(&raw mut alt_buf.b_ffname, &raw mut Buf::current().b_ffname);
-        ptr::swap(&raw mut alt_buf.b_sfname, &raw mut Buf::current().b_sfname);
-    };
+    // Exchange the file names for the current and the alternate buffer --
+    // one move now that a buffer's three names are one value. The guard is
+    // the doc comment above: `alt_buf` is expected to be another buffer,
+    // and swapping a place with itself is not a swap.
+    if alt_buf.raw() != Buf::current_raw() {
+        core::mem::swap(&mut alt_buf.name, &mut Buf::current().name);
+    }
     buf_name_changed(Buf::current());
     buf_autocmd(AutoEvent::BufFilePost, Buf::current());
     buf_autocmd(AutoEvent::BufFilePost, alt_buf);
@@ -439,7 +442,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
     }
     // Autocommands may have changed buffer names, esp. when 'autochdir'
     // is set.
-    Some(Buf::current().b_sfname)
+    Some(Buf::current().name.short_ptr())
 }
 
 /// Check if it is allowed to overwrite a file.  If `b_flags` has `BufFlags::NOTEDITED`,
@@ -663,16 +666,25 @@ fn write_one_buffer(
         return WriteAll::Stop;
     }
     let mut deleted = false;
-    if buffer.b_ffname.is_null() {
+    if buffer.name.full().is_none() {
         semsg!("E141: No file name for buffer {}", buffer.handle as int64_t);
         *error += 1;
     } else if check_readonly(&mut args.forceit, buffer)
-        || unsafe { check_overwrite(args, buffer, buffer.b_fname, buffer.b_ffname, false) }.is_err()
+        || unsafe {
+            check_overwrite(
+                args,
+                buffer,
+                buffer.name.shown_ptr(),
+                buffer.name.full_ptr(),
+                false,
+            )
+        }
+        .is_err()
     {
         *error += 1;
     } else {
         let bufref = BufRef::of(buffer);
-        if unsafe { handle_mkdir_p_arg(args, buffer.b_fname) }.is_err()
+        if unsafe { handle_mkdir_p_arg(args, buffer.name.shown_ptr()) }.is_err()
             || buf_write_all(buffer, args.forceit).is_err()
         {
             *error += 1;
@@ -711,7 +723,7 @@ fn not_writing() -> bool {
 fn check_readonly(forceit: &mut bool, buffer: Buf) -> bool {
     // Handle a file being readonly when the 'readonly' option is set or when
     // the file exists and permissions are read-only.
-    let file = buffer.b_ffname;
+    let file = buffer.name.full_ptr();
     // SAFETY: the buffer's own file name.
     let readonly = !*forceit
         && (buffer.b_p_ro != 0
@@ -720,7 +732,7 @@ fn check_readonly(forceit: &mut bool, buffer: Buf) -> bool {
         return false;
     }
 
-    let (is_ro, name) = (buffer.b_p_ro != 0, buffer.b_fname);
+    let (is_ro, name) = (buffer.b_p_ro != 0, buffer.name.shown_ptr());
     if !confirming() || name.is_null() {
         // SAFETY: live message strings; one `%s` for one string.
         if is_ro {

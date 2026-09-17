@@ -616,7 +616,7 @@ pub fn check_marks_read() {
     let buf = Buf::current_raw();
     if !unsafe { (*buf).b_marks_read }
         && get_shada_parameter('\'' as c_int) > 0
-        && !unsafe { (*buf).b_ffname.is_null() }
+        && !unsafe { (*buf).name.full().is_none() }
     {
         let _ = shada_read_marks();
     }

@@ -44,7 +44,7 @@ fn read_original(
     lines: LineNr,
     flags: c_int,
 ) -> Result<Loaded, Failed> {
-    let (name, short) = (Buf::current().b_ffname, core::ptr::null_mut());
+    let (name, short) = (Buf::current().name.full_ptr(), core::ptr::null_mut());
     // SAFETY: the name is the buffer's own.
     unsafe { readfile(name, short, from, skip, lines, None, flags, false) }
 }
@@ -69,10 +69,10 @@ pub fn ml_recover(checkext: bool) {
     let mut serious_error = true;
 
     'theend: {
-        let fname = if Buf::current().b_fname.is_null() {
+        let fname = if Buf::current().name.is_unnamed() {
             c"".as_ptr().cast_mut()
         } else {
-            Buf::current().b_fname
+            Buf::current().name.shown_ptr()
         };
         // A name ending in ".s[a-w][a-z]" is taken to be the swap file
         // itself; otherwise its swap files are searched for.
@@ -229,7 +229,7 @@ pub fn ml_recover(checkext: bool) {
             };
         } else {
             let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
-            unsafe { home_replace(None, Buf::current().b_ffname, out, room, true) };
+            unsafe { home_replace(None, Buf::current().name.full_ptr(), out, room, true) };
         }
         msg_putchar('\n' as c_int);
         // SAFETY: the copy above NUL-terminated `path`.
@@ -242,8 +242,8 @@ pub fn ml_recover(checkext: bool) {
         let mtime = unsafe { b0_read_number(&(*b0p).b0_mtime) } as c_int;
         let mut org_file_info: FileInfo = unsafe { core::mem::zeroed() };
         let mut swp_file_info: FileInfo = unsafe { core::mem::zeroed() };
-        if !Buf::current().b_ffname.is_null()
-            && unsafe { os_fileinfo(Buf::current().b_ffname, &raw mut org_file_info) }
+        if !Buf::current().name.full().is_none()
+            && unsafe { os_fileinfo(Buf::current().name.full_ptr(), &raw mut org_file_info) }
             && ((unsafe { os_fileinfo(mf_fname(mfp), &raw mut swp_file_info) }
                 && org_file_info.stat.st_mtim.tv_sec > swp_file_info.stat.st_mtim.tv_sec)
                 || org_file_info.stat.st_mtim.tv_sec != mtime as _)
@@ -283,7 +283,7 @@ pub fn ml_recover(checkext: bool) {
         // and friends. Errors are ignored, and the text itself is not
         // used — except as the "unchanged?" comparison below.
         let mut orig_file_status = Err(Failed);
-        if !Buf::current().b_ffname.is_null() {
+        if !Buf::current().name.full().is_none() {
             orig_file_status = read_original(0, 0, MAXLNUM, READ_NEW as c_int);
         }
 
@@ -364,7 +364,7 @@ pub fn ml_recover(checkext: bool) {
     if serious_error && called_from_main {
         ml_close(Buf::current(), 1);
     } else {
-        let (name, buf) = (Buf::current().b_fname, Buf::current_raw());
+        let (name, buf) = (Buf::current().name.shown_ptr(), Buf::current_raw());
         let none = core::ptr::null_mut();
         let __hoisted_0 = unsafe { Buf::from_raw(buf) };
         unsafe { apply_autocmds(AutoEvent::BufReadPost, none, name, false, __hoisted_0) };
@@ -462,7 +462,7 @@ unsafe fn recover_lines(
 
     // Without a file to fall back on, a data block whose number went
     // negative (never written to the swap file) is simply lost.
-    let mut cannot_open = Buf::current().b_ffname.is_null();
+    let mut cannot_open = Buf::current().name.full().is_none();
 
     let append = |lnum: &mut LineNr, text: *const c_char| {
         let _ = unsafe { ml_append(*lnum, text.cast_mut(), 0, true) };
@@ -751,12 +751,12 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
             if buf_is_changed(buf)
                 && check_file != 0
                 && unsafe { mf_need_trans(buf.b_ml.ml_mfp) }
-                && !buf.b_ffname.is_null()
+                && !buf.name.full().is_none()
             {
                 // If the original file is gone or has changed, preserve
                 // now, to get rid of all the negative numbered blocks.
                 let mut file_info: FileInfo = unsafe { core::mem::zeroed() };
-                if !unsafe { os_fileinfo(buf.b_ffname, &raw mut file_info) }
+                if !unsafe { os_fileinfo(buf.name.full_ptr(), &raw mut file_info) }
                     || file_info.stat.st_mtim.tv_sec != buf.b_mtime_read
                     || file_info.stat.st_mtim.tv_nsec != buf.b_mtime_read_ns
                     || unsafe { os_fileinfo_size(&raw mut file_info) } != buf.b_orig_size

@@ -418,7 +418,7 @@ impl FindTags {
 
         // For CTRL-] in a help file prefer a match in the same
         // language: a help file for language xx is named "*.xxx".
-        let fname = Buf::current().b_fname;
+        let fname = Buf::current().name.shown_ptr();
         let flen = if fname.is_null() {
             0
         } else {
@@ -784,7 +784,7 @@ pub unsafe fn find_tags(
         retval = if tagfunc == OK { Ok(()) } else { Err(Failed) };
         if tagfunc == NOTDONE {
             // A ".txt" help file keeps "en" as its language.
-            let fname = Buf::current().b_fname;
+            let fname = Buf::current().name.shown_ptr();
             if flags & TAG_KEEP_LANG as c_int != 0
                 && st.help_lang_find.is_null()
                 && !fname.is_null()

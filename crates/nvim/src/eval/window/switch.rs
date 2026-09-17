@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::pos::equalpos;
 use crate::types::Failed;
@@ -51,8 +52,8 @@ pub unsafe fn win_execute_before(args: *mut WinExecute, window: Win, tabpage: Ta
         // window is entered; `apply_acd` records that it has already
         // landed where the saved one says, so the restore can skip it.
         let buf = Buf::current();
-        if !buf.b_sfname.is_null() && buf.b_fname == buf.b_sfname {
-            args.save_sfname = unsafe { xstrdup(buf.b_sfname) };
+        if !buf.name.short().is_none() && buf.name.shown_ptr() == buf.name.short_ptr() {
+            args.save_sfname = unsafe { xstrdup(buf.name.short_ptr()) };
         }
         do_autochdir();
         let mut autocwd: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
@@ -84,9 +85,10 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
         unsafe { os_chdir(cstr::at(args.cwd.as_mut_ptr())) };
         if !args.save_sfname.is_null() {
             let mut buf = Buf::current();
-            unsafe { xfree(buf.b_sfname.cast()) };
-            buf.b_sfname = args.save_sfname;
-            buf.b_fname = buf.b_sfname;
+            // SAFETY: the block `win_execute_before` saved, which nothing
+            // else holds; the buffer releases what it had in its place.
+            buf.name
+                .set_short(Some(unsafe { XString::from_raw(args.save_sfname) }));
         }
     }
     if let Some(mut win) = args.wp.and_then(valid_win)

@@ -489,7 +489,7 @@ pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
         apply_autocmds(
             AutoEvent::FileType,
             buffer.b_p_ft.value_ptr(),
-            buffer.b_fname,
+            buffer.name.shown_ptr(),
             force || ft_recursive.get() == 1,
             Some(buffer),
         )

@@ -247,7 +247,7 @@ fn fill_name(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
         unsafe { xstrlcpy(name.as_mut_ptr(), special, MAXPATHL as usize) };
         return;
     }
-    let (fname, dst) = (buffer.b_fname, name.as_mut_ptr());
+    let (fname, dst) = (buffer.name.shown_ptr(), name.as_mut_ptr());
     // SAFETY: a live buffer, its name, and `MAXPATHL` writable bytes.
     unsafe { home_replace(Some(buffer), fname, dst, MAXPATHL as size_t, true) };
 }
@@ -384,10 +384,10 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     if !name.is_null() {
         out.put_str(c"%s", name);
     } else {
-        let name = if fullname == 0 && !buf.b_fname.is_null() {
-            buf.b_fname
+        let name = if fullname == 0 && !buf.name.is_unnamed() {
+            buf.name.shown_ptr()
         } else {
-            buf.b_ffname
+            buf.name.full_ptr()
         };
         // Only a help buffer's name is shortened against the buffer's own
         // directory; every other name is shortened against `$HOME` alone.
@@ -693,7 +693,7 @@ fn fill_icon(dst: &mut [c_char; IOSIZE as usize]) {
         // SAFETY: a NUL-terminated file name, or null, which `path_tail`
         // does not accept -- `buf_spname` answered null, so `b_fname` is
         // set, and `b_ffname` with it.
-        name = unsafe { path_tail(buf.b_ffname) };
+        name = unsafe { path_tail(buf.name.full_ptr()) };
     }
     // SAFETY: a NUL-terminated name.
     let mut namelen = unsafe { cstr::bytes_at(name) }.len() as c_int;

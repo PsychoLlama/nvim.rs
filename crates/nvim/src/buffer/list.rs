@@ -14,7 +14,9 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::types::AutoEvent;
+use crate::types::BufName;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -259,8 +261,13 @@ pub unsafe fn buflist_new(
     };
 
     if !ffname.is_null() {
-        buf.b_ffname = ffname;
-        buf.b_sfname = dup(sfname);
+        // `ffname` is the block `fix_fname` allocated above; `sfname` may
+        // still be the caller's own pointer, so the buffer takes a copy.
+        // SAFETY: a live `xmalloc` block nothing else holds, and a
+        // NUL-terminated name.
+        let full = unsafe { XString::from_raw(ffname) };
+        let short = (!sfname.is_null()).then(|| unsafe { XString::from_raw(dup(sfname)) });
+        buf.name.set(full, short);
     }
 
     clear_wininfo(buf);
@@ -289,7 +296,7 @@ pub unsafe fn buflist_new(
 
     init_hashtabs(buf);
 
-    buf.b_fname = buf.b_sfname;
+    buf.name.show_short();
     buf.file_id_valid = file_id_valid;
     if file_id_valid {
         buf.file_id = file_id;
@@ -411,6 +418,10 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     // `init_buf_string_options`.
     // SAFETY: a fresh allocation nothing has read or dropped.
     unsafe { init_buf_string_options(at) };
+    // ... and the file name, for the same reason: `BufName` holds two of
+    // those `Option<XString>`s and an enum whose niche is one of them.
+    // SAFETY: as above.
+    unsafe { (&raw mut (*at).name).write(BufName::default()) };
     // SAFETY: all-zero bytes are otherwise what upstream's
     // `xcalloc(1, sizeof(Buffer))` hands a fresh buffer.
     Owned::new(unsafe { storage.assume_init() })
@@ -507,7 +518,7 @@ pub fn curbuf_reusable() -> bool {
         return false;
     };
     let empty = buf.b_ml.ml_mfp.is_null() || buf_is_empty(buf);
-    buf.b_ffname.is_null()
+    buf.name.full().is_none()
         && buf.b_nwindows <= 1
         && buf.terminal.is_null()
         && empty

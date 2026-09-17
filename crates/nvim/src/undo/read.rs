@@ -42,7 +42,7 @@ use super::*;
 pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *const c_char) {
     // SAFETY: a live current buffer and NUL-terminated names, by the above.
     let file_name: *mut c_char = if name.is_null() {
-        let picked = unsafe { u_get_undo_file_name(Buf::current().b_ffname, true) };
+        let picked = unsafe { u_get_undo_file_name(Buf::current().name.full_ptr(), true) };
         if picked.is_null() {
             return;
         }

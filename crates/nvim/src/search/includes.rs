@@ -308,7 +308,7 @@ impl Walk {
             self.line = self.buf;
             self.files.close_innermost();
             self.curr_fname = if self.files.depth() == -1 {
-                Buf::current().b_fname
+                Buf::current().name.shown_ptr()
             } else {
                 self.files.innermost().name.as_ptr()
             };
@@ -380,8 +380,8 @@ unsafe fn handle_include(
 ) {
     let mut progress = [0 as c_char; IOSIZE as usize];
     // A relative name is resolved against the file the line is in.
-    let p_fname = if walk.curr_fname == Buf::current().b_fname {
-        Buf::current().b_ffname
+    let p_fname = if walk.curr_fname == Buf::current().name.shown_ptr() {
+        Buf::current().name.full_ptr()
     } else {
         walk.curr_fname
     };
@@ -661,7 +661,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
         }
     }
 
-    let from_file = if walk.curr_fname == Buf::current().b_fname {
+    let from_file = if walk.curr_fname == Buf::current().name.shown_ptr() {
         ptr::null_mut()
     } else {
         walk.curr_fname
@@ -840,7 +840,7 @@ pub unsafe fn find_pattern_in_path(
         end_lnum,
         already: false,
         files: FileStack::new(),
-        curr_fname: Buf::current().b_fname,
+        curr_fname: Buf::current().name.shown_ptr(),
         prev_fname: ptr::null_mut(),
         depth_displayed: -1,
         did_show: false,
