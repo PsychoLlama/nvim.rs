@@ -37,7 +37,7 @@ use crate::global_cell::GlobalCell;
 use crate::mark::mark_view_make;
 use crate::memory::{xcalloc, xrealloc};
 use crate::option::vars::p_fdls;
-use crate::option::{clear_winopt, copy_winopt, didset_window_options};
+use crate::option::{clear_winopt, copy_winopt, didset_window_options, init_winopt_strings};
 use crate::pos::MAXLNUM;
 use crate::types::{
     AdditionalData, Buffer, ColNr, FileMark, FileMarkView, GArray, LineNr, OptInt, Pos, Timestamp,
@@ -72,11 +72,17 @@ impl DerefMut for Entry {
 }
 
 impl Entry {
-    /// A fresh, zeroed entry, as upstream's `xcalloc(1, sizeof(WinInfo))`.
+    /// A fresh, zeroed entry, as upstream's `xcalloc(1, sizeof(WinInfo))`,
+    /// with its option set's string values written: all-zero bytes are not
+    /// a valid `Option<XString>`, for the reason
+    /// `optionstr::init_buf_string_options` states.
     pub(crate) fn new() -> Self {
         // SAFETY: `xcalloc` aborts rather than answering null, and a zeroed
-        // `WinInfo` is the initial value upstream gives one.
-        Entry(unsafe { xcalloc(1, size_of::<WinInfo>()) }.cast::<WinInfo>())
+        // `WinInfo` is otherwise the initial value upstream gives one; the
+        // option strings are written before anything can read or drop them.
+        let at = unsafe { xcalloc(1, size_of::<WinInfo>()) }.cast::<WinInfo>();
+        unsafe { init_winopt_strings(&raw mut (*at).wi_opt) };
+        Entry(at)
     }
 
     #[inline(always)]

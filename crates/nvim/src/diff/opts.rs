@@ -20,6 +20,7 @@
 use super::*;
 use crate::option::vars::P_DIA;
 use crate::option::vars::P_DIP;
+use crate::optionstr::LocalOptStr;
 use crate::semsg;
 use crate::types::Failed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
@@ -102,10 +103,10 @@ pub(crate) unsafe fn parse_diffanchors(
 ) -> Result<(), Failed> {
     // A copy: the walk below outlives a projection's borrow.
     let global_dia = P_DIA.get();
-    let mut dia = if unsafe { *buffer.b_p_dia } == 0 {
+    let mut dia = if buffer.b_p_dia.first_byte() == 0 {
         global_dia.as_ptr().cast_mut()
     } else {
-        buffer.b_p_dia
+        buffer.b_p_dia.value_ptr()
     };
     // `None` means "stay where you are": `check_only` resolves the address in
     // the window the user is in, and the one case where no window shows the

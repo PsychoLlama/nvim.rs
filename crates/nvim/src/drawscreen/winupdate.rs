@@ -19,6 +19,7 @@ use crate::decoration::{DecorStateRef, kVPosWinCol};
 use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
 use crate::winlayer::{self, Win};
@@ -178,7 +179,7 @@ pub(crate) fn win_update(window: Win) {
     let nrwidth_before = win.w_nrwidth;
     let nrwidth_new = if win.w_onebuf_opt.wo_nu != 0
         || win.w_onebuf_opt.wo_rnu != 0
-        || unsafe { *win.w_onebuf_opt.wo_stc } != 0
+        || win.w_onebuf_opt.wo_stc.first_byte() != 0
     {
         number_width(window)
     } else {

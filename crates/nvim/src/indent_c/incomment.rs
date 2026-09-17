@@ -19,6 +19,7 @@
 )]
 
 use super::*;
+use crate::optionstr::LocalOptStr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -147,7 +148,7 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
     let mut start_align = 0;
     let mut done = false;
 
-    let mut p = Buf::current().b_p_com;
+    let mut p = Buf::current().b_p_com.value_ptr();
     // SAFETY: 'comments' is a NUL-terminated option string, and nothing below
     // steps `p` past that NUL: each `add(1)` follows a byte just read and
     // found non-NUL, `getdigits_int` stops at the first non-digit, and

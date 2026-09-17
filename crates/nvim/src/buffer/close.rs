@@ -44,6 +44,7 @@ use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, se
 use crate::memline::ml_close;
 use crate::message::e_auabort;
 use crate::normal::visual_active;
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::exiting;
@@ -281,8 +282,7 @@ impl Disposition {
         // The caller must take care of NOT deleting/freeing when 'bufhidden'
         // is "hide" (otherwise we could never free or delete a buffer).
         if buffer.terminal.is_null() {
-            // SAFETY: `'bufhidden'` is a NUL-terminated option value.
-            match unsafe { *buffer.b_p_bh } as u8 {
+            match buffer.b_p_bh.first_byte() as u8 {
                 b'd' => (it.del, it.unload) = (true, true),
                 b'w' => (it.del, it.unload, it.wipe) = (true, true, true),
                 b'u' => it.unload = true,

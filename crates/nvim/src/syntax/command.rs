@@ -11,13 +11,14 @@
 use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
-use crate::optionstr::is_empty_option;
 use crate::semsg;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::eval::typval::NumBuf;
+use crate::memory::XString;
+use crate::optionstr::LocalOptStr;
 use crate::types::NUL;
 
 /// Which of `names` the argument word is, ignoring case.
@@ -168,28 +169,30 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
     let arg = unsafe { skipwhite(args.arg) };
     if unsafe { *arg } as c_int == NUL {
         msg_str(c"\n");
-        if !is_empty_option(cur_syn_block().b_syn_isk) {
+        if !cur_syn_block().b_syn_isk.is_unset() {
             msg_str(c"syntax iskeyword ");
-            msg_display(unsafe { cstr::at(cur_syn_block().b_syn_isk) }, 0, false);
+            let value = cur_syn_block().b_syn_isk.clone().unwrap_or_default();
+            msg_display(value.as_cstr(), 0, false);
         } else {
             msg_display(gettext(c"syntax iskeyword not set"), 0, false);
         }
     } else if unsafe { strncasecmp(arg, c"clear".as_ptr(), 5) } == 0 {
         cur_syn_block().b_syn_chartab = buf_chartab();
-        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
+        cur_syn_block().b_syn_isk = None;
     } else {
         // Run the value through `'iskeyword'`'s own parser on the current
         // buffer and keep the table it produces, putting the buffer's own
-        // option and table back afterwards.
+        // option and table back afterwards. The parsed value then *moves*
+        // from the buffer's option into the syntax block's own copy.
         let saved = buf_chartab();
-        let save_isk = Buf::current().b_p_isk;
-        unsafe { Buf::current().b_p_isk = xstrdup(arg) };
+        // SAFETY: the command's argument is NUL-terminated.
+        let value = XString::from_cstr(unsafe { cstr::at(arg) });
+        let save_isk = Buf::current().b_p_isk.replace(value);
 
         buf_init_chartab(Buf::current(), false);
         cur_syn_block().b_syn_chartab = buf_chartab();
         set_buf_chartab(saved);
-        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
-        cur_syn_block().b_syn_isk = Buf::current().b_p_isk;
+        cur_syn_block().b_syn_isk = Buf::current().b_p_isk.take();
         Buf::current().b_p_isk = save_isk;
     }
     redraw_later(Win::current(), UPD_NOT_VALID);
@@ -351,12 +354,9 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
         unsafe { hash_init::<*mut c_char>(syn_field!(cur_syn_block(), b_keywtab_ic)) };
         // TODO(vim): Keep the spell checking as it was.
         Win::current().w_onebuf_opt.wo_spell = 0; // No spell checking
-        // Make sure option values are "empty_string_option" instead of NULL.
-        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spc)) };
-        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spf)) };
-        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spl)) };
-        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spo)) };
-        unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
+        // Upstream replaces the block's five NULL option values with the
+        // shared empty string here; a fresh block's are already `None`,
+        // which *is* that value.
     }
 
     // Save the value of b:current_syntax; the autocommand below can change

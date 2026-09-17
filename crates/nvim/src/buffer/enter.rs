@@ -44,6 +44,7 @@ use crate::r#move::{WinValid, scroll_cursor_halfway};
 use crate::normal::visual_active;
 use crate::option::buf_copy_options;
 use crate::option::vars::p_acd;
+use crate::optionstr::LocalOptStr;
 use crate::os::state::last_chdir_reason;
 use crate::spell::parse_spelllang;
 use crate::startup::starting;
@@ -153,7 +154,7 @@ fn set_spelllang(win: Win) {
 fn has_spelllang(win: Win) -> bool {
     // SAFETY: a live window's syntax block is live, and `'spelllang'` a
     // NUL-terminated option value.
-    unsafe { *(*win.w_s).b_p_spl as c_int != NUL }
+    unsafe { (*win.w_s).b_p_spl.first_byte() as c_int != NUL }
 }
 
 fn resize_terminal(term: *mut Terminal) {
@@ -376,7 +377,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
         // ":ball" used in an autocommand.  If there already is a filetype we
         // might prefer to keep it.
         // SAFETY: `'filetype'` is a NUL-terminated option value.
-        if unsafe { *buffer.b_p_ft } as c_int == NUL {
+        if buffer.b_p_ft.first_byte() as c_int == NUL {
             buffer.b_did_filetype = false;
         }
         load_current_buffer();

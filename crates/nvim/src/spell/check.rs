@@ -52,6 +52,7 @@ use super::{
     MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, count_common_word, spelltab_isu,
 };
 use crate::highlight_group::{HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
+use crate::optionstr::LocalOptStr;
 
 /// Whether `c` is upper case, by the spell table below 128 and the general
 /// rules above it.
@@ -365,7 +366,8 @@ pub fn spell_valid_case(wordflags: WordFlags, treeflags: WordFlags) -> bool {
 
 /// Whether spell checking is on for `window` and a language is actually loaded.
 pub fn spell_check_window(window: Win) -> bool {
-    let on = unsafe { window.w_onebuf_opt.wo_spell != 0 && *(*window.w_s).b_p_spl != 0 };
+    let on =
+        unsafe { window.w_onebuf_opt.wo_spell != 0 && (*window.w_s).b_p_spl.first_byte() != 0 };
     on && unsafe { (*window.w_s).b_langp.ga_len } > 0
         && !unsafe { *((*window.w_s).b_langp.ga_data as *mut *mut c_char) }.is_null()
 }
@@ -373,7 +375,7 @@ pub fn spell_check_window(window: Win) -> bool {
 /// Whether spell checking is *off* for `window`, giving an error if so.
 pub fn no_spell_checking(window: Win) -> bool {
     if window.w_onebuf_opt.wo_spell == 0
-        || unsafe { *(*window.w_s).b_p_spl } == 0
+        || unsafe { (*window.w_s).b_p_spl.first_byte() } == 0
         || unsafe { (*window.w_s).b_langp.ga_len } <= 0
     {
         emsg(gettext(e_no_spell));

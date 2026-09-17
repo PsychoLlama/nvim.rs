@@ -54,6 +54,7 @@ use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Outcome, Pos, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};
+use crate::memory::XString;
 use crate::r#move::{update_curswant_force, update_topline, validate_virtcol};
 
 /// Whether 'selection' is "exclusive": the character under the far end of the
@@ -763,8 +764,9 @@ pub(crate) fn nv_select(cmd_arg: &mut CmdArg) {
 /// a text object's idea of a block is fixed and must not follow the option.
 pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
     let include = cmd_arg.cmdchar != 'i' as c_int;
-    let mps_save = Buf::current().b_p_mps;
-    Buf::current().b_p_mps = c"(:),{:},[:],<:>".as_ptr().cast_mut();
+    let mps_save = Buf::current()
+        .b_p_mps
+        .replace(XString::from_cstr(c"(:),{:},[:],<:>"));
 
     let op = cmd_arg.op();
     let n = cmd_arg.count1;

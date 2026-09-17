@@ -270,7 +270,7 @@
 {"path":"neovim::memline::ml_preserve","kind":"fn","file":"crates/nvim/src/memline/recover.rs","tests":["crates/nvim/tests/unit/memline.rs"]}
 {"path":"neovim::memline::ml_setflags","kind":"fn","file":"crates/nvim/src/memline/block0.rs","tests":["crates/nvim/tests/unit/memline.rs"]}
 {"path":"neovim::memory::ARENA_EMPTY","kind":"const","file":"crates/nvim/src/memory/arena.rs","tests":["crates/nvim/tests/unit/unpacker.rs"]}
-{"path":"neovim::memory::XString","kind":"struct","file":"crates/nvim/src/memory/xstring.rs","tests":["crates/nvim/tests/unit/memline.rs","crates/nvim/tests/unit/shell.rs","crates/nvim/tests/unit/undo.rs"]}
+{"path":"neovim::memory::XString","kind":"struct","file":"crates/nvim/src/memory/xstring.rs","tests":["crates/nvim/tests/unit/memline.rs","crates/nvim/tests/unit/search.rs","crates/nvim/tests/unit/shell.rs","crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::memory::arena_finish","kind":"fn","file":"crates/nvim/src/memory/arena.rs","tests":["crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::memory::arena_mem_free","kind":"fn","file":"crates/nvim/src/memory/arena.rs","tests":["crates/nvim/tests/unit/unpacker.rs"]}
 {"path":"neovim::memory::xcalloc","kind":"fn","file":"crates/nvim/src/memory/mod.rs","tests":["crates/nvim/tests/unit/hashtab.rs","crates/nvim/tests/unit/msgpack.rs","crates/nvim/tests/unit/support/tv.rs"]}

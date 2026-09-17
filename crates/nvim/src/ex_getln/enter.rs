@@ -17,6 +17,7 @@ use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
 use crate::message::emsg_ptr;
+use crate::optionstr::LocalOptStr;
 use crate::types::OptStr;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,
@@ -247,7 +248,7 @@ pub(crate) fn command_line_enter(
 
         cmdmsg_rl.set(
             Win::current().w_onebuf_opt.wo_rl != 0
-                && unsafe { *Win::current().w_onebuf_opt.wo_rlc } as ::core::ffi::c_int
+                && Win::current().w_onebuf_opt.wo_rlc.first_byte() as ::core::ffi::c_int
                     == 's' as ::core::ffi::c_int
                 && (s.firstc == '/' as ::core::ffi::c_int || s.firstc == '?' as ::core::ffi::c_int),
         );
@@ -345,9 +346,9 @@ pub(crate) fn command_line_enter(
             let mut found_one = false;
             for mut wp in windows_in_curtab() {
                 if p_stl(|value| !value.is_empty())
-                    || unsafe { *wp.w_onebuf_opt.wo_stl } as ::core::ffi::c_int != NUL
+                    || wp.w_onebuf_opt.wo_stl.first_byte() as ::core::ffi::c_int != NUL
                     || p_wbr(|value| !value.is_empty())
-                    || unsafe { *wp.w_onebuf_opt.wo_wbr } as ::core::ffi::c_int != NUL
+                    || wp.w_onebuf_opt.wo_wbr.first_byte() as ::core::ffi::c_int != NUL
                 {
                     wp.w_redr_status = true;
                     found_one = true;

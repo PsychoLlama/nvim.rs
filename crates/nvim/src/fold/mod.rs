@@ -58,6 +58,7 @@ pub use text::get_foldtext;
 use crate::pos::MAXLNUM;
 use crate::state::MODE_INSERT;
 
+use crate::optionstr::LocalOptStr;
 use level::fold_update_computed;
 use list::{FLine, FoldList, FoldRef};
 use open_close::check_closed;
@@ -392,11 +393,9 @@ pub fn fold_info(win: Win, lnum: LineNr) -> FoldInfo {
 /// a single byte in the first three, which is what upstream leans on too.
 ///
 fn foldmethod_byte_is(window: Win, at: usize, c: u8) -> bool {
-    let fdm = window.w_onebuf_opt.wo_fdm;
-    // SAFETY: 'foldmethod' is a NUL-terminated option string, and the empty
-    // check short-circuits before `at` is reached. Every legal value is at
-    // least four bytes long, so `at <= 3` stays inside the string.
-    unsafe { *fdm as c_int != NUL && *fdm.add(at) as u8 == c }
+    // Every legal 'foldmethod' is at least four bytes long, so a non-empty
+    // value always has a byte at `at <= 3`.
+    window.w_onebuf_opt.wo_fdm.bytes().get(at) == Some(&c)
 }
 
 /// Returns true if 'foldmethod' is "manual"

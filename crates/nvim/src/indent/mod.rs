@@ -55,6 +55,7 @@ pub mod tabstop;
 
 // Split out for size. The names below are what the rest of the tree calls,
 // and it calls them as `indent::*`.
+use crate::optionstr::LocalOptStr;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::state::MODE_INSERT;
 use crate::winlayer::Win;
@@ -747,7 +748,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
         };
     }
     let mut regmatch = RegMatch {
-        regprog: unsafe { vim_regcomp(Buf::current().b_p_flp, RE_MAGIC) },
+        regprog: unsafe { vim_regcomp(Buf::current().b_p_flp.value_ptr(), RE_MAGIC) },
         startp: [::core::ptr::null_mut::<c_char>(); 10],
         endp: [::core::ptr::null_mut::<c_char>(); 10],
         rm_matchcol: 0,

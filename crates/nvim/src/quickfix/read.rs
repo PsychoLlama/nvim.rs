@@ -19,6 +19,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::list_items;
 use crate::message_fmt::c_str;
+use crate::optionstr::LocalOptStr;
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{CONV_NONE, IOSIZE, VAR_LIST, VAR_STRING};
@@ -505,8 +506,11 @@ pub(crate) unsafe fn qf_init_ext(
         // The two cheap tests stay in front of the buffer's option, as
         // C's `&&` chain had them.
         let local_efm = if global_efm && !from_value {
+            // The buffer's own value, read straight through: nothing
+            // between here and the end of the walk sets an option.
             buffer
-                .map(|buf| buf.b_p_efm)
+                .map(|buf| buf.b_p_efm.value_ptr())
+                // SAFETY: an option value is NUL-terminated.
                 .filter(|&efm| unsafe { *efm } != 0)
         } else {
             None

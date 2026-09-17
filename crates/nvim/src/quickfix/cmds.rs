@@ -71,8 +71,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         );
     }
 
-    // SAFETY: a live buffer's option value is NUL-terminated.
-    let enc = unsafe { local_or_global(Buf::current().b_p_menc, P_MENC) };
+    let enc = local_or_global(&Buf::current().b_p_menc, P_MENC);
 
     let wp = is_loclist_cmd(excmd.cmdidx).then(Win::current);
 

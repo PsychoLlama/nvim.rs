@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::memory::XString;
 use crate::r#move::WinValid;
 use crate::registry::IdSet;
 use crate::types::Failed;
@@ -330,35 +331,41 @@ pub struct WinInfo {
     pub wi_folds: GArray,
     pub wi_changelistidx: ::core::ffi::c_int,
 }
-/// Not `Copy`: the string options in here are owned, and `copy_options`
-/// exists precisely to duplicate them. A shallow copy is a step in that,
-/// never the whole of it.
+/// Not `Copy`: the string options in here own their bytes, and
+/// `copy_winopt` exists precisely to duplicate them -- the derived `Clone`
+/// is a deep copy of exactly those, which is why `copy_winopt` can be
+/// field-by-field rather than a `write`.
+///
+/// `None` in a string field is upstream's shared empty string: the window
+/// has no value of its own there. A window is allocated zeroed and freed
+/// with `xfree`, so `window::alloc`'s `clear_options` is what releases these
+/// -- there is no destructor to lean on.
 #[derive(Clone)]
 pub struct WinOpt {
     pub wo_arab: ::core::ffi::c_int,
     pub wo_bri: ::core::ffi::c_int,
-    pub wo_briopt: *mut ::core::ffi::c_char,
+    pub wo_briopt: Option<XString>,
     pub wo_diff: ::core::ffi::c_int,
-    pub wo_fdc: *mut ::core::ffi::c_char,
-    pub wo_eiw: *mut ::core::ffi::c_char,
-    pub wo_fdc_save: *mut ::core::ffi::c_char,
+    pub wo_fdc: Option<XString>,
+    pub wo_eiw: Option<XString>,
+    pub wo_fdc_save: Option<XString>,
     pub wo_fen: ::core::ffi::c_int,
     pub wo_fen_save: ::core::ffi::c_int,
-    pub wo_fdi: *mut ::core::ffi::c_char,
+    pub wo_fdi: Option<XString>,
     pub wo_fdl: OptInt,
     pub wo_fdl_save: OptInt,
-    pub wo_fdm: *mut ::core::ffi::c_char,
-    pub wo_fdm_save: *mut ::core::ffi::c_char,
+    pub wo_fdm: Option<XString>,
+    pub wo_fdm_save: Option<XString>,
     pub wo_fml: OptInt,
     pub wo_fdn: OptInt,
-    pub wo_fde: *mut ::core::ffi::c_char,
-    pub wo_fdt: *mut ::core::ffi::c_char,
-    pub wo_fmr: *mut ::core::ffi::c_char,
+    pub wo_fde: Option<XString>,
+    pub wo_fdt: Option<XString>,
+    pub wo_fmr: Option<XString>,
     pub wo_lbr: ::core::ffi::c_int,
     pub wo_list: ::core::ffi::c_int,
     pub wo_nu: ::core::ffi::c_int,
     pub wo_rnu: ::core::ffi::c_int,
-    pub wo_ve: *mut ::core::ffi::c_char,
+    pub wo_ve: Option<XString>,
     pub wo_ve_flags: ::core::ffi::c_uint,
     pub wo_nuw: OptInt,
     pub wo_wfb: ::core::ffi::c_int,
@@ -367,33 +374,33 @@ pub struct WinOpt {
     pub wo_pvw: ::core::ffi::c_int,
     pub wo_lhi: OptInt,
     pub wo_rl: ::core::ffi::c_int,
-    pub wo_rlc: *mut ::core::ffi::c_char,
+    pub wo_rlc: Option<XString>,
     pub wo_scr: OptInt,
     pub wo_sms: ::core::ffi::c_int,
     pub wo_spell: ::core::ffi::c_int,
     pub wo_cuc: ::core::ffi::c_int,
     pub wo_cul: ::core::ffi::c_int,
-    pub wo_culopt: *mut ::core::ffi::c_char,
-    pub wo_cc: *mut ::core::ffi::c_char,
-    pub wo_sbr: *mut ::core::ffi::c_char,
-    pub wo_stc: *mut ::core::ffi::c_char,
-    pub wo_stl: *mut ::core::ffi::c_char,
-    pub wo_wbr: *mut ::core::ffi::c_char,
+    pub wo_culopt: Option<XString>,
+    pub wo_cc: Option<XString>,
+    pub wo_sbr: Option<XString>,
+    pub wo_stc: Option<XString>,
+    pub wo_stl: Option<XString>,
+    pub wo_wbr: Option<XString>,
     pub wo_scb: ::core::ffi::c_int,
     pub wo_diff_saved: ::core::ffi::c_int,
     pub wo_scb_save: ::core::ffi::c_int,
     pub wo_wrap: ::core::ffi::c_int,
     pub wo_wrap_save: ::core::ffi::c_int,
-    pub wo_cocu: *mut ::core::ffi::c_char,
+    pub wo_cocu: Option<XString>,
     pub wo_cole: OptInt,
     pub wo_crb: ::core::ffi::c_int,
     pub wo_crb_save: ::core::ffi::c_int,
-    pub wo_scl: *mut ::core::ffi::c_char,
+    pub wo_scl: Option<XString>,
     pub wo_siso: OptInt,
     pub wo_so: OptInt,
-    pub wo_winhl: *mut ::core::ffi::c_char,
-    pub wo_lcs: *mut ::core::ffi::c_char,
-    pub wo_fcs: *mut ::core::ffi::c_char,
+    pub wo_winhl: Option<XString>,
+    pub wo_lcs: Option<XString>,
+    pub wo_fcs: Option<XString>,
     pub wo_winbl: OptInt,
     pub wo_wrap_flags: uint32_t,
     pub wo_stl_flags: uint32_t,

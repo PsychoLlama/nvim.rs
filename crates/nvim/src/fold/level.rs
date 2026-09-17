@@ -34,6 +34,7 @@ use core::ffi::c_int;
 use super::adjust::*;
 use super::marker::*;
 use super::*;
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXLNUM;
 
 // The fold-level strategy is dispatched by comparing function addresses, as
@@ -637,7 +638,7 @@ pub(super) fn foldlevel_indent(line: FLine) {
     // its level from its neighbours.
     if c_int::from(first) == NUL
         || has_char(
-            unsafe { cstr::at(line.win().w_onebuf_opt.wo_fdi) },
+            unsafe { cstr::at(line.win().w_onebuf_opt.wo_fdi.value_ptr()) },
             c_int::from(first),
         )
     {

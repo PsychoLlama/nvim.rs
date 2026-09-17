@@ -28,6 +28,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 
+use crate::optionstr::LocalOptStr;
 use crate::winlayer::Buf;
 /// Create a fold from line "start" to line "end" (inclusive) in window `window`
 /// by adding markers.
@@ -44,7 +45,10 @@ pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     // SAFETY: as above -- both spans are inside 'foldmarker'.
     let (open, close) = unsafe {
         (
-            cstr::slice_at(window.w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()),
+            cstr::slice_at(
+                window.w_onebuf_opt.wo_fmr.value_ptr(),
+                foldstartmarkerlen.get(),
+            ),
             cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()),
         )
     };
@@ -59,7 +63,7 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
     let lnum = pos.lnum;
     // 'commentstring', and where in it the marker's text goes.
     // SAFETY: the buffer's own option value, NUL-terminated.
-    let cms = unsafe { cstr::bytes_at(buffer.b_p_cms) };
+    let cms = unsafe { cstr::bytes_at(buffer.b_p_cms.value_ptr()) };
     let text_at = cms.windows(2).position(|w| w == b"%s");
     if u_save(lnum - 1, lnum + 1).is_err() {
         return;
@@ -132,7 +136,10 @@ pub(super) fn delete_fold_markers(window: Win, fold: FoldRef, recursive: bool, l
     // SAFETY: as above -- both spans are inside 'foldmarker'.
     let (open, close) = unsafe {
         (
-            cstr::slice_at(window.w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()),
+            cstr::slice_at(
+                window.w_onebuf_opt.wo_fmr.value_ptr(),
+                foldstartmarkerlen.get(),
+            ),
             cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()),
         )
     };
@@ -150,7 +157,7 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
         return;
     }
     // SAFETY: the buffer's own option value, NUL-terminated.
-    let cms = unsafe { cstr::bytes_at(buffer.b_p_cms) };
+    let cms = unsafe { cstr::bytes_at(buffer.b_p_cms.value_ptr()) };
     let text_at = cms.windows(2).position(|w| w == b"%s");
     // A copy, because the line is rewritten from it below and `u_save` runs
     // in between.
@@ -211,7 +218,7 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
 /// moment the option is set again — which is why every caller re-runs this.
 ///
 pub(super) fn parse_marker(window: Win) {
-    let foldmarker = window.w_onebuf_opt.wo_fmr;
+    let foldmarker = window.w_onebuf_opt.wo_fmr.value_ptr();
     // SAFETY: 'foldmarker' has already been validated as two non-empty
     // halves separated by a comma, so the comma is there.
     let comma = unsafe { vim_strchr(foldmarker, ',' as c_int) };
@@ -233,8 +240,12 @@ pub(super) fn foldlevel_marker(line: FLine) {
     // SAFETY: the caller's promise -- a live window, and `parse_marker` has
     // written the two markers and their lengths.
     let (window, start_lvl) = unsafe { ((*flp).wp, (*flp).lvl) };
-    let startmarker =
-        unsafe { cstr::slice_at((*window).w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()) };
+    let startmarker = unsafe {
+        cstr::slice_at(
+            (*window).w_onebuf_opt.wo_fmr.value_ptr(),
+            foldstartmarkerlen.get(),
+        )
+    };
     let endmarker = unsafe { cstr::slice_at(foldendmarker.get(), foldendmarkerlen.get()) };
     unsafe { (*flp).start = 0 };
     unsafe { (*flp).lvl_next = (*flp).lvl };

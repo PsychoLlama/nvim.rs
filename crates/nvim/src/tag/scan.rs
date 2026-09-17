@@ -19,6 +19,7 @@ use crate::option::vars::P_HLG;
 use crate::options::{
     kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
 };
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_MAGIC;
 use crate::semsg;
@@ -469,7 +470,7 @@ impl FindTags {
         // the growarray holds the allocated matches the callback made.
         if self.flags & TAG_NO_TAGFUNC as c_int != 0
             || tfu_in_use.get()
-            || unsafe { *Buf::current().b_p_tfu } == 0
+            || Buf::current().b_p_tfu.first_byte() == 0
         {
             return NOTDONE;
         }

@@ -61,7 +61,7 @@ pub(crate) fn win(args: &OptSet) -> Win {
 ///
 /// `window` is the window from [`win`] and `local` its own variable for this
 /// option. Which variable it is, not what it says, so nothing is read.
-pub(crate) fn local_window(varp: StrVar, window: Win, local: *mut *mut c_char) -> Option<Win> {
+pub(crate) fn local_window(varp: StrVar, window: Win, local: *mut Option<XString>) -> Option<Win> {
     if varp == StrVar::Local(local) {
         Some(window)
     } else {

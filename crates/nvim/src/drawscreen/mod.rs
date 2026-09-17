@@ -139,6 +139,7 @@ mod winupdate;
 pub(crate) use self::winupdate::*;
 mod winlines;
 pub use self::winlines::*;
+use crate::optionstr::LocalOptStr;
 use crate::regexp::re_multiline;
 /// How much of a window has to be redrawn, ordered by severity. Each value
 /// implies every lower one.
@@ -427,7 +428,7 @@ pub fn update_screen() -> Result<(), Failed> {
     if wp.w_redr_type < UPD_NOT_VALID {
         let nrwidth = if wp.w_onebuf_opt.wo_nu != 0
             || wp.w_onebuf_opt.wo_rnu != 0
-            || unsafe { *wp.w_onebuf_opt.wo_stc } != 0
+            || wp.w_onebuf_opt.wo_stc.first_byte() != 0
         {
             number_width(wp)
         } else {
@@ -693,7 +694,7 @@ pub fn number_width(mut window: Win) -> c_int {
     }
     window.w_nrwidth_line_count = largest;
 
-    if unsafe { *window.w_onebuf_opt.wo_stc } != 0 {
+    if window.w_onebuf_opt.wo_stc.first_byte() != 0 {
         // 'statuscolumn' draws the number itself, so all that is reserved
         // here is 'numberwidth'; the real width is re-estimated from the
         // expression's output.
@@ -735,8 +736,7 @@ pub fn number_width(mut window: Win) -> c_int {
 /// Whether the cursor line in window `window` may be concealed, per
 /// `'concealcursor'`.
 pub fn conceal_cursor_line(window: Win) -> bool {
-    // SAFETY: a live window, on the main thread.
-    if unsafe { *window.w_onebuf_opt.wo_cocu } == 0 {
+    if window.w_onebuf_opt.wo_cocu.first_byte() == 0 {
         return false;
     }
     let mode = if get_real_state() & MODE_VISUAL != 0 {
@@ -751,7 +751,7 @@ pub fn conceal_cursor_line(window: Win) -> bool {
         return false;
     };
     has_char(
-        unsafe { cstr::at(window.w_onebuf_opt.wo_cocu) },
+        unsafe { cstr::at(window.w_onebuf_opt.wo_cocu.value_ptr()) },
         mode as c_int,
     )
 }

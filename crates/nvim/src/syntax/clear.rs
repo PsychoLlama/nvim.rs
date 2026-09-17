@@ -59,7 +59,7 @@ pub(crate) unsafe fn syntax_clear(block: *mut SynBlock) {
     block.b_syn_linecont_prog = ::core::ptr::null_mut();
     block.b_syn_linecont_pat = None;
     block.b_syn_folditems = 0;
-    unsafe { clear_string_option(&raw mut (*block.raw()).b_syn_isk) };
+    block.b_syn_isk = None;
 
     syn_stack_free_all(block);
     invalidate_current_state();
@@ -83,6 +83,14 @@ pub(crate) unsafe fn init_synblock(at: *mut SynBlock) {
         (&raw mut (*at).b_syn_patterns).write(Vec::new());
         (&raw mut (*at).b_syn_clusters).write(Vec::new());
         (&raw mut (*at).b_syn_linecont_pat).write(None);
+        // The block's five string options, for the reason
+        // `init_buf_string_options` states: a zeroed `Option<XString>` is
+        // not `None`.
+        (&raw mut (*at).b_p_spc).write(None);
+        (&raw mut (*at).b_p_spf).write(None);
+        (&raw mut (*at).b_p_spl).write(None);
+        (&raw mut (*at).b_p_spo).write(None);
+        (&raw mut (*at).b_syn_isk).write(None);
     }
 }
 
@@ -116,7 +124,7 @@ fn syntax_sync_clear() {
     unsafe { vim_regfree(block.b_syn_linecont_prog) };
     block.b_syn_linecont_prog = ::core::ptr::null_mut();
     block.b_syn_linecont_pat = None;
-    unsafe { clear_string_option(&raw mut (*block.raw()).b_syn_isk) };
+    block.b_syn_isk = None;
 
     syn_stack_free_all(block); // Need to recompute all syntax.
 }

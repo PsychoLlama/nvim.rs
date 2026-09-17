@@ -24,6 +24,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::strchr;
 use crate::strings::vim_strchr;
 use crate::winlayer::Buf;
@@ -116,7 +117,7 @@ pub fn bomb_size() -> c_int {
     if unsafe { (*buf).b_p_bomb } == 0 || unsafe { (*buf).b_p_bin } != 0 {
         return 0;
     }
-    let fenc = unsafe { CStr::from_ptr((*buf).b_p_fenc) }.to_bytes();
+    let fenc = unsafe { CStr::from_ptr((*buf).b_p_fenc.value_ptr()) }.to_bytes();
     if fenc.is_empty() || fenc == b"utf-8" {
         3
     } else if fenc.starts_with(b"ucs-2") || fenc.starts_with(b"utf-16") {

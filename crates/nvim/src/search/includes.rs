@@ -228,8 +228,7 @@ unsafe fn compile_patterns(
     }
 
     if kind == FIND_DEFINE {
-        // SAFETY: `curbuf` is live and its option value is NUL-terminated.
-        let def = unsafe { local_or_global(Buf::current().b_p_def, P_DEF) };
+        let def = local_or_global(&Buf::current().b_p_def, P_DEF);
         // Don't ignore case in the 'define' pattern.
         if !def.is_empty() && !unsafe { compile(&mut pats.def, def.as_ptr().cast_mut(), false) } {
             return None;
@@ -242,9 +241,7 @@ unsafe fn compile_patterns(
 /// The effective `'include'`: the buffer-local one, or the global one
 /// when it is empty.
 fn include_option() -> XString {
-    // SAFETY: `curbuf` is live from the first `buflist_new` to exit, and a
-    // buffer's option value is NUL-terminated.
-    unsafe { local_or_global(Buf::current().b_p_inc, P_INC) }
+    local_or_global(&Buf::current().b_p_inc, P_INC)
 }
 
 /// Whether the `'include'` pattern uses `\zs`, which moves the file name

@@ -15,7 +15,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -62,6 +61,7 @@ const TRY_STATE: TryState = TryState {
     did_emsg: 0,
 };
 use crate::api_error;
+use crate::optionstr::LocalOptStr;
 
 pub fn win_set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
     set_buf(win, buffer)
@@ -122,13 +122,11 @@ pub fn win_fdccol_count(window: Win) -> c_int {
 /// The columns `'foldcolumn'` asks for in `window`, `auto[:N]` resolved against how
 /// deeply its folds are nested.
 fn fdccol_count(window: Win) -> c_int {
-    let fdc = window.w_onebuf_opt.wo_fdc;
-    // SAFETY: `'foldcolumn'` is a NUL-terminated option string, so the first
-    // four bytes and -- once they read `auto` -- the two after them are inside
-    // it.
-    let byte = |n: isize| unsafe { *fdc.offset(n) } as c_int;
-    // SAFETY: as above.
-    if !unsafe { cstr::starts_with(fdc, b"auto") } {
+    let fdc = window.w_onebuf_opt.wo_fdc.bytes();
+    // `'foldcolumn'` is vetted by its own `did_set_*`, so the first four
+    // bytes and -- once they read `auto` -- the two after them are there.
+    let byte = |n: usize| c_int::from(fdc.get(n).copied().unwrap_or(0));
+    if !fdc.starts_with(b"auto") {
         return byte(0) - '0' as c_int;
     }
     let fdccol = if byte(4) == ':' as c_int {

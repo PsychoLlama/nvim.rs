@@ -308,10 +308,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
         window.w_skipcol = 0 as ColNr;
     }
     if first_time {
-        if window.w_onebuf_opt.wo_diff_saved != 0 {
-            free_string_option_of(window.w_onebuf_opt.wo_fdm_save);
-        }
-        window.w_onebuf_opt.wo_fdm_save = strdup_of(window.w_onebuf_opt.wo_fdm);
+        window.w_onebuf_opt.wo_fdm_save = window.w_onebuf_opt.wo_fdm.clone();
     }
     let foldmethod = OptVal::string(String_0::from_cstr(c"diff"));
     let scope = OptionSetFlags::LOCAL;
@@ -325,21 +322,14 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     if first_time {
         window.w_onebuf_opt.wo_fen_save = window.w_onebuf_opt.wo_fen;
         window.w_onebuf_opt.wo_fdl_save = window.w_onebuf_opt.wo_fdl;
-        if window.w_onebuf_opt.wo_diff_saved != 0 {
-            free_string_option_of(window.w_onebuf_opt.wo_fdc_save);
-        }
-        window.w_onebuf_opt.wo_fdc_save = strdup_of(window.w_onebuf_opt.wo_fdc);
+        window.w_onebuf_opt.wo_fdc_save = window.w_onebuf_opt.wo_fdc.clone();
     }
-    free_string_option_of(window.w_onebuf_opt.wo_fdc);
-    window.w_onebuf_opt.wo_fdc = strdup_of(c"2".as_ptr());
     // A single digit, because the option's buffer is one byte plus the
     // NUL. C's `assert()` is `debug_assert!`: it vanishes under NDEBUG.
-    debug_assert!((0..=9).contains(&diff_foldcolumn.get()));
-    let fdc = window.w_onebuf_opt.wo_fdc;
     let width = diff_foldcolumn.get();
-    // SAFETY: `fdc` is the one-digit string just allocated, and `strlen + 1`
-    // is exactly the room it has.
-    unsafe { snprintf(fdc, cstr::bytes_at(fdc).len() + 1, c"%d".as_ptr(), width) };
+    debug_assert!((0..=9).contains(&width));
+    let digit = u8::try_from(width.clamp(0, 9)).unwrap_or(0);
+    window.w_onebuf_opt.wo_fdc = Some(XString::from_bytes(&[b'0' + digit]));
     window.w_onebuf_opt.wo_fen = 1;
     window.w_onebuf_opt.wo_fdl = 0 as OptInt;
     // SAFETY: a live window, in all three calls.
@@ -358,17 +348,6 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
 }
 
 /// `free_string_option`, for one of the window's own option strings.
-fn free_string_option_of(p: *mut c_char) {
-    // SAFETY: an option string the option code itself allocated, or null.
-    unsafe { free_string_option(p) };
-}
-
-/// `xstrdup`, for a NUL-terminated option string.
-fn strdup_of(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string; `xstrdup` aborts rather than fail.
-    unsafe { xstrdup(p) }
-}
-
 /// `:diffoff[!]`: leave diff mode in this window, or with `!` in every
 /// window of the tabpage.
 ///
@@ -400,12 +379,8 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
                     wp.w_onebuf_opt.wo_wrap = 1;
                     wp.w_leftcol = 0 as ColNr;
                 }
-                free_string_option_of(wp.w_onebuf_opt.wo_fdm);
-                wp.w_onebuf_opt.wo_fdm =
-                    strdup_of(saved_or(wp.w_onebuf_opt.wo_fdm_save, c"manual".as_ptr()));
-                free_string_option_of(wp.w_onebuf_opt.wo_fdc);
-                wp.w_onebuf_opt.wo_fdc =
-                    strdup_of(saved_or(wp.w_onebuf_opt.wo_fdc_save, c"0".as_ptr()));
+                wp.w_onebuf_opt.wo_fdm = saved_or(&wp.w_onebuf_opt.wo_fdm_save, c"manual");
+                wp.w_onebuf_opt.wo_fdc = saved_or(&wp.w_onebuf_opt.wo_fdc_save, c"0");
                 if wp.w_onebuf_opt.wo_fdl == 0 as OptInt {
                     wp.w_onebuf_opt.wo_fdl = wp.w_onebuf_opt.wo_fdl_save;
                 }
@@ -449,11 +424,9 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
 ///
 /// Upstream tests the saved value's *first byte*: an empty saved string means
 /// the option was never really recorded.
-fn saved_or(saved: *mut c_char, fallback: *const c_char) -> *const c_char {
-    // SAFETY: a NUL-terminated option string the option code allocated.
-    if c_int::from(unsafe { *saved }) != 0 {
-        saved.cast_const()
-    } else {
-        fallback
+fn saved_or(saved: &Option<XString>, fallback: &'static CStr) -> Option<XString> {
+    match saved {
+        Some(value) if !value.is_empty() => Some(value.clone()),
+        _ => Some(XString::from_cstr(fallback)),
     }
 }

@@ -13,11 +13,11 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::option::SavedCpo;
-use crate::optionstr::is_empty_option;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
+use crate::optionstr::LocalOptStr;
 use crate::regexp::RE_MAGIC;
 use crate::types::NUL;
 use crate::winlayer::graph::{switch_buffer, switch_window};
@@ -301,7 +301,7 @@ fn scan_for_sync_point(from: LineNr, end_lnum: LineNr, start_lnum: LineNr) -> Op
 /// A no-op when the syntax has no `iskeyword` of its own, in which case
 /// [`restore_chartab`] is a no-op too and the saved buffer is never read.
 pub(crate) fn save_chartab(chartab: &mut [uint64_t; 4]) {
-    if is_empty_option(syn_block().b_syn_isk) {
+    if syn_block().b_syn_isk.is_unset() {
         return;
     }
     // The two tables are the same 32 bytes, one typed as four `uint64_t`
@@ -317,7 +317,7 @@ pub(crate) fn save_chartab(chartab: &mut [uint64_t; 4]) {
 
 /// Put back what [`save_chartab`] saved.
 pub(crate) fn restore_chartab(chartab: &[uint64_t; 4]) {
-    if !is_empty_option(syn_block().b_syn_isk) {
+    if !syn_block().b_syn_isk.is_unset() {
         // SAFETY: as [`save_chartab`].
         unsafe { (*syn_buf.get()).b_chartab = *chartab };
     }

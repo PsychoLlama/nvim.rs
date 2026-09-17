@@ -14,6 +14,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{CallFrame, DictRef, list_iter};
+use crate::optionstr::LocalOptStr;
 use crate::types::TypVal;
 use crate::types::{
     FAIL, OK, OptError, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,
@@ -123,7 +124,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
         None
     };
 
-    if unsafe { *Buf::current().b_p_tfu } == 0 || !Buf::current().b_tfu_cb.is_set() {
+    if Buf::current().b_p_tfu.first_byte() == 0 || !Buf::current().b_tfu_cb.is_set() {
         return FAIL;
     }
 

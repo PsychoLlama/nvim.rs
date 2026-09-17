@@ -39,6 +39,7 @@ use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_
 use self::smart::smart_indent;
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
+use crate::optionstr::LocalOptStr;
 use crate::types::{FoFlag, NUL};
 
 mod comment;
@@ -387,7 +388,8 @@ pub unsafe fn open_line(
     // `in_cinkeys` reads `'cinkeys'` and the cursor line; the short circuits
     // are upstream's.
     let do_cindent = !p_paste()
-        && (Buf::current().b_p_cin != 0 || c_int::from(unsafe { *Buf::current().b_p_inde }) != NUL)
+        && (Buf::current().b_p_cin != 0
+            || c_int::from(Buf::current().b_p_inde.first_byte()) != NUL)
         && in_cinkeys(key, ' ' as c_int, linewhite(Win::current().w_cursor.lnum))
         && flags & OPENLINE_FORCE_INDENT == 0;
 

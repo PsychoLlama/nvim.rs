@@ -30,6 +30,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::memline::ml_get_buf;
 use crate::message::emsg_ptr;
 use crate::option::vars::p_hid;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::quickfix::{msg_loclist, msg_qflist};
@@ -56,16 +57,14 @@ fn tr(msg: &CStr) -> *mut c_char {
 /// The first byte of `'buftype'`, or NUL when there is no buffer. Option
 /// variables are never null, so upstream indexes `b_p_bt` unconditionally.
 fn buftype(buffer: Option<Buf>) -> c_char {
-    // SAFETY: an option variable holds a NUL-terminated string, so its
-    // first byte is there to be read.
-    buffer.map_or(0, |b| unsafe { *b.b_p_bt })
+    buffer.map_or(0, |b| b.b_p_bt.first_byte())
 }
 
 /// `b_p_bt[2]`, which upstream reads only once `b_p_bt[0] == 'n'` has said
 /// there are at least three bytes ("nofile" or "nowrite") to read.
 fn buftype_2(buffer: Buf) -> c_char {
-    // SAFETY: a `'buftype'` beginning with 'n' is one of those two words.
-    unsafe { *buffer.b_p_bt.add(2) }
+    // A `'buftype'` beginning with 'n' is one of those two words.
+    buffer.b_p_bt.bytes()[2].cast_signed()
 }
 
 fn has_terminal(buffer: Buf) -> bool {
@@ -168,9 +167,7 @@ pub(crate) fn buf_dontwrite_msg(buffer: Option<Buf>) -> bool {
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
 pub fn buf_hide(buffer: Buf) -> bool {
-    // SAFETY: the caller's promise -- a live buffer. Upstream dereferences
-    // this one without a null test.
-    let bufhidden = unsafe { *buffer.b_p_bh };
+    let bufhidden = buffer.b_p_bh.first_byte();
     match bufhidden as u8 {
         b'u' | b'w' | b'd' => return false, // "unload", "wipe", "delete"
         b'h' => return true,                // "hide"

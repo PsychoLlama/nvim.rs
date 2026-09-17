@@ -68,7 +68,7 @@ use crate::mbyte::{
     utfc_ptr2len,
 };
 use crate::memline::{Lines, ml_append, ml_delete};
-use crate::memory::{memchrsub, xfree, xmalloc, xstrdup};
+use crate::memory::{XString, memchrsub, xfree, xmalloc};
 use crate::message::emsg;
 use crate::message::{
     e_diff_anchors_with_hidden_windows, e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir,
@@ -82,8 +82,7 @@ use crate::normal::check_scrollbind;
 use crate::option::vars::{p_dex, p_pex, p_sbo, p_srr};
 use crate::option::{OptionTarget, set_option_direct_for, set_option_value_give_err};
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
-use crate::optionstr::free_string_option;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::env::{os_env_exists, os_unsetenv};
 use crate::os::fs::{os_chdir, os_dirname, os_fileinfo, os_fileinfo_size, os_fopen, os_remove};
 use crate::os::shell::{ShellOpts, call_shell};

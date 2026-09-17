@@ -64,6 +64,7 @@ use crate::option::{
     set_option_direct, set_options_bin, shortmess,
 };
 use crate::options::kOptFileencoding;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::{getc, gettext, gettext_ptr, ngettext, putc, snprintf};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_env_exists};
 use crate::os::fs::{
@@ -307,7 +308,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     }
 
     // Do filetype detection now if 'filetype' is empty.
-    if unsafe { *Buf::current().b_p_ft } == 0 {
+    if Buf::current().b_p_ft.first_byte() == 0 {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
             let cmd = c"filetypedetect BufRead".as_ptr().cast_mut();
             // SAFETY: a static command line.
@@ -650,14 +651,20 @@ pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
     // SAFETY: the caller's command, live for the call.
     // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
-    let cmd_len = 15 + unsafe { cstr::bytes_at(buffer.b_p_fenc) }.len();
+    let cmd_len = 15 + unsafe { cstr::bytes_at(buffer.b_p_fenc.value_ptr()) }.len();
     excmd.cmd = unsafe { xmalloc(cmd_len) }.cast();
-    unsafe { snprintf(excmd.cmd, cmd_len, c"e ++enc=%s".as_ptr(), buffer.b_p_fenc) };
+    unsafe {
+        snprintf(
+            excmd.cmd,
+            cmd_len,
+            c"e ++enc=%s".as_ptr(),
+            buffer.b_p_fenc.value_ptr(),
+        )
+    };
     // Where the encoding name starts in that command.
     excmd.force_enc = 8;
     excmd.bad_char = buffer.b_bad_char;
-    // SAFETY: 'fileformat' is the buffer's own one-character option string.
-    excmd.force_ff = unsafe { *buffer.b_p_ff } as u8 as c_int;
+    excmd.force_ff = buffer.b_p_ff.first_byte() as u8 as c_int;
     excmd.force_bin = if buffer.b_p_bin != 0 {
         FORCE_BIN
     } else {

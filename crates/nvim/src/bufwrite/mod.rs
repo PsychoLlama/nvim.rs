@@ -43,6 +43,7 @@ use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_for
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
 };
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::{gettext, gettext_ptr, snprintf};
 use crate::os::fs::{
     os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,
@@ -548,7 +549,7 @@ pub unsafe fn buf_write(
                         unsafe { enc_canonize(command.cmd.offset(command.force_enc as isize)) };
                     fenc_tofree
                 } else {
-                    b.b_p_fenc
+                    b.b_p_fenc.value_ptr()
                 };
                 let converted = unsafe { need_conversion(fenc) };
 

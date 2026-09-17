@@ -17,6 +17,7 @@ use super::*;
 use crate::cstr;
 use crate::grid::linebuf;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXCOL;
 use crate::strings::has_char;
 use crate::types::NUL;
@@ -478,7 +479,7 @@ impl Cells {
             // 'concealcursor' does not name "v", so the Visual area shows
             // its text.
             && !(self.lnum_in_visual_area
-                && !has_char(unsafe { cstr::at(window.w_onebuf_opt.wo_cocu) }, 'v' as ::core::ffi::c_int));
+                && !has_char(unsafe { cstr::at(window.w_onebuf_opt.wo_cocu.value_ptr()) }, 'v' as ::core::ffi::c_int));
         if !wants_conceal {
             self.prev_syntax_id = 0;
             self.is_concealing = false;

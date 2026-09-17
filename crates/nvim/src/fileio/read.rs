@@ -31,6 +31,7 @@ use crate::types::{CmdModFlags, CpoFlag, Failed, OptStr, OptionSetFlags};
 mod tail;
 
 use self::tail::{report_and_place, run_read_autocmds};
+use crate::optionstr::LocalOptStr;
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {
@@ -236,7 +237,7 @@ pub(crate) unsafe fn readfile(
             fenc = c"utf-8".as_ptr().cast_mut();
             fenc_alloced = false;
         } else if p_fencs(CStr::is_empty) {
-            fenc = Buf::current().b_p_fenc; // use the buffer's encoding
+            fenc = Buf::current().b_p_fenc.value_ptr(); // use the buffer's encoding
             fenc_alloced = false;
         } else {
             // Try the items in 'fileencodings'; a copy, because the cursor

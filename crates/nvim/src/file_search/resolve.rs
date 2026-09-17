@@ -22,6 +22,7 @@ use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::narrow::len_as_int;
 use crate::option::vars::P_CDPATH;
+use crate::optionstr::LocalOptStr;
 use crate::path::buffer_path;
 use crate::tr_c;
 use crate::types::MAXPATHL;
@@ -73,7 +74,7 @@ pub(crate) unsafe fn find_file_in_path(
             buffer_path(),
             FINDFILE_BOTH as c_int,
             rel_fname,
-            Buf::current().b_p_sua,
+            Buf::current().b_p_sua.value_ptr(),
             file_to_find,
             search_ctx,
         )

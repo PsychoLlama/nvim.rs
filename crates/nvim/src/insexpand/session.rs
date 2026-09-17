@@ -550,8 +550,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
         }
         if ctrl_x_mode_line_or_eval() {
             // Insert a new line, keep indentation but ignore 'comments'.
-            let old = Buf::current().b_p_com;
-            Buf::current().b_p_com = c"".as_ptr().cast_mut();
+            let old = Buf::current().b_p_com.replace(XString::new());
             set_compl_startpos_here(compl_col.get());
             ins_eol('\r' as c_int);
             Buf::current().b_p_com = old;

@@ -34,6 +34,7 @@ use crate::r#move::changed_cline_bef_curs;
 use crate::ops::shift_line;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_paste, p_report};
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::os::input::line_breakcheck;
 use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
@@ -207,7 +208,7 @@ pub fn preprocs_left() -> bool {
 /// Whether the conditions are right for smart indenting.
 pub fn may_do_si() -> bool {
     let buf = Buf::current();
-    unsafe { buf.b_p_si != 0 && buf.b_p_cin == 0 && *buf.b_p_inde == 0 && !p_paste() }
+    buf.b_p_si != 0 && buf.b_p_cin == 0 && buf.b_p_inde.first_byte() == 0 && !p_paste()
 }
 
 /// Sets the cursor line's indent to that of the line holding the `{` that

@@ -49,6 +49,7 @@ use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::c_str;
 use crate::option::vars::{P_DIR, p_confirm, p_dir, p_wa, p_write};
 use crate::option::{copy_option_part, cpo_has, shortmess};
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
@@ -423,9 +424,8 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
         return None;
     }
 
-    // SAFETY: `curbuf` is live.
     // If 'filetype' was empty try detecting it now.
-    if unsafe { *Buf::current().b_p_ft } as c_int == NUL {
+    if Buf::current().b_p_ft.first_byte() as c_int == NUL {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
             let _ = unsafe {
                 do_doautocmd(

@@ -37,6 +37,7 @@ use crate::r#move::{
 use crate::option::get_scrolloff_value;
 use crate::option::vars::{P_CH, p_ch, p_ls, p_spk, p_stal, p_wbr};
 use crate::options::kWinOptScroll;
+use crate::optionstr::LocalOptStr;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::startup::{exiting, full_screen};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};
@@ -668,7 +669,7 @@ fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
     let (global, local) = p_wbr(|value| unsafe {
         (
             *value.as_ptr().cast_mut() as c_int,
-            *window.w_onebuf_opt.wo_wbr as c_int,
+            window.w_onebuf_opt.wo_wbr.first_byte() as c_int,
         )
     });
     let winbar_height = if window.w_floating {

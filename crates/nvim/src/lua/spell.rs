@@ -25,6 +25,7 @@ use crate::lua::ffi::{
 };
 use crate::message::e_no_spell;
 use crate::message::emsg;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
 use crate::types::{Hlf, lua_State, luaL_Reg, size_t};
@@ -60,7 +61,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
         win.w_onebuf_opt.wo_spell = 1;
     }
     // SAFETY: `w_s` is the window's synblock, always set.
-    if unsafe { *(*win.w_s).b_p_spl } == 0 {
+    if unsafe { (*win.w_s).b_p_spl.first_byte() } == 0 {
         emsg(gettext(e_no_spell));
         win.w_onebuf_opt.wo_spell = wo_spell_save;
         return 0;

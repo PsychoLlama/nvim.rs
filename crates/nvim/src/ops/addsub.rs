@@ -38,6 +38,7 @@ use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
 use crate::normal::{visual_active, visual_mode};
+use crate::optionstr::LocalOptStr;
 use crate::types::NUL;
 
 /// Case of the hex digits last seen, so that `0xAB` increments to `0xAC` and
@@ -66,9 +67,12 @@ struct NrFormats {
 impl NrFormats {
     /// Read the current buffer's 'nrformats'.
     fn current() -> Self {
-        // SAFETY: the caller's promise -- 'nrformats' is a NUL-terminated
-        // option string.
-        let has = |c: u8| has_char(unsafe { cstr::at(Buf::current().b_p_nf) }, c_int::from(c));
+        let has = |c: u8| {
+            has_char(
+                unsafe { cstr::at(Buf::current().b_p_nf.value_ptr()) },
+                c_int::from(c),
+            )
+        };
         NrFormats {
             hex: has(b'x'),
             oct: has(b'o'),

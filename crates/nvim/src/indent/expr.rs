@@ -23,6 +23,7 @@ use crate::indent_c::{cindent_on, do_c_expr_indent};
 use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
 use crate::option::vars::{P_LISPWORDS, p_debug, p_paste};
 use crate::option::{copy_option_part, was_set_insecurely};
+use crate::optionstr::LocalOptStr;
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::pos::lt;
 use crate::runtime::state::current_sctx;
@@ -53,7 +54,7 @@ pub fn get_expr_indent() -> c_int {
         // The expression is evaluated from a copy, because 'indentexpr' can
         // be changed while it is running.
         // SAFETY: 'indentexpr' is a NUL-terminated option value.
-        let mut expression = XString::from_cstr(unsafe { cstr::at(buf.b_p_inde) });
+        let mut expression = XString::from_cstr(unsafe { cstr::at(buf.b_p_inde.value_ptr()) });
         // SAFETY: as above; the copy outlives the evaluation.
         unsafe { eval_to_number(expression.as_mut_ptr(), true) as c_int }
     };
@@ -353,8 +354,10 @@ unsafe fn lisp_match(p: *mut c_char) -> bool {
     let mut buf: [c_char; 512] = [0; 512];
     // A copy: the cursor below walks past the end of a projection's borrow.
     let lispwords = P_LISPWORDS.get();
-    let mut word = if unsafe { *Buf::current().b_p_lw } != 0 {
-        Buf::current().b_p_lw
+    // The buffer's own 'lispwords' where it has one, else the copy above:
+    // the cursor below walks it to the end of the value.
+    let mut word = if Buf::current().b_p_lw.first_byte() != 0 {
+        Buf::current().b_p_lw.value_ptr()
     } else {
         lispwords.as_ptr().cast_mut()
     };
@@ -397,7 +400,11 @@ pub fn fixthisline(get_the_indent: IndentGetter) {
 pub fn use_indentexpr_for_lisp() -> bool {
     // SAFETY: the caller's contract.
     let buf = Buf::current();
-    unsafe { buf.b_p_lisp != 0 && *buf.b_p_inde != 0 && cstr::eq_bytes(buf.b_p_lop, b"expr:1") }
+    unsafe {
+        buf.b_p_lisp != 0
+            && buf.b_p_inde.first_byte() != 0
+            && cstr::eq_bytes(buf.b_p_lop.value_ptr(), b"expr:1")
+    }
 }
 
 /// Fixes the cursor line's indent for 'lisp' and 'cindent'.

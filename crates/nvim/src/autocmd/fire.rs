@@ -35,6 +35,7 @@ use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
+use crate::optionstr::LocalOptStr;
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
 
@@ -278,12 +279,14 @@ pub unsafe fn apply_autocmds_group(
         let win_local = event_row(event).win_local;
         let mut win_ignore = false;
         if buffer == Buf::current_or_none() && win_local {
-            win_ignore = unsafe { event_ignored(event, Win::current().w_onebuf_opt.wo_eiw, true) };
+            win_ignore = unsafe {
+                event_ignored(event, Win::current().w_onebuf_opt.wo_eiw.value_ptr(), true)
+            };
         } else if buffer.is_some_and(|b| win_local && b.b_nwindows > 0) {
             win_ignore = true;
             for wp in tab_windows() {
                 if Some(wp.buffer()) == buffer
-                    && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw, true) }
+                    && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw.value_ptr(), true) }
                 {
                     win_ignore = false;
                     break;
@@ -349,8 +352,8 @@ pub unsafe fn apply_autocmds_group(
         if fname.is_null() || unsafe { *fname } == 0 {
             match (buffer, event) {
                 (None, _) => fname = ::core::ptr::null_mut(),
-                (Some(b), AutoEvent::Syntax) => fname = b.b_p_syn,
-                (Some(b), AutoEvent::FileType) => fname = b.b_p_ft,
+                (Some(b), AutoEvent::Syntax) => fname = b.b_p_syn.value_ptr(),
+                (Some(b), AutoEvent::FileType) => fname = b.b_p_ft.value_ptr(),
                 (Some(b), _) => {
                     if !b.b_sfname.is_null() {
                         sfname = unsafe { xstrdup(b.b_sfname) };

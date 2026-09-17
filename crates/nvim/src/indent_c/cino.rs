@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::optionstr::LocalOptStr;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -93,7 +94,7 @@ pub unsafe fn parse_cino(buffer: Buf) {
     // The option itself is walked by *index* into its bytes, so only the
     // three steps that hand a pointer to C are unchecked.  Nothing below
     // writes 'cinoptions', so the borrow stays good for the whole pass.
-    let start = buffer.b_p_cino;
+    let start = buffer.b_p_cino.value_ptr();
     // SAFETY: `b_p_cino` is a NUL-terminated option string.
     let cino = unsafe { CStr::from_ptr(start) }.to_bytes();
 

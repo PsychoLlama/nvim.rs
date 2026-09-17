@@ -37,6 +37,7 @@ use crate::ops::{Op, do_join};
 use crate::option::vars::{P_SMD, p_smd};
 use crate::option::was_set_insecurely;
 use crate::options::kOptFormatexpr;
+use crate::optionstr::LocalOptStr;
 use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
 use crate::search::check_linecomment;
@@ -148,7 +149,7 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
 
     // Copy it: the option can be changed while it is running.
     // SAFETY: 'formatexpr' is a NUL-terminated option value.
-    let mut fex = XString::from_cstr(unsafe { cstr::at(Buf::current().b_p_fex) });
+    let mut fex = XString::from_cstr(unsafe { cstr::at(Buf::current().b_p_fex.value_ptr()) });
     // Errors go against the script that set `'formatexpr'`.
     let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptFormatexpr as usize]);
     let r = {
@@ -172,7 +173,7 @@ fn paragraph_indent(first_line: LineNr) -> c_int {
     } else if Buf::current().b_p_lisp != 0 {
         get_lisp_indent()
     } else if cindent_on() {
-        if unsafe { *Buf::current().b_p_inde } as c_int != NUL {
+        if Buf::current().b_p_inde.first_byte() as c_int != NUL {
             get_expr_indent()
         } else {
             get_c_indent()

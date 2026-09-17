@@ -16,10 +16,11 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CStr, c_char, c_int};
+use std::ffi::{CStr, c_int};
 use std::ptr;
 
 use neovim::ex_docmd::state::cmdmod;
+use neovim::memory::XString;
 use neovim::regexp::vim_regfree;
 use neovim::search::{get_search_pat, pat_has_uppercase, search_regcomp};
 use neovim::types::{CmdModFlags, RegMMatch};
@@ -92,7 +93,7 @@ fn a_very_magic_pattern_spells_the_same_pairs_without_a_backslash() {
 struct RightLeft {
     _sandbox: Sandbox,
     rl: c_int,
-    rlc: *mut c_char,
+    rlc: Option<XString>,
     flags: CmdModFlags,
 }
 
@@ -110,11 +111,11 @@ impl RightLeft {
             let saved = RightLeft {
                 _sandbox: sandbox,
                 rl: (*win).w_onebuf_opt.wo_rl,
-                rlc: (*win).w_onebuf_opt.wo_rlc,
+                rlc: (*win).w_onebuf_opt.wo_rlc.take(),
                 flags: cmdmod.with(|c| c.cmod_flags),
             };
             (*win).w_onebuf_opt.wo_rl = 1;
-            (*win).w_onebuf_opt.wo_rlc = rlc.as_ptr().cast_mut();
+            (*win).w_onebuf_opt.wo_rlc = Some(XString::from_cstr(rlc));
             cmdmod.with_mut(|c| c.cmod_flags |= CmdModFlags::KEEPPATTERNS);
             saved
         }
@@ -127,7 +128,7 @@ impl Drop for RightLeft {
         unsafe {
             let win = curwin.get();
             (*win).w_onebuf_opt.wo_rl = self.rl;
-            (*win).w_onebuf_opt.wo_rlc = self.rlc;
+            (*win).w_onebuf_opt.wo_rlc = self.rlc.take();
             cmdmod.with_mut(|c| c.cmod_flags = self.flags);
         }
     }

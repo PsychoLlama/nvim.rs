@@ -52,6 +52,7 @@ use crate::types::{
 };
 use crate::window::global_stl_height;
 
+use super::LocalOptStr;
 use super::frame::{invalid, old_value, varp, win};
 use super::free_string_option;
 use super::{
@@ -83,7 +84,7 @@ pub fn did_set_backupcopy(args: &mut OptSet) -> Result<(), OptError> {
     // `:set` rate.
     let global = P_BKC.get();
     let value = if local {
-        buf.b_p_bkc
+        buf.b_p_bkc.value_ptr()
     } else {
         if !opt_flags.has(OptionSetFlags::GLOBAL) {
             // A plain `:set` drops the buffer's own answer.
@@ -136,25 +137,25 @@ pub fn did_set_backupext_or_patchmode(_args: &mut OptSet) -> Result<(), OptError
 }
 
 pub fn did_set_bufhidden(args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: the table's own word list.
-    unsafe { did_set_opt_flags(args.os_buf.b_p_bh, &opt_bh_values, false) }
+    let value = args.os_buf.b_p_bh.value_ptr();
+    // SAFETY: the table's own word list, and the buffer's own value.
+    unsafe { did_set_opt_flags(value, &opt_bh_values, false) }
 }
 
 /// 'buftype' cannot be changed into or out of "terminal": that is decided
 /// by whether the buffer actually has a terminal attached.
 pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
     let (mut buf, mut wp) = (args.os_buf, win(args));
-    // SAFETY: the buffer's own C string value; only the first letter is
-    // ever distinguishing.
-    let first = unsafe { *buf.b_p_bt };
+    // Only the first letter is ever distinguishing.
+    let first = buf.b_p_bt.bytes().first().copied().unwrap_or(0);
     let has_terminal = !buf.terminal.is_null();
-    if has_terminal != (first == b't' as c_char)
-        || !unsafe { opt_strings_ok(buf.b_p_bt, &opt_bt_values, false) }
-    {
+    let value = buf.b_p_bt.value_ptr();
+    // SAFETY: the table's own word list, and the buffer's own value.
+    if has_terminal != (first == b't') || !unsafe { opt_strings_ok(value, &opt_bt_values, false) } {
         return invalid();
     }
 
-    if first == b'p' as c_char {
+    if first == b'p' {
         // A prompt buffer has no comment leaders, and its prompt starts at
         // the end of what is there now.
         // SAFETY: sets this buffer's own option, and replaces its prompt
@@ -189,7 +190,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
         wp.w_redr_status = true;
         redraw_later(wp, UPD_VALID);
     }
-    buf.b_help = first == b'h' as c_char;
+    buf.b_help = first == b'h';
     redraw_titles();
     Ok(())
 }
@@ -444,8 +445,7 @@ pub fn did_set_keymap(args: &mut OptSet) -> Result<(), OptError> {
     args.os_value_checked = true;
     errmsg?;
 
-    // SAFETY: the option's own C string value.
-    if c_int::from(unsafe { *buf.b_p_keymap }) != NUL {
+    if !buf.b_p_keymap.bytes().is_empty() {
         buf.b_p_iminsert = B_IMODE_LMAP as OptInt;
         // 'imsearch' at -1 means "follow 'iminsert'", and stays that
         // way.

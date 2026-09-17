@@ -40,10 +40,9 @@ use crate::getchar::state::{got_int, mapped_ctrl_c, mod_mask};
 use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, Key};
-use crate::memory::{strequal, xstrdup};
+use crate::memory::XString;
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
-use crate::optionstr::free_string_option;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
 use crate::state::{
     MODE_TERMINAL, ModeState, may_trigger_modechanged, state_enter, state_handle_k_event,
@@ -54,7 +53,7 @@ use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
 use crate::winlayer::{Buf, Win, WinId};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_int, c_void};
 use core::ops::{Deref, DerefMut};
 
 use super::input::{is_mouse_key, send_mouse_event, terminal_send_key};
@@ -62,6 +61,7 @@ use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
 use super::{Term, row_to_linenr, terminal_check_size, terminal_set_state};
+use crate::optionstr::LocalOptStr;
 use crate::search::FORWARD;
 
 const DOBUF_WIPE: c_int = 4;
@@ -88,7 +88,10 @@ pub(crate) struct TerminalState {
     /// re-entry rule.
     pub save_curwin: Option<WinId>,
     pub save_w_p_cul: bool,
-    pub save_w_p_culopt: *mut c_char,
+    /// The `'cursorlineopt'` the window had before terminal mode forced
+    /// `"number"`, owned until it is put back. `None` means nothing was
+    /// forced, which is what upstream's null pointer said.
+    pub save_w_p_culopt: Option<XString>,
     pub save_w_p_culopt_flags: uint8_t,
     pub save_w_p_cuc: c_int,
     pub save_w_p_so: OptInt,
@@ -105,7 +108,7 @@ impl TerminalState {
             cursor_visible: true,
             save_curwin: None,
             save_w_p_cul: false,
-            save_w_p_culopt: ::core::ptr::null_mut(),
+            save_w_p_culopt: None,
             save_w_p_culopt_flags: 0,
             save_w_p_cuc: 0,
             save_w_p_so: 0,
@@ -195,7 +198,7 @@ fn set_terminal_winopts(mut s: Session) {
     let mut wp = current_win();
     s.save_curwin = Some(wp.id());
     s.save_w_p_cul = wp.w_onebuf_opt.wo_cul != 0;
-    s.save_w_p_culopt = ::core::ptr::null_mut();
+    s.save_w_p_culopt = None;
     s.save_w_p_culopt_flags = wp.w_p_culopt_flags;
     s.save_w_p_cuc = wp.w_onebuf_opt.wo_cuc;
     s.save_w_p_so = wp.w_onebuf_opt.wo_so;
@@ -204,14 +207,11 @@ fn set_terminal_winopts(mut s: Session) {
     if wp.w_onebuf_opt.wo_cul != 0
         && wp.w_p_culopt_flags as c_int & kOptCuloptFlagNumber as c_int != 0
     {
-        let culopt = wp.w_onebuf_opt.wo_culopt;
-        // SAFETY: `'culopt'` is a NUL-terminated option string, compared
-        // against one of this crate's own.
-        if !unsafe { strequal(culopt, c"number".as_ptr()) } {
-            s.save_w_p_culopt = culopt;
-            // SAFETY: copies one of this crate's own strings; the copy is
-            // the window's until `unset_terminal_winopts` frees it.
-            wp.w_onebuf_opt.wo_culopt = unsafe { xstrdup(c"number".as_ptr()) };
+        if wp.w_onebuf_opt.wo_culopt.bytes() != b"number" {
+            s.save_w_p_culopt = wp
+                .w_onebuf_opt
+                .wo_culopt
+                .replace(XString::from_cstr(c"number"));
         }
         wp.w_p_culopt_flags = kOptCuloptFlagNumber as uint8_t;
     } else {
@@ -246,21 +246,15 @@ fn unset_terminal_winopts(mut s: Session) {
         // SAFETY: either a live window's own option set, or the copy the
         // terminal's buffer kept of it.
         let winopts = unsafe { &mut *winopts };
-        if !s.save_w_p_culopt.is_null() {
-            // SAFETY: the `'culopt'` the window is holding, which the saved
-            // one replaces.
-            unsafe { free_string_option(winopts.wo_culopt) };
-            winopts.wo_culopt = s.save_w_p_culopt;
-            s.save_w_p_culopt = ::core::ptr::null_mut();
+        if s.save_w_p_culopt.is_some() {
+            winopts.wo_culopt = s.save_w_p_culopt.take();
         }
         winopts.wo_cul = s.save_w_p_cul as c_int;
         winopts.wo_cuc = s.save_w_p_cuc;
         winopts.wo_so = s.save_w_p_so;
         winopts.wo_siso = s.save_w_p_siso;
     }
-    // SAFETY: the copy `set_terminal_winopts` made, or null, which this
-    // takes as "nothing to free".
-    unsafe { free_string_option(s.save_w_p_culopt) };
+    s.save_w_p_culopt = None;
     s.save_curwin = None;
 }
 

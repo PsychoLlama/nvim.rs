@@ -63,11 +63,11 @@ use ::libc::getuid;
 
 use super::{
     NO_LOCAL_UNDOLEVEL, PROJECT_NAME, ROOT_UID, SID_NONE, boolean_optval, check_options,
-    check_win_options, default_fileformat, didset_options, didset_options2, get_option,
-    get_option_unset_value, insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagNoDefExp,
-    kOptFlagNoDefault, option_default, option_expand, option_is_global_local, option_var,
-    option_was_set, optval_copy, optval_free, set_fileformat, set_option_direct,
-    set_option_value_give_err, set_option_varp, store_option_default,
+    default_fileformat, didset_options, didset_options2, get_option, get_option_unset_value,
+    insecure_flag, kOptFlagComma, kOptFlagGettext, kOptFlagNoDefExp, kOptFlagNoDefault,
+    option_default, option_expand, option_is_global_local, option_var, option_was_set, optval_copy,
+    optval_free, set_fileformat, set_option_direct, set_option_value_give_err, set_option_varp,
+    store_option_default,
 };
 
 /// Every option, in table order.
@@ -317,7 +317,6 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     Buf::current().b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
 
     check_buf_options(Buf::current());
-    check_win_options(Win::current());
     check_options();
     last_status(false);
     didset_options();

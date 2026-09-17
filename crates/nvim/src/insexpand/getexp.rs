@@ -17,6 +17,7 @@ use crate::memory::XString;
 use crate::option::local_or_global;
 use crate::option::vars::P_DICT;
 use crate::option::vars::P_TSR;
+use crate::optionstr::LocalOptStr;
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
@@ -146,7 +147,7 @@ unsafe fn scan_buf_valid(st: *mut InsComplNextState) -> bool {
 
 pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
-        && (unsafe { *Buf::current().b_p_tsrfu } as c_int != NUL
+        && (Buf::current().b_p_tsrfu.first_byte() as c_int != NUL
             || p_tsrfu(|value| !value.is_empty()))
 }
 
@@ -385,9 +386,9 @@ pub(crate) unsafe fn get_next_dict_tsr_completion(
     let owned = if !dict.is_null() {
         XString::from_cstr(unsafe { cstr::at(dict) })
     } else if compl_type == CTRL_X_THESAURUS {
-        unsafe { local_or_global(Buf::current().b_p_tsr, P_TSR) }
+        local_or_global(&Buf::current().b_p_tsr, P_TSR)
     } else {
-        unsafe { local_or_global(Buf::current().b_p_dict, P_DICT) }
+        local_or_global(&Buf::current().b_p_dict, P_DICT)
     };
     let files = owned.as_ptr().cast_mut();
     let flags = if dict.is_null() { 0 } else { dict_f };
@@ -690,7 +691,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         let option = if compl_cont_status.get() & CONT_LOCAL != 0 {
             c".".as_ptr()
         } else {
-            Buf::current().b_p_cpt
+            Buf::current().b_p_cpt.value_ptr()
         };
         // SAFETY: `st` is the scan state cell, and `option` is a
         // NUL-terminated option string.

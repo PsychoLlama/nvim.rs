@@ -18,23 +18,21 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 use core::ptr;
 
 use crate::drawscreen::status_redraw_all;
 use crate::global_cell::GlobalCell;
 use crate::indent::tabstop_set;
-use crate::memory::{XString, xfree, xstrdup};
+use crate::memory::{XString, xfree};
 use crate::option::vars::{
     P_AI, P_ET, P_RI, P_RU, P_SM, P_STA, P_STS, P_TW, P_VSTS, P_WM, p_ai, p_et, p_paste, p_ri,
-    p_ru, p_sm, p_sta, p_sts, p_tw, p_vsts, p_wm,
+    p_ru, p_sm, p_sta, p_sts, p_tw, p_wm,
 };
 use crate::options::{
     kOptAutoindent, kOptExpandtab, kOptRevins, kOptRuler, kOptShowmatch, kOptSmarttab,
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
-use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::types::{ColNr, OptError, OptIndex, OptInt, OptSet, OptionSetFlags};
 
 use crate::types::Buffer;
@@ -67,9 +65,6 @@ pub(crate) struct PasteSave {
     pub(crate) sts: OptInt,
     pub(crate) tw: OptInt,
     pub(crate) wm: OptInt,
-    /// 'varsofttabstop', or null for a value that was not set. Owned: the
-    /// next save frees it.
-    pub(crate) vsts: *mut c_char,
 }
 
 impl PasteSave {
@@ -85,16 +80,28 @@ impl PasteSave {
         sts: 0,
         tw: 0,
         wm: 0,
-        vsts: ptr::null_mut(),
     };
 }
 
 static SAVED: GlobalCell<PasteSave> = GlobalCell::new(PasteSave::NONE);
 
+/// What 'paste' stashed for 'varsofttabstop'. Its own cell rather than a
+/// field of [`PasteSave`]: the record is `Copy` and read out by value a
+/// dozen times, and an owned string is neither.
+///
+/// `None` is "the option was not set", which is what the restore puts back
+/// as the option owning nothing.
+static SAVED_VSTS: GlobalCell<Option<XString>> = GlobalCell::new(None);
+
 /// What 'paste' has stashed, for the buffer-local copies `copy.rs` seeds
 /// from it.
 pub(crate) fn paste_save() -> PasteSave {
     SAVED.get()
+}
+
+/// A copy of what 'paste' stashed for 'varsofttabstop'.
+pub(crate) fn paste_saved_vsts() -> Option<XString> {
+    SAVED_VSTS.with(Clone::clone)
 }
 
 /// The options 'paste' overrides while it is on, and so re-attributes to
@@ -129,15 +136,10 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
                 buf.b_p_sts_nopaste = buf.b_p_sts;
                 buf.b_p_ai_nopaste = buf.b_p_ai;
                 buf.b_p_et_nopaste = buf.b_p_et;
-                if !buf.b_p_vsts_nopaste.is_null() {
-                    unsafe { xfree(buf.b_p_vsts_nopaste.cast::<c_void>()) };
-                }
-                buf.b_p_vsts_nopaste = unsafe { saved_copy(buf.b_p_vsts) };
+                buf.b_p_vsts_nopaste = buf.b_p_vsts.clone();
             }
-            let stale = SAVED.get().vsts;
-            if !stale.is_null() {
-                unsafe { xfree(stale.cast::<c_void>()) };
-            }
+            // The stale save goes with the write.
+            SAVED_VSTS.set((!P_VSTS.is_unset()).then(|| P_VSTS.get()));
             SAVED.set(PasteSave {
                 on: false,
                 sm: p_sm(),
@@ -149,7 +151,6 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
                 sts: p_sts(),
                 tw: p_tw(),
                 wm: p_wm(),
-                vsts: p_vsts(|value| unsafe { saved_copy(value.as_ptr().cast_mut()) }),
             });
         }
 
@@ -159,10 +160,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
             buf.b_p_sts = 0;
             buf.b_p_ai = 0;
             buf.b_p_et = 0;
-            if !buf.b_p_vsts.is_null() {
-                unsafe { free_string_option(buf.b_p_vsts) };
-            }
-            buf.b_p_vsts = empty_option();
+            buf.b_p_vsts = None;
             unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
             buf.b_p_vsts_array = ptr::null_mut();
         }
@@ -186,16 +184,13 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
             buf.b_p_sts = buf.b_p_sts_nopaste;
             buf.b_p_ai = buf.b_p_ai_nopaste;
             buf.b_p_et = buf.b_p_et_nopaste;
-            if !buf.b_p_vsts.is_null() {
-                unsafe { free_string_option(buf.b_p_vsts) };
-            }
-            buf.b_p_vsts = unsafe { restored_copy(buf.b_p_vsts_nopaste) };
+            buf.b_p_vsts = buf.b_p_vsts_nopaste.clone();
             unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
-            if !buf.b_p_vsts.is_null() && !is_empty_option(buf.b_p_vsts) {
+            if let Some(vsts) = buf.b_p_vsts.as_ref() {
                 // The array's address is the buffer's plus a constant, so
                 // naming it reads nothing.
                 let array = field_ptr(buf.raw(), VSTS_ARRAY, |b: &Buffer| &b.b_p_vsts_array);
-                unsafe { tabstop_set(buf.b_p_vsts, array) };
+                unsafe { tabstop_set(vsts.as_ptr().cast_mut(), array) };
             } else {
                 buf.b_p_vsts_array = ptr::null_mut::<ColNr>();
             }
@@ -213,9 +208,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
         P_STS.set(saved.sts);
         P_TW.set(saved.tw);
         P_WM.set(saved.wm);
-        // SAFETY: the paste record's saved value is null or a live
-        // allocation; the option takes a copy of it.
-        P_VSTS.restore(unsafe { restored_owned(saved.vsts) });
+        P_VSTS.restore(paste_saved_vsts());
     }
     SAVED.with_mut(|saved| saved.on = p_paste());
     didset_options_sctx(
@@ -223,43 +216,4 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
         &PASTE_DEP_OPTS,
     );
     Ok(())
-}
-
-/// What 'paste' stashes for a 'varsofttabstop' value: null for a value that
-/// was not set, so the restore knows to put the shared empty string back.
-///
-/// # Safety
-///
-/// `value` must be a string option's value.
-unsafe fn saved_copy(value: *mut c_char) -> *mut c_char {
-    if value.is_null() || is_empty_option(value) {
-        return ptr::null_mut();
-    }
-    // SAFETY: the caller's `value` is a NUL-terminated option value.
-    unsafe { xstrdup(value) }
-}
-
-/// The inverse of [`saved_copy`].
-///
-/// # Safety
-///
-/// `saved` must be what [`saved_copy`] returned.
-unsafe fn restored_copy(saved: *mut c_char) -> *mut c_char {
-    if saved.is_null() {
-        return empty_option();
-    }
-    // SAFETY: the caller's `saved` is a NUL-terminated allocation.
-    unsafe { xstrdup(saved) }
-}
-
-/// [`restored_copy`] for a global value, which owns its string: nothing
-/// saved is the option owning nothing, which is what the shared empty
-/// string stood for.
-///
-/// # Safety
-///
-/// As [`restored_copy`].
-unsafe fn restored_owned(saved: *mut c_char) -> Option<XString> {
-    // SAFETY: the caller's `saved` is null or a NUL-terminated allocation.
-    (!saved.is_null()).then(|| XString::from_cstr(unsafe { cstr::at(saved) }))
 }

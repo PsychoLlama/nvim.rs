@@ -12,6 +12,7 @@
 use super::*;
 use crate::cstr;
 use crate::message_fmt::c_str;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::CmdIdx;
@@ -255,9 +256,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         // The last block went away: the diff folds have nothing left to
         // describe, so every window folding by `diff` is rebuilt.
         for wp in windows() {
-            // SAFETY: a live window's `'foldmethod'` is a NUL-terminated
-            // option string.
-            let by_diff = unsafe { *wp.w_onebuf_opt.wo_fdm } as c_int == 'd' as c_int;
+            let by_diff = wp.w_onebuf_opt.wo_fdm.first_byte() as c_int == 'd' as c_int;
             if wp.w_onebuf_opt.wo_diff != 0 && by_diff && wp.w_onebuf_opt.wo_fen != 0 {
                 // SAFETY: a live window.
                 fold_update_all(wp);

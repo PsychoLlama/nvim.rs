@@ -16,6 +16,7 @@ use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::mbyte::char_at;
 use crate::option::cpo_has;
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXCOL;
 use crate::strings::has_char;
 use crate::types::{CpoFlag, NUL};
@@ -115,7 +116,8 @@ fn backslash_count(line: &[u8], col: c_int) -> c_int {
 fn find_mps_values(target: &mut Target, switchit: bool) {
     let (initc, findc) = (&mut target.initc, &mut target.findc);
     let backwards = &mut target.backwards;
-    let mut ptr = Buf::current().b_p_mps;
+    // The walk reads 'matchpairs' in place, as upstream's does.
+    let mut ptr = Buf::current().b_p_mps.value_ptr();
     while unsafe { *ptr } as c_int != NUL {
         // The opening half of this pair.
         if unsafe { utf_ptr2char(ptr) } == *initc {

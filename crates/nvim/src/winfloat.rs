@@ -35,7 +35,7 @@ use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
-use crate::memory::xstrdup;
+use crate::memory::XString;
 use crate::message::e_cmdwin;
 use crate::message::emsg_ptr;
 use crate::mouse::{MousePos, find_win_inner};
@@ -43,8 +43,7 @@ use crate::r#move::textpos2screenpos;
 use crate::option::vars::{p_ch, p_ls};
 use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
 use crate::options::kOptBufhidden;
-use crate::optionstr::{clear_string_option, free_string_option};
-use crate::strings::concat_str;
+use crate::optionstr::LocalOptStr;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptVal,
@@ -152,48 +151,12 @@ fn floats() -> impl Iterator<Item = Win> {
 /// spells the same test three ways -- `*p != NUL`, `p && *p != NUL` and
 /// `p[0] != 'a'`; the unconditional forms would be undefined on a null
 /// option, and answering NUL for one lands on the same arm they do.
-fn opt_head(s: *const c_char) -> c_char {
-    if s.is_null() {
-        return 0;
-    }
-    // SAFETY: a non-null string option is NUL-terminated, so its first byte
-    // is there to be read.
-    unsafe { *s }
-}
-
-fn opt_is_set(s: *const c_char) -> bool {
-    opt_head(s) != 0
-}
-
-fn opt_len(s: *const c_char) -> usize {
-    // SAFETY: a NUL-terminated string option, its caller having ruled out null.
-    unsafe { cstr::bytes_at(s) }.len()
-}
-
-/// Free a string option's value and put `new` in its place.
-fn set_opt(slot: &mut *mut c_char, new: *mut c_char) {
-    // SAFETY: an option variable holds what `free_string_option` accepts --
-    // null, the shared empty string (which it skips) or an owned allocation.
-    unsafe { free_string_option(*slot) };
-    *slot = new;
-}
-
-/// Free a string option's value and leave it holding the shared empty string.
-fn clear_opt(slot: &mut *mut c_char) {
-    // SAFETY: an option variable, as `set_opt`.
-    unsafe { clear_string_option(slot) };
-}
-
-/// `xstrdup` of a literal, for the values `win_set_minimal_style` forces.
-fn dup(s: &'static CStr) -> *mut c_char {
-    // SAFETY: a NUL-terminated literal.
-    unsafe { xstrdup(s.as_ptr()) }
-}
-
-/// `concat_str`: a fresh allocation holding `old` followed by `tail`.
-fn concat(old: *const c_char, tail: &'static CStr) -> *mut c_char {
-    // SAFETY: a non-null option value and a NUL-terminated literal.
-    unsafe { concat_str(old, tail.as_ptr()) }
+/// A window-local string option's value followed by `tail`, which is what
+/// `win_set_minimal_style` appends to 'fillchars' and 'winhighlight'.
+fn with_tail(value: &Option<XString>, tail: &'static CStr) -> XString {
+    let mut joined = value.clone().unwrap_or_default();
+    joined.push_cstr(tail);
+    joined
 }
 
 // ---------------------------------------------------------------------------
@@ -343,7 +306,7 @@ fn new_float(win: Option<Win>, last: bool, fconfig: WinConfig) -> Result<Option<
         }
     };
     win.w_floating = true;
-    win.w_status_height = if opt_is_set(win.w_onebuf_opt.wo_stl) && show_statusline() {
+    win.w_status_height = if !win.w_onebuf_opt.wo_stl.bytes().is_empty() && show_statusline() {
         STATUS_HEIGHT
     } else {
         0
@@ -379,14 +342,10 @@ fn alloc_new_float(last: bool, fconfig: &WinConfig) -> Result<Option<Win>, Error
     init_window(win);
     // A one-line float has no room for a window bar, and a float never draws
     // the global 'statusline'.
-    if !win.w_onebuf_opt.wo_wbr.is_null() && fconfig.height == 1 {
-        // Upstream tests `!= empty_string_option` before freeing;
-        // `free_string_option` makes the same test itself.
-        clear_opt(&mut win.w_onebuf_opt.wo_wbr);
+    if fconfig.height == 1 {
+        win.w_onebuf_opt.wo_wbr = None;
     }
-    if !win.w_onebuf_opt.wo_stl.is_null() {
-        clear_opt(&mut win.w_onebuf_opt.wo_stl);
-    }
+    win.w_onebuf_opt.wo_stl = None;
     Ok(Some(win))
 }
 
@@ -465,50 +424,48 @@ pub(crate) fn win_set_minimal_style(win: Win) {
 
     // Hide EOB region: use " " fillchar and cleared highlighting
     if win.w_p_fcs_chars.eob != ' ' as ScreenChar {
-        let old = win.w_onebuf_opt.wo_fcs;
-        let new = if opt_is_set(old) {
-            concat(old, c",eob: ")
+        let fcs = &win.w_onebuf_opt.wo_fcs;
+        let new = if fcs.bytes().is_empty() {
+            XString::from_cstr(c"eob: ")
         } else {
-            dup(c"eob: ")
+            with_tail(fcs, c",eob: ")
         };
-        set_opt(&mut win.w_onebuf_opt.wo_fcs, new);
+        win.w_onebuf_opt.wo_fcs = Some(new);
     }
 
     // TODO(bfredl): this could use a highlight namespace directly,
     // and avoid peculiarities around window options
-    let old = win.w_onebuf_opt.wo_winhl;
-    let new = if opt_is_set(old) {
-        concat(old, c",EndOfBuffer:")
+    let winhl = &win.w_onebuf_opt.wo_winhl;
+    let new = if winhl.bytes().is_empty() {
+        XString::from_cstr(c"EndOfBuffer:")
     } else {
-        dup(c"EndOfBuffer:")
+        with_tail(winhl, c",EndOfBuffer:")
     };
-    set_opt(&mut win.w_onebuf_opt.wo_winhl, new);
+    win.w_onebuf_opt.wo_winhl = Some(new);
     parse_winhl(win);
 
     // signcolumn: use 'auto'
-    let scl = win.w_onebuf_opt.wo_scl;
-    if opt_head(scl) != b'a' as c_char || opt_len(scl) >= 8 {
-        set_opt(&mut win.w_onebuf_opt.wo_scl, dup(c"auto"));
+    let scl = win.w_onebuf_opt.wo_scl.bytes();
+    if scl.first() != Some(&b'a') || scl.len() >= 8 {
+        win.w_onebuf_opt.wo_scl = Some(XString::from_cstr(c"auto"));
     }
 
     // foldcolumn: use '0'
-    if opt_head(win.w_onebuf_opt.wo_fdc) != b'0' as c_char {
-        set_opt(&mut win.w_onebuf_opt.wo_fdc, dup(c"0"));
+    if win.w_onebuf_opt.wo_fdc.bytes().first() != Some(&b'0') {
+        win.w_onebuf_opt.wo_fdc = Some(XString::from_cstr(c"0"));
     }
 
     // colorcolumn: cleared
-    if opt_is_set(win.w_onebuf_opt.wo_cc) {
-        set_opt(&mut win.w_onebuf_opt.wo_cc, dup(c""));
+    if !win.w_onebuf_opt.wo_cc.bytes().is_empty() {
+        win.w_onebuf_opt.wo_cc = Some(XString::new());
     }
 
     // statuscolumn: cleared
-    if opt_is_set(win.w_onebuf_opt.wo_stc) {
-        clear_opt(&mut win.w_onebuf_opt.wo_stc);
-    }
+    win.w_onebuf_opt.wo_stc = None;
 
     // statusline: cleared (for floating windows)
-    if win.w_floating && opt_is_set(win.w_onebuf_opt.wo_stl) {
-        clear_opt(&mut win.w_onebuf_opt.wo_stl);
+    if win.w_floating && !win.w_onebuf_opt.wo_stl.bytes().is_empty() {
+        win.w_onebuf_opt.wo_stl = None;
         if win.w_status_height > 0 {
             win_config_float(win, win.w_config.clone());
         }
@@ -531,7 +488,7 @@ pub(crate) fn win_border_width(win: Win) -> c_int {
 pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
     let mut win = win;
     // Process statusline changes before applying new height from config
-    let show_stl = opt_is_set(win.w_onebuf_opt.wo_stl) && show_statusline();
+    let show_stl = !win.w_onebuf_opt.wo_stl.bytes().is_empty() && show_statusline();
     if win.w_status_height != 0 && !show_stl {
         remove_status_line(win);
     } else if win.w_status_height == 0 && show_stl {
@@ -711,7 +668,7 @@ pub(crate) fn win_check_anchored_floats(win: Win) {
 pub(crate) fn win_float_update_statusline() {
     for wp in floats() {
         let has_status = wp.w_status_height > 0;
-        let should_show = opt_is_set(wp.w_onebuf_opt.wo_stl) && show_statusline();
+        let should_show = !wp.w_onebuf_opt.wo_stl.bytes().is_empty() && show_statusline();
         if should_show != has_status {
             win_config_float(wp, wp.w_config.clone());
         }

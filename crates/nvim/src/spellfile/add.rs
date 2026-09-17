@@ -66,6 +66,7 @@ use super::{
     MAXWLEN, SEEK_SET, SPELL_ADD_BAD, SPELL_ADD_RARE, e_illegal_character_in_word, kXDGDataHome,
     mkspell,
 };
+use crate::optionstr::LocalOptStr;
 
 /// Add `word[..len]` to a spell file, or take it back out again.
 ///
@@ -110,17 +111,19 @@ pub unsafe fn spell_add_word(
         int_wordlist.get()
     } else {
         // Give 'spellfile' a sensible default if it has none.
-        if unsafe { *(*Win::current().w_s).b_p_spf } == 0 {
+        if unsafe { (*Win::current().w_s).b_p_spf.first_byte() } == 0 {
             init_spellfile();
             new_spf = true;
         }
-        if unsafe { *(*Win::current().w_s).b_p_spf } == 0 {
+        if unsafe { (*Win::current().w_s).b_p_spf.first_byte() } == 0 {
             semsg!("E764: Option '{}' is not set", "spellfile");
             return;
         }
 
         fnamebuf = unsafe { xmalloc(MAXPATHL as size_t) } as *mut c_char;
-        let mut spf = unsafe { (*Win::current().w_s).b_p_spf };
+        // SAFETY: the window's own syntax block; the walk reads
+        // 'spellfile' in place, as upstream's does.
+        let mut spf = unsafe { (*Win::current().w_s).b_p_spf.value_ptr() };
         let mut i = 1;
         while unsafe { *spf } != 0 {
             let sep = c",".as_ptr() as *mut c_char;
@@ -293,7 +296,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
 /// directory `'spelllang'` named if it named one by path, holding a
 /// `.add` file named after the language and encoding in use.
 fn init_spellfile() {
-    if unsafe { *(*Win::current().w_s).b_p_spl } == 0
+    if unsafe { (*Win::current().w_s).b_p_spl.first_byte() } == 0
         || unsafe { (*Win::current().w_s).b_langp.ga_len } <= 0
     {
         return;
@@ -301,8 +304,10 @@ fn init_spellfile() {
 
     // Take the first 'spelllang' entry up to a separator. When it is a
     // path, the file goes beside it and "lstart" is its last component.
-    let mut lstart = Buf::current().b_s.b_p_spl;
-    let mut lend = unsafe { (*Win::current().w_s).b_p_spl };
+    // Both walk 'spelllang' in place, as upstream's do.
+    let mut lstart = Buf::current().b_s.b_p_spl.value_ptr();
+    // SAFETY: the window's own syntax block.
+    let mut lend = unsafe { (*Win::current().w_s).b_p_spl.value_ptr() };
     let mut aspath = false;
     while unsafe { *lend } != 0 && !has_char(c",._", unsafe { *lend } as uint8_t as c_int) {
         if vim_ispathsep(unsafe { *lend } as c_int) {
@@ -316,11 +321,12 @@ fn init_spellfile() {
     let buf = unsafe { xmalloc(buf_len) } as *mut c_char;
     if aspath {
         // Use the directory 'spelllang' pointed at.
-        if unsafe { lend.offset_from(Buf::current().b_s.b_p_spl) } as size_t >= buf_len {
+        if unsafe { lend.offset_from(Buf::current().b_s.b_p_spl.value_ptr()) } as size_t >= buf_len
+        {
             unsafe { xfree(buf as *mut c_void) };
             return;
         }
-        let spl = Buf::current().b_s.b_p_spl;
+        let spl = Buf::current().b_s.b_p_spl.value_ptr();
         let len = unsafe { lend.offset_from(spl) } as size_t;
         unsafe { xmemcpyz(buf as *mut c_void, spl as *const c_void, len) };
     } else {

@@ -38,6 +38,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
+use crate::optionstr::LocalOptStr;
 use crate::types::NUL;
 
 /// `<Space>`, which is only a command when CTRL is held (`i_CTRL-@`'s
@@ -531,7 +532,7 @@ fn key_complete(s: &mut InsertState) -> Next {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if c_int::from(unsafe { *Buf::current().b_p_cpt }) == NUL
+    if c_int::from(Buf::current().b_p_cpt.first_byte()) == NUL
         && (ctrl_x_mode_normal() || ctrl_x_mode_whole_line())
         && !compl_status_local()
     {

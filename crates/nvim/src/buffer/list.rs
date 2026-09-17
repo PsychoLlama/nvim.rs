@@ -42,7 +42,7 @@ use crate::message_fmt::c_str;
 use crate::option::vars::{jop_flags, p_sol, swb_flags};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
-use crate::optionstr::clear_string_option;
+use crate::optionstr::init_buf_string_options;
 use crate::os::cshim::gettext_ptr;
 use crate::os::fs::os_fileid;
 use crate::path::full_name_save;
@@ -119,14 +119,6 @@ fn xfree_clear<T>(slot: &mut *mut T) {
     // SAFETY: an owned allocation or null.
     unsafe { xfree((*slot).cast::<c_void>()) };
     *slot = ptr::null_mut();
-}
-
-/// `clear_string_option`: free an option's value and leave the slot holding
-/// the shared empty string.
-fn clear_opt(slot: &mut *mut c_char) {
-    // SAFETY: an option variable, holding null, the shared empty string or
-    // an owned allocation.
-    unsafe { clear_string_option(slot) };
 }
 
 fn clear_callback(cb: &mut Callback) {
@@ -402,10 +394,11 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     let mut storage = Box::<Buffer>::new_zeroed();
     let at = storage.as_mut_ptr();
     // The fields a zeroed `Buffer` is *not* a valid value for -- an empty
-    // `Vec` holds a non-null dangling pointer, not a zero one, and a `HashMap`
-    // holds a seeded hasher -- are the user-command list, the keymap, the
-    // buffer's syntax block (`init_synblock`), what the memline owns, and
-    // the two extmark tables.
+    // `Vec` holds a non-null dangling pointer, not a zero one, a `HashMap`
+    // holds a seeded hasher, and an `Option<XString>`'s niche is the
+    // vector's capacity -- are the user-command list, the keymap, the
+    // buffer's syntax block (`init_synblock`), what the memline owns, the
+    // two extmark tables, and the string options.
     // SAFETY: all are inside the block just allocated, nothing has read or
     // dropped them, and `write` does not drop what was there.
     unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
@@ -414,6 +407,10 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
     unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
     unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
+    // ... and the string options, which are `Option<XString>`: see
+    // `init_buf_string_options`.
+    // SAFETY: a fresh allocation nothing has read or dropped.
+    unsafe { init_buf_string_options(at) };
     // SAFETY: all-zero bytes are otherwise what upstream's
     // `xcalloc(1, sizeof(Buffer))` hands a fresh buffer.
     Owned::new(unsafe { storage.assume_init() })
@@ -525,81 +522,81 @@ pub fn curbuf_reusable() -> bool {
 /// `'buftype'` and `'fileencoding'` too.
 pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     if free_p_ff {
-        clear_opt(&mut buffer.b_p_fenc);
-        clear_opt(&mut buffer.b_p_ff);
-        clear_opt(&mut buffer.b_p_bh);
-        clear_opt(&mut buffer.b_p_bt);
+        buffer.b_p_fenc = None;
+        buffer.b_p_ff = None;
+        buffer.b_p_bh = None;
+        buffer.b_p_bt = None;
     }
-    clear_opt(&mut buffer.b_p_def);
-    clear_opt(&mut buffer.b_p_inc);
-    clear_opt(&mut buffer.b_p_inex);
-    clear_opt(&mut buffer.b_p_inde);
-    clear_opt(&mut buffer.b_p_indk);
-    clear_opt(&mut buffer.b_p_fp);
-    clear_opt(&mut buffer.b_p_fex);
-    clear_opt(&mut buffer.b_p_kp);
-    clear_opt(&mut buffer.b_p_mps);
-    clear_opt(&mut buffer.b_p_fo);
-    clear_opt(&mut buffer.b_p_flp);
-    clear_opt(&mut buffer.b_p_isk);
-    clear_opt(&mut buffer.b_p_vsts);
-    xfree_clear(&mut buffer.b_p_vsts_nopaste);
+    buffer.b_p_def = None;
+    buffer.b_p_inc = None;
+    buffer.b_p_inex = None;
+    buffer.b_p_inde = None;
+    buffer.b_p_indk = None;
+    buffer.b_p_fp = None;
+    buffer.b_p_fex = None;
+    buffer.b_p_kp = None;
+    buffer.b_p_mps = None;
+    buffer.b_p_fo = None;
+    buffer.b_p_flp = None;
+    buffer.b_p_isk = None;
+    buffer.b_p_vsts = None;
+    buffer.b_p_vsts_nopaste = None;
     xfree_clear(&mut buffer.b_p_vsts_array);
-    clear_opt(&mut buffer.b_p_vts);
+    buffer.b_p_vts = None;
     xfree_clear(&mut buffer.b_p_vts_array);
-    clear_opt(&mut buffer.b_p_keymap);
+    buffer.b_p_keymap = None;
     buffer.b_kmap_ga = Vec::new();
-    clear_opt(&mut buffer.b_p_com);
-    clear_opt(&mut buffer.b_p_cms);
-    clear_opt(&mut buffer.b_p_nf);
-    clear_opt(&mut buffer.b_p_syn);
-    clear_opt(&mut buffer.b_s.b_syn_isk);
-    clear_opt(&mut buffer.b_s.b_p_spc);
-    clear_opt(&mut buffer.b_s.b_p_spf);
+    buffer.b_p_com = None;
+    buffer.b_p_cms = None;
+    buffer.b_p_nf = None;
+    buffer.b_p_syn = None;
+    buffer.b_s.b_syn_isk = None;
+    buffer.b_s.b_p_spc = None;
+    buffer.b_s.b_p_spf = None;
     free_regprog(&mut buffer.b_s.b_cap_prog);
-    clear_opt(&mut buffer.b_s.b_p_spl);
-    clear_opt(&mut buffer.b_s.b_p_spo);
-    clear_opt(&mut buffer.b_p_sua);
-    clear_opt(&mut buffer.b_p_ft);
-    clear_opt(&mut buffer.b_p_cink);
-    clear_opt(&mut buffer.b_p_cino);
-    clear_opt(&mut buffer.b_p_lop);
-    clear_opt(&mut buffer.b_p_cinsd);
-    clear_opt(&mut buffer.b_p_cinw);
-    clear_opt(&mut buffer.b_p_cot);
-    clear_opt(&mut buffer.b_p_cpt);
-    clear_opt(&mut buffer.b_p_cfu);
+    buffer.b_s.b_p_spl = None;
+    buffer.b_s.b_p_spo = None;
+    buffer.b_p_sua = None;
+    buffer.b_p_ft = None;
+    buffer.b_p_cink = None;
+    buffer.b_p_cino = None;
+    buffer.b_p_lop = None;
+    buffer.b_p_cinsd = None;
+    buffer.b_p_cinw = None;
+    buffer.b_p_cot = None;
+    buffer.b_p_cpt = None;
+    buffer.b_p_cfu = None;
     clear_callback(&mut buffer.b_cfu_cb);
-    clear_opt(&mut buffer.b_p_ofu);
+    buffer.b_p_ofu = None;
     clear_callback(&mut buffer.b_ofu_cb);
-    clear_opt(&mut buffer.b_p_tsrfu);
+    buffer.b_p_tsrfu = None;
     clear_callback(&mut buffer.b_tsrfu_cb);
     let cpt_count = buffer.b_p_cpt_count;
     clear_cpt(&mut buffer.b_p_cpt_cb, cpt_count);
     buffer.b_p_cpt_count = 0;
-    clear_opt(&mut buffer.b_p_gefm);
-    clear_opt(&mut buffer.b_p_gp);
-    clear_opt(&mut buffer.b_p_mp);
-    clear_opt(&mut buffer.b_p_efm);
-    clear_opt(&mut buffer.b_p_ep);
-    clear_opt(&mut buffer.b_p_path);
-    clear_opt(&mut buffer.b_p_tags);
-    clear_opt(&mut buffer.b_p_tc);
-    clear_opt(&mut buffer.b_p_tfu);
+    buffer.b_p_gefm = None;
+    buffer.b_p_gp = None;
+    buffer.b_p_mp = None;
+    buffer.b_p_efm = None;
+    buffer.b_p_ep = None;
+    buffer.b_p_path = None;
+    buffer.b_p_tags = None;
+    buffer.b_p_tc = None;
+    buffer.b_p_tfu = None;
     clear_callback(&mut buffer.b_tfu_cb);
-    clear_opt(&mut buffer.b_p_ffu);
+    buffer.b_p_ffu = None;
     clear_callback(&mut buffer.b_ffu_cb);
-    clear_opt(&mut buffer.b_p_dict);
-    clear_opt(&mut buffer.b_p_dia);
-    clear_opt(&mut buffer.b_p_tsr);
-    clear_opt(&mut buffer.b_p_qe);
+    buffer.b_p_dict = None;
+    buffer.b_p_dia = None;
+    buffer.b_p_tsr = None;
+    buffer.b_p_qe = None;
     buffer.b_p_ac = -1;
     buffer.b_p_ar = -1;
     buffer.b_p_fs = -1;
     buffer.b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
-    clear_opt(&mut buffer.b_p_lw);
-    clear_opt(&mut buffer.b_p_bkc);
-    clear_opt(&mut buffer.b_p_menc);
+    buffer.b_p_lw = None;
+    buffer.b_p_bkc = None;
+    buffer.b_p_menc = None;
 }
 
 // ---------------------------------------------------------------------------

@@ -26,6 +26,7 @@ use super::*;
 use crate::decoration::SignCountHalf;
 use crate::decoration::kMTMetaSignText;
 use crate::grid::default_gridview;
+use crate::optionstr::LocalOptStr;
 use crate::winlayer::FrameRef;
 use crate::winlayer::Win;
 
@@ -63,8 +64,7 @@ pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
     // 'signcolumn' with a range, or a 'statuscolumn' that may ask for the
     // count, needs the per-line counts kept up to date from now on.
     if !buf.b_signcols.autom
-        // SAFETY: the window's own 'statuscolumn' string, live with it.
-        && (unsafe { *window.w_onebuf_opt.wo_stc } != 0
+        && (window.w_onebuf_opt.wo_stc.first_byte() != 0
             || (window.w_maxscwidth > 1 && window.w_minscwidth != window.w_maxscwidth))
     {
         buf.b_signcols.autom = true;
@@ -86,7 +86,7 @@ pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
     let mut width = window.w_maxscwidth.min(buf.b_signcols.max);
     // SAFETY: as above -- the window's own 'statuscolumn' string.
     let rebuild_stc = buf.b_signcols.max != buf.b_signcols.last_max
-        && unsafe { *window.w_onebuf_opt.wo_stc } != 0;
+        && window.w_onebuf_opt.wo_stc.first_byte() != 0;
 
     if rebuild_stc {
         // Make `number_width` re-estimate the 'statuscolumn' width.

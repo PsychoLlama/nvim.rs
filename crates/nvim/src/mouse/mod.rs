@@ -43,6 +43,7 @@ use crate::grid::grid_adjust;
 use crate::mbyte::{mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::normal::sel_exclusive;
+use crate::optionstr::LocalOptStr;
 use crate::plines::{getvcols, win_chartabsize};
 use crate::search::BACKWARD;
 use crate::state::virtual_active;
@@ -210,8 +211,7 @@ impl Win {
 
     /// Whether `'statuscolumn'` is unset for this window.
     fn statuscolumn_empty(self) -> bool {
-        // SAFETY: an option string is NUL-terminated, never null.
-        unsafe { *self.w_onebuf_opt.wo_stc == NUL as c_char }
+        self.w_onebuf_opt.wo_stc.first_byte() == NUL as c_char
     }
 
     /// Whether the window's status line runs into a window to its right, so

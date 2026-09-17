@@ -35,7 +35,6 @@ use crate::normal::{
     visual_selection,
 };
 use crate::option::vars::{P_SBR, p_ch, p_sc, p_sel, p_sloc};
-use crate::optionstr::empty_option;
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
@@ -192,11 +191,10 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
     let (mut leftcol, mut rightcol): (ColNr, ColNr) = (0, 0);
     // A copy of the anchor: `getvcols` only reads it.
     let mut anchor = sel.anchor;
-    // SAFETY: both positions are in the current buffer, and the two
-    // 'showbreak' values are put back before returning.
+    // Both positions are in the current buffer, and the two 'showbreak'
+    // values are put back before returning.
     let saved_sbr = P_SBR.clear();
-    let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr;
-    Win::current().w_onebuf_opt.wo_sbr = empty_option();
+    let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr.take();
     let win = Win::current();
     let (cursor, other) = (win.cursor().raw(), &raw mut anchor);
     let (l, r) = (&raw mut leftcol, &raw mut rightcol);

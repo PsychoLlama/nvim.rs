@@ -62,6 +62,7 @@ use crate::fold::fold_adjust_cursor;
 use crate::normal::visual_active;
 use crate::option::{cpo_has, get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
 use crate::options::kOptCuloptFlagScreenline;
+use crate::optionstr::LocalOptStr;
 use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
     win_may_fill,
@@ -158,8 +159,7 @@ impl Win {
     /// into `w_nrwidth_width`, and this is on the per-line draw path, so
     /// asking it where upstream would not both costs and writes.
     fn number_col(self) -> c_int {
-        // SAFETY: an option string is NUL-terminated, never null.
-        let stc_empty = unsafe { *self.w_onebuf_opt.wo_stc == NUL as c_char };
+        let stc_empty = self.w_onebuf_opt.wo_stc.first_byte() == NUL as c_char;
         if self.w_onebuf_opt.wo_nu == 0 && self.w_onebuf_opt.wo_rnu == 0 && stc_empty {
             return 0;
         }

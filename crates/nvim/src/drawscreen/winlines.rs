@@ -17,6 +17,7 @@ use super::*;
 use crate::decoration::{DecorStateRef, SIGN_WIDTH};
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
+use crate::optionstr::LocalOptStr;
 use crate::types::CpoFlag;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -309,7 +310,7 @@ fn draw_one_line(
         // Spell checking only applies to real buffer text: a concealed line
         // or a fold whose 'foldtext' replaces it has none.
         let display_buf_line =
-            !concealed && (foldinfo.fi_lines == 0 || unsafe { *window.w_onebuf_opt.wo_fdt } == 0);
+            !concealed && (foldinfo.fi_lines == 0 || window.w_onebuf_opt.wo_fdt.first_byte() == 0);
 
         let mut zero_spv = SpellVars::default();
         let spv_arg: *mut SpellVars = if display_buf_line {

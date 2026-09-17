@@ -50,6 +50,7 @@ use crate::message_fmt::c_str;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
+use crate::optionstr::LocalOptStr;
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
@@ -640,7 +641,7 @@ pub(crate) fn prepare_help_buffer() {
     // '*', '"' and '|', plus the latin1 word characters translated help
     // files use. Only set it when needed: `buf_init_chartab` is work.
     let isk = c"!-~,^*,^|,^\",192-255";
-    if !unsafe { cstr::eq(Buf::current().b_p_isk, isk.as_ptr()) } {
+    if !unsafe { cstr::eq(Buf::current().b_p_isk.value_ptr(), isk.as_ptr()) } {
         set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
         check_buf_options(Buf::current());
         buf_init_chartab(Buf::current(), false);

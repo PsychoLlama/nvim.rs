@@ -5,15 +5,14 @@
 //! rather than a struct assignment, because a string field has to be
 //! duplicated and a few fields are deliberately *not* copied.
 //!
-//! The shared empty string every unset string option points at is never
-//! duplicated — [`copy_option_val`] hands the same pointer back — so that
-//! `free_string_option` can go on telling an owned value from an unset one
-//! by its address.
+//! A string option's local copy owns its bytes, and `None` is the shared
+//! empty string every option with no value of its own used to point at — so
+//! "duplicate the value" is a `clone` and "give it none" is `None`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 use core::mem::offset_of;
 use core::ptr;
 
@@ -25,7 +24,7 @@ use crate::indent::{briopt_check, tabstop_set};
 use crate::insexpand::{
     set_buflocal_cfu_callback, set_buflocal_cpt_callbacks, set_buflocal_ofu_callback,
 };
-use crate::memory::xstrdup;
+use crate::memory::XString;
 use crate::option::vars::{
     P_CPO, P_IMINSERT, P_IMSEARCH, P_MA, P_VSTS, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink,
     p_cino, p_cinsd, p_cinw, p_cms, p_com, p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol,
@@ -35,7 +34,7 @@ use crate::option::vars::{
 };
 
 use super::check::bin_save;
-use super::paste::paste_save;
+use super::paste::{paste_save, paste_saved_vsts};
 use crate::options::{
     BufOptIndex, buf_opt_idx, kBufOptAutoindent, kBufOptBinary, kBufOptBomb, kBufOptCindent,
     kBufOptCinkeys, kBufOptCinoptions, kBufOptCinscopedecls, kBufOptCinwords, kBufOptComments,
@@ -50,9 +49,7 @@ use crate::options::{
     kBufOptSynmaxcol, kBufOptTabstop, kBufOptTagfunc, kBufOptTextwidth, kBufOptUndofile,
     kBufOptVarsofttabstop, kBufOptVartabstop, kBufOptWrapmargin, kOptModifiable,
 };
-use crate::optionstr::{
-    check_buf_options, check_signcolumn, check_string_option, clear_string_option, empty_option,
-};
+use crate::optionstr::{LocalOptStr, check_buf_options, check_signcolumn};
 use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
 use crate::types::{Buffer, CmdModFlags, ColNr, CpoFlag, OptInt, WinOpt, Window, int16_t};
@@ -71,11 +68,6 @@ use crate::option::cpo_has;
 /// is ordinary checked code, and the borrow it hands out lasts only as long
 /// as the access that asked for it.
 type Wop = Live<WinOpt>;
-
-/// The string every unset string option shares.
-fn unset_string() -> *mut c_char {
-    empty_option()
-}
 
 /// The address of one field of the buffer `$buf` points at, computed rather
 /// than read: see [`super::field_ptr`]. The `|b: &Buffer|` argument is never
@@ -118,9 +110,8 @@ macro_rules! win_field {
 /// projects the option's own string and this makes the copy the buffer's
 /// field takes over, so the borrow never leaves the closure. A compiled-in
 /// name (`c"mac"`) goes through the same door.
-fn dup(value: &CStr) -> *mut c_char {
-    // SAFETY: a `CStr` is NUL-terminated by construction.
-    unsafe { xstrdup(value.as_ptr()) }
+fn dup(value: &CStr) -> Option<XString> {
+    Some(XString::from_cstr(value))
 }
 
 /// Give a window's option values to a freshly split one.
@@ -140,26 +131,13 @@ pub(crate) fn win_copy_options(wp_from: Win, wp_to: Win) {
     didset_window_options(wp_to, true);
 }
 
-/// A copy of a string option's value, sharing the unset string rather than
-/// duplicating it.
-///
-/// # Safety
-///
-/// `val` must be a string option's value.
-pub(crate) unsafe fn copy_option_val(val: *const c_char) -> *mut c_char {
-    if val == unset_string() {
-        return unset_string();
-    }
-    // SAFETY: the caller's value is a NUL-terminated option value.
-    unsafe { xstrdup(val) }
-}
-
 /// Copy one window's worth of option values.
 ///
 /// # Safety
 ///
-/// Both must point at `WinOpt`s, and `to`'s fields uninitialised or
-/// already released.
+/// Both must point at `WinOpt`s, and `to`'s string values must be its own
+/// -- the assignments below drop what they overwrite, so a freshly
+/// allocated `to` has to have been through [`init_winopt_strings`].
 pub(crate) unsafe fn copy_winopt(from: *mut WinOpt, to: *mut WinOpt) {
     // SAFETY: the caller's structures. Both handles borrow for the one
     // field access that asked and never across a call, so neither ever
@@ -169,23 +147,23 @@ pub(crate) unsafe fn copy_winopt(from: *mut WinOpt, to: *mut WinOpt) {
 
     t.wo_arab = f.wo_arab;
     t.wo_list = f.wo_list;
-    t.wo_lcs = unsafe { copy_option_val(f.wo_lcs) };
-    t.wo_fcs = unsafe { copy_option_val(f.wo_fcs) };
+    t.wo_lcs = f.wo_lcs.clone();
+    t.wo_fcs = f.wo_fcs.clone();
     t.wo_nu = f.wo_nu;
     t.wo_rnu = f.wo_rnu;
-    t.wo_ve = unsafe { copy_option_val(f.wo_ve) };
+    t.wo_ve = f.wo_ve.clone();
     t.wo_ve_flags = f.wo_ve_flags;
     t.wo_nuw = f.wo_nuw;
     t.wo_rl = f.wo_rl;
-    t.wo_rlc = unsafe { copy_option_val(f.wo_rlc) };
-    t.wo_sbr = unsafe { copy_option_val(f.wo_sbr) };
-    t.wo_stl = unsafe { copy_option_val(f.wo_stl) };
-    t.wo_wbr = unsafe { copy_option_val(f.wo_wbr) };
+    t.wo_rlc = f.wo_rlc.clone();
+    t.wo_sbr = f.wo_sbr.clone();
+    t.wo_stl = f.wo_stl.clone();
+    t.wo_wbr = f.wo_wbr.clone();
     t.wo_wrap = f.wo_wrap;
     t.wo_wrap_save = f.wo_wrap_save;
     t.wo_lbr = f.wo_lbr;
     t.wo_bri = f.wo_bri;
-    t.wo_briopt = unsafe { copy_option_val(f.wo_briopt) };
+    t.wo_briopt = f.wo_briopt.clone();
     t.wo_scb = f.wo_scb;
     t.wo_scb_save = f.wo_scb_save;
     t.wo_sms = f.wo_sms;
@@ -196,57 +174,55 @@ pub(crate) unsafe fn copy_winopt(from: *mut WinOpt, to: *mut WinOpt) {
     t.wo_spell = f.wo_spell;
     t.wo_cuc = f.wo_cuc;
     t.wo_cul = f.wo_cul;
-    t.wo_culopt = unsafe { copy_option_val(f.wo_culopt) };
-    t.wo_cc = unsafe { copy_option_val(f.wo_cc) };
+    t.wo_culopt = f.wo_culopt.clone();
+    t.wo_cc = f.wo_cc.clone();
     t.wo_diff = f.wo_diff;
     t.wo_diff_saved = f.wo_diff_saved;
-    t.wo_eiw = unsafe { copy_option_val(f.wo_eiw) };
-    t.wo_cocu = unsafe { copy_option_val(f.wo_cocu) };
+    t.wo_eiw = f.wo_eiw.clone();
+    t.wo_cocu = f.wo_cocu.clone();
     t.wo_cole = f.wo_cole;
-    t.wo_fdc = unsafe { copy_option_val(f.wo_fdc) };
+    t.wo_fdc = f.wo_fdc.clone();
     // The four `_save` copies only hold anything while `:diffthis` is
     // in effect; otherwise they are the unset string, not a value to
     // duplicate.
     t.wo_fdc_save = if f.wo_diff_saved != 0 {
-        unsafe { xstrdup(f.wo_fdc_save) }
+        f.wo_fdc_save.clone()
     } else {
-        unset_string()
+        None
     };
     t.wo_fen = f.wo_fen;
     t.wo_fen_save = f.wo_fen_save;
-    t.wo_fdi = unsafe { copy_option_val(f.wo_fdi) };
+    t.wo_fdi = f.wo_fdi.clone();
     t.wo_fml = f.wo_fml;
     t.wo_fdl = f.wo_fdl;
     t.wo_fdl_save = f.wo_fdl_save;
-    t.wo_fdm = unsafe { copy_option_val(f.wo_fdm) };
+    t.wo_fdm = f.wo_fdm.clone();
     t.wo_fdm_save = if f.wo_diff_saved != 0 {
-        unsafe { xstrdup(f.wo_fdm_save) }
+        f.wo_fdm_save.clone()
     } else {
-        unset_string()
+        None
     };
     t.wo_fdn = f.wo_fdn;
-    t.wo_fde = unsafe { copy_option_val(f.wo_fde) };
-    t.wo_fdt = unsafe { copy_option_val(f.wo_fdt) };
-    t.wo_fmr = unsafe { copy_option_val(f.wo_fmr) };
-    t.wo_scl = unsafe { copy_option_val(f.wo_scl) };
+    t.wo_fde = f.wo_fde.clone();
+    t.wo_fdt = f.wo_fdt.clone();
+    t.wo_fmr = f.wo_fmr.clone();
+    t.wo_scl = f.wo_scl.clone();
     t.wo_lhi = f.wo_lhi;
-    t.wo_winhl = unsafe { copy_option_val(f.wo_winhl) };
+    t.wo_winhl = f.wo_winhl.clone();
     t.wo_winbl = f.wo_winbl;
-    t.wo_stc = unsafe { copy_option_val(f.wo_stc) };
+    t.wo_stc = f.wo_stc.clone();
     t.wo_wrap_flags = f.wo_wrap_flags;
     t.wo_stl_flags = f.wo_stl_flags;
     t.wo_wbr_flags = f.wo_wbr_flags;
     t.wo_fde_flags = f.wo_fde_flags;
     t.wo_fdt_flags = f.wo_fdt_flags;
     t.wo_script_ctx = f.wo_script_ctx;
-
-    unsafe { check_winopt(to) };
 }
 
 /// The window-local string options, as the address of each field. Naming a
 /// field reads nothing, so this needs no promise of its own; what the two
 /// callers then *do* with the addresses does.
-fn winopt_strings(wop: *mut WinOpt) -> [*mut *mut c_char; 23] {
+fn winopt_strings(wop: *mut WinOpt) -> [*mut Option<XString>; 23] {
     [
         wop_field!(wop, wo_fdc),
         wop_field!(wop, wo_fdc_save),
@@ -274,24 +250,21 @@ fn winopt_strings(wop: *mut WinOpt) -> [*mut *mut c_char; 23] {
     ]
 }
 
-/// Give a window's two option sets any string values they are still missing.
-pub(crate) fn check_win_options(win: Win) {
-    // SAFETY: the caller's window, whose two option sets the addresses
-    // below name without reading it.
-    unsafe { check_winopt(win_field!(win.raw(), w_onebuf_opt)) };
-    unsafe { check_winopt(win_field!(win.raw(), w_allbuf_opt)) };
-}
-
-/// Replace any null string value with the shared unset string.
+/// Give a freshly allocated window's option set its string values.
+///
+/// For the reason [`crate::optionstr::init_buf_string_options`] states: a
+/// window and a `WinInfo` are allocated zeroed, and all-zero bytes are not
+/// a valid `Option<XString>`.
 ///
 /// # Safety
 ///
-/// `wop` must point at a `WinOpt`.
-pub(crate) unsafe fn check_winopt(wop: *mut WinOpt) {
-    // SAFETY: the caller's structure, and each address is one of its own
-    // string fields.
+/// `wop` must point at a freshly allocated `WinOpt` whose string values
+/// have not been read, written or dropped.
+pub(crate) unsafe fn init_winopt_strings(wop: *mut WinOpt) {
     for field in winopt_strings(wop) {
-        unsafe { check_string_option(field) };
+        // SAFETY: the caller's structure, and each address is one of its
+        // own string fields; `write` does not drop what was there.
+        unsafe { field.write(None) };
     }
 }
 
@@ -301,10 +274,10 @@ pub(crate) unsafe fn check_winopt(wop: *mut WinOpt) {
 ///
 /// `wop` must point at a `WinOpt` whose string values are its own.
 pub(crate) unsafe fn clear_winopt(wop: *mut WinOpt) {
-    // SAFETY: the caller's structure, and each address is one of its own
-    // string fields.
     for field in winopt_strings(wop) {
-        unsafe { clear_string_option(field) };
+        // SAFETY: the caller's structure, and each address is one of its
+        // own string fields.
+        drop(unsafe { (*field).take() });
     }
 }
 
@@ -332,10 +305,11 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     let _ = fill_culopt_flags(None, w);
     // Read each value where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
-    let fcs = w.w_onebuf_opt.wo_fcs;
-    // SAFETY: as above; 'fillchars' and 'listchars' are string options.
+    let fcs = w.w_onebuf_opt.wo_fcs.value_ptr();
+    // SAFETY: as above; 'fillchars' and 'listchars' are string options, and
+    // the pointer is the window's own field, which nothing below writes.
     let _ = unsafe { set_chars_option(window, fcs, kFillchars, true) };
-    let lcs = w.w_onebuf_opt.wo_lcs;
+    let lcs = w.w_onebuf_opt.wo_lcs.value_ptr();
     let _ = unsafe { set_chars_option(window, lcs, kListchars, true) };
     // SAFETY: the caller's window.
     unsafe { parse_winhl_opt(ptr::null(), Some(window)) };
@@ -396,13 +370,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         // — jumping back to one with CTRL-T or CTRL-O must not reset it.
         let dont_do_help = (flags & BCO_NOHELP as c_int != 0 && b.b_help) || b.b_p_initialized;
         // 'iskeyword' is the one string that survives the free below.
-        let save_p_isk = if dont_do_help {
-            let saved = b.b_p_isk;
-            b.b_p_isk = ptr::null_mut();
-            saved
-        } else {
-            ptr::null_mut()
-        };
+        let save_p_isk = if dont_do_help { b.b_p_isk.take() } else { None };
 
         if b.b_p_initialized {
             free_buf_options(buffer, false);
@@ -418,8 +386,8 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
                 b'u' => dup(c"unix"),
                 _ => p_ff(dup),
             };
-            b.b_p_bh = unset_string();
-            b.b_p_bt = unset_string();
+            b.b_p_bh = None;
+            b.b_p_bt = None;
         }
 
         b.b_p_ai = c_int::from(p_ai());
@@ -485,11 +453,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         } else {
             p_vsts(tabstop_array)
         };
-        b.b_p_vsts_nopaste = match paste_save().vsts {
-            saved if saved.is_null() => ptr::null_mut(),
-            // SAFETY: the paste record's saved value is a live C string.
-            saved => dup(unsafe { cstr::at(saved) }),
-        };
+        b.b_p_vsts_nopaste = paste_saved_vsts();
 
         b.b_p_com = p_com(dup);
         copy_sctx(b, kBufOptComments);
@@ -520,18 +484,18 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         copy_sctx(b, kBufOptLispoptions);
         // 'filetype' and 'syntax' start empty: the autocommands that
         // set them have not run for this buffer yet.
-        b.b_p_ft = unset_string();
+        b.b_p_ft = None;
         b.b_p_pi = c_int::from(p_pi());
         copy_sctx(b, kBufOptPreserveindent);
         b.b_p_cinw = p_cinw(dup);
         copy_sctx(b, kBufOptCinwords);
         b.b_p_lisp = c_int::from(p_lisp());
         copy_sctx(b, kBufOptLisp);
-        b.b_p_syn = unset_string();
+        b.b_p_syn = None;
         b.b_p_smc = p_smc();
         copy_sctx(b, kBufOptSynmaxcol);
 
-        b.b_s.b_syn_isk = unset_string();
+        b.b_s.b_syn_isk = None;
         b.b_s.b_p_spc = p_spc(dup);
         copy_sctx(b, kBufOptSpellcapcheck);
         // SAFETY: `b_s` is the buffer's own syntax block.
@@ -548,7 +512,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         copy_sctx(b, kBufOptIndentexpr);
         b.b_p_indk = p_indk(dup);
         copy_sctx(b, kBufOptIndentkeys);
-        b.b_p_fp = unset_string();
+        b.b_p_fp = None;
         b.b_p_fex = p_fex(dup);
         copy_sctx(b, kBufOptFormatexpr);
         b.b_p_sua = p_sua(dup);
@@ -589,7 +553,8 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
             buf_field!(buffer.raw(), b_p_lw),
             buf_field!(buffer.raw(), b_p_menc),
         ] {
-            unsafe { *field = unset_string() };
+            // SAFETY: the address names a field of the caller's buffer.
+            drop(unsafe { (*field).take() });
         }
         b.b_bkc_flags = 0 as c_uint;
         b.b_tc_flags = 0 as c_uint;
@@ -617,10 +582,8 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
             b.b_help = false;
             // The buffer is no longer a help buffer, so 'buftype' must
             // not still say "help".
-            // SAFETY: 'buftype' is a string option, so never null, and
-            // its variable is the buffer's own.
-            if (unsafe { *b.b_p_bt }) as c_int == 'h' as c_int {
-                unsafe { clear_string_option(buf_field!(buffer.raw(), b_p_bt)) };
+            if b.b_p_bt.bytes().first() == Some(&b'h') {
+                b.b_p_bt = None;
             }
             b.b_p_ma = c_int::from(p_ma());
             copy_sctx(b, kBufOptModifiable);

@@ -32,8 +32,7 @@ pub fn grep_internal(cmdidx: CmdIdx) -> bool {
     ) {
         return false;
     }
-    // SAFETY: the option strings of a live buffer are NUL-terminated.
-    unsafe { local_or_global(Buf::current().b_p_gp, P_GP) == c"internal" }
+    local_or_global(&Buf::current().b_p_gp, P_GP) == c"internal"
 }
 
 /// The name the `QuickFixCmdPre`/`QuickFixCmdPost` autocommands are matched
@@ -99,8 +98,7 @@ pub fn ex_make(excmd: &mut ExArg) {
         return;
     }
 
-    // SAFETY: a live buffer's option value is NUL-terminated.
-    let enc = unsafe { local_or_global(Buf::current().b_p_menc, P_MENC) };
+    let enc = local_or_global(&Buf::current().b_p_menc, P_MENC);
 
     let au_name = make_get_auname(excmd.cmdidx);
     if let Some(name) = au_name {
@@ -130,7 +128,7 @@ pub fn ex_make(excmd: &mut ExArg) {
     let errorformat = if is_make {
         P_EFM.get()
     } else {
-        unsafe { local_or_global(Buf::current().b_p_gefm, P_GEFM) }
+        local_or_global(&Buf::current().b_p_gefm, P_GEFM)
     };
     let newlist = !matches!(excmd.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
 

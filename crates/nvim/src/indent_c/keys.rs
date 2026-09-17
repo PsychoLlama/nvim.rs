@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::optionstr::LocalOptStr;
 use crate::strings::vim_strchr;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
@@ -21,9 +22,8 @@ use core::ffi::{c_char, c_int};
 /// Whether C indenting is on: `'cindent'` or a non-empty `'indentexpr'`, and
 /// not `'paste'`.
 pub fn cindent_on() -> bool {
-    // SAFETY: 'indentexpr' is a NUL-terminated option string.  The cheaper
-    // tests are kept in front of it, as upstream has them.
-    !p_paste() && (Buf::current().b_p_cin != 0 || unsafe { *Buf::current().b_p_inde } != 0)
+    // The cheaper tests are kept in front, as upstream has them.
+    !p_paste() && (Buf::current().b_p_cin != 0 || !Buf::current().b_p_inde.bytes().is_empty())
 }
 
 /// Which prefix of a 'cinkeys' item this call is asking about.
@@ -53,11 +53,13 @@ pub fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> bool {
     }
 
     // 'indentexpr' set means 'indentkeys' rather than 'cinkeys'.
-    // SAFETY: 'indentexpr' is a NUL-terminated option string.
-    let mut look = if unsafe { *Buf::current().b_p_inde } != 0 {
-        Buf::current().b_p_indk
+    //
+    // The walk below reads the option's own buffer, as upstream's does;
+    // nothing between here and the end of it can set an option.
+    let mut look = if !Buf::current().b_p_inde.bytes().is_empty() {
+        Buf::current().b_p_indk.value_ptr()
     } else {
-        Buf::current().b_p_cink
+        Buf::current().b_p_cink.value_ptr()
     };
 
     loop {
@@ -355,8 +357,7 @@ unsafe fn word_matches(
 
 /// Reindent the current line with 'indentexpr' or the C indent.
 pub fn do_c_expr_indent() {
-    // SAFETY: 'indentexpr' is a NUL-terminated option string.
-    if unsafe { *Buf::current().b_p_inde } != 0 {
+    if !Buf::current().b_p_inde.bytes().is_empty() {
         fixthisline(Some(get_expr_indent));
     } else {
         fixthisline(Some(get_c_indent));

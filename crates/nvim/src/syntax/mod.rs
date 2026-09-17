@@ -66,14 +66,13 @@ use crate::highlight_group::{
 use crate::indent_c::find_start_comment;
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
-use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
+use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz};
 use crate::message::state::msg_col;
 use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
     msg_putchar, msg_str, msg_str_hl, msg_title,
 };
 
-use crate::optionstr::clear_string_option;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::input::line_breakcheck;
 use crate::path::path_is_absolute;

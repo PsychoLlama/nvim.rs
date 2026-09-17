@@ -36,6 +36,7 @@ use crate::normal::{
 };
 use crate::ops::clear_oparg;
 use crate::option::{local_or_global, magic_isset};
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
@@ -246,7 +247,7 @@ fn ident_escapes(cmdchar: c_int, tag_cmd: bool) -> &'static CStr {
     }
     // A help tag may contain any of these, so nothing is escaped.
     // SAFETY: 'filetype' is a NUL-terminated option string.
-    if unsafe { cstr::eq_bytes(Buf::current().b_p_ft, b"help") } {
+    if unsafe { cstr::eq_bytes(Buf::current().b_p_ft.value_ptr(), b"help") } {
         c""
     } else {
         c"\\|\"\n["
@@ -352,7 +353,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     // 'keywordprg', which decides what `K` does. A copy, because it is
     // built into a command line further down.
     // SAFETY: `curbuf` is live and 'keywordprg' is NUL-terminated.
-    let keywordprg = unsafe { local_or_global(Buf::current().b_p_kp, P_KP) };
+    let keywordprg = local_or_global(&Buf::current().b_p_kp, P_KP);
     let kp = keywordprg.as_ptr().cast_mut();
     let kp_helpbang = keywordprg == c":help!";
     let kp_help =

@@ -27,6 +27,7 @@ use crate::ascii::ascii_iswhite;
 use crate::cursor::get_cursor_pos_ptr;
 use crate::mbyte::{utf_iscomposing_first, utf_ptr2char};
 use crate::option::vars::p_paste;
+use crate::optionstr::LocalOptStr;
 use crate::types::FoFlag;
 use crate::window::win_fdccol_count;
 use crate::winlayer::graph::cmdwin_buf;
@@ -70,7 +71,7 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 pub fn has_format_option(x: FoFlag) -> bool {
     // The dereference stays behind the `&&`: with no current buffer the
     // left half is what keeps the right one from running.
-    unsafe { !p_paste() && x.is_in(CStr::from_ptr(Buf::current().b_p_fo)) }
+    unsafe { !p_paste() && x.is_in(CStr::from_ptr(Buf::current().b_p_fo.value_ptr())) }
 }
 
 /// `WHITECHAR` (`v0.12.4:textformat.c:50`): `cc` is white space, and the

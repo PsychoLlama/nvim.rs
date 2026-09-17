@@ -64,6 +64,7 @@ use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_visual;
 use crate::option::vars::{p_awa, p_sol, p_ur, p_verbose};
 use crate::option::{ScrollMargin, ScrollOff, shortmess};
+use crate::optionstr::LocalOptStr;
 use crate::path::fix_fname;
 use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;
@@ -424,7 +425,7 @@ pub(crate) unsafe fn do_ecmd(
         // language.  Can only be done once the buffer is properly set up.
         if state.did_get_winopts
             && Win::current().w_onebuf_opt.wo_spell != 0
-            && unsafe { *(*Win::current().w_s).b_p_spl } as c_int != NUL
+            && unsafe { (*Win::current().w_s).b_p_spl.first_byte() } as c_int != NUL
         {
             let _ = parse_spelllang(Win::current());
         }

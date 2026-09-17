@@ -16,6 +16,7 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_LAST;
 use crate::search::{
@@ -344,7 +345,7 @@ unsafe fn echo_search_cmd(
         }
 
         if Win::current().w_onebuf_opt.wo_rl != 0
-            && unsafe { *Win::current().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int
+            && Win::current().w_onebuf_opt.wo_rlc.first_byte() as c_int == 's' as c_int
         {
             unsafe { reverse_echo(&mut echo) };
         }
@@ -711,7 +712,8 @@ pub unsafe fn do_search(
 /// blinks in left-to-right mode and the closing one in right-to-left.
 fn mps_shows_match(c: c_int) -> bool {
     let rightleft = (Win::current().w_onebuf_opt.wo_rl != 0) ^ p_ri();
-    let mut p = Buf::current().b_p_mps;
+    // The walk reads 'matchpairs' in place, as upstream's does.
+    let mut p = Buf::current().b_p_mps.value_ptr();
     while unsafe { *p } as c_int != NUL {
         if unsafe { utf_ptr2char(p) } == c && rightleft {
             return true;

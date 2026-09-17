@@ -19,6 +19,7 @@ use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::change::*;
+use crate::optionstr::LocalOptStr;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
@@ -261,7 +262,7 @@ unsafe fn plan_end(plan: &mut LeaderPlan, mut p: Com, dir: c_int, saved_line: *m
 
     // `O` on the end of a comment inserts the middle leader, which is the
     // item before this one -- so search backwards for it.
-    let com = Buf::current().b_p_com;
+    let com = Buf::current().b_p_com.value_ptr();
     while p.raw() > com && p.byte() != ',' as c_int {
         p.back();
     }

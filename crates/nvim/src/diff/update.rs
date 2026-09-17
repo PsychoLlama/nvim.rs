@@ -288,10 +288,8 @@ unsafe fn diff_write(
     }
 
     let was_empty = buffer.b_ml.ml_flags.masked(MlFlags::EMPTY);
-    let save_ff = buffer.b_p_ff;
     // The diff must see the file the way the buffer holds it.
-    // SAFETY: a static string; `xstrdup` aborts rather than fail.
-    buffer.b_p_ff = unsafe { xstrdup(c"unix".as_ptr()) };
+    let save_ff = buffer.b_p_ff.replace(XString::from_cstr(c"unix"));
     // Writing the buffer is an implementation detail of the diff, so it
     // must not move the '[ and '] marks.
     //
@@ -312,8 +310,7 @@ unsafe fn diff_write(
     // short name and no `ExArg` are wanted.
     let r = unsafe { buf_write(buffer, name, noshort, start, end, None, req) };
     cmdmod_set_flags(CmdModFlags::SANDBOX.when(save_cmod_flags));
-    // SAFETY: the option string the buffer itself holds.
-    unsafe { free_string_option(buffer.b_p_ff) };
+    // The forced "unix" goes when the saved value moves back in.
     buffer.b_p_ff = save_ff;
     buffer.b_ml.ml_flags = buffer.b_ml.ml_flags.without(MlFlags::EMPTY) | was_empty;
     r

@@ -37,6 +37,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
+use crate::optionstr::LocalOptStr;
 
 /// One part of a comma-separated option, appended to `part`, with the rest of
 /// the option answered back.
@@ -83,7 +84,7 @@ pub fn starts_with_cinword(line: &[u8]) -> bool {
         .unwrap_or(line.len());
 
     // SAFETY: 'cinwords' is a NUL-terminated option string of this buffer.
-    let words = unsafe { cstr::bytes_at(Buf::current().b_p_cinw) };
+    let words = unsafe { cstr::bytes_at(Buf::current().b_p_cinw.value_ptr()) };
     let mut rest = words;
     let mut word = Vec::with_capacity(words.len());
     while !rest.is_empty() {
@@ -206,7 +207,7 @@ fn is_option_label(line: &[u8], at: usize, option: &[u8]) -> bool {
 pub(crate) fn is_scope_decl(line: &[u8], at: usize) -> bool {
     // SAFETY: 'cinscopedecls' is a NUL-terminated option string of this
     // buffer, and `is_option_label` only reads the bytes it is handed.
-    let decls = unsafe { cstr::bytes_at(Buf::current().b_p_cinsd) };
+    let decls = unsafe { cstr::bytes_at(Buf::current().b_p_cinsd.value_ptr()) };
     is_option_label(line, at, decls)
 }
 

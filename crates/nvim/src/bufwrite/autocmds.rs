@@ -22,7 +22,7 @@
 
 use crate::buffer::{BufFlags, buf_is_nofilename, current_buf};
 use crate::ex_docmd::cmdmod_has;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::AutoEvent;
 use core::ffi::c_char;
@@ -199,9 +199,8 @@ pub(crate) fn buf_write_do_autocmds(
         no_wait_return.set(no_wait_return.get() - 1);
         msg_scroll.set(msg_save);
         if nofile_err {
-            let buftype = Buf::current().b_p_bt;
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let buftype = unsafe { c_str(buftype) };
+            let buftype = Buf::current().b_p_bt.clone().unwrap_or_default();
+            let buftype = msg_bytes(&buftype);
             semsg!("E676: No matching autocommands for buftype={buftype} buffer");
         }
         if nofile_err || aborting() {

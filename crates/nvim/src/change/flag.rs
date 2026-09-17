@@ -23,6 +23,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::buffer::BufFlags;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
 use crate::types::NUL;
 use crate::winlayer::Buf;
@@ -181,14 +182,13 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
 ///
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
 pub fn save_file_ff(mut buffer: Buf) {
-    // SAFETY: 'fileformat' is the buffer's own one-character option string.
-    buffer.b_start_ffc = c_int::from(unsafe { *buffer.b_p_ff }.cast_unsigned());
+    buffer.b_start_ffc = c_int::from(buffer.b_p_ff.first_byte().cast_unsigned());
     buffer.b_start_eof = buffer.b_p_eof;
     buffer.b_start_eol = buffer.b_p_eol;
     buffer.b_start_bomb = buffer.b_p_bomb;
 
     // Only free and allocate when the value actually changed.
-    let (recorded, current) = (buffer.b_start_fenc, buffer.b_p_fenc);
+    let (recorded, current) = (buffer.b_start_fenc, buffer.b_p_fenc.value_ptr());
     // SAFETY: both are NUL-terminated option strings, and `b_start_fenc` is
     // this buffer's own allocation to replace.
     if recorded.is_null() || !unsafe { cstr::eq(recorded, current) } {
@@ -217,8 +217,7 @@ pub fn file_ff_differs(buffer: Buf, ignore_empty: bool) -> bool {
     {
         return false;
     }
-    // SAFETY: 'fileformat' is the buffer's own one-character option string.
-    if buffer.b_start_ffc != c_int::from(unsafe { *buffer.b_p_ff }) {
+    if buffer.b_start_ffc != c_int::from(buffer.b_p_ff.first_byte()) {
         return true;
     }
     // 'endofline' and 'endoffile' only matter with 'binary' set or
@@ -231,10 +230,9 @@ pub fn file_ff_differs(buffer: Buf, ignore_empty: bool) -> bool {
     if buffer.b_p_bin == 0 && buffer.b_start_bomb != buffer.b_p_bomb {
         return true;
     }
-    let (recorded, current) = (buffer.b_start_fenc, buffer.b_p_fenc);
+    let (recorded, current) = (buffer.b_start_fenc, buffer.b_p_fenc.value_ptr());
     if recorded.is_null() {
-        // SAFETY: the buffer's own NUL-terminated option string.
-        return c_int::from(unsafe { *current }) != NUL;
+        return !buffer.b_p_fenc.bytes().is_empty();
     }
     // SAFETY: both are the buffer's own NUL-terminated option strings.
     unsafe { !cstr::eq(recorded, current) }

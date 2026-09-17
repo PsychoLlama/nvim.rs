@@ -57,6 +57,7 @@ use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
+use crate::optionstr::LocalOptStr;
 use crate::types::{
     AlignTextPos, ApiDict, Array, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
     OptionSetFlags, ScreenChar, StatusCol, StlClickDefinition, StlClickDefinition_type_0,
@@ -498,22 +499,6 @@ pub(crate) fn is_redrawing() -> bool {
     redrawing()
 }
 
-/// The first byte of an option string, which is what the "is it set?" tests
-/// read.
-///
-/// Safe because every option of string type holds a NUL-terminated string
-/// from the moment the option table is initialised; there is no window in
-/// which one is null.
-pub(crate) fn opt_first(s: *const c_char) -> c_char {
-    // SAFETY: the invariant above.
-    unsafe { *s }
-}
-
-/// Whether an option string is empty, i.e. C's `*wp->w_p_stl == NUL`.
-pub(crate) fn opt_is_empty(s: *const c_char) -> bool {
-    opt_first(s) == 0
-}
-
 /// The active attribute of highlight group `hlf`, i.e. C's `HL_ATTR`.
 pub(crate) fn hl_attr(hlf: c_int) -> c_int {
     // SAFETY: the attribute table is built before the first redraw and is
@@ -619,7 +604,7 @@ pub unsafe fn build_statuscol_str(
     let job = StlJob {
         win,
         // SAFETY: the window's own option string.
-        fmt: unsafe { Fmt::copy_of(win.w_onebuf_opt.wo_stc) },
+        fmt: unsafe { Fmt::copy_of(win.w_onebuf_opt.wo_stc.value_ptr()) },
         opt: (kOptStatuscolumn, OptionSetFlags::LOCAL),
         fillchar: 0,
         maxwidth: stcp.width,

@@ -24,7 +24,6 @@ use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
 
-use crate::ascii::ascii_isdigit;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{BufFlags, do_autochdir};
 use crate::change::save_file_ff;
@@ -56,7 +55,7 @@ use crate::option::vars::{
     p_window, p_wiw,
 };
 use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
-use crate::optionstr::check_signcolumn;
+use crate::optionstr::{LocalOptStr, check_signcolumn};
 use crate::os::cshim::gettext;
 use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::{ll_resize_stack, qf_resize_stack};
@@ -66,7 +65,7 @@ use crate::startup::{full_screen, readonlymode, starting};
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    Buffer, ColNr, LineNr, NUL, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv,
+    Buffer, ColNr, LineNr, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv,
     ptrdiff_t, uint8_t,
 };
 use crate::ui::state::{Columns, Rows};
@@ -454,7 +453,7 @@ pub(crate) fn did_set_number_relativenumber(args: &mut OptSet) -> Result<(), Opt
     let mut win = unsafe { Frame::read(args) }.win;
     // A 'statuscolumn' draws the number itself, so the cached width has
     // to be recomputed rather than reused.
-    if (unsafe { *win.w_onebuf_opt.wo_stc }) != NUL as c_char {
+    if !win.w_onebuf_opt.wo_stc.bytes().is_empty() {
         win.w_nrwidth_line_count = 0 as LineNr;
     }
     let _ = unsafe { check_signcolumn(ptr::null_mut(), Some(win)) };
@@ -757,10 +756,11 @@ pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
 
     let _syn_recursive = Depth::of(&syn_recursive);
     buffer.b_flags |= BufFlags::SYN_SET;
+    let syn = buffer.b_p_syn.value_ptr();
     unsafe {
         apply_autocmds(
             AutoEvent::Syntax,
-            buffer.b_p_syn,
+            syn,
             buffer.b_fname,
             value_changed || syn_recursive.get() == 1,
             Some(buffer),
@@ -775,31 +775,31 @@ pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
 pub(crate) fn do_spelllang_source(win: Win) {
     let mut fname: [c_char; 200] = [0; 200];
 
-    // SAFETY: the caller's window is live, and its 'spelllang' is a
-    // NUL-terminated option value.
-    let mut q = unsafe { (*win.w_s).b_p_spl };
+    // SAFETY: the caller's window is live, so its syntax block is.
+    let value = unsafe { &(*win.w_s).b_p_spl };
     // "cjk" is a modifier, not a language.
-    if unsafe { cstr::starts_with(q, b"cjk,") } {
-        q = unsafe { q.add(4) };
+    let rest = value
+        .bytes()
+        .strip_prefix(b"cjk,".as_slice())
+        .unwrap_or_else(|| value.bytes());
+    let name_len = rest
+        .iter()
+        .take_while(|&&b| b.is_ascii_alphanumeric() || b == b'-')
+        .count();
+    if name_len == 0 {
+        return;
     }
-    let mut p = q;
-    while unsafe { *p } != NUL as c_char {
-        let c = unsafe { *p } as c_int;
-        if !((unsafe { *p } as u8).is_ascii_alphabetic() || ascii_isdigit(c) || c == '-' as c_int) {
-            break;
-        }
-        p = unsafe { p.add(1) };
-    }
-    if p > q {
-        unsafe {
-            vim_snprintf(
-                fname.as_mut_ptr(),
-                size_of::<[c_char; 200]>(),
-                c"spell/%.*s.*".as_ptr(),
-                p.offset_from(q) as c_int,
-                q,
-            )
-        };
-        let _ = unsafe { source_runtime_vim_lua(fname.as_mut_ptr(), RuntimeOpts::ALL) };
-    }
+    // SAFETY: `fname` is the buffer the formatter is told the size of, and
+    // the format's two arguments are a length and the bytes it measures.
+    unsafe {
+        vim_snprintf(
+            fname.as_mut_ptr(),
+            size_of::<[c_char; 200]>(),
+            c"spell/%.*s.*".as_ptr(),
+            name_len as c_int,
+            rest.as_ptr().cast::<c_char>(),
+        );
+    };
+    // SAFETY: the formatter left a NUL-terminated name in `fname`.
+    let _ = unsafe { source_runtime_vim_lua(fname.as_mut_ptr(), RuntimeOpts::ALL) };
 }

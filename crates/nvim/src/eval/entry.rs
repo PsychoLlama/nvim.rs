@@ -44,6 +44,7 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::{called_emsg, did_emsg};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
+use crate::optionstr::LocalOptStr;
 use crate::runtime::sourcing_a_script;
 use crate::runtime::state::current_sctx;
 use crate::types::{
@@ -663,7 +664,7 @@ pub unsafe fn eval_foldexpr(window: Win, marker: *mut c_int) -> c_int {
     let saved_sctx: ScriptCtx = current_sctx.get();
     let use_sandbox = was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL);
     // SAFETY: an option string is NUL-terminated.
-    let arg = unsafe { skipwhite(window.w_onebuf_opt.wo_fde) };
+    let arg = unsafe { skipwhite(window.w_onebuf_opt.wo_fde.value_ptr()) };
     current_sctx.set(window.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
     let retval: VarNumber = {
         let _no_emsg = Suppress::emsg();
@@ -719,8 +720,7 @@ pub fn eval_foldtext(window: Win) -> Object {
     }
 
     let use_sandbox = was_set_insecurely(window, kOptFoldtext, OptionSetFlags::LOCAL);
-    // SAFETY: as above; the window outlives this call.
-    let arg = window.w_onebuf_opt.wo_fdt;
+    let arg = window.w_onebuf_opt.wo_fdt.value_ptr();
     let mut funccal_entry = FuncCallEntry {
         top_funccal: null_mut(),
         next: null_mut(),

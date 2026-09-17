@@ -42,6 +42,7 @@ use crate::types::{
 };
 use crate::window::check_colorcolumn;
 
+use super::LocalOptStr;
 use super::frame::{invalid, local_window, old_value, varp, win};
 use super::{
     COCU_ALL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, WW_ALL,
@@ -335,7 +336,7 @@ pub fn did_set_virtualedit(args: &mut OptSet) -> Result<(), OptError> {
     // A copy, so that the global value outlives the projection: `:set` rate.
     let global = P_VE.get();
     let value = if local {
-        wp.w_onebuf_opt.wo_ve
+        wp.w_onebuf_opt.wo_ve.value_ptr()
     } else {
         global.as_ptr().cast_mut()
     };

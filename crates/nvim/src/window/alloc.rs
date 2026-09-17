@@ -33,8 +33,8 @@ use crate::hashtab::hash_init;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
 use crate::memory::xcalloc;
-use crate::option::clear_winopt;
 use crate::option::vars::p_ch;
+use crate::option::{clear_winopt, init_winopt_strings};
 use crate::quickfix::qf_free_all;
 use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
@@ -63,20 +63,24 @@ fn zeroed<T>() -> *mut T {
     unsafe { xcalloc(1, size_of::<T>()) }.cast::<T>()
 }
 
-/// A fresh window, zeroed but for the two fields that own an allocation.
+/// A fresh window, zeroed but for the fields that own an allocation.
 ///
 /// All-zero bytes are not a valid `ScreenGrid` -- its cell buffers are
 /// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
-/// a `HashSet` and carries a hasher, so both are written before anything can
-/// read or drop them.
+/// a `HashSet` and carries a hasher, nor either `WinOpt`'s string options,
+/// for the reason `optionstr::init_buf_string_options` states. All four are
+/// written before anything can read or drop them.
 fn zeroed_window() -> Win {
     let wp = zeroed::<Window>();
-    // SAFETY: a fresh allocation this thread alone holds; the zeroed grid
-    // and set are overwritten, never read. The window is live from here on,
-    // which is what `Win::new` asks -- `alloc` registers it a few lines down.
+    // SAFETY: a fresh allocation this thread alone holds; the zeroed grid,
+    // set and option strings are overwritten, never read. The window is
+    // live from here on, which is what `Win::new` asks -- `alloc` registers
+    // it a few lines down.
     unsafe {
         (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty());
         (&raw mut (*wp).w_ns_set).write(id_set());
+        init_winopt_strings(&raw mut (*wp).w_onebuf_opt);
+        init_winopt_strings(&raw mut (*wp).w_allbuf_opt);
         Win::new(wp)
     }
 }

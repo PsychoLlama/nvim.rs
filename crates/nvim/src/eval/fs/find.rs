@@ -43,6 +43,7 @@ use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::memory::xfree;
 use crate::option::local_or_global_raw;
 use crate::option::vars::{P_PATH, p_wic};
+use crate::optionstr::LocalOptStr;
 use crate::types::{
     BackslashEscape, EvalFuncData, Expand, ExpandContext, GArray, Pos, ScriptCtx, TypVal, VAR_LIST,
     VAR_STRING, VarNumber, Vv, kListLenUnknown, ptrdiff_t, size_t,
@@ -208,7 +209,7 @@ fn free(p: *mut c_char) {
 fn search_path() -> *mut c_char {
     // SAFETY: `curbuf` names the live current buffer, and its option values
     // are NUL-terminated.
-    unsafe { local_or_global_raw(Buf::current().b_p_path, P_PATH) }
+    unsafe { local_or_global_raw(&Buf::current().b_p_path, P_PATH) }
 }
 
 /// The suffixes `findfile()` tries, and none for `finddir()`.
@@ -216,8 +217,7 @@ fn suffixes(find_what: c_int) -> *mut c_char {
     if find_what == FINDFILE_DIR as c_int {
         return c"".as_ptr().cast_mut();
     }
-    // SAFETY: `curbuf` names the live current buffer.
-    Buf::current().b_p_sua
+    Buf::current().b_p_sua.value_ptr()
 }
 
 /// Set `v:val`, or clear it when `name` is NULL.

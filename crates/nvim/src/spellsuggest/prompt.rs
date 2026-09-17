@@ -52,6 +52,7 @@ use crate::mouse::state::mouse_row;
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::option::vars::p_verbose;
 use crate::options::kOptBoFlagSpell;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext;
 use crate::search::FORWARD;
 use crate::smsg;
@@ -105,7 +106,7 @@ pub(crate) fn spell_suggest(count: c_int) {
 fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     // SAFETY: the caller guarantees the window and its spell state; `line`
     // is owned here and outlives every pointer taken into it.
-    if unsafe { *(*Win::current().w_s).b_p_spl } as c_int == NUL {
+    if unsafe { (*Win::current().w_s).b_p_spl.first_byte() } as c_int == NUL {
         emsg(gettext(e_no_spell));
         return;
     }

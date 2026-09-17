@@ -33,6 +33,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::default_gridview;
 use crate::highlight_group::HLF_C;
 use crate::memory::xstrlcpy;
+use crate::optionstr::LocalOptStr;
 use crate::os::env::home_replace;
 use crate::types::MAXPATHL;
 use crate::types::ui::kUIWildmenu;
@@ -60,7 +61,7 @@ pub fn win_redr_status(window: Win) {
     } else if !is_redrawing() {
         // Not now -- the popup menu may be drawn over it.
         win.w_redr_status = true;
-    } else if !opt_is_empty(win.w_onebuf_opt.wo_stl)
+    } else if !win.w_onebuf_opt.wo_stl.bytes().is_empty()
         || !win.w_floating
         || (is_stl_global && win.is_current())
     {

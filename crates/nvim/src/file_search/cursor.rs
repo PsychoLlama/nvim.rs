@@ -15,6 +15,7 @@ use crate::cstr;
 use crate::guard::Script;
 use crate::message_fmt::c_str;
 use crate::normal::visual_active;
+use crate::optionstr::LocalOptStr;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{FAIL, OptionSetFlags, Vv};
@@ -255,7 +256,7 @@ pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut 
 
     let res = unsafe {
         eval_to_string_safe(
-            Buf::current().b_p_inex,
+            Buf::current().b_p_inex.value_ptr(),
             was_set_insecurely(Win::current(), kOptIncludeexpr, OptionSetFlags::LOCAL),
             true,
         )
@@ -308,7 +309,7 @@ pub(crate) unsafe fn find_file_name_in_path(
     }
 
     let mut tofree: *mut c_char = ptr::null_mut();
-    if options.has(FileNameOpts::INCL) && unsafe { *Buf::current().b_p_inex } != 0 {
+    if options.has(FileNameOpts::INCL) && Buf::current().b_p_inex.first_byte() != 0 {
         tofree = unsafe { eval_includeexpr(name, len) };
         if !tofree.is_null() {
             name = tofree;
@@ -338,7 +339,7 @@ pub(crate) unsafe fn find_file_name_in_path(
         // 'includeexpr' (unless done already).
         if file_name.is_null()
             && !options.has(FileNameOpts::INCL)
-            && unsafe { *Buf::current().b_p_inex } != 0
+            && Buf::current().b_p_inex.first_byte() != 0
         {
             tofree = unsafe { eval_includeexpr(name, len) };
             if !tofree.is_null() {

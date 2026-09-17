@@ -26,6 +26,7 @@ use crate::normal::{
     with_visual_anchor,
 };
 use crate::option::vars::p_sel;
+use crate::optionstr::LocalOptStr;
 use crate::pos::{equalpos, lt};
 use crate::types::{ColNr, NUL, OpArg};
 
@@ -128,7 +129,7 @@ unsafe fn quoted_span(
     vis_empty: bool,
     vis_bef_curs: bool,
 ) -> Option<(c_int, c_int)> {
-    let qe = Buf::current().b_p_qe;
+    let qe = Buf::current().b_p_qe.value_ptr();
     // SAFETY, for all five: the caller guarantees `line` is the current line
     // and so NUL-terminated, and 'quoteescape' is a NUL-terminated option
     // string -- between them that is everything the two searches ask of their

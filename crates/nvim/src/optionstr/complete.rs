@@ -22,6 +22,7 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::types::{NUL, OptError, OptSet, OptionSetFlags};
 
+use super::LocalOptStr;
 use super::frame::{invalid, varp, win};
 use super::{
     CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, free_string_option, illegal_char, illegal_char_after_chr,
@@ -169,7 +170,7 @@ pub fn did_set_completeopt(args: &mut OptSet) -> Result<(), OptError> {
     // A copy, so that the global value outlives the projection: `:set` rate.
     let global = P_COT.get();
     let value = if local {
-        buf.b_p_cot
+        buf.b_p_cot.value_ptr()
     } else {
         if !opt_flags.has(OptionSetFlags::GLOBAL) {
             // A plain `:set` drops the buffer's own answer.
@@ -315,7 +316,7 @@ pub fn did_set_tagcase(args: &mut OptSet) -> Result<(), OptError> {
     // A copy, so that the global value outlives the projection: `:set` rate.
     let global = P_TC.get();
     let value = if local {
-        buf.b_p_tc
+        buf.b_p_tc.value_ptr()
     } else {
         global.as_ptr().cast_mut()
     };

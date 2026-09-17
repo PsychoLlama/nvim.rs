@@ -37,6 +37,7 @@ use crate::memory::xmalloc;
 use crate::option::skip_to_option_part;
 use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
+use crate::optionstr::LocalOptStr;
 use crate::path::path_has_wildcard;
 use crate::types::{Failed, NUL, UVarNumber, VarNumber, uint8_t, uint64_t};
 use ::libc::abort;
@@ -277,7 +278,16 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     {
         return false;
     }
-    if unsafe { parse_isopt(buffer.b_p_isk, IsoptTable::Keyword, Some(buffer), false) }.is_err() {
+    if unsafe {
+        parse_isopt(
+            buffer.b_p_isk.value_ptr(),
+            IsoptTable::Keyword,
+            Some(buffer),
+            false,
+        )
+    }
+    .is_err()
+    {
         return false;
     }
     chartab_initialized.set(true);

@@ -69,6 +69,7 @@ use super::slang::slang_free;
 use super::{
     MAXWLEN, REGION_ALL, SpellLoad, first_lang, int_wordlist, kEqualFiles, repl_from, repl_to,
 };
+use crate::optionstr::LocalOptStr;
 use crate::runtime::RuntimeOpts;
 use crate::winlayer::{Buf, buffers, windows};
 
@@ -276,7 +277,7 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
     clear_midword(window);
 
     // The SpellFileMissing autocommands may change 'spelllang' underfoot.
-    let mut spl_copy = XString::from_cstr(unsafe { cstr::at((*window.w_s).b_p_spl) });
+    let mut spl_copy = XString::from_cstr(unsafe { cstr::at((*window.w_s).b_p_spl.value_ptr()) });
 
     unsafe { (*window.w_s).b_cjk = 0 };
 
@@ -421,7 +422,9 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
     if ret_msg.is_ok() {
         // Round 0 is the internal word list; each round after that is one
         // entry of 'spellfile'.
-        let mut spf = unsafe { (*Win::current().w_s).b_p_spf };
+        // SAFETY: the window's own syntax block; the walk reads
+        // 'spellfile' in place, as upstream's does.
+        let mut spf = unsafe { (*Win::current().w_s).b_p_spf.value_ptr() };
         let mut round = 0;
         while round == 0 || unsafe { *spf } != 0 {
             if round == 0 {
@@ -646,7 +649,7 @@ pub fn spell_reload() {
     for wp in windows() {
         // SAFETY: a live window of the current tab page, and the synblock it
         // points at.
-        if unsafe { *(*wp.w_s).b_p_spl } != 0 && wp.w_onebuf_opt.wo_spell != 0 {
+        if unsafe { (*wp.w_s).b_p_spl.first_byte() } != 0 && wp.w_onebuf_opt.wo_spell != 0 {
             let _ = parse_spelllang(wp);
             break;
         }
@@ -713,10 +716,10 @@ pub fn did_set_spell_option() -> Result<(), OptError> {
 pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Result<(), OptError> {
     let rp: *mut RegProg = unsafe { (*synblock).b_cap_prog };
 
-    if unsafe { (*synblock).b_p_spc }.is_null() || unsafe { *(*synblock).b_p_spc } == 0 {
+    if unsafe { (*synblock).b_p_spc.bytes() }.is_empty() {
         unsafe { (*synblock).b_cap_prog = core::ptr::null_mut() };
     } else {
-        let re = unsafe { concat_str(c"^".as_ptr(), (*synblock).b_p_spc) };
+        let re = unsafe { concat_str(c"^".as_ptr(), (*synblock).b_p_spc.value_ptr()) };
         unsafe { (*synblock).b_cap_prog = vim_regcomp(re, RE_MAGIC as c_int) };
         unsafe { xfree(re as *mut c_void) };
         if unsafe { (*synblock).b_cap_prog }.is_null() {

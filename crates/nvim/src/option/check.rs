@@ -40,7 +40,7 @@ use crate::r#move::changed_window_setting;
 use crate::option::vars::{P_BIN, P_ET, P_ML, P_TW, P_WM, p_et, p_ml, p_tw, p_wm};
 use crate::options::*;
 use crate::optionstr::{
-    derive_breakat_flags, didset_string_options, empty_option, set_chars_option,
+    LocalOptStr, derive_breakat_flags, didset_string_options, empty_option, set_chars_option,
 };
 use crate::os::cshim::strchr;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
@@ -174,16 +174,18 @@ pub(crate) fn didset_options() {
 pub(crate) fn didset_options2() {
     highlight_changed();
     let win = Win::current();
-    let fcs = win.w_onebuf_opt.wo_fcs;
+    let fcs = win.w_onebuf_opt.wo_fcs.value_ptr();
     let _ = unsafe { set_chars_option(win, fcs, kFillchars, true) };
-    let lcs = win.w_onebuf_opt.wo_lcs;
+    let lcs = win.w_onebuf_opt.wo_lcs.value_ptr();
     let _ = unsafe { set_chars_option(win, lcs, kListchars, true) };
     let _ = check_opt_wim();
     let mut buf = Buf::current();
     unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
-    unsafe { tabstop_set(buf.b_p_vsts, &raw mut buf.b_p_vsts_array) };
+    let vsts = buf.b_p_vsts.value_ptr();
+    unsafe { tabstop_set(vsts, &raw mut buf.b_p_vsts_array) };
     unsafe { xfree(buf.b_p_vts_array.cast::<c_void>()) };
-    unsafe { tabstop_set(buf.b_p_vts, &raw mut buf.b_p_vts_array) };
+    let vts = buf.b_p_vts.value_ptr();
+    unsafe { tabstop_set(vts, &raw mut buf.b_p_vts_array) };
 }
 
 /// Replace a null string option with the shared empty string, for every
@@ -338,7 +340,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
     // The caller's string is NUL-terminated.
     let mut p: *const c_char = match (winhl.is_null(), window) {
         (false, _) => winhl,
-        (true, Some(w)) => w.w_onebuf_opt.wo_winhl,
+        (true, Some(w)) => w.w_onebuf_opt.wo_winhl.value_ptr(),
         (true, None) => empty_option(),
     };
 

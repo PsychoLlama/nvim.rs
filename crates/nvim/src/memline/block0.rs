@@ -18,6 +18,7 @@ use crate::path::tail_index;
 use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 
 use super::*;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext;
 use crate::types::{MAXPATHL, NUL};
 
@@ -240,7 +241,7 @@ pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buffer: Buf) {
 /// `b0p` must point at a live `ZeroBlock`, unaliased for the call.
 pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, b: Buf) {
     let size = B0_FNAME_SIZE_NOCRYPT as usize;
-    let fenc = b.b_p_fenc;
+    let fenc = b.b_p_fenc.value_ptr();
     let n = unsafe { cstr::bytes_at(fenc) }.len();
     // SAFETY: as [`set_b0_fname`] -- the field itself, not a copy of it.
     let name = unsafe { &mut (*b0p).b0_fname };

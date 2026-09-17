@@ -22,6 +22,7 @@ use super::*;
 use crate::cstr;
 use crate::decoration::kMTMetaInline;
 use crate::normal::{VisualSelection, visual_active, visual_selection};
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXCOL;
 use crate::spell::SMT_ALL;
 use crate::types::NUL;
@@ -180,7 +181,7 @@ impl LineSetup {
     /// against, plus "nothing found yet" for the rest.
     fn new(window: Win, wlv: &WinLineVars, concealed: bool) -> Self {
         let has_fold = wlv.foldinfo.fi_level != 0 && wlv.foldinfo.fi_lines > 0;
-        let has_foldtext = has_fold && unsafe { *window.w_onebuf_opt.wo_fdt } != 0;
+        let has_foldtext = has_fold && window.w_onebuf_opt.wo_fdt.first_byte() != 0;
         LineSetup {
             // First, because `win_hl_attr` hands out attribute ids in the
             // order it is asked for them.
@@ -516,7 +517,7 @@ impl LineSetup {
             )
         };
 
-        if unsafe { *window.w_onebuf_opt.wo_stc } != 0 {
+        if window.w_onebuf_opt.wo_stc.first_byte() != 0 {
             // 'statuscolumn' replaces the fold, sign and number columns;
             // the expression is evaluated per row by `draw_statuscol`.
             self.statuscol.draw = true;

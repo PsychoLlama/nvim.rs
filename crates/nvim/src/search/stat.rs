@@ -16,6 +16,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
+use crate::optionstr::LocalOptStr;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg;
@@ -154,7 +155,7 @@ pub(crate) unsafe fn cmdline_search_stat(
     // A right-to-left window has the pair the other way round, so that
     // it still reads "current of total" on screen.
     let reversed = Win::current().w_onebuf_opt.wo_rl != 0
-        && unsafe { *Win::current().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int;
+        && Win::current().w_onebuf_opt.wo_rlc.first_byte() as c_int == 's' as c_int;
     let mut t = [0 as c_char; STAT_BUF_LEN];
     let at = t.as_mut_ptr();
     let room = STAT_BUF_LEN as size_t;

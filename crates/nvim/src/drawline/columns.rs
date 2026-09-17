@@ -24,6 +24,7 @@ use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
+use crate::optionstr::LocalOptStr;
 use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
 use crate::winlayer::Win;
 
@@ -568,7 +569,7 @@ impl WinLineVars {
 
         set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber);
         let width = unsafe { build_statuscol_str(window, lnum, relnum, buf.as_mut_ptr(), stcp) };
-        let was_reset = unsafe { *window.w_onebuf_opt.wo_stc } == NUL as ::core::ffi::c_char;
+        let was_reset = window.w_onebuf_opt.wo_stc.first_byte() == NUL as ::core::ffi::c_char;
         if was_reset
             || (width > unsafe { (*stcp).width } && unsafe { (*stcp).width } < MAX_STCWIDTH)
         {

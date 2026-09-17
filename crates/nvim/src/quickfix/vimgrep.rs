@@ -21,6 +21,7 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
 use crate::message_fmt::c_str;
+use crate::optionstr::LocalOptStr;
 use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::smsg;
@@ -514,7 +515,7 @@ unsafe fn keep_or_drop_dummy(
     // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
     // buffer goes away as soon as it is hidden, which wins.
     // SAFETY: `'bufhidden'` is a NUL-terminated option string.
-    let bufhidden = unsafe { *buffer.b_p_bh } as u8;
+    let bufhidden = buffer.b_p_bh.first_byte() as u8;
     let hidden_stays = cmdmod_has(CmdModFlags::HIDE) && !matches!(bufhidden, b'u' | b'w' | b'd');
     if !hidden_stays {
         if !found_match {
@@ -556,7 +557,7 @@ unsafe fn keep_or_drop_dummy(
     unsafe {
         apply_autocmds(
             AutoEvent::FileType,
-            buffer.b_p_ft,
+            buffer.b_p_ft.value_ptr(),
             buffer.b_fname,
             true,
             __hoisted_0,

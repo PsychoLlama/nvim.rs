@@ -41,6 +41,7 @@ use crate::normal::{
     visual_active, visual_anchor, visual_mode, visual_select,
 };
 use crate::option::cpo_has;
+use crate::optionstr::LocalOptStr;
 use crate::types::{CpoFlag, FoFlag, NUL, Outcome};
 
 /// The Visual area a `.` replays: its mode and size, not its position.
@@ -711,10 +712,10 @@ fn run_operator(
         }
 
         OpType::Format => {
-            if unsafe { *Buf::current().b_p_fex } as c_int != NUL {
+            if Buf::current().b_p_fex.first_byte() as c_int != NUL {
                 unsafe { op_formatexpr(op.raw()) };
             } else if p_fp(|value| !value.is_empty())
-                || unsafe { *Buf::current().b_p_fp } as c_int != NUL
+                || Buf::current().b_p_fp.first_byte() as c_int != NUL
             {
                 // An external program.
                 unsafe { op_colon(op.raw()) };
@@ -811,7 +812,7 @@ fn indent_or_colon(op: Op) {
         unsafe { op_reindent(op.raw(), Some(indent)) };
         return;
     }
-    let indent = if unsafe { *Buf::current().b_p_inde } as c_int != NUL {
+    let indent = if Buf::current().b_p_inde.first_byte() as c_int != NUL {
         get_expr_indent as unsafe fn() -> c_int
     } else {
         get_c_indent as unsafe fn() -> c_int

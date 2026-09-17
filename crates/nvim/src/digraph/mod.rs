@@ -37,6 +37,7 @@ use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::normal::add_to_showcmd;
 use crate::option::SavedCpo;
 use crate::option::vars::{p_dg, p_enc};
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
@@ -607,7 +608,9 @@ pub fn keymap_init() -> Result<(), OptError> {
     // NUL-terminated option string.
     let keymap = unsafe {
         buf.b_kmap_state &= !(KEYMAP_INIT as int16_t);
-        CStr::from_ptr(buf.b_p_keymap).to_bytes().to_vec()
+        CStr::from_ptr(buf.b_p_keymap.value_ptr())
+            .to_bytes()
+            .to_vec()
     };
     if keymap.is_empty() {
         // Stop any active keymap and clear the b:keymap_name variable.
@@ -804,7 +807,7 @@ pub fn keymap_str(window: Win) -> Option<CString> {
         let name = if !s.is_null() && *s as c_int != NUL {
             CStr::from_ptr(s).to_owned()
         } else if buf.b_kmap_state as c_int & KEYMAP_LOADED != 0 {
-            CStr::from_ptr(buf.b_p_keymap).to_owned()
+            CStr::from_ptr(buf.b_p_keymap.value_ptr()).to_owned()
         } else {
             CString::new("lang").expect("no interior NUL")
         };

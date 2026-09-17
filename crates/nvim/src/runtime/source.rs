@@ -24,6 +24,7 @@ use crate::winlayer::Buf;
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::Script;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext;
 use crate::types::{FAIL, IOSIZE, NUL, OK, READBIN};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -564,7 +565,7 @@ fn profile_script_stop(wait_start: ProfTime) {
 fn curbuf_is_lua() -> bool {
     let buf = Buf::current();
     // SAFETY: the caller's contract.
-    let ft_is_lua = unsafe { strequal(buf.b_p_ft, c"lua".as_ptr()) };
+    let ft_is_lua = unsafe { strequal(buf.b_p_ft.value_ptr(), c"lua".as_ptr()) };
     ft_is_lua
         || (!buf.b_fname.is_null() && unsafe { path_with_extension(cstr::at(buf.b_fname), c"lua") })
 }

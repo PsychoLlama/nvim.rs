@@ -33,7 +33,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::api_error;
 use crate::memline::ml_open;
-use crate::memory::xstrdup;
+use crate::memory::XString;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::{
     find_option, get_all_vimoptions, get_option_value_for, get_vimoption, object_as_optval,
@@ -231,7 +231,8 @@ unsafe fn do_ft_buf(
     );
     ftbuf.b_p_swf = 0;
     ftbuf.b_p_ml = 0;
-    unsafe { ftbuf.b_p_ft = xstrdup(filetype) };
+    // SAFETY: the caller's NUL-terminated filetype name.
+    ftbuf.b_p_ft = Some(XString::from_cstr(unsafe { crate::cstr::at(filetype) }));
     // SAFETY: the autocommand tables are the editor's own.
     if !has_event(AutoEvent::FileType) {
         return (Some(ftbuf), Ok(()));

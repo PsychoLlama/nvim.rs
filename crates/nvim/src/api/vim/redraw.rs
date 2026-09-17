@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::guard::Allow;
+use crate::optionstr::LocalOptStr;
 use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win, first_window, windows};
@@ -33,8 +34,7 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
         opts.statusline.unwrap_or(false),
         opts.winbar.unwrap_or(false),
     );
-    // SAFETY: a window's `'statuscolumn'` is a live NUL-terminated string.
-    let has_statuscolumn = ::core::ffi::c_int::from(unsafe { *window.w_onebuf_opt.wo_stc }) != NUL;
+    let has_statuscolumn = ::core::ffi::c_int::from(window.w_onebuf_opt.wo_stc.first_byte()) != NUL;
     if statuscolumn && has_statuscolumn {
         window.w_nrwidth_line_count = 0 as LineNr;
         changed_window_setting(window);

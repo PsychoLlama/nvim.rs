@@ -32,6 +32,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::guard::Lock;
+use crate::optionstr::LocalOptStr;
 use crate::types::{FoFlag, MB_MAXCHAR, NUL};
 
 /// Upstream's `ISSPECIAL`: a character that needs processing other than the
@@ -186,7 +187,7 @@ fn wrap_before_insert(c: c_int, flags: c_int, second_indent: c_int, textwidth: c
     let mut do_internal = true;
     let virtcol = get_nolist_virtcol() + char2cells(if c != NUL { c } else { gchar_cursor() });
 
-    if unsafe { *Buf::current().b_p_fex } as c_int != NUL
+    if Buf::current().b_p_fex.first_byte() as c_int != NUL
         && flags & INSCHAR_NO_FEX as c_int == 0
         && (force_format != 0 || virtcol > textwidth)
     {

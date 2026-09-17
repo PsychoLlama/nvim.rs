@@ -94,6 +94,7 @@ use crate::r#move::changed_window_setting_all;
 use crate::option::vars::fenc_default;
 use crate::option::vars::{cmp_flags, p_ambw, p_emoji, p_enc};
 use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
+use crate::optionstr::LocalOptStr;
 use crate::optionstr::check_chars_options;
 use crate::os::cshim::{__ctype_b_loc, gettext, strncasecmp};
 use crate::os::env::{env_buf, os_getenv_into};
@@ -194,14 +195,14 @@ pub fn utf_find_illegal() {
     let mut vimconv = CONV_NONE_INIT;
     let mut tofree: *mut c_char = core::ptr::null_mut();
 
-    if unsafe { enc_canon_props(Buf::current().b_p_fenc) } & ENC_8BIT != 0 {
+    if unsafe { enc_canon_props(Buf::current().b_p_fenc.value_ptr()) } & ENC_8BIT != 0 {
         // 'encoding' is utf-8 but the file is 8-bit, so what is illegal is
         // decided after converting back to the file's encoding.
         let _ = p_enc(|value| unsafe {
             convert_setup(
                 &raw mut vimconv,
                 value.as_ptr().cast_mut(),
-                Buf::current().b_p_fenc,
+                Buf::current().b_p_fenc.value_ptr(),
             )
         });
     }

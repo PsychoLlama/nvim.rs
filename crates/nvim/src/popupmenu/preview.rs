@@ -19,6 +19,7 @@ use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Suppress};
 use crate::message::emsg_ptr;
 use crate::option::boolean_optval;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::strchr;
 use crate::pos::MAXCOL;
 use crate::types::OptionSetFlags;
@@ -323,7 +324,7 @@ unsafe fn pum_show_info(
             && Buf::current().b_nwindows == 1
             && Buf::current().b_fname.is_null()
             && buf_is_nofile(current_buf())
-            && unsafe { *Buf::current().b_p_bh } == b'w' as c_char
+            && Buf::current().b_p_bh.first_byte() == b'w' as c_char
         {
             // Already a "wipeout" buffer: just empty it.
             buf_clear();

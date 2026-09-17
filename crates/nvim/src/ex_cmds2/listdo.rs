@@ -38,6 +38,7 @@ use crate::memory::XString;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
 use crate::normal::do_check_scrollbind;
+use crate::optionstr::LocalOptStr;
 use crate::pos::MAXLNUM;
 use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
@@ -389,14 +390,14 @@ fn restore_syntax_events(save_ei: Option<XString>) {
                 unsafe {
                     apply_autocmds(
                         AutoEvent::Syntax,
-                        Buf::current().b_p_syn,
+                        Buf::current().b_p_syn.value_ptr(),
                         Buf::current().b_fname,
                         true,
                         Buf::current_or_none(),
                     )
                 };
             } else {
-                let (syn, name) = (buf.b_p_syn, buf.b_fname);
+                let (syn, name) = (buf.b_p_syn.value_ptr(), buf.b_fname);
                 // SAFETY: `aco` is this frame's, `buf` is live, and the two
                 // strings are its own NUL-terminated fields -- read before
                 // the switch, which does not touch them.

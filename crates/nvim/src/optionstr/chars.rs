@@ -60,7 +60,7 @@ use crate::types::{
 use crate::winlayer;
 
 use super::{
-    clear_string_option, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
+    LocalOptStr, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
     e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str, kFillchars,
     kListchars,
 };
@@ -398,16 +398,15 @@ pub unsafe fn set_chars_option(
 ) -> Result<(), OptError> {
     let listchars = is_listchars(what);
     let tab: &[Field] = if listchars { &LCS_TAB } else { &FCS_TAB };
-    // SAFETY: the caller's window; both are C strings.
     let local = if listchars {
-        window.w_onebuf_opt.wo_lcs
+        &window.w_onebuf_opt.wo_lcs
     } else {
-        window.w_onebuf_opt.wo_fcs
+        &window.w_onebuf_opt.wo_fcs
     };
     // An empty local value defers to the global one. A copy, so that the
     // global outlives the projection: this runs at `:set` rate.
     let global = if listchars { P_LCS.get() } else { P_FCS.get() };
-    let value = if unsafe { c_int::from(*local) } == NUL {
+    let value = if local.bytes().is_empty() {
         global.as_cstr()
     } else {
         // SAFETY: an option value is a C string.
@@ -666,19 +665,21 @@ unsafe fn alloc_run(len: c_int) -> *mut ScreenChar {
 /// # Safety
 /// `win` is a live window and `val` a C string.
 pub(crate) unsafe fn did_set_global_chars_option(
-    mut win: Win,
+    win: Win,
     val: *mut c_char,
     what: CharsOption,
     opt_flags: OptionSetFlags,
 ) -> Result<(), OptError> {
     let listchars = is_listchars(what);
-    // SAFETY: the caller's window.
-    let local_ptr = if listchars {
-        &raw mut win.w_onebuf_opt.wo_lcs
-    } else {
-        &raw mut win.w_onebuf_opt.wo_fcs
+    let local = |mut wp: Win| -> *mut Option<XString> {
+        if listchars {
+            &raw mut wp.w_onebuf_opt.wo_lcs
+        } else {
+            &raw mut wp.w_onebuf_opt.wo_fcs
+        }
     };
-    let local_is_empty = unsafe { c_int::from(**local_ptr) } == NUL;
+    // SAFETY: the caller's window.
+    let local_is_empty = unsafe { &*local(win) }.bytes().is_empty();
     let for_this_window = local_is_empty || !opt_flags.has(OptionSetFlags::GLOBAL);
 
     // SAFETY: the caller's window and value.
@@ -686,19 +687,16 @@ pub(crate) unsafe fn did_set_global_chars_option(
 
     if !opt_flags.has(OptionSetFlags::GLOBAL) {
         // SAFETY: the window's own option variable.
-        unsafe { clear_string_option(local_ptr) };
+        drop(unsafe { (*local(win)).take() });
     }
 
-    // SAFETY: `for_each_window` only visits live windows.
+    // SAFETY: `for_each_window` only visits live windows, and the pointer
+    // is the window's own field, read and handed straight on.
     unsafe {
         for_each_window(|wp| {
-            let opt = if listchars {
-                wp.w_onebuf_opt.wo_lcs
-            } else {
-                wp.w_onebuf_opt.wo_fcs
-            };
-            if c_int::from(*opt) == NUL {
-                let _ = set_chars_option(wp, opt, what, true);
+            let opt = &*local(wp);
+            if opt.bytes().is_empty() {
+                let _ = set_chars_option(wp, opt.value_ptr(), what, true);
             }
             None
         })
@@ -779,8 +777,8 @@ pub fn check_chars_options() -> Result<(), OptError> {
         return Err((global).into());
     }
     let per_window = for_each_window(|wp| {
-        check(wp, wp.w_onebuf_opt.wo_lcs, kListchars, true)
-            .or_else(|| check(wp, wp.w_onebuf_opt.wo_fcs, kFillchars, true))
+        check(wp, wp.w_onebuf_opt.wo_lcs.value_ptr(), kListchars, true)
+            .or_else(|| check(wp, wp.w_onebuf_opt.wo_fcs.value_ptr(), kFillchars, true))
     });
     match per_window {
         Some(errmsg) => Err(errmsg.into()),

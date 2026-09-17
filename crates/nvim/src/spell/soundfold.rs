@@ -33,6 +33,7 @@ use crate::types::{LangP, MB_MAXBYTES, NUL, SpellLang};
 
 use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
+use crate::optionstr::LocalOptStr;
 
 /// `soundfold()`: the sound-fold of `word` in the first of the window's
 /// languages that has a sound-folding table, or a copy of `word` itself
@@ -43,7 +44,9 @@ use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
 /// `word` must point at a NUL-terminated string.
 pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
     let win = Win::current_raw();
-    if unsafe { (*win).w_onebuf_opt.wo_spell } != 0 && unsafe { *(*(*win).w_s).b_p_spl } != 0 {
+    if unsafe { (*win).w_onebuf_opt.wo_spell } != 0
+        && unsafe { (*(*win).w_s).b_p_spl.first_byte() } != 0
+    {
         // SAFETY: `win` is the current window; its syntax block is live.
         let langp = unsafe { &(*(*win).w_s).b_langp };
         for lpi in 0..langp.ga_len {

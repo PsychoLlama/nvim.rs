@@ -18,6 +18,7 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};
@@ -196,7 +197,7 @@ pub unsafe fn search_regcomp(
 
     unsafe { xfree(compiled_pat.get() as *mut c_void) };
     let rightleft_reverse = Win::current().w_onebuf_opt.wo_rl != 0
-        && unsafe { *Win::current().w_onebuf_opt.wo_rlc } as c_int == 's' as c_int;
+        && Win::current().w_onebuf_opt.wo_rlc.first_byte() as c_int == 's' as c_int;
     compiled_pat.set(if rightleft_reverse {
         unsafe { reverse_text(pat) }
     } else {

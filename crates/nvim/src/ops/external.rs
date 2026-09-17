@@ -31,6 +31,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
+use crate::optionstr::LocalOptStr;
 use crate::types::{NUL, OptError};
 
 /// `:` for a Visual region, and the `!` filter `=` and `gq` fall back to.
@@ -86,8 +87,8 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
         unsafe { stuff_readbuf(get_equalprg().as_ptr().cast_mut()) };
         unsafe { stuff_readbuf(c"\n".as_ptr()) };
     } else if op.op_type == OpType::Format {
-        if c_int::from(unsafe { *Buf::current().b_p_fp }) != NUL {
-            unsafe { stuff_readbuf(Buf::current().b_p_fp) };
+        if c_int::from(Buf::current().b_p_fp.first_byte()) != NUL {
+            unsafe { stuff_readbuf(Buf::current().b_p_fp.value_ptr()) };
         } else if p_fp(|value| !value.is_empty()) {
             p_fp(|value| unsafe { stuff_readbuf(value.as_ptr().cast_mut()) });
         } else {

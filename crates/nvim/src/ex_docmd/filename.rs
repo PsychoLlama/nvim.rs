@@ -96,12 +96,11 @@ pub unsafe fn replace_makeprg(
     let buf = Buf::current();
     // A copy: `strrep` below builds a new command line out of it.
     let (local, global) = if is_grep {
-        (buf.b_p_gp, P_GP)
+        (&buf.b_p_gp, P_GP)
     } else {
-        (buf.b_p_mp, P_MP)
+        (&buf.b_p_mp, P_MP)
     };
-    // SAFETY: a live buffer's option values are NUL-terminated.
-    let program = unsafe { local_or_global(local, global) };
+    let program = local_or_global(local, global);
 
     arg = unsafe { skipwhite(arg) };
     let mut new_cmdline = unsafe { strrep(program.as_ptr(), c"$*".as_ptr(), arg) };

@@ -24,6 +24,7 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::guard::Depth;
 use crate::message_fmt::c_str;
+use crate::optionstr::LocalOptStr;
 use crate::smsg;
 use crate::types::TypVal;
 use crate::types::{Failed, OptionSetFlags};
@@ -487,7 +488,7 @@ pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
     let ret = unsafe {
         apply_autocmds(
             AutoEvent::FileType,
-            buffer.b_p_ft,
+            buffer.b_p_ft.value_ptr(),
             buffer.b_fname,
             force || ft_recursive.get() == 1,
             Some(buffer),

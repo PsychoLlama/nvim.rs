@@ -17,6 +17,7 @@ use crate::keycodes::{
     Ctrl_D, Ctrl_E, Ctrl_F, Ctrl_I, Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R,
     Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U, Ctrl_V, Ctrl_X, Ctrl_Y, Ctrl_Z, Key, NotAKey,
 };
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::has_char;
 use crate::types::NUL;
@@ -159,12 +160,12 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
     // never null.
     let local_unset = |field: *const c_char| unsafe { *field } == NUL as c_char;
     let empty = if dict_opt {
-        let unset = local_unset(Buf::current().b_p_dict) && p_dict(CStr::is_empty);
+        let unset = local_unset(Buf::current().b_p_dict.value_ptr()) && p_dict(CStr::is_empty);
         unset && Win::current().w_onebuf_opt.wo_spell == 0
     } else {
-        local_unset(Buf::current().b_p_tsr)
+        local_unset(Buf::current().b_p_tsr.value_ptr())
             && p_tsr(CStr::is_empty)
-            && local_unset(Buf::current().b_p_tsrfu)
+            && local_unset(Buf::current().b_p_tsrfu.value_ptr())
             && p_tsrfu(CStr::is_empty)
     };
     if !empty {

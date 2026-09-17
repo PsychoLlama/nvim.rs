@@ -24,6 +24,7 @@ use crate::r#move::win_col_off2;
 use crate::narrow::number_as_int;
 use crate::option::vars::dy_flags;
 use crate::option::{get_flp_value, get_showbreak_value};
+use crate::optionstr::LocalOptStr;
 use crate::plines::win_chartabsize;
 use crate::regexp::{RE_AUTO, RE_MAGIC, RE_STRICT, RE_STRING};
 use crate::winlayer::Win;
@@ -127,7 +128,7 @@ pub unsafe fn briopt_check(briopt: *mut c_char, window: Option<Win>) -> bool {
     // The caller's option string, or the window's own copy of it.
     let value = match (briopt.is_null(), window) {
         (false, _) => briopt.cast_const(),
-        (true, Some(w)) => w.w_onebuf_opt.wo_briopt.cast_const(),
+        (true, Some(w)) => w.w_onebuf_opt.wo_briopt.value_ptr().cast_const(),
         // Upstream reads `empty_string_option` here, which is only ever
         // the empty string and is never written through.
         (true, None) => c"".as_ptr(),

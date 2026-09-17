@@ -44,6 +44,7 @@ use crate::message::state::{msg_col, msg_row};
 use crate::message::{msg_clr_eos, msg_grid_view};
 use crate::option::vars::{P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal, p_wbr};
 use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
@@ -123,7 +124,7 @@ impl Target {
         };
 
         if draw_winbar {
-            let local = !opt_is_empty(win.w_onebuf_opt.wo_wbr);
+            let local = !win.w_onebuf_opt.wo_wbr.bytes().is_empty();
             let mut row = -1; // Row zero is the first row of text.
             canvas = grid_adjust(win.w_grid, &mut row, &mut col);
             if row < 0 {
@@ -141,8 +142,7 @@ impl Target {
                 group,
                 attr: win_hl(win, group as c_int),
             };
-            // SAFETY: a window's option value is NUL-terminated.
-            let wbr = unsafe { local_or_global(win.w_onebuf_opt.wo_wbr, P_WBR) };
+            let wbr = local_or_global(&win.w_onebuf_opt.wo_wbr, P_WBR);
             let source = Source {
                 // SAFETY: the copy is NUL-terminated.
                 fmt: unsafe { Fmt::copy_of(wbr.as_ptr().cast_mut()) },
@@ -198,9 +198,8 @@ impl Target {
                 opt: (kOptRulerformat, OptionSetFlags::NONE),
             }
         } else {
-            let local = !opt_is_empty(win.w_onebuf_opt.wo_stl);
-            // SAFETY: a window's option value is NUL-terminated.
-            let stl = unsafe { local_or_global(win.w_onebuf_opt.wo_stl, P_STL) };
+            let local = !win.w_onebuf_opt.wo_stl.bytes().is_empty();
+            let stl = local_or_global(&win.w_onebuf_opt.wo_stl, P_STL);
             Source {
                 // SAFETY: the copy is NUL-terminated.
                 fmt: unsafe { Fmt::copy_of(stl.as_ptr().cast_mut()) },
@@ -505,7 +504,7 @@ pub fn win_redr_winbar(window: Win) {
     let win = window;
     if win.w_winbar_height != 0
         && is_redrawing()
-        && (p_wbr(|value| !value.is_empty()) || !opt_is_empty(win.w_onebuf_opt.wo_wbr))
+        && (p_wbr(|value| !value.is_empty()) || !win.w_onebuf_opt.wo_wbr.bytes().is_empty())
     {
         win_redr_custom(Some(window), true, false, false);
     }

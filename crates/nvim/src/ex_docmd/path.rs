@@ -47,6 +47,7 @@ use crate::optionstr::free_string_option;
 
 use crate::os::env::expand_env;
 
+use crate::optionstr::LocalOptStr;
 use crate::path::pathcmp;
 use crate::types::{
     BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, MAXPATHL, NUL, OK, OptError,
@@ -65,7 +66,7 @@ fn global_findfunc() -> *mut Callback {
 
 /// The buffer-local 'findfunc' if it is set, and the global one otherwise.
 pub(crate) fn get_findfunc_callback() -> *mut Callback {
-    if byte(Buf::current().b_p_ffu) != NUL {
+    if byte(Buf::current().b_p_ffu.value_ptr()) != NUL {
         // SAFETY: `curbuf` is set from startup to exit, and the address
         // of a field is not a read of the buffer.
         unsafe { &raw mut (*Buf::current_raw()).b_ffu_cb }
@@ -198,7 +199,7 @@ pub(crate) unsafe fn findfunc_find_file(
 pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
     let mut buf = args.os_buf;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        option_set_callback_func(buf.b_p_ffu, &raw mut buf.b_ffu_cb)
+        option_set_callback_func(buf.b_p_ffu.value_ptr(), &raw mut buf.b_ffu_cb)
     } else {
         let r = p_ffu(|ffu| option_set_callback_func(ffu.as_ptr().cast_mut(), global_findfunc()));
         // Setting it globally without `:setglobal` clears the local one.

@@ -26,7 +26,6 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::message::msg_ptr;
 use crate::normal::{VisualMode, VisualSelection, sel_exclusive, visual_selection};
-use crate::optionstr::empty_option;
 use crate::types::{IOSIZE, NUL};
 
 /// Bytes, words and characters in one line, up to `limit` bytes.
@@ -201,8 +200,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
     if sel.mode.is_block() {
         // 'showbreak' would move the columns `getvcols` answers.
         let saved_sbr = P_SBR.clear();
-        let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr;
-        Win::current().w_onebuf_opt.wo_sbr = empty_option();
+        let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr.take();
 
         oparg.is_visual = true;
         oparg.motion_type = kMTBlockWise;

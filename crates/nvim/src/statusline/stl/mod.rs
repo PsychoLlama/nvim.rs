@@ -75,6 +75,7 @@ use crate::option::{
     find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,
 };
 use crate::options::kOptInvalid;
+use crate::optionstr::LocalOptStr;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
 use crate::path::path_tail;
@@ -367,7 +368,7 @@ impl Env {
     pub(super) fn with_filetype<R>(&self, f: impl FnOnce(&[u8]) -> R) -> R {
         // SAFETY: a string option always holds a NUL-terminated string, and
         // the borrow ends before anything can `:set` it.
-        f(unsafe { CStr::from_ptr(self.buf.b_p_ft) }.to_bytes())
+        f(unsafe { CStr::from_ptr(self.buf.b_p_ft.value_ptr()) }.to_bytes())
     }
 
     /// The sign in column `i`, and the highlight id it draws in.

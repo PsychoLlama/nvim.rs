@@ -133,18 +133,18 @@ impl NumVar {
 
 /// A string option's variable.
 ///
-/// The global value is a field of the option record and the option owns it;
-/// a local copy is still a raw `char *` field of a window, a buffer or a
-/// syntax block, which is the next slice's. This pair of operations is the
-/// seam between the two: above it a string option's value changes hands as
-/// an owned allocation, below it as the `char *` the option protocol and
-/// [`OptVal`] still speak.
+/// Both halves own their bytes now: the global value is a field of the
+/// option record, a local copy an `Option<XString>` field of a window, a
+/// buffer or a syntax block, and `None` on either side is upstream's shared
+/// empty string -- the option holding no value of its own. This pair of
+/// operations is the seam where that owned storage meets the `char *` the
+/// option protocol and [`OptVal`] still speak.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub(crate) enum StrVar {
     /// The global value: a field of the option record.
     Global(StrOpt),
     /// A window's, buffer's or syntax block's own copy.
-    Local(*mut *mut c_char),
+    Local(*mut Option<XString>),
     /// An immutable option reads its own default in place. See
     /// [`BoolVar::OwnDefault`].
     OwnDefault(OptIndex),
@@ -171,8 +171,12 @@ impl StrVar {
                 .as_string()
                 .expect("an immutable string option's default is a string")
                 .data(),
-            // SAFETY: the caller's live field.
-            StrVar::Local(var) => unsafe { *var },
+            // SAFETY: the caller's live field. The pointer is the field's
+            // own buffer and lives until the field is written, which is the
+            // same promise the global arm makes.
+            StrVar::Local(var) => unsafe { &*var }
+                .as_ref()
+                .map_or_else(empty_option, |value| value.as_ptr().cast_mut()),
         }
     }
 
@@ -205,12 +209,16 @@ impl StrVar {
                 store_option_default(idx, OptVal::String(OptStr::from_raw_parts(value, len)));
                 old
             }
-            // SAFETY: the caller's live field.
-            StrVar::Local(var) => unsafe {
-                let old = *var;
-                *var = value;
-                old
-            },
+            StrVar::Local(var) => {
+                // SAFETY: the caller's promise -- one owner. The shared
+                // empty string is nobody's allocation, so it becomes the
+                // field owning nothing rather than a block to adopt, and
+                // comes back out as itself.
+                let owned = (!is_empty_option(value)).then(|| unsafe { XString::from_raw(value) });
+                // SAFETY: the caller's live field.
+                core::mem::replace(unsafe { &mut *var }, owned)
+                    .map_or_else(empty_option, XString::into_raw)
+            }
         }
     }
 
@@ -324,8 +332,8 @@ impl From<*mut OptInt> for OptSlot {
     }
 }
 
-impl From<*mut *mut c_char> for OptSlot {
-    fn from(var: *mut *mut c_char) -> Self {
+impl From<*mut Option<XString>> for OptSlot {
+    fn from(var: *mut Option<XString>) -> Self {
         OptSlot::String(StrVar::Local(var))
     }
 }

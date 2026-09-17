@@ -10,12 +10,12 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::option::local_or_global;
 use crate::option::vars::P_TSRFU;
 
 use crate::guard::Lock;
+use crate::optionstr::LocalOptStr;
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{Failed, IOSIZE, NUL, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
@@ -275,7 +275,8 @@ unsafe fn skip_cpt_delims(mut p: *mut c_char) -> *mut c_char {
 pub(crate) fn get_cpt_sources_count() -> c_int {
     let mut dummy = [0 as c_char; LSIZE as usize];
     let mut count = 0;
-    let mut p = Buf::current().b_p_cpt;
+    // The walk reads the option's own buffer, as upstream's does.
+    let mut p = Buf::current().b_p_cpt.value_ptr();
     while unsafe { *p } as c_int != NUL {
         p = unsafe { skip_cpt_delims(p) };
         if unsafe { *p } as c_int != NUL {
@@ -464,7 +465,8 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
 
     let mut part = [0 as c_char; LSIZE as usize];
     let mut idx: isize = 0;
-    let mut p = Buf::current().b_p_cpt;
+    // The walk reads the option's own buffer, as upstream's does.
+    let mut p = Buf::current().b_p_cpt.value_ptr();
     while unsafe { *p } as c_int != NUL {
         p = unsafe { skip_cpt_delims(p) };
         if unsafe { *p } as c_int != NUL {
@@ -499,7 +501,10 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
     let mut buf = args.os_buf;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         // Buffer-local option set.
-        unsafe { option_set_callback_func(buf.b_p_tsrfu, &raw mut buf.b_tsrfu_cb) }
+        {
+            let value = buf.b_p_tsrfu.value_ptr();
+            unsafe { option_set_callback_func(value, &raw mut buf.b_tsrfu_cb) }
+        }
     } else {
         // Global option set.
         let retval =
@@ -558,14 +563,13 @@ pub fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
 pub(crate) fn get_complete_funcname(type_0: c_int) -> XString {
     let buf = Buf::current();
     let local = match type_0 {
-        CTRL_X_FUNCTION => buf.b_p_cfu,
-        CTRL_X_OMNI => buf.b_p_ofu,
+        CTRL_X_FUNCTION => &buf.b_p_cfu,
+        CTRL_X_OMNI => &buf.b_p_ofu,
         // The only one of the three with a global value to fall back to.
-        CTRL_X_THESAURUS => return unsafe { local_or_global(buf.b_p_tsrfu, P_TSRFU) },
+        CTRL_X_THESAURUS => return local_or_global(&buf.b_p_tsrfu, P_TSRFU),
         _ => return XString::new(),
     };
-    // SAFETY: `curbuf` is live and its option values are NUL-terminated.
-    XString::from_cstr(unsafe { cstr::at(local) })
+    local.clone().unwrap_or_default()
 }
 
 /// The callback to use for insert-mode completion of `type_0`.
@@ -577,7 +581,7 @@ pub(crate) fn get_insert_callback(type_0: c_int) -> *mut Callback {
         return unsafe { &raw mut (*Buf::current_raw()).b_ofu_cb };
     }
     // CTRL_X_THESAURUS
-    if unsafe { *Buf::current().b_p_tsrfu } as c_int != NUL {
+    if !Buf::current().b_p_tsrfu.bytes().is_empty() {
         unsafe { &raw mut (*Buf::current_raw()).b_tsrfu_cb }
     } else {
         tsrfu_cb().slot()
@@ -711,7 +715,11 @@ pub(crate) fn prepare_cpt_compl_funcs() {
     // The throwaway `copy_option_part` steps the entry into.
     let mut skipped = [0 as c_char; IOSIZE as usize];
     // Make a copy of 'cpt' in case the buffer gets wiped out.
-    let cpt = unsafe { xstrdup(Buf::current().b_p_cpt) };
+    let cpt = {
+        let value = Buf::current().b_p_cpt.value_ptr();
+        // SAFETY: the buffer's own option value, NUL-terminated.
+        unsafe { xstrdup(value) }
+    };
     unsafe { strip_caret_numbers_in_place(cpt) };
 
     let mut idx = 0;
@@ -771,7 +779,8 @@ pub(crate) fn setup_cpt_sources() {
 
     let mut rows = Vec::with_capacity(count as usize);
     let mut part = [0 as c_char; LSIZE as usize];
-    let mut p = Buf::current().b_p_cpt;
+    // The walk reads the option's own buffer, as upstream's does.
+    let mut p = Buf::current().b_p_cpt.value_ptr();
     while unsafe { *p } != 0 {
         p = unsafe { skip_cpt_delims(p) };
         if unsafe { *p } != 0 {
@@ -842,7 +851,11 @@ pub(crate) fn cpt_compl_refresh() {
     // Make the completion list linear (non-cyclic).
     ins_compl_make_linear();
     // Make a copy of 'cpt' in case the buffer gets wiped out.
-    let cpt = unsafe { xstrdup(Buf::current().b_p_cpt) };
+    let cpt = {
+        let value = Buf::current().b_p_cpt.value_ptr();
+        // SAFETY: the buffer's own option value, NUL-terminated.
+        unsafe { xstrdup(value) }
+    };
     unsafe { strip_caret_numbers_in_place(cpt) };
 
     cpt_sources().set_index(0);

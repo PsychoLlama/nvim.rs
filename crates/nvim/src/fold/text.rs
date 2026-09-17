@@ -33,6 +33,7 @@ use core::ptr;
 use super::marker::*;
 use super::*;
 use crate::options::kWinOptFoldtext;
+use crate::optionstr::LocalOptStr;
 
 /// Generates text to display
 ///
@@ -72,8 +73,7 @@ pub unsafe fn get_foldtext(
         did_emsg.set(0);
     }
     let win = window;
-    // SAFETY: 'foldtext' is a NUL-terminated option string.
-    if unsafe { *win.w_onebuf_opt.wo_fdt } as c_int != NUL {
+    if win.w_onebuf_opt.wo_fdt.first_byte() as c_int != NUL {
         let mut dashes: [c_char; 22] = [0; 22];
         let level = foldinfo.fi_level.min(dashes.len() as c_int - 1);
         dashes[..level as usize].fill('-' as c_char);
@@ -187,7 +187,7 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
     let gap = |b: *const c_char, a: *const c_char| b.addr().wrapping_sub(a.addr()) as size_t;
 
     // 'commentstring' split around its `%s`, with the padding trimmed.
-    let cms_start = skip_ws(Buf::current().b_p_cms);
+    let cms_start = skip_ws(Buf::current().b_p_cms.value_ptr());
     // SAFETY: 'commentstring' is a NUL-terminated option string.
     let mut cms_slen = unsafe { cstr::bytes_at(cms_start) }.len();
     while cms_slen > 0 && ascii_iswhite(at(cms_start.wrapping_add(cms_slen - 1))) {
@@ -216,7 +216,7 @@ pub(super) unsafe fn foldtext_cleanup(str: *mut c_char) {
         let mut len: size_t = 0;
         if ncmp(
             s,
-            Win::current().w_onebuf_opt.wo_fmr,
+            Win::current().w_onebuf_opt.wo_fmr.value_ptr(),
             foldstartmarkerlen.get(),
         ) {
             len = foldstartmarkerlen.get();

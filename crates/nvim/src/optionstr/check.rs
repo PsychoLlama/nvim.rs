@@ -46,7 +46,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
-use crate::types::{Failed, NUL, OptError, StlOpt, size_t, uint32_t};
+use crate::types::{Buffer, Failed, NUL, OptError, StlOpt, size_t, uint32_t};
 
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
@@ -108,77 +108,94 @@ pub(crate) fn illegal_char_after_chr(c: c_int) -> OptError {
     }))
 }
 
-/// Give every string option of a buffer the empty string in place of a null.
-pub fn check_buf_options(mut buffer: Buf) {
-    // SAFETY: the caller's buffer; each field is one of its `char *`
-    // options, and `parse_cino` re-derives the 'cinoptions' cache from the
-    // string this just made non-null.
-    for field in [
-        &raw mut buffer.b_p_bh,
-        &raw mut buffer.b_p_bt,
-        &raw mut buffer.b_p_fenc,
-        &raw mut buffer.b_p_ff,
-        &raw mut buffer.b_p_def,
-        &raw mut buffer.b_p_inc,
-        &raw mut buffer.b_p_inex,
-        &raw mut buffer.b_p_inde,
-        &raw mut buffer.b_p_indk,
-        &raw mut buffer.b_p_fp,
-        &raw mut buffer.b_p_fex,
-        &raw mut buffer.b_p_kp,
-        &raw mut buffer.b_p_mps,
-        &raw mut buffer.b_p_fo,
-        &raw mut buffer.b_p_flp,
-        &raw mut buffer.b_p_isk,
-        &raw mut buffer.b_p_com,
-        &raw mut buffer.b_p_cms,
-        &raw mut buffer.b_p_nf,
-        &raw mut buffer.b_p_qe,
-        &raw mut buffer.b_p_syn,
-        &raw mut buffer.b_s.b_syn_isk,
-        &raw mut buffer.b_s.b_p_spc,
-        &raw mut buffer.b_s.b_p_spf,
-        &raw mut buffer.b_s.b_p_spl,
-        &raw mut buffer.b_s.b_p_spo,
-        &raw mut buffer.b_p_sua,
-        &raw mut buffer.b_p_cink,
-        &raw mut buffer.b_p_cino,
-    ] {
-        unsafe { check_string_option(field) };
+/// Give a freshly allocated buffer's string options their initial value.
+///
+/// A buffer is allocated **zeroed**, and all-zero bytes are not a valid
+/// `Option<XString>`: the niche the `Option` uses is the vector's capacity,
+/// so a zeroed field reads as `Some` over a null pointer. Every string
+/// option is therefore written -- with `write`, which drops nothing --
+/// before anything can read or drop it. The buffer's syntax block has its
+/// own five; [`crate::syntax::init_synblock`] writes those.
+///
+/// This is where upstream's "replace each null option value with the shared
+/// empty string" sweep went: `None` *is* that shared empty string, so the
+/// value a fresh buffer starts with is written once here instead of patched
+/// up on every `buf_copy_options`.
+///
+/// # Safety
+///
+/// `at` must point at a freshly allocated buffer whose string options have
+/// not been read, written or dropped.
+pub unsafe fn init_buf_string_options(at: *mut Buffer) {
+    // SAFETY: the caller's promise -- each address is one of the buffer's
+    // own fields, and `write` does not drop what was there.
+    unsafe {
+        (&raw mut (*at).b_p_bkc).write(None);
+        (&raw mut (*at).b_p_bh).write(None);
+        (&raw mut (*at).b_p_bt).write(None);
+        (&raw mut (*at).b_p_cino).write(None);
+        (&raw mut (*at).b_p_cink).write(None);
+        (&raw mut (*at).b_p_cinw).write(None);
+        (&raw mut (*at).b_p_cinsd).write(None);
+        (&raw mut (*at).b_p_com).write(None);
+        (&raw mut (*at).b_p_cms).write(None);
+        (&raw mut (*at).b_p_cot).write(None);
+        (&raw mut (*at).b_p_cpt).write(None);
+        (&raw mut (*at).b_p_cfu).write(None);
+        (&raw mut (*at).b_p_ofu).write(None);
+        (&raw mut (*at).b_p_tfu).write(None);
+        (&raw mut (*at).b_p_ffu).write(None);
+        (&raw mut (*at).b_p_fenc).write(None);
+        (&raw mut (*at).b_p_ff).write(None);
+        (&raw mut (*at).b_p_ft).write(None);
+        (&raw mut (*at).b_p_fo).write(None);
+        (&raw mut (*at).b_p_flp).write(None);
+        (&raw mut (*at).b_p_isk).write(None);
+        (&raw mut (*at).b_p_def).write(None);
+        (&raw mut (*at).b_p_inc).write(None);
+        (&raw mut (*at).b_p_inex).write(None);
+        (&raw mut (*at).b_p_inde).write(None);
+        (&raw mut (*at).b_p_indk).write(None);
+        (&raw mut (*at).b_p_fp).write(None);
+        (&raw mut (*at).b_p_fex).write(None);
+        (&raw mut (*at).b_p_kp).write(None);
+        (&raw mut (*at).b_p_lop).write(None);
+        (&raw mut (*at).b_p_menc).write(None);
+        (&raw mut (*at).b_p_mps).write(None);
+        (&raw mut (*at).b_p_nf).write(None);
+        (&raw mut (*at).b_p_qe).write(None);
+        (&raw mut (*at).b_p_sua).write(None);
+        (&raw mut (*at).b_p_syn).write(None);
+        (&raw mut (*at).b_p_vsts).write(None);
+        (&raw mut (*at).b_p_vsts_nopaste).write(None);
+        (&raw mut (*at).b_p_vts).write(None);
+        (&raw mut (*at).b_p_keymap).write(None);
+        (&raw mut (*at).b_p_gefm).write(None);
+        (&raw mut (*at).b_p_gp).write(None);
+        (&raw mut (*at).b_p_mp).write(None);
+        (&raw mut (*at).b_p_efm).write(None);
+        (&raw mut (*at).b_p_ep).write(None);
+        (&raw mut (*at).b_p_path).write(None);
+        (&raw mut (*at).b_p_tags).write(None);
+        (&raw mut (*at).b_p_tc).write(None);
+        (&raw mut (*at).b_p_dict).write(None);
+        (&raw mut (*at).b_p_dia).write(None);
+        (&raw mut (*at).b_p_tsr).write(None);
+        (&raw mut (*at).b_p_tsrfu).write(None);
+        (&raw mut (*at).b_p_lw).write(None);
     }
+}
+
+/// Rebuild what a buffer derives from its string options.
+///
+/// Upstream spelled this "replace every null option value with the shared
+/// empty string", and then re-derived the 'cinoptions' cache from the value
+/// it had just made dereferenceable. A buffer's string options own their
+/// bytes now and `None` is the shared empty string, so nothing is left to
+/// patch up and the cache is the whole of it.
+pub fn check_buf_options(buffer: Buf) {
+    // SAFETY: the caller's buffer, whose 'cinoptions' this re-reads.
     unsafe { parse_cino(buffer) };
-    for field in [
-        &raw mut buffer.b_p_lop,
-        &raw mut buffer.b_p_ft,
-        &raw mut buffer.b_p_cinw,
-        &raw mut buffer.b_p_cinsd,
-        &raw mut buffer.b_p_cot,
-        &raw mut buffer.b_p_cpt,
-        &raw mut buffer.b_p_cfu,
-        &raw mut buffer.b_p_ofu,
-        &raw mut buffer.b_p_keymap,
-        &raw mut buffer.b_p_gefm,
-        &raw mut buffer.b_p_gp,
-        &raw mut buffer.b_p_mp,
-        &raw mut buffer.b_p_efm,
-        &raw mut buffer.b_p_ep,
-        &raw mut buffer.b_p_path,
-        &raw mut buffer.b_p_tags,
-        &raw mut buffer.b_p_ffu,
-        &raw mut buffer.b_p_tfu,
-        &raw mut buffer.b_p_tc,
-        &raw mut buffer.b_p_dict,
-        &raw mut buffer.b_p_dia,
-        &raw mut buffer.b_p_tsr,
-        &raw mut buffer.b_p_tsrfu,
-        &raw mut buffer.b_p_lw,
-        &raw mut buffer.b_p_bkc,
-        &raw mut buffer.b_p_menc,
-        &raw mut buffer.b_p_vsts,
-        &raw mut buffer.b_p_vts,
-    ] {
-        unsafe { check_string_option(field) };
-    }
 }
 
 /// The value every string option with nothing of its own points at.
@@ -197,6 +214,57 @@ static EMPTY_OPTION: GlobalCell<[c_char; 1]> = GlobalCell::new([0]);
 /// The shared value to give a string option that has none of its own.
 pub(crate) const fn empty_option() -> *mut c_char {
     EMPTY_OPTION.as_raw().cast::<c_char>()
+}
+
+/// What a string option's *local* copy — a field of a window, a buffer or a
+/// syntax block — shows the readers that still want a `char *` or a `&CStr`.
+///
+/// The global values have [`crate::options::vars::StrOpt`]; this is the
+/// same four questions for a local one, whose storage is the field itself.
+/// `None` is upstream's shared empty string: the option owns nothing and
+/// holds no value of its own, so a global-local option falls back and a
+/// `:setlocal` reads as unset.
+pub(crate) trait LocalOptStr {
+    /// The value as the `char *` the option protocol and the C callees
+    /// still speak, which is the shared empty string when the field owns
+    /// nothing.
+    ///
+    /// **The pointer is the field's own buffer**, and lives until the field
+    /// is written — not until the end of the caller's statement. A reader
+    /// that keeps it across anything that can set an option is reading
+    /// freed bytes; take [`value`](Self::value) or a copy instead.
+    fn value_ptr(&self) -> *mut c_char;
+
+    /// The value's bytes, without the terminator.
+    fn bytes(&self) -> &[u8];
+
+    /// The value's first byte, which is 0 for a field that owns nothing --
+    /// upstream's `*p` on a variable that is never null.
+    fn first_byte(&self) -> c_char;
+
+    /// Whether the field owns no string of its own — upstream's
+    /// `is_empty_option` on a local copy. **Not** "the value is empty": a
+    /// local option explicitly set to `""` owns an empty string.
+    fn is_unset(&self) -> bool;
+}
+
+impl LocalOptStr for Option<XString> {
+    fn value_ptr(&self) -> *mut c_char {
+        self.as_ref()
+            .map_or_else(empty_option, |value| value.as_ptr().cast_mut())
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.as_deref().unwrap_or_default()
+    }
+
+    fn first_byte(&self) -> c_char {
+        self.bytes().first().copied().unwrap_or(0).cast_signed()
+    }
+
+    fn is_unset(&self) -> bool {
+        self.is_none()
+    }
 }
 
 /// Whether a string option's value is that shared one, which answers two
@@ -219,30 +287,6 @@ pub unsafe fn free_string_option(p: *mut c_char) {
     }
 }
 
-/// Free a string option's value and leave the variable holding the shared
-/// empty string.
-///
-/// # Safety
-/// `option` points at a string option's variable.
-pub unsafe fn clear_string_option(option: *mut *mut c_char) {
-    // SAFETY: the caller's variable, holding a value `free_string_option`
-    // accepts.
-    unsafe { free_string_option(*option) };
-    unsafe { *option = empty_option() };
-}
-
-/// Replace a null option value with the shared empty string, so that
-/// everything downstream can dereference it.
-///
-/// # Safety
-/// `option` points at a string option's variable.
-pub unsafe fn check_string_option(option: *mut *mut c_char) {
-    // SAFETY: the caller's variable.
-    if unsafe { *option }.is_null() {
-        unsafe { *option = empty_option() };
-    }
-}
-
 /// Is `val` a name 'filetype', 'syntax' or 'keymap' will accept?
 pub(crate) fn valid_filetype(val: &CStr) -> bool {
     valid_name(val, b".-_")
@@ -262,7 +306,7 @@ pub(crate) fn valid_filetype(val: &CStr) -> bool {
 pub unsafe fn check_signcolumn(scl: *mut c_char, window: Option<Win>) -> Result<(), Failed> {
     let val = match (scl.is_null(), window) {
         (false, _) => scl.cast_const(),
-        (true, Some(w)) => w.w_onebuf_opt.wo_scl,
+        (true, Some(w)) => w.w_onebuf_opt.wo_scl.value_ptr(),
         (true, None) => empty_option(),
     };
     // SAFETY: an option value is a C string.

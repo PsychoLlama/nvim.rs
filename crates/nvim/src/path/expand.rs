@@ -185,7 +185,7 @@ pub(crate) unsafe fn expand_in_path(
 pub(crate) fn buffer_path() -> *mut c_char {
     // SAFETY: `curbuf` names the live current buffer, and its option values
     // are NUL-terminated.
-    unsafe { local_or_global_raw(Buf::current().b_p_path, P_PATH) }
+    unsafe { local_or_global_raw(&Buf::current().b_p_path, P_PATH) }
 }
 
 /// Does `p` hold what looks like an environment variable? A backslash

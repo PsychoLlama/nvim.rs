@@ -32,6 +32,7 @@ use crate::global_cell::GlobalCell;
 use crate::option::option_was_set;
 use crate::option::vars::{P_WINDOW, p_ch, p_window};
 use crate::options::kOptWindow;
+use crate::optionstr::LocalOptStr;
 use crate::strings::vim_snprintf;
 use crate::types::{Dict, LineNr, List, OptInt, SaveVEvent, TypVal, VarNumber, ptrdiff_t, size_t};
 use crate::ui::state::{Columns, Rows};
@@ -196,8 +197,7 @@ fn scan_windows(what: &mut Scan) {
             snapshot_window(&mut wp);
             continue;
         }
-        // SAFETY: the window's own 'eventignorewin' string.
-        let eiw = wp.w_onebuf_opt.wo_eiw;
+        let eiw = wp.w_onebuf_opt.wo_eiw.value_ptr();
         let ignore_scroll = unsafe { event_ignored(AutoEvent::WinScrolled, eiw, true) };
         let ignore_resize = unsafe { event_ignored(AutoEvent::WinResized, eiw, true) };
         let size_changed =

@@ -25,6 +25,7 @@ use crate::memory::xmalloc;
 use crate::message::e_invarg;
 use crate::message::msg_ui_flush;
 use crate::r#move::WinValid;
+use crate::optionstr::LocalOptStr;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
@@ -276,7 +277,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Result<
     let mut s = match () {
         _ if !cc.is_null() => cc,
         _ => match win {
-            Some(w) => w.w_onebuf_opt.wo_cc,
+            Some(w) => w.w_onebuf_opt.wo_cc.value_ptr(),
             None => empty_option(),
         },
     };
