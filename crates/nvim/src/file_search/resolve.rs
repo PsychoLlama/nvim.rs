@@ -21,6 +21,7 @@ use super::*;
 use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::narrow::len_as_int;
+use crate::option::vars::P_CDPATH;
 use crate::path::buffer_path;
 use crate::tr_c;
 use crate::types::MAXPATHL;
@@ -63,14 +64,13 @@ pub(crate) unsafe fn find_file_in_path(
     file_to_find: *mut *mut c_char,
     search_ctx: *mut *mut c_char,
 ) -> *mut c_char {
-    let path = buffer_path();
     unsafe {
         find_file_in_path_option(
             name,
             len,
             options,
             first,
-            path.as_ptr().cast_mut(),
+            buffer_path(),
             FINDFILE_BOTH as c_int,
             rel_fname,
             Buf::current().b_p_sua,
@@ -109,20 +109,20 @@ pub(crate) unsafe fn find_directory_in_path(
     file_to_find: *mut *mut c_char,
     search_ctx: *mut *mut c_char,
 ) -> *mut c_char {
-    p_cdpath(|cdpath| unsafe {
+    unsafe {
         find_file_in_path_option(
             name,
             len,
             options,
             true,
-            cdpath.as_ptr().cast_mut(),
+            P_CDPATH.value_ptr(),
             FINDFILE_DIR as c_int,
             rel_fname,
             c"".as_ptr().cast_mut(),
             file_to_find,
             search_ctx,
         )
-    })
+    }
 }
 
 /// Replace `*file_to_find` with `ptr[len]`, environment variables expanded.

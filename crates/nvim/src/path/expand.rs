@@ -12,8 +12,7 @@
 
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
-use crate::memory::XString;
-use crate::option::local_or_global;
+use crate::option::local_or_global_raw;
 use crate::option::vars::P_CDPATH;
 use crate::option::vars::P_PATH;
 use crate::strings::has_char;
@@ -144,17 +143,11 @@ pub(crate) unsafe fn expand_in_path(
     let mut path_ga = GArray::default();
     unsafe { ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1) };
     let path_option = if flags.has(ExpandFlags::CDPATH) {
-        P_CDPATH.get()
+        P_CDPATH.value_ptr()
     } else {
         buffer_path()
     };
-    unsafe {
-        expand_path_option(
-            curdir.as_mut_ptr(),
-            path_option.as_ptr().cast_mut(),
-            &raw mut path_ga,
-        )
-    };
+    unsafe { expand_path_option(curdir.as_mut_ptr(), path_option, &raw mut path_ga) };
     if path_ga.ga_len <= 0 {
         return 0;
     }
@@ -186,12 +179,13 @@ pub(crate) unsafe fn expand_in_path(
 /// The `'path'` in force: the buffer's own, or the global one when it is
 /// empty.
 ///
-/// A copy, because the global option owns its string and the walks that use
-/// this outlive a projection's borrow.
-pub(crate) fn buffer_path() -> XString {
+/// The option's own buffer, not a copy: `find_file_in_path_option` keeps its
+/// position in a static and resumes it on a later call. See
+/// [`crate::option::local_or_global_raw`].
+pub(crate) fn buffer_path() -> *mut c_char {
     // SAFETY: `curbuf` names the live current buffer, and its option values
     // are NUL-terminated.
-    unsafe { local_or_global(Buf::current().b_p_path, P_PATH) }
+    unsafe { local_or_global_raw(Buf::current().b_p_path, P_PATH) }
 }
 
 /// Does `p` hold what looks like an environment variable? A backslash
@@ -366,7 +360,7 @@ pub unsafe fn gen_expand_wildcards(
 
         if did_expand_in_path && ga.ga_len > 0 && flags.has(SEARCH_LIST) {
             RECURSIVE.set(false);
-            unsafe { uniquefy_paths(&raw mut ga, p, path_option.as_ptr().cast_mut()) };
+            unsafe { uniquefy_paths(&raw mut ga, p, path_option) };
             RECURSIVE.set(true);
         }
         if p != unsafe { *pat.add(i as usize) } {

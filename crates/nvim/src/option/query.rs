@@ -66,19 +66,23 @@ pub(crate) unsafe fn local_or_global(local: *const c_char, global: StrOpt) -> XS
     }
 }
 
-/// [`local_or_global`] as the raw pointer the draw paths still read.
+/// [`local_or_global`] as the raw pointer, for the readers a copy cannot
+/// serve.
 ///
 /// The answer is the option's *own* buffer -- the global record's string or
 /// the buffer's or window's raw field -- and is live until that option is
-/// written. Only the readers that are asked several times per screen line
-/// use this; everything else takes the copy. When the local copies own their
-/// storage too, both halves become one projection and this goes.
+/// written, which is exactly upstream's contract. Three kinds of caller need
+/// it: the readers asked several times per screen line ('showbreak',
+/// 'formatlistpat'), and `'path'`, whose walk keeps its position in a static
+/// and resumes it on a *later* call, so a copy would be gone by then. When
+/// the local copies own their storage too, both halves become one projection
+/// and this goes.
 ///
 /// # Safety
 ///
 /// `local` must be the live, NUL-terminated local copy of `global`'s option,
 /// and the answer must not outlive a write to either.
-unsafe fn local_or_global_raw(local: *const c_char, global: StrOpt) -> *mut c_char {
+pub(crate) unsafe fn local_or_global_raw(local: *const c_char, global: StrOpt) -> *mut c_char {
     // SAFETY: the caller's value.
     if unsafe { *local } == 0 {
         global.value_ptr()

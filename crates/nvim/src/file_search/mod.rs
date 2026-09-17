@@ -34,7 +34,7 @@ use crate::message::{
     e_no_more_directory_str_found_in_cdpath, e_no_more_file_str_found_in_path,
 };
 use crate::normal::get_visual_text;
-use crate::option::vars::{p_cdpath, p_fic};
+use crate::option::vars::p_fic;
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::options::kOptIncludeexpr;
 use crate::os::cshim::gettext;

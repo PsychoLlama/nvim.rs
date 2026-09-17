@@ -147,7 +147,6 @@ count	callee	no_raw	defs	def
 17	Win::new	0	1	crates/nvim/src/winlayer.rs
 17	add_str	0	5	
 17	full_name_save	0	1	crates/nvim/src/path/mod.rs
-17	local_or_global	0	1	crates/nvim/src/option/query.rs
 17	nlua_pop_object	0	1	crates/nvim/src/lua/converter/pop_object.rs
 17	utf_ptr2str_char_info	0	1	crates/nvim/src/mbyte/walk.rs
 17	value_check_lock	0	1	crates/nvim/src/eval/typval/value.rs
@@ -171,6 +170,7 @@ count	callee	no_raw	defs	def
 15	ga_clear_strings	0	1	crates/nvim/src/garray.rs
 15	getvvcol	0	1	crates/nvim/src/plines/vcol.rs
 15	hash_init	0	1	crates/nvim/src/hashtab.rs
+15	local_or_global	0	1	crates/nvim/src/option/query.rs
 15	restore_v_event	0	1	crates/nvim/src/eval/entry.rs
 15	tv_dict_item_free	0	1	crates/nvim/src/eval/typval/dictitem.rs
 14	Bytes::new	0	1	crates/nvim/src/charset/mod.rs
@@ -813,6 +813,7 @@ count	callee	no_raw	defs	def
 4	leave_cleanup	0	1	crates/nvim/src/ex_eval/trycmd.rs
 4	list_extend	0	1	crates/nvim/src/eval/typval/listops.rs
 4	ll_free_all	0	1	crates/nvim/src/quickfix/stack.rs
+4	local_or_global_raw	0	1	crates/nvim/src/option/query.rs
 4	lua_pop	0	1	crates/nvim/src/lua/ffi.rs
 4	lua_pushnumber	0	0	
 4	mark_check	0	1	crates/nvim/src/mark/mod.rs
@@ -1760,7 +1761,6 @@ count	callee	no_raw	defs	def
 2	ll_release	0	1	crates/nvim/src/quickfix/stack.rs
 2	load_colors	0	1	crates/nvim/src/highlight_group/defaults.rs
 2	loaded_var	0	1	crates/nvim/src/eval/provider.rs
-2	local_or_global_raw	0	1	crates/nvim/src/option/query.rs
 2	loop_poll_events	0	1	crates/nvim/src/event/loop.rs
 2	luaL_argerror	0	0	
 2	luaL_checktype	0	0	

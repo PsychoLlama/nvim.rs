@@ -40,8 +40,8 @@ use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
 use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
-use crate::memory::{XString, xfree};
-use crate::option::local_or_global;
+use crate::memory::xfree;
+use crate::option::local_or_global_raw;
 use crate::option::vars::{P_PATH, p_wic};
 use crate::types::{
     BackslashEscape, EvalFuncData, Expand, ExpandContext, GArray, Pos, ScriptCtx, TypVal, VAR_LIST,
@@ -201,10 +201,14 @@ fn free(p: *mut c_char) {
 
 /// The 'path' a search walks: the buffer's own when it set one, else the
 /// global option.
-fn search_path() -> XString {
+///
+/// The option's own buffer, not a copy: `find_file_in_path_option` keeps its
+/// position in a static and resumes it on a later call. See
+/// [`crate::option::local_or_global_raw`].
+fn search_path() -> *mut c_char {
     // SAFETY: `curbuf` names the live current buffer, and its option values
     // are NUL-terminated.
-    unsafe { local_or_global(Buf::current().b_p_path, P_PATH) }
+    unsafe { local_or_global_raw(Buf::current().b_p_path, P_PATH) }
 }
 
 /// The suffixes `findfile()` tries, and none for `finddir()`.
@@ -247,7 +251,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
             None => error = true,
             Some(p) => {
                 if !p.to_bytes().is_empty() {
-                    path = XString::from_cstr(p);
+                    path = p.as_ptr().cast_mut();
                 }
                 if args.len() > 2 {
                     count = nr_arg(args, 2, &mut error) as c_int;
@@ -287,18 +291,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
         // and the two out-parameters carry the walk's state from one round
         // to the next.
         fresult = unsafe {
-            find_file_in_path_option(
-                p,
-                n,
-                quiet,
-                first,
-                path.as_ptr().cast_mut(),
-                find_what,
-                rel,
-                sua,
-                f2f,
-                c,
-            )
+            find_file_in_path_option(p, n, quiet, first, path, find_what, rel, sua, f2f, c)
         };
         first = false;
         if !fresult.is_null() && result.v_type() == VAR_LIST {
