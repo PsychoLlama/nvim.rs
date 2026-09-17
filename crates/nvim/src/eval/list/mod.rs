@@ -20,6 +20,11 @@
 //! builtins are ordinary safe Rust.  [`Container::of`] is the one place the
 //! `TypVal` union is read, under the `v_type` that names the live arm.
 //!
+//! All three are `Copy` pointers and not borrows, and that is the same
+//! decision three times over -- see [`DictArg`] for the argument.  None of
+//! them may become a `&mut`, and a future slice that reads them as
+//! vestigial should read the next section first.
+//!
 //! # Re-entrancy
 //!
 //! Nothing here caches anything across a call that can run Vimscript, and
@@ -41,7 +46,6 @@ use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::{CStr, c_char, c_int};
 use core::marker::PhantomData;
-use core::slice;
 
 use crate::cstr;
 use crate::eval::typval::{
@@ -57,7 +61,6 @@ use crate::eval::vars::{
 };
 use crate::eval::{eval_expr_typval, get_copy_id};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::garray::ga_grow;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_lock, hash_unlock};
 use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
@@ -375,12 +378,15 @@ impl Item {
 
 /// A `Dict` the evaluator handed us: live, or NULL for `v:_null_dict`.
 ///
-/// **Not a borrow wearing a handle's name, unlike its list and blob
-/// siblings.** `filter()`, `map()` and `foreach()` run a callback per item,
-/// and that callback reaches this same dictionary through whatever named it
-/// — so nothing here may hold a `&mut Dict` across a step, and
-/// [`DictArg::items`] is a *slot index* rather than an iterator that borrows
-/// the table.
+/// **Not a borrow wearing a handle's name** — and neither are its list and
+/// blob siblings, whatever p31 said on its way out. `filter()`, `map()` and
+/// `foreach()` run a callback per item, and that callback reaches this same
+/// dictionary through whatever named it — so nothing here may hold a
+/// `&mut Dict` across a step, and [`DictArg::items`] is a *slot index*
+/// rather than an iterator that borrows the table. `'reverse'` and the
+/// locked walk make the list's and the blob's case look weaker, but only
+/// semantically: a callback that merely *reads* the container invalidates a
+/// `&mut` to it, and the lock does not change that.
 #[derive(Clone, Copy)]
 pub(crate) struct DictArg(*mut Dict);
 
@@ -557,6 +563,13 @@ impl DictItemRef {
 // ---------------------------------------------------------------------
 
 /// A `Blob` the evaluator handed us: live, or NULL for `v:_null_blob`.
+///
+/// `Copy`, and a pointer rather than a borrow, for [`DictArg`]'s reason:
+/// `filter()`/`map()`/`foreach()` run a callback per byte and the callback
+/// reaches this same blob, so a `&mut Blob` held across a step would be a
+/// promise about the whole call that the walk cannot keep. Every method
+/// here re-derives the borrow, and the byte plumbing underneath is
+/// [`Blob`]'s own.
 #[derive(Clone, Copy)]
 pub(crate) struct BlobArg(*mut Blob);
 
@@ -591,69 +604,40 @@ impl BlobArg {
         self.get().map_or(0, |b| b.bv_ga.ga_len)
     }
 
-    /// The first `len` bytes of storage: no more than the length plus what
-    /// [`Blob::grow`] has just reserved.
-    #[inline(always)]
-    fn bytes<'a>(self, len: usize) -> &'a mut [uint8_t] {
-        let data = self
-            .get()
-            .map_or(core::ptr::null_mut(), |b| b.bv_ga.ga_data);
-        if len == 0 {
-            return &mut [];
-        }
-        // SAFETY: a non-empty blob's `ga_data` holds `ga_maxlen` writable
-        // bytes, and the caller stays inside them.
-        unsafe { slice::from_raw_parts_mut(data.cast(), len) }
-    }
-
-    /// Make room for `n` more bytes without changing the length.
-    #[inline(always)]
-    fn grow(self, n: c_int) {
-        // SAFETY: a live blob.
-        unsafe { ga_grow(&raw mut (*self.0).bv_ga, n) };
-    }
-
-    #[inline(always)]
-    fn set_len(self, len: c_int) {
-        if let Some(b) = self.get() {
-            b.bv_ga.ga_len = len;
-        }
-    }
-
     #[inline(always)]
     pub(crate) fn byte(self, idx: c_int) -> uint8_t {
-        self.bytes(self.len() as usize)[idx as usize]
+        self.get().expect("a live blob").byte(idx)
     }
 
     #[inline(always)]
     pub(crate) fn set_byte(self, idx: c_int, byte: uint8_t) {
-        self.bytes(self.len() as usize)[idx as usize] = byte;
+        self.get().expect("a live blob").set_byte(idx, byte);
     }
 
     /// Drop the byte at `idx`, closing the gap -- `filter()`'s removal.
     #[inline(always)]
     pub(crate) fn remove_byte(self, idx: c_int) {
-        let len = self.len() as usize;
-        self.bytes(len)
-            .copy_within(idx as usize + 1.., idx as usize);
-        self.set_len(len as c_int - 1);
+        let at = idx as usize;
+        self.get().expect("a live blob").drain(at, at);
     }
 
     /// Insert `byte` before `idx`, which may be the blob's length.
     #[inline(always)]
     pub(crate) fn insert_byte(self, idx: c_int, byte: uint8_t) {
-        let (len, idx) = (self.len() as usize, idx as usize);
-        self.grow(1);
-        let bytes = self.bytes(len + 1);
+        let (blob, idx) = (self.get().expect("a live blob"), idx as usize);
+        let len = blob.len();
+        // `claim` grows the array *and* declares the byte live, so the
+        // shuffle below runs over the whole new length.
+        blob.claim(1);
+        let bytes = blob.bytes_mut();
         bytes.copy_within(idx..len, idx + 1);
         bytes[idx] = byte;
-        self.set_len(len as c_int + 1);
     }
 
     /// Append `byte`, growing the blob -- `add()`'s one-item form.
     #[inline(always)]
     pub(crate) fn push(self, byte: uint8_t) {
-        self.insert_byte(self.len(), byte);
+        self.get().expect("a live blob").push(byte);
     }
 
     /// Store the blob in `result`, taking a reference to it.

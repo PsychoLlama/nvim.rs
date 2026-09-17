@@ -25,7 +25,7 @@ count	callee	no_raw	defs	def
 79	nlua_pop_handle	0	1	crates/nvim/src/lua/converter/pop.rs
 77	apply_autocmds	0	1	crates/nvim/src/autocmd/fire.rs
 69	prefix_eq	0	1	crates/nvim/src/cstr.rs
-68	from_raw_parts_mut	0	0	
+67	from_raw_parts_mut	0	0	
 64	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 62	nlua_pop_integer	0	1	crates/nvim/src/lua/converter/pop.rs
 61	strequal	0	1	crates/nvim/src/memory/mod.rs
@@ -67,11 +67,11 @@ count	callee	no_raw	defs	def
 33	xstrlcat	0	1	crates/nvim/src/memory/mod.rs
 32	Box::from_raw	0	8	
 32	eq_bytes	0	1	crates/nvim/src/cstr.rs
-32	ga_grow	0	1	crates/nvim/src/garray.rs
 32	os_path_exists	0	1	crates/nvim/src/os/fs/dir.rs
 32	ptr2cells	0	1	crates/nvim/src/charset/display.rs
 31	.copy_from_nonoverlapping	0	0	
 31	f	0	0	
+31	ga_grow	0	1	crates/nvim/src/garray.rs
 30	Term::new	0	1	crates/nvim/src/terminal/mod.rs
 30	emsg	0	0	
 30	syn_check_group	0	1	crates/nvim/src/highlight_group/table.rs
