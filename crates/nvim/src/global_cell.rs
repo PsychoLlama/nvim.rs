@@ -179,6 +179,41 @@ impl<T> GlobalCell<T> {
         *project(unsafe { &mut *self.0.get() }) = value;
     }
 
+    /// Project one field of the contents, forming no reference to the rest.
+    ///
+    /// This is [`get_field`](Self::get_field) for a field too expensive to
+    /// copy — a string option's owned buffer, say. `f` sees the field and
+    /// the borrow ends when it returns, which is the whole of the contract:
+    /// a value that has to outlive the call is cloned inside `f`, never
+    /// handed out by reference.
+    ///
+    /// The borrow rules are [`get_field`](Self::get_field)'s for the same
+    /// reason — an option read must not enter the borrow table — so `f` must
+    /// not write the same field. Nothing in `f` may reach back into the cell
+    /// and replace what it is looking at.
+    #[inline(always)]
+    pub fn with_field<F, R>(
+        &self,
+        project: impl FnOnce(&mut T) -> &mut F,
+        f: impl FnOnce(&F) -> R,
+    ) -> R {
+        check_main_thread();
+        check_no_exclusive_borrow(self.0.get() as usize);
+        // SAFETY: main-thread invariant + no outstanding exclusive borrow.
+        f(project(unsafe { &mut *self.0.get() }))
+    }
+
+    /// Overwrite one field and answer what it held. The move out and the
+    /// move in are one operation, so a field that owns an allocation can
+    /// change hands without either side being able to free it twice.
+    #[inline(always)]
+    pub fn replace_field<F>(&self, project: impl FnOnce(&mut T) -> &mut F, value: F) -> F {
+        check_main_thread();
+        check_no_borrow(self.0.get() as usize);
+        // SAFETY: main-thread invariant + no outstanding borrow.
+        core::mem::replace(project(unsafe { &mut *self.0.get() }), value)
+    }
+
     /// Run `f` with a shared reference to the contents.
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         check_main_thread();

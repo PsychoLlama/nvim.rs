@@ -16,14 +16,14 @@
 
 use crate::cstr;
 use crate::strings::has_char;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, transchar_byte};
 use crate::drawscreen::comp_col;
 use crate::drawscreen::state::ru_wid;
-use crate::memory::{xfree, xstrdup};
+use crate::memory::xstrdup;
 use crate::message::e_invalid_format_string_single_percent_s;
 use crate::message::{verbose_open, verbose_stop};
 use crate::option::vars::p_vfile;
@@ -38,6 +38,7 @@ use crate::types::{LineNr, NUL, OptSet, OptionSetFlags, StlSyntax};
 use crate::winfloat::win_config_float;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
+use super::free_string_option;
 use super::{
     SHM_ALL, check_stl_option, did_set_option_listflag, did_set_str_generic, illegal_char,
     opt_strings_mask,
@@ -84,7 +85,7 @@ fn opt_bytes<'a>(s: *const c_char) -> &'a [u8] {
 /// Check `'rulerformat'` as a whole.
 fn check_ruf() -> Option<CString> {
     // SAFETY: the option's own value.
-    unsafe { check_stl_option(p_ruf()) }
+    p_ruf(|value| unsafe { check_stl_option(value.as_ptr().cast_mut()) })
 }
 
 pub fn did_set_rulerformat(args: &mut OptSet) -> Option<&CStr> {
@@ -136,9 +137,10 @@ pub(crate) fn did_set_statustabline_rulerformat(
         let default = get_option_default(idx, flags, &mut expansion)
             .as_string()
             .expect("every option reaching here is a string option");
-        // SAFETY: the option's own variable.
-        unsafe { xfree(varp.get().cast::<c_void>()) };
-        unsafe { varp.set(xstrdup(default.data())) };
+        // SAFETY: the option's own variable. Replace and *then* free; see
+        // `crate::optionstr::did_set_optexpr`.
+        let old = unsafe { varp.replace(xstrdup(default.data())) };
+        unsafe { free_string_option(old) };
         s = unsafe { varp.get() };
     }
     // A floating window's status line is part of its frame.
@@ -211,7 +213,7 @@ const SHADA_ITEMS: &[u8] = b"!\"%'/:<@cfhnrs";
 pub fn did_set_shada(args: &mut OptSet) -> Option<&CStr> {
     let (buf, buflen) = errbuf(args);
     // SAFETY: the option's own value, which is NUL-terminated.
-    let value = unsafe { CStr::from_ptr(p_shada()) }.to_bytes();
+    let value = p_shada(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
     // Reading past the end answers the terminator, as walking the C string
     // does.
     let at = |i: usize| value.get(i).copied().unwrap_or(0);
@@ -311,7 +313,7 @@ pub fn did_set_shortmess(args: &mut OptSet) -> Option<&CStr> {
 
 pub fn did_set_verbosefile(_args: &mut OptSet) -> Option<&CStr> {
     verbose_stop();
-    if c_int::from(unsafe { *p_vfile() }) != NUL && verbose_open().is_err() {
+    if p_vfile(|value| !value.is_empty()) && verbose_open().is_err() {
         return invalid();
     }
     None

@@ -15,7 +15,7 @@ use crate::cstr;
 use crate::eval::fs::modify_fname;
 use crate::eval::vars::get_vim_var_str;
 use crate::memory::xmemrchr;
-use crate::option::vars::p_hf;
+use crate::option::vars::{P_HF, p_hf};
 use crate::os::cshim::strchr;
 use crate::os::fs::os_isdir;
 use crate::os::state::{didset_vim, didset_vimruntime};
@@ -202,9 +202,9 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
         // '$'), then from the executable's own path.
         let mut exe_name: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         if vim_path.is_null() {
-            let from_helpfile = !p_hf().is_null() && !has_char(cstr::at(p_hf()), '$' as c_int);
+            let from_helpfile = !p_hf(|hf| has_char(hf, '$' as c_int));
             if from_helpfile {
-                vim_path = p_hf();
+                vim_path = P_HF.value_ptr();
             } else {
                 // ../share/nvim/runtime, relative to the binary.
                 vim_get_prefix_from_exepath(exe_name.as_mut_ptr());

@@ -81,7 +81,7 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Fail
             unsafe { os_remove(cstr::at(orig)) };
         }
         // With `'diffexpr'` set there is no `-a` to retry without.
-        if unsafe { *p_dex() } != 0 || diff_a_works.get().is_some() {
+        if p_dex(|value| !value.is_empty()) || diff_a_works.get().is_some() {
             break;
         }
         diff_a_works.set(Some(ok));
@@ -179,7 +179,7 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
     let tmp_orig = unsafe { (*dio).dio_orig.din_fname };
     let tmp_new = unsafe { (*dio).dio_new.din_fname };
     let tmp_diff = unsafe { (*dio).dio_diff.dout_fname };
-    if unsafe { *p_dex() } != 0 {
+    if p_dex(|value| !value.is_empty()) {
         unsafe { eval_diff(tmp_orig, tmp_new, tmp_diff) };
         return Ok(());
     }
@@ -215,8 +215,8 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
         cmd.extend_from_slice(cstr::bytes_at(tmp_orig));
         cmd.push(b' ');
         cmd.extend_from_slice(cstr::bytes_at(tmp_new));
-        append_redir(&mut cmd, cstr::at(p_srr()), cstr::at(tmp_diff));
     }
+    p_srr(|srr| unsafe { append_redir(&mut cmd, srr, cstr::at(tmp_diff)) });
     let cmd = cstr::owned(&cmd);
 
     block_autocmds();

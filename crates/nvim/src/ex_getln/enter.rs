@@ -204,7 +204,7 @@ pub(crate) fn command_line_enter(
     };
     // SAFETY: `state` lives in this frame for the whole of the key loop.
     let mut s = unsafe { Cls::new(&raw mut state) };
-    s.save_p_icm = unsafe { xstrdup(p_icm()) };
+    s.save_p_icm = p_icm(|value| unsafe { xstrdup(value.as_ptr().cast_mut()) });
     init_incsearch_state(s.is_state());
 
     let mut cc = Cc::current();
@@ -344,16 +344,16 @@ pub(crate) fn command_line_enter(
         if !cmd_silent.get() && !exmode_active.get() {
             let mut found_one = false;
             for mut wp in windows_in_curtab() {
-                if unsafe { *p_stl() } as ::core::ffi::c_int != NUL
+                if p_stl(|value| !value.is_empty())
                     || unsafe { *wp.w_onebuf_opt.wo_stl } as ::core::ffi::c_int != NUL
-                    || unsafe { *p_wbr() } as ::core::ffi::c_int != NUL
+                    || p_wbr(|value| !value.is_empty())
                     || unsafe { *wp.w_onebuf_opt.wo_wbr } as ::core::ffi::c_int != NUL
                 {
                     wp.w_redr_status = true;
                     found_one = true;
                 }
             }
-            if unsafe { *p_tal() } as ::core::ffi::c_int != NUL {
+            if p_tal(|value| !value.is_empty()) {
                 redraw_tabline.set(true);
                 found_one = true;
             }

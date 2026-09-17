@@ -14,7 +14,6 @@
 
 use super::*;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab};
-use crate::optionstr::empty_option;
 use crate::types::Failed;
 use crate::window::{WSP_ABOVE, WSP_HELP, WSP_NEWLOC, WSP_TOP};
 use crate::winlayer::{Win, last_window, tabs, windows, windows_in_tab};
@@ -132,7 +131,7 @@ unsafe fn qf_open_new_file_win(ll_ref: *mut QfInfo) -> Result<(), Failed> {
         return Err(Failed);
     }
     // Do not split again for the next entry.
-    P_SWB.set(empty_option());
+    P_SWB.clear();
     swb_flags.set(0);
     Win::current().w_onebuf_opt.wo_scb = false as c_int;
     Win::current().w_onebuf_opt.wo_crb = false as c_int;

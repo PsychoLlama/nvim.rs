@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::normal::{
     VisualMode, set_visual_active, set_visual_anchor, set_visual_mode, visual_active,
     visual_anchor, with_visual_anchor,
@@ -122,7 +123,7 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
 
     // Correct the cursor when 'selection' is exclusive.
     if visual_active()
-        && c_int::from(unsafe { *p_sel() }) == 'e' as c_int
+        && p_sel(|value| cstr::first(value) == b'e')
         && lt(visual_anchor(), Win::current().w_cursor)
     {
         dec_cursor();
@@ -184,7 +185,7 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
     set_visual_active(true);
     set_visual_mode(VisualMode::CHAR);
 
-    if c_int::from(unsafe { *p_sel() }) == 'e' as c_int {
+    if p_sel(|value| cstr::first(value) == b'e') {
         // Correction for exclusive selection depends on the direction.
         if forward && ltoreq(visual_anchor(), Win::current().w_cursor) {
             inc_cursor();

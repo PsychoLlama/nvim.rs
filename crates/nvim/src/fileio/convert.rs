@@ -133,13 +133,15 @@ pub(crate) unsafe fn readfile_charconvert(
 /// `fenc` must point at a NUL-terminated string.
 pub unsafe fn need_conversion(fenc: *const c_char) -> bool {
     let fenc_flags;
-    let same_encoding = if unsafe { *fenc } == 0 || unsafe { cstr::eq(p_enc(), fenc) } {
+    let same_encoding = if unsafe { *fenc } == 0
+        || p_enc(|value| unsafe { cstr::eq(value.as_ptr().cast_mut(), fenc) })
+    {
         fenc_flags = 0;
         true
     } else {
         // Ignore the difference between "ansi" and "latin1", "ucs-4" and
         // "ucs-4be", and so on.
-        let enc_flags = unsafe { get_fio_flags(p_enc()) };
+        let enc_flags = p_enc(|value| unsafe { get_fio_flags(value.as_ptr().cast_mut()) });
         fenc_flags = unsafe { get_fio_flags(fenc) };
         enc_flags != 0 && fenc_flags == enc_flags
     };
@@ -159,8 +161,12 @@ pub unsafe fn need_conversion(fenc: *const c_char) -> bool {
 ///
 /// `name` must point at a NUL-terminated string.
 pub unsafe fn get_fio_flags(name: *const c_char) -> c_int {
-    let name = if unsafe { *name } == 0 { p_enc() } else { name };
-    let prop = unsafe { enc_canon_props(name) };
+    // SAFETY: the caller's string, or `'encoding'`'s own.
+    let prop = if unsafe { *name } == 0 {
+        p_enc(|enc| unsafe { enc_canon_props(enc.as_ptr()) })
+    } else {
+        unsafe { enc_canon_props(name) }
+    };
     let little = if prop & ENC_ENDIAN_L as c_int != 0 {
         FIO_ENDIAN_L
     } else {
@@ -704,9 +710,9 @@ pub(crate) struct FormatGuess {
 impl FormatGuess {
     pub(crate) fn from_ffs() -> Self {
         FormatGuess {
-            try_dos: has_char(unsafe { cstr::at(p_ffs()) }, b'd' as c_int),
-            try_unix: has_char(unsafe { cstr::at(p_ffs()) }, b'x' as c_int) as c_int,
-            try_mac: has_char(unsafe { cstr::at(p_ffs()) }, b'm' as c_int) as c_int,
+            try_dos: p_ffs(|value| has_char(value, b'd' as c_int)),
+            try_unix: p_ffs(|value| has_char(value, b'x' as c_int)) as c_int,
+            try_mac: p_ffs(|value| has_char(value, b'm' as c_int)) as c_int,
         }
     }
 
@@ -792,7 +798,7 @@ pub(crate) fn rewind_retry(
     had_iconv: bool,
 ) {
     // SAFETY: reading an option string pointer.
-    if unsafe { *p_ccv() } != 0 && had_iconv {
+    if p_ccv(|value| !value.is_empty()) && had_iconv {
         // iconv() failed; try 'charconvert'.
         *did_iconv = true;
     } else {

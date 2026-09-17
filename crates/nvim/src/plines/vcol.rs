@@ -9,6 +9,7 @@
 //! functions.
 
 use super::*;
+use crate::cstr;
 use core::ptr;
 
 use crate::normal::{visual_active, visual_anchor};
@@ -106,7 +107,7 @@ pub(crate) unsafe fn getvcol(
             && window.w_onebuf_opt.wo_list == 0
             && !virtual_active(window)
             && !(visual_active()
-                && (unsafe { *p_sel() } == b'e' as c_char
+                && (p_sel(|value| cstr::first(value) == b'e')
                     || ltoreq(unsafe { *pos }, visual_anchor())));
         if cursor_at_tab_end {
             unsafe { *cursor = vcol + incr - 1 };
@@ -220,9 +221,10 @@ pub(crate) unsafe fn getvcols(
     // second position -- but only when that still leaves the first one's
     // last column inside the block.
     let before_second = from2 - 1;
+    let exclusive = p_sel(|value| cstr::first(value) == b'e');
     unsafe {
         *right = if to2 > to1 {
-            if *p_sel() == b'e' as c_char && before_second >= to1 {
+            if exclusive && before_second >= to1 {
                 before_second
             } else {
                 to2

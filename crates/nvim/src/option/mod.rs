@@ -20,6 +20,7 @@
 //! | [`validate`] | vetting a value before anything sees it |
 //! | [`set`] | `set_option`, and the ordering it depends on |
 //! | [`context`] | doing that for another window or buffer |
+//! | [`cpo`] | 'cpoptions' held at a value for one operation |
 //! | [`set_cmd`] | the `:set` argument parser |
 //! | [`stropt`] | the `+=`/`^=`/`-=` value assembly |
 //! | [`didset`] | the boolean and numeric `did_set_*` callbacks |
@@ -46,6 +47,7 @@ use core::ffi::{c_int, c_uint};
 mod check;
 mod context;
 mod copy;
+mod cpo;
 mod defaults;
 mod didset;
 mod expand;
@@ -65,6 +67,7 @@ pub mod vars;
 pub(crate) use self::check::*;
 pub(crate) use self::context::*;
 pub(crate) use self::copy::*;
+pub(crate) use self::cpo::*;
 pub(crate) use self::defaults::*;
 pub(crate) use self::didset::*;
 pub(crate) use self::expand::*;

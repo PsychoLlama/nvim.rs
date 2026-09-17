@@ -4,7 +4,7 @@
 
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::xfree;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::api::private::helpers::cstr_to_string;
@@ -83,7 +83,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
         };
         xfree(name as *mut c_void);
     } else {
-        if byte(p_sh()) == NUL {
+        if p_sh(CStr::is_empty) {
             emsg(gettext(e_shellempty));
             return;
         }
@@ -132,7 +132,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
 pub(crate) fn ex_lsp(excmd: &mut ExArg) {
     // SAFETY: the command line's own NUL-terminated argument.
     let excmd = Array::from(vec![Object::string(unsafe { cstr_to_string(excmd.arg) })]);
-    const CHUNK: &core::ffi::CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
+    const CHUNK: &CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
     let ran = unsafe {
         nlua_exec(
             &String_0::from_cstr(CHUNK),

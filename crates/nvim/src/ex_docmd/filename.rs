@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 use crate::cstr;
 use crate::ex_cmds::newlnum;
+use crate::option::local_or_global;
 use crate::os::cshim::snprintf;
 use crate::types::CmdIdx;
 
@@ -42,7 +43,7 @@ use crate::ex_docmd::{
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
 use crate::memory::{xmemdupz, xstrdup, xstrlcpy};
 use crate::message::e_usingsid;
-use crate::option::vars::{p_gp, p_mp, p_wic};
+use crate::option::vars::{P_GP, P_MP, p_wic};
 use crate::runtime::state::current_sctx;
 
 use crate::message::{emsg_ptr, msg_make};
@@ -93,24 +94,21 @@ pub unsafe fn replace_makeprg(
     }
 
     let buf = Buf::current();
-    let program: *const c_char = if is_grep {
-        if byte(buf.b_p_gp) == NUL {
-            p_gp()
-        } else {
-            buf.b_p_gp
-        }
-    } else if byte(buf.b_p_mp) == NUL {
-        p_mp()
+    // A copy: `strrep` below builds a new command line out of it.
+    let (local, global) = if is_grep {
+        (buf.b_p_gp, P_GP)
     } else {
-        buf.b_p_mp
+        (buf.b_p_mp, P_MP)
     };
+    // SAFETY: a live buffer's option values are NUL-terminated.
+    let program = unsafe { local_or_global(local, global) };
 
     arg = unsafe { skipwhite(arg) };
-    let mut new_cmdline = unsafe { strrep(program, c"$*".as_ptr(), arg) };
+    let mut new_cmdline = unsafe { strrep(program.as_ptr(), c"$*".as_ptr(), arg) };
     if new_cmdline.is_null() {
         // No `$*`: the argument goes on the end.
-        new_cmdline = xmalloc(len_of(program) + len_of(arg) + 2) as *mut c_char;
-        unsafe { strcpy(new_cmdline, program as *mut c_char) };
+        new_cmdline = xmalloc(program.len() + len_of(arg) + 2) as *mut c_char;
+        unsafe { strcpy(new_cmdline, program.as_ptr()) };
         unsafe { strcat(new_cmdline, c" ".as_ptr()) };
         unsafe { strcat(new_cmdline, arg) };
     }

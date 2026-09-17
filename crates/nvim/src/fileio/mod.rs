@@ -680,7 +680,7 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
                 OptionSetFlags::LOCAL,
             );
         // SAFETY: 'fileformats' is a string option; it is never null.
-        } else if unsafe { *p_ffs() } != 0 {
+        } else if p_ffs(|value| !value.is_empty()) {
             set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
         }
     }

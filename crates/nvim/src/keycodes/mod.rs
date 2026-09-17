@@ -650,12 +650,12 @@ pub unsafe fn get_mouse_button(code: c_int, is_click: *mut bool, is_drag: *mut b
 /// byte in the input is escaped as `K_SPECIAL KS_SPECIAL KE_FILLER`. Used for
 /// both sides of a mapping, the rhs of a menu command, and `feedkeys()` input.
 ///
-/// Also handles `<C-v>` and backslash escapes (per `cpo_val`),
+/// Also handles `<C-v>` and backslash escapes (per `cpo`),
 /// `<Leader>`/`<LocalLeader>` expansion, `<SID>` script-id substitution, and —
 /// unless `REPTERM_NO_SIMPLIFY` — simplifications such as `<C-H>` to 0x08.
 ///
 /// `sid_arg` is the script id `<SID>` stands for, or 0 to take the current
-/// one. Only `CpoFlag::BSLASH` is read out of `cpo_val`.
+/// one. Only `CpoFlag::BSLASH` is read out of `cpo`.
 ///
 /// # Safety
 /// `from` must be readable for `from_len` bytes and `bufp` must be writable.
@@ -669,7 +669,7 @@ pub unsafe fn replace_termcodes(
     sid_arg: ScriptId,
     flags: c_int,
     did_simplify: *mut bool,
-    cpo_val: *const c_char,
+    cpo: &CStr,
 ) -> *mut c_char {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise -- `from` is readable for `from_len`
@@ -677,8 +677,7 @@ pub unsafe fn replace_termcodes(
     let mut src = unsafe { Cursor::new(from) };
     let end = src.skip(from_len as isize - 1);
     // A backslash is a special character unless 'cpoptions' contains B.
-    // SAFETY: `cpo_val` is the caller's NUL-terminated option string.
-    let do_backslash = !has_char(unsafe { cstr::at(cpo_val) }, CpoFlag::BSLASH.as_c_int());
+    let do_backslash = !has_char(cpo, CpoFlag::BSLASH.as_c_int());
     let do_special = flags & REPTERM_NO_SPECIAL == 0;
     // SAFETY: the caller's promise -- `bufp` is readable and writable.
     let given = unsafe { *bufp };

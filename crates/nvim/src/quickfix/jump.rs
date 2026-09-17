@@ -19,7 +19,6 @@ use crate::cstr;
 use crate::edit::BeginlineOpts;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_docmd::cmdmod_tab;
-use crate::optionstr::is_empty_option;
 use crate::search::SEARCH_KEEP;
 use crate::types::{IOSIZE, ShmFlag};
 use crate::winlayer::Win;
@@ -458,7 +457,7 @@ pub(crate) unsafe fn qf_jump_newwin(
         qf_emsg(e_no_errors.as_ptr());
         return;
     }
-    let old_swb = p_swb();
+    let old_swb = P_SWB.clear();
     let old_swb_flags = swb_flags.get();
     // Getting the file may reset it.
     let old_key_typed = KeyTyped.get();
@@ -530,8 +529,8 @@ pub(crate) unsafe fn qf_jump_newwin(
 
     // Put 'switchbuf' back, unless an autocommand or a modeline changed
     // it meanwhile.
-    if p_swb() != old_swb && is_empty_option(p_swb()) {
-        P_SWB.set(old_swb);
+    if P_SWB.is_unset() {
+        P_SWB.restore(old_swb);
         swb_flags.set(old_swb_flags);
     }
     qf_busy_end();

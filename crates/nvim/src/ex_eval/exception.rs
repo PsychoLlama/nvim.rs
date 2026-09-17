@@ -470,7 +470,7 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
         verbose_enter();
     }
     let no_prompt = Suppress::wait_return();
-    if debug_break_level.get() > 0 || unsafe { *p_vfile() } == NUL as c_char {
+    if debug_break_level.get() > 0 || p_vfile(CStr::is_empty) {
         // Always scroll up, don't overwrite.
         msg_scroll.set(1);
     }
@@ -480,7 +480,7 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
     let _: bool = report_msg(0, || tr_plural!(template, value));
     // Don't overwrite this either.
     msg_str(c"\n");
-    if debug_break_level.get() > 0 || unsafe { *p_vfile() } == NUL as c_char {
+    if debug_break_level.get() > 0 || p_vfile(CStr::is_empty) {
         cmdline_row.set(msg_row.get());
     }
     drop(no_prompt);

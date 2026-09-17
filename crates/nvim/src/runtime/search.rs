@@ -22,6 +22,8 @@ use super::*;
 use crate::cstr;
 use crate::memory::XString;
 use crate::message_fmt::c_str;
+use crate::option::vars::P_PP;
+use crate::option::vars::P_RTP;
 use crate::path::ExpandFlags;
 use crate::semsg;
 use crate::smsg;
@@ -358,11 +360,18 @@ unsafe fn announce_search(name: *mut c_char, prefix: *const c_char, path: *const
 ///
 /// Answers OK when something was found, FAIL otherwise.
 ///
+/// `path` is the list to walk, which the caller has already copied out of
+/// whichever option it came from -- invoking the callback may set that
+/// option -- and `path_name` is the option it names, for the "not found"
+/// message. Upstream recovered that name by comparing `path` against
+/// `p_rtp`'s *address*, which a copied list cannot answer.
+///
 /// # Safety
-/// `path` and `prefix` must be NUL-terminated (`prefix` may be empty), `name`
-/// may be null, and `callback` must accept `cookie`.
+/// `prefix` must be NUL-terminated (it may be empty), `name` may be null, and
+/// `callback` must accept `cookie`.
 pub unsafe fn do_in_path(
-    path: *const c_char,
+    mut path: XString,
+    path_name: &'static CStr,
     prefix: *const c_char,
     name: *mut c_char,
     flags: RuntimeOpts,
@@ -370,20 +379,16 @@ pub unsafe fn do_in_path(
     cookie: *mut c_void,
 ) -> c_int {
     let visitor = Visitor { callback, cookie };
-    // Copy the path list: invoking the callback may change the option it came
-    // from.
-    // SAFETY: `path` is NUL-terminated.
-    let mut rtp_copy = XString::from_cstr(unsafe { cstr::at(path) });
     let buf = unsafe { xmallocz(MAXPATHL as size_t) }.cast::<c_char>();
 
     if p_verbose() > 10 && !name.is_null() {
         // SAFETY: the caller's strings.
-        unsafe { announce_search(name, prefix, path) };
+        unsafe { announce_search(name, prefix, path.as_ptr()) };
     }
 
     let do_all = flags.has(RuntimeOpts::ALL);
     let mut did_one = false;
-    let mut rtp = rtp_copy.as_mut_ptr();
+    let mut rtp = path.as_mut_ptr();
     // SAFETY: `rtp` walks the copy; `buf` has `MAXPATHL` writable bytes.
     while unsafe { *rtp } != 0 && (do_all || !did_one) {
         // SAFETY: as above.
@@ -437,11 +442,7 @@ pub unsafe fn do_in_path(
     unsafe { xfree(buf.cast()) };
 
     if !did_one && !name.is_null() {
-        let basepath = if path == p_rtp().cast_const() {
-            c"runtimepath"
-        } else {
-            c"packpath"
-        };
+        let basepath = path_name;
         // SAFETY: `basepath` is a literal and `name` the caller's pattern.
         if flags.has(RuntimeOpts::ERR) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
@@ -611,7 +612,7 @@ fn runtime_get_named_common(
 /// # Safety
 /// As [`do_in_path`].
 pub unsafe fn do_in_path_and_pp(
-    path: *mut c_char,
+    path: XString,
     name: *mut c_char,
     flags: RuntimeOpts,
     callback: DoInRuntimepathCB,
@@ -630,7 +631,17 @@ pub unsafe fn do_in_path_and_pp(
 
     if !flags.has(RuntimeOpts::NORTP) {
         // SAFETY: the caller's strings and callback.
-        done |= unsafe { do_in_path(path, c"".as_ptr(), dirs_only, flags, callback, cookie) };
+        done |= unsafe {
+            do_in_path(
+                path,
+                c"runtimepath",
+                c"".as_ptr(),
+                dirs_only,
+                flags,
+                callback,
+                cookie,
+            )
+        };
     }
 
     if wants_more(done) && flags.has(RuntimeOpts::START) {
@@ -651,8 +662,17 @@ pub unsafe fn do_in_path_and_pp(
             },
         ] {
             // SAFETY: as above.
-            done |=
-                unsafe { do_in_path(p_pp(), prefix.as_ptr(), name, start_flags, callback, cookie) };
+            done |= unsafe {
+                do_in_path(
+                    P_PP.get(),
+                    c"packpath",
+                    prefix.as_ptr(),
+                    name,
+                    start_flags,
+                    callback,
+                    cookie,
+                )
+            };
             if !wants_more(done) {
                 break;
             }
@@ -661,7 +681,17 @@ pub unsafe fn do_in_path_and_pp(
 
     if wants_more(done) && flags.has(RuntimeOpts::OPT) {
         for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
-            done |= unsafe { do_in_path(p_pp(), prefix.as_ptr(), name, flags, callback, cookie) };
+            done |= unsafe {
+                do_in_path(
+                    P_PP.get(),
+                    c"packpath",
+                    prefix.as_ptr(),
+                    name,
+                    flags,
+                    callback,
+                    cookie,
+                )
+            };
             if !wants_more(done) {
                 break;
             }
@@ -702,7 +732,7 @@ pub unsafe fn do_in_runtimepath(
         && (success == FAIL || flags.has(RuntimeOpts::ALL))
     {
         // SAFETY: as above.
-        success |= unsafe { do_in_path_and_pp(p_rtp(), name, flags, callback, cookie) };
+        success |= unsafe { do_in_path_and_pp(P_RTP.get(), name, flags, callback, cookie) };
     }
     if success == FAIL { Err(Failed) } else { Ok(()) }
 }
@@ -746,7 +776,7 @@ pub unsafe fn source_runtime_vim_lua(name: *mut c_char, flags: RuntimeOpts) -> R
 /// # Safety
 /// Both must be NUL-terminated.
 pub unsafe fn source_in_path_vim_lua(
-    path: *mut c_char,
+    path: XString,
     name: *mut c_char,
     flags: RuntimeOpts,
 ) -> c_int {

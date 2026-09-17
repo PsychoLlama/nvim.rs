@@ -286,7 +286,7 @@ fn add_menus(menu_path: CText, map_to: CText, arg: &MenuArg, pri_tab: &[c_int; M
 fn translate_termcodes<'a>(rhs: &'a CStr, owner: &mut *mut c_char) -> &'a CStr {
     // SAFETY: `rhs` is NUL-terminated and `owner` names a live slot;
     // `replace_termcodes` allocates into it and answers a pointer into it.
-    unsafe {
+    p_cpo(|cpo| unsafe {
         let translated = replace_termcodes(
             rhs.as_ptr(),
             rhs.count_bytes(),
@@ -294,10 +294,10 @@ fn translate_termcodes<'a>(rhs: &'a CStr, owner: &mut *mut c_char) -> &'a CStr {
             0,
             REPTERM_DO_LT,
             ptr::null_mut(),
-            p_cpo(),
+            cpo,
         );
         CStr::from_ptr(translated)
-    }
+    })
 }
 
 /// `getdigits_int(&p, false, 0)`: the number `p` starts with, advancing `p`

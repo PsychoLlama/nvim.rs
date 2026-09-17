@@ -401,7 +401,7 @@ fn split_room_horizontal(
 /// The first character of `'eadirection'`.
 fn ead() -> c_int {
     // SAFETY: `'eadirection'` is a NUL-terminated option string.
-    unsafe { *p_ead() as c_int }
+    p_ead(|value| unsafe { *value.as_ptr().cast_mut() as c_int })
 }
 
 /// Whether any window beside `oldwin` in its own row or column answers `taller`
@@ -797,7 +797,7 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     newp.w_prevdir = dup(oldp.w_prevdir);
 
     // SAFETY: `'splitkeep'` is a NUL-terminated option string.
-    let spk = unsafe { *p_spk() } as c_int;
+    let spk = p_spk(|value| unsafe { *value.as_ptr().cast_mut() }) as c_int;
     if spk != 'c' as c_int {
         if spk == 't' as c_int {
             newp.w_skipcol = oldp.w_skipcol;

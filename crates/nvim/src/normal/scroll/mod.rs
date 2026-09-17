@@ -8,7 +8,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win, windows};
@@ -71,7 +70,7 @@ pub(crate) fn do_check_scrollbind(check: bool) {
                 let down = vtopline as LineNr - old_vtopline.get();
                 check_scrollbind(down, win.w_leftcol - old_leftcol.get());
             }
-        } else if has_char(unsafe { cstr::at(p_sbo()) }, 'j' as c_int) {
+        } else if p_sbo(|value| has_char(value, 'j' as c_int)) {
             // Just moved into this window, and 'scrollopt' has "jump":
             // bring it back to where the binding says it should be.
             check_scrollbind(vtopline as LineNr - win.w_scbind_pos as LineNr, 0);
@@ -100,9 +99,9 @@ pub(crate) fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
     // Two windows in diff mode are always bound vertically; otherwise
     // 'scrollopt' says so.
     let want_ver = old_curwin.w_onebuf_opt.wo_diff != 0
-        || (has_char(unsafe { cstr::at(p_sbo()) }, 'v' as c_int) && vtopline_diff != 0);
-    let want_hor = has_char(unsafe { cstr::at(p_sbo()) }, 'h' as c_int)
-        && (leftcol_diff != 0 || vtopline_diff != 0);
+        || (p_sbo(|value| has_char(value, 'v' as c_int)) && vtopline_diff != 0);
+    let want_hor =
+        p_sbo(|value| has_char(value, 'h' as c_int)) && (leftcol_diff != 0 || vtopline_diff != 0);
     set_visual_active(false);
     set_visual_select(visual_active());
 

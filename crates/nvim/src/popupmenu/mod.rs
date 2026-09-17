@@ -183,17 +183,15 @@ unsafe fn pum_items() -> &'static [PumItem] {
 /// right and bottom edges — and two for any of the box styles.
 #[inline]
 fn pum_border_width() -> c_int {
-    // SAFETY: `p_pumborder` and the option's value table are editor-owned
-    // NUL-terminated strings.
-    let border = p_pumborder();
-    if unsafe { *border } == 0 || unsafe { strequal(border, BORDER_NONE.as_ptr()) } {
-        return 0;
-    }
-    if unsafe { strequal(border, BORDER_SHADOW.as_ptr()) } {
-        1
-    } else {
-        2
-    }
+    p_pumborder(|border| {
+        if border.is_empty() || border == BORDER_NONE {
+            0
+        } else if border == BORDER_SHADOW {
+            1
+        } else {
+            2
+        }
+    })
 }
 
 /// Where the menu is anchored: the position the placement is computed from.

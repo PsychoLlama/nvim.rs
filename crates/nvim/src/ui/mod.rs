@@ -399,7 +399,7 @@ pub fn vim_beep(val: core::ffi::c_uint) {
             }
         }
     }
-    if has_char(unsafe { cstr::at(p_debug()) }, 'e' as c_int) {
+    if p_debug(|value| has_char(value, 'e' as c_int)) {
         msg_source(HLF_W);
         msg(gettext(c"Beep!"), HLF_W);
     }
@@ -664,7 +664,7 @@ pub fn ui_flush() {
     if pending_mode_info_update.get() {
         let mut arena: Arena = ARENA_EMPTY;
         let style = mode_style_array();
-        let enabled = unsafe { *p_guicursor() } != 0;
+        let enabled = p_guicursor(|value| !value.is_empty());
         ui_call_mode_info_set(enabled as Boolean, style);
         unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
         pending_mode_info_update.set(false);

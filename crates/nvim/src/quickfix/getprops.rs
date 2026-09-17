@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::option::vars::P_EFM;
 use crate::types::{ListRef, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, kListLenMayKnow};
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
@@ -217,7 +218,9 @@ unsafe fn qf_get_list_from_lines(
         return Err(QfError::BadValue);
     }
 
-    let mut errorformat = p_efm();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let efm = P_EFM.get();
+    let mut errorformat = efm.as_ptr().cast_mut();
     if let Some(efm_di) = unsafe { find(what, "efm") } {
         if efm_di.di_tv.v_type() != VAR_STRING || efm_di.di_tv.string_or_null().is_null() {
             return Err(QfError::BadValue);

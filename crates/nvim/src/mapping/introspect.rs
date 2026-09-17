@@ -12,6 +12,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::memory::handoff::owned_cstr;
+use crate::option::vars::P_CPO;
 use crate::types::{NUL, VAR_DICT, kListLenUnknown};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -210,7 +211,6 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     let mut did_simplify = false;
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
-    let cpo = p_cpo();
     let plain = ptr::null_mut();
     let simplify = &raw mut did_simplify;
     let out = &raw mut keys_buf;
@@ -220,9 +220,12 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
 
     // SAFETY: `keys` is NUL-terminated, and both `*_buf` slots are locals that
     // outlive the calls; the allocations they take over are the guards'.
+    // A copy, because the second `replace_termcodes` below is past the end
+    // of a projection's borrow.
+    let cpo = P_CPO.get();
     let (keys_simplified, _owned, mut found) = unsafe {
         let len = cstr::bytes_at(keys).len();
-        let simplified = replace_termcodes(keys, len, out, 0, flags, simplify, cpo);
+        let simplified = replace_termcodes(keys, len, out, 0, flags, simplify, cpo.as_cstr());
         let owned = COwned::new(keys_buf);
         let found = check_map(simplified, mode, exact, false, abbr);
         (simplified, owned, found)
@@ -237,7 +240,7 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
             // behind a test on one of those -- so dropping the whole match
             // is the same answer.
             let len = cstr::bytes_at(keys).len();
-            replace_termcodes(keys, len, alt_out, 0, nosimp, plain, cpo);
+            replace_termcodes(keys, len, alt_out, 0, nosimp, plain, cpo.as_cstr());
             found = check_map(alt_keys_buf, mode, exact, false, abbr);
         }
         COwned::new(alt_keys_buf)
@@ -278,7 +281,8 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
 /// `maplist()`: every mapping, global then buffer-local, as a list of dicts.
 pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
-    let cpo = p_cpo();
+    // A copy: the walk below hands each mapping to a closure.
+    let cpo = P_CPO.get();
     let abbr = args.first().is_some_and(|tv| tv_get_bool(tv) != 0);
     // SAFETY: as above.
     tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);
@@ -302,7 +306,7 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let (alt, _owned) = unsafe {
                 let lhs = str2special_arena(mp.m_keys.as_ptr(), true, false, &raw mut arena);
                 let len = cstr::bytes_at(lhs).len();
-                replace_termcodes(lhs, len, out, 0, flags, simplify, cpo);
+                replace_termcodes(lhs, len, out, 0, flags, simplify, cpo.as_cstr());
                 let alt = (did_simplify && !keys_buf.is_null())
                     .then(|| MapStr::new(cstr::bytes_at(keys_buf)));
                 (alt, COwned::new(keys_buf))

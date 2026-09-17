@@ -15,7 +15,11 @@ use super::*;
 use crate::cstr;
 use crate::file_search::FileNameOpts;
 use crate::highlight_group::{HLF_D, HLF_R};
+use crate::memory::XString;
 use crate::message_fmt::c_str;
+use crate::option::local_or_global;
+use crate::option::vars::P_DEF;
+use crate::option::vars::P_INC;
 use crate::regexp::RE_MAGIC;
 use crate::smsg;
 use crate::strings::has_bytes;
@@ -215,23 +219,19 @@ unsafe fn compile_patterns(
         }
     }
 
-    let inc_opt = unsafe { include_option() };
-    if unsafe { *inc_opt } as c_int != NUL {
+    let inc_opt = include_option();
+    if !inc_opt.is_empty() {
         // Don't ignore case in the 'include' pattern.
-        if !unsafe { compile(&mut pats.incl, inc_opt, false) } {
+        if !unsafe { compile(&mut pats.incl, inc_opt.as_ptr(), false) } {
             return None;
         }
     }
 
     if kind == FIND_DEFINE {
-        let buf_def = Buf::current().b_p_def;
-        let def = if unsafe { *buf_def } as c_int == NUL {
-            p_def()
-        } else {
-            buf_def
-        };
+        // SAFETY: `curbuf` is live and its option value is NUL-terminated.
+        let def = unsafe { local_or_global(Buf::current().b_p_def, P_DEF) };
         // Don't ignore case in the 'define' pattern.
-        if unsafe { *def } as c_int != NUL && !unsafe { compile(&mut pats.def, def, false) } {
+        if !def.is_empty() && !unsafe { compile(&mut pats.def, def.as_ptr().cast_mut(), false) } {
             return None;
         }
     }
@@ -241,16 +241,10 @@ unsafe fn compile_patterns(
 
 /// The effective `'include'`: the buffer-local one, or the global one
 /// when it is empty.
-///
-/// # Safety
-/// The current buffer must be valid.
-unsafe fn include_option() -> *mut c_char {
-    let buf_inc = Buf::current().b_p_inc;
-    if unsafe { *buf_inc } as c_int == NUL {
-        p_inc()
-    } else {
-        buf_inc
-    }
+fn include_option() -> XString {
+    // SAFETY: `curbuf` is live from the first `buflist_new` to exit, and a
+    // buffer's option value is NUL-terminated.
+    unsafe { local_or_global(Buf::current().b_p_inc, P_INC) }
 }
 
 /// Whether the `'include'` pattern uses `\zs`, which moves the file name
@@ -835,7 +829,8 @@ pub unsafe fn find_pattern_in_path(
     let Some(mut pats) = found else {
         return;
     };
-    let inc_opt = unsafe { include_option() };
+    let inc_opt = include_option();
+    let inc_opt = inc_opt.as_ptr().cast_mut();
 
     let mut file_line = vec![0 as c_char; LSIZE];
     let end_lnum = end_lnum.min(Buf::current().b_ml.ml_line_count);

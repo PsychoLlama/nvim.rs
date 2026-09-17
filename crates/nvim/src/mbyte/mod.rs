@@ -197,7 +197,13 @@ pub fn utf_find_illegal() {
     if unsafe { enc_canon_props(Buf::current().b_p_fenc) } & ENC_8BIT != 0 {
         // 'encoding' is utf-8 but the file is 8-bit, so what is illegal is
         // decided after converting back to the file's encoding.
-        let _ = unsafe { convert_setup(&raw mut vimconv, p_enc(), Buf::current().b_p_fenc) };
+        let _ = p_enc(|value| unsafe {
+            convert_setup(
+                &raw mut vimconv,
+                value.as_ptr().cast_mut(),
+                Buf::current().b_p_fenc,
+            )
+        });
     }
 
     Win::current().w_cursor.coladd = 0;

@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::option::vars::P_MOPT;
 use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -213,7 +214,9 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
     let mut history = 0;
     let mut progress_target = 0;
 
-    let mut p = p_mopt();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let mopt = P_MOPT.get();
+    let mut p = mopt.as_ptr().cast_mut();
     while unsafe { *p } != 0 {
         if unsafe { at_opt(p, OPT_HIT_ENTER, false) } {
             p = unsafe { p.add(OPT_HIT_ENTER.count_bytes()) };

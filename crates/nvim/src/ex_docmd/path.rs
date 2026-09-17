@@ -200,7 +200,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         option_set_callback_func(buf.b_p_ffu, &raw mut buf.b_ffu_cb)
     } else {
-        let r = option_set_callback_func(p_ffu(), global_findfunc());
+        let r = p_ffu(|ffu| option_set_callback_func(ffu.as_ptr().cast_mut(), global_findfunc()));
         // Setting it globally without `:setglobal` clears the local one.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
             unsafe { callback_free(&raw mut buf.b_ffu_cb) };
@@ -213,8 +213,9 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
     let varp = args.os_varp.string_var();
     let name = unsafe { get_scriptlocal_funcname(varp.get()) };
     if !name.is_null() {
-        unsafe { free_string_option(varp.get()) };
-        unsafe { varp.set(name) };
+        // Replace and *then* free; see `did_set_optexpr`.
+        let old = unsafe { varp.replace(name) };
+        unsafe { free_string_option(old) };
     }
     None
 }

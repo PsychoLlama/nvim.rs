@@ -20,6 +20,7 @@ use crate::r#move::changed_window_setting;
 use crate::option::vars::p_fcl;
 use crate::os::cshim::gettext;
 use crate::winlayer::{TabPage, Win, windows_in_tab};
+use core::ffi::CStr;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -144,7 +145,7 @@ pub(super) fn new_fold_level_win(mut win: Win) {
 /// Apply 'foldlevel' to all folds that don't contain the cursor.
 pub fn fold_check_close() {
     // SAFETY: 'foldclose' is a NUL-terminated option string.
-    if unsafe { *p_fcl() } as c_int == NUL {
+    if p_fcl(CStr::is_empty) {
         return;
     }
     // SAFETY: the caller's promise.

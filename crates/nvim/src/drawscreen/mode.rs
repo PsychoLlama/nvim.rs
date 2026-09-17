@@ -338,7 +338,7 @@ pub fn comp_col() {
             sc_width = ru_width;
         }
     }
-    if p_sc() && unsafe { *p_sloc() } == b'l'.cast_signed() {
+    if p_sc() && p_sloc(|value| cstr::first(value) == b'l') {
         sc_width = sc_width.saturating_add(SHOWCMD_COLS as c_int);
         // A separating space, unless the ruler is not beside it anyway.
         if !p_ru() || last_has_status {

@@ -8,6 +8,7 @@ use super::identfind::find_ident_under_cursor;
 use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
+use crate::option::vars::P_KP;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
@@ -26,7 +27,7 @@ use crate::keycodes::Ctrl_RSB;
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_prevptr, utfc_ptr2len};
-use crate::memory::{strequal, xfree, xmalloc, xrealloc};
+use crate::memory::{xfree, xmalloc, xrealloc};
 use crate::message::e_noident;
 use crate::message::emsg;
 use crate::normal::{
@@ -34,8 +35,7 @@ use crate::normal::{
     check_text_or_curbuf_locked, clear_op, get_visual_text, normal_search, visual_active,
 };
 use crate::ops::clear_oparg;
-use crate::option::magic_isset;
-use crate::option::vars::p_kp;
+use crate::option::{local_or_global, magic_isset};
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
@@ -349,19 +349,14 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         }
     }
 
-    // 'keywordprg', which decides what `K` does.
-    // SAFETY: 'keywordprg' is a NUL-terminated option string.
-    let kp = if unsafe { *Buf::current().b_p_kp } as c_int == NUL {
-        p_kp()
-    } else {
-        Buf::current().b_p_kp
-    };
-    // SAFETY: `kp` is NUL-terminated, as are the literals.
-    let kp_helpbang = unsafe { strequal(kp, c":help!".as_ptr()) };
-    let kp_help = kp_helpbang
-        || unsafe { *kp } as c_int == NUL
-        || unsafe { strequal(kp, c":he".as_ptr()) }
-        || unsafe { strequal(kp, c":help".as_ptr()) };
+    // 'keywordprg', which decides what `K` does. A copy, because it is
+    // built into a command line further down.
+    // SAFETY: `curbuf` is live and 'keywordprg' is NUL-terminated.
+    let keywordprg = unsafe { local_or_global(Buf::current().b_p_kp, P_KP) };
+    let kp = keywordprg.as_ptr().cast_mut();
+    let kp_helpbang = keywordprg == c":help!";
+    let kp_help =
+        kp_helpbang || keywordprg.is_empty() || keywordprg == c":he" || keywordprg == c":help";
     if kp_help && !kp_helpbang {
         // SAFETY: `word` points into a NUL-terminated buffer line.
         if unsafe { *skipwhite(word) } as c_int == NUL {

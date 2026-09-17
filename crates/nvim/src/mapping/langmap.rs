@@ -14,8 +14,8 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::message_fmt::c_str_len;
+use crate::option::vars::P_LANGMAP;
 use crate::swmsg;
 use crate::types::NUL;
 use core::ffi::{c_char, c_int};
@@ -83,9 +83,11 @@ pub(crate) fn langmap_init() {
 pub unsafe fn did_set_langmap(args: &mut OptSet) -> Option<&CStr> {
     let opts = &*args;
     langmap_init(); // back to a one-to-one map
-    let base = p_langmap();
-    // SAFETY: `p_langmap` holds the live, NUL-terminated `'langmap'`.
-    let opt = unsafe { cstr::bytes_at(base) };
+    // A copy: the walk below reports errors through the frame's buffer and
+    // outlives a projection's borrow.
+    let langmap = P_LANGMAP.get();
+    let base = langmap.as_ptr().cast_mut();
+    let opt = langmap.as_cstr().to_bytes();
     // The byte at `at`, with the option's own NUL past the end.
     let byte = |at: usize| opt.get(at).copied().unwrap_or(0);
     // SAFETY: `at` is an index inside the option, so `base.add(at)` is a byte

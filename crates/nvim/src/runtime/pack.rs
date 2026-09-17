@@ -20,6 +20,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::option::vars::{P_PP, P_RTP};
 use crate::os::cshim::strstr;
 use crate::path::ExpandFlags;
 
@@ -125,13 +126,21 @@ struct InsertPoints {
 /// Answers `None` when an entry could not be resolved, which upstream treats
 /// as a failure of the whole operation.
 ///
+/// Both answers point into `rtp`, which is the caller's copy of
+/// 'runtimepath': the option owns its string now, so the walk and the splice
+/// that follows share one copy rather than each reading the option again.
+///
 /// # Safety
 /// `ffname` must be NUL-terminated and `fname_len` its length.
-unsafe fn find_insert_points(ffname: *const c_char, fname_len: size_t) -> Option<InsertPoints> {
+unsafe fn find_insert_points(
+    rtp: &CStr,
+    ffname: *const c_char,
+    fname_len: size_t,
+) -> Option<InsertPoints> {
     let mut buf = [0 as c_char; MAXPATHL as usize];
     let mut insp: *const c_char = ptr::null();
     let mut after_insp: *const c_char = ptr::null();
-    let mut entry: *const c_char = p_rtp();
+    let mut entry: *const c_char = rtp.as_ptr();
 
     // SAFETY: `entry` walks 'runtimepath' and `buf` has `MAXPATHL` bytes.
     while unsafe { *entry } != 0 {
@@ -184,8 +193,8 @@ unsafe fn find_insert_points(ffname: *const c_char, fname_len: size_t) -> Option
 
     if insp.is_null() {
         // Neither "fname" nor an `after/` directory: append at the end.
-        // SAFETY: 'runtimepath' is NUL-terminated.
-        insp = unsafe { p_rtp().add(cstr::bytes_at(p_rtp()).len()) };
+        // SAFETY: the caller's copy is NUL-terminated.
+        insp = unsafe { rtp.as_ptr().add(rtp.count_bytes()) };
     }
     Some(InsertPoints { insp, after_insp })
 }
@@ -214,14 +223,14 @@ struct Spliced {
 /// `afterdir` must be NUL-terminated, and `addlen`/`afterlen` their lengths
 /// plus one for the comma (`afterlen` is zero when there is no `after/`).
 unsafe fn splice_rtp(
+    rtp: &CStr,
     fname: *mut c_char,
     afterdir: *mut c_char,
     addlen: size_t,
     afterlen: size_t,
     points: &InsertPoints,
 ) -> Option<Spliced> {
-    // SAFETY: 'runtimepath' is NUL-terminated.
-    let oldlen = unsafe { cstr::bytes_at(p_rtp()) }.len();
+    let oldlen = rtp.count_bytes();
     let capacity = oldlen + addlen + afterlen + 1; // +1 for the NUL
     // SAFETY: `try_malloc` answers null rather than aborting.
     let new_rtp = unsafe { try_malloc(capacity) }.cast::<c_char>();
@@ -231,9 +240,9 @@ unsafe fn splice_rtp(
 
     // SAFETY: every write below stays inside `capacity`, which was sized from
     // the same three lengths. `insp` points into 'runtimepath'.
-    let mut keep = unsafe { points.insp.offset_from(p_rtp()) } as size_t;
+    let mut keep = unsafe { points.insp.offset_from(rtp.as_ptr()) } as size_t;
     let mut first_pos = keep;
-    unsafe { new_rtp.cast::<u8>().copy_from(p_rtp().cast(), keep) };
+    unsafe { new_rtp.cast::<u8>().copy_from(rtp.as_ptr().cast(), keep) };
     let mut len = keep;
     if unsafe { *points.insp } == 0 {
         // Appending at the end: the comma goes before.
@@ -255,12 +264,12 @@ unsafe fn splice_rtp(
 
     let mut after_pos = 0;
     if afterlen > 0 && !points.after_insp.is_null() {
-        let keep_after = unsafe { points.after_insp.offset_from(p_rtp()) } as size_t;
+        let keep_after = unsafe { points.after_insp.offset_from(rtp.as_ptr()) } as size_t;
         unsafe {
             new_rtp
                 .add(len)
                 .cast::<u8>()
-                .copy_from(p_rtp().add(keep).cast(), keep_after - keep)
+                .copy_from(rtp.as_ptr().add(keep).cast(), keep_after - keep)
         };
         len += keep_after - keep;
         unsafe {
@@ -276,12 +285,12 @@ unsafe fn splice_rtp(
         after_pos = keep_after;
     }
 
-    if unsafe { *p_rtp().add(keep) } != 0 {
+    if unsafe { *rtp.as_ptr().add(keep) } != 0 {
         unsafe {
             new_rtp
                 .add(len)
                 .cast::<u8>()
-                .copy_from(p_rtp().add(keep).cast(), oldlen - keep + 1)
+                .copy_from(rtp.as_ptr().add(keep).cast(), oldlen - keep + 1)
         };
     } else {
         unsafe { *new_rtp.add(len) = 0 };
@@ -398,7 +407,9 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), F
     }
     // SAFETY: `ffname` is an owned NUL-terminated string, freed below.
     let fname_len = unsafe { cstr::bytes_at(ffname) }.len();
-    let points = unsafe { find_insert_points(ffname, fname_len) };
+    // One copy of 'runtimepath' for the walk and the splice that follows.
+    let rtp = P_RTP.get();
+    let points = unsafe { find_insert_points(rtp.as_cstr(), ffname, fname_len) };
 
     let mut afterdir = ptr::null_mut();
     let mut retval = Err(Failed);
@@ -419,7 +430,9 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), F
         };
         let addlen = unsafe { cstr::bytes_at(fname) }.len() + 1; // +1 for the comma
 
-        if let Some(spliced) = unsafe { splice_rtp(fname, afterdir, addlen, afterlen, &points) } {
+        if let Some(spliced) =
+            unsafe { splice_rtp(rtp.as_cstr(), fname, afterdir, addlen, afterlen, &points) }
+        {
             let was_valid = runtime_search_path_valid.get();
             set_option_value_give_err(
                 kOptRuntimepath,
@@ -503,7 +516,9 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> 
 /// `fname` must be NUL-terminated.
 unsafe fn rtp_has_entry(fname: *mut c_char) -> bool {
     let mut buf = [0 as c_char; MAXPATHL as usize];
-    let mut p: *const c_char = p_rtp();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let rtp = P_RTP.get();
+    let mut p: *const c_char = rtp.as_ptr();
     // SAFETY: `p` walks 'runtimepath'; `buf` has `MAXPATHL` bytes.
     while unsafe { *p } != 0 {
         // SAFETY: as above.
@@ -602,7 +617,8 @@ pub fn add_pack_start_dirs() {
     // SAFETY: `add_pack_start_dir` ignores its cookie.
     unsafe {
         do_in_path(
-            p_pp(),
+            P_PP.get(),
+            c"packpath",
             c"".as_ptr(),
             ptr::null_mut(),
             RuntimeOpts::ALL | RuntimeOpts::DIR,
@@ -682,7 +698,8 @@ pub fn load_start_packages() {
     for name in [c"pack/*/start/*", c"start/*"] {
         unsafe {
             do_in_path(
-                p_pp(),
+                P_PP.get(),
+                c"packpath",
                 c"".as_ptr(),
                 name.as_ptr().cast_mut(),
                 RuntimeOpts::ALL | RuntimeOpts::DIR,
@@ -713,17 +730,17 @@ pub fn load_plugins() {
         return;
     }
     let plugin_pattern = c"plugin/**/*".as_ptr().cast_mut();
-    // SAFETY: the whole body is startup sequencing over NUL-terminated
-    // patterns; `rtp_copy` is owned only when it was copied.
-    let mut rtp_copy = p_rtp();
+    // A copy of 'runtimepath' taken *before* the `start` packages are
+    // spliced in, which is what upstream's `rtp_copy` was for.
+    let rtp_copy = P_RTP.get();
     if !did_source_packages.get() {
-        rtp_copy = unsafe { xstrdup(p_rtp()) };
         add_pack_start_dirs();
     }
 
     // Not `source_runtime_vim_lua` yet, so `:packloadall` can be checked
-    // for below. NB: after this call "rtp_copy" may have been freed, if it
-    // was not copied.
+    // for below.
+    // SAFETY: the whole body is startup sequencing over NUL-terminated
+    // patterns.
     unsafe {
         source_in_path_vim_lua(
             rtp_copy,
@@ -735,7 +752,6 @@ pub fn load_plugins() {
 
     // Only source "start" packages when a `:packloadall` has not already.
     if !did_source_packages.get() {
-        unsafe { xfree(rtp_copy.cast()) };
         load_start_packages();
     }
     time_msg_now(c"loading packages");
@@ -776,7 +792,8 @@ pub fn ex_packadd(excmd: &mut ExArg) {
         unsafe { vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"start".as_ptr(), arg) };
         res = unsafe {
             do_in_path(
-                p_pp(),
+                P_PP.get(),
+                c"packpath",
                 c"".as_ptr(),
                 pat,
                 RuntimeOpts::ALL | RuntimeOpts::DIR,
@@ -790,7 +807,8 @@ pub fn ex_packadd(excmd: &mut ExArg) {
     unsafe { vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"opt".as_ptr(), arg) };
     unsafe {
         do_in_path(
-            p_pp(),
+            P_PP.get(),
+            c"packpath",
             c"".as_ptr(),
             pat,
             RuntimeOpts::ALL | RuntimeOpts::DIR | RuntimeOpts::ERR.when(res == FAIL),

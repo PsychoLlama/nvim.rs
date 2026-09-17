@@ -39,7 +39,7 @@ use crate::message::{
 };
 use crate::r#move::validate_virtcol;
 use crate::option::shortmess;
-use crate::option::vars::{p_icon, p_iconstring, p_ru, p_title, p_titlelen, p_titlestring};
+use crate::option::vars::{P_ICONSTRING, P_TITLESTRING, p_icon, p_ru, p_title, p_titlelen};
 use crate::options::{kOptIconstring, kOptTitlestring};
 use crate::os::cshim::{gettext_ptr, ngettext};
 use crate::os::env::home_replace;
@@ -614,18 +614,26 @@ pub fn maketitle() {
         return;
     }
 
+    // Copies: `build_stl` evaluates a statusline expression, which may set
+    // an option, and the two pointers outlive that call either way.
+    let (titlestring, iconstring) = (P_TITLESTRING.get(), P_ICONSTRING.get());
     let mut title_str: *mut c_char = ptr::null_mut();
     if p_title() {
         let mut maxlen = 0;
         if p_titlelen() > 0 as OptInt {
             maxlen = ((p_titlelen() * Columns.get() as OptInt / 100) as c_int).max(10);
         }
-        if opt_is_set(p_titlestring()) {
+        if !titlestring.is_empty() {
             if stl_syntax.get().has(StlSyntax::TITLE) {
-                build_stl(&mut scratch, p_titlestring(), kOptTitlestring, maxlen);
+                build_stl(
+                    &mut scratch,
+                    titlestring.as_ptr().cast_mut(),
+                    kOptTitlestring,
+                    maxlen,
+                );
                 title_str = scratch.as_mut_ptr();
             } else {
-                title_str = p_titlestring();
+                title_str = titlestring.as_ptr().cast_mut();
             }
         } else {
             // Format: "fname + (path) (1 of 2) - Nvim".
@@ -640,11 +648,16 @@ pub fn maketitle() {
     let mut icon_str: *mut c_char = ptr::null_mut();
     if p_icon() {
         icon_str = scratch.as_mut_ptr();
-        if opt_is_set(p_iconstring()) {
+        if !iconstring.is_empty() {
             if stl_syntax.get().has(StlSyntax::ICON) {
-                build_stl(&mut scratch, p_iconstring(), kOptIconstring, 0);
+                build_stl(
+                    &mut scratch,
+                    iconstring.as_ptr().cast_mut(),
+                    kOptIconstring,
+                    0,
+                );
             } else {
-                icon_str = p_iconstring();
+                icon_str = iconstring.as_ptr().cast_mut();
             }
         } else {
             fill_icon(&mut scratch);
@@ -655,11 +668,6 @@ pub fn maketitle() {
     if mustset {
         resettitle();
     }
-}
-
-fn opt_is_set(s: *const c_char) -> bool {
-    // SAFETY: a string option, which is never null.
-    unsafe { *s != 0 }
 }
 
 /// `build_stl_str_hl` for the title and icon, which want the text and

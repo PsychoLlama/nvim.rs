@@ -197,7 +197,8 @@ pub(crate) fn check_options() {
             // window or buffer.
             let var = get_varp(opt_idx).string_var();
             if unsafe { var.get() }.is_null() {
-                unsafe { var.set(empty_option()) };
+                // Nothing to release: the variable held null.
+                let _ = unsafe { var.replace(empty_option()) };
             }
         }
     }

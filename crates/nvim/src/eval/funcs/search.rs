@@ -10,8 +10,8 @@
 
 use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, list_alloc_ret};
 use crate::cstr;
+use crate::option::SavedCpo;
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::cursor::check_cursor;
 use crate::eval::typval::NumBuf;
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
@@ -19,10 +19,8 @@ use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
 use crate::message_fmt::c_str;
 use crate::normal::find_decl;
-use crate::option::set_option_value_give_err;
-use crate::option::vars::{P_CPO, P_WS, p_cpo, p_ws};
-use crate::options::kOptCpoptions;
-use crate::optionstr::{empty_option, free_string_option, is_empty_option};
+use crate::option::vars::{P_WS, p_ws};
+
 use crate::pos::equalpos;
 use crate::profile::profile_setlimit;
 use crate::regexp::RE_SEARCH;
@@ -31,8 +29,8 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, Pos, SearchItArg, TypVal,
-    VarNumber, int64_t, size_t,
+    Direction, EvalFuncData, FAIL, LineNr, NUL, Pos, SearchItArg, TypVal, VarNumber, int64_t,
+    size_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -476,45 +474,6 @@ fn alternation(pats: &[&[u8]]) -> Vec<c_char> {
     out.into_iter().map(|b| b as c_char).collect()
 }
 
-/// 'cpoptions' emptied for the duration of a pair search, so that a `cpo-l`
-/// setting cannot change what the patterns mean.
-///
-/// Restoring is not a plain assignment: the {skip} expression is arbitrary
-/// vimscript and may have set the option itself. If it left our own empty
-/// string in place nothing happened and the saved value goes straight back;
-/// if it left some *other* empty string the option was set and restored
-/// behind our back, and the saved value has to go through the option
-/// machinery so that everything watching 'cpoptions' hears about it.
-struct EmptyCpo(*mut c_char);
-
-impl EmptyCpo {
-    fn new() -> Self {
-        let saved = p_cpo();
-        P_CPO.set(empty_option());
-        EmptyCpo(saved)
-    }
-}
-
-impl Drop for EmptyCpo {
-    fn drop(&mut self) {
-        if is_empty_option(p_cpo()) {
-            P_CPO.set(self.0);
-            return;
-        }
-        // SAFETY: `self.0` is the string the option owned on entry and is
-        // still live; `set_option_value_give_err` copies it and
-        // `free_string_option` then releases our claim on it.
-        if unsafe { *p_cpo() } == 0 {
-            set_option_value_give_err(
-                kOptCpoptions,
-                OptVal::string(unsafe { cstr_to_string(self.0) }),
-                OptionSetFlags::NONE,
-            );
-        }
-        unsafe { free_string_option(self.0) };
-    }
-}
-
 /// Search for a start/middle/end triple, honouring nesting.
 ///
 /// Also used by the `it`/`at` text objects, which pass a null `skip` and no
@@ -535,7 +494,7 @@ pub unsafe fn do_searchpair(
     lnum_stop: LineNr,
     time_limit: int64_t,
 ) -> c_int {
-    let _cpo = EmptyCpo::new();
+    let _cpo = SavedCpo::empty_under_user_code();
     let mut retval = 0;
     let mut nest = 1;
     let mut options = SEARCH_KEEP as c_int;

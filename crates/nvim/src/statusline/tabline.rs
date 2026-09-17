@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -139,7 +140,7 @@ pub fn draw_tabline() {
     );
     tab_click_arena().clear();
 
-    if !opt_is_empty(p_tal()) {
+    if p_tal(|value| !value.is_empty()) {
         // Use the 'tabline' option instead.
         win_redr_custom(None, false, false, false);
     } else {
@@ -242,7 +243,7 @@ fn draw_default_tabline() {
     let fill = if use_sep_chars { b'_' } else { b' ' };
     paint_fill(col, Columns.get(), schar_from_ascii(fill), attr_fill);
 
-    if p_sc() && c_int::from(opt_first(p_sloc())) == c_int::from(b't') {
+    if p_sc() && c_int::from(p_sloc(cstr::first)) == c_int::from(b't') {
         paint_showcmd(col, tabcount, attr_nosel);
     }
 

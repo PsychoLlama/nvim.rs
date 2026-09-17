@@ -11,7 +11,7 @@
 
 use crate::cstr;
 use crate::message_fmt::{c_str, msg_bytes};
-use crate::optionstr::empty_option;
+use crate::option::SavedCpo;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -469,11 +469,9 @@ pub(crate) fn read_pattern(line: &[u8], at: usize, ci: &mut SynPat) -> Option<us
     // Store the pattern and its compiled program. 'cpoptions' is emptied
     // first, to avoid the 'l' flag.
     let pattern = cstr::owned(&tail[1..end]);
-    let cpo_save = p_cpo();
-    P_CPO.set(empty_option());
+    let _cpo = SavedCpo::empty();
     // SAFETY: an owned NUL-terminated copy of the pattern text.
     ci.sp_prog = unsafe { vim_regcomp(pattern.as_ptr().cast_mut(), RE_MAGIC) };
-    P_CPO.set(cpo_save);
     ci.sp_pattern = Some(pattern);
     if ci.sp_prog.is_null() {
         return None;

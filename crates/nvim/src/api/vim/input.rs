@@ -209,10 +209,9 @@ pub fn nvim_replace_termcodes(
     }
     let mut ptr: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let (text, len, out) = (str.data(), str.len(), &raw mut ptr);
-    let (no_flag, cpo) = (::core::ptr::null_mut::<bool>(), p_cpo());
-    // SAFETY: `str` is the caller's, `ptr` this frame's own out-parameter,
-    // and `'cpoptions'` a live NUL-terminated string.
-    unsafe { replace_termcodes(text, len, out, 0 as ScriptId, flags, no_flag, cpo) };
+    let no_flag = ::core::ptr::null_mut::<bool>();
+    // SAFETY: `str` is the caller's and `ptr` this frame's own out-parameter.
+    p_cpo(|cpo| unsafe { replace_termcodes(text, len, out, 0 as ScriptId, flags, no_flag, cpo) });
     // SAFETY: `replace_termcodes` left an owned C string in `ptr`.
     unsafe { cstr_to_string(ptr) }
 }

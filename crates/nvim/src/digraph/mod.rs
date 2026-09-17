@@ -35,7 +35,8 @@ use crate::memory::{xfree, xmemdupz};
 use crate::message::state::msg_col;
 use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::normal::add_to_showcmd;
-use crate::option::vars::{P_CPO, p_cpo, p_dg, p_enc};
+use crate::option::SavedCpo;
+use crate::option::vars::{p_dg, p_enc};
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
@@ -618,7 +619,11 @@ pub fn keymap_init() -> Option<&'static CStr> {
     // Source the keymap file, first for this encoding and then without it.
     // The name is snapshotted above because the script can set 'keymap'.
     // SAFETY: 'encoding' is a NUL-terminated option string.
-    let enc = unsafe { CStr::from_ptr(p_enc()).to_bytes().to_vec() };
+    let enc = p_enc(|value| unsafe {
+        CStr::from_ptr(value.as_ptr().cast_mut())
+            .to_bytes()
+            .to_vec()
+    });
     if source_keymap_file(&keymap, Some(&enc)) || source_keymap_file(&keymap, None) {
         return None;
     }
@@ -663,13 +668,11 @@ pub fn ex_loadkeymap(excmd: &mut ExArg) {
     buf.b_kmap_state = 0;
     buf.b_kmap_ga.clear();
     // Set 'cpoptions' to "C" to avoid line continuation.
-    let save_cpo = p_cpo();
-    P_CPO.set(c"C".as_ptr() as *mut c_char);
+    let _cpo = SavedCpo::held(c"C");
     // SAFETY: caller contract; the line getter was just checked to be the
     // sourcing one, and `buf`'s entry list was just emptied.
     read_keymap_entries(excmd, buf);
     apply_keymap_entries(buf);
-    P_CPO.set(save_cpo);
     buf.b_kmap_state |= KEYMAP_LOADED as int16_t;
     status_redraw_curbuf();
 }
@@ -752,8 +755,7 @@ fn keymap_unload() {
         return;
     }
     // Set 'cpoptions' to "C" to avoid line continuation.
-    let save_cpo = p_cpo();
-    P_CPO.set(c"C".as_ptr() as *mut c_char);
+    let _cpo = SavedCpo::held(c"C");
     // The commands are built before any of them runs, so `do_map` cannot be
     // reading the list it is driven by.
     let cmds: Vec<Vec<u8>> = buf
@@ -772,7 +774,6 @@ fn keymap_unload() {
             )
         };
     }
-    P_CPO.set(save_cpo);
     // The entries own their two strings.
     buf.b_kmap_ga = Vec::new();
     buf.b_kmap_state &= !(KEYMAP_LOADED as int16_t);

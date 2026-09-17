@@ -13,6 +13,7 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::FuncFlags;
 use crate::message_fmt::c_str;
+use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
 use crate::winlayer::Buf;
@@ -140,11 +141,13 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let buffer = number(c"buffer") != 0;
     // The dict's "mode" is not used past get_map_mode_string.
 
-    let cpo = p_cpo();
+    // A copy, because the unmap below is past the end of a projection's
+    // borrow.
+    let cpo = P_CPO.get();
     // SAFETY: `orig_rhs` is NUL-terminated.
     unsafe {
         let rhs_len = cstr::bytes_at(orig_rhs).len();
-        set_maparg_rhs(orig_rhs, rhs_len, rhs_lua, sid, cpo, &mut args);
+        set_maparg_rhs(orig_rhs, rhs_len, rhs_lua, sid, cpo.as_cstr(), &mut args);
     }
 
     // SAFETY: `curbuf` is set from startup to exit; `&raw` reads nothing, and
@@ -174,7 +177,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
             c"".as_ptr(),
             0,
             LUA_NOREF,
-            cpo,
+            cpo.as_cstr(),
             &mut unmap_args,
         );
     }
@@ -280,13 +283,12 @@ pub unsafe fn modify_keymap(
             break 'fail_and_free;
         }
 
-        let cpo = p_cpo();
         // SAFETY: `lhs` and `rhs` are live API strings.
-        let ok = unsafe {
+        let ok = p_cpo(|cpo| unsafe {
             let (l, ll) = (lhs.data(), lhs.len());
             let (r, rl) = (rhs.data(), rhs.len());
             set_maparg_lhs_rhs(l, ll, r, rl, lua_funcref, cpo, &mut parsed_args)
-        };
+        });
         if !ok
             || parsed_args.lhs_len > MAXMAPLEN as size_t
             || parsed_args.alt_lhs_len > MAXMAPLEN as size_t

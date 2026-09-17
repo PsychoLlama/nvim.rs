@@ -16,6 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -325,7 +326,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         }
         findsent_forward(count, at_start_sent);
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if c_int::from(unsafe { *p_sel() }) == 'e' as c_int {
+        if p_sel(|value| cstr::first(value) == b'e') {
             Win::current().w_cursor.col += 1;
         }
     }
@@ -395,7 +396,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
             return Ok(());
         }
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if c_int::from(unsafe { *p_sel() }) == 'e' as c_int {
+        if p_sel(|value| cstr::first(value) == b'e') {
             Win::current().w_cursor.col += 1;
         }
         set_visual_anchor(start_pos);

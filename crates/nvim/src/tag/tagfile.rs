@@ -20,6 +20,8 @@ use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
 use crate::file_search::Name;
+use crate::option::local_or_global;
+use crate::option::vars::P_TAGS;
 use crate::path::tail_index;
 use crate::runtime::RuntimeOpts;
 use crate::strings::has_char;
@@ -88,11 +90,10 @@ impl TagFiles {
         // SAFETY: `curbuf` is live, and the buffer-local and global
         // `'tags'` are NUL-terminated option strings.
         let help = Buf::current().b_help;
-        let local = Buf::current().b_p_tags;
+        let tags = (!help).then(|| unsafe { local_or_global(Buf::current().b_p_tags, P_TAGS) });
         TagFiles {
             help: help.then(HelpTags::collect),
-            tags: (!help)
-                .then(|| unsafe { Name::from_ptr(if *local != 0 { local } else { p_tags() }) }),
+            tags: tags.map(|tags| unsafe { Name::from_ptr(tags.as_ptr().cast_mut()) }),
             at: 0,
             search: Search::default(),
         }
@@ -237,7 +238,7 @@ impl HelpTags {
         }
         self.at += 1;
         // SAFETY: `'helpfile'` is a NUL-terminated option string.
-        let hf = unsafe { CStr::from_ptr(p_hf()) }.to_bytes();
+        let hf = p_hf(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
         if hf.is_empty() {
             return None;
         }

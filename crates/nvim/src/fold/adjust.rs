@@ -16,6 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::garray::{ga_grow, ga_init};
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
@@ -170,7 +171,7 @@ pub fn fold_adjust_visual() {
         }
         end.col = win.buffer().lines().line_len(end.lnum);
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if end.col > 0 && c_int::from(unsafe { *p_sel() }) == 'o' as c_int {
+        if end.col > 0 && p_sel(|value| cstr::first(value) == b'o') {
             end.col -= 1;
         }
         if anchor_first {

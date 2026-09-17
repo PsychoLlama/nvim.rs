@@ -18,6 +18,7 @@
 )]
 
 use crate::cstr;
+use crate::option::vars::P_SU;
 use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CStr;
@@ -546,7 +547,9 @@ pub unsafe fn match_suffix(fname: *mut c_char) -> bool {
     let mut suf_buf = [0 as c_char; MAXSUFLEN as usize];
     let fnamelen = unsafe { CStr::from_ptr(fname) }.to_bytes().len();
     let mut setsuflen = 0;
-    let mut setsuf = p_su();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let su = P_SU.get();
+    let mut setsuf = su.as_ptr().cast_mut();
     while unsafe { *setsuf } != 0 {
         setsuflen = unsafe {
             copy_option_part(

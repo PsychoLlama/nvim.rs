@@ -91,9 +91,7 @@ use crate::startup::{
 use crate::state::mode::{exmode_active, restart_edit};
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
-use crate::types::{
-    CallbackReader, IOSIZE, LineNr, List, NUL, OptInt, QfInfo, VarNumber, Vv, int64_t,
-};
+use crate::types::{CallbackReader, IOSIZE, LineNr, List, OptInt, QfInfo, VarNumber, Vv, int64_t};
 use crate::ui::state::{Rows, resize_events};
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -417,7 +415,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         P_UT.set(1 as OptInt);
     }
 
-    if unsafe { *p_shada() } as c_int != NUL {
+    if p_shada(|value| !value.is_empty()) {
         let _ = unsafe { shada_read_everything(ptr::null(), false, true) };
         time_msg_at(c"reading ShaDa");
     }

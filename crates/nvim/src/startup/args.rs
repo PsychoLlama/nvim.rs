@@ -107,7 +107,7 @@ fn set_opt(idx: OptIndex, value: OptVal) {
 /// writing over the user's ShaDa.
 fn suppress_shada() {
     // SAFETY: reads and writes one option.
-    if p_shadafile().is_null() || unsafe { *p_shadafile() } as c_int == NUL {
+    if p_shadafile(CStr::is_empty) {
         set_opt(kOptShadafile, unsafe { string_opt(c"NONE".as_ptr()) });
     }
 }

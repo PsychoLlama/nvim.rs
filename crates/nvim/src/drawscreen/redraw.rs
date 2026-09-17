@@ -76,7 +76,7 @@ pub fn show_cursor_info_later(force: bool) {
         }
         // A window bar can show the same items, and it is never on the
         // command line, so it needs the status-line treatment either way.
-        if unsafe { *p_wbr() } != 0 || unsafe { *wp.w_onebuf_opt.wo_wbr } != 0 {
+        if p_wbr(|value| !value.is_empty()) || unsafe { *wp.w_onebuf_opt.wo_wbr } != 0 {
             wp.w_redr_status = true;
         }
         redraw_custom_title_later();

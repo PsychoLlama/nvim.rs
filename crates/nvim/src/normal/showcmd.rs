@@ -34,7 +34,7 @@ use crate::normal::{
     SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear, showcmd_visual,
     visual_selection,
 };
-use crate::option::vars::{P_SBR, p_ch, p_sbr, p_sc, p_sel, p_sloc};
+use crate::option::vars::{P_SBR, p_ch, p_sc, p_sel, p_sloc};
 use crate::optionstr::empty_option;
 use crate::plines::getvcols;
 use crate::pos::lt;
@@ -194,15 +194,14 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
     let mut anchor = sel.anchor;
     // SAFETY: both positions are in the current buffer, and the two
     // 'showbreak' values are put back before returning.
-    let saved_sbr = p_sbr();
+    let saved_sbr = P_SBR.clear();
     let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr;
-    P_SBR.set(empty_option());
     Win::current().w_onebuf_opt.wo_sbr = empty_option();
     let win = Win::current();
     let (cursor, other) = (win.cursor().raw(), &raw mut anchor);
     let (l, r) = (&raw mut leftcol, &raw mut rightcol);
     unsafe { getvcols(win, cursor, other, l, r) };
-    P_SBR.set(saved_sbr);
+    P_SBR.restore(saved_sbr);
     Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
     rightcol - leftcol + 1
 }
@@ -228,7 +227,7 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
             ml_get_pos(&raw const anchor)
         })
     };
-    let exclusive = unsafe { *p_sel() } as c_int == 'e' as c_int;
+    let exclusive = p_sel(|value| cstr::first(value) == b'e');
     while if exclusive { s < e } else { s <= e } {
         let l = unsafe { utfc_ptr2len(s) };
         if l == 0 {
@@ -384,7 +383,7 @@ pub(crate) fn display_showcmd() {
     showcmd_is_clear.set(clear);
 
     // SAFETY: 'showcmdloc' is a non-empty string option.
-    let loc = unsafe { *p_sloc() as c_int };
+    let loc = p_sloc(|value| unsafe { *value.as_ptr().cast_mut() as c_int });
     if loc == 's' as c_int {
         // SAFETY: `curwin` is the current window.
         if clear {

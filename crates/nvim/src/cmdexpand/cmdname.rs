@@ -53,7 +53,7 @@ pub(crate) unsafe fn set_context_by_cmdname(
     match cmdidx {
         CmdIdx::find | CmdIdx::sfind | CmdIdx::tabfind => {
             if expand.xp_context == ExpandContext::Files {
-                expand.xp_context = if unsafe { *get_findfunc() } as c_int != NUL {
+                expand.xp_context = if !get_findfunc().is_empty() {
                     ExpandContext::Findfunc
                 } else {
                     ExpandContext::FilesInPath

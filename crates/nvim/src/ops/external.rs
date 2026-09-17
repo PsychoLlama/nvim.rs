@@ -83,13 +83,13 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
         unsafe { stuff_readbuf(c"!".as_ptr()) };
     }
     if op.op_type == OpType::Indent {
-        unsafe { stuff_readbuf(get_equalprg()) };
+        unsafe { stuff_readbuf(get_equalprg().as_ptr().cast_mut()) };
         unsafe { stuff_readbuf(c"\n".as_ptr()) };
     } else if op.op_type == OpType::Format {
         if c_int::from(unsafe { *Buf::current().b_p_fp }) != NUL {
             unsafe { stuff_readbuf(Buf::current().b_p_fp) };
-        } else if c_int::from(unsafe { *p_fp() }) != NUL {
-            unsafe { stuff_readbuf(p_fp()) };
+        } else if p_fp(|value| !value.is_empty()) {
+            p_fp(|value| unsafe { stuff_readbuf(value.as_ptr().cast_mut()) });
         } else {
             unsafe { stuff_readbuf(c"fmt".as_ptr()) };
         }
@@ -117,7 +117,11 @@ fn global_opfunc() -> *mut Callback {
 /// The option's current value must be a valid C string.
 pub unsafe fn did_set_operatorfunc(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the caller's promise -- 'operatorfunc' is a valid C string.
-    if unsafe { option_set_callback_func(p_opfunc(), global_opfunc()) }.is_err() {
+    if p_opfunc(|value| unsafe {
+        option_set_callback_func(value.as_ptr().cast_mut(), global_opfunc())
+    })
+    .is_err()
+    {
         return Some(e_invarg);
     }
     None
@@ -148,7 +152,7 @@ pub(crate) unsafe fn op_function(op: *const OpArg) {
     let orig_start: Pos = Buf::current().b_op_start;
     let orig_end: Pos = Buf::current().b_op_end;
 
-    if c_int::from(unsafe { *p_opfunc() }) == NUL {
+    if p_opfunc(CStr::is_empty) {
         emsg(gettext(c"E774: 'operatorfunc' is empty"));
         return;
     }

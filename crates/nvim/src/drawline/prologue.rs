@@ -19,6 +19,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::decoration::kMTMetaInline;
 use crate::normal::{VisualSelection, visual_active, visual_selection};
 use crate::pos::MAXCOL;
@@ -318,10 +319,7 @@ impl LineSetup {
                 }
             }
             if !sel.mode.is_line() && lnum == bot.lnum {
-                if unsafe { *p_sel() } == b'e' as ::core::ffi::c_char
-                    && bot.col == 0
-                    && bot.coladd == 0
-                {
+                if p_sel(|value| cstr::first(value) == b'e') && bot.col == 0 && bot.coladd == 0 {
                     // 'selection' "exclusive" and the selection stops at
                     // the start of this line: none of it is here.
                     wlv.fromcol = -10;
@@ -330,7 +328,7 @@ impl LineSetup {
                     wlv.tocol = MAXCOL as ::core::ffi::c_int;
                 } else {
                     let mut pos = bot;
-                    if unsafe { *p_sel() } == b'e' as ::core::ffi::c_char {
+                    if p_sel(|value| cstr::first(value) == b'e') {
                         unsafe {
                             getvvcol(
                                 window,
@@ -360,7 +358,7 @@ impl LineSetup {
         // drawn as a block inside the selection anyway.
         if !highlight_match.get()
             && self.in_curline
-            && cursor_is_block_during_visual(unsafe { *p_sel() } == b'e' as ::core::ffi::c_char)
+            && cursor_is_block_during_visual(p_sel(|value| cstr::first(value) == b'e'))
         {
             self.noinvcur = true;
         }

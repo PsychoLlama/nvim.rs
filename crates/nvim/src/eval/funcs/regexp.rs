@@ -28,8 +28,8 @@ use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
 use crate::message::state::did_emsg;
 use crate::message_fmt::c_str;
-use crate::option::vars::{P_CPO, p_cpo, p_ic};
-use crate::optionstr::empty_option;
+use crate::option::SavedCpo;
+use crate::option::vars::p_ic;
 use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg;
@@ -51,26 +51,6 @@ const EMPTY_REGMATCH: RegMatch = RegMatch {
     rm_matchcol: 0,
     rm_ic: false,
 };
-
-/// The `match*()` family compiles its pattern with 'cpoptions' emptied, so
-/// that a `cpo-l` or `cpo-\` setting cannot change what a pattern means.
-/// Restores the caller's value on drop, which is what makes the early
-/// returns below safe to write.
-struct EmptyCpo(*mut c_char);
-
-impl EmptyCpo {
-    fn new() -> Self {
-        let saved = p_cpo();
-        P_CPO.set(empty_option());
-        EmptyCpo(saved)
-    }
-}
-
-impl Drop for EmptyCpo {
-    fn drop(&mut self) {
-        P_CPO.set(self.0);
-    }
-}
 
 /// A compiled pattern, freed on drop.
 struct Regprog(RegMatch);
@@ -117,7 +97,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
     // SAFETY throughout: the caller's obligation. Every pointer below either points
     // into an argument (which outlives the call), into `patbuf`, or into
     // the string `tofree` owns.
-    let _cpo = EmptyCpo::new();
+    let _cpo = SavedCpo::empty();
     result.write_number(-1);
     match kind {
         kSomeMatchList => {
@@ -458,7 +438,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         return;
     };
 
-    let _cpo = EmptyCpo::new();
+    let _cpo = SavedCpo::empty();
     let Some(mut prog) = (unsafe { Regprog::compile(pat) }) else {
         return;
     };
@@ -533,7 +513,7 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if pat.is_null() {
         return;
     }
-    let _cpo = EmptyCpo::new();
+    let _cpo = SavedCpo::empty();
     let Some(mut prog) = (unsafe { Regprog::compile(pat) }) else {
         return;
     };

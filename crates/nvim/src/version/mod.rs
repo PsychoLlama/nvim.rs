@@ -367,7 +367,9 @@ pub(crate) fn may_show_intro() -> bool {
         && Buf::current().handle == 1
         && Win::current().handle == LOWEST_WIN_ID as c_int
         && one_window(Win::current(), None)
-        && !ShmFlag::INTRO.is_in(unsafe { CStr::from_ptr(p_shm()) })
+        && !ShmFlag::INTRO.is_in(p_shm(|value| unsafe {
+            CStr::from_ptr(value.as_ptr().cast_mut())
+        }))
 }
 
 /// The intro screen, top to bottom. The first three lines are the logo, and

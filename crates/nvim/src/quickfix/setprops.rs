@@ -13,6 +13,7 @@ use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{NumBuf, dict_has_key, list_items};
 use crate::message_fmt::c_str;
+use crate::option::vars::P_EFM;
 use crate::semsg;
 use crate::types::{VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING};
 use core::ffi::{c_char, c_int, c_uint};
@@ -446,7 +447,9 @@ unsafe fn qf_setprop_items_from_lines(
     di: &mut DictItem,
     action: c_int,
 ) -> Result<(), QfError> {
-    let mut errorformat = p_efm();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let efm = P_EFM.get();
+    let mut errorformat = efm.as_ptr().cast_mut();
     if let Some(efm_di) = unsafe { find(what, "efm") } {
         if efm_di.di_tv.v_type() != VAR_STRING || efm_di.di_tv.string_or_null().is_null() {
             return Err(QfError::BadValue);

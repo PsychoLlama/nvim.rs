@@ -22,10 +22,9 @@ use crate::drawscreen::state::{need_maketitle, redraw_tabline};
 use crate::eval::typval::{callback_free, tv_dict_alloc, tv_free};
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
-use crate::memory::{xcalloc, xfree, xstrdup};
+use crate::memory::{XString, xcalloc, xfree, xstrdup};
 use crate::option::vars::{
-    P_SISO, P_SO, bkc_flags, p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm,
-    p_siso, p_so, ve_flags,
+    P_SISO, P_SO, bkc_flags, p_bs, p_cpo, p_ffs, p_magic, p_sh, p_shm, p_siso, p_so, ve_flags,
 };
 use crate::options::*;
 use crate::optionstr::empty_option;
@@ -46,41 +45,70 @@ use super::{
 use crate::state::MODE_TERMINAL;
 use crate::winlayer::Win;
 
-/// 'equalprg', local where set.
-pub(crate) fn get_equalprg() -> *mut c_char {
-    // SAFETY: `curbuf` is live, and its string options are never null.
-    if unsafe { *Buf::current().b_p_ep } == 0 {
-        p_ep()
+/// A global-local string option's value in force: the buffer's or window's
+/// own copy where it set one, else the global value.
+///
+/// The answer is a **copy**, because the two halves cannot be one borrow:
+/// the local copy is a raw field the option layer owns and the global value
+/// is a string the option record owns, and every caller here walks the
+/// answer or hands it to a C callee past the end of a projection.
+///
+/// # Safety
+///
+/// `local` must be the live, NUL-terminated local copy of `global`'s option.
+pub(crate) unsafe fn local_or_global(local: *const c_char, global: StrOpt) -> XString {
+    // SAFETY: the caller's value.
+    let local = unsafe { cstr::at(local) };
+    if local.is_empty() {
+        global.get()
     } else {
-        Buf::current().b_p_ep
+        XString::from_cstr(local)
     }
 }
 
-/// 'findfunc', local where set.
-pub(crate) fn get_findfunc() -> *mut c_char {
-    // SAFETY: `curbuf` is live, and its string options are never null.
-    if unsafe { *Buf::current().b_p_ffu } == 0 {
-        p_ffu()
+/// [`local_or_global`] as the raw pointer the draw paths still read.
+///
+/// The answer is the option's *own* buffer -- the global record's string or
+/// the buffer's or window's raw field -- and is live until that option is
+/// written. Only the readers that are asked several times per screen line
+/// use this; everything else takes the copy. When the local copies own their
+/// storage too, both halves become one projection and this goes.
+///
+/// # Safety
+///
+/// `local` must be the live, NUL-terminated local copy of `global`'s option,
+/// and the answer must not outlive a write to either.
+unsafe fn local_or_global_raw(local: *const c_char, global: StrOpt) -> *mut c_char {
+    // SAFETY: the caller's value.
+    if unsafe { *local } == 0 {
+        global.value_ptr()
     } else {
-        Buf::current().b_p_ffu
+        local.cast_mut()
     }
+}
+
+/// 'equalprg', local where set.
+pub(crate) fn get_equalprg() -> XString {
+    // SAFETY: `curbuf` is live, and its string options are never null.
+    unsafe { local_or_global(Buf::current().b_p_ep, P_EP) }
+}
+
+/// 'findfunc', local where set.
+pub(crate) fn get_findfunc() -> XString {
+    // SAFETY: `curbuf` is live, and its string options are never null.
+    unsafe { local_or_global(Buf::current().b_p_ffu, P_FFU) }
 }
 
 /// Whether 'shortmess' asks for message `x` to be shortened. The `a` flag is
 /// an abbreviation standing for these four and nothing else.
 pub(crate) fn shortmess(x: ShmFlag) -> bool {
     const ABBREVIATED: [ShmFlag; 4] = [ShmFlag::RO, ShmFlag::MOD, ShmFlag::LINES, ShmFlag::WRI];
-    // SAFETY: 'shortmess' is a string option; the null test is upstream's.
-    let Some(shm) = (unsafe { cstr::at_opt(p_shm()) }) else {
-        return false;
-    };
-    x.is_in(shm) || (ShmFlag::ABBREVIATIONS.is_in(shm) && ABBREVIATED.contains(&x))
+    p_shm(|shm| x.is_in(shm) || (ShmFlag::ABBREVIATIONS.is_in(shm) && ABBREVIATED.contains(&x)))
 }
 
 /// Whether 'cpoptions' contains `flag`.
 pub(crate) fn cpo_has(flag: CpoFlag) -> bool {
-    // SAFETY: 'cpoptions' is a string option and is never null.
-    flag.is_in(unsafe { CStr::from_ptr(p_cpo()) })
+    p_cpo(|cpo| flag.is_in(cpo))
 }
 
 /// Record where a vimrc was found in `$MYVIMRC`/`$MYVIMDIR`, unless the
@@ -212,10 +240,12 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
     // SAFETY: 'backspace' is a string option, so it is a live, NUL-terminated
     // string.
     // The historic numeric spelling: 2 is everything but "nostop".
-    if unsafe { *p_bs() } == b'2' as c_char {
+    if p_bs(|value| cstr::first(value) == b'2') {
         return what != BsFlag::NOSTOP;
     }
-    what.is_in(unsafe { CStr::from_ptr(p_bs()) })
+    what.is_in(p_bs(|value| unsafe {
+        CStr::from_ptr(value.as_ptr().cast_mut())
+    }))
 }
 
 /// 'backupcopy' as flags, local where set.
@@ -230,11 +260,10 @@ pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
 ///
 pub(crate) fn get_flp_value(buffer: Buf) -> *mut c_char {
     // SAFETY: a string option is either null or NUL-terminated.
-    if buffer.b_p_flp.is_null() || unsafe { *buffer.b_p_flp } == 0 {
-        p_flp()
-    } else {
-        buffer.b_p_flp
+    if buffer.b_p_flp.is_null() {
+        return P_FLP.value_ptr();
     }
+    unsafe { local_or_global_raw(buffer.b_p_flp, P_FLP) }
 }
 
 /// 'virtualedit' as flags, local where set. The two "none" bits only exist
@@ -254,14 +283,14 @@ pub(crate) fn get_ve_flags(window: Win) -> c_uint {
 ///
 pub(crate) fn get_showbreak_value(win: Win) -> *mut c_char {
     let local = win.w_onebuf_opt.wo_sbr;
-    // SAFETY: a string option is either null or NUL-terminated.
-    if local.is_null() || unsafe { *local } == 0 {
-        return p_sbr();
+    if local.is_null() {
+        return P_SBR.value_ptr();
     }
+    // SAFETY: a string option is NUL-terminated.
     if unsafe { cstr::eq_bytes(local, b"NONE") } {
         return empty_option();
     }
-    local
+    unsafe { local_or_global_raw(local, P_SBR) }
 }
 
 /// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.
@@ -307,7 +336,7 @@ pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int 
 /// The line ending a new file gets: the first entry of 'fileformats'.
 pub(crate) fn default_fileformat() -> c_int {
     // SAFETY: 'fileformats' is a string option; it is never null.
-    match unsafe { *p_ffs() } as u8 {
+    match p_ffs(|value| unsafe { *value.as_ptr().cast_mut() }) as u8 {
         b'm' => EOL_MAC,
         b'd' => EOL_DOS,
         _ => EOL_UNIX,
@@ -412,13 +441,19 @@ pub(crate) unsafe fn copy_option_part(
 /// Whether 'shell' is a csh derivative, which needs its own quoting.
 pub(crate) fn csh_like_shell() -> bool {
     // SAFETY: 'shell' is a string option; it is never null.
-    has_bytes(unsafe { cstr::at(path_tail(p_sh())) }, b"csh")
+    has_bytes(
+        p_sh(|value| unsafe { cstr::at(path_tail(value.as_ptr().cast_mut())) }),
+        b"csh",
+    )
 }
 
 /// Whether 'shell' is fish, which needs its own quoting.
 pub(crate) fn fish_like_shell() -> bool {
     // SAFETY: 'shell' is a string option; it is never null.
-    has_bytes(unsafe { cstr::at(path_tail(p_sh())) }, b"fish")
+    has_bytes(
+        p_sh(|value| unsafe { cstr::at(path_tail(value.as_ptr().cast_mut())) }),
+        b"fish",
+    )
 }
 
 /// Every buffer-local (or window-local) option of the current buffer and

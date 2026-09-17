@@ -33,17 +33,17 @@ use crate::indent_c::parse_cino;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
-use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
+use crate::memory::{XString, xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
 use crate::message_fmt::c_str;
 use crate::option::vars::{P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW, fenc_default};
-use crate::option::vars::{p_enc, p_hlg, p_rtp, p_sh};
+use crate::option::vars::{p_enc, p_rtp, p_sh};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
     kOptFileformats, kOptHelplang, kOptIcon, kOptInvalid, kOptModeline, kOptPackpath,
     kOptRuntimepath, kOptScroll, kOptShell, kOptShellpipe, kOptShellredir, kOptTermbidi, kOptTitle,
     kOptTtyfast, kOptUndodir, kOptViewdir, kOptWindow,
 };
-use crate::optionstr::{check_buf_options, free_string_option};
+use crate::optionstr::check_buf_options;
 use crate::os::cshim::{bind_textdomain_codeset, gettext_ptr, snprintf, strncasecmp};
 use crate::os::env::{os_env_exists, os_getenv, vim_getenv};
 use crate::os::lang::{get_mess_lang, lang_init};
@@ -336,7 +336,9 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     didset_options2();
     lang_init();
     set_init_fenc_default();
-    unsafe { bind_textdomain_codeset(PROJECT_NAME.as_ptr(), p_enc()) };
+    p_enc(|value| unsafe {
+        bind_textdomain_codeset(PROJECT_NAME.as_ptr(), value.as_ptr().cast_mut())
+    });
     unsafe { set_helplang_default(get_mess_lang()) };
 }
 
@@ -500,7 +502,7 @@ pub(crate) fn set_init_2(_headless: bool) {
         c"set_init_2",
         613,
         "startup runtimepath/packpath value: {}",
-        unsafe { c_str(p_rtp()) }
+        p_rtp(|value| unsafe { c_str(value.as_ptr().cast_mut()) })
     );
     // 'scroll' is half the window height, so it could not be defaulted
     // before there was a window.
@@ -539,7 +541,8 @@ pub(crate) fn set_init_3() {
     let do_sp = !option_was_set(kOptShellpipe);
 
     let mut len: size_t = 0;
-    let tail = unsafe { invocation_path_tail(p_sh(), &raw mut len) };
+    let tail =
+        p_sh(|value| unsafe { invocation_path_tail(value.as_ptr().cast_mut(), &raw mut len) });
     let shell = unsafe { xmemdupz(tail.cast::<c_void>(), len) }.cast::<c_char>();
     let named = |names: &[&CStr]| {
         names
@@ -587,10 +590,10 @@ pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
     if lang_len < 2 || option_was_set(kOptHelplang) {
         return;
     }
-    unsafe { free_string_option(p_hlg()) };
-    P_HLG.set(unsafe { xmemdupz(lang.cast::<c_void>(), lang_len) }.cast::<c_char>());
-
-    let hlg = p_hlg();
+    // SAFETY: the caller's `lang` is NUL-terminated and at least `lang_len`
+    // bytes long.
+    let mut helplang = XString::from_bytes(unsafe { cstr::slice_at(lang, lang_len) });
+    let hlg = helplang.as_mut_ptr();
     let lower = |c: c_char| (c as u8).to_ascii_lowercase() as c_char;
     if unsafe { strncasecmp(hlg, c"zh_".as_ptr(), 3) } == 0 && lang_len >= 5 {
         // zh_CN becomes "cn", zh_TW becomes "tw".
@@ -601,7 +604,9 @@ pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
         unsafe { *hlg = 'e' as c_char };
         unsafe { *hlg.add(1) = 'n' as c_char };
     }
-    unsafe { *hlg.add(2) = NUL as c_char };
+    // Two letters is all 'helplang' keeps.
+    helplang.truncate(2);
+    P_HLG.set(helplang);
 }
 
 /// 'title' and 'icon' default off unless the user asked for them, so that

@@ -34,14 +34,14 @@ use crate::memline::ml_setflags;
 use crate::memory::xfree;
 use crate::message::{e_modifiable, e_unsupportedoption};
 use crate::option::option_var;
-use crate::option::vars::{bkc_flags, p_bex, p_bkc, p_bs, p_enc, p_pm};
+use crate::option::vars::{P_BKC, bkc_flags, p_bex, p_bs, p_enc, p_pm};
 use crate::option::{
     get_fileformat, redraw_titles, set_iminsert_global, set_imsearch_global, set_option_direct,
     skip_to_option_part,
 };
 use crate::options::{
-    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, kOptEncoding, kOptFileencoding,
-    kOptIskeyword, opt_bh_values, opt_bkc_values, opt_bt_values,
+    kOptBkcFlagAuto, kOptBkcFlagNo, kOptBkcFlagYes, kOptComments, kOptEncoding, kOptEventignorewin,
+    kOptFileencoding, kOptIskeyword, opt_bh_values, opt_bkc_values, opt_bt_values,
 };
 use crate::os::time::os_time;
 use crate::spell::spell_reload;
@@ -53,6 +53,7 @@ use crate::types::{
 use crate::window::global_stl_height;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
+use super::free_string_option;
 use super::{
     B_IMODE_LMAP, B_IMODE_NONE, B_IMODE_USE_INSERT, COM_ALL, CPO_VI, EOL_MAC, FO_ALL, SID_NONE,
     did_set_opt_flags, did_set_optexpr, did_set_option_listflag, did_set_str_generic,
@@ -64,9 +65,8 @@ use crate::pos::MAXLNUM;
 /// 'backspace' is a word list, except that the number 2 is also accepted
 /// and means everything but "nostop".
 pub fn did_set_backspace(args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: the option's own C string value.
-    if unsafe { ascii_isdigit(c_int::from(*p_bs())) } {
-        if unsafe { *p_bs() } != b'2' as c_char {
+    if p_bs(|value| ascii_isdigit(c_int::from(cstr::first(value)))) {
+        if p_bs(|value| cstr::first(value) != b'2') {
             return invalid();
         }
         return None;
@@ -79,6 +79,9 @@ pub fn did_set_backspace(args: &mut OptSet) -> Option<&CStr> {
 pub fn did_set_backupcopy(args: &mut OptSet) -> Option<&CStr> {
     let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
+    // A copy, so that the global value outlives the projection: this runs at
+    // `:set` rate.
+    let global = P_BKC.get();
     let value = if local {
         buf.b_p_bkc
     } else {
@@ -86,7 +89,7 @@ pub fn did_set_backupcopy(args: &mut OptSet) -> Option<&CStr> {
             // A plain `:set` drops the buffer's own answer.
             buf.b_bkc_flags = 0 as c_uint;
         }
-        p_bkc()
+        global.as_ptr().cast_mut()
     };
     let mut store = |mask: c_uint| {
         if local {
@@ -122,15 +125,11 @@ pub fn did_set_backupcopy(args: &mut OptSet) -> Option<&CStr> {
 /// 'backupext' and 'patchmode' both rename a file out of the way, so they
 /// cannot be the same — a leading dot is not part of the comparison.
 pub fn did_set_backupext_or_patchmode(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: both are the process's own C string option values.
-    let undotted = |value: *mut c_char| {
-        if unsafe { *value } == b'.' as c_char {
-            unsafe { value.add(1) }
-        } else {
-            value
-        }
+    let undotted = |value: &CStr| {
+        let bytes = value.to_bytes();
+        bytes.strip_prefix(b".").unwrap_or(bytes).to_vec()
     };
-    if unsafe { cstr::eq(undotted(p_bex()), undotted(p_pm())) } {
+    if p_bex(undotted) == p_pm(undotted) {
         return Some(e_backupext_and_patchmode_are_equal);
     }
     None
@@ -298,10 +297,11 @@ pub fn did_set_encoding(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the option's own variable; `enc_canonize` allocates the
     // replacement and the old value is freed here.
     let canonical = unsafe { enc_canonize(varp.get()) };
-    unsafe { xfree(varp.get().cast::<c_void>()) };
-    unsafe { varp.set(canonical) };
+    // Replace and *then* free; see `crate::optionstr::did_set_optexpr`.
+    let old = unsafe { varp.replace(canonical) };
+    unsafe { free_string_option(old) };
     if idx == kOptEncoding {
-        if unsafe { !cstr::eq_bytes(p_enc(), b"utf-8") } {
+        if p_enc(|value| unsafe { !cstr::eq_bytes(value.as_ptr().cast_mut(), b"utf-8") }) {
             return Some(e_unsupportedoption);
         }
         spell_reload();
@@ -310,8 +310,9 @@ pub fn did_set_encoding(args: &mut OptSet) -> Option<&CStr> {
 }
 
 pub fn did_set_eventignore(args: &mut OptSet) -> Option<&CStr> {
+    let window_local = args.os_idx == kOptEventignorewin;
     // SAFETY: the frame's C string value.
-    if unsafe { check_ei(varp(args).get()) }.is_err() {
+    if unsafe { check_ei(varp(args).get(), window_local) }.is_err() {
         return invalid();
     }
     None

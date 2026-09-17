@@ -18,12 +18,13 @@
 )]
 
 use super::*;
+use crate::option::vars::P_DIA;
+use crate::option::vars::P_DIP;
 use crate::semsg;
 use crate::types::Failed;
 use crate::winlayer::graph::{switch_buffer, switch_window};
 use crate::winlayer::{Buf, tabs, windows};
 use core::ffi::c_int;
-use std::ffi::CStr;
 
 /// The `'diffopt'` items that are nothing but a flag bit.
 ///
@@ -99,8 +100,10 @@ pub(crate) unsafe fn parse_diffanchors(
     anchors: *mut LineNr,
     num_anchors: *mut c_int,
 ) -> Result<(), Failed> {
+    // A copy: the walk below outlives a projection's borrow.
+    let global_dia = P_DIA.get();
     let mut dia = if unsafe { *buffer.b_p_dia } == 0 {
-        p_dia()
+        global_dia.as_ptr().cast_mut()
     } else {
         buffer.b_p_dia
     };
@@ -213,8 +216,11 @@ pub fn diffopt_changed() -> Result<(), Failed> {
     let mut algorithm_new: u64 = 0;
     let mut indent_heuristic: u64 = 0;
 
-    let base = p_dip();
-    let text = unsafe { CStr::from_ptr(base) }.to_bytes();
+    // A copy: `number_at` below walks it past the end of a projection's
+    // borrow.
+    let dip = P_DIP.get();
+    let base = dip.as_ptr().cast_mut();
+    let text = dip.as_cstr().to_bytes();
     // `getdigits_int` walks a `char *`, so the parse tracks an offset and
     // hands it the matching pointer where it needs one.
     let number_at = |at: usize, default| {

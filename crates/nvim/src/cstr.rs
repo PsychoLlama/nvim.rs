@@ -362,6 +362,15 @@ pub(crate) fn as_bytes(buf: &[c_char]) -> &[u8] {
     unsafe { slice::from_raw_parts(buf.as_ptr().cast::<u8>(), buf.len()) }
 }
 
+/// The first byte of a C string, or NUL when it has none.
+///
+/// The spelling of `*p` for a value that is a string in its own right: the
+/// option variables, whose first byte is what a dozen `'selection'`-shaped
+/// tests ask about, answer `&CStr` and have no pointer to dereference.
+pub(crate) fn first(s: &CStr) -> u8 {
+    s.to_bytes().first().copied().unwrap_or(0)
+}
+
 /// The byte at `i`, answering `NUL` past the end.
 ///
 /// The one adaptation almost every pointer walk needs when it becomes an

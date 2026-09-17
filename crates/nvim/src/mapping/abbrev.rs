@@ -292,12 +292,11 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     }
     let mut res: *mut c_char = ptr::null_mut();
     let out = &raw mut res;
-    let cpo = p_cpo();
     let dolt = REPTERM_DO_LT as c_int;
     let simplify = ptr::null_mut();
     // SAFETY: as above; `res` is a live slot for the allocation
     // `replace_termcodes` makes, which the guard releases.
-    let replaced = unsafe {
+    let replaced = p_cpo(|cpo| unsafe {
         let at = replace_termcodes(
             bytes.as_ptr().cast(),
             bytes.len(),
@@ -309,6 +308,6 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
         );
         let _owned = COwned::new(res);
         MapStr::new(cstr::bytes_at(at))
-    };
+    });
     Some(replaced)
 }

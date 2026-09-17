@@ -14,7 +14,9 @@
 use crate::cstr;
 use crate::fileio::Loaded;
 use crate::memline::MlFlags;
+use crate::option::vars::P_FENCS;
 use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -128,6 +130,9 @@ pub(crate) unsafe fn readfile(
     let mut fenc: *mut c_char;
     let mut fenc_alloced = false;
     let mut fenc_next: *mut c_char = ptr::null_mut();
+    // 'fileencodings' copied out, so the cursor above survives the retry
+    // loop below; empty until the branch that needs it runs.
+    let fencs;
     let mut advance_fenc = false;
     let mut did_iconv = false; // iconv() failed, try 'charconvert' next
     let mut converted = false;
@@ -230,11 +235,14 @@ pub(crate) unsafe fn readfile(
             fenc_next = c"latin1".as_ptr().cast_mut();
             fenc = c"utf-8".as_ptr().cast_mut();
             fenc_alloced = false;
-        } else if unsafe { *p_fencs() } == 0 {
+        } else if p_fencs(CStr::is_empty) {
             fenc = Buf::current().b_p_fenc; // use the buffer's encoding
             fenc_alloced = false;
         } else {
-            fenc_next = p_fencs(); // try the items in 'fileencodings'
+            // Try the items in 'fileencodings'; a copy, because the cursor
+            // walks it across the whole retry loop below.
+            fencs = P_FENCS.get();
+            fenc_next = fencs.as_ptr().cast_mut();
             fenc = unsafe { next_fenc(&mut fenc_next, &mut fenc_alloced) };
         }
 
@@ -286,7 +294,7 @@ pub(crate) unsafe fn readfile(
                     guess.try_mac = 0;
                 } else if Buf::current().b_p_bin != 0 {
                     fileformat = EOL_UNIX; // binary: use Unix format
-                } else if unsafe { *p_ffs() } == 0 {
+                } else if p_ffs(CStr::is_empty) {
                     fileformat = get_fileformat(Buf::current()); // from the buffer
                 } else {
                     fileformat = EOL_UNKNOWN; // detect from the file
@@ -357,7 +365,7 @@ pub(crate) unsafe fn readfile(
                 if conv.flags == 0
                     && !how.stdin
                     && !how.buffer
-                    && unsafe { *p_ccv() } != 0
+                    && p_ccv(|value| !value.is_empty())
                     && !how.fifo
                     && !conv.has_iconv()
                 {

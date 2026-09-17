@@ -165,7 +165,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
         }
 
         // SAFETY: 'shellquote' is a live option string.
-        let shq = unsafe { cstr::bytes_at(p_shq()) };
+        let shq = p_shq(|value| unsafe { cstr::bytes_at(value.as_ptr().cast_mut()) });
         if !shq.is_empty() {
             // `prevcmd` is set -- either `prevcmd_is_set` passed above, or
             // the assembled command was just stored in it.
@@ -629,7 +629,12 @@ enum Shell {
 /// Classify 'shell' by the tail of its invocation path.
 fn shell_kind() -> Shell {
     // SAFETY: caller's contract; a NULL length asks only for the tail.
-    let tail = unsafe { cstr::bytes_at(invocation_path_tail(p_sh(), ptr::null_mut())) };
+    let tail = p_sh(|value| unsafe {
+        cstr::bytes_at(invocation_path_tail(
+            value.as_ptr().cast_mut(),
+            ptr::null_mut(),
+        ))
+    });
     if tail.starts_with(b"fish") {
         Shell::Fish
     } else if tail.starts_with(b"pwsh") || tail.starts_with(b"powershell") {
@@ -662,7 +667,11 @@ pub(crate) fn make_filter_cmd(
     );
     if let Some(otmp) = otmp {
         // SAFETY: 'shellredir' is a live option string.
-        append_redir(&mut text, unsafe { cstr::at(p_srr()) }, otmp);
+        append_redir(
+            &mut text,
+            p_srr(|value| unsafe { cstr::at(value.as_ptr().cast_mut()) }),
+            otmp,
+        );
     }
     cstr::owned(&text)
 }

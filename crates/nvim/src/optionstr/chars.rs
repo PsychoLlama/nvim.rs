@@ -35,6 +35,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
@@ -48,7 +49,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::message::{e_invarg, e_leadtab_requires_tab};
 use crate::narrow::number_as_int;
 use crate::option::option_var;
-use crate::option::vars::{p_fcs, p_lcs};
+use crate::option::vars::{P_FCS, P_LCS, p_fcs, p_lcs};
 use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::vim_snprintf;
@@ -411,14 +412,15 @@ pub unsafe fn set_chars_option<'a>(
     } else {
         window.w_onebuf_opt.wo_fcs
     };
-    // An empty local value defers to the global one.
+    // An empty local value defers to the global one. A copy, so that the
+    // global outlives the projection: this runs at `:set` rate.
+    let global = if listchars { P_LCS.get() } else { P_FCS.get() };
     let value = if unsafe { c_int::from(*local) } == NUL {
-        if listchars { p_lcs() } else { p_fcs() }
+        global.as_cstr()
     } else {
-        value.cast_mut()
+        // SAFETY: an option value is a C string.
+        unsafe { cstr::at(value) }
     };
-    // SAFETY: an option value is a C string.
-    let value = unsafe { CStr::from_ptr(value) };
     // The struct this call fills in and, when `apply`, hands to the window.
     // Only one of the two is ever used; which one is `listchars`.
     let mut lcs = NO_LIST_CHARS;
@@ -795,10 +797,10 @@ pub fn check_chars_options() -> Option<&'static CStr> {
         }
     };
 
-    if let Some(global) = check(Win::current(), p_lcs(), kListchars, false) {
+    if let Some(global) = p_lcs(|lcs| check(Win::current(), lcs.as_ptr(), kListchars, false)) {
         return Some(global);
     }
-    if let Some(global) = check(Win::current(), p_fcs(), kFillchars, false) {
+    if let Some(global) = p_fcs(|fcs| check(Win::current(), fcs.as_ptr(), kFillchars, false)) {
         return Some(global);
     }
     for_each_window(|wp| {

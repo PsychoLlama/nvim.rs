@@ -15,6 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char};
@@ -545,7 +546,7 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
         return;
     }
 
-    let table = if unsafe { *p_bg() } == b'l'.cast_signed() {
+    let table = if p_bg(|value| cstr::first(value) == b'l') {
         &HIGHLIGHT_INIT_LIGHT
     } else {
         &HIGHLIGHT_INIT_DARK

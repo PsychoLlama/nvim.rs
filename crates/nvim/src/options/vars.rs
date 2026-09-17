@@ -16,11 +16,11 @@
 #[allow(unused_imports)]
 use super::*;
 
-use core::ffi::c_char;
+use core::ffi::{CStr, c_char};
 use core::mem::offset_of;
-use core::ptr;
 
 use crate::global_cell::GlobalCell;
+use crate::memory::XString;
 use crate::optionstr::empty_option;
 use crate::types::OptInt;
 
@@ -45,6 +45,22 @@ macro_rules! selector {
             project: fn(&mut Options) -> &mut $ty,
         }
 
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                self.at == other.at
+            }
+        }
+
+        impl Eq for $name {}
+    };
+}
+
+/// A selector over a field small enough to copy in and out: the numbers and
+/// the booleans.
+macro_rules! copy_selector {
+    ($name:ident, $ty:ty, $what:expr) => {
+        selector!($name, $ty, $what);
+
         impl $name {
             /// What the field holds.
             pub fn get(self) -> $ty {
@@ -56,24 +72,90 @@ macro_rules! selector {
                 OPTIONS.set_field(self.project, value);
             }
         }
-
-        impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool {
-                self.at == other.at
-            }
-        }
-
-        impl Eq for $name {}
     };
 }
 
-selector!(BoolOpt, bool, "A boolean option's global value.");
-selector!(NumOpt, OptInt, "A number option's global value.");
+copy_selector!(BoolOpt, bool, "A boolean option's global value.");
+copy_selector!(NumOpt, OptInt, "A number option's global value.");
 selector!(
     StrOpt,
-    *mut c_char,
-    "A string option's global value: the allocation the option owns."
+    Option<XString>,
+    "A string option's global value: the string the option owns, if it owns one."
 );
+
+impl StrOpt {
+    /// Project the value: `f` sees it and the borrow ends when `f` returns.
+    ///
+    /// An option that owns nothing — `None`, which is upstream's shared
+    /// `empty_string_option` — reads as the empty string, which is what
+    /// every consumer of a string option's variable already assumed.
+    #[inline(always)]
+    pub fn with<R>(self, f: impl FnOnce(&CStr) -> R) -> R {
+        OPTIONS.with_field(self.project, |value| {
+            f(value.as_ref().map_or(c"", XString::as_cstr))
+        })
+    }
+
+    /// The value as the `char *` the option protocol still speaks, which is
+    /// the shared empty string when the option owns nothing.
+    ///
+    /// The pointer is the option's own buffer and stays live until the
+    /// option is written. `crate::option::scope`'s `StrVar` is the seam
+    /// where an owned string meets that protocol; the handful of other
+    /// callers are the readers that are asked several times per screen line
+    /// and hand the value straight to a C callee (`crate::option::query`'s
+    /// `local_or_global_raw`). Deliberately **not** spelled `as_raw`: that
+    /// is `GlobalCell`'s escape hatch, and the ratchet counts it by name.
+    pub fn value_ptr(self) -> *mut c_char {
+        OPTIONS.with_field(self.project, |value| {
+            value
+                .as_ref()
+                .map_or_else(empty_option, |s| s.as_ptr().cast_mut())
+        })
+    }
+
+    /// Whether the option owns no string of its own.
+    ///
+    /// This is upstream's `is_empty_option` for a global value, and it is
+    /// **not** "the value is empty": an option explicitly set to `""` owns
+    /// an empty string and answers false. The save-and-restore idioms
+    /// (`substitute()`'s quiet 'cpoptions', `:vimgrep`'s 'switchbuf') lean
+    /// on exactly that difference.
+    pub fn is_unset(self) -> bool {
+        OPTIONS.with_field(self.project, Option::is_none)
+    }
+
+    /// A copy of the value, for a caller that needs it to outlive the
+    /// borrow.
+    pub fn get(self) -> XString {
+        OPTIONS.with_field(self.project, |value| {
+            value.clone().unwrap_or_else(XString::new)
+        })
+    }
+
+    /// Give the option a new value — or none — and answer what it held.
+    /// The move out and the move in are one step, so neither side can free
+    /// the other's string.
+    pub fn swap(self, value: Option<XString>) -> Option<XString> {
+        OPTIONS.replace_field(self.project, value)
+    }
+
+    /// Give the option a value of its own, releasing what it held.
+    pub fn set(self, value: XString) {
+        drop(self.swap(Some(value)));
+    }
+
+    /// Leave the option owning nothing, and answer what it held.
+    pub fn clear(self) -> Option<XString> {
+        self.swap(None)
+    }
+
+    /// Put back what [`clear`](Self::clear) answered, releasing whatever is
+    /// there now. The other half of the save-and-restore idioms.
+    pub fn restore(self, value: Option<XString>) {
+        drop(self.swap(value));
+    }
+}
 
 /// The table of fields: one line per option that has a global value.
 ///
@@ -99,16 +181,18 @@ macro_rules! options {
         /// address of. They are one record here, behind one cell.
         ///
         /// The fields are private and nothing hands out a reference to the
-        /// record. A reader copies one field out and a selector's `set`
-        /// copies one in, and the borrow is over before either returns, so
-        /// a `did_set_*` callback that re-enters the editor cannot be
-        /// holding the option table open while it does.
+        /// record. A number or a boolean is copied in and out; a string is
+        /// *projected*, so the borrow ends inside the reader's closure and a
+        /// value that must outlive it is cloned. Either way the record is
+        /// not open across a call, so a `did_set_*` callback that re-enters
+        /// the editor cannot be holding the option table while it does.
         pub struct $record {
             $($(#[$doc])* $field: $ty,)*
         }
 
-        /// The one cell. Seeded with each field's zero; startup installs the
-        /// table's defaults through `crate::option::set_init_1`.
+        /// The one cell. Seeded with each field's zero — a string option
+        /// owns nothing until startup installs the table's defaults through
+        /// `crate::option::set_init_1`, and reads as `""` until then.
         static OPTIONS: GlobalCell<$record> = GlobalCell::new($record {
             $($field: $init,)*
         });
@@ -124,18 +208,41 @@ macro_rules! options {
                 project: |o| &mut o.$field,
             };
 
-            $(#[$doc])*
-            ///
-            /// The cheap accessor: one load, no selector in the way. `pub`
-            /// for the same reason the selector is, and because a table
-            /// declares a reader per row whether or not the tree has a
-            /// caller for that row today.
-            #[inline(always)]
-            pub fn $field() -> $ty {
-                OPTIONS.get_field(|o| &mut o.$field)
+            reader! {
+                $(#[$doc])*
+                $kind, $field, $ty
             }
-
         )*
+    };
+}
+
+/// The reader for one field, whose shape follows the field's type: a number
+/// or a boolean is answered, a string is projected into a closure.
+macro_rules! reader {
+    ($(#[$doc:meta])* StrOpt, $field:ident, $ty:ty) => {
+        $(#[$doc])*
+        ///
+        /// The projecting accessor: `f` sees the value and the borrow ends
+        /// when it returns. [`StrOpt::get`] on the selector is the copy, for
+        /// a value that has to outlive the call.
+        #[inline(always)]
+        pub fn $field<R>(f: impl FnOnce(&CStr) -> R) -> R {
+            OPTIONS.with_field(|o| &mut o.$field, |value| {
+                f(value.as_ref().map_or(c"", XString::as_cstr))
+            })
+        }
+    };
+    ($(#[$doc:meta])* $kind:ident, $field:ident, $ty:ty) => {
+        $(#[$doc])*
+        ///
+        /// The cheap accessor: one load, no selector in the way. `pub`
+        /// for the same reason the selector is, and because a table
+        /// declares a reader per row whether or not the tree has a
+        /// caller for that row today.
+        #[inline(always)]
+        pub fn $field() -> $ty {
+            OPTIONS.get_field(|o| &mut o.$field)
+        }
     };
 }
 
@@ -144,7 +251,7 @@ options! {
         /// `'allowrevins'`.
         p_ari: bool = false, P_ARI: BoolOpt;
         /// `'ambiwidth'`.
-        p_ambw: *mut c_char = ptr::null_mut(), P_AMBW: StrOpt;
+        p_ambw: Option<XString> = None, P_AMBW: StrOpt;
         /// `'arabicshape'`.
         p_arshape: bool = false, P_ARSHAPE: BoolOpt;
         /// `'autochdir'`.
@@ -164,61 +271,61 @@ options! {
         /// `'autowriteall'`.
         p_awa: bool = false, P_AWA: BoolOpt;
         /// `'background'`.
-        p_bg: *mut c_char = ptr::null_mut(), P_BG: StrOpt;
+        p_bg: Option<XString> = None, P_BG: StrOpt;
         /// `'backspace'`.
-        p_bs: *mut c_char = ptr::null_mut(), P_BS: StrOpt;
+        p_bs: Option<XString> = None, P_BS: StrOpt;
         /// `'backup'`.
         p_bk: bool = false, P_BK: BoolOpt;
         /// `'backupcopy'`.
-        p_bkc: *mut c_char = ptr::null_mut(), P_BKC: StrOpt;
+        p_bkc: Option<XString> = None, P_BKC: StrOpt;
         /// `'backupdir'`.
-        p_bdir: *mut c_char = ptr::null_mut(), P_BDIR: StrOpt;
+        p_bdir: Option<XString> = None, P_BDIR: StrOpt;
         /// `'backupext'`.
-        p_bex: *mut c_char = ptr::null_mut(), P_BEX: StrOpt;
+        p_bex: Option<XString> = None, P_BEX: StrOpt;
         /// `'backupskip'`.
-        p_bsk: *mut c_char = ptr::null_mut(), P_BSK: StrOpt;
+        p_bsk: Option<XString> = None, P_BSK: StrOpt;
         /// `'belloff'`.
-        p_bo: *mut c_char = ptr::null_mut(), P_BO: StrOpt;
+        p_bo: Option<XString> = None, P_BO: StrOpt;
         /// `'binary'`.
         p_bin: bool = false, P_BIN: BoolOpt;
         /// `'bomb'`.
         p_bomb: bool = false, P_BOMB: BoolOpt;
         /// `'breakat'`.
-        p_breakat: *mut c_char = ptr::null_mut(), P_BREAKAT: StrOpt;
+        p_breakat: Option<XString> = None, P_BREAKAT: StrOpt;
         /// `'bufhidden'`.
-        p_bh: *mut c_char = ptr::null_mut(), P_BH: StrOpt;
+        p_bh: Option<XString> = None, P_BH: StrOpt;
         /// `'buflisted'`.
         p_bl: bool = false, P_BL: BoolOpt;
         /// `'buftype'`.
-        p_bt: *mut c_char = ptr::null_mut(), P_BT: StrOpt;
+        p_bt: Option<XString> = None, P_BT: StrOpt;
         /// `'busy'`.
         p_busy: OptInt = 0, P_BUSY: NumOpt;
         /// `'casemap'`.
-        p_cmp: *mut c_char = ptr::null_mut(), P_CMP: StrOpt;
+        p_cmp: Option<XString> = None, P_CMP: StrOpt;
         /// `'cdhome'`.
         p_cdh: bool = false, P_CDH: BoolOpt;
         /// `'cdpath'`.
-        p_cdpath: *mut c_char = ptr::null_mut(), P_CDPATH: StrOpt;
+        p_cdpath: Option<XString> = None, P_CDPATH: StrOpt;
         /// `'cedit'`.
-        p_cedit: *mut c_char = ptr::null_mut(), P_CEDIT: StrOpt;
+        p_cedit: Option<XString> = None, P_CEDIT: StrOpt;
         /// `'channel'`.
         p_channel: OptInt = 0, P_CHANNEL: NumOpt;
         /// `'charconvert'`.
-        p_ccv: *mut c_char = ptr::null_mut(), P_CCV: StrOpt;
+        p_ccv: Option<XString> = None, P_CCV: StrOpt;
         /// `'chistory'`.
         p_chi: OptInt = 0, P_CHI: NumOpt;
         /// `'cindent'`.
         p_cin: bool = false, P_CIN: BoolOpt;
         /// `'cinkeys'`.
-        p_cink: *mut c_char = ptr::null_mut(), P_CINK: StrOpt;
+        p_cink: Option<XString> = None, P_CINK: StrOpt;
         /// `'cinoptions'`.
-        p_cino: *mut c_char = ptr::null_mut(), P_CINO: StrOpt;
+        p_cino: Option<XString> = None, P_CINO: StrOpt;
         /// `'cinscopedecls'`.
-        p_cinsd: *mut c_char = ptr::null_mut(), P_CINSD: StrOpt;
+        p_cinsd: Option<XString> = None, P_CINSD: StrOpt;
         /// `'cinwords'`.
-        p_cinw: *mut c_char = ptr::null_mut(), P_CINW: StrOpt;
+        p_cinw: Option<XString> = None, P_CINW: StrOpt;
         /// `'clipboard'`.
-        p_cb: *mut c_char = ptr::null_mut(), P_CB: StrOpt;
+        p_cb: Option<XString> = None, P_CB: StrOpt;
         /// `'cmdheight'`.
         p_ch: OptInt = 0, P_CH: NumOpt;
         /// `'cmdwinheight'`.
@@ -226,17 +333,17 @@ options! {
         /// `'columns'`.
         p_columns: OptInt = 0, P_COLUMNS: NumOpt;
         /// `'comments'`.
-        p_com: *mut c_char = ptr::null_mut(), P_COM: StrOpt;
+        p_com: Option<XString> = None, P_COM: StrOpt;
         /// `'commentstring'`.
-        p_cms: *mut c_char = ptr::null_mut(), P_CMS: StrOpt;
+        p_cms: Option<XString> = None, P_CMS: StrOpt;
         /// `'complete'`.
-        p_cpt: *mut c_char = ptr::null_mut(), P_CPT: StrOpt;
+        p_cpt: Option<XString> = None, P_CPT: StrOpt;
         /// `'completefunc'`.
-        p_cfu: *mut c_char = ptr::null_mut(), P_CFU: StrOpt;
+        p_cfu: Option<XString> = None, P_CFU: StrOpt;
         /// `'completeitemalign'`.
-        p_cia: *mut c_char = ptr::null_mut(), P_CIA: StrOpt;
+        p_cia: Option<XString> = None, P_CIA: StrOpt;
         /// `'completeopt'`.
-        p_cot: *mut c_char = ptr::null_mut(), P_COT: StrOpt;
+        p_cot: Option<XString> = None, P_COT: StrOpt;
         /// `'completetimeout'`.
         p_cto: OptInt = 0, P_CTO: NumOpt;
         /// `'confirm'`.
@@ -244,33 +351,33 @@ options! {
         /// `'copyindent'`.
         p_ci: bool = false, P_CI: BoolOpt;
         /// `'cpoptions'`.
-        p_cpo: *mut c_char = ptr::null_mut(), P_CPO: StrOpt;
+        p_cpo: Option<XString> = None, P_CPO: StrOpt;
         /// `'debug'`.
-        p_debug: *mut c_char = ptr::null_mut(), P_DEBUG: StrOpt;
+        p_debug: Option<XString> = None, P_DEBUG: StrOpt;
         /// `'define'`.
-        p_def: *mut c_char = ptr::null_mut(), P_DEF: StrOpt;
+        p_def: Option<XString> = None, P_DEF: StrOpt;
         /// `'delcombine'`.
         p_deco: bool = false, P_DECO: BoolOpt;
         /// `'dictionary'`.
-        p_dict: *mut c_char = ptr::null_mut(), P_DICT: StrOpt;
+        p_dict: Option<XString> = None, P_DICT: StrOpt;
         /// `'diffanchors'`.
-        p_dia: *mut c_char = ptr::null_mut(), P_DIA: StrOpt;
+        p_dia: Option<XString> = None, P_DIA: StrOpt;
         /// `'diffexpr'`.
-        p_dex: *mut c_char = ptr::null_mut(), P_DEX: StrOpt;
+        p_dex: Option<XString> = None, P_DEX: StrOpt;
         /// `'diffopt'`.
-        p_dip: *mut c_char = ptr::null_mut(), P_DIP: StrOpt;
+        p_dip: Option<XString> = None, P_DIP: StrOpt;
         /// `'digraph'`.
         p_dg: bool = false, P_DG: BoolOpt;
         /// `'directory'`.
-        p_dir: *mut c_char = ptr::null_mut(), P_DIR: StrOpt;
+        p_dir: Option<XString> = None, P_DIR: StrOpt;
         /// `'display'`.
-        p_dy: *mut c_char = ptr::null_mut(), P_DY: StrOpt;
+        p_dy: Option<XString> = None, P_DY: StrOpt;
         /// `'eadirection'`.
-        p_ead: *mut c_char = ptr::null_mut(), P_EAD: StrOpt;
+        p_ead: Option<XString> = None, P_EAD: StrOpt;
         /// `'emoji'`.
         p_emoji: bool = false, P_EMOJI: BoolOpt;
         /// `'encoding'`.
-        p_enc: *mut c_char = ptr::null_mut(), P_ENC: StrOpt;
+        p_enc: Option<XString> = None, P_ENC: StrOpt;
         /// `'endoffile'`.
         p_eof: bool = false, P_EOF: BoolOpt;
         /// `'endofline'`.
@@ -278,75 +385,75 @@ options! {
         /// `'equalalways'`.
         p_ea: bool = false, P_EA: BoolOpt;
         /// `'equalprg'`.
-        p_ep: *mut c_char = ptr::null_mut(), P_EP: StrOpt;
+        p_ep: Option<XString> = None, P_EP: StrOpt;
         /// `'errorbells'`.
         p_eb: bool = false, P_EB: BoolOpt;
         /// `'errorfile'`.
-        p_ef: *mut c_char = ptr::null_mut(), P_EF: StrOpt;
+        p_ef: Option<XString> = None, P_EF: StrOpt;
         /// `'errorformat'`.
-        p_efm: *mut c_char = ptr::null_mut(), P_EFM: StrOpt;
+        p_efm: Option<XString> = None, P_EFM: StrOpt;
         /// `'eventignore'`.
-        p_ei: *mut c_char = ptr::null_mut(), P_EI: StrOpt;
+        p_ei: Option<XString> = None, P_EI: StrOpt;
         /// `'expandtab'`.
         p_et: bool = false, P_ET: BoolOpt;
         /// `'exrc'`.
         p_exrc: bool = false, P_EXRC: BoolOpt;
         /// `'fileencoding'`.
-        p_fenc: *mut c_char = ptr::null_mut(), P_FENC: StrOpt;
+        p_fenc: Option<XString> = None, P_FENC: StrOpt;
         /// `'fileencodings'`.
-        p_fencs: *mut c_char = ptr::null_mut(), P_FENCS: StrOpt;
+        p_fencs: Option<XString> = None, P_FENCS: StrOpt;
         /// `'fileformat'`.
-        p_ff: *mut c_char = ptr::null_mut(), P_FF: StrOpt;
+        p_ff: Option<XString> = None, P_FF: StrOpt;
         /// `'fileformats'`.
-        p_ffs: *mut c_char = ptr::null_mut(), P_FFS: StrOpt;
+        p_ffs: Option<XString> = None, P_FFS: StrOpt;
         /// `'fileignorecase'`.
         p_fic: bool = false, P_FIC: BoolOpt;
         /// `'filetype'`.
-        p_ft: *mut c_char = ptr::null_mut(), P_FT: StrOpt;
+        p_ft: Option<XString> = None, P_FT: StrOpt;
         /// `'fillchars'`.
-        p_fcs: *mut c_char = ptr::null_mut(), P_FCS: StrOpt;
+        p_fcs: Option<XString> = None, P_FCS: StrOpt;
         /// `'findfunc'`.
-        p_ffu: *mut c_char = ptr::null_mut(), P_FFU: StrOpt;
+        p_ffu: Option<XString> = None, P_FFU: StrOpt;
         /// `'fixendofline'`.
         p_fixeol: bool = false, P_FIXEOL: BoolOpt;
         /// `'foldclose'`.
-        p_fcl: *mut c_char = ptr::null_mut(), P_FCL: StrOpt;
+        p_fcl: Option<XString> = None, P_FCL: StrOpt;
         /// `'foldlevelstart'`.
         p_fdls: OptInt = 0, P_FDLS: NumOpt;
         /// `'foldopen'`.
-        p_fdo: *mut c_char = ptr::null_mut(), P_FDO: StrOpt;
+        p_fdo: Option<XString> = None, P_FDO: StrOpt;
         /// `'formatexpr'`.
-        p_fex: *mut c_char = ptr::null_mut(), P_FEX: StrOpt;
+        p_fex: Option<XString> = None, P_FEX: StrOpt;
         /// `'formatlistpat'`.
-        p_flp: *mut c_char = ptr::null_mut(), P_FLP: StrOpt;
+        p_flp: Option<XString> = None, P_FLP: StrOpt;
         /// `'formatoptions'`.
-        p_fo: *mut c_char = ptr::null_mut(), P_FO: StrOpt;
+        p_fo: Option<XString> = None, P_FO: StrOpt;
         /// `'formatprg'`.
-        p_fp: *mut c_char = ptr::null_mut(), P_FP: StrOpt;
+        p_fp: Option<XString> = None, P_FP: StrOpt;
         /// `'fsync'`.
         p_fs: bool = false, P_FS: BoolOpt;
         /// `'gdefault'`.
         p_gd: bool = false, P_GD: BoolOpt;
         /// `'grepformat'`.
-        p_gefm: *mut c_char = ptr::null_mut(), P_GEFM: StrOpt;
+        p_gefm: Option<XString> = None, P_GEFM: StrOpt;
         /// `'grepprg'`.
-        p_gp: *mut c_char = ptr::null_mut(), P_GP: StrOpt;
+        p_gp: Option<XString> = None, P_GP: StrOpt;
         /// `'guicursor'`.
-        p_guicursor: *mut c_char = ptr::null_mut(), P_GUICURSOR: StrOpt;
+        p_guicursor: Option<XString> = None, P_GUICURSOR: StrOpt;
         /// `'guifont'`.
-        p_guifont: *mut c_char = ptr::null_mut(), P_GUIFONT: StrOpt;
+        p_guifont: Option<XString> = None, P_GUIFONT: StrOpt;
         /// `'guifontwide'`.
-        p_guifontwide: *mut c_char = ptr::null_mut(), P_GUIFONTWIDE: StrOpt;
+        p_guifontwide: Option<XString> = None, P_GUIFONTWIDE: StrOpt;
         /// `'helpfile'`.
-        p_hf: *mut c_char = ptr::null_mut(), P_HF: StrOpt;
+        p_hf: Option<XString> = None, P_HF: StrOpt;
         /// `'helpheight'`.
         p_hh: OptInt = 0, P_HH: NumOpt;
         /// `'helplang'`.
-        p_hlg: *mut c_char = ptr::null_mut(), P_HLG: StrOpt;
+        p_hlg: Option<XString> = None, P_HLG: StrOpt;
         /// `'hidden'`.
         p_hid: bool = false, P_HID: BoolOpt;
         /// `'highlight'`.
-        p_hl: *mut c_char = ptr::null_mut(), P_HL: StrOpt;
+        p_hl: Option<XString> = None, P_HL: StrOpt;
         /// `'history'`.
         p_hi: OptInt = 0, P_HI: NumOpt;
         /// `'hlsearch'`.
@@ -354,7 +461,7 @@ options! {
         /// `'icon'`.
         p_icon: bool = false, P_ICON: BoolOpt;
         /// `'iconstring'`.
-        p_iconstring: *mut c_char = ptr::null_mut(), P_ICONSTRING: StrOpt;
+        p_iconstring: Option<XString> = None, P_ICONSTRING: StrOpt;
         /// `'ignorecase'`.
         p_ic: bool = false, P_IC: BoolOpt;
         /// `'iminsert'`.
@@ -362,41 +469,41 @@ options! {
         /// `'imsearch'`.
         p_imsearch: OptInt = 0, P_IMSEARCH: NumOpt;
         /// `'inccommand'`.
-        p_icm: *mut c_char = ptr::null_mut(), P_ICM: StrOpt;
+        p_icm: Option<XString> = None, P_ICM: StrOpt;
         /// `'include'`.
-        p_inc: *mut c_char = ptr::null_mut(), P_INC: StrOpt;
+        p_inc: Option<XString> = None, P_INC: StrOpt;
         /// `'includeexpr'`.
-        p_inex: *mut c_char = ptr::null_mut(), P_INEX: StrOpt;
+        p_inex: Option<XString> = None, P_INEX: StrOpt;
         /// `'incsearch'`.
         p_is: bool = false, P_IS: BoolOpt;
         /// `'indentexpr'`.
-        p_inde: *mut c_char = ptr::null_mut(), P_INDE: StrOpt;
+        p_inde: Option<XString> = None, P_INDE: StrOpt;
         /// `'indentkeys'`.
-        p_indk: *mut c_char = ptr::null_mut(), P_INDK: StrOpt;
+        p_indk: Option<XString> = None, P_INDK: StrOpt;
         /// `'infercase'`.
         p_inf: bool = false, P_INF: BoolOpt;
         /// `'isfname'`.
-        p_isf: *mut c_char = ptr::null_mut(), P_ISF: StrOpt;
+        p_isf: Option<XString> = None, P_ISF: StrOpt;
         /// `'isident'`.
-        p_isi: *mut c_char = ptr::null_mut(), P_ISI: StrOpt;
+        p_isi: Option<XString> = None, P_ISI: StrOpt;
         /// `'iskeyword'`.
-        p_isk: *mut c_char = ptr::null_mut(), P_ISK: StrOpt;
+        p_isk: Option<XString> = None, P_ISK: StrOpt;
         /// `'isprint'`.
-        p_isp: *mut c_char = ptr::null_mut(), P_ISP: StrOpt;
+        p_isp: Option<XString> = None, P_ISP: StrOpt;
         /// `'joinspaces'`.
         p_js: bool = false, P_JS: BoolOpt;
         /// `'jumpoptions'`.
-        p_jop: *mut c_char = ptr::null_mut(), P_JOP: StrOpt;
+        p_jop: Option<XString> = None, P_JOP: StrOpt;
         /// `'keymap'`.
-        p_keymap: *mut c_char = ptr::null_mut(), P_KEYMAP: StrOpt;
+        p_keymap: Option<XString> = None, P_KEYMAP: StrOpt;
         /// `'keymodel'`.
-        p_km: *mut c_char = ptr::null_mut(), P_KM: StrOpt;
+        p_km: Option<XString> = None, P_KM: StrOpt;
         /// `'keywordprg'`.
-        p_kp: *mut c_char = ptr::null_mut(), P_KP: StrOpt;
+        p_kp: Option<XString> = None, P_KP: StrOpt;
         /// `'langmap'`.
-        p_langmap: *mut c_char = ptr::null_mut(), P_LANGMAP: StrOpt;
+        p_langmap: Option<XString> = None, P_LANGMAP: StrOpt;
         /// `'langmenu'`.
-        p_lm: *mut c_char = ptr::null_mut(), P_LM: StrOpt;
+        p_lm: Option<XString> = None, P_LM: StrOpt;
         /// `'langnoremap'`.
         p_lnr: bool = false, P_LNR: BoolOpt;
         /// `'langremap'`.
@@ -412,23 +519,23 @@ options! {
         /// `'lisp'`.
         p_lisp: bool = false, P_LISP: BoolOpt;
         /// `'lispoptions'`.
-        p_lop: *mut c_char = ptr::null_mut(), P_LOP: StrOpt;
+        p_lop: Option<XString> = None, P_LOP: StrOpt;
         /// `'lispwords'`.
-        p_lispwords: *mut c_char = ptr::null_mut(), P_LISPWORDS: StrOpt;
+        p_lispwords: Option<XString> = None, P_LISPWORDS: StrOpt;
         /// `'listchars'`.
-        p_lcs: *mut c_char = ptr::null_mut(), P_LCS: StrOpt;
+        p_lcs: Option<XString> = None, P_LCS: StrOpt;
         /// `'loadplugins'`.
         p_lpl: bool = false, P_LPL: BoolOpt;
         /// `'magic'`.
         p_magic: bool = false, P_MAGIC: BoolOpt;
         /// `'makeef'`.
-        p_mef: *mut c_char = ptr::null_mut(), P_MEF: StrOpt;
+        p_mef: Option<XString> = None, P_MEF: StrOpt;
         /// `'makeencoding'`.
-        p_menc: *mut c_char = ptr::null_mut(), P_MENC: StrOpt;
+        p_menc: Option<XString> = None, P_MENC: StrOpt;
         /// `'makeprg'`.
-        p_mp: *mut c_char = ptr::null_mut(), P_MP: StrOpt;
+        p_mp: Option<XString> = None, P_MP: StrOpt;
         /// `'matchpairs'`.
-        p_mps: *mut c_char = ptr::null_mut(), P_MPS: StrOpt;
+        p_mps: Option<XString> = None, P_MPS: StrOpt;
         /// `'matchtime'`.
         p_mat: OptInt = 0, P_MAT: NumOpt;
         /// `'maxcombine'`.
@@ -444,9 +551,9 @@ options! {
         /// `'menuitems'`.
         p_mis: OptInt = 0, P_MIS: NumOpt;
         /// `'messagesopt'`.
-        p_mopt: *mut c_char = ptr::null_mut(), P_MOPT: StrOpt;
+        p_mopt: Option<XString> = None, P_MOPT: StrOpt;
         /// `'mkspellmem'`.
-        p_msm: *mut c_char = ptr::null_mut(), P_MSM: StrOpt;
+        p_msm: Option<XString> = None, P_MSM: StrOpt;
         /// `'modeline'`.
         p_ml: bool = false, P_ML: BoolOpt;
         /// `'modelineexpr'`.
@@ -460,37 +567,37 @@ options! {
         /// `'more'`.
         p_more: bool = false, P_MORE: BoolOpt;
         /// `'mouse'`.
-        p_mouse: *mut c_char = ptr::null_mut(), P_MOUSE: StrOpt;
+        p_mouse: Option<XString> = None, P_MOUSE: StrOpt;
         /// `'mousefocus'`.
         p_mousef: bool = false, P_MOUSEF: BoolOpt;
         /// `'mousehide'`.
         p_mh: bool = false, P_MH: BoolOpt;
         /// `'mousemodel'`.
-        p_mousem: *mut c_char = ptr::null_mut(), P_MOUSEM: StrOpt;
+        p_mousem: Option<XString> = None, P_MOUSEM: StrOpt;
         /// `'mousemoveevent'`.
         p_mousemev: bool = false, P_MOUSEMEV: BoolOpt;
         /// `'mousescroll'`.
-        p_mousescroll: *mut c_char = ptr::null_mut(), P_MOUSESCROLL: StrOpt;
+        p_mousescroll: Option<XString> = None, P_MOUSESCROLL: StrOpt;
         /// `'mousetime'`.
         p_mouset: OptInt = 0, P_MOUSET: NumOpt;
         /// `'nrformats'`.
-        p_nf: *mut c_char = ptr::null_mut(), P_NF: StrOpt;
+        p_nf: Option<XString> = None, P_NF: StrOpt;
         /// `'omnifunc'`.
-        p_ofu: *mut c_char = ptr::null_mut(), P_OFU: StrOpt;
+        p_ofu: Option<XString> = None, P_OFU: StrOpt;
         /// `'operatorfunc'`.
-        p_opfunc: *mut c_char = ptr::null_mut(), P_OPFUNC: StrOpt;
+        p_opfunc: Option<XString> = None, P_OPFUNC: StrOpt;
         /// `'packpath'`.
-        p_pp: *mut c_char = ptr::null_mut(), P_PP: StrOpt;
+        p_pp: Option<XString> = None, P_PP: StrOpt;
         /// `'paragraphs'`.
-        p_para: *mut c_char = ptr::null_mut(), P_PARA: StrOpt;
+        p_para: Option<XString> = None, P_PARA: StrOpt;
         /// `'paste'`.
         p_paste: bool = false, P_PASTE: BoolOpt;
         /// `'patchexpr'`.
-        p_pex: *mut c_char = ptr::null_mut(), P_PEX: StrOpt;
+        p_pex: Option<XString> = None, P_PEX: StrOpt;
         /// `'patchmode'`.
-        p_pm: *mut c_char = ptr::null_mut(), P_PM: StrOpt;
+        p_pm: Option<XString> = None, P_PM: StrOpt;
         /// `'path'`.
-        p_path: *mut c_char = ptr::null_mut(), P_PATH: StrOpt;
+        p_path: Option<XString> = None, P_PATH: StrOpt;
         /// `'preserveindent'`.
         p_pi: bool = false, P_PI: BoolOpt;
         /// `'previewheight'`.
@@ -498,7 +605,7 @@ options! {
         /// `'pumblend'`.
         p_pb: OptInt = 0, P_PB: NumOpt;
         /// `'pumborder'`.
-        p_pumborder: *mut c_char = ptr::null_mut(), P_PUMBORDER: StrOpt;
+        p_pumborder: Option<XString> = None, P_PUMBORDER: StrOpt;
         /// `'pumheight'`.
         p_ph: OptInt = 0, P_PH: NumOpt;
         /// `'pummaxwidth'`.
@@ -508,13 +615,13 @@ options! {
         /// `'pyxversion'`.
         p_pyx: OptInt = 0, P_PYX: NumOpt;
         /// `'quickfixtextfunc'`.
-        p_qftf: *mut c_char = ptr::null_mut(), P_QFTF: StrOpt;
+        p_qftf: Option<XString> = None, P_QFTF: StrOpt;
         /// `'quoteescape'`.
-        p_qe: *mut c_char = ptr::null_mut(), P_QE: StrOpt;
+        p_qe: Option<XString> = None, P_QE: StrOpt;
         /// `'readonly'`.
         p_ro: bool = false, P_RO: BoolOpt;
         /// `'redrawdebug'`.
-        p_rdb: *mut c_char = ptr::null_mut(), P_RDB: StrOpt;
+        p_rdb: Option<XString> = None, P_RDB: StrOpt;
         /// `'redrawtime'`.
         p_rdt: OptInt = 0, P_RDT: NumOpt;
         /// `'regexpengine'`.
@@ -526,9 +633,9 @@ options! {
         /// `'ruler'`.
         p_ru: bool = false, P_RU: BoolOpt;
         /// `'rulerformat'`.
-        p_ruf: *mut c_char = ptr::null_mut(), P_RUF: StrOpt;
+        p_ruf: Option<XString> = None, P_RUF: StrOpt;
         /// `'runtimepath'`.
-        p_rtp: *mut c_char = ptr::null_mut(), P_RTP: StrOpt;
+        p_rtp: Option<XString> = None, P_RTP: StrOpt;
         /// `'scrollback'`.
         p_scbk: OptInt = 0, P_SCBK: NumOpt;
         /// `'scrolljump'`.
@@ -536,49 +643,49 @@ options! {
         /// `'scrolloff'`.
         p_so: OptInt = 0, P_SO: NumOpt;
         /// `'scrollopt'`.
-        p_sbo: *mut c_char = ptr::null_mut(), P_SBO: StrOpt;
+        p_sbo: Option<XString> = None, P_SBO: StrOpt;
         /// `'sections'`.
-        p_sections: *mut c_char = ptr::null_mut(), P_SECTIONS: StrOpt;
+        p_sections: Option<XString> = None, P_SECTIONS: StrOpt;
         /// `'secure'`.
         p_secure: bool = false, P_SECURE: BoolOpt;
         /// `'selection'`.
-        p_sel: *mut c_char = ptr::null_mut(), P_SEL: StrOpt;
+        p_sel: Option<XString> = None, P_SEL: StrOpt;
         /// `'selectmode'`.
-        p_slm: *mut c_char = ptr::null_mut(), P_SLM: StrOpt;
+        p_slm: Option<XString> = None, P_SLM: StrOpt;
         /// `'sessionoptions'`.
-        p_ssop: *mut c_char = ptr::null_mut(), P_SSOP: StrOpt;
+        p_ssop: Option<XString> = None, P_SSOP: StrOpt;
         /// `'shada'`.
-        p_shada: *mut c_char = ptr::null_mut(), P_SHADA: StrOpt;
+        p_shada: Option<XString> = None, P_SHADA: StrOpt;
         /// `'shadafile'`.
-        p_shadafile: *mut c_char = ptr::null_mut(), P_SHADAFILE: StrOpt;
+        p_shadafile: Option<XString> = None, P_SHADAFILE: StrOpt;
         /// `'shell'`.
-        p_sh: *mut c_char = ptr::null_mut(), P_SH: StrOpt;
+        p_sh: Option<XString> = None, P_SH: StrOpt;
         /// `'shellcmdflag'`.
-        p_shcf: *mut c_char = ptr::null_mut(), P_SHCF: StrOpt;
+        p_shcf: Option<XString> = None, P_SHCF: StrOpt;
         /// `'shellpipe'`.
-        p_sp: *mut c_char = ptr::null_mut(), P_SP: StrOpt;
+        p_sp: Option<XString> = None, P_SP: StrOpt;
         /// `'shellquote'`.
-        p_shq: *mut c_char = ptr::null_mut(), P_SHQ: StrOpt;
+        p_shq: Option<XString> = None, P_SHQ: StrOpt;
         /// `'shellredir'`.
-        p_srr: *mut c_char = ptr::null_mut(), P_SRR: StrOpt;
+        p_srr: Option<XString> = None, P_SRR: StrOpt;
         /// `'shelltemp'`.
         p_stmp: bool = false, P_STMP: BoolOpt;
         /// `'shellxescape'`.
-        p_sxe: *mut c_char = ptr::null_mut(), P_SXE: StrOpt;
+        p_sxe: Option<XString> = None, P_SXE: StrOpt;
         /// `'shellxquote'`.
-        p_sxq: *mut c_char = ptr::null_mut(), P_SXQ: StrOpt;
+        p_sxq: Option<XString> = None, P_SXQ: StrOpt;
         /// `'shiftround'`.
         p_sr: bool = false, P_SR: BoolOpt;
         /// `'shiftwidth'`.
         p_sw: OptInt = 0, P_SW: NumOpt;
         /// `'shortmess'`.
-        p_shm: *mut c_char = ptr::null_mut(), P_SHM: StrOpt;
+        p_shm: Option<XString> = None, P_SHM: StrOpt;
         /// `'showbreak'`.
-        p_sbr: *mut c_char = ptr::null_mut(), P_SBR: StrOpt;
+        p_sbr: Option<XString> = None, P_SBR: StrOpt;
         /// `'showcmd'`.
         p_sc: bool = false, P_SC: BoolOpt;
         /// `'showcmdloc'`.
-        p_sloc: *mut c_char = ptr::null_mut(), P_SLOC: StrOpt;
+        p_sloc: Option<XString> = None, P_SLOC: StrOpt;
         /// `'showfulltag'`.
         p_sft: bool = false, P_SFT: BoolOpt;
         /// `'showmatch'`.
@@ -600,41 +707,41 @@ options! {
         /// `'softtabstop'`.
         p_sts: OptInt = 0, P_STS: NumOpt;
         /// `'spellcapcheck'`.
-        p_spc: *mut c_char = ptr::null_mut(), P_SPC: StrOpt;
+        p_spc: Option<XString> = None, P_SPC: StrOpt;
         /// `'spellfile'`.
-        p_spf: *mut c_char = ptr::null_mut(), P_SPF: StrOpt;
+        p_spf: Option<XString> = None, P_SPF: StrOpt;
         /// `'spelllang'`.
-        p_spl: *mut c_char = ptr::null_mut(), P_SPL: StrOpt;
+        p_spl: Option<XString> = None, P_SPL: StrOpt;
         /// `'spelloptions'`.
-        p_spo: *mut c_char = ptr::null_mut(), P_SPO: StrOpt;
+        p_spo: Option<XString> = None, P_SPO: StrOpt;
         /// `'spellsuggest'`.
-        p_sps: *mut c_char = ptr::null_mut(), P_SPS: StrOpt;
+        p_sps: Option<XString> = None, P_SPS: StrOpt;
         /// `'splitbelow'`.
         p_sb: bool = false, P_SB: BoolOpt;
         /// `'splitkeep'`.
-        p_spk: *mut c_char = ptr::null_mut(), P_SPK: StrOpt;
+        p_spk: Option<XString> = None, P_SPK: StrOpt;
         /// `'splitright'`.
         p_spr: bool = false, P_SPR: BoolOpt;
         /// `'startofline'`.
         p_sol: bool = false, P_SOL: BoolOpt;
         /// `'statusline'`.
-        p_stl: *mut c_char = ptr::null_mut(), P_STL: StrOpt;
+        p_stl: Option<XString> = None, P_STL: StrOpt;
         /// `'suffixes'`.
-        p_su: *mut c_char = ptr::null_mut(), P_SU: StrOpt;
+        p_su: Option<XString> = None, P_SU: StrOpt;
         /// `'suffixesadd'`.
-        p_sua: *mut c_char = ptr::null_mut(), P_SUA: StrOpt;
+        p_sua: Option<XString> = None, P_SUA: StrOpt;
         /// `'swapfile'`.
         p_swf: bool = false, P_SWF: BoolOpt;
         /// `'switchbuf'`.
-        p_swb: *mut c_char = ptr::null_mut(), P_SWB: StrOpt;
+        p_swb: Option<XString> = None, P_SWB: StrOpt;
         /// `'synmaxcol'`.
         p_smc: OptInt = 0, P_SMC: NumOpt;
         /// `'syntax'`.
-        p_syn: *mut c_char = ptr::null_mut(), P_SYN: StrOpt;
+        p_syn: Option<XString> = None, P_SYN: StrOpt;
         /// `'tabclose'`.
-        p_tcl: *mut c_char = ptr::null_mut(), P_TCL: StrOpt;
+        p_tcl: Option<XString> = None, P_TCL: StrOpt;
         /// `'tabline'`.
-        p_tal: *mut c_char = ptr::null_mut(), P_TAL: StrOpt;
+        p_tal: Option<XString> = None, P_TAL: StrOpt;
         /// `'tabpagemax'`.
         p_tpm: OptInt = 0, P_TPM: NumOpt;
         /// `'tabstop'`.
@@ -642,15 +749,15 @@ options! {
         /// `'tagbsearch'`.
         p_tbs: bool = false, P_TBS: BoolOpt;
         /// `'tagcase'`.
-        p_tc: *mut c_char = ptr::null_mut(), P_TC: StrOpt;
+        p_tc: Option<XString> = None, P_TC: StrOpt;
         /// `'tagfunc'`.
-        p_tfu: *mut c_char = ptr::null_mut(), P_TFU: StrOpt;
+        p_tfu: Option<XString> = None, P_TFU: StrOpt;
         /// `'taglength'`.
         p_tl: OptInt = 0, P_TL: NumOpt;
         /// `'tagrelative'`.
         p_tr: bool = false, P_TR: BoolOpt;
         /// `'tags'`.
-        p_tags: *mut c_char = ptr::null_mut(), P_TAGS: StrOpt;
+        p_tags: Option<XString> = None, P_TAGS: StrOpt;
         /// `'tagstack'`.
         p_tgst: bool = false, P_TGST: BoolOpt;
         /// `'termbidi'`.
@@ -658,15 +765,15 @@ options! {
         /// `'termguicolors'`.
         p_tgc: bool = false, P_TGC: BoolOpt;
         /// `'termpastefilter'`.
-        p_tpf: *mut c_char = ptr::null_mut(), P_TPF: StrOpt;
+        p_tpf: Option<XString> = None, P_TPF: StrOpt;
         /// `'termsync'`.
         p_termsync: bool = false, P_TERMSYNC: BoolOpt;
         /// `'textwidth'`.
         p_tw: OptInt = 0, P_TW: NumOpt;
         /// `'thesaurus'`.
-        p_tsr: *mut c_char = ptr::null_mut(), P_TSR: StrOpt;
+        p_tsr: Option<XString> = None, P_TSR: StrOpt;
         /// `'thesaurusfunc'`.
-        p_tsrfu: *mut c_char = ptr::null_mut(), P_TSRFU: StrOpt;
+        p_tsrfu: Option<XString> = None, P_TSRFU: StrOpt;
         /// `'tildeop'`.
         p_to: bool = false, P_TO: BoolOpt;
         /// `'timeout'`.
@@ -678,9 +785,9 @@ options! {
         /// `'titlelen'`.
         p_titlelen: OptInt = 0, P_TITLELEN: NumOpt;
         /// `'titleold'`.
-        p_titleold: *mut c_char = ptr::null_mut(), P_TITLEOLD: StrOpt;
+        p_titleold: Option<XString> = None, P_TITLEOLD: StrOpt;
         /// `'titlestring'`.
-        p_titlestring: *mut c_char = ptr::null_mut(), P_TITLESTRING: StrOpt;
+        p_titlestring: Option<XString> = None, P_TITLESTRING: StrOpt;
         /// `'ttimeout'`.
         p_ttimeout: bool = false, P_TTIMEOUT: BoolOpt;
         /// `'ttimeoutlen'`.
@@ -688,7 +795,7 @@ options! {
         /// `'ttyfast'`.
         p_tf: bool = false, P_TF: BoolOpt;
         /// `'undodir'`.
-        p_udir: *mut c_char = ptr::null_mut(), P_UDIR: StrOpt;
+        p_udir: Option<XString> = None, P_UDIR: StrOpt;
         /// `'undofile'`.
         p_udf: bool = false, P_UDF: BoolOpt;
         /// `'undolevels'`.
@@ -700,45 +807,45 @@ options! {
         /// `'updatetime'`.
         p_ut: OptInt = 0, P_UT: NumOpt;
         /// `'varsofttabstop'`.
-        p_vsts: *mut c_char = ptr::null_mut(), P_VSTS: StrOpt;
+        p_vsts: Option<XString> = None, P_VSTS: StrOpt;
         /// `'vartabstop'`.
-        p_vts: *mut c_char = ptr::null_mut(), P_VTS: StrOpt;
+        p_vts: Option<XString> = None, P_VTS: StrOpt;
         /// `'verbose'`.
         p_verbose: OptInt = 0, P_VERBOSE: NumOpt;
         /// `'verbosefile'`.
-        p_vfile: *mut c_char = empty_option(), P_VFILE: StrOpt;
+        p_vfile: Option<XString> = None, P_VFILE: StrOpt;
         /// `'viewdir'`.
-        p_vdir: *mut c_char = ptr::null_mut(), P_VDIR: StrOpt;
+        p_vdir: Option<XString> = None, P_VDIR: StrOpt;
         /// `'viewoptions'`.
-        p_vop: *mut c_char = ptr::null_mut(), P_VOP: StrOpt;
+        p_vop: Option<XString> = None, P_VOP: StrOpt;
         /// `'virtualedit'`.
-        p_ve: *mut c_char = ptr::null_mut(), P_VE: StrOpt;
+        p_ve: Option<XString> = None, P_VE: StrOpt;
         /// `'visualbell'`.
         p_vb: bool = false, P_VB: BoolOpt;
         /// `'warn'`.
         p_warn: bool = false, P_WARN: BoolOpt;
         /// `'whichwrap'`.
-        p_ww: *mut c_char = ptr::null_mut(), P_WW: StrOpt;
+        p_ww: Option<XString> = None, P_WW: StrOpt;
         /// `'wildchar'`.
         p_wc: OptInt = 0, P_WC: NumOpt;
         /// `'wildcharm'`.
         p_wcm: OptInt = 0, P_WCM: NumOpt;
         /// `'wildignore'`.
-        p_wig: *mut c_char = ptr::null_mut(), P_WIG: StrOpt;
+        p_wig: Option<XString> = None, P_WIG: StrOpt;
         /// `'wildignorecase'`.
         p_wic: bool = false, P_WIC: BoolOpt;
         /// `'wildmenu'`.
         p_wmnu: bool = false, P_WMNU: BoolOpt;
         /// `'wildmode'`.
-        p_wim: *mut c_char = ptr::null_mut(), P_WIM: StrOpt;
+        p_wim: Option<XString> = None, P_WIM: StrOpt;
         /// `'wildoptions'`.
-        p_wop: *mut c_char = ptr::null_mut(), P_WOP: StrOpt;
+        p_wop: Option<XString> = None, P_WOP: StrOpt;
         /// `'winaltkeys'`.
-        p_wak: *mut c_char = ptr::null_mut(), P_WAK: StrOpt;
+        p_wak: Option<XString> = None, P_WAK: StrOpt;
         /// `'winbar'`.
-        p_wbr: *mut c_char = ptr::null_mut(), P_WBR: StrOpt;
+        p_wbr: Option<XString> = None, P_WBR: StrOpt;
         /// `'winborder'`.
-        p_winborder: *mut c_char = ptr::null_mut(), P_WINBORDER: StrOpt;
+        p_winborder: Option<XString> = None, P_WINBORDER: StrOpt;
         /// `'window'`.
         p_window: OptInt = 0, P_WINDOW: NumOpt;
         /// `'winheight'`.

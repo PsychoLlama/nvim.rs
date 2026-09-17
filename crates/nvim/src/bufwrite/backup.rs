@@ -16,6 +16,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::option::vars::{P_BDIR, P_BEX};
 use crate::os::uv_error::UV_ENOTSUP;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_uint};
@@ -391,11 +392,14 @@ pub(crate) unsafe fn buf_write_make_backup(
         copy = false;
     }
 
-    // Make sure there is a valid backup extension to use.
-    let backup_ext = if unsafe { *p_bex() } as c_int == NUL {
+    // Make sure there is a valid backup extension to use. A copy, because
+    // the backup below writes a file and may report through the message
+    // machinery.
+    let bex = P_BEX.get();
+    let backup_ext = if bex.is_empty() {
         c".bak".as_ptr().cast_mut()
     } else {
-        p_bex()
+        bex.as_ptr().cast_mut()
     };
 
     let path = if copy {
@@ -434,7 +438,9 @@ unsafe fn backup_by_copy(
     let mut backup: *mut c_char = core::ptr::null_mut();
 
     // Try to make the backup in each directory in 'backupdir'.
-    let mut dirp = p_bdir();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let bdir = P_BDIR.get();
+    let mut dirp = bdir.as_ptr().cast_mut();
     while unsafe { *dirp } != 0 {
         backup = unsafe { buf_get_backup_name(fname, &mut dirp, false, backup_ext) };
         if backup.is_null() {
@@ -528,7 +534,9 @@ unsafe fn backup_by_rename(
     // path/fo.o.h becomes path/fo.o.h.bak, in the first directory of
     // 'backupdir' that works.
     let mut backup: *mut c_char = core::ptr::null_mut();
-    let mut dirp = p_bdir();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let bdir = P_BDIR.get();
+    let mut dirp = bdir.as_ptr().cast_mut();
     while unsafe { *dirp } != 0 {
         backup = unsafe { buf_get_backup_name(fname, &mut dirp, false, backup_ext) };
         if !backup.is_null()
@@ -633,7 +641,7 @@ pub(crate) unsafe fn apply_patchmode(
     perm: c_int,
     file_info_old: &FileInfo,
 ) {
-    let org = unsafe { modname(fname, p_pm(), false) };
+    let org = p_pm(|value| unsafe { modname(fname, value.as_ptr().cast_mut(), false) });
     if !backup.path.is_null() {
         if org.is_null() {
             emsg(translate(c"E205: Patchmode: can't save original file"));

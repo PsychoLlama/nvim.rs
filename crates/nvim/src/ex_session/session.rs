@@ -186,7 +186,10 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     if opts.has(kOptSsopFlagOptions) {
         // SAFETY: 'shortmess' is a NUL-terminated option string, and its
         // bytes go out verbatim.
-        if !out.puts(c"set shortmess=") || !unsafe { out.bytes(p_shm()) } || !out.eol() {
+        if !out.puts(c"set shortmess=")
+            || !p_shm(|value| unsafe { out.bytes(value.as_ptr().cast_mut()) })
+            || !out.eol()
+        {
             return false;
         }
     } else if !out.line(c"let &shortmess = s:shortmess_save") {

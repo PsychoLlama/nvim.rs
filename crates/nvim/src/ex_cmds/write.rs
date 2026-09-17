@@ -47,7 +47,7 @@ use crate::message::state::emsg_silent;
 use crate::message::{e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly};
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::c_str;
-use crate::option::vars::{p_confirm, p_dir, p_wa, p_write};
+use crate::option::vars::{P_DIR, p_confirm, p_dir, p_wa, p_write};
 use crate::option::{copy_option_part, cpo_has, shortmess};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
@@ -64,6 +64,7 @@ use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, first_buffer};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -545,22 +546,24 @@ pub unsafe fn check_overwrite(
 /// room `copy_option_part` is told it has.
 fn swap_dir() -> Vec<u8> {
     // SAFETY: 'directory' is a live option string.
-    if unsafe { *p_dir() } as c_int == NUL {
+    if p_dir(CStr::is_empty) {
         return b".\0".to_vec();
     }
-    let mut dir = vec![0u8; MAXPATHL as usize];
-    let mut p = p_dir();
+    let mut first = vec![0u8; MAXPATHL as usize];
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let dir = P_DIR.get();
+    let mut p = dir.as_ptr().cast_mut();
     // SAFETY: the buffer really is `MAXPATHL` bytes, and `p` walks the live
     // option string.
     unsafe {
         copy_option_part(
             &raw mut p,
-            dir.as_mut_ptr().cast(),
+            first.as_mut_ptr().cast(),
             MAXPATHL as usize,
             c",".as_ptr().cast_mut(),
         )
     };
-    dir
+    first
 }
 
 /// `:wnext`, `:wNext` and `:wprevious` -- write, then step through the

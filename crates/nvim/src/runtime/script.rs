@@ -771,7 +771,9 @@ pub fn ex_scriptencoding(excmd: &mut ExArg) {
     };
     // Set up for conversion from the specified encoding to 'encoding'.
     let sp = unsafe { getline_cookie(excmd.ea_getline, excmd.cookie) }.cast::<SourceCookie>();
-    let _ = unsafe { convert_setup(&raw mut (*sp).conv, name, p_enc()) };
+    let _ = p_enc(|value| unsafe {
+        convert_setup(&raw mut (*sp).conv, name, value.as_ptr().cast_mut())
+    });
     if name != excmd.arg {
         unsafe { xfree(name.cast::<c_void>()) };
     }

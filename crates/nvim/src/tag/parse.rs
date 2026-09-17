@@ -174,7 +174,13 @@ impl FindTags {
                 end += 1;
             }
             unsafe { *line.add(end) = 0 };
-            let _ = unsafe { convert_setup(&raw mut self.vimconv, line.add(20), p_enc()) };
+            let _ = p_enc(|value| unsafe {
+                convert_setup(
+                    &raw mut self.vimconv,
+                    line.add(20),
+                    value.as_ptr().cast_mut(),
+                )
+            });
         }
         // Read the next line; an unrecognised flag is ignored.
         false

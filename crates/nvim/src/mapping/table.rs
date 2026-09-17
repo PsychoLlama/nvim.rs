@@ -459,16 +459,15 @@ pub(crate) unsafe fn map_to_exists(
 ) -> bool {
     let mut buf: *mut c_char = ptr::null_mut();
     let out = &raw mut buf;
-    let cpo = p_cpo();
     let dolt = REPTERM_DO_LT.cast_signed();
     let simplify = ptr::null_mut();
     // SAFETY: the caller's promise — `str` is live and NUL-terminated.  The
     // allocation `replace_termcodes` may leave in `buf` is the guard's.
-    let (rhs, _owned) = unsafe {
+    let (rhs, _owned) = p_cpo(|cpo| unsafe {
         let len = cstr::bytes_at(str).len();
         let rhs = replace_termcodes(str, len, out, 0, dolt, simplify, cpo);
         (rhs, COwned::new(buf))
-    };
+    });
 
     let mut mode = 0;
     for (ch, flags) in MODE_CHARS {

@@ -236,7 +236,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     if mode.is_char() {
         // 'selection' decides whether the last character is included.
         // SAFETY: `p_sel` is the option's own string.
-        let inclusive = unsafe { *p_sel() as u8 != b'e' } as ColNr;
+        let inclusive = p_sel(|value| cstr::first(value) != b'e') as ColNr;
         !((lnum == top.lnum && col < top.col) || (lnum == bot.lnum && col >= bot.col + inclusive))
     } else if mode.is_block() {
         let (mut start, mut end, mut start2, mut end2) = (0, 0, 0, 0);
@@ -260,7 +260,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         // byte offset into it.
         let cols = unsafe { win_linetabsize(wp, rex.buf_lnum(), line.cast(), col) };
         // SAFETY: as `inclusive` above.
-        cols >= start && cols <= end - unsafe { *p_sel() as u8 == b'e' } as ColNr
+        cols >= start && cols <= end - p_sel(|value| cstr::first(value) == b'e') as ColNr
     } else {
         true
     }

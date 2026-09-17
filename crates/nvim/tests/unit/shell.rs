@@ -16,7 +16,7 @@
 use std::ffi::{CStr, CString, c_char, c_int};
 use std::ptr;
 
-use neovim::memory::xfree;
+use neovim::memory::{XString, xfree};
 use neovim::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ};
 use neovim::os::shell::system::os_system;
 use neovim::os::shell::{shell_argv_to_str, shell_build_argv};
@@ -28,7 +28,7 @@ use crate::support::{Editor, cstr, editor_lock, internalize};
 /// here are leaked for the duration, which is what makes them safe to hand to
 /// code that only reads them.
 struct ShellOptions {
-    saved: [*mut c_char; 4],
+    saved: [Option<XString>; 4],
     _editor: Editor,
 }
 
@@ -37,7 +37,7 @@ impl ShellOptions {
     /// only setting under which `os_system` can run at all.
     fn plain() -> Self {
         let options = ShellOptions {
-            saved: [P_SH.get(), P_SHCF.get(), P_SXQ.get(), P_SXE.get()],
+            saved: [P_SH.clear(), P_SHCF.clear(), P_SXQ.clear(), P_SXE.clear()],
             _editor: editor_lock(),
         };
         options.set("/bin/sh", "-c", "", "");
@@ -45,28 +45,21 @@ impl ShellOptions {
     }
 
     fn set(&self, sh: &str, shcf: &str, sxq: &str, sxe: &str) {
-        P_SH.set(leak(sh));
-        P_SHCF.set(leak(shcf));
-        P_SXQ.set(leak(sxq));
-        P_SXE.set(leak(sxe));
+        P_SH.set(XString::from_bytes(sh.as_bytes()));
+        P_SHCF.set(XString::from_bytes(shcf.as_bytes()));
+        P_SXQ.set(XString::from_bytes(sxq.as_bytes()));
+        P_SXE.set(XString::from_bytes(sxe.as_bytes()));
     }
 }
 
 impl Drop for ShellOptions {
     fn drop(&mut self) {
-        let [sh, shcf, sxq, sxe] = self.saved;
-        P_SH.set(sh);
-        P_SHCF.set(shcf);
-        P_SXQ.set(sxq);
-        P_SXE.set(sxe);
+        let [sh, shcf, sxq, sxe] = core::mem::take(&mut self.saved);
+        P_SH.restore(sh);
+        P_SHCF.restore(shcf);
+        P_SXQ.restore(sxq);
+        P_SXE.restore(sxe);
     }
-}
-
-/// An option value that outlives the call that reads it.
-fn leak(s: &str) -> *mut c_char {
-    CString::new(s)
-        .expect("an option value holds no NUL")
-        .into_raw()
 }
 
 /// `shell_build_argv`, read back as strings and released item by item — the

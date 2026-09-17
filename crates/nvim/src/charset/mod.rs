@@ -26,7 +26,7 @@
 
 use crate::cstr;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{
@@ -264,15 +264,21 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     }
 
     // The first three are the global options; the last is the buffer's own
-    // 'iskeyword'. Reading all four up front is what the C's loop does one
-    // at a time — none of them can move while the tables are being filled.
-    let options = [p_isi(), p_isp(), p_isf(), buffer.b_p_isk];
-    for &option in &options[if global { 0 } else { 3 }..] {
-        // SAFETY: an option value is a NUL-terminated string, and `buffer` is
-        // valid.
-        if unsafe { parse_isopt(option, Some(buffer), false) }.is_err() {
-            return false;
-        }
+    // 'iskeyword'. Which table an option fills is the option's identity,
+    // which upstream recovered by comparing the value's *address* against
+    // `p_isi` and friends; it is named here instead.
+    // SAFETY (both): a `CStr` and a buffer's own option value are
+    // NUL-terminated, and `buffer` is the caller's live one.
+    let fill = |var: &CStr, table| unsafe { parse_isopt(var.as_ptr(), table, Some(buffer), false) };
+    if global
+        && (p_isi(|var| fill(var, IsoptTable::Ident)).is_err()
+            || p_isp(|var| fill(var, IsoptTable::Print)).is_err()
+            || p_isf(|var| fill(var, IsoptTable::Fname)).is_err())
+    {
+        return false;
+    }
+    if unsafe { parse_isopt(buffer.b_p_isk, IsoptTable::Keyword, Some(buffer), false) }.is_err() {
+        return false;
     }
     chartab_initialized.set(true);
     true
@@ -283,8 +289,9 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
 /// # Safety
 /// `var` must be a NUL-terminated string.
 pub unsafe fn check_isopt(var: *mut c_char) -> Result<(), Failed> {
-    // SAFETY: forwarded; a check pass never touches the (null) buffer.
-    unsafe { parse_isopt(var, None, true) }
+    // SAFETY: forwarded; a check pass never touches the (null) buffer, and
+    // the table it would fill is never reached.
+    unsafe { parse_isopt(var, IsoptTable::Keyword, None, true) }
 }
 
 /// Set or clear `c`'s bit in `buffer`'s keyword set.
@@ -423,19 +430,10 @@ fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buffer: Buf) {
 /// `only_check`.
 unsafe fn parse_isopt(
     var: *const c_char,
+    table: IsoptTable,
     buffer: Option<Buf>,
     only_check: bool,
 ) -> Result<(), Failed> {
-    let table = if var == p_isi().cast_const() {
-        IsoptTable::Ident
-    } else if var == p_isp().cast_const() {
-        IsoptTable::Print
-    } else if var == p_isf().cast_const() {
-        IsoptTable::Fname
-    } else {
-        IsoptTable::Keyword
-    };
-
     let mut cursor = unsafe { Bytes::new(var) };
     while cursor.byte() != 0 {
         // SAFETY: the cursor is still inside `var`.

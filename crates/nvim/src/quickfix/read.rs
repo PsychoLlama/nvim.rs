@@ -132,7 +132,9 @@ impl Reader {
         };
         // SAFETY: the caller's strings are NUL-terminated.
         if !enc.is_null() && unsafe { *enc } != 0 {
-            let _ = unsafe { convert_setup(&raw mut reader.vc, enc, p_enc()) };
+            let _ = p_enc(|value| unsafe {
+                convert_setup(&raw mut reader.vc, enc, value.as_ptr().cast_mut())
+            });
         }
         if !efile.is_null() {
             let fd = if unsafe { strequal(efile, c"-".as_ptr()) } {
@@ -495,13 +497,14 @@ pub(crate) unsafe fn qf_init_ext(
         // Use the buffer-local 'errorformat' when it has one.
         // The two cheap tests stay in front of the buffer's option, as
         // C's `&&` chain had them.
-        let local_efm = if errorformat == p_efm() && !from_value {
-            buffer
-                .map(|buf| buf.b_p_efm)
-                .filter(|&efm| unsafe { *efm } != 0)
-        } else {
-            None
-        };
+        let local_efm =
+            if p_efm(|efm| unsafe { cstr::eq(errorformat, efm.as_ptr()) }) && !from_value {
+                buffer
+                    .map(|buf| buf.b_p_efm)
+                    .filter(|&efm| unsafe { *efm } != 0)
+            } else {
+                None
+            };
         let efm = local_efm.unwrap_or(errorformat);
 
         // Take the compiled option out of the cache for the length of

@@ -129,7 +129,7 @@ use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
 use crate::option::shortmess;
 use crate::option::vars::p_vfile;
 use crate::option::vars::{
-    P_MORE, p_ch, p_debug, p_eb, p_lz, p_mopt, p_more, p_report, p_verbose, rdb_flags,
+    P_MORE, p_ch, p_debug, p_eb, p_lz, p_more, p_report, p_verbose, rdb_flags,
 };
 use crate::options::{
     kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,

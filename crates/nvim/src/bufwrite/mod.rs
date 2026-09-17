@@ -38,7 +38,7 @@ use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
 use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
 use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_str_hl, set_keep_msg};
 use crate::message_fmt::{c_str, emsg_text};
-use crate::option::vars::{p_bdir, p_bex, p_bk, p_bsk, p_ccv, p_fs, p_pm, p_wb};
+use crate::option::vars::{p_bk, p_bsk, p_ccv, p_fs, p_pm, p_wb};
 use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
@@ -451,10 +451,12 @@ pub unsafe fn buf_write(
             }
 
             // 'backupskip' names files that get no backup.
-            dobackup = p_wb() || p_bk() || unsafe { *p_pm() } != 0;
+            dobackup = p_wb() || p_bk() || p_pm(|value| !value.is_empty());
             if dobackup
-                && unsafe { *p_bsk() } != 0
-                && unsafe { match_file_list(p_bsk(), sfname, ffname) }
+                && p_bsk(|value| !value.is_empty())
+                && p_bsk(|value| unsafe {
+                    match_file_list(value.as_ptr().cast_mut(), sfname, ffname)
+                })
             {
                 dobackup = false;
             }
@@ -471,7 +473,7 @@ pub unsafe fn buf_write(
             // 'patchmode' asks for it; appending only backs up for
             // 'patchmode'. With 'writebackup' and 'backup' both off there
             // is no backup at all, which helps on almost-full disks.
-            if !(req.append && unsafe { *p_pm() } == 0)
+            if !(req.append && p_pm(CStr::is_empty))
                 && !req.filtering
                 && target.perm >= 0
                 && dobackup
@@ -574,7 +576,7 @@ pub unsafe fn buf_write(
                         if !writer.reserve_conv_buf(ICONV_MULT as usize) {
                             end = 0;
                         }
-                    } else if unsafe { *p_ccv() } != 0 {
+                    } else if p_ccv(|value| !value.is_empty()) {
                         wfname = vim_tempname();
                         if wfname.is_null() {
                             // Can't write without a temp file!
@@ -769,7 +771,7 @@ pub unsafe fn buf_write(
                     }
                 }
 
-                if unsafe { *p_pm() } != 0 && dobackup {
+                if p_pm(|value| !value.is_empty()) && dobackup {
                     unsafe { apply_patchmode(fname, &mut backup, target.perm, &file_info_old) };
                 }
 

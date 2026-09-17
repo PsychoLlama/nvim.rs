@@ -346,5 +346,5 @@ fn char_at_cursor() -> c_int {
 /// `'selection'`'s first letter: `i`nclusive, `e`xclusive or `o`ld.
 fn selection_style() -> u8 {
     // SAFETY: the option always holds a non-empty NUL-terminated string.
-    unsafe { *p_sel() }.cast_unsigned()
+    p_sel(|value| unsafe { *value.as_ptr().cast_mut() }).cast_unsigned()
 }

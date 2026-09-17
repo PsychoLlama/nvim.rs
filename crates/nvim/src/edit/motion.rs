@@ -19,7 +19,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
 use crate::strings::has_char;
@@ -104,9 +103,7 @@ pub(crate) fn ins_left() {
             revins_legal.set(revins_legal.get() + 1);
         }
         revins_chars.set(revins_chars.get() + 1);
-    } else if has_char(unsafe { cstr::at(p_ww()) }, '[' as c_int)
-        && Win::current().w_cursor.lnum > 1
-    {
+    } else if p_ww(|value| has_char(value, '[' as c_int)) && Win::current().w_cursor.lnum > 1 {
         // 'whichwrap' allows the motion to leave the line.
         start_arrow_at(&mut tpos);
         Win::current().w_cursor.lnum -= 1;
@@ -192,7 +189,7 @@ pub(crate) fn ins_right() {
         if revins_chars.get() != 0 {
             revins_chars.set(revins_chars.get() - 1);
         }
-    } else if has_char(unsafe { cstr::at(p_ww()) }, ']' as c_int)
+    } else if p_ww(|value| has_char(value, ']' as c_int))
         && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
     {
         // 'whichwrap' allows the motion to leave the line.

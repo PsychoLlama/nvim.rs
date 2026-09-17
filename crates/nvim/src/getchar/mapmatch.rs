@@ -32,7 +32,7 @@ fn langmap_adjust(c: c_int, condition: bool) -> c_int {
     // +5.6..7.6% on `inbench`'s `mapresolve` before it was put back.
     // SAFETY (this body): `p_langmap` holds the live `'langmap'` option
     // string, which is NUL-terminated.
-    if unsafe { *p_langmap() } != 0
+    if p_langmap(|value| !value.is_empty())
         && condition
         && (p_lrm()
             || if vgetc_busy.get() != 0 {

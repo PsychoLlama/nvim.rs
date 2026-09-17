@@ -6,6 +6,7 @@
 use super::wrappers::{
     arg_bool, arg_lnum, arg_number, arg_number_chk, arg_string, arg_string_chk, list_alloc_ret,
 };
+use crate::cstr;
 use crate::cursor::check_cursor;
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_opt_number_arg, tv_check_for_string_or_list_arg,
@@ -245,7 +246,7 @@ pub fn f_line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 let both_diff =
                     wp.w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_diff != 0;
                 // SAFETY: `p_spk` is the option's own C string value.
-                if unsafe { *p_spk() } != b'c' as c_char || both_diff {
+                if p_spk(|value| cstr::first(value) != b'c') || both_diff {
                     skip_update_topline.set(true);
                 }
                 check_cursor(wp);

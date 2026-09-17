@@ -183,7 +183,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         with_autocmds_unblocked(AutoEvent::VimLeavePre);
     }
 
-    if !p_shada().is_null() && unsafe { *p_shada() } as c_int != NUL {
+    if p_shada(|value| !value.is_empty()) {
         // The registers, history, marks and the rest.
         unsafe { shada_write_file(ptr::null(), false) };
     }
@@ -202,8 +202,10 @@ pub fn getout(mut exitval: c_int) -> ! {
         wait_return(0);
     }
 
-    if p_title() && unsafe { *p_titleold() } as c_int != NUL {
-        ui_call_set_title(unsafe { cstr_to_string(p_titleold()) });
+    if p_title() && p_titleold(|value| !value.is_empty()) {
+        ui_call_set_title(p_titleold(|value| unsafe {
+            cstr_to_string(value.as_ptr().cast_mut())
+        }));
     }
 
     if garbage_collect_at_exit.get() {

@@ -86,18 +86,16 @@ use crate::r#move::update_topline;
 use crate::normal::reset_visual_and_resel;
 use crate::ops::get_region_bytecount;
 use crate::option::vars::{
-    P_CPO, P_MLS, P_SWB, fdo_flags, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc, p_gefm, p_gp, p_hh,
-    p_ic, p_mef, p_menc, p_mls, p_qftf, p_rtp, p_shq, p_sp, p_swb, swb_flags,
+    P_MLS, P_SWB, fdo_flags, p_ch, p_chi, p_efm, p_enc, p_hh, p_ic, p_mef, p_mls, p_qftf, swb_flags,
 };
 use crate::option::{
     buf_copy_options, copy_option_part, option_set_callback_func, set_option_direct,
     set_option_value_give_err, shortmess, skip_to_option_part,
 };
 use crate::options::{
-    kOptBufhidden, kOptBuftype, kOptCpoptions, kOptErrorfile, kOptFdoFlagQuickfix, kOptFiletype,
-    kOptFoldmethod, kOptSwapfile, kOptSwbFlagUselast, kOptSwbFlagUsetab,
+    kOptBufhidden, kOptBuftype, kOptErrorfile, kOptFdoFlagQuickfix, kOptFiletype, kOptFoldmethod,
+    kOptSwapfile, kOptSwbFlagUselast, kOptSwbFlagUsetab,
 };
-use crate::optionstr::free_string_option;
 use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::os::env::{expand_env, os_get_pid};
 use crate::os::fs::{

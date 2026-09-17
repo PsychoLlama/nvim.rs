@@ -79,7 +79,7 @@ use crate::r#move::{
     invalidate_botline_win, validate_cursor,
 };
 use crate::normal::check_scrollbind;
-use crate::option::vars::{p_dex, p_dia, p_dip, p_pex, p_sbo, p_srr};
+use crate::option::vars::{p_dex, p_pex, p_sbo, p_srr};
 use crate::option::{OptionTarget, set_option_direct_for, set_option_value_give_err};
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::optionstr::free_string_option;

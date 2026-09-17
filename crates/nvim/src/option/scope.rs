@@ -35,8 +35,10 @@ use core::mem::offset_of;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
+use crate::memory::XString;
 use crate::options::vars::{BoolOpt, NumOpt, StrOpt};
 use crate::options::*;
+use crate::optionstr::{empty_option, is_empty_option};
 use crate::types::{
     Buffer, OptIndex, OptInt, OptScope, OptStr, OptVal, OptValType, OptVar, OptionSetFlags,
     SynBlock, Window, ssize_t,
@@ -129,11 +131,14 @@ impl NumVar {
     }
 }
 
-/// A string option's variable. Never null once startup has run; an unset
-/// global-local local copy holds the shared empty string.
+/// A string option's variable.
 ///
-/// The value is still a raw `char *` either way: the next slice is what gives
-/// an option's string an owner.
+/// The global value is a field of the option record and the option owns it;
+/// a local copy is still a raw `char *` field of a window, a buffer or a
+/// syntax block, which is the next slice's. This pair of operations is the
+/// seam between the two: above it a string option's value changes hands as
+/// an owned allocation, below it as the `char *` the option protocol and
+/// [`OptVal`] still speak.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub(crate) enum StrVar {
     /// The global value: a field of the option record.
@@ -146,14 +151,22 @@ pub(crate) enum StrVar {
 }
 
 impl StrVar {
-    /// What the variable holds. See [`NumVar::get`].
+    /// The value's bytes, as the pointer the option protocol reads.
+    ///
+    /// A variable that owns nothing answers the shared empty string, which
+    /// is what upstream kept in the variable itself; the pointer is live
+    /// until the variable is written.
     ///
     /// # Safety
     ///
     /// A `Local` must name a field of a live window, buffer or syntax block.
     pub(crate) unsafe fn get(self) -> *mut c_char {
         match self {
-            StrVar::Global(field) => field.get(),
+            // The option owns the buffer and goes on owning it; the caller
+            // reads it and must not free it. Writing the variable is what
+            // ends the pointer's life, and the option protocol's
+            // `free_oldval` is where that is decided.
+            StrVar::Global(field) => field.value_ptr(),
             StrVar::OwnDefault(idx) => option_default(idx)
                 .as_string()
                 .expect("an immutable string option's default is a string")
@@ -163,21 +176,41 @@ impl StrVar {
         }
     }
 
-    /// Overwrite the variable, which takes over whatever `value` owns.
+    /// Overwrite the variable, taking over `value`, and answer the block
+    /// that was there — which the caller now owns and must release.
     ///
     /// # Safety
     ///
-    /// As [`get`](Self::get).
-    pub(crate) unsafe fn set(self, value: *mut c_char) {
+    /// As [`get`](Self::get), and `value` must be the shared empty string or
+    /// an allocation with one owner, which this takes over.
+    pub(crate) unsafe fn replace(self, value: *mut c_char) -> *mut c_char {
         match self {
-            StrVar::Global(field) => field.set(value),
+            StrVar::Global(field) => {
+                // SAFETY: the caller's promise -- one owner. The shared empty
+                // string is nobody's allocation, so it becomes the option
+                // owning nothing rather than a block to adopt, and comes
+                // back out as itself.
+                let owned = (!is_empty_option(value)).then(|| unsafe { XString::from_raw(value) });
+                field
+                    .swap(owned)
+                    .map_or_else(empty_option, XString::into_raw)
+            }
             StrVar::OwnDefault(idx) => {
                 // SAFETY: an option value is NUL-terminated.
                 let len = unsafe { crate::cstr::bytes_at(value) }.len();
+                let old = option_default(idx)
+                    .as_string()
+                    .expect("an immutable string option's default is a string")
+                    .data();
                 store_option_default(idx, OptVal::String(OptStr::from_raw_parts(value, len)));
+                old
             }
             // SAFETY: the caller's live field.
-            StrVar::Local(var) => unsafe { *var = value },
+            StrVar::Local(var) => unsafe {
+                let old = *var;
+                *var = value;
+                old
+            },
         }
     }
 

@@ -285,7 +285,9 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         });
     }
 
-    match unsafe { parse_winborder(&raw mut *config, p_pumborder()) } {
+    match p_pumborder(|value| unsafe {
+        parse_winborder(&raw mut *config, value.as_ptr().cast_mut())
+    }) {
         Ok(true) => {}
         Ok(false) => return None,
         Err(e) => {
@@ -297,7 +299,7 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
 
     // The shadow style is not a box: it darkens the cells to the right
     // and below instead, in two dedicated highlight groups.
-    if unsafe { strequal(p_pumborder(), BORDER_SHADOW.as_ptr()) } {
+    if p_pumborder(|value| unsafe { strequal(value.as_ptr().cast_mut(), BORDER_SHADOW.as_ptr()) }) {
         config.shadow = true;
         let blend = unsafe { syn_check_group(c"PmenuShadow".as_ptr(), 11) };
         let through = unsafe { syn_check_group(c"PmenuShadowThrough".as_ptr(), 18) };

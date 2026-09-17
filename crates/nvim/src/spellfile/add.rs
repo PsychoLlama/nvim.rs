@@ -349,11 +349,12 @@ fn init_spellfile() {
     // the ASCII build of the language rather than the current encoding.
     let fname =
         unsafe { (*(*((*Win::current().w_s).b_langp.ga_data as *mut LangP)).lp_slang).sl_fname };
+    let encoding = spell_enc();
     let enc_suffix =
         if !fname.is_null() && has_bytes(unsafe { cstr::at(path_tail(fname)) }, b".ascii.") {
             c"ascii".as_ptr()
         } else {
-            spell_enc() as *const c_char
+            encoding.as_ptr()
         };
     let used = unsafe { cstr::bytes_at(buf) }.len();
     let at = unsafe { buf.add(used) };

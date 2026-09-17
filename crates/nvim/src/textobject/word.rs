@@ -10,6 +10,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -219,7 +220,7 @@ pub fn end_word(
 
     // Undo a cursor position adjusted for exclusive 'selection'.
     // SAFETY: 'selection' is a NUL-terminated option string.
-    if unsafe { *p_sel() } as c_int == 'e' as c_int
+    if p_sel(|value| cstr::first(value) == b'e')
         && visual_active()
         && visual_mode().is_char()
         && VIsual_select_exclu_adj.get()
@@ -359,7 +360,7 @@ pub unsafe fn current_word(
     // Correct the cursor when 'selection' is exclusive.
     // SAFETY: 'selection' is a NUL-terminated option string.
     if visual_active()
-        && unsafe { *p_sel() } as c_int == 'e' as c_int
+        && p_sel(|value| cstr::first(value) == b'e')
         && lt(visual_anchor(), Win::current().w_cursor)
     {
         // SAFETY: the caller guarantees the cursor is on a line of the buffer.
@@ -468,7 +469,7 @@ pub unsafe fn current_word(
 
     if visual_active() {
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if unsafe { *p_sel() } as c_int == 'e' as c_int
+        if p_sel(|value| cstr::first(value) == b'e')
             && inclusive
             && ltoreq(visual_anchor(), Win::current().w_cursor)
         {

@@ -14,6 +14,7 @@
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
+use crate::cstr;
 use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
@@ -244,7 +245,8 @@ pub(crate) fn show_sub(
     cmdpreview_bufnr: Handle,
 ) -> c_int {
     // SAFETY: 'shortmess' is a live string option value.
-    let save_shm: CString = unsafe { CStr::from_ptr(p_shm()) }.into();
+    let save_shm: CString =
+        p_shm(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).into();
     let orig_buf = Buf::current();
 
     // Disable the file info message.
@@ -274,8 +276,8 @@ pub(crate) fn show_sub(
     // Use the preview window only when inccommand=split and the range is more
     // than the current line.
     // SAFETY: 'inccommand' is a live string option.
-    let preview =
-        unsafe { *p_icm() } as u8 == b's' && (range.0 != old_cusr.lnum || range.1 != old_cusr.lnum);
+    let preview = p_icm(|value| cstr::first(value) == b's')
+        && (range.0 != old_cusr.lnum || range.1 != old_cusr.lnum);
 
     let mut pv = if preview {
         // With 'inccommand' at `split` the caller's contract makes

@@ -268,7 +268,7 @@ pub unsafe fn apply_autocmds_group(
         {
             break 'bypass;
         }
-        if unsafe { event_ignored(event, p_ei()) } {
+        if p_ei(|ei| unsafe { event_ignored(event, ei.as_ptr().cast_mut(), false) }) {
             break 'bypass;
         }
 
@@ -278,12 +278,12 @@ pub unsafe fn apply_autocmds_group(
         let win_local = event_row(event).win_local;
         let mut win_ignore = false;
         if buffer == Buf::current_or_none() && win_local {
-            win_ignore = unsafe { event_ignored(event, Win::current().w_onebuf_opt.wo_eiw) };
+            win_ignore = unsafe { event_ignored(event, Win::current().w_onebuf_opt.wo_eiw, true) };
         } else if buffer.is_some_and(|b| win_local && b.b_nwindows > 0) {
             win_ignore = true;
             for wp in tab_windows() {
                 if Some(wp.buffer()) == buffer
-                    && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw) }
+                    && !unsafe { event_ignored(event, wp.w_onebuf_opt.wo_eiw, true) }
                 {
                     win_ignore = false;
                     break;

@@ -146,8 +146,8 @@ pub fn msg_source(hl_id: c_int) {
 /// Is this a bad time to show an error?
 pub(crate) fn emsg_not_now() -> bool {
     (emsg_off.get() > 0
-        && !has_char(unsafe { cstr::at(p_debug()) }, b'm' as c_int)
-        && !has_char(unsafe { cstr::at(p_debug()) }, b't' as c_int))
+        && !p_debug(|value| has_char(value, b'm' as c_int))
+        && !p_debug(|value| has_char(value, b't' as c_int)))
         || emsg_skip.get() > 0
 }
 
@@ -174,7 +174,7 @@ pub unsafe fn emsg_multiline(
     let severe = emsg_severe.get();
     emsg_severe.set(false);
 
-    if emsg_off.get() == 0 || has_char(unsafe { cstr::at(p_debug()) }, b't' as c_int) {
+    if emsg_off.get() == 0 || p_debug(|value| has_char(value, b't' as c_int)) {
         // Cause a throw of an error exception if appropriate. Don't display
         // the error message in this case.
         let mut ignore = false;

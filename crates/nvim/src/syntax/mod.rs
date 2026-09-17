@@ -72,7 +72,7 @@ use crate::message::{
     emsg, msg, msg_advance, msg_display, msg_display_bytes, msg_ext_set_kind, msg_outnum,
     msg_putchar, msg_str, msg_str_hl, msg_title,
 };
-use crate::option::vars::{P_CPO, p_cpo};
+
 use crate::optionstr::clear_string_option;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::input::line_breakcheck;

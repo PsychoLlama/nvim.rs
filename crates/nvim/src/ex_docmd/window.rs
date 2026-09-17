@@ -245,7 +245,7 @@ fn reset_binding(mut win: Win) {
 /// `:sfind`/`:tabfind`: resolve the argument to a file name, or null.
 fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
     let n = len(arg);
-    if byte(get_findfunc()) != NUL {
+    if !get_findfunc().is_empty() {
         // SAFETY: a NUL-terminated argument.
         return unsafe { findfunc_find_file(arg, n, count) };
     }

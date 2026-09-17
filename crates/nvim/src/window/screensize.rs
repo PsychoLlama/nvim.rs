@@ -198,8 +198,8 @@ fn scan_windows(what: &mut Scan) {
         }
         // SAFETY: the window's own 'eventignorewin' string.
         let eiw = wp.w_onebuf_opt.wo_eiw;
-        let ignore_scroll = unsafe { event_ignored(AutoEvent::WinScrolled, eiw) };
-        let ignore_resize = unsafe { event_ignored(AutoEvent::WinResized, eiw) };
+        let ignore_scroll = unsafe { event_ignored(AutoEvent::WinScrolled, eiw, true) };
+        let ignore_resize = unsafe { event_ignored(AutoEvent::WinResized, eiw, true) };
         let size_changed =
             !ignore_resize && (wp.w_last_width != wp.w_width || wp.w_last_height != wp.w_height);
         if size_changed {

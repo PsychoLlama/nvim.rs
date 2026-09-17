@@ -54,7 +54,7 @@ use crate::message::{
     msg_str_hl, set_keep_msg, verb_msg,
 };
 use crate::message_fmt::c_str;
-use crate::option::vars::{p_dir, p_shm, p_uc, p_verbose};
+use crate::option::vars::{P_DIR, p_dir, p_shm, p_uc, p_verbose};
 use crate::option::{copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
 use crate::os::cshim::{gettext, strncasecmp};
@@ -470,7 +470,9 @@ pub fn ml_open_file(buffer: Buf) {
     }
 
     // Try every directory in 'directory'.
-    let mut dirp = p_dir();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let dir = P_DIR.get();
+    let mut dirp = dir.as_ptr().cast_mut();
     let mut found_existing_dir = false;
     while unsafe { *dirp } != NUL as ::core::ffi::c_char {
         // Between choosing the name and creating the file another Nvim
@@ -508,7 +510,7 @@ pub fn ml_open_file(buffer: Buf) {
         mf_close_file(buffer, false);
     }
 
-    if unsafe { *p_dir() } != NUL as ::core::ffi::c_char && unsafe { mf_fname(mfp) }.is_null() {
+    if p_dir(|value| !value.is_empty()) && unsafe { mf_fname(mfp) }.is_null() {
         need_wait_return.set(true); // call wait_return() later
         let _no_prompt = Suppress::wait_return();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

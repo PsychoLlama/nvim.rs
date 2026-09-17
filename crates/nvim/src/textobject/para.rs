@@ -12,7 +12,6 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::cstr;
 use crate::cstr::byte_at;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::mark::setpcmark;
@@ -156,11 +155,9 @@ pub fn starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
     if first != b'.' {
         return false;
     }
-    // SAFETY: 'sections' and 'paragraphs' are NUL-terminated option values.
-    let (sections, paragraphs) =
-        unsafe { (cstr::bytes_at(p_sections()), cstr::bytes_at(p_para())) };
     let name = &line[1..];
-    inmacro(sections, name) || (para == 0 && inmacro(paragraphs, name))
+    p_sections(|sections| inmacro(sections.to_bytes(), name))
+        || (para == 0 && p_para(|paragraphs| inmacro(paragraphs.to_bytes(), name)))
 }
 
 /// Grow an existing linewise Visual selection by `count` more paragraphs.

@@ -32,7 +32,7 @@ use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::e_fnametoolong;
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
-use crate::option::vars::p_rtp;
+use crate::option::vars::P_RTP;
 use crate::os::cshim::{gettext, putc, snprintf, strchr};
 use crate::os::fs::{os_fopen, os_isdir};
 use crate::os::input::line_breakcheck;
@@ -61,12 +61,25 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     }
 
     if unsafe { cstr::eq_bytes(excmd.arg, b"ALL") } {
-        let (rtp, none, doc) = (p_rtp(), c"".as_ptr(), c"doc".as_ptr().cast_mut());
+        // A copy: the walk sources nothing, but it outlives a projection's
+        // borrow and `do_in_path` keeps the cursor.
+        let rtp = P_RTP.get();
+        let (none, doc) = (c"".as_ptr(), c"doc".as_ptr().cast_mut());
         let opts = RuntimeOpts::ALL | RuntimeOpts::DIR;
         let flag = (&raw mut add_help_tags).cast::<c_void>();
         // SAFETY: `flag` outlives the walk, which is the callback's only
         // argument; the rest are static strings and the runtimepath.
-        unsafe { do_in_path(rtp, none, doc, opts, Some(helptags_cb), flag) };
+        unsafe {
+            do_in_path(
+                rtp,
+                c"runtimepath",
+                none,
+                doc,
+                opts,
+                Some(helptags_cb),
+                flag,
+            )
+        };
         return;
     }
 

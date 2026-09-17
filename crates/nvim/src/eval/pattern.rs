@@ -7,19 +7,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::option::SavedCpo;
 use core::ffi::{c_char, c_int};
 use core::ptr::{copy_nonoverlapping, null_mut};
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::eval::{REGSUB_COPY, REGSUB_MAGIC};
 use crate::mbyte::utfc_ptr2len;
-use crate::option::set_option_value_give_err;
-use crate::option::vars::{P_CPO, p_cpo, p_ic};
-use crate::options::kOptCpoptions;
-use crate::optionstr::{empty_option, free_string_option, is_empty_option};
+use crate::option::vars::p_ic;
+
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, NUL, OptVal, OptionSetFlags, RegMatch, RegProg, TypVal, size_t};
+use crate::types::{ColNr, NUL, RegMatch, RegProg, TypVal, size_t};
 use core::slice;
 
 /// A `RegMatch` with nothing in it.
@@ -31,51 +29,12 @@ const EMPTY_REGMATCH: RegMatch = RegMatch {
     rm_ic: false,
 };
 
-/// 'cpoptions' emptied for the duration of a pattern, restored on drop.
-///
-/// A bare assignment would be wrong: the expression a `\=` replacement runs
-/// may itself have set the option, and then the *current* value has to be
-/// put back through the option machinery so its notifications fire.
-struct QuietCpo {
-    saved: *mut c_char,
-}
-
-impl QuietCpo {
-    fn enter() -> Self {
-        let saved = p_cpo();
-        P_CPO.set(empty_option());
-        Self { saved }
-    }
-}
-
-impl Drop for QuietCpo {
-    fn drop(&mut self) {
-        // SAFETY: `saved` is the pointer 'cpoptions' held on entry.
-        if is_empty_option(p_cpo()) {
-            // Nothing touched it: put the old pointer straight back.
-            P_CPO.set(self.saved);
-            return;
-        }
-        // Something replaced it. If what it left is *another* empty
-        // string, the old value has to go back through the option
-        // machinery rather than by assignment.
-        if unsafe { *p_cpo() } == NUL as c_char {
-            set_option_value_give_err(
-                kOptCpoptions,
-                OptVal::string(unsafe { cstr_to_string(self.saved) }),
-                OptionSetFlags::NONE,
-            );
-        }
-        unsafe { free_string_option(self.saved) };
-    }
-}
-
 /// Does `pat` match anywhere in `text`?
 ///
 /// # Safety
 /// Both arguments must be NUL-terminated strings.
 pub unsafe fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -> bool {
-    let _cpo = QuietCpo::enter();
+    let _cpo = SavedCpo::empty_under_user_code();
     let mut regmatch = EMPTY_REGMATCH;
     // SAFETY: the caller's promise -- `pat` is NUL-terminated.
     regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
@@ -109,7 +68,7 @@ pub unsafe fn do_string_sub(
     flags: *const c_char,
     ret_len: *mut size_t,
 ) -> *mut c_char {
-    let _cpo = QuietCpo::enter();
+    let _cpo = SavedCpo::empty_under_user_code();
     let mut out = Vec::<u8>::new();
     // Whether anything was substituted. The garray answered this by having
     // been allocated at all; a `Vec` cannot, and an empty result is a real

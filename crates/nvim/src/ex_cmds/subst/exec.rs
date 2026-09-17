@@ -59,12 +59,13 @@ use crate::search::get_search_pat;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptionSetFlags, Pos, ProfTime,
+    CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, OptInt, OptionSetFlags, Pos, ProfTime,
     RegMMatch, int64_t, size_t,
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
 use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -654,7 +655,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         return 0 as c_int;
     }
     // SAFETY: 'inccommand' is a live string option.
-    if unsafe { *p_icm() } as c_int == NUL || !args.pat_given {
+    if p_icm(CStr::is_empty) || !args.pat_given {
         return 0 as c_int;
     }
     if pre_hl_id.get() == 0 as c_int {

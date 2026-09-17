@@ -14,9 +14,9 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::getchar::typeahead;
 use crate::memory::XString;
+use crate::option::vars::P_EI;
 use crate::types::{Failed, OptionSetFlags};
 
 /// The [`EVENT_NAMES`] row an event number names.
@@ -84,12 +84,21 @@ pub fn event_nr2name(event: AutoEvent) -> *const ::core::ffi::c_char {
 /// covers only the window-local events, which is what the sign of a row's
 /// `event` records.
 ///
+/// `window_local` says which of the two options `ei` is, which upstream
+/// asked by comparing the pointer against `p_ei` -- a question the option's
+/// value cannot answer now that it owns its storage, and that the caller
+/// knew all along.
+///
 /// # Safety
 ///
 /// `event` must be an initialized `AutoEvent` whose pointer fields point at
 /// live data for the call. `ei` must point at a NUL-terminated string,
 /// unaliased for the call.
-pub unsafe fn event_ignored(event: AutoEvent, mut ei: *mut ::core::ffi::c_char) -> bool {
+pub unsafe fn event_ignored(
+    event: AutoEvent,
+    mut ei: *mut ::core::ffi::c_char,
+    window_local: bool,
+) -> bool {
     let mut ignored = false;
     // SAFETY: `ei` is a NUL-terminated option value, so the walk stops at
     // its end.  `skip_all` and `event_name2nr` take the same contract, and
@@ -98,7 +107,7 @@ pub unsafe fn event_ignored(event: AutoEvent, mut ei: *mut ::core::ffi::c_char) 
         let unignore = unsafe { *ei } == b'-' as ::core::ffi::c_char;
         ei = unsafe { ei.add(usize::from(unignore)) };
         if let Some(after_all) = unsafe { skip_all(ei) } {
-            ignored = ei == p_ei() || event_row(event).win_local;
+            ignored = !window_local || event_row(event).win_local;
             ei = after_all;
         } else if unsafe { event_name2nr(ei, &raw mut ei) } == Some(event) {
             if unignore {
@@ -113,14 +122,13 @@ pub unsafe fn event_ignored(event: AutoEvent, mut ei: *mut ::core::ffi::c_char) 
 /// `Ok` when `ei` -- a value of 'eventignore' or 'eventignorewin' -- is a
 /// list of event names, `Err` otherwise.
 ///
-/// 'eventignorewin' is the value that is not `p_ei`, and it accepts only
-/// the window-local events.
+/// `win` says the value is 'eventignorewin', which accepts only the
+/// window-local events.
 ///
 /// # Safety
 ///
 /// `ei` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> Result<(), Failed> {
-    let win = ei != p_ei();
+pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char, win: bool) -> Result<(), Failed> {
     // SAFETY: as in `event_ignored` -- `ei` is a NUL-terminated option
     // value, and every step below stays within it.
     while unsafe { *ei } != 0 {
@@ -169,10 +177,8 @@ unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_c
 /// Append `what` (which starts with a comma) to 'eventignore', and answer
 /// the old value for [`au_event_restore`].
 pub(crate) fn au_event_disable(what: &CStr) -> XString {
-    // SAFETY: 'eventignore' holds a NUL-terminated value.
-    let ignored = unsafe { cstr::bytes_at(p_ei()) };
-    let saved = XString::from_bytes(ignored);
-    let appended = if ignored.is_empty() && what.to_bytes().first() == Some(&b',') {
+    let saved = P_EI.get();
+    let appended = if saved.is_empty() && what.to_bytes().first() == Some(&b',') {
         // Nothing to join to, so the leading comma would open the list with
         // an empty entry.
         XString::from_bytes(&what.to_bytes()[1..])

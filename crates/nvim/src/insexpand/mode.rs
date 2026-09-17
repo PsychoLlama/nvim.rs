@@ -155,20 +155,17 @@ pub(crate) fn compl_shows_dir_backward() -> bool {
 /// Check that `'dictionary'` (`dict_opt`) or `'thesaurus'` can be used;
 /// complain, beep and leave CTRL-X mode when it cannot.
 pub fn check_compl_option(dict_opt: bool) -> bool {
+    // SAFETY (every read): an option string is a NUL-terminated allocation,
+    // never null.
+    let local_unset = |field: *const c_char| unsafe { *field } == NUL as c_char;
     let empty = if dict_opt {
-        // SAFETY: an option string is a NUL-terminated allocation, never
-        // null.
-        let unset =
-            unsafe { *Buf::current().b_p_dict as c_int == NUL && *p_dict() as c_int == NUL };
+        let unset = local_unset(Buf::current().b_p_dict) && p_dict(CStr::is_empty);
         unset && Win::current().w_onebuf_opt.wo_spell == 0
     } else {
-        // SAFETY: as above.
-        unsafe {
-            *Buf::current().b_p_tsr as c_int == NUL
-                && *p_tsr() as c_int == NUL
-                && *Buf::current().b_p_tsrfu as c_int == NUL
-                && *p_tsrfu() as c_int == NUL
-        }
+        local_unset(Buf::current().b_p_tsr)
+            && p_tsr(CStr::is_empty)
+            && local_unset(Buf::current().b_p_tsrfu)
+            && p_tsrfu(CStr::is_empty)
     };
     if !empty {
         return true;

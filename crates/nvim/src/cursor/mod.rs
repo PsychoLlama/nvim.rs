@@ -25,6 +25,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -203,7 +204,7 @@ impl PosRef {
 /// Whether 'selection' is `"old"`, where the cursor may not rest on the NUL.
 #[inline(always)]
 fn selection_is_old() -> bool {
-    unsafe { *p_sel() == b'o' as c_char }
+    p_sel(|value| cstr::first(value) == b'o')
 }
 
 // ---------------------------------------------------------------------------

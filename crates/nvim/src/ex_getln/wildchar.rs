@@ -11,6 +11,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::keycodes::{Ctrl_Z, Key};
+use crate::option::vars::P_WIM;
 use crate::options::OptWimFlags;
 use crate::types::{ExpandContext, Failed, NUL, OK};
 
@@ -187,7 +188,9 @@ pub fn check_opt_wim() -> Result<(), Failed> {
     let mut new_wim_flags: [uint8_t; 4] = [0; 4];
     let mut idx = 0usize;
 
-    let mut p = p_wim();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let wim = P_WIM.get();
+    let mut p = wim.as_ptr().cast_mut();
     while unsafe { *p } != 0 {
         // The stage name runs to the first non-alphabetic byte, which has
         // to be one of the separators.

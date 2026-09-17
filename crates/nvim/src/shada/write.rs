@@ -238,7 +238,9 @@ impl Writing {
             .insert(c"pid", Object::integer(os_get_pid()))
             .insert(
                 c"encoding",
-                Object::string(unsafe { cstr_to_string(p_enc()) }),
+                Object::string(p_enc(|value| unsafe {
+                    cstr_to_string(value.as_ptr().cast_mut())
+                })),
             );
         let entry = ShadaEntry {
             can_free_entry: false,

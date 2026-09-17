@@ -13,7 +13,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::insexpand::set_cpt_callbacks;
 use crate::option::copy_option_part;
-use crate::option::vars::{cia_flags, cot_flags, p_cia, p_cot, p_hlg, p_tc, spo_flags, tc_flags};
+use crate::option::vars::{P_CIA, P_COT, P_HLG, P_TC, cia_flags, cot_flags, spo_flags, tc_flags};
 use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
 use crate::os::env::vim_unsetenv_ext;
 use crate::os::state::{didset_vim, didset_vimruntime};
@@ -134,7 +134,9 @@ pub fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
 
     // SAFETY: the option's own C string value, and a scratch buffer of the
     // size given.
-    let mut p = p_cia();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let cia = P_CIA.get();
+    let mut p = cia.as_ptr().cast_mut();
     while unsafe { *p } != 0 {
         unsafe {
             copy_option_part(
@@ -170,6 +172,8 @@ pub fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
 pub fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
     let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
+    // A copy, so that the global value outlives the projection: `:set` rate.
+    let global = P_COT.get();
     let value = if local {
         buf.b_p_cot
     } else {
@@ -177,7 +181,7 @@ pub fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
             // A plain `:set` drops the buffer's own answer.
             buf.b_cot_flags = 0 as c_uint;
         }
-        p_cot()
+        global.as_ptr().cast_mut()
     };
     // SAFETY: a C string, against the table's own word list.
     let Some(mask) = (unsafe { opt_strings_mask(value, &opt_cot_values, true) }) else {
@@ -209,7 +213,9 @@ pub fn did_set_helpfile(_args: &mut OptSet) -> Option<&CStr> {
 pub fn did_set_helplang(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the option's own C string value; each test below is reached
     // only once the byte before it is known not to be the terminator.
-    let mut s = p_hlg();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let hlg = P_HLG.get();
+    let mut s = hlg.as_ptr().cast_mut();
     while c_int::from(unsafe { *s }) != NUL {
         if c_int::from(unsafe { *s.add(1) }) == NUL
             || ((unsafe { *s.add(2) } != b',' as c_char
@@ -245,8 +251,10 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Option<&CStr> {
     let varp = varp(args);
     let resolved = unsafe { get_scriptlocal_funcname(varp.get()) };
     if !resolved.is_null() {
-        unsafe { free_string_option(varp.get()) };
-        unsafe { varp.set(resolved) };
+        // Replace and *then* free: a global value's string is the option
+        // record's, so freeing it before the write would release it twice.
+        let old = unsafe { varp.replace(resolved) };
+        unsafe { free_string_option(old) };
     }
     None
 }
@@ -310,7 +318,13 @@ pub fn did_set_spellsuggest(_args: &mut OptSet) -> Option<&CStr> {
 pub fn did_set_tagcase(args: &mut OptSet) -> Option<&CStr> {
     let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
-    let value = if local { buf.b_p_tc } else { p_tc() };
+    // A copy, so that the global value outlives the projection: `:set` rate.
+    let global = P_TC.get();
+    let value = if local {
+        buf.b_p_tc
+    } else {
+        global.as_ptr().cast_mut()
+    };
     // An empty buffer-local value means "no override".
     // SAFETY: an option's value is a C string.
     let mask = if local && unsafe { c_int::from(*value) } == NUL {

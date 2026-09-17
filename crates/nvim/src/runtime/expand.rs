@@ -87,19 +87,25 @@ unsafe fn glob_rounds(
     unsafe { build_pattern(buf, buf_len, c"", dir, pat, SCRIPTS) };
     loop {
         if !flags.has(RuntimeOpts::NORTP) {
-            unsafe { globpath(p_rtp(), buf, gap, glob_flags, expand_dirs) };
+            p_rtp(|value| unsafe {
+                globpath(value.as_ptr().cast_mut(), buf, gap, glob_flags, expand_dirs)
+            });
         }
         let suffix = if expand_dirs { ANYTHING } else { SCRIPTS };
         if flags.has(RuntimeOpts::START) {
             for prefix in [c"pack/*/start/*/", c"start/*/"] {
                 unsafe { build_pattern(buf, buf_len, prefix, dir, pat, suffix) };
-                unsafe { globpath(p_pp(), buf, gap, glob_flags, expand_dirs) };
+                p_pp(|value| unsafe {
+                    globpath(value.as_ptr().cast_mut(), buf, gap, glob_flags, expand_dirs)
+                });
             }
         }
         if flags.has(RuntimeOpts::OPT) {
             for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
                 unsafe { build_pattern(buf, buf_len, prefix, dir, pat, suffix) };
-                unsafe { globpath(p_pp(), buf, gap, glob_flags, expand_dirs) };
+                p_pp(|value| unsafe {
+                    globpath(value.as_ptr().cast_mut(), buf, gap, glob_flags, expand_dirs)
+                });
             }
         }
         // Second round, for directories.
@@ -337,7 +343,15 @@ pub unsafe fn expand_packadd_dir(
     let s = unsafe { xmalloc(buflen) }.cast::<c_char>();
     for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
         unsafe { snprintf(s, buflen, fmt.as_ptr(), pat) };
-        unsafe { globpath(p_pp(), s, &raw mut ga, WildOpts::NONE, true) };
+        p_pp(|value| unsafe {
+            globpath(
+                value.as_ptr().cast_mut(),
+                s,
+                &raw mut ga,
+                WildOpts::NONE,
+                true,
+            )
+        });
     }
     unsafe { xfree(s.cast()) };
 

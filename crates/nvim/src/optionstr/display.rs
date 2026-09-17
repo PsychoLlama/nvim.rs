@@ -7,6 +7,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -25,13 +26,12 @@ use crate::ex_getln::state::cmdpreview;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
 use crate::mbyte::utfc_ptr2len;
-use crate::memory::xstrdup;
 use crate::message::e_unsupportedoption;
 use crate::message::{messagesopt_changed, msg_grid_validate};
 use crate::r#move::validate_virtcol;
 use crate::option::vars::{
-    P_BG, breakat_flags, p_bg, p_breakat, p_km, p_mousescroll, p_mousescroll_hor,
-    p_mousescroll_vert, p_pumborder, p_ve, p_winborder, ve_flags,
+    P_BG, P_VE, breakat_flags, p_bg, p_breakat, p_km, p_mousescroll, p_mousescroll_hor,
+    p_mousescroll_vert, p_pumborder, p_winborder, ve_flags,
 };
 use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
@@ -47,9 +47,8 @@ use super::{
     COCU_ALL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, WW_ALL,
     check_chars_options, check_signcolumn, check_str_opt, did_set_option_listflag,
     did_set_statustabline_rulerformat, did_set_str_generic,
-    e_showbreak_contains_unprintable_or_wide_character, empty_option, free_string_option,
-    kAlignLeft, kWinSplitLeft, kWinStyleUnused, kZIndexFloatDefault, opt_strings_mask,
-    terminal_notify_theme,
+    e_showbreak_contains_unprintable_or_wide_character, kAlignLeft, kWinSplitLeft, kWinStyleUnused,
+    kZIndexFloatDefault, opt_strings_mask, terminal_notify_theme,
 };
 use crate::decoration::SCL_NUM;
 use crate::eval::typval::NumBuf;
@@ -89,36 +88,22 @@ pub fn did_set_background(args: &mut OptSet) -> Option<&CStr> {
     }
     // SAFETY: both are C strings; only the first byte distinguishes "dark"
     // from "light".
-    if unsafe { *old_value(args) == *p_bg() } {
+    if p_bg(|value| unsafe { *old_value(args) == *value.as_ptr().cast_mut() }) {
         return None;
     }
 
-    let dark = unsafe { *p_bg() } == b'd' as c_char;
+    let dark = p_bg(|value| cstr::first(value) == b'd');
     init_highlight(false, false);
 
-    // SAFETY: reading the global that `init_highlight` may have changed,
-    // and the editor's own variable dictionary.
-    if unsafe {
-        dark != (*p_bg() == b'd' as c_char)
-            && !get_var_value(c"g:colors_name".as_ptr(), &mut numbuf).is_null()
-    } {
+    // The global may have been changed by `init_highlight`.
+    // SAFETY: the editor's own variable dictionary.
+    if dark != p_bg(|value| cstr::first(value) == b'd')
+        && !unsafe { get_var_value(c"g:colors_name".as_ptr(), &mut numbuf) }.is_null()
+    {
         let name = c"g:colors_name";
-        // SAFETY: the name is a C string of the length given, and `p_bg` is
-        // this process's own option variable.
+        // SAFETY: the name is a C string of the length given.
         let _ = unsafe { do_unlet(name.as_ptr(), name.to_bytes().len(), true) };
-        unsafe { free_string_option(p_bg()) };
-        P_BG.set(unsafe {
-            xstrdup(if dark {
-                c"dark".as_ptr()
-            } else {
-                c"light".as_ptr()
-            })
-        });
-        // `check_string_option` for a cell: `xstrdup` never answers
-        // null, but upstream guards anyway.
-        if p_bg().is_null() {
-            P_BG.set(empty_option());
-        }
+        P_BG.set(XString::from_cstr(if dark { c"dark" } else { c"light" }));
         init_highlight(false, false);
     }
 
@@ -142,14 +127,12 @@ pub fn did_set_breakat(_args: &mut OptSet) -> Option<&'static CStr> {
 /// The `'breakat'` character set itself, for the startup sweep, which has
 /// no option frame to hand a callback.
 pub(crate) fn derive_breakat_flags() {
-    let value = p_breakat();
     let mut chars = BreakAt::NONE;
-    if !value.is_null() {
-        // SAFETY: the option's own value is a C string.
-        for &byte in unsafe { CStr::from_ptr(value) }.to_bytes() {
+    p_breakat(|value| {
+        for &byte in value.to_bytes() {
             chars.insert(byte);
         }
-    }
+    });
     breakat_flags.set(chars);
 }
 
@@ -244,8 +227,8 @@ pub fn did_set_keymodel(args: &mut OptSet) -> Option<&CStr> {
         return errmsg;
     }
     // SAFETY: the option's C string value, only read here.
-    km_stopsel.set(has_char(unsafe { cstr::at(p_km()) }, c_int::from(b'o')));
-    km_startsel.set(has_char(unsafe { cstr::at(p_km()) }, c_int::from(b'a')));
+    km_stopsel.set(p_km(|value| has_char(value, c_int::from(b'o'))));
+    km_startsel.set(p_km(|value| has_char(value, c_int::from(b'a'))));
     None
 }
 
@@ -267,7 +250,8 @@ pub fn did_set_mouse(args: &mut OptSet) -> Option<&CStr> {
 /// than whatever the previous value set.
 pub fn did_set_mousescroll(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the option's own value is a C string.
-    let value = unsafe { CStr::from_ptr(p_mousescroll()) }.to_bytes();
+    let value =
+        p_mousescroll(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
     let mut vertical: Option<OptInt> = None;
     let mut horizontal: Option<OptInt> = None;
 
@@ -294,7 +278,7 @@ pub fn did_set_mousescroll(_args: &mut OptSet) -> Option<&CStr> {
         // number too large for an `int`.
         // SAFETY: `at` points into the option's own C string, at the digits
         // just vetted.
-        let mut at = unsafe { p_mousescroll().add(offset + 4) };
+        let mut at = p_mousescroll(|value| unsafe { value.as_ptr().cast_mut().add(offset + 4) });
         let number = unsafe { getdigits_int(&raw mut at, false, -1) };
         if number == -1 {
             return invalid();
@@ -368,7 +352,13 @@ pub fn did_set_signcolumn(args: &mut OptSet) -> Option<&CStr> {
 pub fn did_set_virtualedit(args: &mut OptSet) -> Option<&CStr> {
     let mut wp = win(args);
     let local = args.os_flags.has(OptionSetFlags::LOCAL);
-    let value = { if local { wp.w_onebuf_opt.wo_ve } else { p_ve() } };
+    // A copy, so that the global value outlives the projection: `:set` rate.
+    let global = P_VE.get();
+    let value = if local {
+        wp.w_onebuf_opt.wo_ve
+    } else {
+        global.as_ptr().cast_mut()
+    };
     let mut store = |mask: c_uint| {
         if local {
             wp.w_onebuf_opt.wo_ve_flags = mask;
@@ -476,7 +466,7 @@ pub(crate) unsafe fn parse_border_opt(border_opt: *mut c_char) -> bool {
 
 pub fn did_set_winborder(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the option's own C string value.
-    if !unsafe { parse_border_opt(p_winborder()) } {
+    if !p_winborder(|value| unsafe { parse_border_opt(value.as_ptr().cast_mut()) }) {
         return invalid();
     }
     None
@@ -484,7 +474,7 @@ pub fn did_set_winborder(_args: &mut OptSet) -> Option<&CStr> {
 
 pub fn did_set_pumborder(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the option's own C string value.
-    if !unsafe { parse_border_opt(p_pumborder()) } {
+    if !p_pumborder(|value| unsafe { parse_border_opt(value.as_ptr().cast_mut()) }) {
         return invalid();
     }
     None

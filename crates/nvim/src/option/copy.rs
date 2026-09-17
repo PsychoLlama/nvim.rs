@@ -19,6 +19,7 @@ use core::ptr;
 
 use crate::buffer::free_buf_options;
 use crate::charset::buf_init_chartab;
+use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::indent::{briopt_check, tabstop_set};
 use crate::insexpand::{
@@ -26,11 +27,11 @@ use crate::insexpand::{
 };
 use crate::memory::xstrdup;
 use crate::option::vars::{
-    P_IMINSERT, P_IMSEARCH, P_MA, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink, p_cino, p_cinsd,
-    p_cinw, p_cms, p_com, p_cpo, p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo,
-    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp, p_lop, p_ma,
-    p_ml, p_mps, p_nf, p_ofu, p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl, p_spo, p_sts,
-    p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
+    P_CPO, P_IMINSERT, P_IMSEARCH, P_MA, P_VSTS, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink,
+    p_cino, p_cinsd, p_cinw, p_cms, p_com, p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol,
+    p_flp, p_fo, p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp,
+    p_lop, p_ma, p_ml, p_mps, p_nf, p_ofu, p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl,
+    p_spo, p_sts, p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
 };
 
 use super::check::bin_save;
@@ -54,7 +55,7 @@ use crate::optionstr::{
 };
 use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
-use crate::types::{Buffer, CmdModFlags, ColNr, CpoFlag, NUL, OptInt, WinOpt, Window, int16_t};
+use crate::types::{Buffer, CmdModFlags, ColNr, CpoFlag, OptInt, WinOpt, Window, int16_t};
 use crate::window::{check_colorcolumn, set_winbar_win};
 use crate::winlayer::{Buf, Live, Win};
 
@@ -111,22 +112,15 @@ macro_rules! win_field {
     };
 }
 
-/// A duplicate of a global string option's value.
+/// A buffer-local copy of a value a string option owns.
 ///
-/// Every string option holds a live NUL-terminated string from the moment
-/// the defaults are set, so naming the option's cell *is* `xstrdup`'s whole
-/// precondition — which is why this takes the cell rather than a pointer,
-/// and why the promise is paid once here instead of at each of the thirty
-/// fields below.
-fn dup_global(value: *mut c_char) -> *mut c_char {
-    // SAFETY: a string option's value is a live NUL-terminated string.
-    unsafe { xstrdup(value) }
-}
-
-/// [`dup_global`] for one of the compiled-in names.
-fn dup_static(name: &CStr) -> *mut c_char {
+/// This is what a global string option's reader is handed to: the reader
+/// projects the option's own string and this makes the copy the buffer's
+/// field takes over, so the borrow never leaves the closure. A compiled-in
+/// name (`c"mac"`) goes through the same door.
+fn dup(value: &CStr) -> *mut c_char {
     // SAFETY: a `CStr` is NUL-terminated by construction.
-    unsafe { xstrdup(name.as_ptr()) }
+    unsafe { xstrdup(value.as_ptr()) }
 }
 
 /// Give a window's option values to a freshly split one.
@@ -386,7 +380,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
 
     // Before the defaults exist there is nothing to copy: `main` makes
     // the first buffer that early.
-    if p_cpo().is_null() {
+    if P_CPO.is_unset() {
         check_buf_options(buffer);
         return;
     }
@@ -416,14 +410,14 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         } else {
             free_buf_options(buffer, true);
             b.b_p_ro = 0;
-            b.b_p_fenc = dup_global(p_fenc());
+            b.b_p_fenc = p_fenc(dup);
             // A new buffer takes the *first* of 'fileformats' rather
             // than 'fileformat', since nothing has been read yet.
-            b.b_p_ff = match unsafe { *p_ffs() } as u8 {
-                b'm' => dup_static(c"mac"),
-                b'd' => dup_static(c"dos"),
-                b'u' => dup_static(c"unix"),
-                _ => dup_global(p_ff()),
+            b.b_p_ff = match p_ffs(cstr::first) {
+                b'm' => dup(c"mac"),
+                b'd' => dup(c"dos"),
+                b'u' => dup(c"unix"),
+                _ => p_ff(dup),
             };
             b.b_p_bh = unset_string();
             b.b_p_bt = unset_string();
@@ -469,46 +463,46 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
             copy_sctx(b, kBufOptSwapfile);
         }
 
-        b.b_p_cpt = dup_global(p_cpt());
+        b.b_p_cpt = p_cpt(dup);
         copy_sctx(b, kBufOptComplete);
         set_buflocal_cpt_callbacks(b);
-        b.b_p_cfu = dup_global(p_cfu());
+        b.b_p_cfu = p_cfu(dup);
         copy_sctx(b, kBufOptCompletefunc);
         set_buflocal_cfu_callback(b);
-        b.b_p_ofu = dup_global(p_ofu());
+        b.b_p_ofu = p_ofu(dup);
         copy_sctx(b, kBufOptOmnifunc);
         set_buflocal_ofu_callback(b);
-        b.b_p_tfu = dup_global(p_tfu());
+        b.b_p_tfu = p_tfu(dup);
         copy_sctx(b, kBufOptTagfunc);
         set_buflocal_tfu_callback(b);
 
         b.b_p_sts = p_sts();
         copy_sctx(b, kBufOptSofttabstop);
         b.b_p_sts_nopaste = paste_save().sts;
-        b.b_p_vsts = dup_global(p_vsts());
+        b.b_p_vsts = p_vsts(dup);
         copy_sctx(b, kBufOptVarsofttabstop);
-        b.b_p_vsts_array = if !p_vsts().is_null() && p_vsts() != unset_string() {
-            // SAFETY: 'vartabstop' is a non-empty string option value.
-            unsafe { tabstop_array(p_vsts()) }
-        } else {
+        b.b_p_vsts_array = if P_VSTS.is_unset() {
             ptr::null_mut()
+        } else {
+            p_vsts(tabstop_array)
         };
         b.b_p_vsts_nopaste = match paste_save().vsts {
             saved if saved.is_null() => ptr::null_mut(),
-            saved => dup_global(saved),
+            // SAFETY: the paste record's saved value is a live C string.
+            saved => dup(unsafe { cstr::at(saved) }),
         };
 
-        b.b_p_com = dup_global(p_com());
+        b.b_p_com = p_com(dup);
         copy_sctx(b, kBufOptComments);
-        b.b_p_cms = dup_global(p_cms());
+        b.b_p_cms = p_cms(dup);
         copy_sctx(b, kBufOptCommentstring);
-        b.b_p_fo = dup_global(p_fo());
+        b.b_p_fo = p_fo(dup);
         copy_sctx(b, kBufOptFormatoptions);
-        b.b_p_flp = dup_global(p_flp());
+        b.b_p_flp = p_flp(dup);
         copy_sctx(b, kBufOptFormatlistpat);
-        b.b_p_nf = dup_global(p_nf());
+        b.b_p_nf = p_nf(dup);
         copy_sctx(b, kBufOptNrformats);
-        b.b_p_mps = dup_global(p_mps());
+        b.b_p_mps = p_mps(dup);
         copy_sctx(b, kBufOptMatchpairs);
         b.b_p_si = c_int::from(p_si());
         copy_sctx(b, kBufOptSmartindent);
@@ -517,20 +511,20 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         copy_sctx(b, kBufOptCopyindent);
         b.b_p_cin = c_int::from(p_cin());
         copy_sctx(b, kBufOptCindent);
-        b.b_p_cink = dup_global(p_cink());
+        b.b_p_cink = p_cink(dup);
         copy_sctx(b, kBufOptCinkeys);
-        b.b_p_cino = dup_global(p_cino());
+        b.b_p_cino = p_cino(dup);
         copy_sctx(b, kBufOptCinoptions);
-        b.b_p_cinsd = dup_global(p_cinsd());
+        b.b_p_cinsd = p_cinsd(dup);
         copy_sctx(b, kBufOptCinscopedecls);
-        b.b_p_lop = dup_global(p_lop());
+        b.b_p_lop = p_lop(dup);
         copy_sctx(b, kBufOptLispoptions);
         // 'filetype' and 'syntax' start empty: the autocommands that
         // set them have not run for this buffer yet.
         b.b_p_ft = unset_string();
         b.b_p_pi = c_int::from(p_pi());
         copy_sctx(b, kBufOptPreserveindent);
-        b.b_p_cinw = dup_global(p_cinw());
+        b.b_p_cinw = p_cinw(dup);
         copy_sctx(b, kBufOptCinwords);
         b.b_p_lisp = c_int::from(p_lisp());
         copy_sctx(b, kBufOptLisp);
@@ -539,28 +533,28 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         copy_sctx(b, kBufOptSynmaxcol);
 
         b.b_s.b_syn_isk = unset_string();
-        b.b_s.b_p_spc = dup_global(p_spc());
+        b.b_s.b_p_spc = p_spc(dup);
         copy_sctx(b, kBufOptSpellcapcheck);
         // SAFETY: `b_s` is the buffer's own syntax block.
         unsafe { compile_cap_prog(buf_field!(buffer.raw(), b_s)) };
-        b.b_s.b_p_spf = dup_global(p_spf());
+        b.b_s.b_p_spf = p_spf(dup);
         copy_sctx(b, kBufOptSpellfile);
-        b.b_s.b_p_spl = dup_global(p_spl());
+        b.b_s.b_p_spl = p_spl(dup);
         copy_sctx(b, kBufOptSpelllang);
-        b.b_s.b_p_spo = dup_global(p_spo());
+        b.b_s.b_p_spo = p_spo(dup);
         copy_sctx(b, kBufOptSpelloptions);
         b.b_s.b_p_spo_flags = spo_flags.get();
 
-        b.b_p_inde = dup_global(p_inde());
+        b.b_p_inde = p_inde(dup);
         copy_sctx(b, kBufOptIndentexpr);
-        b.b_p_indk = dup_global(p_indk());
+        b.b_p_indk = p_indk(dup);
         copy_sctx(b, kBufOptIndentkeys);
         b.b_p_fp = unset_string();
-        b.b_p_fex = dup_global(p_fex());
+        b.b_p_fex = p_fex(dup);
         copy_sctx(b, kBufOptFormatexpr);
-        b.b_p_sua = dup_global(p_sua());
+        b.b_p_sua = p_sua(dup);
         copy_sctx(b, kBufOptSuffixesadd);
-        b.b_p_keymap = dup_global(p_keymap());
+        b.b_p_keymap = p_keymap(dup);
         copy_sctx(b, kBufOptKeymap);
         b.b_kmap_state = (b.b_kmap_state as c_int | KEYMAP_INIT) as int16_t;
         b.b_p_iminsert = p_iminsert();
@@ -602,9 +596,9 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_tc_flags = 0 as c_uint;
         b.b_cot_flags = 0 as c_uint;
         // 'includeexpr' is buffer-local only, not global-local.
-        b.b_p_inex = dup_global(p_inex());
+        b.b_p_inex = p_inex(dup);
         copy_sctx(b, kBufOptIncludeexpr);
-        b.b_p_qe = dup_global(p_qe());
+        b.b_p_qe = p_qe(dup);
         copy_sctx(b, kBufOptQuoteescape);
         b.b_p_udf = c_int::from(p_udf());
         copy_sctx(b, kBufOptUndofile);
@@ -613,12 +607,12 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
             b.b_p_isk = save_p_isk;
             b.b_p_vts_array = vts_array(b);
         } else {
-            b.b_p_isk = dup_global(p_isk());
+            b.b_p_isk = p_isk(dup);
             copy_sctx(b, kBufOptIskeyword);
             did_isk = true;
             b.b_p_ts = p_ts();
             copy_sctx(b, kBufOptTabstop);
-            b.b_p_vts = dup_global(p_vts());
+            b.b_p_vts = p_vts(dup);
             copy_sctx(b, kBufOptVartabstop);
             b.b_p_vts_array = vts_array(b);
             b.b_help = false;
@@ -645,14 +639,10 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
 }
 
 /// The tab-stop array a 'vartabstop'-like value describes.
-///
-/// # Safety
-///
-/// `value` must be a non-empty string option value.
-unsafe fn tabstop_array(value: *mut c_char) -> *mut ColNr {
+fn tabstop_array(value: &CStr) -> *mut ColNr {
     let mut array: *mut ColNr = ptr::null_mut();
-    // SAFETY: the caller's value.
-    unsafe { tabstop_set(value, &raw mut array) };
+    // SAFETY: a `CStr` is NUL-terminated, which is all `tabstop_set` reads.
+    unsafe { tabstop_set(value.as_ptr().cast_mut(), &raw mut array) };
     array
 }
 
@@ -663,14 +653,13 @@ unsafe fn tabstop_array(value: *mut c_char) -> *mut ColNr {
 /// than inline so that the two identical call sites cannot drift.
 ///
 fn vts_array(buffer: Buf) -> *mut ColNr {
-    let vts = p_vts();
-    // SAFETY: 'vartabstop' is a string option, so its value is a live
-    // NUL-terminated string; the test above is what `tabstop_set` needs.
-    if !vts.is_null() && unsafe { *vts } != NUL as c_char && buffer.b_p_vts_array.is_null() {
-        unsafe { tabstop_array(vts) }
-    } else {
-        ptr::null_mut()
-    }
+    p_vts(|vts| {
+        if !vts.is_empty() && buffer.b_p_vts_array.is_null() {
+            tabstop_array(vts)
+        } else {
+            ptr::null_mut()
+        }
+    })
 }
 
 /// `-M`: make every buffer unmodifiable, default included.

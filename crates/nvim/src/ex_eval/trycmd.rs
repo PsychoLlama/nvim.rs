@@ -62,8 +62,8 @@ use crate::message::e_argreq;
 use crate::message::state::{did_emsg, emsg_silent};
 use crate::message::{emsg_ptr, internal_error};
 use crate::message_fmt::c_str;
-use crate::option::vars::{P_CPO, p_cpo};
-use crate::optionstr::empty_option;
+use crate::option::SavedCpo;
+
 use crate::regexp::{
     RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl, vim_regfree,
 };
@@ -306,8 +306,7 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
         save_char = unsafe { *end };
         unsafe { *end = NUL as c_char };
     }
-    let save_cpo = p_cpo();
-    P_CPO.set(empty_option());
+    let _cpo = SavedCpo::empty();
     // Errors here would invalidate the current exception.
     // Disable error messages: one here would invalidate the exception.
     let no_emsg = Suppress::emsg();
@@ -319,7 +318,6 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
     if !end.is_null() {
         unsafe { *end = save_char };
     }
-    P_CPO.set(save_cpo);
     if regmatch.regprog.is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let pat = unsafe { c_str(pat) };

@@ -15,6 +15,7 @@ use super::*;
 use crate::file_search::Name;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
+use crate::option::vars::P_HLG;
 use crate::options::{
     kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
 };
@@ -435,7 +436,9 @@ impl FindTags {
 
         // Otherwise the position in 'helplang' is the priority.
         self.help_pri = 1;
-        let mut s = p_hlg();
+        // A copy: the cursor below walks past the end of a projection's borrow.
+        let hlg = P_HLG.get();
+        let mut s = hlg.as_ptr().cast_mut();
         while unsafe { *s } != 0 {
             if unsafe { lang_is(s, self.help_lang, false) } {
                 break;

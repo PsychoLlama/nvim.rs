@@ -179,7 +179,7 @@ pub(crate) fn find_command(cmdchar: c_int) -> c_int {
 #[inline(always)]
 fn langmap_wanted(condition: bool) -> bool {
     // SAFETY: 'langmap' is a NUL-terminated option string.
-    let have_langmap = unsafe { *p_langmap() } as c_int != 0;
+    let have_langmap = p_langmap(|value| !value.is_empty());
     let from_a_map = if vgetc_busy.get() != 0 {
         typeahead().maplen() == 0
     } else {

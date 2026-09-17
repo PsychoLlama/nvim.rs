@@ -9,11 +9,12 @@ use crate::ex_cmds::newlnum;
 use crate::fileio::Loaded;
 use crate::guard::Allow;
 use crate::memline::MlFlags;
+use crate::memory::XString;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::window::valid_win;
 use crate::winlayer::WinId;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::arglist::check_arg_idx;
@@ -215,7 +216,7 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
     } else {
         1
     };
-    let fname = if byte(get_findfunc()) != NUL {
+    let fname = if !get_findfunc().is_empty() {
         unsafe { findfunc_find_file(excmd.arg, cstr::bytes_at(excmd.arg).len(), count) }
     } else {
         unsafe { find_nth_on_path(excmd.arg, excmd.addr_count, excmd.line2) }
@@ -554,16 +555,16 @@ pub(crate) fn ex_checkpath(excmd: &mut ExArg) {
 pub(crate) fn ex_shada(excmd: &mut ExArg) {
     // An empty 'shada' would mean "save nothing", which is not what an
     // explicit command means.
-    let save_shada = p_shada();
-    if byte(p_shada()) == NUL {
-        P_SHADA.set(c"'100".as_ptr() as *mut c_char);
-    }
+    let save_shada =
+        p_shada(CStr::is_empty).then(|| P_SHADA.swap(Some(XString::from_cstr(c"'100"))));
     if excmd.cmdidx == CmdIdx::rviminfo || excmd.cmdidx == CmdIdx::rshada {
         let _ = unsafe { shada_read_everything(excmd.arg, excmd.forceit, false) };
     } else {
         unsafe { shada_write_file(excmd.arg, excmd.forceit) };
     }
-    P_SHADA.set(save_shada);
+    if let Some(saved) = save_shada {
+        P_SHADA.restore(saved);
+    }
 }
 
 /// `:fclose` — close a floating window by its handle.

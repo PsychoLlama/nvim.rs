@@ -366,7 +366,7 @@ fn termcodes(src: &str, from_part: bool, do_lt: bool, special: bool) -> Vec<u8> 
             0,
             flags,
             ptr::null_mut(),
-            CPO.as_ptr(),
+            CPO,
         );
         take_bytes(buf)
     }

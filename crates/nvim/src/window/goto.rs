@@ -381,7 +381,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
 /// scrolls the text instead.
 fn split_keep_cursor() -> bool {
     // SAFETY: `'splitkeep'` is a NUL-terminated option string.
-    unsafe { *p_spk() as c_int == 'c' as c_int }
+    p_spk(|value| cstr::first(value) == b'c')
 }
 
 /// The window CTRL-W p goes back to, `None` when there is none.

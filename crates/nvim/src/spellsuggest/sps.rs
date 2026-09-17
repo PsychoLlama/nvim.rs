@@ -20,7 +20,7 @@ use crate::fileio::vim_fgets;
 use crate::getchar::state::got_int;
 use crate::message_fmt::c_str;
 use crate::option::copy_option_part;
-use crate::option::vars::p_sps;
+use crate::option::vars::P_SPS;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::semsg;
@@ -53,7 +53,9 @@ pub(crate) fn spell_check_sps() -> Result<(), Failed> {
     sps_flags.set(0);
     sps_limit.set(9999);
 
-    let mut p = p_sps();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let sps = P_SPS.get();
+    let mut p = sps.as_ptr().cast_mut();
     while unsafe { *p } as c_int != NUL {
         // SAFETY: `p` walks the option's NUL-terminated value and `buf` is
         // `MAXPATHL`, which is what `copy_option_part` is told it may fill.

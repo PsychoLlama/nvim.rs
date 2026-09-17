@@ -41,7 +41,7 @@ use crate::guard::sandbox;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::memory::{xfree, xmemcpyz};
 use crate::message::state::{did_emsg, emsg_silent, msg_col, msg_scroll, msg_silent};
-use crate::option::vars::{P_VERBOSE, p_ei, p_verbose};
+use crate::option::vars::{P_EI, P_VERBOSE, p_verbose};
 use crate::state::mode::exmode_active;
 
 use crate::message::redirecting;
@@ -564,7 +564,7 @@ fn apply_cmdmod() {
         cmdmod.with_mut(|cm| cm.cmod_did_esilent += 1);
     }
     if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei).is_null() {
-        let save_ei = xstrdup(p_ei());
+        let save_ei = P_EI.get().into_raw();
         cmdmod.with_mut(|cm| cm.cmod_save_ei = save_ei);
         set_option_direct(
             kOptEventignore,

@@ -93,7 +93,7 @@ pub fn utf_char2cells(c: c_int) -> c_int {
         return 2;
     }
     // SAFETY: `p_ambw` is 'ambiwidth', a NUL-terminated option string.
-    if unsafe { *p_ambw() } as c_int == 'd' as c_int && prop.ambiguous_width {
+    if p_ambw(|value| cstr::first(value) == b'd') && prop.ambiguous_width {
         return 2;
     }
     if p_emoji() && c >= FIRST_EMOJI_BLOCK && !prop.ambiguous_width && prop_is_emojilike(prop) {

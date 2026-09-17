@@ -229,7 +229,7 @@ extern "C" fn term_bell(_data: *mut c_void) -> c_int {
 unsafe extern "C" fn term_theme(dark: *mut bool, _data: *mut c_void) -> c_int {
     // SAFETY: vterm's own out-parameter, and `'background'` is a live
     // option string.
-    unsafe { *dark = *p_bg() == b'd' as c_char };
+    p_bg(|value| unsafe { *dark = *value.as_ptr().cast_mut() == b'd' as c_char });
     1
 }
 

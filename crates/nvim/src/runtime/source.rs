@@ -612,7 +612,13 @@ unsafe fn strip_bom(conv: *mut VimConv, firstline: *mut c_char) -> *mut c_char {
     if unsafe { slice::from_raw_parts(firstline.cast::<u8>(), 3) } != b"\xef\xbb\xbf" {
         return firstline;
     }
-    let _ = unsafe { convert_setup(conv, c"utf-8".as_ptr().cast_mut(), p_enc()) };
+    let _ = p_enc(|value| unsafe {
+        convert_setup(
+            conv,
+            c"utf-8".as_ptr().cast_mut(),
+            value.as_ptr().cast_mut(),
+        )
+    });
     let rest = unsafe { firstline.add(3) };
     let mut recoded = unsafe { string_convert(conv, rest, ptr::null_mut()) };
     if recoded.is_null() {

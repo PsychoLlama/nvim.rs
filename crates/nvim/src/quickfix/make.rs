@@ -10,9 +10,15 @@
 
 use super::*;
 use crate::cstr;
+use crate::option::local_or_global;
+use crate::option::vars::P_EFM;
+use crate::option::vars::P_GEFM;
+use crate::option::vars::P_GP;
+use crate::option::vars::P_MENC;
+use crate::option::vars::P_SHQ;
+use crate::option::vars::P_SP;
 use crate::os::shell::ShellOpts;
 use crate::types::CmdIdx;
-use crate::types::NUL;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
@@ -27,13 +33,7 @@ pub fn grep_internal(cmdidx: CmdIdx) -> bool {
         return false;
     }
     // SAFETY: the option strings of a live buffer are NUL-terminated.
-    let local = Buf::current().b_p_gp;
-    let grepprg = if unsafe { *local } as c_int == NUL {
-        p_gp()
-    } else {
-        local
-    };
-    unsafe { CStr::from_ptr(grepprg) == c"internal" }
+    unsafe { local_or_global(Buf::current().b_p_gp, P_GP) == c"internal" }
 }
 
 /// The name the `QuickFixCmdPre`/`QuickFixCmdPost` autocommands are matched
@@ -58,17 +58,14 @@ fn make_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 ///
 /// Both strings must be NUL-terminated.
 unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> CString {
-    // SAFETY: forwarded from the caller, plus the live option strings.
-    let (quote, makecmd, redirect, pipe, fname) = unsafe {
-        (
-            cstr::bytes_at(p_shq()),
-            cstr::bytes_at(makecmd),
-            // If 'shellpipe' is empty the output is not redirected at all.
-            *p_sp() as c_int != NUL,
-            cstr::at(p_sp()),
-            cstr::at(fname),
-        )
-    };
+    // Copies of the two option values: the command line is built out of
+    // them and `append_redir` reads one past the end of a projection.
+    let (shq, sp) = (P_SHQ.get(), P_SP.get());
+    // SAFETY: forwarded from the caller.
+    let (makecmd, fname) = unsafe { (cstr::bytes_at(makecmd), cstr::at(fname)) };
+    // If 'shellpipe' is empty the output is not redirected at all.
+    let (redirect, pipe) = (!sp.is_empty(), sp.as_cstr());
+    let quote = &*shq;
 
     let mut cmd: Vec<u8> = Vec::new();
     cmd.extend_from_slice(quote);
@@ -102,12 +99,8 @@ pub fn ex_make(excmd: &mut ExArg) {
         return;
     }
 
-    let local_enc = Buf::current().b_p_menc;
-    let enc = if unsafe { *local_enc } as c_int != NUL {
-        local_enc
-    } else {
-        p_menc()
-    };
+    // SAFETY: a live buffer's option value is NUL-terminated.
+    let enc = unsafe { local_or_global(Buf::current().b_p_menc, P_MENC) };
 
     let au_name = make_get_auname(excmd.cmdidx);
     if let Some(name) = au_name {
@@ -133,22 +126,27 @@ pub fn ex_make(excmd: &mut ExArg) {
     incr_quickfix_busy();
 
     let is_make = matches!(excmd.cmdidx, CmdIdx::make | CmdIdx::lmake);
+    // SAFETY: a live buffer's option value is NUL-terminated.
     let errorformat = if is_make {
-        p_efm()
+        P_EFM.get()
     } else {
-        let local = Buf::current().b_p_gefm;
-        if unsafe { *local } as c_int != NUL {
-            local
-        } else {
-            p_gefm()
-        }
+        unsafe { local_or_global(Buf::current().b_p_gefm, P_GEFM) }
     };
     let newlist = !matches!(excmd.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
 
     let newlist2 = newlist as c_int;
     let title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
     let qf_title = title.as_ptr();
-    let res = unsafe { qf_init(wp, fname, errorformat, newlist2, qf_title, enc) };
+    let res = unsafe {
+        qf_init(
+            wp,
+            fname,
+            errorformat.as_ptr().cast_mut(),
+            newlist2,
+            qf_title,
+            enc.as_ptr().cast_mut(),
+        )
+    };
 
     // A location list command may have found no list to add to, in
     // which case there is nothing left to do but clean up.
@@ -193,7 +191,7 @@ unsafe fn get_mef_name() -> *mut c_char {
     static OFF: GlobalCell<c_int> = GlobalCell::new(0);
 
     // SAFETY: the option strings are NUL-terminated.
-    if unsafe { *p_mef() } as c_int == NUL {
+    if p_mef(CStr::is_empty) {
         let name = vim_tempname();
         if name.is_null() {
             qf_emsg(e_notmp.as_ptr());
@@ -201,9 +199,9 @@ unsafe fn get_mef_name() -> *mut c_char {
         return name;
     }
 
-    let makeef = unsafe { CStr::from_ptr(p_mef()) }.to_bytes();
+    let makeef = p_mef(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
     let Some(at) = makeef.windows(2).position(|pair| pair == b"##") else {
-        return unsafe { xstrdup(p_mef()) };
+        return p_mef(|value| unsafe { xstrdup(value.as_ptr().cast_mut()) });
     };
 
     // Keep trying until the name doesn't exist yet.

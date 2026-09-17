@@ -61,7 +61,7 @@ use crate::r#move::{update_curswant_force, update_topline, validate_virtcol};
 #[inline(always)]
 pub(crate) fn sel_exclusive() -> bool {
     // SAFETY: 'selection' is a non-empty C string option.
-    unsafe { *p_sel() as c_int == 'e' as c_int }
+    p_sel(|value| cstr::first(value) == b'e')
 }
 
 // ---------------------------------------------------------------------------
@@ -596,7 +596,7 @@ pub(crate) fn start_selection() {
 /// only counts as typed when nothing is being replayed.
 pub(crate) fn may_start_select(c: c_int) {
     // SAFETY: 'selectmode' is a C string option.
-    let by_selectmode = has_char(unsafe { cstr::at(p_slm()) }, c);
+    let by_selectmode = p_slm(|value| has_char(value, c));
     let typed = c == 'o' as c_int || (stuff_empty() && typeahead().maplen() == 0);
     set_visual_select(typed && by_selectmode);
 }

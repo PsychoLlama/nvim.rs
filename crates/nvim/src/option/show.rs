@@ -17,6 +17,7 @@
 
 use crate::cstr;
 use crate::keycodes::ModMask;
+use crate::option::vars::P_MOUSE;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -33,7 +34,6 @@ use crate::message::{
     message_filtered, msg_advance, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
 };
 use crate::mouse::setmouse;
-use crate::option::vars::p_mouse;
 use crate::options::{
     kOptAleph, kOptCount, kOptFiletype, kOptFoldenable, kOptFoldexpr, kOptFoldignore,
     kOptFoldlevel, kOptFoldmarker, kOptFoldmethod, kOptFoldminlines, kOptFoldnestmax, kOptPackpath,
@@ -174,7 +174,7 @@ pub(crate) fn ui_refresh_options() {
     }
     // 'mouse' is not a UI option, but the UI has to be told about it
     // all the same.
-    if !p_mouse().is_null() {
+    if !P_MOUSE.is_unset() {
         setmouse();
     }
 }

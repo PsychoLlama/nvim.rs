@@ -30,6 +30,7 @@
 
 use super::cache::AttrCache;
 use super::{get_attr_entry, kHlBlend, kHlBlendThrough, syn_attr2entry, update_window_hl};
+use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{normal_bg, normal_fg, normal_sp};
@@ -166,7 +167,7 @@ fn blend_over(ratio: c_int, back: HlAttrs, front: HlAttrs) -> HlAttrs {
 fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     // SAFETY: the editor's own globals; `p_bg` is a NUL-terminated option
     // string, never empty.
-    let dark = unsafe { *p_bg() == b'd'.cast_signed() };
+    let dark = p_bg(|value| cstr::first(value) == b'd');
     if attrs.rgb_bg_color == -1 {
         attrs.rgb_bg_color = normal_bg.get();
     }

@@ -21,7 +21,7 @@ use crate::ex_eval::state::{did_throw, trylevel};
 use crate::guard::Lock;
 use crate::indent_c::{cindent_on, do_c_expr_indent};
 use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
-use crate::option::vars::{p_debug, p_lispwords, p_paste};
+use crate::option::vars::{P_LISPWORDS, p_debug, p_paste};
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::pos::lt;
@@ -73,7 +73,7 @@ pub fn get_expr_indent() -> c_int {
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
     // try/catch.
     // SAFETY: 'debug' is a NUL-terminated option string.
-    let debug_throw = has_char(unsafe { cstr::at(p_debug()) }, 't' as c_int);
+    let debug_throw = p_debug(|value| has_char(value, 't' as c_int));
     if did_throw.get() && (!debug_throw || trylevel.get() == 0) {
         handle_did_throw();
         did_throw.set(false);
@@ -351,10 +351,12 @@ unsafe fn lisp_match(p: *mut c_char) -> bool {
     // SAFETY: the caller's string, and `buf` is this frame's;
     // `copy_option_part` bounds its copy by the size it is given.
     let mut buf: [c_char; 512] = [0; 512];
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let lispwords = P_LISPWORDS.get();
     let mut word = if unsafe { *Buf::current().b_p_lw } != 0 {
         Buf::current().b_p_lw
     } else {
-        p_lispwords()
+        lispwords.as_ptr().cast_mut()
     };
     while unsafe { *word } != 0 {
         let len = unsafe {

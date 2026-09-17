@@ -374,7 +374,8 @@ impl SpellInfo {
 /// thousands of words.
 pub fn spell_check_msm() -> Result<(), Failed> {
     // SAFETY: `p_msm` holds the option's value, a NUL-terminated string.
-    let Some((start, incr, added)) = (unsafe { parse_mkspellmem(p_msm()) }) else {
+    let parsed = p_msm(|value| unsafe { parse_mkspellmem(value.as_ptr().cast_mut()) });
+    let Some((start, incr, added)) = parsed else {
         return Err(Failed);
     };
 
@@ -601,10 +602,11 @@ unsafe fn output_name(
     let ends_with = |ext: &::core::ffi::CStr| {
         len > 4 && unsafe { cstr::eq(first.add(len).sub(4), ext.as_ptr()) }
     };
+    let encoding = spell_enc();
     let enc = if ascii {
         c"ascii".as_ptr()
     } else {
-        spell_enc().cast::<::core::ffi::c_char>()
+        encoding.as_ptr()
     };
 
     if fcount == 1 {

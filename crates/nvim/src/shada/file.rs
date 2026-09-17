@@ -18,6 +18,7 @@
 
 use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text, msg_cstr};
+use crate::option::vars::P_SHADA;
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::smsg;
 use crate::strings::vim_strchr;
@@ -132,11 +133,13 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
     if !file.is_null() && unsafe { *file } != NUL as c_char {
         return Some(unsafe { CStr::from_ptr(file) }.to_owned());
     }
-    if !p_shadafile().is_null() && unsafe { *p_shadafile() } != NUL as c_char {
-        if unsafe { strequal(p_shadafile(), c"NONE".as_ptr()) } {
+    if p_shadafile(|value| !value.is_empty()) {
+        if p_shadafile(|value| unsafe { strequal(value.as_ptr().cast_mut(), c"NONE".as_ptr()) }) {
             return None; // "-i NONE" or "--clean"
         }
-        return Some(unsafe { CStr::from_ptr(p_shadafile()) }.to_owned());
+        return Some(
+            p_shadafile(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_owned(),
+        );
     }
 
     let mut named = find_shada_parameter('n' as c_int);
@@ -539,7 +542,9 @@ pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
     let mut part = [0 as c_char; MAXPATHL as usize + 1];
     let new_name = unsafe { home_replace_save(None, name) };
     let mut retval = false;
-    let mut p = p_shada();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let shada = P_SHADA.get();
+    let mut p = shada.as_ptr().cast_mut();
     while unsafe { *p } != 0 {
         let seps = c", ".as_ptr().cast_mut();
         unsafe { copy_option_part(&raw mut p, part.as_mut_ptr(), part.len(), seps) };
@@ -573,7 +578,9 @@ pub fn get_shada_parameter(type_0: c_int) -> c_int {
 
 /// What follows a parameter's letter in `'shada'`, or null if it has none.
 pub fn find_shada_parameter(type_0: c_int) -> *mut c_char {
-    let mut p = p_shada();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let shada = P_SHADA.get();
+    let mut p = shada.as_ptr().cast_mut();
     while unsafe { *p } != 0 {
         if unsafe { *p } as c_int == type_0 {
             return unsafe { p.add(1) };

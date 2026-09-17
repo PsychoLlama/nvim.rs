@@ -105,14 +105,10 @@ pub(crate) fn showmap(mp: Mb, local: bool) {
 /// `:abbrev` accept, which is what command-line completion offers.
 ///
 /// The answer can be wider than the original, so it is built in a `Vec`.
-///
-/// # Safety
-/// `cpo_val` must be live and NUL-terminated.
-pub(crate) unsafe fn translate_mapping(str_in: &[u8], cpo_val: *const c_char) -> Vec<u8> {
+pub(crate) fn translate_mapping(str_in: &[u8], cpo: &CStr) -> Vec<u8> {
     let mut out = Vec::<u8>::new();
 
-    // SAFETY: the caller's promise — `cpo_val` is NUL-terminated.
-    let cpo_bslash = has_char(unsafe { cstr::at(cpo_val) }, CpoFlag::BSLASH.as_c_int());
+    let cpo_bslash = has_char(cpo, CpoFlag::BSLASH.as_c_int());
     let mut at = 0;
     while at < str_in.len() {
         let mut c = c_int::from(str_in[at]);
@@ -336,7 +332,7 @@ pub unsafe fn expand_mappings(
             return None;
         }
         // SAFETY: `'cpoptions'` is NUL-terminated.
-        let mut rendering = unsafe { translate_mapping(mp.keys(), p_cpo()) };
+        let mut rendering = p_cpo(|cpo| translate_mapping(mp.keys(), cpo));
         if rendering.is_empty() {
             return None; // nothing to match against
         }

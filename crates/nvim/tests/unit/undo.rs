@@ -107,12 +107,12 @@ fn a_link_round_trips_through_its_four_byte_field() {
 
 #[cfg(not(miri))]
 mod write {
-    use std::ffi::{CString, c_char};
+    use std::ffi::CString;
     use std::fs;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::path::PathBuf;
 
-    use neovim::memory::xfree;
+    use neovim::memory::{XString, xfree};
     use neovim::option::vars::P_UDIR;
     use neovim::types::Buffer;
     use neovim::undo::format::UF_START_MAGIC;
@@ -137,7 +137,7 @@ mod write {
         // Owns the bytes `p_udir`/`b_ffname` point at for the case's life.
         _udir: CString,
         ffname: Option<CString>,
-        old_udir: *mut c_char,
+        old_udir: Option<XString>,
         old_synced: bool,
     }
 
@@ -167,8 +167,7 @@ mod write {
             buf.b_u_synced = true;
             buf.b_u_numhead = 1;
 
-            let old_udir = P_UDIR.get();
-            P_UDIR.set(udir.as_ptr().cast_mut());
+            let old_udir = P_UDIR.swap(Some(XString::from_cstr(&udir)));
             // `u_write_undo` syncs the *current* buffer before serialising
             // the one it was handed, and this fixture's buffer is not one
             // the editor can stand in: it is in no registry, and "current"
@@ -238,7 +237,7 @@ mod write {
 
     impl Drop for Fixture {
         fn drop(&mut self) {
-            P_UDIR.set(self.old_udir);
+            P_UDIR.restore(self.old_udir.take());
             Buf::current().b_u_synced = self.old_synced;
             let _ = fs::remove_dir_all(&self.dir);
         }

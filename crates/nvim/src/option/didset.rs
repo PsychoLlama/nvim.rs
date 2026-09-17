@@ -182,7 +182,7 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Option<&CStr> {
             redraw_all_later(UPD_NOT_VALID);
         }
     }
-    if unsafe { !cstr::eq_bytes(p_enc(), b"utf-8") } {
+    if p_enc(|value| unsafe { !cstr::eq_bytes(value.as_ptr().cast_mut(), b"utf-8") }) {
         let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
         msg_source(HLF_W);
         msg(gettext(warning), HLF_W);

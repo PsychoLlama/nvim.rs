@@ -352,10 +352,10 @@ fn enter_help_window() -> Option<HelpWindow> {
 
     // SAFETY: the window list is a live intrusive list on the main thread.
     // No help window yet: check that 'helpfile' can be read at all.
-    let helpfd = unsafe { os_fopen(p_hf(), c"rb".as_ptr()) };
+    let helpfd = p_hf(|value| unsafe { os_fopen(value.as_ptr().cast_mut(), c"rb".as_ptr()) });
     if helpfd.is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(p_hf()) };
+        let arg0 = p_hf(|value| unsafe { c_str(value.as_ptr().cast_mut()) });
         smsg!(0, "Help file \"{arg0}\" not found");
         return None;
     }
@@ -580,14 +580,14 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
     // SAFETY: 'helplang' is a NUL-terminated option string; a non-empty one
     // always has at least two bytes, since it is a comma-separated list of
     // two-letter codes.
-    let hlg = p_hlg();
-    if unsafe { *hlg } != NUL as c_char
-        && (unsafe { *hlg } != b'e' as c_char || unsafe { *hlg.offset(1) } != b'n' as c_char)
-    {
-        suffix[0] = b'@' as c_char;
-        suffix[1] = unsafe { *hlg };
-        suffix[2] = unsafe { *hlg.offset(1) };
-    }
+    p_hlg(|hlg| {
+        let hlg = hlg.to_bytes();
+        if !hlg.is_empty() && hlg[..2.min(hlg.len())] != *b"en" {
+            suffix[0] = b'@' as c_char;
+            suffix[1] = hlg[0].cast_signed();
+            suffix[2] = hlg[1].cast_signed();
+        }
+    });
 
     // SAFETY: caller contract; every truncation writes inside a string.
     for i in 0..num_file {

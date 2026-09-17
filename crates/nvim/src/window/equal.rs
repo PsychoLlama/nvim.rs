@@ -35,7 +35,7 @@ pub fn win_equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
 pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
     let dir = if dir == 0 {
         // SAFETY: `'eadirection'` is a NUL-terminated option string.
-        unsafe { *p_ead() as ::core::ffi::c_uchar as c_int }
+        p_ead(|value| unsafe { *value.as_ptr().cast_mut() as ::core::ffi::c_uchar as c_int })
     } else {
         dir
     };

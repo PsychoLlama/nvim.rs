@@ -41,7 +41,7 @@ use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg_putchar;
 use crate::message::state::{did_emsg, msg_didany, msg_scroll, no_wait_return};
-use crate::option::vars::{p_ef, p_efm, p_fdls, p_menc, p_shm};
+use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
 use crate::os::cshim::snprintf;
 use crate::os::input::os_breakcheck;
@@ -136,8 +136,14 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     // The title of the list is the command that would have made it.
     let into = title.as_mut_ptr();
     let fmt = c"cfile %s".as_ptr();
-    unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, p_ef()) };
-    let (ef, efm, enc) = (p_ef(), p_efm(), p_menc());
+    p_ef(|value| unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, value.as_ptr().cast_mut()) });
+    // Copies: `qf_init` reads a file and fires autocommands.
+    let (ef, efm, enc) = (P_EF.get(), P_EFM.get(), P_MENC.get());
+    let (ef, efm, enc) = (
+        ef.as_ptr().cast_mut(),
+        efm.as_ptr().cast_mut(),
+        enc.as_ptr().cast_mut(),
+    );
     if unsafe { qf_init(None, ef, efm, 1, title.as_mut_ptr(), enc) } < 0 {
         msg_putchar('\n' as c_int);
         os_exit(3);
@@ -394,10 +400,12 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 }
                 goto_tabpage(0);
                 if i == 1 {
-                    p_shm_save = unsafe { xstrdup(p_shm()) };
+                    p_shm_save = p_shm(|value| unsafe { xstrdup(value.as_ptr().cast_mut()) });
                     let mut shm: [c_char; 100] = [0; 100];
                     let (into, size) = (shm.as_mut_ptr(), size_of::<[c_char; 100]>());
-                    unsafe { snprintf(into, size, c"F%s".as_ptr(), p_shm()) };
+                    p_shm(|value| unsafe {
+                        snprintf(into, size, c"F%s".as_ptr(), value.as_ptr().cast_mut())
+                    });
                     unsafe { set_shortmess(shm.as_mut_ptr()) };
                 }
             } else {

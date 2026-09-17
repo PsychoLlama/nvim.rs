@@ -87,7 +87,9 @@ pub unsafe fn eval_charconvert(
     current_sctx.set(option_last_set(kOptCharconvert));
 
     let mut err = false;
-    if unsafe { eval_to_bool(p_ccv(), &raw mut err, None, false, true) } {
+    if p_ccv(|value| unsafe {
+        eval_to_bool(value.as_ptr().cast_mut(), &raw mut err, None, false, true)
+    }) {
         err = true;
     }
 
@@ -115,7 +117,9 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptDiffexpr));
 
-    unsafe { tv_free(eval_expr_ext(p_dex(), None, true).as_mut()) };
+    p_dex(|value| unsafe {
+        tv_free(eval_expr_ext(value.as_ptr().cast_mut(), None, true).as_mut())
+    });
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
@@ -138,7 +142,9 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptPatchexpr));
 
-    unsafe { tv_free(eval_expr_ext(p_pex(), None, true).as_mut()) };
+    p_pex(|value| unsafe {
+        tv_free(eval_expr_ext(value.as_ptr().cast_mut(), None, true).as_mut())
+    });
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);

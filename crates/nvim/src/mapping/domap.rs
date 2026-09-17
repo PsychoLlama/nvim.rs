@@ -540,14 +540,13 @@ unsafe fn do_mapclear(mut cmdp: *mut c_char, arg: *mut c_char, forceit: bool, ab
 /// `lhs` and `rhs` must be live, NUL-terminated strings.
 pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: bool) {
     let mut args = MapArguments::default();
-    let cpo = p_cpo();
     let noremap = MAPTYPE_NOREMAP as c_int;
     // SAFETY: the caller's promise — both strings are live and
     // NUL-terminated.
-    unsafe {
+    p_cpo(|cpo| unsafe {
         let (lhs_len, rhs_len) = (cstr::bytes_at(lhs).len(), cstr::bytes_at(rhs).len());
         set_maparg_lhs_rhs(lhs, lhs_len, rhs, rhs_len, LUA_NOREF, cpo, &mut args);
-    }
+    });
     args.buffer = buffer;
 
     buf_do_map(noremap, &args, mode, false, Buf::current());

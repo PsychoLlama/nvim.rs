@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::highlight::HlAttrFlags;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
@@ -621,7 +622,7 @@ impl KeyLoop {
             None
         };
         let Some(dark) = dark else { return };
-        if dark == (unsafe { *p_bg() } == b'd' as c_char) || option_was_set(kOptBackground) {
+        if dark == (p_bg(|value| cstr::first(value) == b'd')) || option_was_set(kOptBackground) {
             return;
         }
         set_option_value_give_err(

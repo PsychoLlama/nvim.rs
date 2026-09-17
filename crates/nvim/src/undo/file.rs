@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::option::vars::P_UDIR;
 use core::ffi::CStr;
 
 use super::format::*;
@@ -73,7 +74,9 @@ pub unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> 
     // do not collide. Built once, whatever the list holds.
     let mut munged: *mut c_char = ptr::null_mut();
     let mut undo_file_name: *mut c_char = ptr::null_mut();
-    let mut dirp: *mut c_char = p_udir();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let udir = P_UDIR.get();
+    let mut dirp: *mut c_char = udir.as_ptr().cast_mut();
     // SAFETY: 'undodir' is a NUL-terminated option string, and the walk stops
     // at that NUL.
     while unsafe { *dirp } != NUL as c_char {

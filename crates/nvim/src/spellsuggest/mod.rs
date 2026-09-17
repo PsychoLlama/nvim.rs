@@ -527,7 +527,9 @@ unsafe fn spell_find_suggest(
     }
 
     // An expression may change 'spellsuggest' while it runs.
-    let mut sps_copy = XString::from_cstr(unsafe { cstr::at(p_sps()) });
+    let mut sps_copy = XString::from_cstr(p_sps(|value| unsafe {
+        cstr::at(value.as_ptr().cast_mut())
+    }));
     let mut do_combine = false;
     let mut did_intern = false;
     let mut p = sps_copy.as_mut_ptr();

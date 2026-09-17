@@ -74,7 +74,7 @@ pub(crate) fn ins_reg() {
             KeyTyped.get()
         };
         // SAFETY: 'langmap' is a live NUL-terminated option string.
-        if unsafe { *p_langmap() } as c_int != 0
+        if p_langmap(|value| !value.is_empty())
             && (p_lrm() || typed)
             && KeyStuffed.get() == 0
             && c >= 0

@@ -22,6 +22,7 @@
 #![allow(unsafe_code)]
 
 use crate::memline::MlFlags;
+use crate::option::local_or_global;
 use core::ffi::{c_char, c_int};
 use core::slice;
 
@@ -41,7 +42,7 @@ use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::message::state::{msg_col, msg_row};
 use crate::message::{msg_clr_eos, msg_grid_view};
-use crate::option::vars::{p_ch, p_ru, p_ruf, p_stl, p_tal, p_wbr};
+use crate::option::vars::{P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal, p_wbr};
 use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
 use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;
@@ -115,7 +116,7 @@ impl Target {
             };
             let source = Source {
                 // SAFETY: the option's own string.
-                fmt: unsafe { Fmt::copy_of(p_tal()) },
+                fmt: p_tal(|value| unsafe { Fmt::copy_of(value.as_ptr().cast_mut()) }),
                 opt: (kOptTabline, OptionSetFlags::NONE),
             };
             return (target.maxwidth > 0).then_some((target, source));
@@ -140,14 +141,11 @@ impl Target {
                 group,
                 attr: win_hl(win, group as c_int),
             };
-            let wbr = if local {
-                win.w_onebuf_opt.wo_wbr
-            } else {
-                p_wbr()
-            };
+            // SAFETY: a window's option value is NUL-terminated.
+            let wbr = unsafe { local_or_global(win.w_onebuf_opt.wo_wbr, P_WBR) };
             let source = Source {
-                // SAFETY: the option's own string.
-                fmt: unsafe { Fmt::copy_of(wbr) },
+                // SAFETY: the copy is NUL-terminated.
+                fmt: unsafe { Fmt::copy_of(wbr.as_ptr().cast_mut()) },
                 opt: (
                     kOptWinbar,
                     if local {
@@ -185,7 +183,7 @@ impl Target {
 
         let source = if draw_ruler {
             // SAFETY: the option's own string.
-            let fmt = unsafe { Fmt::copy_of(ruler_body(p_ruf())) };
+            let fmt = p_ruf(|value| unsafe { Fmt::copy_of(ruler_body(value.as_ptr().cast_mut())) });
             col = (ru_col.get() - (Columns.get() - maxwidth)).max((maxwidth + 1) / 2);
             maxwidth -= col;
             if !in_status_line {
@@ -201,14 +199,11 @@ impl Target {
             }
         } else {
             let local = !opt_is_empty(win.w_onebuf_opt.wo_stl);
-            let stl = if local {
-                win.w_onebuf_opt.wo_stl
-            } else {
-                p_stl()
-            };
+            // SAFETY: a window's option value is NUL-terminated.
+            let stl = unsafe { local_or_global(win.w_onebuf_opt.wo_stl, P_STL) };
             Source {
-                // SAFETY: the option's own string.
-                fmt: unsafe { Fmt::copy_of(stl) },
+                // SAFETY: the copy is NUL-terminated.
+                fmt: unsafe { Fmt::copy_of(stl.as_ptr().cast_mut()) },
                 opt: (
                     kOptStatusline,
                     if local {
@@ -510,7 +505,7 @@ pub fn win_redr_winbar(window: Win) {
     let win = window;
     if win.w_winbar_height != 0
         && is_redrawing()
-        && (!opt_is_empty(p_wbr()) || !opt_is_empty(win.w_onebuf_opt.wo_wbr))
+        && (p_wbr(|value| !value.is_empty()) || !opt_is_empty(win.w_onebuf_opt.wo_wbr))
     {
         win_redr_custom(Some(window), true, false, false);
     }
@@ -568,7 +563,8 @@ pub fn redraw_ruler() {
     }
 
     let part_of_status = win.w_status_height != 0 || is_stl_global;
-    if !opt_is_empty(p_ruf()) && (p_ch() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
+    if p_ruf(|value| !value.is_empty())
+        && (p_ch() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
     {
         win_redr_custom(Some(win), false, true, ui_has(kUIMessages));
         return;

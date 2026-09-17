@@ -29,6 +29,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::keycodes::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_void};
@@ -540,7 +541,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
             op.inclusive = false;
             // Take the line break too, unless the operator only works on
             // whole lines anyway.
-            if unsafe { *p_sel() } as c_int != 'o' as c_int
+            if p_sel(|value| cstr::first(value) != b'o')
                 && !op_on_lines(op.op_type)
                 && op.end.lnum < Buf::current().line_count()
             {
@@ -582,7 +583,7 @@ fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
         && !op.inclusive
         && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
         && op.end.col == 0
-        && (!op.is_visual || unsafe { *p_sel() } as c_int == 'o' as c_int)
+        && (!op.is_visual || p_sel(|value| cstr::first(value) == b'o'))
         && op.line_count > 1)
     {
         op.end_adjusted = false;
@@ -712,7 +713,7 @@ fn run_operator(
         OpType::Format => {
             if unsafe { *Buf::current().b_p_fex } as c_int != NUL {
                 unsafe { op_formatexpr(op.raw()) };
-            } else if unsafe { *p_fp() } as c_int != NUL
+            } else if p_fp(|value| !value.is_empty())
                 || unsafe { *Buf::current().b_p_fp } as c_int != NUL
             {
                 // An external program.
@@ -797,7 +798,7 @@ fn run_operator(
 fn indent_or_colon(op: Op) {
     // SAFETY: a live `OpArg` describing a region of the current buffer, and
     // 'equalprg'/'indentexpr' are NUL-terminated option strings.
-    if op.op_type != OpType::Indent || unsafe { *get_equalprg() } as c_int != NUL {
+    if op.op_type != OpType::Indent || !get_equalprg().is_empty() {
         unsafe { op_colon(op.raw()) };
         return;
     }

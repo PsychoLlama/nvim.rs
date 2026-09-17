@@ -259,7 +259,12 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
     let vimruntime = unsafe { os_getenv_into(c"VIMRUNTIME".as_ptr(), &mut env) };
     if vimruntime.is_null() {
         emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset".as_ptr()));
-    } else if unsafe { has_bytes(cstr::at(p_rtp()), cstr::bytes_at(vimruntime)) } {
+    } else if p_rtp(|value| unsafe {
+        has_bytes(
+            cstr::at(value.as_ptr().cast_mut()),
+            cstr::bytes_at(vimruntime),
+        )
+    }) {
         // Upstream's, and it reads backwards: finding $VIMRUNTIME
         // *inside* 'runtimepath' is what makes it report $VIMRUNTIME as
         // the invalid one. Left alone — it is a message, not behaviour.

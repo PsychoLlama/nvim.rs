@@ -63,13 +63,14 @@ pub(crate) unsafe fn find_file_in_path(
     file_to_find: *mut *mut c_char,
     search_ctx: *mut *mut c_char,
 ) -> *mut c_char {
+    let path = buffer_path();
     unsafe {
         find_file_in_path_option(
             name,
             len,
             options,
             first,
-            buffer_path(),
+            path.as_ptr().cast_mut(),
             FINDFILE_BOTH as c_int,
             rel_fname,
             Buf::current().b_p_sua,
@@ -108,20 +109,20 @@ pub(crate) unsafe fn find_directory_in_path(
     file_to_find: *mut *mut c_char,
     search_ctx: *mut *mut c_char,
 ) -> *mut c_char {
-    unsafe {
+    p_cdpath(|cdpath| unsafe {
         find_file_in_path_option(
             name,
             len,
             options,
             true,
-            p_cdpath(),
+            cdpath.as_ptr().cast_mut(),
             FINDFILE_DIR as c_int,
             rel_fname,
             c"".as_ptr().cast_mut(),
             file_to_find,
             search_ctx,
         )
-    }
+    })
 }
 
 /// Replace `*file_to_find` with `ptr[len]`, environment variables expanded.

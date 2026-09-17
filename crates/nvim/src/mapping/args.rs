@@ -92,7 +92,7 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
     orig_rhs: *const c_char,
     orig_rhs_len: size_t,
     rhs_lua: LuaRef,
-    cpo_val: *const c_char,
+    cpo: &CStr,
     args: &mut MapArguments,
 ) -> bool {
     // If the mapping was given as ^V<C_UP>, replace the term codes with the
@@ -111,11 +111,11 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
     let plain = ptr::null_mut();
     let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
     // SAFETY: the caller's promise — `orig_lhs` is `orig_lhs_len` live bytes
-    // and `cpo_val` a NUL-terminated `'cpoptions'`.  `lhs_buf` outlives both
+    // and `cpo` a NUL-terminated `'cpoptions'`.  `lhs_buf` outlives both
     // calls, which is where `replace_termcodes` may leave its answer, and its
     // answer is NUL-terminated.
     let replaced = unsafe {
-        let at = replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, flags, simplify, cpo_val);
+        let at = replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, flags, simplify, cpo);
         if at.is_null() {
             return false;
         }
@@ -126,7 +126,7 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
     if did_simplify {
         // SAFETY: as the first call.
         let alt = unsafe {
-            let at = replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, nosimp, plain, cpo_val);
+            let at = replace_termcodes(orig_lhs, orig_lhs_len, buf, 0, nosimp, plain, cpo);
             if at.is_null() {
                 return false;
             }
@@ -139,7 +139,7 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
     }
 
     // SAFETY: as above — the caller's live strings.
-    unsafe { set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, 0, cpo_val, args) };
+    unsafe { set_maparg_rhs(orig_rhs, orig_rhs_len, rhs_lua, 0, cpo, args) };
     true
 }
 
@@ -152,13 +152,13 @@ pub(crate) unsafe fn set_maparg_lhs_rhs(
 /// here, so a caller that wants a `desc` must set it *first*.
 ///
 /// # Safety
-/// `orig_rhs` and `cpo_val` must be live.
+/// `orig_rhs` and `cpo` must be live.
 pub(crate) unsafe fn set_maparg_rhs(
     orig_rhs: *const c_char,
     orig_rhs_len: size_t,
     rhs_lua: LuaRef,
     sid: ScriptId,
-    cpo_val: *const c_char,
+    cpo: &CStr,
     args: &mut MapArguments,
 ) {
     debug_assert!(args.rhs.is_none(), "an RHS is parsed once");
@@ -200,11 +200,11 @@ pub(crate) unsafe fn set_maparg_rhs(
         let buf = &raw mut rhs_buf;
         let dolt = REPTERM_DO_LT as c_int;
         let plain = ptr::null_mut();
-        // SAFETY: as above, plus `cpo_val` NUL-terminated; `rhs_buf` is only a
+        // SAFETY: as above, plus `cpo` NUL-terminated; `rhs_buf` is only a
         // scratch slot `replace_termcodes` may take over, which the guard
         // releases once the answer has been copied out of it.
         unsafe {
-            let at = replace_termcodes(orig_rhs, orig_rhs_len, buf, sid, dolt, plain, cpo_val);
+            let at = replace_termcodes(orig_rhs, orig_rhs_len, buf, sid, dolt, plain, cpo);
             let _owned = COwned::new(rhs_buf);
             MapStr::new(cstr::bytes_at(at))
         }
@@ -309,7 +309,7 @@ pub(crate) unsafe fn str_to_mapargs(
 
     // SAFETY: `consumed + orig_lhs_len` is an index inside `base`'s own
     // NUL-terminated bytes, and `lhs` names the local copy just made.
-    let ok = unsafe {
+    let ok = p_cpo(|cpo| unsafe {
         let rhs_start = skipwhite(base.add(consumed + orig_lhs_len));
         let orig_rhs_len = cstr::bytes_at(rhs_start).len();
         set_maparg_lhs_rhs(
@@ -318,10 +318,10 @@ pub(crate) unsafe fn str_to_mapargs(
             rhs_start,
             orig_rhs_len,
             LUA_NOREF,
-            p_cpo(),
+            cpo,
             args,
         )
-    };
+    });
     if !ok {
         return 1;
     }

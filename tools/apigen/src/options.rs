@@ -777,11 +777,11 @@ fn emit_values(out: &mut String, opts: &[Opt]) {
 
 /// The support code [`emit_vars`] writes above the table of fields.
 const VARS_SUPPORT: &str = r##"
-use core::ffi::c_char;
+use core::ffi::{CStr, c_char};
 use core::mem::offset_of;
-use core::ptr;
 
 use crate::global_cell::GlobalCell;
+use crate::memory::XString;
 use crate::optionstr::empty_option;
 use crate::types::OptInt;
 
@@ -806,6 +806,22 @@ macro_rules! selector {
             project: fn(&mut Options) -> &mut $ty,
         }
 
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                self.at == other.at
+            }
+        }
+
+        impl Eq for $name {}
+    };
+}
+
+/// A selector over a field small enough to copy in and out: the numbers and
+/// the booleans.
+macro_rules! copy_selector {
+    ($name:ident, $ty:ty, $what:expr) => {
+        selector!($name, $ty, $what);
+
         impl $name {
             /// What the field holds.
             pub fn get(self) -> $ty {
@@ -817,24 +833,90 @@ macro_rules! selector {
                 OPTIONS.set_field(self.project, value);
             }
         }
-
-        impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool {
-                self.at == other.at
-            }
-        }
-
-        impl Eq for $name {}
     };
 }
 
-selector!(BoolOpt, bool, "A boolean option's global value.");
-selector!(NumOpt, OptInt, "A number option's global value.");
+copy_selector!(BoolOpt, bool, "A boolean option's global value.");
+copy_selector!(NumOpt, OptInt, "A number option's global value.");
 selector!(
     StrOpt,
-    *mut c_char,
-    "A string option's global value: the allocation the option owns."
+    Option<XString>,
+    "A string option's global value: the string the option owns, if it owns one."
 );
+
+impl StrOpt {
+    /// Project the value: `f` sees it and the borrow ends when `f` returns.
+    ///
+    /// An option that owns nothing — `None`, which is upstream's shared
+    /// `empty_string_option` — reads as the empty string, which is what
+    /// every consumer of a string option's variable already assumed.
+    #[inline(always)]
+    pub fn with<R>(self, f: impl FnOnce(&CStr) -> R) -> R {
+        OPTIONS.with_field(self.project, |value| {
+            f(value.as_ref().map_or(c"", XString::as_cstr))
+        })
+    }
+
+    /// The value as the `char *` the option protocol still speaks, which is
+    /// the shared empty string when the option owns nothing.
+    ///
+    /// The pointer is the option's own buffer and stays live until the
+    /// option is written. `crate::option::scope`'s `StrVar` is the seam
+    /// where an owned string meets that protocol; the handful of other
+    /// callers are the readers that are asked several times per screen line
+    /// and hand the value straight to a C callee (`crate::option::query`'s
+    /// `local_or_global_raw`). Deliberately **not** spelled `as_raw`: that
+    /// is `GlobalCell`'s escape hatch, and the ratchet counts it by name.
+    pub fn value_ptr(self) -> *mut c_char {
+        OPTIONS.with_field(self.project, |value| {
+            value
+                .as_ref()
+                .map_or_else(empty_option, |s| s.as_ptr().cast_mut())
+        })
+    }
+
+    /// Whether the option owns no string of its own.
+    ///
+    /// This is upstream's `is_empty_option` for a global value, and it is
+    /// **not** "the value is empty": an option explicitly set to `""` owns
+    /// an empty string and answers false. The save-and-restore idioms
+    /// (`substitute()`'s quiet 'cpoptions', `:vimgrep`'s 'switchbuf') lean
+    /// on exactly that difference.
+    pub fn is_unset(self) -> bool {
+        OPTIONS.with_field(self.project, Option::is_none)
+    }
+
+    /// A copy of the value, for a caller that needs it to outlive the
+    /// borrow.
+    pub fn get(self) -> XString {
+        OPTIONS.with_field(self.project, |value| {
+            value.clone().unwrap_or_else(XString::new)
+        })
+    }
+
+    /// Give the option a new value — or none — and answer what it held.
+    /// The move out and the move in are one step, so neither side can free
+    /// the other's string.
+    pub fn swap(self, value: Option<XString>) -> Option<XString> {
+        OPTIONS.replace_field(self.project, value)
+    }
+
+    /// Give the option a value of its own, releasing what it held.
+    pub fn set(self, value: XString) {
+        drop(self.swap(Some(value)));
+    }
+
+    /// Leave the option owning nothing, and answer what it held.
+    pub fn clear(self) -> Option<XString> {
+        self.swap(None)
+    }
+
+    /// Put back what [`clear`](Self::clear) answered, releasing whatever is
+    /// there now. The other half of the save-and-restore idioms.
+    pub fn restore(self, value: Option<XString>) {
+        drop(self.swap(value));
+    }
+}
 
 /// The table of fields: one line per option that has a global value.
 ///
@@ -860,16 +942,18 @@ macro_rules! options {
         /// address of. They are one record here, behind one cell.
         ///
         /// The fields are private and nothing hands out a reference to the
-        /// record. A reader copies one field out and a selector's `set`
-        /// copies one in, and the borrow is over before either returns, so
-        /// a `did_set_*` callback that re-enters the editor cannot be
-        /// holding the option table open while it does.
+        /// record. A number or a boolean is copied in and out; a string is
+        /// *projected*, so the borrow ends inside the reader's closure and a
+        /// value that must outlive it is cloned. Either way the record is
+        /// not open across a call, so a `did_set_*` callback that re-enters
+        /// the editor cannot be holding the option table while it does.
         pub struct $record {
             $($(#[$doc])* $field: $ty,)*
         }
 
-        /// The one cell. Seeded with each field's zero; startup installs the
-        /// table's defaults through `crate::option::set_init_1`.
+        /// The one cell. Seeded with each field's zero — a string option
+        /// owns nothing until startup installs the table's defaults through
+        /// `crate::option::set_init_1`, and reads as `""` until then.
         static OPTIONS: GlobalCell<$record> = GlobalCell::new($record {
             $($field: $init,)*
         });
@@ -885,18 +969,41 @@ macro_rules! options {
                 project: |o| &mut o.$field,
             };
 
-            $(#[$doc])*
-            ///
-            /// The cheap accessor: one load, no selector in the way. `pub`
-            /// for the same reason the selector is, and because a table
-            /// declares a reader per row whether or not the tree has a
-            /// caller for that row today.
-            #[inline(always)]
-            pub fn $field() -> $ty {
-                OPTIONS.get_field(|o| &mut o.$field)
+            reader! {
+                $(#[$doc])*
+                $kind, $field, $ty
             }
-
         )*
+    };
+}
+
+/// The reader for one field, whose shape follows the field's type: a number
+/// or a boolean is answered, a string is projected into a closure.
+macro_rules! reader {
+    ($(#[$doc:meta])* StrOpt, $field:ident, $ty:ty) => {
+        $(#[$doc])*
+        ///
+        /// The projecting accessor: `f` sees the value and the borrow ends
+        /// when it returns. [`StrOpt::get`] on the selector is the copy, for
+        /// a value that has to outlive the call.
+        #[inline(always)]
+        pub fn $field<R>(f: impl FnOnce(&CStr) -> R) -> R {
+            OPTIONS.with_field(|o| &mut o.$field, |value| {
+                f(value.as_ref().map_or(c"", XString::as_cstr))
+            })
+        }
+    };
+    ($(#[$doc:meta])* $kind:ident, $field:ident, $ty:ty) => {
+        $(#[$doc])*
+        ///
+        /// The cheap accessor: one load, no selector in the way. `pub`
+        /// for the same reason the selector is, and because a table
+        /// declares a reader per row whether or not the tree has a
+        /// caller for that row today.
+        #[inline(always)]
+        pub fn $field() -> $ty {
+            OPTIONS.get_field(|o| &mut o.$field)
+        }
     };
 }
 
@@ -918,18 +1025,16 @@ fn emit_vars(out: &mut String, opts: &[Opt]) {
         if !seen.insert(var) {
             continue;
         }
-        let (kind, ty, mut init) = match o.ty.as_str() {
+        // A string option owns nothing until startup gives it a value, and
+        // reads as `""` until then -- which is what upstream's shared
+        // `empty_string_option` was for, including 'verbosefile', whose
+        // `option_vars.h` declaration says it is "used before options are
+        // initialized".
+        let (kind, ty, init) = match o.ty.as_str() {
             "boolean" => ("BoolOpt", "bool", "false"),
             "number" => ("NumOpt", "OptInt", "0"),
-            _ => ("StrOpt", "*mut c_char", "ptr::null_mut()"),
+            _ => ("StrOpt", "Option<XString>", "None"),
         };
-        // 'verbosefile' is read before `set_init_1` runs -- upstream's
-        // `option_vars.h` says so at the declaration ("used before options
-        // are initialized") -- so its field starts at the shared empty
-        // string instead of the null every other string option starts at.
-        if var == "p_vfile" {
-            init = "empty_option()";
-        }
         writeln!(out, "        /// `'{}'`.", o.full_name).unwrap();
         writeln!(
             out,

@@ -91,10 +91,10 @@ pub fn did_set_cedit(_args: &mut OptSet) -> Option<&'static CStr> {
 /// Safe: the option's value is a C string from the moment the option table
 /// is initialised, which is the whole of the precondition.
 pub(crate) fn derive_cedit_key() -> Option<&'static CStr> {
-    if unsafe { *p_cedit() } as ::core::ffi::c_int == NUL {
+    if p_cedit(CStr::is_empty) {
         cedit_key.set(-1);
     } else {
-        let n = unsafe { string_to_key(p_cedit()) };
+        let n = p_cedit(|value| unsafe { string_to_key(value.as_ptr().cast_mut()) });
         if n == 0 || vim_isprintc(n) {
             return Some(e_invarg);
         }

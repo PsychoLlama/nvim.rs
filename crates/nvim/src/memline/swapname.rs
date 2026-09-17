@@ -20,6 +20,7 @@ use crate::guard::{Lock, Suppress};
 use crate::mbyte::cluster_len;
 use crate::memory::xstrlcpy;
 use crate::message_fmt::c_str;
+use crate::option::vars::P_DIR;
 use crate::path::ExpandFlags;
 use crate::semsg;
 use ::libc::{EINVAL, ENOENT};
@@ -46,7 +47,9 @@ pub fn ml_setname(buffer: Buf) {
 
     // Try every directory in 'directory'.
     let mut success = false;
-    let mut dirp = p_dir();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let dir = P_DIR.get();
+    let mut dirp = dir.as_ptr().cast_mut();
     let mut found_existing_dir = false;
     while unsafe { *dirp } as c_int != NUL {
         let fname = unsafe {
@@ -422,7 +425,9 @@ unsafe fn resolve_swapfile_clash(
     // buffer was not already recovered, and 'shortmess' allows it.
     if unsafe { swapfile_is_for_other_file(buffer, fname) }
         || Buf::current().b_flags.has(BufFlags::RECOVERED)
-        || ShmFlag::ATTENTION.is_in(unsafe { CStr::from_ptr(p_shm()) })
+        || ShmFlag::ATTENTION.is_in(p_shm(|value| unsafe {
+            CStr::from_ptr(value.as_ptr().cast_mut())
+        }))
     {
         return false;
     }
@@ -733,10 +738,12 @@ pub unsafe fn recover_names(
     // the whole of it as the bound. Upstream passed a 31000 it had reasoned
     // its way to instead.
     // SAFETY: `p_dir` is the option's NUL-terminated value.
-    let room = unsafe { cstr::bytes_at(p_dir()) }.len() + 1;
+    let room = p_dir(|value| unsafe { cstr::bytes_at(value.as_ptr().cast_mut()) }).len() + 1;
     let mut buf: Vec<c_char> = vec![0; room];
     let mut dir_len;
-    let mut dirp = p_dir();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let dir = P_DIR.get();
+    let mut dirp = dir.as_ptr().cast_mut();
     while unsafe { *dirp } != 0 {
         // Isolate one directory name and advance `dirp` past it.
         dir_len = unsafe {

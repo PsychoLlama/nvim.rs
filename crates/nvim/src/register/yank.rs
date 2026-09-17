@@ -272,7 +272,7 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
     // a later line is really a linewise one.
     //
     // SAFETY: 'selection' is a NUL-terminated option string.
-    let sel_old = region.is_visual && unsafe { c_int::from(*p_sel()) } != 'o' as c_int;
+    let sel_old = region.is_visual && p_sel(|value| cstr::first(value) != b'o');
     if region.motion_type == kMTCharWise
         && region.start.col == 0
         && !region.inclusive

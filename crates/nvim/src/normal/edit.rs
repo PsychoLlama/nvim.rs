@@ -292,7 +292,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
     }
     // An empty line has nothing to swap unless 'whichwrap' lets `~` move
     // to the next one.
-    let wraps = has_char(unsafe { cstr::at(p_ww()) }, '~' as c_int);
+    let wraps = p_ww(|value| has_char(value, '~' as c_int));
     if unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int == NUL && !wraps {
         clear_op_beep(cmd_arg.op());
         return;
@@ -730,7 +730,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // Leave `gv` naming what was just put.
         Buf::current().b_visual.vi_start = Buf::current().b_op_start;
         Buf::current().b_visual.vi_end = Buf::current().b_op_end;
-        if unsafe { *p_sel() } as c_int == 'e' as c_int {
+        if p_sel(|value| cstr::first(value) == b'e') {
             unsafe { inc(&mut (*Buf::current_raw()).b_visual.vi_end) };
         }
     }

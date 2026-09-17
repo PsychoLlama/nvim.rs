@@ -34,6 +34,7 @@ use neovim::memline::{
     B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
     ZeroBlock, ml_append_buf, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
 };
+use neovim::memory::XString;
 use neovim::option::vars::P_DIR;
 use neovim::types::{Buffer, ColNr, LineNr};
 use neovim::winlayer::Buf;
@@ -94,7 +95,7 @@ struct Swapped {
     sandbox: Sandbox,
     buf: *mut Buffer,
     /// `'directory'`'s value on the way in.
-    saved_dir: *mut c_char,
+    saved_dir: Option<XString>,
     /// The sandbox-local value, owned here so it outlives every read of it.
     _dir: CString,
     swap: std::path::PathBuf,
@@ -114,8 +115,7 @@ impl Swapped {
         // default is the user's real state directory, which a test must not
         // write into, so it is pointed at the sandbox and restored on drop.
         let dir = cstr(sandbox.as_str());
-        let saved_dir = P_DIR.get();
-        P_DIR.set(dir.as_ptr().cast_mut());
+        let saved_dir = P_DIR.swap(Some(XString::from_cstr(&dir)));
 
         let mut owned: Vec<c_char> = cstr(name)
             .as_bytes_with_nul()
@@ -180,7 +180,7 @@ impl Swapped {
 
 impl Drop for Swapped {
     fn drop(&mut self) {
-        P_DIR.set(self.saved_dir);
+        P_DIR.restore(self.saved_dir.take());
         // SAFETY: the buffer this case opened, wiped as `buffer.rs` does —
         // a buffer left on the list is visible to every later case.
         unsafe {

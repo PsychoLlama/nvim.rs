@@ -50,7 +50,7 @@ use crate::message::{
     msg_putchar, msg_start, msg_str, msg_str_hl, verb_msg, verbose_enter, verbose_leave,
 };
 use crate::option::copy_option_part;
-use crate::option::vars::{fdo_flags, p_fs, p_udir, p_ul, p_verbose};
+use crate::option::vars::{fdo_flags, p_fs, p_ul, p_verbose};
 use crate::options::kOptFdoFlagUndo;
 use crate::os::cshim::{getc, gettext, ngettext};
 use crate::os::fs::{

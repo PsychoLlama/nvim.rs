@@ -18,13 +18,14 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
 use crate::drawscreen::status_redraw_all;
 use crate::global_cell::GlobalCell;
 use crate::indent::tabstop_set;
-use crate::memory::{xfree, xstrdup};
+use crate::memory::{XString, xfree, xstrdup};
 use crate::option::vars::{
     P_AI, P_ET, P_RI, P_RU, P_SM, P_STA, P_STS, P_TW, P_VSTS, P_WM, p_ai, p_et, p_paste, p_ri,
     p_ru, p_sm, p_sta, p_sts, p_tw, p_vsts, p_wm,
@@ -148,7 +149,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
                 sts: p_sts(),
                 tw: p_tw(),
                 wm: p_wm(),
-                vsts: unsafe { saved_copy(p_vsts()) },
+                vsts: p_vsts(|value| unsafe { saved_copy(value.as_ptr().cast_mut()) }),
             });
         }
 
@@ -177,10 +178,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
         P_STS.set(0);
         P_AI.set(false);
         P_ET.set(false);
-        if !p_vsts().is_null() {
-            unsafe { free_string_option(p_vsts()) };
-        }
-        P_VSTS.set(empty_option());
+        P_VSTS.clear();
     } else if SAVED.get().on {
         for mut buf in buffers() {
             buf.b_p_tw = buf.b_p_tw_nopaste;
@@ -215,10 +213,9 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
         P_STS.set(saved.sts);
         P_TW.set(saved.tw);
         P_WM.set(saved.wm);
-        if !p_vsts().is_null() {
-            unsafe { free_string_option(p_vsts()) };
-        }
-        P_VSTS.set(unsafe { restored_copy(saved.vsts) });
+        // SAFETY: the paste record's saved value is null or a live
+        // allocation; the option takes a copy of it.
+        P_VSTS.restore(unsafe { restored_owned(saved.vsts) });
     }
     SAVED.with_mut(|saved| saved.on = p_paste());
     didset_options_sctx(
@@ -253,4 +250,16 @@ unsafe fn restored_copy(saved: *mut c_char) -> *mut c_char {
     }
     // SAFETY: the caller's `saved` is a NUL-terminated allocation.
     unsafe { xstrdup(saved) }
+}
+
+/// [`restored_copy`] for a global value, which owns its string: nothing
+/// saved is the option owning nothing, which is what the shared empty
+/// string stood for.
+///
+/// # Safety
+///
+/// As [`restored_copy`].
+unsafe fn restored_owned(saved: *mut c_char) -> Option<XString> {
+    // SAFETY: the caller's `saved` is null or a NUL-terminated allocation.
+    (!saved.is_null()).then(|| XString::from_cstr(unsafe { cstr::at(saved) }))
 }

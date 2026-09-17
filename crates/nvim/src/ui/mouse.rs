@@ -21,7 +21,7 @@
 use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::normal::visual_active;
-use crate::option::vars::p_mouse;
+use crate::option::vars::{P_MOUSE, p_mouse};
 use crate::state::mode::State;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
@@ -50,7 +50,7 @@ const MOUSE_A: &CStr = c"nvich";
 /// Recomputes whether the mouse is wanted in the current mode.
 pub fn ui_check_mouse() {
     has_mouse.set(false);
-    if unsafe { *p_mouse() } == 0 {
+    if p_mouse(CStr::is_empty) {
         return;
     }
     let state = State.get();
@@ -75,7 +75,9 @@ pub fn ui_check_mouse() {
 
 /// Whether `'mouse'` enables the mouse for `mode`.
 pub fn ui_mouse_has(mode: c_int) -> bool {
-    let mut p = p_mouse();
+    // A copy: the cursor below walks past the end of a projection's borrow.
+    let mouse = P_MOUSE.get();
+    let mut p = mouse.as_ptr().cast_mut();
     while unsafe { *p } != 0 {
         let flag = c_int::from(unsafe { *p });
         let matched = match flag {

@@ -23,6 +23,10 @@
 )]
 
 use super::*;
+use crate::option::local_or_global;
+use crate::option::vars::P_EF;
+use crate::option::vars::P_EFM;
+use crate::option::vars::P_MENC;
 use crate::types::CmdIdx;
 use crate::types::OptStr;
 use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_LIST};
@@ -67,24 +71,29 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         );
     }
 
-    let local_enc = Buf::current().b_p_menc;
-    let enc = if c_int::from(unsafe { *local_enc }) != NUL {
-        local_enc
-    } else {
-        p_menc()
-    };
+    // SAFETY: a live buffer's option value is NUL-terminated.
+    let enc = unsafe { local_or_global(Buf::current().b_p_menc, P_MENC) };
 
     let wp = is_loclist_cmd(excmd.cmdidx).then(Win::current);
 
     incr_quickfix_busy();
 
     let newlist = !matches!(excmd.cmdidx, CmdIdx::caddfile | CmdIdx::laddfile);
-    let efile = p_ef();
-    let errorformat2 = p_efm();
+    // Copies: `qf_init` reads a file and fires autocommands.
+    let (efile, errorformat2) = (P_EF.get(), P_EFM.get());
     let newlist2 = c_int::from(newlist);
     let title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
     let qf_title2 = title.as_ptr();
-    let res = unsafe { qf_init(wp, efile, errorformat2, newlist2, qf_title2, enc) };
+    let res = unsafe {
+        qf_init(
+            wp,
+            efile.as_ptr().cast_mut(),
+            errorformat2.as_ptr().cast_mut(),
+            newlist2,
+            qf_title2,
+            enc.as_ptr().cast_mut(),
+        )
+    };
 
     if let Some(wp) = wp {
         let Some(loclist) = qf_win_loclist(wp) else {
@@ -200,7 +209,8 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
     let qf_title2 = None;
-    let errorformat3 = p_efm();
+    // A copy: `qf_init_ext` reads the buffer and fires autocommands.
+    let errorformat3 = P_EFM.get();
     let line12 = excmd.line1;
     let line22 = excmd.line2;
     let enc2 = ptr::null_mut();
@@ -211,7 +221,7 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
             errorformat2,
             Some(buf),
             qf_title2,
-            errorformat3,
+            errorformat3.as_ptr().cast_mut(),
             newlist,
             line12,
             line22,
@@ -295,7 +305,8 @@ fn cexpr_core(excmd: &mut ExArg, tv: &mut TypVal) -> Result<(), Failed> {
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
     let buf2 = None;
-    let errorformat3 = p_efm();
+    // A copy: `qf_init_ext` evaluates an expression and fires autocommands.
+    let errorformat3 = P_EFM.get();
     let title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
     let enc2 = ptr::null_mut();
     let res = unsafe {
@@ -305,7 +316,7 @@ fn cexpr_core(excmd: &mut ExArg, tv: &mut TypVal) -> Result<(), Failed> {
             errorformat2,
             buf2,
             Some(tv),
-            errorformat3,
+            errorformat3.as_ptr().cast_mut(),
             newlist,
             0,
             0,

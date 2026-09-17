@@ -60,7 +60,7 @@ use crate::lua::executor::{
 };
 use crate::message::state::{msg_col, msg_row, msg_silent};
 use crate::message::{e_invarg, e_noabbr, e_nomap};
-use crate::option::vars::{p_cpo, p_langmap, p_verbose};
+use crate::option::vars::{p_cpo, p_verbose};
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, no_abbr};
 

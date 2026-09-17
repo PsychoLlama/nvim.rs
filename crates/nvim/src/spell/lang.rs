@@ -49,7 +49,7 @@ use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrlcpy};
 use crate::message::e_invarg;
-use crate::option::vars::p_enc;
+use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{copy_option_part, valid_name};
 use crate::os::cshim::snprintf;
 use crate::os::fs::os_remove;
@@ -83,13 +83,13 @@ fn ascii_isalpha(c: c_int) -> bool {
 /// The encoding spell files are named after: `'encoding'`, except that
 /// `latin9` uses `latin1`'s files, and anything implausibly long falls back
 /// to `latin1`.
-pub fn spell_enc() -> *mut c_char {
-    if unsafe { cstr::bytes_at(p_enc()) }.len() < 60
-        && unsafe { !cstr::eq_bytes(p_enc(), b"iso-8859-15") }
-    {
-        return p_enc();
+pub fn spell_enc() -> XString {
+    let usable = p_enc(|enc| enc.count_bytes() < 60 && enc != c"iso-8859-15");
+    if usable {
+        P_ENC.get()
+    } else {
+        XString::from_cstr(c"latin1")
     }
-    c"latin1".as_ptr() as *mut c_char
 }
 
 /// The `.spl` file name for the internal word list, into `fname[MAXPATHL]`.
@@ -169,7 +169,8 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             let _ = unsafe { do_cmdline_cmd(autocmd_buf.as_ptr()) };
         } else {
             // SAFETY: the language name and the encoding are NUL-terminated.
-            let (lang, enc) = unsafe { (c_str(lang), c_str(spell_enc())) };
+            let encoding = spell_enc();
+            let (lang, enc) = unsafe { (c_str(lang), c_str(encoding.as_ptr())) };
             smsg!(
                 0,
                 "Warning: Cannot find word list \"{lang}.{enc}.spl\" or \"{lang}.ascii.spl\""

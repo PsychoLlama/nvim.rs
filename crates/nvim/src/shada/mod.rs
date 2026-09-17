@@ -36,7 +36,7 @@ use crate::msgpack_rpc::packer::{
 use crate::msgpack_rpc::unpacker::{
     push_additional_data, unpack_array, unpack_integer, unpack_keydict, unpack_skip, unpack_string,
 };
-use crate::option::vars::{p_enc, p_fs, p_hi, p_shada, p_shadafile, p_verbose};
+use crate::option::vars::{p_enc, p_fs, p_hi, p_shadafile, p_verbose};
 use crate::option::{copy_option_part, magic_isset};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_pid};
 use crate::os::fileio::{

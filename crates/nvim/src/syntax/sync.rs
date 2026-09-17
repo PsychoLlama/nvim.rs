@@ -12,7 +12,8 @@
 
 use crate::cstr;
 use crate::message_fmt::c_str;
-use crate::optionstr::{empty_option, is_empty_option};
+use crate::option::SavedCpo;
+use crate::optionstr::is_empty_option;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -557,11 +558,9 @@ unsafe fn sync_linecont(args: &ExArg, next_arg: *mut c_char) -> Result<*mut c_ch
         // SAFETY: both pointers are into the command line, `next_arg` first.
         let pat = unsafe { name_at(next_arg.add(1), arg_end.offset_from(next_arg) as usize - 1) };
         block.b_syn_linecont_ic = block.b_syn_ic;
-        let cpo_save = p_cpo();
-        P_CPO.set(empty_option());
+        let _cpo = SavedCpo::empty();
         // SAFETY: `pat` is live across the call, which only reads it.
         unsafe { block.b_syn_linecont_prog = vim_regcomp(pat.as_ptr().cast_mut(), RE_MAGIC) };
-        P_CPO.set(cpo_save);
         syn_clear_time(&mut block.b_syn_linecont_time);
 
         if block.b_syn_linecont_prog.is_null() {

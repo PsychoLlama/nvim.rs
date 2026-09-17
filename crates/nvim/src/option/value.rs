@@ -25,7 +25,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use crate::cstr;
 use crate::memory::{xmalloc, xstrdup};
-use crate::optionstr::is_empty_option;
+use crate::optionstr::{free_string_option, is_empty_option};
 use crate::os::cshim::snprintf;
 use crate::types::{
     Object, OptIndex, OptStr, OptVal, OptValType, String_0, kObjectTypeBoolean, kObjectTypeInteger,
@@ -233,10 +233,6 @@ pub(crate) unsafe fn set_option_varp(
     free_oldval: bool,
 ) {
     debug_assert!(option_has_type(opt_idx, value.kind()));
-    if free_oldval {
-        // SAFETY: the caller's slot is this option's variable.
-        optval_free(unsafe { optval_from_varp(opt_idx, slot) });
-    }
     // SAFETY: the slot and the value are the same type — the table asserts
     // it for every row at compile time, and the assertion above ties this
     // value to the same row.
@@ -246,8 +242,17 @@ pub(crate) unsafe fn set_option_varp(
             unsafe { var.set(word) }
         }
         (OptSlot::Number(var), OptVal::Number(n)) => unsafe { var.set(n) },
-        // The variable takes the allocation over.
-        (OptSlot::String(var), OptVal::String(s)) => unsafe { var.set(s.data()) },
+        // The variable takes the allocation over, and hands back the one it
+        // held. Only a string owns anything, which is why `free_oldval` is
+        // decided here rather than by an `optval_free` in front of the
+        // match: a global value's own string is the record's, and freeing it
+        // *and* overwriting the field would release it twice.
+        (OptSlot::String(var), OptVal::String(s)) => {
+            let old = unsafe { var.replace(s.data()) };
+            if free_oldval {
+                unsafe { free_string_option(old) };
+            }
+        }
         _ => unreachable!("an option's slot is not the type its value is"),
     }
 }

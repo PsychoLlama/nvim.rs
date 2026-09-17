@@ -14,6 +14,9 @@ use super::*;
 use crate::cmdexpand::Expanded;
 use crate::cstr;
 use crate::memory::XString;
+use crate::option::local_or_global;
+use crate::option::vars::P_DICT;
+use crate::option::vars::P_TSR;
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
@@ -144,7 +147,7 @@ unsafe fn scan_buf_valid(st: *mut InsComplNextState) -> bool {
 pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
         && (unsafe { *Buf::current().b_p_tsrfu } as c_int != NUL
-            || unsafe { *p_tsrfu() } as c_int != NUL)
+            || p_tsrfu(|value| !value.is_empty()))
 }
 
 /// Is there another `'complete'` entry after `cpt`, so the source index should
@@ -377,19 +380,16 @@ pub(crate) unsafe fn get_next_dict_tsr_completion(
         unsafe { expand_by_function(compl_type, pattern, ptr::null_mut()) };
         return;
     }
-    let files = if !dict.is_null() {
-        dict
+    // SAFETY (all three): `curbuf` is live and its option values are
+    // NUL-terminated.
+    let owned = if !dict.is_null() {
+        XString::from_cstr(unsafe { cstr::at(dict) })
     } else if compl_type == CTRL_X_THESAURUS {
-        if unsafe { *Buf::current().b_p_tsr } as c_int == NUL {
-            p_tsr()
-        } else {
-            Buf::current().b_p_tsr
-        }
-    } else if unsafe { *Buf::current().b_p_dict } as c_int == NUL {
-        p_dict()
+        unsafe { local_or_global(Buf::current().b_p_tsr, P_TSR) }
     } else {
-        Buf::current().b_p_dict
+        unsafe { local_or_global(Buf::current().b_p_dict, P_DICT) }
     };
+    let files = owned.as_ptr().cast_mut();
     let flags = if dict.is_null() { 0 } else { dict_f };
     let thesaurus = compl_type == CTRL_X_THESAURUS;
     // SAFETY: `files` is a NUL-terminated option-style list and `pattern`

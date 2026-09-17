@@ -62,7 +62,7 @@ use crate::message::emsg;
 use crate::message::{e_noname, e_prev_dir, e_write};
 use crate::message_fmt::c_str;
 use crate::option::makeset;
-use crate::option::vars::{p_acd, p_hls, p_vdir, ssop_flags, vop_flags};
+use crate::option::vars::{P_VDIR, p_acd, p_hls, p_vdir, ssop_flags, vop_flags};
 use crate::options::{
     OptSsopFlags, kOptSsopFlagBlank, kOptSsopFlagCurdir, kOptSsopFlagHelp, kOptSsopFlagOptions,
     kOptSsopFlagSesdir, kOptSsopFlagSkiprtp, kOptSsopFlagTerminal,
@@ -415,7 +415,9 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
     let sname = unsafe { home_replace_save(None, Buf::current().b_ffname) };
 
     // SAFETY: 'viewdir' is a NUL-terminated option value.
-    let mut view = XString::from_bytes(unsafe { cstr::bytes_at(p_vdir()) });
+    let mut view = XString::from_bytes(p_vdir(|value| unsafe {
+        cstr::bytes_at(value.as_ptr().cast_mut())
+    }));
     // `add_pathsep`, over the buffer just built: a separator that is the
     // trailing byte of a multibyte character does not count as one.
     // SAFETY: the two addresses are this string's own ends.
@@ -485,8 +487,9 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
                 return;
             }
             // The 'viewdir' may still need creating.
-            if !os_isdir(p_vdir()) {
-                let _ = vim_mkdir_emsg(p_vdir(), 0o755);
+            let vdir = P_VDIR.get();
+            if !os_isdir(vdir.as_ptr().cast_mut()) {
+                let _ = vim_mkdir_emsg(vdir.as_ptr().cast_mut(), 0o755);
             }
             view_file
         } else if *arg != NUL as c_char {

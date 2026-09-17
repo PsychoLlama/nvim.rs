@@ -120,23 +120,25 @@ unsafe fn have_dollars(num: c_int, file: *mut *mut c_char) -> bool {
 /// # Safety
 /// `pat[0..num_pat]` must be NUL-terminated strings.
 unsafe fn pick_shell_style(num_pat: c_int, pat: *mut *mut c_char) -> ShellStyle {
-    // SAFETY: the caller's contract; `p_sh` is a NUL-terminated option value.
-    unsafe {
-        // `cmd` expansion runs the pattern itself.
-        if num_pat == 1 {
-            let first = CStr::from_ptr(*pat).to_bytes();
-            if first.len() > 2 && first.starts_with(b"`") && first.ends_with(b"`") {
-                return ShellStyle::Backtick;
-            }
+    // `cmd` expansion runs the pattern itself.
+    if num_pat == 1 {
+        // SAFETY: the caller's contract.
+        let first = unsafe { CStr::from_ptr(*pat) }.to_bytes();
+        if first.len() > 2 && first.starts_with(b"`") && first.ends_with(b"`") {
+            return ShellStyle::Backtick;
         }
-        let sh = CStr::from_ptr(p_sh()).to_bytes();
-        if sh.ends_with(b"csh") {
+    }
+    p_sh(|sh| {
+        let bytes = sh.to_bytes();
+        if bytes.ends_with(b"csh") {
             return ShellStyle::Glob;
         }
-        if sh.ends_with(b"zsh") {
+        if bytes.ends_with(b"zsh") {
             return ShellStyle::Print;
         }
-        let tail = CStr::from_ptr(path_tail(p_sh())).to_bytes();
+        // SAFETY: an option value is NUL-terminated, and `path_tail`
+        // answers a position inside it.
+        let tail = unsafe { CStr::from_ptr(path_tail(sh.as_ptr().cast_mut())) }.to_bytes();
         if contains(tail, b"bash") {
             ShellStyle::GlobStar
         } else if contains(tail, b"sh") {
@@ -144,7 +146,7 @@ unsafe fn pick_shell_style(num_pat: c_int, pat: *mut *mut c_char) -> ShellStyle 
         } else {
             ShellStyle::Echo
         }
-    }
+    })
 }
 
 /// `strstr` over bytes.
@@ -156,8 +158,14 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 fn is_fish_shell() -> bool {
     // SAFETY: `p_sh` is a NUL-terminated option value, and
     // `invocation_path_tail` answers a pointer inside it.
-    unsafe { CStr::from_ptr(invocation_path_tail(p_sh(), ptr::null_mut())).to_bytes() }
+    p_sh(|sh| unsafe {
+        CStr::from_ptr(invocation_path_tail(
+            sh.as_ptr().cast_mut(),
+            ptr::null_mut(),
+        ))
+        .to_bytes()
         .starts_with(b"fish")
+    })
 }
 
 /// Escape one pattern into the shell command, backslashing

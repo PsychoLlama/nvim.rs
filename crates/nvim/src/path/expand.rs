@@ -12,6 +12,10 @@
 
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::memory::XString;
+use crate::option::local_or_global;
+use crate::option::vars::P_CDPATH;
+use crate::option::vars::P_PATH;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
@@ -140,11 +144,17 @@ pub(crate) unsafe fn expand_in_path(
     let mut path_ga = GArray::default();
     unsafe { ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1) };
     let path_option = if flags.has(ExpandFlags::CDPATH) {
-        p_cdpath()
+        P_CDPATH.get()
     } else {
-        unsafe { buffer_path() }
+        buffer_path()
     };
-    unsafe { expand_path_option(curdir.as_mut_ptr(), path_option, &raw mut path_ga) };
+    unsafe {
+        expand_path_option(
+            curdir.as_mut_ptr(),
+            path_option.as_ptr().cast_mut(),
+            &raw mut path_ga,
+        )
+    };
     if path_ga.ga_len <= 0 {
         return 0;
     }
@@ -176,14 +186,12 @@ pub(crate) unsafe fn expand_in_path(
 /// The `'path'` in force: the buffer's own, or the global one when it is
 /// empty.
 ///
-/// # Safety
-/// There must be a current buffer.
-pub(crate) unsafe fn buffer_path() -> *mut c_char {
-    if unsafe { *Buf::current().b_p_path } == 0 {
-        p_path()
-    } else {
-        Buf::current().b_p_path
-    }
+/// A copy, because the global option owns its string and the walks that use
+/// this outlive a projection's borrow.
+pub(crate) fn buffer_path() -> XString {
+    // SAFETY: `curbuf` names the live current buffer, and its option values
+    // are NUL-terminated.
+    unsafe { local_or_global(Buf::current().b_p_path, P_PATH) }
 }
 
 /// Does `p` hold what looks like an environment variable? A backslash
@@ -273,7 +281,7 @@ pub unsafe fn gen_expand_wildcards(
         }
     }
 
-    let path_option = unsafe { buffer_path() };
+    let path_option = buffer_path();
     RECURSIVE.set(true);
     let mut ga = GArray::default();
     unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 30) };
@@ -358,7 +366,7 @@ pub unsafe fn gen_expand_wildcards(
 
         if did_expand_in_path && ga.ga_len > 0 && flags.has(SEARCH_LIST) {
             RECURSIVE.set(false);
-            unsafe { uniquefy_paths(&raw mut ga, p, path_option) };
+            unsafe { uniquefy_paths(&raw mut ga, p, path_option.as_ptr().cast_mut()) };
             RECURSIVE.set(true);
         }
         if p != unsafe { *pat.add(i as usize) } {
@@ -554,7 +562,7 @@ pub unsafe fn expand_wildcards(
     }
 
     // Remove the names that match 'wildignore'.
-    if unsafe { *p_wig() } != 0 {
+    if p_wig(|value| !value.is_empty()) {
         debug_assert!(
             unsafe { *num_files } == 0 || !unsafe { *files }.is_null(),
             "path: matches without an array to hold them"
@@ -565,7 +573,7 @@ pub unsafe fn expand_wildcards(
             debug_assert!(!name.is_null(), "path: a match with no name");
             let ffname = unsafe { full_name_save(name, false) };
             debug_assert!(!ffname.is_null(), "path: a match with no full name");
-            if unsafe { match_file_list(p_wig(), name, ffname) } {
+            if p_wig(|value| unsafe { match_file_list(value.as_ptr().cast_mut(), name, ffname) }) {
                 unsafe { xfree(name.cast()) };
             } else {
                 unsafe { *(*files).add(kept) = name };

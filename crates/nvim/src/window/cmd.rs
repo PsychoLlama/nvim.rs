@@ -666,7 +666,7 @@ fn detach_window() {
 /// came from the keyboard rather than from a mapping.
 fn langmap_adjust(c: c_int) -> c_int {
     // SAFETY: `'langmap'` is a NUL-terminated option string.
-    let mapping = unsafe { *p_langmap() } as c_int != NUL;
+    let mapping = p_langmap(|value| !value.is_empty());
     let typed = if vgetc_busy.get() != 0 {
         typeahead().maplen() == 0
     } else {

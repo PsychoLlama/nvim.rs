@@ -15,7 +15,7 @@ use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
 use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
-use crate::types::{ExpandContext, Failed, IOSIZE, NUL, ShmFlag};
+use crate::types::{ExpandContext, Failed, IOSIZE, ShmFlag};
 use crate::winlayer::{Buf, Win};
 
 /// C's `compl_startpos.lnum = curwin->w_cursor.lnum; compl_startpos.col = col;`
@@ -295,7 +295,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
 
     let is_cpt_function = !cb.is_null();
     if !is_cpt_function {
-        if unsafe { *get_complete_funcname(ctrl_x_mode.get()) } as c_int == NUL {
+        if get_complete_funcname(ctrl_x_mode.get()).is_empty() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = unsafe {
                 c_str(if ctrl_x_mode_function() {

@@ -10,7 +10,10 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::cstr;
 use crate::eval::typval::CallFrame;
+use crate::option::local_or_global;
+use crate::option::vars::P_TSRFU;
 
 use crate::guard::Lock;
 use crate::semsg;
@@ -499,7 +502,8 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
         unsafe { option_set_callback_func(buf.b_p_tsrfu, &raw mut buf.b_tsrfu_cb) }
     } else {
         // Global option set.
-        let retval = unsafe { tsrfu_cb().set_from_option(p_tsrfu()) };
+        let retval =
+            p_tsrfu(|value| unsafe { tsrfu_cb().set_from_option(value.as_ptr().cast_mut()) });
         // When using :set, free the local callback.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
             unsafe { callback_free(&raw mut buf.b_tsrfu_cb) };
@@ -551,19 +555,17 @@ pub fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
 }
 
 /// The user-defined completion function name for completion `type_0`.
-pub(crate) fn get_complete_funcname(type_0: c_int) -> *mut c_char {
-    match type_0 {
-        CTRL_X_FUNCTION => Buf::current().b_p_cfu,
-        CTRL_X_OMNI => Buf::current().b_p_ofu,
-        CTRL_X_THESAURUS => {
-            if unsafe { *Buf::current().b_p_tsrfu } as c_int == NUL {
-                p_tsrfu()
-            } else {
-                Buf::current().b_p_tsrfu
-            }
-        }
-        _ => c"".as_ptr().cast_mut(),
-    }
+pub(crate) fn get_complete_funcname(type_0: c_int) -> XString {
+    let buf = Buf::current();
+    let local = match type_0 {
+        CTRL_X_FUNCTION => buf.b_p_cfu,
+        CTRL_X_OMNI => buf.b_p_ofu,
+        // The only one of the three with a global value to fall back to.
+        CTRL_X_THESAURUS => return unsafe { local_or_global(buf.b_p_tsrfu, P_TSRFU) },
+        _ => return XString::new(),
+    };
+    // SAFETY: `curbuf` is live and its option values are NUL-terminated.
+    XString::from_cstr(unsafe { cstr::at(local) })
 }
 
 /// The callback to use for insert-mode completion of `type_0`.
@@ -597,7 +599,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
 
     let is_cpt_function = !cb.is_null();
     if !is_cpt_function {
-        if unsafe { *get_complete_funcname(type_0) } as c_int == NUL {
+        if get_complete_funcname(type_0).is_empty() {
             return;
         }
         cb = get_insert_callback(type_0);
