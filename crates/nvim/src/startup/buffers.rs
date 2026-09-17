@@ -144,7 +144,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
         efm.as_ptr().cast_mut(),
         enc.as_ptr().cast_mut(),
     );
-    if unsafe { qf_init(None, ef, efm, 1, title.as_mut_ptr(), enc) } < 0 {
+    if unsafe { qf_init(None, ef, efm, true, 1, title.as_mut_ptr(), enc) } < 0 {
         msg_putchar('\n' as c_int);
         os_exit(3);
     }

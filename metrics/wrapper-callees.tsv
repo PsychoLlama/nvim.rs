@@ -33,8 +33,8 @@ count	callee	no_raw	defs	def
 56	strequal	0	1	crates/nvim/src/memory/mod.rs
 56	vim_strchr	0	1	crates/nvim/src/strings/mod.rs
 53	copy	0	1	crates/nvim/src/strings/printf/emit.rs
-53	eq	0	1	crates/nvim/src/cstr.rs
 52	abort	0	0	
+52	eq	0	1	crates/nvim/src/cstr.rs
 52	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 51	vim_regfree	0	1	crates/nvim/src/regexp/api.rs
 50	Xp::new	0	68	

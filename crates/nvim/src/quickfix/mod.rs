@@ -86,7 +86,7 @@ use crate::r#move::update_topline;
 use crate::normal::reset_visual_and_resel;
 use crate::ops::get_region_bytecount;
 use crate::option::vars::{
-    P_MLS, P_SWB, fdo_flags, p_ch, p_chi, p_efm, p_enc, p_hh, p_ic, p_mef, p_mls, p_qftf, swb_flags,
+    P_MLS, P_SWB, fdo_flags, p_ch, p_chi, p_enc, p_hh, p_ic, p_mef, p_mls, p_qftf, swb_flags,
 };
 use crate::option::{
     buf_copy_options, copy_option_part, option_set_callback_func, set_option_direct,

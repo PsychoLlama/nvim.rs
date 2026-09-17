@@ -142,6 +142,9 @@ pub fn ex_make(excmd: &mut ExArg) {
             wp,
             fname,
             errorformat.as_ptr().cast_mut(),
+            // `:make` reads the global 'errorformat'; `:grep` reads
+            // 'grepformat', which is never the buffer's own.
+            is_make,
             newlist2,
             qf_title,
             enc.as_ptr().cast_mut(),

@@ -473,6 +473,8 @@ unsafe fn qf_setprop_items_from_lines(
             None,
             Some(&mut di.di_tv),
             errorformat,
+            // Only reached with a value, which never reads the buffer's own.
+            true,
             false,
             0,
             0,

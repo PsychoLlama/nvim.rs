@@ -410,6 +410,7 @@ pub unsafe fn qf_init(
     window: Option<Win>,
     efile: *const c_char,
     errorformat: *mut c_char,
+    global_efm: bool,
     newlist: c_int,
     qf_title: *const c_char,
     enc: *mut c_char,
@@ -428,6 +429,7 @@ pub unsafe fn qf_init(
             Some(Buf::current()),
             None,
             errorformat,
+            global_efm,
             newlist != 0,
             0,
             0,
@@ -462,6 +464,7 @@ pub(crate) unsafe fn qf_init_ext(
     buffer: Option<Buf>,
     tv: Option<&mut TypVal>,
     errorformat: *mut c_char,
+    global_efm: bool,
     newlist: bool,
     lnumfirst: LineNr,
     lnumlast: LineNr,
@@ -494,17 +497,20 @@ pub(crate) unsafe fn qf_init_ext(
             qfl
         };
 
-        // Use the buffer-local 'errorformat' when it has one.
+        // Use the buffer-local 'errorformat' when the caller asked for the
+        // global one and the buffer has its own. Upstream asked "did the
+        // caller pass `p_efm` itself" by comparing *addresses*, which a
+        // value that owns its storage cannot answer; `global_efm` is the
+        // same question, from the caller that knew it all along.
         // The two cheap tests stay in front of the buffer's option, as
         // C's `&&` chain had them.
-        let local_efm =
-            if p_efm(|efm| unsafe { cstr::eq(errorformat, efm.as_ptr()) }) && !from_value {
-                buffer
-                    .map(|buf| buf.b_p_efm)
-                    .filter(|&efm| unsafe { *efm } != 0)
-            } else {
-                None
-            };
+        let local_efm = if global_efm && !from_value {
+            buffer
+                .map(|buf| buf.b_p_efm)
+                .filter(|&efm| unsafe { *efm } != 0)
+        } else {
+            None
+        };
         let efm = local_efm.unwrap_or(errorformat);
 
         // Take the compiled option out of the cache for the length of
