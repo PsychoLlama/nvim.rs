@@ -15,7 +15,7 @@ use crate::os::cshim::strchr;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{ExpandContext, NUL};
+use crate::types::{CmdLine, ExpandContext, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -190,18 +190,21 @@ pub(crate) unsafe fn set_cmd_index(
             excmd.cmdidx = CmdIdx::substitute;
             p = unsafe { cmd.add(1) };
         } else if (unsafe { *cmd } as u8).is_ascii_uppercase() {
-            excmd.set_cmd_ptr(cmd as *mut c_char);
-            p = unsafe {
-                find_ucmd(
-                    excmd,
-                    p as *mut c_char,
-                    ptr::null_mut(),
-                    expand.raw(),
-                    complp,
-                )
-            };
-            if p.is_null() {
+            // `find_ucmd` measures the typed name as the distance from the
+            // command word, so both ends have to be in the same buffer: the
+            // command gets a copy of the line, and the answer comes back as
+            // an offset into `cmd`, which is the same text.
+            let typed = p.addr() - cmd.addr();
+            // SAFETY: `cmd` is inside the NUL-terminated line.
+            excmd.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(cmd) });
+            let end = excmd.line.ptr_at(typed);
+            // SAFETY: `end` is inside the copy, past its command word.
+            let found = unsafe { find_ucmd(excmd, end, ptr::null_mut(), expand.raw(), complp) };
+            if found.is_null() {
                 excmd.cmdidx = CmdIdx::SIZE; // Ambiguous user command.
+                p = ptr::null();
+            } else {
+                p = cmd.wrapping_add(excmd.line.offset_of(found));
             }
         }
     }

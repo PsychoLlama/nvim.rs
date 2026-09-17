@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
+use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::types::CmdIdx;
 use crate::types::OptStr;
@@ -34,7 +35,7 @@ use crate::ex_docmd::source::getline_equal;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    ExFunc, SID_NONE, cmdnames, e_invrange, ex_msg, ex_pressedreturn, exmode_plus, getexline,
+    ExFunc, SID_NONE, cmdnames, e_invrange, ex_msg, ex_pressedreturn, getexline,
 };
 use crate::getchar::state::expr_map_lock;
 use crate::guard::sandbox;
@@ -51,7 +52,6 @@ use crate::optionstr::free_string_option;
 
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::strings::vim_strchr;
 use crate::types::{
     CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, size_t,
 };
@@ -131,54 +131,51 @@ pub(crate) fn parse_command_modifiers(
     // there) is stepped over so a modifier after it is still seen, and
     // put back below — the range has to reach the command, not the
     // modifier scan.
-    if unsafe { cstr::starts_with(excmd.cmd_ptr(), b"'<,'>") } {
-        let p = unsafe { skipwhite(excmd.cmd_ptr().add(5)) };
-        if byte(p) != NUL && byte(p) != '|' as c_int {
-            let visual_range = excmd.cmd_ptr();
-            excmd.set_cmd_ptr(unsafe { visual_range.add(5) });
+    if excmd.line.cmd().starts_with(b"'<,'>") {
+        let after = excmd.line.skip_white(excmd.line.cmd + 5);
+        if excmd.line.byte_at(after) != 0 && excmd.line.byte_at(after) != b'|' {
+            excmd.line.cmd += 5;
             cmd_start = excmd.cmd_ptr();
             has_visual_range = true;
         }
     }
 
     loop {
-        while byte(excmd.cmd_ptr()) == ' ' as c_int
-            || byte(excmd.cmd_ptr()) == '\t' as c_int
-            || byte(excmd.cmd_ptr()) == ':' as c_int
-        {
-            let cmd_start = excmd.cmd_ptr();
-            excmd.set_cmd_ptr(unsafe { cmd_start.add(1) });
+        while matches!(excmd.line.byte_at(excmd.line.cmd), b' ' | b'\t' | b':') {
+            excmd.line.cmd += 1;
         }
 
         // In Ex mode an empty line means "print the next one", which is
         // spelled by substituting a `+` command.
-        if byte(excmd.cmd_ptr()) == NUL
+        if excmd.line.byte_at(excmd.line.cmd) == 0
             && exmode_active.get()
             && unsafe { getline_equal(excmd.ea_getline, excmd.cookie, Some(getexline)) }
             && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
         {
-            excmd.set_cmd_ptr(exmode_plus.as_ptr().cast_mut());
+            // An Ex-mode empty line *becomes* a `+` command: the line the
+            // user did not type is retired and this one takes its place.
+            excmd.line.take_over(b"+\0".to_vec());
+            excmd.line.cmd = 0;
+            excmd.line.substituted = true;
             use_plus_cmd = true;
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
             break;
         }
-        if byte(excmd.cmd_ptr()) == '"' as c_int {
-            let cmd_start = excmd.cmd_ptr();
-            excmd.set_nextcmd_ptr(unsafe { vim_strchr(cmd_start, '\n' as c_int) });
-            if !excmd.line.next.is_none() {
-                let next_start = excmd.nextcmd_ptr();
-                excmd.set_nextcmd_ptr(unsafe { next_start.add(1) });
-            }
+        if excmd.line.byte_at(excmd.line.cmd) == b'"' {
+            // The comment runs to the newline; whatever follows it is the
+            // next command.
+            let cmd = excmd.line.cmd;
+            excmd.line.next = excmd.line.rest_of(cmd).iter().position(|b| *b == b'\n');
+            excmd.line.next = excmd.line.next.map(|at| cmd + at + 1);
             return Err(Failed);
         }
-        if byte(excmd.cmd_ptr()) == '\n' as c_int {
-            let cmd_start = excmd.cmd_ptr();
-            excmd.set_nextcmd_ptr(unsafe { cmd_start.add(1) });
+        if excmd.line.byte_at(excmd.line.cmd) == b'\n' {
+            excmd.line.next = Some(excmd.line.cmd + 1);
             return Err(Failed);
         }
-        if byte(excmd.cmd_ptr()) == NUL {
+        if excmd.line.byte_at(excmd.line.cmd) == 0 {
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
@@ -188,48 +185,43 @@ pub(crate) fn parse_command_modifiers(
         // A modifier may follow a range (`:1,2 silent print`), so the
         // name is looked for past one — but `args.cmd` only moves for
         // the modifiers that accept that.
-        let mut p = unsafe { skip_range(excmd.cmd_ptr(), ptr::null_mut()) };
-        match ubyte(p) {
+        let cmd = excmd.cmd_ptr();
+        // SAFETY: the command's own NUL-terminated line, and a null context
+        // is "not completing".
+        let skipped = unsafe { skip_range(cmd, ptr::null_mut()) };
+        let mut at = excmd.line.offset_of(skipped);
+        match excmd.line.byte_at(at) {
             b'a' => {
-                if !excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"aboveleft".as_ptr(), 3)) {
+                if !takes(excmd, b"aboveleft", 3) {
                     break;
                 }
                 cm.cmod_split |= WSP_ABOVE as c_int;
             }
             b'b' => {
-                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"belowright".as_ptr(), 3)) {
+                if takes(excmd, b"belowright", 3) {
                     cm.cmod_split |= WSP_BELOW as c_int;
-                } else if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"browse".as_ptr(), 3))
-                {
+                } else if takes(excmd, b"browse", 3) {
                     cm.cmod_flags |= CmdModFlags::BROWSE;
-                } else if excmd
-                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"botright".as_ptr(), 2))
-                {
+                } else if takes(excmd, b"botright", 2) {
                     cm.cmod_split |= WSP_BOT as c_int;
                 } else {
                     break;
                 }
             }
             b'c' => {
-                if !excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"confirm".as_ptr(), 4)) {
+                if !takes(excmd, b"confirm", 4) {
                     break;
                 }
                 cm.cmod_flags |= CmdModFlags::CONFIRM;
             }
             b'k' => {
-                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"keepmarks".as_ptr(), 3)) {
+                if takes(excmd, b"keepmarks", 3) {
                     cm.cmod_flags |= CmdModFlags::KEEPMARKS;
-                } else if excmd
-                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"keepalt".as_ptr(), 5))
-                {
+                } else if takes(excmd, b"keepalt", 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPALT;
-                } else if excmd
-                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"keeppatterns".as_ptr(), 5))
-                {
+                } else if takes(excmd, b"keeppatterns", 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPPATTERNS;
-                } else if excmd
-                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"keepjumps".as_ptr(), 5))
-                {
+                } else if takes(excmd, b"keepjumps", 5) {
                     cm.cmod_flags |= CmdModFlags::KEEPJUMPS;
                 } else {
                     break;
@@ -239,25 +231,35 @@ pub(crate) fn parse_command_modifiers(
                 // `:filter` insists on a pattern *and* something after
                 // it: the whole point is the command it wraps.
                 let mut reg_pat: *mut c_char = ptr::null_mut();
-                if !checkforcmd(&raw mut p, c"filter".as_ptr(), 4)
-                    || byte(p) == NUL
-                    || ends_excmd(byte(p)) != 0
+                let Some(after) = check_for_word(&excmd.line, at, b"filter", 4) else {
+                    break;
+                };
+                at = after;
+                if excmd.line.byte_at(at) == 0
+                    || ends_excmd(c_int::from(excmd.line.byte_at(at))) != 0
                 {
                     break;
                 }
-                if byte(p) == '!' as c_int {
+                if excmd.line.byte_at(at) == b'!' {
                     cm.cmod_filter_force = true;
-                    p = unsafe { skipwhite(p.add(1)) };
-                    if byte(p) == NUL || ends_excmd(byte(p)) != 0 {
+                    at = excmd.line.skip_white(at + 1);
+                    if excmd.line.byte_at(at) == 0
+                        || ends_excmd(c_int::from(excmd.line.byte_at(at))) != 0
+                    {
                         break;
                     }
                 }
-                p = if skip_only {
-                    skip_vimgrep_pat(p, ptr::null_mut(), ptr::null_mut())
+                let start = excmd.line.ptr_at(at);
+                let past = if skip_only {
+                    skip_vimgrep_pat(start, ptr::null_mut(), ptr::null_mut())
                 } else {
-                    skip_vimgrep_pat(p, &raw mut reg_pat, ptr::null_mut())
+                    skip_vimgrep_pat(start, &raw mut reg_pat, ptr::null_mut())
                 };
-                if p.is_null() || byte(p) == NUL {
+                if past.is_null() {
+                    break;
+                }
+                at = excmd.line.offset_of(past);
+                if excmd.line.byte_at(at) == 0 {
                     break;
                 }
                 if !skip_only {
@@ -267,67 +269,63 @@ pub(crate) fn parse_command_modifiers(
                         break;
                     }
                 }
-                excmd.set_cmd_ptr(p);
+                excmd.line.cmd = at;
             }
             b'h' => {
-                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"horizontal".as_ptr(), 3)) {
+                if takes(excmd, b"horizontal", 3) {
                     cm.cmod_split |= WSP_HOR as c_int;
-                } else if p == excmd.cmd_ptr()
-                    && checkforcmd(&raw mut p, c"hide".as_ptr(), 3)
-                    && byte(p) != NUL
-                    && ends_excmd(byte(p)) == 0
+                } else if at == excmd.line.cmd
+                    && let Some(after) = check_for_word(&excmd.line, at, b"hide", 3)
+                    && excmd.line.byte_at(after) != 0
+                    && ends_excmd(c_int::from(excmd.line.byte_at(after))) == 0
                 {
                     // `:hide` is a command in its own right, so it is
                     // only a modifier when a command follows it and no
                     // range precedes it.
-                    excmd.set_cmd_ptr(p);
+                    excmd.line.cmd = after;
                     cm.cmod_flags |= CmdModFlags::HIDE;
                 } else {
                     break;
                 }
             }
             b'l' => {
-                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"lockmarks".as_ptr(), 3)) {
+                if takes(excmd, b"lockmarks", 3) {
                     cm.cmod_flags |= CmdModFlags::LOCKMARKS;
-                } else if excmd
-                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"leftabove".as_ptr(), 5))
-                {
+                } else if takes(excmd, b"leftabove", 5) {
                     cm.cmod_split |= WSP_ABOVE as c_int;
                 } else {
                     break;
                 }
             }
             b'n' => {
-                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"noautocmd".as_ptr(), 3)) {
+                if takes(excmd, b"noautocmd", 3) {
                     cm.cmod_flags |= CmdModFlags::NOAUTOCMD;
-                } else if excmd
-                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"noswapfile".as_ptr(), 3))
-                {
+                } else if takes(excmd, b"noswapfile", 3) {
                     cm.cmod_flags |= CmdModFlags::NOSWAPFILE;
                 } else {
                     break;
                 }
             }
             b'r' => {
-                if !excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"rightbelow".as_ptr(), 6)) {
+                if !takes(excmd, b"rightbelow", 6) {
                     break;
                 }
                 cm.cmod_split |= WSP_BELOW as c_int;
             }
             b's' => {
-                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"sandbox".as_ptr(), 3)) {
+                if takes(excmd, b"sandbox", 3) {
                     cm.cmod_flags |= CmdModFlags::SANDBOX;
-                } else if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"silent".as_ptr(), 3))
-                {
+                } else if takes(excmd, b"silent", 3) {
                     cm.cmod_flags |= CmdModFlags::SILENT;
                     // `:silent!` only means "and silence errors" when
                     // the `!` is stuck to the word: `:silent !cmd` runs
                     // a shell command quietly.
-                    if byte(excmd.cmd_ptr()) == '!' as c_int
-                        && !ascii_iswhite(byte_at(excmd.cmd_ptr(), -1))
+                    let cmd = excmd.line.cmd;
+                    if excmd.line.byte_at(cmd) == b'!'
+                        && cmd > 0
+                        && !ascii_iswhite(c_int::from(excmd.line.byte_at(cmd - 1)))
                     {
-                        let cmd_start = excmd.cmd_ptr();
-                        excmd.set_cmd_ptr(unsafe { skipwhite(cmd_start.add(1)) });
+                        excmd.line.cmd = excmd.line.skip_white(cmd + 1);
                         cm.cmod_flags |= CmdModFlags::ERRSILENT;
                     }
                 } else {
@@ -335,7 +333,8 @@ pub(crate) fn parse_command_modifiers(
                 }
             }
             b't' => {
-                if checkforcmd(&raw mut p, c"tab".as_ptr(), 3) {
+                if let Some(after) = check_for_word(&excmd.line, at, b"tab", 3) {
+                    at = after;
                     if !skip_only {
                         // The scan advances a cursor of its own; see
                         // `parse_cmd_address`.
@@ -353,10 +352,10 @@ pub(crate) fn parse_command_modifiers(
                                 errormsg,
                             )
                         } as c_int;
-                        excmd.set_cmd_ptr(cursor);
-                        if excmd.cmd_ptr().is_null() {
+                        if cursor.is_null() {
                             return Err(Failed);
                         }
+                        excmd.set_cmd_ptr(cursor);
                         if tabnr == MAXLNUM {
                             cm.cmod_tab = tab_index(TabPage::current()) + 1;
                         } else {
@@ -367,36 +366,38 @@ pub(crate) fn parse_command_modifiers(
                             cm.cmod_tab = tabnr + 1;
                         }
                     }
-                    excmd.set_cmd_ptr(p);
-                } else if excmd
-                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"topleft".as_ptr(), 2))
-                {
+                    excmd.line.cmd = at;
+                } else if takes(excmd, b"topleft", 2) {
                     cm.cmod_split |= WSP_TOP as c_int;
                 } else {
                     break;
                 }
             }
             b'u' => {
-                if !excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"unsilent".as_ptr(), 3)) {
+                if !takes(excmd, b"unsilent", 3) {
                     break;
                 }
                 cm.cmod_flags |= CmdModFlags::UNSILENT;
             }
             b'v' => {
-                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"vertical".as_ptr(), 4)) {
+                if takes(excmd, b"vertical", 4) {
                     cm.cmod_split |= WSP_VERT as c_int;
-                } else if checkforcmd(&raw mut p, c"verbose".as_ptr(), 4) {
+                } else if let Some(after) = check_for_word(&excmd.line, at, b"verbose", 4) {
+                    at = after;
                     // The count is read from `args.cmd`, which
                     // `checkforcmd` left *before* the word: `:5verbose`.
                     // Saturating: the count is whatever the user typed,
                     // so `:2147483647verbose set` would otherwise add one
                     // to `INT_MAX` and end the process.  C wraps here.
-                    cm.cmod_verbose = if ascii_isdigit(byte(excmd.cmd_ptr())) {
-                        unsafe { atoi(excmd.cmd_ptr()) }.saturating_add(1)
-                    } else {
-                        2
-                    };
-                    excmd.set_cmd_ptr(p);
+                    let count = excmd.line.ptr_at(excmd.line.cmd);
+                    cm.cmod_verbose =
+                        if ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.cmd))) {
+                            // SAFETY: the command word, NUL-terminated.
+                            unsafe { atoi(count) }.saturating_add(1)
+                        } else {
+                            2
+                        };
+                    excmd.line.cmd = at;
                 } else {
                     break;
                 }
@@ -430,7 +431,9 @@ unsafe fn restore_visual_range(
 ) {
     if !has_visual_range {
         if use_plus_cmd {
-            excmd.set_cmd_ptr(exmode_plus.as_ptr().cast_mut());
+            // The `+` the scan substituted for the empty line is the whole
+            // of it, so the command word is its first byte.
+            excmd.line.cmd = 0;
         }
         return;
     }
@@ -451,7 +454,12 @@ unsafe fn restore_visual_range(
             move_bytes(at, c":'<,'>".as_ptr(), 6);
         }
     } else if use_plus_cmd {
-        excmd.set_cmd_ptr(c"'<,'>+".as_ptr() as *mut c_char);
+        // The Visual range is put back in front of the `+` this run
+        // substituted for an empty Ex-mode line.
+        excmd.line.take_over(b"'<,'>+\0".to_vec());
+        excmd.line.cmd = 0;
+        // Not the bare substitution any more: the range is the user's.
+        excmd.line.substituted = false;
     } else {
         excmd.set_cmd_ptr(orig_cmd);
     }
@@ -803,10 +811,16 @@ pub fn is_map_cmd(cmdidx: CmdIdx) -> bool {
         || ex_func_is(func, ex_abclear)
 }
 
-/// `checkforcmd()` as checked code.
-fn checkforcmd(cursor: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::lookup::checkforcmd(cursor, cmd, len) }
+/// Take the modifier `name` off the front of the command word if it is
+/// there, `min` letters being enough to spell it.
+fn takes(excmd: &mut ExArg, name: &[u8], min: usize) -> bool {
+    match check_for_word(&excmd.line, excmd.line.cmd, name, min) {
+        Some(at) => {
+            excmd.line.cmd = at;
+            true
+        }
+        None => false,
+    }
 }
 
 /// `memmove()`'s byte copy as checked code: `n` bytes, overlap allowed.
@@ -841,12 +855,6 @@ fn xstrdup(str: *const c_char) -> *mut c_char {
 fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
     unsafe { *p as c_int }
-}
-
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
 }
 
 /// The byte at `p[i]`, as the C's `*(p + i)` reads it.

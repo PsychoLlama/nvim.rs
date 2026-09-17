@@ -157,7 +157,8 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
             let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
             if win_split(0, flags).is_ok() {
                 excmd.cmdidx = CmdIdx::split;
-                excmd.set_arg_ptr(tmp_new);
+                // SAFETY: the temporary's name, NUL-terminated.
+                excmd.set_arg_text(unsafe { cstr::bytes_at(tmp_new) });
                 // SAFETY: the caller's command, and a window that was live
                 // when it was read.
                 do_exedit(excmd, Some(old_curwin.id()));
@@ -166,7 +167,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
                     diff_win_options(Win::current(), true);
                     diff_win_options(old_curwin, true);
                     if let Some(patched) = newname.as_mut() {
-                        excmd.set_arg_ptr(patched.as_mut_ptr());
+                        excmd.set_arg_text(patched);
                         // SAFETY: the caller's command; the group name and
                         // the command line are static strings.
                         ex_file(excmd);

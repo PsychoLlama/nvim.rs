@@ -644,7 +644,6 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
             Buf::current().b_mod_set = true;
         }
     }
-    unsafe { xfree(ea.cmd_ptr().cast()) };
 
     if let Some(scratch) = bufref.get() {
         wipe_buffer(scratch, false);

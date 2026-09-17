@@ -25,7 +25,7 @@ use crate::charset::getdigits;
 
 use crate::event::libuv::uv_strerror;
 
-use crate::ex_docmd::lookup::checkforcmd;
+use crate::ex_docmd::lookup::check_for_word;
 
 use crate::arglist::state::arg_had_last;
 use crate::ex_docmd::window::current_tab_nr;
@@ -46,8 +46,8 @@ use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
-    CmdModFlags, CompleteListItemGetter, ExArg, Expand, FAIL, FILE, Failed, NUL, OK, int32_t,
-    intmax_t, size_t,
+    CmdLine, CmdModFlags, CompleteListItemGetter, ExArg, Expand, FAIL, FILE, Failed, NUL, OK,
+    int32_t, intmax_t, size_t,
 };
 use crate::window::{only_one_window, tabpage_index};
 
@@ -120,80 +120,121 @@ pub(crate) fn get_bad_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.
 pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
-    let mut arg = unsafe { excmd.arg_ptr().add(2) };
-    let mut bad_char_idx: c_int = 0;
+    let mut at = excmd.line.arg + 2;
 
     // `++bin`/`++nobin` and `++binary`/`++nobinary`.
-    if starts_with(arg, b"bin") || starts_with(arg, b"nobin") {
-        if byte(arg) == 'n' as c_int {
-            arg = unsafe { arg.add(2) };
+    let word = excmd.line.rest_of(at);
+    if word.starts_with(b"bin") || word.starts_with(b"nobin") {
+        if excmd.line.byte_at(at) == b'n' {
+            at += 2;
             excmd.force_bin = FORCE_NOBIN;
         } else {
             excmd.force_bin = FORCE_BIN;
         }
-        if !unsafe { checkforcmd(&raw mut arg, c"binary".as_ptr(), 3) } {
+        let Some(after) = check_for_word(&excmd.line, at, b"binary", 3) else {
             return Err(Failed);
-        }
-        excmd.set_arg_ptr(skipwhite(arg));
+        };
+        excmd.line.arg = after;
         return Ok(());
     }
 
     // `++edit`, and not `++editsomething`.
-    if starts_with(arg, b"edit") && !(ubyte_at(arg, 4)).is_ascii_alphabetic() {
+    if excmd.line.rest_of(at).starts_with(b"edit")
+        && !excmd.line.byte_at(at + 4).is_ascii_alphabetic()
+    {
         excmd.read_edit = true;
-        excmd.set_arg_ptr(unsafe { skipwhite(arg.add(4)) });
+        excmd.line.arg = excmd.line.skip_white(at + 4);
         return Ok(());
     }
 
     // `++p`, and not `++psomething`.
-    if byte(arg) == 'p' as c_int && !(ubyte_at(arg, 1)).is_ascii_alphabetic() {
+    if excmd.line.byte_at(at) == b'p' && !excmd.line.byte_at(at + 1).is_ascii_alphabetic() {
         excmd.mkdir_p = true;
-        excmd.set_arg_ptr(unsafe { skipwhite(arg.add(1)) });
+        excmd.line.arg = excmd.line.skip_white(at + 1);
         return Ok(());
     }
 
-    let pp: *mut c_int = if starts_with(arg, b"ff") {
-        arg = unsafe { arg.add(2) };
-        &raw mut excmd.force_ff
-    } else if starts_with(arg, b"fileformat") {
-        arg = unsafe { arg.add(10) };
-        &raw mut excmd.force_ff
-    } else if starts_with(arg, b"enc") {
-        arg = unsafe { arg.add(if starts_with(arg, b"encoding") { 8 } else { 3 }) };
-        &raw mut excmd.force_enc
-    } else if starts_with(arg, b"bad") {
-        arg = unsafe { arg.add(3) };
-        &raw mut bad_char_idx
+    // Which of the three offsets the value is recorded in, and how long the
+    // option's own name was.
+    let word = excmd.line.rest_of(at);
+    let opt = if word.starts_with(b"fileformat") {
+        Some((Opt::FileFormat, 10))
+    } else if word.starts_with(b"ff") {
+        Some((Opt::FileFormat, 2))
+    } else if word.starts_with(b"encoding") {
+        Some((Opt::Encoding, 8))
+    } else if word.starts_with(b"enc") {
+        Some((Opt::Encoding, 3))
+    } else if word.starts_with(b"bad") {
+        Some((Opt::BadChar, 3))
     } else {
-        ptr::null_mut()
+        None
     };
-
-    if pp.is_null() || byte(arg) != '=' as c_int {
+    let Some((opt, name_len)) = opt else {
+        return Err(Failed);
+    };
+    at += name_len;
+    if excmd.line.byte_at(at) != b'=' {
         return Err(Failed);
     }
-    arg = unsafe { arg.add(1) };
-    unsafe { *pp = arg.offset_from(excmd.cmd_ptr()) as c_int };
-    arg = skip_cmd_arg(arg, false);
-    excmd.set_arg_ptr(skipwhite(arg));
-    unsafe { *arg = NUL as c_char };
+    at += 1;
 
-    if pp == &raw mut excmd.force_ff {
-        if unsafe { check_ff_value(excmd.cmd_ptr().offset(excmd.force_ff as isize)) } == FAIL {
-            return Err(Failed);
+    // The three that take a value are stored as *offsets from the command
+    // word* rather than as cursors, because the command line is
+    // reallocated by the `%`/`#` expansion that runs later.
+    let value = c_int::try_from(at - excmd.line.cmd).unwrap_or(0);
+    match opt {
+        Opt::FileFormat => excmd.force_ff = value,
+        Opt::Encoding => excmd.force_enc = value,
+        // `get_bad_opt` reads the value itself, so nothing records it.
+        Opt::BadChar => {}
+    }
+    let end = skip_arg_at(&mut excmd.line, at);
+    excmd.line.arg = excmd.line.skip_white(end);
+    excmd.line.terminate_at(end);
+
+    match opt {
+        Opt::FileFormat => {
+            let ff = excmd.line.ptr_at(at);
+            // SAFETY: the value, NUL-terminated by the write just above.
+            if unsafe { check_ff_value(ff) } == FAIL {
+                return Err(Failed);
+            }
+            // Only the first letter is kept: 'u', 'd' or 'm'.
+            excmd.force_ff = c_int::from(excmd.line.byte_at(at));
         }
-        // Only the first letter is kept: 'u', 'd' or 'm'.
-        excmd.force_ff = ubyte_at(excmd.cmd_ptr(), excmd.force_ff as isize) as c_int;
-    } else if pp == &raw mut excmd.force_enc {
-        let mut p = unsafe { excmd.cmd_ptr().offset(excmd.force_enc as isize) };
-        while byte(p) != NUL {
-            unsafe { *p = (*p as u8).to_ascii_lowercase() as c_char };
-            p = unsafe { p.add(1) };
+        Opt::Encoding => {
+            for off in at..excmd.line.end_of(at) {
+                let lower = excmd.line.byte_at(off).to_ascii_lowercase();
+                excmd.line.set_byte(off, lower);
+            }
         }
-    } else if unsafe { get_bad_opt(excmd.cmd_ptr().offset(bad_char_idx as isize), excmd) }.is_err()
-    {
-        return Err(Failed);
+        Opt::BadChar => {
+            let bad = excmd.line.ptr_at(at);
+            // SAFETY: as above.
+            if unsafe { get_bad_opt(bad, excmd) }.is_err() {
+                return Err(Failed);
+            }
+        }
     }
     Ok(())
+}
+
+/// Which `++opt=value` was given: the three that take a value, and so the
+/// three `ExArg` offsets one can be recorded in.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Opt {
+    FileFormat,
+    Encoding,
+    BadChar,
+}
+
+/// [`skip_cmd_arg`] over a command line, answering where the argument ends.
+fn skip_arg_at(line: &mut CmdLine, at: usize) -> usize {
+    let start = line.ptr_at(at);
+    // `rembs = false` leaves the line alone, so the walk only reads.
+    let end = skip_cmd_arg(start, false);
+    line.offset_of(end)
 }
 
 /// The completion candidates for `++`.
@@ -602,12 +643,6 @@ fn ubyte(p: *const c_char) -> u8 {
 fn byte_at(p: *const c_char, i: isize) -> c_int {
     // SAFETY: an offset within the NUL-terminated string `p` points into.
     unsafe { *p.offset(i) as c_int }
-}
-
-/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
-fn ubyte_at(p: *const c_char, i: isize) -> u8 {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as u8 }
 }
 
 /// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --

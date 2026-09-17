@@ -252,6 +252,10 @@ impl Default for CmdMod {
 /// consumer handed `eap->arg` sees.
 ///
 /// [`separate_nextcmd`]: crate::ex_docmd::separate_nextcmd
+/// The terminator a line with no buffer hands out, so that a cursor into it
+/// reads as the empty string. See [`CmdLine::ptr_at`].
+static EMPTY_LINE: [u8; 1] = [0];
+
 #[derive(Clone, Default)]
 pub struct CmdLine {
     /// The line's bytes, empty or ending in a NUL.
@@ -273,6 +277,11 @@ pub struct CmdLine {
     /// `nvim_cmd`'s pre-split argument vector, as `(offset, length)` pairs
     /// into the line it rendered. Empty for a command that was typed.
     pub args: Vec<(usize, usize)>,
+    /// This line is the `+` Ex mode substitutes for an empty one, not a `+`
+    /// the user typed. Upstream tells the two apart by comparing `eap->cmd`
+    /// against the *address* of the static it substituted, which an owned
+    /// line cannot do; `ex_range_without_command` is the one reader.
+    pub substituted: bool,
 }
 
 impl CmdLine {
@@ -284,6 +293,7 @@ impl CmdLine {
         arg: 0,
         next: None,
         args: Vec::new(),
+        substituted: false,
     };
 
     /// The line `text` holds, which must be empty or end in a NUL.
@@ -472,6 +482,7 @@ impl CmdLine {
         self.next = None;
         self.args.clear();
         self.retired = None;
+        self.substituted = false;
     }
 
     /// Take `new` over as the line, retiring what was there.
@@ -489,13 +500,23 @@ impl CmdLine {
     }
 
     /// A writable pointer at `at`, for a callee that still takes one.
+    ///
+    /// A line with no buffer at all answers the shared terminator, because
+    /// a cursor into the empty line must still *read* as the empty string;
+    /// a caller that writes through one is wrong either way.
     pub fn ptr_at(&mut self, at: usize) -> *mut ::core::ffi::c_char {
+        if self.text.is_empty() {
+            return EMPTY_LINE.as_ptr().cast::<::core::ffi::c_char>().cast_mut();
+        }
         let at = at.min(self.text.len());
         self.text[at..].as_mut_ptr().cast()
     }
 
     /// A readable pointer at `at`, for a callee that still takes one.
     pub fn ptr_from(&self, at: usize) -> *const ::core::ffi::c_char {
+        if self.text.is_empty() {
+            return EMPTY_LINE.as_ptr().cast();
+        }
         self.text[at.min(self.text.len())..].as_ptr().cast()
     }
 
@@ -506,7 +527,13 @@ impl CmdLine {
     }
 
     /// Where `p`, which must point into the live buffer, is.
+    ///
+    /// # Panics
+    /// In a debug build, if `p` is not inside the line. A cursor taken from
+    /// somewhere else is the mistake this type exists to make impossible,
+    /// and a wrapped offset would only hide it.
     pub fn offset_of(&self, p: *const ::core::ffi::c_char) -> usize {
+        debug_assert!(self.contains(p), "a cursor from outside the line");
         p.addr() - self.text.as_ptr().addr()
     }
 }
@@ -615,6 +642,26 @@ impl ExArg {
         let answer = walk(&raw mut cursor);
         self.set_arg_ptr(cursor);
         answer
+    }
+
+    /// Make `text` the command's whole line, with `arg` at its start.
+    ///
+    /// What a handler does when it rewrites its own argument into a buffer
+    /// of its own: `:diffget 3` builds the count, `:oldfiles` expands the
+    /// name it picked, `:find` answers a path off `'path'`. Upstream points
+    /// `eap->arg` at that other buffer and leaves the command line behind
+    /// it, so the argument outlives the buffer or the buffer outlives the
+    /// command; owning the text is the same rewrite with the lifetime
+    /// written down.
+    pub fn set_arg_text(&mut self, text: &[u8]) {
+        self.line = CmdLine::from_bytes(text);
+    }
+
+    /// [`set_arg_text`](ExArg::set_arg_text), for a *synthetic command*:
+    /// the whole line, command word included, is written here rather than
+    /// typed. `prep_exarg`'s `:e ++enc=…` is the one caller.
+    pub fn set_cmd_text(&mut self, text: &[u8]) {
+        self.line = CmdLine::from_bytes(text);
     }
 
     /// The whole line as a writable pointer -- upstream's

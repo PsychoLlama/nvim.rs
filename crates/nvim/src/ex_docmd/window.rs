@@ -54,7 +54,7 @@ use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::strings::vim_snprintf;
 use crate::tag::state::{g_do_tagpreview, postponed_split_flags, postponed_split_tab};
-use crate::types::{CmdModFlags, ExArg, IOSIZE, NUL, intmax_t, size_t, uint8_t};
+use crate::types::{CmdLine, CmdModFlags, ExArg, IOSIZE, NUL, intmax_t, size_t, uint8_t};
 use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{
@@ -208,7 +208,8 @@ fn splitview(excmd: &mut ExArg) {
         if fname.is_null() {
             return;
         }
-        excmd.set_arg_ptr(fname);
+        // SAFETY: the name the search answered, NUL-terminated.
+        excmd.set_arg_text(unsafe { cstr::bytes_at(fname) });
     }
 
     if use_tab {
@@ -297,10 +298,11 @@ pub fn tabpage_new() {
     let mut excmd = fresh_exarg();
     excmd.line1 = 0;
     excmd.line2 = 0;
-    excmd.set_arg_ptr(c"".as_ptr() as *mut c_char);
     // `ex_splitview` reads the first byte of `cmd` to tell a vertical split
-    // from a horizontal one.
-    excmd.set_cmd_ptr(c"tabn".as_ptr() as *mut c_char);
+    // from a horizontal one; the argument is what follows it, which is
+    // nothing.
+    excmd.line = CmdLine::from_bytes(b"tabn");
+    excmd.line.arg = 4;
     excmd.cmdidx = CmdIdx::tabnew;
     splitview(&mut excmd);
 }

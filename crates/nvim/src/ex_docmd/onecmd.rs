@@ -43,7 +43,7 @@ use crate::ex_docmd::source::{ex_errmsg, getline_cookie};
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
     DoCmdOpts, ExFunc, PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command,
-    e_not_an_editor_command, exmode_plus, quitmore,
+    e_not_an_editor_command, quitmore,
 };
 use crate::ex_eval::CsFlags;
 
@@ -775,14 +775,14 @@ fn refuses_here(excmd: &ExArg) -> Option<CString> {
 /// the last of them.
 ///
 /// Which of the two it is depends on how the line ended — a `|` after the
-/// range, or Ex mode, means print. `exmode_plus + 1` is the empty string Ex
-/// mode substitutes for a bare `+`; it is recognised by *address*, not by
-/// content.
+/// range, or Ex mode, means print. The one exception is the `+` Ex mode
+/// substitutes for an empty line once its `+` has been consumed, which
+/// `CmdLine::substituted` marks: upstream recognises it by the *address* of
+/// the static it substituted.
 pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
     let mut errormsg: Option<CString> = None;
-    if byte(excmd.cmd_ptr()) == '|' as c_int
-        || (exmode_active.get()
-            && !ptr::eq(excmd.cmd_ptr(), unsafe { exmode_plus.as_ptr().add(1) }))
+    let past_substituted_plus = excmd.line.substituted && excmd.line.cmd == 1;
+    if excmd.line.byte_at(excmd.line.cmd) == b'|' || (exmode_active.get() && !past_substituted_plus)
     {
         excmd.cmdidx = CmdIdx::print;
         excmd.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;

@@ -44,8 +44,7 @@ use crate::memline::{
     check_need_swap, ml_append, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len, ml_open,
 };
 use crate::memory::{
-    memchrsub, time_to_bytes, verbose_try_malloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup,
-    xstrlcat,
+    memchrsub, time_to_bytes, verbose_try_malloc, xfree, xmallocz, xmemdupz, xstrdup, xstrlcat,
 };
 use crate::message::e_interr;
 use crate::message::state::{
@@ -649,18 +648,11 @@ pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 /// forced to what buffer `buffer` already has. Used when calling `readfile` to
 /// re-read a buffer that is already open.
 pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
-    // SAFETY: the caller's command, live for the call.
     // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
-    let cmd_len = 15 + unsafe { cstr::bytes_at(buffer.b_p_fenc.value_ptr()) }.len();
-    excmd.set_cmd_ptr(unsafe { xmalloc(cmd_len) }.cast());
-    unsafe {
-        snprintf(
-            excmd.cmd_ptr(),
-            cmd_len,
-            c"e ++enc=%s".as_ptr(),
-            buffer.b_p_fenc.value_ptr(),
-        )
-    };
+    let fenc = unsafe { cstr::bytes_at(buffer.b_p_fenc.value_ptr()) };
+    let mut line = b"e ++enc=".to_vec();
+    line.extend_from_slice(fenc);
+    excmd.set_cmd_text(&line);
     // Where the encoding name starts in that command.
     excmd.force_enc = 8;
     excmd.bad_char = buffer.b_bad_char;

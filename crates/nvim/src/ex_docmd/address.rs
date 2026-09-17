@@ -156,11 +156,14 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                     errormsg,
                 )
             };
-            excmd.set_cmd_ptr(cursor);
-            address_count += 1;
-            if excmd.cmd_ptr().is_null() {
+            // `get_address` answers a null cursor when the address was
+            // malformed: upstream stores it in `eap->cmd` and tests that,
+            // which an offset cannot say, so the test comes first.
+            if cursor.is_null() {
                 break 'theend;
             }
+            excmd.set_cmd_ptr(cursor);
+            address_count += 1;
             if lnum != MAXLNUM {
                 excmd.line2 = lnum;
             } else if byte(excmd.cmd_ptr()) == '%' as c_int {

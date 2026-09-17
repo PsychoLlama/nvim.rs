@@ -43,7 +43,7 @@ use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
 use crate::types::CmdIdx;
-use crate::types::{ExArgt, FieldHashfn, NUL};
+use crate::types::{CmdLine, ExArgt, FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -183,10 +183,10 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
         return Err(err_expected_at(c"cmd", c"non-empty String", ptr::null()));
     }
 
-    // `find_ex_command` reads `excmd.cmd`, which is the keydict's own string --
-    // and the keydict outlives this call.
-    let cmdname = name.data();
-    excmd.set_cmd_ptr(cmdname);
+    // `find_ex_command` reads the command word, so the name is the whole of
+    // the line until `build_cmdline_str` renders the real one.
+    excmd.line = CmdLine::from_bytes(name.as_bytes());
+    let cmdname = excmd.line.ptr_at(0);
     let mut p = unsafe { find_ex_command(excmd, ptr::null_mut()) };
 
     // An unknown capitalised name plus a CmdUndefined autocommand is a lazily

@@ -74,14 +74,8 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
         cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
         cstack: ::core::ptr::null_mut(),
     };
-    let mut nrbuf: [c_char; 30] = [0; 30];
-    if count == 0 as size_t {
-        ea.set_arg_ptr(c"".as_ptr() as *mut c_char);
-    } else {
-        let at = nrbuf.as_mut_ptr();
-        // SAFETY: `nrbuf` holds the 30 bytes `vim_snprintf` is told about.
-        unsafe { vim_snprintf(at, 30, c"%zu".as_ptr(), count) };
-        ea.set_arg_ptr(at);
+    if count != 0 as size_t {
+        ea.set_arg_text(format!("{count}").as_bytes());
     }
     ea.line1 = Win::current().w_cursor.lnum;
     ea.line2 = Win::current().w_cursor.lnum;

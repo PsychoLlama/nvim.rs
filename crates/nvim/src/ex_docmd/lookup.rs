@@ -24,7 +24,7 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::startup::getout;
 
-use crate::types::{CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, size_t};
+use crate::types::{CmdAddr, CmdLine, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, size_t};
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 
 /// Is this index a *user* command rather than a row of `cmdnames`?
@@ -66,6 +66,23 @@ pub unsafe fn checkforcmd(cursor: *mut *mut c_char, cmd: *const c_char, len: c_i
         return true;
     }
     false
+}
+
+/// [`checkforcmd`] over a command line, answering where the word ended.
+///
+/// `None` is "not this command". `name` is the command spelled out and
+/// `min` the shortest abbreviation of it the parse accepts, so `:sil`,
+/// `:sile`, `:silen` and `:silent` are all `("silent", 3)` -- but `:silentx`
+/// is not, because a letter after the abbreviation makes it a longer word.
+pub(crate) fn check_for_word(line: &CmdLine, at: usize, name: &[u8], min: usize) -> Option<usize> {
+    let typed = line.rest_of(at);
+    let matched = name
+        .iter()
+        .zip(typed)
+        .take_while(|(want, got)| want == got)
+        .count();
+    let follows = line.byte_at(at + matched);
+    (matched >= min && !follows.is_ascii_alphabetic()).then(|| line.skip_white(at + matched))
 }
 
 /// The two commands whose one-letter spelling the table cannot express,
@@ -253,13 +270,10 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
     }
     // `:2match`/`:3match` carry their count in the name.
     let mut ea = blank_exarg();
-    ea.set_cmd_ptr(
-        if byte(name) == '2' as c_int || byte(name) == '3' as c_int {
-            unsafe { name.add(1) }
-        } else {
-            name
-        } as *mut c_char,
-    );
+    // SAFETY: the caller's promise -- a NUL-terminated name.
+    ea.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(name) });
+    // `:2match`/`:3match` carry their count in the name.
+    ea.line.cmd = usize::from(byte(name) == '2' as c_int || byte(name) == '3' as c_int);
     let mut full: c_int = 0;
     let p = unsafe { find_ex_command(&mut ea, &raw mut full) };
     if p.is_null() {
@@ -295,13 +309,10 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     }
     name = unsafe { skip_range(name, ptr::null_mut()) };
     let mut ea = blank_exarg();
-    ea.set_cmd_ptr(
-        if byte(name) == '2' as c_int || byte(name) == '3' as c_int {
-            unsafe { name.add(1) }
-        } else {
-            name
-        },
-    );
+    // SAFETY: `name` walks the NUL-terminated argument.
+    ea.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(name) });
+    // `:2match`/`:3match` carry their count in the name.
+    ea.line.cmd = usize::from(byte(name) == '2' as c_int || byte(name) == '3' as c_int);
     let p = unsafe { find_ex_command(&mut ea, ptr::null_mut()) };
     if p.is_null() || ea.cmdidx == CmdIdx::SIZE {
         return;

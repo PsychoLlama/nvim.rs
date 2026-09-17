@@ -439,11 +439,6 @@ enum Pass {
     Done,
 }
 
-/// Take over a line the getter or the loop store answered: an `xmalloc` block.
-fn adopt(line: *mut c_char) -> CmdLine {
-    CmdLine::from_vec(unsafe { XString::from_raw(line) }.into_vec()) // SAFETY: as above.
-}
-
 /// Everything one [`do_cmdline`] run carries from one `|`-separated command
 /// to the next. C kept these as a dozen locals of a 600-line function whose
 /// loop body read and wrote all of them; naming the set is what lets a pass be
@@ -507,16 +502,17 @@ impl Run {
     fn take_line(&mut self, source: &Source, flags: DoCmdOpts) -> Pass {
         // Replaying a loop body: take the next stored line. Each
         // `|`-separated command was stored separately, so an `:endwhile`
-        // can jump back to exactly one of them.
+        // can jump back to exactly one of them. A *copy*, because the store
+        // keeps its line and the command modifies what it is handed.
         if self.cstack.cs_looplevel > 0 && self.current_line < self.lines.ga_len {
             self.pending = None;
-            match replay_stored_line(source, &self.lines, self.current_line) {
-                Some(Line(line)) => self.pending = Some(adopt(line)),
-                None => {
-                    self.retval = Err(Failed);
-                    return Pass::Done;
-                }
-            }
+            let Some(Line(line)) = replay_stored_line(source, &self.lines, self.current_line)
+            else {
+                self.retval = Err(Failed);
+                return Pass::Done;
+            };
+            // SAFETY: the store's line, NUL-terminated.
+            self.pending = Some(CmdLine::from_bytes(unsafe { cstr::bytes_at(line) }));
         }
 
         if self.pending.is_none() {
@@ -525,13 +521,17 @@ impl Run {
             } else {
                 (self.cstack.cs_idx + 1) * 2
             };
-            match ask_for_line(source, indent, self.count, flags, &mut self.did_block) {
-                Some(Line(line)) => self.pending = Some(adopt(line)),
-                None => {
-                    self.retval = Err(Failed);
-                    return Pass::Done;
-                }
-            }
+            let Some(Line(line)) =
+                ask_for_line(source, indent, self.count, flags, &mut self.did_block)
+            else {
+                self.retval = Err(Failed);
+                return Pass::Done;
+            };
+            // Taken over: every line getter answers a block its caller owns.
+            // SAFETY: as above -- an `xmalloc` block.
+            self.pending = Some(CmdLine::from_vec(
+                unsafe { XString::from_raw(line) }.into_vec(),
+            ));
             self.used_getline = true;
         }
         Pass::Again

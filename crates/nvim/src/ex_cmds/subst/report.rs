@@ -363,13 +363,13 @@ pub fn ex_substitute_preview(
         return 0 as c_int;
     }
     // `do_sub` may move `args.arg`, which the caller still needs where it was.
-    let save_arg = excmd.arg_ptr();
+    let save_arg = excmd.line.arg;
     let retv = do_sub(
         excmd,
         profile_setlimit(p_rdt() as int64_t),
         cmdpreview_ns,
         cmdpreview_bufnr,
     );
-    excmd.set_arg_ptr(save_arg);
+    excmd.line.arg = save_arg;
     retv
 }

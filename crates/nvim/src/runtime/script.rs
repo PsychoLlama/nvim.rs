@@ -161,11 +161,19 @@ fn edit_script(excmd: &mut ExArg, by_number: bool) {
             emsg(gettext(e_invarg));
             return;
         }
-        unsafe { excmd.set_arg_ptr((*script_item(excmd.line2 as ScriptId)).sn_name) };
+        // SAFETY: `line2` names a live script, whose name is NUL-terminated.
+        let name = unsafe { cstr::bytes_at((*script_item(excmd.line2 as ScriptId)).sn_name) };
+        excmd.set_arg_text(name);
     } else {
         let namebuff = path.as_mut_ptr();
-        unsafe { expand_env(excmd.arg_ptr(), namebuff, MAXPATHL) };
-        excmd.set_arg_ptr(namebuff);
+        let arg = excmd.arg_ptr();
+        // SAFETY: `namebuff` holds the `MAXPATHL` bytes the expansion is
+        // told about, and it leaves the name NUL-terminated.
+        let expanded = unsafe {
+            expand_env(arg, namebuff, MAXPATHL);
+            cstr::bytes_at(namebuff)
+        };
+        excmd.set_arg_text(expanded);
     }
     do_exedit(excmd, None);
 }

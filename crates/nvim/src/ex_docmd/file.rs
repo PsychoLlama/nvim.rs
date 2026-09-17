@@ -232,7 +232,8 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
     if fname.is_null() {
         return;
     }
-    excmd.set_arg_ptr(fname);
+    // SAFETY: the name the search answered, NUL-terminated and owned here.
+    excmd.set_arg_text(unsafe { cstr::bytes_at(fname) });
     do_exedit(excmd, None);
     xfree(fname as *mut c_void);
 }

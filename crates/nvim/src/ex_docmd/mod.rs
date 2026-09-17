@@ -294,9 +294,6 @@ static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false);
 /// static rather than a literal at each of its two uses.
 static dollar_command: &CStr = c"$";
 static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-/// The command Ex mode substitutes for a bare newline. Never written, and
-/// recognised by address in `ex_range_without_command`.
-static exmode_plus: &CStr = c"+";
 static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 static prev_dir: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
 static filetype_detect: GlobalCell<Option<bool>> = GlobalCell::new(None);
