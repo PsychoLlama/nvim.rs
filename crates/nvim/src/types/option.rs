@@ -66,12 +66,12 @@ pub enum OptVal {
     /// A global-local option with no value in this scope, and what the API
     /// reports as nil. `kOptValTypeNil`.
     Nil,
-    /// A boolean option's value, in the option variable's own alphabet: 0
-    /// false, 1 true, and -1 for a global-local option with no local value.
-    /// [`OptVal::as_boolean`] is the `Option<bool>` face of it; the raw
-    /// `c_int` stays because `set_option_varp` writes this word straight
-    /// through to the variable. `kOptValTypeBoolean`.
-    Boolean(::core::ffi::c_int),
+    /// A boolean option's value: on, off, or **absent** — a global-local
+    /// option with no value in this scope, which upstream spells as the
+    /// third state of the option variable's `int` (-1) and reports to the
+    /// API as nil. The variable keeps that alphabet; the value does not.
+    /// `kOptValTypeBoolean`.
+    Boolean(Option<bool>),
     /// `kOptValTypeNumber`.
     Number(OptInt),
     /// `kOptValTypeString`.
@@ -157,17 +157,19 @@ impl OptVal {
     /// and for every other kind of option.
     pub const fn as_boolean(&self) -> Option<bool> {
         match self {
-            OptVal::Boolean(0) => Some(false),
-            OptVal::Boolean(1..) => Some(true),
+            OptVal::Boolean(boolean) => *boolean,
             _ => None,
         }
     }
 
-    /// The tri-state word itself, for the callers that write it through to
-    /// an option variable.
+    /// The tri-state word upstream's union held: 0 false, 1 true, -1 not
+    /// set in this scope. Vimscript still reads a boolean option's value as
+    /// a number, which is what this is for.
     pub const fn tristate(&self) -> Option<::core::ffi::c_int> {
         match self {
-            OptVal::Boolean(word) => Some(*word),
+            OptVal::Boolean(None) => Some(-1),
+            OptVal::Boolean(Some(false)) => Some(0),
+            OptVal::Boolean(Some(true)) => Some(1),
             _ => None,
         }
     }

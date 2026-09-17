@@ -47,7 +47,7 @@ use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::option::{copy_option_part, set_option_value_give_err};
 use crate::options::kOptSpellfile;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::os::env::home_replace;
 use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
 use crate::os::stdpaths::get_xdg_home;
@@ -88,7 +88,7 @@ pub unsafe fn spell_add_word(
     // `smsg!` runs autocommands, so the path it reports is this frame's.
     let mut shown = [0 as c_char; MAXPATHL as usize];
     if !unsafe { valid_spell_word(word, word.offset(len as isize)) } {
-        unsafe { emsg(gettext_ptr(e_illegal_character_in_word.get())) };
+        emsg(gettext(e_illegal_character_in_word));
         return;
     }
 

@@ -66,10 +66,7 @@ unsafe fn augroup_map_del(id: ::core::ffi::c_int, name: *const ::core::ffi::c_ch
 /// catalogue, both of which are live for as long as the editor is.
 #[inline(always)]
 pub(crate) fn get_deleted_augroup() -> *const ::core::ffi::c_char {
-    if deleted_augroup.get().is_null() {
-        deleted_augroup.set(gettext(c"--Deleted--").as_ptr());
-    }
-    deleted_augroup.get()
+    gettext(c"--Deleted--").as_ptr()
 }
 
 /// The id of the group called `name`, creating one if there is not

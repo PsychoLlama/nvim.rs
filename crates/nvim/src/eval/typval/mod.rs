@@ -193,7 +193,7 @@ pub const TV_INITIAL_VALUE: TypVal = TypVal::Unknown;
 
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
-pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());
+pub static tv_empty_string: &::core::ffi::CStr = c"";
 /// How many submatches a `\=` replacement expression is handed: `\0`
 /// through `\9`.
 pub const SL_SIZE: usize = 10;

@@ -250,7 +250,7 @@ static ONE_CHAR_STRINGS: [[c_char; 2]; 256] = {
 ///
 /// # Safety
 /// `input` must point to a live [`TermInput`].
-unsafe fn tui_get_stty_erase(input: *mut TermInput) -> *const c_char {
+unsafe fn tui_get_stty_erase(input: *mut TermInput) -> u8 {
     let mut erase = 0u8;
     // SAFETY: the caller guarantees `input`; `tcgetattr` fills the termios.
     unsafe {
@@ -266,7 +266,7 @@ unsafe fn tui_get_stty_erase(input: *mut TermInput) -> *const c_char {
             );
         }
     }
-    ONE_CHAR_STRINGS[usize::from(erase)].as_ptr()
+    erase
 }
 
 /// Correct libtermkey's idea of the backspace and delete keys.
@@ -284,16 +284,20 @@ pub(crate) unsafe extern "C" fn tui_tk_ti_getstr(
     value: *const c_char,
     data: *mut c_void,
 ) -> *const c_char {
-    /// The erase character, read once on the first capability lookup.
-    static ERASE: GlobalCell<*const c_char> = GlobalCell::new(core::ptr::null());
+    /// The erase character the line discipline reports, read once on the
+    /// first capability lookup. `None` is "not read yet"; a zero byte is a
+    /// terminal that names no erase character, which is a value of its own.
+    static ERASE: GlobalCell<Option<u8>> = GlobalCell::new(None);
 
     // SAFETY: libtermkey passes NUL-terminated capability names and values,
     // and the `data` this TUI registered.
     unsafe {
-        if ERASE.get().is_null() {
-            ERASE.set(tui_get_stty_erase(data.cast::<TermInput>()));
+        if ERASE.get().is_none() {
+            ERASE.set(Some(tui_get_stty_erase(data.cast::<TermInput>())));
         }
-        let erase = ERASE.get();
+        // The one-character string libtermkey is handed back: the table is
+        // `'static`, so the answer outlives the call the way C's did.
+        let erase = ONE_CHAR_STRINGS[usize::from(ERASE.get().unwrap_or(0))].as_ptr();
         if strequal(name, c"key_backspace".as_ptr()) {
             log_termkey("kbs", value);
             if *erase != 0 {

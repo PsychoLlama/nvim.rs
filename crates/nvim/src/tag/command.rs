@@ -18,6 +18,7 @@ use super::*;
 use crate::cstr;
 use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
+use crate::memory::XString;
 use crate::message::msg_ptr;
 use crate::message_fmt::c_str;
 use crate::pos::MAXCOL;
@@ -25,7 +26,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::types::{IOSIZE, Vv};
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
 /// The preview window's stand-in for a tag stack.
@@ -233,8 +234,7 @@ impl DoTag {
             owned_name: None,
             prev_num_matches: num_matches.get(),
         };
-        unsafe { free_string_option(nofile_fname.get()) };
-        nofile_fname.set(ptr::null_mut());
+        drop(nofile_fname.take());
         cmd
     }
 
@@ -601,8 +601,8 @@ impl DoTag {
         // SAFETY: the caller's promise; `find_tags` fills both locals and
         // the matches it answers become ours.
         if other {
-            unsafe { xfree(tagmatchname.get().cast()) };
-            tagmatchname.set(unsafe { xstrdup(*name) });
+            // SAFETY: `find_tags` filled `name` with a NUL-terminated tag.
+            tagmatchname.set(Some(unsafe { XString::from_cstr(CStr::from_ptr(*name)) }));
         }
 
         if matches!(self.kind as c_uint, DT_SELECT | DT_JUMP | DT_LTAG) {
@@ -673,7 +673,10 @@ impl DoTag {
     /// `name` must be NUL-terminated.
     unsafe fn other_name(&self, name: *const c_char) -> bool {
         // SAFETY: the caller's promise.
-        unsafe { tagmatchname.get().is_null() || !cstr::eq(tagmatchname.get(), name) }
+        tagmatchname.with(|remembered| match remembered {
+            None => true,
+            Some(remembered) => !unsafe { cstr::eq(remembered.as_ptr(), name) },
+        })
     }
 
     /// Settle on which match to jump to, listing them and asking when the
@@ -712,7 +715,9 @@ impl DoTag {
             // Don't give this error when a file was not found and we
             // are looking for a match in another file that was not
             // found either: E429 says so below.
-            if matches!(self.kind as c_uint, DT_NEXT | DT_FIRST) && nofile_fname.get().is_null() {
+            if matches!(self.kind as c_uint, DT_NEXT | DT_FIRST)
+                && nofile_fname.with(Option::is_none)
+            {
                 tag_emsg(if found == 1 {
                     c"E427: There is only one matching tag"
                 } else {
@@ -769,9 +774,12 @@ impl DoTag {
         // SAFETY: the caller's promise.
         // Only when about to try the next match: otherwise E429 below
         // reports it.
-        if !nofile_fname.get().is_null() && self.error_cur_match != self.cur_match {
-            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
-            let arg0 = unsafe { c_str(nofile_fname.get()) };
+        if self.error_cur_match != self.cur_match
+            && let Some(missing) = nofile_fname.with(Clone::clone)
+        {
+            // SAFETY: the message macros expand to a `vim_snprintf` over
+            // the format literal above and the editor's message buffers.
+            let arg0 = unsafe { c_str(missing.as_ptr()) };
             smsg!(0, "File \"{arg0}\" does not exist");
         }
 
@@ -803,8 +811,10 @@ impl DoTag {
                 && (max_num_matches.get() != MAXCOL as c_int
                     || self.cur_match < num_matches.get() - 1));
         if !more {
-            // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
-            let arg0 = unsafe { c_str(nofile_fname.get()) };
+            let missing = nofile_fname.with(Clone::clone).unwrap_or_default();
+            // SAFETY: the message macros expand to a `vim_snprintf` over
+            // the format literal above and the editor's message buffers.
+            let arg0 = unsafe { c_str(missing.as_ptr()) };
             semsg!("E429: File \"{arg0}\" does not exist");
             return false;
         }

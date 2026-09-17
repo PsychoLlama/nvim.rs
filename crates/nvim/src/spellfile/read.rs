@@ -291,7 +291,7 @@ unsafe fn read_spl(
     }
 
     // SAFETY: the message table's own string.
-    unsafe { emsg(gettext_ptr(e_spell_trunc.get())) };
+    emsg(gettext(e_spell_trunc));
     false
 }
 

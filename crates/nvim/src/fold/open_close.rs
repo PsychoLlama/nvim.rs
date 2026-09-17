@@ -18,7 +18,7 @@ use crate::garray::{ga_grow, ga_init};
 use crate::message::emsg;
 use crate::r#move::changed_window_setting;
 use crate::option::vars::p_fcl;
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::winlayer::{TabPage, Win, windows_in_tab};
 use core::ffi::c_int;
 use core::ptr;
@@ -580,5 +580,5 @@ pub(super) fn check_closed(
 /// C's `emsg(_(e_nofold))`, which every command that found no fold gives.
 fn emsg_nofold() {
     // SAFETY: a static, translated message.
-    unsafe { emsg(gettext_ptr(e_nofold.get())) };
+    emsg(gettext(e_nofold));
 }

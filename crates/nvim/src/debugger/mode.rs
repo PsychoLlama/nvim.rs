@@ -126,16 +126,13 @@ unsafe fn show_debug_banner(cmd: *mut c_char) {
         (c"Oldval = \"%s\"", &debug_oldval),
         (c"Newval = \"%s\"", &debug_newval),
     ] {
-        let text = cell.get();
-        if text.is_null() {
+        let Some(text) = cell.take() else {
             continue;
-        }
-        // SAFETY: `text` is the NUL-terminated string the cell owns, and the
-        // message copies it before it is freed.
-        let shown = unsafe { c_str(text) };
+        };
+        // SAFETY: an `XString` is NUL-terminated by construction, and it
+        // outlives the message the formatter builds from it.
+        let shown = unsafe { c_str(text.as_ptr()) };
         let _: bool = report_msg(0, || tr_c!(label, shown));
-        unsafe { xfree(text.cast()) };
-        cell.set(ptr::null_mut());
     }
 
     let sname = estack_sfile(ESTACK_NONE);

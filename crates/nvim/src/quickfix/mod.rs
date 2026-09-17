@@ -131,7 +131,7 @@ use crate::window::{
 };
 use crate::winlayer::graph::{firstwin, lastwin, prevwin};
 use ::libc::{__errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, time};
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 
 // The carve of the transpiled module; see each child's docs.
 mod efm;
@@ -176,10 +176,10 @@ pub use self::setprops::*;
 mod eval;
 pub use self::eval::*;
 
-pub(crate) static msg_loclist: GlobalCell<*mut c_char> =
-    GlobalCell::new(c"[Location List]".as_ptr() as *mut c_char);
-pub(crate) static msg_qflist: GlobalCell<*mut c_char> =
-    GlobalCell::new(c"[Quickfix List]".as_ptr() as *mut c_char);
+/// The names `:ls` and the status line give the two list buffers. Upstream
+/// keeps them in `char *` globals; nothing has ever written to either.
+pub(crate) static msg_loclist: &CStr = c"[Location List]";
+pub(crate) static msg_qflist: &CStr = c"[Quickfix List]";
 
 /// Why a `getqflist()`/`setqflist()` request could not be carried out.
 ///

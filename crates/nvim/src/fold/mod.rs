@@ -134,7 +134,7 @@ pub struct FoldLine {
 
 /// Set when the folds changed and the window needs redrawing.
 static fold_changed: GlobalCell<bool> = GlobalCell::new(false);
-static e_nofold: GlobalCell<*const c_char> = GlobalCell::new(c"E490: No fold found".as_ptr());
+static e_nofold: &::core::ffi::CStr = c"E490: No fold found";
 
 /// While the folds are being updated, the lines between `invalid_top` and
 /// `invalid_bot` have an undefined fold level. Only meaningful for the window

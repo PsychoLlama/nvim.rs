@@ -185,8 +185,7 @@ fn autocmd_for_curbuf(event: AutoEvent) {
     // SAFETY: the current buffer is live, and the event takes no file name.
     unsafe { apply_autocmds(event, nofile, nofile, false, cb) };
 }
-static e_auchangedbuf: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(c"E812: Autocommands changed buffer or buffer name".as_ptr());
+static e_auchangedbuf: &::core::ffi::CStr = c"E812: Autocommands changed buffer or buffer name";
 pub const NONASCII_MASK: uint64_t = (-1 as ::core::ffi::c_int as uint64_t)
     .wrapping_div(0xff as uint64_t)
     .wrapping_mul(0x80 as uint64_t);
@@ -291,7 +290,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     }
     if Buf::current_raw() != buf {
         // We are in another buffer now, don't do the renaming.
-        unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
+        emsg(gettext(e_auchangedbuf));
         return Err(Failed);
     }
 

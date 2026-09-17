@@ -253,9 +253,10 @@ pub fn optval_as_tv(value: OptVal, numbool: bool) -> TypVal {
     // keep the answer out of `Drop`'s way.
     let mut rettv = TypVal::Special(kSpecialVarNull);
     match value {
-        OptVal::Boolean(word) => {
+        OptVal::Boolean(_) => {
             if numbool {
-                rettv.write_number(word as VarNumber);
+                let word = value.tristate().expect("the arm is Boolean");
+                rettv.write_number(VarNumber::from(word));
             } else if let Some(boolean) = value.as_boolean() {
                 // An unset global-local boolean has no Vimscript
                 // spelling and stays the `v:null` this started as.

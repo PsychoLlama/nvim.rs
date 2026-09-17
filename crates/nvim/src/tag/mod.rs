@@ -32,7 +32,7 @@ use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
 use crate::mbyte::{convert_setup, mb_strnicmp, string_convert, utfc_ptr2len};
-use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcat};
+use crate::memory::{XString, xfree, xmalloc, xmemdupz, xstrdup, xstrlcat};
 use crate::message::state::{msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent};
 use crate::message::{e_invarg, e_listreq};
 use crate::message::{
@@ -50,7 +50,6 @@ use crate::options::{
     kOptFdoFlagTag, kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagUseopen, kOptSwbFlagUsetab,
     kOptSwbFlagVsplit,
 };
-use crate::optionstr::free_string_option;
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::fs::{os_fopen, os_path_exists};
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
@@ -182,10 +181,12 @@ pub enum Jumped {
     /// The file the match names does not exist. The C's `NOTAGFILE`.
     NoSuchFile,
 }
-static nofile_fname: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static tagmatchname: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+/// The name of a file a match pointed at that does not exist, kept so that
+/// the E429 report can name it. `None` is "every match's file was there".
+static nofile_fname: GlobalCell<Option<XString>> = GlobalCell::new(None);
+/// The tag the remembered matches were found for, so that a `:tnext` can
+/// tell whether it is still walking the same search.
+static tagmatchname: GlobalCell<Option<XString>> = GlobalCell::new(None);
 static ptag_entry: GlobalCell<Taggy> = GlobalCell::new(Taggy {
     tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     fmark: FileMark {
@@ -212,8 +213,6 @@ pub const TAG_SEP: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 /// # Safety
 /// Must not be called while a match is still being read.
 pub unsafe fn tag_freematch() {
-    // SAFETY: the name is ours, or NULL.
-    unsafe { xfree(tagmatchname.get().cast()) };
-    tagmatchname.set(::core::ptr::null_mut());
+    drop(tagmatchname.take());
 }
 pub const ML_EXTRA: ::core::ffi::c_int = 3 as ::core::ffi::c_int;

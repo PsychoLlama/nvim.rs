@@ -21,7 +21,7 @@
 )]
 
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char};
+use core::ffi::{CStr, c_char, c_int};
 
 use crate::cstr;
 use crate::memory::{xmalloc, xstrdup};
@@ -38,17 +38,23 @@ use super::{
     kOptValTypeNumber, kOptValTypeString, option_default, option_has_type,
 };
 
+/// The `Option<bool>` an option variable's tri-state word stands for: a
+/// negative word is "not set in this scope", and anything above 1 is true.
+pub(crate) const fn tristate(word: c_int) -> Option<bool> {
+    match word {
+        ..0 => None,
+        0 => Some(false),
+        1.. => Some(true),
+    }
+}
+
 /// The `OptVal` for a boolean option's value.
 ///
 /// `None` is upstream's `kNone`: a global-local option with no value of its
 /// own in this scope.  It is not "false", and `optval_as_object` reports it
 /// as nil rather than as `false`.
 pub(crate) const fn boolean_optval(value: Option<bool>) -> OptVal {
-    OptVal::Boolean(match value {
-        Some(true) => 1,
-        Some(false) => 0,
-        None => -1,
-    })
+    OptVal::Boolean(value)
 }
 
 /// What `:set` and `nvim_get_option_info` call each value type.
@@ -188,7 +194,9 @@ pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVa
     // option's own tri-state, so anything above 1 reads as true.
     let value = match slot {
         OptSlot::None => OptVal::Nil,
-        OptSlot::Boolean(var) => OptVal::Boolean(unsafe { var.get() }.clamp(-1, 1)),
+        // The variable's word is the option's own tri-state, so anything
+        // above 1 reads as true and a negative one is "not set here".
+        OptSlot::Boolean(var) => boolean_optval(tristate(unsafe { var.get() })),
         OptSlot::Number(var) => OptVal::Number(unsafe { var.get() }),
         // A *borrow* of the option variable's own buffer, which is what
         // makes `optval_free` of this value free the variable's string --
@@ -233,7 +241,10 @@ pub(crate) unsafe fn set_option_varp(
     // it for every row at compile time, and the assertion above ties this
     // value to the same row.
     match (slot, value) {
-        (OptSlot::Boolean(var), OptVal::Boolean(word)) => unsafe { var.set(word) },
+        (OptSlot::Boolean(var), OptVal::Boolean(boolean)) => {
+            let word = boolean.map_or(-1, c_int::from);
+            unsafe { var.set(word) }
+        }
         (OptSlot::Number(var), OptVal::Number(n)) => unsafe { var.set(n) },
         // The variable takes the allocation over.
         (OptSlot::String(var), OptVal::String(s)) => unsafe { var.set(s.data()) },
@@ -248,8 +259,12 @@ pub(crate) fn optval_to_cstr(value: &OptVal) -> *mut c_char {
         // SAFETY (every arm): the literal is NUL-terminated, and `buf` is
         // the allocation the arm just made.
         OptVal::Nil => unsafe { xstrdup(c"".as_ptr()) },
-        OptVal::Boolean(word) => {
-            let word = if *word != 0 { c"true" } else { c"false" };
+        OptVal::Boolean(boolean) => {
+            let word = if *boolean == Some(true) {
+                c"true"
+            } else {
+                c"false"
+            };
             unsafe { xstrdup(word.as_ptr()) }
         }
         OptVal::Number(n) => {

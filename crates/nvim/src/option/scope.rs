@@ -220,10 +220,9 @@ impl BoolVar {
     pub(crate) unsafe fn get(self) -> c_int {
         match self {
             BoolVar::Global(field) => c_int::from(field.get()),
-            BoolVar::OwnDefault(idx) => match option_default(idx) {
-                OptVal::Boolean(word) => word,
-                _ => unreachable!("an immutable boolean option's default is a boolean"),
-            },
+            BoolVar::OwnDefault(idx) => option_default(idx)
+                .tristate()
+                .expect("an immutable boolean option's default is a boolean"),
             // SAFETY: the caller's live field.
             BoolVar::Local(var) => unsafe { *var },
         }
@@ -241,7 +240,9 @@ impl BoolVar {
                 debug_assert!(word == 0 || word == 1, "a global boolean is not tri-state");
                 field.set(word != 0);
             }
-            BoolVar::OwnDefault(idx) => store_option_default(idx, OptVal::Boolean(word)),
+            BoolVar::OwnDefault(idx) => {
+                store_option_default(idx, OptVal::Boolean(super::tristate(word)));
+            }
             // SAFETY: the caller's live field.
             BoolVar::Local(var) => unsafe { *var = word },
         }

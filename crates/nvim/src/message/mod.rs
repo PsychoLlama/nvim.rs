@@ -250,8 +250,10 @@ static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false);
 /// in a keyset that dies with the call, which is how a borrowed kind became
 /// a use-after-free.
 static msg_ext_kind: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-static msg_ext_trigger: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
+/// What caused the message being built, for a UI that groups by it. Both
+/// callers name a compiled-in kind, so the cell holds the literal rather
+/// than a pointer whose lifetime it would have to answer for.
+static msg_ext_trigger: GlobalCell<Option<&'static ::core::ffi::CStr>> = GlobalCell::new(None);
 static msg_ext_id: GlobalCell<Object> = GlobalCell::new(Object::Integer(1 as Integer));
 static msg_ext_chunks: GlobalCell<Option<Array>> = GlobalCell::new(None);
 /// The text written under the current highlight, waiting to be closed off

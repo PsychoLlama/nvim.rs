@@ -277,9 +277,9 @@ impl Env {
             return;
         }
         let msg = if self.win.w_llist_ref.is_null() {
-            msg_qflist.get()
+            msg_qflist.as_ptr().cast_mut()
         } else {
-            msg_loclist.get()
+            msg_loclist.as_ptr().cast_mut()
         };
         // SAFETY: both globals hold a NUL-terminated message, and `gettext`
         // answers one for it.

@@ -132,8 +132,10 @@ pub const DBG_EXPR: c_int = 3;
 static debug_greedy: GlobalCell<bool> = GlobalCell::new(false);
 /// The before/after values of a watched expression that just changed; shown
 /// once, on the way into the prompt, then freed.
-static debug_oldval: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-static debug_newval: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+/// The two values a watch expression moved between, waiting to be printed
+/// in the debug banner. Each is owned, and the banner takes it.
+static debug_oldval: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static debug_newval: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 static dbg_breakp: GlobalCell<Vec<Breakpoint>> = GlobalCell::new(Vec::new());
 static prof_ga: GlobalCell<Vec<Breakpoint>> = GlobalCell::new(Vec::new());
@@ -777,14 +779,17 @@ unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
 /// Record the "before" value the prompt banner prints, freeing whatever an
 /// earlier change left. A null typval renders as the empty value.
 fn set_oldval(tv: Option<&mut TypVal>) {
-    // SAFETY: caller contract; the cell owns what it holds.
-    unsafe { xfree(debug_oldval.get().cast()) };
-    debug_oldval.set(unsafe { typval_tostring(tv.map(|tv| &*tv), true) });
+    // SAFETY: the caller's typval, and `typval_tostring` always answers an
+    // allocation of its own.
+    debug_oldval.set(Some(unsafe {
+        XString::from_raw(typval_tostring(tv.map(|tv| &*tv), true))
+    }));
 }
 
 /// [`set_oldval`] for the "after" value.
 fn set_newval(tv: Option<&mut TypVal>) {
     // SAFETY: as `set_oldval`.
-    unsafe { xfree(debug_newval.get().cast()) };
-    debug_newval.set(unsafe { typval_tostring(tv.map(|tv| &*tv), true) });
+    debug_newval.set(Some(unsafe {
+        XString::from_raw(typval_tostring(tv.map(|tv| &*tv), true))
+    }));
 }

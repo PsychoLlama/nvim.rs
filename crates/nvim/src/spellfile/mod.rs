@@ -8,7 +8,6 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, skipwhite};
 use crate::cstr;
 use crate::getchar::state::got_int;
-use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
 use crate::mbyte::convert_setup;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
@@ -283,11 +282,9 @@ pub const VIMSPELLMAGICL: usize =
 pub const VIMSPELLVERSION: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 pub const SNF_REQUIRED: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const COMPOUND_MAX_LEN: ::core::ffi::c_int = 100000 as ::core::ffi::c_int;
-static e_spell_trunc: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(c"E758: Truncated spell file".as_ptr());
+static e_spell_trunc: &::core::ffi::CStr = c"E758: Truncated spell file";
 static e_duplicate_char_in_map_entry: &::core::ffi::CStr = c"E783: Duplicate char in MAP entry";
-static e_illegal_character_in_word: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(c"E1280: Illegal character in word".as_ptr());
+static e_illegal_character_in_word: &::core::ffi::CStr = c"E1280: Illegal character in word";
 pub const MAXLINELEN: ::core::ffi::c_int = 500 as ::core::ffi::c_int;
 pub const AFT_CHAR: ::core::ffi::c_int = 0;
 pub const AFT_LONG: ::core::ffi::c_int = 1 as ::core::ffi::c_int;

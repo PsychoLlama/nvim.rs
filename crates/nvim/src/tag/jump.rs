@@ -14,6 +14,7 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_split, cmdmod_set_tab, cmdmod_tab};
 use crate::guard::{Lock, Suppress};
+use crate::memory::XString;
 use crate::option::cpo_has;
 use crate::os::cshim::strstr;
 use crate::search::SEARCH_KEEP;
@@ -415,8 +416,10 @@ impl Jump {
         if !unsafe { os_path_exists(self.fname()) }
             && !unsafe { has_autocmd(AutoEvent::BufReadCmd, self.fname(), None) }
         {
-            unsafe { xfree(nofile_fname.get().cast()) };
-            nofile_fname.set(unsafe { xstrdup(self.fname()) });
+            // SAFETY: the match's file name is NUL-terminated.
+            nofile_fname.set(Some(unsafe {
+                XString::from_cstr(CStr::from_ptr(self.fname()))
+            }));
             return Ok(Jumped::NoSuchFile);
         }
 

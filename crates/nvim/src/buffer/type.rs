@@ -187,9 +187,9 @@ pub fn buf_spname(buffer: Buf) -> *mut c_char {
     let b = buffer;
     if buf_is_quickfix(Some(b)) {
         if b.handle == qf_stack_get_bufnr() {
-            return tr_raw(msg_qflist.get());
+            return tr_raw(msg_qflist.as_ptr().cast_mut());
         }
-        return tr_raw(msg_loclist.get());
+        return tr_raw(msg_loclist.as_ptr().cast_mut());
     }
     if buf_is_nofilename(Some(b)) {
         if !b.b_fname.is_null() {

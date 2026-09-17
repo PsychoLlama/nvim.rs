@@ -308,7 +308,7 @@ pub(crate) unsafe fn open_source(
                 check_need_swap(how.newfile);
                 // The SwapExists autocommand may mess things up.
                 if buffer_changed() {
-                    unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
+                    emsg(gettext(e_auchangedbuf));
                     return Err(retval);
                 }
             }
@@ -385,7 +385,7 @@ pub(crate) unsafe fn open_source(
     if !buf_is_dontwrite(current_buf()) {
         check_need_swap(how.newfile);
         if !how.stdin && buffer_changed() {
-            unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
+            emsg(gettext(e_auchangedbuf));
             if !how.buffer {
                 unsafe { close(fd) };
             }

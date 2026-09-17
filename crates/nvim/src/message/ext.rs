@@ -47,12 +47,9 @@ pub fn msg_ext_set_append(append: bool) {
 }
 
 /// Record what caused the next message, for a UI that wants to group by it.
-///
-/// # Safety
-/// As [`msg_ext_set_kind`]: `trigger` is stored by pointer.
-pub unsafe fn msg_ext_set_trigger(trigger: *const c_char) {
+pub fn msg_ext_set_trigger(trigger: &'static CStr) {
     msg_ext_ui_flush();
-    msg_ext_trigger.set(trigger);
+    msg_ext_trigger.set(Some(trigger));
 }
 
 /// Close off the run of text accumulated under one highlight.
@@ -133,7 +130,11 @@ pub fn msg_ext_ui_flush() {
         to_ui_history,
         msg_ext_append.get(),
         msg_ext_id.with(Object::clone),
-        unsafe { cstr_to_string(msg_ext_trigger.get()) },
+        msg_ext_trigger
+            .get()
+            .map_or_else(String_0::default, |trigger| {
+                String_0::from_bytes(trigger.to_bytes())
+            }),
     );
 
     if !to_ui_history {

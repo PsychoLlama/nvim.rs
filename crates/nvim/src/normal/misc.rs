@@ -97,7 +97,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
     // A typed `:` scrolls the message area up to make room for the
     // command line; a mapped one leaves the display alone.
     if KeyTyped.get() {
-        unsafe { msg_ext_set_trigger(c"typed_cmd".as_ptr()) };
+        msg_ext_set_trigger(c"typed_cmd");
         compute_cmdrow();
     }
     let cmd_result = if is_lua {
@@ -115,7 +115,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
         };
         unsafe { do_cmdline(ptr::null_mut(), getline, NULL, opts).is_ok() }
     };
-    unsafe { msg_ext_set_trigger(c"".as_ptr()) };
+    msg_ext_set_trigger(c"");
     if !cmd_result {
         clear_op(op);
     } else if op.op_type != OpType::Nop

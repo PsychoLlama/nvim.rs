@@ -128,8 +128,6 @@ const E_AUTOCOMMAND_NESTING_TOO_DEEP: &CStr = c"E218: Autocommand nesting too de
 static active_apc_list: GlobalCell<*mut AutoPatCmd> =
     GlobalCell::new(::core::ptr::null_mut::<AutoPatCmd>());
 static next_augroup_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
-static deleted_augroup: GlobalCell<*const ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null::<::core::ffi::c_char>());
 static current_augroup: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(AUGROUP_DEFAULT as ::core::ffi::c_int);
 static au_need_clean: GlobalCell<bool> = GlobalCell::new(false);

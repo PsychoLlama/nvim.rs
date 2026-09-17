@@ -168,7 +168,7 @@ impl TypvalSink for NothingSink {
             }
         } else {
             unsafe { func_unref(fun) };
-            if !ptr::eq(fun, tv_empty_string.get()) {
+            if !ptr::eq(fun, tv_empty_string.as_ptr()) {
                 unsafe { xfree(fun.cast::<c_void>()) };
             }
             tv.write_func_name(ptr::null_mut());

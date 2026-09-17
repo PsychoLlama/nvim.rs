@@ -103,7 +103,7 @@ pub(crate) unsafe fn eval_func(
     // While skipping, a name that was never resolved still has to look
     // like a Funcref so the subscript handling can go on.
     if rv.v_type() == VAR_UNKNOWN && !evaluate && cur.byte() == b'(' {
-        rv.write_func_name(tv_empty_string.get() as *mut c_char);
+        rv.write_func_name(tv_empty_string.as_ptr().cast_mut());
     }
     if evaluate && aborting() {
         if ret.is_ok() {

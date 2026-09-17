@@ -527,7 +527,7 @@ unsafe fn ex_let_option(
                     OptVal::Number(number) => number,
                     // The tri-state word itself, as upstream's union read
                     // of the `boolean` arm answered.
-                    OptVal::Boolean(word) => OptInt::from(word),
+                    OptVal::Boolean(_) => OptInt::from(v.tristate().expect("the arm is Boolean")),
                     OptVal::Nil | OptVal::String(_) => {
                         unreachable!("guarded to a Number or a Boolean")
                     }

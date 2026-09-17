@@ -141,10 +141,9 @@ const fn scope_idx(global: GlobalOptIndex, win: WinOptIndex, buf: BufOptIndex) -
 }
 
 const fn boolean(value: bool) -> OptVal {
-    // The variant holds the option variable's own tri-state word: 0 false, 1
-    // true, -1 for a global-local option with no value in this scope. A
-    // default is never the third.
-    OptVal::Boolean(if value { 1 } else { 0 })
+    // A default is never the third state -- an option's own default is
+    // always a value, never "not set in this scope".
+    OptVal::Boolean(Some(value))
 }
 
 const fn number(value: OptInt) -> OptVal {
