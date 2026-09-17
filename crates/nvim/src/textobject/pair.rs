@@ -28,7 +28,7 @@ use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::{Lines, decl, inc, incl};
 use crate::memory::{xfree, xmalloc};
 use crate::option::cpo_has;
-use crate::option::vars::{p_cpo, p_sel, p_ws};
+use crate::option::vars::{P_CPO, P_WS, p_cpo, p_sel, p_ws};
 use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
@@ -104,8 +104,8 @@ pub unsafe fn current_block(
 
     // Search backwards for the unclosed bracket. Quotes are ignored here,
     // but 'cpoptions' `M` is kept because that is the user's choice.
-    let save_cpo = p_cpo.get();
-    p_cpo.set(if !cpo_has(CpoFlag::MATCHBSL) {
+    let save_cpo = p_cpo();
+    P_CPO.set(if !cpo_has(CpoFlag::MATCHBSL) {
         c"%".as_ptr() as *mut c_char
     } else {
         c"%M".as_ptr() as *mut c_char
@@ -138,7 +138,7 @@ pub unsafe fn current_block(
         Win::current().w_cursor = found;
         start_pos = found;
     }
-    p_cpo.set(save_cpo);
+    P_CPO.set(save_cpo);
 
     // Then the matching closing bracket.
     if pos.is_none() {
@@ -205,7 +205,7 @@ pub unsafe fn current_block(
     if visual_active() {
         // SAFETY: `p_sel` holds the NUL-terminated 'selection' value, set
         // before any mapping can run.
-        if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+        if unsafe { *p_sel() } as c_int == 'e' as c_int {
             inc(&mut Win::current().cursor());
         }
         if sol && gchar_cursor() != NUL {
@@ -332,17 +332,17 @@ unsafe fn search_tag_pair(spat: *const c_char, epat: *const c_char, dir: c_int) 
 pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) -> c_int {
     let mut count = count_arg;
     let mut do_include = include;
-    let save_p_ws = p_ws.get() != 0;
+    let save_p_ws = p_ws();
     let mut retval = FAIL;
     let mut is_inclusive = true;
-    p_ws.set(0);
+    P_WS.set(false);
 
     let old_pos = Win::current().w_cursor;
     let mut old_end = Win::current().w_cursor; // where we started
     let mut old_start = old_end;
     // SAFETY: `p_sel` holds the NUL-terminated 'selection' value, set before
     // any mapping can run.
-    if !visual_active() || unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+    if !visual_active() || unsafe { *p_sel() } as c_int == 'e' as c_int {
         decl(&mut old_end); // `old_end` is inclusive
     }
 
@@ -401,7 +401,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
                 <= 0
             {
                 Win::current().w_cursor = old_pos;
-                p_ws.set(save_p_ws as c_int);
+                P_WS.set(save_p_ws);
                 return retval;
             }
         }
@@ -424,7 +424,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         let len = unsafe { cp.offset_from(p) } as c_int;
         if len == 0 {
             Win::current().w_cursor = old_pos;
-            p_ws.set(save_p_ws as c_int);
+            P_WS.set(save_p_ws);
             return retval;
         }
         let spat_len = len as size_t + 39;
@@ -519,7 +519,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         if lt(end_pos, start_pos) {
             Win::current().w_cursor = start_pos;
         // SAFETY: `p_sel` holds the NUL-terminated 'selection' value.
-        } else if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+        } else if unsafe { *p_sel() } as c_int == 'e' as c_int {
             // SAFETY: the cursor is on a line of the current buffer.
             inc_cursor();
         }
@@ -545,6 +545,6 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
     }
     retval = OK;
 
-    p_ws.set(save_p_ws as c_int);
+    P_WS.set(save_p_ws);
     retval
 }

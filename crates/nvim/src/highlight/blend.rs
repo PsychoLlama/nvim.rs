@@ -166,7 +166,7 @@ fn blend_over(ratio: c_int, back: HlAttrs, front: HlAttrs) -> HlAttrs {
 fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     // SAFETY: the editor's own globals; `p_bg` is a NUL-terminated option
     // string, never empty.
-    let dark = unsafe { *p_bg.get() == b'd'.cast_signed() };
+    let dark = unsafe { *p_bg() == b'd'.cast_signed() };
     if attrs.rgb_bg_color == -1 {
         attrs.rgb_bg_color = normal_bg.get();
     }

@@ -82,7 +82,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
         return None;
     }
     let val = if val.is_null() {
-        unsafe { *option_var(opt_idx).string_var() }
+        unsafe { option_var(opt_idx).string_var().get() }
     } else {
         val
     };
@@ -676,7 +676,7 @@ pub(crate) unsafe fn expand_setting_subtract(
     }
     let (buf, win) = (Buf::current(), Win::current());
     let varp = get_varp_scope_from(opt_idx, FLAGS.get(), buf, win);
-    let value = unsafe { *varp.string_var() };
+    let value = unsafe { varp.string_var().get() };
     let flags = get_option(opt_idx).flags;
 
     if flags & kOptFlagComma as uint32_t != 0 {

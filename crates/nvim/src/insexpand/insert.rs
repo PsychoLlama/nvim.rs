@@ -495,7 +495,7 @@ pub(crate) fn ins_compl_next(allow_get_expansion: bool, count: c_int, insert_mat
     let compl_preinsert = ins_compl_has_preinsert();
     let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0
         || compl_autocomplete.get() && !compl_preinsert;
-    let has_autocomplete_delay = compl_autocomplete.get() && p_acl.get() > 0;
+    let has_autocomplete_delay = compl_autocomplete.get() && p_acl() > 0;
 
     // When a user completion function answers -1 for findstart, which is
     // the next time round with 'always', compl_shown_match becomes NULL.

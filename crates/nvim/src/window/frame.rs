@@ -334,7 +334,7 @@ pub(crate) fn alt_frame(win: Win, tabpage: Option<TabPage>) -> FrameRef {
     let row = frp.parent().is_some_and(|p| p.fr_layout as c_int == FR_ROW);
     let col = frp.parent().is_some_and(|p| p.fr_layout as c_int == FR_COL);
     // Set a preference between the next and previous frame.
-    let before = (col && p_sb.get() != 0) || (row && p_spr.get() != 0);
+    let before = (col && p_sb()) || (row && p_spr());
     let (target, other) = if before { (prev, next) } else { (next, prev) };
     // Prefer the frame that is not fixed along the axis the room moves.
     let fixed = if row {

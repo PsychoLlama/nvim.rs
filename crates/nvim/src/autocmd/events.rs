@@ -98,7 +98,7 @@ pub unsafe fn event_ignored(event: AutoEvent, mut ei: *mut ::core::ffi::c_char) 
         let unignore = unsafe { *ei } == b'-' as ::core::ffi::c_char;
         ei = unsafe { ei.add(usize::from(unignore)) };
         if let Some(after_all) = unsafe { skip_all(ei) } {
-            ignored = ei == p_ei.get() || event_row(event).win_local;
+            ignored = ei == p_ei() || event_row(event).win_local;
             ei = after_all;
         } else if unsafe { event_name2nr(ei, &raw mut ei) } == Some(event) {
             if unignore {
@@ -120,7 +120,7 @@ pub unsafe fn event_ignored(event: AutoEvent, mut ei: *mut ::core::ffi::c_char) 
 ///
 /// `ei` must point at a NUL-terminated string, unaliased for the call.
 pub unsafe fn check_ei(mut ei: *mut ::core::ffi::c_char) -> Result<(), Failed> {
-    let win = ei != p_ei.get();
+    let win = ei != p_ei();
     // SAFETY: as in `event_ignored` -- `ei` is a NUL-terminated option
     // value, and every step below stays within it.
     while unsafe { *ei } != 0 {
@@ -170,7 +170,7 @@ unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_c
 /// the old value for [`au_event_restore`].
 pub(crate) fn au_event_disable(what: &CStr) -> XString {
     // SAFETY: 'eventignore' holds a NUL-terminated value.
-    let ignored = unsafe { cstr::bytes_at(p_ei.get()) };
+    let ignored = unsafe { cstr::bytes_at(p_ei()) };
     let saved = XString::from_bytes(ignored);
     let appended = if ignored.is_empty() && what.to_bytes().first() == Some(&b',') {
         // Nothing to join to, so the leading comma would open the list with

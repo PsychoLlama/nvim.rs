@@ -434,7 +434,7 @@ pub fn do_autochdir() {
 }
 
 fn do_autochdir_now() {
-    if p_acd.get() == 0 {
+    if !p_acd() {
         return;
     }
     let fname = Buf::current().b_ffname;

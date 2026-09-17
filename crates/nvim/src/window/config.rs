@@ -29,7 +29,7 @@ use crate::fold::deepest_fold_nesting;
 use crate::grid::{default_grid_ref, grid_adjust, win_grid_alloc};
 use crate::guard::Suppress;
 use crate::r#move::textpos2screenpos;
-use crate::option::vars::{p_acd, p_ch};
+use crate::option::vars::{P_ACD, p_acd, p_ch};
 use crate::os::cshim::gettext_ptr;
 use crate::plines::win_text_height;
 use crate::pos::MAXCOL;
@@ -89,15 +89,15 @@ fn set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
     };
     if win_result.is_ok() {
         // Do not trigger 'autochdir' in the window we switched to.
-        let save_acd = p_acd.get();
+        let save_acd = p_acd();
         if !switchwin.sw_same_win {
-            p_acd.set(0);
+            P_ACD.set(false);
         }
         let (goto, first, fwd) = (DOBUF_GOTO as c_int, DOBUF_FIRST as c_int, FORWARD as c_int);
         let nr = buffer.handle();
         let _ = do_buffer(goto, first, fwd, nr, 0);
         if !switchwin.sw_same_win {
-            p_acd.set(save_acd);
+            P_ACD.set(save_acd);
         }
     }
     // SAFETY: `tstate` is the state `try_enter` saved.
@@ -228,7 +228,7 @@ fn ext_win_position(window: Win, validate: bool) {
             anchor_to_window(parent, &c, validate, &mut grid, &mut row, &mut col);
         }
     } else if c.relative as c_uint == kFloatRelativeLaststatus as c_uint {
-        row += (Rows.get() - p_ch.get() as c_int - last_stl_rows(false)) as Float;
+        row += (Rows.get() - p_ch() as c_int - last_stl_rows(false)) as Float;
     } else if c.relative as c_uint == kFloatRelativeTabline as c_uint {
         row += tabline_rows() as Float;
     }
@@ -255,7 +255,7 @@ fn ext_win_position(window: Win, validate: bool) {
     let mut comp_col = col as c_int - if east { wp.w_width_outer } else { 0 };
     // Don't cover the command line unless the float sits above the messages.
     let above_ch = if wp.w_config.zindex < kZIndexMessages as c_int {
-        p_ch.get() as c_int
+        p_ch() as c_int
     } else {
         0
     };

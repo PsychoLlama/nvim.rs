@@ -352,10 +352,10 @@ fn enter_help_window() -> Option<HelpWindow> {
 
     // SAFETY: the window list is a live intrusive list on the main thread.
     // No help window yet: check that 'helpfile' can be read at all.
-    let helpfd = unsafe { os_fopen(p_hf.get(), c"rb".as_ptr()) };
+    let helpfd = unsafe { os_fopen(p_hf(), c"rb".as_ptr()) };
     if helpfd.is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg0 = unsafe { c_str(p_hf.get()) };
+        let arg0 = unsafe { c_str(p_hf()) };
         smsg!(0, "Help file \"{arg0}\" not found");
         return None;
     }
@@ -368,7 +368,7 @@ fn enter_help_window() -> Option<HelpWindow> {
         && Win::current().w_width != Columns.get()
         && Win::current().w_width < 80
     {
-        split |= if p_sb.get() != 0 {
+        split |= if p_sb() {
             WSP_BOT as c_int
         } else {
             WSP_TOP as c_int
@@ -377,8 +377,8 @@ fn enter_help_window() -> Option<HelpWindow> {
     if win_split(0, split).is_err() {
         return None;
     }
-    if (Win::current().w_height as OptInt) < p_hh.get() {
-        win_setheight(p_hh.get() as c_int);
+    if (Win::current().w_height as OptInt) < p_hh() {
+        win_setheight(p_hh() as c_int);
     }
 
     // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
@@ -580,7 +580,7 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
     // SAFETY: 'helplang' is a NUL-terminated option string; a non-empty one
     // always has at least two bytes, since it is a comma-separated list of
     // two-letter codes.
-    let hlg = p_hlg.get();
+    let hlg = p_hlg();
     if unsafe { *hlg } != NUL as c_char
         && (unsafe { *hlg } != b'e' as c_char || unsafe { *hlg.offset(1) } != b'n' as c_char)
     {

@@ -322,7 +322,7 @@ unsafe fn create_environment(
             }
             // COLORTERM was just removed; put ours back when we know
             // the child can use it.
-            if p_tgc.get() != 0 {
+            if p_tgc() {
                 let truecolor = c"truecolor".as_ptr();
                 let _ = unsafe { (*env).add_str(b"COLORTERM", truecolor) };
             }

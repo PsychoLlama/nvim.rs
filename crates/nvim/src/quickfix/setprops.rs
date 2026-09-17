@@ -446,7 +446,7 @@ unsafe fn qf_setprop_items_from_lines(
     di: &mut DictItem,
     action: c_int,
 ) -> Result<(), QfError> {
-    let mut errorformat = p_efm.get();
+    let mut errorformat = p_efm();
     if let Some(efm_di) = unsafe { find(what, "efm") } {
         if efm_di.di_tv.v_type() != VAR_STRING || efm_di.di_tv.string_or_null().is_null() {
             return Err(QfError::BadValue);

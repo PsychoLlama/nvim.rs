@@ -211,7 +211,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
                         || (before == ' ' as c_int && (*inserted_space_p == 0 || arrow_used.get()))
                 }
         };
-        let one_step = mode == Backspace::Char && ((p_sta.get() != 0 && in_indent) || soft_tab());
+        let one_step = mode == Backspace::Char && ((p_sta() && in_indent) || soft_tab());
         if one_step {
             *inserted_space_p = 0;
             bs_one_shiftwidth(in_indent);
@@ -379,7 +379,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
 
     // The virtual column to end up at.
     let mut want_vcol = if vcol > 0 { vcol - 1 } else { 0 };
-    if p_sta.get() != 0 && in_indent {
+    if p_sta() && in_indent {
         want_vcol -= want_vcol % get_sw_value(Buf::current());
     } else {
         let sts = get_sts_value();
@@ -474,7 +474,7 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
             replace_do_bs(-1);
         } else {
             let mut has_composing = false;
-            if p_deco.get() != 0 {
+            if p_deco() {
                 // SAFETY: the cursor is on a character of its line, so the
                 // character after it is at most the line's NUL.
                 let p0 = get_cursor_pos_ptr();

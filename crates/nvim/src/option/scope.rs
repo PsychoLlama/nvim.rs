@@ -11,9 +11,10 @@
 //! same question for an explicit `:setglobal`/`:setlocal`, and is the one
 //! caller that must see the sentinel rather than fall back.
 //!
-//! The result is a `*mut c_void` because the three value types have three
-//! different widths; [`super::value`] is where it gets read or written, and
-//! it re-derives the type from the same table row.
+//! The result is an [`OptSlot`]: which of the three types the option is, and
+//! then either the selector naming its field of the global record or the
+//! address of a window's, buffer's or syntax block's own copy. [`super::value`]
+//! is where it gets read or written.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -28,21 +29,22 @@
 )]
 
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
 
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
+use crate::options::vars::{BoolOpt, NumOpt, StrOpt};
 use crate::options::*;
 use crate::types::{
-    Buffer, OptIndex, OptInt, OptScope, OptValType, OptVar, OptionSetFlags, SynBlock, Window,
-    ssize_t,
+    Buffer, OptIndex, OptInt, OptScope, OptStr, OptVal, OptValType, OptVar, OptionSetFlags,
+    SynBlock, Window, ssize_t,
 };
 
 use super::{
     NO_LOCAL_UNDOLEVEL, get_option, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_default_var,
+    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, option_default, store_option_default,
 };
 
 /// The signed distance from a field of `w_onebuf_opt` to the same field of
@@ -61,6 +63,201 @@ const ALLBUF_OFFSET: isize = {
     all - one
 };
 
+/// One variable of one kind, wherever it lives.
+///
+/// A global value is a field of `Options`, named by the selector the table's
+/// row holds; a local one is a field of a window, a buffer or a syntax block,
+/// and is still an address — `crate::types::buffer`'s fields are a later
+/// slice's. The pair is what lets a read or a write be one operation with one
+/// `# Safety` clause instead of a match at every call site.
+///
+/// [`NumVar`], [`StrVar`] and [`BoolVar`] are the three; the third is spelled
+/// out separately because its two halves disagree about the type.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum NumVar {
+    /// The global value: a field of the option record.
+    Global(NumOpt),
+    /// A window's or buffer's own copy, or a negative sentinel meaning "not
+    /// set here".
+    Local(*mut OptInt),
+    /// An immutable option has nowhere to keep a value, so it reads its own
+    /// current default in place. See [`BoolVar::OwnDefault`].
+    OwnDefault(OptIndex),
+}
+
+impl NumVar {
+    /// What the variable holds.
+    ///
+    /// # Safety
+    ///
+    /// A `Local` must name a field of a live window, buffer or syntax block
+    /// — what `get_varp`/`get_varp_scope` hand out.
+    pub(crate) unsafe fn get(self) -> OptInt {
+        match self {
+            NumVar::Global(field) => field.get(),
+            NumVar::OwnDefault(idx) => option_default(idx)
+                .as_number()
+                .expect("an immutable number option's default is a number"),
+            // SAFETY: the caller's live field.
+            NumVar::Local(var) => unsafe { *var },
+        }
+    }
+
+    /// Overwrite the variable.
+    ///
+    /// # Safety
+    ///
+    /// As [`get`](Self::get).
+    pub(crate) unsafe fn set(self, value: OptInt) {
+        match self {
+            NumVar::Global(field) => field.set(value),
+            NumVar::OwnDefault(idx) => store_option_default(idx, OptVal::Number(value)),
+            // SAFETY: the caller's live field.
+            NumVar::Local(var) => unsafe { *var = value },
+        }
+    }
+
+    /// The same field of the object `delta` bytes away — a window's other
+    /// `WinOpt`. Only a local copy has one.
+    fn byte_offset(self, delta: isize) -> Self {
+        match self {
+            NumVar::Global(_) | NumVar::OwnDefault(_) => {
+                unreachable!("a global value has no second copy")
+            }
+            NumVar::Local(var) => NumVar::Local(var.wrapping_byte_offset(delta)),
+        }
+    }
+}
+
+/// A string option's variable. Never null once startup has run; an unset
+/// global-local local copy holds the shared empty string.
+///
+/// The value is still a raw `char *` either way: the next slice is what gives
+/// an option's string an owner.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum StrVar {
+    /// The global value: a field of the option record.
+    Global(StrOpt),
+    /// A window's, buffer's or syntax block's own copy.
+    Local(*mut *mut c_char),
+    /// An immutable option reads its own default in place. See
+    /// [`BoolVar::OwnDefault`].
+    OwnDefault(OptIndex),
+}
+
+impl StrVar {
+    /// What the variable holds. See [`NumVar::get`].
+    ///
+    /// # Safety
+    ///
+    /// A `Local` must name a field of a live window, buffer or syntax block.
+    pub(crate) unsafe fn get(self) -> *mut c_char {
+        match self {
+            StrVar::Global(field) => field.get(),
+            StrVar::OwnDefault(idx) => option_default(idx)
+                .as_string()
+                .expect("an immutable string option's default is a string")
+                .data(),
+            // SAFETY: the caller's live field.
+            StrVar::Local(var) => unsafe { *var },
+        }
+    }
+
+    /// Overwrite the variable, which takes over whatever `value` owns.
+    ///
+    /// # Safety
+    ///
+    /// As [`get`](Self::get).
+    pub(crate) unsafe fn set(self, value: *mut c_char) {
+        match self {
+            StrVar::Global(field) => field.set(value),
+            StrVar::OwnDefault(idx) => {
+                // SAFETY: an option value is NUL-terminated.
+                let len = unsafe { crate::cstr::bytes_at(value) }.len();
+                store_option_default(idx, OptVal::String(OptStr::from_raw_parts(value, len)));
+            }
+            // SAFETY: the caller's live field.
+            StrVar::Local(var) => unsafe { *var = value },
+        }
+    }
+
+    /// See [`NumVar::byte_offset`].
+    fn byte_offset(self, delta: isize) -> Self {
+        match self {
+            StrVar::Global(_) | StrVar::OwnDefault(_) => {
+                unreachable!("a global value has no second copy")
+            }
+            StrVar::Local(var) => StrVar::Local(var.wrapping_byte_offset(delta)),
+        }
+    }
+}
+
+/// A boolean option's variable.
+///
+/// The two halves disagree about the type, which is why this one is written
+/// out rather than taken from `variable!`: the global value is a `bool`, and
+/// a local copy is the tri-state word upstream gave every boolean — 0 false,
+/// 1 true, **-1 not set in this scope**.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum BoolVar {
+    /// The global value: a field of the option record.
+    Global(BoolOpt),
+    /// A window's or buffer's own tri-state copy.
+    Local(*mut c_int),
+    /// An immutable option has nowhere to keep a value, so it reads its own
+    /// current default in place — the `def_val` of its own row, as
+    /// `crate::option::state` currently holds it. Upstream reached the same
+    /// bytes through a `void *` into the defaults table.
+    OwnDefault(OptIndex),
+}
+
+impl BoolVar {
+    /// What the variable holds, as the tri-state word: 0, 1 or -1.
+    ///
+    /// # Safety
+    ///
+    /// A `Local` must name a field of a live window or buffer.
+    pub(crate) unsafe fn get(self) -> c_int {
+        match self {
+            BoolVar::Global(field) => c_int::from(field.get()),
+            BoolVar::OwnDefault(idx) => match option_default(idx) {
+                OptVal::Boolean(word) => word,
+                _ => unreachable!("an immutable boolean option's default is a boolean"),
+            },
+            // SAFETY: the caller's live field.
+            BoolVar::Local(var) => unsafe { *var },
+        }
+    }
+
+    /// Overwrite the variable with a tri-state word. A global value has no
+    /// third state: -1 there would read back as true.
+    ///
+    /// # Safety
+    ///
+    /// As [`get`](Self::get).
+    pub(crate) unsafe fn set(self, word: c_int) {
+        match self {
+            BoolVar::Global(field) => {
+                debug_assert!(word == 0 || word == 1, "a global boolean is not tri-state");
+                field.set(word != 0);
+            }
+            BoolVar::OwnDefault(idx) => store_option_default(idx, OptVal::Boolean(word)),
+            // SAFETY: the caller's live field.
+            BoolVar::Local(var) => unsafe { *var = word },
+        }
+    }
+
+    /// See [`NumVar::byte_offset`].
+    fn byte_offset(self, delta: isize) -> Self {
+        match self {
+            BoolVar::Global(_) | BoolVar::OwnDefault(_) => {
+                unreachable!("a global value has no second copy")
+            }
+            BoolVar::Local(var) => BoolVar::Local(var.wrapping_byte_offset(delta)),
+        }
+    }
+}
+
 /// An option's storage in one scope, with the type its row declares.
 ///
 /// The plumbing used to answer a bare `*mut c_void` and let every reader
@@ -73,50 +270,33 @@ const ALLBUF_OFFSET: isize = {
 pub(crate) enum OptSlot {
     /// The option has no variable in this scope.
     None,
-    /// A boolean option's tri-state `int`: 0 false, 1 true, -1 unset here.
-    Boolean(*mut c_int),
-    /// A number option's `OptInt`.
-    Number(*mut OptInt),
-    /// A string option's `char *`. Never null; an unset one holds the
-    /// shared empty string.
-    String(*mut *mut c_char),
+    /// A boolean option's variable.
+    Boolean(BoolVar),
+    /// A number option's variable.
+    Number(NumVar),
+    /// A string option's variable.
+    String(StrVar),
 }
 
 impl From<*mut c_int> for OptSlot {
     fn from(var: *mut c_int) -> Self {
-        OptSlot::Boolean(var)
+        OptSlot::Boolean(BoolVar::Local(var))
     }
 }
 
 impl From<*mut OptInt> for OptSlot {
     fn from(var: *mut OptInt) -> Self {
-        OptSlot::Number(var)
+        OptSlot::Number(NumVar::Local(var))
     }
 }
 
 impl From<*mut *mut c_char> for OptSlot {
     fn from(var: *mut *mut c_char) -> Self {
-        OptSlot::String(var)
+        OptSlot::String(StrVar::Local(var))
     }
 }
 
 impl OptSlot {
-    /// The slot a raw `varp` is, given the option whose variable it is. The
-    /// last untyped edge: [`option_default_var`] answers the address of a
-    /// hidden option's own default, which is a `void *` because the defaults
-    /// table is one union per row.
-    fn from_raw(opt_idx: OptIndex, varp: *mut c_void) -> Self {
-        if varp.is_null() {
-            return OptSlot::None;
-        }
-        match super::option_get_type(opt_idx) {
-            kOptValTypeBoolean => OptSlot::Boolean(varp.cast::<c_int>()),
-            kOptValTypeNumber => OptSlot::Number(varp.cast::<OptInt>()),
-            kOptValTypeString => OptSlot::String(varp.cast::<*mut c_char>()),
-            type_0 => unreachable!("option value type {type_0}"),
-        }
-    }
-
     /// Whether the option has no variable in this scope.
     pub(crate) fn is_none(self) -> bool {
         matches!(self, OptSlot::None)
@@ -126,7 +306,7 @@ impl OptSlot {
     /// already established the option's type — from `option_has_type`, from
     /// the `did_set_*` they are, or from the row itself — and the table's
     /// compile-time assertion is what ties that type to this arm.
-    pub(crate) fn boolean_var(self) -> *mut c_int {
+    pub(crate) fn boolean_var(self) -> BoolVar {
         match self {
             OptSlot::Boolean(var) => var,
             _ => unreachable!("the option is not a boolean option"),
@@ -134,7 +314,7 @@ impl OptSlot {
     }
 
     /// A number option's variable. See [`boolean_var`](Self::boolean_var).
-    pub(crate) fn number_var(self) -> *mut OptInt {
+    pub(crate) fn number_var(self) -> NumVar {
         match self {
             OptSlot::Number(var) => var,
             _ => unreachable!("the option is not a number option"),
@@ -142,7 +322,7 @@ impl OptSlot {
     }
 
     /// A string option's variable. See [`boolean_var`](Self::boolean_var).
-    pub(crate) fn string_var(self) -> *mut *mut c_char {
+    pub(crate) fn string_var(self) -> StrVar {
         match self {
             OptSlot::String(var) => var,
             _ => unreachable!("the option is not a string option"),
@@ -154,9 +334,9 @@ impl OptSlot {
     fn byte_offset(self, delta: isize) -> Self {
         match self {
             OptSlot::None => OptSlot::None,
-            OptSlot::Boolean(var) => OptSlot::Boolean(var.wrapping_byte_offset(delta)),
-            OptSlot::Number(var) => OptSlot::Number(var.wrapping_byte_offset(delta)),
-            OptSlot::String(var) => OptSlot::String(var.wrapping_byte_offset(delta)),
+            OptSlot::Boolean(var) => OptSlot::Boolean(var.byte_offset(delta)),
+            OptSlot::Number(var) => OptSlot::Number(var.byte_offset(delta)),
+            OptSlot::String(var) => OptSlot::String(var.byte_offset(delta)),
         }
     }
 }
@@ -232,11 +412,11 @@ impl Unset {
         // here has, and which is never null.
         match (self, local) {
             (Unset::Never, _) | (_, OptSlot::None) => false,
-            (Unset::Sentinel, OptSlot::String(var)) => (unsafe { **var }) == 0,
-            (Unset::Sentinel, OptSlot::Boolean(var)) => (unsafe { *var }) < 0,
-            (Unset::Sentinel, OptSlot::Number(var)) => (unsafe { *var }) < 0,
+            (Unset::Sentinel, OptSlot::String(var)) => (unsafe { *var.get() }) == 0,
+            (Unset::Sentinel, OptSlot::Boolean(var)) => (unsafe { var.get() }) < 0,
+            (Unset::Sentinel, OptSlot::Number(var)) => (unsafe { var.get() }) < 0,
             (Unset::NoLocalUndolevel, OptSlot::Number(var)) => {
-                (unsafe { *var }) == OptInt::from(NO_LOCAL_UNDOLEVEL)
+                (unsafe { var.get() }) == OptInt::from(NO_LOCAL_UNDOLEVEL)
             }
             (Unset::NoLocalUndolevel, _) => {
                 unreachable!("only 'undolevels' carries that sentinel")
@@ -253,10 +433,18 @@ impl Unset {
 pub(crate) fn option_var(opt_idx: OptIndex) -> OptSlot {
     match get_option(opt_idx).var {
         OptVar::NoGlobal => OptSlot::None,
-        OptVar::Boolean(cell) => OptSlot::Boolean(cell.ptr()),
-        OptVar::Number(cell) => OptSlot::Number(cell.ptr()),
-        OptVar::String(cell) => OptSlot::String(cell.ptr()),
-        OptVar::OwnDefault => OptSlot::from_raw(opt_idx, option_default_var(opt_idx)),
+        OptVar::Boolean(field) => OptSlot::Boolean(BoolVar::Global(field)),
+        OptVar::Number(field) => OptSlot::Number(NumVar::Global(field)),
+        OptVar::String(field) => OptSlot::String(StrVar::Global(field)),
+        // An immutable option has no variable; its own current default is
+        // the value, read (and written, if anything ever got that far) in
+        // place. Which arm it is still comes from the row's declared type.
+        OptVar::OwnDefault => match super::option_get_type(opt_idx) {
+            kOptValTypeBoolean => OptSlot::Boolean(BoolVar::OwnDefault(opt_idx)),
+            kOptValTypeNumber => OptSlot::Number(NumVar::OwnDefault(opt_idx)),
+            kOptValTypeString => OptSlot::String(StrVar::OwnDefault(opt_idx)),
+            type_0 => unreachable!("option value type {type_0}"),
+        },
     }
 }
 

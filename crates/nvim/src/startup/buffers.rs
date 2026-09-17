@@ -136,8 +136,8 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     // The title of the list is the command that would have made it.
     let into = title.as_mut_ptr();
     let fmt = c"cfile %s".as_ptr();
-    unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, p_ef.get()) };
-    let (ef, efm, enc) = (p_ef.get(), p_efm.get(), p_menc.get());
+    unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, p_ef()) };
+    let (ef, efm, enc) = (p_ef(), p_efm(), p_menc());
     if unsafe { qf_init(None, ef, efm, 1, title.as_mut_ptr(), enc) } < 0 {
         msg_putchar('\n' as c_int);
         os_exit(3);
@@ -311,8 +311,8 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
         Win::current().buffer().make_current();
 
         if Buf::current().b_ml.ml_mfp.is_null() {
-            if p_fdls.get() >= 0 as OptInt {
-                Win::current().w_onebuf_opt.wo_fdl = p_fdls.get();
+            if p_fdls() >= 0 as OptInt {
+                Win::current().w_onebuf_opt.wo_fdl = p_fdls();
             }
             // Ask, rather than print, if the swap file is in the way.
             swap_exists_action.set(SEA_DIALOG);
@@ -394,10 +394,10 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 }
                 goto_tabpage(0);
                 if i == 1 {
-                    p_shm_save = unsafe { xstrdup(p_shm.get()) };
+                    p_shm_save = unsafe { xstrdup(p_shm()) };
                     let mut shm: [c_char; 100] = [0; 100];
                     let (into, size) = (shm.as_mut_ptr(), size_of::<[c_char; 100]>());
-                    unsafe { snprintf(into, size, c"F%s".as_ptr(), p_shm.get()) };
+                    unsafe { snprintf(into, size, c"F%s".as_ptr(), p_shm()) };
                     unsafe { set_shortmess(shm.as_mut_ptr()) };
                 }
             } else {

@@ -17,7 +17,7 @@ use std::ffi::{CStr, CString, c_char, c_int};
 use std::ptr;
 
 use neovim::memory::xfree;
-use neovim::option::vars::{p_sh, p_shcf, p_sxe, p_sxq};
+use neovim::option::vars::{P_SH, P_SHCF, P_SXE, P_SXQ};
 use neovim::os::shell::system::os_system;
 use neovim::os::shell::{shell_argv_to_str, shell_build_argv};
 
@@ -37,7 +37,7 @@ impl ShellOptions {
     /// only setting under which `os_system` can run at all.
     fn plain() -> Self {
         let options = ShellOptions {
-            saved: [p_sh.get(), p_shcf.get(), p_sxq.get(), p_sxe.get()],
+            saved: [P_SH.get(), P_SHCF.get(), P_SXQ.get(), P_SXE.get()],
             _editor: editor_lock(),
         };
         options.set("/bin/sh", "-c", "", "");
@@ -45,20 +45,20 @@ impl ShellOptions {
     }
 
     fn set(&self, sh: &str, shcf: &str, sxq: &str, sxe: &str) {
-        p_sh.set(leak(sh));
-        p_shcf.set(leak(shcf));
-        p_sxq.set(leak(sxq));
-        p_sxe.set(leak(sxe));
+        P_SH.set(leak(sh));
+        P_SHCF.set(leak(shcf));
+        P_SXQ.set(leak(sxq));
+        P_SXE.set(leak(sxe));
     }
 }
 
 impl Drop for ShellOptions {
     fn drop(&mut self) {
         let [sh, shcf, sxq, sxe] = self.saved;
-        p_sh.set(sh);
-        p_shcf.set(shcf);
-        p_sxq.set(sxq);
-        p_sxe.set(sxe);
+        P_SH.set(sh);
+        P_SHCF.set(shcf);
+        P_SXQ.set(sxq);
+        P_SXE.set(sxe);
     }
 }
 

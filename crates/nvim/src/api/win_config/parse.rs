@@ -630,11 +630,11 @@ impl Decode {
             return Ok(Parsed::Done);
         }
         // SAFETY: the option's value is a live NUL-terminated string.
-        if unsafe { *p_winborder.get() } == 0 {
+        if unsafe { *p_winborder() } == 0 {
             return Ok(Parsed::Done);
         }
         // SAFETY: as above, and `self.fconfig` names the live config.
-        let parsed = unsafe { parse_winborder(self.fconfig.raw(), p_winborder.get()) }?;
+        let parsed = unsafe { parse_winborder(self.fconfig.raw(), p_winborder()) }?;
         Ok(if parsed {
             Parsed::Done
         } else {

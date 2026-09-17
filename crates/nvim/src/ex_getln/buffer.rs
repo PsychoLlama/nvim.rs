@@ -390,7 +390,7 @@ pub(crate) fn cmdline_paste(regname: ::core::ffi::c_int, literally: bool, remcr:
     let mut p = arg;
     // With 'incsearch' set and CTRL-R CTRL-W used: skip the duplicate
     // part of the word.
-    if p_is.get() != 0 && regname == Ctrl_W {
+    if p_is() && regname == Ctrl_W {
         let skip = duplicate_word_len(arg);
         p = p.wrapping_add(skip as usize);
     }
@@ -420,7 +420,7 @@ fn duplicate_word_len(arg: *const ::core::ffi::c_char) -> ::core::ffi::c_int {
         w = w.wrapping_offset(-(len as isize));
     }
     let len = end.addr().wrapping_sub(w.addr()) as ::core::ffi::c_int;
-    if same_prefix(w, arg, len as size_t, p_ic.get() != 0) {
+    if same_prefix(w, arg, len as size_t, p_ic()) {
         len
     } else {
         0
@@ -492,7 +492,7 @@ pub unsafe fn cmdline_paste_str(mut s: *const ::core::ffi::c_char, literally: bo
 
 /// Check whether typing `c` completes an abbreviation on the command line.
 pub(crate) fn ccheck_abbr(c: ::core::ffi::c_int) -> bool {
-    if p_paste.get() != 0 || no_abbr.get() {
+    if p_paste() || no_abbr.get() {
         // no abbreviations, or in paste mode
         return false;
     }

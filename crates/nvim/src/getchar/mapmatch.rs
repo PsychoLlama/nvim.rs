@@ -32,9 +32,9 @@ fn langmap_adjust(c: c_int, condition: bool) -> c_int {
     // +5.6..7.6% on `inbench`'s `mapresolve` before it was put back.
     // SAFETY (this body): `p_langmap` holds the live `'langmap'` option
     // string, which is NUL-terminated.
-    if unsafe { *p_langmap.get() } != 0
+    if unsafe { *p_langmap() } != 0
         && condition
-        && (p_lrm.get() != 0
+        && (p_lrm()
             || if vgetc_busy.get() != 0 {
                 typeahead().maplen() == 0
             } else {
@@ -433,7 +433,7 @@ unsafe fn apply_mapping(mp: Mb, keylen: c_int, mapdepth: *mut c_int) -> c_int {
 
     // The depth check catches `:map x y` plus `:map y x`.
     unsafe { *mapdepth += 1 };
-    if unsafe { *mapdepth } >= p_mmd.get() as c_int {
+    if unsafe { *mapdepth } >= p_mmd() as c_int {
         emsg(gettext(e_recursive_mapping));
         if State.get() & MODE_CMDLINE != 0 {
             redrawcmdline();
@@ -624,7 +624,7 @@ pub(crate) unsafe fn handle_mapping(
         && (tb.maplen() == 0
             || is_plug_map
             || tb.noremap(0) & (RM_NONE as c_int | RM_ABBR as c_int) == 0)
-        && !(p_paste.get() != 0 && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0)
+        && !(p_paste() && State.get() & (MODE_INSERT | MODE_CMDLINE) != 0)
         && !(State.get() == MODE_HITRETURN && (tb_c1 == CAR || tb_c1 == ' ' as c_int))
         && State.get() != MODE_ASKMORE
         && !at_ins_compl_key();

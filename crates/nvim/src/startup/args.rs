@@ -34,7 +34,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::guard::{SavedSctx, Script};
 use crate::lua::state::nlua_disable_preload;
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
-use crate::option::vars::{p_lpl, p_shadafile, p_uc, p_verbose, p_write};
+use crate::option::vars::{P_LPL, P_UC, P_VERBOSE, P_WRITE, p_shadafile};
 use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
 use crate::os::cshim::{gettext, snprintf, stderr, strncasecmp};
 use crate::os::env::os_getenv;
@@ -107,7 +107,7 @@ fn set_opt(idx: OptIndex, value: OptVal) {
 /// writing over the user's ShaDa.
 fn suppress_shada() {
     // SAFETY: reads and writes one option.
-    if p_shadafile.get().is_null() || unsafe { *p_shadafile.get() } as c_int == NUL {
+    if p_shadafile().is_null() || unsafe { *p_shadafile() } as c_int == NUL {
         set_opt(kOptShadafile, unsafe { string_opt(c"NONE".as_ptr()) });
     }
 }
@@ -307,7 +307,7 @@ impl Scan {
             self.argv_idx += 6;
             return true;
         } else if self.tail_starts_with(c"noplugin") {
-            p_lpl.set(0);
+            P_LPL.set(false);
         } else if self.tail_starts_with(c"cmd") {
             self.argv_idx += 3;
             return true;
@@ -386,7 +386,7 @@ impl Scan {
                 if c == b'M' {
                     reset_modifiable();
                 }
-                p_write.set(0);
+                P_WRITE.set(false);
             }
             // `-N` (nocompatible) and `-X` (no X server) are always so.
             b'N' | b'X' => {}
@@ -416,7 +416,7 @@ impl Scan {
             b'R' => {
                 readonlymode.set(true);
                 Buf::current().b_p_ro = 1;
-                p_uc.set(READONLY_UPDATECOUNT);
+                P_UC.set(READONLY_UPDATECOUNT);
             }
             // `-L` is the historical spelling of `-r`.
             b'r' | b'L' => recoverymode.set(true),
@@ -449,7 +449,7 @@ impl Scan {
             b'V' => {
                 let word = self.arg();
                 let n = unsafe { get_number_arg(word, &raw mut self.argv_idx, DEFAULT_VERBOSE) };
-                p_verbose.set(n as OptInt);
+                P_VERBOSE.set(n as OptInt);
                 if self.has_tail() {
                     // `-V{N}{file}`: whatever follows the digits is
                     // 'verbosefile', and it uses up the whole word.
@@ -551,7 +551,7 @@ impl Scan {
                 // script name belongs to the script, not to us.
                 headless_mode.set(true);
                 silent_mode.set(true);
-                p_verbose.set(1 as OptInt);
+                P_VERBOSE.set(1 as OptInt);
                 self.parm.no_swap_file = 1;
                 if self.parm.use_vimrc.is_null() {
                     self.parm.use_vimrc = c"NONE".as_ptr() as *mut c_char;

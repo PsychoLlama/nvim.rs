@@ -139,7 +139,7 @@ pub fn draw_tabline() {
     );
     tab_click_arena().clear();
 
-    if !opt_is_empty(p_tal.get()) {
+    if !opt_is_empty(p_tal()) {
         // Use the 'tabline' option instead.
         win_redr_custom(None, false, false, false);
     } else {
@@ -242,7 +242,7 @@ fn draw_default_tabline() {
     let fill = if use_sep_chars { b'_' } else { b' ' };
     paint_fill(col, Columns.get(), schar_from_ascii(fill), attr_fill);
 
-    if p_sc.get() != 0 && c_int::from(opt_first(p_sloc.get())) == c_int::from(b't') {
+    if p_sc() && c_int::from(opt_first(p_sloc())) == c_int::from(b't') {
         paint_showcmd(col, tabcount, attr_nosel);
     }
 

@@ -247,10 +247,10 @@ unsafe fn source_init_pair(
             let (init_lua, init_vim) = unsafe { (c_str(init_lua), c_str(init_vim)) };
             semsg!("E5422: Conflicting configs: \"{init_lua}\" \"{init_vim}\"");
         }
-        return Some(p_exrc.get() != 0);
+        return Some(p_exrc());
     }
     if unsafe { do_source(init_vim, true, DOSO_VIMRC as c_int, ptr::null_mut()) } != FAIL {
-        let mut do_exrc = p_exrc.get() != 0;
+        let mut do_exrc = p_exrc();
         if do_exrc && check_exrc_is_same {
             let vimrc = VIMRC_FILE.as_ptr() as *mut c_char;
             let same = unsafe { path_full_compare(vimrc, init_vim, false, true) };
@@ -273,10 +273,10 @@ pub(crate) fn do_user_initialization() -> bool {
     // Read before anything is sourced: the fall-through at the bottom
     // answers with *this*, not with what a half-sourced config left
     // behind.
-    let do_exrc = p_exrc.get() != 0;
+    let do_exrc = p_exrc();
 
     if unsafe { execute_env(c"VIMINIT".as_ptr() as *mut c_char) }.is_ok() {
-        return p_exrc.get() != 0;
+        return p_exrc();
     }
 
     let init_lua_path = unsafe { stdpaths_user_conf_subpath(c"init.lua".as_ptr()) };
@@ -307,7 +307,7 @@ pub(crate) fn do_user_initialization() -> bool {
     }
 
     if unsafe { execute_env(c"EXINIT".as_ptr() as *mut c_char) }.is_ok() {
-        return p_exrc.get() != 0;
+        return p_exrc();
     }
     do_exrc
 }

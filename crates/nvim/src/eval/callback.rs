@@ -138,7 +138,7 @@ const VLUA: &CStr = c"v:lua.";
 /// # Safety
 /// `callback` must be valid.
 pub unsafe fn callback_call(callback: *mut Callback, args: &[TypVal], result: &mut TypVal) -> bool {
-    if OptInt::from(callback_depth.get()) > p_mfd.get() {
+    if OptInt::from(callback_depth.get()) > p_mfd() {
         // SAFETY: the message is a NUL-terminated literal.
         emsg_static(e_command_too_recursive);
         return false;

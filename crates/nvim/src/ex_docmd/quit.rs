@@ -177,15 +177,13 @@ pub(crate) fn ex_quit(excmd: &mut ExArg) {
     if !buf_hide(wp.buffer())
         && check_changed(
             wp.buffer(),
-            (if p_awa.get() != 0 {
-                CCGD_AW as c_int
-            } else {
-                0
-            }) | (if excmd.forceit {
-                CCGD_FORCEIT as c_int
-            } else {
-                0
-            }) | CCGD_EXCMD as c_int,
+            (if p_awa() { CCGD_AW as c_int } else { 0 })
+                | (if excmd.forceit {
+                    CCGD_FORCEIT as c_int
+                } else {
+                    0
+                })
+                | CCGD_EXCMD as c_int,
         )
         || check_more(true, excmd.forceit) == FAIL
         || only_one_window() && check_changed_any(excmd.forceit, true)
@@ -338,7 +336,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     // Only the last window on a changed buffer has to ask.
     let mut need_hide = buffer.is_some_and(|b| buf_is_changed(b) && b.b_nwindows <= 1);
     if need_hide && !buffer.is_some_and(buf_hide) && forceit == 0 {
-        if (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0 {
+        if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && p_write() {
             let bufref = BufRef::of_opt(buffer);
             dialog_changed(buffer.expect("checked above"), false);
             // The dialog may have wiped the buffer, or written it.

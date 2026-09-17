@@ -33,12 +33,12 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
     // Each window needs at least 'winminheight' lines and a status line, and
     // the current window wants 'winheight'.
     let maxcount = if vertical {
-        ((cur.w_width + cur.w_vsep_width) as OptInt - (p_wiw.get() - p_wmw.get())) as c_int
-            / (p_wmw.get() as c_int + 1)
+        ((cur.w_width + cur.w_vsep_width) as OptInt - (p_wiw() - p_wmw())) as c_int
+            / (p_wmw() as c_int + 1)
     } else {
-        ((cur.w_height + cur.w_hsep_height + cur.w_status_height) as OptInt
-            - (p_wh.get() - p_wmh.get())) as c_int
-            / (p_wmh.get() as c_int + STATUS_HEIGHT as c_int + global_winbar_rows())
+        ((cur.w_height + cur.w_hsep_height + cur.w_status_height) as OptInt - (p_wh() - p_wmh()))
+            as c_int
+            / (p_wmh() as c_int + STATUS_HEIGHT as c_int + global_winbar_rows())
     }
     .max(2);
     let count = count.min(maxcount);
@@ -287,7 +287,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Fa
     // was taken before `win_split_ins` fired its autocommands.
     if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(window.id()) && !window.w_floating {
         setheight_win(height, window);
-        if p_ea.get() != 0 {
+        if p_ea() {
             let cur = Win::current();
             equal(Some(cur), cur == window, 'v' as c_int);
         }
@@ -350,7 +350,7 @@ fn move_after(win1: Win, win2: Win) {
 /// `'winminheight'` plus a status line,
 /// plus its window bar where there is one.
 pub(crate) fn max_wincount(fr: FrameRef, height: c_int) -> c_int {
-    let per_win = p_wmh.get() as c_int + STATUS_HEIGHT as c_int;
+    let per_win = p_wmh() as c_int + STATUS_HEIGHT as c_int;
     if fr.fr_layout as c_int != FR_COL {
         return height / (per_win + frame2window(fr).w_winbar_height);
     }

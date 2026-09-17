@@ -92,7 +92,7 @@ impl TagFiles {
         TagFiles {
             help: help.then(HelpTags::collect),
             tags: (!help)
-                .then(|| unsafe { Name::from_ptr(if *local != 0 { local } else { p_tags.get() }) }),
+                .then(|| unsafe { Name::from_ptr(if *local != 0 { local } else { p_tags() }) }),
             at: 0,
             search: Search::default(),
         }
@@ -237,7 +237,7 @@ impl HelpTags {
         }
         self.at += 1;
         // SAFETY: `'helpfile'` is a NUL-terminated option string.
-        let hf = unsafe { CStr::from_ptr(p_hf.get()) }.to_bytes();
+        let hf = unsafe { CStr::from_ptr(p_hf()) }.to_bytes();
         if hf.is_empty() {
             return None;
         }
@@ -325,7 +325,7 @@ pub(crate) unsafe fn expand_tag_fname(
     let dir = unsafe { CStr::from_ptr(tag_fname) }.to_bytes();
     let dir = &dir[..tail_index(dir)];
 
-    let retval = if (p_tr.get() != 0 || Buf::current().b_help)
+    let retval = if (p_tr() || Buf::current().b_help)
         && !unsafe { vim_is_abs_name(cstr::at(fname)) }
         && !dir.is_empty()
     {

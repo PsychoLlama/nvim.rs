@@ -104,7 +104,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
         emsg(gettext(e_secure.as_ptr()));
         return;
     }
-    if ex_normal_busy.get() as crate::types::OptInt >= p_mmd.get() {
+    if ex_normal_busy.get() as crate::types::OptInt >= p_mmd() {
         emsg(gettext(c"E192: Recursive use of :normal too deep".as_ptr()));
         return;
     }

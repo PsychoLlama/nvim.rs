@@ -50,7 +50,7 @@ use crate::global_cell::GlobalCell;
 use crate::memline::ml_replace;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::option::vars::p_ws;
+use crate::option::vars::{P_WS, p_ws};
 use crate::os::cshim::gettext;
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
@@ -326,7 +326,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     let pos: Pos = Win::current().w_cursor;
     // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
     // comes back as 1.
-    let save_ws = p_ws.get() != 0;
+    let save_ws = p_ws();
     let mut prev_lnum: LineNr = 0;
 
     if repl_from.get().is_null() || repl_to.get().is_null() {
@@ -343,7 +343,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     frompat.push_bytes(unsafe { cstr::bytes_at(repl_from.get()) });
     frompat.push_bytes(b"\\>");
     let frompatlen = frompat.len();
-    p_ws.set(0);
+    P_WS.set(false);
 
     sub_nsubs.set(0);
     sub_nlines.set(0);
@@ -400,7 +400,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
         Win::current().w_cursor.col += repl_to_len as ColNr;
     }
 
-    p_ws.set(save_ws as c_int);
+    P_WS.set(save_ws);
     Win::current().w_cursor = pos;
 
     if sub_nsubs.get() == 0 {

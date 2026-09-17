@@ -78,8 +78,8 @@ use crate::message::{
 };
 use crate::r#move::{changed_cline_bef_curs, curs_columns, validate_cursor};
 use crate::option::vars::{
-    cot_flags, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js, p_paste, p_scs, p_smd,
-    p_tsr, p_tsrfu, p_wic, p_ws,
+    P_IC, P_SCS, P_WS, cot_flags, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js,
+    p_paste, p_scs, p_smd, p_tsr, p_tsrfu, p_wic, p_ws,
 };
 use crate::option::{can_bs, copy_option_part, magic_isset, option_set_callback_func, shortmess};
 use crate::options::{

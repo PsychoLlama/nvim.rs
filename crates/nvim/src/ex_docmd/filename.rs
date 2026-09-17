@@ -95,12 +95,12 @@ pub unsafe fn replace_makeprg(
     let buf = Buf::current();
     let program: *const c_char = if is_grep {
         if byte(buf.b_p_gp) == NUL {
-            p_gp.get()
+            p_gp()
         } else {
             buf.b_p_gp
         }
     } else if byte(buf.b_p_mp) == NUL {
-        p_mp.get()
+        p_mp()
     } else {
         buf.b_p_mp
     };
@@ -256,7 +256,7 @@ pub(crate) unsafe fn expand_filename(
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Files;
     let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
-    if p_wic.get() != 0 {
+    if p_wic() {
         options |= WildOpts::ICASE;
     }
     let expanded = unsafe {

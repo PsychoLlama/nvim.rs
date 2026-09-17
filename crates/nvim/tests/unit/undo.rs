@@ -113,7 +113,7 @@ mod write {
     use std::path::PathBuf;
 
     use neovim::memory::xfree;
-    use neovim::option::vars::p_udir;
+    use neovim::option::vars::P_UDIR;
     use neovim::types::Buffer;
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
@@ -167,8 +167,8 @@ mod write {
             buf.b_u_synced = true;
             buf.b_u_numhead = 1;
 
-            let old_udir = p_udir.get();
-            p_udir.set(udir.as_ptr().cast_mut());
+            let old_udir = P_UDIR.get();
+            P_UDIR.set(udir.as_ptr().cast_mut());
             // `u_write_undo` syncs the *current* buffer before serialising
             // the one it was handed, and this fixture's buffer is not one
             // the editor can stand in: it is in no registry, and "current"
@@ -238,7 +238,7 @@ mod write {
 
     impl Drop for Fixture {
         fn drop(&mut self) {
-            p_udir.set(self.old_udir);
+            P_UDIR.set(self.old_udir);
             Buf::current().b_u_synced = self.old_synced;
             let _ = fs::remove_dir_all(&self.dir);
         }

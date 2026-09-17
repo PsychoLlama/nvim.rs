@@ -45,7 +45,7 @@ use core::ffi::{c_char, c_int, c_uint};
 /// and the "current match" highlight actually differs from the others --
 /// otherwise nothing on screen would change.
 fn current_match_is_distinct() -> bool {
-    p_hls.get() != 0
+    p_hls()
         && !no_hlsearch.get()
         && win_hl_attr(Win::current(), HLF_LC) != win_hl_attr(Win::current(), HLF_L)
 }

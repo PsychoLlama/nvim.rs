@@ -74,8 +74,8 @@ pub(crate) fn ins_reg() {
             KeyTyped.get()
         };
         // SAFETY: 'langmap' is a live NUL-terminated option string.
-        if unsafe { *p_langmap.get() } as c_int != 0
-            && (p_lrm.get() != 0 || typed)
+        if unsafe { *p_langmap() } as c_int != 0
+            && (p_lrm() || typed)
             && KeyStuffed.get() == 0
             && c >= 0
         {
@@ -342,9 +342,9 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
     // otherwise the mode message is removed.
     if reg_recording.get() != 0 || restart_edit.get() != NUL {
         show_mode();
-    } else if p_smd.get() != 0
+    } else if p_smd()
         && (got_int.get() || !skip_showmode())
-        && !(p_ch.get() == 0 && !ui_has(kUIMessages))
+        && !(p_ch() == 0 && !ui_has(kUIMessages))
     {
         unshowmode(false);
     }
@@ -373,8 +373,8 @@ pub(crate) fn ins_ctrl_() {
         }
     }
 
-    p_ri.set((p_ri.get() == 0) as c_int);
-    revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
+    P_RI.set(!p_ri());
+    revins_on.set(State.get() == MODE_INSERT && p_ri());
     if revins_on.get() {
         revins_scol.set(Win::current().w_cursor.col);
         revins_legal.set(revins_legal.get() + 1);

@@ -94,8 +94,8 @@ use crate::r#move::{
 };
 use crate::normal::{clear_showcmd, normal_enter};
 use crate::option::vars::{
-    p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl,
-    p_tal, p_tbidi, p_wbr, p_wc, p_wcm, p_wim, p_wmnu, wim_flags,
+    P_HLS, p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs,
+    p_stl, p_tal, p_tbidi, p_wbr, p_wc, p_wcm, p_wim, p_wmnu, wim_flags,
 };
 use crate::option::{
     csh_like_shell, magic_isset, set_iminsert_global, set_imsearch_global, set_option_direct,

@@ -537,7 +537,7 @@ pub(crate) unsafe fn eval4(
             len += 1;
             false
         }
-        _ => p_ic.get() != 0,
+        _ => p_ic(),
     };
 
     cur.skip(len as usize);

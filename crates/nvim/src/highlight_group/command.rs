@@ -621,7 +621,7 @@ impl KeyLoop {
             None
         };
         let Some(dark) = dark else { return };
-        if dark == (unsafe { *p_bg.get() } == b'd' as c_char) || option_was_set(kOptBackground) {
+        if dark == (unsafe { *p_bg() } == b'd' as c_char) || option_was_set(kOptBackground) {
             return;
         }
         set_option_value_give_err(

@@ -367,7 +367,7 @@ impl Flags {
             binary: false,
             append: false,
             defer: false,
-            do_fsync: p_fs.get() != 0,
+            do_fsync: p_fs(),
             mkdir_p: false,
         };
         if args.len() <= 2 {

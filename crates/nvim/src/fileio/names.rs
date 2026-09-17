@@ -233,7 +233,7 @@ pub unsafe fn vim_rename(from: *const c_char, to: *const c_char) -> c_int {
     // to the same file but the spelling differs we have to go through a
     // temp file.
     if unsafe { path_fnamecmp(cstr::at(from), cstr::at(to)) } == 0 {
-        if p_fic.get() != 0 && !unsafe { cstr::eq(path_tail(from), path_tail(to)) } {
+        if p_fic() && !unsafe { cstr::eq(path_tail(from), path_tail(to)) } {
             use_tmp_file = true;
         } else {
             return 0;
@@ -348,7 +348,7 @@ pub unsafe fn match_file_pat(
     allow_dirs: c_int,
 ) -> bool {
     let mut regmatch = RegMatch {
-        rm_ic: p_fic.get() != 0, // ignore case if 'fileignorecase' is set
+        rm_ic: p_fic(), // ignore case if 'fileignorecase' is set
         regprog: if prog.is_null() {
             unsafe { vim_regcomp(pattern, RE_MAGIC) }
         } else {

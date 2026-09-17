@@ -236,7 +236,7 @@ fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
     let room = if name_len == 0 { Columns.get() - 47 } else { 0 };
     // SAFETY: module contract; `uc_rep` is the entry's own string.
     msg_display_keys(unsafe { cstr::at(cmd.uc_rep) }, false, room);
-    if p_verbose.get() > 0 {
+    if p_verbose() > 0 {
         last_set_msg(cmd.uc_script_ctx);
     }
 }

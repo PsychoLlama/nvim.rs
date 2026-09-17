@@ -263,7 +263,7 @@ pub(crate) unsafe fn ff_wc_equal(s1: *const c_char, s2: *const c_char) -> bool {
     if s1 == s2 {
         return true;
     }
-    let ignorecase = p_fic.get() != 0;
+    let ignorecase = p_fic();
     let fold = |c: c_int| if ignorecase { mb_tolower(c) } else { c };
 
     let (mut i, mut j) = (0usize, 0usize);

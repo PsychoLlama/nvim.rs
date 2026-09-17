@@ -401,10 +401,10 @@ pub(crate) unsafe fn redraw_wildmenu(
                 // 2.  Set 'winminheight' to zero to avoid that the window
                 // is resized.
                 if needs_status_line() {
-                    save_p_ls.set(p_ls.get() as c_int);
-                    save_p_wmh.set(p_wmh.get() as c_int);
-                    p_ls.set(2 as OptInt);
-                    p_wmh.set(0 as OptInt);
+                    save_p_ls.set(p_ls() as c_int);
+                    save_p_wmh.set(p_wmh() as c_int);
+                    P_LS.set(2 as OptInt);
+                    P_WMH.set(0 as OptInt);
                     last_status(false);
                 }
                 wild_menu_showing.set(WM_SHOWN);

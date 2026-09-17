@@ -361,15 +361,15 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
 
     // set window height to desired minimal value
     let cur = Win::current();
-    if (cur.w_height as OptInt) < p_wh.get() && cur.w_onebuf_opt.wo_wfh == 0 && !cur.w_floating {
-        setheight_win(p_wh.get() as c_int, cur);
+    if (cur.w_height as OptInt) < p_wh() && cur.w_onebuf_opt.wo_wfh == 0 && !cur.w_floating {
+        setheight_win(p_wh() as c_int, cur);
     } else if cur.w_height == 0 {
         setheight_win(1, cur);
     }
     // set window width to desired minimal value
     let cur = Win::current();
-    if (cur.w_width as OptInt) < p_wiw.get() && cur.w_onebuf_opt.wo_wfw == 0 && !cur.w_floating {
-        setwidth_win(p_wiw.get() as c_int, cur);
+    if (cur.w_width as OptInt) < p_wiw() && cur.w_onebuf_opt.wo_wfw == 0 && !cur.w_floating {
+        setwidth_win(p_wiw() as c_int, cur);
     }
 
     setmouse(); // in case jumped to/from help buffer
@@ -381,7 +381,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
 /// scrolls the text instead.
 fn split_keep_cursor() -> bool {
     // SAFETY: `'splitkeep'` is a NUL-terminated option string.
-    unsafe { *p_spk.get() as c_int == 'c' as c_int }
+    unsafe { *p_spk() as c_int == 'c' as c_int }
 }
 
 /// The window CTRL-W p goes back to, `None` when there is none.
@@ -441,7 +441,7 @@ fn fix_current_dir() {
 fn chdir_to(dir: *mut c_char, scope: CdScope, cwd: *const c_char) {
     // SAFETY: two NUL-terminated paths; -1 means "compare all of both".
     let differs = unsafe { pathcmp(dir, cwd, -1) } != 0;
-    let announce = p_acd.get() == 0 && differs;
+    let announce = !p_acd() && differs;
     if announce {
         dirchanged(dir, scope, true);
     }

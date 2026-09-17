@@ -73,7 +73,7 @@ pub fn get_expr_indent() -> c_int {
     // Reset `did_throw`, unless 'debug' has "throw" and we are inside a
     // try/catch.
     // SAFETY: 'debug' is a NUL-terminated option string.
-    let debug_throw = has_char(unsafe { cstr::at(p_debug.get()) }, 't' as c_int);
+    let debug_throw = has_char(unsafe { cstr::at(p_debug()) }, 't' as c_int);
     if did_throw.get() && (!debug_throw || trylevel.get() == 0) {
         handle_did_throw();
         did_throw.set(false);
@@ -354,7 +354,7 @@ unsafe fn lisp_match(p: *mut c_char) -> bool {
     let mut word = if unsafe { *Buf::current().b_p_lw } != 0 {
         Buf::current().b_p_lw
     } else {
-        p_lispwords.get()
+        p_lispwords()
     };
     while unsafe { *word } != 0 {
         let len = unsafe {
@@ -400,7 +400,7 @@ pub fn use_indentexpr_for_lisp() -> bool {
 
 /// Fixes the cursor line's indent for 'lisp' and 'cindent'.
 pub fn fix_indent() {
-    if p_paste.get() != 0 {
+    if p_paste() {
         return; // no auto-indenting when 'paste' is set
     }
     // SAFETY: the caller's contract.

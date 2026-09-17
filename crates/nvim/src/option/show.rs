@@ -174,7 +174,7 @@ pub(crate) fn ui_refresh_options() {
     }
     // 'mouse' is not a UI option, but the UI has to be told about it
     // all the same.
-    if !p_mouse.get().is_null() {
+    if !p_mouse().is_null() {
         setmouse();
     }
 }
@@ -196,12 +196,14 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // The variable is only read for a boolean option, because for
     // anything else it is not an `int` at all. 'modified' has no
     // variable worth reading either; the undo state decides.
-    let word = || unsafe { *varp.boolean_var() };
-    let is_off =
-        || match varp == OptSlot::Boolean(unsafe { &raw mut (*Buf::current_raw()).b_changed }) {
-            true => !curbuf_is_changed(),
-            false => word() == 0,
-        };
+    let word = || unsafe { varp.boolean_var().get() };
+    let modified = OptSlot::Boolean(super::BoolVar::Local(unsafe {
+        &raw mut (*Buf::current_raw()).b_changed
+    }));
+    let is_off = || match varp == modified {
+        true => !curbuf_is_changed(),
+        false => word() == 0,
+    };
     let prefix = if boolean && is_off() {
         c"no"
     } else if boolean && word() < 0 {
@@ -306,7 +308,7 @@ pub(crate) unsafe fn makeset(
                 let guarded = opt_idx == kOptSyntax || opt_idx == kOptFiletype;
                 let (guard, name) = (c"if &%s != '%s'".as_ptr(), get_option(opt_idx).fullname);
                 if guarded
-                    && (unsafe { fprintf(fd, guard, name, *varp.string_var()) } < 0
+                    && (unsafe { fprintf(fd, guard, name, varp.string_var().get()) } < 0
                         || !unsafe { put_eol_unchecked(fd) })
                 {
                     return Err(Failed);
@@ -553,12 +555,12 @@ pub(crate) fn option_value2string(
             // character rather than as its code.
             unsafe { xstrlcpy(buf, transchar(wc as c_int).as_ptr(), cap) };
         } else {
-            unsafe { snprintf(buf, cap, c"%ld".as_ptr(), *varp.number_var()) };
+            unsafe { snprintf(buf, cap, c"%ld".as_ptr(), varp.number_var().get()) };
         }
         return;
     }
 
-    let value = unsafe { *varp.string_var() };
+    let value = unsafe { varp.string_var().get() };
     if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
         unsafe { home_replace(None, value, buf, MAXPATHL as size_t, false) };
     } else {
@@ -578,7 +580,7 @@ pub(crate) unsafe fn wc_use_keyname(opt_idx: OptIndex, slot: OptSlot, wcp: &mut 
     }
     // SAFETY: both options are numeric and global-only, so the slot is the
     // `OptInt` cell the table names.
-    *wcp = unsafe { *slot.number_var() };
+    *wcp = unsafe { slot.number_var().get() };
     // A negative value is a special key code; a positive one may still be a
     // named key such as <Tab>.
     *wcp < 0 || has_key_name(*wcp as c_int)

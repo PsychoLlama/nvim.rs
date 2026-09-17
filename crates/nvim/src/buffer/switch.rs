@@ -184,7 +184,7 @@ fn jop_clean() -> bool {
     jop_flags.get() & kOptJopFlagClean as c_int as ::core::ffi::c_uint != 0
 }
 fn confirming() -> bool {
-    p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)
+    p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +387,7 @@ pub unsafe fn do_bufdel(
             _ => c"E517: No buffers were wiped out",
         });
     }
-    if deleted as OptInt >= p_report.get() {
+    if deleted as OptInt >= p_report() {
         match command {
             c if c == DOBUF_UNLOAD as c_int => {
                 report_count(c"%d buffer unloaded", c"%d buffers unloaded", deleted);
@@ -539,7 +539,7 @@ fn do_buffer_ext(
 
     // Check if the current buffer may be abandoned.
     if action == DOBUF_GOTO as c_int && !may_abandon(Buf::current(), forceit) {
-        if confirming() && p_write.get() != 0 {
+        if confirming() && p_write() {
             let bufref = BufRef::of(buf);
             ask_about_changes(Buf::current());
             if !bufref.valid() {
@@ -778,7 +778,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
 /// re-validates `buf` after each.
 fn refuse_unload(buffer: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(), Failed>> {
     if flags & DOBUF_FORCEIT as c_int == 0 && is_changed(buffer) {
-        if confirming() && p_write.get() != 0 {
+        if confirming() && p_write() {
             ask_about_changes(buffer);
             // Autocommand deleted buffer, oops! It's not changed now.  If it's
             // still changed fail silently, the dialog already mentioned why it

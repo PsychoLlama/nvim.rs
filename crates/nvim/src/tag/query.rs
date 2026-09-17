@@ -329,7 +329,7 @@ unsafe fn add_tag_field(
     // line repeats is dropped rather than replacing the first.
     // SAFETY: the dictionary being built, and a NUL-terminated field name.
     if unsafe { dict_find(dict.as_ref(), cstr::bytes_at(field_name)) }.is_some() {
-        if p_verbose.get() > 0 {
+        if p_verbose() > 0 {
             verbose_enter();
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
             let field_name = unsafe { c_str(field_name) };

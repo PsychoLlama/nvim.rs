@@ -115,7 +115,7 @@ pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
     } else if win.w_onebuf_opt.wo_sms == 0 {
         // SAFETY: the caller's promise -- this moves `curwin`'s cursor.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-    } else if p_sol.get() != 0 {
+    } else if p_sol() {
         nv_g_home_m_cmd(&mut ca);
     }
 
@@ -188,10 +188,10 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
     // With a single window and a 'window' smaller than the screen, that is
     // the page; otherwise a page is the window less its overlap.
     let page = if firstwin.get() == lastwin.get()
-        && p_window.get() > 0
-        && p_window.get() < OptInt::from(Rows.get() - 1)
+        && p_window() > 0
+        && p_window() < OptInt::from(Rows.get() - 1)
     {
-        (number_as_int(p_window.get()) - 2).max(1)
+        (number_as_int(p_window()) - 2).max(1)
     } else {
         get_scroll_overlap(win, dir)
     };

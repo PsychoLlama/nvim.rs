@@ -83,7 +83,7 @@ pub(crate) fn get_fpos_of_mouse(mut mpos: PosRef) -> c_int {
     // winpos and height may change in win_enter()!
     if winrow >= win.w_view_height + win.w_status_height {
         // Below the window; the global status line spans the whole screen.
-        let below_screen = Rows.get() as OptInt - p_ch.get();
+        let below_screen = Rows.get() as OptInt - p_ch();
         if mouse_grid.get() <= 1
             && (mouse_row.get() as OptInt) < below_screen
             && mouse_row.get() as OptInt >= below_screen - global_stl_height() as OptInt

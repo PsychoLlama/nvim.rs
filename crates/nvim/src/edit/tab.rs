@@ -95,7 +95,7 @@ pub(crate) fn ins_tab() -> bool {
     // 'smarttab' only does something in the indent, and only when
     // 'tabstop' differs from 'shiftwidth' -- which is what these three
     // 'vartabstop' cases are asking.
-    let smart_tab = p_sta.get() != 0
+    let smart_tab = p_sta()
         && ind
         && (tabstops(Buf::current().b_p_vts_array) > 1
             || (tabstops(Buf::current().b_p_vts_array) == 1
@@ -120,7 +120,7 @@ pub(crate) fn ins_tab() -> bool {
     unsafe { append_to_redobuff(c"\t".as_ptr()) };
 
     // How many columns to the next stop, from whichever option owns it.
-    let mut temp = if p_sta.get() != 0 && ind {
+    let mut temp = if p_sta() && ind {
         // A tab in the indent uses 'shiftwidth'.
         let sw = sw_value();
         sw - nolist_virtcol() % sw
@@ -153,9 +153,7 @@ pub(crate) fn ins_tab() -> bool {
 
     // With 'expandtab' off, put TABs back where the spaces will do.
     if Buf::current().b_p_et == 0
-        && (tabstops(Buf::current().b_p_vsts_array) > 0
-            || sts_value() > 0
-            || (p_sta.get() != 0 && ind))
+        && (tabstops(Buf::current().b_p_vsts_array) > 0 || sts_value() > 0 || (p_sta() && ind))
     {
         tab_spaces_to_tabs();
     }

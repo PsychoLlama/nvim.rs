@@ -34,7 +34,7 @@ use crate::types::{
 use crate::undo::curbuf_is_changed;
 
 use super::{
-    NUMBUFLEN, OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil,
+    BoolVar, NUMBUFLEN, OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil,
     kOptValTypeNumber, kOptValTypeString, option_default, option_has_type,
 };
 
@@ -175,22 +175,26 @@ pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVa
     // 'modified' has no variable of its own worth reading: `b_changed` alone
     // misses a buffer whose undo state says it is unchanged after all.
     // SAFETY: `curbuf` is a live buffer for as long as the editor is running.
-    if slot == OptSlot::Boolean(unsafe { &raw mut (*Buf::current_raw()).b_changed }) {
+    if slot
+        == OptSlot::Boolean(BoolVar::Local(unsafe {
+            &raw mut (*Buf::current_raw()).b_changed
+        }))
+    {
         // SAFETY: reading the current buffer's change state.
         return boolean_optval(Some(curbuf_is_changed()));
     }
-    // SAFETY (all three): the slot names this option's variable and its
-    // variant is the type that variable holds. A boolean's word is the
+    // SAFETY (all three): the slot names this option's variable, so a local
+    // one names a field of a live window or buffer. A boolean's word is the
     // option's own tri-state, so anything above 1 reads as true.
     let value = match slot {
         OptSlot::None => OptVal::Nil,
-        OptSlot::Boolean(var) => OptVal::Boolean(unsafe { *var }.clamp(-1, 1)),
-        OptSlot::Number(var) => OptVal::Number(unsafe { *var }),
+        OptSlot::Boolean(var) => OptVal::Boolean(unsafe { var.get() }.clamp(-1, 1)),
+        OptSlot::Number(var) => OptVal::Number(unsafe { var.get() }),
         // A *borrow* of the option variable's own buffer, which is what
         // makes `optval_free` of this value free the variable's string --
         // the protocol `set_option_varp`'s `free_oldval` relies on.
         OptSlot::String(var) => {
-            let data = unsafe { *var };
+            let data = unsafe { var.get() };
             // An option variable that has never been set is a null pointer,
             // which is the empty value rather than a string of no bytes.
             let len = if data.is_null() {
@@ -229,10 +233,10 @@ pub(crate) unsafe fn set_option_varp(
     // it for every row at compile time, and the assertion above ties this
     // value to the same row.
     match (slot, value) {
-        (OptSlot::Boolean(var), OptVal::Boolean(word)) => unsafe { *var = word },
-        (OptSlot::Number(var), OptVal::Number(n)) => unsafe { *var = n },
+        (OptSlot::Boolean(var), OptVal::Boolean(word)) => unsafe { var.set(word) },
+        (OptSlot::Number(var), OptVal::Number(n)) => unsafe { var.set(n) },
         // The variable takes the allocation over.
-        (OptSlot::String(var), OptVal::String(s)) => unsafe { *var = s.data() },
+        (OptSlot::String(var), OptVal::String(s)) => unsafe { var.set(s.data()) },
         _ => unreachable!("an option's slot is not the type its value is"),
     }
 }

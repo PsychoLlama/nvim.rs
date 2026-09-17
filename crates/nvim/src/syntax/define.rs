@@ -469,11 +469,11 @@ pub(crate) fn read_pattern(line: &[u8], at: usize, ci: &mut SynPat) -> Option<us
     // Store the pattern and its compiled program. 'cpoptions' is emptied
     // first, to avoid the 'l' flag.
     let pattern = cstr::owned(&tail[1..end]);
-    let cpo_save = p_cpo.get();
-    p_cpo.set(empty_option());
+    let cpo_save = p_cpo();
+    P_CPO.set(empty_option());
     // SAFETY: an owned NUL-terminated copy of the pattern text.
     ci.sp_prog = unsafe { vim_regcomp(pattern.as_ptr().cast_mut(), RE_MAGIC) };
-    p_cpo.set(cpo_save);
+    P_CPO.set(cpo_save);
     ci.sp_pattern = Some(pattern);
     if ci.sp_prog.is_null() {
         return None;

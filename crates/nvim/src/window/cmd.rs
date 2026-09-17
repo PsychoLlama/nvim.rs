@@ -518,7 +518,7 @@ fn tagpreview_height(prenum: c_int) -> c_int {
     if prenum != 0 {
         prenum
     } else {
-        p_pvh.get() as c_int
+        p_pvh() as c_int
     }
 }
 
@@ -666,13 +666,13 @@ fn detach_window() {
 /// came from the keyboard rather than from a mapping.
 fn langmap_adjust(c: c_int) -> c_int {
     // SAFETY: `'langmap'` is a NUL-terminated option string.
-    let mapping = unsafe { *p_langmap.get() } as c_int != NUL;
+    let mapping = unsafe { *p_langmap() } as c_int != NUL;
     let typed = if vgetc_busy.get() != 0 {
         typeahead().maplen() == 0
     } else {
         KeyTyped.get()
     };
-    if !(mapping && (p_lrm.get() != 0 || typed) && KeyStuffed.get() == 0 && c >= 0) {
+    if !(mapping && (p_lrm() || typed) && KeyStuffed.get() == 0 && c >= 0) {
         return c;
     }
     if c < 256 {

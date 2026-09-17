@@ -209,7 +209,7 @@ unsafe fn compile_patterns(
         pat.push(0);
         // Ignore case according to 'ignorecase', 'smartcase' and the
         // pattern itself.
-        let ic = unsafe { ignorecase(pat.as_ptr() as *mut c_char) } != 0;
+        let ic = unsafe { ignorecase(pat.as_ptr() as *mut c_char) };
         if !unsafe { compile(&mut pats.pat, pat.as_ptr() as *const c_char, ic) } {
             return None;
         }
@@ -226,7 +226,7 @@ unsafe fn compile_patterns(
     if kind == FIND_DEFINE {
         let buf_def = Buf::current().b_p_def;
         let def = if unsafe { *buf_def } as c_int == NUL {
-            p_def.get()
+            p_def()
         } else {
             buf_def
         };
@@ -247,7 +247,7 @@ unsafe fn compile_patterns(
 unsafe fn include_option() -> *mut c_char {
     let buf_inc = Buf::current().b_p_inc;
     if unsafe { *buf_inc } as c_int == NUL {
-        p_inc.get()
+        p_inc()
     } else {
         buf_inc
     }
@@ -457,7 +457,7 @@ unsafe fn handle_include(
             vim_snprintf(out, room, fmt.as_ptr(), name)
         };
         unsafe { msg_trunc(progress.as_mut_ptr(), true, HLF_R) };
-    } else if p_verbose.get() >= 5 {
+    } else if p_verbose() >= 5 {
         verbose_enter();
         // SAFETY: a static, translated message and a NUL-terminated name.
         let name = unsafe { c_str(name) };
@@ -640,7 +640,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
                     i += 1;
                 }
                 // `joined` =~ "\(\k\|\i\).* ", so i >= 2.
-                if p_js.get() != 0
+                if p_js()
                     && (unsafe { *iobuff.offset(i as isize - 2) } as c_int == '.' as c_int
                         || unsafe { *iobuff.offset(i as isize - 2) } as c_int == '?' as c_int
                         || unsafe { *iobuff.offset(i as isize - 2) } as c_int == '!' as c_int)
@@ -675,9 +675,7 @@ unsafe fn expand_match(walk: &mut Walk, startp: *mut c_char, dir: &mut Direction
     } else {
         walk.curr_fname
     };
-    match unsafe {
-        ins_compl_add_infercase(aux, i, p_ic.get() != 0, from_file, *dir, cont_s_ipos, 0)
-    } {
+    match unsafe { ins_compl_add_infercase(aux, i, p_ic(), from_file, *dir, cont_s_ipos, 0) } {
         // If dir was BACKWARD, honour it just once.
         r if r == OK => *dir = FORWARD,
         r if r == FAIL => return After::Stop,

@@ -29,7 +29,7 @@ pub fn grep_internal(cmdidx: CmdIdx) -> bool {
     // SAFETY: the option strings of a live buffer are NUL-terminated.
     let local = Buf::current().b_p_gp;
     let grepprg = if unsafe { *local } as c_int == NUL {
-        p_gp.get()
+        p_gp()
     } else {
         local
     };
@@ -61,11 +61,11 @@ unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> CStr
     // SAFETY: forwarded from the caller, plus the live option strings.
     let (quote, makecmd, redirect, pipe, fname) = unsafe {
         (
-            cstr::bytes_at(p_shq.get()),
+            cstr::bytes_at(p_shq()),
             cstr::bytes_at(makecmd),
             // If 'shellpipe' is empty the output is not redirected at all.
-            *p_sp.get() as c_int != NUL,
-            cstr::at(p_sp.get()),
+            *p_sp() as c_int != NUL,
+            cstr::at(p_sp()),
             cstr::at(fname),
         )
     };
@@ -106,7 +106,7 @@ pub fn ex_make(excmd: &mut ExArg) {
     let enc = if unsafe { *local_enc } as c_int != NUL {
         local_enc
     } else {
-        p_menc.get()
+        p_menc()
     };
 
     let au_name = make_get_auname(excmd.cmdidx);
@@ -134,13 +134,13 @@ pub fn ex_make(excmd: &mut ExArg) {
 
     let is_make = matches!(excmd.cmdidx, CmdIdx::make | CmdIdx::lmake);
     let errorformat = if is_make {
-        p_efm.get()
+        p_efm()
     } else {
         let local = Buf::current().b_p_gefm;
         if unsafe { *local } as c_int != NUL {
             local
         } else {
-            p_gefm.get()
+            p_gefm()
         }
     };
     let newlist = !matches!(excmd.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
@@ -193,7 +193,7 @@ unsafe fn get_mef_name() -> *mut c_char {
     static OFF: GlobalCell<c_int> = GlobalCell::new(0);
 
     // SAFETY: the option strings are NUL-terminated.
-    if unsafe { *p_mef.get() } as c_int == NUL {
+    if unsafe { *p_mef() } as c_int == NUL {
         let name = vim_tempname();
         if name.is_null() {
             qf_emsg(e_notmp.as_ptr());
@@ -201,9 +201,9 @@ unsafe fn get_mef_name() -> *mut c_char {
         return name;
     }
 
-    let makeef = unsafe { CStr::from_ptr(p_mef.get()) }.to_bytes();
+    let makeef = unsafe { CStr::from_ptr(p_mef()) }.to_bytes();
     let Some(at) = makeef.windows(2).position(|pair| pair == b"##") else {
-        return unsafe { xstrdup(p_mef.get()) };
+        return unsafe { xstrdup(p_mef()) };
     };
 
     // Keep trying until the name doesn't exist yet.

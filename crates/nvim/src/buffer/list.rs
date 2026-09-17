@@ -658,7 +658,7 @@ pub fn buflist_getfile(
         return Err(Failed);
     }
 
-    if p_sol.get() == 0 && col != 0 {
+    if !p_sol() && col != 0 {
         let mut win = current_win();
         win.w_cursor.col = col;
         check_cursor_column(win);
@@ -706,7 +706,7 @@ pub(crate) fn buflist_getfpos() {
     let mut win = current_win();
     win.w_cursor.lnum = lnum;
     check_cursor_line(win);
-    if p_sol.get() != 0 {
+    if p_sol() {
         win.w_cursor.col = 0 as ColNr;
     } else {
         win.w_cursor.col = col;

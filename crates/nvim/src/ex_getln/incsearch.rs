@@ -292,7 +292,7 @@ pub(crate) fn do_incsearch_highlighting(
     *skiplen = 0;
     *patlen = Cc::current().len();
 
-    if p_is.get() == 0 || cmd_silent.get() {
+    if !p_is() || cmd_silent.get() {
         return false;
     }
 
@@ -370,7 +370,7 @@ pub(crate) fn may_do_incsearch_highlighting(
 
     if patlen != 0 || use_last_pat {
         let mut search_flags = SEARCH_OPT + SEARCH_NOOF + SEARCH_PEEK;
-        if p_hls.get() == 0 {
+        if !p_hls() {
             search_flags += SEARCH_KEEP;
         }
         if search_first_line.get() != 0 {
@@ -464,7 +464,7 @@ pub(crate) fn may_do_incsearch_highlighting(
     validate_curwin_cursor();
 
     // May redraw the status line to show the cursor position.
-    if p_ru.get() != 0 && (Win::current().w_status_height > 0 || global_stl_height() > 0) {
+    if p_ru() && (Win::current().w_status_height > 0 || global_stl_height() > 0) {
         Win::current().w_redr_status = true;
     }
 
@@ -518,8 +518,8 @@ pub(crate) fn may_add_char_to_search(
         if *c != NUL {
             // With 'ignorecase' and 'smartcase' set and no uppercase in
             // the command line, lowercase the character.
-            if p_ic.get() != 0
-                && p_scs.get() != 0
+            if p_ic()
+                && p_scs()
                 // SAFETY: the pattern starts `skiplen` bytes into the
                 // command line, which is NUL-terminated.
                 && !unsafe { pat_has_uppercase(Cc::current().at(skiplen)) }
@@ -666,7 +666,7 @@ pub(crate) fn may_do_command_line_next_incsearch(
     } else {
         t = s.match_start;
     }
-    if p_hls.get() == 0 {
+    if !p_hls() {
         search_flags += SEARCH_KEEP;
     }
 

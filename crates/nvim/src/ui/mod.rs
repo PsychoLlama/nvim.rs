@@ -63,7 +63,9 @@ use crate::highlight_group::HLF_W;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
-use crate::option::vars::{bo_flags, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags};
+use crate::option::vars::{
+    P_LZ, bo_flags, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags,
+};
 use crate::option::{set_option_value, ui_refresh_options};
 use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
 use crate::os::cshim::gettext;
@@ -178,7 +180,7 @@ pub fn ui_init() {
 /// asking for RGB: a terminal UI's `rgb` flag describes the terminal, which
 /// the TUI has already accounted for.
 pub fn ui_rgb_attached() -> bool {
-    p_tgc.get() != 0 || each_ui().any(|ui| !is_tui(ui) && unsafe { (*ui).rgb })
+    p_tgc() || each_ui().any(|ui| !is_tui(ui) && unsafe { (*ui).rgb })
 }
 
 /// Whether any attached UI is something other than a terminal.
@@ -281,10 +283,10 @@ pub fn ui_refresh() {
     ui_default_colors_set();
     // 'lazyredraw' would defer the resize past the point the UIs are
     // told about it.
-    let save_p_lz = p_lz.get();
-    p_lz.set(0);
+    let save_p_lz = p_lz();
+    P_LZ.set(false);
     screen_resize(width, height);
-    p_lz.set(save_p_lz);
+    P_LZ.set(save_p_lz);
     ui_mode_info_set();
     pending_mode_update.set(true);
     ui_cursor_shape();
@@ -390,14 +392,14 @@ pub fn vim_beep(val: core::ffi::c_uint) {
         }
         beeps.set(beeps.get() + 1);
         if beeps.get() <= 3 {
-            if p_vb.get() != 0 {
+            if p_vb() {
                 ui_call_visual_bell();
             } else {
                 ui_call_bell();
             }
         }
     }
-    if has_char(unsafe { cstr::at(p_debug.get()) }, 'e' as c_int) {
+    if has_char(unsafe { cstr::at(p_debug()) }, 'e' as c_int) {
         msg_source(HLF_W);
         msg(gettext(c"Beep!"), HLF_W);
     }
@@ -554,14 +556,14 @@ pub unsafe fn ui_line(
 
     // 'writedelay' with `redrawdebug=line`: park the cursor at the end of
     // the line just drawn and pause, so the draw order is watchable.
-    if p_wd.get() != 0 && rdb_flags.get() & kOptRdbFlagLine as core::ffi::c_uint != 0 {
+    if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagLine as core::ffi::c_uint != 0 {
         ui_call_grid_cursor_goto(
             grid.handle as Integer,
             row as Integer,
             clearcol.min(grid.cols - 1) as Integer,
         );
         ui_call_flush();
-        os_sleep(p_wd.get().unsigned_abs());
+        os_sleep(p_wd().unsigned_abs());
         pending_cursor_update.set(true);
     }
 }
@@ -662,7 +664,7 @@ pub fn ui_flush() {
     if pending_mode_info_update.get() {
         let mut arena: Arena = ARENA_EMPTY;
         let style = mode_style_array();
-        let enabled = unsafe { *p_guicursor.get() } != 0;
+        let enabled = unsafe { *p_guicursor() } != 0;
         ui_call_mode_info_set(enabled as Boolean, style);
         unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
         pending_mode_info_update.set(false);
@@ -697,8 +699,8 @@ pub fn ui_flush() {
 
     ui_call_flush();
 
-    if p_wd.get() != 0 && rdb_flags.get() & kOptRdbFlagFlush as core::ffi::c_uint != 0 {
-        os_sleep(p_wd.get().unsigned_abs());
+    if p_wd() != 0 && rdb_flags.get() & kOptRdbFlagFlush as core::ffi::c_uint != 0 {
+        os_sleep(p_wd().unsigned_abs());
     }
 }
 

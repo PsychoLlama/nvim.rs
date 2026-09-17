@@ -194,13 +194,13 @@ pub(crate) fn updatescript(c: c_int) {
     }
     let idle = c == 0;
     if idle
-        || (p_uc.get() > 0 && {
+        || (p_uc() > 0 && {
             count.set(count.get() + 1);
-            OptInt::from(count.get()) >= p_uc.get()
+            OptInt::from(count.get()) >= p_uc()
         })
     {
         // Always fsync at idle (CursorHold).
-        ml_sync_all(c_int::from(idle), 1, p_fs.get() != 0 || idle);
+        ml_sync_all(c_int::from(idle), 1, p_fs() || idle);
         count.set(0);
     }
 }

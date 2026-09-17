@@ -110,7 +110,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if matches!(unsafe { *s } as u8, b'%' | b'#' | b'<') {
         // A `%`/`#`/`<` item is resolved by the Ex-command machinery,
         // whose own errors are suppressed unless 'verbose' is set.
-        let quiet = p_verbose.get() == 0 as OptInt;
+        let quiet = p_verbose() == 0 as OptInt;
         let no_emsg = quiet.then(Suppress::emsg);
         let mut len: usize = 0;
         let mut errormsg: *const c_char = ptr::null();
@@ -151,7 +151,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Files;
-    if p_wic.get() != 0 {
+    if p_wic() {
         options |= WildOpts::ICASE;
     }
     if result.v_type() == VAR_STRING {

@@ -102,11 +102,7 @@ fn update_topline_win(mut win: Win) {
         if n >= halfheight as int64_t {
             scroll_cursor_halfway(win, false, false);
         } else {
-            scroll_cursor_top(
-                win,
-                arith::scrolljump_lines(p_sj.get(), win.w_view_height),
-                0,
-            );
+            scroll_cursor_top(win, arith::scrolljump_lines(p_sj(), win.w_view_height), 0);
             check_botline = true;
         }
     } else {
@@ -136,7 +132,7 @@ fn update_topline_win(mut win: Win) {
                 if n <= (win.w_view_height + 1) as int64_t {
                     scroll_cursor_bot(
                         win,
-                        arith::scrolljump_lines(p_sj.get(), win.w_view_height),
+                        arith::scrolljump_lines(p_sj(), win.w_view_height),
                         false,
                     );
                 } else {

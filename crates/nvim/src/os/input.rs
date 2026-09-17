@@ -230,8 +230,8 @@ pub unsafe fn input_get(
             }
         } else {
             let wait_start = os_hrtime();
-            cursorhold_time.set(cursorhold_time.get().min(p_ut.get() as c_int));
-            result = inbuf_poll(p_ut.get() as c_int - cursorhold_time.get(), events);
+            cursorhold_time.set(cursorhold_time.get().min(p_ut() as c_int));
+            result = inbuf_poll(p_ut() as c_int - cursorhold_time.get(), events);
             if result == InputAvail::Empty {
                 if (*read_stream.ptr()).s.closed && silent_mode.get() {
                     // Drained event loop and initial input; exit `-es`/`-Es`.
@@ -486,7 +486,7 @@ fn check_multiclick(code: c_int, grid: c_int, row: c_int, col: c_int) -> Option<
         let mouse_time = os_hrtime();
         let timediff = mouse_time.wrapping_sub(orig_mouse_time.get());
         // 'mousetime' is in milliseconds, `os_hrtime` in nanoseconds.
-        let mouset = (p_mouset.get() as uint64_t).wrapping_mul(1_000_000);
+        let mouset = (p_mouset() as uint64_t).wrapping_mul(1_000_000);
         let same_click = code == orig_mouse_code.get()
             && no_move
             && timediff < mouset

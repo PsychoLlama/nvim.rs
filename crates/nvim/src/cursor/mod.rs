@@ -203,7 +203,7 @@ impl PosRef {
 /// Whether 'selection' is `"old"`, where the cursor may not rest on the NUL.
 #[inline(always)]
 fn selection_is_old() -> bool {
-    unsafe { *p_sel.get() == b'o' as c_char }
+    unsafe { *p_sel() == b'o' as c_char }
 }
 
 // ---------------------------------------------------------------------------

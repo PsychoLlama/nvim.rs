@@ -392,10 +392,10 @@ pub(crate) unsafe fn buf_write_make_backup(
     }
 
     // Make sure there is a valid backup extension to use.
-    let backup_ext = if unsafe { *p_bex.get() } as c_int == NUL {
+    let backup_ext = if unsafe { *p_bex() } as c_int == NUL {
         c".bak".as_ptr().cast_mut()
     } else {
-        p_bex.get()
+        p_bex()
     };
 
     let path = if copy {
@@ -434,7 +434,7 @@ unsafe fn backup_by_copy(
     let mut backup: *mut c_char = core::ptr::null_mut();
 
     // Try to make the backup in each directory in 'backupdir'.
-    let mut dirp = p_bdir.get();
+    let mut dirp = p_bdir();
     while unsafe { *dirp } != 0 {
         backup = unsafe { buf_get_backup_name(fname, &mut dirp, false, backup_ext) };
         if backup.is_null() {
@@ -453,7 +453,7 @@ unsafe fn backup_by_copy(
                 // erase the file.
                 unsafe { xfree(backup.cast()) };
                 backup = core::ptr::null_mut();
-            } else if p_bk.get() == 0
+            } else if !p_bk()
                 && !unsafe { step_backup_name(backup, backup_ext, Some(&mut file_info_new)) }
             {
                 // Not keeping the backup, so an existing one must not be
@@ -528,11 +528,11 @@ unsafe fn backup_by_rename(
     // path/fo.o.h becomes path/fo.o.h.bak, in the first directory of
     // 'backupdir' that works.
     let mut backup: *mut c_char = core::ptr::null_mut();
-    let mut dirp = p_bdir.get();
+    let mut dirp = p_bdir();
     while unsafe { *dirp } != 0 {
         backup = unsafe { buf_get_backup_name(fname, &mut dirp, false, backup_ext) };
         if !backup.is_null()
-            && p_bk.get() == 0
+            && !p_bk()
             && unsafe { os_path_exists(backup) }
             && !unsafe { step_backup_name(backup, backup_ext, None) }
         {
@@ -633,7 +633,7 @@ pub(crate) unsafe fn apply_patchmode(
     perm: c_int,
     file_info_old: &FileInfo,
 ) {
-    let org = unsafe { modname(fname, p_pm.get(), false) };
+    let org = unsafe { modname(fname, p_pm(), false) };
     if !backup.path.is_null() {
         if org.is_null() {
             emsg(translate(c"E205: Patchmode: can't save original file"));
@@ -781,11 +781,11 @@ pub(crate) unsafe fn finish_write(
     // the data reached the disk. For a device the fsync is attempted but
     // not complained about; it could be a pipe.
     let fsync = if buffer.b_p_fs >= 0 {
-        buffer.b_p_fs
+        buffer.b_p_fs != 0
     } else {
-        p_fs.get()
+        p_fs()
     };
-    if fsync != 0 {
+    if fsync {
         let error = unsafe { os_fsync(fd) };
         // UV_ENOTSUP is "this storage does not do fsync".
         if error != 0 && error != UV_ENOTSUP && !target.device {

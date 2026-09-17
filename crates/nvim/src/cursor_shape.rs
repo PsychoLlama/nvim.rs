@@ -270,7 +270,7 @@ pub(crate) fn parse_shape_opt(what: c_int) -> Option<&'static CStr> {
     let mut found_ve = false;
 
     for round in 1..=2 {
-        let opt = p_guicursor.get();
+        let opt = p_guicursor();
         // SAFETY: an option value is a NUL-terminated string. Upstream
         // re-reads the global at the top of each round; so does this.
         let bytes = unsafe { CStr::from_ptr(opt) }.to_bytes();
@@ -498,7 +498,7 @@ pub(crate) fn cursor_is_block_during_visual(exclusive: bool) -> bool {
 /// so needs the UI told when that group changes.
 pub(crate) fn cursor_mode_uses_syn_id(syn_id: c_int) -> bool {
     // SAFETY: an option value is a NUL-terminated string.
-    if unsafe { *p_guicursor.get() } == 0 {
+    if unsafe { *p_guicursor() } == 0 {
         return false;
     }
     (0..SHAPE_IDX_COUNT).any(|idx| {
@@ -530,7 +530,7 @@ pub(crate) fn cursor_get_mode_idx() -> ShapeIdx {
         SHAPE_IDX_O
     } else if visual_active() {
         // SAFETY: an option value is a NUL-terminated string.
-        if unsafe { *p_sel.get() } == b'e' as c_char {
+        if unsafe { *p_sel() } == b'e' as c_char {
             SHAPE_IDX_VE
         } else {
             SHAPE_IDX_V

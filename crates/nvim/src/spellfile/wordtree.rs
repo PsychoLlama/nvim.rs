@@ -653,7 +653,7 @@ pub(super) unsafe fn wordtree_compress(
     let mut tot: c_int = 0;
     let n = unsafe { node_compress(spin, (*root).wn_sibling, &raw mut ht, &mut tot) };
 
-    if spin.si_verbose != 0 || p_verbose.get() > 2 {
+    if spin.si_verbose != 0 || p_verbose() > 2 {
         let perc = remaining_percentage(n, tot);
         let (name, left) = (name.to_string_lossy(), tot - n);
         spell_message_fmt(

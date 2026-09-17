@@ -144,7 +144,7 @@ unsafe fn scan_buf_valid(st: *mut InsComplNextState) -> bool {
 pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
         && (unsafe { *Buf::current().b_p_tsrfu } as c_int != NUL
-            || unsafe { *p_tsrfu.get() } as c_int != NUL)
+            || unsafe { *p_tsrfu() } as c_int != NUL)
 }
 
 /// Is there another `'complete'` entry after `cpt`, so the source index should
@@ -381,12 +381,12 @@ pub(crate) unsafe fn get_next_dict_tsr_completion(
         dict
     } else if compl_type == CTRL_X_THESAURUS {
         if unsafe { *Buf::current().b_p_tsr } as c_int == NUL {
-            p_tsr.get()
+            p_tsr()
         } else {
             Buf::current().b_p_tsr
         }
     } else if unsafe { *Buf::current().b_p_dict } as c_int == NUL {
-        p_dict.get()
+        p_dict()
     } else {
         Buf::current().b_p_dict
     };
@@ -400,8 +400,8 @@ pub(crate) unsafe fn get_next_dict_tsr_completion(
 /// Tag names matching `compl_pattern`, up to `TAG_MANY` of them.
 pub(crate) fn get_next_tag_completion() {
     // Set `p_ic` from `p_ic`, `p_scs` and the pattern, for `find_tags`.
-    let save_p_ic = p_ic.get();
-    p_ic.set(unsafe { ignorecase(compl_pattern().data()) });
+    let save_p_ic = p_ic();
+    P_IC.set(unsafe { ignorecase(compl_pattern().data()) });
     g_tag_at_cursor.set(true);
 
     let mut matches: *mut *mut c_char = ptr::null_mut();
@@ -418,11 +418,11 @@ pub(crate) fn get_next_tag_completion() {
     // the two out-parameters are this frame's own locals.
     let found = unsafe { find_tags(pat, count, out, flags, TAG_MANY, fname) };
     if found.is_ok() && num_matches > 0 {
-        unsafe { ins_compl_add_matches(num_matches, matches, p_ic.get()) };
+        unsafe { ins_compl_add_matches(num_matches, matches, c_int::from(p_ic())) };
     }
 
     g_tag_at_cursor.set(false);
-    p_ic.set(save_p_ic);
+    P_IC.set(save_p_ic);
 }
 
 /// File names matching `compl_pattern`, fuzzily when `'completeopt'` asks.
@@ -525,12 +525,7 @@ pub(crate) fn get_next_filename_completion() {
                         false,
                         None,
                         dir,
-                        CP_FAST
-                            | if p_fic.get() != 0 || p_wic.get() != 0 {
-                                CP_ICASE
-                            } else {
-                                0
-                            },
+                        CP_FAST | if p_fic() || p_wic() { CP_ICASE } else { 0 },
                         false,
                         ptr::null(),
                         current_score,
@@ -558,13 +553,7 @@ pub(crate) fn get_next_filename_completion() {
     }
 
     if num_matches > 0 {
-        unsafe {
-            ins_compl_add_matches(
-                num_matches,
-                matches,
-                c_int::from(p_fic.get() != 0 || p_wic.get() != 0),
-            )
-        };
+        unsafe { ins_compl_add_matches(num_matches, matches, c_int::from(p_fic() || p_wic())) };
     }
 }
 
@@ -592,7 +581,7 @@ pub(crate) fn get_next_spell_completion(lnum: LineNr) {
     let mut matches: *mut *mut c_char = ptr::null_mut();
     let num_matches = unsafe { expand_spelling(lnum, compl_pattern().data(), &raw mut matches) };
     if num_matches > 0 {
-        unsafe { ins_compl_add_matches(num_matches, matches, p_ic.get()) };
+        unsafe { ins_compl_add_matches(num_matches, matches, c_int::from(p_ic())) };
     } else {
         unsafe { xfree(matches.cast::<c_void>()) };
     }
@@ -655,7 +644,7 @@ pub(crate) unsafe fn get_next_completion_match(
 
 /// Start the per-source time slice, where a timeout is configured at all.
 pub(crate) fn compl_source_start_timer(source_idx: c_int) {
-    if compl_autocomplete.get() || p_cto.get() > 0 {
+    if compl_autocomplete.get() || p_cto() > 0 {
         let now = os_hrtime();
         cpt_sources().update(source_idx, |source| source.compl_start_tv = now);
         compl_time_slice_expired.set(false);
@@ -739,13 +728,13 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         && !cpt_sources().is_unset();
     if normal_mode_strict {
         cpt_sources().set_index(0);
-        if compl_autocomplete.get() || p_cto.get() > 0 {
+        if compl_autocomplete.get() || p_cto() > 0 {
             compl_source_start_timer(0);
             compl_time_slice_expired.set(false);
             compl_timeout_ms.set(if compl_autocomplete.get() {
-                (COMPL_INITIAL_TIMEOUT_MS as OptInt).max(p_act.get()) as uint64_t
+                (COMPL_INITIAL_TIMEOUT_MS as OptInt).max(p_act()) as uint64_t
             } else {
-                p_cto.get() as uint64_t
+                p_cto() as uint64_t
             });
         }
     }
@@ -794,7 +783,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         let mut compl_timeout_save = 0;
         if normal_mode_strict
             && type_0 == CTRL_X_FUNCTION
-            && (compl_autocomplete.get() || p_cto.get() > 0)
+            && (compl_autocomplete.get() || p_cto() > 0)
         {
             compl_timeout_save = compl_timeout_ms.get();
             compl_timeout_ms.set(if compl_from_nonkeyword.get() {
@@ -849,7 +838,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         // user function, and that can have changed either operand.
         if normal_mode_strict
             && type_0 == CTRL_X_FUNCTION
-            && (compl_autocomplete.get() || p_cto.get() > 0)
+            && (compl_autocomplete.get() || p_cto() > 0)
         {
             compl_timeout_ms.set(compl_timeout_save);
         }

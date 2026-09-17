@@ -363,7 +363,7 @@ pub(crate) unsafe fn uc_add_command(
 ) -> Result<(), Failed> {
     let mut rep_buf: *mut c_char = ptr::null_mut();
     let out = &raw mut rep_buf;
-    let (no_flags, no_did_simplify, cpo) = (0, ptr::null_mut(), p_cpo.get());
+    let (no_flags, no_did_simplify, cpo) = (0, ptr::null_mut(), p_cpo());
     // SAFETY: caller contract; `rep_buf` is this frame's own.
     unsafe {
         let len = cstr::bytes_at(rep).len();

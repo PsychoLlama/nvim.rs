@@ -451,10 +451,10 @@ pub unsafe fn buf_write(
             }
 
             // 'backupskip' names files that get no backup.
-            dobackup = p_wb.get() != 0 || p_bk.get() != 0 || unsafe { *p_pm.get() } != 0;
+            dobackup = p_wb() || p_bk() || unsafe { *p_pm() } != 0;
             if dobackup
-                && unsafe { *p_bsk.get() } != 0
-                && unsafe { match_file_list(p_bsk.get(), sfname, ffname) }
+                && unsafe { *p_bsk() } != 0
+                && unsafe { match_file_list(p_bsk(), sfname, ffname) }
             {
                 dobackup = false;
             }
@@ -471,7 +471,7 @@ pub unsafe fn buf_write(
             // 'patchmode' asks for it; appending only backs up for
             // 'patchmode'. With 'writebackup' and 'backup' both off there
             // is no backup at all, which helps on almost-full disks.
-            if !(req.append && unsafe { *p_pm.get() } == 0)
+            if !(req.append && unsafe { *p_pm() } == 0)
                 && !req.filtering
                 && target.perm >= 0
                 && dobackup
@@ -526,8 +526,8 @@ pub unsafe fn buf_write(
                     && overwriting
                     && !(exiting.get() && !backup.path.is_null())
                 {
-                    let fsync = if b.b_p_fs >= 0 { b.b_p_fs } else { p_fs.get() };
-                    ml_preserve(buf, false, fsync != 0);
+                    let fsync = if b.b_p_fs >= 0 { b.b_p_fs != 0 } else { p_fs() };
+                    ml_preserve(buf, false, fsync);
                     if got_int.get() {
                         err = Some(unsafe { WriteError::shared(e_interr.as_ptr(), 0) });
                         break 'restore_backup;
@@ -574,7 +574,7 @@ pub unsafe fn buf_write(
                         if !writer.reserve_conv_buf(ICONV_MULT as usize) {
                             end = 0;
                         }
-                    } else if unsafe { *p_ccv.get() } != 0 {
+                    } else if unsafe { *p_ccv() } != 0 {
                         wfname = vim_tempname();
                         if wfname.is_null() {
                             // Can't write without a temp file!
@@ -769,12 +769,12 @@ pub unsafe fn buf_write(
                     }
                 }
 
-                if unsafe { *p_pm.get() } != 0 && dobackup {
+                if unsafe { *p_pm() } != 0 && dobackup {
                     unsafe { apply_patchmode(fname, &mut backup, target.perm, &file_info_old) };
                 }
 
                 // Remove the backup unless 'backup' is set.
-                if p_bk.get() == 0
+                if !p_bk()
                     && !backup.path.is_null()
                     && !writer.conv_error
                     && unsafe { os_remove(cstr::at(backup.path)) } != 0

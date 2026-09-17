@@ -162,7 +162,7 @@ pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
     if change_cnt > 0 && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         Buf::current().b_op_start = startpos;
     }
-    if change_cnt > p_report.get() as ssize_t {
+    if change_cnt > p_report() as ssize_t {
         let fmt = ngettext(
             c"%ld lines changed",
             c"%ld lines changed",

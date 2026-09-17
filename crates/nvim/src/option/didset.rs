@@ -51,8 +51,9 @@ use crate::message::{msg, msg_source};
 use crate::r#move::changed_window_setting;
 use crate::normal::{do_check_scrollbind, get_vtopline};
 use crate::option::vars::{
-    p_arshape, p_ch, p_columns, p_deco, p_ea, p_enc, p_hh, p_hls, p_lines, p_lnr, p_lrm, p_sj,
-    p_tbidi, p_titlelen, p_uc, p_udf, p_ul, p_wh, p_window, p_wiw,
+    P_ARSHAPE, P_CH, P_DECO, P_LNR, P_LRM, P_SJ, P_UL, P_WINDOW, p_arshape, p_ch, p_columns, p_ea,
+    p_enc, p_hh, p_hls, p_lines, p_lnr, p_lrm, p_sj, p_tbidi, p_titlelen, p_uc, p_udf, p_wh,
+    p_window, p_wiw,
 };
 use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
 use crate::optionstr::check_signcolumn;
@@ -86,7 +87,7 @@ use super::{
 use crate::highlight_group::HLF_W;
 use crate::winlayer::{self, Buf, Win};
 
-use super::field_ptr;
+use super::{NumVar, field_ptr};
 
 /// "E590", the one message a callback in this module reports.
 const E_PREVIEW_WINDOW_EXISTS: &CStr = c"E590: A preview window already exists";
@@ -158,7 +159,7 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_arab == 0 {
-        if p_tbidi.get() == 0 && win.w_onebuf_opt.wo_rl != 0 {
+        if !p_tbidi() && win.w_onebuf_opt.wo_rl != 0 {
             win.w_onebuf_opt.wo_rl = 0;
             changed_window_setting(win);
         }
@@ -169,25 +170,25 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Option<&CStr> {
         return None;
     }
 
-    if p_tbidi.get() == 0 {
+    if !p_tbidi() {
         // Right-to-left mode, and the shaping that is most of what
         // Arabic needs.
         if win.w_onebuf_opt.wo_rl == 0 {
             win.w_onebuf_opt.wo_rl = 1;
             changed_window_setting(win);
         }
-        if p_arshape.get() == 0 {
-            p_arshape.set(1);
+        if !p_arshape() {
+            P_ARSHAPE.set(true);
             redraw_all_later(UPD_NOT_VALID);
         }
     }
-    if unsafe { !cstr::eq_bytes(p_enc.get(), b"utf-8") } {
+    if unsafe { !cstr::eq_bytes(p_enc(), b"utf-8") } {
         let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
         msg_source(HLF_W);
         msg(gettext(warning), HLF_W);
         unsafe { set_vim_var_string(Vv::Warningmsg, gettext(warning).as_ptr(), -1 as ptrdiff_t) };
     }
-    p_deco.set(1);
+    P_DECO.set(true);
     unsafe { answer_err(args, set_option_value(kOptKeymap, keymap, local)) }
 }
 
@@ -242,14 +243,12 @@ pub(crate) fn did_set_cmdheight(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame; the rest reads globals.
     let old_value = unsafe { Frame::read(args) }.old_number();
     let room = (Rows.get() - min_rows(TabPage::current()) + 1) as OptInt;
-    if p_ch.get() > room {
-        p_ch.set(room);
+    if p_ch() > room {
+        P_CH.set(room);
     }
     let laid_out =
         (tabline_height() + global_stl_height() + current_topframe().fr_height) as OptInt;
-    if (p_ch.get() != old_value || laid_out != Rows.get() as OptInt - p_ch.get())
-        && full_screen.get()
-    {
+    if (p_ch() != old_value || laid_out != Rows.get() as OptInt - p_ch()) && full_screen.get() {
         command_height();
     }
     None
@@ -277,7 +276,7 @@ pub(crate) fn did_set_eof_eol_fixeol_bomb(_args: &mut OptSet) -> Option<&CStr> {
 pub(crate) fn did_set_equalalways(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let f = unsafe { Frame::read(args) };
-    if p_ea.get() != 0 && f.old_boolean() == Some(false) {
+    if p_ea() && f.old_boolean() == Some(false) {
         win_equal(Some(f.win), false, 0);
     }
     None
@@ -312,9 +311,9 @@ pub(crate) fn did_set_foldnestmax(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) fn did_set_helpheight(_args: &mut OptSet) -> Option<&CStr> {
     if firstwin.get() != lastwin.get()
         && Buf::current().b_help
-        && (Win::current().w_height as OptInt) < p_hh.get()
+        && (Win::current().w_height as OptInt) < p_hh()
     {
-        win_setheight(p_hh.get() as c_int);
+        win_setheight(p_hh() as c_int);
     }
     None
 }
@@ -327,7 +326,7 @@ pub(crate) fn did_set_hlsearch(_args: &mut OptSet) -> Option<&CStr> {
 
 /// 'ignorecase': what the search highlight matches changes with it.
 pub(crate) fn did_set_ignorecase(_args: &mut OptSet) -> Option<&CStr> {
-    if p_hls.get() != 0 {
+    if p_hls() {
         redraw_all_later(UPD_SOME_VALID);
     }
     None
@@ -342,13 +341,13 @@ pub(crate) fn did_set_iminsert(_args: &mut OptSet) -> Option<&CStr> {
 
 /// 'langnoremap': the deprecated inverse of 'langremap'.
 pub(crate) fn did_set_langnoremap(_args: &mut OptSet) -> Option<&CStr> {
-    p_lrm.set((p_lnr.get() == 0) as c_int);
+    P_LRM.set(!p_lnr());
     None
 }
 
 /// 'langremap': keeps the deprecated 'langnoremap' in step.
 pub(crate) fn did_set_langremap(_args: &mut OptSet) -> Option<&CStr> {
-    p_lnr.set((p_lrm.get() == 0) as c_int);
+    P_LNR.set(!p_lrm());
     None
 }
 
@@ -395,29 +394,29 @@ pub(crate) fn did_set_lines_or_columns(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, whose `varp` is this option's own
     // variable; the rest is the screen.
     let f = unsafe { Frame::read(args) };
-    if p_lines.get() != Rows.get() as OptInt || p_columns.get() != Columns.get() as OptInt {
+    if p_lines() != Rows.get() as OptInt || p_columns() != Columns.get() as OptInt {
         if updating_screen.get() {
             unsafe { set_option_varp(f.idx, f.varp, f.old, false) };
         } else if full_screen.get() {
-            screen_resize(p_columns.get() as c_int, p_lines.get() as c_int);
+            screen_resize(p_columns() as c_int, p_lines() as c_int);
         } else {
             // Before the screen exists there is nothing to resize; just
             // record the size and keep the command line on screen.
-            Rows.set(p_lines.get() as c_int);
-            Columns.set(p_columns.get() as c_int);
+            Rows.set(p_lines() as c_int);
+            Columns.set(p_columns() as c_int);
             check_screensize();
-            let new_row = (Rows.get() as OptInt - p_ch.get().max(1)) as c_int;
-            if cmdline_row.get() > new_row && Rows.get() as OptInt > p_ch.get() {
-                debug_assert!(p_ch.get() >= 0);
+            let new_row = (Rows.get() as OptInt - p_ch().max(1)) as c_int;
+            if cmdline_row.get() > new_row && Rows.get() as OptInt > p_ch() {
+                debug_assert!(p_ch() >= 0);
                 cmdline_row.set(new_row);
             }
         }
-        if p_window.get() >= Rows.get() as OptInt || !option_was_set(kOptWindow) {
-            p_window.set((Rows.get() - 1) as OptInt);
+        if p_window() >= Rows.get() as OptInt || !option_was_set(kOptWindow) {
+            P_WINDOW.set((Rows.get() - 1) as OptInt);
         }
     }
-    if p_sj.get() >= Rows.get() as OptInt && full_screen.get() {
-        p_sj.set((Rows.get() / 2) as OptInt);
+    if p_sj() >= Rows.get() as OptInt && full_screen.get() {
+        P_SJ.set((Rows.get() / 2) as OptInt);
     }
     None
 }
@@ -543,7 +542,7 @@ pub(crate) fn did_set_shiftwidth_tabstop(args: &mut OptSet) -> Option<&CStr> {
     let own_sw = field_ptr(f.buf.raw(), offset_of!(Buffer, b_p_sw), |b: &Buffer| {
         &b.b_p_sw
     });
-    if f.varp == OptSlot::Number(own_sw) || f.buf.b_p_sw == 0 {
+    if f.varp == OptSlot::Number(NumVar::Local(own_sw)) || f.buf.b_p_sw == 0 {
         unsafe { parse_cino(f.buf) };
     }
     None
@@ -579,7 +578,7 @@ pub(crate) fn did_set_spell(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) fn did_set_swapfile(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let buf = unsafe { Frame::read(args) }.buf;
-    if buf.b_p_swf != 0 && p_uc.get() != 0 {
+    if buf.b_p_swf != 0 && p_uc() != 0 {
         ml_open_file(buf);
     } else {
         mf_close_file(buf, true);
@@ -607,7 +606,7 @@ pub(crate) fn did_set_title_icon(_args: &mut OptSet) -> Option<&CStr> {
 pub(crate) fn did_set_titlelen(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame.
     let old_value = unsafe { Frame::read(args) }.old_number();
-    if starting.get() != NO_SCREEN && old_value != p_titlelen.get() {
+    if starting.get() != NO_SCREEN && old_value != p_titlelen() {
         need_maketitle.set(true);
     }
     None
@@ -618,7 +617,7 @@ pub(crate) fn did_set_titlelen(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) fn did_set_undofile(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer list is the editor's.
     let f = unsafe { Frame::read(args) };
-    if f.buf.b_p_udf == 0 && p_udf.get() == 0 {
+    if f.buf.b_p_udf == 0 && !p_udf() {
         return None;
     }
     let mut hash: [uint8_t; 32] = [0; 32];
@@ -648,10 +647,10 @@ pub(crate) fn did_set_undolevels(args: &mut OptSet) -> Option<&CStr> {
     });
     let (value, old_value) = (f.new_number(), f.old_number());
     if f.varp == option_var(kOptUndolevels) {
-        p_ul.set(old_value);
+        P_UL.set(old_value);
         u_sync(true);
-        p_ul.set(value);
-    } else if pp == own_ul {
+        P_UL.set(value);
+    } else if pp == NumVar::Local(own_ul) {
         f.buf.b_p_ul = old_value;
         u_sync(true);
         f.buf.b_p_ul = value;
@@ -662,7 +661,7 @@ pub(crate) fn did_set_undolevels(args: &mut OptSet) -> Option<&CStr> {
 /// 'updatecount': switching it on from zero is what opens the swap files.
 pub(crate) fn did_set_updatecount(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer list is the editor's.
-    if p_uc.get() != 0 && unsafe { Frame::read(args) }.old_number() == 0 {
+    if p_uc() != 0 && unsafe { Frame::read(args) }.old_number() == 0 {
         ml_open_files();
     }
     None
@@ -673,7 +672,7 @@ pub(crate) fn did_set_updatecount(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) fn did_set_wildchar(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame, whose `varp` is this numeric option's
     // own variable.
-    let c = unsafe { *Frame::read(args).varp.number_var() };
+    let c = unsafe { Frame::read(args).varp.number_var().get() };
     if c == Ctrl_C as OptInt
         || c == '\n' as OptInt
         || c == '\r' as OptInt
@@ -700,24 +699,24 @@ pub(crate) fn did_set_winblend(args: &mut OptSet) -> Option<&CStr> {
 
 /// 'window': the scroll amount `CTRL-F` uses, capped at the screen.
 pub(crate) fn did_set_window(_args: &mut OptSet) -> Option<&CStr> {
-    if p_window.get() < 1 || p_window.get() >= Rows.get() as OptInt {
-        p_window.set((Rows.get() - 1) as OptInt);
+    if p_window() < 1 || p_window() >= Rows.get() as OptInt {
+        P_WINDOW.set((Rows.get() - 1) as OptInt);
     }
     None
 }
 
 /// 'winheight': grow the current window if it is now too short.
 pub(crate) fn did_set_winheight(_args: &mut OptSet) -> Option<&CStr> {
-    if firstwin.get() != lastwin.get() && (Win::current().w_height as OptInt) < p_wh.get() {
-        win_setheight(p_wh.get() as c_int);
+    if firstwin.get() != lastwin.get() && (Win::current().w_height as OptInt) < p_wh() {
+        win_setheight(p_wh() as c_int);
     }
     None
 }
 
 /// 'winwidth': widen the current window if it is now too narrow.
 pub(crate) fn did_set_winwidth(_args: &mut OptSet) -> Option<&CStr> {
-    if firstwin.get() != lastwin.get() && (Win::current().w_width as OptInt) < p_wiw.get() {
-        win_setwidth(p_wiw.get() as c_int);
+    if firstwin.get() != lastwin.get() && (Win::current().w_width as OptInt) < p_wiw() {
+        win_setwidth(p_wiw() as c_int);
     }
     None
 }
@@ -742,9 +741,9 @@ pub(crate) fn did_set_xhistory(args: &mut OptSet) -> Option<&CStr> {
     let f = unsafe { Frame::read(args) };
     let arg = f.varp.number_var();
     if f.varp == option_var(kOptChistory) {
-        qf_resize_stack(unsafe { *arg } as c_int);
+        qf_resize_stack(unsafe { arg.get() } as c_int);
     } else {
-        ll_resize_stack(f.win, unsafe { *arg } as c_int);
+        ll_resize_stack(f.win, unsafe { arg.get() } as c_int);
     }
     None
 }

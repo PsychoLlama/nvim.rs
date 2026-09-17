@@ -135,7 +135,7 @@ pub const UNDO_HASH_SIZE: c_int = 32;
 ///
 /// Safe: the editor's message state is live from startup to exit.
 pub(crate) fn verbosely(automatic: bool, say: impl FnOnce()) {
-    if automatic && p_verbose.get() <= 0 {
+    if automatic && p_verbose() <= 0 {
         return;
     }
     if automatic {
@@ -260,7 +260,7 @@ pub fn undo_allowed(buffer: Buf) -> bool {
 fn get_undolevel(buffer: Buf) -> OptInt {
     let local = buffer.b_p_ul;
     if local == OptInt::from(NO_LOCAL_UNDOLEVEL) {
-        return p_ul.get();
+        return p_ul();
     }
     local
 }

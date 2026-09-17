@@ -16,6 +16,7 @@ use crate::types::Failed;
 
 use crate::global_cell::GlobalCell;
 use crate::option::OptSlot;
+use crate::options::vars::{BoolOpt, NumOpt, StrOpt};
 use crate::winlayer::{Buf, Win};
 
 crate::flag_set! {
@@ -250,21 +251,21 @@ pub struct OptSet {
 /// an `OptInt` or a `char *` depending on the row's `type_0` — and the
 /// table used to state the tag once and the address once, with nothing
 /// tying them together: `var` was a `*mut c_void` filled in from whichever
-/// global the metadata named. Here the arm carries the cell itself, so a
-/// row cannot point a string option at a number and still compile, and
-/// `option::scope::option_var` is the one place that
-/// turns any of it back into an address.
+/// global the metadata named. Here the arm carries a *selector* naming one
+/// field of [`crate::options::vars::Options`], so a row cannot point a
+/// string option at a number and still compile, and the table holds no
+/// address at all.
 #[derive(Copy, Clone)]
 pub enum OptVar {
     /// The option has no global variable: its value lives only in a window
     /// or a buffer.
     NoGlobal,
-    /// A boolean option's `int`.
-    Boolean(&'static GlobalCell<::core::ffi::c_int>),
-    /// A number option's `OptInt`.
-    Number(&'static GlobalCell<OptInt>),
-    /// A string option's `char *`.
-    String(&'static GlobalCell<*mut ::core::ffi::c_char>),
+    /// A boolean option's field.
+    Boolean(BoolOpt),
+    /// A number option's field.
+    Number(NumOpt),
+    /// A string option's field.
+    String(StrOpt),
     /// An immutable option has nowhere to keep a value, so it reads its own
     /// default in place — the `def_val.data` of its own row, whose active
     /// member is this option's type. Nothing writes through it: `set_option`

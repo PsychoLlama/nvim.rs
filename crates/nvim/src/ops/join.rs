@@ -276,7 +276,7 @@ fn measure_join(
                     plan.add_space(t);
                 }
                 // 'joinspaces': two spaces after the end of a sentence.
-                if p_js.get() != 0
+                if p_js()
                     && (endcurr1 == '.' as c_int
                         || endcurr1 == '?' as c_int
                         || endcurr1 == '!' as c_int)

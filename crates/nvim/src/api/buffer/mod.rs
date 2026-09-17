@@ -30,7 +30,7 @@ use crate::memory::{
 };
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::ops::get_region_bytecount;
-use crate::option::vars::p_acd;
+use crate::option::vars::{P_ACD, p_acd};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;

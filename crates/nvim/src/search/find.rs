@@ -602,7 +602,7 @@ pub unsafe fn searchit(
             // Stop when 'wrapscan' is off, "stop_lnum" was given,
             // after an interrupt, after a match, and after looping
             // twice.
-            if p_ws.get() == 0
+            if !p_ws()
                 || stop_lnum != 0
                 || got_int.get()
                 || s.aborted()
@@ -651,7 +651,7 @@ pub unsafe fn searchit(
         if got_int.get() {
             emsg(gettext(e_interr));
         } else if options & SEARCH_MSG == SEARCH_MSG {
-            let msg = if p_ws.get() != 0 {
+            let msg = if p_ws() {
                 gettext(e_patnotf2)
             } else if lnum == 0 {
                 gettext(c"E384: Search hit TOP without match for: %s")
@@ -718,7 +718,7 @@ pub unsafe fn search_for_exact_line(
     loop {
         unsafe { (*pos).lnum += dir };
         if unsafe { (*pos).lnum } < 1 {
-            if p_ws.get() == 0 {
+            if !p_ws() {
                 unsafe { (*pos).lnum = 1 };
                 break;
             }
@@ -728,7 +728,7 @@ pub unsafe fn search_for_exact_line(
             }
         } else if unsafe { (*pos).lnum } > buffer.b_ml.ml_line_count {
             unsafe { (*pos).lnum = 1 };
-            if p_ws.get() == 0 {
+            if !p_ws() {
                 break;
             }
             if !shortmess(ShmFlag::SEARCH) {
@@ -755,13 +755,13 @@ pub unsafe fn search_for_exact_line(
             // When adding lines the matching line may be empty; it is
             // not ignored, because it is the *next* line that is
             // wanted. -- Acevedo
-            if unsafe { mb_strcmp_ic(p_ic.get() != 0, text, pat) } == 0 {
+            if unsafe { mb_strcmp_ic(p_ic(), text, pat) } == 0 {
                 return Ok(());
             }
         } else if at < line.len() {
             // Expanding lines or words; ignore empty lines.
             debug_assert!(compl_len >= 0);
-            let same = if p_ic.get() != 0 {
+            let same = if p_ic() {
                 unsafe { mb_strnicmp(text, pat, compl_len as size_t) }
             } else {
                 let n = compl_len as size_t;

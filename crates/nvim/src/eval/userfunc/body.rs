@@ -201,7 +201,7 @@ pub(crate) unsafe fn get_function_body(
                         && unsafe { *skipwhite(line_arg) } != NUL as c_char
                     {
                         nextcmd = line_arg;
-                    } else if w.byte() != NUL as u8 && w.byte() != b'"' && p_verbose.get() > 0 {
+                    } else if w.byte() != NUL as u8 && w.byte() != b'"' && p_verbose() > 0 {
                         // SAFETY: a message argument the caller holds as a NUL-terminated string.
                         let p = unsafe { c_str(p) };
                         swmsg!(true, "W22: Text found after :endfunction: {p}");

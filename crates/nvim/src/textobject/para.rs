@@ -157,12 +157,8 @@ pub fn starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
         return false;
     }
     // SAFETY: 'sections' and 'paragraphs' are NUL-terminated option values.
-    let (sections, paragraphs) = unsafe {
-        (
-            cstr::bytes_at(p_sections.get()),
-            cstr::bytes_at(p_para.get()),
-        )
-    };
+    let (sections, paragraphs) =
+        unsafe { (cstr::bytes_at(p_sections()), cstr::bytes_at(p_para())) };
     let name = &line[1..];
     inmacro(sections, name) || (para == 0 && inmacro(paragraphs, name))
 }

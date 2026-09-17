@@ -20,6 +20,8 @@
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char};
 
+use crate::option::StrVar;
+
 use crate::message::e_invarg;
 use crate::types::OptSet;
 
@@ -29,9 +31,8 @@ pub(crate) fn invalid() -> Option<&'static CStr> {
     Some(e_invarg)
 }
 
-/// The option's value variable — a `char **`, since every option here is a
-/// string.
-pub(crate) fn varp(args: &OptSet) -> *mut *mut c_char {
+/// The option's value variable — a string one, since every option here is.
+pub(crate) fn varp(args: &OptSet) -> StrVar {
     args.os_varp.string_var()
 }
 
@@ -49,15 +50,14 @@ pub(crate) fn win(args: &OptSet) -> Win {
 /// `:setglobal` on a window-local option is vetted without disturbing any
 /// window.
 ///
-/// # Safety
 /// `window` is the window from [`win`] and `local` its own variable for this
-/// option; the comparison is of addresses only.
-pub(crate) unsafe fn local_window(
-    varp: *mut *mut c_char,
-    window: Win,
-    local: *mut *mut c_char,
-) -> Option<Win> {
-    if varp == local { Some(window) } else { None }
+/// option. Which variable it is, not what it says, so nothing is read.
+pub(crate) fn local_window(varp: StrVar, window: Win, local: *mut *mut c_char) -> Option<Win> {
+    if varp == StrVar::Local(local) {
+        Some(window)
+    } else {
+        None
+    }
 }
 
 /// The value the option held before this set, as a C string.

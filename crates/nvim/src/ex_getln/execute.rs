@@ -137,7 +137,7 @@ pub(crate) fn command_line_end_wildmenu(mut s: Cls, key_is_wc: bool, c: ::core::
         s.expand(WildOpts::NONE, WildMode::Free);
     }
     s.did_wild_list = false;
-    if p_wmnu.get() == 0 || (c != Key::Up.code() && c != Key::Down.code()) {
+    if !p_wmnu() || (c != Key::Up.code() && c != Key::Down.code()) {
         s.xpc.xp_context = ExpandContext::Nothing;
     }
     s.wim_index = 0;
@@ -277,17 +277,17 @@ pub(crate) unsafe fn command_line_execute(
 
     // When there are matching completions to select, <S-Tab> works like
     // CTRL-P (unless 'wildchar' is <S-Tab>).
-    if s.c as OptInt != p_wc.get() && s.c == Key::STab.code() && s.xpc.xp_numfiles > 0 {
+    if s.c as OptInt != p_wc() && s.c == Key::STab.code() && s.xpc.xp_numfiles > 0 {
         s.c = Ctrl_P;
     }
 
-    if p_wmnu.get() != 0 {
+    if p_wmnu() {
         s.c = unsafe { wildmenu_translate_key(cc, s.c, s.xpc(), s.did_wild_list) };
     }
 
     // Which wildmenu gesture, if any, the key was already used for.
     let mut wild_type = None;
-    let key_is_wc = (s.c as OptInt == p_wc.get() && KeyTyped.get()) || s.c as OptInt == p_wcm.get();
+    let key_is_wc = (s.c as OptInt == p_wc() && KeyTyped.get()) || s.c as OptInt == p_wcm();
     if (cmdline_pum_active() || wild_menu_showing.get() != 0 || s.did_wild_list)
         && !key_is_wc
         && s.xpc.xp_numfiles > 0
@@ -334,7 +334,7 @@ pub(crate) unsafe fn command_line_execute(
         command_line_end_wildmenu(s, key_is_wc, s.c);
     }
 
-    if p_wmnu.get() != 0 {
+    if p_wmnu() {
         s.c = unsafe { wildmenu_process_key(cc, s.c, s.xpc()) };
     }
 
@@ -396,8 +396,8 @@ pub(crate) unsafe fn command_line_execute(
     }
 
     // Completion for 'wildchar', 'wildcharm' and wildtrigger().
-    if (s.c as OptInt == p_wc.get() && !s.gotesc && KeyTyped.get())
-        || s.c as OptInt == p_wcm.get()
+    if (s.c as OptInt == p_wc() && !s.gotesc && KeyTyped.get())
+        || s.c as OptInt == p_wcm()
         || s.c == Key::Wild.code()
         || s.c == Ctrl_Z
     {
@@ -421,11 +421,11 @@ pub(crate) unsafe fn command_line_execute(
         && s.next_wild(WildMode::ExpandKeep, WildOpts::NONE) == OK
     {
         if s.xpc.xp_numfiles > 1
-            && ((!s.did_wild_list && wim_has(s.wim_index, kOptWimFlagList)) || p_wmnu.get() != 0)
+            && ((!s.did_wild_list && wim_has(s.wim_index, kOptWimFlagList)) || p_wmnu())
         {
             // Trigger the popup menu when wildoptions=pum.
             s.show_matches(
-                p_wmnu.get() != 0,
+                p_wmnu(),
                 wim_has(s.wim_index, kOptWimFlagList),
                 wim_has(0, kOptWimFlagNoselect),
             );
@@ -514,7 +514,7 @@ pub(crate) fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
     let prev_cmdpreview = cmdpreview.get();
     let preview_shown = s.firstc == ':' as ::core::ffi::c_int
         && current_sctx.get().sc_sid == 0 // only if interactive
-        && unsafe { *p_icm.get() } as ::core::ffi::c_int != NUL // 'inccommand' is set
+        && unsafe { *p_icm() } as ::core::ffi::c_int != NUL // 'inccommand' is set
         && !exmode_active.get() // not in ex mode
         && cmdline_star.get() == 0 // not typing a password
         && vpeekc_any() == 0
@@ -544,7 +544,7 @@ pub(crate) fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
 
     may_trigger_cursormovedc(s);
 
-    if p_arshape.get() != 0 && p_tbidi.get() == 0 {
+    if p_arshape() && !p_tbidi() {
         // Always redraw the whole command line, to fix shaping and
         // right-left typing. Not efficient, but it works. Only do it when
         // there are no characters left to read, to avoid useless

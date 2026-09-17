@@ -133,7 +133,7 @@ unsafe fn init_histories(wms: *mut WriteMergerState, merging: bool) -> [bool; HI
     for (i, wanted) in wanted.iter_mut().enumerate() {
         let mut num_saved = get_shada_parameter(hist_type2char(i as c_int));
         if num_saved == -1 {
-            num_saved = p_hi.get() as c_int;
+            num_saved = p_hi() as c_int;
         }
         if num_saved > 0 {
             *wanted = true;
@@ -238,7 +238,7 @@ impl Writing {
             .insert(c"pid", Object::integer(os_get_pid()))
             .insert(
                 c"encoding",
-                Object::string(unsafe { cstr_to_string(p_enc.get()) }),
+                Object::string(unsafe { cstr_to_string(p_enc()) }),
             );
         let entry = ShadaEntry {
             can_free_entry: false,

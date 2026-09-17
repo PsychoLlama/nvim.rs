@@ -319,7 +319,7 @@ unsafe fn qf_jump_print_msg(
     let old_msg_scroll = msg_scroll.get();
     if Buf::current_raw() == old_curbuf.raw() && Win::current().w_cursor.lnum == old_lnum {
         msg_scroll.set(true as c_int);
-    } else if (msg_scrolled.get() == 0 || p_ch.get() == 0 && msg_scrolled.get() == 1)
+    } else if (msg_scrolled.get() == 0 || p_ch() == 0 && msg_scrolled.get() == 1)
         && shortmess(ShmFlag::OVERALL)
     {
         msg_scroll.set(false as c_int);
@@ -458,7 +458,7 @@ pub(crate) unsafe fn qf_jump_newwin(
         qf_emsg(e_no_errors.as_ptr());
         return;
     }
-    let old_swb = p_swb.get();
+    let old_swb = p_swb();
     let old_swb_flags = swb_flags.get();
     // Getting the file may reset it.
     let old_key_typed = KeyTyped.get();
@@ -530,8 +530,8 @@ pub(crate) unsafe fn qf_jump_newwin(
 
     // Put 'switchbuf' back, unless an autocommand or a modeline changed
     // it meanwhile.
-    if p_swb.get() != old_swb && is_empty_option(p_swb.get()) {
-        p_swb.set(old_swb);
+    if p_swb() != old_swb && is_empty_option(p_swb()) {
+        P_SWB.set(old_swb);
         swb_flags.set(old_swb_flags);
     }
     qf_busy_end();

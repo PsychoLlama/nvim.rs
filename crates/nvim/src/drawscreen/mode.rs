@@ -60,13 +60,13 @@ pub fn showmode() -> c_int {
     msg_ext_ui_flush();
     msg_grid_validate();
 
-    let do_mode = p_smd.get() != 0
+    let do_mode = p_smd()
         && msg_silent.get() == 0
         && (State.get() & MODE_TERMINAL != 0
             || State.get() & MODE_INSERT != 0
             || restart_edit.get() != NUL
             || visual_active());
-    let can_show_mode = p_ch.get() != 0 || ui_has(kUIMessages);
+    let can_show_mode = p_ch() != 0 || ui_has(kUIMessages);
 
     if (do_mode || reg_recording.get() != 0) && can_show_mode {
         if skip_showmode() {
@@ -142,7 +142,7 @@ pub fn showmode() -> c_int {
                 } else if State.get() & REPLACE_FLAG != 0 {
                     put_translated(c" REPLACE");
                 } else if State.get() & MODE_INSERT != 0 {
-                    if p_ri.get() != 0 {
+                    if p_ri() {
                         put_translated(c" REVERSE");
                     }
                     put_translated(c" INSERT");
@@ -180,7 +180,7 @@ pub fn showmode() -> c_int {
                     }
                 }
 
-                if State.get() & MODE_INSERT != 0 && p_paste.get() != 0 {
+                if State.get() & MODE_INSERT != 0 && p_paste() {
                     put_translated(c" (paste)");
                 }
 
@@ -325,7 +325,7 @@ pub fn comp_col() {
     // `INT_MAX`, and `+ 1` on that overflows. Any width past the screen
     // lands on the same column-one answer below, so saturating is the
     // clamp the arithmetic wanted anyway.
-    if p_ru.get() != 0 {
+    if p_ru() {
         ru_width = if ru_wid.get() != 0 {
             ru_wid.get()
         } else {
@@ -338,10 +338,10 @@ pub fn comp_col() {
             sc_width = ru_width;
         }
     }
-    if p_sc.get() != 0 && unsafe { *p_sloc.get() } == b'l'.cast_signed() {
+    if p_sc() && unsafe { *p_sloc() } == b'l'.cast_signed() {
         sc_width = sc_width.saturating_add(SHOWCMD_COLS as c_int);
         // A separating space, unless the ruler is not beside it anyway.
-        if p_ru.get() == 0 || last_has_status {
+        if !p_ru() || last_has_status {
             sc_width = sc_width.saturating_add(1);
         }
     }

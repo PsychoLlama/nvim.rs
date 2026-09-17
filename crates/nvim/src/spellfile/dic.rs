@@ -208,7 +208,7 @@ pub(super) unsafe fn spell_read_dic(
         } else {
             // Report every duplicate when 'verbose' is on, otherwise
             // just the first, plus a count at the end.
-            if p_verbose.get() > 0 {
+            if p_verbose() > 0 {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (fname, dw) = unsafe { (c_str(fname), c_str(dw)) };
                 smsg!(0, "Duplicate word in {fname} line {}: {dw}", lnum);

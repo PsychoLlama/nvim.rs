@@ -155,9 +155,9 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
         // Clamp 'cmdheight' so the windows still fit, on this tab page and
         // on every other one.
         let max_p_ch = Rows.get() - min_rows(TabPage::current()) + 1;
-        if p_ch.get() > 0 && p_ch.get() > max_p_ch as OptInt {
-            p_ch.set(max_p_ch.max(1) as OptInt);
-            TabPage::current().tp_ch_used = p_ch.get();
+        if p_ch() > 0 && p_ch() > max_p_ch as OptInt {
+            P_CH.set(max_p_ch.max(1) as OptInt);
+            TabPage::current().tp_ch_used = p_ch();
         }
         for mut tp in winlayer::tabs() {
             if !tp.is_current() {
@@ -172,8 +172,8 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
     // `check_screensize` may have clamped them.
     let height = Rows.get();
     let width = Columns.get();
-    p_lines.set(height as OptInt);
-    p_columns.set(width as OptInt);
+    P_LINES.set(height as OptInt);
+    P_COLUMNS.set(width as OptInt);
 
     ui_call_grid_resize(1, width as Integer, height as Integer);
 

@@ -225,7 +225,7 @@ pub fn f_inputrestore(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     if let Some(mut saved) = SAVED_TYPEAHEAD.with_mut(Vec::pop) {
         // SAFETY: filled by the `f_inputsave` that pushed it.
         unsafe { restore_typeahead(&raw mut saved) };
-    } else if p_verbose.get() > 1 {
+    } else if p_verbose() > 1 {
         // SAFETY throughout: a static message, and the caller's return value.
         let msg = c"called inputrestore() more often than inputsave()";
         unsafe { verb_msg(gettext(msg).as_ptr()) };

@@ -396,10 +396,10 @@ pub(crate) fn ins_compl_build_pum() -> c_int {
 
         // Apply 'smartcase' behaviour during normal mode.
         if ctrl_x_mode_normal()
-            && p_inf.get() == 0
+            && !p_inf()
             && !leader.data().is_null()
             // SAFETY: the leader is a NUL-terminated string.
-            && unsafe { ignorecase(leader.data()) } == 0
+            && !unsafe { ignorecase(leader.data()) }
             && !cot_fuzzy()
         {
             comp.cp_flags &= !CP_ICASE;
@@ -741,7 +741,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
     }
     if edit_submode_extra.get().is_null() {
         msg_clr_cmdline();
-    } else if p_smd.get() == 0 {
+    } else if !p_smd() {
         msg_hist_off.set(true);
         let attr = if (edit_submode_highl.get() as c_uint) < HLF_COUNT as c_uint {
             edit_submode_highl.get() as c_int + 1

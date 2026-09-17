@@ -28,7 +28,7 @@ use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
 use crate::message::state::did_emsg;
 use crate::message_fmt::c_str;
-use crate::option::vars::{p_cpo, p_ic};
+use crate::option::vars::{P_CPO, p_cpo, p_ic};
 use crate::optionstr::empty_option;
 use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
@@ -60,15 +60,15 @@ struct EmptyCpo(*mut c_char);
 
 impl EmptyCpo {
     fn new() -> Self {
-        let saved = p_cpo.get();
-        p_cpo.set(empty_option());
+        let saved = p_cpo();
+        P_CPO.set(empty_option());
         EmptyCpo(saved)
     }
 }
 
 impl Drop for EmptyCpo {
     fn drop(&mut self) {
-        p_cpo.set(self.0);
+        P_CPO.set(self.0);
     }
 }
 
@@ -88,7 +88,7 @@ impl Regprog {
         if rm.regprog.is_null() {
             return None;
         }
-        rm.rm_ic = p_ic.get() != 0;
+        rm.rm_ic = p_ic();
         Some(Regprog(rm))
     }
 }

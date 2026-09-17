@@ -87,7 +87,7 @@ pub unsafe fn eval_charconvert(
     current_sctx.set(option_last_set(kOptCharconvert));
 
     let mut err = false;
-    if unsafe { eval_to_bool(p_ccv.get(), &raw mut err, None, false, true) } {
+    if unsafe { eval_to_bool(p_ccv(), &raw mut err, None, false, true) } {
         err = true;
     }
 
@@ -115,7 +115,7 @@ pub unsafe fn eval_diff(origfile: *const c_char, newfile: *const c_char, outfile
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptDiffexpr));
 
-    unsafe { tv_free(eval_expr_ext(p_dex.get(), None, true).as_mut()) };
+    unsafe { tv_free(eval_expr_ext(p_dex(), None, true).as_mut()) };
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
@@ -138,7 +138,7 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
     unsafe { set_vim_var_strings(&named) };
     current_sctx.set(option_last_set(kOptPatchexpr));
 
-    unsafe { tv_free(eval_expr_ext(p_pex.get(), None, true).as_mut()) };
+    unsafe { tv_free(eval_expr_ext(p_pex(), None, true).as_mut()) };
 
     clear_vim_var_strings(&VARS);
     current_sctx.set(saved_sctx);
@@ -162,7 +162,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut L
     let mut save_val = TV_INITIAL_VALUE;
     prepare_vimvar(Vv::Val, &mut save_val);
     unsafe { set_vim_var_string(Vv::Val, badword, -1) };
-    let no_emsg = (p_verbose.get() == 0).then(Suppress::emsg);
+    let no_emsg = (p_verbose() == 0).then(Suppress::emsg);
     current_sctx.set(option_last_set(kOptSpellsuggest));
 
     let mut rettv = TV_INITIAL_VALUE;

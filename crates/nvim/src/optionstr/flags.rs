@@ -140,7 +140,7 @@ pub(crate) unsafe fn did_set_opt_flags(
 /// one of the accepted ones".
 pub fn did_set_str_generic(args: &mut OptSet) -> Option<&'static CStr> {
     let (idx, varp) = (args.os_idx, args.os_varp.string_var());
-    if unsafe { check_str_opt(idx, varp) }.is_err() {
+    if unsafe { check_str_opt(idx, Some(varp)) }.is_err() {
         Some(e_invarg)
     } else {
         None
@@ -177,17 +177,16 @@ pub(crate) unsafe fn did_set_option_listflag<'a>(
 /// value".
 ///
 /// # Safety
-/// `varp` is null or points at the option's `char *` variable.
-pub(crate) unsafe fn check_str_opt(idx: OptIndex, varp: *mut *mut c_char) -> Result<(), Failed> {
+/// `varp` is the option's variable, or `None` for its global one.
+pub(crate) unsafe fn check_str_opt(
+    idx: OptIndex,
+    varp: Option<crate::option::StrVar>,
+) -> Result<(), Failed> {
     let opt = get_option(idx);
-    let varp = if varp.is_null() {
-        option_var(idx).string_var()
-    } else {
-        varp
-    };
+    let varp = varp.unwrap_or_else(|| option_var(idx).string_var());
     let list = opt.flags & (kOptFlagComma | kOptFlagOneComma) != 0;
     // SAFETY: the option's variable holds a C string.
-    let Some(mask) = (unsafe { opt_strings_mask(*varp, opt_values(idx), list) }) else {
+    let Some(mask) = (unsafe { opt_strings_mask(varp.get(), opt_values(idx), list) }) else {
         return Err(Failed);
     };
     // The table names the mask cell itself; an option with no mask has none.

@@ -59,9 +59,9 @@ pub(crate) unsafe fn ins_compl_dictionaries(
     };
 
     // If 'infercase' is set, don't use 'smartcase' here.
-    let save_p_scs = p_scs.get();
+    let save_p_scs = p_scs();
     if Buf::current().b_p_inf != 0 {
-        p_scs.set(0);
+        P_SCS.set(false);
     }
 
     // C's `goto theend`, i.e. free and restore below without scanning.
@@ -86,7 +86,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
         }
 
         // Ignore case depends on 'ignorecase', 'smartcase' and "pat".
-        regmatch.rm_ic = unsafe { ignorecase(pat) } != 0;
+        regmatch.rm_ic = unsafe { ignorecase(pat) };
         while unsafe { *dict } as c_int != NUL && !got_int.get() && !compl_interrupted.get() {
             // Copy one dictionary file name into buf.
             // Upstream leaves both uninitialised: every path that reads
@@ -151,7 +151,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
         }
     }
 
-    p_scs.set(save_p_scs);
+    P_SCS.set(save_p_scs);
     unsafe { vim_regfree(regmatch.regprog) };
     unsafe { xfree(buf.cast::<c_void>()) };
 }
@@ -430,7 +430,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
                     ml_get_buf_len(ins_buf, lnum + 1),
                 )
             };
-            if p_paste.get() == 0 {
+            if !p_paste() {
                 let tmp_ptr = ptr;
                 ptr = unsafe { skipwhite(tmp_ptr) };
                 len -= unsafe { ptr.offset_from(tmp_ptr) } as c_int;
@@ -471,7 +471,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
                             len += 1;
                         }
                         // The joined line =~ "\k.* ", thus len >= 2.
-                        if p_js.get() != 0
+                        if p_js()
                             && matches!(
                                 unsafe { *iobuff.offset((len - 2) as isize) } as u8,
                                 b'.' | b'?' | b'!'
@@ -538,21 +538,21 @@ pub(crate) unsafe fn get_next_default_completion(
     let in_curbuf = ins_buf.raw() == Buf::current_raw();
 
     // If 'infercase' is set, don't use 'smartcase' here.
-    let save_p_scs = p_scs.get();
+    let save_p_scs = p_scs();
     debug_assert!(!ins_buf.raw().is_null());
     if ins_buf.b_p_inf != 0 {
-        p_scs.set(0);
+        P_SCS.set(false);
     }
 
     // Buffers other than curbuf are scanned from the beginning or the end
     // but never from the middle, thus setting nowrapscan in these buffers
     // is a good idea; on the other hand, we always set wrapscan for curbuf
     // to avoid missing matches -- Acevedo, Webb
-    let save_p_ws = p_ws.get();
+    let save_p_ws = p_ws();
     if !in_curbuf {
-        p_ws.set(0);
+        P_WS.set(false);
     } else if unsafe { (*st).cpt.at() } as c_int == '.' as c_int {
-        p_ws.set(1);
+        P_WS.set(true);
     }
 
     let mut looped_around = false;
@@ -681,7 +681,7 @@ pub(crate) unsafe fn get_next_default_completion(
         } else {
             ins_buf.b_sfname
         };
-        let ic = p_ic.get() != 0;
+        let ic = p_ic();
         // SAFETY: `ptr` is `len` readable bytes of the match just found, and
         // `fname` is null or the scanned buffer's own name.
         let add_r = unsafe {
@@ -698,8 +698,8 @@ pub(crate) unsafe fn get_next_default_completion(
         }
     }
 
-    p_scs.set(save_p_scs);
-    p_ws.set(save_p_ws);
+    P_SCS.set(save_p_scs);
+    P_WS.set(save_p_ws);
     found_new_match
 }
 
@@ -711,7 +711,7 @@ pub(crate) fn get_register_completion() {
     let starts_with_orig = |s: *mut c_char| {
         let (data, len) = compl_orig_text().parts();
         data.is_null()
-            || if p_ic.get() != 0 {
+            || if p_ic() {
                 unsafe { strncasecmp(s, data, len) == 0 }
             } else {
                 unsafe { cstr::prefix_eq(s, data, len) }
@@ -817,7 +817,7 @@ unsafe fn add_scanned_word(
     // `start`, and the match is not re-anchoring the initial position.
     unsafe {
         let len = end.offset_from(start) as c_int;
-        ins_compl_add_infercase(start, len, p_ic.get() != 0, fname, dir, false, score)
+        ins_compl_add_infercase(start, len, p_ic(), fname, dir, false, score)
     }
 }
 
@@ -969,7 +969,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
         let last = buffer.b_ml.ml_line_count;
         current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
         if !(1..=last).contains(&current_pos.lnum) {
-            if p_ws.get() == 0 {
+            if !p_ws() {
                 return None;
             }
             current_pos.lnum = if dir == FORWARD { 1 } else { last };

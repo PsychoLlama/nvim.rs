@@ -197,12 +197,12 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
 /// Whether `'mousemodel'` is set to "popup" or "popup_setpos".
 pub(crate) fn mouse_model_popup() -> bool {
     // SAFETY: an option string is NUL-terminated, never null.
-    unsafe { *p_mousem.get() == 'p' as c_char }
+    unsafe { *p_mousem() == 'p' as c_char }
 }
 
 /// Whether `'mousemodel'` is exactly "popup_setpos", which moves the cursor
 /// before showing the menu.
 pub(crate) fn mouse_model_popup_setpos() -> bool {
     // SAFETY: an option string is NUL-terminated, never null.
-    unsafe { CStr::from_ptr(p_mousem.get()) == c"popup_setpos" }
+    unsafe { CStr::from_ptr(p_mousem()) == c"popup_setpos" }
 }

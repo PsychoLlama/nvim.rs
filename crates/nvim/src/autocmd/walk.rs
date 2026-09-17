@@ -98,7 +98,7 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
             };
             let namep = unsafe { xmalloc(sourcing_name_len) }.cast::<::core::ffi::c_char>();
             unsafe { snprintf(namep, sourcing_name_len, s.as_ptr(), name, (*ap).pat) };
-            if p_verbose.get() >= 8 {
+            if p_verbose() >= 8 {
                 verbose_enter();
                 // SAFETY: `namep` is the NUL-terminated name just built.
                 let namep = unsafe { c_str(namep) };
@@ -249,7 +249,7 @@ pub unsafe fn getnextac(
     debug_assert!(!unsafe { (*ac).pat }.is_null());
     let mut oneshot = unsafe { (*ac).once };
 
-    if p_verbose.get() >= 9 {
+    if p_verbose() >= 9 {
         verbose_enter_scroll();
         let handler_str = unsafe { aucmd_handler_to_string(ac) };
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

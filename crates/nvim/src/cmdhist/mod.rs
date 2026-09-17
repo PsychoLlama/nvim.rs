@@ -177,7 +177,7 @@ fn get_histtype(name: &[u8], return_default: bool) -> HistoryType {
 /// Sync the rings to the 'history' option, keeping the newest entries when
 /// shrinking.
 pub fn init_history() {
-    let history_opt = p_hi.get();
+    let history_opt = p_hi();
     assert!(
         (0..=OptInt::from(c_int::MAX)).contains(&history_opt),
         "'history' out of range"

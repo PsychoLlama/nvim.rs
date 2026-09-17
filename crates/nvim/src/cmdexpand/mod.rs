@@ -63,7 +63,9 @@ use crate::message::{
     emsg, msg_advance, msg_clr_eos, msg_display, msg_display_elided, msg_ext_set_kind,
     msg_grid_view, msg_putchar, msg_scroll_up, msg_start, msg_str, msg_str_hl,
 };
-use crate::option::vars::{p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, wop_flags};
+use crate::option::vars::{
+    P_LS, P_WMH, p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, wop_flags,
+};
 use crate::option::{
     copy_option_part, csh_like_shell, expand_old_setting, expand_setting_subtract, expand_settings,
     expand_string_setting, get_findfunc, magic_isset, set_context_in_set_cmd,

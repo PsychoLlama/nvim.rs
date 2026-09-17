@@ -292,7 +292,7 @@ pub(crate) fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     }
     let mut res: *mut c_char = ptr::null_mut();
     let out = &raw mut res;
-    let cpo = p_cpo.get();
+    let cpo = p_cpo();
     let dolt = REPTERM_DO_LT as c_int;
     let simplify = ptr::null_mut();
     // SAFETY: as above; `res` is a live slot for the allocation

@@ -198,7 +198,7 @@ unsafe fn compile_sort_pattern(
     if regmatch.regprog.is_null() {
         return None;
     }
-    regmatch.rm_ic = p_ic.get() != 0;
+    regmatch.rm_ic = p_ic();
     Some(unsafe { end.offset_from(arg) } as usize)
 }
 

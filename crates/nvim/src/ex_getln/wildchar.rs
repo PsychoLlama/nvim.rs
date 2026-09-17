@@ -34,7 +34,7 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
     let mut options = WildOpts::NO_BEEP;
     let escape = unsafe { (*s).firstc } != '@' as ::core::ffi::c_int;
     let redraw_if_menu_empty = unsafe { (*s).c } == Key::Wild.code();
-    let wim_noselect = p_wmnu.get() != 0 && wim_has(0, kOptWimFlagNoselect);
+    let wim_noselect = p_wmnu() && wim_has(0, kOptWimFlagNoselect);
 
     if wim_has(unsafe { (*s).wim_index }, kOptWimFlagLastused) {
         options |= WildOpts::BUFLASTUSED;
@@ -65,8 +65,8 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
         let wim_full = wim_has(0, kOptWimFlagFull);
 
         unsafe { (*s).wim_index = 0 };
-        if unsafe { (*s).c } as OptInt == p_wc.get()
-            || unsafe { (*s).c } as OptInt == p_wcm.get()
+        if unsafe { (*s).c } as OptInt == p_wc()
+            || unsafe { (*s).c } as OptInt == p_wcm()
             || unsafe { (*s).c } == Key::Wild.code()
             || unsafe { (*s).c } == Ctrl_Z
         {
@@ -115,23 +115,22 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
         if res == OK && unsafe { (*s).xpc.xp_numfiles } > if wim_noselect { 0 } else { 1 } {
             if wim_longest {
                 let found_longest_prefix = cc.cmdpos != cmdpos_before;
-                if wim_list || (p_wmnu.get() != 0 && wim_full) {
-                    unsafe { showmatches(&raw mut (*s).xpc, p_wmnu.get() != 0, wim_list, true) };
+                if wim_list || (p_wmnu() && wim_full) {
+                    unsafe { showmatches(&raw mut (*s).xpc, p_wmnu(), wim_list, true) };
                 } else if !found_longest_prefix {
                     // Nothing was inserted, so look at what the *next*
                     // 'wildmode' stage asks for and do that now.
                     let wim_list_next = wim_has(1, kOptWimFlagList);
                     let wim_full_next = wim_has(1, kOptWimFlagFull);
                     let wim_noselect_next = wim_has(1, kOptWimFlagNoselect);
-                    if wim_list_next || (p_wmnu.get() != 0 && (wim_full_next || wim_noselect_next))
-                    {
+                    if wim_list_next || (p_wmnu() && (wim_full_next || wim_noselect_next)) {
                         if wim_full_next && !wim_noselect_next {
                             unsafe { nextwild(&raw mut (*s).xpc, WildMode::Next, options, escape) };
                         } else {
                             unsafe {
                                 showmatches(
                                     &raw mut (*s).xpc,
-                                    p_wmnu.get() != 0,
+                                    p_wmnu(),
                                     wim_list_next,
                                     wim_noselect_next,
                                 )
@@ -142,10 +141,8 @@ pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) ->
                         }
                     }
                 }
-            } else if wim_list || (p_wmnu.get() != 0 && (wim_full || wim_noselect)) {
-                unsafe {
-                    showmatches(&raw mut (*s).xpc, p_wmnu.get() != 0, wim_list, wim_noselect)
-                };
+            } else if wim_list || (p_wmnu() && (wim_full || wim_noselect)) {
+                unsafe { showmatches(&raw mut (*s).xpc, p_wmnu(), wim_list, wim_noselect) };
             } else {
                 vim_beep(kOptBoFlagWildmode as ::core::ffi::c_int as ::core::ffi::c_uint);
             }
@@ -190,7 +187,7 @@ pub fn check_opt_wim() -> Result<(), Failed> {
     let mut new_wim_flags: [uint8_t; 4] = [0; 4];
     let mut idx = 0usize;
 
-    let mut p = p_wim.get();
+    let mut p = p_wim();
     while unsafe { *p } != 0 {
         // The stage name runs to the first non-alphabetic byte, which has
         // to be one of the separators.

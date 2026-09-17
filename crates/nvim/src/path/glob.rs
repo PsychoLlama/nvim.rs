@@ -180,7 +180,7 @@ unsafe fn split_wild_component(
 ) -> Split {
     // With every letter a wildcard, a name that differs only in case is
     // still a match.
-    let icase = p_fic.get() == 0 && flags.has(ExpandFlags::ICASE);
+    let icase = !p_fic() && flags.has(ExpandFlags::ICASE);
     // Where the component starts, and whether a wildcard has turned up
     // in it yet.
     let mut comp = 0;
@@ -309,7 +309,7 @@ pub(crate) unsafe fn do_path_expand(
     let mut regmatch = RegMatch {
         // Ignore case if given 'wildignorecase', else respect
         // 'fileignorecase'.
-        rm_ic: flags.has(ExpandFlags::ICASE) || p_fic.get() != 0,
+        rm_ic: flags.has(ExpandFlags::ICASE) || p_fic(),
         ..Default::default()
     };
     let silent = flags
@@ -546,7 +546,7 @@ pub unsafe fn match_suffix(fname: *mut c_char) -> bool {
     let mut suf_buf = [0 as c_char; MAXSUFLEN as usize];
     let fnamelen = unsafe { CStr::from_ptr(fname) }.to_bytes().len();
     let mut setsuflen = 0;
-    let mut setsuf = p_su.get();
+    let mut setsuf = p_su();
     while unsafe { *setsuf } != 0 {
         setsuflen = unsafe {
             copy_option_part(

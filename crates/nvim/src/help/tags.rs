@@ -61,7 +61,7 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     }
 
     if unsafe { cstr::eq_bytes(excmd.arg, b"ALL") } {
-        let (rtp, none, doc) = (p_rtp.get(), c"".as_ptr(), c"doc".as_ptr().cast_mut());
+        let (rtp, none, doc) = (p_rtp(), c"".as_ptr(), c"doc".as_ptr().cast_mut());
         let opts = RuntimeOpts::ALL | RuntimeOpts::DIR;
         let flag = (&raw mut add_help_tags).cast::<c_void>();
         // SAFETY: `flag` outlives the walk, which is the callback's only

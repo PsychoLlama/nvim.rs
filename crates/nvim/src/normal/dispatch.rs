@@ -179,13 +179,13 @@ pub(crate) fn find_command(cmdchar: c_int) -> c_int {
 #[inline(always)]
 fn langmap_wanted(condition: bool) -> bool {
     // SAFETY: 'langmap' is a NUL-terminated option string.
-    let have_langmap = unsafe { *p_langmap.get() } as c_int != 0;
+    let have_langmap = unsafe { *p_langmap() } as c_int != 0;
     let from_a_map = if vgetc_busy.get() != 0 {
         typeahead().maplen() == 0
     } else {
         KeyTyped.get()
     };
-    have_langmap && condition && (p_lrm.get() != 0 || from_a_map) && KeyStuffed.get() == 0
+    have_langmap && condition && (p_lrm() || from_a_map) && KeyStuffed.get() == 0
 }
 
 /// Translate one key through 'langmap', if this key and this moment call for
@@ -257,10 +257,10 @@ unsafe fn additional_char_slot(s: *mut NormalState) -> (Slot, bool, bool) {
 unsafe fn resolve_ctrl_backslash(s: *mut NormalState) {
     // SAFETY (throughout): `s` is the caller's live state.
     let mut ns = unsafe { NormalStateRef::new(s) };
-    let mut towait = if p_ttm.get() >= 0 {
-        p_ttm.get() as c_int
+    let mut towait = if p_ttm() >= 0 {
+        p_ttm() as c_int
     } else {
-        p_tm.get() as c_int
+        p_tm() as c_int
     };
     loop {
         ns.c = vpeekc();

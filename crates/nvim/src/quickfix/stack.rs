@@ -529,7 +529,7 @@ pub(crate) fn qf_alloc_stack(qfltype: QfListType, n: c_int) -> *mut QfInfo {
 /// Give the quickfix stack its `'chistory'` slots. Called once, during
 /// startup; the stack itself is a static and needs no allocating.
 pub fn qf_init_stack() {
-    let n = p_chi.get() as c_int;
+    let n = p_chi() as c_int;
     // A leaf closure over one static: nothing it calls can re-enter the
     // cell, which is what lets this be an exclusive borrow at all.
     ql_info_actual.with_mut(|qi| {

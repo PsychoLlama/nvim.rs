@@ -320,7 +320,7 @@ pub(crate) fn list_version() {
     msg_putchar(b'\n' as c_int);
     list_lua_version();
 
-    if p_verbose.get() > 0 as OptInt {
+    if p_verbose() > 0 as OptInt {
         msg_putchar(b'\n' as c_int);
         msg_str(BUILD_LINE);
         msg_putchar(b'\n' as c_int);
@@ -348,7 +348,7 @@ pub(crate) fn list_version() {
         }
     }
 
-    let more = if p_verbose.get() > 0 as OptInt {
+    let more = if p_verbose() > 0 as OptInt {
         c"\nRun :checkhealth for more info"
     } else if starting.get() != 0 {
         c"\nRun \"nvim -V1 -v\" for more info"
@@ -367,7 +367,7 @@ pub(crate) fn may_show_intro() -> bool {
         && Buf::current().handle == 1
         && Win::current().handle == LOWEST_WIN_ID as c_int
         && one_window(Win::current(), None)
-        && !ShmFlag::INTRO.is_in(unsafe { CStr::from_ptr(p_shm.get()) })
+        && !ShmFlag::INTRO.is_in(unsafe { CStr::from_ptr(p_shm()) })
 }
 
 /// The intro screen, top to bottom. The first three lines are the logo, and
@@ -436,7 +436,7 @@ pub(crate) fn intro_message(colon: bool) {
     // Centre the block vertically, ignoring the line the empty entry
     // above the version costs.
     let mut blanklines = Rows.get() - (INTRO_LINES.len() as c_int - 1);
-    if p_ls.get() > 1 as OptInt {
+    if p_ls() > 1 as OptInt {
         blanklines -= Rows.get() - current_topframe().fr_height;
     }
     let top = blanklines.max(0) / 2;

@@ -199,7 +199,7 @@ pub(crate) fn highlight_list_one(id: c_int) {
     if !didh {
         list_arg(id, didh, ListValue::Text(Some(c"cleared")), c"");
     }
-    if p_verbose.get() > 0 {
+    if p_verbose() > 0 {
         last_set_msg(entry.script_ctx);
     }
 }

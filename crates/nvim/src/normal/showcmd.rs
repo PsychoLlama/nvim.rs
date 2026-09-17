@@ -34,7 +34,7 @@ use crate::normal::{
     SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear, showcmd_visual,
     visual_selection,
 };
-use crate::option::vars::{p_ch, p_sbr, p_sc, p_sel, p_sloc};
+use crate::option::vars::{P_SBR, p_ch, p_sbr, p_sc, p_sel, p_sloc};
 use crate::optionstr::empty_option;
 use crate::plines::getvcols;
 use crate::pos::lt;
@@ -194,15 +194,15 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
     let mut anchor = sel.anchor;
     // SAFETY: both positions are in the current buffer, and the two
     // 'showbreak' values are put back before returning.
-    let saved_sbr = p_sbr.get();
+    let saved_sbr = p_sbr();
     let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr;
-    p_sbr.set(empty_option());
+    P_SBR.set(empty_option());
     Win::current().w_onebuf_opt.wo_sbr = empty_option();
     let win = Win::current();
     let (cursor, other) = (win.cursor().raw(), &raw mut anchor);
     let (l, r) = (&raw mut leftcol, &raw mut rightcol);
     unsafe { getvcols(win, cursor, other, l, r) };
-    p_sbr.set(saved_sbr);
+    P_SBR.set(saved_sbr);
     Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
     rightcol - leftcol + 1
 }
@@ -228,7 +228,7 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
             ml_get_pos(&raw const anchor)
         })
     };
-    let exclusive = unsafe { *p_sel.get() } as c_int == 'e' as c_int;
+    let exclusive = unsafe { *p_sel() } as c_int == 'e' as c_int;
     while if exclusive { s < e } else { s <= e } {
         let l = unsafe { utfc_ptr2len(s) };
         if l == 0 {
@@ -275,7 +275,7 @@ fn show_visual_size(sel: VisualSelection) {
 /// Throw away the partial command, or replace it with the size of the
 /// Visual selection while there is one and nothing is waiting to be typed.
 pub(crate) fn clear_showcmd() {
-    if p_sc.get() == 0 {
+    if !p_sc() {
         return;
     }
     // SAFETY: reads the typeahead state.
@@ -296,7 +296,7 @@ pub(crate) fn clear_showcmd() {
 /// Answers whether the area was redrawn: the caller uses that to decide
 /// whether it must put the cursor back.
 pub(crate) fn add_to_showcmd(c: c_int) -> bool {
-    if p_sc.get() == 0 || msg_silent.get() != 0 || ex_normal_busy.get() != 0 {
+    if !p_sc() || msg_silent.get() != 0 || ex_normal_busy.get() != 0 {
         return false;
     }
     // A Visual size sitting in the area is replaced, not appended to.
@@ -349,7 +349,7 @@ pub(crate) fn add_to_showcmd_c(c: c_int) {
 
 /// Drop the last `len` bytes of the partial command.
 pub(crate) fn del_from_showcmd(len: c_int) {
-    if p_sc.get() == 0 {
+    if !p_sc() {
         return;
     }
     let mut sc = showcmd_buf.get();
@@ -363,14 +363,14 @@ pub(crate) fn del_from_showcmd(len: c_int) {
 
 /// Save the partial command across something that shows its own.
 pub(crate) fn push_showcmd() {
-    if p_sc.get() != 0 {
+    if p_sc() {
         old_showcmd_buf.set(showcmd_buf.get());
     }
 }
 
 /// Put back what `push_showcmd` saved.
 pub(crate) fn pop_showcmd() {
-    if p_sc.get() == 0 {
+    if !p_sc() {
         return;
     }
     showcmd_buf.set(old_showcmd_buf.get());
@@ -384,7 +384,7 @@ pub(crate) fn display_showcmd() {
     showcmd_is_clear.set(clear);
 
     // SAFETY: 'showcmdloc' is a non-empty string option.
-    let loc = unsafe { *p_sloc.get() as c_int };
+    let loc = unsafe { *p_sloc() as c_int };
     if loc == 's' as c_int {
         // SAFETY: `curwin` is the current window.
         if clear {
@@ -409,7 +409,7 @@ pub(crate) fn display_showcmd() {
         show_through_ui(clear);
         return;
     }
-    if p_ch.get() == 0 as OptInt {
+    if p_ch() == 0 as OptInt {
         return;
     }
     draw_on_last_line(clear);

@@ -53,7 +53,7 @@ pub(crate) fn spell_check_sps() -> Result<(), Failed> {
     sps_flags.set(0);
     sps_limit.set(9999);
 
-    let mut p = p_sps.get();
+    let mut p = p_sps();
     while unsafe { *p } as c_int != NUL {
         // SAFETY: `p` walks the option's NUL-terminated value and `buf` is
         // `MAXPATHL`, which is what `copy_option_part` is told it may fill.

@@ -91,8 +91,8 @@ pub(crate) unsafe fn jump_to_help_window(
     }
     win_split(0, flags)?;
     unsafe { *opened_window = true };
-    if (Win::current().w_height as OptInt) < p_hh.get() {
-        win_setheight(p_hh.get() as c_int);
+    if (Win::current().w_height as OptInt) < p_hh() {
+        win_setheight(p_hh() as c_int);
     }
     if share_loclist {
         win_set_loclist(Win::current(), qi);
@@ -132,7 +132,7 @@ unsafe fn qf_open_new_file_win(ll_ref: *mut QfInfo) -> Result<(), Failed> {
         return Err(Failed);
     }
     // Do not split again for the next entry.
-    p_swb.set(empty_option());
+    P_SWB.set(empty_option());
     swb_flags.set(0);
     Win::current().w_onebuf_opt.wo_scb = false as c_int;
     Win::current().w_onebuf_opt.wo_crb = false as c_int;

@@ -159,15 +159,15 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
         // SAFETY: an option string is a NUL-terminated allocation, never
         // null.
         let unset =
-            unsafe { *Buf::current().b_p_dict as c_int == NUL && *p_dict.get() as c_int == NUL };
+            unsafe { *Buf::current().b_p_dict as c_int == NUL && *p_dict() as c_int == NUL };
         unset && Win::current().w_onebuf_opt.wo_spell == 0
     } else {
         // SAFETY: as above.
         unsafe {
             *Buf::current().b_p_tsr as c_int == NUL
-                && *p_tsr.get() as c_int == NUL
+                && *p_tsr() as c_int == NUL
                 && *Buf::current().b_p_tsrfu as c_int == NUL
-                && *p_tsrfu.get() as c_int == NUL
+                && *p_tsrfu() as c_int == NUL
         }
     };
     if !empty {
@@ -415,7 +415,7 @@ pub fn ins_compl_len() -> c_int {
 /// off) and not `fuzzy`.
 pub fn ins_compl_has_preinsert() -> bool {
     let flags = completeopt_flags();
-    if compl_autocomplete.get() && p_ic.get() != 0 && p_inf.get() == 0 {
+    if compl_autocomplete.get() && p_ic() && !p_inf() {
         return false;
     }
     if compl_autocomplete.get() {
@@ -445,7 +445,7 @@ pub(crate) fn ins_compl_need_restart() -> bool {
 /// `'autocomplete'`, buffer-local value first (`-1` means "unset").
 pub fn ins_compl_has_autocomplete() -> bool {
     let local = Buf::current().b_p_ac;
-    (if local >= 0 { local } else { p_ac.get() }) != 0
+    if local >= 0 { local != 0 } else { p_ac() }
 }
 
 /// How much of the leader has been typed: the cursor's distance from

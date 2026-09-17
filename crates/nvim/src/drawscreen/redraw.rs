@@ -32,8 +32,8 @@ use crate::winlayer::Win;
 ///
 /// Answers whether either does.
 pub fn redraw_custom_title_later() -> bool {
-    let custom = (p_icon.get() != 0 && stl_syntax.get().has(StlSyntax::ICON))
-        || (p_title.get() != 0 && stl_syntax.get().has(StlSyntax::TITLE));
+    let custom = (p_icon() && stl_syntax.get().has(StlSyntax::ICON))
+        || (p_title() && stl_syntax.get().has(StlSyntax::TITLE));
     if custom {
         need_maketitle.set(true);
     }
@@ -76,7 +76,7 @@ pub fn show_cursor_info_later(force: bool) {
         }
         // A window bar can show the same items, and it is never on the
         // command line, so it needs the status-line treatment either way.
-        if unsafe { *p_wbr.get() } != 0 || unsafe { *wp.w_onebuf_opt.wo_wbr } != 0 {
+        if unsafe { *p_wbr() } != 0 || unsafe { *wp.w_onebuf_opt.wo_wbr } != 0 {
             wp.w_redr_status = true;
         }
         redraw_custom_title_later();
@@ -261,7 +261,7 @@ pub fn status_redraw_buf(buffer: Buf) {
     // has to be marked separately -- but only if the loop above did not
     // already mark the current window.
     let wp = Win::current();
-    if p_ru.get() != 0 && wp.w_status_height == 0 && !wp.w_redr_status {
+    if p_ru() && wp.w_status_height == 0 && !wp.w_redr_status {
         redraw_cmdline.set(true);
         redraw_later(wp, UPD_VALID);
     }

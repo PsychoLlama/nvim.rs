@@ -700,7 +700,7 @@ pub unsafe fn grid_put_linebuf(
         clear_width = col;
     }
 
-    if p_arshape.get() != 0 && p_tbidi.get() == 0 && endcol > col {
+    if p_arshape() && !p_tbidi() && endcol > col {
         unsafe { line_do_arabic_shape(&mut line.chars_mut()[at(col)..at(endcol)]) };
     }
 

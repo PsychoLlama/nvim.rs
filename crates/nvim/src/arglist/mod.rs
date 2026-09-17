@@ -46,7 +46,7 @@ use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::normal::reset_visual_and_resel;
 use crate::option::magic_isset;
-use crate::option::vars::{p_ea, p_fic, p_tpm};
+use crate::option::vars::{P_EA, p_ea, p_fic, p_tpm};
 use crate::os::input::os_breakcheck;
 use crate::path::{
     ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,
@@ -581,7 +581,7 @@ unsafe fn arglist_del_files(patterns: &[*mut c_char]) {
         endp: [ptr::null_mut(); 10],
         rm_matchcol: 0,
         // Ignore case when 'fileignorecase' is set.
-        rm_ic: p_fic.get() != 0,
+        rm_ic: p_fic(),
     };
     for &pattern in patterns {
         if got_int.get() {

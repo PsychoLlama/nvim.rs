@@ -313,12 +313,12 @@ impl Env {
     /// `%S`: `'showcmd'`'s pending keys, but only in the option
     /// `'showcmdloc'` names.
     pub(super) fn showcmd(&self, text: &mut Vec<u8>) {
-        if p_sc.get() == 0 {
+        if !p_sc() {
             return;
         }
         if self.opt_idx as c_int != kOptInvalid as c_int {
             // SAFETY: `p_sloc` holds a NUL-terminated option value.
-            let loc = find_option(unsafe { CStr::from_ptr(p_sloc.get()) });
+            let loc = find_option(unsafe { CStr::from_ptr(p_sloc()) });
             if loc as c_int != self.opt_idx as c_int {
                 return;
             }

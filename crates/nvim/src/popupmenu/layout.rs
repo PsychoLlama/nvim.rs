@@ -80,7 +80,7 @@ pub(crate) fn pum_compute_vertical_placement(
     // that reads the pum state, which is why the row and height can be
     // settled in locals first.
     let cmdline_pum = State.get() & MODE_CMDLINE != 0 && target_win.is_none();
-    let mut height = clamp_to_option(size.min(PUM_DEF_HEIGHT), p_ph.get());
+    let mut height = clamp_to_option(size.min(PUM_DEF_HEIGHT), p_ph());
     let mut row;
 
     if pum_win_row + 2 + pum_border_size >= below_row - height
@@ -100,10 +100,10 @@ pub(crate) fn pum_compute_vertical_placement(
             row = 0;
             height = pum_win_row - context_lines;
         }
-        if p_ph.get() > 0 && OptInt::from(height) > p_ph.get() {
+        if p_ph() > 0 && OptInt::from(height) > p_ph() {
             // Losing rows off the top keeps the bottom where it was.
-            row += height - p_ph.get() as c_int;
-            height = p_ph.get() as c_int;
+            row += height - p_ph() as c_int;
+            height = p_ph() as c_int;
         }
 
         if pum_border_size > 0 && pum_border_size + row + height >= pum_win_row {
@@ -127,7 +127,7 @@ pub(crate) fn pum_compute_vertical_placement(
         };
 
         row = pum_win_row + context_lines;
-        height = clamp_to_option((below_row - row).min(size), p_ph.get());
+        height = clamp_to_option((below_row - row).min(size), p_ph());
         if row + height + pum_border_size >= cmdline_row.get() {
             height -= pum_border_size;
         }
@@ -151,16 +151,16 @@ fn set_pum_width_aligned_with_cursor(width: c_int, available_width: c_int) -> bo
     let mut width = width;
     let mut end_padding = true;
 
-    if OptInt::from(width) < p_pw.get() {
-        width = p_pw.get() as c_int;
+    if OptInt::from(width) < p_pw() {
+        width = p_pw() as c_int;
         end_padding = false;
     }
-    if p_pmw.get() > 0 && OptInt::from(width) > p_pmw.get() {
-        width = p_pmw.get() as c_int;
+    if p_pmw() > 0 && OptInt::from(width) > p_pmw() {
+        width = p_pmw() as c_int;
         end_padding = false;
     }
 
-    pum_width.set(width + c_int::from(end_padding && OptInt::from(width) >= p_pw.get()));
+    pum_width.set(width + c_int::from(end_padding && OptInt::from(width) >= p_pw()));
     available_width >= pum_width.get()
 }
 
@@ -193,7 +193,7 @@ pub(crate) fn pum_compute_horizontal_placement(
     }
 
     // Show it truncated, provided it is at least 'pumwidth' wide.
-    if OptInt::from(available_width) > p_pw.get() {
+    if OptInt::from(available_width) > p_pw() {
         pum_width.set(available_width);
         return;
     }
@@ -205,8 +205,8 @@ pub(crate) fn pum_compute_horizontal_placement(
         available_width += cursor_col;
     }
 
-    if OptInt::from(available_width) > p_pw.get() {
-        pum_width.set(p_pw.get() as c_int + 1); // truncate beyond 'pumwidth'
+    if OptInt::from(available_width) > p_pw() {
+        pum_width.set(p_pw() as c_int + 1); // truncate beyond 'pumwidth'
         if pum_rl.get() {
             pum_col.set(pum_width.get() + pum_scrollbar.get() + border_width);
         } else {

@@ -296,8 +296,8 @@ unsafe fn pum_show_info(
 
     // A preview split is 3 lines by default, less if 'previewheight' is.
     g_do_tagpreview.set(PUM_PREVIEW_HEIGHT);
-    if p_pvh.get() > 0 && p_pvh.get() < OptInt::from(g_do_tagpreview.get()) {
-        g_do_tagpreview.set(p_pvh.get() as c_int);
+    if p_pvh() > 0 && p_pvh() < OptInt::from(g_do_tagpreview.get()) {
+        g_do_tagpreview.set(p_pvh() as c_int);
     }
     let redraw_off = Suppress::redraw();
     // An autocommand that syncs undo here does weird things to the tree.
@@ -388,7 +388,7 @@ unsafe fn pum_fill_info(
 
     // Grow a preview split to fit the text, up to 'previewheight'.
     if repeat == 0 && !use_float {
-        let lnum = lnum.min(p_pvh.get() as LineNr);
+        let lnum = lnum.min(p_pvh() as LineNr);
         if LineNr::from(Win::current().w_height) < lnum {
             win_setheight(lnum as c_int);
             resized = true;

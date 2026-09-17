@@ -303,7 +303,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     unsafe { compl_orig_extmarks().save() };
 
     let mut flags = CP_ORIGINAL_TEXT;
-    if p_ic.get() != 0 {
+    if p_ic() {
         flags |= CP_ICASE;
     }
     if ins_compl_add_orig_text(flags | CP_FAST).is_err() {

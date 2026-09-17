@@ -294,7 +294,7 @@ fn translate_termcodes<'a>(rhs: &'a CStr, owner: &mut *mut c_char) -> &'a CStr {
             0,
             REPTERM_DO_LT,
             ptr::null_mut(),
-            p_cpo.get(),
+            p_cpo(),
         );
         CStr::from_ptr(translated)
     }

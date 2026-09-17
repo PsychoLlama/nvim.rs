@@ -49,7 +49,7 @@ pub fn msg_start() {
     if need_highlight_changed.get() {
         highlight_changed();
     }
-    if need_clr_eos.get() || (p_ch.get() == 0 && redrawing_cmdline.get()) {
+    if need_clr_eos.get() || (p_ch() == 0 && redrawing_cmdline.get()) {
         // Halfway an `:echo` and getting an (error) message: clear any
         // text the command left.
         need_clr_eos.set(false);
@@ -58,7 +58,7 @@ pub fn msg_start() {
 
     // With 'cmdheight' 0 the first line of msg_grid has to be scrolled in
     // over the screen.
-    if p_ch.get() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
+    if p_ch() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
         msg_grid_validate();
         msg_scroll_up(false, true);
         msg_scrolled.set(msg_scrolled.get() + 1);
@@ -69,9 +69,9 @@ pub fn msg_start() {
         // Overwrite the last message.
         msg_row.set(cmdline_row.get());
         msg_col.set(0);
-    } else if (msg_didout.get() || p_ch.get() == 0) && !ui_has(kUIMessages) {
+    } else if (msg_didout.get() || p_ch() == 0) && !ui_has(kUIMessages) {
         // Start the message on the next line.
-        if p_ch.get() == 0 && !msg_didout.get() && msg_use_printf() != 0 {
+        if p_ch() == 0 && !msg_didout.get() && msg_use_printf() != 0 {
             msg_bytes_to_grid(b"\n", 0, false);
         } else {
             msg_putchar(NL);
@@ -178,7 +178,7 @@ fn put_bytes(bytes: &[u8], hl_id: c_int, hist: bool, whole_message: bool) {
 
     // Writing to a screen that has already scrolled needs a hit-enter
     // prompt afterwards. Not when only using CR to move the cursor.
-    let overflow = !ui_has(kUIMessages) && msg_scrolled.get() > c_int::from(p_ch.get() == 0);
+    let overflow = !ui_has(kUIMessages) && msg_scrolled.get() > c_int::from(p_ch() == 0);
     if overflow && !msg_scrolled_ign.get() && bytes != b"\r" {
         need_wait_return.set(true);
     }
@@ -263,7 +263,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
     let mut stored = 0;
     let mut sb_col = msg_col.get();
     let store = |run: &[u8], sb_col: &mut c_int, finish: bool| {
-        if p_more.get() != 0 && !recurse {
+        if p_more() && !recurse {
             store_sb_text(run, hl_id, sb_col, finish);
         }
     };
@@ -306,7 +306,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                     lines_left.set(lines_left.get() - 1);
                 }
                 // Screen full and 'more' set: wait for a character.
-                if p_more.get() != 0
+                if p_more()
                     && lines_left.get() == 0
                     && State.get() != MODE_HITRETURN
                     && !msg_no_more.get()
@@ -452,7 +452,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
     while at < bytes.len() && bytes[at] != 0 {
         let rest = &bytes[at..];
         let len = char_len(rest);
-        if !(silent_mode.get() && p_verbose.get() == 0) {
+        if !(silent_mode.get() && p_verbose() == 0) {
             // One character, with NL translated to CR NL.
             let mut buf = [0u8; 7];
             let mut used = 0;

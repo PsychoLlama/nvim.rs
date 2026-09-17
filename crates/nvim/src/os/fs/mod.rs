@@ -251,7 +251,7 @@ fn take_errno() -> c_int {
 ///
 /// Answers 0, or a negative libuv error code.
 pub fn os_chdir(path: &CStr) -> c_int {
-    if p_verbose.get() >= 5 as OptInt {
+    if p_verbose() >= 5 as OptInt {
         // SAFETY: `path` is NUL-terminated, and `%s` is the one conversion
         // the format string asks for.
         unsafe {

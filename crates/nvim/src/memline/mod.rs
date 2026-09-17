@@ -309,7 +309,7 @@ pub fn ml_open(mut buffer: Buf) -> Result<(), Failed> {
         b.b_p_swf = 0;
     }
     // A swap file may still be opened later, when 'updatecount' is set.
-    buffer.b_may_swap = buffer.terminal.is_null() && p_uc.get() != 0 && buffer.b_p_swf != 0;
+    buffer.b_may_swap = buffer.terminal.is_null() && p_uc() != 0 && buffer.b_p_swf != 0;
 
     let mfp = unsafe { mf_open(::core::ptr::null_mut(), 0) };
     let mut hp: *mut BlockHdr = ::core::ptr::null_mut();
@@ -470,7 +470,7 @@ pub fn ml_open_file(buffer: Buf) {
     }
 
     // Try every directory in 'directory'.
-    let mut dirp = p_dir.get();
+    let mut dirp = p_dir();
     let mut found_existing_dir = false;
     while unsafe { *dirp } != NUL as ::core::ffi::c_char {
         // Between choosing the name and creating the file another Nvim
@@ -508,7 +508,7 @@ pub fn ml_open_file(buffer: Buf) {
         mf_close_file(buffer, false);
     }
 
-    if unsafe { *p_dir.get() } != NUL as ::core::ffi::c_char && unsafe { mf_fname(mfp) }.is_null() {
+    if unsafe { *p_dir() } != NUL as ::core::ffi::c_char && unsafe { mf_fname(mfp) }.is_null() {
         need_wait_return.set(true); // call wait_return() later
         let _no_prompt = Suppress::wait_return();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

@@ -125,8 +125,8 @@ impl Pattern {
                 self.headlen += 1;
             }
         }
-        if p_tl.get() != 0 && self.headlen as OptInt > p_tl.get() {
-            self.headlen = p_tl.get() as c_int;
+        if p_tl() != 0 && self.headlen as OptInt > p_tl() {
+            self.headlen = p_tl() as c_int;
         }
         self.regmatch.regprog =
             unsafe { vim_regcomp(self.pat, if magic_isset() { RE_MAGIC } else { 0 }) };
@@ -435,7 +435,7 @@ impl FindTags {
 
         // Otherwise the position in 'helplang' is the priority.
         self.help_pri = 1;
-        let mut s = p_hlg.get();
+        let mut s = p_hlg();
         while unsafe { *s } != 0 {
             if unsafe { lang_is(s, self.help_lang, false) } {
                 break;
@@ -503,7 +503,7 @@ impl FindTags {
         if self.fp.is_null() {
             return;
         }
-        if p_verbose.get() >= 5 {
+        if p_verbose() >= 5 {
             verbose_enter();
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
             let tag_fname = unsafe { c_str(self.tag_fname.as_ptr()) };
@@ -722,7 +722,7 @@ pub unsafe fn find_tags(
     let has_re = flags & TAG_REGEXP as c_int != 0;
     let noic = flags & TAG_NOIC as c_int != 0;
 
-    let save_p_ic = p_ic.get();
+    let save_p_ic = p_ic();
     // 'tagcase' decides how case is treated for this search.
     let tagcase = match Buf::current().b_tc_flags {
         0 => tc_flags.get(),
@@ -730,10 +730,10 @@ pub unsafe fn find_tags(
     };
     match tagcase {
         kOptTcFlagFollowic => {}
-        kOptTcFlagIgnore => p_ic.set(1),
-        kOptTcFlagMatch => p_ic.set(0),
-        kOptTcFlagFollowscs => p_ic.set(unsafe { ignorecase(pat) }),
-        kOptTcFlagSmart => p_ic.set(unsafe { ignorecase_opt(pat, 1, 1) }),
+        kOptTcFlagIgnore => P_IC.set(true),
+        kOptTcFlagMatch => P_IC.set(false),
+        kOptTcFlagFollowscs => P_IC.set(unsafe { ignorecase(pat) }),
+        kOptTcFlagSmart => P_IC.set(unsafe { ignorecase_opt(pat, true, true) }),
         _ => unsafe { abort() },
     }
 
@@ -762,8 +762,8 @@ pub unsafe fn find_tags(
         None
     };
 
-    if p_tl.get() != 0 && st.orgpat.len as OptInt > p_tl.get() {
-        st.orgpat.len = p_tl.get() as c_int;
+    if p_tl() != 0 && st.orgpat.len as OptInt > p_tl() {
+        st.orgpat.len = p_tl() as c_int;
     }
 
     // A pattern that does not compile is the caller's problem, not a
@@ -793,10 +793,10 @@ pub unsafe fn find_tags(
             // Ignoring case rules out bisection, so a search that may
             // ignore case reads every file twice: once matching case,
             // and again ignoring it if nothing turned up.
-            st.orgpat.regmatch.rm_ic = (p_ic.get() != 0 || !noic)
-                && (findall || st.orgpat.headlen == 0 || p_tbs.get() == 0);
+            st.orgpat.regmatch.rm_ic =
+                (p_ic() || !noic) && (findall || st.orgpat.headlen == 0 || !p_tbs());
             for round in 1..=2 {
-                st.linear = st.orgpat.headlen == 0 || p_tbs.get() == 0 || round == 2;
+                st.linear = st.orgpat.headlen == 0 || !p_tbs() || round == 2;
 
                 let mut files = TagFiles::new();
                 while let Some(name) = files.next() {
@@ -809,11 +809,7 @@ pub unsafe fn find_tags(
                 }
                 drop(files);
 
-                if st.stop_searching
-                    || st.linear
-                    || (p_ic.get() == 0 && noic)
-                    || st.orgpat.regmatch.rm_ic
-                {
+                if st.stop_searching || st.linear || (!p_ic() && noic) || st.orgpat.regmatch.rm_ic {
                     break;
                 }
                 st.orgpat.regmatch.rm_ic = true;
@@ -834,7 +830,7 @@ pub unsafe fn find_tags(
     unsafe { *num_matches = st.into_matches(matchesp) };
 
     Buf::current().b_help = help_save;
-    p_ic.set(save_p_ic);
+    P_IC.set(save_p_ic);
     drop(saved_pat);
     retval
 }

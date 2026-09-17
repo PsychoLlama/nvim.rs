@@ -74,7 +74,7 @@ use crate::r#move::{changed_window_setting, update_topline, validate_cursor};
 use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::normal::reset_visual_and_resel;
-use crate::option::vars::{p_cpo, p_lz};
+use crate::option::vars::{P_LZ, p_cpo, p_lz};
 use crate::option::{OptionTarget, buf_copy_options, set_option_direct_for};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptCotFlagPopup, kOptInvalid};
 use crate::optionstr::check_stl_option;

@@ -230,7 +230,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
 
     pum_selected.set(-1);
     pum_first.set(0);
-    if p_mousemev.get() == 0 {
+    if !p_mousemev() {
         // Pretend 'mousemoveevent' is set so the menu can follow the
         // pointer, and put it back afterwards.
         set_mousemoveevent(true);
@@ -262,7 +262,7 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
 
     drop(array);
     pum_undisplay(true);
-    if p_mousemev.get() == 0 {
+    if !p_mousemev() {
         set_mousemoveevent(false);
     }
 }

@@ -268,7 +268,7 @@ pub unsafe fn apply_autocmds_group(
         {
             break 'bypass;
         }
-        if unsafe { event_ignored(event, p_ei.get()) } {
+        if unsafe { event_ignored(event, p_ei()) } {
             break 'bypass;
         }
 

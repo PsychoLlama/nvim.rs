@@ -366,8 +366,8 @@ pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool)
     // The popup menu's own groups pick up 'pumblend' unless the group
     // set a blend itself.
     if (HLF_PNI..=HLF_PST).contains(&idx) {
-        if attrs.hl_blend == -1 && p_pb.get() > 0 {
-            attrs.hl_blend = p_pb.get() as c_int;
+        if attrs.hl_blend == -1 && p_pb() > 0 {
+            attrs.hl_blend = p_pb() as c_int;
         }
         if pum_drawn() {
             must_redraw_pum.set(true);

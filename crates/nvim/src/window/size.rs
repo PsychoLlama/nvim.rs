@@ -21,7 +21,7 @@ use super::*;
 use crate::drawscreen::state::{cmdline_row, redraw_cmdline};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
 use crate::message::e_noroom;
-use crate::option::vars::{p_ch, p_wmh, p_wmw};
+use crate::option::vars::{P_WMH, P_WMW, p_ch, p_wmh, p_wmw};
 use crate::types::{OptInt, OptSet, kFloatRelativeWindow};
 use crate::ui::state::{Columns, Rows};
 use crate::winfloat::win_config_float;
@@ -93,9 +93,9 @@ pub(crate) fn setheight_win(height: c_int, win: Win) {
     // Always keep the current window at least one line high, even when
     // 'winminheight' is zero; two when it has a window bar.
     let floor = if win.is_current() {
-        p_wmh.get().max(1)
+        p_wmh().max(1)
     } else {
-        p_wmh.get()
+        p_wmh()
     } as c_int
         + win.w_winbar_height;
     let height = height.max(floor);
@@ -169,7 +169,7 @@ fn set_frame_height(curfrp: FrameRef, height: c_int) {
         } else {
             let wp = lastwin_nofloating(None);
             let below = wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height;
-            (Rows.get() - p_ch.get() as c_int - global_stl_rows() - below).max(0)
+            (Rows.get() - p_ch() as c_int - global_stl_rows() - below).max(0)
         };
 
         if height <= room + room_cmdline {
@@ -182,7 +182,7 @@ fn set_frame_height(curfrp: FrameRef, height: c_int) {
         let target = arith::parent_target(
             height,
             minheight(parent, NextCurwin::NoWin),
-            p_wmh.get() as c_int,
+            p_wmh() as c_int,
         );
         set_frame_height(parent, target);
         // NOTREACHED
@@ -264,7 +264,7 @@ pub(crate) fn setwidth_win(width: c_int, window: Win) {
     // Always keep the current window at least one column wide, even when
     // 'winminwidth' is zero.
     let width = if window.is_current() {
-        width.max(p_wmw.get() as c_int).max(1)
+        width.max(p_wmw() as c_int).max(1)
     } else {
         width.max(0)
     };
@@ -319,19 +319,14 @@ pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
         if width <= room {
             break;
         }
-        let rows_avail = Rows.get() as OptInt
-            - p_ch.get()
-            - tabline_rows() as OptInt
-            - global_stl_rows() as OptInt;
+        let rows_avail =
+            Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt;
         if run == 2 || curfrp.fr_height as OptInt >= rows_avail {
             width = room;
             break;
         }
-        let target = arith::parent_target(
-            width,
-            minwidth(parent, NextCurwin::NoWin),
-            p_wmw.get() as c_int,
-        );
+        let target =
+            arith::parent_target(width, minwidth(parent, NextCurwin::NoWin), p_wmw() as c_int);
         set_frame_width(parent, target);
     }
 
@@ -386,12 +381,12 @@ pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
 pub fn did_set_winminheight(_args: &mut OptSet) -> Option<&CStr> {
     let mut first = true;
     // Loop until there is a 'winminheight' that is possible.
-    while p_wmh.get() > 0 as OptInt {
-        let room = Rows.get() - p_ch.get() as c_int;
+    while p_wmh() > 0 as OptInt {
+        let room = Rows.get() - p_ch() as c_int;
         if room >= min_rows_all_tabpages() {
             break;
         }
-        p_wmh.set(p_wmh.get() - 1);
+        P_WMH.set(p_wmh() - 1);
         if first {
             err(e_noroom.as_ptr());
             first = false;
@@ -402,11 +397,11 @@ pub fn did_set_winminheight(_args: &mut OptSet) -> Option<&CStr> {
 
 pub fn did_set_winminwidth(_args: &mut OptSet) -> Option<&CStr> {
     let mut first = true;
-    while p_wmw.get() > 0 as OptInt {
+    while p_wmw() > 0 as OptInt {
         if Columns.get() >= minwidth(current_topframe(), NextCurwin::Unset) {
             break;
         }
-        p_wmw.set(p_wmw.get() - 1);
+        P_WMW.set(p_wmw() - 1);
         if first {
             err(e_noroom.as_ptr());
             first = false;
@@ -477,7 +472,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
         // Only dragging the last status line can reduce 'cmdheight'.
         let mut sum = Rows.get() - cmdline_row.get();
         if curfr.next().is_some() {
-            sum -= p_ch.get() as c_int + global_stl_rows();
+            sum -= p_ch() as c_int + global_stl_rows();
         } else if min_set_ch.get() > 0 as OptInt {
             sum -= 1;
         }

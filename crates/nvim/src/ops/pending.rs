@@ -165,7 +165,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     virtual_op.set(None);
     if gui_yank {
         Win::current().w_cursor = old_cursor;
-    } else if p_sol.get() == 0
+    } else if !p_sol()
         && op.motion_type == kMTLineWise
         && !op.end_adjusted
         && (op.op_type == OpType::Lshift
@@ -540,7 +540,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
             op.inclusive = false;
             // Take the line break too, unless the operator only works on
             // whole lines anyway.
-            if unsafe { *p_sel.get() } as c_int != 'o' as c_int
+            if unsafe { *p_sel() } as c_int != 'o' as c_int
                 && !op_on_lines(op.op_type)
                 && op.end.lnum < Buf::current().line_count()
             {
@@ -582,7 +582,7 @@ fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
         && !op.inclusive
         && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
         && op.end.col == 0
-        && (!op.is_visual || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
+        && (!op.is_visual || unsafe { *p_sel() } as c_int == 'o' as c_int)
         && op.line_count > 1)
     {
         op.end_adjusted = false;
@@ -712,7 +712,7 @@ fn run_operator(
         OpType::Format => {
             if unsafe { *Buf::current().b_p_fex } as c_int != NUL {
                 unsafe { op_formatexpr(op.raw()) };
-            } else if unsafe { *p_fp.get() } as c_int != NUL
+            } else if unsafe { *p_fp() } as c_int != NUL
                 || unsafe { *Buf::current().b_p_fp } as c_int != NUL
             {
                 // An external program.

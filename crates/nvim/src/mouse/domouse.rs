@@ -327,7 +327,7 @@ pub(crate) fn do_mouse(
     // If Visual mode changed show it later.
     if (!visual_active() && old_active && mode_displayed.get())
         || (visual_active()
-            && p_smd.get() != 0
+            && p_smd()
             && msg_silent.get() == 0
             && (!old_active || visual_mode() != old_mode))
     {

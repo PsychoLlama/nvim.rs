@@ -65,7 +65,7 @@ pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *c
     });
     let fp: *mut FILE = unsafe { os_fopen(file_name, c"r".as_ptr()) };
     if fp.is_null() {
-        if !name.is_null() || p_verbose.get() > 0 {
+        if !name.is_null() || p_verbose() > 0 {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let file_name = unsafe { c_str(file_name) };
             semsg!("E822: Cannot open undo file for reading: {file_name}");

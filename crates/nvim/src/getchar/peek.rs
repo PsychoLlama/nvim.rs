@@ -217,14 +217,12 @@ fn wait_time_for(advance: bool, keylen: c_int) -> c_long {
     if !advance {
         return 0;
     }
-    if typeahead().is_empty()
-        || !(p_timeout.get() != 0 || (p_ttimeout.get() != 0 && keylen == KEYLEN_PART_KEY))
-    {
+    if typeahead().is_empty() || !(p_timeout() || (p_ttimeout() && keylen == KEYLEN_PART_KEY)) {
         -1 // blocking wait
-    } else if keylen == KEYLEN_PART_KEY && p_ttm.get() >= 0 {
-        p_ttm.get() as c_long
+    } else if keylen == KEYLEN_PART_KEY && p_ttm() >= 0 {
+        p_ttm() as c_long
     } else {
-        p_tm.get() as c_long
+        p_tm() as c_long
     }
 }
 
@@ -335,7 +333,7 @@ fn read_from_typeahead(
             && ex_normal_busy.get() == 0
             && tb.maplen() == 0
             && State.get() & MODE_INSERT != 0
-            && (p_timeout.get() != 0 || (keylen == KEYLEN_PART_KEY && p_ttimeout.get() != 0))
+            && (p_timeout() || (keylen == KEYLEN_PART_KEY && p_ttimeout()))
             && {
                 c = unsafe { inchar(tb.tail(), 3, 25) };
                 c == 0
@@ -403,7 +401,7 @@ fn read_from_typeahead(
         // mapping we are about to block here, so the changed text has to
         // be shown. Same for a redraw 'lazyredraw' postponed because
         // there was something in the input buffer (a termresponse, say).
-        if (State.get() & MODE_INSERT != 0 || p_lz.get() != 0)
+        if (State.get() & MODE_INSERT != 0 || p_lz())
             && State.get() & MODE_CMDLINE == 0
             && advance
             && must_redraw.get() != 0
@@ -527,7 +525,7 @@ pub(crate) fn vgetorpeek(advance: bool) -> c_int {
     // The "INSERT" message is taken care of here: if an ESC is answered
     // to leave Insert mode the message is deleted, and if we do not
     // answer an ESC but deleted the message before, it is redisplayed.
-    if advance && p_smd.get() != 0 && msg_silent.get() == 0 && State.get() & MODE_INSERT != 0 {
+    if advance && p_smd() && msg_silent.get() == 0 && State.get() & MODE_INSERT != 0 {
         if c == ESC && !mode_deleted && no_mapping.get() == 0 && mode_displayed.get() {
             if !typeahead().is_empty() && !KeyTyped.get() {
                 redraw_cmdline.set(true); // delete the mode later

@@ -83,7 +83,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
         };
         xfree(name as *mut c_void);
     } else {
-        if byte(p_sh.get()) == NUL {
+        if byte(p_sh()) == NUL {
             emsg(gettext(e_shellempty));
             return;
         }

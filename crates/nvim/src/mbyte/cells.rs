@@ -93,14 +93,10 @@ pub fn utf_char2cells(c: c_int) -> c_int {
         return 2;
     }
     // SAFETY: `p_ambw` is 'ambiwidth', a NUL-terminated option string.
-    if unsafe { *p_ambw.get() } as c_int == 'd' as c_int && prop.ambiguous_width {
+    if unsafe { *p_ambw() } as c_int == 'd' as c_int && prop.ambiguous_width {
         return 2;
     }
-    if p_emoji.get() != 0
-        && c >= FIRST_EMOJI_BLOCK
-        && !prop.ambiguous_width
-        && prop_is_emojilike(prop)
-    {
+    if p_emoji() && c >= FIRST_EMOJI_BLOCK && !prop.ambiguous_width && prop_is_emojilike(prop) {
         return 2;
     }
     1
@@ -114,7 +110,7 @@ pub fn utf_char2cells(c: c_int) -> c_int {
 /// `next` must point at the byte after the character, inside the same string.
 unsafe fn widened_by_vs16(cells: c_int, c: c_int, next: *const c_char) -> bool {
     cells == 1
-        && p_emoji.get() != 0
+        && p_emoji()
         && prop_is_emojilike(utf8proc_get_property(c))
         // SAFETY: the caller's obligation.
         && unsafe { utf_ptr2char(next) } == VS16
@@ -180,7 +176,7 @@ pub fn cells_at(bytes: &[u8]) -> c_int {
     let cells = utf_char2cells(c);
     let rest = &bytes[usize::from(utf8len_tab[usize::from(first)])..];
     if cells == 1
-        && p_emoji.get() != 0
+        && p_emoji()
         && prop_is_emojilike(utf8proc_get_property(c))
         && char_at(rest) == VS16
     {

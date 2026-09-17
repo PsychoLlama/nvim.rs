@@ -34,7 +34,7 @@ use crate::mark::mark_col_adjust;
 use crate::memline::Lines;
 use crate::message::msgmore;
 use crate::ops::{Op, do_join};
-use crate::option::vars::p_smd;
+use crate::option::vars::{P_SMD, p_smd};
 use crate::option::was_set_insecurely;
 use crate::options::kOptFormatexpr;
 use crate::os::input::line_breakcheck;
@@ -365,8 +365,8 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
 
                 // Format, without 'showmode'.
                 State.set(MODE_INSERT); // for open_line()
-                let smd_save = p_smd.get();
-                p_smd.set(0);
+                let smd_save = p_smd();
+                P_SMD.set(false);
                 insertchar(
                     NUL,
                     INSCHAR_FORMAT as c_int
@@ -388,7 +388,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                     second_indent,
                 );
                 State.set(old_state);
-                p_smd.set(smd_save);
+                P_SMD.set(smd_save);
                 // `insertchar` can have run `:normal`, which updates the
                 // cursor shape; put it back.
                 ui_cursor_shape();

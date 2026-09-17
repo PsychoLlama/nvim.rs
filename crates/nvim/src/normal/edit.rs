@@ -157,7 +157,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     // easier to get right by replaying the whole thing as `R<Tab><Esc>`.
     if literal != Ctrl_V
         && cmd_arg.nchar == '\t' as c_int
-        && (Buf::current().b_p_et != 0 || p_sta.get() != 0)
+        && (Buf::current().b_p_et != 0 || p_sta())
     {
         stuff_readbuf_number(cmd_arg.count1);
         stuff_readbuf_char('R' as c_int);
@@ -292,7 +292,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
     }
     // An empty line has nothing to swap unless 'whichwrap' lets `~` move
     // to the next one.
-    let wraps = has_char(unsafe { cstr::at(p_ww.get()) }, '~' as c_int);
+    let wraps = has_char(unsafe { cstr::at(p_ww()) }, '~' as c_int);
     if unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int == NUL && !wraps {
         clear_op_beep(cmd_arg.op());
         return;
@@ -449,7 +449,7 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
 
 /// `~`: swap case, or the `g~` operator when 'tildeop' is on.
 pub(crate) fn nv_tilde(cmd_arg: &mut CmdArg) {
-    if p_to.get() == 0 && !visual_active() && cmd_arg.op().op_type != OpType::Tilde {
+    if !p_to() && !visual_active() && cmd_arg.op().op_type != OpType::Tilde {
         if prompt_refuses(cmd_arg) {
             return;
         }
@@ -730,7 +730,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // Leave `gv` naming what was just put.
         Buf::current().b_visual.vi_start = Buf::current().b_op_start;
         Buf::current().b_visual.vi_end = Buf::current().b_op_end;
-        if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+        if unsafe { *p_sel() } as c_int == 'e' as c_int {
             unsafe { inc(&mut (*Buf::current_raw()).b_visual.vi_end) };
         }
     }

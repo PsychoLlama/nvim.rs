@@ -405,7 +405,7 @@ pub fn compute_cmdrow() {
             wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height + global_stl_height(),
         );
     }
-    if cmdline_row.get() == Rows.get() && p_ch.get() > 0 {
+    if cmdline_row.get() == Rows.get() && p_ch() > 0 {
         cmdline_row.set(cmdline_row.get() - 1);
     }
     lines_left.set(cmdline_row.get());

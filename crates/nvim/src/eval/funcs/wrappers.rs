@@ -30,7 +30,7 @@ use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::e_invalwindow;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
-use crate::option::vars::{p_cpo, p_magic};
+use crate::option::vars::{P_CPO, P_MAGIC, p_cpo, p_magic};
 use crate::optionstr::empty_option;
 use crate::os::cshim::gettext;
 use crate::semsg;
@@ -442,16 +442,16 @@ pub fn tv_get_buf(tv: &TypVal, curtab_only: c_int) -> Option<Buf> {
 
     // The pattern is matched with 'magic' on and 'cpoptions' empty, so
     // that neither setting can change what a buffer name means.
-    let save_magic = p_magic.get();
-    let save_cpo = p_cpo.get();
-    p_magic.set(1);
-    p_cpo.set(empty_option());
+    let save_magic = p_magic();
+    let save_cpo = p_cpo();
+    P_MAGIC.set(true);
+    P_CPO.set(empty_option());
     let end = unsafe { name.add(cstr::bytes_at(name).len()) };
     let only = curtab_only != 0;
     let buf = unsafe { buflist_findpat(name, end, true, false, only) };
     let found = find_buf(buf);
-    p_magic.set(save_magic);
-    p_cpo.set(save_cpo);
+    P_MAGIC.set(save_magic);
+    P_CPO.set(save_cpo);
 
     // A name no buffer matches may still be a *file* name we know.
     match found {

@@ -138,7 +138,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
         }
         // CTRL-_ toggles 'revins', but only with 'allowrevins'.
         Err(NotAKey(Ctrl__)) => {
-            if p_ari.get() == 0 {
+            if !p_ari() {
                 Next::Normal
             } else {
                 ins_ctrl_();
@@ -606,7 +606,7 @@ fn insert_normal_char(s: &mut InsertState) {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and
     // every step stops at the NUL.
-    if p_paste.get() == 0 {
+    if !p_paste() {
         let str = do_insert_char_pre(s.c);
         if !str.is_null() {
             if c_int::from(unsafe { *str }) != NUL && stop_arrow().is_ok() {

@@ -140,7 +140,7 @@ pub(crate) fn win_update(window: Win) {
     let save_got_int = got_int.get();
     got_int.set(false);
     // Bound syntax highlighting by 'redrawtime'.
-    let mut syntax_tm = profile_setlimit(p_rdt.get() as int64_t);
+    let mut syntax_tm = profile_setlimit(p_rdt() as int64_t);
     unsafe { syn_set_timeout(&raw mut syntax_tm) };
 
     win_extmark_arr.with_mut(Vec::clear);

@@ -50,7 +50,7 @@ fn search_around(
     skip_first_backward: bool,
     zero_width: bool,
 ) -> Option<Match> {
-    let old_p_ws = p_ws.get();
+    let old_p_ws = p_ws();
     let mut end_pos = Pos::default();
     for i in 0..2 {
         if forward && i == 0 && skip_first_backward {
@@ -69,7 +69,7 @@ fn search_around(
 
         // Wrapping should not occur in the first round.
         if i == 0 {
-            p_ws.set(0);
+            P_WS.set(false);
         }
         let result = unsafe {
             searchit(
@@ -86,7 +86,7 @@ fn search_around(
                 ptr::null_mut(),
             )
         };
-        p_ws.set(old_p_ws);
+        P_WS.set(old_p_ws);
 
         if result != 0 {
             continue;
@@ -122,7 +122,7 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
 
     // Correct the cursor when 'selection' is exclusive.
     if visual_active()
-        && c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int
+        && c_int::from(unsafe { *p_sel() }) == 'e' as c_int
         && lt(visual_anchor(), Win::current().w_cursor)
     {
         dec_cursor();
@@ -184,7 +184,7 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
     set_visual_active(true);
     set_visual_mode(VisualMode::CHAR);
 
-    if c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int {
+    if c_int::from(unsafe { *p_sel() }) == 'e' as c_int {
         // Correction for exclusive selection depends on the direction.
         if forward && ltoreq(visual_anchor(), Win::current().w_cursor) {
             inc_cursor();

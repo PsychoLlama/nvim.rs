@@ -114,7 +114,7 @@ pub(crate) unsafe fn find_directory_in_path(
             len,
             options,
             true,
-            p_cdpath.get(),
+            p_cdpath(),
             FINDFILE_DIR as c_int,
             rel_fname,
             c"".as_ptr().cast_mut(),

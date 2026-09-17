@@ -41,7 +41,7 @@ use crate::getchar::stuff_readbuf;
 use crate::mark::setpcmark;
 use crate::message::e_trailing_arg;
 use crate::message::state::{msg_scroll, need_wait_return};
-use crate::option::vars::{p_awa, p_shada};
+use crate::option::vars::{P_SHADA, p_awa, p_shada};
 use crate::startup::{readonlymode, recoverymode};
 use crate::state::mode::{exmode_active, pending_exmode_active};
 
@@ -187,11 +187,8 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
     recoverymode.set(true);
     let unsaved = check_changed(
         Buf::current(),
-        (if p_awa.get() != 0 {
-            CCGD_AW as c_int
-        } else {
-            0
-        }) | CCGD_MULTWIN as c_int
+        (if p_awa() { CCGD_AW as c_int } else { 0 })
+            | CCGD_MULTWIN as c_int
             | (if excmd.forceit {
                 CCGD_FORCEIT as c_int
             } else {
@@ -557,16 +554,16 @@ pub(crate) fn ex_checkpath(excmd: &mut ExArg) {
 pub(crate) fn ex_shada(excmd: &mut ExArg) {
     // An empty 'shada' would mean "save nothing", which is not what an
     // explicit command means.
-    let save_shada = p_shada.get();
-    if byte(p_shada.get()) == NUL {
-        p_shada.set(c"'100".as_ptr() as *mut c_char);
+    let save_shada = p_shada();
+    if byte(p_shada()) == NUL {
+        P_SHADA.set(c"'100".as_ptr() as *mut c_char);
     }
     if excmd.cmdidx == CmdIdx::rviminfo || excmd.cmdidx == CmdIdx::rshada {
         let _ = unsafe { shada_read_everything(excmd.arg, excmd.forceit, false) };
     } else {
         unsafe { shada_write_file(excmd.arg, excmd.forceit) };
     }
-    p_shada.set(save_shada);
+    P_SHADA.set(save_shada);
 }
 
 /// `:fclose` — close a floating window by its handle.

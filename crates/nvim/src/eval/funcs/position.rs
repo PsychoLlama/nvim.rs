@@ -245,7 +245,7 @@ pub fn f_line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 let both_diff =
                     wp.w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_diff != 0;
                 // SAFETY: `p_spk` is the option's own C string value.
-                if unsafe { *p_spk.get() } != b'c' as c_char || both_diff {
+                if unsafe { *p_spk() } != b'c' as c_char || both_diff {
                     skip_update_topline.set(true);
                 }
                 check_cursor(wp);

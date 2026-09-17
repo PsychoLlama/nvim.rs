@@ -775,6 +775,172 @@ fn emit_values(out: &mut String, opts: &[Opt]) {
     }
 }
 
+/// The support code [`emit_vars`] writes above the table of fields.
+const VARS_SUPPORT: &str = r##"
+use core::ffi::c_char;
+use core::mem::offset_of;
+use core::ptr;
+
+use crate::global_cell::GlobalCell;
+use crate::optionstr::empty_option;
+use crate::types::OptInt;
+
+/// Which field of [`Options`] one option's global value is.
+///
+/// A selector is a projection into the record plus the offset it projects
+/// to, which is its identity: two selectors are equal when they name the
+/// same field. The option table holds one per row, in place of the address
+/// its `var` used to be, and [`crate::option::scope`] is what turns it into
+/// a read or a write.
+macro_rules! selector {
+    ($name:ident, $ty:ty, $what:expr) => {
+        #[doc = $what]
+        ///
+        /// A field selector; see the module docs.
+        #[derive(Copy, Clone)]
+        pub struct $name {
+            /// The field's offset in [`Options`] — the selector's identity.
+            at: usize,
+            /// The field itself, typed, so a selector cannot name a field of
+            /// another type.
+            project: fn(&mut Options) -> &mut $ty,
+        }
+
+        impl $name {
+            /// What the field holds.
+            pub fn get(self) -> $ty {
+                OPTIONS.get_field(self.project)
+            }
+
+            /// Overwrite the field.
+            pub fn set(self, value: $ty) {
+                OPTIONS.set_field(self.project, value);
+            }
+        }
+
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                self.at == other.at
+            }
+        }
+
+        impl Eq for $name {}
+    };
+}
+
+selector!(BoolOpt, bool, "A boolean option's global value.");
+selector!(NumOpt, OptInt, "A number option's global value.");
+selector!(
+    StrOpt,
+    *mut c_char,
+    "A string option's global value: the allocation the option owns."
+);
+
+/// The table of fields: one line per option that has a global value.
+///
+/// The record itself: each line declares one field, the reader everything
+/// outside this module reads it with, and the selector — which is both what the option table's
+/// row holds and how the option is *written* (`P_XX.set(value)`). The reader
+/// projects the field directly rather than through the selector, because
+/// reads are the hot half: `win_line` asks several options per screen line,
+/// and a write is a `:set`.
+macro_rules! options {
+    (struct $record:ident {
+        $(
+            $(#[$doc:meta])*
+            $field:ident: $ty:ty = $init:expr, $sel:ident: $kind:ident;
+        )*
+    }) => {
+        /// The editor's global option values, one field per option.
+        ///
+        /// Upstream declares these in `option_vars.h` as one `EXTERN` per
+        /// option, and the transpile gave each its own cell: three hundred
+        /// globals whose only shared fact — that they are the option table's
+        /// storage — nothing stated, and which a caller could take the
+        /// address of. They are one record here, behind one cell.
+        ///
+        /// The fields are private and nothing hands out a reference to the
+        /// record. A reader copies one field out and a selector's `set`
+        /// copies one in, and the borrow is over before either returns, so
+        /// a `did_set_*` callback that re-enters the editor cannot be
+        /// holding the option table open while it does.
+        pub struct $record {
+            $($(#[$doc])* $field: $ty,)*
+        }
+
+        /// The one cell. Seeded with each field's zero; startup installs the
+        /// table's defaults through `crate::option::set_init_1`.
+        static OPTIONS: GlobalCell<$record> = GlobalCell::new($record {
+            $($field: $init,)*
+        });
+
+        $(
+            $(#[$doc])*
+            ///
+            /// The selector: what the option table's row holds, and how
+            /// the option is written (`.set(value)`). `pub` because the
+            /// unit suite sets a handful of options directly.
+            pub const $sel: $kind = $kind {
+                at: offset_of!($record, $field),
+                project: |o| &mut o.$field,
+            };
+
+            $(#[$doc])*
+            ///
+            /// The cheap accessor: one load, no selector in the way. `pub`
+            /// for the same reason the selector is, and because a table
+            /// declares a reader per row whether or not the tree has a
+            /// caller for that row today.
+            #[inline(always)]
+            pub fn $field() -> $ty {
+                OPTIONS.get_field(|o| &mut o.$field)
+            }
+
+        )*
+    };
+}
+
+"##;
+
+/// The record of global option values: one field, one selector and one pair
+/// of accessors per option whose row names a variable.
+///
+/// The whole thing is one `options!` invocation, so it is emitted as one
+/// file rather than chunked — a macro call cannot be cut in half.
+fn emit_vars(out: &mut String, opts: &[Opt]) {
+    out.push_str(VARS_SUPPORT.trim_start_matches('\n'));
+    out.push_str("options! {\n    struct Options {\n");
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    for o in opts {
+        let Some(var) = o.varname.as_deref() else {
+            continue;
+        };
+        if !seen.insert(var) {
+            continue;
+        }
+        let (kind, ty, mut init) = match o.ty.as_str() {
+            "boolean" => ("BoolOpt", "bool", "false"),
+            "number" => ("NumOpt", "OptInt", "0"),
+            _ => ("StrOpt", "*mut c_char", "ptr::null_mut()"),
+        };
+        // 'verbosefile' is read before `set_init_1` runs -- upstream's
+        // `option_vars.h` says so at the declaration ("used before options
+        // are initialized") -- so its field starts at the shared empty
+        // string instead of the null every other string option starts at.
+        if var == "p_vfile" {
+            init = "empty_option()";
+        }
+        writeln!(out, "        /// `'{}'`.", o.full_name).unwrap();
+        writeln!(
+            out,
+            "        {var}: {ty} = {init}, {}: {kind};",
+            var.to_uppercase()
+        )
+        .unwrap();
+    }
+    out.push_str("    }\n}\n");
+}
+
 /// One row of the table, as a struct literal that fills in only what differs
 /// from `BLANK`.
 fn emit_row(out: &mut String, o: &Opt) {
@@ -806,7 +972,13 @@ fn emit_row(out: &mut String, o: &Opt) {
         .collect();
     writeln!(out, "        scope_idx: scope_idx({}),", idx.join(", ")).unwrap();
     match &o.varname {
-        Some(var) => writeln!(out, "        var: OptVar::{}(&{var}),", titlecase(&o.ty)).unwrap(),
+        Some(var) => writeln!(
+            out,
+            "        var: OptVar::{}({}),",
+            titlecase(&o.ty),
+            var.to_uppercase()
+        )
+        .unwrap(),
         None if o.immutable => writeln!(out, "        var: OptVar::OwnDefault,").unwrap(),
         None => {}
     }
@@ -944,7 +1116,6 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
     .collect();
     for o in opts {
         wanted.extend(o.flags.iter().map(String::as_str));
-        wanted.extend(o.varname.as_deref());
         wanted.extend(o.flags_varname.as_deref());
         wanted.extend(o.did_set_cb.as_deref());
         wanted.extend(o.expand_cb.as_deref());
@@ -1032,6 +1203,13 @@ pub fn generate(
         sections.push(("lookup", chunk));
     }
 
+    // The record of option values is one `options!` invocation, so it is a
+    // section of its own: the chunker splits at item boundaries and a macro
+    // call has none inside it. The driver formats every file it is handed.
+    let mut text = String::new();
+    emit_vars(&mut text, &opts);
+    sections.push(("vars", text));
+
     // The table itself is one array literal, so it is formatted whole and
     // then cut at row boundaries into `PART` constants the parent splices.
     let mut text = format!("const ALL: [VimOption; {}] = [\n", opts.len());
@@ -1076,6 +1254,7 @@ pub fn generate(
             "index" => "The option indices: which row is which option.",
             "flags" => "The flag enums a string option's value parses into.",
             "values" => "The values each string option accepts.",
+            "vars" => "Where every option's global value lives.",
             _ => "The name lookup: which option a spelling means.",
         };
         files.push(Emitted {
@@ -1105,7 +1284,11 @@ pub fn generate(
     let mut out = String::from(HEADER);
     out.push('\n');
     for file in &files {
-        writeln!(out, "mod {};", file.name.strip_suffix(".rs").unwrap()).unwrap();
+        let stem = file.name.strip_suffix(".rs").unwrap();
+        // `vars` is named from outside (`crate::options::vars`); the rest are
+        // chunks this module splices back together.
+        let vis = if stem == "vars" { "pub " } else { "" };
+        writeln!(out, "{vis}mod {stem};").unwrap();
     }
     out.push('\n');
     for file in &files {

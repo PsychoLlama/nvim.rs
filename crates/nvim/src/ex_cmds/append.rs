@@ -28,7 +28,7 @@ use crate::memline::{ml_append, ml_delete};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
 use crate::message::state::{lines_left, msg_scroll, need_wait_return};
-use crate::option::vars::p_window;
+use crate::option::vars::P_WINDOW;
 use crate::os::cshim::gettext;
 use crate::state::mode::State;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
@@ -326,7 +326,7 @@ pub fn ex_z(excmd: &mut ExArg) {
         if bigness > cap || bigness < 0 {
             bigness = cap;
         }
-        p_window.set(bigness as c_int as OptInt);
+        P_WINDOW.set(bigness as c_int as OptInt);
         if kind == b'=' {
             bigness += 2;
         }

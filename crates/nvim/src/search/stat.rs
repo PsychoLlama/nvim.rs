@@ -216,7 +216,7 @@ fn update_search_stat(
             cnt: c.cnt,
             exact_match: c.exact_match,
             incomplete: c.incomplete,
-            last_maxcount: p_msc.get() as c_int,
+            last_maxcount: p_msc() as c_int,
         };
     }
     last_maxcount.set(maxcount);
@@ -252,8 +252,8 @@ fn update_search_stat(
             -1
         };
     } else {
-        let save_ws = p_ws.get();
-        p_ws.set(0);
+        let save_ws = p_ws();
+        P_WS.set(false);
         let start = if timeout > 0 {
             profile_setlimit(timeout as int64_t)
         } else {
@@ -305,7 +305,7 @@ fn update_search_stat(
         if done_search {
             unsafe { c.remember(pos) };
         }
-        p_ws.set(save_ws);
+        P_WS.set(save_ws);
     }
 
     counted.set(c);
@@ -355,7 +355,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut numbuf = NumBuf::new();
     let mut pos = Win::current().w_cursor;
     let mut pattern = ptr::null_mut::<c_char>();
-    let mut maxcount = p_msc.get() as c_int;
+    let mut maxcount = p_msc() as c_int;
     let mut timeout = SEARCH_STAT_DEF_TIMEOUT as c_int;
     // Upstream also sets this when 'shortmess' contains `S`, which it
     // already is.

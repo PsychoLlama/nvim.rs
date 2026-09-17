@@ -583,7 +583,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     compl_orig_text().set(unsafe { compl_text_from_line(line) });
     unsafe { compl_orig_extmarks().save() };
     let mut flags = CP_ORIGINAL_TEXT;
-    if p_ic.get() != 0 {
+    if p_ic() {
         flags |= CP_ICASE;
     }
     if ins_compl_add_orig_text(flags).is_err() {
@@ -630,7 +630,7 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 
     // Time when match collection starts.
     let mut compl_start_tv: uint64_t = 0;
-    if compl_autocomplete.get() && p_acl.get() > 0 && !disable_ac_delay {
+    if compl_autocomplete.get() && p_acl() > 0 && !disable_ac_delay {
         compl_start_tv = os_hrtime();
     }
     // The identities, taken while both are provably live: the completion
@@ -696,10 +696,10 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 
     // Wait for the autocompletion delay to expire.
     if compl_autocomplete.get()
-        && p_acl.get() > 0
+        && p_acl() > 0
         && !disable_ac_delay
         && !no_matches_found
-        && elapsed_ms(compl_start_tv) < p_acl.get() as uint64_t
+        && elapsed_ms(compl_start_tv) < p_acl() as uint64_t
     {
         setcursor();
         ui_flush();
@@ -714,7 +714,7 @@ pub fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
                 break;
             }
             os_delay(2, true);
-            if elapsed_ms(compl_start_tv) >= p_acl.get() as uint64_t {
+            if elapsed_ms(compl_start_tv) >= p_acl() as uint64_t {
                 break;
             }
         }
@@ -751,7 +751,7 @@ pub(crate) unsafe fn compl_pattern_from_line(line: *mut c_char) -> String_0 {
     // answers a fresh NUL-terminated allocation.
     unsafe {
         let start = line.offset(at as isize);
-        if p_ic.get() != 0 {
+        if p_ic() {
             cstr_to_string(str_foldcase(start, len, ptr::null_mut(), 0))
         } else {
             cbuf_to_string(start, len as size_t)

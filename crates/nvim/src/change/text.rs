@@ -200,15 +200,11 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
 
     // In Insert or Replace mode with 'showmatch', briefly show the match
     // for a closing bracket.
-    if p_sm.get() != 0
-        && State.get() & MODE_INSERT != 0
-        && msg_silent.get() == 0
-        && !ins_compl_active()
-    {
+    if p_sm() && State.get() & MODE_INSERT != 0 && msg_silent.get() == 0 && !ins_compl_active() {
         unsafe { showmatch(utf_ptr2char(buf)) };
     }
 
-    if p_ri.get() == 0 || State.get() & REPLACE_FLAG != 0 {
+    if !p_ri() || State.get() & REPLACE_FLAG != 0 {
         // Normal insert: move the cursor right.
         Win::current().w_cursor.col += charlen as ColNr;
     }
@@ -310,10 +306,7 @@ pub fn del_bytes(mut count: ColNr, fixpos_arg: bool, use_delcombine: bool) -> Re
     // With 'delcombine', deleting (less than) one character takes only the
     // last combining character off it -- and then the cursor must not move,
     // because the base character is still there.
-    if p_deco.get() != 0
-        && use_delcombine
-        && unsafe { utfc_ptr2len(oldp.offset(col as isize)) } >= count
-    {
+    if p_deco() && use_delcombine && unsafe { utfc_ptr2len(oldp.offset(col as isize)) } >= count {
         let p0 = unsafe { oldp.offset(col as isize) };
         let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
         if unsafe { utf_composinglike(p0, p0.offset(utf_ptr2len(p0) as isize), &raw mut state) } {

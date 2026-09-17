@@ -144,7 +144,7 @@ impl Search {
         if search.regmatch.regprog.is_null() {
             return None;
         }
-        search.regmatch.rmm_ic = p_ic.get();
+        search.regmatch.rmm_ic = c_int::from(p_ic());
         search.regmatch.rmm_maxcol = 0;
 
         let p = unsafe { skipwhite(p) };
@@ -209,10 +209,10 @@ unsafe fn load_quietly(
     dirname_now: *mut c_char,
 ) -> Option<Buf> {
     let save_ei = au_event_disable(c",Filetype");
-    let save_mls = p_mls.get();
-    p_mls.set(0);
+    let save_mls = p_mls();
+    P_MLS.set(0);
     let buf = unsafe { load_dummy_buffer(fname, dirname_start, dirname_now) };
-    p_mls.set(save_mls);
+    P_MLS.set(save_mls);
     au_event_restore(Some(save_ei));
     buf
 }

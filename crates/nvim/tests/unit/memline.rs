@@ -34,7 +34,7 @@ use neovim::memline::{
     B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
     ZeroBlock, ml_append_buf, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
 };
-use neovim::option::vars::p_dir;
+use neovim::option::vars::P_DIR;
 use neovim::types::{Buffer, ColNr, LineNr};
 use neovim::winlayer::Buf;
 
@@ -114,8 +114,8 @@ impl Swapped {
         // default is the user's real state directory, which a test must not
         // write into, so it is pointed at the sandbox and restored on drop.
         let dir = cstr(sandbox.as_str());
-        let saved_dir = p_dir.get();
-        p_dir.set(dir.as_ptr().cast_mut());
+        let saved_dir = P_DIR.get();
+        P_DIR.set(dir.as_ptr().cast_mut());
 
         let mut owned: Vec<c_char> = cstr(name)
             .as_bytes_with_nul()
@@ -180,7 +180,7 @@ impl Swapped {
 
 impl Drop for Swapped {
     fn drop(&mut self) {
-        p_dir.set(self.saved_dir);
+        P_DIR.set(self.saved_dir);
         // SAFETY: the buffer this case opened, wiped as `buffer.rs` does —
         // a buffer left on the list is visible to every later case.
         unsafe {

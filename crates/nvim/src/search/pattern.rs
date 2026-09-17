@@ -215,7 +215,7 @@ pub unsafe fn search_regcomp(
         }
     }
 
-    unsafe { (*regmatch).rmm_ic = ignorecase(pat) };
+    unsafe { (*regmatch).rmm_ic = c_int::from(ignorecase(pat)) };
     unsafe { (*regmatch).rmm_maxcol = 0 };
     unsafe { (*regmatch).regprog = vim_regcomp(pat, if magic { RE_MAGIC } else { 0 }) };
     if unsafe { (*regmatch).regprog.is_null() } {
@@ -255,7 +255,7 @@ pub unsafe fn save_re_pat(idx: c_int, pat: *mut c_char, patlen: size_t, magic: b
     );
     last_idx.set(idx);
     // With 'hlsearch' a changed pattern means a redraw.
-    if p_hls.get() != 0 {
+    if p_hls() {
         redraw_all_later(UPD_SOME_VALID);
     }
     set_no_hlsearch(false);
@@ -415,8 +415,8 @@ pub(crate) unsafe fn replace_last_used_pattern(s: *const c_char) {
 ///
 /// # Safety
 /// `pat` must be a NUL-terminated string.
-pub unsafe fn ignorecase(pat: *mut c_char) -> c_int {
-    unsafe { ignorecase_opt(pat, p_ic.get(), p_scs.get()) }
+pub unsafe fn ignorecase(pat: *mut c_char) -> bool {
+    unsafe { ignorecase_opt(pat, p_ic(), p_scs()) }
 }
 
 /// As [`ignorecase`] but with the `'ignorecase'`/`'smartcase'` values
@@ -424,16 +424,16 @@ pub unsafe fn ignorecase(pat: *mut c_char) -> c_int {
 ///
 /// # Safety
 /// `pat` must be a NUL-terminated string.
-pub unsafe fn ignorecase_opt(pat: *mut c_char, ic_in: c_int, scs: c_int) -> c_int {
+pub unsafe fn ignorecase_opt(pat: *mut c_char, ic_in: bool, scs: bool) -> bool {
     let mut ic = ic_in;
     // 'infercase' completion does its own case handling.
     // SAFETY: the caller's NUL-terminated pattern.
-    if ic != 0
+    if ic
         && !no_smartcase.get()
-        && scs != 0
+        && scs
         && !(ctrl_x_mode_not_default() && Buf::current().b_p_inf != 0)
     {
-        ic = !unsafe { pat_has_uppercase(pat) } as c_int;
+        ic = !unsafe { pat_has_uppercase(pat) };
     }
     no_smartcase.set(false);
     ic
@@ -545,7 +545,7 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
         saved_spats_last_idx.set(last_idx.get());
     }
     // With 'hlsearch' a changed pattern means a redraw.
-    if p_hls.get() != 0 && idx == last_idx.get() && !no_hlsearch.get() {
+    if p_hls() && idx == last_idx.get() && !no_hlsearch.get() {
         redraw_all_later(UPD_SOME_VALID);
     }
 }

@@ -198,11 +198,10 @@ unsafe fn read_wordfile_header(
             line = unsafe { line.add(9) };
             let enc = unsafe { enc_canonize(line) };
             if spin.si_ascii == 0
-                && unsafe { convert_setup(&raw mut spin.si_conv, enc, p_enc.get()) }.is_err()
+                && unsafe { convert_setup(&raw mut spin.si_conv, enc, p_enc()) }.is_err()
             {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, line, arg2) =
-                    unsafe { (c_str(fname), c_str(line), c_str(p_enc.get())) };
+                let (fname, line, arg2) = unsafe { (c_str(fname), c_str(line), c_str(p_enc())) };
                 smsg!(
                     0,
                     "Conversion in {fname} not supported: from {line} to {arg2}"

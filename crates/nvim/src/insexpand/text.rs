@@ -159,7 +159,7 @@ pub unsafe fn ins_compl_add_infercase(
         n
     };
 
-    if p_ic.get() != 0 && Buf::current().b_p_inf != 0 && len > 0 {
+    if p_ic() && Buf::current().b_p_inf != 0 && len > 0 {
         let char_len = char_count(str);
         let compl_char_len = char_count(compl_orig_text().data());
         // "char_len" may be smaller than "compl_char_len" when using
@@ -251,7 +251,7 @@ pub(crate) fn get_next_bufname_token() {
         let tail = unsafe { path_tail(b.b_sfname) };
         let (orig_data, orig_len) = compl_orig_text().parts();
         if unsafe { cstr::prefix_eq(tail, orig_data, orig_len) } {
-            let flags = if p_ic.get() != 0 { CP_ICASE } else { 0 };
+            let flags = if p_ic() { CP_ICASE } else { 0 };
             let no_name = ptr::null_mut();
             let _no_data: Option<&mut TypVal> = None;
             let (no_cptext, no_hl) = (ptr::null(), ptr::null());
@@ -329,10 +329,10 @@ pub(crate) unsafe fn find_common_prefix(prefix_len: *mut size_t, curbuf_only: bo
 
         // Apply 'smartcase' behavior during normal mode.
         if ctrl_x_mode_normal()
-            && p_inf.get() == 0
+            && !p_inf()
             && !leader.data().is_null()
             // SAFETY: the leader is a NUL-terminated string.
-            && unsafe { ignorecase(leader.data()) } == 0
+            && !unsafe { ignorecase(leader.data()) }
         {
             compl.cp_flags &= !CP_ICASE;
         }

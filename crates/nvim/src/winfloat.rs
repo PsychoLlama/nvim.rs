@@ -439,7 +439,7 @@ fn cmdwin_is_float() -> bool {
 
 /// The two 'laststatus' values under which a float draws its own 'statusline'.
 fn show_statusline() -> bool {
-    p_ls.get() == 1 as OptInt || p_ls.get() == 2 as OptInt
+    p_ls() == 1 as OptInt || p_ls() == 2 as OptInt
 }
 
 pub(crate) fn win_new_float(
@@ -574,7 +574,7 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
 
     if !ui_has(kUIMultigrid) {
         let above_ch = if win.w_config.zindex < kZIndexMessages {
-            p_ch.get() as c_int
+            p_ch() as c_int
         } else {
             0
         };

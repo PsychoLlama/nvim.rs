@@ -24,8 +24,8 @@ use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::option::vars::{
-    bkc_flags, p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm, p_siso, p_so,
-    ve_flags,
+    P_SISO, P_SO, bkc_flags, p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm,
+    p_siso, p_so, ve_flags,
 };
 use crate::options::*;
 use crate::optionstr::empty_option;
@@ -50,7 +50,7 @@ use crate::winlayer::Win;
 pub(crate) fn get_equalprg() -> *mut c_char {
     // SAFETY: `curbuf` is live, and its string options are never null.
     if unsafe { *Buf::current().b_p_ep } == 0 {
-        p_ep.get()
+        p_ep()
     } else {
         Buf::current().b_p_ep
     }
@@ -60,7 +60,7 @@ pub(crate) fn get_equalprg() -> *mut c_char {
 pub(crate) fn get_findfunc() -> *mut c_char {
     // SAFETY: `curbuf` is live, and its string options are never null.
     if unsafe { *Buf::current().b_p_ffu } == 0 {
-        p_ffu.get()
+        p_ffu()
     } else {
         Buf::current().b_p_ffu
     }
@@ -71,7 +71,7 @@ pub(crate) fn get_findfunc() -> *mut c_char {
 pub(crate) fn shortmess(x: ShmFlag) -> bool {
     const ABBREVIATED: [ShmFlag; 4] = [ShmFlag::RO, ShmFlag::MOD, ShmFlag::LINES, ShmFlag::WRI];
     // SAFETY: 'shortmess' is a string option; the null test is upstream's.
-    let Some(shm) = (unsafe { cstr::at_opt(p_shm.get()) }) else {
+    let Some(shm) = (unsafe { cstr::at_opt(p_shm()) }) else {
         return false;
     };
     x.is_in(shm) || (ShmFlag::ABBREVIATIONS.is_in(shm) && ABBREVIATED.contains(&x))
@@ -80,7 +80,7 @@ pub(crate) fn shortmess(x: ShmFlag) -> bool {
 /// Whether 'cpoptions' contains `flag`.
 pub(crate) fn cpo_has(flag: CpoFlag) -> bool {
     // SAFETY: 'cpoptions' is a string option and is never null.
-    flag.is_in(unsafe { CStr::from_ptr(p_cpo.get()) })
+    flag.is_in(unsafe { CStr::from_ptr(p_cpo()) })
 }
 
 /// Record where a vimrc was found in `$MYVIMRC`/`$MYVIMDIR`, unless the
@@ -156,7 +156,7 @@ pub(crate) fn magic_isset() -> bool {
     match magic_overruled.get() {
         OPTION_MAGIC_ON => true,
         OPTION_MAGIC_OFF => false,
-        _ => p_magic.get() != 0,
+        _ => p_magic(),
     }
 }
 
@@ -212,10 +212,10 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
     // SAFETY: 'backspace' is a string option, so it is a live, NUL-terminated
     // string.
     // The historic numeric spelling: 2 is everything but "nostop".
-    if unsafe { *p_bs.get() } == b'2' as c_char {
+    if unsafe { *p_bs() } == b'2' as c_char {
         return what != BsFlag::NOSTOP;
     }
-    what.is_in(unsafe { CStr::from_ptr(p_bs.get()) })
+    what.is_in(unsafe { CStr::from_ptr(p_bs()) })
 }
 
 /// 'backupcopy' as flags, local where set.
@@ -231,7 +231,7 @@ pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
 pub(crate) fn get_flp_value(buffer: Buf) -> *mut c_char {
     // SAFETY: a string option is either null or NUL-terminated.
     if buffer.b_p_flp.is_null() || unsafe { *buffer.b_p_flp } == 0 {
-        p_flp.get()
+        p_flp()
     } else {
         buffer.b_p_flp
     }
@@ -256,7 +256,7 @@ pub(crate) fn get_showbreak_value(win: Win) -> *mut c_char {
     let local = win.w_onebuf_opt.wo_sbr;
     // SAFETY: a string option is either null or NUL-terminated.
     if local.is_null() || unsafe { *local } == 0 {
-        return p_sbr.get();
+        return p_sbr();
     }
     if unsafe { cstr::eq_bytes(local, b"NONE") } {
         return empty_option();
@@ -307,7 +307,7 @@ pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int 
 /// The line ending a new file gets: the first entry of 'fileformats'.
 pub(crate) fn default_fileformat() -> c_int {
     // SAFETY: 'fileformats' is a string option; it is never null.
-    match unsafe { *p_ffs.get() } as u8 {
+    match unsafe { *p_ffs() } as u8 {
         b'm' => EOL_MAC,
         b'd' => EOL_DOS,
         _ => EOL_UNIX,
@@ -412,13 +412,13 @@ pub(crate) unsafe fn copy_option_part(
 /// Whether 'shell' is a csh derivative, which needs its own quoting.
 pub(crate) fn csh_like_shell() -> bool {
     // SAFETY: 'shell' is a string option; it is never null.
-    has_bytes(unsafe { cstr::at(path_tail(p_sh.get())) }, b"csh")
+    has_bytes(unsafe { cstr::at(path_tail(p_sh())) }, b"csh")
 }
 
 /// Whether 'shell' is fish, which needs its own quoting.
 pub(crate) fn fish_like_shell() -> bool {
     // SAFETY: 'shell' is a string option; it is never null.
-    has_bytes(unsafe { cstr::at(path_tail(p_sh.get())) }, b"fish")
+    has_bytes(unsafe { cstr::at(path_tail(p_sh())) }, b"fish")
 }
 
 /// Every buffer-local (or window-local) option of the current buffer and
@@ -460,7 +460,7 @@ pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
         return 0;
     }
     match window.w_onebuf_opt.wo_so {
-        local if local < 0 => p_so.get(),
+        local if local < 0 => p_so(),
         local => local,
     }
 }
@@ -469,7 +469,7 @@ pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
 ///
 pub(crate) fn get_sidescrolloff_value(window: Win) -> int64_t {
     match window.w_onebuf_opt.wo_siso {
-        local if local < 0 => p_siso.get(),
+        local if local < 0 => p_siso(),
         local => local,
     }
 }
@@ -518,8 +518,8 @@ impl ScrollOff {
         match self {
             Self::Window(win, ScrollMargin::Lines) => win.w_onebuf_opt.wo_so,
             Self::Window(win, ScrollMargin::Columns) => win.w_onebuf_opt.wo_siso,
-            Self::Global(ScrollMargin::Lines) => p_so.get(),
-            Self::Global(ScrollMargin::Columns) => p_siso.get(),
+            Self::Global(ScrollMargin::Lines) => p_so(),
+            Self::Global(ScrollMargin::Columns) => p_siso(),
         }
     }
 
@@ -528,8 +528,8 @@ impl ScrollOff {
         match self {
             Self::Window(mut win, ScrollMargin::Lines) => win.w_onebuf_opt.wo_so = value,
             Self::Window(mut win, ScrollMargin::Columns) => win.w_onebuf_opt.wo_siso = value,
-            Self::Global(ScrollMargin::Lines) => p_so.set(value),
-            Self::Global(ScrollMargin::Columns) => p_siso.set(value),
+            Self::Global(ScrollMargin::Lines) => P_SO.set(value),
+            Self::Global(ScrollMargin::Columns) => P_SISO.set(value),
         }
     }
 }

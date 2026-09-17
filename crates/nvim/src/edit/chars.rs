@@ -82,7 +82,7 @@ pub(crate) fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         && vpeekc() != NUL
         && State.get() & REPLACE_FLAG == 0
         && !cindent_on()
-        && p_ri.get() == 0
+        && !p_ri()
     {
         let mut buf: [c_char; INPUT_BUFLEN as usize + 1] = [0; INPUT_BUFLEN as usize + 1];
         let mut virtcol: ColNr = 0;
@@ -270,7 +270,7 @@ fn end_pending_comment(c: c_int) {
 pub(crate) fn echeck_abbr(c: c_int) -> bool {
     // Not in 'paste' mode, not when disabled, and not just after moving
     // around with the cursor keys.
-    if p_paste.get() != 0 || no_abbr.get() || arrow_used.get() {
+    if p_paste() || no_abbr.get() || arrow_used.get() {
         return false;
     }
 

@@ -126,10 +126,11 @@ use crate::message::state::{
     redir_vname,
 };
 use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
+use crate::option::shortmess;
+use crate::option::vars::p_vfile;
 use crate::option::vars::{
-    p_ch, p_debug, p_eb, p_lz, p_mopt, p_more, p_report, p_verbose, rdb_flags,
+    P_MORE, p_ch, p_debug, p_eb, p_lz, p_mopt, p_more, p_report, p_verbose, rdb_flags,
 };
-use crate::option::{p_vfile, shortmess};
 use crate::options::{
     kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,
     kOptMoptFlagProgress, kOptMoptFlagWait, kOptRdbFlagNothrottle,
@@ -818,7 +819,7 @@ pub unsafe fn set_keep_msg(s: *const c_char, hl_id: c_int) {
 
 /// Would a message be seen if it were shown now?
 pub fn messaging() -> bool {
-    !(p_lz.get() != 0 && char_avail() && !KeyTyped.get()) && (p_ch.get() > 0 || ui_has(kUIMessages))
+    !(p_lz() && char_avail() && !KeyTyped.get()) && (p_ch() > 0 || ui_has(kUIMessages))
 }
 
 /// Report "N more lines" / "N fewer lines" after an edit, if `'report'`
@@ -839,7 +840,7 @@ pub fn msgmore(n: c_int) {
     }
 
     let pn = unsafe { abs(n) };
-    if pn as OptInt <= p_report.get() {
+    if pn as OptInt <= p_report() {
         return;
     }
     let (one, many) = if n > 0 {

@@ -180,7 +180,7 @@ pub(crate) unsafe fn nextwild(
             | WildOpts::ADD_SLASH
             | WildOpts::SILENT
             | WildOpts::ESCAPE.when(escape)
-            | WildOpts::ICASE.when(p_wic.get() != 0);
+            | WildOpts::ICASE.when(p_wic());
         p = unsafe {
             expand_one(
                 expand.raw(),
@@ -339,7 +339,7 @@ unsafe fn next_match(mode: WildMode, expand: *mut Expand) -> *mut c_char {
     }
 
     // Display the matches on screen.
-    if p_wmnu.get() != 0 {
+    if p_wmnu() {
         if !compl_match_array.get().is_null() {
             compl_selected.set(findex);
             cmdline_pum_display(false);
@@ -484,7 +484,7 @@ unsafe fn longest_common_match(expand: *mut Expand, options: WildOpts) -> *mut c
     // 'fileignorecase' folds case, but only where the matches are names
     // that came from the filesystem or the buffer list.  Neither operand
     // can change inside the loop.
-    let fold = p_fic.get() != 0
+    let fold = p_fic()
         && matches!(
             expand.xp_context,
             ExpandContext::Directories

@@ -76,7 +76,7 @@ impl FindTags {
         } else if name_only {
             // If wanted, read the line again to get the long form too.
             if State.get() & MODE_INSERT != 0 {
-                self.get_searchpat = p_sft.get() != 0;
+                self.get_searchpat = p_sft();
             }
             Some(name_match(tagp))
         } else {

@@ -416,8 +416,8 @@ fn close_all_others(message: bool, forceit: bool) {
                 break 'skip;
             }
             if !r {
-                let confirm = p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM);
-                if message && confirm && p_write.get() != 0 {
+                let confirm = p_confirm() || cmdmod_has(CmdModFlags::CONFIRM);
+                if message && confirm && p_write() {
                     ask_about_changes(wp.buffer());
                     if valid_win(wp.id()).is_none() {
                         nextwp = first_window().map(Win::id); // messed up

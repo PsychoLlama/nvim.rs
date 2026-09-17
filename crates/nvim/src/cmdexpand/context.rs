@@ -135,7 +135,7 @@ pub(crate) unsafe fn set_cmd_index(
     // - the 's' command can be followed directly by 'c', 'g', 'i', 'I' or
     //   'r'.
     if !fuzzy
-        && p_ic.get() == 0
+        && !p_ic()
         && unsafe { *cmd } as c_int == 'k' as c_int
         && unsafe { *cmd.add(1) } as c_int != 'e' as c_int
     {

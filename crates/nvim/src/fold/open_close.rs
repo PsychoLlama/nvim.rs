@@ -144,7 +144,7 @@ pub(super) fn new_fold_level_win(mut win: Win) {
 /// Apply 'foldlevel' to all folds that don't contain the cursor.
 pub fn fold_check_close() {
     // SAFETY: 'foldclose' is a NUL-terminated option string.
-    if unsafe { *p_fcl.get() } as c_int == NUL {
+    if unsafe { *p_fcl() } as c_int == NUL {
         return;
     }
     // SAFETY: the caller's promise.

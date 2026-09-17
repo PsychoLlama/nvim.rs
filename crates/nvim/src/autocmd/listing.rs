@@ -209,7 +209,7 @@ pub(crate) unsafe fn au_show_for_event(
             }
             unsafe { xfree(handler_str.cast::<::core::ffi::c_void>()) };
 
-            if p_verbose.get() > 0 {
+            if p_verbose() > 0 {
                 // SAFETY: the row's own script context.
                 unsafe { last_set_msg((*ac).script_ctx) };
             }

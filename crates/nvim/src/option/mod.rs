@@ -36,13 +36,12 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::optionstr::set_chars_option;
 use crate::types::{
     CharsOption, HlAttrs, OptScope, OptValType, RgbValue, XpPrefix, int16_t, int32_t,
 };
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{c_int, c_uint};
 
 mod check;
 mod context;
@@ -166,8 +165,6 @@ pub(crate) const EOL_MAC: c_int = 2 as c_int;
 pub(crate) const DFLT_FO_VIM: &::core::ffi::CStr = c"tcqj";
 pub(crate) const CPO_VIM: &::core::ffi::CStr = c"aABceFs_";
 pub(crate) const LISPWORD_VALUE: &::core::ffi::CStr = c"defun,define,defmacro,set!,lambda,if,case,let,flet,let*,letrec,do,do*,define-syntax,let-syntax,letrec-syntax,destructuring-bind,defpackage,defparameter,defstruct,deftype,defvar,do-all-symbols,do-external-symbols,do-symbols,dolist,dotimes,ecase,etypecase,eval-when,labels,macrolet,multiple-value-bind,multiple-value-call,multiple-value-prog1,multiple-value-setq,prog1,progv,typecase,unless,unwind-protect,when,with-input-from-string,with-open-file,with-open-stream,with-output-to-string,with-package-iterator,define-condition,handler-bind,handler-case,restart-bind,restart-case,with-simple-restart,store-value,use-value,muffle-warning,abort,continue,with-slots,with-slots*,with-accessors,with-accessors*,defclass,defmethod,print-unreadable-object";
-pub(crate) static p_vfile: GlobalCell<*mut c_char> =
-    GlobalCell::new(crate::optionstr::empty_option());
 pub(crate) const NO_LOCAL_UNDOLEVEL: c_int = -123456 as c_int;
 pub(crate) const SB_MAX: c_int = 1000000 as c_int;
 pub(crate) const MAX_NUMBERWIDTH: c_int = 20 as c_int;

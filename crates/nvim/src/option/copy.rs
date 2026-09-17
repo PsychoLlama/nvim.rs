@@ -26,18 +26,15 @@ use crate::insexpand::{
 };
 use crate::memory::xstrdup;
 use crate::option::vars::{
-    p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink, p_cino, p_cinsd, p_cinw, p_cms, p_com, p_cpo,
-    p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo, p_iminsert, p_imsearch, p_inde,
-    p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp, p_lop, p_ma, p_ml, p_mps, p_nf, p_ofu, p_pi,
-    p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl, p_spo, p_sts, p_sua, p_sw, p_swf, p_tfu, p_ts,
-    p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
+    P_IMINSERT, P_IMSEARCH, P_MA, p_ai, p_bin, p_bomb, p_cfu, p_ci, p_cin, p_cink, p_cino, p_cinsd,
+    p_cinw, p_cms, p_com, p_cpo, p_cpt, p_et, p_fenc, p_fex, p_ff, p_ffs, p_fixeol, p_flp, p_fo,
+    p_iminsert, p_imsearch, p_inde, p_indk, p_inex, p_inf, p_isk, p_keymap, p_lisp, p_lop, p_ma,
+    p_ml, p_mps, p_nf, p_ofu, p_pi, p_qe, p_scbk, p_si, p_smc, p_spc, p_spf, p_spl, p_spo, p_sts,
+    p_sua, p_sw, p_swf, p_tfu, p_ts, p_tw, p_udf, p_vsts, p_vts, p_wm, spo_flags,
 };
 
-use super::check::{p_et_nobin, p_ml_nobin, p_tw_nobin, p_wm_nobin};
-use super::paste::{
-    p_ai_nopaste, p_et_nopaste, p_sts_nopaste, p_tw_nopaste, p_vsts_nopaste, p_wm_nopaste,
-};
-use crate::global_cell::GlobalCell;
+use super::check::bin_save;
+use super::paste::paste_save;
 use crate::options::{
     BufOptIndex, buf_opt_idx, kBufOptAutoindent, kBufOptBinary, kBufOptBomb, kBufOptCindent,
     kBufOptCinkeys, kBufOptCinoptions, kBufOptCinscopedecls, kBufOptCinwords, kBufOptComments,
@@ -121,9 +118,9 @@ macro_rules! win_field {
 /// precondition — which is why this takes the cell rather than a pointer,
 /// and why the promise is paid once here instead of at each of the thirty
 /// fields below.
-fn dup_global(cell: &GlobalCell<*mut c_char>) -> *mut c_char {
+fn dup_global(value: *mut c_char) -> *mut c_char {
     // SAFETY: a string option's value is a live NUL-terminated string.
-    unsafe { xstrdup(cell.get()) }
+    unsafe { xstrdup(value) }
 }
 
 /// [`dup_global`] for one of the compiled-in names.
@@ -389,7 +386,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
 
     // Before the defaults exist there is nothing to copy: `main` makes
     // the first buffer that early.
-    if p_cpo.get().is_null() {
+    if p_cpo().is_null() {
         check_buf_options(buffer);
         return;
     }
@@ -419,48 +416,48 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         } else {
             free_buf_options(buffer, true);
             b.b_p_ro = 0;
-            b.b_p_fenc = dup_global(&p_fenc);
+            b.b_p_fenc = dup_global(p_fenc());
             // A new buffer takes the *first* of 'fileformats' rather
             // than 'fileformat', since nothing has been read yet.
-            b.b_p_ff = match unsafe { *p_ffs.get() } as u8 {
+            b.b_p_ff = match unsafe { *p_ffs() } as u8 {
                 b'm' => dup_static(c"mac"),
                 b'd' => dup_static(c"dos"),
                 b'u' => dup_static(c"unix"),
-                _ => dup_global(&p_ff),
+                _ => dup_global(p_ff()),
             };
             b.b_p_bh = unset_string();
             b.b_p_bt = unset_string();
         }
 
-        b.b_p_ai = p_ai.get();
+        b.b_p_ai = c_int::from(p_ai());
         copy_sctx(b, kBufOptAutoindent);
-        b.b_p_ai_nopaste = p_ai_nopaste.get();
-        b.b_p_sw = p_sw.get();
+        b.b_p_ai_nopaste = c_int::from(paste_save().ai);
+        b.b_p_sw = p_sw();
         copy_sctx(b, kBufOptShiftwidth);
-        b.b_p_scbk = p_scbk.get();
+        b.b_p_scbk = p_scbk();
         copy_sctx(b, kBufOptScrollback);
-        b.b_p_tw = p_tw.get();
+        b.b_p_tw = p_tw();
         copy_sctx(b, kBufOptTextwidth);
-        b.b_p_tw_nopaste = p_tw_nopaste.get();
-        b.b_p_tw_nobin = p_tw_nobin.get();
-        b.b_p_wm = p_wm.get();
+        b.b_p_tw_nopaste = paste_save().tw;
+        b.b_p_tw_nobin = bin_save().tw;
+        b.b_p_wm = p_wm();
         copy_sctx(b, kBufOptWrapmargin);
-        b.b_p_wm_nopaste = p_wm_nopaste.get();
-        b.b_p_wm_nobin = p_wm_nobin.get();
-        b.b_p_bin = p_bin.get();
+        b.b_p_wm_nopaste = paste_save().wm;
+        b.b_p_wm_nobin = bin_save().wm;
+        b.b_p_bin = c_int::from(p_bin());
         copy_sctx(b, kBufOptBinary);
-        b.b_p_bomb = p_bomb.get();
+        b.b_p_bomb = c_int::from(p_bomb());
         copy_sctx(b, kBufOptBomb);
-        b.b_p_et = p_et.get();
+        b.b_p_et = c_int::from(p_et());
         copy_sctx(b, kBufOptExpandtab);
-        b.b_p_fixeol = p_fixeol.get();
+        b.b_p_fixeol = c_int::from(p_fixeol());
         copy_sctx(b, kBufOptFixendofline);
-        b.b_p_et_nobin = p_et_nobin.get();
-        b.b_p_et_nopaste = p_et_nopaste.get();
-        b.b_p_ml = p_ml.get();
+        b.b_p_et_nobin = c_int::from(bin_save().et);
+        b.b_p_et_nopaste = c_int::from(paste_save().et);
+        b.b_p_ml = c_int::from(p_ml());
         copy_sctx(b, kBufOptModeline);
-        b.b_p_ml_nobin = p_ml_nobin.get();
-        b.b_p_inf = p_inf.get();
+        b.b_p_ml_nobin = c_int::from(bin_save().ml);
+        b.b_p_inf = c_int::from(p_inf());
         copy_sctx(b, kBufOptInfercase);
 
         // `:noswapfile` wins over the global 'swapfile', and leaves the
@@ -468,108 +465,107 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         if cmdmod_has(CmdModFlags::NOSWAPFILE) {
             b.b_p_swf = 0;
         } else {
-            b.b_p_swf = p_swf.get();
+            b.b_p_swf = c_int::from(p_swf());
             copy_sctx(b, kBufOptSwapfile);
         }
 
-        b.b_p_cpt = dup_global(&p_cpt);
+        b.b_p_cpt = dup_global(p_cpt());
         copy_sctx(b, kBufOptComplete);
         set_buflocal_cpt_callbacks(b);
-        b.b_p_cfu = dup_global(&p_cfu);
+        b.b_p_cfu = dup_global(p_cfu());
         copy_sctx(b, kBufOptCompletefunc);
         set_buflocal_cfu_callback(b);
-        b.b_p_ofu = dup_global(&p_ofu);
+        b.b_p_ofu = dup_global(p_ofu());
         copy_sctx(b, kBufOptOmnifunc);
         set_buflocal_ofu_callback(b);
-        b.b_p_tfu = dup_global(&p_tfu);
+        b.b_p_tfu = dup_global(p_tfu());
         copy_sctx(b, kBufOptTagfunc);
         set_buflocal_tfu_callback(b);
 
-        b.b_p_sts = p_sts.get();
+        b.b_p_sts = p_sts();
         copy_sctx(b, kBufOptSofttabstop);
-        b.b_p_sts_nopaste = p_sts_nopaste.get();
-        b.b_p_vsts = dup_global(&p_vsts);
+        b.b_p_sts_nopaste = paste_save().sts;
+        b.b_p_vsts = dup_global(p_vsts());
         copy_sctx(b, kBufOptVarsofttabstop);
-        b.b_p_vsts_array = if !p_vsts.get().is_null() && p_vsts.get() != unset_string() {
+        b.b_p_vsts_array = if !p_vsts().is_null() && p_vsts() != unset_string() {
             // SAFETY: 'vartabstop' is a non-empty string option value.
-            unsafe { tabstop_array(p_vsts.get()) }
+            unsafe { tabstop_array(p_vsts()) }
         } else {
             ptr::null_mut()
         };
-        b.b_p_vsts_nopaste = if p_vsts_nopaste.get().is_null() {
-            ptr::null_mut()
-        } else {
-            dup_global(&p_vsts_nopaste)
+        b.b_p_vsts_nopaste = match paste_save().vsts {
+            saved if saved.is_null() => ptr::null_mut(),
+            saved => dup_global(saved),
         };
 
-        b.b_p_com = dup_global(&p_com);
+        b.b_p_com = dup_global(p_com());
         copy_sctx(b, kBufOptComments);
-        b.b_p_cms = dup_global(&p_cms);
+        b.b_p_cms = dup_global(p_cms());
         copy_sctx(b, kBufOptCommentstring);
-        b.b_p_fo = dup_global(&p_fo);
+        b.b_p_fo = dup_global(p_fo());
         copy_sctx(b, kBufOptFormatoptions);
-        b.b_p_flp = dup_global(&p_flp);
+        b.b_p_flp = dup_global(p_flp());
         copy_sctx(b, kBufOptFormatlistpat);
-        b.b_p_nf = dup_global(&p_nf);
+        b.b_p_nf = dup_global(p_nf());
         copy_sctx(b, kBufOptNrformats);
-        b.b_p_mps = dup_global(&p_mps);
+        b.b_p_mps = dup_global(p_mps());
         copy_sctx(b, kBufOptMatchpairs);
-        b.b_p_si = p_si.get();
+        b.b_p_si = c_int::from(p_si());
         copy_sctx(b, kBufOptSmartindent);
         b.b_p_channel = 0 as OptInt;
-        b.b_p_ci = p_ci.get();
+        b.b_p_ci = c_int::from(p_ci());
         copy_sctx(b, kBufOptCopyindent);
-        b.b_p_cin = p_cin.get();
+        b.b_p_cin = c_int::from(p_cin());
         copy_sctx(b, kBufOptCindent);
-        b.b_p_cink = dup_global(&p_cink);
+        b.b_p_cink = dup_global(p_cink());
         copy_sctx(b, kBufOptCinkeys);
-        b.b_p_cino = dup_global(&p_cino);
+        b.b_p_cino = dup_global(p_cino());
         copy_sctx(b, kBufOptCinoptions);
-        b.b_p_cinsd = dup_global(&p_cinsd);
+        b.b_p_cinsd = dup_global(p_cinsd());
         copy_sctx(b, kBufOptCinscopedecls);
-        b.b_p_lop = dup_global(&p_lop);
+        b.b_p_lop = dup_global(p_lop());
         copy_sctx(b, kBufOptLispoptions);
         // 'filetype' and 'syntax' start empty: the autocommands that
         // set them have not run for this buffer yet.
         b.b_p_ft = unset_string();
-        b.b_p_pi = p_pi.get();
+        b.b_p_pi = c_int::from(p_pi());
         copy_sctx(b, kBufOptPreserveindent);
-        b.b_p_cinw = dup_global(&p_cinw);
+        b.b_p_cinw = dup_global(p_cinw());
         copy_sctx(b, kBufOptCinwords);
-        b.b_p_lisp = p_lisp.get();
+        b.b_p_lisp = c_int::from(p_lisp());
         copy_sctx(b, kBufOptLisp);
         b.b_p_syn = unset_string();
-        b.b_p_smc = p_smc.get();
+        b.b_p_smc = p_smc();
         copy_sctx(b, kBufOptSynmaxcol);
 
         b.b_s.b_syn_isk = unset_string();
-        b.b_s.b_p_spc = dup_global(&p_spc);
+        b.b_s.b_p_spc = dup_global(p_spc());
         copy_sctx(b, kBufOptSpellcapcheck);
         // SAFETY: `b_s` is the buffer's own syntax block.
         unsafe { compile_cap_prog(buf_field!(buffer.raw(), b_s)) };
-        b.b_s.b_p_spf = dup_global(&p_spf);
+        b.b_s.b_p_spf = dup_global(p_spf());
         copy_sctx(b, kBufOptSpellfile);
-        b.b_s.b_p_spl = dup_global(&p_spl);
+        b.b_s.b_p_spl = dup_global(p_spl());
         copy_sctx(b, kBufOptSpelllang);
-        b.b_s.b_p_spo = dup_global(&p_spo);
+        b.b_s.b_p_spo = dup_global(p_spo());
         copy_sctx(b, kBufOptSpelloptions);
         b.b_s.b_p_spo_flags = spo_flags.get();
 
-        b.b_p_inde = dup_global(&p_inde);
+        b.b_p_inde = dup_global(p_inde());
         copy_sctx(b, kBufOptIndentexpr);
-        b.b_p_indk = dup_global(&p_indk);
+        b.b_p_indk = dup_global(p_indk());
         copy_sctx(b, kBufOptIndentkeys);
         b.b_p_fp = unset_string();
-        b.b_p_fex = dup_global(&p_fex);
+        b.b_p_fex = dup_global(p_fex());
         copy_sctx(b, kBufOptFormatexpr);
-        b.b_p_sua = dup_global(&p_sua);
+        b.b_p_sua = dup_global(p_sua());
         copy_sctx(b, kBufOptSuffixesadd);
-        b.b_p_keymap = dup_global(&p_keymap);
+        b.b_p_keymap = dup_global(p_keymap());
         copy_sctx(b, kBufOptKeymap);
         b.b_kmap_state = (b.b_kmap_state as c_int | KEYMAP_INIT) as int16_t;
-        b.b_p_iminsert = p_iminsert.get();
+        b.b_p_iminsert = p_iminsert();
         copy_sctx(b, kBufOptIminsert);
-        b.b_p_imsearch = p_imsearch.get();
+        b.b_p_imsearch = p_imsearch();
         copy_sctx(b, kBufOptImsearch);
 
         // The global-local options start unset, reading through to the
@@ -606,23 +602,23 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_tc_flags = 0 as c_uint;
         b.b_cot_flags = 0 as c_uint;
         // 'includeexpr' is buffer-local only, not global-local.
-        b.b_p_inex = dup_global(&p_inex);
+        b.b_p_inex = dup_global(p_inex());
         copy_sctx(b, kBufOptIncludeexpr);
-        b.b_p_qe = dup_global(&p_qe);
+        b.b_p_qe = dup_global(p_qe());
         copy_sctx(b, kBufOptQuoteescape);
-        b.b_p_udf = p_udf.get();
+        b.b_p_udf = c_int::from(p_udf());
         copy_sctx(b, kBufOptUndofile);
 
         if dont_do_help {
             b.b_p_isk = save_p_isk;
             b.b_p_vts_array = vts_array(b);
         } else {
-            b.b_p_isk = dup_global(&p_isk);
+            b.b_p_isk = dup_global(p_isk());
             copy_sctx(b, kBufOptIskeyword);
             did_isk = true;
-            b.b_p_ts = p_ts.get();
+            b.b_p_ts = p_ts();
             copy_sctx(b, kBufOptTabstop);
-            b.b_p_vts = dup_global(&p_vts);
+            b.b_p_vts = dup_global(p_vts());
             copy_sctx(b, kBufOptVartabstop);
             b.b_p_vts_array = vts_array(b);
             b.b_help = false;
@@ -633,7 +629,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
             if (unsafe { *b.b_p_bt }) as c_int == 'h' as c_int {
                 unsafe { clear_string_option(buf_field!(buffer.raw(), b_p_bt)) };
             }
-            b.b_p_ma = p_ma.get();
+            b.b_p_ma = c_int::from(p_ma());
             copy_sctx(b, kBufOptModifiable);
         }
     }
@@ -667,7 +663,7 @@ unsafe fn tabstop_array(value: *mut c_char) -> *mut ColNr {
 /// than inline so that the two identical call sites cannot drift.
 ///
 fn vts_array(buffer: Buf) -> *mut ColNr {
-    let vts = p_vts.get();
+    let vts = p_vts();
     // SAFETY: 'vartabstop' is a string option, so its value is a live
     // NUL-terminated string; the test above is what `tabstop_set` needs.
     if !vts.is_null() && unsafe { *vts } != NUL as c_char && buffer.b_p_vts_array.is_null() {
@@ -680,17 +676,17 @@ fn vts_array(buffer: Buf) -> *mut ColNr {
 /// `-M`: make every buffer unmodifiable, default included.
 pub(crate) fn reset_modifiable() {
     Buf::current().b_p_ma = 0;
-    p_ma.set(0);
+    P_MA.set(false);
     change_option_default(kOptModifiable, boolean_optval(Some(false)));
 }
 
 /// Carry a buffer's 'iminsert' back to the global value, so that the next
 /// buffer starts where this one left off.
 pub(crate) fn set_iminsert_global(buffer: Buf) {
-    p_iminsert.set(buffer.b_p_iminsert);
+    P_IMINSERT.set(buffer.b_p_iminsert);
 }
 
 /// As [`set_iminsert_global`], for 'imsearch'.
 pub(crate) fn set_imsearch_global(buffer: Buf) {
-    p_imsearch.set(buffer.b_p_imsearch);
+    P_IMSEARCH.set(buffer.b_p_imsearch);
 }

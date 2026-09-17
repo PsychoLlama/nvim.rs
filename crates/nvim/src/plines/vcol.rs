@@ -106,7 +106,7 @@ pub(crate) unsafe fn getvcol(
             && window.w_onebuf_opt.wo_list == 0
             && !virtual_active(window)
             && !(visual_active()
-                && (unsafe { *p_sel.get() } == b'e' as c_char
+                && (unsafe { *p_sel() } == b'e' as c_char
                     || ltoreq(unsafe { *pos }, visual_anchor())));
         if cursor_at_tab_end {
             unsafe { *cursor = vcol + incr - 1 };
@@ -222,7 +222,7 @@ pub(crate) unsafe fn getvcols(
     let before_second = from2 - 1;
     unsafe {
         *right = if to2 > to1 {
-            if *p_sel.get() == b'e' as c_char && before_second >= to1 {
+            if *p_sel() == b'e' as c_char && before_second >= to1 {
                 before_second
             } else {
                 to2

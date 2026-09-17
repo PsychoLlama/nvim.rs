@@ -90,7 +90,7 @@ pub(crate) fn ins_compl_new_leader() {
     unsafe { ins_compl_insert_bytes(compl_leader().data().offset(get_compl_len() as isize), -1) };
     compl_used_match.set(false);
 
-    if p_acl.get() > 0 {
+    if p_acl() > 0 {
         pum_undisplay(true);
         redraw_later(Win::current(), UPD_VALID);
         let _ = update_screen(); // Show char (deletion) immediately
@@ -613,7 +613,7 @@ pub fn ins_compl_check_keys(frequency: c_int, in_compl_func: bool) {
             && compl_cont_status.get() & CONT_LOCAL == 0
             && !cpt_sources().is_unset()
             && cpt_sources().index() >= 0;
-        if normal_mode_strict && (compl_autocomplete.get() || p_cto.get() > 0) {
+        if normal_mode_strict && (compl_autocomplete.get() || p_cto() > 0) {
             check_elapsed_time();
         }
     }

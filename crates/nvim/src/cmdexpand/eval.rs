@@ -47,7 +47,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         filtered = tv_get_number_chk(&args[2]).unwrap_or(-1) != 0;
     }
 
-    if p_wic.get() != 0 {
+    if p_wic() {
         options |= WildOpts::ICASE;
     }
 

@@ -27,7 +27,7 @@ use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::message::e_no_spell;
 use crate::message::state::did_emsg;
 use crate::message::{emsg, str2special_save};
-use crate::option::vars::{p_cpo, p_enc};
+use crate::option::vars::{P_CPO, p_cpo, p_enc};
 use crate::optionstr::empty_option;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::time::{os_localtime_r, os_strptime, tm_zeroed};
@@ -426,8 +426,8 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut patbuf = NumBuf::new();
     // 'cpoptions' is cleared around the split so that its flags cannot
     // change what the pattern means.
-    let save_cpo = p_cpo.get();
-    p_cpo.set(empty_option());
+    let save_cpo = p_cpo();
+    P_CPO.set(empty_option());
     // SAFETY throughout: the arguments are live typvals, `patbuf` outlives the calls
     // that may fill it, and the compiled program is freed before returning.
     let str = arg_string(&mut numbuf, &args[0]);
@@ -455,7 +455,7 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             unsafe { vim_regfree(prog) };
         }
     }
-    p_cpo.set(save_cpo);
+    P_CPO.set(save_cpo);
 }
 
 /// Append `str`'s pieces to `list`, separating on `prog`.
@@ -533,7 +533,7 @@ pub fn f_strftime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let mut conv: VimConv = CONV_NONE_INIT;
     let enc = unsafe { enc_locale() };
-    let _ = unsafe { convert_setup(&raw mut conv, p_enc.get(), enc) };
+    let _ = unsafe { convert_setup(&raw mut conv, p_enc(), enc) };
     if conv.vc_type != CONV_NONE {
         p = unsafe { string_convert(&raw mut conv, p, ptr::null_mut()) };
     }
@@ -546,7 +546,7 @@ pub fn f_strftime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     // The reverse conversion reuses `conv`, so it must be set up again
     // in the other direction before the result is converted back.
-    let _ = unsafe { convert_setup(&raw mut conv, enc, p_enc.get()) };
+    let _ = unsafe { convert_setup(&raw mut conv, enc, p_enc()) };
     result.write_string(if conv.vc_type != CONV_NONE {
         unsafe { string_convert(&raw mut conv, out.as_mut_ptr(), ptr::null_mut()) }
     } else {
@@ -572,7 +572,7 @@ pub fn f_strptime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let str = arg_string(&mut str_buf, &args[1]) as *mut c_char;
     let mut conv: VimConv = CONV_NONE_INIT;
     let enc = unsafe { enc_locale() };
-    let _ = unsafe { convert_setup(&raw mut conv, p_enc.get(), enc) };
+    let _ = unsafe { convert_setup(&raw mut conv, p_enc(), enc) };
     if conv.vc_type != CONV_NONE {
         fmt = unsafe { string_convert(&raw mut conv, fmt, ptr::null_mut()) };
     }

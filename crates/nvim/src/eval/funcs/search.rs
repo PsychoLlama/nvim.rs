@@ -20,7 +20,7 @@ use crate::memline::{decl, incl};
 use crate::message_fmt::c_str;
 use crate::normal::find_decl;
 use crate::option::set_option_value_give_err;
-use crate::option::vars::{p_cpo, p_ws};
+use crate::option::vars::{P_CPO, P_WS, p_cpo, p_ws};
 use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::pos::equalpos;
@@ -97,17 +97,17 @@ const FLAG_BITS: [(u8, c_int); 8] = [
 /// The flag parser writes the option directly (that is what `w` and `W`
 /// mean) and every caller restores it, including on the error paths the C
 /// reaches with `goto theend`.
-struct SavedWrapScan(c_int);
+struct SavedWrapScan(bool);
 
 impl SavedWrapScan {
     fn new() -> Self {
-        SavedWrapScan(p_ws.get())
+        SavedWrapScan(p_ws())
     }
 }
 
 impl Drop for SavedWrapScan {
     fn drop(&mut self) {
-        p_ws.set(self.0);
+        P_WS.set(self.0);
     }
 }
 
@@ -131,8 +131,8 @@ fn search_direction(varp: Option<&TypVal>, flags: &mut c_int) -> c_int {
     while unsafe { *p } as c_int != NUL {
         match unsafe { *p } as u8 {
             b'b' => dir = BACKWARD as c_int,
-            b'w' => p_ws.set(1),
-            b'W' => p_ws.set(0),
+            b'w' => P_WS.set(true),
+            b'W' => P_WS.set(false),
             letter => match FLAG_BITS.iter().find(|&&(l, _)| l == letter) {
                 Some(&(_, mask)) => *flags |= mask,
                 None => {
@@ -395,7 +395,7 @@ fn searchpair_cmn(args: &[TypVal], match_pos: Option<&mut Pos>) -> c_int {
 
     // `r` implies `W`; without it the repeat would wrap forever.
     if flags & SP_REPEAT != 0 {
-        p_ws.set(0);
+        P_WS.set(false);
     }
 
     // The optional {skip}, {stopline} and {timeout}. As in search(),
@@ -489,22 +489,22 @@ struct EmptyCpo(*mut c_char);
 
 impl EmptyCpo {
     fn new() -> Self {
-        let saved = p_cpo.get();
-        p_cpo.set(empty_option());
+        let saved = p_cpo();
+        P_CPO.set(empty_option());
         EmptyCpo(saved)
     }
 }
 
 impl Drop for EmptyCpo {
     fn drop(&mut self) {
-        if is_empty_option(p_cpo.get()) {
-            p_cpo.set(self.0);
+        if is_empty_option(p_cpo()) {
+            P_CPO.set(self.0);
             return;
         }
         // SAFETY: `self.0` is the string the option owned on entry and is
         // still live; `set_option_value_give_err` copies it and
         // `free_string_option` then releases our claim on it.
-        if unsafe { *p_cpo.get() } == 0 {
+        if unsafe { *p_cpo() } == 0 {
             set_option_value_give_err(
                 kOptCpoptions,
                 OptVal::string(unsafe { cstr_to_string(self.0) }),

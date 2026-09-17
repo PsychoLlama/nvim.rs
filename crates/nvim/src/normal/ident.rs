@@ -352,7 +352,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     // 'keywordprg', which decides what `K` does.
     // SAFETY: 'keywordprg' is a NUL-terminated option string.
     let kp = if unsafe { *Buf::current().b_p_kp } as c_int == NUL {
-        p_kp.get()
+        p_kp()
     } else {
         Buf::current().b_p_kp
     };

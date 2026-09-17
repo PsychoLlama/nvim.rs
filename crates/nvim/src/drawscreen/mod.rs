@@ -72,8 +72,8 @@ use crate::r#move::{
 };
 use crate::normal::{clear_showcmd, do_check_scrollbind};
 use crate::option::vars::{
-    dy_flags, p_ch, p_columns, p_hls, p_icon, p_lines, p_lz, p_paste, p_rdt, p_ri, p_ru, p_sc,
-    p_sloc, p_smd, p_title, p_wbr, p_wmw,
+    P_CH, P_COLUMNS, P_LINES, dy_flags, p_ch, p_hls, p_icon, p_lz, p_paste, p_rdt, p_ri, p_ru,
+    p_sc, p_sloc, p_smd, p_title, p_wbr, p_wmw,
 };
 use crate::option::{get_ve_flags, shortmess};
 use crate::options::{kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock};
@@ -205,8 +205,7 @@ pub fn conceal_check_cursor_line() {
 /// -- i.e. inside a mapping or a script -- unless something asked for a redraw
 /// explicitly.
 pub fn redrawing() -> bool {
-    RedrawingDisabled.get() == 0
-        && !(p_lz.get() != 0 && char_avail() && !KeyTyped.get() && !do_redraw.get())
+    RedrawingDisabled.get() == 0 && !(p_lz() && char_avail() && !KeyTyped.get() && !do_redraw.get())
 }
 
 /// Put the screen back together after messages scrolled it up.
@@ -229,7 +228,7 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
     if mg.is_allocated() {
         for i in 0..scrollsize.min(mg.rows) {
             let (off, cols) = (mg.row_start(i), mg.cols);
-            mg.clear_line(off, cols, (i as OptInt) < p_ch.get());
+            mg.clear_line(off, cols, (i as OptInt) < p_ch());
         }
     }
     mg.throttled = false;
@@ -240,7 +239,7 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
         was_invalidated = ui_comp_set_screen_valid(false);
         let mut dg = default_grid_ref();
         let mut row = valid;
-        while (row as OptInt) < Rows.get() as OptInt - p_ch.get() {
+        while (row as OptInt) < Rows.get() as OptInt - p_ch() {
             let off = dg.row_start(row);
             dg.clear_line(off, Columns.get(), false);
             row += 1;
@@ -258,12 +257,12 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
                 wp.w_redr_status = true;
             }
         }
-        if is_stl_global && Rows.get() as OptInt - p_ch.get() - 1 > valid as OptInt {
+        if is_stl_global && Rows.get() as OptInt - p_ch() - 1 > valid as OptInt {
             Win::current().w_redr_status = true;
         }
     }
 
-    msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false);
+    msg_grid_set_pos(Rows.get() - p_ch() as c_int, false);
     msg_grid_invalid.set(false);
     if was_invalidated {
         // Only the message area was invalid, not the floats.
@@ -394,7 +393,7 @@ pub fn update_screen() -> Result<(), Failed> {
     if redr_type == UPD_NOT_VALID && clear_cmdline.get() && !ui_has(kUIMessages) {
         grid_clear(
             default_gridview(),
-            Rows.get() - p_ch.get() as c_int,
+            Rows.get() - p_ch() as c_int,
             Rows.get(),
             0,
             Columns.get(),
@@ -596,7 +595,7 @@ impl SearchHl {
 
 /// Compile the `'hlsearch'` pattern for the redraw that is starting.
 pub fn start_search_hl() {
-    if p_hls.get() == 0 || no_hlsearch.get() {
+    if !p_hls() || no_hlsearch.get() {
         return;
     }
     end_search_hl(); // just in case it was not called before
@@ -605,7 +604,7 @@ pub fn start_search_hl() {
     // redraw's matcher.
     unsafe { last_pat_prog(hl.regmatch()) };
     // Bound the search by 'redrawtime'.
-    hl.set_time_limit(profile_setlimit(p_rdt.get() as int64_t));
+    hl.set_time_limit(profile_setlimit(p_rdt() as int64_t));
 }
 
 /// Free the compiled `'hlsearch'` pattern.
@@ -666,10 +665,10 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
 /// leaves one for the current window).
 pub fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
     let fdc = win_fdccol_count(window);
-    let min_width = if window.raw() == Win::current_raw() && p_wmw.get() == 0 {
+    let min_width = if window.raw() == Win::current_raw() && p_wmw() == 0 {
         1
     } else {
-        p_wmw.get() as c_int
+        p_wmw() as c_int
     };
     fdc.min(window.w_view_width - (col + min_width))
 }

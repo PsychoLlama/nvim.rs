@@ -107,7 +107,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
         Buf::current().b_op_end = op.end;
     }
 
-    if OptInt::from(op.line_count) > p_report.get() {
+    if OptInt::from(op.line_count) > p_report() {
         let n = ::core::ffi::c_ulong::try_from(op.line_count)
             .expect("an operator's line count is never negative");
         let fmt = ngettext(c"%ld line changed", c"%ld lines changed", n);

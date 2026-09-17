@@ -120,7 +120,7 @@ fn insert_enter(s: &mut InsertState) {
 
     setmouse();
     clear_showcmd();
-    revins_on.set(State.get() == MODE_INSERT && p_ri.get() != 0);
+    revins_on.set(State.get() == MODE_INSERT && p_ri());
     if revins_on.get() {
         undisplay_dollar();
     }
@@ -154,7 +154,7 @@ fn insert_enter(s: &mut InsertState) {
     // `showmode`'s answer is how many lines the message took, which
     // `change_warning` needs so its own message lands below it.
     s.i = 0;
-    if p_smd.get() != 0 && msg_silent.get() == 0 {
+    if p_smd() && msg_silent.get() == 0 {
         s.i = showmode();
     }
     if did_restart_edit.get() == 0 {

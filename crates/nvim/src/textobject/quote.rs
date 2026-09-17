@@ -260,7 +260,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         vis_bef_curs = lt(visual_anchor(), Win::current().w_cursor);
         vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+        if unsafe { *p_sel() } as c_int == 'e' as c_int {
             if vis_bef_curs {
                 // SAFETY: the cursor is on a line of the current buffer.
                 dec_cursor();
@@ -321,7 +321,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
     else {
         // `abort_search`: undo the 'selection' adjustment made above.
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if visual_active() && unsafe { *p_sel.get() } as c_int == 'e' as c_int {
+        if visual_active() && unsafe { *p_sel() } as c_int == 'e' as c_int {
             if did_exclusive_adj {
                 // SAFETY: the cursor is on a line of the current buffer.
                 inc_cursor();
@@ -389,7 +389,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
             // Step the cursor back when 'selection' is not exclusive.
             // SAFETY: 'selection' is a NUL-terminated option string, and the
             // cursor is on a line of the current buffer.
-            if unsafe { *p_sel.get() } as c_int != 'e' as c_int {
+            if unsafe { *p_sel() } as c_int != 'e' as c_int {
                 dec_cursor();
             }
         } else {

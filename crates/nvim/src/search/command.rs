@@ -652,7 +652,7 @@ pub unsafe fn do_search(
                     });
                 let (at, cursor) = (&raw mut pos, Win::current().cursor().raw());
                 let (msg, msglen) = (echo.buf.as_ptr(), echo.len);
-                let (top_bot, maxcount) = (show_top_bot_msg, p_msc.get() as c_int);
+                let (top_bot, maxcount) = (show_top_bot_msg, p_msc() as c_int);
                 let tm = SEARCH_STAT_DEF_TIMEOUT;
                 // SAFETY: `pos` is this frame's, `cursor` the live window's,
                 // and `msg` the echoed search command's own buffer.
@@ -710,7 +710,7 @@ pub unsafe fn do_search(
 /// `'matchpairs'` is `"x:y,x:y"`: the opening character of each pair
 /// blinks in left-to-right mode and the closing one in right-to-left.
 fn mps_shows_match(c: c_int) -> bool {
-    let rightleft = Win::current().w_onebuf_opt.wo_rl ^ p_ri.get() != 0;
+    let rightleft = (Win::current().w_onebuf_opt.wo_rl != 0) ^ p_ri();
     let mut p = Buf::current().b_p_mps;
     while unsafe { *p } as c_int != NUL {
         if unsafe { utf_ptr2char(p) } == c && rightleft {
@@ -794,9 +794,9 @@ pub fn showmatch(c: c_int) {
     // Brief pause, unless 'm' is present in 'cpo' and a character is
     // available.
     if cpo_has(CpoFlag::SHOWMATCH) {
-        os_delay(p_mat.get() as u64 * 100 + 8, true);
+        os_delay(p_mat() as u64 * 100 + 8, true);
     } else if !char_avail() {
-        os_delay(p_mat.get() as u64 * 100 + 9, false);
+        os_delay(p_mat() as u64 * 100 + 9, false);
     }
 
     Win::current().w_cursor = save_cursor; // restore cursor position

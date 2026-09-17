@@ -70,7 +70,7 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 pub fn has_format_option(x: FoFlag) -> bool {
     // The dereference stays behind the `&&`: with no current buffer the
     // left half is what keeps the right one from running.
-    unsafe { p_paste.get() == 0 && x.is_in(CStr::from_ptr(Buf::current().b_p_fo)) }
+    unsafe { !p_paste() && x.is_in(CStr::from_ptr(Buf::current().b_p_fo)) }
 }
 
 /// `WHITECHAR` (`v0.12.4:textformat.c:50`): `cc` is white space, and the

@@ -346,7 +346,7 @@ pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
 pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state.
     let ns = unsafe { NormalStateRef::new(s) };
-    let showing_mode = p_smd.get() != 0
+    let showing_mode = p_smd()
         && msg_silent.get() == 0
         && (restart_edit.get() != 0
             || visual_active()

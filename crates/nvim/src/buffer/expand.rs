@@ -205,7 +205,7 @@ pub unsafe fn expand_buf_names(
                     }
                     return Err(Failed);
                 }
-                p = buflist_match(&mut regmatch, buf, p_wic.get() != 0);
+                p = buflist_match(&mut regmatch, buf, p_wic());
             } else {
                 // First try matching with the short file name.
                 score = fuzzy_score(buf.b_sfname, pat);
@@ -349,7 +349,7 @@ fn fname_match(rmp: &mut RegMatch, name: *mut c_char, ignore_case: bool) -> *mut
     }
 
     // Ignore case when 'fileignorecase' or the argument is set.
-    rmp.rm_ic = p_fic.get() != 0 || ignore_case;
+    rmp.rm_ic = p_fic() || ignore_case;
     if regexec(rmp, name) {
         return name;
     }

@@ -310,7 +310,7 @@ pub(crate) unsafe fn do_ecmd(
         // What "may we abandon this buffer" should take into account.  Plain
         // arithmetic, so it belongs outside the call's region.
         let mut ccgd = 0;
-        if p_awa.get() != 0 {
+        if p_awa() {
             ccgd |= CCGD_AW as c_int;
         }
         if !other_file {
@@ -560,7 +560,7 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // the reload can be undone.  Do not do this if the (empty) buffer is
     // being re-used for another file.
     if !Buf::current().b_flags.has(BufFlags::NEVERLOADED)
-        && (p_ur.get() < 0 || Buf::current().b_ml.ml_line_count as OptInt <= p_ur.get())
+        && (p_ur() < 0 || Buf::current().b_ml.ml_line_count as OptInt <= p_ur())
     {
         // Sync first so that this is a separate undo-able action.
         u_sync(false);
@@ -701,7 +701,7 @@ fn place_cursor(state: &Ecmd) {
         // line number from caller or old position
         Win::current().w_cursor.lnum = state.newlnum;
         check_cursor_lnum(Win::current());
-        if state.solcol >= 0 && p_sol.get() == 0 {
+        if state.solcol >= 0 && !p_sol() {
             // 'sol' is off: use the last known column.
             Win::current().w_cursor.col = state.solcol;
             check_cursor_col(Win::current());
@@ -726,7 +726,7 @@ fn report_file_info() {
     if shortmess(ShmFlag::OVERALL)
         && msg_listdo_overwrite.get() == 0
         && !exiting.get()
-        && p_verbose.get() == 0
+        && p_verbose() == 0
     {
         msg_scroll.set(0);
     }

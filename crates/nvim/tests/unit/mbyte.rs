@@ -24,7 +24,7 @@ use neovim::mbyte::{
     utf_ptr2char_info, utf_ptr2len, utf_ptr2len_len, utf_ptr2str_char_info, utfc_next,
     utfc_ptr2len, utfc_ptr2schar,
 };
-use neovim::option::vars::p_arshape;
+use neovim::option::vars::P_ARSHAPE;
 
 use crate::support::editor_lock;
 
@@ -488,18 +488,18 @@ fn every_byte_points_back_at_the_start_of_its_grapheme_cluster() {
     // `'arabicshape'` joins lam-alef into one cluster; with it off they stay
     // two. This is the only fixture whose clustering an option decides, and
     // the only reason this file needs the editor lock for more than `curbuf`.
-    let saved = p_arshape.get();
-    p_arshape.set(1);
+    let saved = P_ARSHAPE.get();
+    P_ARSHAPE.set(true);
     check(
         b"\xd8\xb3\xd9\x84\xd8\xa7\xd9\x85",
         &[b"\xd8\xb3", b"\xd9\x84\xd8\xa7", b"\xd9\x85"],
     );
-    p_arshape.set(0);
+    P_ARSHAPE.set(false);
     check(
         b"\xd8\xb3\xd9\x84\xd8\xa7\xd9\x85",
         &[b"\xd8\xb3", b"\xd9\x84", b"\xd8\xa7", b"\xd9\x85"],
     );
-    p_arshape.set(saved);
+    P_ARSHAPE.set(saved);
 }
 
 /// `#30527`: folding is a table lookup, and the table does not cover the

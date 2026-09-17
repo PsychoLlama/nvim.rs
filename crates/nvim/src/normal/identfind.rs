@@ -29,7 +29,7 @@ use crate::message::state::msg_silent;
 use crate::message::{emsg, messaging};
 use crate::normal::{FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, clear_op_beep};
 use crate::option::shortmess;
-use crate::option::vars::{fdo_flags, p_scs, p_ws};
+use crate::option::vars::{P_SCS, P_WS, fdo_flags, p_scs, p_ws};
 use crate::options::kOptFdoFlagSearch;
 use crate::os::cshim::{gettext, snprintf};
 use crate::pos::clearpos;
@@ -369,11 +369,11 @@ pub(crate) unsafe fn find_decl(
     let patlen = unsafe { snprintf(pat, patsize, fmt, len as c_int, word) } as size_t;
 
     let old_pos = Win::current().w_cursor;
-    let save_p_ws = p_ws.get();
-    let save_p_scs = p_scs.get();
+    let save_p_ws = p_ws();
+    let save_p_scs = p_scs();
     // The search must not wrap round the file or guess at case.
-    p_ws.set(0);
-    p_scs.set(0);
+    P_WS.set(false);
+    P_SCS.set(false);
 
     // Where the enclosing block starts, which is as far back as a local
     // declaration may be.
@@ -487,7 +487,7 @@ pub(crate) unsafe fn find_decl(
     }
     // SAFETY: `pat` came from `xmalloc` above and is not used again.
     unsafe { xfree(pat as *mut c_void) };
-    p_ws.set(save_p_ws);
-    p_scs.set(save_p_scs);
+    P_WS.set(save_p_ws);
+    P_SCS.set(save_p_scs);
     found
 }

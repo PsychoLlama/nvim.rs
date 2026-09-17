@@ -129,14 +129,14 @@ unsafe fn pick_shell_style(num_pat: c_int, pat: *mut *mut c_char) -> ShellStyle 
                 return ShellStyle::Backtick;
             }
         }
-        let sh = CStr::from_ptr(p_sh.get()).to_bytes();
+        let sh = CStr::from_ptr(p_sh()).to_bytes();
         if sh.ends_with(b"csh") {
             return ShellStyle::Glob;
         }
         if sh.ends_with(b"zsh") {
             return ShellStyle::Print;
         }
-        let tail = CStr::from_ptr(path_tail(p_sh.get())).to_bytes();
+        let tail = CStr::from_ptr(path_tail(p_sh())).to_bytes();
         if contains(tail, b"bash") {
             ShellStyle::GlobStar
         } else if contains(tail, b"sh") {
@@ -156,7 +156,7 @@ fn contains(haystack: &[u8], needle: &[u8]) -> bool {
 fn is_fish_shell() -> bool {
     // SAFETY: `p_sh` is a NUL-terminated option value, and
     // `invocation_path_tail` answers a pointer inside it.
-    unsafe { CStr::from_ptr(invocation_path_tail(p_sh.get(), ptr::null_mut())).to_bytes() }
+    unsafe { CStr::from_ptr(invocation_path_tail(p_sh(), ptr::null_mut())).to_bytes() }
         .starts_with(b"fish")
 }
 

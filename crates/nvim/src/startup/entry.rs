@@ -56,7 +56,7 @@ use crate::mouse::setmouse;
 use crate::r#move::update_topline;
 use crate::msgpack_rpc::server::{server_init, server_teardown};
 use crate::normal::{check_scrollbind, normal_enter};
-use crate::option::vars::{cb_flags, p_ch, p_lpl, p_shada, p_uc, p_ut};
+use crate::option::vars::{P_LPL, P_UC, P_UT, cb_flags, p_ch, p_shada};
 use crate::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
 use crate::os::cshim::{gettext, stderr, stdout};
 use crate::os::env::{env_init, init_homedir, os_hint_priority};
@@ -314,12 +314,12 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     debug_assert!(
-        p_ch.get() >= 0
-            && Rows.get() as OptInt >= p_ch.get()
-            && Rows.get() as OptInt - p_ch.get() <= c_int::MAX as OptInt,
+        p_ch() >= 0
+            && Rows.get() as OptInt >= p_ch()
+            && Rows.get() as OptInt - p_ch() <= c_int::MAX as OptInt,
         "'cmdheight' does not fit in the screen"
     );
-    cmdline_row.set(Rows.get() - p_ch.get() as c_int);
+    cmdline_row.set(Rows.get() - p_ch() as c_int);
     msg_row.set(cmdline_row.get());
     default_grid_alloc();
 
@@ -383,7 +383,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     // the defaults.
     let vimrc_none = unsafe { strequal(params.use_vimrc, c"NONE".as_ptr()) };
     if vimrc_none {
-        p_lpl.set(params.clean as c_int);
+        P_LPL.set(params.clean);
     }
 
     unsafe { exe_pre_commands(&raw mut params) };
@@ -411,13 +411,13 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     time_msg_at(c"inits 3");
 
     if params.no_swap_file != 0 {
-        p_uc.set(0 as OptInt);
+        P_UC.set(0 as OptInt);
     }
     if silent_mode.get() {
-        p_ut.set(1 as OptInt);
+        P_UT.set(1 as OptInt);
     }
 
-    if unsafe { *p_shada.get() } as c_int != NUL {
+    if unsafe { *p_shada() } as c_int != NUL {
         let _ = unsafe { shada_read_everything(ptr::null(), false, true) };
         time_msg_at(c"reading ShaDa");
     }

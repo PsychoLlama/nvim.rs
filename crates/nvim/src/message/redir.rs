@@ -38,7 +38,7 @@ pub(crate) static redir_col: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Is `'verbosefile'` set to anything?
 fn verbosefile_set() -> bool {
-    unsafe { *p_vfile.get() != 0 }
+    unsafe { *p_vfile() != 0 }
 }
 
 /// [`msg_keep`] inside a `verbose_enter`/`verbose_leave` pair.
@@ -224,10 +224,10 @@ pub fn verbose_open() -> Result<(), Failed> {
     if verbose_fd.get().is_null() && !verbose_did_open.get() {
         // Only give the error message once.
         verbose_did_open.set(true);
-        verbose_fd.set(unsafe { os_fopen(p_vfile.get(), c"a".as_ptr()) });
+        verbose_fd.set(unsafe { os_fopen(p_vfile(), c"a".as_ptr()) });
         if verbose_fd.get().is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(p_vfile.get()) };
+            let arg0 = unsafe { c_str(p_vfile()) };
             semsg!("E484: Can't open file {arg0}");
             return Err(Failed);
         }

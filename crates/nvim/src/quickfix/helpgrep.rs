@@ -176,7 +176,7 @@ unsafe fn wanted_language(lang: *const c_char, fname: *const c_char) -> bool {
 unsafe fn hgr_search_in_rtp(qfl: *mut QfList, p_regmatch: *mut RegMatch, lang: *const c_char) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     // SAFETY: forwarded from the caller; `dir` holds MAXPATHL bytes.
-    let mut p = p_rtp.get();
+    let mut p = p_rtp();
     while unsafe { *p } as c_int != NUL && !got_int.get() {
         let option = &raw mut p;
         let maxlen = MAXPATHL as size_t;
@@ -205,8 +205,8 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
     }
 
     // Make 'cpoptions' empty, the 'l' flag should not be used here.
-    let save_cpo = p_cpo.get();
-    p_cpo.set(empty_option());
+    let save_cpo = p_cpo();
+    P_CPO.set(empty_option());
 
     let mut new_qi = false;
     if is_loclist_cmd(excmd.cmdidx) {
@@ -237,12 +237,12 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
         qfl_changed(qfl);
     }
 
-    if is_empty_option(p_cpo.get()) {
-        p_cpo.set(save_cpo);
+    if is_empty_option(p_cpo()) {
+        P_CPO.set(save_cpo);
     } else {
         // Darn, some plugin changed the value. If it's still empty it
         // was changed and restored, need to restore the complicated way.
-        if unsafe { *p_cpo.get() } as c_int == NUL {
+        if unsafe { *p_cpo() } as c_int == NUL {
             set_option_value_give_err(
                 kOptCpoptions,
                 // SAFETY: the saved value is NUL-terminated and freed just

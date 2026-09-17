@@ -418,7 +418,10 @@ pub(crate) unsafe fn did_set_option(
     {
         errmsg = e_secure.as_ptr();
     } else if new_value.as_string().is_some()
-        && check_illegal_path_names(unsafe { CStr::from_ptr(*varp.string_var()) }, opt.flags)
+        && check_illegal_path_names(
+            unsafe { CStr::from_ptr(varp.string_var().get()) },
+            opt.flags,
+        )
     {
         errmsg = e_invarg.as_ptr();
     } else if let Some(did_set_cb) = opt.opt_did_set_cb {

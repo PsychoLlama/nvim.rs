@@ -140,12 +140,12 @@ impl Opening {
             && keys.split.is_none()
         {
             self.config.split = if vertical {
-                if p_spr.get() != 0 {
+                if p_spr() {
                     kWinSplitRight
                 } else {
                     kWinSplitLeft
                 }
-            } else if p_sb.get() != 0 {
+            } else if p_sb() {
                 kWinSplitBelow
             } else {
                 kWinSplitAbove

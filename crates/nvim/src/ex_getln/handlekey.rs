@@ -551,7 +551,7 @@ fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
 
         // CTRL-_: switch language mode.
         Err(NotAKey(Ctrl__)) => {
-            if p_ari.get() == 0 {
+            if !p_ari() {
                 return None;
             }
             Some(command_line_not_changed(s))

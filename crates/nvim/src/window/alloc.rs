@@ -175,7 +175,7 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     let mut frame = attach_frame(win);
     topframe.set(Some(frame.id()));
     frame.fr_width = Columns.get();
-    frame.fr_height = Rows.get() - p_ch.get() as c_int - global_stl_rows();
+    frame.fr_height = Rows.get() - p_ch() as c_int - global_stl_rows();
     Ok(())
 }
 
@@ -192,10 +192,9 @@ pub(crate) fn attach_frame(window: Win) -> FrameRef {
 pub fn win_init_size() {
     let mut win = first_win();
     let mut top = current_topframe();
-    let rows = (Rows.get() as OptInt
-        - p_ch.get()
-        - tabline_rows() as OptInt
-        - global_stl_rows() as OptInt) as c_int;
+    let rows =
+        (Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
+            as c_int;
     win.w_height = rows;
     win.w_prev_height = rows;
     win.w_view_height = win.w_height - win.w_winbar_height;

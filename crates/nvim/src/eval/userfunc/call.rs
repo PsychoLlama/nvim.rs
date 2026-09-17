@@ -62,7 +62,7 @@ pub unsafe fn call_user_func(
     static depth: GlobalCell<c_int> = GlobalCell::new(0);
 
     // Don't execute the function when the call depth is getting too high.
-    if depth.get() as OptInt >= p_mfd.get() {
+    if depth.get() as OptInt >= p_mfd() {
         let deep = c"E132: Function call depth is higher than 'maxfuncdepth'";
         emsg(gettext(deep));
         rv.write_number(-1);
@@ -284,13 +284,13 @@ pub unsafe fn call_user_func(
     let sandboxed = (f.uf_flags.has(FuncFlags::SANDBOX)).then(Lock::sandbox);
 
     unsafe { estack_push_ufunc(func, 1) };
-    if p_verbose.get() >= 12 {
+    if p_verbose() >= 12 {
         verbose_report(|| {
             let called = sourcing_entry().es_name;
             // SAFETY: the message texts are literals and `es_name` is the // NUL-terminated name of the innermost exec-stack entry.
             let called = unsafe { c_str(called) };
             smsg!(0, "calling {called}");
-            if p_verbose.get() >= 14 {
+            if p_verbose() >= 14 {
                 msg_str(c"(");
                 for i in 0..argcount {
                     if i > 0 {
@@ -401,7 +401,7 @@ pub unsafe fn call_user_func(
         }
     }
 
-    if p_verbose.get() >= 12 {
+    if p_verbose() >= 12 {
         verbose_report(|| {
             let name = sourcing_entry().es_name;
             // SAFETY: `fc_rettv` is the return value the caller handed in,
@@ -449,7 +449,7 @@ pub unsafe fn call_user_func(
     }
     drop(sandboxed);
 
-    if p_verbose.get() >= 12 && !sourcing_entry().es_name.is_null() {
+    if p_verbose() >= 12 && !sourcing_entry().es_name.is_null() {
         verbose_report(|| {
             let name = sourcing_entry().es_name;
             // SAFETY: a literal text and the exec-stack entry's own name.

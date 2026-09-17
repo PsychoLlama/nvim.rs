@@ -119,7 +119,7 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
             win.w_view_width,
             width1,
             win.sidescrolloff(),
-            p_ss.get(),
+            p_ss(),
         );
         if let Some(new_leftcol) = scrolled
             && new_leftcol != win.w_leftcol

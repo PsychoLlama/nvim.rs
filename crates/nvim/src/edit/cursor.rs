@@ -41,7 +41,7 @@ crate::flag_set! {
 /// carries.
 pub(crate) fn beginline(flags: BeginlineOpts) {
     let mut win = Win::current();
-    if flags.has(BeginlineOpts::SOL) && p_sol.get() == 0 {
+    if flags.has(BeginlineOpts::SOL) && !p_sol() {
         // SAFETY: `curwin` is live for the whole session.
         let want = win.w_curswant;
         coladvance_win(win, want);

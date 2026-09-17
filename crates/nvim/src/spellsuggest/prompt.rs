@@ -321,7 +321,7 @@ unsafe fn show_suggestion(i: c_int, stp: &Suggest, badlen: c_int, badptr: *mut c
         msg_str(unsafe { cstr::at(out) });
     }
 
-    if p_verbose.get() > 0 {
+    if p_verbose() > 0 {
         show_score(stp);
     }
 }

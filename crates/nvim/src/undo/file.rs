@@ -73,7 +73,7 @@ pub unsafe fn u_get_undo_file_name(buf_ffname: *const c_char, reading: bool) -> 
     // do not collide. Built once, whatever the list holds.
     let mut munged: *mut c_char = ptr::null_mut();
     let mut undo_file_name: *mut c_char = ptr::null_mut();
-    let mut dirp: *mut c_char = p_udir.get();
+    let mut dirp: *mut c_char = p_udir();
     // SAFETY: 'undodir' is a NUL-terminated option string, and the walk stops
     // at that NUL.
     while unsafe { *dirp } != NUL as c_char {

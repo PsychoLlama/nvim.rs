@@ -174,7 +174,7 @@ impl FindTags {
                 end += 1;
             }
             unsafe { *line.add(end) = 0 };
-            let _ = unsafe { convert_setup(&raw mut self.vimconv, line.add(20), p_enc.get()) };
+            let _ = unsafe { convert_setup(&raw mut self.vimconv, line.add(20), p_enc()) };
         }
         // Read the next line; an unrecognised flag is ignored.
         false
@@ -206,7 +206,7 @@ impl FindTags {
             b'2' => {
                 // Sorted with case folded.
                 margs.sortic = true;
-                self.orgpat.regmatch.rm_ic = p_ic.get() != 0 || !noic;
+                self.orgpat.regmatch.rm_ic = p_ic() || !noic;
                 Reading::Binary
             }
             _ => Reading::Linear,
@@ -277,8 +277,8 @@ impl FindTags {
 
         // How much of the two names to compare.
         let mut cmplen = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as c_int;
-        if p_tl.get() != 0 && cmplen as OptInt > p_tl.get() {
-            cmplen = p_tl.get() as c_int;
+        if p_tl() != 0 && cmplen as OptInt > p_tl() {
+            cmplen = p_tl() as c_int;
         }
         if margs.has_re && self.orgpat.headlen < cmplen {
             cmplen = self.orgpat.headlen;
@@ -393,8 +393,8 @@ impl FindTags {
         // line buffer; the terminator written over `tagname_end` for the
         // regexp is put back before returning.
         let mut cmplen = unsafe { tagp.tagname_end.offset_from(tagp.tagname) } as c_int;
-        if p_tl.get() != 0 && cmplen as OptInt > p_tl.get() {
-            cmplen = p_tl.get() as c_int;
+        if p_tl() != 0 && cmplen as OptInt > p_tl() {
+            cmplen = p_tl() as c_int;
         }
         debug_assert!(cmplen >= 0);
         let len = cmplen as usize;

@@ -413,7 +413,7 @@ pub unsafe fn set_chars_option<'a>(
     };
     // An empty local value defers to the global one.
     let value = if unsafe { c_int::from(*local) } == NUL {
-        if listchars { p_lcs.get() } else { p_fcs.get() }
+        if listchars { p_lcs() } else { p_fcs() }
     } else {
         value.cast_mut()
     };
@@ -747,11 +747,13 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
     } else {
         kFillchars
     };
-    // The comparisons are of addresses only.
+    // Which variable it is, not what it says.
     if varp == option_var(idx).string_var() {
-        unsafe { did_set_global_chars_option(win, *varp, which, flags, errbuf, errbuflen) }
-    } else if varp == &raw mut win.w_onebuf_opt.wo_lcs || varp == &raw mut win.w_onebuf_opt.wo_fcs {
-        unsafe { set_chars_option(win, *varp, which, true, errbuf, errbuflen) }
+        unsafe { did_set_global_chars_option(win, varp.get(), which, flags, errbuf, errbuflen) }
+    } else if varp == crate::option::StrVar::Local(&raw mut win.w_onebuf_opt.wo_lcs)
+        || varp == crate::option::StrVar::Local(&raw mut win.w_onebuf_opt.wo_fcs)
+    {
+        unsafe { set_chars_option(win, varp.get(), which, true, errbuf, errbuflen) }
     } else {
         None
     }
@@ -793,10 +795,10 @@ pub fn check_chars_options() -> Option<&'static CStr> {
         }
     };
 
-    if let Some(global) = check(Win::current(), p_lcs.get(), kListchars, false) {
+    if let Some(global) = check(Win::current(), p_lcs(), kListchars, false) {
         return Some(global);
     }
-    if let Some(global) = check(Win::current(), p_fcs.get(), kFillchars, false) {
+    if let Some(global) = check(Win::current(), p_fcs(), kFillchars, false) {
         return Some(global);
     }
     for_each_window(|wp| {

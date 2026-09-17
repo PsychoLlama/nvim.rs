@@ -77,7 +77,7 @@ pub(crate) unsafe fn list_functions_matching_pat(excmd: &mut ExArg) -> *mut c_ch
         regmatch.regprog = unsafe { vim_regcomp(excmd.arg.add(1), RE_MAGIC) };
         unsafe { *p = c };
         if !regmatch.regprog.is_null() {
-            regmatch.rm_ic = p_ic.get() != 0;
+            regmatch.rm_ic = p_ic();
             unsafe { list_functions(&raw mut regmatch) };
             unsafe { vim_regfree(regmatch.regprog) };
         }

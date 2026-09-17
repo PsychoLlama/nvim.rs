@@ -734,9 +734,7 @@ impl Run {
         }
         self.count += 1;
 
-        if p_verbose.get() >= 15 && !sourcing_entry().es_name.is_null()
-            || p_verbose.get() >= 16 as OptInt
-        {
+        if p_verbose() >= 15 && !sourcing_entry().es_name.is_null() || p_verbose() >= 16 as OptInt {
             // SAFETY: `copy` is this run's NUL-terminated line.
             unsafe { msg_verbose_cmd(sourcing_lnum(), self.copy) };
         }

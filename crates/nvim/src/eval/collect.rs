@@ -263,7 +263,7 @@ pub fn garbage_collect(testing: bool) -> bool {
 
     // 2. Free what nothing marked — but only if every root was seen.
     if abort {
-        if p_verbose.get() > 0 as OptInt {
+        if p_verbose() > 0 as OptInt {
             let msg = c"Not enough memory to set references, garbage collection aborted!";
             // SAFETY: the message is a NUL-terminated literal.
             unsafe { verb_msg(gettext(msg).as_ptr()) };

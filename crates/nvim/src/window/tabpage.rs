@@ -107,7 +107,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     // SAFETY: the dictionary just allocated, and the tab page's own scope.
     unsafe { init_var_dict(vars, scope, VAR_SCOPE) };
     tp.tp_diff_invalid = 1;
-    tp.tp_ch_used = p_ch.get();
+    tp.tp_ch_used = p_ch();
     tp
 }
 
@@ -290,7 +290,7 @@ fn in_window(tabpage: TabPage, body: impl FnOnce()) {
 /// `Rows - 'cmdheight' - tabline - global statusline`: the rows a tab page's
 /// windows may use.
 fn rows_avail() -> int64_t {
-    (Rows.get() as OptInt - p_ch.get() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
+    (Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
         as int64_t
 }
 
@@ -327,7 +327,7 @@ pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
 }
 
 pub fn make_tabpages(maxcount: c_int) -> c_int {
-    let count = maxcount.min(p_tpm.get() as c_int);
+    let count = maxcount.min(p_tpm() as c_int);
 
     // Don't execute autocommands while creating the tab pages: `curwin` and
     // `curbuf` are not set up yet.
@@ -476,12 +476,12 @@ fn enter_tab(
 
     if old_curtab.raw() != TabPage::current_raw() {
         check_tabpage_windows(old_curtab);
-        if p_ch.get() != TabPage::current().tp_ch_used {
+        if p_ch() != TabPage::current().tp_ch_used {
             // Use the stored value of 'cmdheight', which may differ per tab
             // page. Handle the other side effects, but avoid setting frame
             // sizes, which are still correct.
             let new_ch = TabPage::current().tp_ch_used;
-            TabPage::current().tp_ch_used = p_ch.get();
+            TabPage::current().tp_ch_used = p_ch();
             command_frame_height.set(false);
             set_cmdheight(new_ch);
             command_frame_height.set(true);

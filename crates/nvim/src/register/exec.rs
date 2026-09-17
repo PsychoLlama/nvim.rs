@@ -186,7 +186,7 @@ pub fn do_record(c: c_int) -> Result<(), Failed> {
     unsafe { fire_recording_leave(regname.get(), p) };
     reg_recorded.set(reg_recording.get());
     reg_recording.set(0);
-    if p_ch.get() == 0 || ui_has(kUIMessages) {
+    if p_ch() == 0 || ui_has(kUIMessages) {
         showmode();
     } else {
         // Clear the "recording @a" message.

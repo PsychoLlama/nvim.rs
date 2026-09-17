@@ -61,8 +61,8 @@ use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
 use crate::message::{e_interr, e_outofmem};
 use crate::message::{emsg, emsg_ptr, internal_error, msg_str, verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, report_msg};
-use crate::option::p_vfile;
 use crate::option::vars::p_verbose;
+use crate::option::vars::p_vfile;
 use crate::os::cshim::gettext_ptr;
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen};
@@ -460,7 +460,7 @@ pub(super) unsafe fn throw_exception(
 /// # Safety
 /// `mesg` holds one `%s` and `value` is NUL-terminated.
 unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
-    if p_verbose.get() < 13 && debug_break_level.get() <= 0 {
+    if p_verbose() < 13 && debug_break_level.get() <= 0 {
         return;
     }
     let debugging = debug_break_level.get() > 0;
@@ -470,7 +470,7 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
         verbose_enter();
     }
     let no_prompt = Suppress::wait_return();
-    if debug_break_level.get() > 0 || unsafe { *p_vfile.get() } == NUL as c_char {
+    if debug_break_level.get() > 0 || unsafe { *p_vfile() } == NUL as c_char {
         // Always scroll up, don't overwrite.
         msg_scroll.set(1);
     }
@@ -480,7 +480,7 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
     let _: bool = report_msg(0, || tr_plural!(template, value));
     // Don't overwrite this either.
     msg_str(c"\n");
-    if debug_break_level.get() > 0 || unsafe { *p_vfile.get() } == NUL as c_char {
+    if debug_break_level.get() > 0 || unsafe { *p_vfile() } == NUL as c_char {
         cmdline_row.set(msg_row.get());
     }
     drop(no_prompt);
@@ -507,7 +507,7 @@ pub(super) unsafe fn discard_exception(excp: *mut Exception, was_finished: bool)
     }
 
     // SAFETY: caller contract.
-    if p_verbose.get() >= 13 || debug_break_level.get() > 0 {
+    if p_verbose() >= 13 || debug_break_level.get() > 0 {
         // Upstream saves and restores `IObuff` around this, because the
         // report formatted through it and a caller may have been holding
         // a message there. Nothing shares a buffer here any more.
@@ -740,7 +740,7 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
 /// # Safety
 /// As [`report_pending`].
 unsafe fn report_if_verbose(action: PendingAction, pending: c_int, value: *mut c_void) {
-    if p_verbose.get() < 14 && debug_break_level.get() <= 0 {
+    if p_verbose() < 14 && debug_break_level.get() <= 0 {
         return;
     }
     let quiet = debug_break_level.get() <= 0;

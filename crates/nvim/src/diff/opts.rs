@@ -100,7 +100,7 @@ pub(crate) unsafe fn parse_diffanchors(
     num_anchors: *mut c_int,
 ) -> Result<(), Failed> {
     let mut dia = if unsafe { *buffer.b_p_dia } == 0 {
-        p_dia.get()
+        p_dia()
     } else {
         buffer.b_p_dia
     };
@@ -213,7 +213,7 @@ pub fn diffopt_changed() -> Result<(), Failed> {
     let mut algorithm_new: u64 = 0;
     let mut indent_heuristic: u64 = 0;
 
-    let base = p_dip.get();
+    let base = p_dip();
     let text = unsafe { CStr::from_ptr(base) }.to_bytes();
     // `getdigits_int` walks a `char *`, so the parse tracks an offset and
     // hands it the matching pointer where it needs one.

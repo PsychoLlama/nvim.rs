@@ -459,7 +459,7 @@ pub(crate) unsafe fn map_to_exists(
 ) -> bool {
     let mut buf: *mut c_char = ptr::null_mut();
     let out = &raw mut buf;
-    let cpo = p_cpo.get();
+    let cpo = p_cpo();
     let dolt = REPTERM_DO_LT.cast_signed();
     let simplify = ptr::null_mut();
     // SAFETY: the caller's promise — `str` is live and NUL-terminated.  The

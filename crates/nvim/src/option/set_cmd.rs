@@ -161,7 +161,7 @@ unsafe fn validate_opt_idx(
             *errmsg = E_NOT_ALLOWED_IN_MODELINE.as_ptr();
             return Err(Failed);
         }
-        if flags & kOptFlagMLE as uint32_t != 0 && p_mle.get() == 0 {
+        if flags & kOptFlagMLE as uint32_t != 0 && !p_mle() {
             *errmsg = E_MODELINE_NEEDS_MODELINEEXPR.as_ptr();
             return Err(Failed);
         }
@@ -311,7 +311,7 @@ unsafe fn get_option_newval(
                 // value unset.
                 oldval.as_boolean().map(|b| !b)
             } else if prefix == Prefix::Inv {
-                Some(unsafe { *varp.boolean_var() } == 0)
+                Some(unsafe { varp.boolean_var().get() } == 0)
             } else {
                 Some(prefix != Prefix::No)
             };
@@ -564,7 +564,7 @@ unsafe fn show_one(
 
     // With 'verbose' set, say where the value came from — from the
     // script context of the scope the value is being read from.
-    if p_verbose.get() <= 0 {
+    if p_verbose() <= 0 {
         return;
     }
     if varp == option_var(opt_idx) {

@@ -142,7 +142,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
 
     // With two or more tab pages and 'showtabline' at 1, the tabline appears
     // when the next tab is created, which resizes the first tab's windows.
-    let restore_stal = p_stal.get() == 1 && first_tab().is_some_and(|tp| tp.next().is_some());
+    let restore_stal = p_stal() == 1 && first_tab().is_some_and(|tp| tp.next().is_some());
     if restore_stal && !out.line(c"set stal=2") {
         return false;
     }
@@ -176,8 +176,8 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     // Re-apply 'winheight' and 'winwidth', which the layout pass set to 1.
     if !out.write(format_args!(
         "set winheight={} winwidth={}\n",
-        p_wh.get() as int64_t,
-        p_wiw.get() as int64_t
+        p_wh() as int64_t,
+        p_wiw() as int64_t
     )) {
         return false;
     }
@@ -186,7 +186,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     if opts.has(kOptSsopFlagOptions) {
         // SAFETY: 'shortmess' is a NUL-terminated option string, and its
         // bytes go out verbatim.
-        if !out.puts(c"set shortmess=") || !unsafe { out.bytes(p_shm.get()) } || !out.eol() {
+        if !out.puts(c"set shortmess=") || !unsafe { out.bytes(p_shm()) } || !out.eol() {
             return false;
         }
     } else if !out.line(c"let &shortmess = s:shortmess_save") {

@@ -499,7 +499,7 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
         unsafe { option_set_callback_func(buf.b_p_tsrfu, &raw mut buf.b_tsrfu_cb) }
     } else {
         // Global option set.
-        let retval = unsafe { tsrfu_cb().set_from_option(p_tsrfu.get()) };
+        let retval = unsafe { tsrfu_cb().set_from_option(p_tsrfu()) };
         // When using :set, free the local callback.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
             unsafe { callback_free(&raw mut buf.b_tsrfu_cb) };
@@ -557,7 +557,7 @@ pub(crate) fn get_complete_funcname(type_0: c_int) -> *mut c_char {
         CTRL_X_OMNI => Buf::current().b_p_ofu,
         CTRL_X_THESAURUS => {
             if unsafe { *Buf::current().b_p_tsrfu } as c_int == NUL {
-                p_tsrfu.get()
+                p_tsrfu()
             } else {
                 Buf::current().b_p_tsrfu
             }

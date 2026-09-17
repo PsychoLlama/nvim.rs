@@ -37,11 +37,10 @@ use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::tabstop_set;
 use crate::memory::{xfree, xstrchrnul};
 use crate::r#move::changed_window_setting;
-use crate::option::vars::{p_bin, p_et, p_ml, p_tw, p_wm};
+use crate::option::vars::{P_BIN, P_ET, P_ML, P_TW, P_WM, p_et, p_ml, p_tw, p_wm};
 use crate::options::*;
 use crate::optionstr::{
-    check_string_option, derive_breakat_flags, didset_string_options, empty_option,
-    set_chars_option,
+    derive_breakat_flags, didset_string_options, empty_option, set_chars_option,
 };
 use crate::os::cshim::strchr;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
@@ -62,11 +61,29 @@ use super::{
 
 /// What 'binary' overrode, so that switching it off again restores the
 /// values the user set rather than the defaults. The per-buffer copies live
-/// in `Buffer`; these are the global ones.
-pub(crate) static p_tw_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
-pub(crate) static p_wm_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
-pub(crate) static p_ml_nobin: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static p_et_nobin: GlobalCell<c_int> = GlobalCell::new(0);
+/// in `Buffer`; this is the global set, saved and restored as one.
+#[derive(Copy, Clone)]
+pub(crate) struct BinSave {
+    /// 'textwidth' and 'wrapmargin'.
+    pub(crate) tw: OptInt,
+    pub(crate) wm: OptInt,
+    /// 'modeline' and 'expandtab'.
+    pub(crate) ml: bool,
+    pub(crate) et: bool,
+}
+
+static SAVED: GlobalCell<BinSave> = GlobalCell::new(BinSave {
+    tw: 0,
+    wm: 0,
+    ml: false,
+    et: false,
+});
+
+/// What 'binary' has stashed, for the buffer-local copies `copy.rs` seeds
+/// from it.
+pub(crate) fn bin_save() -> BinSave {
+    SAVED.get()
+}
 
 /// The options 'binary' overrides while it is on, and so re-attributes to
 /// whatever script set 'binary'.
@@ -95,10 +112,12 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
                 buf.b_p_et_nobin = buf.b_p_et;
             }
             if global {
-                p_tw_nobin.set(p_tw.get());
-                p_wm_nobin.set(p_wm.get());
-                p_ml_nobin.set(p_ml.get());
-                p_et_nobin.set(p_et.get());
+                SAVED.set(BinSave {
+                    tw: p_tw(),
+                    wm: p_wm(),
+                    ml: p_ml(),
+                    et: p_et(),
+                });
             }
         }
         if local {
@@ -108,11 +127,11 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
             buf.b_p_et = 0;
         }
         if global {
-            p_tw.set(0);
-            p_wm.set(0);
-            p_ml.set(0);
-            p_et.set(0);
-            p_bin.set(1);
+            P_TW.set(0);
+            P_WM.set(0);
+            P_ML.set(false);
+            P_ET.set(false);
+            P_BIN.set(true);
         }
     } else if oldval {
         if local {
@@ -122,10 +141,11 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
             buf.b_p_et = buf.b_p_et_nobin;
         }
         if global {
-            p_tw.set(p_tw_nobin.get());
-            p_wm.set(p_wm_nobin.get());
-            p_ml.set(p_ml_nobin.get());
-            p_et.set(p_et_nobin.get());
+            let saved = SAVED.get();
+            P_TW.set(saved.tw);
+            P_WM.set(saved.wm);
+            P_ML.set(saved.ml);
+            P_ET.set(saved.et);
         }
     }
     // The four overridden options were not set by the user, so they take
@@ -170,11 +190,15 @@ pub(crate) fn didset_options2() {
 /// Replace a null string option with the shared empty string, for every
 /// option that has a global variable. A `:source`d script can leave one.
 pub(crate) fn check_options() {
-    // SAFETY: `get_varp` hands back the variable of a string option, which
-    // is a `*mut c_char`.
     for opt_idx in kOptAleph..kOptCount {
         if option_has_type(opt_idx, kOptValTypeString) && get_option(opt_idx).var.has_global() {
-            unsafe { check_string_option(get_varp(opt_idx).string_var()) };
+            // SAFETY: `get_varp` hands back this string option's own
+            // variable, so a local one names a field of the live current
+            // window or buffer.
+            let var = get_varp(opt_idx).string_var();
+            if unsafe { var.get() }.is_null() {
+                unsafe { var.set(empty_option()) };
+            }
         }
     }
 }

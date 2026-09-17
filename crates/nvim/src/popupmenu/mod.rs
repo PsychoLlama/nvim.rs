@@ -185,7 +185,7 @@ unsafe fn pum_items() -> &'static [PumItem] {
 fn pum_border_width() -> c_int {
     // SAFETY: `p_pumborder` and the option's value table are editor-owned
     // NUL-terminated strings.
-    let border = p_pumborder.get();
+    let border = p_pumborder();
     if unsafe { *border } == 0 || unsafe { strequal(border, BORDER_NONE.as_ptr()) } {
         return 0;
     }

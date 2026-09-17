@@ -88,7 +88,7 @@ pub(crate) unsafe fn file_space(file: *mut FileDescriptor) -> size_t {
 ///
 /// `cookie` must point at an open file descriptor, unaliased for the call.
 pub(crate) unsafe fn close_file(cookie: *mut FileDescriptor) {
-    let error = unsafe { file_close(cookie, p_fs.get() != 0) };
+    let error = unsafe { file_close(cookie, p_fs()) };
     if error != 0 {
         shada_file_error(c"E886: System error while closing ShaDa file: %s", unsafe {
             uv_strerror(error)
@@ -132,11 +132,11 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
     if !file.is_null() && unsafe { *file } != NUL as c_char {
         return Some(unsafe { CStr::from_ptr(file) }.to_owned());
     }
-    if !p_shadafile.get().is_null() && unsafe { *p_shadafile.get() } != NUL as c_char {
-        if unsafe { strequal(p_shadafile.get(), c"NONE".as_ptr()) } {
+    if !p_shadafile().is_null() && unsafe { *p_shadafile() } != NUL as c_char {
+        if unsafe { strequal(p_shadafile(), c"NONE".as_ptr()) } {
             return None; // "-i NONE" or "--clean"
         }
-        return Some(unsafe { CStr::from_ptr(p_shadafile.get()) }.to_owned());
+        return Some(unsafe { CStr::from_ptr(p_shadafile()) }.to_owned());
     }
 
     let mut named = find_shada_parameter('n' as c_int);
@@ -169,7 +169,7 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> Result<(), Faile
         )
     };
 
-    if p_verbose.get() > 1 {
+    if p_verbose() > 1 {
         verbose_enter();
         let note = |wanted: c_uint, text: &'static CStr| {
             if flags as c_uint & wanted != 0 {
@@ -413,7 +413,7 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
         core::ptr::null_mut()
     };
 
-    if p_verbose.get() > 1 {
+    if p_verbose() > 1 {
         verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname.as_ptr()) };
@@ -539,7 +539,7 @@ pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
     let mut part = [0 as c_char; MAXPATHL as usize + 1];
     let new_name = unsafe { home_replace_save(None, name) };
     let mut retval = false;
-    let mut p = p_shada.get();
+    let mut p = p_shada();
     while unsafe { *p } != 0 {
         let seps = c", ".as_ptr().cast_mut();
         unsafe { copy_option_part(&raw mut p, part.as_mut_ptr(), part.len(), seps) };
@@ -573,7 +573,7 @@ pub fn get_shada_parameter(type_0: c_int) -> c_int {
 
 /// What follows a parameter's letter in `'shada'`, or null if it has none.
 pub fn find_shada_parameter(type_0: c_int) -> *mut c_char {
-    let mut p = p_shada.get();
+    let mut p = p_shada();
     while unsafe { *p } != 0 {
         if unsafe { *p } as c_int == type_0 {
             return unsafe { p.add(1) };

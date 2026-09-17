@@ -138,7 +138,7 @@ unsafe fn apply_new_indent(
     Win::current().w_cursor.lnum += 1;
     if did_si.get() {
         let sw = get_sw_value(Buf::current());
-        if p_sr.get() != 0 {
+        if p_sr() {
             newindent -= newindent % sw;
         }
         newindent += sw;
@@ -248,7 +248,7 @@ unsafe fn reindent_new_line(leader: *mut c_char, do_cindent: bool) {
         0
     };
 
-    if p_paste.get() == 0 {
+    if !p_paste() {
         if leader.is_null()
             && !use_indentexpr_for_lisp()
             && Buf::current().b_p_lisp != 0
@@ -386,7 +386,7 @@ pub unsafe fn open_line(
     // SAFETY: `b_p_inde` is the buffer's own `'indentexpr'` string, and
     // `in_cinkeys` reads `'cinkeys'` and the cursor line; the short circuits
     // are upstream's.
-    let do_cindent = p_paste.get() == 0
+    let do_cindent = !p_paste()
         && (Buf::current().b_p_cin != 0 || c_int::from(unsafe { *Buf::current().b_p_inde }) != NUL)
         && in_cinkeys(key, ' ' as c_int, linewhite(Win::current().w_cursor.lnum))
         && flags & OPENLINE_FORCE_INDENT == 0;

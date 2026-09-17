@@ -442,7 +442,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     let cursor = win.w_cursor.lnum;
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
         out.put_str(c"%s", tr_raw(no_lines_msg.as_ptr()));
-    } else if p_ru.get() != 0 {
+    } else if p_ru() {
         // The current line and column are already on the screen -- webb
         let fmt = tr_n(c"%ld line --%d%%--", c"%ld lines --%d%%--", lines);
         out.put_lines(fmt, lines, percentage(cursor, lines));
@@ -609,27 +609,23 @@ pub fn maketitle() {
         return;
     }
     need_maketitle.set(false);
-    if p_title.get() == 0
-        && p_icon.get() == 0
-        && lasttitle.get().is_null()
-        && lasticon.get().is_null()
-    {
+    if !p_title() && !p_icon() && lasttitle.get().is_null() && lasticon.get().is_null() {
         // Nothing to do.
         return;
     }
 
     let mut title_str: *mut c_char = ptr::null_mut();
-    if p_title.get() != 0 {
+    if p_title() {
         let mut maxlen = 0;
-        if p_titlelen.get() > 0 as OptInt {
-            maxlen = ((p_titlelen.get() * Columns.get() as OptInt / 100) as c_int).max(10);
+        if p_titlelen() > 0 as OptInt {
+            maxlen = ((p_titlelen() * Columns.get() as OptInt / 100) as c_int).max(10);
         }
-        if opt_is_set(p_titlestring.get()) {
+        if opt_is_set(p_titlestring()) {
             if stl_syntax.get().has(StlSyntax::TITLE) {
-                build_stl(&mut scratch, p_titlestring.get(), kOptTitlestring, maxlen);
+                build_stl(&mut scratch, p_titlestring(), kOptTitlestring, maxlen);
                 title_str = scratch.as_mut_ptr();
             } else {
-                title_str = p_titlestring.get();
+                title_str = p_titlestring();
             }
         } else {
             // Format: "fname + (path) (1 of 2) - Nvim".
@@ -642,13 +638,13 @@ pub fn maketitle() {
     let mut mustset = value_change(title_str, &lasttitle);
 
     let mut icon_str: *mut c_char = ptr::null_mut();
-    if p_icon.get() != 0 {
+    if p_icon() {
         icon_str = scratch.as_mut_ptr();
-        if opt_is_set(p_iconstring.get()) {
+        if opt_is_set(p_iconstring()) {
             if stl_syntax.get().has(StlSyntax::ICON) {
-                build_stl(&mut scratch, p_iconstring.get(), kOptIconstring, 0);
+                build_stl(&mut scratch, p_iconstring(), kOptIconstring, 0);
             } else {
-                icon_str = p_iconstring.get();
+                icon_str = p_iconstring();
             }
         } else {
             fill_icon(&mut scratch);

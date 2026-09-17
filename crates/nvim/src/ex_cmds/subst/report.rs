@@ -81,8 +81,8 @@ pub fn do_sub_msg(count_only: bool) -> bool {
     // Only report substitutions when there were more than 'report' of them,
     // the command was typed by the user or more than one line changed, and
     // messages are not disabled.
-    let worth_reporting = sub_nsubs.get() as OptInt > p_report.get()
-        && (KeyTyped.get() || sub_nlines.get() > 1 as LineNr || p_report.get() < 1 as OptInt);
+    let worth_reporting = sub_nsubs.get() as OptInt > p_report()
+        && (KeyTyped.get() || sub_nlines.get() > 1 as LineNr || p_report() < 1 as OptInt);
     // SAFETY: message state.
     if (worth_reporting || count_only) && messaging() {
         let mut scratch = [0 as c_char; MSG_BUF_LEN as usize];
@@ -244,7 +244,7 @@ pub(crate) fn show_sub(
     cmdpreview_bufnr: Handle,
 ) -> c_int {
     // SAFETY: 'shortmess' is a live string option value.
-    let save_shm: CString = unsafe { CStr::from_ptr(p_shm.get()) }.into();
+    let save_shm: CString = unsafe { CStr::from_ptr(p_shm()) }.into();
     let orig_buf = Buf::current();
 
     // Disable the file info message.
@@ -274,8 +274,8 @@ pub(crate) fn show_sub(
     // Use the preview window only when inccommand=split and the range is more
     // than the current line.
     // SAFETY: 'inccommand' is a live string option.
-    let preview = unsafe { *p_icm.get() } as u8 == b's'
-        && (range.0 != old_cusr.lnum || range.1 != old_cusr.lnum);
+    let preview =
+        unsafe { *p_icm() } as u8 == b's' && (range.0 != old_cusr.lnum || range.1 != old_cusr.lnum);
 
     let mut pv = if preview {
         // With 'inccommand' at `split` the caller's contract makes
@@ -367,7 +367,7 @@ pub fn ex_substitute_preview(
     let save_arg = excmd.arg;
     let retv = do_sub(
         excmd,
-        profile_setlimit(p_rdt.get() as int64_t),
+        profile_setlimit(p_rdt() as int64_t),
         cmdpreview_ns,
         cmdpreview_bufnr,
     );

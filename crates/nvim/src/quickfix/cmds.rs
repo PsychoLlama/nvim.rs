@@ -71,7 +71,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
     let enc = if c_int::from(unsafe { *local_enc }) != NUL {
         local_enc
     } else {
-        p_menc.get()
+        p_menc()
     };
 
     let wp = is_loclist_cmd(excmd.cmdidx).then(Win::current);
@@ -79,8 +79,8 @@ pub fn ex_cfile(excmd: &mut ExArg) {
     incr_quickfix_busy();
 
     let newlist = !matches!(excmd.cmdidx, CmdIdx::caddfile | CmdIdx::laddfile);
-    let efile = p_ef.get();
-    let errorformat2 = p_efm.get();
+    let efile = p_ef();
+    let errorformat2 = p_efm();
     let newlist2 = c_int::from(newlist);
     let title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
     let qf_title2 = title.as_ptr();
@@ -200,7 +200,7 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
     let qf_title2 = None;
-    let errorformat3 = p_efm.get();
+    let errorformat3 = p_efm();
     let line12 = excmd.line1;
     let line22 = excmd.line2;
     let enc2 = ptr::null_mut();
@@ -295,7 +295,7 @@ fn cexpr_core(excmd: &mut ExArg, tv: &mut TypVal) -> Result<(), Failed> {
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
     let buf2 = None;
-    let errorformat3 = p_efm.get();
+    let errorformat3 = p_efm();
     let title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
     let enc2 = ptr::null_mut();
     let res = unsafe {

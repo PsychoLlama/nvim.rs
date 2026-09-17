@@ -334,7 +334,7 @@ impl RegStack {
         // 'maxmempattern' is bounded far below `i64::MAX`, so a stack that
         // does not fit in one is over any limit there could be.
         let kbytes = i64::try_from(self.bytes >> 10).unwrap_or(i64::MAX);
-        if kbytes >= p_mmp.get() {
+        if kbytes >= p_mmp() {
             emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
             return false;
         }

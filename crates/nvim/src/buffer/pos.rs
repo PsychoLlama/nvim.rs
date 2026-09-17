@@ -394,8 +394,8 @@ pub fn get_winopts(mut buffer: Buf) {
     }
 
     // Set 'foldlevel' to 'foldlevelstart' if it's not negative.
-    if p_fdls.get() >= 0 as OptInt {
-        cur.w_onebuf_opt.wo_fdl = p_fdls.get();
+    if p_fdls() >= 0 as OptInt {
+        cur.w_onebuf_opt.wo_fdl = p_fdls();
     }
     didset_options(cur);
 }

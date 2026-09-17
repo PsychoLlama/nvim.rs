@@ -204,7 +204,7 @@ pub(crate) fn command_line_enter(
     };
     // SAFETY: `state` lives in this frame for the whole of the key loop.
     let mut s = unsafe { Cls::new(&raw mut state) };
-    s.save_p_icm = unsafe { xstrdup(p_icm.get()) };
+    s.save_p_icm = unsafe { xstrdup(p_icm()) };
     init_incsearch_state(s.is_state());
 
     let mut cc = Cc::current();
@@ -344,16 +344,16 @@ pub(crate) fn command_line_enter(
         if !cmd_silent.get() && !exmode_active.get() {
             let mut found_one = false;
             for mut wp in windows_in_curtab() {
-                if unsafe { *p_stl.get() } as ::core::ffi::c_int != NUL
+                if unsafe { *p_stl() } as ::core::ffi::c_int != NUL
                     || unsafe { *wp.w_onebuf_opt.wo_stl } as ::core::ffi::c_int != NUL
-                    || unsafe { *p_wbr.get() } as ::core::ffi::c_int != NUL
+                    || unsafe { *p_wbr() } as ::core::ffi::c_int != NUL
                     || unsafe { *wp.w_onebuf_opt.wo_wbr } as ::core::ffi::c_int != NUL
                 {
                     wp.w_redr_status = true;
                     found_one = true;
                 }
             }
-            if unsafe { *p_tal.get() } as ::core::ffi::c_int != NUL {
+            if unsafe { *p_tal() } as ::core::ffi::c_int != NUL {
                 redraw_tabline.set(true);
                 found_one = true;
             }
@@ -461,7 +461,7 @@ pub(crate) fn command_line_enter(
         // If the line is too long, clear it, so that the ruler and the
         // shown command do not get printed in the middle of it.
         msg_check();
-        if p_ch.get() == 0 as OptInt && !ui_has(kUIMessages) {
+        if p_ch() == 0 as OptInt && !ui_has(kUIMessages) {
             set_must_redraw(UPD_VALID);
         }
         msg_scroll.set(s.save_msg_scroll);

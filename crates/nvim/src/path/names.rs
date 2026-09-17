@@ -156,14 +156,14 @@ pub unsafe fn dir_of_file_exists(fname: *mut c_char) -> bool {
 /// and the file system may fold case by some other rule.
 pub fn path_fnamecmp(fname1: &CStr, fname2: &CStr) -> c_int {
     // SAFETY: both are NUL-terminated and outlive the call.
-    unsafe { mb_strcmp_ic(p_fic.get() != 0, fname1.as_ptr(), fname2.as_ptr()) }
+    unsafe { mb_strcmp_ic(p_fic(), fname1.as_ptr(), fname2.as_ptr()) }
 }
 
 /// [`path_fnamecmp`] over at most `len` bytes.
 pub fn path_fnamencmp(fname1: &CStr, fname2: &CStr, len: size_t) -> c_int {
     let (a, b) = (fname1.as_ptr(), fname2.as_ptr());
     // SAFETY: both are NUL-terminated, and both callees stop at the NUL.
-    if p_fic.get() != 0 {
+    if p_fic() {
         unsafe { mb_strnicmp(a, b, len) }
     } else {
         unsafe { cstr::prefix_cmp(a, b, len) as c_int }
@@ -307,13 +307,7 @@ pub fn path_with_extension(path: &CStr, extension: &CStr) -> bool {
     };
     // SAFETY: `dot` indexes `path`'s own bytes, so the byte after it starts
     // the tail of the same NUL-terminated string; `extension` is one too.
-    unsafe {
-        mb_strcmp_ic(
-            p_fic.get() != 0,
-            path.as_ptr().add(dot + 1),
-            extension.as_ptr(),
-        ) == 0
-    }
+    unsafe { mb_strcmp_ic(p_fic(), path.as_ptr().add(dot + 1), extension.as_ptr()) == 0 }
 }
 
 /// Is `name` a full (absolute) path name, or a URL?

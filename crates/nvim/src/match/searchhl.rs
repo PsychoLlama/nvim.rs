@@ -130,7 +130,7 @@ pub(crate) unsafe fn init_search_hl(window: Win, search_hl: *mut MatchState) {
         unsafe { (*cur).mit_hl.buf = window.w_buffer };
         unsafe { (*cur).mit_hl.lnum = 0 };
         unsafe { (*cur).mit_hl.first_lnum = 0 };
-        unsafe { (*cur).mit_hl.tm = profile_setlimit(p_rdt.get()) };
+        unsafe { (*cur).mit_hl.tm = profile_setlimit(p_rdt()) };
         cur = unsafe { (*cur).mit_next };
     }
     search_hl.buf = window.w_buffer;

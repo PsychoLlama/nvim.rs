@@ -218,7 +218,7 @@ pub unsafe fn filemess(buffer: Buf, name: *mut c_char, s: *mut c_char) {
     if shortmess(ShmFlag::OVERALL)
         && msg_listdo_overwrite.get() == 0
         && !exiting.get()
-        && p_verbose.get() == 0
+        && p_verbose() == 0
     {
         msg_scroll.set(false as c_int);
     }
@@ -681,7 +681,7 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
                 OptionSetFlags::LOCAL,
             );
         // SAFETY: 'fileformats' is a string option; it is never null.
-        } else if unsafe { *p_ffs.get() } != 0 {
+        } else if unsafe { *p_ffs() } != 0 {
             set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
         }
     }

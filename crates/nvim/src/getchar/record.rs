@@ -160,7 +160,7 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
     /// What `add_byte_to_showcmd` has half a key of, between calls.
     static state: GlobalCell<GotcharsState> = GlobalCell::new(GotcharsState::new());
 
-    if p_sc.get() == 0 || msg_silent.get() != 0 {
+    if !p_sc() || msg_silent.get() != 0 {
         return;
     }
     if !state.with_mut(|st| gotchars_add_byte(st, byte)) {

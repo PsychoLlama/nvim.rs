@@ -122,8 +122,8 @@ pub unsafe fn tinput_init(input: *mut TermInput, loop_0: *mut Loop, ti: *mut Ter
         (*input).loop_0 = loop_0;
         (*input).paste = PASTE_NONE;
         (*input).in_fd = STDIN_FILENO;
-        (*input).ttimeout = p_ttimeout.get() != 0;
-        (*input).ttimeoutlen = p_ttm.get();
+        (*input).ttimeout = p_ttimeout();
+        (*input).ttimeoutlen = p_ttm();
         rstream_init_fd(loop_0, &raw mut (*input).read_stream, (*input).in_fd);
 
         // UTF-8 because that is all nvim reads; C0 kept because the editor

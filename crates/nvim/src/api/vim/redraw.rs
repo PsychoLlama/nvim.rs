@@ -145,9 +145,9 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         }
         flush_ui = true;
     }
-    let save_lz = p_lz.get() != 0;
+    let save_lz = p_lz();
     let redraw = Allow::redraw();
-    p_lz.set(0);
+    P_LZ.set(false);
     if opts.statuscolumn.unwrap_or(false)
         || opts.statusline.unwrap_or(false)
         || opts.winbar.unwrap_or(false)
@@ -187,7 +187,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         ui_flush();
     }
     drop(redraw);
-    p_lz.set(::core::ffi::c_int::from(save_lz));
+    P_LZ.set(save_lz);
     Ok(())
 }
 

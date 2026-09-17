@@ -128,21 +128,21 @@ pub unsafe fn shell_build_argv(cmd: *const c_char, extra_args: *const c_char) ->
     unsafe {
         // Counted first, because the vector is allocated once: the words of
         // 'shell', the words of 'shellcmdflag', `extra_args`, `cmd`, NULL.
-        let argc = tokenize(p_sh.get(), ptr::null_mut())
+        let argc = tokenize(p_sh(), ptr::null_mut())
             + if cmd.is_null() {
                 0
             } else {
-                tokenize(p_shcf.get(), ptr::null_mut())
+                tokenize(p_shcf(), ptr::null_mut())
             };
         let rv = xmalloc((argc + 4) * size_of::<*mut c_char>()) as *mut *mut c_char;
 
-        let mut i = tokenize(p_sh.get(), rv);
+        let mut i = tokenize(p_sh(), rv);
         if !extra_args.is_null() {
             *rv.add(i) = xstrdup(extra_args);
             i += 1;
         }
         if !cmd.is_null() {
-            i += tokenize(p_shcf.get(), rv.add(i));
+            i += tokenize(p_shcf(), rv.add(i));
             *rv.add(i) = shell_xescape_xquote(cmd);
             i += 1;
         }
@@ -285,12 +285,12 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mu
     let mut wait_time: ProfTime = 0;
     // SAFETY: the caller's contract. `smsg` is printf-shaped.
     unsafe {
-        if p_verbose.get() > 3 {
+        if p_verbose() > 3 {
             verbose_enter();
             smsg!(
                 0,
                 "Executing command: \"{}\"",
-                c_str(if cmd.is_null() { p_sh.get() } else { cmd })
+                c_str(if cmd.is_null() { p_sh() } else { cmd })
             );
             msg_putchar(NL);
             verbose_leave();
@@ -300,7 +300,7 @@ pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mu
             wait_time = prof_child_enter();
         }
 
-        let retval = if *p_sh.get() == NUL as c_char {
+        let retval = if *p_sh() == NUL as c_char {
             emsg(gettext(e_shellempty));
             -1
         } else {
@@ -558,31 +558,24 @@ unsafe fn shell_xescape_xquote(cmd: *const c_char) -> *mut c_char {
     // SAFETY: the caller's contract; `p_sxq`/`p_sxe` are option values, and
     // `ecmd` is only freed when `vim_strsave_escaped_ext` allocated it.
     unsafe {
-        if *p_sxq.get() == NUL as c_char {
+        if *p_sxq() == NUL as c_char {
             return xstrdup(cmd);
         }
 
         let mut ecmd = cmd;
-        if *p_sxe.get() != NUL as c_char && cstr::eq_bytes(p_sxq.get(), b"(") {
-            ecmd = vim_strsave_escaped_ext(cmd, p_sxe.get(), '^' as c_char, false);
+        if *p_sxe() != NUL as c_char && cstr::eq_bytes(p_sxq(), b"(") {
+            ecmd = vim_strsave_escaped_ext(cmd, p_sxe(), '^' as c_char, false);
         }
-        let ncmd_size = cstr::bytes_at(ecmd).len() + cstr::bytes_at(p_sxq.get()).len() * 2 + 1;
+        let ncmd_size = cstr::bytes_at(ecmd).len() + cstr::bytes_at(p_sxq()).len() * 2 + 1;
         let ncmd = xmalloc(ncmd_size) as *mut c_char;
 
         // 'shellxquote' of "(" appends ")", of "\"(" appends ")\"".
-        if cstr::eq_bytes(p_sxq.get(), b"(") {
+        if cstr::eq_bytes(p_sxq(), b"(") {
             vim_snprintf(ncmd, ncmd_size, c"(%s)".as_ptr(), ecmd);
-        } else if cstr::eq_bytes(p_sxq.get(), b"\"(") {
+        } else if cstr::eq_bytes(p_sxq(), b"\"(") {
             vim_snprintf(ncmd, ncmd_size, c"\"(%s)\"".as_ptr(), ecmd);
         } else {
-            vim_snprintf(
-                ncmd,
-                ncmd_size,
-                c"%s%s%s".as_ptr(),
-                p_sxq.get(),
-                ecmd,
-                p_sxq.get(),
-            );
+            vim_snprintf(ncmd, ncmd_size, c"%s%s%s".as_ptr(), p_sxq(), ecmd, p_sxq());
         }
 
         if ecmd != cmd {

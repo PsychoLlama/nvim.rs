@@ -377,7 +377,7 @@ impl SpellInfo {
 /// thousands of words.
 pub fn spell_check_msm() -> Result<(), Failed> {
     // SAFETY: `p_msm` holds the option's value, a NUL-terminated string.
-    let Some((start, incr, added)) = (unsafe { parse_mkspellmem(p_msm.get()) }) else {
+    let Some((start, incr, added)) = (unsafe { parse_mkspellmem(p_msm()) }) else {
         return Err(Failed);
     };
 
@@ -752,7 +752,7 @@ unsafe fn read_inputs(
 /// Show `text` while `:mkspell` runs, quietly unless it was asked to be
 /// verbose or `'verbose'` is high enough to want it anyway.
 fn spell_message(spin: &SpellInfo, text: &CStr) {
-    if spin.si_verbose == 0 && p_verbose.get() <= 2 as OptInt {
+    if spin.si_verbose == 0 && p_verbose() <= 2 as OptInt {
         return;
     }
     let quiet = spin.si_verbose == 0;
@@ -772,7 +772,7 @@ fn spell_message(spin: &SpellInfo, text: &CStr) {
 /// which `msg` -- and the autocommands it can run -- may write in the middle
 /// of the report. The message is built here and owned until it is shown.
 pub(super) fn spell_message_fmt(spin: &SpellInfo, args: core::fmt::Arguments<'_>) {
-    if spin.si_verbose == 0 && p_verbose.get() <= 2 as OptInt {
+    if spin.si_verbose == 0 && p_verbose() <= 2 as OptInt {
         return;
     }
     spell_message(spin, &cstr::owned(args.to_string().as_bytes()));

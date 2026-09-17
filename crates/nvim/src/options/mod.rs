@@ -35,11 +35,13 @@ mod table_3;
 mod table_4;
 mod table_5;
 mod values;
+pub mod vars;
 
 pub use self::flags::*;
 pub use self::index::*;
 pub use self::lookup::*;
 pub use self::values::*;
+pub use self::vars::*;
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -51,34 +53,8 @@ use crate::insexpand::{did_set_completefunc, did_set_omnifunc, did_set_thesaurus
 use crate::mapping::did_set_langmap;
 use crate::ops::did_set_operatorfunc;
 use crate::option::vars::{
-    bkc_flags, bo_flags, cb_flags, cmp_flags, cot_flags, dy_flags, fdo_flags, jop_flags, p_ac,
-    p_acd, p_acl, p_act, p_ai, p_ambw, p_ar, p_ari, p_arshape, p_aw, p_awa, p_bdir, p_bex, p_bg,
-    p_bh, p_bin, p_bk, p_bkc, p_bl, p_bo, p_bomb, p_breakat, p_bs, p_bsk, p_bt, p_busy, p_cb,
-    p_ccv, p_cdh, p_cdpath, p_cedit, p_cfu, p_ch, p_channel, p_chi, p_ci, p_cia, p_cin, p_cink,
-    p_cino, p_cinsd, p_cinw, p_cmp, p_cms, p_columns, p_com, p_confirm, p_cot, p_cpo, p_cpt, p_cto,
-    p_cwh, p_debug, p_deco, p_def, p_dex, p_dg, p_dia, p_dict, p_dip, p_dir, p_dy, p_ea, p_ead,
-    p_eb, p_ef, p_efm, p_ei, p_emoji, p_enc, p_eof, p_eol, p_ep, p_et, p_exrc, p_fcl, p_fcs,
-    p_fdls, p_fdo, p_fenc, p_fencs, p_fex, p_ff, p_ffs, p_ffu, p_fic, p_fixeol, p_flp, p_fo, p_fp,
-    p_fs, p_ft, p_gd, p_gefm, p_gp, p_guicursor, p_guifont, p_guifontwide, p_hf, p_hh, p_hi, p_hid,
-    p_hl, p_hlg, p_hls, p_ic, p_icm, p_icon, p_iconstring, p_iminsert, p_imsearch, p_inc, p_inde,
-    p_indk, p_inex, p_inf, p_is, p_isf, p_isi, p_isk, p_isp, p_jop, p_js, p_keymap, p_km, p_kp,
-    p_langmap, p_lcs, p_lines, p_linespace, p_lisp, p_lispwords, p_lm, p_lnr, p_lop, p_lpl, p_lrm,
-    p_ls, p_lz, p_ma, p_magic, p_mat, p_mco, p_mef, p_menc, p_mfd, p_mh, p_mis, p_ml, p_mle, p_mls,
-    p_mmd, p_mmp, p_mod, p_mopt, p_more, p_mouse, p_mousef, p_mousem, p_mousemev, p_mousescroll,
-    p_mouset, p_mp, p_mps, p_msc, p_msm, p_nf, p_ofu, p_opfunc, p_para, p_paste, p_path, p_pb,
-    p_pex, p_ph, p_pi, p_pm, p_pmw, p_pp, p_pumborder, p_pvh, p_pw, p_pyx, p_qe, p_qftf, p_rdb,
-    p_rdt, p_re, p_report, p_ri, p_ro, p_rtp, p_ru, p_ruf, p_sb, p_sbo, p_sbr, p_sc, p_scbk, p_scs,
-    p_sections, p_secure, p_sel, p_sft, p_sh, p_shada, p_shadafile, p_shcf, p_shm, p_shq, p_si,
-    p_siso, p_sj, p_slm, p_sloc, p_sm, p_smc, p_smd, p_so, p_sol, p_sp, p_spc, p_spf, p_spk, p_spl,
-    p_spo, p_spr, p_sps, p_sr, p_srr, p_ss, p_ssop, p_sta, p_stal, p_stl, p_stmp, p_sts, p_su,
-    p_sua, p_sw, p_swb, p_swf, p_sxe, p_sxq, p_syn, p_tags, p_tal, p_tbidi, p_tbs, p_tc, p_tcl,
-    p_termsync, p_tf, p_tfu, p_tgc, p_tgst, p_timeout, p_title, p_titlelen, p_titleold,
-    p_titlestring, p_tl, p_tm, p_to, p_tpf, p_tpm, p_tr, p_ts, p_tsr, p_tsrfu, p_ttimeout, p_ttm,
-    p_tw, p_uc, p_udf, p_udir, p_ul, p_ur, p_ut, p_vb, p_vdir, p_ve, p_verbose, p_vop, p_vsts,
-    p_vts, p_wa, p_wak, p_warn, p_wb, p_wbr, p_wc, p_wcm, p_wd, p_wh, p_wic, p_wig, p_wim,
-    p_winborder, p_window, p_wiw, p_wm, p_wmh, p_wmnu, p_wmw, p_wop, p_write, p_ws, p_ww,
-    rdb_flags, ssop_flags, swb_flags, tc_flags, tcl_flags, tpf_flags, ve_flags, vop_flags,
-    wop_flags,
+    bkc_flags, bo_flags, cb_flags, cmp_flags, cot_flags, dy_flags, fdo_flags, jop_flags, rdb_flags,
+    ssop_flags, swb_flags, tc_flags, tcl_flags, tpf_flags, ve_flags, vop_flags, wop_flags,
 };
 use crate::option::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, CPO_VIM, CTRL_F_STR, DFLT_COLS, DFLT_EFM, DFLT_ERRORFILE,
@@ -99,7 +75,7 @@ use crate::option::{
     kOptFlagNoDefault, kOptFlagNoDup, kOptFlagNoGlob, kOptFlagNoMkrc, kOptFlagOneComma,
     kOptFlagPriMkrc, kOptFlagRedrAll, kOptFlagRedrBuf, kOptFlagRedrStat, kOptFlagRedrTabl,
     kOptFlagRedrWin, kOptFlagSecure, kOptFlagUIOption, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin,
-    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString, p_vfile,
+    kOptValTypeBoolean, kOptValTypeNumber, kOptValTypeString,
 };
 use crate::optionstr::{
     did_set_ambiwidth, did_set_background, did_set_backspace, did_set_backupcopy,

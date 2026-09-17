@@ -25,7 +25,7 @@ use crate::getchar::vgetc;
 use crate::guard::Suppress;
 use crate::mark::setpcmark;
 use crate::normal::reset_visual_and_resel;
-use crate::option::vars::{jop_flags, p_ch, p_ea, p_tpm};
+use crate::option::vars::{P_EA, jop_flags, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{Cleanup, ExArg, Exception, FAIL, Failed, LineNr, OptInt};
@@ -282,10 +282,7 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
 fn should_close(win: Win, had_tab: c_int) -> bool {
     let too_small = if cmdmod.with(|m| m.cmod_split) & WSP_VERT as c_int != 0 {
         ((win.w_height + win.w_hsep_height + win.w_status_height) as OptInt)
-            < Rows.get() as OptInt
-                - p_ch.get()
-                - tabline_rows() as OptInt
-                - global_stl_rows() as OptInt
+            < Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt
     } else {
         win.w_width != Columns.get()
     };
@@ -325,12 +322,12 @@ fn open_window_for(
     if wp.is_none() && split_ret.is_ok() {
         let bufref = BufRef::of(buffer);
         // Split the window and put the buffer in it.
-        let p_ea_save = p_ea.get();
+        let p_ea_save = p_ea();
         // Use space from all windows.
-        p_ea.set(1);
+        P_EA.set(true);
         *split_ret = split_below_room();
         *open_wins += 1;
-        p_ea.set(p_ea_save);
+        P_EA.set(p_ea_save);
         if split_ret.is_err() {
             return true;
         }
@@ -368,7 +365,7 @@ fn open_window_for(
         return false;
     }
     // When ":tab" was used open a new tab for a new window repeatedly.
-    if had_tab > 0 && tab_index() as OptInt <= p_tpm.get() {
+    if had_tab > 0 && tab_index() as OptInt <= p_tpm() {
         cmdmod.with_mut(|m| m.cmod_tab = 9999);
     }
     true

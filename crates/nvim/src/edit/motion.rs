@@ -104,7 +104,7 @@ pub(crate) fn ins_left() {
             revins_legal.set(revins_legal.get() + 1);
         }
         revins_chars.set(revins_chars.get() + 1);
-    } else if has_char(unsafe { cstr::at(p_ww.get()) }, '[' as c_int)
+    } else if has_char(unsafe { cstr::at(p_ww()) }, '[' as c_int)
         && Win::current().w_cursor.lnum > 1
     {
         // 'whichwrap' allows the motion to leave the line.
@@ -192,7 +192,7 @@ pub(crate) fn ins_right() {
         if revins_chars.get() != 0 {
             revins_chars.set(revins_chars.get() - 1);
         }
-    } else if has_char(unsafe { cstr::at(p_ww.get()) }, ']' as c_int)
+    } else if has_char(unsafe { cstr::at(p_ww()) }, ']' as c_int)
         && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
     {
         // 'whichwrap' allows the motion to leave the line.

@@ -91,10 +91,10 @@ pub fn did_set_cedit(_args: &mut OptSet) -> Option<&'static CStr> {
 /// Safe: the option's value is a C string from the moment the option table
 /// is initialised, which is the whole of the precondition.
 pub(crate) fn derive_cedit_key() -> Option<&'static CStr> {
-    if unsafe { *p_cedit.get() } as ::core::ffi::c_int == NUL {
+    if unsafe { *p_cedit() } as ::core::ffi::c_int == NUL {
         cedit_key.set(-1);
     } else {
-        let n = unsafe { string_to_key(p_cedit.get()) };
+        let n = unsafe { string_to_key(p_cedit()) };
         if n == 0 || vim_isprintc(n) {
             return Some(e_invarg);
         }
@@ -138,12 +138,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
     cmdmod_add_flags(CmdModFlags::NOSWAPFILE);
 
     // Create a window for the command-line buffer.
-    if win_split(
-        p_cwh.get() as ::core::ffi::c_int,
-        WSP_BOT as ::core::ffi::c_int,
-    )
-    .is_err()
-    {
+    if win_split(p_cwh() as ::core::ffi::c_int, WSP_BOT as ::core::ffi::c_int).is_err() {
         beep_flush();
         return Key::Ignore.code();
     }
@@ -221,7 +216,7 @@ pub(crate) fn open_cmdwin() -> ::core::ffi::c_int {
 
     let histtype = hist_char2type(cmdwin_type.get());
     if histtype == HIST_CMD || histtype == HIST_DEBUG {
-        if p_wc.get() == TAB as OptInt {
+        if p_wc() == TAB as OptInt {
             let tab = c"<Tab>".as_ptr().cast_mut();
             let (ins, nrm) = (
                 c"<C-X><C-V>".as_ptr().cast_mut(),

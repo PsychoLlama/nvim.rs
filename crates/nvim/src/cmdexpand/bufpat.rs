@@ -142,8 +142,8 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
     if regmatch.regprog.is_null() {
         return false;
     }
-    regmatch.rm_ic = p_ic.get() != 0;
-    if p_ic.get() != 0 && p_scs.get() != 0 {
+    regmatch.rm_ic = p_ic();
+    if p_ic() && p_scs() {
         regmatch.rm_ic = !unsafe { pat_has_uppercase(pat) };
     }
 

@@ -46,7 +46,7 @@ use crate::message::{
     verbose_leave, verbose_leave_scroll,
 };
 use crate::option::set_option_direct;
-use crate::option::vars::{p_acd, p_ei, p_verbose};
+use crate::option::vars::{P_ACD, p_acd, p_ei, p_verbose};
 use crate::options::kOptEventignore;
 use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::os::env::expand_env_save;

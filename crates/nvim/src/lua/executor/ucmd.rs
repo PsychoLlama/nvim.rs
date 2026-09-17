@@ -67,7 +67,7 @@ pub unsafe fn nlua_set_sctx(current: *mut ScriptCtx) {
             return;
         }
         (*current).sc_lnum = 0;
-        if p_verbose.get() <= 0 as OptInt {
+        if p_verbose() <= 0 as OptInt {
             return;
         }
 

@@ -515,7 +515,7 @@ fn move_cursor_there(
         may_start_select('o' as c_int);
         setmouse();
 
-        if p_smd.get() != 0 && msg_silent.get() == 0 {
+        if p_smd() && msg_silent.get() == 0 {
             redraw_cmdline.set(true); // show visual mode later
         }
     }

@@ -210,7 +210,7 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
     let mut did_simplify = false;
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let nosimp = flags | REPTERM_NO_SIMPLIFY as c_int;
-    let cpo = p_cpo.get();
+    let cpo = p_cpo();
     let plain = ptr::null_mut();
     let simplify = &raw mut did_simplify;
     let out = &raw mut keys_buf;
@@ -278,7 +278,7 @@ fn get_maparg(args: &[TypVal], result: &mut TypVal, exact: bool) {
 /// `maplist()`: every mapping, global then buffer-local, as a list of dicts.
 pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
-    let cpo = p_cpo.get();
+    let cpo = p_cpo();
     let abbr = args.first().is_some_and(|tv| tv_get_bool(tv) != 0);
     // SAFETY: as above.
     tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t);

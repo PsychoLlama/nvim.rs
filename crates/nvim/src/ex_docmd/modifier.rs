@@ -41,7 +41,7 @@ use crate::guard::sandbox;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::memory::{xfree, xmemcpyz};
 use crate::message::state::{did_emsg, emsg_silent, msg_col, msg_scroll, msg_silent};
-use crate::option::vars::{p_ei, p_verbose};
+use crate::option::vars::{P_VERBOSE, p_ei, p_verbose};
 use crate::state::mode::exmode_active;
 
 use crate::message::redirecting;
@@ -539,10 +539,10 @@ fn apply_cmdmod() {
     let verbose = cmdmod.with(|cm| cm.cmod_verbose);
     if verbose > 0 {
         if cmdmod.with(|cm| cm.cmod_verbose_save) == 0 {
-            let save = p_verbose.get() + 1;
+            let save = p_verbose() + 1;
             cmdmod.with_mut(|cm| cm.cmod_verbose_save = save);
         }
-        p_verbose.set((verbose - 1) as OptInt);
+        P_VERBOSE.set((verbose - 1) as OptInt);
     }
     if mods.has(CmdModFlags::SILENT | CmdModFlags::UNSILENT)
         && cmdmod.with(|cm| cm.cmod_save_msg_silent) == 0
@@ -564,7 +564,7 @@ fn apply_cmdmod() {
         cmdmod.with_mut(|cm| cm.cmod_did_esilent += 1);
     }
     if mods.has(CmdModFlags::NOAUTOCMD) && cmdmod.with(|cm| cm.cmod_save_ei).is_null() {
-        let save_ei = xstrdup(p_ei.get());
+        let save_ei = xstrdup(p_ei());
         cmdmod.with_mut(|cm| cm.cmod_save_ei = save_ei);
         set_option_direct(
             kOptEventignore,
@@ -583,7 +583,7 @@ fn eventignore_all() -> OptVal {
 /// Take the modifiers back out of force.
 pub(crate) fn undo_cmdmod(cm: &mut CmdMod) {
     if cm.cmod_verbose_save > 0 {
-        p_verbose.set(cm.cmod_verbose_save - 1);
+        P_VERBOSE.set(cm.cmod_verbose_save - 1);
         cm.cmod_verbose_save = 0;
     }
     if cm.cmod_did_sandbox != 0 {

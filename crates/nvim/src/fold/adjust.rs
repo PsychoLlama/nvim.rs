@@ -170,7 +170,7 @@ pub fn fold_adjust_visual() {
         }
         end.col = win.buffer().lines().line_len(end.lnum);
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if end.col > 0 && c_int::from(unsafe { *p_sel.get() }) == 'o' as c_int {
+        if end.col > 0 && c_int::from(unsafe { *p_sel() }) == 'o' as c_int {
             end.col -= 1;
         }
         if anchor_first {

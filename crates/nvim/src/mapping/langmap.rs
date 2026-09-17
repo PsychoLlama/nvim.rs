@@ -83,7 +83,7 @@ pub(crate) fn langmap_init() {
 pub unsafe fn did_set_langmap(args: &mut OptSet) -> Option<&CStr> {
     let opts = &*args;
     langmap_init(); // back to a one-to-one map
-    let base = p_langmap.get();
+    let base = p_langmap();
     // SAFETY: `p_langmap` holds the live, NUL-terminated `'langmap'`.
     let opt = unsafe { cstr::bytes_at(base) };
     // The byte at `at`, with the option's own NUL past the end.

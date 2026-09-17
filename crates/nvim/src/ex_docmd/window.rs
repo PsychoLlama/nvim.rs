@@ -626,7 +626,7 @@ pub(crate) fn ex_popup(excmd: &mut ExArg) {
 
 /// `:psearch` — `:isearch` with the result shown in the preview window.
 pub(crate) fn ex_psearch(excmd: &mut ExArg) {
-    g_do_tagpreview.set(p_pvh.get() as c_int);
+    g_do_tagpreview.set(p_pvh() as c_int);
     // SAFETY: the caller's promise -- a live command.
     ex_findpat(excmd);
     g_do_tagpreview.set(0);
@@ -650,7 +650,7 @@ pub(crate) fn ex_pbuffer(excmd: &mut ExArg) {
 
 /// Open or reuse the preview window, and make it current.
 fn prepare_preview_window() {
-    g_do_tagpreview.set(p_pvh.get() as c_int);
+    g_do_tagpreview.set(p_pvh() as c_int);
     prepare_tagpreview(true);
 }
 

@@ -616,7 +616,7 @@ fn compose_debug(rows: (Integer, Integer), cols: (Integer, Integer), syn_id: c_i
 /// real content replaces it. `'writedelay'` is the unit.
 fn debug_delay(lines: Integer) {
     ui_call_flush();
-    let wd = p_wd.get().unsigned_abs();
+    let wd = p_wd().unsigned_abs();
     let factor = lines.clamp(1, 5) as u64;
     os_sleep(factor * wd);
 }

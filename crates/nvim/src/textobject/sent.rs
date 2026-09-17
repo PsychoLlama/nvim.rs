@@ -325,7 +325,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         }
         findsent_forward(count, at_start_sent);
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int {
+        if c_int::from(unsafe { *p_sel() }) == 'e' as c_int {
             Win::current().w_cursor.col += 1;
         }
     }
@@ -395,7 +395,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
             return Ok(());
         }
         // SAFETY: 'selection' is a NUL-terminated option string.
-        if c_int::from(unsafe { *p_sel.get() }) == 'e' as c_int {
+        if c_int::from(unsafe { *p_sel() }) == 'e' as c_int {
             Win::current().w_cursor.col += 1;
         }
         set_visual_anchor(start_pos);

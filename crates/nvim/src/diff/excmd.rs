@@ -100,7 +100,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
         }
 
         // SAFETY: `p_pex` is the `'patchexpr'` option string.
-        if c_int::from(unsafe { *p_pex.get() }) != NUL {
+        if c_int::from(unsafe { *p_pex() }) != NUL {
             // SAFETY: three NUL-terminated file names.
             unsafe { eval_patch(tmp_orig, name, tmp_new) };
         } else {
@@ -345,7 +345,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     // SAFETY: a live window, in all three calls.
     fold_update_all(window);
     changed_window_setting(window);
-    if !has_char(unsafe { cstr::at(p_sbo.get()) }, 'h' as c_int) {
+    if !has_char(unsafe { cstr::at(p_sbo()) }, 'h' as c_int) {
         let _ = unsafe { do_cmdline_cmd(c"set sbo+=hor".as_ptr()) };
     }
     window.w_onebuf_opt.wo_diff_saved = 1;
@@ -439,7 +439,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
         diff_clear(tp);
     }
     // SAFETY: `p_sbo` is the `'scrollopt'` option string.
-    if !diffwin && has_char(unsafe { cstr::at(p_sbo.get()) }, 'h' as c_int) {
+    if !diffwin && has_char(unsafe { cstr::at(p_sbo()) }, 'h' as c_int) {
         // SAFETY: a static command line.
         let _ = unsafe { do_cmdline_cmd(c"set sbo-=hor".as_ptr()) };
     }

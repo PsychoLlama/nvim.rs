@@ -119,7 +119,7 @@ pub fn do_modelines(flags: OptionSetFlags) {
     if current_buf().b_p_ml == 0 {
         return;
     }
-    let mut nmlines = number_as_int(p_mls.get());
+    let mut nmlines = number_as_int(p_mls());
     if nmlines == 0 {
         return;
     }

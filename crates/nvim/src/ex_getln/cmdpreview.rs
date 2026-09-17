@@ -76,12 +76,7 @@ pub(crate) fn cmdpreview_open_buf() -> Option<Buf> {
 pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
     let save_curwin = Win::current();
 
-    if win_split(
-        p_cwh.get() as ::core::ffi::c_int,
-        WSP_BOT as ::core::ffi::c_int,
-    )
-    .is_err()
-    {
+    if win_split(p_cwh() as ::core::ffi::c_int, WSP_BOT as ::core::ffi::c_int).is_err() {
         return None;
     }
 
@@ -240,13 +235,13 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
 
     drop(saved_bufs);
 
-    cpinfo.save_hls = p_hls.get() != 0;
+    cpinfo.save_hls = p_hls();
     cpinfo.save_cmdmod = cmdmod.with(Clone::clone);
     cpinfo.save_view = win_size_save();
     save_search_patterns();
 
     // No search highlighting during a live substitution.
-    p_hls.set(0);
+    P_HLS.set(false);
     // Disable the :leftabove/:botright, :tab and swap-file modifiers.
     cmdmod_set_split(0);
     cmdmod_set_tab(0);
@@ -328,7 +323,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
     }
 
     cmdmod.set(cpinfo.save_cmdmod.clone());
-    p_hls.set(cpinfo.save_hls as ::core::ffi::c_int);
+    P_HLS.set(cpinfo.save_hls);
     restore_search_patterns();
     win_size_restore(&cpinfo.save_view);
     cpinfo.save_view = Vec::new();
@@ -386,8 +381,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
         let mut cpinfo: CpInfo = CP_INFO_INIT;
         // 'inccommand' = "split"
-        let mut icm_split =
-            unsafe { *p_icm.get() } as ::core::ffi::c_int == 's' as ::core::ffi::c_int;
+        let mut icm_split = unsafe { *p_icm() } as ::core::ffi::c_int == 's' as ::core::ffi::c_int;
         let mut cmdpreview_buf: Option<Buf> = None;
         let mut cmdpreview_win: Option<Win> = None;
 

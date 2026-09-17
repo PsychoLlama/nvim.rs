@@ -165,7 +165,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
         }
 
         // SAFETY: 'shellquote' is a live option string.
-        let shq = unsafe { cstr::bytes_at(p_shq.get()) };
+        let shq = unsafe { cstr::bytes_at(p_shq()) };
         if !shq.is_empty() {
             // `prevcmd` is set -- either `prevcmd_is_set` passed above, or
             // the assembled command was just stored in it.
@@ -281,7 +281,7 @@ unsafe fn do_filter(
         Buf::current().b_op_end,
         Win::current().w_cursor,
     );
-    let stmp = p_stmp.get();
+    let stmp = p_stmp();
 
     // Temporarily disable lockmarks since that's needed to propagate changed
     // regions of the buffer for fold_update(), linecount, etc.
@@ -316,7 +316,7 @@ unsafe fn do_filter(
     let mut itmp = None;
     let mut otmp = None;
     let mut no_tempname = false;
-    if stmp == 0 && (do_in || do_out) {
+    if !stmp && (do_in || do_out) {
         if do_in {
             shell_flags |= ShellOpts::WRITE;
             // SAFETY: `curbuf` is live.
@@ -519,7 +519,7 @@ unsafe fn do_filter(
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             drop(no_prompt.take());
 
-            if linecount as OptInt > p_report.get() {
+            if linecount as OptInt > p_report() {
                 if do_in {
                     report_filtered(linecount);
                 } else {
@@ -594,11 +594,7 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     say::putchar('\r' as c_int);
     say::putchar('\n' as c_int);
 
-    if p_warn.get() != 0
-        && !autocmd_busy.get()
-        && msg_silent.get() == 0
-        && buffers().any(buf_is_changed)
-    {
+    if p_warn() && !autocmd_busy.get() && msg_silent.get() == 0 && buffers().any(buf_is_changed) {
         // SAFETY: a live message string.
         say::puts(gettext(c"[No write since last change]\n"));
     }
@@ -633,7 +629,7 @@ enum Shell {
 /// Classify 'shell' by the tail of its invocation path.
 fn shell_kind() -> Shell {
     // SAFETY: caller's contract; a NULL length asks only for the tail.
-    let tail = unsafe { cstr::bytes_at(invocation_path_tail(p_sh.get(), ptr::null_mut())) };
+    let tail = unsafe { cstr::bytes_at(invocation_path_tail(p_sh(), ptr::null_mut())) };
     if tail.starts_with(b"fish") {
         Shell::Fish
     } else if tail.starts_with(b"pwsh") || tail.starts_with(b"powershell") {
@@ -666,7 +662,7 @@ pub(crate) fn make_filter_cmd(
     );
     if let Some(otmp) = otmp {
         // SAFETY: 'shellredir' is a live option string.
-        append_redir(&mut text, unsafe { cstr::at(p_srr.get()) }, otmp);
+        append_redir(&mut text, unsafe { cstr::at(p_srr()) }, otmp);
     }
     cstr::owned(&text)
 }

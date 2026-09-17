@@ -113,7 +113,7 @@ pub(crate) unsafe fn match_on_line(
     if define_matched || compl_status_sol() {
         // Compare the first "len" characters with "ptr".
         let startp = unsafe { skipwhite(p) };
-        let matched = if p_ic.get() != 0 {
+        let matched = if p_ic() {
             unsafe { mb_strnicmp(startp, text, len) == 0 }
         } else {
             unsafe { cstr::prefix_eq(startp, text, len) }

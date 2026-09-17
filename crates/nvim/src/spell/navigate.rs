@@ -290,7 +290,7 @@ pub unsafe fn spell_move_to(
         if dir == BACKWARD {
             if lnum > 1 {
                 lnum -= 1;
-            } else if p_ws.get() == 0 {
+            } else if !p_ws() {
                 break; // at the first line and 'nowrapscan'
             } else {
                 // Wrap to the end. The starting line may be searched
@@ -305,7 +305,7 @@ pub unsafe fn spell_move_to(
         } else {
             if lnum < unsafe { (*window.w_buffer).b_ml.ml_line_count } {
                 lnum += 1;
-            } else if p_ws.get() == 0 {
+            } else if !p_ws() {
                 break; // at the last line and 'nowrapscan'
             } else {
                 // Wrap to the start. The starting line may be searched

@@ -312,7 +312,7 @@ pub(crate) unsafe fn expand_name_patterns(
                 c"\t ".as_ptr().cast_mut(),
             )
         };
-        if p_verbose.get() > 10 {
+        if p_verbose() > 10 {
             verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let buf = unsafe { c_str(buf) };
@@ -376,7 +376,7 @@ pub unsafe fn do_in_path(
     let mut rtp_copy = XString::from_cstr(unsafe { cstr::at(path) });
     let buf = unsafe { xmallocz(MAXPATHL as size_t) }.cast::<c_char>();
 
-    if p_verbose.get() > 10 && !name.is_null() {
+    if p_verbose() > 10 && !name.is_null() {
         // SAFETY: the caller's strings.
         unsafe { announce_search(name, prefix, path) };
     }
@@ -437,7 +437,7 @@ pub unsafe fn do_in_path(
     unsafe { xfree(buf.cast()) };
 
     if !did_one && !name.is_null() {
-        let basepath = if path == p_rtp.get().cast_const() {
+        let basepath = if path == p_rtp().cast_const() {
             c"runtimepath"
         } else {
             c"packpath"
@@ -447,7 +447,7 @@ pub unsafe fn do_in_path(
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (basepath, name) = unsafe { (c_str(basepath.as_ptr()), c_str(name)) };
             semsg!("E919: Directory not found in '{basepath}': \"{name}\"");
-        } else if p_verbose.get() > 1 {
+        } else if p_verbose() > 1 {
             verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
             let (basepath, name) = unsafe { (c_str(basepath.as_ptr()), c_str(name)) };
@@ -651,16 +651,8 @@ pub unsafe fn do_in_path_and_pp(
             },
         ] {
             // SAFETY: as above.
-            done |= unsafe {
-                do_in_path(
-                    p_pp.get(),
-                    prefix.as_ptr(),
-                    name,
-                    start_flags,
-                    callback,
-                    cookie,
-                )
-            };
+            done |=
+                unsafe { do_in_path(p_pp(), prefix.as_ptr(), name, start_flags, callback, cookie) };
             if !wants_more(done) {
                 break;
             }
@@ -669,8 +661,7 @@ pub unsafe fn do_in_path_and_pp(
 
     if wants_more(done) && flags.has(RuntimeOpts::OPT) {
         for prefix in [c"pack/*/opt/*/", c"opt/*/"] {
-            done |=
-                unsafe { do_in_path(p_pp.get(), prefix.as_ptr(), name, flags, callback, cookie) };
+            done |= unsafe { do_in_path(p_pp(), prefix.as_ptr(), name, flags, callback, cookie) };
             if !wants_more(done) {
                 break;
             }
@@ -711,7 +702,7 @@ pub unsafe fn do_in_runtimepath(
         && (success == FAIL || flags.has(RuntimeOpts::ALL))
     {
         // SAFETY: as above.
-        success |= unsafe { do_in_path_and_pp(p_rtp.get(), name, flags, callback, cookie) };
+        success |= unsafe { do_in_path_and_pp(p_rtp(), name, flags, callback, cookie) };
     }
     if success == FAIL { Err(Failed) } else { Ok(()) }
 }

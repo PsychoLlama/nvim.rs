@@ -168,14 +168,14 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
 
         if dict.is_null() {
             // 'shortmess' must not truncate this one.
-            let saved_shm = p_shm.get();
-            p_shm.set(c"".as_ptr() as *mut c_char);
-            if p_ch.get() < 1 {
+            let saved_shm = p_shm();
+            P_SHM.set(c"".as_ptr() as *mut c_char);
+            if p_ch() < 1 {
                 msg_start();
                 msg_scroll.set(1);
             }
             unsafe { msg_ptr(report.as_mut_ptr(), 0) };
-            p_shm.set(saved_shm);
+            P_SHM.set(saved_shm);
         }
     }
 
@@ -201,9 +201,9 @@ fn measure_selection(sel: VisualSelection) -> Selection {
     let mut oparg = OpArg::ZERO;
     if sel.mode.is_block() {
         // 'showbreak' would move the columns `getvcols` answers.
-        let saved_sbr = p_sbr.get();
+        let saved_sbr = p_sbr();
         let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr;
-        p_sbr.set(empty_option());
+        P_SBR.set(empty_option());
         Win::current().w_onebuf_opt.wo_sbr = empty_option();
 
         oparg.is_visual = true;
@@ -213,7 +213,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         let (sv, ev) = (&raw mut oparg.start_vcol, &raw mut oparg.end_vcol);
         unsafe { getvcols(Win::current(), &raw mut min, &raw mut max, sv, ev) };
 
-        p_sbr.set(saved_sbr);
+        P_SBR.set(saved_sbr);
         Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
 
         if Win::current().w_curswant == MAXCOL {

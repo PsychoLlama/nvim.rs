@@ -115,10 +115,10 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error>
     };
     unsafe { try_enter(&raw mut tstate) };
     let is_curbuf: bool = b == Buf::current();
-    let save_acd: ::core::ffi::c_int = p_acd.get();
+    let save_acd = p_acd();
     let redraw_off = (!is_curbuf).then(Suppress::redraw);
     if !is_curbuf {
-        p_acd.set(0 as ::core::ffi::c_int);
+        P_ACD.set(false);
     }
     let mut aco: AcoSave = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, b) };
@@ -126,7 +126,7 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error>
     unsafe { aucmd_restbuf(&raw mut aco) };
     drop(redraw_off);
     if !is_curbuf {
-        p_acd.set(save_acd);
+        P_ACD.set(save_acd);
     }
     error.absorb(unsafe { try_leave(&raw mut tstate) });
     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {

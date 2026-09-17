@@ -826,7 +826,7 @@ pub unsafe fn expand_cmdline(
         unsafe { addstar(expand.xp_pattern, expand.xp_pattern_len, expand.xp_context) }
     };
 
-    if p_wic.get() != 0 {
+    if p_wic() {
         options |= WildOpts::ICASE;
     }
 

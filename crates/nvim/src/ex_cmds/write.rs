@@ -73,7 +73,7 @@ const DIALOG_MSG_SIZE: usize = 1000;
 /// Is a `:confirm` dialog wanted here -- either from 'confirm' or from the
 /// command's own modifier?
 fn confirming() -> bool {
-    p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)
+    p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)
 }
 
 /// Put `name` into the one-`%s` message `fmt` and ask the user to confirm it.
@@ -359,7 +359,7 @@ fn confirm_partial_write(args: &mut ExArg) -> bool {
     if (args.line1 == 1 && args.line2 == Buf::current().b_ml.ml_line_count)
         || args.forceit
         || args.append
-        || p_wa.get() != 0
+        || p_wa()
     {
         return true;
     }
@@ -467,7 +467,7 @@ pub unsafe fn check_overwrite(
                 || buffer.b_flags.has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
                 || buffer.b_flags.has(BufFlags::READERR)));
     // SAFETY: `ffname` is a live file name.
-    if !contested || p_wa.get() != 0 || !unsafe { os_path_exists(ffname) } {
+    if !contested || p_wa() || !unsafe { os_path_exists(ffname) } {
         return Ok(());
     }
 
@@ -545,11 +545,11 @@ pub unsafe fn check_overwrite(
 /// room `copy_option_part` is told it has.
 fn swap_dir() -> Vec<u8> {
     // SAFETY: 'directory' is a live option string.
-    if unsafe { *p_dir.get() } as c_int == NUL {
+    if unsafe { *p_dir() } as c_int == NUL {
         return b".\0".to_vec();
     }
     let mut dir = vec![0u8; MAXPATHL as usize];
-    let mut p = p_dir.get();
+    let mut p = p_dir();
     // SAFETY: the buffer really is `MAXPATHL` bytes, and `p` walks the live
     // option string.
     unsafe {
@@ -690,7 +690,7 @@ fn write_one_buffer(
 ///
 /// Returns true and gives a message when writing is disabled.
 fn not_writing() -> bool {
-    if p_write.get() != 0 {
+    if p_write() {
         return false;
     }
     emsg(gettext(
@@ -795,7 +795,7 @@ pub unsafe fn getfile(
         && curbuf_is_changed()
         && autowrite(Buf::current(), forceit).is_err()
     {
-        if p_confirm.get() != 0 && p_write.get() != 0 {
+        if p_confirm() && p_write() {
             dialog_changed(Buf::current(), false);
         }
         if curbuf_is_changed() {

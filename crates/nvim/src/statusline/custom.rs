@@ -115,7 +115,7 @@ impl Target {
             };
             let source = Source {
                 // SAFETY: the option's own string.
-                fmt: unsafe { Fmt::copy_of(p_tal.get()) },
+                fmt: unsafe { Fmt::copy_of(p_tal()) },
                 opt: (kOptTabline, OptionSetFlags::NONE),
             };
             return (target.maxwidth > 0).then_some((target, source));
@@ -143,7 +143,7 @@ impl Target {
             let wbr = if local {
                 win.w_onebuf_opt.wo_wbr
             } else {
-                p_wbr.get()
+                p_wbr()
             };
             let source = Source {
                 // SAFETY: the option's own string.
@@ -170,7 +170,7 @@ impl Target {
             maxwidth = win.w_view_width;
         } else {
             row = if is_stl_global {
-                Rows.get() - p_ch.get() as c_int - 1
+                Rows.get() - p_ch() as c_int - 1
             } else {
                 win.w_winrow + win.w_height
             };
@@ -185,7 +185,7 @@ impl Target {
 
         let source = if draw_ruler {
             // SAFETY: the option's own string.
-            let fmt = unsafe { Fmt::copy_of(ruler_body(p_ruf.get())) };
+            let fmt = unsafe { Fmt::copy_of(ruler_body(p_ruf())) };
             col = (ru_col.get() - (Columns.get() - maxwidth)).max((maxwidth + 1) / 2);
             maxwidth -= col;
             if !in_status_line {
@@ -204,7 +204,7 @@ impl Target {
             let stl = if local {
                 win.w_onebuf_opt.wo_stl
             } else {
-                p_stl.get()
+                p_stl()
             };
             Source {
                 // SAFETY: the option's own string.
@@ -510,7 +510,7 @@ pub fn win_redr_winbar(window: Win) {
     let win = window;
     if win.w_winbar_height != 0
         && is_redrawing()
-        && (!opt_is_empty(p_wbr.get()) || !opt_is_empty(win.w_onebuf_opt.wo_wbr))
+        && (!opt_is_empty(p_wbr()) || !opt_is_empty(win.w_onebuf_opt.wo_wbr))
     {
         win_redr_custom(Some(window), true, false, false);
     }
@@ -539,10 +539,10 @@ pub fn redraw_ruler() {
     let is_stl_global = stl_is_global();
 
     // Should the ruler be drawn at all? If not, clear what was drawn before.
-    if p_ru.get() == 0
+    if !p_ru()
         || win.w_status_height > 0
         || is_stl_global
-        || (p_ch.get() == 0 as OptInt && !ui_has(kUIMessages))
+        || (p_ch() == 0 as OptInt && !ui_has(kUIMessages))
     {
         if DID_SHOW_EXT_RULER.get() && ui_has(kUIMessages) {
             ui_call_msg_ruler(ARRAY_DICT_INIT);
@@ -568,8 +568,7 @@ pub fn redraw_ruler() {
     }
 
     let part_of_status = win.w_status_height != 0 || is_stl_global;
-    if !opt_is_empty(p_ruf.get())
-        && (p_ch.get() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
+    if !opt_is_empty(p_ruf()) && (p_ch() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
     {
         win_redr_custom(Some(win), false, true, ui_has(kUIMessages));
         return;

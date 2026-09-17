@@ -202,10 +202,9 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
         // '$'), then from the executable's own path.
         let mut exe_name: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         if vim_path.is_null() {
-            let from_helpfile =
-                !p_hf.get().is_null() && !has_char(cstr::at(p_hf.get()), '$' as c_int);
+            let from_helpfile = !p_hf().is_null() && !has_char(cstr::at(p_hf()), '$' as c_int);
             if from_helpfile {
-                vim_path = p_hf.get();
+                vim_path = p_hf();
             } else {
                 // ../share/nvim/runtime, relative to the binary.
                 vim_get_prefix_from_exepath(exe_name.as_mut_ptr());

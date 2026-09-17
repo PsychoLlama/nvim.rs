@@ -118,7 +118,7 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
             // A slow thing to do, so say so — otherwise it looks hung.
             if i > 1
                 && (i % 50 == 0 || i as LineNr == line_count - 1)
-                && line_count as OptInt > p_report.get()
+                && line_count as OptInt > p_report()
             {
                 // Restore the cursor first, so the `msg_show` callback
                 // does not redraw `curwin`.
@@ -174,7 +174,7 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
     } else if unsafe { (*op).is_visual } {
         redraw_curbuf_later(UPD_INVERTED);
     }
-    if line_count as OptInt > p_report.get() {
+    if line_count as OptInt > p_report() {
         let done = (line_count - (i as LineNr + 1)) as c_int;
         unsafe {
             indent_progress(
@@ -208,7 +208,7 @@ pub fn preprocs_left() -> bool {
 /// Whether the conditions are right for smart indenting.
 pub fn may_do_si() -> bool {
     let buf = Buf::current();
-    unsafe { buf.b_p_si != 0 && buf.b_p_cin == 0 && *buf.b_p_inde == 0 && p_paste.get() == 0 }
+    unsafe { buf.b_p_si != 0 && buf.b_p_cin == 0 && *buf.b_p_inde == 0 && !p_paste() }
 }
 
 /// Sets the cursor line's indent to that of the line holding the `{` that

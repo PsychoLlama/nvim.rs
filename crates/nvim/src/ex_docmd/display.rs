@@ -28,7 +28,7 @@ use crate::memory::xstrdup;
 use crate::message::state::{
     msg_col, msg_didout, need_wait_return, redir_fd, redir_off, redir_reg, redir_vname,
 };
-use crate::option::vars::{p_hls, p_lz};
+use crate::option::vars::{P_LZ, p_hls, p_lz};
 use crate::search::state::no_hlsearch;
 use crate::state::mode::State;
 
@@ -218,12 +218,12 @@ pub(crate) fn ex_redrawtabline(_excmd: &mut ExArg) {
 /// and put back when the guard is dropped.
 struct LazyRedrawOff {
     _redraw: Saved,
-    p_lz: c_int,
+    p_lz: bool,
 }
 
 impl Drop for LazyRedrawOff {
     fn drop(&mut self) {
-        p_lz.set(self.p_lz);
+        P_LZ.set(self.p_lz);
     }
 }
 
@@ -231,9 +231,9 @@ impl Drop for LazyRedrawOff {
 fn suspend_lazyredraw() -> LazyRedrawOff {
     let off = LazyRedrawOff {
         _redraw: Allow::redraw(),
-        p_lz: p_lz.get(),
+        p_lz: p_lz(),
     };
-    p_lz.set(0);
+    P_LZ.set(false);
     off
 }
 
@@ -262,10 +262,7 @@ pub(crate) fn ex_digraphs(excmd: &mut ExArg) {
 /// Set 'no_hlsearch', keeping `v:hlsearch` in step.
 pub fn set_no_hlsearch(flag: bool) {
     no_hlsearch.set(flag);
-    set_vim_var_nr(
-        Vv::Hlsearch,
-        (!no_hlsearch.get() && p_hls.get() != 0) as VarNumber,
-    );
+    set_vim_var_nr(Vv::Hlsearch, (!no_hlsearch.get() && p_hls()) as VarNumber);
 }
 
 /// `:nohlsearch`.

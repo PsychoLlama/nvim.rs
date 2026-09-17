@@ -26,7 +26,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptJumpoptions, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_jop),
+        var: OptVar::String(P_JOP),
         flags_var: Some(&jop_flags),
         values: &opt_jop_values,
         opt_did_set_cb: Some(did_set_str_generic),
@@ -42,7 +42,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptKeymap),
-        var: OptVar::String(&p_keymap),
+        var: OptVar::String(P_KEYMAP),
         opt_did_set_cb: Some(did_set_keymap),
         def_val: string(c""),
         ..BLANK
@@ -55,7 +55,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptKeymodel, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_km),
+        var: OptVar::String(P_KM),
         values: &opt_km_values,
         opt_did_set_cb: Some(did_set_keymodel),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -70,7 +70,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptKeywordprg, kWinOptInvalid, kBufOptKeywordprg),
-        var: OptVar::String(&p_kp),
+        var: OptVar::String(P_KP),
         def_val: string(c":Man"),
         ..BLANK
     },
@@ -82,7 +82,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLangmap, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_langmap),
+        var: OptVar::String(P_LANGMAP),
         opt_did_set_cb: Some(did_set_langmap),
         def_val: string(c""),
         ..BLANK
@@ -95,7 +95,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLangmenu, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_lm),
+        var: OptVar::String(P_LM),
         def_val: string(c""),
         ..BLANK
     },
@@ -105,7 +105,7 @@ pub(super) const PART: [VimOption; 81] = [
         shortname: name(c"lnr"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLangnoremap, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_lnr),
+        var: OptVar::Boolean(P_LNR),
         opt_did_set_cb: Some(did_set_langnoremap),
         def_val: boolean(true),
         ..BLANK
@@ -116,7 +116,7 @@ pub(super) const PART: [VimOption; 81] = [
         shortname: name(c"lrm"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLangremap, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_lrm),
+        var: OptVar::Boolean(P_LRM),
         opt_did_set_cb: Some(did_set_langremap),
         ..BLANK
     },
@@ -128,7 +128,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLaststatus, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_ls),
+        var: OptVar::Number(P_LS),
         opt_did_set_cb: Some(did_set_laststatus),
         def_val: number(2),
         ..BLANK
@@ -139,7 +139,7 @@ pub(super) const PART: [VimOption; 81] = [
         shortname: name(c"lz"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLazyredraw, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_lz),
+        var: OptVar::Boolean(P_LZ),
         ..BLANK
     },
     // 'lhistory'
@@ -169,7 +169,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLines, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_lines),
+        var: OptVar::Number(P_LINES),
         opt_did_set_cb: Some(did_set_lines_or_columns),
         def_val: number(DFLT_ROWS as OptInt),
         ..BLANK
@@ -182,7 +182,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLinespace, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_linespace),
+        var: OptVar::Number(P_LINESPACE),
         def_val: number(0),
         ..BLANK
     },
@@ -191,7 +191,7 @@ pub(super) const PART: [VimOption; 81] = [
         fullname: name(c"lisp"),
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptLisp),
-        var: OptVar::Boolean(&p_lisp),
+        var: OptVar::Boolean(P_LISP),
         opt_did_set_cb: Some(did_set_lisp),
         ..BLANK
     },
@@ -203,7 +203,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptLispoptions),
-        var: OptVar::String(&p_lop),
+        var: OptVar::String(P_LOP),
         values: &opt_lop_values,
         opt_did_set_cb: Some(did_set_lispoptions),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -218,7 +218,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptLispwords, kWinOptInvalid, kBufOptLispwords),
-        var: OptVar::String(&p_lispwords),
+        var: OptVar::String(P_LISPWORDS),
         def_val: string(LISPWORD_VALUE),
         ..BLANK
     },
@@ -238,7 +238,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | WIN,
         scope_idx: scope_idx(kGlobalOptListchars, kWinOptListchars, kBufOptInvalid),
-        var: OptVar::String(&p_lcs),
+        var: OptVar::String(P_LCS),
         opt_did_set_cb: Some(did_set_chars_option),
         opt_expand_cb: Some(expand_set_chars_option),
         def_val: string(c"tab:> ,trail:-,nbsp:+"),
@@ -250,7 +250,7 @@ pub(super) const PART: [VimOption; 81] = [
         shortname: name(c"lpl"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptLoadplugins, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_lpl),
+        var: OptVar::Boolean(P_LPL),
         def_val: boolean(true),
         ..BLANK
     },
@@ -259,7 +259,7 @@ pub(super) const PART: [VimOption; 81] = [
         fullname: name(c"magic"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMagic, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_magic),
+        var: OptVar::Boolean(P_MAGIC),
         def_val: boolean(true),
         ..BLANK
     },
@@ -271,7 +271,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMakeef, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_mef),
+        var: OptVar::String(P_MEF),
         def_val: string(c""),
         ..BLANK
     },
@@ -282,7 +282,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptMakeencoding, kWinOptInvalid, kBufOptMakeencoding),
-        var: OptVar::String(&p_menc),
+        var: OptVar::String(P_MENC),
         opt_did_set_cb: Some(did_set_encoding),
         opt_expand_cb: Some(expand_set_encoding),
         def_val: string(c""),
@@ -296,7 +296,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptMakeprg, kWinOptInvalid, kBufOptMakeprg),
-        var: OptVar::String(&p_mp),
+        var: OptVar::String(P_MP),
         def_val: string(c"make"),
         ..BLANK
     },
@@ -308,7 +308,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptMatchpairs),
-        var: OptVar::String(&p_mps),
+        var: OptVar::String(P_MPS),
         opt_did_set_cb: Some(did_set_matchpairs),
         def_val: string(c"(:),{:},[:]"),
         ..BLANK
@@ -320,7 +320,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMatchtime, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_mat),
+        var: OptVar::Number(P_MAT),
         def_val: number(5),
         ..BLANK
     },
@@ -331,7 +331,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMaxcombine, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_mco),
+        var: OptVar::Number(P_MCO),
         def_val: number(MAX_MCO as OptInt),
         ..BLANK
     },
@@ -342,7 +342,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMaxfuncdepth, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_mfd),
+        var: OptVar::Number(P_MFD),
         def_val: number(100),
         ..BLANK
     },
@@ -353,7 +353,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMaxmapdepth, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_mmd),
+        var: OptVar::Number(P_MMD),
         def_val: number(1000),
         ..BLANK
     },
@@ -364,7 +364,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMaxmempattern, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_mmp),
+        var: OptVar::Number(P_MMP),
         def_val: number(1000),
         ..BLANK
     },
@@ -375,7 +375,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMaxsearchcount, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_msc),
+        var: OptVar::Number(P_MSC),
         def_val: number(999),
         ..BLANK
     },
@@ -386,7 +386,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMenuitems, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_mis),
+        var: OptVar::Number(P_MIS),
         def_val: number(25),
         ..BLANK
     },
@@ -398,7 +398,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMessagesopt, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_mopt),
+        var: OptVar::String(P_MOPT),
         values: &opt_mopt_values,
         opt_did_set_cb: Some(did_set_messagesopt),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -413,7 +413,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMkspellmem, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_msm),
+        var: OptVar::String(P_MSM),
         opt_did_set_cb: Some(did_set_mkspellmem),
         def_val: string(c"460000,2000,500"),
         ..BLANK
@@ -424,7 +424,7 @@ pub(super) const PART: [VimOption; 81] = [
         shortname: name(c"ml"),
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptModeline),
-        var: OptVar::Boolean(&p_ml),
+        var: OptVar::Boolean(P_ML),
         def_val: boolean(true),
         ..BLANK
     },
@@ -435,7 +435,7 @@ pub(super) const PART: [VimOption; 81] = [
         flags: kOptFlagSecure,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptModelineexpr, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_mle),
+        var: OptVar::Boolean(P_MLE),
         ..BLANK
     },
     // 'modelines'
@@ -445,7 +445,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptModelines, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_mls),
+        var: OptVar::Number(P_MLS),
         def_val: number(5),
         ..BLANK
     },
@@ -456,7 +456,7 @@ pub(super) const PART: [VimOption; 81] = [
         flags: kOptFlagNoGlob,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptModifiable),
-        var: OptVar::Boolean(&p_ma),
+        var: OptVar::Boolean(P_MA),
         opt_did_set_cb: Some(did_set_modifiable),
         def_val: boolean(true),
         ..BLANK
@@ -468,7 +468,7 @@ pub(super) const PART: [VimOption; 81] = [
         flags: kOptFlagRedrStat | kOptFlagNoMkrc,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptModified),
-        var: OptVar::Boolean(&p_mod),
+        var: OptVar::Boolean(P_MOD),
         opt_did_set_cb: Some(did_set_modified),
         ..BLANK
     },
@@ -477,7 +477,7 @@ pub(super) const PART: [VimOption; 81] = [
         fullname: name(c"more"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMore, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_more),
+        var: OptVar::Boolean(P_MORE),
         def_val: boolean(true),
         ..BLANK
     },
@@ -488,7 +488,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMouse, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_mouse),
+        var: OptVar::String(P_MOUSE),
         opt_did_set_cb: Some(did_set_mouse),
         opt_expand_cb: Some(expand_set_mouse),
         def_val: string(c"nvi"),
@@ -501,7 +501,7 @@ pub(super) const PART: [VimOption; 81] = [
         flags: kOptFlagUIOption,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMousefocus, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_mousef),
+        var: OptVar::Boolean(P_MOUSEF),
         ..BLANK
     },
     // 'mousehide'
@@ -511,7 +511,7 @@ pub(super) const PART: [VimOption; 81] = [
         flags: kOptFlagUIOption,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMousehide, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_mh),
+        var: OptVar::Boolean(P_MH),
         def_val: boolean(true),
         ..BLANK
     },
@@ -522,7 +522,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMousemodel, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_mousem),
+        var: OptVar::String(P_MOUSEM),
         values: &opt_mousem_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -536,7 +536,7 @@ pub(super) const PART: [VimOption; 81] = [
         flags: kOptFlagUIOption,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMousemoveevent, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_mousemev),
+        var: OptVar::Boolean(P_MOUSEMEV),
         ..BLANK
     },
     // 'mousescroll'
@@ -546,7 +546,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMousescroll, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_mousescroll),
+        var: OptVar::String(P_MOUSESCROLL),
         values: &opt_mousescroll_values,
         opt_did_set_cb: Some(did_set_mousescroll),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -573,7 +573,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMousetime, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_mouset),
+        var: OptVar::Number(P_MOUSET),
         def_val: number(500),
         ..BLANK
     },
@@ -585,7 +585,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptNrformats),
-        var: OptVar::String(&p_nf),
+        var: OptVar::String(P_NF),
         values: &opt_nf_values,
         opt_did_set_cb: Some(did_set_str_generic),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -622,7 +622,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptOmnifunc),
-        var: OptVar::String(&p_ofu),
+        var: OptVar::String(P_OFU),
         opt_did_set_cb: Some(did_set_omnifunc),
         def_val: string(c""),
         ..BLANK
@@ -645,7 +645,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptOperatorfunc, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_opfunc),
+        var: OptVar::String(P_OPFUNC),
         opt_did_set_cb: Some(did_set_operatorfunc),
         def_val: string(c""),
         ..BLANK
@@ -658,7 +658,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPackpath, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_pp),
+        var: OptVar::String(P_PP),
         opt_did_set_cb: Some(did_set_runtimepackpath),
         def_val: string(c""),
         ..BLANK
@@ -670,7 +670,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptParagraphs, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_para),
+        var: OptVar::String(P_PARA),
         def_val: string(c"IPLPPPQPP TPHPLIPpLpItpplpipbp"),
         ..BLANK
     },
@@ -680,7 +680,7 @@ pub(super) const PART: [VimOption; 81] = [
         flags: kOptFlagPriMkrc,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPaste, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_paste),
+        var: OptVar::Boolean(P_PASTE),
         opt_did_set_cb: Some(did_set_paste),
         ..BLANK
     },
@@ -704,7 +704,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPatchexpr, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_pex),
+        var: OptVar::String(P_PEX),
         opt_did_set_cb: Some(did_set_optexpr),
         def_val: string(c""),
         ..BLANK
@@ -717,7 +717,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPatchmode, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_pm),
+        var: OptVar::String(P_PM),
         opt_did_set_cb: Some(did_set_backupext_or_patchmode),
         def_val: string(c""),
         ..BLANK
@@ -730,7 +730,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL | BUF,
         scope_idx: scope_idx(kGlobalOptPath, kWinOptInvalid, kBufOptPath),
-        var: OptVar::String(&p_path),
+        var: OptVar::String(P_PATH),
         def_val: string(c".,,"),
         ..BLANK
     },
@@ -740,7 +740,7 @@ pub(super) const PART: [VimOption; 81] = [
         shortname: name(c"pi"),
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptPreserveindent),
-        var: OptVar::Boolean(&p_pi),
+        var: OptVar::Boolean(P_PI),
         ..BLANK
     },
     // 'previewheight'
@@ -750,7 +750,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPreviewheight, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_pvh),
+        var: OptVar::Number(P_PVH),
         def_val: number(12),
         ..BLANK
     },
@@ -782,7 +782,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPumblend, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_pb),
+        var: OptVar::Number(P_PB),
         opt_did_set_cb: Some(did_set_pumblend),
         def_val: number(0),
         ..BLANK
@@ -794,7 +794,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPumborder, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_pumborder),
+        var: OptVar::String(P_PUMBORDER),
         values: &opt_pumborder_values,
         opt_did_set_cb: Some(did_set_pumborder),
         opt_expand_cb: Some(expand_set_str_generic),
@@ -808,7 +808,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPumheight, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_ph),
+        var: OptVar::Number(P_PH),
         def_val: number(0),
         ..BLANK
     },
@@ -819,7 +819,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPummaxwidth, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_pmw),
+        var: OptVar::Number(P_PMW),
         def_val: number(0),
         ..BLANK
     },
@@ -830,7 +830,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPumwidth, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_pw),
+        var: OptVar::Number(P_PW),
         def_val: number(15),
         ..BLANK
     },
@@ -842,7 +842,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPyxversion, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_pyx),
+        var: OptVar::Number(P_PYX),
         def_val: number(3),
         ..BLANK
     },
@@ -854,7 +854,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptQuickfixtextfunc, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_qftf),
+        var: OptVar::String(P_QFTF),
         opt_did_set_cb: Some(did_set_quickfixtextfunc),
         def_val: string(c""),
         ..BLANK
@@ -866,7 +866,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptQuoteescape),
-        var: OptVar::String(&p_qe),
+        var: OptVar::String(P_QE),
         def_val: string(c"\\"),
         ..BLANK
     },
@@ -877,7 +877,7 @@ pub(super) const PART: [VimOption; 81] = [
         flags: kOptFlagRedrStat | kOptFlagNoGlob,
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptReadonly),
-        var: OptVar::Boolean(&p_ro),
+        var: OptVar::Boolean(P_RO),
         opt_did_set_cb: Some(did_set_readonly),
         ..BLANK
     },
@@ -889,7 +889,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptRedrawdebug, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::String(&p_rdb),
+        var: OptVar::String(P_RDB),
         flags_var: Some(&rdb_flags),
         values: &opt_rdb_values,
         opt_did_set_cb: Some(did_set_str_generic),
@@ -904,7 +904,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptRedrawtime, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_rdt),
+        var: OptVar::Number(P_RDT),
         def_val: number(2000),
         ..BLANK
     },
@@ -915,7 +915,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptRegexpengine, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_re),
+        var: OptVar::Number(P_RE),
         def_val: number(0),
         ..BLANK
     },
@@ -945,7 +945,7 @@ pub(super) const PART: [VimOption; 81] = [
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptReport, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Number(&p_report),
+        var: OptVar::Number(P_REPORT),
         def_val: number(2),
         ..BLANK
     },
@@ -955,7 +955,7 @@ pub(super) const PART: [VimOption; 81] = [
         shortname: name(c"ri"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptRevins, kWinOptInvalid, kBufOptInvalid),
-        var: OptVar::Boolean(&p_ri),
+        var: OptVar::Boolean(P_RI),
         ..BLANK
     },
 ];

@@ -412,11 +412,10 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
         if unsafe { os_isdir(buffer.b_fname) } {
             // Nothing to do.
         } else if (if buffer.b_p_ar >= 0 {
-            buffer.b_p_ar
+            buffer.b_p_ar != 0
         } else {
-            p_ar.get()
-        }) != 0
-            && !buf_is_changed(buffer)
+            p_ar()
+        }) && !buf_is_changed(buffer)
             && file_info_ok
         {
             // If 'autoread' is set, the buffer has no changes and the file
@@ -556,7 +555,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     let old_cursor = Win::current().w_cursor;
     let old_topline = Win::current().w_topline;
 
-    if p_ur.get() < 0 || Buf::current().b_ml.ml_line_count as OptInt <= p_ur.get() {
+    if p_ur() < 0 || Buf::current().b_ml.ml_line_count as OptInt <= p_ur() {
         // Save all the text, so that the reload can be undone. Sync first
         // so that this is a separate undo-able action.
         u_sync(false);

@@ -50,7 +50,7 @@ const MOUSE_A: &CStr = c"nvich";
 /// Recomputes whether the mouse is wanted in the current mode.
 pub fn ui_check_mouse() {
     has_mouse.set(false);
-    if unsafe { *p_mouse.get() } == 0 {
+    if unsafe { *p_mouse() } == 0 {
         return;
     }
     let state = State.get();
@@ -75,7 +75,7 @@ pub fn ui_check_mouse() {
 
 /// Whether `'mouse'` enables the mouse for `mode`.
 pub fn ui_mouse_has(mode: c_int) -> bool {
-    let mut p = p_mouse.get();
+    let mut p = p_mouse();
     while unsafe { *p } != 0 {
         let flag = c_int::from(unsafe { *p });
         let matched = match flag {

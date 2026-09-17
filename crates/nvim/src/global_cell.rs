@@ -148,6 +148,37 @@ impl<T> GlobalCell<T> {
         self.with_mut(core::mem::take)
     }
 
+    /// Copy one field of the contents out, forming no reference to the rest.
+    ///
+    /// This is [`get`](Self::get) for a record too large to copy whole — the
+    /// editor's option values, say, which are one cell with three hundred
+    /// fields. `project` names the field and does nothing else; it is
+    /// generated (`|o| &mut o.field`), so the reference it takes is gone
+    /// before the copy is made and no caller ever holds one.
+    ///
+    /// The borrow rules are `get`'s, not `with`'s: the read is a copy, and it
+    /// may not happen inside a `with_mut` on the same cell. That is the point
+    /// — a field read that tracked a borrow would make every option read in
+    /// the editor a borrow-table entry, and would turn an option read inside
+    /// a `did_set_*` callback into a panic.
+    #[inline(always)]
+    pub fn get_field<F: Copy>(&self, project: impl FnOnce(&mut T) -> &mut F) -> F {
+        check_main_thread();
+        check_no_exclusive_borrow(self.0.get() as usize);
+        // SAFETY: main-thread invariant + no outstanding exclusive borrow.
+        *project(unsafe { &mut *self.0.get() })
+    }
+
+    /// Overwrite one field of the contents. See
+    /// [`get_field`](Self::get_field).
+    #[inline(always)]
+    pub fn set_field<F>(&self, project: impl FnOnce(&mut T) -> &mut F, value: F) {
+        check_main_thread();
+        check_no_borrow(self.0.get() as usize);
+        // SAFETY: main-thread invariant + no outstanding borrow.
+        *project(unsafe { &mut *self.0.get() }) = value;
+    }
+
     /// Run `f` with a shared reference to the contents.
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         check_main_thread();

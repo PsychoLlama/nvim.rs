@@ -14,7 +14,7 @@ use crate::api::private::helpers::cstr_to_string;
 use crate::eval::{REGSUB_COPY, REGSUB_MAGIC};
 use crate::mbyte::utfc_ptr2len;
 use crate::option::set_option_value_give_err;
-use crate::option::vars::{p_cpo, p_ic};
+use crate::option::vars::{P_CPO, p_cpo, p_ic};
 use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
@@ -42,8 +42,8 @@ struct QuietCpo {
 
 impl QuietCpo {
     fn enter() -> Self {
-        let saved = p_cpo.get();
-        p_cpo.set(empty_option());
+        let saved = p_cpo();
+        P_CPO.set(empty_option());
         Self { saved }
     }
 }
@@ -51,15 +51,15 @@ impl QuietCpo {
 impl Drop for QuietCpo {
     fn drop(&mut self) {
         // SAFETY: `saved` is the pointer 'cpoptions' held on entry.
-        if is_empty_option(p_cpo.get()) {
+        if is_empty_option(p_cpo()) {
             // Nothing touched it: put the old pointer straight back.
-            p_cpo.set(self.saved);
+            P_CPO.set(self.saved);
             return;
         }
         // Something replaced it. If what it left is *another* empty
         // string, the old value has to go back through the option
         // machinery rather than by assignment.
-        if unsafe { *p_cpo.get() } == NUL as c_char {
+        if unsafe { *p_cpo() } == NUL as c_char {
             set_option_value_give_err(
                 kOptCpoptions,
                 OptVal::string(unsafe { cstr_to_string(self.saved) }),
@@ -116,7 +116,7 @@ pub unsafe fn do_string_sub(
     // answer (`substitute("x", "x", "", "")`).
     let mut substituted = false;
     let mut regmatch = EMPTY_REGMATCH;
-    regmatch.rm_ic = p_ic.get() != 0;
+    regmatch.rm_ic = p_ic();
     // SAFETY: the caller's promise -- `pat` is NUL-terminated.
     regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
 

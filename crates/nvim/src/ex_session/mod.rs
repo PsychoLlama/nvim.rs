@@ -271,7 +271,7 @@ fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> *mut c_char {
     if !buffer.b_sfname.is_null()
         && opts.is_session()
         && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
-        && p_acd.get() == 0
+        && !p_acd()
         && !did_lcd.get()
     {
         return buffer.b_sfname;
@@ -415,7 +415,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
     let sname = unsafe { home_replace_save(None, Buf::current().b_ffname) };
 
     // SAFETY: 'viewdir' is a NUL-terminated option value.
-    let mut view = XString::from_bytes(unsafe { cstr::bytes_at(p_vdir.get()) });
+    let mut view = XString::from_bytes(unsafe { cstr::bytes_at(p_vdir()) });
     // `add_pathsep`, over the buffer just built: a separator that is the
     // trailing byte of a multibyte character does not count as one.
     // SAFETY: the two addresses are this string's own ends.
@@ -485,8 +485,8 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
                 return;
             }
             // The 'viewdir' may still need creating.
-            if !os_isdir(p_vdir.get()) {
-                let _ = vim_mkdir_emsg(p_vdir.get(), 0o755);
+            if !os_isdir(p_vdir()) {
+                let _ = vim_mkdir_emsg(p_vdir(), 0o755);
             }
             view_file
         } else if *arg != NUL as c_char {
@@ -583,7 +583,7 @@ unsafe fn write_rc(
         if !out.line(c"let &g:so = s:so_save | let &g:siso = s:siso_save") {
             failed = true;
         }
-        if p_hls.get() != 0 && !out.line(c"set hlsearch") {
+        if p_hls() && !out.line(c"set hlsearch") {
             failed = true;
         }
         if no_hlsearch.get() && !out.line(c"nohlsearch") {

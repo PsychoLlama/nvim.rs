@@ -42,11 +42,11 @@ pub unsafe fn win_execute_before(args: *mut WinExecute, window: Win, tabpage: Ta
             || !win.w_localdir.is_null()
             || !tab.is_current()
                 && (!TabPage::current().tp_localdir.is_null() || !tab.tp_localdir.is_null())
-            || p_acd.get() != 0)
+            || p_acd())
     {
         args.cwd_status = unsafe { os_dirname(args.cwd.as_mut_ptr(), size_of_val(&args.cwd)) };
     }
-    if args.cwd_status.is_ok() && p_acd.get() != 0 {
+    if args.cwd_status.is_ok() && p_acd() {
         // 'autochdir' will move the working directory itself when the
         // window is entered; `apply_acd` records that it has already
         // landed where the saved one says, so the restore can skip it.

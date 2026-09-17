@@ -176,7 +176,7 @@ pub fn buf_hide(buffer: Buf) -> bool {
         b'h' => return true,                // "hide"
         _ => {}
     }
-    p_hid.get() != 0 || cmdmod_has(CmdModFlags::HIDE)
+    p_hid() || cmdmod_has(CmdModFlags::HIDE)
 }
 
 // ---------------------------------------------------------------------------

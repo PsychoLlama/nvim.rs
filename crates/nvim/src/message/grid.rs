@@ -98,7 +98,7 @@ pub fn msg_grid_validate() {
     let mut grid = msg_grid_ref();
     grid_assign_handle(&mut grid);
     let should_alloc = msg_use_grid();
-    let max_rows = Rows.get() - p_ch.get() as c_int;
+    let max_rows = Rows.get() - p_ch() as c_int;
 
     if should_alloc
         && (grid.rows != Rows.get() || grid.cols != Columns.get() || !grid.is_allocated())
@@ -165,7 +165,7 @@ pub fn msg_cursor_goto(row: c_int, mut col: c_int) {
 
 /// How many screen lines the message area currently occupies.
 pub fn msg_scrollsize() -> c_int {
-    msg_scrolled.get() + p_ch.get() as c_int + c_int::from(p_ch.get() > 0 || msg_scrolled.get() > 1)
+    msg_scrolled.get() + p_ch() as c_int + c_int::from(p_ch() > 0 || msg_scrolled.get() > 1)
 }
 
 /// Should message output be batched into one scroll at flush time?
@@ -262,7 +262,7 @@ pub fn msg_reset_scroll() {
     }
     grid.throttled = false;
     // TODO(bfredl): calculate the conflict in the compositor instead.
-    msg_grid_set_pos(Rows.get() - p_ch.get() as c_int, false);
+    msg_grid_set_pos(Rows.get() - p_ch() as c_int, false);
     clear_cmdline.set(true);
     if grid.is_allocated() {
         // The bound is re-evaluated each time round, as upstream does.

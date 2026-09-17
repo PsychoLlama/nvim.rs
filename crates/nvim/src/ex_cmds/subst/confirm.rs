@@ -34,7 +34,7 @@ use crate::r#move::{
     do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline, validate_cursor,
 };
 use crate::option::cpo_has;
-use crate::option::vars::p_lz;
+use crate::option::vars::{P_LZ, p_lz};
 use crate::os::cshim::{gettext, snprintf};
 use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
@@ -157,7 +157,7 @@ fn prompt_exmode(st: &Sub) -> c_int {
 fn prompt_visual(st: &Sub) -> c_int {
     let mut orig_line: *mut c_char = ptr::null_mut();
     let mut len_change = 0 as c_int;
-    let save_p_lz = p_lz.get();
+    let save_p_lz = p_lz();
     // SAFETY: the current window is live.
     let save_p_fen = Win::current().w_onebuf_opt.wo_fen;
     // SAFETY: as above.
@@ -166,7 +166,7 @@ fn prompt_visual(st: &Sub) -> c_int {
     // Invert the matched string; the inversion is removed afterwards.
     let redraw = Allow::redraw();
     // Avoid calling update_screen() in vgetorpeek().
-    p_lz.set(0);
+    P_LZ.set(false);
 
     if st.new_line.is_some() {
         // There already was a substitution and we would like to show it, but
@@ -231,7 +231,7 @@ fn prompt_visual(st: &Sub) -> c_int {
 
     msg_didout.set(false); // don't scroll up
     gotocmdline(true);
-    p_lz.set(save_p_lz);
+    P_LZ.set(save_p_lz);
     drop(redraw);
 
     // Restore the line.

@@ -272,7 +272,7 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
     // a later line is really a linewise one.
     //
     // SAFETY: 'selection' is a NUL-terminated option string.
-    let sel_old = region.is_visual && unsafe { c_int::from(*p_sel.get()) } != 'o' as c_int;
+    let sel_old = region.is_visual && unsafe { c_int::from(*p_sel()) } != 'o' as c_int;
     if region.motion_type == kMTCharWise
         && region.start.col == 0
         && !region.inclusive
@@ -368,7 +368,7 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
         if yank_type == kMTCharWise && yanklines == 1 {
             yanklines = 0;
         }
-        if yanklines > p_report.get() as size_t {
+        if yanklines > p_report() as size_t {
             // SAFETY: `op` is still the operator that was just applied.
             unsafe { report_yank(op, yank_type, yanklines) };
         }

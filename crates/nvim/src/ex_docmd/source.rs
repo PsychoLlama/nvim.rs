@@ -242,7 +242,7 @@ pub(crate) unsafe fn msg_verbose_cmd(lnum: LineNr, cmd: *mut c_char) {
 /// still leave room for the editor's own nesting.
 pub(crate) fn do_cmdline_start() -> Result<(), Failed> {
     debug_assert!(cmdline_call_depth.get() >= 0);
-    if cmdline_call_depth.get() >= 200 && cmdline_call_depth.get() as OptInt >= p_mfd.get() {
+    if cmdline_call_depth.get() >= 200 && cmdline_call_depth.get() as OptInt >= p_mfd() {
         return Err(Failed);
     }
     cmdline_call_depth.set(cmdline_call_depth.get() + 1);

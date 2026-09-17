@@ -545,7 +545,7 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
         return;
     }
 
-    let table = if unsafe { *p_bg.get() } == b'l'.cast_signed() {
+    let table = if unsafe { *p_bg() } == b'l'.cast_signed() {
         &HIGHLIGHT_INIT_LIGHT
     } else {
         &HIGHLIGHT_INIT_DARK

@@ -318,7 +318,7 @@ pub(crate) unsafe fn str_to_mapargs(
             rhs_start,
             orig_rhs_len,
             LUA_NOREF,
-            p_cpo.get(),
+            p_cpo(),
             args,
         )
     };

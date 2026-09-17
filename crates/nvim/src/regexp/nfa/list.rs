@@ -179,7 +179,7 @@ impl ThreadList {
     /// Reserve the next slot size up, or report E363 and refuse.
     fn grow(&mut self) -> bool {
         let newlen = self.slots * 3 / 2 + 50;
-        if (((newlen * size_of::<NfaThread>()) >> 10) as i64) >= p_mmp.get() {
+        if (((newlen * size_of::<NfaThread>()) >> 10) as i64) >= p_mmp() {
             emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
             return false;
         }

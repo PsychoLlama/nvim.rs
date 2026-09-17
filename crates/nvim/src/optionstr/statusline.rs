@@ -26,8 +26,9 @@ use crate::drawscreen::state::ru_wid;
 use crate::memory::{xfree, xstrdup};
 use crate::message::e_invalid_format_string_single_percent_s;
 use crate::message::{verbose_open, verbose_stop};
+use crate::option::vars::p_vfile;
 use crate::option::vars::{p_ruf, p_shada, ssop_flags};
-use crate::option::{answer_err, did_set_title, get_option_default, p_vfile};
+use crate::option::{answer_err, did_set_title, get_option_default};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
@@ -55,7 +56,7 @@ pub fn did_set_titlestring(args: &mut OptSet) -> Option<&CStr> {
 /// shown literally, so a bad format is not an error here.
 pub(crate) fn did_set_titleiconstring(args: &OptSet, flagval: StlSyntax) -> Option<&'static CStr> {
     // SAFETY: the frame's value is a C string.
-    let value = unsafe { *varp(args) };
+    let value = unsafe { varp(args).get() };
     // SAFETY: as above; the checker walks it to its terminator.
     let formatted = unsafe {
         has_char(cstr::at(value), c_int::from(b'%')) && check_stl_option(value).is_none()
@@ -83,7 +84,7 @@ fn opt_bytes<'a>(s: *const c_char) -> &'a [u8] {
 /// Check `'rulerformat'` as a whole.
 fn check_ruf() -> Option<CString> {
     // SAFETY: the option's own value.
-    unsafe { check_stl_option(p_ruf.get()) }
+    unsafe { check_stl_option(p_ruf()) }
 }
 
 pub fn did_set_rulerformat(args: &mut OptSet) -> Option<&CStr> {
@@ -126,7 +127,7 @@ pub(crate) fn did_set_statustabline_rulerformat(
     }
 
     // SAFETY: the frame and its C string value.
-    let mut s = unsafe { *varp };
+    let mut s = unsafe { varp.get() };
     let (idx, flags) = (args.os_idx, args.os_flags);
     let is_stl = idx as c_int == kOptStatusline as c_int;
     let global = flags.has(OptionSetFlags::GLOBAL) || !flags.has(OptionSetFlags::LOCAL);
@@ -136,9 +137,9 @@ pub(crate) fn did_set_statustabline_rulerformat(
             .as_string()
             .expect("every option reaching here is a string option");
         // SAFETY: the option's own variable.
-        unsafe { xfree((*varp).cast::<c_void>()) };
-        unsafe { *varp = xstrdup(default.data()) };
-        s = unsafe { *varp };
+        unsafe { xfree(varp.get().cast::<c_void>()) };
+        unsafe { varp.set(xstrdup(default.data())) };
+        s = unsafe { varp.get() };
     }
     // A floating window's status line is part of its frame.
     if is_stl && wp.w_floating {
@@ -210,7 +211,7 @@ const SHADA_ITEMS: &[u8] = b"!\"%'/:<@cfhnrs";
 pub fn did_set_shada(args: &mut OptSet) -> Option<&CStr> {
     let (buf, buflen) = errbuf(args);
     // SAFETY: the option's own value, which is NUL-terminated.
-    let value = unsafe { CStr::from_ptr(p_shada.get()) }.to_bytes();
+    let value = unsafe { CStr::from_ptr(p_shada()) }.to_bytes();
     // Reading past the end answers the terminator, as walking the C string
     // does.
     let at = |i: usize| value.get(i).copied().unwrap_or(0);
@@ -305,12 +306,12 @@ pub fn did_set_shellpipe_redir(args: &mut OptSet) -> Option<&CStr> {
 pub fn did_set_shortmess(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame, its value and its error buffer.
     let (buf, len) = errbuf(args);
-    unsafe { did_set_option_listflag(*varp(args), SHM_ALL.as_ptr(), buf, len) }
+    unsafe { did_set_option_listflag(varp(args).get(), SHM_ALL.as_ptr(), buf, len) }
 }
 
 pub fn did_set_verbosefile(_args: &mut OptSet) -> Option<&CStr> {
     verbose_stop();
-    if c_int::from(unsafe { *p_vfile.get() }) != NUL && verbose_open().is_err() {
+    if c_int::from(unsafe { *p_vfile() }) != NUL && verbose_open().is_err() {
         return invalid();
     }
     None

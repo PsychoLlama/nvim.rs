@@ -362,12 +362,12 @@ fn apply_split(mut win: Win, config: CfgKeys, mut fconfig: WinCfg) -> Result<App
     let old_split = win_split_dir(win);
     if has_vertical && !has_split {
         fconfig.split = if config.vertical.unwrap_or(false) {
-            if old_split == kWinSplitRight || p_spr.get() != 0 {
+            if old_split == kWinSplitRight || p_spr() {
                 kWinSplitRight
             } else {
                 kWinSplitLeft
             }
-        } else if old_split == kWinSplitBelow || p_sb.get() != 0 {
+        } else if old_split == kWinSplitBelow || p_sb() {
             kWinSplitBelow
         } else {
             kWinSplitAbove

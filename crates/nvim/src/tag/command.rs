@@ -266,7 +266,7 @@ impl DoTag {
     /// already jumped.
     fn prepare(&mut self) -> bool {
         // SAFETY: the caller's promise.
-        if p_tgst.get() == 0 && unsafe { *self.tag } != 0 {
+        if !p_tgst() && unsafe { *self.tag } != 0 {
             // 'tagstack' is off: jump without recording anything.
             self.use_tagstack = false;
             self.new_tag = true;

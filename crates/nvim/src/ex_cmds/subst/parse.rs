@@ -195,7 +195,7 @@ pub(crate) unsafe fn sub_parse_flags(
     if bytes.first() == Some(&b'&') {
         i = 1;
     } else {
-        flags.do_all = p_gd.get() != 0;
+        flags.do_all = p_gd();
         flags.do_ask = false;
         flags.do_error = true;
         flags.do_print = false;

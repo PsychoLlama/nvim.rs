@@ -230,11 +230,11 @@ pub(crate) unsafe fn readfile(
             fenc_next = c"latin1".as_ptr().cast_mut();
             fenc = c"utf-8".as_ptr().cast_mut();
             fenc_alloced = false;
-        } else if unsafe { *p_fencs.get() } == 0 {
+        } else if unsafe { *p_fencs() } == 0 {
             fenc = Buf::current().b_p_fenc; // use the buffer's encoding
             fenc_alloced = false;
         } else {
-            fenc_next = p_fencs.get(); // try the items in 'fileencodings'
+            fenc_next = p_fencs(); // try the items in 'fileencodings'
             fenc = unsafe { next_fenc(&mut fenc_next, &mut fenc_alloced) };
         }
 
@@ -286,7 +286,7 @@ pub(crate) unsafe fn readfile(
                     guess.try_mac = 0;
                 } else if Buf::current().b_p_bin != 0 {
                     fileformat = EOL_UNIX; // binary: use Unix format
-                } else if unsafe { *p_ffs.get() } == 0 {
+                } else if unsafe { *p_ffs() } == 0 {
                     fileformat = get_fileformat(Buf::current()); // from the buffer
                 } else {
                     fileformat = EOL_UNKNOWN; // detect from the file
@@ -357,7 +357,7 @@ pub(crate) unsafe fn readfile(
                 if conv.flags == 0
                     && !how.stdin
                     && !how.buffer
-                    && unsafe { *p_ccv.get() } != 0
+                    && unsafe { *p_ccv() } != 0
                     && !how.fifo
                     && !conv.has_iconv()
                 {

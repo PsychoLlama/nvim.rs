@@ -18,7 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
 use crate::drawscreen::status_redraw_all;
@@ -26,7 +26,8 @@ use crate::global_cell::GlobalCell;
 use crate::indent::tabstop_set;
 use crate::memory::{xfree, xstrdup};
 use crate::option::vars::{
-    p_ai, p_et, p_paste, p_ri, p_ru, p_sm, p_sta, p_sts, p_tw, p_vsts, p_wm,
+    P_AI, P_ET, P_RI, P_RU, P_SM, P_STA, P_STS, P_TW, P_VSTS, P_WM, p_ai, p_et, p_paste, p_ri,
+    p_ru, p_sm, p_sta, p_sts, p_tw, p_vsts, p_wm,
 };
 use crate::options::{
     kOptAutoindent, kOptExpandtab, kOptRevins, kOptRuler, kOptShowmatch, kOptSmarttab,
@@ -41,14 +42,59 @@ use crate::winlayer::buffers;
 use super::{didset_options_sctx, field_ptr};
 
 /// What 'paste' overrode, so that switching it off again restores the
-/// values the user set. The per-buffer copies live in `Buffer`; these are
-/// the global ones.
-pub(crate) static p_ai_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static p_et_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
-pub(crate) static p_sts_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
-pub(crate) static p_tw_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
-pub(crate) static p_wm_nopaste: GlobalCell<OptInt> = GlobalCell::new(0);
-pub(crate) static p_vsts_nopaste: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+/// values the user set. The per-buffer copies live in `Buffer`; this is the
+/// global set.
+///
+/// Upstream keeps one global per saved option and a tenth for "is 'paste'
+/// already on"; they are only ever read and written together, on the two
+/// transitions, and a saved value means nothing without `on` to say whether
+/// it was ever taken. One record says that.
+#[derive(Copy, Clone)]
+pub(crate) struct PasteSave {
+    /// Whether 'paste' was on last time the callback ran — which is what
+    /// makes setting 'paste' twice keep the first save.
+    on: bool,
+    /// 'showmatch', 'smarttab', 'ruler' and 'revins'.
+    sm: bool,
+    sta: bool,
+    ru: bool,
+    ri: bool,
+    /// 'autoindent' and 'expandtab'.
+    pub(crate) ai: bool,
+    pub(crate) et: bool,
+    /// 'softtabstop', 'textwidth' and 'wrapmargin'.
+    pub(crate) sts: OptInt,
+    pub(crate) tw: OptInt,
+    pub(crate) wm: OptInt,
+    /// 'varsofttabstop', or null for a value that was not set. Owned: the
+    /// next save frees it.
+    pub(crate) vsts: *mut c_char,
+}
+
+impl PasteSave {
+    /// Nothing saved yet.
+    const NONE: Self = PasteSave {
+        on: false,
+        sm: false,
+        sta: false,
+        ru: false,
+        ri: false,
+        ai: false,
+        et: false,
+        sts: 0,
+        tw: 0,
+        wm: 0,
+        vsts: ptr::null_mut(),
+    };
+}
+
+static SAVED: GlobalCell<PasteSave> = GlobalCell::new(PasteSave::NONE);
+
+/// What 'paste' has stashed, for the buffer-local copies `copy.rs` seeds
+/// from it.
+pub(crate) fn paste_save() -> PasteSave {
+    SAVED.get()
+}
 
 /// The options 'paste' overrides while it is on, and so re-attributes to
 /// whatever script set 'paste'.
@@ -71,17 +117,11 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 const VSTS_ARRAY: usize = core::mem::offset_of!(Buffer, b_p_vsts_array);
 
 pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
-    static old_p_paste: GlobalCell<c_int> = GlobalCell::new(0);
-    static save_sm: GlobalCell<c_int> = GlobalCell::new(0);
-    static save_sta: GlobalCell<c_int> = GlobalCell::new(0);
-    static save_ru: GlobalCell<c_int> = GlobalCell::new(0);
-    static save_ri: GlobalCell<c_int> = GlobalCell::new(0);
-
     // SAFETY: the buffer list is the editor's own, and every string handled
     // here is either the shared empty string or an allocation this option
     // owns.
-    if p_paste.get() != 0 {
-        if old_p_paste.get() == 0 {
+    if p_paste() {
+        if !SAVED.get().on {
             for mut buf in buffers() {
                 buf.b_p_tw_nopaste = buf.b_p_tw;
                 buf.b_p_wm_nopaste = buf.b_p_wm;
@@ -93,19 +133,23 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
                 }
                 buf.b_p_vsts_nopaste = unsafe { saved_copy(buf.b_p_vsts) };
             }
-            save_sm.set(p_sm.get());
-            save_sta.set(p_sta.get());
-            save_ru.set(p_ru.get());
-            save_ri.set(p_ri.get());
-            p_ai_nopaste.set(p_ai.get());
-            p_et_nopaste.set(p_et.get());
-            p_sts_nopaste.set(p_sts.get());
-            p_tw_nopaste.set(p_tw.get());
-            p_wm_nopaste.set(p_wm.get());
-            if !p_vsts_nopaste.get().is_null() {
-                unsafe { xfree(p_vsts_nopaste.get().cast::<c_void>()) };
+            let stale = SAVED.get().vsts;
+            if !stale.is_null() {
+                unsafe { xfree(stale.cast::<c_void>()) };
             }
-            p_vsts_nopaste.set(unsafe { saved_copy(p_vsts.get()) });
+            SAVED.set(PasteSave {
+                on: false,
+                sm: p_sm(),
+                sta: p_sta(),
+                ru: p_ru(),
+                ri: p_ri(),
+                ai: p_ai(),
+                et: p_et(),
+                sts: p_sts(),
+                tw: p_tw(),
+                wm: p_wm(),
+                vsts: unsafe { saved_copy(p_vsts()) },
+            });
         }
 
         for mut buf in buffers() {
@@ -121,23 +165,23 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
             unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };
             buf.b_p_vsts_array = ptr::null_mut();
         }
-        p_sm.set(0);
-        p_sta.set(0);
-        if p_ru.get() != 0 {
+        P_SM.set(false);
+        P_STA.set(false);
+        if p_ru() {
             status_redraw_all();
         }
-        p_ru.set(0);
-        p_ri.set(0);
-        p_tw.set(0);
-        p_wm.set(0);
-        p_sts.set(0);
-        p_ai.set(0);
-        p_et.set(0);
-        if !p_vsts.get().is_null() {
-            unsafe { free_string_option(p_vsts.get()) };
+        P_RU.set(false);
+        P_RI.set(false);
+        P_TW.set(0);
+        P_WM.set(0);
+        P_STS.set(0);
+        P_AI.set(false);
+        P_ET.set(false);
+        if !p_vsts().is_null() {
+            unsafe { free_string_option(p_vsts()) };
         }
-        p_vsts.set(empty_option());
-    } else if old_p_paste.get() != 0 {
+        P_VSTS.set(empty_option());
+    } else if SAVED.get().on {
         for mut buf in buffers() {
             buf.b_p_tw = buf.b_p_tw_nopaste;
             buf.b_p_wm = buf.b_p_wm_nopaste;
@@ -158,24 +202,25 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
                 buf.b_p_vsts_array = ptr::null_mut::<ColNr>();
             }
         }
-        p_sm.set(save_sm.get());
-        p_sta.set(save_sta.get());
-        if p_ru.get() != save_ru.get() {
+        let saved = SAVED.get();
+        P_SM.set(saved.sm);
+        P_STA.set(saved.sta);
+        if p_ru() != saved.ru {
             status_redraw_all();
         }
-        p_ru.set(save_ru.get());
-        p_ri.set(save_ri.get());
-        p_ai.set(p_ai_nopaste.get());
-        p_et.set(p_et_nopaste.get());
-        p_sts.set(p_sts_nopaste.get());
-        p_tw.set(p_tw_nopaste.get());
-        p_wm.set(p_wm_nopaste.get());
-        if !p_vsts.get().is_null() {
-            unsafe { free_string_option(p_vsts.get()) };
+        P_RU.set(saved.ru);
+        P_RI.set(saved.ri);
+        P_AI.set(saved.ai);
+        P_ET.set(saved.et);
+        P_STS.set(saved.sts);
+        P_TW.set(saved.tw);
+        P_WM.set(saved.wm);
+        if !p_vsts().is_null() {
+            unsafe { free_string_option(p_vsts()) };
         }
-        p_vsts.set(unsafe { restored_copy(p_vsts_nopaste.get()) });
+        P_VSTS.set(unsafe { restored_copy(saved.vsts) });
     }
-    old_p_paste.set(p_paste.get());
+    SAVED.with_mut(|saved| saved.on = p_paste());
     didset_options_sctx(
         OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL,
         &PASTE_DEP_OPTS,

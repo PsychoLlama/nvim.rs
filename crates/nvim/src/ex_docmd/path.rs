@@ -200,7 +200,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         option_set_callback_func(buf.b_p_ffu, &raw mut buf.b_ffu_cb)
     } else {
-        let r = option_set_callback_func(p_ffu.get(), global_findfunc());
+        let r = option_set_callback_func(p_ffu(), global_findfunc());
         // Setting it globally without `:setglobal` clears the local one.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
             unsafe { callback_free(&raw mut buf.b_ffu_cb) };
@@ -211,10 +211,10 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
         return Some(e_invarg);
     }
     let varp = args.os_varp.string_var();
-    let name = unsafe { get_scriptlocal_funcname(*varp) };
+    let name = unsafe { get_scriptlocal_funcname(varp.get()) };
     if !name.is_null() {
-        unsafe { free_string_option(*varp) };
-        unsafe { *varp = name };
+        unsafe { free_string_option(varp.get()) };
+        unsafe { varp.set(name) };
     }
     None
 }
@@ -315,7 +315,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     };
 
     // `:cd` with no argument means home, when 'cdhome' is set.
-    if byte(new_dir) == NUL && p_cdh.get() != 0 {
+    if byte(new_dir) == NUL && p_cdh() {
         unsafe { expand_env(c"$HOME".as_ptr() as *mut c_char, dir.as_mut_ptr(), MAXPATHL) };
         new_dir = dir.as_mut_ptr();
     }
@@ -356,7 +356,7 @@ pub fn ex_cd(excmd: &mut ExArg) {
     let new_dir = excmd.arg;
     // Without 'cdhome', a bare `:cd` reports the directory instead of
     // changing it — Vi's behaviour.
-    if byte(new_dir) == NUL && p_cdh.get() == 0 {
+    if byte(new_dir) == NUL && !p_cdh() {
         report_working_dir();
         return;
     }
@@ -368,9 +368,7 @@ pub fn ex_cd(excmd: &mut ExArg) {
     } else {
         kCdScopeGlobal
     };
-    if unsafe { changedir_func(new_dir, scope) }
-        && (KeyTyped.get() || p_verbose.get() >= 5 as OptInt)
-    {
+    if unsafe { changedir_func(new_dir, scope) } && (KeyTyped.get() || p_verbose() >= 5 as OptInt) {
         report_working_dir();
     }
 }
@@ -391,7 +389,7 @@ fn report_working_dir() {
         emsg(gettext(c"E187: Unknown".as_ptr()));
         return;
     }
-    if p_verbose.get() > 0 as OptInt {
+    if p_verbose() > 0 as OptInt {
         let context = if !last_chdir_reason.get().is_null() {
             last_chdir_reason.get()
         } else if !Win::current().w_localdir.is_null() {

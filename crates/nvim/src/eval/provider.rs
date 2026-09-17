@@ -356,7 +356,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
             unsafe { provider_fn(bp, nm, c"provider#%s#Call") };
             // SAFETY: `bp` holds the NUL-terminated function name.
             let defined = !unsafe { find_func(bp) }.is_null();
-            if defined && p_lpl.get() != 0 {
+            if defined && p_lpl() {
                 // SAFETY: the format takes two NUL-terminated strings.
                 let (nm2, nm) = unsafe { (c_str(nm), c_str(nm)) };
                 semsg!("provider: {nm2}: missing required variable g:loaded_{nm}_provider");

@@ -173,7 +173,7 @@ unsafe fn load_spl(
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
             semsg!("E484: Can't open file {fname}");
-        } else if p_verbose.get() > 2 as OptInt {
+        } else if p_verbose() > 2 as OptInt {
             verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let fname = unsafe { c_str(fname) };
@@ -182,7 +182,7 @@ unsafe fn load_spl(
         }
         return false;
     };
-    if p_verbose.get() > 2 as OptInt {
+    if p_verbose() > 2 as OptInt {
         verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };

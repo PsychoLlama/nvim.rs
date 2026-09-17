@@ -160,7 +160,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     // override it and may name the region type.
     let opts =
         (args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)).then(|| args[2].dict_or_null());
-    let exclusive_by_default = unsafe { *p_sel.get() } == b'e' as c_char;
+    let exclusive_by_default = unsafe { *p_sel() } == b'e' as c_char;
     let (is_select_exclusive, spec) = match opts {
         Some(d) => {
             // SAFETY: the argument's own dictionary.

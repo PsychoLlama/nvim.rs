@@ -24,7 +24,7 @@ use super::{
 };
 use crate::message::state::called_emsg;
 use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
-use crate::option::vars::{p_re, p_verbose};
+use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::regexp::state::reg_do_extmatch;
@@ -58,7 +58,7 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegP
     // SAFETY: `expr_arg` is the caller's NUL-terminated pattern, and the
     // engine table's entries are set at compile time.
     let mut expr = expr_arg;
-    regexp_engine.set(p_re.get() as c_int);
+    regexp_engine.set(p_re() as c_int);
     if unsafe { cstr::starts_with(expr, b"\\%#=") } {
         let chosen = unsafe { *expr.offset(4) } as c_int - '0' as c_int;
         if chosen == AUTOMATIC_ENGINE as c_int
@@ -101,7 +101,7 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegP
         && called_emsg.get() == called_emsg_before
     {
         regexp_engine.set(BACKTRACKING_ENGINE as c_int);
-        if p_verbose.get() > 0 as OptInt {
+        if p_verbose() > 0 as OptInt {
             verbose_enter();
             let note = c"Switching to backtracking RE engine for pattern: ".as_ptr();
             // SAFETY: the translation of a static message.
@@ -148,9 +148,9 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
     // SAFETY: `prog` is a live NFA program, so it carries a pattern.
     let re_flags = unsafe { (*prog).re_flags } as c_int;
     let mut pat = XString::from_cstr(unsafe { cstr::at((*(prog as *mut NfaRegProg)).pattern) });
-    let save_p_re = p_re.get();
-    p_re.set(BACKTRACKING_ENGINE as c_int as OptInt);
-    if p_verbose.get() > 0 as OptInt {
+    let save_p_re = p_re();
+    P_RE.set(BACKTRACKING_ENGINE as c_int as OptInt);
+    if p_verbose() > 0 as OptInt {
         verbose_enter();
         msg_str(gettext(
             c"Switching to backtracking RE engine for pattern: ",
@@ -167,7 +167,7 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
     if extmatch {
         reg_do_extmatch.set(0);
     }
-    p_re.set(save_p_re);
+    P_RE.set(save_p_re);
     new
 }
 

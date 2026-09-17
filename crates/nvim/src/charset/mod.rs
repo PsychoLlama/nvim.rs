@@ -266,7 +266,7 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     // The first three are the global options; the last is the buffer's own
     // 'iskeyword'. Reading all four up front is what the C's loop does one
     // at a time — none of them can move while the tables are being filled.
-    let options = [p_isi.get(), p_isp.get(), p_isf.get(), buffer.b_p_isk];
+    let options = [p_isi(), p_isp(), p_isf(), buffer.b_p_isk];
     for &option in &options[if global { 0 } else { 3 }..] {
         // SAFETY: an option value is a NUL-terminated string, and `buffer` is
         // valid.
@@ -426,11 +426,11 @@ unsafe fn parse_isopt(
     buffer: Option<Buf>,
     only_check: bool,
 ) -> Result<(), Failed> {
-    let table = if var == p_isi.get().cast_const() {
+    let table = if var == p_isi().cast_const() {
         IsoptTable::Ident
-    } else if var == p_isp.get().cast_const() {
+    } else if var == p_isp().cast_const() {
         IsoptTable::Print
-    } else if var == p_isf.get().cast_const() {
+    } else if var == p_isf().cast_const() {
         IsoptTable::Fname
     } else {
         IsoptTable::Keyword

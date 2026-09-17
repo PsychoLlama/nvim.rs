@@ -140,7 +140,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let buffer = number(c"buffer") != 0;
     // The dict's "mode" is not used past get_map_mode_string.
 
-    let cpo = p_cpo.get();
+    let cpo = p_cpo();
     // SAFETY: `orig_rhs` is NUL-terminated.
     unsafe {
         let rhs_len = cstr::bytes_at(orig_rhs).len();
@@ -280,7 +280,7 @@ pub unsafe fn modify_keymap(
             break 'fail_and_free;
         }
 
-        let cpo = p_cpo.get();
+        let cpo = p_cpo();
         // SAFETY: `lhs` and `rhs` are live API strings.
         let ok = unsafe {
             let (l, ll) = (lhs.data(), lhs.len());

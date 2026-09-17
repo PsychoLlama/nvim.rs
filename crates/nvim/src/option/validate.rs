@@ -163,12 +163,12 @@ pub(crate) unsafe fn validate_num_option(
         | kOptTimeoutlen | kOptCmdheight => bounded(value, 0, too_small(), OptInt::MAX, invalid()),
         kOptCmdwinheight => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
         // The four window-size options each cross-check their partner.
-        kOptWinheight if value >= 1 && p_wmh.get() > value => e_winheight.as_ptr(),
+        kOptWinheight if value >= 1 && p_wmh() > value => e_winheight.as_ptr(),
         kOptWinheight => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
-        kOptWinminheight => bounded(value, 0, too_small(), p_wh.get(), e_winheight.as_ptr()),
-        kOptWinwidth if value >= 1 && p_wmw.get() > value => e_winwidth.as_ptr(),
+        kOptWinminheight => bounded(value, 0, too_small(), p_wh(), e_winheight.as_ptr()),
+        kOptWinwidth if value >= 1 && p_wmw() > value => e_winwidth.as_ptr(),
         kOptWinwidth => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
-        kOptWinminwidth => bounded(value, 0, too_small(), p_wiw.get(), e_winwidth.as_ptr()),
+        kOptWinminwidth => bounded(value, 0, too_small(), p_wiw(), e_winwidth.as_ptr()),
         // 'maxcombine' is fixed: whatever is asked for, this is the answer.
         kOptMaxcombine => {
             *newval = MAX_MCO as OptInt;

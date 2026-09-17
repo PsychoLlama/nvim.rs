@@ -42,8 +42,8 @@ use crate::winlayer::{FrameRef, Win};
 /// [`arith::frame_minheight`] wants them.
 fn height_opts() -> MinSize {
     MinSize {
-        wanted: ::core::ffi::c_int::try_from(p_wh.get()).unwrap_or(::core::ffi::c_int::MAX),
-        minimum: ::core::ffi::c_int::try_from(p_wmh.get()).unwrap_or(::core::ffi::c_int::MAX),
+        wanted: ::core::ffi::c_int::try_from(p_wh()).unwrap_or(::core::ffi::c_int::MAX),
+        minimum: ::core::ffi::c_int::try_from(p_wmh()).unwrap_or(::core::ffi::c_int::MAX),
         curwin: Win::current_or_none().map(Win::id),
     }
 }
@@ -51,8 +51,8 @@ fn height_opts() -> MinSize {
 /// `'winwidth'`, `'winminwidth'` and the current window.
 fn width_opts() -> MinSize {
     MinSize {
-        wanted: ::core::ffi::c_int::try_from(p_wiw.get()).unwrap_or(::core::ffi::c_int::MAX),
-        minimum: ::core::ffi::c_int::try_from(p_wmw.get()).unwrap_or(::core::ffi::c_int::MAX),
+        wanted: ::core::ffi::c_int::try_from(p_wiw()).unwrap_or(::core::ffi::c_int::MAX),
+        minimum: ::core::ffi::c_int::try_from(p_wmw()).unwrap_or(::core::ffi::c_int::MAX),
         curwin: Win::current_or_none().map(Win::id),
     }
 }
@@ -86,15 +86,15 @@ pub(crate) fn new_height(
     if topfrp.parent().is_none() && set_ch {
         // The top frame's height is the screen's minus the command line, so
         // giving it a new one means giving 'cmdheight' the difference.
-        let want_ch = p_ch.get() + OptInt::from(topfrp.fr_height) - OptInt::from(height);
+        let want_ch = p_ch() + OptInt::from(topfrp.fr_height) - OptInt::from(height);
         let new_ch = min_set_ch.get().max(want_ch);
-        if new_ch != p_ch.get() {
+        if new_ch != p_ch() {
             let save_ch = min_set_ch.get();
             set_option_value(kOptCmdheight, OptVal::Number(new_ch), OptionSetFlags::NONE);
             min_set_ch.set(save_ch);
         }
         let room = OptInt::from(Rows.get())
-            - p_ch.get()
+            - p_ch()
             - OptInt::from(tabline_rows())
             - OptInt::from(global_stl_rows());
         let room = room.clamp(OptInt::from(::core::ffi::c_int::MIN), OptInt::from(height));

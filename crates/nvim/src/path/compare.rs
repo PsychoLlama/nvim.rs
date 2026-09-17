@@ -187,7 +187,7 @@ pub unsafe fn same_directory(f1: *mut c_char, f2: *mut c_char) -> bool {
 /// # Safety
 /// Both must be NUL-terminated strings.
 pub unsafe fn pathcmp(p: *const c_char, q: *const c_char, maxlen: c_int) -> c_int {
-    let ignorecase = p_fic.get() != 0;
+    let ignorecase = p_fic();
     let fold = |c: c_int| if ignorecase { mb_toupper(c) } else { c };
     let limit = if maxlen < 0 {
         usize::MAX

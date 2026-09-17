@@ -592,14 +592,14 @@ impl Jump {
     /// Search for the tag's pattern, guessing at it if it is not there.
     fn search(&mut self, tagp: &TagParts, search_options: c_int) -> c_int {
         // SAFETY: the caller's promise; the globals are live.
-        let save_p_ws = p_ws.get() != 0;
-        let save_p_ic = p_ic.get();
-        let save_p_scs = p_scs.get();
+        let save_p_ws = p_ws();
+        let save_p_ic = p_ic();
+        let save_p_scs = p_scs();
         // 'wrapscan' is needed for a backward search, and the pattern
         // was not typed by the user, so case must not be folded.
-        p_ws.set(1);
-        p_ic.set(0);
-        p_scs.set(0);
+        P_WS.set(true);
+        P_IC.set(false);
+        P_SCS.set(false);
 
         let save_lnum = Win::current().w_cursor.lnum;
         // Start before the line the "line:" field named, or before the
@@ -610,7 +610,7 @@ impl Jump {
             Found::Exactly
         } else {
             // Try again, ignoring case this time.
-            p_ic.set(1);
+            P_IC.set(true);
             if self.pattern.search(search_options) {
                 Found::IgnoringCase
             } else {
@@ -630,7 +630,7 @@ impl Jump {
                 // Only say so when it really was a guess, not when
                 // 'ignorecase' was already set and the match turned up
                 // once case was folded.
-                if matches!(found, Found::Guessing) || save_p_ic == 0 {
+                if matches!(found, Found::Guessing) || !save_p_ic {
                     let s2 = gettext(c"E435: Couldn't find tag, just guessing!");
                     msg(s2, 0);
                     if msg_scrolled.get() == 0 && msg_silent.get() == 0 {
@@ -641,9 +641,9 @@ impl Jump {
             }
         };
 
-        p_ws.set(c_int::from(save_p_ws));
-        p_ic.set(save_p_ic);
-        p_scs.set(save_p_scs);
+        P_WS.set(save_p_ws);
+        P_IC.set(save_p_ic);
+        P_SCS.set(save_p_scs);
         // A search command may have put the cursor beyond the end of
         // the line; correct that here.
         check_cursor(Win::current());

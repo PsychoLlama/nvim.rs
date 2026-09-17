@@ -150,7 +150,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
         let _ = ml_delete_flags(line1 + extra, ML_DEL_MESSAGE as c_int);
     }
 
-    if global_busy.get() == 0 && num_lines as OptInt > p_report.get() {
+    if global_busy.get() == 0 && num_lines as OptInt > p_report() {
         let moved = ngettext(c"%ld line moved", c"%ld lines moved", num_lines as c_ulong);
         let _: bool = report_msg(0, || tr_plural!(moved, num_lines as int64_t));
     }

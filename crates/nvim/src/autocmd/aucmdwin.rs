@@ -203,12 +203,12 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
         // `RedrawingDisabled` keeps it from redrawing or setting the
         // window title.
-        let save_acd = p_acd.get();
-        p_acd.set(0);
+        let save_acd = p_acd();
+        P_ACD.set(false);
         let redraw_off = Suppress::redraw();
         win_enter(auc, false);
         drop(redraw_off);
-        p_acd.set(save_acd);
+        P_ACD.set(save_acd);
         unblock_autocmds();
         auc.make_current();
     }

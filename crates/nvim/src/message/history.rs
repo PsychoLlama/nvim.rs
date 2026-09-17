@@ -213,7 +213,7 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
     let mut history = 0;
     let mut progress_target = 0;
 
-    let mut p = p_mopt.get();
+    let mut p = p_mopt();
     while unsafe { *p } != 0 {
         if unsafe { at_opt(p, OPT_HIT_ENTER, false) } {
             p = unsafe { p.add(OPT_HIT_ENTER.count_bytes()) };

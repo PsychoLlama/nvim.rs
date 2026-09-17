@@ -221,7 +221,7 @@ fn deadly_signal(signum: c_int) -> ! {
             c"Nvim: Caught deadly signal '%s'\n".as_ptr(),
             name,
         );
-        if p_awa.get() != 0 && signum != SIGTERM && signum != SIGINT {
+        if p_awa() && signum != SIGTERM && signum != SIGINT {
             autowrite_all();
         }
         // Preserve files and exit.
@@ -247,7 +247,7 @@ fn handle_signal(signum: c_int) {
             SIGPWR => ml_sync_all(0, 0, true),
             SIGPIPE => {}
             SIGTSTP => {
-                if p_awa.get() != 0 {
+                if p_awa() {
                     autowrite_all();
                 }
             }

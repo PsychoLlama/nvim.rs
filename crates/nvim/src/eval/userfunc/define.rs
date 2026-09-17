@@ -106,7 +106,7 @@ pub(crate) unsafe fn list_func_head(
     }
 
     msg_clr_eos();
-    if p_verbose.get() > 0 {
+    if p_verbose() > 0 {
         last_set_msg(f.uf_script_ctx);
     }
     Ok(())

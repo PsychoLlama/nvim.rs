@@ -35,7 +35,7 @@ use crate::r#move::{
     validate_botline_win, win_col_off2,
 };
 use crate::option::get_scrolloff_value;
-use crate::option::vars::{p_ch, p_ls, p_spk, p_stal, p_wbr};
+use crate::option::vars::{P_CH, p_ch, p_ls, p_spk, p_stal, p_wbr};
 use crate::options::kWinOptScroll;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::startup::{exiting, full_screen};
@@ -145,7 +145,7 @@ pub fn win_fix_scroll(resize: bool) {
 /// "topline" holds the top line, and "cursor" (the default) does nothing here.
 pub(crate) fn fix_scroll(resize: bool) {
     // SAFETY: `'splitkeep'` is a NUL-terminated option string.
-    if unsafe { *p_spk.get() } as c_int == 'c' as c_int {
+    if unsafe { *p_spk() } as c_int == 'c' as c_int {
         return;
     }
     skip_update_topline.set(true);
@@ -153,7 +153,7 @@ pub(crate) fn fix_scroll(resize: bool) {
         if !wp.w_floating && wp.w_height != wp.w_prev_height {
             wp.w_do_win_fix_cursor = true;
             // SAFETY: as above.
-            let screen = unsafe { *p_spk.get() } as c_int == 's' as c_int;
+            let screen = unsafe { *p_spk() } as c_int == 's' as c_int;
             if screen
                 && wp.w_winrow != wp.w_prev_winrow
                 && wp.w_botline - 1 <= wp.buffer().line_count()
@@ -356,7 +356,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
         height = (window.w_height - window.w_winbar_height).max(0);
     }
     // SAFETY: `'splitkeep'` is a NUL-terminated option string.
-    let keeps_cursor = unsafe { *p_spk.get() } as c_int == 'c' as c_int;
+    let keeps_cursor = unsafe { *p_spk() } as c_int == 'c' as c_int;
 
     if height != prev_height {
         if height > 0 && valid_cursor {
@@ -487,27 +487,27 @@ pub fn command_height() {
         frp = fr.prev();
     }
 
-    while p_ch.get() > old_p_ch as OptInt && command_frame_height.get() {
+    while p_ch() > old_p_ch as OptInt && command_frame_height.get() {
         let Some(fr) = frp else {
             err(e_noroom.as_ptr());
-            p_ch.set(old_p_ch as OptInt);
+            P_CH.set(old_p_ch as OptInt);
             break;
         };
         let spare = fr.fr_height - minheight(fr, NextCurwin::Unset);
-        let h = ((p_ch.get() - old_p_ch as OptInt) as c_int).min(spare);
+        let h = ((p_ch() - old_p_ch as OptInt) as c_int).min(spare);
         add_height(fr, -h);
         old_p_ch += h;
         frp = fr.prev();
     }
-    if p_ch.get() < old_p_ch as OptInt
+    if p_ch() < old_p_ch as OptInt
         && command_frame_height.get()
         && let Some(fr) = frp
     {
-        add_height(fr, (old_p_ch as OptInt - p_ch.get()) as c_int);
+        add_height(fr, (old_p_ch as OptInt - p_ch()) as c_int);
     }
 
     comp_positions();
-    cmdline_row.set(Rows.get() - p_ch.get() as c_int);
+    cmdline_row.set(Rows.get() - p_ch() as c_int);
     redraw_cmdline.set(true);
     if msg_scrolled.get() == 0 && full_screen.get() {
         let mut grid = default_gridview();
@@ -518,8 +518,8 @@ pub fn command_height() {
         grid_clear(grid, cmdline_row.get(), Rows.get(), 0, Columns.get(), 0);
         msg_row.set(cmdline_row.get());
     }
-    TabPage::current().tp_ch_used = p_ch.get();
-    min_set_ch.set(p_ch.get());
+    TabPage::current().tp_ch_used = p_ch();
+    min_set_ch.set(p_ch());
 }
 
 /// Add `n` rows to frame `frp` and to every frame above it, from
@@ -665,7 +665,7 @@ pub fn set_winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int
 fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
     let mut window = window;
     // SAFETY: both are NUL-terminated option strings.
-    let (global, local) = unsafe { (*p_wbr.get() as c_int, *window.w_onebuf_opt.wo_wbr as c_int) };
+    let (global, local) = unsafe { (*p_wbr() as c_int, *window.w_onebuf_opt.wo_wbr as c_int) };
     let winbar_height = if window.w_floating {
         (local != NUL) as c_int
     } else {
@@ -710,7 +710,7 @@ pub(crate) fn tabline_rows() -> c_int {
         return 0;
     }
     debug_assert!(tabs().next().is_some(), "first_tabpage");
-    match p_stal.get() {
+    match p_stal() {
         // Only draw the tab line for a second tab page.
         1 => tabs().nth(1).map_or(0, |_| 1),
         0 => 0,
@@ -725,7 +725,7 @@ pub fn global_winbar_height() -> c_int {
 /// The rows a global `'winbar'` takes off every window.
 pub(crate) fn global_winbar_rows() -> c_int {
     // SAFETY: `'winbar'` is a NUL-terminated option string.
-    (unsafe { *p_wbr.get() } as c_int != NUL) as c_int
+    (unsafe { *p_wbr() } as c_int != NUL) as c_int
 }
 
 pub fn global_stl_height() -> c_int {
@@ -734,7 +734,7 @@ pub fn global_stl_height() -> c_int {
 
 /// The rows a global status line (`'laststatus'` = 3) takes.
 pub(crate) fn global_stl_rows() -> c_int {
-    if p_ls.get() == 3 as OptInt {
+    if p_ls() == 3 as OptInt {
         STATUS_HEIGHT as c_int
     } else {
         0
@@ -749,7 +749,7 @@ pub fn last_stl_height(morewin: bool) -> c_int {
 /// whether a window is about to be added.
 pub(crate) fn last_stl_rows(morewin: bool) -> c_int {
     let alone = is_only_window(first_window(), None);
-    if p_ls.get() > 1 as OptInt || (p_ls.get() == 1 as OptInt && (morewin || !alone)) {
+    if p_ls() > 1 as OptInt || (p_ls() == 1 as OptInt && (morewin || !alone)) {
         STATUS_HEIGHT as c_int
     } else {
         0
@@ -782,7 +782,7 @@ pub(crate) fn min_rows_of(tabpage: TabPage) -> c_int {
 /// the global option rather than the saved copy.
 fn cmdheight_of(tabpage: TabPage) -> OptInt {
     if tabpage.is_current() {
-        p_ch.get()
+        p_ch()
     } else {
         tabpage.tp_ch_used
     }

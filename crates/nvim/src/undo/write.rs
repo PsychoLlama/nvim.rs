@@ -84,7 +84,7 @@ unsafe fn write_undo_file(
         unsafe { os_remove(cstr::at(file_name)) };
     }
     if buffer.b_u_numhead == 0 && buffer.b_u_line_ptr.is_null() {
-        if p_verbose.get() > 0 {
+        if p_verbose() > 0 {
             let mesg = gettext(c"Skipping undo file write, nothing to undo");
             // SAFETY: as above.
             unsafe { verb_msg(mesg.as_ptr()) };
@@ -265,13 +265,13 @@ unsafe fn write_tree(
     // 'fsync' asks for the bytes to be on the disk before we call the
     // write done.
     let fsync_wanted = if buffer.b_p_fs >= 0 {
-        buffer.b_p_fs
+        buffer.b_p_fs != 0
     } else {
-        p_fs.get()
+        p_fs()
     };
     // SAFETY: `stream` and `fd` are the same open file as `bi`, by the contract
     // above.
-    if fsync_wanted != 0 && unsafe { fflush(stream) } == 0 && unsafe { os_fsync(fd) } != 0 {
+    if fsync_wanted && unsafe { fflush(stream) } == 0 && unsafe { os_fsync(fd) } != 0 {
         write_ok = false;
     }
     write_ok

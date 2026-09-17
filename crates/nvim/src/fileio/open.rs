@@ -186,7 +186,7 @@ pub(crate) unsafe fn open_source(
 
     msg_scroll.set(
         (!((shortmess(ShmFlag::OVER) && msg_listdo_overwrite.get() == 0) || Buf::current().b_help)
-            || p_verbose.get() != 0) as c_int,
+            || p_verbose() != 0) as c_int,
     );
 
     if !fname.is_null() && unsafe { *fname } != 0 {

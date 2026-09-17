@@ -105,7 +105,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
 pub(crate) fn ex_ptag(excmd: &mut ExArg) {
-    g_do_tagpreview.set(p_pvh.get() as c_int);
+    g_do_tagpreview.set(p_pvh() as c_int);
     unsafe { ex_tag_cmd(excmd, cmdnames[excmd.cmdidx.index()].cmd_name.add(1)) };
 }
 

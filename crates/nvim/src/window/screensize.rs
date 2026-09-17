@@ -30,7 +30,7 @@ use crate::eval::{get_v_event, restore_v_event};
 use crate::ex_getln::compute_cmdrow;
 use crate::global_cell::GlobalCell;
 use crate::option::option_was_set;
-use crate::option::vars::{p_ch, p_window};
+use crate::option::vars::{P_WINDOW, p_ch, p_window};
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{Dict, LineNr, List, OptInt, SaveVEvent, TypVal, VarNumber, ptrdiff_t, size_t};
@@ -42,7 +42,7 @@ use crate::winlayer::{Win, windows};
 /// The rows the frame tree has to itself: the screen minus the command line,
 /// the tab line and a global status line.
 fn frame_rows() -> c_int {
-    (Rows.get() as OptInt - p_ch.get() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
+    (Rows.get() as OptInt - p_ch() - tabline_rows() as OptInt - global_stl_rows() as OptInt)
         as c_int
 }
 
@@ -51,10 +51,10 @@ pub fn win_new_screensize() {
     static old_Columns: GlobalCell<c_int> = GlobalCell::new(0);
     if old_Rows.get() != Rows.get() {
         // If 'window' uses the whole screen, keep it using the whole screen.
-        if p_window.get() == (old_Rows.get() - 1) as OptInt
+        if p_window() == (old_Rows.get() - 1) as OptInt
             || (old_Rows.get() == 0 && !option_was_set(kOptWindow))
         {
-            p_window.set((Rows.get() - 1) as OptInt);
+            P_WINDOW.set((Rows.get() - 1) as OptInt);
         }
         old_Rows.set(Rows.get());
         new_screen_rows();
@@ -85,7 +85,7 @@ pub(crate) fn new_screen_rows() {
     comp_positions();
     win_reconfig_floats();
     compute_cmdrow();
-    TabPage::current().tp_ch_used = p_ch.get();
+    TabPage::current().tp_ch_used = p_ch();
     if !skip_win_fix_scroll.get() {
         fix_scroll(true);
     }

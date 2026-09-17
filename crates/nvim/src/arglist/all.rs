@@ -319,10 +319,10 @@ fn open_window_for_arg(
     };
     if !aall.use_firstwin {
         // Split the current window, taking space from all of them.
-        let p_ea_save = p_ea.get() != 0;
-        p_ea.set(c_int::from(true));
+        let p_ea_save = p_ea();
+        P_EA.set(true);
         let split_ret = win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int);
-        p_ea.set(c_int::from(p_ea_save));
+        P_EA.set(p_ea_save);
         split_ret?;
     }
     // SAFETY: curwin is the window just split (or the first one), and the
@@ -383,7 +383,7 @@ fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
         if !split_failed {
             os_breakcheck();
             // With ":tab", open a new tab page for each new window.
-            let room = tabpage_index(None) as OptInt <= p_tpm.get();
+            let room = tabpage_index(None) as OptInt <= p_tpm();
             if aall.had_tab > 0 && room {
                 cmdmod.with_mut(|m| m.cmod_tab = 9999);
             }

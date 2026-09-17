@@ -154,8 +154,8 @@ fn a_is_valid(c: c_int) -> bool {
 
 /// Is `two` an alef variant that combines with a preceding lam?
 pub(crate) fn arabic_maycombine(two: c_int) -> bool {
-    p_arshape.get() != 0
-        && p_tbidi.get() == 0
+    p_arshape()
+        && !p_tbidi()
         && matches!(
             two,
             A_ALEF_MADDA | A_ALEF_HAMZA_ABOVE | A_ALEF_HAMZA_BELOW | A_ALEF

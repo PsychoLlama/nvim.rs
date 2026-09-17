@@ -45,7 +45,7 @@ const CPT_WITH_ARGUMENT: &CStr = c"ksF";
 pub fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
     let (buf, buflen) = errbuf(args);
     // SAFETY: the frame's C string value, walked to its terminator.
-    let mut p = unsafe { *varp(args) };
+    let mut p = unsafe { varp(args).get() };
     while unsafe { *p } != 0 {
         let mut part = [0u8; LSIZE as usize];
         let mut into = 0;
@@ -134,7 +134,7 @@ pub fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
 
     // SAFETY: the option's own C string value, and a scratch buffer of the
     // size given.
-    let mut p = p_cia.get();
+    let mut p = p_cia();
     while unsafe { *p } != 0 {
         unsafe {
             copy_option_part(
@@ -177,7 +177,7 @@ pub fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
             // A plain `:set` drops the buffer's own answer.
             buf.b_cot_flags = 0 as c_uint;
         }
-        p_cot.get()
+        p_cot()
     };
     // SAFETY: a C string, against the table's own word list.
     let Some(mask) = (unsafe { opt_strings_mask(value, &opt_cot_values, true) }) else {
@@ -209,7 +209,7 @@ pub fn did_set_helpfile(_args: &mut OptSet) -> Option<&CStr> {
 pub fn did_set_helplang(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the option's own C string value; each test below is reached
     // only once the byte before it is known not to be the terminator.
-    let mut s = p_hlg.get();
+    let mut s = p_hlg();
     while c_int::from(unsafe { *s }) != NUL {
         if c_int::from(unsafe { *s.add(1) }) == NUL
             || ((unsafe { *s.add(2) } != b',' as c_char
@@ -243,10 +243,10 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's own variable; `get_scriptlocal_funcname` returns
     // a fresh allocation or null, and the old value is freed here.
     let varp = varp(args);
-    let resolved = unsafe { get_scriptlocal_funcname(*varp) };
+    let resolved = unsafe { get_scriptlocal_funcname(varp.get()) };
     if !resolved.is_null() {
-        unsafe { free_string_option(*varp) };
-        unsafe { *varp = resolved };
+        unsafe { free_string_option(varp.get()) };
+        unsafe { varp.set(resolved) };
     }
     None
 }
@@ -258,7 +258,7 @@ pub fn did_set_spellcapcheck(args: &mut OptSet) -> Option<&CStr> {
 
 pub fn did_set_spellfile(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
-    if !unsafe { valid_spellfile(*varp(args)) } {
+    if !unsafe { valid_spellfile(varp(args).get()) } {
         return invalid();
     }
     did_set_spell_option()
@@ -266,7 +266,7 @@ pub fn did_set_spellfile(args: &mut OptSet) -> Option<&CStr> {
 
 pub fn did_set_spelllang(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame's C string value.
-    if !valid_spelllang(unsafe { CStr::from_ptr(*varp(args)) }) {
+    if !valid_spelllang(unsafe { CStr::from_ptr(varp(args).get()) }) {
         return invalid();
     }
     did_set_spell_option()
@@ -310,7 +310,7 @@ pub fn did_set_spellsuggest(_args: &mut OptSet) -> Option<&CStr> {
 pub fn did_set_tagcase(args: &mut OptSet) -> Option<&CStr> {
     let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
-    let value = if local { buf.b_p_tc } else { p_tc.get() };
+    let value = if local { buf.b_p_tc } else { p_tc() };
     // An empty buffer-local value means "no override".
     // SAFETY: an option's value is a C string.
     let mask = if local && unsafe { c_int::from(*value) } == NUL {

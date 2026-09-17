@@ -179,7 +179,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     // `terminal_check_size`, which may have changed since the last `BufRef`
     // (`close_buffer` autocommands, say).
     let bufref = BufRef::of_opt(win.buffer_or_none());
-    let had_cmdline_ruler = p_ru.get() != 0 && win.is_current() && win.w_status_height == 0;
+    let had_cmdline_ruler = p_ru() && win.is_current() && win.w_status_height == 0;
     let was_current = win.is_current();
 
     // Free the memory the window used, and take the window that received its
@@ -214,8 +214,8 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         // remove it. Do this before `equal()`, which may change a height.
         update_last_status(false);
         // SAFETY: `'eadirection'` is a NUL-terminated option string.
-        let ead = unsafe { *p_ead.get() } as c_int;
-        if !Win::current().w_floating && p_ea.get() != 0 && (ead == 'b' as c_int || ead == dir) {
+        let ead = unsafe { *p_ead() } as c_int;
+        if !Win::current().w_floating && p_ea() && (ead == 'b' as c_int || ead == dir) {
             // If the frame of the closed window contains the new current
             // window, resize only that frame; otherwise resize all windows.
             let same = Win::current().frame().fr_parent == win_frame;

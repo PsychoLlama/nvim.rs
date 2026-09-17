@@ -35,8 +35,8 @@ use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
 use crate::message_fmt::c_str;
-use crate::option::vars::fenc_default;
-use crate::option::vars::{p_ch, p_enc, p_hlg, p_icon, p_rtp, p_sh, p_title, p_window};
+use crate::option::vars::{P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW, fenc_default};
+use crate::option::vars::{p_enc, p_hlg, p_rtp, p_sh};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
     kOptFileformats, kOptHelplang, kOptIcon, kOptInvalid, kOptModeline, kOptPackpath,
@@ -98,7 +98,7 @@ const ON: OptVal = boolean_optval(Some(true));
 /// A new tab page starts with the global 'cmdheight', not with whatever the
 /// tab page it was opened from had.
 pub(crate) fn set_init_tablocal() {
-    p_ch.set(
+    P_CH.set(
         option_default(kOptCmdheight)
             .as_number()
             .expect("'cmdheight' is a number option"),
@@ -236,7 +236,7 @@ fn set_init_expand_env() {
         let translated = opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global();
         let expansion = (!translated).then(|| unsafe { option_expand(opt_idx, ptr::null()) });
         let expanded = match &expansion {
-            None => unsafe { gettext_ptr(*option_var(opt_idx).string_var()) }.as_ptr(),
+            None => unsafe { gettext_ptr(option_var(opt_idx).string_var().get()) }.as_ptr(),
             Some(Some(expanded)) => expanded.as_ptr(),
             Some(None) => continue,
         };
@@ -336,7 +336,7 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     didset_options2();
     lang_init();
     set_init_fenc_default();
-    unsafe { bind_textdomain_codeset(PROJECT_NAME.as_ptr(), p_enc.get()) };
+    unsafe { bind_textdomain_codeset(PROJECT_NAME.as_ptr(), p_enc()) };
     unsafe { set_helplang_default(get_mess_lang()) };
 }
 
@@ -500,7 +500,7 @@ pub(crate) fn set_init_2(_headless: bool) {
         c"set_init_2",
         613,
         "startup runtimepath/packpath value: {}",
-        unsafe { c_str(p_rtp.get()) }
+        unsafe { c_str(p_rtp()) }
     );
     // 'scroll' is half the window height, so it could not be defaulted
     // before there was a window.
@@ -510,7 +510,7 @@ pub(crate) fn set_init_2(_headless: bool) {
     comp_col();
     // Same for 'window', which is one screen's worth of lines.
     if !option_was_set(kOptWindow) {
-        p_window.set((Rows.get() - 1) as OptInt);
+        P_WINDOW.set((Rows.get() - 1) as OptInt);
     }
     change_option_default(kOptWindow, OptVal::Number((Rows.get() - 1) as OptInt));
 }
@@ -539,7 +539,7 @@ pub(crate) fn set_init_3() {
     let do_sp = !option_was_set(kOptShellpipe);
 
     let mut len: size_t = 0;
-    let tail = unsafe { invocation_path_tail(p_sh.get(), &raw mut len) };
+    let tail = unsafe { invocation_path_tail(p_sh(), &raw mut len) };
     let shell = unsafe { xmemdupz(tail.cast::<c_void>(), len) }.cast::<c_char>();
     let named = |names: &[&CStr]| {
         names
@@ -587,10 +587,10 @@ pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
     if lang_len < 2 || option_was_set(kOptHelplang) {
         return;
     }
-    unsafe { free_string_option(p_hlg.get()) };
-    p_hlg.set(unsafe { xmemdupz(lang.cast::<c_void>(), lang_len) }.cast::<c_char>());
+    unsafe { free_string_option(p_hlg()) };
+    P_HLG.set(unsafe { xmemdupz(lang.cast::<c_void>(), lang_len) }.cast::<c_char>());
 
-    let hlg = p_hlg.get();
+    let hlg = p_hlg();
     let lower = |c: c_char| (c as u8).to_ascii_lowercase() as c_char;
     if unsafe { strncasecmp(hlg, c"zh_".as_ptr(), 3) } == 0 && lang_len >= 5 {
         // zh_CN becomes "cn", zh_TW becomes "tw".
@@ -607,10 +607,10 @@ pub(crate) unsafe fn set_helplang_default(lang: *const c_char) {
 /// 'title' and 'icon' default off unless the user asked for them, so that
 /// nvim does not have to ask the terminal what its title was.
 pub(crate) fn set_title_defaults() {
-    for (opt_idx, cell) in [(kOptTitle, &p_title), (kOptIcon, &p_icon)] {
+    for (opt_idx, field) in [(kOptTitle, P_TITLE), (kOptIcon, P_ICON)] {
         if !option_was_set(opt_idx) {
             change_option_default(opt_idx, OFF);
-            cell.set(0);
+            field.set(false);
         }
     }
 }

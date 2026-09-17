@@ -140,7 +140,7 @@ pub(crate) unsafe fn expand_in_path(
     let mut path_ga = GArray::default();
     unsafe { ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1) };
     let path_option = if flags.has(ExpandFlags::CDPATH) {
-        p_cdpath.get()
+        p_cdpath()
     } else {
         unsafe { buffer_path() }
     };
@@ -180,7 +180,7 @@ pub(crate) unsafe fn expand_in_path(
 /// There must be a current buffer.
 pub(crate) unsafe fn buffer_path() -> *mut c_char {
     if unsafe { *Buf::current().b_p_path } == 0 {
-        p_path.get()
+        p_path()
     } else {
         Buf::current().b_p_path
     }
@@ -554,7 +554,7 @@ pub unsafe fn expand_wildcards(
     }
 
     // Remove the names that match 'wildignore'.
-    if unsafe { *p_wig.get() } != 0 {
+    if unsafe { *p_wig() } != 0 {
         debug_assert!(
             unsafe { *num_files } == 0 || !unsafe { *files }.is_null(),
             "path: matches without an array to hold them"
@@ -565,7 +565,7 @@ pub unsafe fn expand_wildcards(
             debug_assert!(!name.is_null(), "path: a match with no name");
             let ffname = unsafe { full_name_save(name, false) };
             debug_assert!(!ffname.is_null(), "path: a match with no full name");
-            if unsafe { match_file_list(p_wig.get(), name, ffname) } {
+            if unsafe { match_file_list(p_wig(), name, ffname) } {
                 unsafe { xfree(name.cast()) };
             } else {
                 unsafe { *(*files).add(kept) = name };

@@ -151,7 +151,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
                 && unsafe { (*(*ac).pat).buflocal_nr } == buffer.handle
             {
                 unsafe { aucmd_del(ac) };
-                if p_verbose.get() >= 6 {
+                if p_verbose() >= 6 {
                     verbose_enter();
                     // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
                     let arg0 = unsafe { c_str(event_nr2name(event)) };

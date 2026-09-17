@@ -127,7 +127,7 @@ pub fn wait_return(redraw: c_int) {
 
         // With 'cmdheight' zero we need to scroll the first line of
         // msg_grid onto the screen.
-        if p_ch.get() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
+        if p_ch() == 0 && !ui_has(kUIMessages) && msg_scrolled.get() == 0 {
             msg_grid_validate();
             msg_scroll_up(false, true);
             msg_scrolled.set(msg_scrolled.get() + 1);
@@ -158,7 +158,7 @@ pub fn wait_return(redraw: c_int) {
                 reg_recording.set(save_reg_recording);
                 scriptout.set(save_scriptout);
 
-                if p_more.get() != 0 {
+                if p_more() {
                     // Allow scrolling back in the messages. Also accept
                     // scroll-down commands when messages fill the screen,
                     // so one 'j' too many does not make them disappear.
@@ -284,14 +284,14 @@ pub fn wait_return(redraw: c_int) {
 /// `newline_sb` is set when starting a new line should add it to the
 /// scrollback.
 pub(crate) fn hit_return_msg(newline_sb: bool) {
-    let save_p_more = p_more.get();
+    let save_p_more = p_more();
     if !newline_sb {
-        p_more.set(0);
+        P_MORE.set(false);
     }
     if msg_didout.get() {
         msg_putchar(c_int::from(b'\n')); // start on a new line
     }
-    p_more.set(0); // don't want to see this message when scrolling back
+    P_MORE.set(false); // don't want to see this message when scrolling back
     if got_int.get() {
         msg_str(gettext(c"Interrupt: "));
     }
@@ -300,7 +300,7 @@ pub(crate) fn hit_return_msg(newline_sb: bool) {
     if msg_use_printf() == 0 {
         msg_clr_eos();
     }
-    p_more.set(save_p_more);
+    P_MORE.set(save_p_more);
 }
 
 /// The `--More--` pager: page back and forth through the scrollback.

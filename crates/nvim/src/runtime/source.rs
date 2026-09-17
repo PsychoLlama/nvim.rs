@@ -612,7 +612,7 @@ unsafe fn strip_bom(conv: *mut VimConv, firstline: *mut c_char) -> *mut c_char {
     if unsafe { slice::from_raw_parts(firstline.cast::<u8>(), 3) } != b"\xef\xbb\xbf" {
         return firstline;
     }
-    let _ = unsafe { convert_setup(conv, c"utf-8".as_ptr().cast_mut(), p_enc.get()) };
+    let _ = unsafe { convert_setup(conv, c"utf-8".as_ptr().cast_mut(), p_enc()) };
     let rest = unsafe { firstline.add(3) };
     let mut recoded = unsafe { string_convert(conv, rest, ptr::null_mut()) };
     if recoded.is_null() {
@@ -707,7 +707,7 @@ unsafe fn source_bracket(
     // SAFETY: as above.
     unsafe { open_script(cookie, *fname_exp, req.check_other) };
     if cookie.fp.is_null() && !cookie.source_from_buf_or_str {
-        if p_verbose.get() > 1 {
+        if p_verbose() > 1 {
             let numbered = c"line %ld: could not source \"%s\"";
             // SAFETY: both formats take the name, `numbered` after the line.
             unsafe { verbose_source_msg(c"could not source \"%s\"", numbered, req.fname) };
@@ -717,7 +717,7 @@ unsafe fn source_bracket(
 
     // The file exists.  Everything set up from here has to come back down
     // before this function returns.
-    if p_verbose.get() > 1 {
+    if p_verbose() > 1 {
         let numbered = c"line %ld: sourcing \"%s\"";
         // SAFETY: as above.
         unsafe { verbose_source_msg(c"sourcing \"%s\"", numbered, req.fname) };
@@ -797,7 +797,7 @@ unsafe fn source_bracket(
         emsg(gettext(e_interr));
     }
     estack_pop();
-    if p_verbose.get() > 1 {
+    if p_verbose() > 1 {
         let resumed = sourcing_name();
         verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

@@ -37,7 +37,7 @@ fn wanted_kinds(flags: c_int, want_marks: bool, get_old_files: bool) -> c_uint {
     let mut kinds: c_uint = 0;
     if flags & kShaDaWantInfo as c_int != 0 {
         kinds |= kSDReadUndisableableData | kSDReadRegisters | kSDReadGlobalMarks;
-        if p_hi.get() != 0 {
+        if p_hi() != 0 {
             kinds |= kSDReadHistory;
         }
         if !find_shada_parameter('!' as c_int).is_null() {
@@ -114,7 +114,7 @@ pub(crate) unsafe fn shada_read(sd_reader: *mut FileDescriptor, flags: c_int) {
     let mut hms = [const { HistoryMergerState::EMPTY }; HIST_COUNT as usize];
     if srni_flags & kSDReadHistory != 0 {
         for (i, hms) in hms.iter_mut().enumerate() {
-            unsafe { hms_init(hms, i as uint8_t, p_hi.get() as size_t, true, true) };
+            unsafe { hms_init(hms, i as uint8_t, p_hi() as size_t, true, true) };
         }
     }
     if get_old_files && (oldfiles_list.is_null() || force) {

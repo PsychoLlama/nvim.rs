@@ -88,7 +88,7 @@ fn cmdline_del(mut cclp: Cc, from: c_int) {
 /// the wildchar has to look typed or the completion will not run.
 fn recomplete() -> c_int {
     KeyTyped.set(true);
-    p_wc.get() as c_int
+    p_wc() as c_int
 }
 
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
@@ -282,7 +282,7 @@ pub(crate) unsafe fn wildmenu_process_key(cclp: Cc, key: c_int, expand: *mut Exp
 /// scrolled the command line, borrowed the status line by forcing
 /// `'laststatus'`, or drew over the last window's existing status line.
 pub(crate) fn wildmenu_cleanup(cclp: Cc) {
-    if p_wmnu.get() == 0 || wild_menu_showing.get() == 0 {
+    if !p_wmnu() || wild_menu_showing.get() == 0 {
         return;
     }
 
@@ -298,8 +298,8 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
         redrawcmd();
     } else if save_p_ls.get() != -1 {
         // Restore 'laststatus' and 'winminheight'.
-        p_ls.set(save_p_ls.get() as OptInt);
-        p_wmh.set(save_p_wmh.get() as OptInt);
+        P_LS.set(save_p_ls.get() as OptInt);
+        P_WMH.set(save_p_wmh.get() as OptInt);
         last_status(false);
         let _ = update_screen(); // redraw the screen NOW
         redrawcmd();

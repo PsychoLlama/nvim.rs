@@ -262,8 +262,8 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
 ///
 /// Careful: autocommands may make `buffer` invalid.
 pub(crate) fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed> {
-    if !(p_aw.get() != 0 || p_awa.get() != 0)
-        || p_write.get() == 0
+    if !(p_aw() || p_awa())
+        || !p_write()
         // never autowrite a "nofile" or "nowrite" buffer
         || buf_is_dontwrite(Some(buffer))
         || (!forceit && buffer.b_p_ro != 0)
@@ -284,7 +284,7 @@ pub(crate) fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed> {
 
 /// Flush every buffer except the ones that are readonly or never written.
 pub(crate) fn autowrite_all() {
-    if !(p_aw.get() != 0 || p_awa.get() != 0) || p_write.get() == 0 {
+    if !(p_aw() || p_awa()) || !p_write() {
         return;
     }
     // SAFETY: module contract. A write's autocommands can delete the buffer
@@ -318,7 +318,7 @@ pub(crate) fn check_changed(buffer: Buf, flags: c_int) -> bool {
         return false;
     }
 
-    let confirm = (p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) && p_write.get() != 0;
+    let confirm = (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && p_write();
     if !confirm {
         if flags & CCGD_EXCMD != 0 {
             no_write_message();
@@ -510,7 +510,7 @@ pub(crate) fn check_changed_any(hidden: bool, unload: bool) -> bool {
         let bufref = BufRef::of(buf);
         // Try auto-writing the buffer. If that fails but the buffer no
         // longer exists it is not changed, and that is fine.
-        let flags = if p_awa.get() != 0 { CCGD_AW } else { 0 } | CCGD_MULTWIN | CCGD_ALLBUF;
+        let flags = if p_awa() { CCGD_AW } else { 0 } | CCGD_MULTWIN | CCGD_ALLBUF;
         if check_changed(buf, flags) {
             // Didn't save -- still changed, if it is still there at all.
             found = bufref.get();
@@ -525,7 +525,7 @@ pub(crate) fn check_changed_any(hidden: bool, unload: bool) -> bool {
 
     exiting.set(false);
     // With ":confirm" the dialog was the message; do not add an error.
-    if !(p_confirm.get() != 0 || cmdmod_has(CmdModFlags::CONFIRM)) {
+    if !(p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) {
         report_unwritten(culprit);
     }
 

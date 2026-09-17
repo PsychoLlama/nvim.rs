@@ -95,7 +95,7 @@ pub(crate) fn showmap(mp: Mb, local: bool) {
         msg_str(c"\n                 "); // shift to the rhs column
         msg_str(desc.as_cstr());
     }
-    if p_verbose.get() > 0 {
+    if p_verbose() > 0 {
         last_set_msg(mp.m_script_ctx);
     }
     msg_clr_eos();
@@ -336,7 +336,7 @@ pub unsafe fn expand_mappings(
             return None;
         }
         // SAFETY: `'cpoptions'` is NUL-terminated.
-        let mut rendering = unsafe { translate_mapping(mp.keys(), p_cpo.get()) };
+        let mut rendering = unsafe { translate_mapping(mp.keys(), p_cpo()) };
         if rendering.is_empty() {
             return None; // nothing to match against
         }

@@ -63,7 +63,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
             // A line starting with '#' stays put when 'smartindent' or
             // 'cindent' says preprocessor lines keep column 0.
             let left = op.op_type == OpType::Lshift;
-            shift_line(left, p_sr.get() != 0, amount, false);
+            shift_line(left, p_sr(), amount, false);
         }
         Win::current().w_cursor.lnum += 1;
     }
@@ -81,7 +81,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
     // The cursor line must not be in a closed fold.
     fold_open_cursor();
 
-    if op.line_count as OptInt > p_report.get() {
+    if op.line_count as OptInt > p_report() {
         // Two plural forms, nested: "line"/"lines" on the line count and
         // "time"/"times" on the shift count, which is why the outer
         // `ngettext` chooses between two already-translated formats.
@@ -318,10 +318,10 @@ fn shift_block(op: Op, amount: c_int) {
     let old_state = State.get();
     let old_col = Win::current().w_cursor.col;
     let sw_val = get_sw_value_indent(Buf::current(), left);
-    let old_p_ri = p_ri.get();
+    let old_p_ri = p_ri();
 
     // No 'revins' and no MODE_REPLACE while we rebuild the indent.
-    p_ri.set(0);
+    P_RI.set(false);
     State.set(MODE_INSERT);
 
     let mut bd = BlockDef::ZERO;
@@ -352,7 +352,7 @@ fn shift_block(op: Op, amount: c_int) {
 
     State.set(old_state);
     Win::current().w_cursor.col = old_col;
-    p_ri.set(old_p_ri);
+    P_RI.set(old_p_ri);
 }
 
 /// `>` on one line of a blockwise region: widen the white space in front of

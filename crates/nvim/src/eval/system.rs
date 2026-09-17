@@ -212,7 +212,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
         return;
     }
 
-    if p_verbose.get() > 3 as OptInt {
+    if p_verbose() > 3 as OptInt {
         // SAFETY: `argv` is the NULL-terminated vector built above.
         let cmdstr = unsafe { shell_argv_to_str(argv) };
         verbose_enter_scroll();

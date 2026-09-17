@@ -17,7 +17,7 @@ use std::ffi::{CStr, c_char, c_int};
 use std::path::Path;
 use std::ptr;
 
-use neovim::option::vars::p_fic;
+use neovim::option::vars::P_FIC;
 use neovim::path::{
     append_path, invocation_path_tail, kBothFilesMissing, kDifferentFiles, kEqualFileNames,
     kEqualFiles, kOneFileMissing, path_fix_case, path_fnamecmp, path_fnamencmp, path_full_compare,
@@ -558,14 +558,14 @@ fn an_extension_matches_case_insensitively_only_when_the_option_says_so() {
         "the bytes before the dot are not read"
     );
 
-    let saved = p_fic.get();
-    p_fic.set(0);
+    let saved = P_FIC.get();
+    P_FIC.set(false);
     assert!(!has("/some/path/file.VIM", "vim"));
     assert!(!has("/some/path/file.LUA", "lua"));
-    p_fic.set(1);
+    P_FIC.set(true);
     assert!(has("/some/path/file.VIM", "vim"));
     assert!(has("/some/path/file.LUA", "lua"));
-    p_fic.set(saved);
+    P_FIC.set(saved);
 }
 
 /// A name is a URL when it starts with a scheme: letters, then any of
@@ -642,8 +642,8 @@ fn comparing_two_file_names_reads_them_whole_and_folds_case_by_the_option() {
     let _sandbox = Sandbox::globals();
     let cmp = |a: &str, b: &str| path_fnamecmp(&cstr(a), &cstr(b)).signum();
 
-    let saved = p_fic.get();
-    p_fic.set(0);
+    let saved = P_FIC.get();
+    P_FIC.set(false);
     assert_eq!(cmp("a/b", "a/b"), 0);
     assert_eq!(cmp("", ""), 0, "two empty names are the same name");
     assert_eq!(cmp("", "a"), -1, "the empty name sorts first");
@@ -654,9 +654,9 @@ fn comparing_two_file_names_reads_them_whole_and_folds_case_by_the_option() {
     );
     assert_eq!(cmp("a/B", "a/b"), -1, "and so is case, with the option off");
     assert_eq!(cmp("naïve", "naïve"), 0, "multibyte bytes compare as bytes");
-    p_fic.set(1);
+    P_FIC.set(true);
     assert_eq!(cmp("a/B", "a/b"), 0, "with the option on, case is not");
-    p_fic.set(saved);
+    P_FIC.set(saved);
 
     // The bounded form stops at `len`, or at either name's NUL first.
     assert_eq!(path_fnamencmp(&cstr("a/bcd"), &cstr("a/bzz"), 3), 0);

@@ -211,7 +211,7 @@ pub(crate) unsafe fn expand_from_context(
             return Err(Failed);
         }
         // Set ignore-case according to 'ignorecase', 'smartcase' and pat.
-        regmatch.rm_ic = unsafe { ignorecase(pat) } != 0;
+        regmatch.rm_ic = unsafe { ignorecase(pat) };
     }
 
     let ret = match context {

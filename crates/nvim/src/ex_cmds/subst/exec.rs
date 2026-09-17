@@ -510,7 +510,7 @@ fn substitute_range(st: &mut Sub, args: &SubArgs) {
             break;
         }
         if args.cmdpreview_ns > 0 as c_int
-            && st.preview_lines.lines_needed > p_cwh.get() as LineNr
+            && st.preview_lines.lines_needed > p_cwh() as LineNr
             // SAFETY: the current window is live.
             && st.lnum > Win::current().w_botline
         {
@@ -590,7 +590,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             if args.cmdpreview_ns <= 0 as c_int
                 && !do_sub_msg(subflags.with(|flags| flags.do_count))
                 && subflags.with(|flags| flags.do_ask)
-                && p_ch.get() > 0 as OptInt
+                && p_ch() > 0 as OptInt
             {
                 msg(c"", 0 as c_int);
             }
@@ -611,7 +611,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             emsg(gettext(e_interr));
         } else if st.got_match {
             // Did find something, but nothing was substituted.
-            if p_ch.get() > 0 as OptInt && !ui_has(kUIMessages) {
+            if p_ch() > 0 as OptInt && !ui_has(kUIMessages) {
                 msg(c"", 0 as c_int);
             }
         } else if subflags.with(|flags| flags.do_error) {
@@ -654,7 +654,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         return 0 as c_int;
     }
     // SAFETY: 'inccommand' is a live string option.
-    if unsafe { *p_icm.get() } as c_int == NUL || !args.pat_given {
+    if unsafe { *p_icm() } as c_int == NUL || !args.pat_given {
         return 0 as c_int;
     }
     if pre_hl_id.get() == 0 as c_int {

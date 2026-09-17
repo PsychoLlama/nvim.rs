@@ -84,10 +84,10 @@ fn ascii_isalpha(c: c_int) -> bool {
 /// `latin9` uses `latin1`'s files, and anything implausibly long falls back
 /// to `latin1`.
 pub fn spell_enc() -> *mut c_char {
-    if unsafe { cstr::bytes_at(p_enc.get()) }.len() < 60
-        && unsafe { !cstr::eq_bytes(p_enc.get(), b"iso-8859-15") }
+    if unsafe { cstr::bytes_at(p_enc()) }.len() < 60
+        && unsafe { !cstr::eq_bytes(p_enc(), b"iso-8859-15") }
     {
-        return p_enc.get();
+        return p_enc();
     }
     c"latin1".as_ptr() as *mut c_char
 }

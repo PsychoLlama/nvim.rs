@@ -23,7 +23,7 @@ use core::ffi::{c_char, c_int};
 pub fn cindent_on() -> bool {
     // SAFETY: 'indentexpr' is a NUL-terminated option string.  The cheaper
     // tests are kept in front of it, as upstream has them.
-    p_paste.get() == 0 && (Buf::current().b_p_cin != 0 || unsafe { *Buf::current().b_p_inde } != 0)
+    !p_paste() && (Buf::current().b_p_cin != 0 || unsafe { *Buf::current().b_p_inde } != 0)
 }
 
 /// Which prefix of a 'cinkeys' item this call is asking about.

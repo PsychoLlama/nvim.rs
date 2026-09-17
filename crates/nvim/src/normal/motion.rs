@@ -304,7 +304,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
     // With an inclusive selection the cursor may sit one past the last
     // character; 'virtualedit' handles that itself.
     // SAFETY: 'selection' is a NUL-terminated option string.
-    let sel = unsafe { *p_sel.get() } as c_int;
+    let sel = unsafe { *p_sel() } as c_int;
     let past_line = visual_active() && sel != 'o' as c_int && !virtual_active(win);
 
     // Which 'whichwrap' flag lets this key wrap to the next line.
@@ -328,7 +328,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
         };
         if at_end {
             if wrap_flag != NUL
-                && has_char(unsafe { cstr::at(p_ww.get()) }, wrap_flag)
+                && has_char(unsafe { cstr::at(p_ww()) }, wrap_flag)
                 && win.w_cursor.lnum < Buf::current().b_ml.ml_line_count
             {
                 // A pending exclusive operator eats the line break by
@@ -406,7 +406,7 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
     while n > 0 {
         if oneleft().is_err() {
             if wrap_flag != NUL
-                && has_char(unsafe { cstr::at(p_ww.get()) }, wrap_flag)
+                && has_char(unsafe { cstr::at(p_ww()) }, wrap_flag)
                 && win.w_cursor.lnum > 1
             {
                 win.w_cursor.lnum -= 1;
@@ -535,7 +535,7 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
     // An exclusive Select-mode selection was widened by one when it was
     // made; the search has to run against the real cursor position.
     let mut cursor_dec = false;
-    if unsafe { *p_sel.get() } as c_int == 'e' as c_int
+    if unsafe { *p_sel() } as c_int == 'e' as c_int
         && visual_active()
         && visual_mode().is_char()
         && VIsual_select_exclu_adj.get()
@@ -748,7 +748,7 @@ pub(crate) unsafe fn adjust_cursor(op: *mut OpArg) {
     let mut op = unsafe { Op::new(op) };
     if Win::current().w_cursor.col > 0
         && gchar_cursor() == NUL
-        && (!visual_active() || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
+        && (!visual_active() || unsafe { *p_sel() } as c_int == 'o' as c_int)
         && !virtual_active(Win::current())
         && get_ve_flags(Win::current()) & kOptVeFlagOnemore as c_uint == 0
     {

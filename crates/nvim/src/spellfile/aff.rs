@@ -475,10 +475,10 @@ unsafe fn handle_line(
         // SAFETY: an item, which is a live NUL-terminated string.
         aff.af_enc = unsafe { enc_canonize(item_ptr(items[1])) };
         if spin.si_ascii == 0
-            && unsafe { convert_setup(&raw mut spin.si_conv, aff.af_enc, p_enc.get()) }.is_err()
+            && unsafe { convert_setup(&raw mut spin.si_conv, aff.af_enc, p_enc()) }.is_err()
         {
             let (fname, af_enc, arg2) =
-                unsafe { (c_str(fname), c_str(aff.af_enc), c_str(p_enc.get())) };
+                unsafe { (c_str(fname), c_str(aff.af_enc), c_str(p_enc())) };
             smsg!(
                 0,
                 "Conversion in {fname} not supported: from {af_enc} to {arg2}"

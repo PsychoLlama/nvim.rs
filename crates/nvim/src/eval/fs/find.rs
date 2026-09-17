@@ -205,7 +205,7 @@ fn search_path() -> *mut c_char {
     let local = Buf::current().b_p_path;
     // SAFETY: an option string is NUL-terminated, so its first byte is there.
     if unsafe { *local } == 0 {
-        p_path.get()
+        p_path()
     } else {
         local
     }
@@ -356,7 +356,7 @@ pub fn f_glob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let mut xpc = Expander::new();
-    if p_wic.get() != 0 {
+    if p_wic() {
         options |= WildOpts::ICASE;
     }
     let pat = str_arg(args, 0, &mut numbuf);

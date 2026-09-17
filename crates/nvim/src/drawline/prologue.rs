@@ -318,7 +318,7 @@ impl LineSetup {
                 }
             }
             if !sel.mode.is_line() && lnum == bot.lnum {
-                if unsafe { *p_sel.get() } == b'e' as ::core::ffi::c_char
+                if unsafe { *p_sel() } == b'e' as ::core::ffi::c_char
                     && bot.col == 0
                     && bot.coladd == 0
                 {
@@ -330,7 +330,7 @@ impl LineSetup {
                     wlv.tocol = MAXCOL as ::core::ffi::c_int;
                 } else {
                     let mut pos = bot;
-                    if unsafe { *p_sel.get() } == b'e' as ::core::ffi::c_char {
+                    if unsafe { *p_sel() } == b'e' as ::core::ffi::c_char {
                         unsafe {
                             getvvcol(
                                 window,
@@ -360,7 +360,7 @@ impl LineSetup {
         // drawn as a block inside the selection anyway.
         if !highlight_match.get()
             && self.in_curline
-            && cursor_is_block_during_visual(unsafe { *p_sel.get() } == b'e' as ::core::ffi::c_char)
+            && cursor_is_block_during_visual(unsafe { *p_sel() } == b'e' as ::core::ffi::c_char)
         {
             self.noinvcur = true;
         }
