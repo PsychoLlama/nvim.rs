@@ -14,7 +14,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::keycodes::ModMask;
+use crate::memory::XString;
 use crate::ops::Op;
 use crate::types::AutoEvent;
 use crate::winlayer::TabPage;
@@ -46,7 +48,6 @@ use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
 use crate::getchar::state::{KeyTyped, got_int, mod_mask, reg_executing, reg_recording};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
-use crate::memory::{xfree, xstrdup};
 use crate::message::state::{
     did_emsg, did_wait_return, emsg_on_display, emsg_silent, in_assert_fails, keep_msg,
     keep_msg_hl_id, msg_didany, msg_didout, msg_hist_off, msg_nowait, msg_scroll, msg_silent,
@@ -76,7 +77,7 @@ use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::cmdwin_result;
 use ::libc::time;
-use core::ffi::{c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint};
 
 use crate::r#move::{update_curswant, update_topline, validate_cursor};
 
@@ -390,9 +391,10 @@ pub(crate) fn normal_redraw_mode_message() {
         setcursor();
         let _ = update_screen();
         keep_msg.set(kmsg);
-        let copy = unsafe { xstrdup(keep_msg.get()) };
-        unsafe { msg_ptr(copy, keep_msg_hl_id.get()) };
-        unsafe { xfree(copy.cast::<c_void>()) };
+        // SAFETY: `keep_msg` is a NUL-terminated owned string, tested
+        // non-null above; the copy outlives the call that may free it.
+        let mut copy = XString::from_cstr(unsafe { cstr::at(keep_msg.get()) });
+        unsafe { msg_ptr(copy.as_mut_ptr(), keep_msg_hl_id.get()) };
     }
     setcursor();
     ui_cursor_shape();
@@ -523,11 +525,11 @@ fn normal_redraw() {
     if !keep_msg.get().is_null() {
         // `msg` may free the global, so it is handed a copy -- and the
         // message is not added to the history a second time.
-        let copy = unsafe { xstrdup(keep_msg.get()) };
+        // SAFETY: as above.
+        let mut copy = XString::from_cstr(unsafe { cstr::at(keep_msg.get()) });
         msg_hist_off.set(true);
-        unsafe { msg_ptr(copy, keep_msg_hl_id.get()) };
+        unsafe { msg_ptr(copy.as_mut_ptr(), keep_msg_hl_id.get()) };
         msg_hist_off.set(false);
-        unsafe { xfree(copy.cast::<c_void>()) };
     }
     if need_fileinfo.get() && !shortmess(ShmFlag::FILEINFO) {
         fileinfo(0, 1, false);

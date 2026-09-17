@@ -64,7 +64,7 @@ use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::memory::{xfree, xmemcpyz, xstrdup};
+use crate::memory::xmemcpyz;
 use crate::option::copy_option_part;
 use crate::option::vars::p_sps;
 use crate::os::input::os_breakcheck;
@@ -527,10 +527,10 @@ unsafe fn spell_find_suggest(
     }
 
     // An expression may change 'spellsuggest' while it runs.
-    let sps_copy = unsafe { xstrdup(p_sps.get()) };
+    let mut sps_copy = XString::from_cstr(unsafe { cstr::at(p_sps.get()) });
     let mut do_combine = false;
     let mut did_intern = false;
-    let mut p = sps_copy;
+    let mut p = sps_copy.as_mut_ptr();
     while unsafe { *p } as c_int != NUL {
         // SAFETY: `p` walks the copy of the option's NUL-terminated value
         // and `buf` is `MAXPATHL`, which is the bound handed over.
@@ -555,7 +555,6 @@ unsafe fn spell_find_suggest(
             did_intern = true;
         }
     }
-    unsafe { xfree(sps_copy as *mut c_void) };
 
     if do_combine {
         // Last, because sorting would undo the interleaving.

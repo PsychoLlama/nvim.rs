@@ -31,6 +31,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use crate::types::AutoEvent;
@@ -46,7 +47,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
+use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrlcpy};
 use crate::message::e_invarg;
 use crate::option::vars::p_enc;
 use crate::option::{copy_option_part, valid_name};
@@ -273,11 +274,11 @@ pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
     clear_midword(window);
 
     // The SpellFileMissing autocommands may change 'spelllang' underfoot.
-    let spl_copy = unsafe { xstrdup((*window.w_s).b_p_spl) };
+    let mut spl_copy = XString::from_cstr(unsafe { cstr::at((*window.w_s).b_p_spl) });
 
     unsafe { (*window.w_s).b_cjk = 0 };
 
-    let mut splp = spl_copy;
+    let mut splp = spl_copy.as_mut_ptr();
     'names: while unsafe { *splp } != 0 {
         let (buf, room) = (lang.as_mut_ptr(), MAXWLEN as size_t);
         let sep = c",".as_ptr() as *mut c_char;
@@ -560,7 +561,6 @@ pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
         redraw_later(window, UPD_NOT_VALID);
     }
 
-    unsafe { xfree(spl_copy as *mut c_void) };
     recursive.set(false);
     ret_msg
 }

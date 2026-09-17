@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_char, c_int, c_long};
 
@@ -31,7 +32,6 @@ use crate::indent::{
 use crate::indent_c::{cindent_on, get_c_indent};
 use crate::mark::mark_col_adjust;
 use crate::memline::Lines;
-use crate::memory::{xfree, xstrdup};
 use crate::message::msgmore;
 use crate::ops::{Op, do_join};
 use crate::option::vars::p_smd;
@@ -147,15 +147,16 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     set_vim_var_char(c);
 
     // Copy it: the option can be changed while it is running.
-    let fex = unsafe { xstrdup(Buf::current().b_p_fex) };
+    // SAFETY: 'formatexpr' is a NUL-terminated option value.
+    let mut fex = XString::from_cstr(unsafe { cstr::at(Buf::current().b_p_fex) });
     // Errors go against the script that set `'formatexpr'`.
     let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptFormatexpr as usize]);
     let r = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
-        unsafe { eval_to_number(fex, true) as c_int }
+        // SAFETY: the copy above, which outlives the evaluation.
+        unsafe { eval_to_number(fex.as_mut_ptr(), true) as c_int }
     };
     unsafe { set_vim_var_string(Vv::Char, ::core::ptr::null::<c_char>(), -1 as ptrdiff_t) };
-    unsafe { xfree(fex as *mut ::core::ffi::c_void) };
     drop(script_ctx);
     r
 }

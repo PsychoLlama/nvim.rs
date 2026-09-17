@@ -5,6 +5,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::CStr;
@@ -20,7 +21,6 @@ use crate::ex_eval::state::{did_throw, trylevel};
 use crate::guard::Lock;
 use crate::indent_c::{cindent_on, do_c_expr_indent};
 use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
-use crate::memory::{xfree, xstrdup};
 use crate::option::vars::{p_debug, p_lispwords, p_paste};
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::plines::{init_charsize_arg, win_charsize};
@@ -50,12 +50,12 @@ pub fn get_expr_indent() -> c_int {
         let _locked = Lock::text();
         // SAFETY: as above.
         current_sctx.set(buf.b_p_script_ctx[kBufOptIndentexpr as usize]);
-        // SAFETY: as above. The expression is evaluated from a copy, because
-        // 'indentexpr' can be changed while it is running.
-        let inde_copy = unsafe { xstrdup(buf.b_p_inde) };
-        let answer = unsafe { eval_to_number(inde_copy, true) } as c_int;
-        unsafe { xfree(inde_copy.cast()) };
-        answer
+        // The expression is evaluated from a copy, because 'indentexpr' can
+        // be changed while it is running.
+        // SAFETY: 'indentexpr' is a NUL-terminated option value.
+        let mut expression = XString::from_cstr(unsafe { cstr::at(buf.b_p_inde) });
+        // SAFETY: as above; the copy outlives the evaluation.
+        unsafe { eval_to_number(expression.as_mut_ptr(), true) as c_int }
     };
     current_sctx.set(save_sctx);
 

@@ -20,6 +20,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::path::ExpandFlags;
 use crate::semsg;
@@ -372,7 +373,7 @@ pub unsafe fn do_in_path(
     // Copy the path list: invoking the callback may change the option it came
     // from.
     // SAFETY: `path` is NUL-terminated.
-    let rtp_copy = unsafe { xstrdup(path) };
+    let mut rtp_copy = XString::from_cstr(unsafe { cstr::at(path) });
     let buf = unsafe { xmallocz(MAXPATHL as size_t) }.cast::<c_char>();
 
     if p_verbose.get() > 10 && !name.is_null() {
@@ -382,7 +383,7 @@ pub unsafe fn do_in_path(
 
     let do_all = flags.has(RuntimeOpts::ALL);
     let mut did_one = false;
-    let mut rtp = rtp_copy;
+    let mut rtp = rtp_copy.as_mut_ptr();
     // SAFETY: `rtp` walks the copy; `buf` has `MAXPATHL` writable bytes.
     while unsafe { *rtp } != 0 && (do_all || !did_one) {
         // SAFETY: as above.
@@ -434,7 +435,6 @@ pub unsafe fn do_in_path(
 
     // SAFETY: both were allocated above and are no longer referenced.
     unsafe { xfree(buf.cast()) };
-    unsafe { xfree(rtp_copy.cast()) };
 
     if !did_one && !name.is_null() {
         let basepath = if path == p_rtp.get().cast_const() {

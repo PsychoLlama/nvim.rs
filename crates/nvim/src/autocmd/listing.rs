@@ -12,6 +12,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::os::cshim::strchr;
 use crate::types::ExpandContext;
 use crate::winlayer::Buf;
@@ -384,7 +385,8 @@ pub unsafe fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
     // SAFETY: `arg` is the caller's NUL-terminated string, so `arg_save` is
     // a NUL-terminated copy of it this function owns and frees at the end.
     // Every pointer below is a position inside that copy.
-    let arg_save = unsafe { xstrdup(arg) };
+    let mut owned = XString::from_cstr(unsafe { cstr::at(arg) });
+    let arg_save = owned.as_mut_ptr();
     let retval = 'theend: {
         let mut p = unsafe { strchr(arg_save, '#' as ::core::ffi::c_int) };
         if !p.is_null() {
@@ -465,6 +467,5 @@ pub unsafe fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
     };
 
     // SAFETY: `xstrdup` allocated it and nothing else took it.
-    unsafe { xfree(arg_save.cast::<::core::ffi::c_void>()) };
     retval
 }

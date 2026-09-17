@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
@@ -21,7 +22,6 @@ use super::{
     AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg,
     REX_ALL, Rex, bt_regengine, nfa_regengine, regexp_engine, rex_in_use,
 };
-use crate::memory::{xfree, xstrdup};
 use crate::message::state::called_emsg;
 use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{p_re, p_verbose};
@@ -147,7 +147,7 @@ pub unsafe fn vim_regfree(prog: *mut RegProg) {
 unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut RegProg {
     // SAFETY: `prog` is a live NFA program, so it carries a pattern.
     let re_flags = unsafe { (*prog).re_flags } as c_int;
-    let pat = unsafe { xstrdup((*(prog as *mut NfaRegProg)).pattern) };
+    let mut pat = XString::from_cstr(unsafe { cstr::at((*(prog as *mut NfaRegProg)).pattern) });
     let save_p_re = p_re.get();
     p_re.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose.get() > 0 as OptInt {
@@ -155,7 +155,7 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
         msg_str(gettext(
             c"Switching to backtracking RE engine for pattern: ",
         ));
-        msg_str(unsafe { cstr::at(pat) });
+        msg_str(pat.as_cstr());
         verbose_leave();
     }
     if extmatch {
@@ -163,11 +163,10 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
         // to survive the recompile.
         reg_do_extmatch.set(REX_ALL);
     }
-    let new = unsafe { vim_regcomp(pat, re_flags) };
+    let new = unsafe { vim_regcomp(pat.as_mut_ptr(), re_flags) };
     if extmatch {
         reg_do_extmatch.set(0);
     }
-    unsafe { xfree(pat.cast()) };
     p_re.set(save_p_re);
     new
 }

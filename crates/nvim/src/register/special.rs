@@ -24,7 +24,9 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::guard::Depth;
+use crate::memory::XString;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -81,17 +83,15 @@ pub unsafe fn get_expr_line() -> *mut c_char {
     // Evaluating may set `expr_line` again, so work on a copy.
     //
     // SAFETY: tested non-null just above, and it is a NUL-terminated string.
-    let expr_copy = unsafe { xstrdup(expr_line.get()) };
+    let mut expression = XString::from_cstr(unsafe { cstr::at(expr_line.get()) });
     if nested.get() >= 10 {
-        return expr_copy;
+        return expression.into_raw();
     }
     let nesting = Depth::of(&nested);
-    // SAFETY: running Vimscript is the caller's promise, and `expr_copy` is a
+    // SAFETY: running Vimscript is the caller's promise, and the copy is a
     // NUL-terminated string this call owns for the duration.
-    let rv = unsafe { eval_to_string(expr_copy, true, false) };
+    let rv = unsafe { eval_to_string(expression.as_mut_ptr(), true, false) };
     drop(nesting);
-    // SAFETY: `expr_copy` is ours and `eval_to_string` kept no pointer to it.
-    unsafe { xfree(expr_copy.cast::<c_void>()) };
     rv
 }
 

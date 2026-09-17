@@ -1,13 +1,13 @@
 count	callee	no_raw	defs	def
-908	xfree	0	1	crates/nvim/src/memory/mod.rs
+898	xfree	0	1	crates/nvim/src/memory/mod.rs
 814	.add	0	3	
 467	.offset	0	0	
 448	bytes_at	0	1	crates/nvim/src/cstr.rs
 437	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 300	CStr::from_ptr	0	2	
+244	at	0	3	
 243	.offset_from	0	0	
-235	at	0	3	
-215	xstrdup	0	1	crates/nvim/src/memory/mod.rs
+205	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 165	xmalloc	0	1	crates/nvim/src/memory/mod.rs
@@ -1589,7 +1589,6 @@ count	callee	no_raw	defs	def
 2	eval_logical	0	1	crates/nvim/src/eval/expr/level.rs
 2	eval_one_expr_in_str	0	1	crates/nvim/src/eval/vars/heredoc.rs
 2	eval_string	0	1	crates/nvim/src/eval/expr/literal.rs
-2	eval_to_number	0	1	crates/nvim/src/eval/entry.rs
 2	ex_unletlock	0	1	crates/nvim/src/eval/vars/unlet.rs
 2	execute_cmd	0	1	crates/nvim/src/ex_docmd/api.rs
 2	execute_cmd0	0	1	crates/nvim/src/ex_docmd/api.rs
@@ -2714,6 +2713,7 @@ count	callee	no_raw	defs	def
 1	eval_replacement	0	1	crates/nvim/src/regexp/substitute.rs
 1	eval_soundfold	0	1	crates/nvim/src/spell/soundfold.rs
 1	eval_spell_expr	0	1	crates/nvim/src/eval/vars/external.rs
+1	eval_to_number	0	1	crates/nvim/src/eval/entry.rs
 1	eval_to_string_eap	0	1	crates/nvim/src/eval/entry.rs
 1	eval_to_string_skip	0	1	crates/nvim/src/eval/entry.rs
 1	ex_call_inner	0	1	crates/nvim/src/eval/userfunc/ret.rs
