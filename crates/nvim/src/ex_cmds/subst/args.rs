@@ -165,16 +165,19 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
         delimiter = unsafe { *cmd } as u8 as c_int;
         cmd = unsafe { cmd.add(1) };
         pat = cmd; // remember the start of the search pattern
-        // The `?` delimiter's `\?` is unescaped into a copy rather than in
-        // place; nothing here reads it, and upstream hangs it off `eap->arg`
-        // and never frees it.
-        let mut new_pattern: *mut c_char = ptr::null_mut();
+        // `newp` is where the skip would hand back a *copy* of the pattern
+        // with a `?` delimiter's `\?` unescaped -- but only when the slot it
+        // is given is empty. Upstream passes `&eap->arg`, which never is, so
+        // the unescape happens in place and the slot's whole job is to say
+        // "do not copy". A null here would rewrite a copy nothing reads and
+        // leave the `\?` in the pattern.
+        let mut no_copy = pat;
         cmd = unsafe {
             skip_regexp_ex(
                 cmd,
                 delimiter,
                 magic_isset() as c_int,
-                &raw mut new_pattern,
+                &raw mut no_copy,
                 ptr::null_mut(),
                 ptr::null_mut(),
             )

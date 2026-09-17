@@ -23,7 +23,6 @@ use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::state::got_int;
 use crate::mark::setpcmark;
 use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
-use crate::memory::XString;
 use crate::message::state::{msg_col, msg_didout, msg_scrolled};
 use crate::message::{e_backslash, e_interr, e_invcmd};
 use crate::message::{emsg, msg};
@@ -104,13 +103,6 @@ struct GlobalPat {
     which_pat: c_int,
     /// The Ex command to run on each selected line.
     cmd: *mut c_char,
-    /// A `:g?pat\??cmd` has its `\?` unescaped into a copy of the pattern
-    /// rather than in place, and `pat`/`cmd` then address the copy. Upstream
-    /// hangs it off `eap->arg` and never frees it; owning it here is the
-    /// same lifetime without the leak, which is the whole of what this field
-    /// is for.
-    #[expect(dead_code, reason = "held to keep `pat` and `cmd` alive")]
-    rewritten: Option<XString>,
 }
 
 /// Split `:g/pat/cmd` into its pattern and its command, reporting the three
@@ -139,7 +131,6 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
             patlen: 0 as size_t,
             which_pat,
             cmd: arg.wrapping_add(2),
-            rewritten: None,
         });
     }
 
@@ -154,31 +145,24 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
         return None;
     }
 
-    let mut pat = arg.wrapping_add(1);
-    // `newp` is where the skip hands back a rewritten copy of the pattern,
-    // which it makes for a `\?` under a `?` delimiter.
-    let mut newp: *mut c_char = ptr::null_mut();
+    let pat = arg.wrapping_add(1);
+    // `newp` is where the skip would hand back a *copy* with a `?`
+    // delimiter's `\?` unescaped, and it only makes one when the slot is
+    // empty. Upstream passes `&eap->arg`, which never is, so the unescape
+    // happens in place; the slot's whole job is to say "do not copy".
+    let mut no_copy = pat;
     // SAFETY: `pat` is the pattern's first byte, inside the NUL-terminated
-    // argument, and `newp` is this frame's own.
+    // argument, and the slot is this frame's own.
     let mut cmd = unsafe {
         skip_regexp_ex(
             pat,
             delim as c_int,
             magic_isset() as c_int,
-            &raw mut newp,
+            &raw mut no_copy,
             ptr::null_mut(),
             ptr::null_mut(),
         )
     };
-    // The rewritten copy replaces the pattern, and the command word moved
-    // into it with the same offset.
-    let rewritten = (!newp.is_null()).then(|| {
-        let at = cmd.addr() - newp.addr();
-        // SAFETY: `newp` is the `xstrnsave` copy the skip just made.
-        let mut copy = unsafe { XString::from_raw(newp) };
-        (pat, cmd) = (copy.as_mut_ptr(), copy.as_mut_ptr().wrapping_add(at));
-        copy
-    });
     // SAFETY: the skip stopped at the delimiter, at the NUL, or in between.
     if unsafe { *cmd } as u8 == delim {
         // End delimiter found: replace it with a NUL.
@@ -193,7 +177,6 @@ fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
         patlen: unsafe { cstr::bytes_at(pat) }.len(),
         which_pat: RE_LAST as c_int,
         cmd,
-        rewritten,
     })
 }
 

@@ -308,14 +308,16 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
             &mut errormsg,
         )
     };
-    excmd.set_arg_ptr(cursor);
-    if excmd.arg_ptr().is_null() {
+    // `get_address` answers a null cursor when the address was malformed;
+    // an offset cannot say null, so the test comes before the store.
+    if cursor.is_null() {
         if let Some(msg) = &errormsg {
             emsg(msg.as_ptr());
         }
-        excmd.set_nextcmd_ptr(ptr::null_mut());
+        excmd.line.next = None;
         return;
     }
+    excmd.set_arg_ptr(cursor);
     get_flags(excmd);
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".

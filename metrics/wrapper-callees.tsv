@@ -152,7 +152,6 @@ count	callee	no_raw	defs	def
 17	value_check_lock	0	1	crates/nvim/src/eval/typval/value.rs
 16	Di::new	0	68	
 16	Ui::new	0	68	
-16	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 16	append_to_redobuff	0	1	crates/nvim/src/getchar/redo.rs
 16	concat_fnames	0	1	crates/nvim/src/path/names.rs
 16	do_cmdline	0	1	crates/nvim/src/ex_docmd/cmdline.rs
@@ -164,6 +163,7 @@ count	callee	no_raw	defs	def
 15	Name::from_ptr	0	1	crates/nvim/src/file_search/mod.rs
 15	String_0::from_owned_parts	0	1	crates/nvim/src/api/private/helpers/text.rs
 15	Uf::new	0	68	
+15	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
 15	buflist_new	0	1	crates/nvim/src/buffer/list.rs
 15	callback_call	0	1	crates/nvim/src/eval/callback.rs
 15	ga_clear	0	1	crates/nvim/src/garray.rs
