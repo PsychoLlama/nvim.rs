@@ -281,6 +281,16 @@ pub fn utf_iscomposing_legacy(c: c_int) -> bool {
 /// # Safety
 ///
 /// `p` must point at a NUL-terminated string and `firstc` must be writable.
+///
+/// `inline(always)`, and the benchmark says so: this is the per-cell call of
+/// `win_line`'s draw loop, and it *was* inlined there until the option
+/// rewrite grew the loop's other callees past the inliner's threshold. The
+/// call it fell back to cost **187 M instructions on `scrbench`** -- 0.66 %
+/// of the whole benchmark, and two thirds of phase 32's regression against
+/// its floor -- which is what a call costs at five million cells. See
+/// [`utfc_ptrlen2schar`], whose call site in `grid_line_puts` moved the same
+/// way.
+#[inline(always)]
 pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScreenChar {
     let c = unsafe { utf_ptr2char(p) };
     unsafe { *firstc = c };
@@ -298,6 +308,9 @@ pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScreenChar
 /// # Safety
 ///
 /// `p` must point at `len` readable bytes and `firstc` must be writable.
+///
+/// `inline(always)` for the reason [`utfc_ptr2schar`] gives.
+#[inline(always)]
 pub unsafe fn utfc_ptrlen2schar(
     p: *const c_char,
     mut len: c_int,
