@@ -25,13 +25,12 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::cstr_to_string;
 use crate::charset::{trans_characters, vim_strsize};
 use crate::drawscreen::redrawing;
 use crate::drawscreen::state::need_maketitle;
 use crate::getchar::state::got_int;
 use crate::mbyte::utf_cp_bounds;
-use crate::memory::{xfree, xstrdup, xstrlcpy};
+use crate::memory::{XString, xstrlcpy};
 use crate::message::state::{msg_col, msg_scroll, msg_scrolled, need_wait_return, no_lines_msg};
 use crate::message::{
     message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_start, msg_trunc,
@@ -51,6 +50,7 @@ use crate::statusline::state::stl_syntax;
 use crate::statusline::{FmtSource, StlSinks, build_stl_str_hl};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::terminal::terminal_running;
+use crate::types::String_0;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, int64_t,
@@ -609,7 +609,8 @@ pub fn maketitle() {
         return;
     }
     need_maketitle.set(false);
-    if !p_title() && !p_icon() && lasttitle.get().is_null() && lasticon.get().is_null() {
+    if !p_title() && !p_icon() && lasttitle.with(Option::is_none) && lasticon.with(Option::is_none)
+    {
         // Nothing to do.
         return;
     }
@@ -712,34 +713,29 @@ fn fill_icon(dst: &mut [c_char; IOSIZE as usize]) {
 
 /// Whether `str` differs from what the cell holds, replacing it if it does.
 /// Answers whether [`resettitle`] should be called.
-fn value_change(str: *mut c_char, last: &GlobalCell<*mut c_char>) -> bool {
-    let old = last.get();
-    let differs = str.is_null() != old.is_null() || {
-        // SAFETY: two NUL-terminated titles, neither null.
-        !str.is_null() && !old.is_null() && !unsafe { cstr::eq(str, old) }
-    };
-    if !differs {
+fn value_change(str: *mut c_char, last: &GlobalCell<Option<XString>>) -> bool {
+    // SAFETY: a NUL-terminated title, or null for "there is none".
+    let now = unsafe { cstr::at_opt(str) };
+    if last.with(|old| old.as_deref() == now.map(CStr::to_bytes)) {
         return false;
     }
-    // SAFETY: the previous title, this function's own allocation.
-    unsafe { xfree(old.cast::<c_void>()) };
-    if str.is_null() {
-        last.set(ptr::null_mut());
+    let Some(now) = now else {
+        last.set(None);
         resettitle();
         return false;
-    }
-    // SAFETY: a NUL-terminated title.
-    last.set(unsafe { xstrdup(str) });
+    };
+    last.set(Some(XString::from_cstr(now)));
     true
 }
 
 /// Send the current window title and icon text to the UI.
 pub fn resettitle() {
-    // SAFETY: two NUL-terminated titles, or null, which `cstr_to_string`
-    // answers the empty string for.
-    unsafe { ui_call_set_icon(cstr_to_string(lasticon.get())) };
-    // SAFETY: as above.
-    unsafe { ui_call_set_title(cstr_to_string(lasttitle.get())) };
+    // A title the UI has never been told is upstream's null pointer, which
+    // `cstr_to_string` answered the empty string for.
+    let icon = lasticon.with(|value| String_0::from_bytes(value.as_deref().unwrap_or_default()));
+    ui_call_set_icon(icon);
+    let title = lasttitle.with(|value| String_0::from_bytes(value.as_deref().unwrap_or_default()));
+    ui_call_set_title(title);
 }
 
 // ---------------------------------------------------------------------------

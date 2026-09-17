@@ -220,7 +220,14 @@ pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let add_nr = |k: &str, v| unsafe { (*retdict).add_number(k.as_bytes(), v) };
     let add_list = |k: &str, v| unsafe { (*retdict).add_list(k.as_bytes(), v) };
 
-    let mut ret = add_str("cmdline_orig", cmdline_orig.get());
+    // Upstream's null pointer -- nothing expanded yet -- is a null entry,
+    // not an empty string, so the `None` case is spelled out.
+    let mut ret = cmdline_orig.with(|line| {
+        add_str(
+            "cmdline_orig",
+            line.as_ref().map_or(ptr::null(), |v| v.as_ptr()),
+        )
+    });
     if ret.is_ok() {
         ret = add_nr("pum_visible", pum_visible() as VarNumber);
     }

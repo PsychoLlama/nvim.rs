@@ -1,18 +1,18 @@
 count	callee	no_raw	defs	def
-888	xfree	0	1	crates/nvim/src/memory/mod.rs
+883	xfree	0	1	crates/nvim/src/memory/mod.rs
 809	.add	0	3	
 467	.offset	0	0	
 442	bytes_at	0	1	crates/nvim/src/cstr.rs
 436	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 288	CStr::from_ptr	0	2	
 243	.offset_from	0	0	
-222	at	0	3	
-191	xstrdup	0	1	crates/nvim/src/memory/mod.rs
+224	at	0	3	
+189	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 165	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 161	skipwhite	0	1	crates/nvim/src/charset/walk.rs
-154	from_raw_parts	0	0	
+155	from_raw_parts	0	0	
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 120	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 110	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
@@ -34,15 +34,15 @@ count	callee	no_raw	defs	def
 55	vim_strchr	0	1	crates/nvim/src/strings/mod.rs
 53	copy	0	1	crates/nvim/src/strings/printf/emit.rs
 52	abort	0	0	
-52	eq	0	1	crates/nvim/src/cstr.rs
 52	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 51	vim_regfree	0	1	crates/nvim/src/regexp/api.rs
 50	Xp::new	0	68	
+50	eq	0	1	crates/nvim/src/cstr.rs
 50	msg_ext_set_kind	0	1	crates/nvim/src/message/ext.rs
 49	.sub	0	0	
-47	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
 46	copy_nonoverlapping	0	0	
 46	do_cmdline_cmd	0	1	crates/nvim/src/ex_docmd/cmdline.rs
+46	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
 45	fprintf	0	0	
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 43	strcpy	0	0	
@@ -101,11 +101,11 @@ count	callee	no_raw	defs	def
 23	tv_clear	0	0	
 23	utf_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 23	xrealloc	0	1	crates/nvim/src/memory/mod.rs
+22	at_opt	0	2	
 22	os_dirname	0	1	crates/nvim/src/os/fs/mod.rs
 22	utf_ptr2cells	0	1	crates/nvim/src/mbyte/cells.rs
 22	utfc_next	1	1	crates/nvim/src/mbyte/walk.rs
 21	Fmark::new	0	1	crates/nvim/src/mark/store.rs
-21	at_opt	0	2	
 21	atoi	0	0	
 21	aucmd_prepbuf	0	1	crates/nvim/src/autocmd/aucmdwin.rs
 21	eval1	0	1	crates/nvim/src/eval/expr/level.rs
@@ -3765,8 +3765,6 @@ count	callee	no_raw	defs	def
 1	ui_attach	1	1	crates/nvim/src/api/ui/mod.rs
 1	ui_attach_impl	0	1	crates/nvim/src/ui/mod.rs
 1	ui_call_raw_line	0	1	crates/nvim/src/ui/sinks.rs
-1	ui_call_set_icon	0	0	
-1	ui_call_set_title	0	0	
 1	ui_client_attach	0	1	crates/nvim/src/ui_client.rs
 1	ui_client_event_raw_line	0	1	crates/nvim/src/ui_client.rs
 1	ui_client_get_redraw_handler	0	1	crates/nvim/src/ui_client.rs

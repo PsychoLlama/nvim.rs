@@ -31,8 +31,9 @@ use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 
-/// The script/function the last error was reported from.
-static last_sourcing_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
+/// The script/function the last error was reported from. Owned: the cell
+/// releases it when the source changes.
+static last_sourcing_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
 
 /// The line the last error was reported from.
 static last_sourcing_lnum: GlobalCell<c_int> = GlobalCell::new(0);
@@ -40,18 +41,18 @@ static last_sourcing_lnum: GlobalCell<c_int> = GlobalCell::new(0);
 /// Forget where the last error came from, so the next one names its source
 /// again.
 pub fn reset_last_sourcing() {
-    unsafe { xfree(last_sourcing_name.get().cast()) };
-    last_sourcing_name.set(ptr::null_mut());
+    last_sourcing_name.set(None);
     last_sourcing_lnum.set(0);
 }
 
 /// Is the innermost script/function a different one from the last error's?
 fn other_sourcing_name() -> bool {
     if exestack_has_name() {
-        if !last_sourcing_name.get().is_null() {
-            return !unsafe { cstr::eq(sourcing_top().es_name, last_sourcing_name.get()) };
-        }
-        return true;
+        return last_sourcing_name.with(|last| match last.as_deref() {
+            // SAFETY: an exec-stack entry's name is NUL-terminated.
+            Some(last) => (unsafe { cstr::at(sourcing_top().es_name) }).to_bytes() != last,
+            None => true,
+        });
     }
     false
 }
@@ -130,10 +131,11 @@ pub fn msg_source(hl_id: c_int) {
     // Remember the source name and line number, so we can tell when
     // the message changes.
     if sourcing_top().es_name.is_null() || other_sourcing_name() {
-        unsafe { xfree(last_sourcing_name.get().cast()) };
-        last_sourcing_name.set(ptr::null_mut());
+        last_sourcing_name.set(None);
         if !sourcing_top().es_name.is_null() {
-            last_sourcing_name.set(unsafe { xstrdup(sourcing_top().es_name) });
+            // SAFETY: an exec-stack entry's name is NUL-terminated.
+            let name = unsafe { cstr::at(sourcing_top().es_name) };
+            last_sourcing_name.set(Some(XString::from_cstr(name)));
             if !redirecting() {
                 msg_putchar_hl(b'\n' as c_int, hl_id);
             }

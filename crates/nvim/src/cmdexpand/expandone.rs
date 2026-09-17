@@ -12,6 +12,7 @@
 use super::*;
 use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{BackslashEscape, ExpandContext, FAIL, OK};
@@ -212,8 +213,10 @@ pub(crate) unsafe fn nextwild(
 
     // Save the command line before inserting the selected item.
     if !wild_navigate && ccline.in_use() {
-        unsafe { xfree(cmdline_orig.get() as *mut c_void) };
-        cmdline_orig.set(unsafe { xstrnsave(ccline.text(), ccline.len() as size_t) });
+        // SAFETY: the command line's own bytes, as long as it says.
+        let len = ccline.len() as usize;
+        let line = unsafe { core::slice::from_raw_parts(ccline.text().cast::<u8>(), len) };
+        cmdline_orig.set(Some(XString::from_bytes(line)));
     }
 
     if !p.is_null() && !got_int.get() && !options.has(WildOpts::NOSELECT) {
@@ -702,6 +705,5 @@ pub unsafe fn expand_cleanup(expand: *mut Expand) {
 
 /// Drop the saved copy of the command line taken before the last expansion.
 pub fn clear_cmdline_orig() {
-    unsafe { xfree(cmdline_orig.get() as *mut c_void) };
-    cmdline_orig.set(ptr::null_mut());
+    cmdline_orig.set(None);
 }

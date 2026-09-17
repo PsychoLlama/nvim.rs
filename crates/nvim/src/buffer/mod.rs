@@ -64,7 +64,7 @@ use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
 use crate::mark::setpcmark;
 use crate::memline::ml_delete;
-use crate::memory::xfree;
+use crate::memory::{XString, xfree};
 use crate::message::emsg_ptr;
 use crate::normal::end_visual_mode;
 use crate::option::shortmess;
@@ -320,10 +320,11 @@ pub fn buf_valid(buffer: BufId) -> bool {
     buffers_back().any(|b| b.id() == buffer)
 }
 
-static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
-static lasticon: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+/// The window title and icon text last sent to the UI. Owned: the cell
+/// releases the old value when the title changes, and `None` is upstream's
+/// null -- "the UI has never been told one".
+static lasttitle: GlobalCell<Option<XString>> = GlobalCell::new(None);
+static lasticon: GlobalCell<Option<XString>> = GlobalCell::new(None);
 pub const NO_LOCAL_UNDOLEVEL: ::core::ffi::c_int = -123456 as ::core::ffi::c_int;
 pub const SID_MODELINE: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
 pub const SEA_NONE: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

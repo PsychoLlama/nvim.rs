@@ -55,7 +55,7 @@ use crate::lua::executor::{
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len};
-use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstpcpy, xstrdup};
+use crate::memory::{XString, xfree, xmalloc, xmemcpyz, xmemdupz, xstpcpy, xstrdup};
 use crate::menu::{get_menu_name, get_menu_names, menu_is_separator, set_context_in_menu_cmd};
 use crate::message::state::{cmd_silent, msg_col, msg_didany, msg_row, msg_scrolled};
 use crate::message::{e_invarg, e_toomany};
@@ -294,8 +294,11 @@ static compl_match_array: GlobalCell<*mut PumItem> =
 static compl_match_arraysize: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static compl_startcol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static compl_selected: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static cmdline_orig: GlobalCell<*mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
+/// The command line as it stood before the last expansion inserted a
+/// match, for `:h getcompletion()`'s `cmdline_orig`. Owned: the cell frees
+/// the previous copy when it takes a new one, and `None` is upstream's
+/// null -- nothing has been expanded yet.
+static cmdline_orig: GlobalCell<Option<XString>> = GlobalCell::new(None);
 /// How much of `:filetype` has already been typed, and so which of its
 /// arguments are still worth offering -- upstream's `EXP_FILETYPECMD_*`.
 #[derive(Copy, Clone, PartialEq, Eq)]
