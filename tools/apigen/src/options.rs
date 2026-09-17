@@ -845,18 +845,6 @@ selector!(
 );
 
 impl StrOpt {
-    /// Project the value: `f` sees it and the borrow ends when `f` returns.
-    ///
-    /// An option that owns nothing — `None`, which is upstream's shared
-    /// `empty_string_option` — reads as the empty string, which is what
-    /// every consumer of a string option's variable already assumed.
-    #[inline(always)]
-    pub fn with<R>(self, f: impl FnOnce(&CStr) -> R) -> R {
-        OPTIONS.with_field(self.project, |value| {
-            f(value.as_ref().map_or(c"", XString::as_cstr))
-        })
-    }
-
     /// The value as the `char *` the option protocol still speaks, which is
     /// the shared empty string when the option owns nothing.
     ///
