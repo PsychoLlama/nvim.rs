@@ -18,6 +18,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
 use core::ffi::CStr;
@@ -197,7 +198,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
 /// Whether `'mousemodel'` is set to "popup" or "popup_setpos".
 pub(crate) fn mouse_model_popup() -> bool {
     // SAFETY: an option string is NUL-terminated, never null.
-    p_mousem(|value| unsafe { *value.as_ptr().cast_mut() == 'p' as c_char })
+    p_mousem(|value| cstr::first(value) == b'p')
 }
 
 /// Whether `'mousemodel'` is exactly "popup_setpos", which moves the cursor

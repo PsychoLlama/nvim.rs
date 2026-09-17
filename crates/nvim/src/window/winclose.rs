@@ -214,7 +214,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         // remove it. Do this before `equal()`, which may change a height.
         update_last_status(false);
         // SAFETY: `'eadirection'` is a NUL-terminated option string.
-        let ead = p_ead(|value| unsafe { *value.as_ptr().cast_mut() }) as c_int;
+        let ead = p_ead(|value| c_int::from(cstr::first(value)));
         if !Win::current().w_floating && p_ea() && (ead == 'b' as c_int || ead == dir) {
             // If the frame of the closed window contains the new current
             // window, resize only that frame; otherwise resize all windows.

@@ -457,7 +457,10 @@ pub(crate) unsafe fn qf_jump_newwin(
         qf_emsg(e_no_errors.as_ptr());
         return;
     }
-    let old_swb = P_SWB.clear();
+    // A copy of 'switchbuf', to put back if the jump empties it: the split
+    // path below clears the option so that the *next* entry does not split
+    // again, and the option owning nothing is how that is recognised.
+    let old_swb = (!P_SWB.is_unset()).then(|| P_SWB.get());
     let old_swb_flags = swb_flags.get();
     // Getting the file may reset it.
     let old_key_typed = KeyTyped.get();
@@ -528,7 +531,7 @@ pub(crate) unsafe fn qf_jump_newwin(
     }
 
     // Put 'switchbuf' back, unless an autocommand or a modeline changed
-    // it meanwhile.
+    // it meanwhile -- in which case it owns a value of its own.
     if P_SWB.is_unset() {
         P_SWB.restore(old_swb);
         swb_flags.set(old_swb_flags);

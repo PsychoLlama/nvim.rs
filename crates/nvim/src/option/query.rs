@@ -336,7 +336,7 @@ pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int 
 /// The line ending a new file gets: the first entry of 'fileformats'.
 pub(crate) fn default_fileformat() -> c_int {
     // SAFETY: 'fileformats' is a string option; it is never null.
-    match p_ffs(|value| unsafe { *value.as_ptr().cast_mut() }) as u8 {
+    match p_ffs(cstr::first) {
         b'm' => EOL_MAC,
         b'd' => EOL_DOS,
         _ => EOL_UNIX,

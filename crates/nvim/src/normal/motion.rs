@@ -304,7 +304,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
     // With an inclusive selection the cursor may sit one past the last
     // character; 'virtualedit' handles that itself.
     // SAFETY: 'selection' is a NUL-terminated option string.
-    let sel = p_sel(|value| unsafe { *value.as_ptr().cast_mut() }) as c_int;
+    let sel = p_sel(|value| c_int::from(cstr::first(value)));
     let past_line = visual_active() && sel != 'o' as c_int && !virtual_active(win);
 
     // Which 'whichwrap' flag lets this key wrap to the next line.

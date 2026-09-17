@@ -383,7 +383,7 @@ pub(crate) fn display_showcmd() {
     showcmd_is_clear.set(clear);
 
     // SAFETY: 'showcmdloc' is a non-empty string option.
-    let loc = p_sloc(|value| unsafe { *value.as_ptr().cast_mut() as c_int });
+    let loc = p_sloc(|value| c_int::from(cstr::first(value)));
     if loc == 's' as c_int {
         // SAFETY: `curwin` is the current window.
         if clear {
