@@ -25,7 +25,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
+use crate::option::vars::P_SEL;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -42,7 +42,6 @@ use crate::memory::xmallocz;
 use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor};
 use crate::option::get_ve_flags;
-use crate::option::vars::p_sel;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsize};
 use crate::pos::MAXCOL;
@@ -204,7 +203,7 @@ impl PosRef {
 /// Whether 'selection' is `"old"`, where the cursor may not rest on the NUL.
 #[inline(always)]
 fn selection_is_old() -> bool {
-    p_sel(|value| cstr::first(value) == b'o')
+    P_SEL.first_byte() == b'o'
 }
 
 // ---------------------------------------------------------------------------

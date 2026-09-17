@@ -34,7 +34,7 @@ use crate::memline::ml_setflags;
 use crate::memory::xfree;
 use crate::message::{e_modifiable, e_unsupportedoption};
 use crate::option::option_var;
-use crate::option::vars::{P_BKC, bkc_flags, p_bex, p_bs, p_enc, p_pm};
+use crate::option::vars::{P_BKC, P_BS, bkc_flags, p_bex, p_enc, p_pm};
 use crate::option::{
     get_fileformat, redraw_titles, set_iminsert_global, set_imsearch_global, set_option_direct,
     skip_to_option_part,
@@ -66,8 +66,8 @@ use crate::pos::MAXLNUM;
 /// 'backspace' is a word list, except that the number 2 is also accepted
 /// and means everything but "nostop".
 pub fn did_set_backspace(args: &mut OptSet) -> Result<(), OptError> {
-    if p_bs(|value| ascii_isdigit(c_int::from(cstr::first(value)))) {
-        if p_bs(|value| cstr::first(value) != b'2') {
+    if ascii_isdigit(c_int::from(P_BS.first_byte())) {
+        if P_BS.first_byte() != b'2' {
             return invalid();
         }
         return Ok(());

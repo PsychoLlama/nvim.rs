@@ -25,8 +25,7 @@ use crate::drawscreen::state::ru_wid;
 use crate::memory::xstrdup;
 use crate::message::e_invalid_format_string_single_percent_s;
 use crate::message::{verbose_open, verbose_stop};
-use crate::option::vars::p_vfile;
-use crate::option::vars::{P_SHADA, p_ruf, ssop_flags};
+use crate::option::vars::{P_SHADA, P_VFILE, p_ruf, ssop_flags};
 use crate::option::{did_set_title, get_option_default};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
 use crate::os::cshim::gettext;
@@ -305,7 +304,7 @@ pub fn did_set_shortmess(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_verbosefile(_args: &mut OptSet) -> Result<(), OptError> {
     verbose_stop();
-    if p_vfile(|value| !value.is_empty()) && verbose_open().is_err() {
+    if P_VFILE.first_byte() != 0 && verbose_open().is_err() {
         return invalid();
     }
     Ok(())

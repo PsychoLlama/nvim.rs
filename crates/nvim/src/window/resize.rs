@@ -35,7 +35,7 @@ use crate::r#move::{
     validate_botline_win, win_col_off2,
 };
 use crate::option::get_scrolloff_value;
-use crate::option::vars::{P_CH, p_ch, p_ls, p_spk, p_stal, p_wbr};
+use crate::option::vars::{P_CH, P_SPK, P_WBR, p_ch, p_ls, p_stal, p_wbr};
 use crate::options::kWinOptScroll;
 use crate::optionstr::LocalOptStr;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
@@ -145,16 +145,14 @@ pub fn win_fix_scroll(resize: bool) {
 /// `'splitkeep'` asks for -- "screen" holds the text still on the screen,
 /// "topline" holds the top line, and "cursor" (the default) does nothing here.
 pub(crate) fn fix_scroll(resize: bool) {
-    // SAFETY: `'splitkeep'` is a NUL-terminated option string.
-    if p_spk(|value| cstr::first(value) == b'c') {
+    if P_SPK.first_byte() == b'c' {
         return;
     }
     skip_update_topline.set(true);
     for mut wp in windows() {
         if !wp.w_floating && wp.w_height != wp.w_prev_height {
             wp.w_do_win_fix_cursor = true;
-            // SAFETY: as above.
-            let screen = p_spk(|value| cstr::first(value) == b's');
+            let screen = P_SPK.first_byte() == b's';
             if screen
                 && wp.w_winrow != wp.w_prev_winrow
                 && wp.w_botline - 1 <= wp.buffer().line_count()
@@ -356,8 +354,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
     if height == 0 {
         height = (window.w_height - window.w_winbar_height).max(0);
     }
-    // SAFETY: `'splitkeep'` is a NUL-terminated option string.
-    let keeps_cursor = p_spk(|value| cstr::first(value) == b'c');
+    let keeps_cursor = P_SPK.first_byte() == b'c';
 
     if height != prev_height {
         if height > 0 && valid_cursor {
@@ -730,8 +727,7 @@ pub fn global_winbar_height() -> c_int {
 
 /// The rows a global `'winbar'` takes off every window.
 pub(crate) fn global_winbar_rows() -> c_int {
-    // SAFETY: `'winbar'` is a NUL-terminated option string.
-    (p_wbr(|value| !value.is_empty())) as c_int
+    (P_WBR.first_byte() != 0) as c_int
 }
 
 pub fn global_stl_height() -> c_int {

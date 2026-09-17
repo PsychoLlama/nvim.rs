@@ -14,7 +14,6 @@
 
 use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
-use crate::cstr;
 use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
@@ -25,7 +24,7 @@ use crate::message::e_interr;
 use crate::message::{MSG_BUF_LEN, emsg, messaging, msg_ptr, set_keep_msg};
 use crate::r#move::update_topline;
 use crate::option::set_option_direct;
-use crate::option::vars::{p_icm, p_rdt, p_report, p_shm};
+use crate::option::vars::{P_ICM, p_rdt, p_report, p_shm};
 use crate::options::kOptShortmess;
 use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
@@ -274,9 +273,8 @@ pub(crate) fn show_sub(
 
     // Use the preview window only when inccommand=split and the range is more
     // than the current line.
-    // SAFETY: 'inccommand' is a live string option.
-    let preview = p_icm(|value| cstr::first(value) == b's')
-        && (range.0 != old_cusr.lnum || range.1 != old_cusr.lnum);
+    let preview =
+        P_ICM.first_byte() == b's' && (range.0 != old_cusr.lnum || range.1 != old_cusr.lnum);
 
     let mut pv = if preview {
         // With 'inccommand' at `split` the caller's contract makes

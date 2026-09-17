@@ -35,7 +35,7 @@ use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::buf_copy_options;
-use crate::option::vars::{p_acd, p_spk, p_wh, p_wiw};
+use crate::option::vars::{P_SPK, p_acd, p_wh, p_wiw};
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::os::state::{globaldir, last_chdir_reason};
 use crate::path::pathcmp;
@@ -380,8 +380,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
 /// Whether `'splitkeep'` is `"cursor"`, which keeps the cursor line put and
 /// scrolls the text instead.
 fn split_keep_cursor() -> bool {
-    // SAFETY: `'splitkeep'` is a NUL-terminated option string.
-    p_spk(|value| cstr::first(value) == b'c')
+    P_SPK.first_byte() == b'c'
 }
 
 /// The window CTRL-W p goes back to, `None` when there is none.

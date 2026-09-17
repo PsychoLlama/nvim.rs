@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::message_fmt::c_str;
+use crate::option::vars::P_VFILE;
 use crate::semsg;
 use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
@@ -38,7 +39,7 @@ pub(crate) static redir_col: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Is `'verbosefile'` set to anything?
 fn verbosefile_set() -> bool {
-    p_vfile(|value| !value.is_empty())
+    P_VFILE.first_byte() != 0
 }
 
 /// [`msg_keep`] inside a `verbose_enter`/`verbose_leave` pair.

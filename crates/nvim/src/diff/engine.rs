@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::option::vars::P_DEX;
 use crate::types::Failed;
 use core::ffi::{c_char, c_int};
 
@@ -81,7 +82,7 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Fail
             unsafe { os_remove(cstr::at(orig)) };
         }
         // With `'diffexpr'` set there is no `-a` to retry without.
-        if p_dex(|value| !value.is_empty()) || diff_a_works.get().is_some() {
+        if P_DEX.first_byte() != 0 || diff_a_works.get().is_some() {
             break;
         }
         diff_a_works.set(Some(ok));
@@ -179,7 +180,7 @@ pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
     let tmp_orig = unsafe { (*dio).dio_orig.din_fname };
     let tmp_new = unsafe { (*dio).dio_new.din_fname };
     let tmp_diff = unsafe { (*dio).dio_diff.dout_fname };
-    if p_dex(|value| !value.is_empty()) {
+    if P_DEX.first_byte() != 0 {
         unsafe { eval_diff(tmp_orig, tmp_new, tmp_diff) };
         return Ok(());
     }

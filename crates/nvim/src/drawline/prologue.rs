@@ -19,9 +19,9 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::decoration::kMTMetaInline;
 use crate::normal::{VisualSelection, visual_active, visual_selection};
+use crate::option::vars::P_SEL;
 use crate::optionstr::LocalOptStr;
 use crate::pos::MAXCOL;
 use crate::spell::SMT_ALL;
@@ -320,7 +320,7 @@ impl LineSetup {
                 }
             }
             if !sel.mode.is_line() && lnum == bot.lnum {
-                if p_sel(|value| cstr::first(value) == b'e') && bot.col == 0 && bot.coladd == 0 {
+                if P_SEL.first_byte() == b'e' && bot.col == 0 && bot.coladd == 0 {
                     // 'selection' "exclusive" and the selection stops at
                     // the start of this line: none of it is here.
                     wlv.fromcol = -10;
@@ -329,7 +329,7 @@ impl LineSetup {
                     wlv.tocol = MAXCOL as ::core::ffi::c_int;
                 } else {
                     let mut pos = bot;
-                    if p_sel(|value| cstr::first(value) == b'e') {
+                    if P_SEL.first_byte() == b'e' {
                         unsafe {
                             getvvcol(
                                 window,
@@ -359,7 +359,7 @@ impl LineSetup {
         // drawn as a block inside the selection anyway.
         if !highlight_match.get()
             && self.in_curline
-            && cursor_is_block_during_visual(p_sel(|value| cstr::first(value) == b'e'))
+            && cursor_is_block_during_visual(P_SEL.first_byte() == b'e')
         {
             self.noinvcur = true;
         }

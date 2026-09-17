@@ -20,6 +20,7 @@ use crate::keycodes::{
     Ctrl_Y, Ctrl_Z, Key,
 };
 use crate::option::cpo_has;
+use crate::option::vars::P_ICM;
 use crate::types::{CpoFlag, ExpandContext, NUL, OK};
 use crate::winlayer::Win;
 
@@ -514,7 +515,7 @@ pub(crate) fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
     let prev_cmdpreview = cmdpreview.get();
     let preview_shown = s.firstc == ':' as ::core::ffi::c_int
         && current_sctx.get().sc_sid == 0 // only if interactive
-        && p_icm(|value| !value.is_empty()) // 'inccommand' is set
+        && P_ICM.first_byte() != 0 // 'inccommand' is set
         && !exmode_active.get() // not in ex mode
         && cmdline_star.get() == 0 // not typing a password
         && vpeekc_any() == 0

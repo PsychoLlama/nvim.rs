@@ -20,6 +20,7 @@
 )]
 
 use crate::cstr;
+use crate::option::vars::P_SLOC;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
@@ -338,7 +339,7 @@ pub fn comp_col() {
             sc_width = ru_width;
         }
     }
-    if p_sc() && p_sloc(|value| cstr::first(value) == b'l') {
+    if p_sc() && P_SLOC.first_byte() == b'l' {
         sc_width = sc_width.saturating_add(SHOWCMD_COLS as c_int);
         // A separating space, unless the ruler is not beside it anyway.
         if !p_ru() || last_has_status {

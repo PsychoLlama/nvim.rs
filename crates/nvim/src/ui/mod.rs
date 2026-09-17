@@ -64,7 +64,7 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
 use crate::option::vars::{
-    P_LZ, bo_flags, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags,
+    P_GUICURSOR, P_LZ, bo_flags, p_debug, p_lz, p_tgc, p_vb, p_wd, rdb_flags,
 };
 use crate::option::{set_option_value, ui_refresh_options};
 use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
@@ -664,7 +664,7 @@ pub fn ui_flush() {
     if pending_mode_info_update.get() {
         let mut arena: Arena = ARENA_EMPTY;
         let style = mode_style_array();
-        let enabled = p_guicursor(|value| !value.is_empty());
+        let enabled = P_GUICURSOR.first_byte() != 0;
         ui_call_mode_info_set(enabled as Boolean, style);
         unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
         pending_mode_info_update.set(false);

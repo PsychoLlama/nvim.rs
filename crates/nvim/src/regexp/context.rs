@@ -19,6 +19,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::option::vars::P_SEL;
 use core::ffi::{c_char, c_int};
 
 use super::submatch::Rsm;
@@ -35,7 +36,6 @@ use crate::memory::{xcalloc, xfree, xmalloc};
 use crate::message::e_re_corr;
 use crate::message::emsg;
 use crate::normal::{VisualMode, visual_ever_started, visual_selection};
-use crate::option::vars::p_sel;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::plines::{getvvcol, win_linetabsize};
@@ -235,8 +235,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     let col = rex.col();
     if mode.is_char() {
         // 'selection' decides whether the last character is included.
-        // SAFETY: `p_sel` is the option's own string.
-        let inclusive = p_sel(|value| cstr::first(value) != b'e') as ColNr;
+        let inclusive = ColNr::from(P_SEL.first_byte() != b'e');
         !((lnum == top.lnum && col < top.col) || (lnum == bot.lnum && col >= bot.col + inclusive))
     } else if mode.is_block() {
         let (mut start, mut end, mut start2, mut end2) = (0, 0, 0, 0);
@@ -259,8 +258,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         // SAFETY: `line` is the NUL-terminated line just fetched and `col` a
         // byte offset into it.
         let cols = unsafe { win_linetabsize(wp, rex.buf_lnum(), line.cast(), col) };
-        // SAFETY: as `inclusive` above.
-        cols >= start && cols <= end - p_sel(|value| cstr::first(value) == b'e') as ColNr
+        cols >= start && cols <= end - ColNr::from(P_SEL.first_byte() == b'e')
     } else {
         true
     }

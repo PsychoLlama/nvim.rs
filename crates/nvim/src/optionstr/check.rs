@@ -247,7 +247,7 @@ pub(crate) trait LocalOptStr {
 
     /// The value's first byte, which is 0 for a field that owns nothing --
     /// upstream's `*p` on a variable that is never null.
-    fn first_byte(&self) -> c_char;
+    fn first_byte(&self) -> u8;
 
     /// Whether the field owns no string of its own — upstream's
     /// `is_empty_option` on a local copy. **Not** "the value is empty": a
@@ -265,8 +265,8 @@ impl LocalOptStr for Option<XString> {
         self.as_deref().unwrap_or_default()
     }
 
-    fn first_byte(&self) -> c_char {
-        self.bytes().first().copied().unwrap_or(0).cast_signed()
+    fn first_byte(&self) -> u8 {
+        self.bytes().first().copied().unwrap_or(0)
     }
 
     fn is_unset(&self) -> bool {

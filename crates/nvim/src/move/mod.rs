@@ -159,7 +159,7 @@ impl Win {
     /// into `w_nrwidth_width`, and this is on the per-line draw path, so
     /// asking it where upstream would not both costs and writes.
     fn number_col(self) -> c_int {
-        let stc_empty = self.w_onebuf_opt.wo_stc.first_byte() == NUL as c_char;
+        let stc_empty = self.w_onebuf_opt.wo_stc.first_byte() == 0;
         if self.w_onebuf_opt.wo_nu == 0 && self.w_onebuf_opt.wo_rnu == 0 && stc_empty {
             return 0;
         }

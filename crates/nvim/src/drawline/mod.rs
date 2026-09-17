@@ -51,7 +51,7 @@ use crate::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc};
 use crate::message::state::did_emsg;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
-use crate::option::vars::{dy_flags, p_sel};
+use crate::option::vars::dy_flags;
 use crate::option::{get_showbreak_value, kOptFlagInsecure};
 use crate::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,

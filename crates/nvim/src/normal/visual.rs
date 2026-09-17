@@ -9,7 +9,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::ops::Op;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
@@ -38,7 +37,7 @@ use crate::normal::{
 };
 use crate::ops::adjust_cursor_eol;
 use crate::option::get_ve_flags;
-use crate::option::vars::{p_sel, p_slm, p_smd};
+use crate::option::vars::{P_SEL, p_slm, p_smd};
 use crate::options::kOptVeFlagBlock;
 use crate::plines::{getvcol, getvcols};
 use crate::pos::{MAXCOL, equalpos, lt};
@@ -61,8 +60,7 @@ use crate::r#move::{update_curswant_force, update_topline, validate_virtcol};
 /// selection is not part of it.
 #[inline(always)]
 pub(crate) fn sel_exclusive() -> bool {
-    // SAFETY: 'selection' is a non-empty C string option.
-    p_sel(|value| cstr::first(value) == b'e')
+    P_SEL.first_byte() == b'e'
 }
 
 // ---------------------------------------------------------------------------

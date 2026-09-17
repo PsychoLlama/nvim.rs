@@ -16,11 +16,10 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::garray::{ga_grow, ga_init};
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
-use crate::option::vars::p_sel;
+use crate::option::vars::P_SEL;
 use crate::pos::{MAXLNUM, ltoreq};
 use crate::state::mode::State;
 use crate::winlayer::Win;
@@ -170,8 +169,7 @@ pub fn fold_adjust_visual() {
             return false;
         }
         end.col = win.buffer().lines().line_len(end.lnum);
-        // SAFETY: 'selection' is a NUL-terminated option string.
-        if end.col > 0 && p_sel(|value| cstr::first(value) == b'o') {
+        if end.col > 0 && P_SEL.first_byte() == b'o' {
             end.col -= 1;
         }
         if anchor_first {

@@ -48,7 +48,7 @@ use crate::normal::{
     nv_cmds, set_vcount_ca, set_visual_select, start_selection, visual_active, visual_select,
 };
 use crate::ops::{Op, do_pending_operator, get_op_type};
-use crate::option::vars::{fdo_flags, p_langmap, p_lrm, p_tm, p_ttm};
+use crate::option::vars::{P_LANGMAP, fdo_flags, p_lrm, p_tm, p_ttm};
 use crate::register::get_default_register_name;
 use crate::state::mode::{
     State, VIsual_select_reg, finish_op, km_startsel, motion_force, opcount, restart_VIsual_select,
@@ -178,8 +178,7 @@ pub(crate) fn find_command(cmdchar: c_int) -> c_int {
 /// without changing anything.
 #[inline(always)]
 fn langmap_wanted(condition: bool) -> bool {
-    // SAFETY: 'langmap' is a NUL-terminated option string.
-    let have_langmap = p_langmap(|value| !value.is_empty());
+    let have_langmap = P_LANGMAP.first_byte() != 0;
     let from_a_map = if vgetc_busy.get() != 0 {
         typeahead().maplen() == 0
     } else {

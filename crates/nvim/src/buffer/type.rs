@@ -56,24 +56,19 @@ fn tr(msg: &CStr) -> *mut c_char {
 
 /// The first byte of `'buftype'`, or NUL when there is no buffer. Option
 /// variables are never null, so upstream indexes `b_p_bt` unconditionally.
-fn buftype(buffer: Option<Buf>) -> c_char {
+fn buftype(buffer: Option<Buf>) -> u8 {
     buffer.map_or(0, |b| b.b_p_bt.first_byte())
 }
 
 /// `b_p_bt[2]`, which upstream reads only once `b_p_bt[0] == 'n'` has said
 /// there are at least three bytes ("nofile" or "nowrite") to read.
-fn buftype_2(buffer: Buf) -> c_char {
+fn buftype_2(buffer: Buf) -> u8 {
     // A `'buftype'` beginning with 'n' is one of those two words.
-    buffer.b_p_bt.bytes()[2].cast_signed()
+    buffer.b_p_bt.bytes()[2]
 }
 
 fn has_terminal(buffer: Buf) -> bool {
     !buffer.terminal.is_null()
-}
-
-/// One byte of `'buftype'`, as a `char`.
-const fn ch(byte: u8) -> c_char {
-    byte as c_char
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +83,7 @@ const fn ch(byte: u8) -> c_char {
 
 /// `bt_prompt()`: a "prompt" buffer.
 pub(crate) fn buf_is_prompt(buffer: Option<Buf>) -> bool {
-    buftype(buffer) == ch(b'p')
+    buftype(buffer) == b'p'
 }
 
 /// `bt_help()`: a help buffer.
@@ -103,12 +98,12 @@ pub(crate) fn buf_is_normal(buffer: Option<Buf>) -> bool {
 
 /// `bt_quickfix()`: the quickfix or location list buffer.
 pub(crate) fn buf_is_quickfix(buffer: Option<Buf>) -> bool {
-    buftype(buffer) == ch(b'q')
+    buftype(buffer) == b'q'
 }
 
 /// `bt_terminal()`: a terminal buffer.
 pub(crate) fn buf_is_terminal(buffer: Option<Buf>) -> bool {
-    buftype(buffer) == ch(b't')
+    buftype(buffer) == b't'
 }
 
 /// `bt_nofilename()`: a "nofile", "acwrite", terminal or "prompt" buffer.
@@ -120,10 +115,7 @@ pub(crate) fn buf_is_nofilename(buffer: Option<Buf>) -> bool {
 /// [`buf_is_nofilename`] over a buffer already in hand.
 fn is_nofilename(buffer: Buf) -> bool {
     let bt = buftype(Some(buffer));
-    bt == ch(b'n') && buftype_2(buffer) == ch(b'f')
-        || bt == ch(b'a')
-        || has_terminal(buffer)
-        || bt == ch(b'p')
+    bt == b'n' && buftype_2(buffer) == b'f' || bt == b'a' || has_terminal(buffer) || bt == b'p'
 }
 
 /// `bt_nofileread()`: a "nofile", "quickfix", terminal or "prompt" buffer,
@@ -131,16 +123,13 @@ fn is_nofilename(buffer: Buf) -> bool {
 pub(crate) fn buf_is_nofileread(buffer: Option<Buf>) -> bool {
     buffer.is_some_and(|b| {
         let bt = buftype(Some(b));
-        bt == ch(b'n') && buftype_2(b) == ch(b'f')
-            || bt == ch(b't')
-            || bt == ch(b'q')
-            || bt == ch(b'p')
+        bt == b'n' && buftype_2(b) == b'f' || bt == b't' || bt == b'q' || bt == b'p'
     })
 }
 
 /// `bt_nofile()`: a "nofile" buffer.
 pub(crate) fn buf_is_nofile(buffer: Option<Buf>) -> bool {
-    buffer.is_some_and(|b| buftype(Some(b)) == ch(b'n') && buftype_2(b) == ch(b'f'))
+    buffer.is_some_and(|b| buftype(Some(b)) == b'n' && buftype_2(b) == b'f')
 }
 
 /// `bt_dontwrite()`: a "nowrite", "nofile", terminal or "prompt" buffer.
@@ -151,7 +140,7 @@ pub(crate) fn buf_is_dontwrite(buffer: Option<Buf>) -> bool {
 /// [`buf_is_dontwrite`] over a buffer already in hand.
 fn is_dontwrite(buffer: Buf) -> bool {
     let bt = buftype(Some(buffer));
-    bt == ch(b'n') || has_terminal(buffer) || bt == ch(b'p')
+    bt == b'n' || has_terminal(buffer) || bt == b'p'
 }
 
 /// `bt_dontwrite_msg()`: [`buf_is_dontwrite`], complaining when it is true.
@@ -167,8 +156,7 @@ pub(crate) fn buf_dontwrite_msg(buffer: Option<Buf>) -> bool {
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
 pub fn buf_hide(buffer: Buf) -> bool {
-    let bufhidden = buffer.b_p_bh.first_byte();
-    match bufhidden as u8 {
+    match buffer.b_p_bh.first_byte() {
         b'u' | b'w' | b'd' => return false, // "unload", "wipe", "delete"
         b'h' => return true,                // "hide"
         _ => {}

@@ -8,7 +8,6 @@ use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::api::private::helpers::cbuf_to_string;
 use crate::buffer::find_buf;
 use crate::charset::getdigits_int;
-use crate::cstr;
 use crate::eval::list2fpos;
 use crate::eval::typval::{
     NumBuf, dict_get_bool, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_list_alloc,
@@ -22,7 +21,7 @@ use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::normal::unadjust_for_sel_inner;
 use crate::ops::{block_prep, charwise_block_prep, reset_lbr, restore_lbr};
-use crate::option::vars::p_sel;
+use crate::option::vars::P_SEL;
 use crate::os::cshim::gettext;
 use crate::plines::getvvcol;
 use crate::pos::{MAXCOL, equalpos, lt};
@@ -161,7 +160,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     // override it and may name the region type.
     let opts =
         (args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)).then(|| args[2].dict_or_null());
-    let exclusive_by_default = p_sel(|value| cstr::first(value) == b'e');
+    let exclusive_by_default = P_SEL.first_byte() == b'e';
     let (is_select_exclusive, spec) = match opts {
         Some(d) => {
             // SAFETY: the argument's own dictionary.

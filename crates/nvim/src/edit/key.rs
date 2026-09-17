@@ -528,10 +528,6 @@ fn key_eol(s: &mut InsertState) -> Next {
 /// CTRL-X submode is running, in which case there is nothing to complete
 /// with and the key is inserted.
 fn key_complete(s: &mut InsertState) -> Next {
-    // SAFETY: every `unsafe` call below is an editor-wide routine whose only
-    // precondition is the live `curwin`/`curbuf` this mode runs with.
-    // The strings walked below are NUL-terminated lines of that buffer, and
-    // every step stops at the NUL.
     if c_int::from(Buf::current().b_p_cpt.first_byte()) == NUL
         && (ctrl_x_mode_normal() || ctrl_x_mode_whole_line())
         && !compl_status_local()

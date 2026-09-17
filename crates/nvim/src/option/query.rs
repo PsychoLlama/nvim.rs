@@ -24,7 +24,7 @@ use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::{XString, xcalloc, xfree, xstrdup};
 use crate::option::vars::{
-    P_SISO, P_SO, bkc_flags, p_bs, p_cpo, p_ffs, p_magic, p_sh, p_shm, p_siso, p_so, ve_flags,
+    P_BS, P_FFS, P_SISO, P_SO, bkc_flags, p_bs, p_cpo, p_magic, p_sh, p_shm, p_siso, p_so, ve_flags,
 };
 use crate::options::*;
 use crate::optionstr::{LocalOptStr, empty_option};
@@ -230,10 +230,7 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
     if what == BsFlag::START && buf_is_prompt(current_buf()) {
         return false;
     }
-    // SAFETY: 'backspace' is a string option, so it is a live, NUL-terminated
-    // string.
-    // The historic numeric spelling: 2 is everything but "nostop".
-    if p_bs(|value| cstr::first(value) == b'2') {
+    if P_BS.first_byte() == b'2' {
         return what != BsFlag::NOSTOP;
     }
     what.is_in(p_bs(|value| unsafe {
@@ -322,8 +319,7 @@ pub(crate) fn get_fileformat_force(buffer: Buf, excmd: Option<&ExArg>) -> c_int 
 
 /// The line ending a new file gets: the first entry of 'fileformats'.
 pub(crate) fn default_fileformat() -> c_int {
-    // SAFETY: 'fileformats' is a string option; it is never null.
-    match p_ffs(cstr::first) {
+    match P_FFS.first_byte() {
         b'm' => EOL_MAC,
         b'd' => EOL_DOS,
         _ => EOL_UNIX,

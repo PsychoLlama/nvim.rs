@@ -15,7 +15,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
+use crate::option::vars::P_BG;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char};
@@ -27,7 +27,6 @@ use crate::highlight::state::{
     cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp,
 };
 use crate::memory::{xfree, xstrdup};
-use crate::option::vars::p_bg;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::types::{Failed, RgbValue};
 
@@ -546,7 +545,7 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
         return;
     }
 
-    let table = if p_bg(|value| cstr::first(value) == b'l') {
+    let table = if P_BG.first_byte() == b'l' {
         &HIGHLIGHT_INIT_LIGHT
     } else {
         &HIGHLIGHT_INIT_DARK

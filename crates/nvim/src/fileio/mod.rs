@@ -58,7 +58,7 @@ use crate::message::{
     set_keep_msg,
 };
 use crate::r#move::update_topline;
-use crate::option::vars::{p_ar, p_ccv, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
+use crate::option::vars::{P_FFS, p_ar, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
 use crate::option::{
     copy_option_part, default_fileformat, get_fileformat, get_fileformat_force, set_fileformat,
     set_option_direct, set_options_bin, shortmess,
@@ -664,7 +664,7 @@ pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
     // Where the encoding name starts in that command.
     excmd.force_enc = 8;
     excmd.bad_char = buffer.b_bad_char;
-    excmd.force_ff = buffer.b_p_ff.first_byte() as u8 as c_int;
+    excmd.force_ff = buffer.b_p_ff.first_byte() as c_int;
     excmd.force_bin = if buffer.b_p_bin != 0 {
         FORCE_BIN
     } else {
@@ -685,8 +685,7 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
                 get_fileformat_force(Buf::current(), forced),
                 OptionSetFlags::LOCAL,
             );
-        // SAFETY: 'fileformats' is a string option; it is never null.
-        } else if p_ffs(|value| !value.is_empty()) {
+        } else if P_FFS.first_byte() != 0 {
             set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
         }
     }

@@ -46,7 +46,7 @@ use crate::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, find_ident_under_cursor,
     reset_visual_and_resel,
 };
-use crate::option::vars::{p_langmap, p_lrm, p_pvh, swb_flags};
+use crate::option::vars::{P_LANGMAP, p_lrm, p_pvh, swb_flags};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;
@@ -665,8 +665,7 @@ fn detach_window() {
 /// `LANGMAP_ADJUST(c, true)`: map `c` through `'langmap'`, but only when it
 /// came from the keyboard rather than from a mapping.
 fn langmap_adjust(c: c_int) -> c_int {
-    // SAFETY: `'langmap'` is a NUL-terminated option string.
-    let mapping = p_langmap(|value| !value.is_empty());
+    let mapping = P_LANGMAP.first_byte() != 0;
     let typed = if vgetc_busy.get() != 0 {
         typeahead().maplen() == 0
     } else {

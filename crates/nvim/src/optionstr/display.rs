@@ -87,12 +87,11 @@ pub fn did_set_background(args: &mut OptSet) -> Result<(), OptError> {
         return Ok(());
     }
 
-    let dark = p_bg(|value| cstr::first(value) == b'd');
+    let dark = P_BG.first_byte() == b'd';
     init_highlight(false, false);
 
     // The global may have been changed by `init_highlight`.
-    // SAFETY: the editor's own variable dictionary.
-    if dark != p_bg(|value| cstr::first(value) == b'd')
+    if dark != (P_BG.first_byte() == b'd')
         && !unsafe { get_var_value(c"g:colors_name".as_ptr(), &mut numbuf) }.is_null()
     {
         let name = c"g:colors_name";

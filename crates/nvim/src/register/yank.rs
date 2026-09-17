@@ -21,6 +21,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::guard::Lock;
 use crate::memory::XString;
 use crate::message_fmt::{c_str, report_msg};
+use crate::option::vars::P_SEL;
 use crate::tr_plural;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
@@ -271,8 +272,7 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
     // A charwise yank that starts in column 0 and ends before column 0 of
     // a later line is really a linewise one.
     //
-    // SAFETY: 'selection' is a NUL-terminated option string.
-    let sel_old = region.is_visual && p_sel(|value| cstr::first(value) != b'o');
+    let sel_old = region.is_visual && P_SEL.first_byte() != b'o';
     if region.motion_type == kMTCharWise
         && region.start.col == 0
         && !region.inclusive

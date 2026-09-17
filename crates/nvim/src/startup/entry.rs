@@ -56,7 +56,7 @@ use crate::mouse::setmouse;
 use crate::r#move::update_topline;
 use crate::msgpack_rpc::server::{server_init, server_teardown};
 use crate::normal::{check_scrollbind, normal_enter};
-use crate::option::vars::{P_LPL, P_UC, P_UT, cb_flags, p_ch, p_shada};
+use crate::option::vars::{P_LPL, P_SHADA, P_UC, P_UT, cb_flags, p_ch};
 use crate::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
 use crate::os::cshim::{gettext, stderr, stdout};
 use crate::os::env::{env_init, init_homedir, os_hint_priority};
@@ -415,7 +415,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         P_UT.set(1 as OptInt);
     }
 
-    if p_shada(|value| !value.is_empty()) {
+    if P_SHADA.first_byte() != 0 {
         let _ = unsafe { shada_read_everything(ptr::null(), false, true) };
         time_msg_at(c"reading ShaDa");
     }

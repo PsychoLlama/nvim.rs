@@ -324,7 +324,7 @@ unsafe fn pum_show_info(
             && Buf::current().b_nwindows == 1
             && Buf::current().b_fname.is_null()
             && buf_is_nofile(current_buf())
-            && Buf::current().b_p_bh.first_byte() == b'w' as c_char
+            && Buf::current().b_p_bh.first_byte() == b'w'
         {
             // Already a "wipeout" buffer: just empty it.
             buf_clear();

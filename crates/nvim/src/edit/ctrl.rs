@@ -23,6 +23,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::keycodes::Key;
+use crate::option::vars::P_LANGMAP;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 

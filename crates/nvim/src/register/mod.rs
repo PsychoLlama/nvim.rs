@@ -81,7 +81,7 @@ use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topli
 use crate::normal::find_ident_under_cursor;
 use crate::ops::{adjust_cursor_eol, block_prep, charwise_block_prep, get_op_char};
 use crate::option::get_ve_flags;
-use crate::option::vars::{p_ch, p_report, p_sel};
+use crate::option::vars::{p_ch, p_report};
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::os::input::os_breakcheck;

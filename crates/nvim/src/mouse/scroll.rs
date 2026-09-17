@@ -18,7 +18,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
 
@@ -32,7 +31,7 @@ use crate::r#move::pagescroll;
 use crate::narrow::number_as_int;
 use crate::normal::nv_scroll_line;
 use crate::ops::clear_oparg;
-use crate::option::vars::{p_mousem, p_mousescroll_hor, p_mousescroll_vert};
+use crate::option::vars::{P_MOUSEM, p_mousem, p_mousescroll_hor, p_mousescroll_vert};
 use crate::popupmenu::pum_visible;
 use crate::pos::equalpos;
 use crate::search::{BACKWARD, FORWARD};
@@ -196,8 +195,7 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
 
 /// Whether `'mousemodel'` is set to "popup" or "popup_setpos".
 pub(crate) fn mouse_model_popup() -> bool {
-    // SAFETY: an option string is NUL-terminated, never null.
-    p_mousem(|value| cstr::first(value) == b'p')
+    P_MOUSEM.first_byte() == b'p'
 }
 
 /// Whether `'mousemodel'` is exactly "popup_setpos", which moves the cursor

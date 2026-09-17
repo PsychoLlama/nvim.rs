@@ -376,7 +376,6 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
         // If there is no filetype, allow for detecting one.  Esp. useful for
         // ":ball" used in an autocommand.  If there already is a filetype we
         // might prefer to keep it.
-        // SAFETY: `'filetype'` is a NUL-terminated option value.
         if buffer.b_p_ft.first_byte() as c_int == NUL {
             buffer.b_did_filetype = false;
         }

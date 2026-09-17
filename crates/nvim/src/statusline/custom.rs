@@ -42,7 +42,7 @@ use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::message::state::{msg_col, msg_row};
 use crate::message::{msg_clr_eos, msg_grid_view};
-use crate::option::vars::{P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal, p_wbr};
+use crate::option::vars::{P_RUF, P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal};
 use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
 use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext;
@@ -504,7 +504,7 @@ pub fn win_redr_winbar(window: Win) {
     let win = window;
     if win.w_winbar_height != 0
         && is_redrawing()
-        && (p_wbr(|value| !value.is_empty()) || !win.w_onebuf_opt.wo_wbr.bytes().is_empty())
+        && (P_WBR.first_byte() != 0 || !win.w_onebuf_opt.wo_wbr.bytes().is_empty())
     {
         win_redr_custom(Some(window), true, false, false);
     }
@@ -562,8 +562,7 @@ pub fn redraw_ruler() {
     }
 
     let part_of_status = win.w_status_height != 0 || is_stl_global;
-    if p_ruf(|value| !value.is_empty())
-        && (p_ch() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
+    if P_RUF.first_byte() != 0 && (p_ch() > 0 as OptInt || (ui_has(kUIMessages) && !part_of_status))
     {
         win_redr_custom(Some(win), false, true, ui_has(kUIMessages));
         return;

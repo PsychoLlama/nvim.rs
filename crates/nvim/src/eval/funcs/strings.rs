@@ -314,7 +314,7 @@ fn with_spell(body: impl FnOnce()) {
         let _ = parse_spelllang(win);
         win.w_onebuf_opt.wo_spell = 1;
     }
-    if unsafe { (*win.w_s).b_p_spl.first_byte() } == NUL as c_char {
+    if unsafe { (*win.w_s).b_p_spl.first_byte() } == 0 {
         emsg(gettext(e_no_spell));
     } else {
         body();
@@ -341,7 +341,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
                 word = get_cursor_pos_ptr();
                 Win::current().w_set_curswant = true;
             }
-        } else if Buf::current().b_s.b_p_spl.first_byte() != NUL as c_char {
+        } else if Buf::current().b_s.b_p_spl.first_byte() != 0 {
             let mut str = arg_string_chk(&mut numbuf, &args[0]);
             let mut capcol: c_int = -1;
             if !str.is_null() {

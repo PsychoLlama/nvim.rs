@@ -13,8 +13,7 @@
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::option::local_or_global_raw;
-use crate::option::vars::P_CDPATH;
-use crate::option::vars::P_PATH;
+use crate::option::vars::{P_CDPATH, P_PATH, P_WIG};
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
@@ -556,7 +555,7 @@ pub unsafe fn expand_wildcards(
     }
 
     // Remove the names that match 'wildignore'.
-    if p_wig(|value| !value.is_empty()) {
+    if P_WIG.first_byte() != 0 {
         debug_assert!(
             unsafe { *num_files } == 0 || !unsafe { *files }.is_null(),
             "path: matches without an array to hold them"

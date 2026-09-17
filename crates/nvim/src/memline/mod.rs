@@ -510,7 +510,7 @@ pub fn ml_open_file(buffer: Buf) {
         mf_close_file(buffer, false);
     }
 
-    if p_dir(|value| !value.is_empty()) && unsafe { mf_fname(mfp) }.is_null() {
+    if P_DIR.first_byte() != 0 && unsafe { mf_fname(mfp) }.is_null() {
         need_wait_return.set(true); // call wait_return() later
         let _no_prompt = Suppress::wait_return();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

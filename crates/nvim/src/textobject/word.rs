@@ -10,7 +10,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
+use crate::option::vars::P_SEL;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -27,7 +27,6 @@ use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, unadjust_for_sel, visual_active, visual_anchor,
     visual_mode,
 };
-use crate::option::vars::p_sel;
 use crate::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::mode::VIsual_select_exclu_adj;
@@ -219,8 +218,7 @@ pub fn end_word(
     cls_bigword.set(bigword);
 
     // Undo a cursor position adjusted for exclusive 'selection'.
-    // SAFETY: 'selection' is a NUL-terminated option string.
-    if p_sel(|value| cstr::first(value) == b'e')
+    if P_SEL.first_byte() == b'e'
         && visual_active()
         && visual_mode().is_char()
         && VIsual_select_exclu_adj.get()
@@ -359,9 +357,7 @@ pub unsafe fn current_word(
 
     // Correct the cursor when 'selection' is exclusive.
     // SAFETY: 'selection' is a NUL-terminated option string.
-    if visual_active()
-        && p_sel(|value| cstr::first(value) == b'e')
-        && lt(visual_anchor(), Win::current().w_cursor)
+    if visual_active() && P_SEL.first_byte() == b'e' && lt(visual_anchor(), Win::current().w_cursor)
     {
         // SAFETY: the caller guarantees the cursor is on a line of the buffer.
         dec_cursor();
@@ -468,8 +464,7 @@ pub unsafe fn current_word(
     }
 
     if visual_active() {
-        // SAFETY: 'selection' is a NUL-terminated option string.
-        if p_sel(|value| cstr::first(value) == b'e')
+        if P_SEL.first_byte() == b'e'
             && inclusive
             && ltoreq(visual_anchor(), Win::current().w_cursor)
         {

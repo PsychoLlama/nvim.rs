@@ -282,7 +282,7 @@ impl Disposition {
         // The caller must take care of NOT deleting/freeing when 'bufhidden'
         // is "hide" (otherwise we could never free or delete a buffer).
         if buffer.terminal.is_null() {
-            match buffer.b_p_bh.first_byte() as u8 {
+            match buffer.b_p_bh.first_byte() {
                 b'd' => (it.del, it.unload) = (true, true),
                 b'w' => (it.del, it.unload, it.wipe) = (true, true, true),
                 b'u' => it.unload = true,

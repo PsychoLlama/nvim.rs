@@ -65,7 +65,7 @@ use crate::mouse::setmouse;
 use crate::r#move::validate_cursor;
 use crate::normal::may_start_select;
 use crate::option::vars::{
-    P_WS, fdo_flags, p_hls, p_ic, p_js, p_mat, p_msc, p_ri, p_scs, p_sel, p_verbose, p_ws,
+    P_WS, fdo_flags, p_hls, p_ic, p_js, p_mat, p_msc, p_ri, p_scs, p_verbose, p_ws,
 };
 use crate::option::{magic_isset, shortmess};
 use crate::options::{kOptBoFlagShowmatch, kOptFdoFlagSearch};

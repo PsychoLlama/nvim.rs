@@ -9,8 +9,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::highlight::HlAttrFlags;
+use crate::option::vars::P_BG;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -27,7 +27,6 @@ use crate::highlight::state::{
 use crate::lua::executor::nlua_set_sctx;
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{c_str, msg_bytes};
-use crate::option::vars::p_bg;
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
@@ -622,7 +621,7 @@ impl KeyLoop {
             None
         };
         let Some(dark) = dark else { return };
-        if dark == (p_bg(|value| cstr::first(value) == b'd')) || option_was_set(kOptBackground) {
+        if dark == (P_BG.first_byte() == b'd') || option_was_set(kOptBackground) {
             return;
         }
         set_option_value_give_err(

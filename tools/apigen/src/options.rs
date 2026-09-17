@@ -887,14 +887,9 @@ impl StrOpt {
     /// Unlike [`is_unset`](Self::is_unset) this does not distinguish an
     /// option that owns nothing from one explicitly set to `""`; upstream's
     /// `*p_xx == NUL` does not either.
-    pub fn first_byte(self) -> c_char {
+    pub fn first_byte(self) -> u8 {
         OPTIONS.with_field(self.project, |value| {
-            value
-                .as_deref()
-                .and_then(<[u8]>::first)
-                .copied()
-                .unwrap_or(0)
-                .cast_signed()
+            value.as_deref().and_then(<[u8]>::first).copied().unwrap_or(0)
         })
     }
 

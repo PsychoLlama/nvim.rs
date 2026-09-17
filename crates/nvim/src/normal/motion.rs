@@ -31,7 +31,7 @@ use crate::normal::{
     CAR, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
     unadjust_for_sel, visual_active, visual_mode,
 };
-use crate::option::vars::{p_sel, p_ww};
+use crate::option::vars::{P_SEL, p_sel, p_ww};
 use crate::option::{cpo_has, get_showbreak_value, get_ve_flags};
 use crate::options::{
     kOptFdoFlagBlock, kOptFdoFlagHor, kOptFdoFlagJump, kOptFdoFlagPercent, kOptVeFlagOnemore,
@@ -533,7 +533,7 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
     // An exclusive Select-mode selection was widened by one when it was
     // made; the search has to run against the real cursor position.
     let mut cursor_dec = false;
-    if p_sel(|value| cstr::first(value) == b'e')
+    if P_SEL.first_byte() == b'e'
         && visual_active()
         && visual_mode().is_char()
         && VIsual_select_exclu_adj.get()
@@ -746,7 +746,7 @@ pub(crate) unsafe fn adjust_cursor(op: *mut OpArg) {
     let mut op = unsafe { Op::new(op) };
     if Win::current().w_cursor.col > 0
         && gchar_cursor() == NUL
-        && (!visual_active() || p_sel(|value| cstr::first(value) == b'o'))
+        && (!visual_active() || P_SEL.first_byte() == b'o')
         && !virtual_active(Win::current())
         && get_ve_flags(Win::current()) & kOptVeFlagOnemore as c_uint == 0
     {

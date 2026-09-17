@@ -21,6 +21,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::{index_of, list_iter};
+use crate::option::vars::P_AMBW;
 use crate::os::cshim::gettext_owned;
 use crate::semsg;
 use crate::types::NUL;
@@ -93,8 +94,7 @@ pub fn utf_char2cells(c: c_int) -> c_int {
     if prop.charwidth as c_int == 2 {
         return 2;
     }
-    // SAFETY: `p_ambw` is 'ambiwidth', a NUL-terminated option string.
-    if p_ambw(|value| cstr::first(value) == b'd') && prop.ambiguous_width {
+    if P_AMBW.first_byte() == b'd' && prop.ambiguous_width {
         return 2;
     }
     if p_emoji() && c >= FIRST_EMOJI_BLOCK && !prop.ambiguous_width && prop_is_emojilike(prop) {

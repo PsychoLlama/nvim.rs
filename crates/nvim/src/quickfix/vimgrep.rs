@@ -514,8 +514,7 @@ unsafe fn keep_or_drop_dummy(
 
     // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
     // buffer goes away as soon as it is hidden, which wins.
-    // SAFETY: `'bufhidden'` is a NUL-terminated option string.
-    let bufhidden = buffer.b_p_bh.first_byte() as u8;
+    let bufhidden = buffer.b_p_bh.first_byte();
     let hidden_stays = cmdmod_has(CmdModFlags::HIDE) && !matches!(bufhidden, b'u' | b'w' | b'd');
     if !hidden_stays {
         if !found_match {

@@ -23,7 +23,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::types::ApiDict;
 use crate::types::String_0;
 use core::ffi::{CStr, c_char, c_int};
@@ -34,7 +33,7 @@ use crate::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{syn_check_group, syn_id2attr};
 use crate::normal::visual_active;
-use crate::option::vars::{P_GUICURSOR, p_guicursor, p_sel};
+use crate::option::vars::{P_GUICURSOR, P_SEL, p_guicursor};
 use crate::state::mode::{State, finish_op};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
@@ -538,8 +537,7 @@ pub(crate) fn cursor_get_mode_idx() -> ShapeIdx {
     } else if finish_op.get() {
         SHAPE_IDX_O
     } else if visual_active() {
-        // SAFETY: an option value is a NUL-terminated string.
-        if p_sel(|value| cstr::first(value) == b'e') {
+        if P_SEL.first_byte() == b'e' {
             SHAPE_IDX_VE
         } else {
             SHAPE_IDX_V

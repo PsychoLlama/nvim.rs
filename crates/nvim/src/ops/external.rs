@@ -26,6 +26,7 @@
 
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::option::vars::P_FP;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -89,7 +90,7 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
     } else if op.op_type == OpType::Format {
         if c_int::from(Buf::current().b_p_fp.first_byte()) != NUL {
             unsafe { stuff_readbuf(Buf::current().b_p_fp.value_ptr()) };
-        } else if p_fp(|value| !value.is_empty()) {
+        } else if P_FP.first_byte() != 0 {
             p_fp(|value| unsafe { stuff_readbuf(value.as_ptr().cast_mut()) });
         } else {
             unsafe { stuff_readbuf(c"fmt".as_ptr()) };

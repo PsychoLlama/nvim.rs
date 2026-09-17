@@ -9,9 +9,9 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
+use crate::option::vars::P_ICM;
 use crate::types::{CmdModFlags, ExArgt, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
 
@@ -382,7 +382,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
 
         let mut cpinfo: CpInfo = CP_INFO_INIT;
         // 'inccommand' = "split"
-        let mut icm_split = p_icm(|value| cstr::first(value) == b's');
+        let mut icm_split = P_ICM.first_byte() == b's';
         let mut cmdpreview_buf: Option<Buf> = None;
         let mut cmdpreview_win: Option<Win> = None;
 

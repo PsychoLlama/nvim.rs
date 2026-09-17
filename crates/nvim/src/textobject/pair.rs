@@ -9,7 +9,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
@@ -28,7 +27,7 @@ use crate::mark::setpcmark;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::{Lines, decl, inc, incl};
 use crate::memory::{xfree, xmalloc};
-use crate::option::vars::{P_WS, p_sel, p_ws};
+use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
 use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
@@ -203,9 +202,7 @@ pub unsafe fn current_block(
     }
 
     if visual_active() {
-        // SAFETY: `p_sel` holds the NUL-terminated 'selection' value, set
-        // before any mapping can run.
-        if p_sel(|value| cstr::first(value) == b'e') {
+        if P_SEL.first_byte() == b'e' {
             inc(&mut Win::current().cursor());
         }
         if sol && gchar_cursor() != NUL {
@@ -340,9 +337,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
     let old_pos = Win::current().w_cursor;
     let mut old_end = Win::current().w_cursor; // where we started
     let mut old_start = old_end;
-    // SAFETY: `p_sel` holds the NUL-terminated 'selection' value, set before
-    // any mapping can run.
-    if !visual_active() || p_sel(|value| cstr::first(value) == b'e') {
+    if !visual_active() || P_SEL.first_byte() == b'e' {
         decl(&mut old_end); // `old_end` is inclusive
     }
 
@@ -518,8 +513,7 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         // tags: select the character under the cursor.
         if lt(end_pos, start_pos) {
             Win::current().w_cursor = start_pos;
-        // SAFETY: `p_sel` holds the NUL-terminated 'selection' value.
-        } else if p_sel(|value| cstr::first(value) == b'e') {
+        } else if P_SEL.first_byte() == b'e' {
             // SAFETY: the cursor is on a line of the current buffer.
             inc_cursor();
         }

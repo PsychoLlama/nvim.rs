@@ -16,11 +16,11 @@
 )]
 
 use super::*;
-use crate::cstr;
 use crate::normal::{
     VisualMode, set_visual_active, set_visual_anchor, set_visual_mode, visual_active,
     visual_anchor, with_visual_anchor,
 };
+use crate::option::vars::P_SEL;
 use crate::regexp::RE_SEARCH;
 use crate::search::{SEARCH_END, SEARCH_KEEP};
 use crate::types::Failed;
@@ -122,9 +122,7 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
     let save_visual = visual_anchor();
 
     // Correct the cursor when 'selection' is exclusive.
-    if visual_active()
-        && p_sel(|value| cstr::first(value) == b'e')
-        && lt(visual_anchor(), Win::current().w_cursor)
+    if visual_active() && P_SEL.first_byte() == b'e' && lt(visual_anchor(), Win::current().w_cursor)
     {
         dec_cursor();
     }
@@ -185,7 +183,7 @@ pub fn current_search(count: c_int, forward: bool) -> Result<(), Failed> {
     set_visual_active(true);
     set_visual_mode(VisualMode::CHAR);
 
-    if p_sel(|value| cstr::first(value) == b'e') {
+    if P_SEL.first_byte() == b'e' {
         // Correction for exclusive selection depends on the direction.
         if forward && ltoreq(visual_anchor(), Win::current().w_cursor) {
             inc_cursor();

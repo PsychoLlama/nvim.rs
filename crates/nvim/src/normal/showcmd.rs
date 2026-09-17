@@ -34,7 +34,7 @@ use crate::normal::{
     SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear, showcmd_visual,
     visual_selection,
 };
-use crate::option::vars::{P_SBR, p_ch, p_sc, p_sel, p_sloc};
+use crate::option::vars::{P_SBR, P_SEL, p_ch, p_sc, p_sloc};
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
@@ -225,7 +225,7 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
             ml_get_pos(&raw const anchor)
         })
     };
-    let exclusive = p_sel(|value| cstr::first(value) == b'e');
+    let exclusive = P_SEL.first_byte() == b'e';
     while if exclusive { s < e } else { s <= e } {
         let l = unsafe { utfc_ptr2len(s) };
         if l == 0 {

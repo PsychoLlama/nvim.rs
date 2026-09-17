@@ -73,7 +73,7 @@ use crate::r#move::{
 use crate::normal::{clear_showcmd, do_check_scrollbind};
 use crate::option::vars::{
     P_CH, P_COLUMNS, P_LINES, dy_flags, p_ch, p_hls, p_icon, p_lz, p_paste, p_rdt, p_ri, p_ru,
-    p_sc, p_sloc, p_smd, p_title, p_wbr, p_wmw,
+    p_sc, p_smd, p_title, p_wmw,
 };
 use crate::option::{get_ve_flags, shortmess};
 use crate::options::{kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock};

@@ -14,7 +14,7 @@
 use crate::cstr;
 use crate::fileio::Loaded;
 use crate::memline::MlFlags;
-use crate::option::vars::P_FENCS;
+use crate::option::vars::{P_CCV, P_FENCS};
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
@@ -366,7 +366,7 @@ pub(crate) unsafe fn readfile(
                 if conv.flags == 0
                     && !how.stdin
                     && !how.buffer
-                    && p_ccv(|value| !value.is_empty())
+                    && P_CCV.first_byte() != 0
                     && !how.fifo
                     && !conv.has_iconv()
                 {

@@ -27,9 +27,8 @@
 
 use super::packer::{push_call, ui_flush_buf};
 use crate::api::private::helpers::cstr_to_string;
-use crate::cstr;
 use crate::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
-use crate::option::vars::p_bg;
+use crate::option::vars::P_BG;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::{kUILinegrid, kUITermColors};
 use crate::types::{Array, Boolean, Integer, Object, RemoteUI, String_0, WindowHandle};
@@ -382,7 +381,7 @@ pub unsafe fn remote_ui_default_colors_set(
     // to fall back on, so "unset" has to be resolved to something, and
     // 'background' is the only hint there is.
     if !unsafe { (*ui).ui_ext[kUITermColors as usize] } {
-        let dark = p_bg(|value| cstr::first(value) == b'd');
+        let dark = P_BG.first_byte() == b'd';
         if rgb_fg == -1 {
             rgb_fg = if dark { 0xffffff } else { 0 };
         }

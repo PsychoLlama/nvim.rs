@@ -73,7 +73,7 @@ use crate::normal::{
     unadjust_for_sel,
 };
 use crate::option::vars::{
-    P_RI, P_SBR, P_SHM, p_ch, p_fp, p_js, p_opfunc, p_report, p_ri, p_sel, p_sol, p_sr,
+    P_RI, P_SBR, P_SHM, p_ch, p_fp, p_js, p_opfunc, p_report, p_ri, p_sol, p_sr,
 };
 use crate::option::{get_equalprg, get_fileformat, get_ve_flags, option_set_callback_func};
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};

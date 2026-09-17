@@ -182,7 +182,7 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
 ///
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
 pub fn save_file_ff(mut buffer: Buf) {
-    buffer.b_start_ffc = c_int::from(buffer.b_p_ff.first_byte().cast_unsigned());
+    buffer.b_start_ffc = c_int::from(buffer.b_p_ff.first_byte());
     buffer.b_start_eof = buffer.b_p_eof;
     buffer.b_start_eol = buffer.b_p_eol;
     buffer.b_start_bomb = buffer.b_p_bomb;

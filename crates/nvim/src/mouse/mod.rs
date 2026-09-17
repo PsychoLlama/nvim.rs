@@ -211,7 +211,7 @@ impl Win {
 
     /// Whether `'statuscolumn'` is unset for this window.
     fn statuscolumn_empty(self) -> bool {
-        self.w_onebuf_opt.wo_stc.first_byte() == NUL as c_char
+        self.w_onebuf_opt.wo_stc.first_byte() == 0
     }
 
     /// Whether the window's status line runs into a window to its right, so

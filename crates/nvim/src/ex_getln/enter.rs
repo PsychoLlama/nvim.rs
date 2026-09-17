@@ -17,6 +17,7 @@ use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
 use crate::message::emsg_ptr;
+use crate::option::vars::{P_STL, P_TAL, P_WBR};
 use crate::optionstr::LocalOptStr;
 use crate::types::OptStr;
 use crate::types::{
@@ -345,16 +346,16 @@ pub(crate) fn command_line_enter(
         if !cmd_silent.get() && !exmode_active.get() {
             let mut found_one = false;
             for mut wp in windows_in_curtab() {
-                if p_stl(|value| !value.is_empty())
+                if P_STL.first_byte() != 0
                     || wp.w_onebuf_opt.wo_stl.first_byte() as ::core::ffi::c_int != NUL
-                    || p_wbr(|value| !value.is_empty())
+                    || P_WBR.first_byte() != 0
                     || wp.w_onebuf_opt.wo_wbr.first_byte() as ::core::ffi::c_int != NUL
                 {
                     wp.w_redr_status = true;
                     found_one = true;
                 }
             }
-            if p_tal(|value| !value.is_empty()) {
+            if P_TAL.first_byte() != 0 {
                 redraw_tabline.set(true);
                 found_one = true;
             }

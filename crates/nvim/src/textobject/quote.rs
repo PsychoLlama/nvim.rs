@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::option::vars::P_SEL;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -25,7 +26,6 @@ use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
     with_visual_anchor,
 };
-use crate::option::vars::p_sel;
 use crate::optionstr::LocalOptStr;
 use crate::pos::{equalpos, lt};
 use crate::types::{ColNr, NUL, OpArg};
@@ -260,8 +260,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         }
         vis_bef_curs = lt(visual_anchor(), Win::current().w_cursor);
         vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);
-        // SAFETY: 'selection' is a NUL-terminated option string.
-        if p_sel(|value| cstr::first(value) == b'e') {
+        if P_SEL.first_byte() == b'e' {
             if vis_bef_curs {
                 // SAFETY: the cursor is on a line of the current buffer.
                 dec_cursor();
@@ -321,8 +320,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
         (unsafe { quoted_span(line, col_start, quotechar, vis_empty, vis_bef_curs) })
     else {
         // `abort_search`: undo the 'selection' adjustment made above.
-        // SAFETY: 'selection' is a NUL-terminated option string.
-        if visual_active() && p_sel(|value| cstr::first(value) == b'e') {
+        if visual_active() && P_SEL.first_byte() == b'e' {
             if did_exclusive_adj {
                 // SAFETY: the cursor is on a line of the current buffer.
                 inc_cursor();
@@ -388,9 +386,7 @@ pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotech
     if visual_active() {
         if vis_empty || vis_bef_curs {
             // Step the cursor back when 'selection' is not exclusive.
-            // SAFETY: 'selection' is a NUL-terminated option string, and the
-            // cursor is on a line of the current buffer.
-            if p_sel(|value| cstr::first(value) != b'e') {
+            if P_SEL.first_byte() != b'e' {
                 dec_cursor();
             }
         } else {

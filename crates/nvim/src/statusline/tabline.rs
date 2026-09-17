@@ -18,7 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
+use crate::option::vars::{P_SLOC, P_TAL, p_sc};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -30,7 +30,6 @@ use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
 use crate::mbyte::utfc_ptr2len;
 use crate::normal::showcmd_buf;
-use crate::option::vars::{p_sc, p_sloc, p_tal};
 use crate::path::shorten_dir;
 use crate::statusline::state::{tab_page_click_defs, tab_page_click_defs_size};
 use crate::strings::vim_snprintf;
@@ -140,7 +139,7 @@ pub fn draw_tabline() {
     );
     tab_click_arena().clear();
 
-    if p_tal(|value| !value.is_empty()) {
+    if P_TAL.first_byte() != 0 {
         // Use the 'tabline' option instead.
         win_redr_custom(None, false, false, false);
     } else {
@@ -243,7 +242,7 @@ fn draw_default_tabline() {
     let fill = if use_sep_chars { b'_' } else { b' ' };
     paint_fill(col, Columns.get(), schar_from_ascii(fill), attr_fill);
 
-    if p_sc() && c_int::from(p_sloc(cstr::first)) == c_int::from(b't') {
+    if p_sc() && c_int::from(P_SLOC.first_byte()) == c_int::from(b't') {
         paint_showcmd(col, tabcount, attr_nosel);
     }
 

@@ -15,8 +15,7 @@ use crate::cmdexpand::Expanded;
 use crate::cstr;
 use crate::memory::XString;
 use crate::option::local_or_global;
-use crate::option::vars::P_DICT;
-use crate::option::vars::P_TSR;
+use crate::option::vars::{P_DICT, P_TSR, P_TSRFU};
 use crate::optionstr::LocalOptStr;
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
@@ -147,8 +146,7 @@ unsafe fn scan_buf_valid(st: *mut InsComplNextState) -> bool {
 
 pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
-        && (Buf::current().b_p_tsrfu.first_byte() as c_int != NUL
-            || p_tsrfu(|value| !value.is_empty()))
+        && (Buf::current().b_p_tsrfu.first_byte() as c_int != NUL || P_TSRFU.first_byte() != 0)
 }
 
 /// Is there another `'complete'` entry after `cpt`, so the source index should

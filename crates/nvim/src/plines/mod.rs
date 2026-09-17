@@ -30,7 +30,6 @@ use crate::mbyte::{utf_ptr2char, utf_ptr2str_char_info, utfc_next, utfc_ptr2len}
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::win_col_off2;
 use crate::option::get_showbreak_value;
-use crate::option::vars::p_sel;
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};

@@ -28,6 +28,7 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_set_tab;
 use crate::memory::XString;
 use crate::option::boolean_optval;
+use crate::option::vars::P_PEX;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
@@ -99,8 +100,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
             shorten_fnames(1);
         }
 
-        // SAFETY: `p_pex` is the `'patchexpr'` option string.
-        if p_pex(|value| !value.is_empty()) {
+        if P_PEX.first_byte() != 0 {
             // SAFETY: three NUL-terminated file names.
             unsafe { eval_patch(tmp_orig, name, tmp_new) };
         } else {

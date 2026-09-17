@@ -23,6 +23,7 @@
 
 use super::*;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
+use crate::option::vars::P_WBR;
 use crate::optionstr::LocalOptStr;
 use crate::types::StlSyntax;
 use crate::winlayer::Buf;
@@ -77,7 +78,7 @@ pub fn show_cursor_info_later(force: bool) {
         }
         // A window bar can show the same items, and it is never on the
         // command line, so it needs the status-line treatment either way.
-        if p_wbr(|value| !value.is_empty()) || wp.w_onebuf_opt.wo_wbr.first_byte() != 0 {
+        if P_WBR.first_byte() != 0 || wp.w_onebuf_opt.wo_wbr.first_byte() != 0 {
             wp.w_redr_status = true;
         }
         redraw_custom_title_later();

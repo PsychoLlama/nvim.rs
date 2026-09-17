@@ -30,12 +30,11 @@
 
 use super::cache::AttrCache;
 use super::{get_attr_entry, kHlBlend, kHlBlendThrough, syn_attr2entry, update_window_hl};
-use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::highlight::state::{normal_bg, normal_fg, normal_sp};
 use crate::highlight_group::highlight_changed;
-use crate::option::vars::p_bg;
+use crate::option::vars::P_BG;
 use crate::types::{HlAttrs, HlEntry, RgbValue, int16_t};
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -165,9 +164,7 @@ fn blend_over(ratio: c_int, back: HlAttrs, front: HlAttrs) -> HlAttrs {
 /// colours are left alone — they have their own 0-means-unset convention and
 /// [`cterm_blend`] resolves them itself.
 fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
-    // SAFETY: the editor's own globals; `p_bg` is a NUL-terminated option
-    // string, never empty.
-    let dark = p_bg(|value| cstr::first(value) == b'd');
+    let dark = P_BG.first_byte() == b'd';
     if attrs.rgb_bg_color == -1 {
         attrs.rgb_bg_color = normal_bg.get();
     }

@@ -18,7 +18,7 @@
 
 use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text, msg_cstr};
-use crate::option::vars::{P_SHADA, p_shada};
+use crate::option::vars::{P_SHADA, P_SHADAFILE, p_shada};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::smsg;
 use crate::tr_c;
@@ -132,7 +132,7 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
     if !file.is_null() && unsafe { *file } != NUL as c_char {
         return Some(unsafe { CStr::from_ptr(file) }.to_owned());
     }
-    if p_shadafile(|value| !value.is_empty()) {
+    if P_SHADAFILE.first_byte() != 0 {
         if p_shadafile(|value| unsafe { strequal(value.as_ptr().cast_mut(), c"NONE".as_ptr()) }) {
             return None; // "-i NONE" or "--clean"
         }

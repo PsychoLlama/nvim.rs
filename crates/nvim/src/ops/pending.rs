@@ -29,8 +29,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::keycodes::Key;
+use crate::option::vars::{P_FP, P_SEL};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_int, c_void};
 
@@ -542,7 +542,7 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
             op.inclusive = false;
             // Take the line break too, unless the operator only works on
             // whole lines anyway.
-            if p_sel(|value| cstr::first(value) != b'o')
+            if P_SEL.first_byte() != b'o'
                 && !op_on_lines(op.op_type)
                 && op.end.lnum < Buf::current().line_count()
             {
@@ -584,7 +584,7 @@ fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
         && !op.inclusive
         && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
         && op.end.col == 0
-        && (!op.is_visual || p_sel(|value| cstr::first(value) == b'o'))
+        && (!op.is_visual || P_SEL.first_byte() == b'o')
         && op.line_count > 1)
     {
         op.end_adjusted = false;
@@ -714,9 +714,7 @@ fn run_operator(
         OpType::Format => {
             if Buf::current().b_p_fex.first_byte() as c_int != NUL {
                 unsafe { op_formatexpr(op.raw()) };
-            } else if p_fp(|value| !value.is_empty())
-                || Buf::current().b_p_fp.first_byte() as c_int != NUL
-            {
+            } else if P_FP.first_byte() != 0 || Buf::current().b_p_fp.first_byte() as c_int != NUL {
                 // An external program.
                 unsafe { op_colon(op.raw()) };
             } else {

@@ -21,6 +21,7 @@
 
 use crate::guard::Depth;
 use crate::message_fmt::msg_cstr;
+use crate::option::vars::P_SEL;
 use crate::tr;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
@@ -33,7 +34,6 @@ use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
 use crate::getchar::ins_typebuf;
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
-use crate::option::vars::p_sel;
 use crate::pos::MAXCOL;
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, VIsual_reselect, restart_edit};
@@ -345,6 +345,5 @@ fn char_at_cursor() -> c_int {
 
 /// `'selection'`'s first letter: `i`nclusive, `e`xclusive or `o`ld.
 fn selection_style() -> u8 {
-    // SAFETY: the option always holds a non-empty NUL-terminated string.
-    p_sel(cstr::first)
+    P_SEL.first_byte()
 }

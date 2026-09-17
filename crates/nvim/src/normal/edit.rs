@@ -45,7 +45,7 @@ use crate::normal::{
 };
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
-use crate::option::vars::{cb_flags, p_sel, p_sta, p_to, p_ww};
+use crate::option::vars::{P_SEL, cb_flags, p_sta, p_to, p_ww};
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
@@ -730,7 +730,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // Leave `gv` naming what was just put.
         Buf::current().b_visual.vi_start = Buf::current().b_op_start;
         Buf::current().b_visual.vi_end = Buf::current().b_op_end;
-        if p_sel(|value| cstr::first(value) == b'e') {
+        if P_SEL.first_byte() == b'e' {
             unsafe { inc(&mut (*Buf::current_raw()).b_visual.vi_end) };
         }
     }

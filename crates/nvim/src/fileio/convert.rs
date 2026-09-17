@@ -21,6 +21,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::option::vars::P_CCV;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -797,8 +798,7 @@ pub(crate) fn rewind_retry(
     file_rewind: &mut bool,
     had_iconv: bool,
 ) {
-    // SAFETY: reading an option string pointer.
-    if p_ccv(|value| !value.is_empty()) && had_iconv {
+    if P_CCV.first_byte() != 0 && had_iconv {
         // iconv() failed; try 'charconvert'.
         *did_iconv = true;
     } else {

@@ -30,7 +30,7 @@ use crate::memfile::mf_fname;
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
 use crate::message::state::{did_emsg, no_wait_return};
 use crate::message::wait_return;
-use crate::option::vars::{p_shada, p_title, p_titleold};
+use crate::option::vars::{P_SHADA, P_TITLEOLD, p_title, p_titleold};
 use crate::os::cshim::stderr;
 use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
@@ -183,7 +183,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         with_autocmds_unblocked(AutoEvent::VimLeavePre);
     }
 
-    if p_shada(|value| !value.is_empty()) {
+    if P_SHADA.first_byte() != 0 {
         // The registers, history, marks and the rest.
         unsafe { shada_write_file(ptr::null(), false) };
     }
@@ -202,7 +202,7 @@ pub fn getout(mut exitval: c_int) -> ! {
         wait_return(0);
     }
 
-    if p_title() && p_titleold(|value| !value.is_empty()) {
+    if p_title() && P_TITLEOLD.first_byte() != 0 {
         ui_call_set_title(p_titleold(|value| unsafe {
             cstr_to_string(value.as_ptr().cast_mut())
         }));
