@@ -22,6 +22,7 @@ use crate::keycodes::vim_strsave_escape_ks;
 use crate::mbyte::{
     convert_setup, enc_locale, string_convert, utf_char2bytes, utf_ptr2char, utfc_ptr2len,
 };
+use crate::memory::XString;
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
 use crate::message::e_no_spell;
 use crate::message::state::did_emsg;
@@ -622,7 +623,7 @@ pub fn f_submatch(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if as_list {
         result.write_list(reg_submatch_list(no));
     } else {
-        result.write_string(reg_submatch(no));
+        result.write_string(reg_submatch(no).map_or(ptr::null_mut(), XString::into_raw));
     }
 }
 

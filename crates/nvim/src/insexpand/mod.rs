@@ -4,6 +4,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::NL;
@@ -127,7 +128,7 @@ use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
 use crate::winlayer::graph::cmdwin_type;
 use crate::winlayer::{BufId, WinId};
-use ::libc::{atoi, fclose, qsort, strcat, strcpy, strncpy, strrchr};
+use ::libc::{atoi, fclose, qsort, strncpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
 mod mode;
@@ -450,6 +451,11 @@ impl ComplStr {
     pub(crate) unsafe fn set_owned(self, data: *mut c_char, len: size_t) {
         // SAFETY: the caller's promise.
         self.0.set(unsafe { String_0::from_owned_parts(data, len) });
+    }
+
+    /// Take over an [`XString`]'s block.
+    pub(crate) fn set_string(self, pattern: XString) {
+        self.0.set(String_0::from_xstring(pattern));
     }
 
     /// Shorten the string to `len` bytes. Panics past the current length.

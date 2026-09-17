@@ -619,11 +619,11 @@ pub(crate) unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> Option<XStr
             // Up to 18 bytes per cell: six per character, and up to two
             // composing characters.
             len = (room + 2) * 18;
-            let mut scratch = vec![0u8; len as usize];
-            // SAFETY: the caller's string, and `scratch` is the `len` bytes
-            // `trunc_string` is told it has.
-            unsafe { trunc_string(s, scratch.as_mut_ptr().cast::<c_char>(), room, len) };
-            truncated = Some(XString::from_cstr(cstr::in_bytes(&scratch)));
+            truncated = Some(XString::filled(len as usize - 1, |buffer| {
+                // SAFETY: the caller's string, and `buffer` is the `len`
+                // bytes `trunc_string` is told it has.
+                unsafe { trunc_string(s, buffer, room, len) };
+            }));
         }
     }
     truncated

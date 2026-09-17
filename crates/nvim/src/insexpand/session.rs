@@ -9,10 +9,10 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{ExpandContext, Failed, IOSIZE, NUL, ShmFlag};
@@ -43,13 +43,19 @@ pub(crate) unsafe fn get_normal_compl_info(
     // null destination is exactly the room the second call needs.
     let build_pattern = |prefix: &'static CStr, len: c_int| {
         let at = prefix.count_bytes();
-        let n = unsafe { quote_meta(ptr::null_mut(), line.offset(compl_col.get() as isize), len) }
-            as size_t
-            + at;
-        let data = unsafe { xmalloc(n) }.cast::<c_char>();
-        unsafe { strcpy(data, prefix.as_ptr()) };
-        unsafe { quote_meta(data.add(at), line.offset(compl_col.get() as isize), len) };
-        (data, n)
+        // SAFETY: `line` is the caller's NUL-terminated line and `compl_col`
+        // a column in it; a null destination asks for the size only.
+        let quoted =
+            unsafe { quote_meta(ptr::null_mut(), line.offset(compl_col.get() as isize), len) }
+                as size_t;
+        XString::filled(at + quoted - 1, |buffer| {
+            // SAFETY: `buffer` has the room `quote_meta` just asked for,
+            // prefix included, and the line is as above.
+            unsafe {
+                ptr::copy_nonoverlapping(prefix.as_ptr(), buffer, at);
+                quote_meta(buffer.add(at), line.offset(compl_col.get() as isize), len);
+            }
+        })
     };
 
     if compl_cont_status.get() & CONT_SOL != 0 || ctrl_x_mode_path_defines() {
@@ -76,10 +82,7 @@ pub(crate) unsafe fn get_normal_compl_info(
         } else {
             c"\\<"
         };
-        let (data, n) = build_pattern(prefix, compl_length.get());
-        // SAFETY: `build_pattern` answers its own NUL-terminated block of
-        // `n` bytes, the terminator included.
-        unsafe { compl_pattern().set_owned(data, n - 1) };
+        compl_pattern().set_string(build_pattern(prefix, compl_length.get()));
     } else {
         // Upstream decrements in the `else if` test itself, so only these
         // two branches see the smaller column.
@@ -118,18 +121,19 @@ pub(crate) unsafe fn get_normal_compl_info(
                 // Only match a word with at least two chars -- webb.
                 // There's no need to call quote_meta for the size,
                 // xmalloc(7) is enough -- Acevedo.
-                let data = unsafe { xmalloc(7) }.cast::<c_char>();
-                unsafe { strcpy(data, c"\\<".as_ptr()) };
-                unsafe { quote_meta(data.offset(2), line.offset(compl_col.get() as isize), 1) };
-                unsafe { strcat(data, c"\\k".as_ptr()) };
-                // SAFETY: `data` is this branch's own block, NUL-terminated
-                // by the `strcat` above.
-                let len = unsafe { cstr::bytes_at(data) }.len();
-                unsafe { compl_pattern().set_owned(data, len) };
+                let mut pattern = XString::filled(6, |buffer| {
+                    // SAFETY: six bytes of room, which is what upstream's
+                    // `xmalloc(7)` said the two-byte prefix and a single
+                    // quoted character need; the line is as above.
+                    unsafe {
+                        ptr::copy_nonoverlapping(c"\\<".as_ptr(), buffer, 2);
+                        quote_meta(buffer.add(2), line.offset(compl_col.get() as isize), 1);
+                    }
+                });
+                pattern.push_str("\\k");
+                compl_pattern().set_string(pattern);
             } else {
-                let (data, n) = build_pattern(c"\\<", compl_length.get());
-                // SAFETY: as above.
-                unsafe { compl_pattern().set_owned(data, n - 1) };
+                compl_pattern().set_string(build_pattern(c"\\<", compl_length.get()));
             }
         }
     }

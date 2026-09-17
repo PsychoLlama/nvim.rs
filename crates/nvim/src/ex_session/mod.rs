@@ -56,7 +56,8 @@ use crate::fileio::shorten_fnames;
 use crate::global_cell::GlobalCell;
 use crate::mapping::makemap;
 use crate::mbyte::utfc_ptr2len;
-use crate::memory::{xfree, xmalloc, xmemcpyz};
+use crate::memory::XString;
+use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::message::{e_noname, e_prev_dir, e_write};
 use crate::message_fmt::c_str;
@@ -70,18 +71,19 @@ use crate::os::cshim::{gettext, putc};
 use crate::os::env::home_replace_save;
 use crate::os::fs::{os_chdir, os_dirname, os_isdir};
 use crate::os::state::globaldir;
-use crate::path::{add_pathsep, vim_full_name, vim_ispathsep};
+use crate::path::{after_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::search::state::no_hlsearch;
 use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::types::PATHSEPSTR;
 use crate::types::{
     ArgEntry, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, size_t,
 };
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
-use ::libc::{fclose, fprintf, fputs, strcpy};
+use ::libc::{fclose, fprintf, fputs};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{fmt, ptr};
 
@@ -408,47 +410,47 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
         emsg(gettext(e_noname));
         return ptr::null_mut();
     }
+    // SAFETY: the current buffer's own file name, and `home_replace_save`
+    // answers an owned NUL-terminated string.
     let sname = unsafe { home_replace_save(None, Buf::current().b_ffname) };
 
-    // One extra byte for each character that doubles.
-    let mut extra = 0usize;
-    let mut p = sname;
-    while unsafe { *p } != NUL as c_char {
-        if unsafe { *p } == b'=' as c_char || vim_ispathsep(unsafe { *p } as c_int) {
-            extra += 1;
-        }
-        p = unsafe { p.offset(1) };
+    // SAFETY: 'viewdir' is a NUL-terminated option value.
+    let mut view = XString::from_bytes(unsafe { cstr::bytes_at(p_vdir.get()) });
+    // `add_pathsep`, over the buffer just built: a separator that is the
+    // trailing byte of a multibyte character does not count as one.
+    // SAFETY: the two addresses are this string's own ends.
+    let terminated = unsafe {
+        let start = view.as_ptr();
+        after_pathsep(start, start.add(view.len())) != 0
+    };
+    if !view.is_empty() && !terminated {
+        view.push_cstr(PATHSEPSTR);
     }
 
-    let sname_len = unsafe { cstr::bytes_at(sname) }.len();
-    let get_len = unsafe { cstr::bytes_at(p_vdir.get()) }.len();
-    let retval = unsafe { xmalloc(sname_len + extra + get_len + 9) }.cast::<c_char>();
-    unsafe { strcpy(retval, p_vdir.get()) };
-    unsafe { add_pathsep(retval) };
-    let mut s = unsafe { retval.add(cstr::bytes_at(retval).len()) };
-    p = sname;
-    while unsafe { *p } != NUL as c_char {
-        if unsafe { *p } == b'=' as c_char {
-            unsafe { *s = b'=' as c_char };
-            unsafe { *s.offset(1) = b'=' as c_char };
-            s = unsafe { s.offset(2) };
-        } else if vim_ispathsep(unsafe { *p } as c_int) {
-            unsafe { *s = b'=' as c_char };
-            unsafe { *s.offset(1) = b'+' as c_char };
-            s = unsafe { s.offset(2) };
+    // Each `=` and each path separator doubles, so that the flattened name
+    // can be turned back into a path.
+    // SAFETY: `sname` is the NUL-terminated name just built.
+    for &byte in unsafe { cstr::bytes_at(sname) } {
+        if byte == b'=' {
+            view.push_str("==");
+        } else if vim_ispathsep(c_int::from(byte)) {
+            view.push_str("=+");
         } else {
-            unsafe { *s = *p };
-            s = unsafe { s.offset(1) };
+            view.push_byte(byte);
         }
-        p = unsafe { p.offset(1) };
     }
-    unsafe { *s = b'=' as c_char };
-    unsafe { *s.offset(1) = c };
-    s = unsafe { s.offset(2) };
-    unsafe { xmemcpyz(s.cast::<c_void>(), c".vim".as_ptr().cast::<c_void>(), 4) };
+    view.push_byte(b'=');
+    view.push_byte(byte_of(c));
+    view.push_str(".vim");
 
+    // SAFETY: `sname`'s own allocation, released once.
     unsafe { xfree(sname.cast::<c_void>()) };
-    retval
+    view.into_raw()
+}
+
+/// A `c_char` as the byte it holds, whichever sign the platform gives it.
+fn byte_of(c: c_char) -> u8 {
+    c.cast_unsigned()
 }
 
 // -- `:mkexrc`, `:mkvimrc`, `:mkview`, `:mksession` ------------------------

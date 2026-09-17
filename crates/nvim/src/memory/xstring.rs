@@ -95,6 +95,30 @@ impl XString {
         Self(buffer)
     }
 
+    /// A string a C callee writes.
+    ///
+    /// `payload` is the room the callee is told it has; the block is that
+    /// many bytes plus a terminator, zero-filled, and `fill` is handed its
+    /// address. The result is measured at the terminator the callee left
+    /// behind, so a callee that wrote less than it asked for does not drag
+    /// the rest of the buffer along -- which is the whole reason the
+    /// `vim_snprintf`-into-`xmalloc` sites could not simply become a
+    /// [`Vec`].
+    ///
+    /// The callee may write up to `payload` bytes and its own terminator,
+    /// and nothing past that; stating the obligation is what the closure's
+    /// own `unsafe` block is for.
+    pub fn filled(payload: usize, fill: impl FnOnce(*mut c_char)) -> Self {
+        let mut buffer = vec![0u8; payload + 1];
+        fill(buffer.as_mut_ptr().cast::<c_char>());
+        let used = buffer
+            .iter()
+            .position(|&byte| byte == 0)
+            .expect("the last byte is the terminator the callee could not overwrite");
+        buffer.truncate(used + 1);
+        Self(buffer)
+    }
+
     /// A copy of a C string, terminator and all. The `xstrdup` of this type.
     pub fn from_cstr(string: &CStr) -> Self {
         Self(string.to_bytes_with_nul().to_vec())

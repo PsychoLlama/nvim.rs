@@ -50,7 +50,8 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::XString;
+use crate::memory::{xfree, xstrdup};
 use crate::message::msg_starthere;
 use crate::message::state::{
     cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
@@ -72,7 +73,7 @@ use crate::types::{
 };
 use crate::ui::state::Rows;
 use crate::winlayer::{Buf, Win};
-use ::libc::{atoi, strcpy};
+use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -664,17 +665,16 @@ unsafe fn debuggy_find(
 
     // A script-local function arrives with `K_SNR` in front of its name; the
     // patterns are written against the `<SNR>` spelling.
-    // SAFETY: caller contract.
-    let name = unsafe {
-        if !file && *fname as uint8_t as c_int == K_SPECIAL {
-            let owned: *mut c_char = xmalloc(cstr::bytes_at(fname).len() + 3).cast();
-            strcpy(owned, c"<SNR>".as_ptr());
-            strcpy(owned.offset(5), fname.offset(3));
-            owned
-        } else {
-            fname
-        }
+    // SAFETY: caller contract -- `fname` is NUL-terminated, and `K_SPECIAL`
+    // arrives as a three-byte `K_SNR` prefix, so the tail starts at 3.
+    let respelled = unsafe {
+        (!file && *fname as uint8_t as c_int == K_SPECIAL).then(|| {
+            let mut respelled = XString::from_bytes(b"<SNR>");
+            respelled.push_bytes(cstr::bytes_at(fname.offset(3)));
+            respelled
+        })
     };
+    let name = respelled.as_ref().map_or(fname, |n| n.as_ptr().cast_mut());
 
     let mut lnum = 0 as LineNr;
     for i in 0..list.len() {
@@ -719,10 +719,6 @@ unsafe fn debuggy_find(
         }
     }
 
-    if name != fname {
-        // SAFETY: the `<SNR>` copy is ours.
-        unsafe { xfree(name.cast()) };
-    }
     lnum
 }
 

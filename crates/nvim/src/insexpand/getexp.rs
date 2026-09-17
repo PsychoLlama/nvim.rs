@@ -13,6 +13,7 @@
 use super::*;
 use crate::cmdexpand::Expanded;
 use crate::cstr;
+use crate::memory::XString;
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
@@ -447,19 +448,13 @@ pub(crate) fn get_next_filename_completion() {
             in_fuzzy_collect = false;
         } else {
             let path_len = unsafe { last_sep.offset_from(leader) } as size_t + 1;
-            let path_with_wildcard = unsafe { xmalloc(path_len + 2) } as *mut c_char;
-            unsafe {
-                vim_snprintf(
-                    path_with_wildcard,
-                    path_len + 2,
-                    c"%*.*s*".as_ptr(),
-                    path_len as c_int,
-                    path_len as c_int,
-                    leader,
-                )
-            };
-            // SAFETY: `vim_snprintf` filled and terminated this block.
-            unsafe { compl_pattern().set_owned(path_with_wildcard, path_len + 1) };
+            // The directory part of the leader, then a `*`.
+            // SAFETY: `leader` is NUL-terminated and at least `path_len`
+            // bytes long -- the separator is inside it.
+            let mut with_wildcard =
+                XString::from_bytes(unsafe { cstr::prefix_at(leader, path_len) });
+            with_wildcard.push_byte(b'*');
+            compl_pattern().set_string(with_wildcard);
             // Restrict the leader to the file-name part.
             leader = unsafe { last_sep.offset(1) };
             leader_len -= path_len;

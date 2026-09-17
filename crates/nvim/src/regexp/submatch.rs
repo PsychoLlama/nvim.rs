@@ -11,17 +11,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
+use crate::memory::XString;
 use core::ffi::{c_char, c_int};
 
 use super::{
     LineOrigin, RegMMatch, RegMatch, RegSubMatch, Rex, can_f_submatch, reg_line, reg_line_len, rsm,
 };
 use crate::eval::typval::{ListRef, SL_SIZE, tv_list_alloc};
-use crate::memory::{xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, LineNr, ListItem, NUL, TypVal, UserFunc, VarLock};
+use crate::types::{ColNr, LineNr, ListItem, TypVal, UserFunc, VarLock};
 use crate::winlayer::Live;
-use ::libc::{strcpy, strncpy};
 
 /// The snapshot `submatch()` answers about.
 ///
@@ -149,12 +149,12 @@ pub(crate) unsafe fn fill_submatch_list(
 /// Null outside a substitution and for a capture that did not participate.
 ///
 /// A buffer match's capture can span lines, in which case the breaks come
-/// back as newlines. That length is not known without walking the lines, so
-/// the walk runs twice: round 1 measures and allocates, round 2 copies.
-/// Both rounds must agree, so keep them in step.
-pub(crate) fn reg_submatch(no: c_int) -> *mut c_char {
+/// back as newlines. Upstream walked the lines twice -- once to measure and
+/// allocate, once to copy -- and the two rounds had to be kept in step by
+/// hand; an [`XString`] grows as the walk goes, so there is one round.
+pub(crate) fn reg_submatch(no: c_int) -> Option<XString> {
     if !can_f_submatch.get() || no < 0 {
-        return core::ptr::null_mut();
+        return None;
     }
     let no = no as usize;
     // SAFETY: guarded by `can_f_submatch`, which is only set while `rsm`
@@ -170,81 +170,63 @@ pub(crate) fn reg_submatch(no: c_int) -> *mut c_char {
         let match_ = unsafe { Live::new(snapshot.match_()) };
         let start = match_.startp[no];
         if start.is_null() || match_.endp[no].is_null() {
-            return core::ptr::null_mut();
+            return None;
         }
-        return unsafe { xstrnsave(start, match_.endp[no].offset_from(start) as usize) };
+        // SAFETY: both ends point into the one NUL-terminated string being
+        // matched, so the capture is that many of its bytes.
+        return Some(XString::from_bytes(unsafe {
+            cstr::prefix_at(start, match_.endp[no].offset_from(start) as usize)
+        }));
     }
 
     // SAFETY: the snapshot names the buffer match that is running.
     let mmatch = unsafe { Live::new(snapshot.mmatch()) };
-    let mut retval: *mut c_char = core::ptr::null_mut();
-    for round in 1..=2 {
-        let mut lnum = mmatch.startpos[no].lnum;
-        if lnum < 0 || mmatch.endpos[no].lnum < 0 {
-            return core::ptr::null_mut();
-        }
-        let line = reg_getline_submatch(rex, lnum);
-        if line.is_null() {
-            // Anti-crash check; cannot happen.
-            break;
-        }
-        let scol = mmatch.startpos[no].col;
-        let ecol = mmatch.endpos[no].col;
-        let s = unsafe { line.offset(scol as isize) };
-
-        // Counts the terminating NUL, so that it is also the size to
-        // allocate at the end of round 1.
-        let mut len: usize;
-        if mmatch.endpos[no].lnum == lnum {
-            // Within one line: from the start column to the end one.
-            len = (ecol - scol) as usize;
-            if round == 2 {
-                unsafe { xmemcpyz(retval.cast(), s.cast(), len) };
-            }
-            len += 1;
-        } else {
-            // The rest of the start line, then whole lines, then the
-            // head of the end line. Each break travels as a newline.
-            len = (reg_getline_submatch_len(rex, lnum) - scol) as usize;
-            if round == 2 {
-                unsafe { strcpy(retval, s) };
-                unsafe { *retval.add(len) = b'\n' as c_char };
-            }
-            len += 1;
-            lnum += 1;
-            while lnum < mmatch.endpos[no].lnum {
-                let line = reg_getline_submatch(rex, lnum);
-                if round == 2 {
-                    unsafe { strcpy(retval.add(len), line) };
-                }
-                len += reg_getline_submatch_len(rex, lnum) as usize;
-                if round == 2 {
-                    unsafe { *retval.add(len) = b'\n' as c_char };
-                }
-                len += 1;
-                lnum += 1;
-            }
-            if round == 2 {
-                unsafe {
-                    strncpy(
-                        retval.add(len),
-                        reg_getline_submatch(rex, lnum),
-                        ecol as usize,
-                    )
-                };
-            }
-            len += ecol as usize;
-            if round == 2 {
-                unsafe { *retval.add(len) = NUL as c_char };
-            }
-            len += 1;
-        }
-
-        if retval.is_null() {
-            retval = unsafe { xmalloc(len) }.cast();
-        }
+    let mut lnum = mmatch.startpos[no].lnum;
+    if lnum < 0 || mmatch.endpos[no].lnum < 0 {
+        return None;
     }
-    retval
+    let line = reg_getline_submatch(rex, lnum);
+    if line.is_null() {
+        // Anti-crash check; cannot happen.
+        return None;
+    }
+    let (scol, ecol) = (mmatch.startpos[no].col, mmatch.endpos[no].col);
+    let mut text = XString::new();
+    if mmatch.endpos[no].lnum == lnum {
+        // Within one line: from the start column to the end one.
+        text.push_bytes(submatch_head(rex, lnum, scol, (ecol - scol) as usize));
+        return Some(text);
+    }
+
+    // The rest of the start line, then whole lines, then the head of the end
+    // line. Each break travels as a newline.
+    let rest = (reg_getline_submatch_len(rex, lnum) - scol) as usize;
+    text.push_bytes(submatch_head(rex, lnum, scol, rest));
+    text.push_byte(b'\n');
+    lnum += 1;
+    while lnum < mmatch.endpos[no].lnum {
+        let whole = reg_getline_submatch_len(rex, lnum) as usize;
+        text.push_bytes(submatch_head(rex, lnum, 0, whole));
+        text.push_byte(b'\n');
+        lnum += 1;
+    }
+    text.push_bytes(submatch_head(rex, lnum, 0, ecol as usize));
+    Some(text)
+}
+
+/// `len` bytes of submatch line `lnum`, starting at column `from` and
+/// stopping at the line's terminator whichever comes first.
+///
+/// A line the match names but the buffer no longer has answers no bytes,
+/// which is upstream's anti-crash check moved inside the walk.
+fn submatch_head(rex: Rex, lnum: LineNr, from: ColNr, len: usize) -> &'static [u8] {
+    let line = reg_getline_submatch(rex, lnum);
+    if line.is_null() {
+        return &[];
+    }
+    // SAFETY: the line `rex`'s match names, NUL-terminated; `prefix_at`
+    // never reads past that terminator, and `from` is a column in it.
+    unsafe { cstr::prefix_at(line.offset(from as isize), len) }
 }
 
 /// [`reg_submatch`] as one list item per line, which is what
