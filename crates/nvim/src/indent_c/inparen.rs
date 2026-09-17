@@ -148,12 +148,11 @@ fn align_with_unclosed_paren(
         let save_lnum = Win::current().w_cursor.lnum;
         Win::current().w_cursor.lnum = our_paren_pos.lnum;
         Win::current().w_cursor.col = look_col as ColNr + 1;
-        let no_oparg = ::core::ptr::null_mut::<OpArg>();
         let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
         // SAFETY: the cursor is just past that `(`, which is where the match
         // search starts; `findmatchlimit` takes a null `oparg` for "no
         // operator pending".
-        let trypos = unsafe { findmatchlimit(no_oparg, c_int::from(b')'), 0, maxparen) };
+        let trypos = findmatchlimit(None, c_int::from(b')'), 0, maxparen);
         if let Some(trypos) = trypos
             && trypos.lnum == our_paren_pos.lnum
             && trypos.col < our_paren_pos.col

@@ -277,7 +277,7 @@ pub(crate) fn while_closes_do(lnum: LineNr) -> bool {
     let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
     // SAFETY: the cursor is on a line of the current buffer, which is where
     // the match search starts.
-    let matched = unsafe { findmatchlimit(::core::ptr::null_mut::<OpArg>(), 0, 0, maxparen) };
+    let matched = findmatchlimit(None, 0, 0, maxparen);
     let retval = matched.is_some_and(|pos| {
         // The match is a position in this buffer, so the cache answers with
         // its line; a column past its end answers the terminator.

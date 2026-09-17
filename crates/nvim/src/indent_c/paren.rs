@@ -28,7 +28,6 @@
 use super::*;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
-use core::ptr;
 
 /// The column `trypos.col` sits at once comments and strings before it are
 /// stepped over -- so a `{` inside a comment answers a column past its own,
@@ -59,7 +58,7 @@ pub(crate) fn find_start_brace() -> Option<Pos> {
     let mut trypos;
     loop {
         // SAFETY: on the main thread, with a current window and buffer.
-        trypos = unsafe { findmatchlimit(ptr::null_mut(), c_int::from(b'{'), FM_BLOCKSTOP, 0) };
+        trypos = findmatchlimit(None, c_int::from(b'{'), FM_BLOCKSTOP, 0);
         let Some(brace) = trypos else {
             break;
         };
@@ -103,7 +102,7 @@ pub(crate) fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
     let found = loop {
         let limit = int64_t::from(ind_maxp_wk);
         // SAFETY: on the main thread, with a current window and buffer.
-        let found = unsafe { findmatchlimit(ptr::null_mut(), c_int::from(c), 0, limit) };
+        let found = findmatchlimit(None, c_int::from(c), 0, limit);
         let Some(trypos) = found else {
             break None;
         };

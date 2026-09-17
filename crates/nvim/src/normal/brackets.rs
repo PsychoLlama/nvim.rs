@@ -94,7 +94,7 @@ unsafe fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: *const Pos) {
     let mut n = if method { 9999 } else { cmd_arg.count1 };
 
     while n > 0 {
-        pos = unsafe { findmatchlimit(cmd_arg.oap, findc, match_direction(cmd_arg), 0) };
+        pos = findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
         let Some(found) = pos else {
             if new_pos.lnum == 0 {
                 // Nothing found at all. A method search says so by leaving
@@ -159,7 +159,7 @@ unsafe fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: *const Pos) {
                     // A brace of the other kind: step over the block it
                     // opens or closes.
                     pos =
-                        unsafe { findmatchlimit(cmd_arg.oap, findc, match_direction(cmd_arg), 0) };
+                        findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
                     match pos {
                         None => n = 0,
                         Some(found) => Win::current().w_cursor = found,

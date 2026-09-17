@@ -691,7 +691,7 @@ pub(crate) unsafe fn indent_after_comment_end(
     }
     let old_cursor = Win::current().w_cursor;
     Win::current().w_cursor.col = unsafe { comment_end.offset_from(saved_line) } as ColNr;
-    let newindent = match unsafe { findmatch(::core::ptr::null_mut(), NUL) } {
+    let newindent = match findmatch(None, NUL) {
         None => newindent,
         Some(pos) => {
             Win::current().w_cursor.lnum = pos.lnum;

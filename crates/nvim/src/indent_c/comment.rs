@@ -43,15 +43,7 @@ pub(crate) fn ind_find_start_comment() -> Option<Pos> {
 pub fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
     let mut cur_maxcomment = int64_t::from(ind_maxcomment);
     loop {
-        // SAFETY: on the main thread, with a current window and buffer.
-        let pos = unsafe {
-            findmatchlimit(
-                ::core::ptr::null_mut::<OpArg>(),
-                c_int::from(b'*'),
-                FM_BACKWARD,
-                cur_maxcomment,
-            )
-        }?;
+        let pos = findmatchlimit(None, c_int::from(b'*'), FM_BACKWARD, cur_maxcomment)?;
         // `findmatchlimit` found `pos` in the current buffer, so the cache
         // answers with the line it sits on.
         if !is_pos_in_string(Lines::current().line(pos.lnum), pos.col) {
@@ -68,15 +60,12 @@ pub fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
 pub(crate) fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> {
     let mut cur_maxcomment = ind_maxcomment;
     loop {
-        // SAFETY: on the main thread, with a current window and buffer.
-        let pos = unsafe {
-            findmatchlimit(
-                ::core::ptr::null_mut::<OpArg>(),
-                c_int::from(b'R'),
-                FM_BACKWARD,
-                int64_t::from(cur_maxcomment),
-            )
-        }?;
+        let pos = findmatchlimit(
+            None,
+            c_int::from(b'R'),
+            FM_BACKWARD,
+            int64_t::from(cur_maxcomment),
+        )?;
         // `findmatchlimit` found `pos` in the current buffer, so the cache
         // answers with the line it sits on.
         if !is_pos_in_string(Lines::current().line(pos.lnum), pos.col) {

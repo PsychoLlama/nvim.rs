@@ -863,9 +863,7 @@ fn select_matching_block(mut win: Win, op: Option<Op>) -> bool {
     if !equalpos(win.w_cursor, visual_anchor()) {
         return false;
     }
-    // SAFETY: a live operator, and the current window and buffer are the ones
-    // the click landed in.
-    let Some(pos) = (unsafe { findmatch(op.raw(), NUL) }) else {
+    let Some(pos) = findmatch(Some(&mut op), NUL) else {
         return false;
     };
 

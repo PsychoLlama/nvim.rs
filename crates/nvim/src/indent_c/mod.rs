@@ -40,7 +40,7 @@ use crate::pos::{MAXCOL, MAXLNUM, lt};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
-use crate::types::{ColNr, EvalFuncData, LPos, LineNr, OpArg, Pos, TypVal, VarNumber, int64_t};
+use crate::types::{ColNr, EvalFuncData, LPos, LineNr, Pos, TypVal, VarNumber, int64_t};
 use ::libc::{atoi, tolower};
 
 // The carve of the transpiled module; see each child's docs.

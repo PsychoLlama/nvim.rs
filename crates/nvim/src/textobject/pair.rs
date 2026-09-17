@@ -117,7 +117,7 @@ pub unsafe fn current_block(
     //
     // SAFETY: there is a current line with the cursor on it; the null
     // operator argument is what the search takes to mean "no operator".
-    pos = unsafe { findmatch(ptr::null_mut(), what) };
+    pos = findmatch(None, what);
     let unbounded = pos.is_none();
     loop {
         let this = count;
@@ -128,9 +128,9 @@ pub unsafe fn current_block(
         // SAFETY: as above -- the cursor is still on a line of the current
         // buffer, moved only to positions the search itself handed back.
         pos = if unbounded {
-            unsafe { findmatchlimit(ptr::null_mut(), what, FM_FORWARD as c_int, 0) }
+            findmatchlimit(None, what, FM_FORWARD as c_int, 0)
         } else {
-            unsafe { findmatch(ptr::null_mut(), what) }
+            findmatch(None, what)
         };
         let Some(found) = pos else {
             break;
@@ -146,7 +146,7 @@ pub unsafe fn current_block(
         return Err(Failed);
     }
     // SAFETY: the cursor sits on the opening bracket the search above found.
-    let Some(mut end_pos) = (unsafe { findmatch(ptr::null_mut(), other) }) else {
+    let Some(mut end_pos) = findmatch(None, other) else {
         Win::current().w_cursor = old_pos;
         return Err(Failed);
     };
@@ -186,14 +186,14 @@ pub unsafe fn current_block(
             }
             Win::current().w_cursor = old_start;
             decl(&mut Win::current().cursor());
-            pos = unsafe { findmatch(ptr::null_mut(), what) };
+            pos = findmatch(None, what);
             let Some(found) = pos else {
                 Win::current().w_cursor = old_pos;
                 return Err(Failed);
             };
             start_pos = found;
             Win::current().w_cursor = found;
-            let Some(found_end) = (unsafe { findmatch(ptr::null_mut(), other) }) else {
+            let Some(found_end) = findmatch(None, other) else {
                 Win::current().w_cursor = old_pos;
                 return Err(Failed);
             };

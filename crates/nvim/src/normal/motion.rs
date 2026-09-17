@@ -601,8 +601,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
     } else {
         op.motion_type = kMTCharWise;
         op.use_reg_one = true;
-        // SAFETY: `op` is the command's live operator.
-        let pos = unsafe { findmatch(op.raw(), NUL) };
+        let pos = findmatch(Some(&mut op), NUL);
         if let Some(pos) = pos {
             // SAFETY: the jump list is live and `cmd_arg` is the caller's.
             setpcmark();

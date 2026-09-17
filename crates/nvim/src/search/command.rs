@@ -735,7 +735,7 @@ pub fn showmatch(c: c_int) {
         return;
     }
 
-    let found = unsafe { findmatch(ptr::null_mut(), NUL) };
+    let found = findmatch(None, NUL);
     let Some(mut lpos) = found else {
         vim_beep(kOptBoFlagShowmatch); // no match, so beep
         return;

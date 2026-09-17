@@ -135,11 +135,11 @@ fn count_parens(line: &[u8], parencount: &mut c_int) {
 fn enclosing_open() -> Option<Pos> {
     // SAFETY: the caller's contract; `findmatch` answers a pointer into
     // static storage that stays valid until the next call.
-    let __v = unsafe { findmatch(::core::ptr::null_mut(), '(' as c_int) };
+    let __v = findmatch(None, '(' as c_int);
     let Some(paren) = __v else {
-        return unsafe { findmatch(::core::ptr::null_mut(), '[' as c_int) };
+        return findmatch(None, '[' as c_int);
     };
-    match unsafe { findmatch(::core::ptr::null_mut(), '[' as c_int) } {
+    match findmatch(None, '[' as c_int) {
         Some(square) if !lt(square, paren) => Some(square),
         _ => Some(paren),
     }

@@ -235,7 +235,7 @@ fn si_indent_like_open_brace(pos: Pos) {
     let after_paren = byte_at(line, i as usize) == b')';
     win.w_cursor.lnum = pos.lnum;
     win.w_cursor.col = i as ColNr;
-    if after_paren && let Some(open) = unsafe { findmatch(ptr::null_mut(), '(' as c_int) } {
+    if after_paren && let Some(open) = findmatch(None, '(' as c_int) {
         win.w_cursor = open;
     }
     let indent = get_indent();
@@ -280,7 +280,7 @@ pub fn ins_try_si(c: c_int) {
         || can_si.get() && c == '}' as c_int && inindent(0)
     {
         let matching = if c == '}' as c_int {
-            unsafe { findmatch(ptr::null_mut(), '{' as c_int) }
+            findmatch(None, '{' as c_int)
         } else {
             None
         };

@@ -427,10 +427,9 @@ pub(crate) unsafe fn find_decl(
             // Refuse a match whose enclosing block closes before the
             // cursor: it is a different scope.
             let travel = (old_pos.lnum - Win::current().w_cursor.lnum + 1) as int64_t;
-            let null_op = ptr::null_mut();
             let brace = '}' as c_int;
             // SAFETY: the current window and buffer are live.
-            let close = unsafe { findmatchlimit(null_op, brace, FM_FORWARD as c_int, travel) };
+            let close = findmatchlimit(None, brace, FM_FORWARD as c_int, travel);
             if let Some(close) = close
                 && close.lnum < old_pos.lnum
             {

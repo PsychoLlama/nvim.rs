@@ -29,12 +29,8 @@ const FORWARD: c_int = super::FORWARD as c_int;
 const BACKWARD: c_int = super::BACKWARD as c_int;
 
 /// Find the match for the bracket under the cursor.
-///
-/// # Safety
-/// `op` must be null or valid; the current window and buffer must be
-/// valid.
-pub unsafe fn findmatch(op: *mut OpArg, initc: c_int) -> Option<Pos> {
-    unsafe { findmatchlimit(op, initc, 0, 0) }
+pub fn findmatch(op: Option<&mut OpArg>, initc: c_int) -> Option<Pos> {
+    findmatchlimit(op, initc, 0, 0)
 }
 
 /// Find the matching paren or brace, if it is within `maxtravel` lines of
@@ -51,19 +47,16 @@ pub unsafe fn findmatch(op: *mut OpArg, initc: c_int) -> Option<Pos> {
 /// `'/'`, `'*'` and `'#'` forms) and `FM_BLOCKSTOP` (stop at a `{` or `}`
 /// in column 0).
 ///
-/// `op` is used only to set `op.motion_type` for the linewise `#if`
-/// case; it may be null.
-///
-/// # Safety
-/// `op` must be null or valid; the current window and buffer must be
-/// valid.
-pub unsafe fn findmatchlimit(
-    op: *mut OpArg,
+/// `op` is only ever written to — `op.motion_type`, for the linewise
+/// `#if` case — and all but four of the callers have no operator to
+/// offer, which is why it is an `Option` and not a pointer.
+pub fn findmatchlimit(
+    op: Option<&mut OpArg>,
     initc: c_int,
     flags: c_int,
     maxtravel: int64_t,
 ) -> Option<Pos> {
-    unsafe { find_match(op, initc, flags, maxtravel) }
+    find_match(op, initc, flags, maxtravel)
 }
 
 // ---------------------------------------------------------------------
@@ -195,10 +188,12 @@ enum Plan {
 /// May move `pos` — onto the other half of a `/*` or `*/`, or forward
 /// along the line to the first bracket after the cursor.
 ///
-/// # Safety
-/// `line` must be the line `pos` is on; `op` must be null or valid.
-unsafe fn make_plan(
-    op: *mut OpArg,
+/// `line` has to be the line `pos` is on for the answer to mean anything,
+/// but that is a correctness claim and not a memory one: a mismatched
+/// pair reads the wrong bytes of a slice it still owns, and every read
+/// here is bounds-checked.
+fn make_plan(
+    op: Option<&mut OpArg>,
     initc: c_int,
     dir: c_int,
     pos: &mut Pos,
@@ -315,8 +310,8 @@ unsafe fn make_plan(
     }
 
     // Look for a matching #if, #else, #elif or #endif.
-    if !op.is_null() {
-        unsafe { (*op).motion_type = kMTLineWise }; // linewise for this case only
+    if let Some(op) = op {
+        op.motion_type = kMTLineWise; // linewise for this case only
     }
     if initc != '#' as c_int {
         let word = after_hash(line, skip::white(line));
@@ -785,11 +780,8 @@ impl Walk {
 }
 
 /// The body of [`findmatchlimit`], answering the position by value.
-///
-/// # Safety
-/// As [`findmatchlimit`].
-unsafe fn find_match(
-    op: *mut OpArg,
+fn find_match(
+    op: Option<&mut OpArg>,
     initc: c_int,
     flags: c_int,
     maxtravel: int64_t,
@@ -814,8 +806,7 @@ unsafe fn find_match(
 
     let plan = {
         let line = lines.line(pos.lnum);
-        // SAFETY: the caller's `op`, and `line` is the line `pos` is on.
-        unsafe { make_plan(op, initc, dir, &mut pos, line, cpo_match, cpo_bsl) }
+        make_plan(op, initc, dir, &mut pos, line, cpo_match, cpo_bsl)
     };
     let mut target = match plan {
         Plan::Nothing => return None,
