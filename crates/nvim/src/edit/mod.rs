@@ -139,7 +139,7 @@ use crate::normal::{
 };
 use crate::ops::do_join;
 use crate::option::vars::{
-    P_RI, fdo_flags, p_ari, p_ch, p_deco, p_langmap, p_lrm, p_paste, p_ri, p_smd, p_sol, p_sta,
+    P_LANGMAP, P_RI, fdo_flags, p_ari, p_ch, p_deco, p_lrm, p_paste, p_ri, p_smd, p_sol, p_sta,
     p_ww,
 };
 use crate::option::{

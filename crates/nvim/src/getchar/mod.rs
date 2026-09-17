@@ -61,8 +61,7 @@ use crate::r#move::validate_cursor;
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::ops::clear_oparg;
 use crate::option::vars::{
-    p_fs, p_langmap, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm,
-    p_uc,
+    p_fs, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm, p_uc,
 };
 use crate::options::kOptBoFlagError;
 use crate::os::cshim::{gettext, putc, stderr};

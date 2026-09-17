@@ -874,6 +874,30 @@ impl StrOpt {
         OPTIONS.with_field(self.project, Option::is_none)
     }
 
+    /// The value's first byte, which is its NUL when the option holds
+    /// nothing — upstream's `*p_xx`, and a constant-time read.
+    ///
+    /// This is the accessor a **hot** caller wants for "is this option set
+    /// at all": the projecting reader below has to find the value's NUL to
+    /// hand out a `&CStr`, which walks the string. Answering `*p_langmap !=
+    /// NUL` through the projection cost 616 M instructions on `inbench` --
+    /// 1.2 % of the whole benchmark -- because the mapping match asks it
+    /// once per typeahead byte per candidate mapping.
+    ///
+    /// Unlike [`is_unset`](Self::is_unset) this does not distinguish an
+    /// option that owns nothing from one explicitly set to `""`; upstream's
+    /// `*p_xx == NUL` does not either.
+    pub fn first_byte(self) -> c_char {
+        OPTIONS.with_field(self.project, |value| {
+            value
+                .as_deref()
+                .and_then(<[u8]>::first)
+                .copied()
+                .unwrap_or(0)
+                .cast_signed()
+        })
+    }
+
     /// A copy of the value, for a caller that needs it to outlive the
     /// borrow.
     pub fn get(self) -> XString {
@@ -974,6 +998,13 @@ macro_rules! reader {
         /// The projecting accessor: `f` sees the value and the borrow ends
         /// when it returns. [`StrOpt::get`] on the selector is the copy, for
         /// a value that has to outlive the call.
+        ///
+        /// **It is not free.** Handing out a `&CStr` means finding the
+        /// value's NUL, so this walks the string; upstream's `char *` was
+        /// already measured. A caller in a loop that only wants the first
+        /// byte, or "does this option hold anything", wants
+        /// [`StrOpt::first_byte`] or [`StrOpt::is_unset`] on the selector
+        /// instead -- both constant time.
         #[inline(always)]
         pub fn $field<R>(f: impl FnOnce(&CStr) -> R) -> R {
             OPTIONS.with_field(|o| &mut o.$field, |value| {

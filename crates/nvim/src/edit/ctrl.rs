@@ -73,12 +73,9 @@ pub(crate) fn ins_reg() {
         } else {
             KeyTyped.get()
         };
-        // SAFETY: 'langmap' is a live NUL-terminated option string.
-        if p_langmap(|value| !value.is_empty())
-            && (p_lrm() || typed)
-            && KeyStuffed.get() == 0
-            && c >= 0
-        {
+        // `first_byte` is upstream's `*p_langmap`; the projecting reader
+        // would walk the value to hand out a `&CStr`.
+        if P_LANGMAP.first_byte() != 0 && (p_lrm() || typed) && KeyStuffed.get() == 0 && c >= 0 {
             if c < 256 {
                 langmap_mapchar.with(|map| map[c as usize] as c_int)
             } else {

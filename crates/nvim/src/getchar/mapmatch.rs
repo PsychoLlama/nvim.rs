@@ -13,6 +13,7 @@ use super::*;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_N, Ctrl_P, KE_IGNORE, KE_PLUG, KE_SNR, key_escape};
 use crate::normal::{set_visual_select, visual_active, visual_select};
+use crate::option::vars::P_LANGMAP;
 use crate::types::MB_MAXCHAR;
 use crate::types::MapStr;
 use crate::types::{Failed, MB_MAXBYTES, NUL};
@@ -30,9 +31,12 @@ fn langmap_adjust(c: c_int, condition: bool) -> c_int {
     // is a call in the innermost loop of the mapping match and this
     // runs once per typeahead byte per candidate mapping: measured at
     // +5.6..7.6% on `inbench`'s `mapresolve` before it was put back.
-    // SAFETY (this body): `p_langmap` holds the live `'langmap'` option
-    // string, which is NUL-terminated.
-    if p_langmap(|value| !value.is_empty())
+    //
+    // `first_byte` and not the projecting `p_langmap(|value| ...)` reader
+    // for the same reason: the projection has to find the value's NUL to
+    // hand out a `&CStr`, and asking that here cost 616 M instructions on
+    // `inbench` (`mapresolve` +24%). This is upstream's `*p_langmap`.
+    if P_LANGMAP.first_byte() != 0
         && condition
         && (p_lrm()
             || if vgetc_busy.get() != 0 {
