@@ -341,10 +341,12 @@ pub(crate) unsafe fn get_exception_string(
 /// [`msg_add_fname`](crate::message::msg_add_fname) prefixed it with a file
 /// name in quotes, in which case the name moves to the end in parentheses.
 ///
-/// **The move truncates the name to two bytes**, because the format string's
-/// own length is passed as the buffer size. That is upstream's arithmetic,
-/// bug included, and the exception values the suites pin are the truncated
-/// ones; see `~/agents/context` for the report.
+/// **The move truncates the name to two bytes.** Upstream passes the format
+/// string's own length (`strlen(" (%s)")`, 5) as the destination size, so
+/// `snprintf` writes `" ("` and two more bytes whatever the name is. It is a
+/// truncation, not an overrun -- the block is far larger than the size given
+/// -- and it is what every `v:exception` has said since Vim 7, so it is
+/// reproduced here rather than diverged from.
 fn exception_message(message: &[u8]) -> Vec<u8> {
     let mut at = 0;
     loop {

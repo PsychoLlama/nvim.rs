@@ -10,14 +10,14 @@
 //!
 //! * As bytes ([`Deref`]) it is the payload *without* the terminator, which
 //!   is what every slice-taking reader wants.
-//! * As a C string ([`as_cstr`](XString::as_cstr), [`as_ptr`](XString::as_ptr)(XString::as_ptr))
+//! * As a C string ([`as_cstr`](XString::as_cstr), [`as_ptr`](XString::as_ptr))
 //!   it is the same bytes with the terminator a C consumer walks to.
 //!
 //! Keeping the NUL in the buffer rather than appending one on demand is what
 //! makes the second form free, and it is also what the transpiled walks
 //! expect: several of them deliberately read one byte past the last
-//! character (the same reason `LineCopy` carries
-//! its terminator). A bare `Vec<u8>` of the payload would hand those walks
+//! character (the same reason `memline`'s `LineCopy` carries its
+//! terminator). A bare `Vec<u8>` of the payload would hand those walks
 //! the vector's uninitialised capacity.
 //!
 //! # Crossing the ABI
@@ -33,8 +33,9 @@
 //! # Interior NULs
 //!
 //! Storage keeps every byte it is given, terminator included, so `len()` and
-//! the [`Deref`] slice are exact. A C consumer reading [`as_ptr`](XString::as_ptr) stops at
-//! the first NUL, and [`as_cstr`](XString::as_cstr) answers exactly what that consumer sees.
+//! the [`Deref`] slice are exact. A C consumer reading
+//! [`as_ptr`](XString::as_ptr) stops at the first NUL, and
+//! [`as_cstr`](XString::as_cstr) answers exactly what that consumer sees.
 //! [`from_bytes`](XString::from_bytes) debug-asserts that its input has no
 //! interior NUL, because text that may hold one is measured text and wants
 //! a `&[u8]` or a [`Vec<u8>`], not a string the editor will hand to `os_*`.
@@ -138,7 +139,7 @@ impl XString {
     ///
     /// Never fails: the buffer always ends with a terminator. With an
     /// interior NUL the answer is the prefix a C consumer would read, which
-    /// is what [`as_ptr`](XString::as_ptr)(Self::as_ptr) hands out.
+    /// is what [`as_ptr`](Self::as_ptr) hands out.
     pub fn as_cstr(&self) -> &CStr {
         CStr::from_bytes_until_nul(&self.0).expect("an XString always ends with a NUL")
     }
