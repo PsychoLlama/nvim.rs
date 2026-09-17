@@ -15,8 +15,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::memory::XString;
 use crate::winlayer::{Buf, PosRef, Win};
 use core::ffi::{c_char, c_int, c_void};
+use core::slice;
 
 use super::Put;
 use crate::edit::BeginlineOpts;
@@ -167,18 +169,17 @@ impl Put {
         // SAFETY: the caller promises `lnum`/`col` is a valid position, so
         // `ml_get` hands back a NUL-terminated line with at least `col` bytes
         // in it; `y_array` holds `y_size` strings and `y_size` is at least
-        // one, so the last is there; and `newp` is allocated for the two
-        // strings and the NUL that `strcpy` writes.
-        unsafe {
-            let ptr = ml_get(lnum).offset(col as isize);
-            let ptrlen = (ml_get_len(lnum) - col) as size_t;
+        // one, so the last is there.
+        let mut appended = unsafe {
+            let tail = ml_get(lnum).offset(col as isize);
+            let tail_len = (ml_get_len(lnum) - col) as size_t;
             let last = &*self.y_array.add(self.y_size.wrapping_sub(1));
-            let newp = xmalloc(ptrlen.wrapping_add(last.len()).wrapping_add(1)) as *mut c_char;
-            strcpy(newp, last.data());
-            strcpy(newp.add(last.len()), ptr);
-            let _ = ml_append(lnum, newp, 0, false);
-            xfree(newp as *mut c_void);
-        }
+            let mut joined = XString::from_bytes(last.as_bytes());
+            joined.push_bytes(slice::from_raw_parts(tail.cast::<u8>(), tail_len));
+            joined
+        };
+        // SAFETY: the line just built, which `ml_append` copies.
+        let _ = unsafe { ml_append(lnum, appended.as_mut_ptr(), 0, false) };
 
         // The head of the cursor line keeps the register's *first* line.
         //
@@ -186,18 +187,15 @@ impl Put {
         // line; `newp` is `col` bytes of it followed by the register's first
         // line and that line's NUL, which is the `col + yanklen + 1` asked
         // for, and `ml_replace` takes ownership of it.
-        unsafe {
-            let yanklen = (*self.y_array).len() as c_int;
+        let replacement = unsafe {
             let oldp = ml_get(lnum);
-            let newp = xmalloc((col + yanklen + 1) as size_t) as *mut c_char;
-            newp.cast::<u8>().copy_from(oldp.cast(), col as size_t);
-            // +1 to bring the NUL across.
-            let put = (*self.y_array).data() as *const c_void;
-            let at = newp.offset(col as isize) as *mut c_void;
-            at.cast::<u8>()
-                .copy_from(put.cast(), (yanklen + 1) as size_t);
-            let _ = ml_replace(lnum, newp, false);
-        }
+            let mut head =
+                XString::from_bytes(slice::from_raw_parts(oldp.cast::<u8>(), col as size_t));
+            head.push_bytes((*self.y_array).as_bytes());
+            head
+        };
+        // SAFETY: the line just built, whose block `ml_replace` takes over.
+        let _ = unsafe { ml_replace(lnum, replacement.into_raw(), false) };
     }
 
     /// Reindent line `lnum` the way `]p` wants: keep the *relative* indent of

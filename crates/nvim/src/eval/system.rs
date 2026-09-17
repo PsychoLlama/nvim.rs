@@ -216,14 +216,12 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
         // SAFETY: `argv` is the NULL-terminated vector built above.
         let cmdstr = unsafe { shell_argv_to_str(argv) };
         verbose_enter_scroll();
-        // SAFETY: the format takes the one NUL-terminated `cmdstr`.
-        let shown = unsafe { c_str(cmdstr) };
+        // SAFETY: `cmdstr` owns its NUL-terminated bytes for this block.
+        let shown = unsafe { c_str(cmdstr.as_ptr()) };
         smsg!(0, "Executing command: \"{shown}\"");
         // SAFETY: the literal is NUL-terminated.
         msg_str(c"\n\n");
         verbose_leave_scroll();
-        // SAFETY: `cmdstr` is the owned rendering.
-        unsafe { xfree(cmdstr as *mut c_void) };
     }
 
     let mut wait_time: ProfTime = 0;

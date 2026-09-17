@@ -49,6 +49,7 @@ mod sps;
 mod walk;
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::spell::WordFlags;
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
@@ -63,7 +64,7 @@ use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
+use crate::memory::{xfree, xmemcpyz, xstrdup};
 use crate::option::copy_option_part;
 use crate::option::vars::p_sps;
 use crate::os::input::os_breakcheck;
@@ -395,12 +396,19 @@ pub(crate) unsafe fn spell_suggest_list(
     for stp in &sug.su_ga {
         // A suggestion may replace only part of `word`; what it does
         // not replace goes on the end.
-        let tail = unsafe { sug.su_badptr.offset(stp.st_orglen as isize) };
-        let wcopy = unsafe { xmalloc(stp.st_wordlen as usize + cstr::bytes_at(tail).len() + 1) }
-            as *mut c_char;
-        unsafe { strcpy(wcopy, stp.word()) };
-        unsafe { strcpy(wcopy.offset(stp.st_wordlen as isize), tail) };
-        unsafe { *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = wcopy };
+        // SAFETY: `su_badptr` is the bad word inside the line, and
+        // `st_orglen` is how much of it the suggestion replaces, so the tail
+        // is still inside that NUL-terminated line.
+        let suggested = unsafe {
+            let mut word =
+                XString::from_bytes(cstr::prefix_at(stp.word(), stp.st_wordlen as usize));
+            word.push_bytes(cstr::bytes_at(sug.su_badptr.offset(stp.st_orglen as isize)));
+            word
+        };
+        unsafe {
+            *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) =
+                suggested.into_raw();
+        };
         unsafe { (*gap).ga_len += 1 };
     }
 

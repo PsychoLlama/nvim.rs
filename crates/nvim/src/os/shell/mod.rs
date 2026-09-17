@@ -26,6 +26,7 @@ mod throttle;
 
 use crate::cstr;
 use crate::guard::Suppress;
+use crate::memory::XString;
 use crate::semsg;
 use crate::smsg;
 use crate::winlayer::Win;
@@ -41,7 +42,7 @@ use crate::fileio::vim_tempname;
 use crate::global_cell::GlobalCell;
 use crate::kvec::Kvec;
 use crate::memline::ml_append;
-use crate::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
+use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::emsg_silent;
 use crate::message::{e_notmp, e_shellempty};
 use crate::message::{
@@ -175,35 +176,35 @@ pub unsafe fn shell_free_argv(argv: *mut *mut c_char) {
 ///
 /// # Safety
 /// `argv` must be a NULL-terminated vector of NUL-terminated strings.
-pub unsafe fn shell_argv_to_str(argv: *mut *mut c_char) -> *mut c_char {
+pub unsafe fn shell_argv_to_str(argv: *mut *mut c_char) -> XString {
+    /// The buffer upstream rendered into, kept because the ellipsis is
+    /// placed by it: a result that does not fit ends at byte 255 with the
+    /// three bytes before it replaced.
     const MAXSIZE: usize = 256;
-    // SAFETY: the caller's contract. `xstrlcat` always terminates and answers
-    // the length the result would have had.
+    let mut rendered = XString::new();
+    // SAFETY: the caller's contract -- a NULL-terminated vector of
+    // NUL-terminated strings.
     unsafe {
-        let rv = xcalloc(MAXSIZE, size_of::<c_char>()) as *mut c_char;
         let mut p = argv;
-        if (*p).is_null() {
-            return rv;
-        }
-        let mut n = 0;
         while !(*p).is_null() {
-            xstrlcat(rv, c"'".as_ptr(), MAXSIZE);
-            xstrlcat(rv, *p, MAXSIZE);
-            n = xstrlcat(rv, c"' ".as_ptr(), MAXSIZE);
-            if n >= MAXSIZE {
-                break;
-            }
+            rendered.push_byte(b'\'');
+            rendered.push_bytes(cstr::bytes_at(*p));
+            rendered.push_bytes(b"' ");
             p = p.add(1);
         }
-        if n < MAXSIZE {
-            // Drop the trailing space.
-            *rv.add(n - 1) = 0;
-        } else {
-            // Too long: "/bin/bash 'foo' 'bar'..."
-            strcpy(rv.add(MAXSIZE - 4), c"...".as_ptr());
-        }
-        rv
     }
+    if rendered.is_empty() {
+        return rendered;
+    }
+    if rendered.len() < MAXSIZE {
+        // Drop the trailing space.
+        rendered.truncate(rendered.len() - 1);
+    } else {
+        // Too long: "/bin/bash 'foo' 'bar'..."
+        rendered.truncate(MAXSIZE - 4);
+        rendered.push_str("...");
+    }
+    rendered
 }
 
 /// Run `cmd` through `'shell'`, or start an interactive shell when it is

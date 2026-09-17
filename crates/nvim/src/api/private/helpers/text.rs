@@ -12,6 +12,7 @@ use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
 use crate::cstr;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
+use crate::memory::XString;
 use crate::memory::{memchrsub, xfree, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
 use crate::types::{Array, Error, LineNr, NUL, Object, String_0, int64_t, size_t};
@@ -128,6 +129,18 @@ impl String_0 {
     /// A copy of `str`'s bytes, stopping at its terminator.
     pub fn from_cstr(str: &CStr) -> Self {
         Self::from_bytes(str.to_bytes())
+    }
+
+    /// Take over an [`XString`]'s block.
+    ///
+    /// The two types hold the same invariant -- an `xmalloc`ed block of
+    /// `size + 1` bytes with a NUL at `size` -- so this handover is the one
+    /// that needs no promise from its caller, and it is how a string built
+    /// in Rust reaches the API layer without a second copy.
+    pub fn from_xstring(string: XString) -> Self {
+        let size = string.len();
+        // SAFETY: `XString`'s invariant is exactly this type's.
+        unsafe { String_0::from_owned_parts(string.into_raw(), size) }
     }
 }
 

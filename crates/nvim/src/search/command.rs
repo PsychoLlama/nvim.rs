@@ -336,10 +336,11 @@ unsafe fn echo_search_cmd(
             unsafe { ptr::copy(off_buf.as_ptr(), buf.add(plen + 1), off_len) };
         }
 
-        let trunc = unsafe { msg_strtrunc(echo.buf.as_ptr(), 1) };
-        if !trunc.is_null() {
-            unsafe { echo.buf.replace(trunc) };
-            echo.len = unsafe { cstr::bytes_at(echo.buf.as_ptr()) }.len();
+        // SAFETY: the echo buffer is this frame's NUL-terminated string.
+        if let Some(truncated) = unsafe { msg_strtrunc(echo.buf.as_ptr(), 1) } {
+            echo.len = truncated.len();
+            // SAFETY: `into_raw` hands over an `xmalloc`ed block.
+            unsafe { echo.buf.replace(truncated.into_raw()) };
         }
 
         if Win::current().w_onebuf_opt.wo_rl != 0

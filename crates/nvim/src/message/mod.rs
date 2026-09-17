@@ -110,6 +110,7 @@ use crate::mbyte::{
     mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells, utf_head_off, utf_ptr2cells,
     utf_ptr2char, utf8len_tab, utfc_ptr2len,
 };
+use crate::memory::XString;
 use crate::memory::{
     arena_alloc, strequal, strnequal, xfree, xmalloc, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
@@ -557,8 +558,8 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     }
 
     // Truncate the message if needed.
-    let buf = unsafe { msg_strtrunc(s, 0) };
-    let s = if buf.is_null() { s } else { buf.cast_const() };
+    let truncated = unsafe { msg_strtrunc(s, 0) };
+    let s = truncated.as_ref().map_or(s, XString::as_ptr);
 
     let mut need_clear = true;
     if multiline {
@@ -585,7 +586,6 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
 
     need_fileinfo.set(false);
 
-    unsafe { xfree(buf.cast()) };
     retval
 }
 
@@ -596,8 +596,8 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
 ///
 /// # Safety
 /// `s` must be a valid C string.
-pub unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
-    let mut buf: *mut c_char = ptr::null_mut();
+pub(crate) unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> Option<XString> {
+    let mut truncated = None;
     // May truncate the message to avoid a hit-return prompt.
     if (msg_scroll.get() == 0
         && !need_wait_return.get()
@@ -619,11 +619,14 @@ pub unsafe fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
             // Up to 18 bytes per cell: six per character, and up to two
             // composing characters.
             len = (room + 2) * 18;
-            buf = unsafe { xmalloc(len as size_t) }.cast();
-            unsafe { trunc_string(s, buf, room, len) };
+            let mut scratch = vec![0u8; len as usize];
+            // SAFETY: the caller's string, and `scratch` is the `len` bytes
+            // `trunc_string` is told it has.
+            unsafe { trunc_string(s, scratch.as_mut_ptr().cast::<c_char>(), room, len) };
+            truncated = Some(XString::from_cstr(cstr::in_bytes(&scratch)));
         }
     }
-    buf
+    truncated
 }
 
 /// Truncate `s` into `buf` at cell width `room`, replacing the middle with

@@ -55,6 +55,7 @@ use crate::ex_eval::state::{
 };
 use crate::getchar::state::got_int;
 use crate::guard::{Allow, Suppress};
+use crate::memory::XString;
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
 use crate::message::{e_interr, e_outofmem};
@@ -62,15 +63,15 @@ use crate::message::{emsg, emsg_ptr, internal_error, msg_str, verbose_enter, ver
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::p_vfile;
 use crate::option::vars::p_verbose;
-use crate::os::cshim::{gettext_ptr, snprintf};
+use crate::os::cshim::gettext_ptr;
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
-use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
+use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen};
 use crate::tr_plural;
 use crate::types::{
     CondStack, ExceptType, Exception, ExceptionState, Failed, IOSIZE, MsgList, NUL, Vv, int64_t,
     ptrdiff_t,
 };
-use ::libc::{strcat, strcpy};
+use ::libc::strcat;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -316,76 +317,67 @@ pub(crate) unsafe fn get_exception_string(
     }
     unsafe { *should_free = true };
 
-    let mesg = unsafe { (*value.cast::<MsgList>()).throw_msg };
-    let ret;
-
-    let val = if !cmdname.is_null() && unsafe { *cmdname } != NUL as c_char {
-        let cmdlen = unsafe { cstr::bytes_at(cmdname) }.len();
-        let room = 4 + cmdlen + 2 + unsafe { cstr::bytes_at(mesg) }.len();
-        ret = unsafe { xstrnsave(c"Vim(".as_ptr(), room) };
-        unsafe { strcpy(ret.add(4), cmdname) };
-        unsafe { strcpy(ret.add(4 + cmdlen), c"):".as_ptr()) };
-        unsafe { ret.add(4 + cmdlen + 2) }
-    } else {
-        ret = unsafe { xstrnsave(c"Vim:".as_ptr(), 4 + cstr::bytes_at(mesg).len()) };
-        unsafe { ret.add(4) }
+    // SAFETY: caller contract -- an error's value is a message list whose
+    // `throw_msg` is NUL-terminated, and `cmdname` is null or a string.
+    let (message, command) = unsafe {
+        (
+            cstr::bytes_at((*value.cast::<MsgList>()).throw_msg),
+            cstr::bytes_at_or_empty(cmdname),
+        )
     };
+    let mut ret = XString::from_bytes(b"Vim");
+    if command.is_empty() {
+        ret.push_byte(b':');
+    } else {
+        ret.push_byte(b'(');
+        ret.push_bytes(command);
+        ret.push_bytes(b"):");
+    }
+    ret.push_bytes(&exception_message(message));
+    ret.into_raw()
+}
 
-    // `msg_add_fname` may have prefixed the message with a file name in
-    // quotes. In the exception value the file name goes in parentheses
-    // at the end instead.
-    let mut p = mesg;
+/// The message as an exception value carries it: `message` itself, unless
+/// [`msg_add_fname`](crate::message::msg_add_fname) prefixed it with a file
+/// name in quotes, in which case the name moves to the end in parentheses.
+///
+/// **The move truncates the name to two bytes**, because the format string's
+/// own length is passed as the buffer size. That is upstream's arithmetic,
+/// bug included, and the exception values the suites pin are the truncated
+/// ones; see `~/agents/context` for the report.
+fn exception_message(message: &[u8]) -> Vec<u8> {
+    let mut at = 0;
     loop {
-        if unsafe { *p } == NUL as c_char || unsafe { error_number_at(p) } {
-            if unsafe { *p } == NUL as c_char || p == mesg {
+        if at == message.len() || error_number_at(&message[at..]) {
+            if at == message.len() || at == 0 {
                 // "E123" missing, or at the very beginning.
-                unsafe { strcat(val, mesg) };
-                break;
+                return message.to_vec();
             }
-            if unsafe { *mesg } != b'"' as c_char
-                || unsafe { p.sub(2) } < unsafe { mesg.add(1) }
-                || unsafe { *p.sub(2) } != b'"' as c_char
-                || unsafe { *p.sub(1) } != b' ' as c_char
-            {
+            if message[0] != b'"' || at < 3 || message[at - 2] != b'"' || message[at - 1] != b' ' {
                 // "E123:" is part of the file name after all.
-                p = unsafe { p.add(1) };
+                at += 1;
                 continue;
             }
             // '"filename" E123: message text'
-            unsafe { strcat(val, p) };
-            unsafe { *p.sub(2) = NUL as c_char };
-            let p_len = unsafe { cstr::bytes_at(p) }.len();
-            unsafe {
-                snprintf(
-                    val.add(p_len),
-                    c" (%s)".count_bytes(),
-                    c" (%s)".as_ptr(),
-                    mesg.add(1),
-                )
-            };
-            unsafe { *p.sub(2) = b'"' as c_char };
-            break;
+            let mut moved = message[at..].to_vec();
+            let mut parenthesised = b" (".to_vec();
+            parenthesised.extend_from_slice(&message[1..at - 2]);
+            parenthesised.push(b')');
+            parenthesised.truncate(c" (%s)".count_bytes() - 1);
+            moved.extend_from_slice(&parenthesised);
+            return moved;
         }
-        p = unsafe { p.add(1) };
+        at += 1;
     }
-    ret
 }
 
-/// Whether `p` starts an `E123:` message number, with one to three digits.
-///
-/// # Safety
-/// `p` points into a NUL-terminated string.
-unsafe fn error_number_at(p: *const c_char) -> bool {
-    // SAFETY: caller contract -- each read is guarded by the one before it,
-    // and the NUL stops the walk.
-    unsafe {
-        *p == b'E' as c_char
-            && ascii_isdigit(*p.add(1) as c_int)
-            && (*p.add(2) == b':' as c_char
-                || ascii_isdigit(*p.add(2) as c_int)
-                    && (*p.add(3) == b':' as c_char
-                        || ascii_isdigit(*p.add(3) as c_int) && *p.add(4) == b':' as c_char))
-    }
+/// Whether `rest` opens with an `E123:` message number, one to three digits.
+fn error_number_at(rest: &[u8]) -> bool {
+    let digit = |i: usize| rest.get(i).is_some_and(u8::is_ascii_digit);
+    let colon = |i: usize| rest.get(i) == Some(&b':');
+    rest.first() == Some(&b'E')
+        && digit(1)
+        && (colon(2) || digit(2) && (colon(3) || digit(3) && colon(4)))
 }
 
 /// Build the exception and make it the one being thrown. `value` is the

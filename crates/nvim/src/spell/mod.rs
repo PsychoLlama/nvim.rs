@@ -34,30 +34,30 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::semsg;
 use crate::types::TAB;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint};
+use core::slice;
 
 use crate::change::inserted_bytes;
-use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
+use crate::cursor::get_cursor_line_ptr;
 use crate::ex_cmds::do_sub_msg;
 use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::memline::ml_replace;
-use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::option::vars::p_ws;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
     ColNr, ExArg, FileComparison, LangP, LineNr, OpArg, Pos, SearchItArg, SpellLang, SpellMoveType,
     SpellTab, Window, size_t, uint8_t,
 };
 use crate::undo::u_save_cursor;
-use ::libc::{strcat, strcpy};
 
 mod chartab;
 mod check;
@@ -337,11 +337,12 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
     let repl_to_len = unsafe { cstr::bytes_at(repl_to.get()) }.len();
     let addlen = repl_to_len as i64 - repl_from_len as i64;
 
-    let frompatsize = repl_from_len + 7;
-    let frompat = unsafe { xmalloc(frompatsize) } as *mut c_char;
-    let fmt = c"\\V\\<%s\\>".as_ptr();
-    let from = repl_from.get();
-    let frompatlen = unsafe { snprintf(frompat, frompatsize, fmt, from) } as size_t;
+    // The word to replace, anchored as a very-nomagic whole word.
+    let mut frompat = XString::from_bytes(b"\\V\\<");
+    // SAFETY: 'spellfile' replacement words are NUL-terminated.
+    frompat.push_bytes(unsafe { cstr::bytes_at(repl_from.get()) });
+    frompat.push_bytes(b"\\>");
+    let frompatlen = frompat.len();
     p_ws.set(0);
 
     sub_nsubs.set(0);
@@ -356,7 +357,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
                 null_op,
                 slash,
                 slash,
-                frompat,
+                frompat.as_ptr().cast_mut(),
                 frompatlen,
                 1,
                 SEARCH_KEEP,
@@ -374,12 +375,18 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
         if addlen <= 0
             || !(unsafe { cstr::prefix_eq(line.offset(col as isize), repl_to.get(), repl_to_len) })
         {
-            let p = unsafe { xmalloc((get_cursor_line_len() as i64 + addlen) as size_t + 1) }
-                as *mut c_char;
-            unsafe { p.cast::<u8>().copy_from(line.cast(), col as size_t) };
-            unsafe { strcpy(p.offset(col as isize), repl_to.get()) };
-            unsafe { strcat(p, line.offset(col as isize).add(repl_from_len)) };
-            let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, p, false) };
+            // SAFETY: the cursor line is NUL-terminated and at least `col`
+            // bytes long, the replaced word is `repl_from_len` of its bytes,
+            // and 'spellfile's replacement is a NUL-terminated option value.
+            let replaced = unsafe {
+                let mut rebuilt =
+                    XString::from_bytes(slice::from_raw_parts(line.cast::<u8>(), col as size_t));
+                rebuilt.push_bytes(cstr::bytes_at(repl_to.get()));
+                rebuilt.push_bytes(cstr::bytes_at(line.offset(col as isize).add(repl_from_len)));
+                rebuilt
+            };
+            // SAFETY: the line just built, whose block `ml_replace` takes on.
+            let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, replaced.into_raw(), false) };
             let lnum = Win::current().w_cursor.lnum;
             let (was, now) = (repl_from_len as c_int, repl_to_len as c_int);
             inserted_bytes(lnum, col, was, now);
@@ -395,7 +402,6 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
 
     p_ws.set(save_ws as c_int);
     Win::current().w_cursor = pos;
-    unsafe { xfree(frompat as *mut c_void) };
 
     if sub_nsubs.get() == 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

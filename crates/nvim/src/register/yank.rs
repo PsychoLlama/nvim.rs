@@ -19,6 +19,7 @@
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Lock;
+use crate::memory::XString;
 use crate::message_fmt::{c_str, report_msg};
 use crate::tr_plural;
 use crate::winlayer::{Buf, Win};
@@ -154,13 +155,10 @@ unsafe fn append_to_register(curr: *mut YankReg, reg: *mut YankReg, yank_type: M
         let first_new = unsafe { &mut *(*reg).y_array };
         j = j.wrapping_sub(1);
         let last_old = unsafe { &mut *(*curr).y_array.add(j) };
-        let joined_size = last_old.len().wrapping_add(first_new.len());
-        let pnew = unsafe { xmalloc(joined_size.wrapping_add(1)) } as *mut c_char;
-        unsafe { strcpy(pnew, last_old.data()) };
-        unsafe { strcpy(pnew.add(last_old.len()), first_new.data()) };
-        // SAFETY: `pnew` is this block's own, NUL-terminated by the copies
-        // above. The assignments release both old strings.
-        *last_old = unsafe { String_0::from_owned_parts(pnew, joined_size) };
+        let mut joined = XString::from_bytes(last_old.as_bytes());
+        joined.push_bytes(first_new.as_bytes());
+        // The assignment releases the old string.
+        *last_old = String_0::from_xstring(joined);
         j = j.wrapping_add(1);
 
         *first_new = String_0::NULL;

@@ -749,9 +749,11 @@ pub unsafe fn mergesort_list(
 pub mod alloc_log;
 pub mod arena;
 pub(crate) mod handoff;
+pub mod xstring;
 /// The arena allocator, re-exported: every caller in the tree spells it
 /// `crate::memory::arena_*`, and it is the same allocation family.
 pub use arena::*;
+pub use xstring::XString;
 
 pub(crate) static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
 pub(crate) static did_outofmem_msg: GlobalCell<bool> = GlobalCell::new(false);

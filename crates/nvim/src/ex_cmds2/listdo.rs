@@ -34,6 +34,7 @@ use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::mark::setpcmark;
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
 use crate::normal::do_check_scrollbind;
@@ -46,7 +47,7 @@ use crate::types::{AcoSave, ExArg, LineNr, size_t};
 use crate::window::{goto_tab, valid_tab, valid_win, win_goto, win_split, win_valid};
 use crate::winlayer::prev_window;
 use crate::winlayer::{Buf, TabId, TabPage, Win, WinId, first_buffer, first_tab, first_window};
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 /// Which list [`ex_listdo`] walks.
@@ -105,10 +106,9 @@ pub(crate) fn ex_listdo(excmd: &mut ExArg) {
 
     // Don't run Syntax autocommands: skipping the syntax file is a large
     // speed improvement.
-    let mut save_ei = ptr::null_mut();
+    let mut save_ei = None;
     if list.changes_buffer() {
-        // SAFETY: module contract.
-        save_ei = unsafe { au_event_disable(c",Syntax".as_ptr().cast_mut()) };
+        save_ei = Some(au_event_disable(c",Syntax"));
         for mut buf in buffers() {
             buf.b_flags.clear(BufFlags::SYN_SET);
         }
@@ -126,9 +126,8 @@ pub(crate) fn ex_listdo(excmd: &mut ExArg) {
     }
 
     drop(keep_messages);
-    if !save_ei.is_null() {
-        // SAFETY: `save_ei` is what `au_event_disable` returned.
-        unsafe { restore_syntax_events(save_ei) };
+    if save_ei.is_some() {
+        restore_syntax_events(save_ei);
     }
 }
 
@@ -373,13 +372,11 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
 /// Put the Syntax event back and fire it for the buffers that were opened
 /// while it was suppressed.
 ///
-/// # Safety
-/// `save_ei` is what [`au_event_disable`] returned, and module contract.
-unsafe fn restore_syntax_events(save_ei: *mut c_char) {
-    // SAFETY: caller contract. `apply_autocmds` can do anything to the
-    // buffer list, so the walk starts over whenever it has run.
+/// `apply_autocmds` can do anything to the buffer list, so the walk starts
+/// over whenever it has run.
+fn restore_syntax_events(save_ei: Option<XString>) {
     let mut aco = AcoSave::default();
-    unsafe { au_event_restore(save_ei) };
+    au_event_restore(save_ei);
 
     let mut cur = first_buffer();
     while let Some(mut buf) = cur {
@@ -387,6 +384,8 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
         if buf.b_nwindows > 0 && buf.b_flags.has(BufFlags::SYN_SET) {
             buf.b_flags.clear(BufFlags::SYN_SET);
             if buf.raw() == Buf::current_raw() {
+                // SAFETY: the current buffer is live, and 'syntax' and the
+                // file name are its own NUL-terminated fields.
                 unsafe {
                     apply_autocmds(
                         AutoEvent::Syntax,
@@ -398,9 +397,14 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
                 };
             } else {
                 let (syn, name) = (buf.b_p_syn, buf.b_fname);
-                unsafe { aucmd_prepbuf(&raw mut aco, buf) };
-                unsafe { apply_autocmds(AutoEvent::Syntax, syn, name, true, Some(buf)) };
-                unsafe { aucmd_restbuf(&raw mut aco) };
+                // SAFETY: `aco` is this frame's, `buf` is live, and the two
+                // strings are its own NUL-terminated fields -- read before
+                // the switch, which does not touch them.
+                unsafe {
+                    aucmd_prepbuf(&raw mut aco, buf);
+                    apply_autocmds(AutoEvent::Syntax, syn, name, true, Some(buf));
+                    aucmd_restbuf(&raw mut aco);
+                }
             }
             // Start over, in case autocommands messed things up.
             bnext = first_buffer();

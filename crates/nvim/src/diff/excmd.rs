@@ -26,6 +26,7 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_set_tab;
+use crate::memory::XString;
 use crate::option::boolean_optval;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::has_char;
@@ -33,7 +34,7 @@ use crate::types::CmdIdx;
 use crate::types::{Failed, MAXPATHL, NUL, OptionSetFlags};
 use crate::winlayer::graph::{switch_to, switch_window};
 use crate::winlayer::{Buf, TabPage, Win, windows};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// Release one of this module's owned strings; a null is fine, as `xfree`'s
@@ -67,10 +68,9 @@ fn emsg_gettext(msg: *const c_char) {
 /// `'patchexpr'` replaces the shell-out entirely.
 pub fn ex_diffpatch(excmd: &mut ExArg) {
     let old_curwin = Win::current();
-    let mut newname: *mut c_char = ptr::null_mut();
+    let mut newname: Option<XString> = None;
     let mut esc_name: *mut c_char = ptr::null_mut();
     let mut fullname: *mut c_char = ptr::null_mut();
-    let mut buf: *mut c_char = ptr::null_mut();
     let (tmp_orig, tmp_new) = (vim_tempname(), vim_tempname());
 
     if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
@@ -83,14 +83,6 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
         };
         // SAFETY: a NUL-terminated file name.
         esc_name = unsafe { vim_strsave_shellescape(name, true, true) };
-        // SAFETY: three NUL-terminated strings.
-        let orig_len = unsafe { cstr::bytes_at(tmp_orig) }.len();
-        let name_len = unsafe { cstr::bytes_at(esc_name) }.len();
-        let new_len = unsafe { cstr::bytes_at(tmp_new) }.len();
-        let buflen = orig_len + name_len + new_len + 16;
-        // SAFETY: `xmalloc` aborts rather than answer null.
-        buf = unsafe { xmalloc(buflen) }.cast::<c_char>();
-
         // Run the patch from the temp directory, so its `.orig`/`.rej`
         // droppings do not land in the user's.
         let mut dirbuf: [c_char; 4096] = [0; 4096];
@@ -112,12 +104,26 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
             // SAFETY: three NUL-terminated file names.
             unsafe { eval_patch(tmp_orig, name, tmp_new) };
         } else {
-            let fmt = c"patch -o %s %s < %s".as_ptr();
-            // SAFETY: `buf` holds `buflen` bytes, and the three `%s` are
-            // matched by the three NUL-terminated names.
-            unsafe { vim_snprintf(buf, buflen, fmt, tmp_new, tmp_orig, esc_name) };
+            // SAFETY: three NUL-terminated names.
+            let mut command = unsafe {
+                let mut line = XString::from_bytes(b"patch -o ");
+                line.push_bytes(cstr::bytes_at(tmp_new));
+                line.push_byte(b' ');
+                line.push_bytes(cstr::bytes_at(tmp_orig));
+                line.push_bytes(b" < ");
+                line.push_bytes(cstr::bytes_at(esc_name));
+                line
+            };
             block_autocmds();
-            unsafe { call_shell(buf, ShellOpts::FILTER, ptr::null_mut::<c_char>()) };
+            // SAFETY: the command line just built, which `call_shell` only
+            // reads, and no extra arguments.
+            unsafe {
+                call_shell(
+                    command.as_mut_ptr(),
+                    ShellOpts::FILTER,
+                    ptr::null_mut::<c_char>(),
+                )
+            };
             unblock_autocmds();
         }
 
@@ -128,8 +134,8 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
             }
             shorten_fnames(1);
         }
-        remove_suffixed(buf, tmp_new, c".orig".as_ptr());
-        remove_suffixed(buf, tmp_new, c".rej".as_ptr());
+        remove_suffixed(tmp_new, c".orig");
+        remove_suffixed(tmp_new, c".rej");
 
         let mut file_info = FileInfo::default();
         // SAFETY: a NUL-terminated file name and a live `FileInfo`.
@@ -141,10 +147,10 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
         } else {
             if !Buf::current().b_fname.is_null() {
                 let fname = Buf::current().b_fname;
-                // SAFETY: the buffer's own file name, NUL-terminated; the
-                // four extra bytes are for the `.new` appended next.
-                newname = unsafe { xstrnsave(fname, cstr::bytes_at(fname).len() + 4) };
-                unsafe { strcat(newname, c".new".as_ptr()) };
+                // SAFETY: the buffer's own file name, NUL-terminated.
+                let mut patched = XString::from_bytes(unsafe { cstr::bytes_at(fname) });
+                patched.push_str(".new");
+                newname = Some(patched);
             }
             cmdmod_set_tab(0);
             let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
@@ -159,8 +165,8 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
                     // SAFETY: both windows are live, as just checked.
                     diff_win_options(Win::current(), true);
                     diff_win_options(old_curwin, true);
-                    if !newname.is_null() {
-                        excmd.arg = newname;
+                    if let Some(patched) = newname.as_mut() {
+                        excmd.arg = patched.as_mut_ptr();
                         // SAFETY: the caller's command; the group name and
                         // the command line are static strings.
                         ex_file(excmd);
@@ -175,8 +181,6 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
     }
     remove_and_free(tmp_orig);
     remove_and_free(tmp_new);
-    free_str(newname);
-    free_str(buf);
     free_str(fullname);
     free_str(esc_name);
 }
@@ -207,14 +211,13 @@ fn save_cwd(dirbuf: &mut [c_char; 4096]) -> bool {
     ok
 }
 
-/// Delete `name` with `suffix` glued on, using `buf` as the scratch space --
-/// `patch(1)`'s `.orig` and `.rej` leftovers.
-fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
-    // SAFETY: `buf` was sized for `name` plus the longest suffix, and both
-    // inputs are NUL-terminated.
-    unsafe { strcpy(buf, name) };
-    unsafe { strcat(buf, suffix) };
-    unsafe { os_remove(cstr::at(buf)) };
+/// Delete `name` with `suffix` glued on -- `patch(1)`'s `.orig` and `.rej`
+/// leftovers.
+fn remove_suffixed(name: *mut c_char, suffix: &CStr) {
+    // SAFETY: a NUL-terminated temp file name.
+    let mut suffixed = XString::from_bytes(unsafe { cstr::bytes_at(name) });
+    suffixed.push_cstr(suffix);
+    os_remove(suffixed.as_cstr());
 }
 
 /// `:diffsplit {file}`: open `file` in a new window and diff it against the

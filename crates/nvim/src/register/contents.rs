@@ -18,6 +18,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
@@ -158,35 +159,17 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
     // One string, with a newline between lines and after the last one if
     // the register is linewise.
     let needs_nl = |i: size_t| y_type == kMTLineWise || i < y_size.wrapping_sub(1);
-    let mut len: size_t = 0;
-    for i in 0..y_size {
-        // SAFETY: `i` is below `y_size`, so this is one of the register's
-        // lines.
-        len = len.wrapping_add(unsafe { (*y_array.add(i)).len() });
+    // SAFETY: `i` is below `y_size`, so each of these is one of the
+    // register's own lines.
+    let lines = || (0..y_size).map(|i| unsafe { &*y_array.add(i) });
+    let mut text = XString::with_capacity(lines().map(|line| line.len() + 1).sum::<size_t>());
+    for (i, line) in lines().enumerate() {
+        text.push_bytes(line.as_bytes());
         if needs_nl(i) {
-            len = len.wrapping_add(1);
+            text.push_byte(b'\n');
         }
     }
-    // SAFETY: `len` is the sum of the lines and the newlines between them,
-    // and the +1 is the terminating NUL, so every copy below lands inside.
-    let retval = unsafe { xmalloc(len.wrapping_add(1)) } as *mut c_char;
-    let mut at: size_t = 0;
-    for i in 0..y_size {
-        // SAFETY: `i` is below `y_size`, as above.
-        let line = unsafe { &*y_array.add(i) };
-        // SAFETY: `at` is the offset the loop above measured this line at,
-        // and the line is NUL-terminated.
-        unsafe { strcpy(retval.add(at), line.data()) };
-        at = at.wrapping_add(line.len());
-        if needs_nl(i) {
-            // SAFETY: the loop above counted this newline into `len`.
-            unsafe { *retval.add(at) = '\n' as c_char };
-            at = at.wrapping_add(1);
-        }
-    }
-    // SAFETY: `at` has reached `len`, the last byte of the allocation.
-    unsafe { *retval.add(at) = NUL as c_char };
-    retval as *mut c_void
+    text.into_raw().cast::<c_void>()
 }
 
 /// Prepare register `name` to be written: check the name, remember `""`, and

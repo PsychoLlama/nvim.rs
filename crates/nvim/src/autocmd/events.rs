@@ -16,6 +16,7 @@
 use super::*;
 use crate::cstr;
 use crate::getchar::typeahead;
+use crate::memory::XString;
 use crate::types::{Failed, OptionSetFlags};
 
 /// The [`EVENT_NAMES`] row an event number names.
@@ -166,61 +167,34 @@ unsafe fn skip_all(ei: *mut ::core::ffi::c_char) -> Option<*mut ::core::ffi::c_c
 }
 
 /// Append `what` (which starts with a comma) to 'eventignore', and answer
-/// the old value in allocated memory for [`au_event_restore`].
-///
-/// # Safety
-///
-/// `what` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn au_event_disable(what: *mut ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: 'eventignore' holds a NUL-terminated value and `what` is the
-    // caller's NUL-terminated string, so both lengths are the strings' own.
-    let p_ei_len = unsafe { cstr::bytes_at(p_ei.get()) }.len();
-    // SAFETY: `p_ei_len` bytes of the option value, copied out.
-    let save_ei = unsafe { xmemdupz(p_ei.get().cast::<::core::ffi::c_void>(), p_ei_len) }
-        .cast::<::core::ffi::c_char>();
-    // SAFETY: room for the old value and `what`, whichever way they are
-    // joined below.
-    let what_len = unsafe { cstr::bytes_at(what) }.len();
-    let new_ei = unsafe { xstrnsave(p_ei.get(), p_ei_len.wrapping_add(what_len)) };
-    if unsafe { *what } == b',' as ::core::ffi::c_char && unsafe { *p_ei.get() } == 0 {
-        // SAFETY: `what` without its leading comma is shorter still.
-        unsafe { strcpy(new_ei, what.add(1)) };
+/// the old value for [`au_event_restore`].
+pub(crate) fn au_event_disable(what: &CStr) -> XString {
+    // SAFETY: 'eventignore' holds a NUL-terminated value.
+    let ignored = unsafe { cstr::bytes_at(p_ei.get()) };
+    let saved = XString::from_bytes(ignored);
+    let appended = if ignored.is_empty() && what.to_bytes().first() == Some(&b',') {
+        // Nothing to join to, so the leading comma would open the list with
+        // an empty entry.
+        XString::from_bytes(&what.to_bytes()[1..])
     } else {
-        // SAFETY: `new_ei` opens with the old value, so `what` fits after
-        // its `p_ei_len` bytes.
-        unsafe { strcpy(new_ei.add(p_ei_len), what) };
-    }
-    // SAFETY: `new_ei` is NUL-terminated, and the option copies it rather
-    // than taking it, so it can be freed right after.
-    unsafe { set_option_eventignore(new_ei) };
-    unsafe { xfree(new_ei.cast::<::core::ffi::c_void>()) };
-    save_ei
+        let mut joined = saved.clone();
+        joined.push_cstr(what);
+        joined
+    };
+    set_option_eventignore(appended.as_cstr());
+    saved
 }
 
-/// Put back what [`au_event_disable`] saved, and free it.
-///
-/// # Safety
-///
-/// `old_ei` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn au_event_restore(old_ei: *mut ::core::ffi::c_char) {
-    if !old_ei.is_null() {
-        // SAFETY: by the contract this is what `au_event_disable` answered:
-        // a NUL-terminated string it allocated and nobody else owns.
-        unsafe { set_option_eventignore(old_ei) };
-        unsafe { xfree(old_ei.cast::<::core::ffi::c_void>()) };
+/// Put back what [`au_event_disable`] saved.
+pub(crate) fn au_event_restore(old_ignored: Option<XString>) {
+    if let Some(value) = old_ignored {
+        set_option_eventignore(value.as_cstr());
     }
 }
 
-/// Set 'eventignore' to a NUL-terminated string, without an owner.
-///
-/// # Safety
-///
-/// `value` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn set_option_eventignore(value: *mut ::core::ffi::c_char) {
-    // SAFETY: `value` is the caller's NUL-terminated string.  The `String_0`
-    // borrows it rather than owning it, and only for the call below, which
-    // copies what it is given.
-    let string = unsafe { cstr_to_string(value) };
+/// Set 'eventignore', which copies what it is given.
+fn set_option_eventignore(value: &CStr) {
+    let string = String_0::from_bytes(value.to_bytes());
     set_option_direct(
         kOptEventignore,
         OptVal::string(string),

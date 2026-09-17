@@ -90,7 +90,7 @@ use crate::os::shell::{ShellOpts, call_shell};
 use crate::path::full_name_save;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD};
-use crate::strings::{vim_snprintf, vim_strsave_shellescape, xstrnsave};
+use crate::strings::{vim_snprintf, vim_strsave_shellescape};
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
@@ -109,7 +109,7 @@ use crate::xdiff::xtypes::{
     XDF_IGNORE_WHITESPACE_AT_EOL, XDF_IGNORE_WHITESPACE_CHANGE, XDF_INDENT_HEURISTIC,
     XDF_NEED_MINIMAL, XDF_PATIENCE_DIFF,
 };
-use ::libc::{atol, fclose, fwrite, strcat, strcpy, tolower};
+use ::libc::{atol, fclose, fwrite, tolower};
 
 // The carve of the transpiled module; see each child's docs.
 mod block;

@@ -6,6 +6,19 @@
 //! `CString` may be released with `xfree`, and `xmalloc` memory may be
 //! adopted by Rust containers, with no copy-at-the-boundary layer.
 //!
+//! # Adopting a foreign block
+//!
+//! A block from `malloc` may be handed to a Rust container that states a
+//! **smaller capacity than `malloc` actually gave**, which is what
+//! [`XString::from_raw`](crate::memory::XString::from_raw) does: it adopts an
+//! `xmalloc` block as a `Vec<u8>` of `strlen + 1` bytes however long the
+//! block really is. That is sound here, and only here, because the `dealloc`
+//! and `realloc` below ignore `layout.size()` on the `malloc` path -- `free`
+//! never took a size, and `realloc` reads the block's own -- so the
+//! understated capacity can neither shorten a release nor truncate a move.
+//! The alignment in the `Layout` is the part that must be right, and a byte
+//! container's is 1.
+//!
 //! `std::alloc::System` deliberately isn't used for this. It is documented
 //! as possibly wrapping the platform allocator in extra bookkeeping, which
 //! would make handing its pointers to `free` (or `malloc`'s to `Box`)

@@ -96,9 +96,9 @@ fn argv_to_str(words: &[&str]) -> String {
     let owned: Vec<CString> = words.iter().copied().map(cstr).collect();
     let mut argv: Vec<*mut c_char> = owned.iter().map(|w| w.as_ptr().cast_mut()).collect();
     argv.push(ptr::null_mut());
-    // SAFETY: `argv` is NULL-terminated and every item outlives the call; the
-    // answer is an owned string.
-    unsafe { internalize(shell_argv_to_str(argv.as_mut_ptr())) }
+    // SAFETY: `argv` is NULL-terminated and every item outlives the call.
+    let rendered = unsafe { shell_argv_to_str(argv.as_mut_ptr()) };
+    String::from_utf8_lossy(&rendered).into_owned()
 }
 
 /// Run `cmd` through the shell and hand back (exit code, what it wrote).

@@ -184,13 +184,11 @@ unsafe fn compile_pattern(spat: *mut c_char) -> *mut RegProg {
 /// `fname` must be NUL-terminated.
 unsafe fn display_fname(fname: *mut c_char) {
     msg_start();
-    let truncated = unsafe { msg_strtrunc(fname, 1) };
-    if truncated.is_null() {
-        msg_display(unsafe { cstr::at(fname) }, 0, false);
-    } else {
-        msg_display(unsafe { cstr::at(truncated) }, 0, false);
-        unsafe { xfree(truncated.cast()) };
-    }
+    match unsafe { msg_strtrunc(fname, 1) } {
+        // SAFETY: the caller's NUL-terminated file name.
+        None => msg_display(unsafe { cstr::at(fname) }, 0, false),
+        Some(truncated) => msg_display(truncated.as_cstr(), 0, false),
+    };
     msg_clr_eos();
     msg_didout.set(false);
     msg_nowait.set(true);
@@ -210,13 +208,12 @@ unsafe fn load_quietly(
     dirname_start: *const c_char,
     dirname_now: *mut c_char,
 ) -> Option<Buf> {
-    // SAFETY: forwarded from the caller.
-    let save_ei = unsafe { au_event_disable(c",Filetype".as_ptr().cast_mut()) };
+    let save_ei = au_event_disable(c",Filetype");
     let save_mls = p_mls.get();
     p_mls.set(0);
     let buf = unsafe { load_dummy_buffer(fname, dirname_start, dirname_now) };
     p_mls.set(save_mls);
-    unsafe { au_event_restore(save_ei) };
+    au_event_restore(Some(save_ei));
     buf
 }
 

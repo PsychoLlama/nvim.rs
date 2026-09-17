@@ -18,13 +18,13 @@ use crate::eval::typval::tv_get_lnum;
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str};
 use crate::global_cell::GlobalCell;
 use crate::memline::Lines;
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::XString;
+use crate::memory::xmalloc;
 use crate::os::cshim::{ngettext, snprintf};
 use crate::search::linewhite;
-use crate::strings::concat_str;
 use crate::winlayer::{Buf, Live};
 use ::libc::strcat;
-use core::ffi::{c_char, c_int, c_ulong, c_void};
+use core::ffi::{c_char, c_int, c_ulong};
 use core::ptr;
 
 use super::text::*;
@@ -152,12 +152,21 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
         let mut vt: VirtText = VIRTTEXT_EMPTY;
         let (last, out) = (lnum + info.fi_lines - 1, buf.as_mut_ptr());
         // SAFETY: `buf` holds `FOLD_TEXT_LEN` bytes and `vt` is this frame's.
-        let mut text = unsafe { get_foldtext(win, lnum, last, info, out, &raw mut vt) };
-        if text == &raw mut buf as *mut c_char {
-            text = unsafe { xstrdup(text) };
-        }
+        let answer = unsafe { get_foldtext(win, lnum, last, info, out, &raw mut vt) };
+        let mut text = if answer == &raw mut buf as *mut c_char {
+            // The scratch buffer, which stays this frame's: copy it out.
+            // SAFETY: `get_foldtext` left a NUL-terminated string in it.
+            XString::from_bytes(unsafe { cstr::bytes_at(answer) })
+        } else {
+            // SAFETY: anything else is `get_foldtext`'s own allocation,
+            // which it hands to its caller.
+            unsafe { XString::from_raw(answer) }
+        };
         if vt.size > 0 {
-            debug_assert!(unsafe { *text } as c_int == '\0' as c_int, "*text == NUL");
+            debug_assert!(
+                text.is_empty(),
+                "a virtual-text 'foldtext' answers no bytes"
+            );
             // A virtual-text 'foldtext' answers in chunks; flatten them.
             let mut i: size_t = 0;
             while i < vt.size {
@@ -166,14 +175,13 @@ pub fn f_foldtextresult(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
                 if chunk.is_null() {
                     break;
                 }
-                let joined = unsafe { concat_str(text, chunk) };
-                unsafe { xfree(text as *mut c_void) };
-                text = joined;
+                // SAFETY: a chunk's NUL-terminated text.
+                text.push_bytes(unsafe { cstr::bytes_at(chunk) });
             }
         }
         // SAFETY: `vt` is this frame's virtual text.
         unsafe { clear_virttext(&raw mut vt) };
-        rv.write_string(text);
+        rv.write_string(text.into_raw());
     }
     entered.set(false);
 }
