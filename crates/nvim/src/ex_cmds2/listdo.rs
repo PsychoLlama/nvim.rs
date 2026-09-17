@@ -306,7 +306,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         if execute {
             let _ = unsafe {
                 do_cmdline(
-                    excmd.arg,
+                    excmd.arg_ptr(),
                     excmd.ea_getline,
                     excmd.cookie,
                     DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT,

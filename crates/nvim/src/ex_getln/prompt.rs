@@ -35,16 +35,16 @@ use core::mem::ManuallyDrop;
 /// writable `size_t` the caller owns.
 pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
     let mut numbuf = NumBuf::new();
-    let mut cmd = excmd.arg;
+    let mut cmd = excmd.arg_ptr();
     if unsafe { *cmd.offset(0) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
         || unsafe { *cmd.offset(1) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
         || excmd.ea_getline.is_none()
     {
-        unsafe { *lenp = cstr::bytes_at(excmd.arg).len() };
+        unsafe { *lenp = cstr::bytes_at(excmd.arg_ptr()).len() };
         if excmd.skip {
             return ::core::ptr::null_mut();
         }
-        return unsafe { xmemdupz(excmd.arg as *const ::core::ffi::c_void, *lenp) }
+        return unsafe { xmemdupz(excmd.arg_ptr() as *const ::core::ffi::c_void, *lenp) }
             as *mut ::core::ffi::c_char;
     }
     cmd = unsafe { cmd.offset(2) };

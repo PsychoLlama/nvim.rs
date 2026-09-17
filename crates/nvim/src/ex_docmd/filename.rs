@@ -21,7 +21,7 @@ use std::ffi::CString;
 use crate::arglist::arg_all;
 use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::find_buf;
-use crate::charset::{backslash_halve, getdigits_int, skipwhite};
+use crate::charset::{backslash_halve, getdigits_int};
 use crate::cmdexpand::{expand_init, expand_one};
 use crate::eval::fs::modify_fname;
 use crate::eval::skip_expr;
@@ -57,7 +57,7 @@ use crate::runtime::estack_sfile;
 use crate::strings::strrep;
 
 use crate::types::{
-    ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, NUL, Vv, size_t, ssize_t,
+    CmdLine, ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, Vv, size_t, ssize_t,
     uint8_t,
 };
 use crate::winlayer::Buf;
@@ -67,20 +67,12 @@ use ::libc::{strcat, strcpy, strpbrk, strrchr};
 /// argument — spliced in here, before `%` and `#` are expanded, so that
 /// the program string can use them too.
 ///
-/// Answers where the argument now starts, which is the whole new line for
-/// a program that had no `$*`.
-///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`, unaliased for the call. `mut
-/// arg` must point at a NUL-terminated string, unaliased for the call.
-/// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns for
-/// the call.
-pub unsafe fn replace_makeprg(
-    excmd: &mut ExArg,
-    mut arg: *mut c_char,
-    cmdlinep: *mut *mut c_char,
-) -> *mut c_char {
+/// Answers whether the line was replaced. It is replaced *whole*: what the
+/// user typed is gone and the program string is the command line, with
+/// `arg` at its start. The cursors into the old line -- `cmd`, and the
+/// API's argument vector -- mean nothing afterwards, which is why the
+/// caller drops them.
+pub fn replace_makeprg(excmd: &mut ExArg) -> bool {
     let idx = excmd.cmdidx;
     let is_grep = idx == CmdIdx::grep
         || idx == CmdIdx::lgrep
@@ -90,11 +82,10 @@ pub unsafe fn replace_makeprg(
     // `grep_internal` means 'grepprg' is `internal`, which is not a
     // program at all.
     if !(is_make || is_grep) || grep_internal(excmd.cmdidx) {
-        return arg;
+        return false;
     }
 
     let buf = Buf::current();
-    // A copy: `strrep` below builds a new command line out of it.
     let (local, global) = if is_grep {
         (&buf.b_p_gp, P_GP)
     } else {
@@ -102,33 +93,38 @@ pub unsafe fn replace_makeprg(
     };
     let program = local_or_global(local, global);
 
-    arg = unsafe { skipwhite(arg) };
-    let mut new_cmdline = unsafe { strrep(program.as_ptr(), c"$*".as_ptr(), arg) };
-    if new_cmdline.is_null() {
+    excmd.line.arg = excmd.line.skip_white(excmd.line.arg);
+    let arg = excmd.line.arg;
+    // SAFETY: `arg` is a tail of the command's own line.
+    let replaced = unsafe { strrep(program.as_ptr(), c"$*".as_ptr(), excmd.line.ptr_at(arg)) };
+    let mut line: Vec<u8> = if replaced.is_null() {
         // No `$*`: the argument goes on the end.
-        new_cmdline = xmalloc(program.len() + len_of(arg) + 2) as *mut c_char;
-        unsafe { strcpy(new_cmdline, program.as_ptr()) };
-        unsafe { strcat(new_cmdline, c" ".as_ptr()) };
-        unsafe { strcat(new_cmdline, arg) };
-    }
+        let mut line = Vec::with_capacity(program.len() + excmd.line.rest_of(arg).len() + 2);
+        line.extend_from_slice(&program);
+        line.push(b' ');
+        line.extend_from_slice(excmd.line.rest_of(arg));
+        line
+    } else {
+        // SAFETY: `strrep` answers a NUL-terminated block this call owns.
+        let copy = unsafe { cstr::bytes_at(replaced) }.to_vec();
+        xfree(replaced as *mut c_void);
+        copy
+    };
+    line.push(0);
 
-    msg_make(unsafe { cstr::at(arg) });
-    unsafe { xfree(*cmdlinep as *mut c_void) };
-    unsafe { *cmdlinep = new_cmdline };
-    new_cmdline
+    msg_make(excmd.line.cstr_from(arg));
+    excmd.line = CmdLine::from_vec(line);
+    true
 }
 
 /// Expand every `%`, `#`, `` `cmd` `` and `<…>` in a command's file
 /// argument, then expand wildcards if the command takes exactly one name.
 ///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`, unaliased for the call.
-/// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns for
-/// the call.
-pub(crate) unsafe fn expand_filename(
+/// Every cursor into the line is re-read from the `CmdLine` after each
+/// replacement: an expansion *grows the buffer*, so an offset held across
+/// one is stale and a pointer held across one is worse.
+pub(crate) fn expand_filename(
     excmd: &mut ExArg,
-    cmdlinep: *mut *mut c_char,
     errormsgp: &mut Option<CString>,
 ) -> Result<(), Failed> {
     // `eval_vars` answers a static message or the empty marker, never a
@@ -139,31 +135,36 @@ pub(crate) unsafe fn expand_filename(
     let mut expanded = [0 as c_char; MAXPATHL as usize];
     // A `:vimgrep` pattern is not a file name, so the scan starts after
     // it.
-    let mut p = skip_grep_pat(excmd);
-    let mut has_wildcards = path_has_wildcard(p);
+    let mut at = skip_grep_pat(excmd);
+    let mut has_wildcards = path_has_wildcard(excmd.line.ptr_from(at));
 
-    while byte(p) != NUL {
-        if byte(p) == '`' as c_int && byte_at(p, 1) == '=' as c_int {
+    while excmd.line.byte_at(at) != 0 {
+        if excmd.line.byte_at(at) == b'`' && excmd.line.byte_at(at + 1) == b'=' {
             // `` `=expr` `` is evaluated much later, by the shell
             // expansion; step over it without touching it.
-            p = unsafe { p.add(2) };
-            let _ = unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
-            if byte(p) == '`' as c_int {
-                p = unsafe { p.add(1) };
+            let mut cursor = excmd.line.ptr_at(at + 2);
+            // SAFETY: `cursor` is this frame's own, over the command's line.
+            let _ = unsafe { skip_expr(&raw mut cursor, ptr::null_mut()) };
+            at = excmd.line.offset_of(cursor);
+            if excmd.line.byte_at(at) == b'`' {
+                at += 1;
             }
             continue;
         }
-        if !has_char(c"%#<".as_ptr(), byte(p) as uint8_t as c_int) {
-            p = unsafe { p.add(1) };
+        if !has_char(c"%#<".as_ptr(), c_int::from(excmd.line.byte_at(at))) {
+            at += 1;
             continue;
         }
 
         let mut srclen: size_t = 0;
         let mut escaped: c_int = 0;
+        let (src, arg) = (excmd.line.ptr_at(at), excmd.line.ptr_at(excmd.line.arg));
+        // SAFETY: both are cursors into the command's own line, and the
+        // three out-parameters are this frame's.
         let mut repl = unsafe {
             eval_vars(
-                p,
-                excmd.arg,
+                src,
+                arg,
                 &raw mut srclen,
                 &raw mut excmd.do_ecmd_lnum,
                 &raw mut msg,
@@ -172,16 +173,18 @@ pub(crate) unsafe fn expand_filename(
             )
         };
         if !msg.is_null() {
+            // SAFETY: `eval_vars` answers a NUL-terminated static message.
             *errormsgp = Some(unsafe { CStr::from_ptr(msg) }.to_owned());
             return Err(Failed);
         }
         if repl.is_null() {
-            p = unsafe { p.add(srclen as usize) };
+            at += srclen;
             continue;
         }
 
         if has_char(repl, '$' as c_int) || has_char(repl, '~' as c_int) {
             let old = repl;
+            // SAFETY: `repl` is the NUL-terminated block `eval_vars` gave.
             repl = unsafe { expand_env_save(repl) };
             xfree(old as *mut c_void);
         }
@@ -204,6 +207,7 @@ pub(crate) unsafe fn expand_filename(
             && !excmd.argt.has(ExArgt::NOSPC)
         {
             let mut l = repl;
+            // SAFETY: `l` walks the NUL-terminated replacement.
             while unsafe { *l } != 0 {
                 if has_char(escape_chars.get(), byte(l) as uint8_t as c_int) {
                     let escaped_repl = vim_strsave_escaped(repl, escape_chars.get());
@@ -216,6 +220,7 @@ pub(crate) unsafe fn expand_filename(
         }
         // A `!` in the replacement would be read as "the previous
         // command" by the shell-command line parser.
+        // SAFETY: `repl` is NUL-terminated.
         if (excmd.usefilter || idx == CmdIdx::bang || idx == CmdIdx::terminal)
             && !unsafe { strpbrk(repl, c"!".as_ptr()) }.is_null()
         {
@@ -224,7 +229,8 @@ pub(crate) unsafe fn expand_filename(
             repl = escaped_repl;
         }
 
-        p = repl_cmdline(excmd, p, srclen, repl, cmdlinep);
+        // SAFETY: as above -- the replacement is NUL-terminated.
+        at = repl_cmdline(excmd, at, srclen, unsafe { cstr::bytes_at(repl) });
         xfree(repl as *mut c_void);
     }
 
@@ -237,29 +243,43 @@ pub(crate) unsafe fn expand_filename(
     if has_wildcards {
         // Environment variables first: they may hold the wildcards, or
         // may be all that looked like one.
-        if has_char(excmd.arg, '$' as c_int) || has_char(excmd.arg, '~' as c_int) {
+        let arg = excmd.line.ptr_at(excmd.line.arg);
+        if has_char(arg, '$' as c_int) || has_char(arg, '~' as c_int) {
             let out = expanded.as_mut_ptr();
-            unsafe { expand_env_esc(excmd.arg, out, MAXPATHL, true, true, ptr::null_mut()) };
+            // SAFETY: `out` is this frame's `MAXPATHL` buffer and `arg` is
+            // the command's own argument.
+            unsafe { expand_env_esc(arg, out, MAXPATHL, true, true, ptr::null_mut()) };
             has_wildcards = path_has_wildcard(out);
-            repl_cmdline(excmd, excmd.arg, len_of(excmd.arg), out, cmdlinep);
+            // SAFETY: `expand_env_esc` leaves `out` NUL-terminated.
+            let out = unsafe { cstr::bytes_at(out) }.to_vec();
+            let (start, len) = (excmd.line.arg, excmd.line.rest_of(excmd.line.arg).len());
+            repl_cmdline(excmd, start, len, &out);
         }
     }
     if !has_wildcards {
-        unsafe { backslash_halve(excmd.arg) };
+        let arg = excmd.line.ptr_at(excmd.line.arg);
+        // SAFETY: the command's own argument, NUL-terminated.
+        unsafe { backslash_halve(arg) };
         return Ok(());
     }
 
+    // SAFETY: `Expand` is a `repr(C)` aggregate of scalars and pointers;
+    // all-zero is a valid value of every one of them, and `expand_init`
+    // writes the rest.
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
+    // SAFETY: `xpc` is this frame's own.
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Files;
     let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
     if p_wic() {
         options |= WildOpts::ICASE;
     }
+    let arg = excmd.line.ptr_at(excmd.line.arg);
+    // SAFETY: as above, over the command's own argument.
     let expanded = unsafe {
         expand_one(
             &raw mut xpc,
-            excmd.arg,
+            arg,
             ptr::null_mut(),
             options,
             WildMode::ExpandFree,
@@ -268,77 +288,38 @@ pub(crate) unsafe fn expand_filename(
     if expanded.is_null() {
         return Err(Failed);
     }
-    repl_cmdline(excmd, excmd.arg, len_of(excmd.arg), expanded, cmdlinep);
+    // SAFETY: `expand_one` answers a NUL-terminated block this call owns.
+    let text = unsafe { cstr::bytes_at(expanded) }.to_vec();
+    let (start, len) = (excmd.line.arg, excmd.line.rest_of(excmd.line.arg).len());
+    repl_cmdline(excmd, start, len, &text);
     xfree(expanded as *mut c_void);
     Ok(())
 }
 
-/// Replace `srclen` bytes at `src` with `repl`, in a freshly allocated copy
-/// of the whole command line.
+/// Replace the `srclen` bytes at `at` with `repl`, in place.
 ///
-/// Everything in the `ExArg` that points into the old line is repointed:
-/// `cmd`, `arg`, `nextcmd`, the API's argument vector and `do_ecmd_cmd`.
-/// Answers where the text after the replacement now lives, which is where
-/// the caller's scan resumes.
-pub(crate) fn repl_cmdline(
-    excmd: &mut ExArg,
-    src: *mut c_char,
-    srclen: size_t,
-    repl: *mut c_char,
-    cmdlinep: *mut *mut c_char,
-) -> *mut c_char {
-    let len = len_of(repl);
-    // The tail after the replacement, the replacement itself, a
-    // terminator, and — because `nextcmd` is stored past the end — the
-    // next command and its own terminator.
-    let mut size = unsafe { src.offset_from(*cmdlinep) } as size_t
-        + unsafe { cstr::bytes_at(src.add(srclen)) }.len()
-        + len
-        + 3;
-    if !excmd.nextcmd.is_null() {
-        size += len_of(excmd.nextcmd);
-    }
-    let new_cmdline = xmalloc(size) as *mut c_char;
+/// Everything in the `ExArg` that addresses the line past the replacement
+/// moves with it: `cmd`, `arg`, `nextcmd`, the API's argument vector and
+/// `do_ecmd_cmd`. Answers where the text after the replacement now starts,
+/// which is where the caller's scan resumes.
+pub(crate) fn repl_cmdline(excmd: &mut ExArg, at: usize, srclen: usize, repl: &[u8]) -> usize {
+    // The `+cmd` argument points into the line, unless it is the shared
+    // `$` constant, which is not in the line at all.
+    let ecmd = (!excmd.do_ecmd_cmd.is_null()
+        && !ptr::eq(excmd.do_ecmd_cmd, dollar_command.as_ptr()))
+    .then(|| excmd.line.offset_of(excmd.do_ecmd_cmd));
 
-    let offset = unsafe { src.offset_from(*cmdlinep) } as size_t;
-    // SAFETY: `src` points into the command line, and `new_cmdline` has
-    // `size` bytes, of which the first `offset` are the head.
-    let (old, past) = unsafe { (*cmdlinep, new_cmdline.add(offset)) };
-    move_bytes(new_cmdline, old, offset);
-    move_bytes(past, repl, len);
-    let tail = offset + len;
-    unsafe { strcpy(new_cmdline.add(tail), src.add(srclen)) };
-    let resume = unsafe { new_cmdline.add(tail) };
+    let delta = excmd.line.splice(at, srclen, repl);
 
-    if !excmd.nextcmd.is_null() {
-        let after = len_of(new_cmdline) + 1;
-        unsafe { strcpy(new_cmdline.add(after), excmd.nextcmd) };
-        excmd.nextcmd = unsafe { new_cmdline.add(after) };
-    }
-    excmd.cmd = unsafe { new_cmdline.offset(excmd.cmd.offset_from(*cmdlinep)) };
-    excmd.arg = unsafe { new_cmdline.offset(excmd.arg.offset_from(*cmdlinep)) };
-    // An argument after the replacement moved by the length difference;
-    // one before it did not move at all.
-    for j in 0..excmd.argc {
-        let old = unsafe { *excmd.args.add(j) };
-        let old_off = unsafe { old.offset_from(*cmdlinep) };
-        unsafe {
-            *excmd.args.add(j) = if offset >= old_off as size_t {
-                new_cmdline.offset(old_off)
-            } else {
-                new_cmdline.offset(old_off + len.wrapping_sub(srclen) as isize)
-            }
+    if let Some(off) = ecmd {
+        let off = if off > at {
+            off.wrapping_add_signed(delta)
+        } else {
+            off
         };
+        excmd.do_ecmd_cmd = excmd.line.ptr_at(off);
     }
-    // The `+cmd` argument, unless it is the shared `$` constant, which
-    // is not in the command line at all.
-    if !excmd.do_ecmd_cmd.is_null() && !ptr::eq(excmd.do_ecmd_cmd, dollar_command.as_ptr()) {
-        excmd.do_ecmd_cmd = unsafe { new_cmdline.offset(excmd.do_ecmd_cmd.offset_from(*cmdlinep)) };
-    }
-
-    unsafe { xfree(*cmdlinep as *mut c_void) };
-    unsafe { *cmdlinep = new_cmdline };
-    resume
+    at + repl.len()
 }
 
 /// The `%`, `#` and `<…>` items, in the order `find_cmdline_var` answers

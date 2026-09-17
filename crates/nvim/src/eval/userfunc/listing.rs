@@ -68,13 +68,13 @@ pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
 /// `excmd` is a live `:function` command whose argument starts with `/`.
 pub(crate) unsafe fn list_functions_matching_pat(excmd: &mut ExArg) -> *mut c_char {
     // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    let mut p = unsafe { skip_regexp(excmd.arg.add(1), b'/' as c_int, 1) };
+    let mut p = unsafe { skip_regexp(excmd.arg_ptr().add(1), b'/' as c_int, 1) };
     if !excmd.skip {
         let mut regmatch = REGMATCH_INIT;
         // Terminate the pattern for `vim_regcomp`, then put the byte back.
         let c = unsafe { *p };
         unsafe { *p = NUL as c_char };
-        regmatch.regprog = unsafe { vim_regcomp(excmd.arg.add(1), RE_MAGIC) };
+        regmatch.regprog = unsafe { vim_regcomp(excmd.arg_ptr().add(1), RE_MAGIC) };
         unsafe { *p = c };
         if !regmatch.regprog.is_null() {
             regmatch.rm_ic = p_ic();
@@ -106,8 +106,8 @@ pub(crate) unsafe fn list_one_function(
         semsg!("E488: Trailing characters: {p}");
         return ptr::null_mut();
     }
-    excmd.nextcmd = unsafe { check_nextcmd(p) };
-    if !excmd.nextcmd.is_null() {
+    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
+    if !excmd.line.next.is_none() {
         unsafe { *p = NUL as c_char };
     }
     if excmd.skip || got_int.get() {
@@ -277,7 +277,7 @@ pub unsafe fn get_user_func_name(expand: *mut Expand, idx: c_int) -> *mut c_char
 pub fn ex_delfunction(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
     let mut fudi = FUNCDICT_INIT;
-    let mut p = excmd.arg;
+    let mut p = excmd.arg_ptr();
     let name =
         unsafe { trans_function_name(&raw mut p, excmd.skip, 0, &raw mut fudi, ptr::null_mut()) };
     unsafe { xfree(fudi.fd_newkey as *mut c_void) };
@@ -294,8 +294,8 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
         semsg!("E488: Trailing characters: {p}");
         return;
     }
-    excmd.nextcmd = unsafe { check_nextcmd(p) };
-    if !excmd.nextcmd.is_null() {
+    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
+    if !excmd.line.next.is_none() {
         unsafe { *p = NUL as c_char };
     }
 
@@ -303,7 +303,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
         // Numbered function.
         if !excmd.skip {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E475: Invalid argument: {arg}");
         }
         unsafe { xfree(name as *mut c_void) };
@@ -322,14 +322,14 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
     if fp.is_null() {
         if !excmd.forceit {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E130: Unknown function: {arg}");
         }
         return;
     }
     if unsafe { (*fp).uf_calls } > 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E131: Cannot delete function {arg}: It is in use");
         return;
     }
@@ -340,7 +340,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
     // arm is reachable at all (see the docket's O-B14-13).
     if unsafe { (*fp).uf_refcount }.get() > 2 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("Cannot delete function {arg}: It is being used internally");
         return;
     }

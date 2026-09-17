@@ -234,7 +234,7 @@ fn menu_getbyname(path_name: &CStr) -> Option<Menu> {
 /// `:emenu` -- find the menu a descriptor like `File.New` names and run it.
 pub(crate) fn ex_emenu(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation; `arg` names the command line.
-    let arg = unsafe { CText::new(excmd.arg) };
+    let arg = unsafe { CText::new(excmd.arg_ptr()) };
 
     // An optional leading mode letter, e.g. ":emenu i File.New".
     let mut mode_idx = MENU_INDEX_INVALID;

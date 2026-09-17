@@ -144,7 +144,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    AcoSave, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdMod,
+    AcoSave, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdLine, CmdMod,
     CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
     CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg,
     ExArgt, Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
@@ -530,14 +530,7 @@ pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
 
 /// An all-zero [`ExArg`]; `parse_cmdline` fills it.
 pub(crate) const EXARG_T_INIT: ExArg = ExArg {
-    arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-    arglens: ::core::ptr::null_mut::<size_t>(),
-    argc: 0,
-    nextcmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    cmdlinep: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
-    cmdline_tofree: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    line: CmdLine::EMPTY,
     cmdidx: CmdIdx::append,
     argt: ExArgt::NONE,
     skip: false,

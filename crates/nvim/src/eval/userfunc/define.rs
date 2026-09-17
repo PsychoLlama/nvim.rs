@@ -189,7 +189,7 @@ impl Definition<'_> {
             if !self.excmd.skip {
                 // SAFETY: a message argument the caller holds as a
                 // NUL-terminated string.
-                let arg = unsafe { c_str(self.excmd.arg) };
+                let arg = unsafe { c_str(self.excmd.arg_ptr()) };
                 semsg!("E124: Missing '(': {arg}");
                 return;
             }
@@ -275,7 +275,7 @@ impl Definition<'_> {
             if KeyTyped.get() && ui_has(kUICmdline) {
                 self.show_block = true;
                 // SAFETY: the live command's own text.
-                unsafe { ui_ext_cmdline_block_append(0, self.excmd.cmd) };
+                unsafe { ui_ext_cmdline_block_append(0, self.excmd.cmd_ptr()) };
             }
             match self.build() {
                 Ok(()) => return Some(()),
@@ -497,10 +497,14 @@ impl Definition<'_> {
         let locked = unsafe {
             if self.fudi.fd_di.is_null() {
                 // Can't add a function to a locked dictionary.
-                value_check_lock((*self.fudi.fd_dict).dv_lock, self.excmd.arg, TV_CSTRING)
+                value_check_lock(
+                    (*self.fudi.fd_dict).dv_lock,
+                    self.excmd.arg_ptr(),
+                    TV_CSTRING,
+                )
             } else {
                 // Can't change an existing function if it is locked.
-                value_check_lock((*self.fudi.fd_di).di_lock, self.excmd.arg, TV_CSTRING)
+                value_check_lock((*self.fudi.fd_di).di_lock, self.excmd.arg_ptr(), TV_CSTRING)
             }
         };
         if locked {
@@ -699,23 +703,24 @@ pub fn ex_function(excmd: &mut ExArg) {
 
     // ":function" without argument: list functions.
     // SAFETY: `ea.arg` is the command's NUL-terminated argument.
-    if ends_excmd(unsafe { *excmd.arg } as c_int) != 0 {
+    if ends_excmd(unsafe { *excmd.arg_ptr() } as c_int) != 0 {
         if !excmd.skip {
             // SAFETY: no pattern means every function.
             unsafe { list_functions(ptr::null_mut()) };
         }
         // SAFETY: as above.
-        excmd.nextcmd = unsafe { check_nextcmd(excmd.arg) };
+        let arg_start = excmd.arg_ptr();
+        excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg_start) });
         return;
     }
 
     // ":function /pat": list functions matching the pattern.
     // SAFETY: as above.
-    if unsafe { *excmd.arg } == b'/' as c_char {
+    if unsafe { *excmd.arg_ptr() } == b'/' as c_char {
         // SAFETY: the live command.
         let p = unsafe { list_functions_matching_pat(excmd) };
         // SAFETY: `p` is the cursor that listing left.
-        excmd.nextcmd = unsafe { check_nextcmd(p) };
+        excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
         return;
     }
 
@@ -729,7 +734,7 @@ pub fn ex_function(excmd: &mut ExArg) {
     //              "name" == NULL, fd_dict and fd_di set
     //   s:func     a script-local name; g:func is the same as func
     let mut fudi = FUNCDICT_INIT;
-    let mut p = excmd.arg;
+    let mut p = excmd.arg_ptr();
     // SAFETY: the command's argument, and both out-parameters are this
     // frame's own.
     let name =

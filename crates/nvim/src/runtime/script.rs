@@ -106,7 +106,7 @@ pub fn find_script_by_name(name: &CStr) -> c_int {
 /// `":scriptnames"`, and `":script {id}"` which edits the script instead.
 pub fn ex_scriptnames(excmd: &mut ExArg) {
     // SAFETY: `excmd` is the command's own argument block.
-    let (by_number, has_arg) = unsafe { (excmd.addr_count > 0, *excmd.arg != NUL as c_char) };
+    let (by_number, has_arg) = unsafe { (excmd.addr_count > 0, *excmd.arg_ptr() != NUL as c_char) };
     if by_number || has_arg {
         // SAFETY: same block; `edit_script` only reads it and `do_exedit`.
         edit_script(excmd, by_number);
@@ -161,11 +161,11 @@ fn edit_script(excmd: &mut ExArg, by_number: bool) {
             emsg(gettext(e_invarg));
             return;
         }
-        unsafe { excmd.arg = (*script_item(excmd.line2 as ScriptId)).sn_name };
+        unsafe { excmd.set_arg_ptr((*script_item(excmd.line2 as ScriptId)).sn_name) };
     } else {
         let namebuff = path.as_mut_ptr();
-        unsafe { expand_env(excmd.arg, namebuff, MAXPATHL) };
-        excmd.arg = namebuff;
+        unsafe { expand_env(excmd.arg_ptr(), namebuff, MAXPATHL) };
+        excmd.set_arg_ptr(namebuff);
     }
     do_exedit(excmd, None);
 }
@@ -764,17 +764,17 @@ pub fn ex_scriptencoding(excmd: &mut ExArg) {
         ));
         return;
     }
-    let name = if unsafe { *excmd.arg } != NUL as c_char {
-        unsafe { enc_canonize(excmd.arg) }
+    let name = if unsafe { *excmd.arg_ptr() } != NUL as c_char {
+        unsafe { enc_canonize(excmd.arg_ptr()) }
     } else {
-        excmd.arg
+        excmd.arg_ptr()
     };
     // Set up for conversion from the specified encoding to 'encoding'.
     let sp = unsafe { getline_cookie(excmd.ea_getline, excmd.cookie) }.cast::<SourceCookie>();
     let _ = p_enc(|value| unsafe {
         convert_setup(&raw mut (*sp).conv, name, value.as_ptr().cast_mut())
     });
-    if name != excmd.arg {
+    if name != excmd.arg_ptr() {
         unsafe { xfree(name.cast::<c_void>()) };
     }
 }

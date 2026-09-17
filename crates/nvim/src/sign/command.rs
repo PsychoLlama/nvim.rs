@@ -500,7 +500,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
 /// `:sign`.
 pub(crate) fn ex_sign(excmd: &mut ExArg) {
     // SAFETY: the caller's command.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
 
     let p = unsafe { skiptowhite(arg) };
     let idx = unsafe { sign_cmd_idx(arg, p) };

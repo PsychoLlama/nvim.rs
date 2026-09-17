@@ -218,7 +218,7 @@ pub fn ex_profile(excmd: &mut ExArg) {
     // walkers stay inside it and the two views borrow from it for the length
     // of this call.
     let (subcmd, full, e) = unsafe {
-        let arg = excmd.arg;
+        let arg = excmd.arg_ptr();
         let end = skiptowhite(arg);
         let len = end.offset_from(arg) as usize;
         (

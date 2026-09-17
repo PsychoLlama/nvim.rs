@@ -64,9 +64,10 @@ use crate::runtime::{
     getsourceline, set_sourcing_lnum, source_breakpoint, source_dbg_tick, source_level,
 };
 
+use crate::memory::XString;
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    CondStack, EsList, Failed, GArray, LineGetter, LineNr, MsgList, OptInt, size_t,
+    CmdLine, CondStack, EsList, Failed, GArray, LineGetter, LineNr, MsgList, OptInt, size_t,
 };
 use crate::ui::ui_has;
 
@@ -438,24 +439,28 @@ enum Pass {
     Done,
 }
 
+/// Take over a line the getter or the loop store answered: an `xmalloc` block.
+fn adopt(line: *mut c_char) -> CmdLine {
+    CmdLine::from_vec(unsafe { XString::from_raw(line) }.into_vec()) // SAFETY: as above.
+}
+
 /// Everything one [`do_cmdline`] run carries from one `|`-separated command
 /// to the next. C kept these as a dozen locals of a 600-line function whose
-/// loop body read and wrote all of them; naming the set is what lets a pass
-/// be a method.
+/// loop body read and wrote all of them; naming the set is what lets a pass be
+/// a method.
 struct Run {
-    /// The `:if`/`:while`/`:try` stack this run opens and closes, the body
-    /// it is storing or replaying, which line of it is next, and the getter
-    /// a command is handed to read further ones.
+    /// The `:if`/`:while`/`:try` stack this run opens and closes, the body it
+    /// is storing or replaying, which line is next, and the getter a command
+    /// reads further ones through.
     cstack: CondStack,
     lines: GArray,
     current_line: c_int,
     loop_cookie: LoopCookie,
-    /// The writable copy of the line being run, and where the next
-    /// `|`-separated command starts inside it (null when there is none).
-    copy: *mut c_char,
-    next: *mut c_char,
-    /// How many commands have run -- what makes the first one special --
-    /// and whether a line came from the getter rather than the caller.
+    /// The line being run, owned: `None` until one has been taken and once
+    /// the last command consumed it. A command may replace the buffer under
+    /// itself, so it is handed over to `do_one_cmd` and handed back.
+    pending: Option<CmdLine>,
+    /// How many commands have run, and whether a line came from the getter.
     count: c_int,
     used_getline: bool,
     /// The storing getter is in use, and where in the body this started.
@@ -473,7 +478,7 @@ struct Run {
 
 impl Run {
     /// A run's starting state: no conditionals, no stored loop lines.
-    fn new(first: *mut c_char) -> Run {
+    fn new(first: Option<CmdLine>) -> Run {
         let mut lines: GArray = unsafe { core::mem::zeroed() };
         unsafe { ga_init(&raw mut lines, size_of::<WhileCmd>() as c_int, 10) };
         Run {
@@ -484,8 +489,7 @@ impl Run {
             // pointers; all-zero is a valid value of every one of them, and
             // every field is written before the cookie is handed out.
             loop_cookie: unsafe { core::mem::zeroed() },
-            copy: ptr::null_mut(),
-            next: first,
+            pending: first,
             count: 0,
             used_getline: false,
             looping: false,
@@ -502,13 +506,12 @@ impl Run {
     /// or take what a `|` left. `Done` at the end of the input.
     fn take_line(&mut self, source: &Source, flags: DoCmdOpts) -> Pass {
         // Replaying a loop body: take the next stored line. Each
-        // `|`-separated command was stored separately, so that an
-        // `:endwhile` can jump back to exactly one of them.
+        // `|`-separated command was stored separately, so an `:endwhile`
+        // can jump back to exactly one of them.
         if self.cstack.cs_looplevel > 0 && self.current_line < self.lines.ga_len {
-            xfree(self.copy as *mut c_void);
-            self.copy = ptr::null_mut();
+            self.pending = None;
             match replay_stored_line(source, &self.lines, self.current_line) {
-                Some(Line(line)) => self.next = line,
+                Some(Line(line)) => self.pending = Some(adopt(line)),
                 None => {
                     self.retval = Err(Failed);
                     return Pass::Done;
@@ -516,26 +519,21 @@ impl Run {
             }
         }
 
-        if self.next.is_null() {
+        if self.pending.is_none() {
             let indent = if self.cstack.cs_idx < 0 {
                 0
             } else {
                 (self.cstack.cs_idx + 1) * 2
             };
             match ask_for_line(source, indent, self.count, flags, &mut self.did_block) {
-                Some(Line(line)) => self.next = line,
+                Some(Line(line)) => self.pending = Some(adopt(line)),
                 None => {
                     self.retval = Err(Failed);
                     return Pass::Done;
                 }
             }
             self.used_getline = true;
-        } else if self.copy.is_null() {
-            // A line was given: copy it, because it is about to be modified
-            // in place.
-            self.next = xstrdup(self.next);
         }
-        self.copy = self.next;
         Pass::Again
     }
 
@@ -544,9 +542,14 @@ impl Run {
     /// replayed and the command gets a getter that stores and replays too,
     /// which is what lets a `:function` be defined inside a `:while`.
     fn command_source(&mut self, source: &Source) {
-        // SAFETY: `next` is the NUL-terminated line this pass is about to
+        let line = self
+            .pending
+            .as_mut()
+            .expect("`take_line` leaves a line to run")
+            .ptr_at(0);
+        // SAFETY: `line` is the NUL-terminated line this pass is about to
         // run, and `lines` is this run's own store.
-        self.looping = self.cstack.cs_looplevel > 0 || unsafe { has_loop_cmd(self.next) };
+        self.looping = self.cstack.cs_looplevel > 0 || unsafe { has_loop_cmd(line) };
         self.line_before = 0;
         if !self.looping {
             return;
@@ -557,7 +560,7 @@ impl Run {
         self.loop_cookie.cookie = source.cookie;
         self.loop_cookie.repeating = (self.current_line < self.lines.ga_len) as c_int;
         if self.current_line == self.lines.ga_len {
-            unsafe { store_loop_line(&raw mut self.lines, self.next) };
+            unsafe { store_loop_line(&raw mut self.lines, line) };
         }
         self.line_before = self.current_line;
     }
@@ -575,17 +578,11 @@ impl Run {
             (source.fgetline, source.cookie)
         };
         let recursing = Depth::of(&RECURSIVE);
-        // SAFETY: `copy` and `cstack` are this run's own, and the line
-        // source is the one `command_source` chose.
-        self.next = unsafe {
-            do_one_cmd(
-                &raw mut self.copy,
-                flags,
-                &raw mut self.cstack,
-                cmd_getline,
-                cmd_cookie,
-            )
-        };
+        let line = self.pending.take().expect("`take_line` leaves a line");
+        // SAFETY: `cstack` is this run's own, and the line source is the one
+        // `command_source` chose.
+        let line =
+            unsafe { do_one_cmd(line, flags, &raw mut self.cstack, cmd_getline, cmd_cookie) };
         drop(recursing);
 
         if self.looping {
@@ -594,9 +591,14 @@ impl Run {
             self.current_line = self.loop_cookie.current_line;
         }
 
-        if self.next.is_null() {
-            xfree(self.copy as *mut c_void);
-            self.copy = ptr::null_mut();
+        if let Some(at) = line.next {
+            // What follows the `|` becomes the whole of the line, in the
+            // same allocation, for the next `do_one_cmd`.
+            let mut line = line;
+            line.restart_at(at);
+            self.pending = Some(line);
+        } else {
+            self.pending = None;
 
             // Remember a typed command for the `:` register -- after
             // running it, so that `:@:` works.
@@ -605,15 +607,6 @@ impl Run {
                 last_cmdline.set(new_last_cmdline.get());
                 new_last_cmdline.set(ptr::null_mut());
             }
-        } else {
-            // Move what follows the `|` to the front of the buffer, for the
-            // next `do_one_cmd`.
-            // SAFETY: `next` points inside `copy`, so the tail fits where
-            // the head was.
-            let len = unsafe { cstr::bytes_at(self.next) }.len();
-            let into = self.copy.cast::<u8>();
-            unsafe { into.copy_from(self.next.cast(), len + 1) };
-            self.next = self.copy;
         }
     }
 
@@ -695,7 +688,7 @@ impl Run {
             && self.used_getline
             && source.is_typed();
         let more_to_run =
-            !self.next.is_null() || self.cstack.cs_idx >= 0 || flags.has(DoCmdOpts::REPEAT);
+            self.pending.is_some() || self.cstack.cs_idx >= 0 || flags.has(DoCmdOpts::REPEAT);
         if aborting_now || typed_error || !more_to_run {
             Pass::Done
         } else {
@@ -707,7 +700,7 @@ impl Run {
     fn step(&mut self, source: &Source, flags: DoCmdOpts) -> Pass {
         // Stop skipping commands after an error once every `:endif`,
         // `:endwhile` and `:endfor` has been passed.
-        if self.next.is_null()
+        if self.pending.is_none()
             && !force_abort.get()
             && self.cstack.cs_idx < 0
             && !source.func_aborted()
@@ -735,8 +728,12 @@ impl Run {
         self.count += 1;
 
         if p_verbose() >= 15 && !sourcing_entry().es_name.is_null() || p_verbose() >= 16 as OptInt {
-            // SAFETY: `copy` is this run's NUL-terminated line.
-            unsafe { msg_verbose_cmd(sourcing_lnum(), self.copy) };
+            let line = self
+                .pending
+                .as_mut()
+                .map_or(ptr::null_mut(), |l| l.ptr_at(0));
+            // SAFETY: `line` is this run's NUL-terminated line.
+            unsafe { msg_verbose_cmd(sourcing_lnum(), line) };
         }
 
         self.run_one(source, flags);
@@ -785,7 +782,7 @@ impl Run {
 
     /// What the run puts back once its last command has run.
     fn close(&mut self, source: &Source, flags: DoCmdOpts, debug_saved: &mut SavedDebugState) {
-        xfree(self.copy as *mut c_void);
+        self.pending = None;
         did_emsg_syntax.set(false);
         // SAFETY: `lines` is this run's own store.
         unsafe { clear_loop_lines(&raw mut self.lines) };
@@ -907,7 +904,12 @@ pub unsafe fn do_cmdline(
         KeyTyped.set(false);
     }
 
-    let mut run = Run::new(cmdline);
+    // A line the caller gave is copied: it is about to be modified in
+    // place, and the caller still owns what it handed over.
+    // SAFETY: the caller's promise -- a NUL-terminated string, or null.
+    let first =
+        (!cmdline.is_null()).then(|| CmdLine::from_bytes(unsafe { cstr::bytes_at(cmdline) }));
+    let mut run = Run::new(first);
     while run.step(source, flags) == Pass::Again {}
     run.close(source, flags, &mut debug_saved);
     msg_list.set(saved_msg_list);

@@ -218,7 +218,14 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
         return;
     }
     let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    let _ = unsafe { vim_full_name(excmd.arg, buffer.as_mut_ptr(), MAXPATHL as usize, false) };
+    let _ = unsafe {
+        vim_full_name(
+            excmd.arg_ptr(),
+            buffer.as_mut_ptr(),
+            MAXPATHL as usize,
+            false,
+        )
+    };
 
     let argv = tv_list_alloc(3 as ptrdiff_t);
     let into = argv.as_ptr();
@@ -245,7 +252,7 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     let into = argv.as_ptr();
     unsafe { (*into).push_number(excmd.line1 as c_int as VarNumber) };
     unsafe { (*into).push_number(excmd.line2 as c_int as VarNumber) };
-    unsafe { (*into).push_string(excmd.arg, -1 as ssize_t) };
+    unsafe { (*into).push_string(excmd.arg_ptr(), -1 as ssize_t) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
@@ -654,7 +661,7 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
 
     // SAFETY: module contract; `args.arg` is NUL-terminated.
-    if unsafe { *excmd.arg } == NUL as c_char {
+    if unsafe { *excmd.arg_ptr() } == NUL as c_char {
         // List all compiler scripts.
         let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr()) };
         let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr()) };
@@ -686,13 +693,13 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     );
     let _ = unsafe { do_unlet(name, len, true) };
 
-    let mut pattern = Vec::with_capacity(unsafe { cstr::bytes_at(excmd.arg) }.len() + 12);
+    let mut pattern = Vec::with_capacity(unsafe { cstr::bytes_at(excmd.arg_ptr()) }.len() + 12);
     pattern.extend_from_slice(b"compiler/");
-    pattern.extend_from_slice(unsafe { CStr::from_ptr(excmd.arg) }.to_bytes());
+    pattern.extend_from_slice(unsafe { CStr::from_ptr(excmd.arg_ptr()) }.to_bytes());
     pattern.extend_from_slice(b".*\0");
     if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) }.is_err() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E666: Compiler not supported: {arg}");
     }
 
@@ -744,7 +751,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
     // window and jump there if so. Checking all of them would be
     // complicated and mostly only one file is dropped. Wildcards are
     // ignored too, since a file name containing one is very unlikely.
-    unsafe { set_arglist(excmd.arg) };
+    unsafe { set_arglist(excmd.arg_ptr()) };
 
     // Expanding wildcards may leave the argument list empty, e.g. when
     // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error
@@ -809,7 +816,8 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
     // Fake a ":sfirst" or ":first" to edit the first argument.
     if split {
         excmd.cmdidx = CmdIdx::sfirst;
-        unsafe { *excmd.cmd = b's' as c_char };
+        let cmd = excmd.line.cmd;
+        excmd.line.set_byte(cmd, b's');
     } else {
         excmd.cmdidx = CmdIdx::first;
     }

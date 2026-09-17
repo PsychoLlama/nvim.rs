@@ -184,7 +184,7 @@ pub fn ex_language(excmd: &mut ExArg) {
     // SAFETY: the caller's contract. `skiptowhite` stays inside `arg`, so the
     // slice between them is in bounds and initialised.
     let (arg, word, name) = unsafe {
-        let arg = excmd.arg;
+        let arg = excmd.arg_ptr();
         let p = skiptowhite(arg);
         let len = p.offset_from(arg) as usize;
         let ends_word = *p == 0 || ascii_iswhite(*p as c_int);

@@ -204,19 +204,19 @@ fn splitview(excmd: &mut ExArg) {
     // before anything is opened.
     let mut fname = ptr::null_mut();
     if is(excmd, CmdIdx::sfind) || is(excmd, CmdIdx::tabfind) {
-        fname = find_file(excmd.arg, count(excmd, 1));
+        fname = find_file(excmd.arg_ptr(), count(excmd, 1));
         if fname.is_null() {
             return;
         }
-        excmd.arg = fname;
+        excmd.set_arg_ptr(fname);
     }
 
     if use_tab {
         open_tabpage(excmd, old_curwin);
-    } else if split(count(excmd, 0), vertical_flag(excmd.cmd)).is_ok() {
+    } else if split(count(excmd, 0), vertical_flag(excmd.cmd_ptr())).is_ok() {
         // A split that will show a *different* file must not stay bound to
         // the one it came from.
-        if byte(excmd.arg) != NUL {
+        if byte(excmd.arg_ptr()) != NUL {
             reset_binding(Win::current());
         } else {
             do_check_scrollbind(false);
@@ -273,7 +273,7 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
     } else {
         excmd.line2 as c_int + 1
     };
-    if new_tabpage(after, excmd.arg, true).is_none() {
+    if new_tabpage(after, excmd.arg_ptr(), true).is_none() {
         return;
     }
     edit(excmd, Some(old_curwin));
@@ -297,10 +297,10 @@ pub fn tabpage_new() {
     let mut excmd = fresh_exarg();
     excmd.line1 = 0;
     excmd.line2 = 0;
-    excmd.arg = c"".as_ptr() as *mut c_char;
+    excmd.set_arg_ptr(c"".as_ptr() as *mut c_char);
     // `ex_splitview` reads the first byte of `cmd` to tell a vertical split
     // from a horizontal one.
-    excmd.cmd = c"tabn".as_ptr() as *mut c_char;
+    excmd.set_cmd_ptr(c"tabn".as_ptr() as *mut c_char);
     excmd.cmdidx = CmdIdx::tabnew;
     splitview(&mut excmd);
 }
@@ -339,8 +339,8 @@ fn tabnext(excmd: &mut ExArg) {
     // *signed* argument is not a count of places to go back — `:tabp -1`
     // is an error, not `:tabp 1`.
     let tab_number;
-    if !excmd.arg.is_null() && byte(excmd.arg) != NUL {
-        let mut p = excmd.arg;
+    if !excmd.arg_ptr().is_null() && byte(excmd.arg_ptr()) != NUL {
+        let mut p = excmd.arg_ptr();
         let p_save = p;
         // SAFETY: a NUL-terminated argument; `p` is left on the first byte
         // the number did not use.
@@ -351,7 +351,7 @@ fn tabnext(excmd: &mut ExArg) {
             || byte(p) != NUL
             || tab_number == 0
         {
-            let (msg, arg) = (e_invarg2.as_ptr(), excmd.arg);
+            let (msg, arg) = (e_invarg2.as_ptr(), excmd.arg_ptr());
             // SAFETY: a message with one `%s`, and the argument for it.
             excmd.errmsg = Some(unsafe { ex_errmsg(msg, arg) });
             return;
@@ -481,7 +481,7 @@ fn is_changed(buffer: Buf) -> bool {
 /// `:mode` — a redraw; the Vim spelling that took a terminal mode name is
 /// refused.
 pub(crate) fn ex_mode(excmd: &mut ExArg) {
-    if byte(excmd.arg) == NUL {
+    if byte(excmd.arg_ptr()) == NUL {
         must_redraw.set(UPD_CLEAR);
         // SAFETY: a live command.
         ex_redraw(excmd);
@@ -515,10 +515,10 @@ fn resize(excmd: &mut ExArg) {
         }
     }
 
-    let relative = byte(excmd.arg) == '-' as c_int || byte(excmd.arg) == '+' as c_int;
-    let empty = byte(excmd.arg) == NUL;
+    let relative = byte(excmd.arg_ptr()) == '-' as c_int || byte(excmd.arg_ptr()) == '+' as c_int;
+    let empty = byte(excmd.arg_ptr()) == NUL;
     // SAFETY: a NUL-terminated argument; a non-number reads as zero.
-    let mut n = unsafe { atol(excmd.arg) } as c_int;
+    let mut n = unsafe { atol(excmd.arg_ptr()) } as c_int;
     if cmdmod.with(|m| m.cmod_split) & WSP_VERT as c_int != 0 {
         if relative {
             n += wp.w_width;
@@ -542,7 +542,7 @@ pub(crate) fn ex_winsize(excmd: &mut ExArg) {
 }
 
 fn winsize(excmd: &mut ExArg) {
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     if !ascii_isdigit(byte(arg)) {
         // SAFETY: the command's NUL-terminated argument.
         let at = unsafe { c_str(arg) };
@@ -577,29 +577,29 @@ fn wincmd(excmd: &mut ExArg) {
     // `CTRL-W g` takes a second character.
     let mut xchar = NUL;
     let mut p;
-    if byte(excmd.arg) == 'g' as c_int || byte(excmd.arg) == Ctrl_G {
-        let second = excmd.arg.wrapping_add(1);
+    if byte(excmd.arg_ptr()) == 'g' as c_int || byte(excmd.arg_ptr()) == Ctrl_G {
+        let second = excmd.arg_ptr().wrapping_add(1);
         if byte(second) == NUL {
             err(e_invarg.as_ptr());
             return;
         }
         xchar = byte(second) as uint8_t as c_int;
-        p = excmd.arg.wrapping_add(2);
+        p = excmd.arg_ptr().wrapping_add(2);
     } else {
-        p = excmd.arg.wrapping_add(1);
+        p = excmd.arg_ptr().wrapping_add(1);
     }
 
     // SAFETY: a NUL-terminated argument; the answer points into it or is null.
-    excmd.nextcmd = unsafe { check_nextcmd(p) };
+    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
     p = skip_white(p);
-    if byte(p) != NUL && byte(p) != '"' as c_int && excmd.nextcmd.is_null() {
+    if byte(p) != NUL && byte(p) != '"' as c_int && excmd.line.next.is_none() {
         err(e_invarg.as_ptr());
     } else if !excmd.skip {
         // A `:vertical`/`:tab` in front applies to the split the window
         // command is about to make.
         postponed_split_flags.set(cmdmod.with(|m| m.cmod_split));
         postponed_split_tab.set(cmdmod.with(|m| m.cmod_tab));
-        let (nchar, prenum) = (byte(excmd.arg), count(excmd, 0));
+        let (nchar, prenum) = (byte(excmd.arg_ptr()), count(excmd, 0));
         do_window(nchar, prenum, xchar);
         postponed_split_flags.set(0);
         postponed_split_tab.set(0);
@@ -616,7 +616,7 @@ pub(crate) fn ex_nogui(excmd: &mut ExArg) {
 
 /// `:popup`.
 pub(crate) fn ex_popup(excmd: &mut ExArg) {
-    let (name, use_mouse_pos) = (excmd.arg, excmd.forceit);
+    let (name, use_mouse_pos) = (excmd.arg_ptr(), excmd.forceit);
     // SAFETY: a NUL-terminated menu path.
     unsafe { pum_make_popup(name, c_int::from(use_mouse_pos)) };
 }

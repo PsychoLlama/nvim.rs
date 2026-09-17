@@ -99,37 +99,17 @@ pub unsafe fn nvim_cmd(
     let (cmd, opts) = unsafe { (&*cmd, &*opts) };
     let output = opts.output.unwrap_or(false);
 
-    // SAFETY: `ExArg` and `CmdParseInfo` are plain C aggregates whose
-    // all-zero state is the valid "nothing parsed yet" one; the C original
-    // clears both with CLEAR_FIELD.
-    let mut excmd: ExArg = unsafe { ::core::mem::zeroed() };
+    let mut excmd = ExArg::default();
+    // SAFETY: a plain C aggregate whose all-zero state is the valid
+    // "nothing parsed yet" one, as the C original's CLEAR_FIELD relies on.
     let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
 
-    // Owned here rather than in `prepare_cmd` because `excmd.cmdlinep` points at
-    // it for the whole of `execute_cmd`.
-    let mut cmdline: *mut c_char = ptr::null_mut();
-
-    // SAFETY: `arena` is the dispatcher's, live for the call. The cleanup
-    // below has to run whichever way the two stages went, so the answer is
-    // held rather than returned from inside them.
-    let answered =
-        unsafe { prepare_cmd(cmd, &mut excmd, &mut cmdinfo, &mut cmdline) }.and_then(|prepared| {
-            match prepared {
-                // SAFETY: `prepare_cmd` answering true means `excmd`/`cmdinfo`
-                // describe a resolved, validated command.
-                true => unsafe { run_cmd(channel_id, &mut excmd, &mut cmdinfo, output) },
-                false => Ok(String_0::NULL),
-            }
-        });
-
-    // SAFETY: all three are heap blocks this call owns; `build_cmdline_str`
-    // and `getargopt` are the only writers.
-    unsafe {
-        xfree(cmdline.cast());
-        xfree(excmd.args.cast());
-        xfree(excmd.arglens.cast());
-    }
-    answered
+    prepare_cmd(cmd, &mut excmd, &mut cmdinfo).and_then(|prepared| match prepared {
+        // SAFETY: `prepare_cmd` answering true means `excmd`/`cmdinfo`
+        // describe a resolved, validated command.
+        true => unsafe { run_cmd(channel_id, &mut excmd, &mut cmdinfo, output) },
+        false => Ok(String_0::NULL),
+    })
 }
 
 /// Turn the Dict into a resolved, validated `ExArg` plus its rendered
@@ -138,15 +118,10 @@ pub unsafe fn nvim_cmd(
 /// `Ok(false)` means stop with nothing executed: the Dict carried modifiers
 /// and nothing else, which upstream treats as a silent no-op.
 ///
-/// # Safety
-///
-/// `cmdline` must point at a `*mut c_char` slot the caller owns; on success
-/// it is left holding a heap-allocated command line the caller frees.
-unsafe fn prepare_cmd(
+fn prepare_cmd(
     cmd: &KeyDict_cmd,
     excmd: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
-    cmdline: &mut *mut c_char,
 ) -> Result<bool, Error> {
     let Some(range_only) = resolve_command(cmd, excmd)? else {
         return Ok(false);
@@ -178,14 +153,13 @@ unsafe fn prepare_cmd(
     apply_mods(cmd, excmd, cmdinfo)?;
 
     // Render the Dict back into a command line: `execute_cmd` and everything
-    // under it read `excmd.arg`, not the Array.
+    // under it read the line, not the Array.
     // SAFETY: `excmd` is resolved and `args` holds only Strings.
-    unsafe { build_cmdline_str(cmdline, excmd, cmdinfo, args) };
-    excmd.cmdlinep = cmdline;
+    unsafe { build_cmdline_str(excmd, cmdinfo, args) };
     apply_argopt(excmd)?;
     if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
         // SAFETY: as above.
-        excmd.do_ecmd_cmd = unsafe { getargcmd(&raw mut excmd.arg) };
+        excmd.do_ecmd_cmd = unsafe { excmd.with_arg_cursor(|cursor| getargcmd(cursor)) };
     }
     Ok(true)
 }
@@ -212,14 +186,14 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
     // `find_ex_command` reads `excmd.cmd`, which is the keydict's own string --
     // and the keydict outlives this call.
     let cmdname = name.data();
-    excmd.cmd = cmdname;
+    excmd.set_cmd_ptr(cmdname);
     let mut p = unsafe { find_ex_command(excmd, ptr::null_mut()) };
 
     // An unknown capitalised name plus a CmdUndefined autocommand is a lazily
     // defined user command: fire the event, then look again.
     if !p.is_null()
         && excmd.cmdidx == CmdIdx::SIZE
-        && unsafe { *excmd.cmd as u8 }.is_ascii_uppercase()
+        && unsafe { *excmd.cmd_ptr() as u8 }.is_ascii_uppercase()
         && has_event(AutoEvent::CmdUndefined)
     {
         // SAFETY: as above.
@@ -229,7 +203,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
             p = if ret as c_int != 0 && !aborting() {
                 find_ex_command(excmd, ptr::null_mut())
             } else {
-                excmd.cmd
+                excmd.cmd_ptr()
             };
         }
     }
@@ -662,12 +636,13 @@ fn apply_argopt(excmd: &mut ExArg) -> Result<(), Error> {
         // SAFETY: caller contract; `getargopt` only ever advances `excmd.arg`
         // within the same line, so the two bytes stay readable.
         let opt = unsafe {
-            *excmd.arg as c_int == '+' as c_int && *excmd.arg.add(1) as c_int == '+' as c_int
+            *excmd.arg_ptr() as c_int == '+' as c_int
+                && *excmd.arg_ptr().add(1) as c_int == '+' as c_int
         };
         if !opt {
             return Ok(());
         }
-        let orig_arg = excmd.arg;
+        let orig_arg = excmd.arg_ptr();
         if getargopt(excmd).is_err() && !is_cmd_ni(excmd.cmdidx) {
             return Err(err_invalid_at(c"argument ", orig_arg));
         }

@@ -380,7 +380,7 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
 /// `:loadview [nr]`.
 pub(crate) fn ex_loadview(excmd: &mut ExArg) {
     // SAFETY: caller contract; `fname` is owned and NUL-terminated.
-    let fname = unsafe { get_view_file(*excmd.arg) };
+    let fname = unsafe { get_view_file(*excmd.arg_ptr()) };
     if fname.is_null() {
         return;
     }
@@ -476,7 +476,7 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
     let mut view_file = ptr::null_mut::<c_char>();
     // SAFETY: caller contract; `args.arg` is NUL-terminated.
     let fname = unsafe {
-        let arg = excmd.arg;
+        let arg = excmd.arg_ptr();
         if cmdidx == CmdIdx::mkview
             && (*arg == NUL as c_char
                 || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL as c_char))

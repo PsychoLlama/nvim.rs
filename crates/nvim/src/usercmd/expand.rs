@@ -38,7 +38,7 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{CmdMod, CmdModFlags, ExArg, ExArgt, NUL, UserCmd, int64_t, size_t};
+use crate::types::{CmdLine, CmdMod, CmdModFlags, ExArg, ExArgt, NUL, UserCmd, int64_t, size_t};
 use crate::window::tab_index;
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use crate::winlayer::TabPage;
@@ -138,23 +138,18 @@ pub(crate) unsafe fn uc_nargs_upper_bound(arg: *const c_char, arglen: size_t) ->
 /// # Safety
 /// Either `args`/`arglens` describe `argc` live arguments, or `args` is
 /// null and `arg` is the NUL-terminated whole argument string.
-unsafe fn uc_split_args(
-    arg: *const c_char,
-    args: *const *mut c_char,
-    arglens: *const size_t,
-    argc: size_t,
-    lenp: *mut size_t,
-) -> *mut c_char {
+unsafe fn uc_split_args(line: &CmdLine, lenp: *mut size_t) -> *mut c_char {
     let mut out = Vec::<u8>::new();
     out.push(b'"');
-    if args.is_null() {
+    if line.args.is_empty() {
         // SAFETY: caller contract.
-        unsafe { quote_line(arg, &mut out) };
+        unsafe { quote_line(line.ptr_from(line.arg), &mut out) };
     } else {
-        for i in 0..argc {
-            // SAFETY: caller contract.
-            let start = unsafe { *args.add(i) };
-            unsafe { quote_span(start, start.add(*arglens.add(i)), &mut out) };
+        let argc = line.args.len();
+        for (i, &(at, len)) in line.args.iter().enumerate() {
+            let start = line.ptr_from(at);
+            // SAFETY: the span is inside the command's own line.
+            unsafe { quote_span(start, start.add(len), &mut out) };
             if i != argc - 1 {
                 out.extend_from_slice(b"\", \"");
             }
@@ -609,8 +604,7 @@ unsafe fn expand_args(
     split_buf: *mut *mut c_char,
     split_len: *mut size_t,
 ) -> size_t {
-    // SAFETY: module contract.
-    let arg = unsafe { CStr::from_ptr(args.arg).to_bytes() };
+    let arg = args.line.arg();
     if arg.is_empty() {
         if quote == Quote::One {
             // SAFETY: caller contract.
@@ -641,10 +635,7 @@ unsafe fn expand_args(
         // Splitting is expensive, so it is done once and cached.
         Quote::Split => {
             if unsafe { *split_buf }.is_null() {
-                unsafe {
-                    *split_buf =
-                        uc_split_args(args.arg, args.args, args.arglens, args.argc, split_len)
-                };
+                unsafe { *split_buf = uc_split_args(&args.line, split_len) };
             }
             unsafe { out.put(slice::from_raw_parts((*split_buf).cast::<u8>(), *split_len)) };
         }

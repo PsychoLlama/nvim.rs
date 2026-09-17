@@ -15,6 +15,7 @@
 use crate::cstr;
 use crate::eval::typval::PartialRef;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::memory::XString;
 use crate::semsg;
 use crate::winlayer::Live;
 use core::ffi::{c_char, c_int};
@@ -60,6 +61,7 @@ const BORROWED_EVALARG: EvalArg = EvalArg {
     eval_getline: None,
     eval_cookie: null_mut(),
     eval_tofree: null_mut(),
+    next_cmd: None,
 };
 
 /// The `EvalArg` that says "evaluate, and read no continuation lines".
@@ -175,15 +177,16 @@ pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, excmd: Option<&mut ExA
             unsafe { xfree(ev.eval_tofree.cast()) };
         }
         Some(command) => {
-            // The command takes the continued line over: what it was
-            // running is freed, and `cmdlinep` names the new one.
-            // SAFETY: `cmdline_tofree` is the line the command owns, and
-            // `cmdlinep` is a live `*mut c_char`.
-            unsafe {
-                xfree(command.cmdline_tofree.cast());
-                command.cmdline_tofree = *command.cmdlinep;
-                *command.cmdlinep = ev.eval_tofree;
-            }
+            // The command takes the continued line over. Its own cursors
+            // stay where they were, which is why the old buffer is retired
+            // rather than freed; `next_cmd`, which `eval0` has already
+            // measured, addresses the *new* one.
+            // SAFETY: `eval_tofree` is the joined line this `evalarg` owns,
+            // an `xmalloc` block, and is not null.
+            let joined = unsafe { XString::from_raw(ev.eval_tofree) };
+            let next = ev.next_cmd.take();
+            command.line.take_over(joined.into_vec());
+            command.line.next = next;
         }
     }
     ev.eval_tofree = null_mut();
@@ -235,16 +238,37 @@ pub unsafe fn eval0(
             let nextcmd = unsafe { check_nextcmd(p) };
             // SAFETY: as above.
             if !nextcmd.is_null() && unsafe { *nextcmd } != b'|' as c_char {
-                command.nextcmd = nextcmd;
+                set_next_cmd(command, evalarg, nextcmd);
             }
         }
         return Err(Failed);
     }
     if let Some(command) = excmd {
         // SAFETY: `p` is inside the expression.
-        command.nextcmd = unsafe { check_nextcmd(p) };
+        let nextcmd = unsafe { check_nextcmd(p) };
+        set_next_cmd(command, evalarg, nextcmd);
     }
     ret
+}
+
+/// Say where the command after the expression starts.
+///
+/// `nextcmd` is a cursor into whichever buffer the evaluator ended up in:
+/// the command's own line, or -- once a continuation was read -- the joined
+/// copy `evalarg` owns, which is not the command line *yet*. In that case
+/// the offset is left on the `evalarg` for [`clear_evalarg`] to install
+/// along with the buffer it belongs to.
+fn set_next_cmd(command: &mut ExArg, evalarg: *mut EvalArg, nextcmd: *const c_char) {
+    // SAFETY: the caller's promise -- `evalarg` is null or valid.
+    let joined = (!evalarg.is_null()).then(|| unsafe { (*evalarg).eval_tofree });
+    match joined {
+        Some(base) if !base.is_null() => {
+            let at = (!nextcmd.is_null()).then(|| nextcmd.addr() - base.addr());
+            // SAFETY: `evalarg` is not null, checked above.
+            unsafe { (*evalarg).next_cmd = at };
+        }
+        _ => command.line.next = (!nextcmd.is_null()).then(|| command.line.offset_of(nextcmd)),
+    }
 }
 
 /// Shortcut for a whole expression that is nothing but one call: `Foo()`.

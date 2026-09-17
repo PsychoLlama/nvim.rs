@@ -107,12 +107,13 @@ pub(super) fn tail() -> Buf {
 
 /// Where the command word starts, without consuming the range.
 pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> *mut c_char {
-    let cmd = excmd.cmd;
+    let cmd = excmd.cmd_ptr();
     // SAFETY (both): `cmd` walks the command's own NUL-terminated line, and
     // a null `full` is "do not report whether the name was spelled out".
-    excmd.cmd = unsafe { skip_range(excmd.cmd, ptr::null_mut()) };
+    let cmd_start = excmd.cmd_ptr();
+    excmd.set_cmd_ptr(unsafe { skip_range(cmd_start, ptr::null_mut()) });
     let p = unsafe { find_ex_command(excmd, ptr::null_mut()) };
-    excmd.cmd = cmd;
+    excmd.set_cmd_ptr(cmd);
     p
 }
 
@@ -135,11 +136,12 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
         loop {
             excmd.line1 = excmd.line2;
             excmd.line2 = get_cmd_default_range(excmd);
-            excmd.cmd = skipwhite(excmd.cmd);
+            let cmd_start = excmd.cmd_ptr();
+            excmd.set_cmd_ptr(skipwhite(cmd_start));
             // The scan advances a cursor of its own: the command is lent to
             // it for the quickfix addresses, so its `cmd` cannot be lent as
             // well.
-            let mut cursor = excmd.cmd;
+            let mut cursor = excmd.cmd_ptr();
             let (addr_type, skip) = (excmd.addr_type, excmd.skip);
             let to_other_file = (excmd.addr_count == 0) as c_int;
             lnum = unsafe {
@@ -154,28 +156,30 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                     errormsg,
                 )
             };
-            excmd.cmd = cursor;
+            excmd.set_cmd_ptr(cursor);
             address_count += 1;
-            if excmd.cmd.is_null() {
+            if excmd.cmd_ptr().is_null() {
                 break 'theend;
             }
             if lnum != MAXLNUM {
                 excmd.line2 = lnum;
-            } else if byte(excmd.cmd) == '%' as c_int {
+            } else if byte(excmd.cmd_ptr()) == '%' as c_int {
                 // `%` is not an address, it is a whole range, so it is
                 // only recognised where an address was expected and
                 // none was found.
-                excmd.cmd = unsafe { excmd.cmd.add(1) };
+                let cmd_start = excmd.cmd_ptr();
+                excmd.set_cmd_ptr(unsafe { cmd_start.add(1) });
                 if !whole_range(excmd, errormsg) {
                     break 'theend;
                 }
                 excmd.addr_count += 1;
-            } else if byte(excmd.cmd) == '*' as c_int {
+            } else if byte(excmd.cmd_ptr()) == '*' as c_int {
                 if excmd.addr_type != CmdAddr::Lines {
                     *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                     break 'theend;
                 }
-                excmd.cmd = unsafe { excmd.cmd.add(1) };
+                let cmd_start = excmd.cmd_ptr();
+                excmd.set_cmd_ptr(unsafe { cmd_start.add(1) });
                 if !excmd.skip {
                     let fm = mark_get_visual(Buf::current(), &raw mut first, '<' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
@@ -193,7 +197,7 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                 }
             }
             excmd.addr_count += 1;
-            if byte(excmd.cmd) == ';' as c_int {
+            if byte(excmd.cmd_ptr()) == ';' as c_int {
                 if !excmd.skip {
                     Win::current().w_cursor.lnum = excmd.line2;
                     // A zero line number is not a position, so only the
@@ -205,10 +209,11 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                     }
                     need_check_cursor = true;
                 }
-            } else if byte(excmd.cmd) != ',' as c_int {
+            } else if byte(excmd.cmd_ptr()) != ',' as c_int {
                 break;
             }
-            excmd.cmd = unsafe { excmd.cmd.add(1) };
+            let cmd_start = excmd.cmd_ptr();
+            excmd.set_cmd_ptr(unsafe { cmd_start.add(1) });
         }
         if excmd.addr_count == 1 {
             excmd.line1 = excmd.line2;

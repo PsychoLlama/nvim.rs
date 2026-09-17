@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::types::CmdLine;
 use core::ffi::{c_char, c_int, c_uint};
 use core::{mem, ptr};
 
@@ -155,7 +156,7 @@ pub fn clear_sb_text(all: bool) {
 pub fn show_sb_text() {
     if ui_has(kUIMessages) {
         let mut ea = ExArg {
-            arg: c"".as_ptr().cast_mut(),
+            line: CmdLine::from_bytes(b""),
             skip: true,
             ..ExArg::default()
         };

@@ -92,7 +92,7 @@ fn prevcmd_is_set() -> bool {
 /// Bangs in the argument stand for the previously entered command, which this
 /// then remembers.
 pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, do_out: bool) {
-    let (arg, line1, line2) = (args.arg, args.line1, args.line2);
+    let (arg, line1, line2) = (args.arg_ptr(), args.line1, args.line2);
     let scroll_save = msg_scroll.get();
     // Disallow shell commands in secure mode.
     // SAFETY: main thread, message state.

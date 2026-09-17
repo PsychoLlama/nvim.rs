@@ -349,7 +349,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     }
     // SAFETY: `picked` is a live string, and the expansion is ours to free.
     let expanded = Owned(unsafe { expand_env_save(picked.cast_mut()) });
-    excmd.arg = expanded.0;
+    excmd.set_arg_ptr(expanded.0);
     excmd.cmdidx = CmdIdx::edit;
     cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
     // SAFETY: the command block is the one borrowed here; the argument it

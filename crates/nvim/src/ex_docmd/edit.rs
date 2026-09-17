@@ -153,10 +153,11 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
 /// `:=` — the line number, unless something follows it, in which case it
 /// is `:lua`'s alias.
 pub(crate) fn ex_equal(excmd: &mut ExArg) {
-    if byte(excmd.arg) != NUL && byte(excmd.arg) != '|' as c_int {
+    if byte(excmd.arg_ptr()) != NUL && byte(excmd.arg_ptr()) != '|' as c_int {
         ex_lua(excmd);
     } else {
-        excmd.nextcmd = unsafe { find_nextcmd(excmd.arg) };
+        let arg_start = excmd.arg_ptr();
+        excmd.set_nextcmd_ptr(unsafe { find_nextcmd(arg_start) });
         smsg!(0, "{}", excmd.line2 as int64_t);
     }
 }
@@ -167,12 +168,12 @@ pub(crate) fn ex_sleep(excmd: &mut ExArg) {
         setcursor_mayforce(Win::current(), true);
     }
     let mut len = excmd.line2 as int64_t;
-    match byte(excmd.arg) {
+    match byte(excmd.arg_ptr()) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
         _ => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E475: Invalid argument: {arg}");
             return;
         }
@@ -293,7 +294,7 @@ fn put_lines(excmd: &mut ExArg, flags: c_int) {
 pub(crate) fn ex_copymove(excmd: &mut ExArg) {
     let mut errormsg = None;
     // The scan advances a cursor of its own; see `parse_cmd_address`.
-    let mut cursor = excmd.arg;
+    let mut cursor = excmd.arg_ptr();
     let addr_type = excmd.addr_type;
     let n = unsafe {
         get_address(
@@ -307,12 +308,12 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
             &mut errormsg,
         )
     };
-    excmd.arg = cursor;
-    if excmd.arg.is_null() {
+    excmd.set_arg_ptr(cursor);
+    if excmd.arg_ptr().is_null() {
         if let Some(msg) = &errormsg {
             emsg(msg.as_ptr());
         }
-        excmd.nextcmd = ptr::null_mut();
+        excmd.set_nextcmd_ptr(ptr::null_mut());
         return;
     }
     get_flags(excmd);
@@ -415,7 +416,7 @@ pub(crate) fn ex_at(excmd: &mut ExArg) {
     Win::current().w_cursor.lnum = excmd.line2;
     check_cursor_col(Win::current());
 
-    let mut c = ubyte(excmd.arg) as c_int;
+    let mut c = ubyte(excmd.arg_ptr()) as c_int;
     if c == NUL {
         c = '@' as c_int;
     }
@@ -500,7 +501,7 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
     let mut count = 0;
     let mut sec = false;
     let mut file = false;
-    let mut p = excmd.arg;
+    let mut p = excmd.arg_ptr();
     if byte(p) == NUL {
         count = 1;
     } else if ascii_isdigit(ubyte(p) as c_int) {
@@ -538,7 +539,7 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
     }
     if byte(p) != NUL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E475: Invalid argument: {arg}");
         return;
     }
@@ -556,13 +557,13 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
 
 /// `:mark` and `:k`.
 pub(crate) fn ex_mark(excmd: &mut ExArg) {
-    if byte(excmd.arg) == NUL {
+    if byte(excmd.arg_ptr()) == NUL {
         emsg(gettext(e_argreq.as_ptr()));
         return;
     }
-    if byte_at(excmd.arg, 1) != NUL {
+    if byte_at(excmd.arg_ptr(), 1) != NUL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E488: Trailing characters: {arg}");
         return;
     }
@@ -571,7 +572,7 @@ pub(crate) fn ex_mark(excmd: &mut ExArg) {
     let pos = Win::current().w_cursor;
     Win::current().w_cursor.lnum = excmd.line2;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    if unsafe { setmark(*excmd.arg as c_int) }.is_err() {
+    if unsafe { setmark(*excmd.arg_ptr() as c_int) }.is_err() {
         emsg(gettext(
             c"E191: Argument must be a letter or forward/backward quote".as_ptr(),
         ));
@@ -637,7 +638,7 @@ pub(crate) fn ex_folddo(excmd: &mut ExArg) {
         }
         lnum += 1;
     }
-    unsafe { global_exe(excmd.arg) };
+    unsafe { global_exe(excmd.arg_ptr()) };
     ml_clearmarked();
 }
 

@@ -22,9 +22,9 @@ const LIST_HL: c_int = HLF_D;
 /// `:syntax [list] [{group}|@{cluster}] ..` and `:syntax sync` with no
 /// argument.
 pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
-    let mut arg = args.arg;
+    let mut arg = args.arg_ptr();
 
-    args.nextcmd = unsafe { find_nextcmd(arg) };
+    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg) });
     if args.skip {
         return;
     }
@@ -80,7 +80,7 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
             arg = unsafe { skipwhite(arg_end) };
         }
     }
-    args.nextcmd = unsafe { check_nextcmd(arg) };
+    args.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
 }
 
 /// The `:syntax sync` half of the listing: how this buffer synchronises.

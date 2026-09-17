@@ -523,7 +523,7 @@ pub fn buf_contents_changed(buffer: Buf) -> bool {
         {
             differ = (1..=Buf::current().line_count()).any(|lnum| lines_differ(buffer, lnum));
         }
-        free(ea.cmd);
+        free(ea.cmd_ptr());
     });
     if Buf::current() != newbuf {
         // SAFETY: `buflist_new` answered it and nothing has freed it: the

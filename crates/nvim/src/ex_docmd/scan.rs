@@ -33,7 +33,7 @@ use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::del_trailing_spaces;
 use crate::types::ex_cmds::ExArg;
 use crate::types::pos::LineNr;
-use crate::types::{CmdAddr, CpoFlag, ExArgt, Failed, NUL, size_t};
+use crate::types::{CmdAddr, CmdLine, CpoFlag, ExArgt, Failed, NUL};
 use crate::winlayer::Buf;
 
 /// Step over a run of `:`, which is how a mapping's `:cmd<CR>` and a leading
@@ -54,6 +54,19 @@ pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) 
     p
 }
 
+/// [`skip_colon_white`] over a command line, answering an offset.
+pub(crate) fn skip_colons(line: &CmdLine, at: usize, skipleadingwhite: bool) -> usize {
+    let mut at = if skipleadingwhite {
+        line.skip_white(at)
+    } else {
+        at
+    };
+    while line.byte_at(at) == b':' {
+        at = line.skip_white(at + 1);
+    }
+    at
+}
+
 /// Take the register name a command such as `:delete x` may carry.
 ///
 /// Three tests have to pass before the character is read as a register: the
@@ -63,29 +76,32 @@ pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) 
 pub(crate) fn parse_register(excmd: &mut ExArg) {
     let is_user_command = is_user_cmd(excmd.cmdidx);
     if !excmd.argt.has(ExArgt::REGSTR)
-        || byte(excmd.arg) == NUL
-        || (is_user_command && byte(excmd.arg) == '=' as c_int)
-        || (excmd.argt.has(ExArgt::COUNT) && ascii_isdigit(byte(excmd.arg)))
+        || byte(excmd.arg_ptr()) == NUL
+        || (is_user_command && byte(excmd.arg_ptr()) == '=' as c_int)
+        || (excmd.argt.has(ExArgt::COUNT) && ascii_isdigit(byte(excmd.arg_ptr())))
     {
         return;
     }
     // `:put` and `:iput` are the two commands that may name a write-only
     // register; every other one is writing to whichever it names.
     let writing = !is_user_command && excmd.cmdidx != CmdIdx::put && excmd.cmdidx != CmdIdx::iput;
-    if !unsafe { valid_yank_reg(*excmd.arg as c_int, writing) } {
+    if !unsafe { valid_yank_reg(*excmd.arg_ptr() as c_int, writing) } {
         return;
     }
-    excmd.regname = ubyte(excmd.arg) as c_int;
-    excmd.arg = unsafe { excmd.arg.add(1) };
+    excmd.regname = ubyte(excmd.arg_ptr()) as c_int;
+    let arg_start = excmd.arg_ptr();
+    excmd.set_arg_ptr(unsafe { arg_start.add(1) });
     // The expression register swallows the rest of the line: it *is* the
     // expression, and evaluating it is deferred until the register is read.
-    if excmd.regname == '=' as c_int && byte(excmd.arg) != NUL {
+    if excmd.regname == '=' as c_int && byte(excmd.arg_ptr()) != NUL {
         if !excmd.skip {
-            unsafe { set_expr_line(xstrdup(excmd.arg)) };
+            unsafe { set_expr_line(xstrdup(excmd.arg_ptr())) };
         }
-        excmd.arg = unsafe { excmd.arg.add(cstr::bytes_at(excmd.arg).len()) };
+        let arg_start = excmd.arg_ptr();
+        excmd.set_arg_ptr(unsafe { arg_start.add(cstr::bytes_at(arg_start).len()) });
     }
-    excmd.arg = skipwhite(excmd.arg);
+    let arg_start = excmd.arg_ptr();
+    excmd.set_arg_ptr(skipwhite(arg_start));
 }
 
 /// Turn a count into a range, which is what a count means for every command
@@ -122,31 +138,29 @@ pub(crate) fn parse_count(
     errormsg: &mut Option<CString>,
     validate: bool,
 ) -> Result<(), Failed> {
-    if !excmd.argt.has(ExArgt::COUNT) || !ascii_isdigit(byte(excmd.arg)) {
+    if !excmd.argt.has(ExArgt::COUNT) || !ascii_isdigit(byte(excmd.arg_ptr())) {
         return Ok(());
     }
     // A command that also takes a buffer name (`:buffer 2x`) only reads
     // the digits as a count when they are the whole word.
     if excmd.argt.has(ExArgt::BUFNAME) {
-        let p = unsafe { skipdigits(excmd.arg.add(1)) };
+        let p = unsafe { skipdigits(excmd.arg_ptr().add(1)) };
         if byte(p) != NUL && !ascii_iswhite(byte(p)) {
             return Ok(());
         }
     }
 
-    let n: LineNr = unsafe { getdigits_int32(&raw mut excmd.arg, false, INT32_MAX) };
-    excmd.arg = skipwhite(excmd.arg);
-    if !excmd.args.is_null() {
+    let n: LineNr =
+        unsafe { excmd.with_arg_cursor(|cursor| getdigits_int32(cursor, false, INT32_MAX)) };
+    let arg_start = excmd.arg_ptr();
+    excmd.set_arg_ptr(skipwhite(arg_start));
+    if let Some(&(first, first_len)) = excmd.line.args.first() {
         // `nvim_cmd` supplies the arguments already split, so the count
         // that was just consumed has to come off the first of them.
-        debug_assert!(excmd.argc > 0 && excmd.arg >= unsafe { *excmd.args });
-        let first = unsafe { *excmd.args };
-        let first_len = unsafe { *excmd.arglens };
-        if excmd.arg < unsafe { first.add(first_len) } {
-            unsafe {
-                *excmd.arglens = first_len.wrapping_sub(excmd.arg.offset_from(first) as size_t)
-            };
-            unsafe { *excmd.args = excmd.arg };
+        let arg = excmd.line.arg;
+        debug_assert!(arg >= first);
+        if arg < first + first_len {
+            excmd.line.args[0] = (arg, first_len - (arg - first));
         } else {
             shift_cmd_args(excmd);
         }
@@ -182,31 +196,39 @@ pub(crate) unsafe fn parse_bang(excmd: &mut ExArg, p: *mut *mut c_char) -> bool 
 /// Take the trailing `l`, `p` and `#` flags a printing command may carry.
 pub(crate) fn get_flags(excmd: &mut ExArg) {
     loop {
-        let flag = match ubyte(excmd.arg) {
+        let flag = match ubyte(excmd.arg_ptr()) {
             b'l' => EXFLAG_LIST,
             b'p' => EXFLAG_PRINT,
             b'#' => EXFLAG_NR,
             _ => return,
         };
         excmd.flags |= flag;
-        excmd.arg = unsafe { skipwhite(excmd.arg.add(1)) };
+        let arg_start = excmd.arg_ptr();
+        excmd.set_arg_ptr(unsafe { skipwhite(arg_start.add(1)) });
     }
 }
 
 /// Step over a `:vimgrep` pattern, whose delimiters are not the ones the
 /// rest of the argument scan knows about.
-pub(crate) fn skip_grep_pat(excmd: &mut ExArg) -> *mut c_char {
+pub(crate) fn skip_grep_pat(excmd: &mut ExArg) -> usize {
     let cmdidx = excmd.cmdidx;
     let is_grep = cmdidx == CmdIdx::vimgrep
         || cmdidx == CmdIdx::lvimgrep
         || cmdidx == CmdIdx::vimgrepadd
         || cmdidx == CmdIdx::lvimgrepadd
         || grep_internal(excmd.cmdidx);
-    if byte(excmd.arg) == NUL || !is_grep {
-        return excmd.arg;
+    if excmd.line.byte_at(excmd.line.arg) == 0 || !is_grep {
+        return excmd.line.arg;
     }
-    let p = unsafe { skip_vimgrep_pat(excmd.arg, ptr::null_mut(), ptr::null_mut()) };
-    if p.is_null() { excmd.arg } else { p }
+    let arg = excmd.line.ptr_at(excmd.line.arg);
+    // SAFETY: the command's own argument, NUL-terminated; neither
+    // out-parameter is wanted here.
+    let p = unsafe { skip_vimgrep_pat(arg, ptr::null_mut(), ptr::null_mut()) };
+    if p.is_null() {
+        excmd.line.arg
+    } else {
+        excmd.line.offset_of(p)
+    }
 }
 
 /// Cut the command's argument at the `|`, `"` or newline that ends it, and
@@ -224,71 +246,78 @@ pub(crate) fn skip_grep_pat(excmd: &mut ExArg) -> *mut c_char {
 /// A backslash before one of them escapes it — but only while 'cpoptions'
 /// does not contain `b`, or the command does not take CTRL-V escapes.
 pub fn separate_nextcmd(excmd: &mut ExArg) {
-    let mut p = skip_grep_pat(excmd);
-    while unsafe { *p } != 0 {
-        if byte(p) == Ctrl_V {
+    let mut at = skip_grep_pat(excmd);
+    while excmd.line.byte_at(at) != 0 {
+        let c = excmd.line.byte_at(at);
+        if c_int::from(c) == Ctrl_V {
             if excmd.argt.has(ExArgt::CTRLV | ExArgt::XFILE) {
-                p = unsafe { p.add(1) };
+                at += 1;
             } else {
-                drop_one_byte(p);
+                excmd.line.drop_byte(at);
             }
-            if byte(p) == NUL {
+            if excmd.line.byte_at(at) == 0 {
                 break;
             }
-        } else if byte(p) == '`' as c_int
-            && byte_at(p, 1) == '=' as c_int
-            && excmd.argt.has(ExArgt::XFILE)
-        {
+        } else if c == b'`' && excmd.line.byte_at(at + 1) == b'=' && excmd.argt.has(ExArgt::XFILE) {
             // A backtick-equals expression is stepped over by the
             // evaluator, not by this scan: it may contain any of the
             // ending characters.
-            p = unsafe { p.add(2) };
-            let _ = unsafe { skip_expr(&raw mut p, ptr::null_mut()) };
-            if byte(p) == NUL {
+            let mut cursor = excmd.line.ptr_at(at + 2);
+            // SAFETY: `cursor` is this frame's own, over the command's line.
+            let _ = unsafe { skip_expr(&raw mut cursor, ptr::null_mut()) };
+            at = excmd.line.offset_of(cursor);
+            if excmd.line.byte_at(at) == 0 {
                 break;
             }
-        } else if unsafe { ends_argument(excmd, p) } {
+        } else if ends_argument(excmd, at) {
             let escaped = (!cpo_has(CpoFlag::BAR) || !excmd.argt.has(ExArgt::CTRLV))
-                && byte_at(p, -1) == '\\' as c_int;
+                && at > 0
+                && excmd.line.byte_at(at - 1) == b'\\';
             if escaped {
-                p = unsafe { p.offset(-1) };
-                drop_one_byte(p);
+                at -= 1;
+                excmd.line.drop_byte(at);
             } else {
-                excmd.nextcmd = unsafe { check_nextcmd(p) };
-                unsafe { *p = NUL as c_char };
+                excmd.line.next = excmd.line.check_next(at);
+                excmd.line.terminate_at(at);
                 break;
             }
         }
-        p = unsafe { p.add(utfc_ptr2len(p) as usize) };
+        at += utfc_len_at(&excmd.line, at);
     }
     if !excmd.argt.has(ExArgt::NOTRLCOM) {
-        unsafe { del_trailing_spaces(excmd.arg) };
+        let arg = excmd.line.ptr_at(excmd.line.arg);
+        // SAFETY: the command's own argument, NUL-terminated.
+        unsafe { del_trailing_spaces(arg) };
     }
 }
 
-/// Does the byte at `p` end the argument? See `separate_nextcmd`.
+/// Does the byte at `at` end the argument? See [`separate_nextcmd`].
 ///
 /// A named predicate rather than an inline condition, but deliberately
-/// *inside* the loop: the `"` half compares `p` against `eap->arg`, so it
+/// *inside* the loop: the `"` half compares `at` against the argument, so it
 /// depends on where the walk has got to and cannot be hoisted.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn ends_argument(excmd: &mut ExArg, p: *mut c_char) -> bool {
-    let c = byte(p);
+fn ends_argument(excmd: &ExArg, at: usize) -> bool {
+    let c = excmd.line.byte_at(at);
     let cmdidx = excmd.cmdidx;
-    let comment = c == '"' as c_int
+    let comment = c == b'"'
         && !excmd.argt.has(ExArgt::NOTRLCOM)
-        && (cmdidx != CmdIdx::at || p != excmd.arg)
+        && (cmdidx != CmdIdx::at || at != excmd.line.arg)
         && (cmdidx != CmdIdx::redir
-            || p != unsafe { excmd.arg.add(1) }
-            || byte_at(p, -1) != '@' as c_int);
-    let bar = c == '|' as c_int
+            || at != excmd.line.arg + 1
+            || at == 0
+            || excmd.line.byte_at(at - 1) != b'@');
+    let bar = c == b'|'
         && cmdidx != CmdIdx::append
         && cmdidx != CmdIdx::change
         && cmdidx != CmdIdx::insert;
-    comment || bar || c == '\n' as c_int
+    comment || bar || c == b'\n'
+}
+
+/// How many bytes the character at `at` occupies.
+fn utfc_len_at(line: &CmdLine, at: usize) -> usize {
+    // SAFETY: a cursor into the NUL-terminated command line.
+    let len = unsafe { crate::mbyte::utfc_ptr2len(line.ptr_from(at)) };
+    len.max(1).cast_unsigned() as usize
 }
 
 /// Delete the byte at `p` by pulling the terminator-inclusive tail over it.

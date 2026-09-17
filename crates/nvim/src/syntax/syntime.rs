@@ -17,7 +17,7 @@ use super::*;
 
 /// `:syntime {on,off,clear,report}`.
 pub(crate) fn ex_syntime(excmd: &mut ExArg) {
-    let arg = unsafe { CStr::from_ptr(excmd.arg) };
+    let arg = unsafe { CStr::from_ptr(excmd.arg_ptr()) };
     match arg.to_bytes() {
         b"on" => syn_time_on.set(true),
         b"off" => syn_time_on.set(false),
@@ -25,7 +25,7 @@ pub(crate) fn ex_syntime(excmd: &mut ExArg) {
         b"report" => syntime_report(),
         _ => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E475: Invalid argument: {arg}");
         }
     }

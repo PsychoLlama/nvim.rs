@@ -113,9 +113,18 @@ pub unsafe fn parse_pattern_and_range(
     // The three out-parameters, taken once. Both callers own three plain
     // `c_int` locals apiece that nothing else in the editor can reach, so
     // there is no re-entry to alias them.
-    // SAFETY: the caller's obligation -- three live, distinct `c_int`s.
-    let (search_delim, skiplen, patlen) =
-        unsafe { (&mut *search_delim, &mut *skiplen, &mut *patlen) };
+    // A copy of what is typed so far comes with them: the scan below only
+    // reads it, and an offset into the copy is the same offset into the line.
+    // SAFETY: the caller's obligation -- three live, distinct `c_int`s -- and
+    // the command line, which is NUL-terminated while it is being shown.
+    let (search_delim, skiplen, patlen, line) = unsafe {
+        (
+            &mut *search_delim,
+            &mut *skiplen,
+            &mut *patlen,
+            CmdLine::from_bytes(cstr::bytes_at(Cc::current().text())),
+        )
+    };
 
     // `cmd`, `p` and `end` all point into the command line, which is one
     // NUL-terminated allocation, and the walk below stops at its terminator;
@@ -134,7 +143,7 @@ pub unsafe fn parse_pattern_and_range(
     let mut ea = ExArg {
         line1: 1,
         line2: 1,
-        cmd: Cc::current().text(),
+        line,
         addr_type: CmdAddr::Lines,
         ..EXARG_T_INIT
     };
@@ -144,7 +153,7 @@ pub unsafe fn parse_pattern_and_range(
     let _ = parse_command_modifiers(&mut ea, &mut dummy, &mut dummy_cmdmod, true);
 
     // Skip over the range to find the command.
-    let cmd = unsafe { skip_range(ea.cmd, ::core::ptr::null_mut::<ExpandContext>()) };
+    let cmd = unsafe { skip_range(ea.cmd_ptr(), ::core::ptr::null_mut::<ExpandContext>()) };
     if !has_char(c"sgvlu", at(cmd) as uint8_t as ::core::ffi::c_int) {
         return false;
     }
@@ -253,7 +262,7 @@ pub unsafe fn parse_pattern_and_range(
     }
 
     // Found a non-empty pattern, or "//".
-    *skiplen = p.addr().wrapping_sub(Cc::current().text().addr()) as ::core::ffi::c_int;
+    *skiplen = ea.line.offset_of(p) as ::core::ffi::c_int;
     *patlen = end.addr().wrapping_sub(p.addr()) as ::core::ffi::c_int;
 
     // Parse the address range.

@@ -681,6 +681,7 @@ pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
         eval_getline: None,
         eval_cookie: ptr::null_mut(),
         eval_tofree: ptr::null_mut(),
+        next_cmd: None,
     };
     // `eval0` takes a mutable buffer: it writes the terminator back over
     // what it consumed.

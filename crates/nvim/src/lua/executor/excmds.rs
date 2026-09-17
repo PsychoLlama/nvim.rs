@@ -49,7 +49,7 @@ const STDIN_CHUNK: size_t = 64;
 /// `:lua {chunk}`, `:lua ={expr}` and `:={expr}`.
 pub fn ex_lua(excmd: &mut ExArg) {
     unsafe {
-        if *excmd.arg == 0 {
+        if *excmd.arg_ptr() == 0 {
             // `:{range}lua` with no body sources the range as Lua.
             if excmd.addr_count > 0 {
                 cmd_source_buffer(excmd, true);
@@ -96,7 +96,7 @@ pub fn ex_luado(excmd: &mut ExArg) {
             emsg(gettext(c"cannot save undo information"));
             return;
         }
-        let cmd = excmd.arg;
+        let cmd = excmd.arg_ptr();
         let cmd_len = cstr::bytes_at(cmd).len();
         let lstate = get_global_lstate();
 
@@ -175,7 +175,7 @@ pub fn ex_luado(excmd: &mut ExArg) {
 /// `:luafile {path}`.
 pub fn ex_luafile(excmd: &mut ExArg) {
     unsafe {
-        nlua_exec_file(excmd.arg);
+        nlua_exec_file(excmd.arg_ptr());
     }
 }
 

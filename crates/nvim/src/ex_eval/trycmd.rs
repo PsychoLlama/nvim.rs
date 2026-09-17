@@ -76,7 +76,7 @@ use core::ptr;
 /// `:throw {expr}`
 pub(crate) fn ex_throw(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     let value = if unsafe { *arg } != NUL as c_char
         && unsafe { *arg } != b'|' as c_char
         && unsafe { *arg } != b'\n' as c_char
@@ -207,14 +207,15 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
 
     let pat;
     let end;
-    if ends_excmd(unsafe { *excmd.arg } as c_int) != 0 {
+    if ends_excmd(unsafe { *excmd.arg_ptr() } as c_int) != 0 {
         // No argument: catch everything.
         pat = c".*".as_ptr().cast_mut();
         end = ptr::null_mut();
-        unsafe { excmd.nextcmd = find_nextcmd(excmd.arg) };
+        let arg = excmd.arg_ptr();
+        unsafe { excmd.set_nextcmd_ptr(find_nextcmd(arg)) };
     } else {
-        pat = unsafe { excmd.arg.add(1) };
-        end = unsafe { skip_regexp_err(pat, *excmd.arg as c_int, true as c_int) };
+        pat = unsafe { excmd.arg_ptr().add(1) };
+        end = unsafe { skip_regexp_err(pat, *excmd.arg_ptr() as c_int, true as c_int) };
         if end.is_null() {
             give_up = true;
         }
@@ -287,7 +288,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
     }
 
     if !end.is_null() {
-        unsafe { excmd.nextcmd = find_nextcmd(end) };
+        unsafe { excmd.set_nextcmd_ptr(find_nextcmd(end)) };
     }
 }
 

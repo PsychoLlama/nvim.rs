@@ -27,7 +27,7 @@ use crate::buffer::BufFlags;
 use crate::buffer::BufRef;
 use crate::cstr;
 use crate::types::CmdIdx;
-use crate::types::{MAXPATHL, OK};
+use crate::types::{CmdLine, MAXPATHL, OK};
 use crate::winlayer::{Buf, windows};
 use core::ffi::c_char;
 use core::ptr;
@@ -41,14 +41,21 @@ use core::ptr;
 /// `dirname_start` must be NUL-terminated.
 pub(crate) unsafe fn restore_start_dir(dirname_start: *const c_char) {
     let mut dirname_now = [0 as c_char; MAXPATHL as usize];
-    // SAFETY: the caller's directory name, and one owned MAXPATHL buffer.
-    let _ = unsafe { os_dirname(dirname_now.as_mut_ptr(), MAXPATHL as size_t) };
-    if unsafe { cstr::eq(dirname_start, dirname_now.as_ptr()) } {
+    // SAFETY (both): one owned MAXPATHL buffer, and the caller's directory
+    // name, which is NUL-terminated.
+    let (now, start) = unsafe {
+        let _ = os_dirname(dirname_now.as_mut_ptr(), MAXPATHL as size_t);
+        (
+            cstr::bytes_at(dirname_now.as_ptr()),
+            cstr::bytes_at(dirname_start),
+        )
+    };
+    if now == start {
         return;
     }
     // Return to the original directory, ignoring any error.
     let mut ea = ExArg {
-        arg: dirname_start.cast_mut(),
+        line: CmdLine::from_bytes(start),
         cmdidx: if Win::current().w_localdir.is_null() {
             CmdIdx::cd
         } else {

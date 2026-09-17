@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::strings::vim_strchr;
@@ -207,13 +208,22 @@ pub(crate) unsafe fn get_function_body(
                         swmsg!(true, "W22: Text found after :endfunction: {p}");
                     }
                     if !nextcmd.is_null() {
-                        // Another command follows.  If the line came from
-                        // "eap" we can point into it, otherwise
-                        // "eap->cmdlinep" has to take the line over.
-                        excmd.nextcmd = nextcmd;
-                        if !unsafe { *line_to_free }.is_null() {
-                            unsafe { xfree(*excmd.cmdlinep as *mut c_void) };
-                            unsafe { *excmd.cmdlinep = *line_to_free };
+                        // Another command follows. When it is in the
+                        // command's own line the offset is all that is
+                        // needed; when it is in the last line the getter
+                        // handed back, the command takes that line over.
+                        if excmd.line.contains(nextcmd) {
+                            excmd.line.next = Some(excmd.line.offset_of(nextcmd));
+                        } else {
+                            // SAFETY: `nextcmd` is inside the line the last
+                            // read handed back, an `xmalloc` block.
+                            let base = unsafe { *line_to_free };
+                            let at = nextcmd.addr() - base.addr();
+                            // SAFETY: as above.
+                            let taken = unsafe { XString::from_raw(base) };
+                            excmd.line.take_over(taken.into_vec());
+                            excmd.line.next = Some(at);
+                            // SAFETY: the caller's slot, now empty.
                             unsafe { *line_to_free = ptr::null_mut() };
                         }
                     }

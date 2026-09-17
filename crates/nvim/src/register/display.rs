@@ -176,7 +176,7 @@ unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_in
 pub fn ex_display(excmd: &mut ExArg) {
     // SAFETY: the caller promises a live `ExArg`, whose `arg` is null or a
     // NUL-terminated string.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     // SAFETY: as above, and tested non-null.
     if !arg.is_null() && unsafe { c_int::from(*arg) } == NUL {
         arg = ::core::ptr::null_mut();

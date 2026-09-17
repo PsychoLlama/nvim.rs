@@ -438,7 +438,7 @@ unsafe fn digits_then(
 pub fn ex_mkspell(excmd: &mut ExArg) {
     // SAFETY: the caller promises the excommand; `get_arglist_exp` fills in
     // the count and the vector, which `free_wild` then releases.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     let mut ascii = false;
     if unsafe { cstr::starts_with(arg, b"-ascii") } {
         ascii = true;
@@ -780,7 +780,7 @@ pub(super) fn spell_message_fmt(spin: &SpellInfo, args: core::fmt::Arguments<'_>
 /// `:spellgood`, `:spellwrong`, `:spellrare` and their `:spell*undo` forms.
 pub fn ex_spell(excmd: &mut ExArg) {
     // SAFETY: the caller promises the excommand.
-    let (cmdidx, forceit, line2, arg) = (excmd.cmdidx, excmd.forceit, excmd.line2, excmd.arg);
+    let (cmdidx, forceit, line2, arg) = (excmd.cmdidx, excmd.forceit, excmd.line2, excmd.arg_ptr());
 
     let kind = if cmdidx == CmdIdx::spellwrong {
         SPELL_ADD_BAD

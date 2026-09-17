@@ -143,28 +143,28 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
         // `excmd` is the raw argument text; `fargs` the split one. The raw
         // string is pushed once and stored twice.
         lua_newtable(lstate);
-        lua_pushstring(lstate, excmd.arg);
+        lua_pushstring(lstate, excmd.arg_ptr());
         lua_pushvalue(lstate, -1);
         lua_setfield(lstate, -4, c"args".as_ptr());
         if (*cmd).uc_argt.has(ExArgt::NOSPC) {
             // At most one argument: `fargs` is the whole of it, or empty.
-            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || !cstr::bytes_at(excmd.arg).is_empty() {
+            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || !cstr::bytes_at(excmd.arg_ptr()).is_empty() {
                 lua_rawseti(lstate, -2, 1);
             } else {
                 lua_pop(lstate, 1);
             }
-        } else if excmd.args.is_null() {
+        } else if excmd.line.args.is_empty() {
             lua_pop(lstate, 1);
             // Not pre-split (`:command` rather than `nvim_cmd`): split here,
             // honouring backslash escapes.
-            let length = cstr::bytes_at(excmd.arg).len();
+            let length = cstr::bytes_at(excmd.arg_ptr()).len();
             let mut end: size_t = 0;
             let mut len: size_t = 0;
             let mut i: c_int = 1;
             let buf = xcalloc(length, size_of::<c_char>()).cast::<c_char>();
             let mut done = false;
             while !done {
-                done = uc_split_args_iter(excmd.arg, length, &raw mut end, buf, &raw mut len);
+                done = uc_split_args_iter(excmd.arg_ptr(), length, &raw mut end, buf, &raw mut len);
                 if len > 0 {
                     lua_pushlstring(lstate, buf, len);
                     lua_rawseti(lstate, -2, i);
@@ -174,8 +174,8 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
             xfree(buf.cast::<c_void>());
         } else {
             lua_pop(lstate, 1);
-            for i in 0..excmd.argc {
-                lua_pushlstring(lstate, *excmd.args.add(i), *excmd.arglens.add(i));
+            for (i, &(at, len)) in excmd.line.args.clone().iter().enumerate() {
+                lua_pushlstring(lstate, excmd.line.ptr_from(at), len);
                 lua_rawseti(lstate, -2, i as c_int + 1);
             }
         }

@@ -60,12 +60,12 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         }
     }
 
-    if c_int::from(unsafe { *excmd.arg }) != NUL {
+    if c_int::from(unsafe { *excmd.arg_ptr() }) != NUL {
         set_option_direct(
             kOptErrorfile,
             // SAFETY: the command line's own NUL-terminated argument,
             // which the option layer copies.
-            OptVal::String(unsafe { OptStr::borrowing(excmd.arg) }),
+            OptVal::String(unsafe { OptStr::borrowing(excmd.arg_ptr()) }),
             OptionSetFlags::NONE,
             0 as ScriptId,
         );
@@ -81,7 +81,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
     // Copies: `qf_init` reads a file and fires autocommands.
     let (efile, errorformat2) = (P_EF.get(), P_EFM.get());
     let newlist2 = c_int::from(newlist);
-    let title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
+    let title = qf_cmdtitle(excmd.line.line());
     let qf_title2 = title.as_ptr();
     let res = unsafe {
         qf_init(
@@ -139,10 +139,10 @@ fn cbuffer_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
     // SAFETY: the caller's promise -- a live `ExArg`.
     // SAFETY: forwarded from the caller.
-    let buf = if c_int::from(unsafe { *excmd.arg }) == NUL {
+    let buf = if c_int::from(unsafe { *excmd.arg_ptr() }) == NUL {
         Buf::current_raw()
-    } else if c_int::from(unsafe { *skipwhite(skipdigits(excmd.arg)) }) == NUL {
-        find_buf(unsafe { atoi(excmd.arg) }).map_or(ptr::null_mut(), |b| b.raw())
+    } else if c_int::from(unsafe { *skipwhite(skipdigits(excmd.arg_ptr())) }) == NUL {
+        find_buf(unsafe { atoi(excmd.arg_ptr()) }).map_or(ptr::null_mut(), |b| b.raw())
     } else {
         ptr::null_mut()
     };
@@ -193,7 +193,7 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
 
     // The title names the buffer as well as the command. `qf_init_ext`
     // copies it, so this frame can own it.
-    let mut qf_title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
+    let mut qf_title = qf_cmdtitle(excmd.line.line());
     if !buf.name.short().is_none() {
         let efile = IOSIZE as size_t;
         let fmt = c"%s (%s)".as_ptr();
@@ -308,7 +308,7 @@ fn cexpr_core(excmd: &mut ExArg, tv: &mut TypVal) -> Result<(), Failed> {
     let buf2 = None;
     // A copy: `qf_init_ext` evaluates an expression and fires autocommands.
     let errorformat3 = P_EFM.get();
-    let title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
+    let title = qf_cmdtitle(excmd.line.line());
     let enc2 = ptr::null_mut();
     let res = unsafe {
         qf_init_ext(
@@ -355,7 +355,7 @@ pub fn ex_cexpr(excmd: &mut ExArg) {
     }
     // Evaluate the expression. When the result is a string or a list of
     // strings, parse each line and add it to the quickfix list.
-    let tv = unsafe { eval_expr(excmd.arg, Some(excmd)) };
+    let tv = unsafe { eval_expr(excmd.arg_ptr(), Some(excmd)) };
     if tv.is_null() {
         return;
     }

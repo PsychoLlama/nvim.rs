@@ -75,7 +75,7 @@ pub(crate) fn ex_bunload(excmd: &mut ExArg) {
     excmd.errmsg = unsafe {
         do_bufdel(
             action,
-            excmd.arg,
+            excmd.arg_ptr(),
             excmd.addr_count,
             excmd.line1 as c_int,
             excmd.line2 as c_int,

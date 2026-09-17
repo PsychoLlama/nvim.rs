@@ -139,6 +139,15 @@ impl XString {
     ///
     /// Never fails: the buffer always ends with a terminator. With an
     /// interior NUL the answer is the prefix a C consumer would read, which
+    /// The buffer back as a `Vec<u8>`, terminator included.
+    ///
+    /// For a caller that wants the vector's own API over the whole block --
+    /// the command line, which holds several NUL-terminated strings at once
+    /// and so is not an `XString` at all.
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0
+    }
+
     /// is what [`as_ptr`](Self::as_ptr) hands out.
     pub fn as_cstr(&self) -> &CStr {
         CStr::from_bytes_until_nul(&self.0).expect("an XString always ends with a NUL")

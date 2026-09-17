@@ -358,18 +358,18 @@ pub fn ex_substitute_preview(
 ) -> c_int {
     // Only preview once the pattern delimiter has been typed.
     // SAFETY: the argument is NUL-terminated.
-    let first = unsafe { *excmd.arg } as u8;
+    let first = unsafe { *excmd.arg_ptr() } as u8;
     if first == 0 || first.is_ascii_alphabetic() || ascii_isdigit(first as c_int) {
         return 0 as c_int;
     }
     // `do_sub` may move `args.arg`, which the caller still needs where it was.
-    let save_arg = excmd.arg;
+    let save_arg = excmd.arg_ptr();
     let retv = do_sub(
         excmd,
         profile_setlimit(p_rdt() as int64_t),
         cmdpreview_ns,
         cmdpreview_bufnr,
     );
-    excmd.arg = save_arg;
+    excmd.set_arg_ptr(save_arg);
     retv
 }

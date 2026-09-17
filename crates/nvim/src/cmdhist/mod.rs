@@ -427,7 +427,7 @@ pub fn ex_history(excmd: &mut ExArg) {
     // SAFETY: caller contract; the message kind is a static string.
     let arg = unsafe {
         msg_ext_set_kind(c"list_cmd".as_ptr());
-        excmd.arg
+        excmd.arg_ptr()
     };
     if get_hislen() == 0 {
         msg(gettext(c"'history' option is zero"), 0);

@@ -355,7 +355,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
 pub fn ex_cd(excmd: &mut ExArg) {
-    let new_dir = excmd.arg;
+    let new_dir = excmd.arg_ptr();
     // Without 'cdhome', a bare `:cd` reports the directory instead of
     // changing it — Vi's behaviour.
     if byte(new_dir) == NUL && !p_cdh() {

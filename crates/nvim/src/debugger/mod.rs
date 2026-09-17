@@ -240,7 +240,7 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
             return;
         }
         // SAFETY: caller contract.
-        unsafe { do_debug(excmd.cmd) };
+        unsafe { do_debug(excmd.cmd_ptr()) };
         return;
     }
 
@@ -271,7 +271,7 @@ pub fn dbg_check_breakpoint(excmd: &mut ExArg) {
         debug_breakpoint_lnum.get() as int64_t
     );
     debug_breakpoint_name.set(ptr::null_mut());
-    unsafe { do_debug(excmd.cmd) };
+    unsafe { do_debug(excmd.cmd_ptr()) };
 }
 
 /// Enter debug mode after all, for a command that [`dbg_check_breakpoint`]
@@ -443,7 +443,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
 /// `:breakadd`, and `:profile func`/`:profile file`.
 pub fn ex_breakadd(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    let (list, arg, forceit) = (BreakList::of(&*excmd), excmd.arg, excmd.forceit);
+    let (list, arg, forceit) = (BreakList::of(&*excmd), excmd.arg_ptr(), excmd.forceit);
     // SAFETY: `arg` is the NUL-terminated argument.
     let Ok(mut bp) = (unsafe { dbg_parsearg(arg, list) }) else {
         return;
@@ -505,7 +505,7 @@ fn update_has_expr_breakpoint() {
 /// `:breakdel` and `:profdel`.
 pub fn ex_breakdel(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    let (list, arg, cmdidx) = (BreakList::of(&*excmd), excmd.arg, excmd.cmdidx);
+    let (list, arg, cmdidx) = (BreakList::of(&*excmd), excmd.arg_ptr(), excmd.cmdidx);
     // SAFETY: `arg` is NUL-terminated.
     let first = unsafe { *arg as c_int };
 

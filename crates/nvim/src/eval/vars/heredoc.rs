@@ -189,12 +189,7 @@ pub unsafe fn heredoc_get(
             // The end marker is matched with the `:let` line's own
             // indentation stripped; the body's comes from its first
             // line, which `text_indent_len == -1` asks for below.
-            // SAFETY: a live command's own command line.
-            let mut p = unsafe { *excmd.cmdlinep };
-            while ascii_iswhite(c_int::from(unsafe { *p })) {
-                p = unsafe { p.add(1) };
-                marker_indent_len += 1;
-            }
+            marker_indent_len += excmd.line.skip_white(0) as c_int;
             text_indent_len = -1;
         } else if is_word(cmd, c"eval") {
             cmd = unsafe { skipwhite(cmd.add(4)) };
@@ -277,7 +272,8 @@ pub unsafe fn heredoc_get(
         // looking for the marker.
         let mut mi = 0;
         let indent = marker_indent_len as size_t;
-        if marker_indent_len > 0 && unsafe { cstr::prefix_eq(theline, *excmd.cmdlinep, indent) } {
+        let line = excmd.line_ptr();
+        if marker_indent_len > 0 && unsafe { cstr::prefix_eq(theline, line, indent) } {
             mi = marker_indent_len;
         }
         if unsafe { cstr::eq(marker, theline.offset(mi as isize)) } {
@@ -326,7 +322,7 @@ pub unsafe fn heredoc_get(
 
     if heredoc_in_string {
         // The next command follows the here-document in the string.
-        excmd.nextcmd = line_arg;
+        excmd.set_nextcmd_ptr(line_arg);
     } else {
         unsafe { xfree(theline.cast()) };
     }

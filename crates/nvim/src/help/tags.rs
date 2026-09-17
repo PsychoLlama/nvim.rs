@@ -53,14 +53,15 @@ use super::flag::kEqualFiles;
 pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     let mut add_help_tags = false;
     // SAFETY: caller contract.
-    if unsafe { cstr::starts_with(excmd.arg, b"++t") }
-        && ascii_iswhite(unsafe { *excmd.arg.offset(3) } as c_int)
+    if unsafe { cstr::starts_with(excmd.arg_ptr(), b"++t") }
+        && ascii_iswhite(unsafe { *excmd.arg_ptr().offset(3) } as c_int)
     {
         add_help_tags = true;
-        unsafe { excmd.arg = skipwhite(excmd.arg.offset(3)) };
+        let arg = excmd.arg_ptr();
+        unsafe { excmd.set_arg_ptr(skipwhite(arg.offset(3))) };
     }
 
-    if unsafe { cstr::eq_bytes(excmd.arg, b"ALL") } {
+    if unsafe { cstr::eq_bytes(excmd.arg_ptr(), b"ALL") } {
         // A copy: the walk sources nothing, but it outlives a projection's
         // borrow and `do_in_path` keeps the cursor.
         let rtp = P_RTP.get();
@@ -86,14 +87,14 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Directories;
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     let opts = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
     let (orig, mode) = (ptr::null_mut(), WildMode::ExpandFree);
     // SAFETY: `xpc` was just initialised and `arg` is the command's own.
     let dirname = unsafe { expand_one(&raw mut xpc, arg, orig, opts, mode) };
     if dirname.is_null() || !unsafe { os_isdir(dirname) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E150: Not a directory: {arg}");
     } else {
         unsafe { do_helptags(dirname, add_help_tags, false) };

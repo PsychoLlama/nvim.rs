@@ -192,7 +192,7 @@ pub fn qf_list(excmd: &mut ExArg) {
 
     // "+N" lists N entries from the current one; otherwise the argument
     // is a range, counted from the end when negative.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     let plus = unsafe { *arg } == b'+' as c_char;
     if plus {
         arg = unsafe { arg.add(1) };

@@ -131,7 +131,7 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
     let mut aco = AcoSave::default();
     // SAFETY: a live command block, by the contract above, and
     // `check_nomodeline` only advances `arg` inside its own argument.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
 

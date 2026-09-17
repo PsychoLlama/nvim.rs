@@ -26,7 +26,7 @@ pub fn ex_unlet(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation -- a live command, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
     let glv_flags = if excmd.forceit { GLV_QUIET } else { 0 };
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     unsafe { ex_unletlock(excmd, arg, 0, glv_flags, do_unlet_var) };
 }
 
@@ -34,7 +34,7 @@ pub fn ex_unlet(excmd: &mut ExArg) {
 pub fn ex_lockvar(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation -- a live command whose argument text
     // is NUL-terminated.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     // Two levels by default: the variable and what it directly holds.
     // `!` is everything, and an explicit count says how deep.
     let mut deep = 2;
@@ -123,7 +123,7 @@ unsafe fn ex_unletlock(
         }
     }
 
-    excmd.nextcmd = unsafe { check_nextcmd(arg) };
+    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
 }
 
 /// `:unlet`'s callback: delete what `lval` names.

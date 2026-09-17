@@ -118,7 +118,7 @@ pub fn ex_make(excmd: &mut ExArg) {
     // In case the name is not unique after all.
     unsafe { os_remove(cstr::at(fname)) };
 
-    let cmd = unsafe { make_get_fullcmd(excmd.arg, fname) };
+    let cmd = unsafe { make_get_fullcmd(excmd.arg_ptr(), fname) };
     unsafe { do_shell(cmd.as_ptr().cast_mut(), ShellOpts::NONE) };
 
     incr_quickfix_busy();
@@ -133,7 +133,7 @@ pub fn ex_make(excmd: &mut ExArg) {
     let newlist = !matches!(excmd.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
 
     let newlist2 = newlist as c_int;
-    let title = unsafe { qf_cmdtitle(*excmd.cmdlinep) };
+    let title = qf_cmdtitle(excmd.line.line());
     let qf_title = title.as_ptr();
     let res = unsafe {
         qf_init(

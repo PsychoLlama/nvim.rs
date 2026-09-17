@@ -11,11 +11,8 @@
 
 use super::*;
 use crate::ascii::ascii_iswhite;
-use crate::cstr;
-use crate::memory::handoff::owned_cstr;
-use crate::types::ExArgt;
+use crate::types::{CmdLine, ExArgt};
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 /// Nothing but spaces and tabs.
 ///
@@ -108,20 +105,16 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
     }
 }
 
+/// Render the Dict back into a command line, and leave it in `excmd`.
+///
+/// Every argument is preceded by one space, which is what lets the offsets
+/// the argument vector records be recovered from the lengths alone.
+///
 /// # Safety
 ///
-/// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns,
-/// left holding a heap-allocated line. `cmd` must point at the command's
-/// `ExArg` and `cmdinfo` at its `CmdParseInfo`, both live and unaliased for
-/// the call.
-pub(crate) unsafe fn build_cmdline_str(
-    cmdlinep: *mut *mut c_char,
-    excmd: &mut ExArg,
-    cmdinfo: *mut CmdParseInfo,
-    args: Array,
-) {
-    // SAFETY: the caller's promise -- `cmd` is the command being built and
-    // is live for the call.
+/// `cmdinfo` must point at the command's `CmdParseInfo`, live and unaliased
+/// for the call.
+pub(crate) unsafe fn build_cmdline_str(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, args: Array) {
     let argc: size_t = args.len();
     // Upstream's `kv_resize(cmdline, 32)`: a size hint, nothing more.
     let mut cmdline: Vec<u8> = Vec::with_capacity(32);
@@ -141,9 +134,8 @@ pub(crate) unsafe fn build_cmdline_str(
         }
     }
     let cmdname_idx: size_t = cmdline.len();
-    let name = excmd.cmd;
-    // SAFETY: `cmd.cmd` is the command name, NUL-terminated.
-    unsafe { cmdline_concat(&mut cmdline, name, cstr::bytes_at(name).len()) };
+    let name = excmd.line.cmd;
+    cmdline.extend_from_slice(excmd.line.rest_of(name));
     if excmd.argt.has(ExArgt::BANG) && excmd.forceit {
         cmdline_concat_str(&mut cmdline, c"!");
     }
@@ -153,78 +145,28 @@ pub(crate) unsafe fn build_cmdline_str(
         cmdline.push(excmd.regname as u8);
     }
 
-    // Each argument is preceded by one space, which is what lets the
-    // offsets below be recovered from the lengths alone.
-    excmd.argc = argc;
-    excmd.arglens = if argc > 0 {
-        // SAFETY: `xcalloc` answers `argc` zeroed slots.
-        unsafe { xcalloc(argc, size_of::<size_t>()) }.cast::<size_t>()
-    } else {
-        ptr::null_mut::<size_t>()
-    };
-    let argstart_idx: size_t = cmdline.len();
-    let arglens = excmd.arglens;
-    for (i, item) in args.iter().enumerate().take(argc) {
+    let mut spans: Vec<(usize, usize)> = Vec::with_capacity(argc);
+    for item in args.iter().take(argc) {
         let s = item
             .as_string()
             .expect("collect_args puts only Strings in the array");
-        // SAFETY: `arglens` was allocated with `argc` slots.
-        unsafe { *arglens.add(i) = s.len() };
-        cmdline_concat_str(&mut cmdline, c" ");
+        cmdline.push(b' ');
+        spans.push((cmdline.len(), s.len()));
         // SAFETY: `s` names its own bytes.
         unsafe { cmdline_concat(&mut cmdline, s.data(), s.len()) };
     }
-    // Handed to the caller, who releases it with `xfree`; every pointer
-    // below is into it, so it is taken over before any of them are made.
-    // The terminator `owned_cstr` appends is where `arg` points when there
-    // are no arguments.
+    // The terminator is where `arg` points when there are no arguments.
     let end_idx = cmdline.len();
-    let items = owned_cstr(cmdline);
+    cmdline.push(0);
 
-    // SAFETY: `cmdname_idx` is an offset into the buffer just built.
-    excmd.cmd = unsafe { items.add(cmdname_idx) };
-    excmd.args = if argc > 0 {
-        // SAFETY: `xcalloc` answers `argc` zeroed slots.
-        unsafe { xcalloc(argc, size_of::<*mut c_char>()) }.cast::<*mut c_char>()
-    } else {
-        ptr::null_mut::<*mut c_char>()
-    };
-    let eap_args = excmd.args;
-    let mut offset: size_t = argstart_idx;
-    for i in 0..argc {
-        offset += 1;
-        // SAFETY: both arrays have `argc` slots, and `offset` is inside the
-        // buffer the arguments were written into.
-        unsafe {
-            *eap_args.add(i) = items.add(offset);
-            offset += *arglens.add(i);
-        }
-    }
-    excmd.arg = if argc > 0 {
-        // SAFETY: `excmd` has at least one slot, filled in above.
-        unsafe { *eap_args }
-    } else {
-        // SAFETY: `end_idx` is where the terminator went.
-        unsafe { items.add(end_idx) }
-    };
-    // SAFETY: `cmdlinep` is the caller's slot, which takes the buffer over.
-    unsafe { *cmdlinep = items };
+    excmd.line = CmdLine::from_vec(cmdline);
+    excmd.line.cmd = cmdname_idx;
+    excmd.line.arg = spans.first().map_or(end_idx, |&(at, _)| at);
+    excmd.line.args = spans;
 
     // `:make`/`:grep` rewrite their own argument, and the rewrite has no
-    // relation to the `excmd` array that was just built.
-    let arg = excmd.arg;
-    // SAFETY: `cmd` is the command being built and `cmdlinep` the caller's
-    // slot, which `replace_makeprg` may reallocate.
-    let p: *mut c_char = unsafe { replace_makeprg(excmd, arg, cmdlinep) };
-    if p != arg {
-        excmd.arg = p;
-        // SAFETY: both arrays are this function's own allocations.
-        unsafe {
-            xfree(eap_args.cast());
-            xfree(arglens.cast());
-        }
-        excmd.args = ptr::null_mut::<*mut c_char>();
-        excmd.arglens = ptr::null_mut::<size_t>();
-        excmd.argc = 0;
+    // relation to the argument vector that was just built.
+    if replace_makeprg(excmd) {
+        excmd.line.args.clear();
     }
 }

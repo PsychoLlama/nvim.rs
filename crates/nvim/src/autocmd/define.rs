@@ -43,7 +43,7 @@ pub unsafe fn do_autocmd(
     let mut once = false;
 
     let group = if unsafe { *arg } == b'|' as ::core::ffi::c_char {
-        unsafe { excmd.nextcmd = arg.add(1) };
+        unsafe { excmd.set_nextcmd_ptr(arg.add(1)) };
         arg = c"".as_ptr().cast_mut();
         AUGROUP_ALL
     } else {
@@ -58,7 +58,7 @@ pub unsafe fn do_autocmd(
 
     pat = unsafe { skipwhite(pat) };
     if unsafe { *pat } == b'|' as ::core::ffi::c_char {
-        unsafe { excmd.nextcmd = pat.add(1) };
+        unsafe { excmd.set_nextcmd_ptr(pat.add(1)) };
         pat = c"".as_ptr().cast_mut();
         cmd = c"".as_ptr().cast_mut();
     } else {

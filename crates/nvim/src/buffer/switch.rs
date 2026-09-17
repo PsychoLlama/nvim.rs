@@ -195,7 +195,7 @@ pub fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
     let save_sea = swap_exists_action.get();
     // SAFETY: the caller's promise -- a live command, whose `cmd` is a
     // NUL-terminated pointer into the command line.
-    let (cmdidx, split) = unsafe { (excmd.cmdidx, *excmd.cmd as c_int == 's' as c_int) };
+    let (cmdidx, split) = unsafe { (excmd.cmdidx, *excmd.cmd_ptr() as c_int == 's' as c_int) };
     // SAFETY: as above.
     let forceit = excmd.forceit;
 

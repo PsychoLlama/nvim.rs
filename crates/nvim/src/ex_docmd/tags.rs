@@ -56,25 +56,27 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
 
     // A leading count is which match to take.
     let mut n = 1;
-    if ascii_isdigit(byte(excmd.arg)) {
-        n = unsafe { getdigits_int(&raw mut excmd.arg, false, 0) };
-        excmd.arg = skipwhite(excmd.arg);
+    if ascii_isdigit(byte(excmd.arg_ptr())) {
+        n = unsafe { excmd.with_arg_cursor(|cursor| getdigits_int(cursor, false, 0)) };
+        let arg_start = excmd.arg_ptr();
+        excmd.set_arg_ptr(skipwhite(arg_start));
     }
 
     // `/pat/` searches for a pattern rather than for a whole word, and
     // the rest of the line after it may be another command.
     let mut whole = true;
-    if byte(excmd.arg) == '/' as c_int {
+    if byte(excmd.arg_ptr()) == '/' as c_int {
         whole = false;
-        excmd.arg = unsafe { excmd.arg.add(1) };
-        let mut p = unsafe { skip_regexp(excmd.arg, '/' as c_int, magic_isset() as c_int) };
+        let arg_start = excmd.arg_ptr();
+        excmd.set_arg_ptr(unsafe { arg_start.add(1) });
+        let mut p = unsafe { skip_regexp(excmd.arg_ptr(), '/' as c_int, magic_isset() as c_int) };
         if unsafe { *p } != 0 {
             unsafe { *p = NUL as c_char };
             p = unsafe { skipwhite(p.add(1)) };
             if ends_excmd(byte(p)) == 0 {
                 excmd.errmsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), p) });
             } else {
-                excmd.nextcmd = unsafe { check_nextcmd(p) };
+                excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
             }
         }
     }
@@ -82,12 +84,12 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
     if !excmd.skip {
         unsafe {
             find_pattern_in_path(
-                excmd.arg,
+                excmd.arg_ptr(),
                 kDirectionNotSet,
-                cstr::bytes_at(excmd.arg).len(),
+                cstr::bytes_at(excmd.arg_ptr()).len(),
                 whole,
                 !excmd.forceit,
-                if *excmd.cmd as c_int == 'd' as c_int {
+                if *excmd.cmd_ptr() as c_int == 'd' as c_int {
                     FIND_DEFINE as c_int
                 } else {
                     FIND_ANY as c_int
@@ -151,7 +153,7 @@ unsafe fn ex_tag_cmd(excmd: &mut ExArg, name: *const c_char) {
     }
     unsafe {
         do_tag(
-            excmd.arg,
+            excmd.arg_ptr(),
             cmd,
             if excmd.addr_count > 0 {
                 excmd.line2 as c_int

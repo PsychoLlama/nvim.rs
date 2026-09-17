@@ -209,8 +209,12 @@ pub(crate) unsafe fn find_ucmd(
     complp: *mut ExpandContext,
 ) -> *mut c_char {
     // SAFETY: caller contract; `p` points into the same line as `args.cmd`.
-    let typed =
-        unsafe { slice::from_raw_parts(excmd.cmd.cast::<u8>(), p.offset_from(excmd.cmd) as _) };
+    let typed = unsafe {
+        slice::from_raw_parts(
+            excmd.cmd_ptr().cast::<u8>(),
+            p.offset_from(excmd.cmd_ptr()) as _,
+        )
+    };
 
     let mut matchlen = 0;
     let mut found = false;
@@ -517,7 +521,7 @@ pub(crate) fn ex_command(excmd: &mut ExArg) {
     let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
 
     // SAFETY: caller contract.
-    let (arg, forceit) = (excmd.arg, excmd.forceit);
+    let (arg, forceit) = (excmd.arg_ptr(), excmd.forceit);
     // SAFETY: caller contract; `arg` is NUL-terminated.
     let has_attr = unsafe { *arg } == b'-' as c_char;
     let mut p = arg;
@@ -656,7 +660,7 @@ pub(crate) fn uc_clear(table: Table) {
 pub(crate) fn ex_delcommand(excmd: &mut ExArg) {
     // SAFETY: caller contract; `args.arg` is NUL-terminated.
     let (mut arg, buffer_only) = unsafe {
-        let arg = excmd.arg.cast_const();
+        let arg = excmd.arg_ptr().cast_const();
         let local = CStr::from_ptr(arg).to_bytes().starts_with(b"-buffer")
             && ascii_iswhite(*arg.add(7) as c_int);
         (arg, local)

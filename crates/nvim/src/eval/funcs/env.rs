@@ -18,6 +18,7 @@ use crate::ex_docmd::{eval_vars, expand_filename};
 use crate::guard::Suppress;
 use crate::memfile::mf_fname;
 use crate::memline::{recover_names, swapfile_dict};
+use crate::memory::XString;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
@@ -32,6 +33,7 @@ use crate::os::stdpaths::{get_appname, get_xdg_home, stdpaths_get_xdg_var};
 use crate::path::concat_fnames_realloc;
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::types::CmdLine;
 use crate::types::{
     CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, List, NUL, OK, OptInt, TypVal,
     VAR_DICT, VAR_LIST, VAR_STRING, VarNumber, XDGVarType, kBoolVarFalse, kListLenShouldKnow,
@@ -191,23 +193,26 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         dict_get_bool(unsafe { (d).as_ref() }, b"errmsg", no) != 0
     };
     let quiet = !errmsg;
-    let mut cmdstr = unsafe { xstrdup(arg_string(&mut numbuf, &args[0])) };
-    let mut eap: ExArg = unsafe { core::mem::zeroed() };
-    eap.arg = cmdstr;
-    eap.cmd = cmdstr;
-    eap.cmdidx = CmdIdx::USER;
-    eap.addr_type = CmdAddr::Lines;
-    eap.argt = ExArgt::NOSPC;
+    // SAFETY: `arg_string` answers a NUL-terminated string that lives for
+    // the call.
+    let line = unsafe { cstr::bytes_at(arg_string(&mut numbuf, &args[0])) }.to_vec();
+    let mut eap = ExArg {
+        line: CmdLine::from_bytes(&line),
+        cmdidx: CmdIdx::USER,
+        addr_type: CmdAddr::Lines,
+        argt: ExArgt::NOSPC,
+        ..ExArg::default()
+    };
     let mut errormsg = None;
     let _no_emsg = quiet.then(Suppress::emsg);
-    if unsafe { expand_filename(&mut eap, &raw mut cmdstr, &mut errormsg) }.is_err()
+    if expand_filename(&mut eap, &mut errormsg).is_err()
         && !quiet
         && let Some(msg) = &errormsg
         && !msg.is_empty()
     {
         emsg(msg);
     }
-    result.write_string(cmdstr);
+    result.write_string(XString::from_bytes(eap.line.line()).into_raw());
 }
 
 /// `setenv({name}, {val})` — `v:null` unsets.

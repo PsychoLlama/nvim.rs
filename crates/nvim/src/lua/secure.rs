@@ -131,7 +131,7 @@ pub fn ex_trust(excmd: &mut ExArg) {
     // SAFETY: the caller's `ExArg`; `arg` is the NUL-terminated command
     // line, so the first word is inside it.
     let (arg, word) = unsafe {
-        let arg = excmd.arg;
+        let arg = excmd.arg_ptr();
         let rest = skiptowhite(arg);
         (
             rest,

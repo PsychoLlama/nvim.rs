@@ -15,12 +15,12 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_char, c_int};
+use std::ffi::{CString, c_int};
 
 use neovim::eval::{eval_to_number, eval_to_string};
 use neovim::ex_docmd::{FORCE_BIN, FORCE_NOBIN};
 use neovim::ex_docmd::{do_cmdline_cmd, getargopt, parse_cmdline, separate_nextcmd};
-use neovim::types::{CmdIdx, CmdModFlags, CmdParseInfo, ExArg, ExArgt, LineNr, Pos};
+use neovim::types::{CmdIdx, CmdLine, CmdModFlags, CmdParseInfo, ExArg, ExArgt, LineNr, Pos};
 use neovim::winlayer::Win;
 
 use crate::support::{Editor, Sandbox, check_emsg, cstr, editor_lock};
@@ -79,32 +79,28 @@ fn cmd_name(idx: CmdIdx) -> &'static str {
     Box::leak(format!("{idx:?}").into_boxed_str())
 }
 
-fn text_at(p: *const c_char) -> String {
-    if p.is_null() {
-        return String::new();
-    }
-    // SAFETY: the parse leaves every pointer it hands back inside the
-    // NUL-terminated line buffer the caller still owns.
-    unsafe { std::ffi::CStr::from_ptr(p) }
-        .to_string_lossy()
-        .into_owned()
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 /// Parse one line, answering the record on success and the message on
 /// failure.
 fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
-    // `parse_cmdline` writes into the line (a `|` becomes a NUL), so the
-    // buffer is the case's own copy and outlives the read-back below.
-    let mut buf: Vec<c_char> = line.bytes().chain([0]).map(|b| b as c_char).collect();
-    let mut cmdline: *mut c_char = buf.as_mut_ptr();
     let mut args = ExArg::default();
     // SAFETY: `CmdParseInfo` is a `repr(Rust)` aggregate of scalars and
     // pointers, and `parse_cmdline` zeroes it before its first read anyway.
     let mut info: CmdParseInfo = unsafe { std::mem::zeroed() };
     let mut errormsg: Option<CString> = None;
-    // SAFETY: all three out-parameters are locals of this frame, unaliased
-    // for the call, and `cmdline` names the buffer above.
-    let ok = unsafe { parse_cmdline(&raw mut cmdline, &mut args, &raw mut info, &mut errormsg) };
+    // SAFETY: both out-parameters are locals of this frame, unaliased for
+    // the call.
+    let ok = unsafe {
+        parse_cmdline(
+            CmdLine::from_bytes(line.as_bytes()),
+            &mut args,
+            &raw mut info,
+            &mut errormsg,
+        )
+    };
     if !ok {
         return Err(errormsg.map_or_else(String::new, |m| m.to_string_lossy().into_owned()));
     }
@@ -118,22 +114,27 @@ fn parse(_editor: &Editor, line: &str) -> Result<Parsed, String> {
             .ok()
             .filter(|&r| r != 0)
             .map(char::from),
-        arg: text_at(args.arg),
-        nextcmd: (!args.nextcmd.is_null()).then(|| text_at(args.nextcmd)),
+        arg: text(args.line.arg()),
+        nextcmd: args.line.next_cmd().map(text),
     })
 }
 
 /// The modifier flags a line parses to, and the `:verbose` level it asks
 /// for.
 fn parse_mods(_editor: &Editor, line: &str) -> (CmdModFlags, c_int) {
-    let mut buf: Vec<c_char> = line.bytes().chain([0]).map(|b| b as c_char).collect();
-    let mut cmdline: *mut c_char = buf.as_mut_ptr();
     let mut args = ExArg::default();
     // SAFETY: as in `parse`.
     let mut info: CmdParseInfo = unsafe { std::mem::zeroed() };
     let mut errormsg: Option<CString> = None;
     // SAFETY: as in `parse`.
-    let ok = unsafe { parse_cmdline(&raw mut cmdline, &mut args, &raw mut info, &mut errormsg) };
+    let ok = unsafe {
+        parse_cmdline(
+            CmdLine::from_bytes(line.as_bytes()),
+            &mut args,
+            &raw mut info,
+            &mut errormsg,
+        )
+    };
     assert!(ok, "{line:?} did not parse");
     (info.cmdmod.cmod_flags, info.cmdmod.cmod_verbose)
 }
@@ -243,26 +244,22 @@ fn a_register_and_a_count_follow_the_argument() {
 type ArgOpts = (char, String, c_int, bool, bool, c_int, String);
 
 fn argopts(_editor: &Editor, line: &str) -> Result<ArgOpts, ()> {
-    let mut buf: Vec<c_char> = line.bytes().chain([0]).map(|b| b as c_char).collect();
     let mut args = ExArg {
-        cmd: buf.as_mut_ptr(),
-        arg: buf.as_mut_ptr(),
+        line: CmdLine::from_bytes(line.as_bytes()),
         ..Default::default()
     };
-    // SAFETY: `args` is this frame's, unaliased, and its `cmd`/`arg` point
-    // into the NUL-terminated buffer above.
-    while unsafe { std::slice::from_raw_parts(args.arg.cast::<u8>(), 2) } == b"++" {
+    while args.line.arg().starts_with(b"++") {
         if getargopt(&mut args).is_err() {
             return Err(());
         }
     }
-    // SAFETY: an offset `getargopt` recorded is inside the buffer above,
-    // and the value it names was NUL-terminated in place.
+    // An offset `getargopt` recorded is from the command word, and the
+    // value it names was NUL-terminated in place.
     let at = |off: c_int| -> String {
         if off == 0 {
             String::new()
         } else {
-            text_at(unsafe { args.cmd.offset(off as isize) })
+            text(args.line.rest_of(args.line.cmd + off as usize))
         }
     };
     Ok((
@@ -272,7 +269,7 @@ fn argopts(_editor: &Editor, line: &str) -> Result<ArgOpts, ()> {
         args.read_edit,
         args.mkdir_p,
         args.bad_char,
-        text_at(args.arg),
+        text(args.line.arg()),
     ))
 }
 
@@ -627,16 +624,15 @@ fn separate_nextcmd_cuts_the_argument_at_the_bar_that_ends_it() {
     // one, which `del_trailing_spaces` takes off on the way out.
     #[track_caller]
     fn split(argt: ExArgt, cmdidx: CmdIdx, line: &str) -> (String, Option<String>) {
-        let mut buf: Vec<c_char> = line.bytes().chain([0]).map(|b| b as c_char).collect();
         let mut excmd = ExArg {
             cmdidx,
             argt,
-            arg: buf.as_mut_ptr(),
+            line: CmdLine::from_bytes(line.as_bytes()),
             ..ExArg::default()
         };
         separate_nextcmd(&mut excmd);
-        let arg = text_at(excmd.arg);
-        let next = (!excmd.nextcmd.is_null()).then(|| text_at(excmd.nextcmd));
+        let arg = text(excmd.line.arg());
+        let next = excmd.line.next_cmd().map(text);
         (arg, next)
     }
 

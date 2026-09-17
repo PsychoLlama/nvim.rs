@@ -180,7 +180,7 @@ pub(crate) fn has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
 /// silently ignored rather than printing anything.
 pub(crate) fn ex_version(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation; `arg` is NUL-terminated.
-    if unsafe { *excmd.arg } != 0 {
+    if unsafe { *excmd.arg_ptr() } != 0 {
         return;
     }
     // Start the banner below the ":version" the user typed. The message

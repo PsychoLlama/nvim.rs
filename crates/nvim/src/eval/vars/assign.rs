@@ -68,7 +68,7 @@ pub fn ex_let(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation -- a live `:let`, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
     let is_const = excmd.cmdidx == CmdIdx::r#const;
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     let mut var_count = 0;
     let mut semicolon = 0;
     let mut first: c_int = 1;
@@ -113,7 +113,7 @@ pub fn ex_let(excmd: &mut ExArg) {
                 unsafe { lister(&raw mut first) };
             }
         }
-        excmd.nextcmd = unsafe { check_nextcmd(arg) };
+        excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
         return;
     }
 
@@ -123,7 +123,7 @@ pub fn ex_let(excmd: &mut ExArg) {
     // *now* rather than inside the closure because the command itself is
     // lent to `heredoc_get` and to the evaluator below, neither of which
     // touches `arg`.
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     let assign = |tv: &mut TypVal, op: *const c_char| {
         // SAFETY: the command's own argument text, and a live value.
         let _ = unsafe { ex_let_vars(arg, tv, false, semicolon, var_count, is_const, op) };
@@ -174,6 +174,7 @@ pub fn ex_let(excmd: &mut ExArg) {
         eval_getline: None,
         eval_cookie: ptr::null_mut(),
         eval_tofree: ptr::null_mut(),
+        next_cmd: None,
     };
     let skip = excmd.skip;
     // SAFETY: a live local `evalarg`, and `expr` inside the command's own

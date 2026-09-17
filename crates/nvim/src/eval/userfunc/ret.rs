@@ -41,12 +41,13 @@ const EVALARG_INIT: EvalArg = EvalArg {
     eval_getline: None,
     eval_cookie: ptr::null_mut(),
     eval_tofree: ptr::null_mut(),
+    next_cmd: None,
 };
 
 /// `:return [expr]`.
 pub fn ex_return(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     let mut rettv = TV_INITIAL_VALUE;
     let mut returning = false;
 
@@ -60,7 +61,7 @@ pub fn ex_return(excmd: &mut ExArg) {
 
     let skipping = (excmd.skip).then(Suppress::emsg_skip);
 
-    excmd.nextcmd = ptr::null_mut();
+    excmd.set_nextcmd_ptr(ptr::null_mut());
     if unsafe { *arg } != NUL as c_char
         && unsafe { *arg } != b'|' as c_char
         && unsafe { *arg } != b'\n' as c_char
@@ -85,9 +86,9 @@ pub fn ex_return(excmd: &mut ExArg) {
     // When skipping or the return gets pending, advance to the next
     // command in this line; otherwise the whole line is used.
     if returning {
-        excmd.nextcmd = ptr::null_mut();
-    } else if excmd.nextcmd.is_null() {
-        excmd.nextcmd = unsafe { check_nextcmd(arg) };
+        excmd.set_nextcmd_ptr(ptr::null_mut());
+    } else if excmd.line.next.is_none() {
+        excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
     }
 
     drop(skipping);
@@ -337,7 +338,7 @@ pub fn invoke_all_defer() {
 /// `:call` and `:defer`.
 pub fn ex_call(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     let mut fudi = FUNCDICT_INIT;
     let mut partial: *mut Partial = ptr::null_mut();
     let mut evalarg = EVALARG_INIT;
@@ -349,7 +350,7 @@ pub fn ex_call(excmd: &mut ExArg) {
         // are reported -- but nothing is called.
         let mut rettv = TV_INITIAL_VALUE;
         let skipping = Suppress::emsg_skip();
-        if unsafe { eval0(excmd.arg, &mut rettv, Some(excmd), &raw mut evalarg) }.is_ok() {
+        if unsafe { eval0(excmd.arg_ptr(), &mut rettv, Some(excmd), &raw mut evalarg) }.is_ok() {
             tv_clear(&mut rettv);
         }
         drop(skipping);
@@ -396,7 +397,7 @@ pub fn ex_call(excmd: &mut ExArg) {
     let startarg = unsafe { skipwhite(arg) };
     if unsafe { *startarg } != b'(' as c_char {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E107: Missing parentheses: {arg}");
     } else {
         let failed = if excmd.cmdidx == CmdIdx::defer {
@@ -428,7 +429,7 @@ pub fn ex_call(excmd: &mut ExArg) {
                     semsg!("E488: Trailing characters: {arg}");
                 }
             } else {
-                excmd.nextcmd = unsafe { check_nextcmd(arg) };
+                excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
             }
         }
         unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };

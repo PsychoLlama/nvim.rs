@@ -221,8 +221,11 @@ pub(crate) unsafe fn readfile(
         if let Some(command) = excmd.as_deref()
             && command.force_enc != 0
         {
+            let name = command
+                .line
+                .ptr_from(command.line.cmd + command.force_enc as usize);
             // SAFETY: `force_enc` is an offset into the command's own line.
-            fenc = unsafe { enc_canonize(command.cmd.offset(command.force_enc as isize)) };
+            fenc = unsafe { enc_canonize(name.cast_mut()) };
             fenc_alloced = true;
             keep_dest_enc = true;
         } else if Buf::current().b_p_bin != 0 {

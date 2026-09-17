@@ -49,7 +49,7 @@ use crate::highlight_group::HLF_D;
 /// print the marks
 pub fn ex_marks(excmd: &mut ExArg) {
     // SAFETY: the caller promised a live command.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     // An empty argument is the same as none: `:marks` with a trailing space
     // must not filter everything out.
     // SAFETY: `arg` is a NUL-terminated string or null.
@@ -213,7 +213,7 @@ pub(super) unsafe fn show_one_mark(
 pub fn ex_delmarks(excmd: &mut ExArg) {
     // SAFETY: the caller promised a live command whose `arg` is a
     // NUL-terminated string.
-    let (arg, forceit) = (excmd.arg, excmd.forceit);
+    let (arg, forceit) = (excmd.arg_ptr(), excmd.forceit);
     let mut buf = Buf::current();
     // SAFETY: `arg` is a NUL-terminated string.
     let empty = c_int::from(unsafe { *arg }) == NUL;

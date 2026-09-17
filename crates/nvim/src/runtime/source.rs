@@ -61,7 +61,7 @@ unsafe fn cmd_source(fname: *mut c_char, excmd: Option<&mut ExArg>) {
             // SAFETY: the command's own conditional stack, live for the call.
             let busy = global_busy.get() != 0
                 || listcmd_busy.get()
-                || !command.nextcmd.is_null()
+                || !command.line.next.is_none()
                 || unsafe { (*command.cstack).cs_idx } >= 0;
             // SAFETY: the caller's NUL-terminated name.
             unsafe { openscript(fname, busy) };
@@ -83,7 +83,7 @@ unsafe fn cmd_source(fname: *mut c_char, excmd: Option<&mut ExArg>) {
 /// `:source`.
 pub fn ex_source(excmd: &mut ExArg) {
     // SAFETY: the caller's contract.
-    unsafe { cmd_source(excmd.arg, Some(excmd)) };
+    unsafe { cmd_source(excmd.arg_ptr(), Some(excmd)) };
 }
 
 /// `:options`, which is `:source` of the option window script with the

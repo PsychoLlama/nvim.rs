@@ -41,7 +41,7 @@ pub fn ex_args(excmd: &mut ExArg) {
     // ":args file ..": define a new argument list, handled like ":next".
     // Also for ":arglocal file .." and ":argglobal file ..".
     // SAFETY: an ex-command argument is NUL-terminated.
-    if unsafe { *excmd.arg } as c_int != NUL {
+    if unsafe { *excmd.arg_ptr() } as c_int != NUL {
         if arglist_is_locked() {
             return;
         }
@@ -181,7 +181,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     // SAFETY: caller contract.
     // SAFETY: `cmd` points at the command's own text, which is not empty.
-    let is_split_cmd = unsafe { *excmd.cmd } as c_int == 's' as c_int;
+    let is_split_cmd = unsafe { *excmd.cmd_ptr() } as c_int == 's' as c_int;
     let forceit = excmd.forceit;
     let cmdidx = excmd.cmdidx;
     let old_arg_idx = cur_arg_idx();
@@ -249,7 +249,7 @@ pub fn ex_next(excmd: &mut ExArg) {
     let forceit = excmd.forceit;
     let is_snext = excmd.cmdidx == CmdIdx::snext;
     // SAFETY: `arg` points at the command's own text.
-    let has_arg = unsafe { *excmd.arg } as c_int != NUL;
+    let has_arg = unsafe { *excmd.arg_ptr() } as c_int != NUL;
     // Check for a changed buffer now: if this fails the argument list is not
     // redefined.
     // SAFETY: curbuf is valid; `check_changed` only reads it and may prompt.
@@ -262,7 +262,7 @@ pub fn ex_next(excmd: &mut ExArg) {
     let argn = if has_arg {
         // Redefine the file list.
         // SAFETY: caller contract.
-        if !unsafe { do_arglist(excmd.arg, ArgListOp::Set, 0, true) } {
+        if !unsafe { do_arglist(excmd.arg_ptr(), ArgListOp::Set, 0, true) } {
             return;
         }
         0
@@ -321,7 +321,7 @@ pub fn ex_argedit(excmd: &mut ExArg) {
     // Whether curbuf will be reused, in which case b_ffname will be set.
     let curbuf_is_reusable = curbuf_reusable();
     // SAFETY: caller contract; the argument is NUL-terminated.
-    if !unsafe { do_arglist(excmd.arg, ArgListOp::Add, argn, true) } {
+    if !unsafe { do_arglist(excmd.arg_ptr(), ArgListOp::Add, argn, true) } {
         return;
     }
     maketitle();
@@ -348,7 +348,7 @@ pub fn ex_argadd(excmd: &mut ExArg) {
         cur_arg_idx() + 1
     };
     // SAFETY: caller contract; the argument is NUL-terminated.
-    unsafe { do_arglist(excmd.arg, ArgListOp::Add, after, false) };
+    unsafe { do_arglist(excmd.arg_ptr(), ArgListOp::Add, after, false) };
     maketitle();
 }
 
@@ -360,12 +360,12 @@ pub fn ex_argdelete(excmd: &mut ExArg) {
         return;
     }
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let by_range = unsafe { excmd.addr_count > 0 || *excmd.arg as c_int == NUL };
+    let by_range = unsafe { excmd.addr_count > 0 || *excmd.arg_ptr() as c_int == NUL };
     // SAFETY: caller contract.
     if by_range {
         delete_arg_range(excmd);
     } else {
-        unsafe { do_arglist(excmd.arg, ArgListOp::Delete, 0, false) };
+        unsafe { do_arglist(excmd.arg_ptr(), ArgListOp::Delete, 0, false) };
     }
     maketitle();
 }
@@ -375,7 +375,7 @@ pub fn ex_argdelete(excmd: &mut ExArg) {
 fn delete_arg_range(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let (addr_count, has_arg) = unsafe { (excmd.addr_count, *excmd.arg as c_int != NUL) };
+    let (addr_count, has_arg) = unsafe { (excmd.addr_count, *excmd.arg_ptr() as c_int != NUL) };
     if addr_count == 0 {
         // ":argdel" works like ":.argdel".
         if cur_arg_idx() >= argcount() {

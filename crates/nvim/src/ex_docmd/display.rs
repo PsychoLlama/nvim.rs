@@ -49,10 +49,10 @@ use ::libc::{fclose, strcasecmp};
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
-    if byte(excmd.arg) != NUL {
-        if unsafe { load_colors(excmd.arg) }.is_err() {
+    if byte(excmd.arg_ptr()) != NUL {
+        if unsafe { load_colors(excmd.arg_ptr()) }.is_err() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E185: Cannot find color scheme '{arg}'");
         }
         return;
@@ -76,10 +76,10 @@ pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
 pub(crate) fn ex_highlight(excmd: &mut ExArg) {
-    if byte(excmd.arg) == NUL && byte_at(excmd.cmd, 2) == '!' as c_int {
+    if byte(excmd.arg_ptr()) == NUL && byte_at(excmd.cmd_ptr(), 2) == '!' as c_int {
         msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
-    unsafe { do_highlight(excmd.arg, excmd.forceit, false) };
+    unsafe { do_highlight(excmd.arg_ptr(), excmd.forceit, false) };
 }
 
 /// `:redir` — send message output to a file, a register or a variable
@@ -88,8 +88,8 @@ pub(crate) fn ex_highlight(excmd: &mut ExArg) {
 /// Only one destination at a time: every form closes whatever was open
 /// first.
 pub(crate) fn ex_redir(excmd: &mut ExArg) {
-    let mut arg = excmd.arg;
-    if unsafe { strcasecmp(excmd.arg, c"END".as_ptr() as *mut c_char) } == 0 {
+    let mut arg = excmd.arg_ptr();
+    if unsafe { strcasecmp(excmd.arg_ptr(), c"END".as_ptr() as *mut c_char) } == 0 {
         close_redir();
     } else if byte(arg) == '>' as c_int {
         // `:redir > file` truncates, `:redir >> file` appends.
@@ -131,7 +131,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         if byte(arg) != NUL {
             redir_reg.set(0);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E475: Invalid argument: {arg}");
         }
     } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
@@ -146,7 +146,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         }
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E475: Invalid argument: {arg}");
     }
     // Whichever form succeeded, output is being captured again.
@@ -252,8 +252,8 @@ pub(crate) fn close_redir() {
 
 /// `:digraphs` — define digraphs, or list them.
 pub(crate) fn ex_digraphs(excmd: &mut ExArg) {
-    if byte(excmd.arg) != NUL {
-        putdigraph(unsafe { core::ffi::CStr::from_ptr(excmd.arg) }.to_bytes());
+    if byte(excmd.arg_ptr()) != NUL {
+        putdigraph(unsafe { core::ffi::CStr::from_ptr(excmd.arg_ptr()) }.to_bytes());
     } else {
         listdigraphs(excmd.forceit);
     }

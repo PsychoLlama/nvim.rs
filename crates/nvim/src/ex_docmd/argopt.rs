@@ -120,7 +120,7 @@ pub(crate) fn get_bad_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.
 pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
-    let mut arg = unsafe { excmd.arg.add(2) };
+    let mut arg = unsafe { excmd.arg_ptr().add(2) };
     let mut bad_char_idx: c_int = 0;
 
     // `++bin`/`++nobin` and `++binary`/`++nobinary`.
@@ -134,21 +134,21 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
         if !unsafe { checkforcmd(&raw mut arg, c"binary".as_ptr(), 3) } {
             return Err(Failed);
         }
-        excmd.arg = skipwhite(arg);
+        excmd.set_arg_ptr(skipwhite(arg));
         return Ok(());
     }
 
     // `++edit`, and not `++editsomething`.
     if starts_with(arg, b"edit") && !(ubyte_at(arg, 4)).is_ascii_alphabetic() {
         excmd.read_edit = true;
-        excmd.arg = unsafe { skipwhite(arg.add(4)) };
+        excmd.set_arg_ptr(unsafe { skipwhite(arg.add(4)) });
         return Ok(());
     }
 
     // `++p`, and not `++psomething`.
     if byte(arg) == 'p' as c_int && !(ubyte_at(arg, 1)).is_ascii_alphabetic() {
         excmd.mkdir_p = true;
-        excmd.arg = unsafe { skipwhite(arg.add(1)) };
+        excmd.set_arg_ptr(unsafe { skipwhite(arg.add(1)) });
         return Ok(());
     }
 
@@ -172,24 +172,25 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
         return Err(Failed);
     }
     arg = unsafe { arg.add(1) };
-    unsafe { *pp = arg.offset_from(excmd.cmd) as c_int };
+    unsafe { *pp = arg.offset_from(excmd.cmd_ptr()) as c_int };
     arg = skip_cmd_arg(arg, false);
-    excmd.arg = skipwhite(arg);
+    excmd.set_arg_ptr(skipwhite(arg));
     unsafe { *arg = NUL as c_char };
 
     if pp == &raw mut excmd.force_ff {
-        if unsafe { check_ff_value(excmd.cmd.offset(excmd.force_ff as isize)) } == FAIL {
+        if unsafe { check_ff_value(excmd.cmd_ptr().offset(excmd.force_ff as isize)) } == FAIL {
             return Err(Failed);
         }
         // Only the first letter is kept: 'u', 'd' or 'm'.
-        excmd.force_ff = ubyte_at(excmd.cmd, excmd.force_ff as isize) as c_int;
+        excmd.force_ff = ubyte_at(excmd.cmd_ptr(), excmd.force_ff as isize) as c_int;
     } else if pp == &raw mut excmd.force_enc {
-        let mut p = unsafe { excmd.cmd.offset(excmd.force_enc as isize) };
+        let mut p = unsafe { excmd.cmd_ptr().offset(excmd.force_enc as isize) };
         while byte(p) != NUL {
             unsafe { *p = (*p as u8).to_ascii_lowercase() as c_char };
             p = unsafe { p.add(1) };
         }
-    } else if unsafe { get_bad_opt(excmd.cmd.offset(bad_char_idx as isize), excmd) }.is_err() {
+    } else if unsafe { get_bad_opt(excmd.cmd_ptr().offset(bad_char_idx as isize), excmd) }.is_err()
+    {
         return Err(Failed);
     }
     Ok(())
@@ -295,12 +296,12 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
     let last_tab = || current_tab_nr(None);
     let invarg2 = |command: &mut ExArg| {
         // SAFETY: the argument is a tail of the command line.
-        command.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), command.arg));
+        command.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), command.arg_ptr()));
     };
 
     'theend: {
-        if !excmd.arg.is_null() && byte(excmd.arg) != NUL {
-            let mut p = excmd.arg;
+        if !excmd.arg_ptr().is_null() && byte(excmd.arg_ptr()) != NUL {
+            let mut p = excmd.arg_ptr();
             // `+N`/`-N` means N places to the right/left of here.
             let relative = match byte(p) {
                 c if c == '-' as c_int => {
@@ -322,7 +323,7 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
                     tab_number = last_tab();
                 } else if equals(p, b"#") {
                     if last_used_tab().is_none() {
-                        excmd.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), excmd.arg));
+                        excmd.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), excmd.arg_ptr()));
                         tab_number = 0;
                         break 'theend;
                     }
@@ -374,16 +375,17 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
                     // `:-tabmove` is spelled as a range, so the sign has
                     // to be read back off the command line — the range
                     // parser has already turned it into a number.
-                    let mut cmdp = excmd.cmd;
+                    let mut at = excmd.line.cmd;
                     loop {
-                        cmdp = unsafe { cmdp.offset(-1) };
-                        if !(cmdp > unsafe { *excmd.cmdlinep }
-                            && (ascii_iswhite(byte(cmdp)) || ascii_isdigit(byte(cmdp))))
+                        at -= 1;
+                        if !(at > 0
+                            && (ascii_iswhite(c_int::from(excmd.line.byte_at(at)))
+                                || ascii_isdigit(c_int::from(excmd.line.byte_at(at)))))
                         {
                             break;
                         }
                     }
-                    if byte(cmdp) == '-' as c_int {
+                    if excmd.line.byte_at(at) == b'-' {
                         tab_number = tab_number.wrapping_sub(1);
                         if tab_number < unaccept_arg0 {
                             excmd.errmsg = Some(ex_msg(e_invrange.as_ptr()));

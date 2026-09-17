@@ -776,7 +776,7 @@ const PACKADD_PATTERN: &CStr = c"pack/*/%s/%s";
 /// `:packadd[!] {name}`.
 pub fn ex_packadd(excmd: &mut ExArg) {
     // SAFETY: `excmd` is the live command; `pat` is owned and freed below.
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     let len = PACKADD_PATTERN.count_bytes() + 1 + unsafe { cstr::bytes_at(arg) }.len() + 5;
     let pat = unsafe { xmallocz(len) }.cast::<c_char>();
     let cookie = if excmd.forceit {

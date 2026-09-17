@@ -234,20 +234,291 @@ impl Default for CmdMod {
         Self::NONE
     }
 }
+/// One Ex command's line, and the cursors into it.
+///
+/// Upstream threads four raw pointers for this. `eap->cmdlinep` names the
+/// line and is a `char **` rather than a `char *` because expanding `%` and
+/// `` `cmd` `` *reallocates* the line mid-command; `eap->cmd`, `eap->arg`
+/// and `eap->nextcmd` point into whatever it currently is, and every one of
+/// them is silently stale the moment it does not. An offset into an owner
+/// survives that reallocation, so the line is owned here and the cursors
+/// are offsets.
+///
+/// The buffer is not one string. [`separate_nextcmd`] writes a NUL over the
+/// `|` that ended the command, so `next` addresses a *second*
+/// NUL-terminated string inside the same allocation, and the argument
+/// expansion appends a third. [`rest_of`](CmdLine::rest_of) is what reads
+/// one of them: from an offset to the next NUL, which is exactly what a C
+/// consumer handed `eap->arg` sees.
+///
+/// [`separate_nextcmd`]: crate::ex_docmd::separate_nextcmd
+#[derive(Clone, Default)]
+pub struct CmdLine {
+    /// The line's bytes, empty or ending in a NUL.
+    text: Vec<u8>,
+    /// The buffer a handler swapped out from under the command
+    /// (`eap->cmdline_tofree` upstream): `:let x = 1` continued over more
+    /// lines is evaluated out of a joined copy, which then *becomes* the
+    /// line so that `nextcmd` can point into it. The old bytes stay alive
+    /// until the command ends, because the cursors of the command still
+    /// running address them.
+    retired: Option<Vec<u8>>,
+    /// Where the command word starts, after the range and the modifiers.
+    pub cmd: usize,
+    /// Where the command's argument starts.
+    pub arg: usize,
+    /// Where the command after a `|` starts, if there is one. A `None` is
+    /// upstream's null `nextcmd`: not "offset zero", but "no next command".
+    pub next: Option<usize>,
+    /// `nvim_cmd`'s pre-split argument vector, as `(offset, length)` pairs
+    /// into the line it rendered. Empty for a command that was typed.
+    pub args: Vec<(usize, usize)>,
+}
+
+impl CmdLine {
+    /// No line at all: what an `ExArg` that has not been handed one holds.
+    pub const EMPTY: CmdLine = CmdLine {
+        text: Vec::new(),
+        retired: None,
+        cmd: 0,
+        arg: 0,
+        next: None,
+        args: Vec::new(),
+    };
+
+    /// The line `text` holds, which must be empty or end in a NUL.
+    pub fn from_vec(text: Vec<u8>) -> CmdLine {
+        debug_assert!(
+            text.last().is_none_or(|byte| *byte == 0),
+            "a command line is a NUL-terminated buffer"
+        );
+        CmdLine {
+            text,
+            ..CmdLine::EMPTY
+        }
+    }
+
+    /// The line `bytes` spells, which is copied and terminated.
+    pub fn from_bytes(bytes: &[u8]) -> CmdLine {
+        let mut text = Vec::with_capacity(bytes.len() + 1);
+        text.extend_from_slice(bytes);
+        text.push(0);
+        CmdLine::from_vec(text)
+    }
+
+    /// The buffer back, terminator included, leaving the cursors behind.
+    pub fn into_vec(self) -> Vec<u8> {
+        self.text
+    }
+
+    /// How many bytes the buffer holds, terminator included.
+    pub fn len(&self) -> usize {
+        self.text.len()
+    }
+
+    /// Is there no line at all?
+    pub fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
+
+    /// The whole buffer, every string in it and every terminator.
+    pub fn buffer(&self) -> &[u8] {
+        &self.text
+    }
+
+    /// The whole buffer, writable.
+    pub fn buffer_mut(&mut self) -> &mut [u8] {
+        &mut self.text
+    }
+
+    /// The string that starts at `at`: up to, and not including, the next
+    /// NUL. What a C consumer handed `line + at` reads.
+    pub fn rest_of(&self, at: usize) -> &[u8] {
+        let tail = &self.text[at.min(self.text.len())..];
+        let end = tail
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(tail.len());
+        &tail[..end]
+    }
+
+    /// [`rest_of`](CmdLine::rest_of) with its terminator, as a `&CStr`.
+    ///
+    /// # Panics
+    /// If the buffer holds no NUL at or after `at`.
+    pub fn cstr_from(&self, at: usize) -> &::core::ffi::CStr {
+        ::core::ffi::CStr::from_bytes_until_nul(&self.text[at.min(self.text.len())..])
+            .expect("a command line is a NUL-terminated buffer")
+    }
+
+    /// The byte at `at`, or a NUL past the end -- which is how the C's `*p`
+    /// reads at the terminator, and what every "is this the end?" test here
+    /// is comparing against.
+    pub fn byte_at(&self, at: usize) -> u8 {
+        self.text.get(at).copied().unwrap_or(0)
+    }
+
+    /// The whole line: the first string in the buffer, which is what
+    /// upstream's `*eap->cmdlinep` names.
+    pub fn line(&self) -> &[u8] {
+        self.rest_of(0)
+    }
+
+    /// The command word and everything after it.
+    pub fn cmd(&self) -> &[u8] {
+        self.rest_of(self.cmd)
+    }
+
+    /// The command's argument.
+    pub fn arg(&self) -> &[u8] {
+        self.rest_of(self.arg)
+    }
+
+    /// The command after the `|`, if there is one.
+    pub fn next_cmd(&self) -> Option<&[u8]> {
+        self.next.map(|at| self.rest_of(at))
+    }
+
+    /// Past the white space at `at`.
+    pub fn skip_white(&self, at: usize) -> usize {
+        at + crate::charset::skip::white(self.rest_of(at))
+    }
+
+    /// Past the non-white bytes at `at`.
+    pub fn skip_to_white(&self, at: usize) -> usize {
+        at + crate::charset::skip::to_white(self.rest_of(at))
+    }
+
+    /// Past the decimal digits at `at`.
+    pub fn skip_digits(&self, at: usize) -> usize {
+        at + crate::charset::skip::digits(self.rest_of(at))
+    }
+
+    /// Where the string that starts at `at` ends.
+    pub fn end_of(&self, at: usize) -> usize {
+        at + self.rest_of(at).len()
+    }
+
+    /// The command after `at`, if `at` is at the separator that
+    /// introduces one. `check_nextcmd` upstream.
+    pub fn check_next(&self, at: usize) -> Option<usize> {
+        let at = self.skip_white(at);
+        matches!(self.byte_at(at), b'|' | b'\n').then_some(at + 1)
+    }
+
+    /// Write `byte` at `at`.
+    pub fn set_byte(&mut self, at: usize, byte: u8) {
+        self.text[at] = byte;
+    }
+
+    /// End the string that starts before `at` here, which is how a `|` is
+    /// turned into two commands.
+    pub fn terminate_at(&mut self, at: usize) {
+        self.set_byte(at, 0);
+    }
+
+    /// Delete the byte at `at` by pulling the rest of *its own string*, the
+    /// terminator included, over it.
+    ///
+    /// Only that string moves: anything the buffer holds past its NUL --
+    /// the next command, an expanded argument -- stays where it is, so
+    /// every offset except the ones inside this string keeps its meaning.
+    /// That is exactly the `memmove(p, p + 1, strlen(p + 1) + 1)` upstream
+    /// writes, and the reason this is not `Vec::remove`.
+    pub fn drop_byte(&mut self, at: usize) {
+        let end = self.end_of(at);
+        self.text.copy_within(at + 1..=end, at);
+    }
+
+    /// Replace the `srclen` bytes at `at` with `repl`, and answer how much
+    /// longer the buffer got.
+    ///
+    /// Every offset past the replacement moves by that amount; the caller
+    /// owns the ones this type does not know about.
+    pub fn splice(&mut self, at: usize, srclen: usize, repl: &[u8]) -> isize {
+        let end = (at + srclen).min(self.text.len());
+        self.text.splice(at..end, repl.iter().copied());
+        let delta = repl.len().cast_signed() - (end - at).cast_signed();
+        Self::shift(&mut self.cmd, at, delta);
+        Self::shift(&mut self.arg, at, delta);
+        if let Some(next) = self.next.as_mut() {
+            Self::shift(next, at, delta);
+        }
+        for (offset, _) in &mut self.args {
+            Self::shift(offset, at, delta);
+        }
+        delta
+    }
+
+    /// Move one offset by `delta`, if it is past `at`.
+    fn shift(offset: &mut usize, at: usize, delta: isize) {
+        if *offset > at {
+            *offset = offset.wrapping_add_signed(delta);
+        }
+    }
+
+    /// Throw away everything before `at`, so that what started there is now
+    /// the whole line, and forget every cursor.
+    ///
+    /// What `do_cmdline` does between two `|`-separated commands: the tail
+    /// moves to the front of the same allocation rather than becoming a
+    /// second one.
+    pub fn restart_at(&mut self, at: usize) {
+        let end = self.end_of(at);
+        self.text.copy_within(at..=end, 0);
+        self.text.truncate(end - at + 1);
+        self.cmd = 0;
+        self.arg = 0;
+        self.next = None;
+        self.args.clear();
+        self.retired = None;
+    }
+
+    /// Take `new` over as the line, retiring what was there.
+    ///
+    /// The cursors are *not* rebased: they still address the retired
+    /// buffer, which is why it stays alive. Upstream's `eap->cmdline_tofree`
+    /// dance, with the lifetime written down.
+    pub fn take_over(&mut self, new: Vec<u8>) {
+        self.retired = Some(::core::mem::replace(&mut self.text, new));
+    }
+
+    /// Does `at` address the retired buffer rather than the live one?
+    pub fn is_retired(&self, at: usize) -> bool {
+        self.retired.is_some() && at >= self.text.len()
+    }
+
+    /// A writable pointer at `at`, for a callee that still takes one.
+    pub fn ptr_at(&mut self, at: usize) -> *mut ::core::ffi::c_char {
+        let at = at.min(self.text.len());
+        self.text[at..].as_mut_ptr().cast()
+    }
+
+    /// A readable pointer at `at`, for a callee that still takes one.
+    pub fn ptr_from(&self, at: usize) -> *const ::core::ffi::c_char {
+        self.text[at.min(self.text.len())..].as_ptr().cast()
+    }
+
+    /// Does `p` point into the live buffer?
+    pub fn contains(&self, p: *const ::core::ffi::c_char) -> bool {
+        let base = self.text.as_ptr().addr();
+        (base..=base + self.text.len()).contains(&p.addr())
+    }
+
+    /// Where `p`, which must point into the live buffer, is.
+    pub fn offset_of(&self, p: *const ::core::ffi::c_char) -> usize {
+        p.addr() - self.text.as_ptr().addr()
+    }
+}
+
 /// One parsed Ex command line.
 ///
-/// Not `Copy`: `args`/`arglens` and `cmdline_tofree` are allocations the
-/// command owns for as long as it runs.
+/// Not `Copy`: `line` is the buffer the command is parsed out of, owned for
+/// as long as it runs.
 #[derive(Clone)]
 pub struct ExArg {
-    pub arg: *mut ::core::ffi::c_char,
-    pub args: *mut *mut ::core::ffi::c_char,
-    pub arglens: *mut size_t,
-    pub argc: size_t,
-    pub nextcmd: *mut ::core::ffi::c_char,
-    pub cmd: *mut ::core::ffi::c_char,
-    pub cmdlinep: *mut *mut ::core::ffi::c_char,
-    pub cmdline_tofree: *mut ::core::ffi::c_char,
+    /// The command line and the three cursors into it.
+    pub line: CmdLine,
     pub cmdidx: CmdIdx,
     pub argt: ExArgt,
     pub skip: bool,
@@ -282,18 +553,82 @@ pub struct ExArg {
     pub cstack: *mut CondStack,
 }
 
+impl ExArg {
+    /// The argument as a writable pointer.
+    ///
+    /// Transitional: every one of these is a handler that has not been
+    /// moved onto [`CmdLine::arg`] yet, and the accessor goes when the last
+    /// of them has.
+    pub fn arg_ptr(&mut self) -> *mut ::core::ffi::c_char {
+        self.line.ptr_at(self.line.arg)
+    }
+
+    /// Put the argument cursor where `p`, which must point into the line,
+    /// is. Transitional, as [`arg_ptr`](ExArg::arg_ptr).
+    pub fn set_arg_ptr(&mut self, p: *const ::core::ffi::c_char) {
+        self.line.arg = self.line.offset_of(p);
+    }
+
+    /// The command word as a writable pointer. Transitional.
+    pub fn cmd_ptr(&mut self) -> *mut ::core::ffi::c_char {
+        self.line.ptr_at(self.line.cmd)
+    }
+
+    /// Put the command cursor where `p` is. Transitional.
+    pub fn set_cmd_ptr(&mut self, p: *const ::core::ffi::c_char) {
+        self.line.cmd = self.line.offset_of(p);
+    }
+
+    /// The next command as a writable pointer, null when there is none.
+    /// Transitional.
+    pub fn nextcmd_ptr(&mut self) -> *mut ::core::ffi::c_char {
+        match self.line.next {
+            Some(at) => self.line.ptr_at(at),
+            None => ::core::ptr::null_mut(),
+        }
+    }
+
+    /// Say where the next command is, or that there is none. Transitional.
+    pub fn set_nextcmd_ptr(&mut self, p: *const ::core::ffi::c_char) {
+        self.line.next = (!p.is_null()).then(|| self.line.offset_of(p));
+    }
+
+    /// Lend the command cursor to a callee that advances a
+    /// `*mut *mut c_char`, and take back where it left off. Transitional,
+    /// as [`cmd_ptr`](ExArg::cmd_ptr).
+    pub fn with_cmd_cursor<T>(
+        &mut self,
+        walk: impl FnOnce(*mut *mut ::core::ffi::c_char) -> T,
+    ) -> T {
+        let mut cursor = self.cmd_ptr();
+        let answer = walk(&raw mut cursor);
+        self.set_cmd_ptr(cursor);
+        answer
+    }
+
+    /// Lend the argument cursor, as [`with_cmd_cursor`](ExArg::with_cmd_cursor).
+    pub fn with_arg_cursor<T>(
+        &mut self,
+        walk: impl FnOnce(*mut *mut ::core::ffi::c_char) -> T,
+    ) -> T {
+        let mut cursor = self.arg_ptr();
+        let answer = walk(&raw mut cursor);
+        self.set_arg_ptr(cursor);
+        answer
+    }
+
+    /// The whole line as a writable pointer -- upstream's
+    /// `*eap->cmdlinep`. Transitional.
+    pub fn line_ptr(&mut self) -> *mut ::core::ffi::c_char {
+        self.line.ptr_at(0)
+    }
+}
+
 impl Default for ExArg {
     /// The all-zero `ExArg` that `CLEAR_FIELD(ea)` produces upstream.
     fn default() -> Self {
         ExArg {
-            arg: ::core::ptr::null_mut(),
-            args: ::core::ptr::null_mut(),
-            arglens: ::core::ptr::null_mut(),
-            argc: 0,
-            nextcmd: ::core::ptr::null_mut(),
-            cmd: ::core::ptr::null_mut(),
-            cmdlinep: ::core::ptr::null_mut(),
-            cmdline_tofree: ::core::ptr::null_mut(),
+            line: CmdLine::EMPTY,
             cmdidx: CmdIdx::append,
             argt: ExArgt::NONE,
             skip: false,

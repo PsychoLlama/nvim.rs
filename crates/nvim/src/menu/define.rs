@@ -56,11 +56,11 @@ struct MenuArg {
 pub(crate) fn ex_menu(excmd: &mut ExArg) {
     // SAFETY: the caller's obligation. `cmd` and `arg` name the command line,
     // which `ex_docmd` lets a command edit.
+    let (cmd_start, arg_start) = (excmd.cmd_ptr(), excmd.arg_ptr());
     let (cmd, arg, forceit, ranged) = unsafe {
-        let excmd = &*excmd;
         (
-            CStr::from_ptr(excmd.cmd),
-            CText::new(excmd.arg),
+            CStr::from_ptr(cmd_start),
+            CText::new(arg_start),
             excmd.forceit,
             (excmd.addr_count != 0 && excmd.line2 != 0).then_some(excmd.line2 as c_int),
         )

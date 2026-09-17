@@ -143,8 +143,8 @@ pub(crate) fn syn_remove_pattern(mut block: SynBlockRef, idx: usize) {
 
 /// `:syntax clear [{group}|@{cluster}] ..` and `:syntax sync clear ..`.
 pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
-    let mut arg = args.arg;
-    args.nextcmd = unsafe { find_nextcmd(arg) };
+    let mut arg = args.arg_ptr();
+    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg) });
     if args.skip {
         return;
     }

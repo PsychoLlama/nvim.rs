@@ -178,10 +178,10 @@ fn cluster_op(rest: &[u8]) -> Option<(usize, c_int)> {
 
 /// `:syntax cluster {name} [contains=..] [add=..] [remove=..]`.
 pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     let mut got_clstr = false;
 
-    args.nextcmd = unsafe { find_nextcmd(arg) };
+    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg) });
     if args.skip {
         return;
     }

@@ -91,7 +91,7 @@ pub(crate) fn ex_set(excmd: &mut ExArg) {
     if excmd.forceit {
         flags |= OptionSetFlags::ONECOLUMN;
     }
-    let _ = unsafe { do_set(excmd.arg, flags) };
+    let _ = unsafe { do_set(excmd.arg_ptr(), flags) };
 }
 
 /// The operator at `arg`, if the two characters there are one.

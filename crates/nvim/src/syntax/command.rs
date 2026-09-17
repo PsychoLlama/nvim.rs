@@ -19,7 +19,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::memory::XString;
 use crate::optionstr::LocalOptStr;
-use crate::types::NUL;
+use crate::types::{CmdLine, NUL};
 
 /// Which of `names` the argument word is, ignoring case.
 ///
@@ -35,7 +35,8 @@ fn word_index(word: &[u8], names: &[&CStr]) -> Option<usize> {
 /// Common prologue: record the next command, and answer whether to go on.
 fn mode_cmd_start(args: &mut ExArg) -> bool {
     // SAFETY: `arg` is the caller's command line, a NUL-terminated string.
-    args.nextcmd = unsafe { find_nextcmd(args.arg) };
+    let arg_start = args.arg_ptr();
+    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg_start) });
     !args.skip
 }
 
@@ -44,7 +45,7 @@ pub(crate) fn syn_cmd_conceal(args: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(args) {
         return;
     }
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     // SAFETY: the caller's command line.
     let (word, _) = unsafe { word_at(arg) };
     if word.is_empty() {
@@ -68,7 +69,7 @@ pub(crate) fn syn_cmd_case(args: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(args) {
         return;
     }
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     // SAFETY: the caller's command line.
     let (word, _) = unsafe { word_at(arg) };
     if word.is_empty() {
@@ -92,7 +93,7 @@ pub(crate) fn syn_cmd_foldlevel(args: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(args) {
         return;
     }
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     // SAFETY: the caller's command line.
     let (word, arg_end) = unsafe { word_at(arg) };
     if word.is_empty() {
@@ -130,7 +131,7 @@ pub(crate) fn syn_cmd_spell(args: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(args) {
         return;
     }
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     // SAFETY: the caller's command line.
     let (word, _) = unsafe { word_at(arg) };
     if word.is_empty() {
@@ -166,7 +167,7 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
     if args.skip {
         return;
     }
-    let arg = unsafe { skipwhite(args.arg) };
+    let arg = unsafe { skipwhite(args.arg_ptr()) };
     if unsafe { *arg } as c_int == NUL {
         msg_str(c"\n");
         if !cur_syn_block().b_syn_isk.is_unset() {
@@ -219,7 +220,8 @@ pub(crate) fn syn_cmd_on(args: &mut ExArg, _syncing: c_int) {
 
 /// `:syntax reset`. It actually resets highlighting, not syntax.
 pub(crate) fn syn_cmd_reset(args: &mut ExArg, _syncing: c_int) {
-    args.nextcmd = unsafe { check_nextcmd(args.arg) };
+    let arg_start = args.arg_ptr();
+    args.set_nextcmd_ptr(unsafe { check_nextcmd(arg_start) });
     if !args.skip {
         init_highlight(true, true);
     }
@@ -238,7 +240,8 @@ pub(crate) fn syn_cmd_off(args: &mut ExArg, _syncing: c_int) {
 /// Source `$VIMRUNTIME/syntax/{name}.vim`, which is what all four of the
 /// on/off commands amount to.
 fn syn_cmd_onoff(args: &mut ExArg, name: &CStr) {
-    args.nextcmd = unsafe { check_nextcmd(args.arg) };
+    let arg_start = args.arg_ptr();
+    args.set_nextcmd_ptr(unsafe { check_nextcmd(arg_start) });
     if args.skip {
         return;
     }
@@ -258,7 +261,7 @@ fn syn_cmd_onoff(args: &mut ExArg, name: &CStr) {
 pub(crate) fn syn_maybe_enable() {
     if !did_syntax_onoff.get() {
         let mut ea = ExArg {
-            arg: c"".as_ptr().cast_mut(),
+            line: CmdLine::from_bytes(b""),
             skip: false,
             ..Default::default()
         };
@@ -317,8 +320,7 @@ pub(crate) static SUBCOMMANDS: [SubCommand; 19] = [
 /// `:syntax`. Finds the subcommand name in [`SUBCOMMANDS`] and calls it.
 pub(crate) fn ex_syntax(excmd: &mut ExArg) {
     // SAFETY: the command table's promise -- the argument block of the
-    let arg = excmd.arg;
-    syn_cmdlinep.set(excmd.cmdlinep);
+    let arg = excmd.arg_ptr();
 
     // Isolate the subcommand name.
     let mut subcmd_end = arg;
@@ -332,7 +334,7 @@ pub(crate) fn ex_syntax(excmd: &mut ExArg) {
     let _skipping = (excmd.skip).then(Suppress::emsg_skip);
     match SUBCOMMANDS.iter().find(|sub| *sub.name == *subcmd_name) {
         Some(sub) => {
-            excmd.arg = unsafe { skipwhite(subcmd_end) };
+            excmd.set_arg_ptr(unsafe { skipwhite(subcmd_end) });
             (sub.func)(excmd, 0);
         }
         None => {
@@ -368,7 +370,7 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buffer = Buf::current();
-    let (fname, arg) = (buffer.name.shown_ptr(), excmd.arg);
+    let (fname, arg) = (buffer.name.shown_ptr(), excmd.arg_ptr());
     // SAFETY: a live buffer, and the command's own NUL-terminated argument.
     unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Some(buffer)) };
 

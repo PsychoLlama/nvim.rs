@@ -364,7 +364,7 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
             // The encoding name lives inside the command line the `++enc=`
             // was parsed out of, at the offset `force_enc` records.
             // SAFETY: the command's own line with its own recorded offset.
-            let enc = unsafe { command.cmd.offset(command.force_enc as isize) };
+            let enc = unsafe { command.cmd_ptr().offset(command.force_enc as isize) };
             len += unsafe { cstr::bytes_at(enc) }.len() + 7;
         }
         if command.bad_char != 0 {
@@ -416,7 +416,7 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
         }
         if command.force_enc != 0 {
             // SAFETY: as the length pass above.
-            let enc = unsafe { command.cmd.offset(command.force_enc as isize) };
+            let enc = unsafe { command.cmd_ptr().offset(command.force_enc as isize) };
             put!(c" ++enc=%s".as_ptr(), enc);
         }
         if command.bad_char == BAD_KEEP {

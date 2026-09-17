@@ -557,7 +557,7 @@ pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: b
 /// name, then report whatever [`buf_do_map`] answers.
 fn do_exmap(excmd: &mut ExArg, isabbrev: bool) {
     // SAFETY: the caller's promise — `excmd` is a live `ExArg`.
-    let mut cmdp = excmd.cmd;
+    let mut cmdp = excmd.cmd_ptr();
     // SAFETY: `cmd` is the command name the dispatcher matched, so it is live
     // and NUL-terminated.
     let mode = unsafe { get_map_mode(&raw mut cmdp, excmd.forceit || isabbrev) };
@@ -571,7 +571,7 @@ fn do_exmap(excmd: &mut ExArg, isabbrev: bool) {
     let mut parsed = MapArguments::default();
     let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
     // SAFETY: `arg` is the command's own NUL-terminated argument.
-    if unsafe { str_to_mapargs(excmd.arg, is_unmap, &mut parsed) } != 0 {
+    if unsafe { str_to_mapargs(excmd.arg_ptr(), is_unmap, &mut parsed) } != 0 {
         emsg(gettext(e_invarg)); // invalid arguments
         return;
     }
@@ -612,7 +612,7 @@ pub fn ex_map(excmd: &mut ExArg) {
         secure.set(2);
         // SAFETY: the caller's promise — `excmd` is live, so `cmd` is its own
         // NUL-terminated command name.
-        msg_display(unsafe { cstr::at(excmd.cmd) }, 0, false);
+        msg_display(unsafe { cstr::at(excmd.cmd_ptr()) }, 0, false);
         msg_putchar(c_int::from(b'\n'));
     }
     // SAFETY: as above.
@@ -629,11 +629,11 @@ pub fn ex_unmap(excmd: &mut ExArg) {
 pub fn ex_mapclear(excmd: &mut ExArg) {
     // SAFETY: the caller's promise — `excmd` is a live `ExArg`, so `cmd` and
     // `arg` are its own NUL-terminated strings.
-    unsafe { do_mapclear(excmd.cmd, excmd.arg, excmd.forceit, false) }
+    unsafe { do_mapclear(excmd.cmd_ptr(), excmd.arg_ptr(), excmd.forceit, false) }
 }
 
 /// `:abclear` and friends.
 pub fn ex_abclear(excmd: &mut ExArg) {
     // SAFETY: as [`ex_mapclear`].
-    unsafe { do_mapclear(excmd.cmd, excmd.arg, true, true) }
+    unsafe { do_mapclear(excmd.cmd_ptr(), excmd.arg_ptr(), true, true) }
 }

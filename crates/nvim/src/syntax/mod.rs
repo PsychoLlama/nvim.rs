@@ -438,10 +438,6 @@ pub(crate) const SYNID_CONTAINED: ::core::ffi::c_int = 22000 as ::core::ffi::c_i
 pub(crate) const SYNID_CLUSTER: ::core::ffi::c_int = 23000 as ::core::ffi::c_int;
 pub(crate) const MAX_SYN_INC_TAG: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub(crate) const MAX_CLUSTER_ID: ::core::ffi::c_int = 32767 as ::core::ffi::c_int - SYNID_CLUSTER;
-/// The `:syntax` command line being executed, which `:syntax include` needs to
-/// expand a file name against.
-static syn_cmdlinep: GlobalCell<*mut *mut ::core::ffi::c_char> =
-    GlobalCell::new(::core::ptr::null_mut());
 /// The `:syntax include` nesting tag items are being defined under; 0 outside
 /// an inclusion.
 static current_syn_inc_tag: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

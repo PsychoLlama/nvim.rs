@@ -261,7 +261,7 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
 
 /// `:syntax keyword {group} [{options}] {keyword} ..`.
 pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     // SAFETY: the rest of the command line, which nothing below writes to.
     let line = unsafe { cstr::bytes_at(arg) }.to_vec();
     let mut conceal_char: c_int = NUL;
@@ -352,7 +352,7 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
             semsg!("E475: Invalid argument: {shown}");
         }
         // SAFETY: an offset within the command line the caller still owns.
-        Some(at) => args.nextcmd = unsafe { check_nextcmd(arg.add(at)) },
+        Some(at) => args.set_nextcmd_ptr(unsafe { check_nextcmd(arg.add(at)) }),
     }
 
     redraw_curbuf_later(UPD_SOME_VALID);

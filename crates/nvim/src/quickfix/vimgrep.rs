@@ -26,7 +26,7 @@ use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
-use crate::types::{CmdModFlags, MAXPATHL, NUL, OptionSetFlags};
+use crate::types::{CmdLine, CmdModFlags, MAXPATHL, NUL, OptionSetFlags};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -122,6 +122,7 @@ impl Search {
     /// and the files to search. Reports the error itself.
     fn parse(excmd: &mut ExArg) -> Option<(Search, Files)> {
         // SAFETY: the caller's promise -- a live `ExArg`.
+        let title = qf_cmdtitle(excmd.line.line());
         // SAFETY: forwarded from the caller.
         let mut search = Search {
             spat: ptr::null_mut(),
@@ -132,10 +133,12 @@ impl Search {
                 MAXLNUM
             },
             regmatch: RegMMatch::default(),
-            qf_title: unsafe { Name::from_ptr(qf_cmdtitle(*excmd.cmdlinep).as_ptr()) },
+            qf_title: unsafe { Name::from_ptr(title.as_ptr()) },
         };
 
-        let p = unsafe { skip_vimgrep_pat(excmd.arg, &raw mut search.spat, &raw mut search.flags) };
+        let p = unsafe {
+            skip_vimgrep_pat(excmd.arg_ptr(), &raw mut search.spat, &raw mut search.flags)
+        };
         if p.is_null() {
             qf_emsg(e_invalpat.as_ptr());
             return None;
@@ -587,7 +590,7 @@ unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
             .is_some_and(|b| ptr::eq(Buf::current_raw(), b.raw()))
     {
         let mut ea = ExArg {
-            arg: target_dir.as_ptr().cast_mut(),
+            line: CmdLine::from_bytes(target_dir.bytes()),
             cmdidx: CmdIdx::lcd,
             ..Default::default()
         };

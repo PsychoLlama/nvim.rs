@@ -235,7 +235,7 @@ unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool)
 
 /// `:left`, `:center` and `:right` -- re-indent every line of the range.
 pub fn ex_align(excmd: &mut ExArg) {
-    let (mut cmdidx, arg, line1, line2) = (excmd.cmdidx, excmd.arg, excmd.line1, excmd.line2);
+    let (mut cmdidx, arg, line1, line2) = (excmd.cmdidx, excmd.arg_ptr(), excmd.line1, excmd.line2);
 
     if Win::current().w_onebuf_opt.wo_rl != 0 {
         // Switch left and right aligning.  Upstream rewrites the command

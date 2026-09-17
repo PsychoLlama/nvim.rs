@@ -652,10 +652,10 @@ pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
     // SAFETY: the caller's command, live for the call.
     // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
     let cmd_len = 15 + unsafe { cstr::bytes_at(buffer.b_p_fenc.value_ptr()) }.len();
-    excmd.cmd = unsafe { xmalloc(cmd_len) }.cast();
+    excmd.set_cmd_ptr(unsafe { xmalloc(cmd_len) }.cast());
     unsafe {
         snprintf(
-            excmd.cmd,
+            excmd.cmd_ptr(),
             cmd_len,
             c"e ++enc=%s".as_ptr(),
             buffer.b_p_fenc.value_ptr(),
@@ -705,7 +705,7 @@ pub fn set_forced_fenc(excmd: &mut ExArg) {
     if excmd.force_enc == 0 {
         return;
     }
-    let fenc = unsafe { enc_canonize(excmd.cmd.offset(excmd.force_enc as isize)) };
+    let fenc = unsafe { enc_canonize(excmd.cmd_ptr().offset(excmd.force_enc as isize)) };
     // A borrow: `set_option_direct` copies, and `fenc` is freed just below.
     // SAFETY: `fenc` is NUL-terminated and outlives the call.
     set_option_direct(

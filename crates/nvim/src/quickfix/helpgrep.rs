@@ -220,16 +220,17 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
     incr_quickfix_busy();
 
     // Check for a specified language.
-    let lang = unsafe { check_help_lang(excmd.arg) };
+    let lang = unsafe { check_help_lang(excmd.arg_ptr()) };
     let mut regmatch = RegMatch {
-        regprog: unsafe { vim_regcomp(excmd.arg, RE_MAGIC + RE_STRING) },
+        regprog: unsafe { vim_regcomp(excmd.arg_ptr(), RE_MAGIC + RE_STRING) },
         rm_ic: false,
         ..RegMatch::default()
     };
     let updated = !regmatch.regprog.is_null();
     if updated {
         // Create a new quickfix list.
-        unsafe { qf_new_list(qi.raw(), qf_cmdtitle(*excmd.cmdlinep).as_ptr()) };
+        let title = qf_cmdtitle(excmd.line.line());
+        unsafe { qf_new_list(qi.raw(), title.as_ptr()) };
         let mut qfl = qf_current_list(qi);
 
         unsafe { hgr_search_in_rtp(qfl.raw(), &raw mut regmatch, lang) };
@@ -268,7 +269,7 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
         qf_goto(qi, 0, 0, false as c_int);
     } else {
         // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E480: No match: {arg}");
     }
 

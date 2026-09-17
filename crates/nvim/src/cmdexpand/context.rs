@@ -190,7 +190,7 @@ pub(crate) unsafe fn set_cmd_index(
             excmd.cmdidx = CmdIdx::substitute;
             p = unsafe { cmd.add(1) };
         } else if (unsafe { *cmd } as u8).is_ascii_uppercase() {
-            excmd.cmd = cmd as *mut c_char;
+            excmd.set_cmd_ptr(cmd as *mut c_char);
             p = unsafe {
                 find_ucmd(
                     excmd,

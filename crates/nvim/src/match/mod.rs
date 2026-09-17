@@ -399,7 +399,7 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
         match_delete(Win::current(), id, false);
     }
 
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     let end;
     if ends_excmd(unsafe { *arg } as c_int) != 0 {
         // `:match` on its own: just clear.
@@ -459,5 +459,5 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
             unsafe { *end = c as c_char };
         }
     }
-    unsafe { excmd.nextcmd = find_nextcmd(end) };
+    unsafe { excmd.set_nextcmd_ptr(find_nextcmd(end)) };
 }

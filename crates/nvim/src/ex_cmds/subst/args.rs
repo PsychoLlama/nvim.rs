@@ -81,7 +81,7 @@ struct Parsed {
 /// Split `/pattern/replacement/` off the argument, or take the previous
 /// pattern and replacement.
 fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> Option<Parsed> {
-    let mut cmd = args.arg;
+    let mut cmd = args.arg_ptr();
     let mut which_pat = if args.cmdidx == CmdIdx::tilde {
         RE_LAST as c_int // use last used regexp
     } else {
@@ -93,7 +93,7 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
     // as a separator.
     // SAFETY: the argument is NUL-terminated.
     let fresh = unsafe {
-        *args.cmd as u8 == b's'
+        *args.cmd_ptr() as u8 == b's'
             && *cmd as c_int != NUL
             && !ascii_iswhite(*cmd as c_int)
             && !has_char(c"0123456789cegriIp|\"", *cmd as u8 as c_int)
@@ -165,12 +165,16 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
         delimiter = unsafe { *cmd } as u8 as c_int;
         cmd = unsafe { cmd.add(1) };
         pat = cmd; // remember the start of the search pattern
+        // The `?` delimiter's `\?` is unescaped into a copy rather than in
+        // place; nothing here reads it, and upstream hangs it off `eap->arg`
+        // and never frees it.
+        let mut new_pattern: *mut c_char = ptr::null_mut();
         cmd = unsafe {
             skip_regexp_ex(
                 cmd,
                 delimiter,
                 magic_isset() as c_int,
-                &raw mut args.arg,
+                &raw mut new_pattern,
                 ptr::null_mut(),
                 ptr::null_mut(),
             )
@@ -305,8 +309,8 @@ pub(super) fn parse_sub(
     if unsafe { *cmd } as c_int != NUL && unsafe { *cmd } as c_int != '"' as c_int {
         // Not end-of-line or comment.
         // SAFETY: as above.
-        args.nextcmd = unsafe { check_nextcmd(cmd) };
-        if args.nextcmd.is_null() {
+        args.set_nextcmd_ptr(unsafe { check_nextcmd(cmd) });
+        if args.line.next.is_none() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let cmd = unsafe { c_str(cmd) };
             semsg!("E488: Trailing characters: {cmd}");

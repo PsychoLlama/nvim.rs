@@ -205,7 +205,7 @@ fn toggle_autoindent() {
 /// which upstream leaves the loop for *without* resetting `lines_left`;
 /// `Some(NULL)` is the callback saying the input ended.
 fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     // SAFETY: caller's contract.
     if unsafe { *arg } == '|' as c_char {
         // Get the text after the trailing bar.
@@ -217,7 +217,7 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
     let Some(getline) = args.ea_getline else {
         // No getline() function: use the lines that follow.  This ends
         // when there is no more.
-        let next = args.nextcmd;
+        let next = args.nextcmd_ptr();
         if next.is_null() {
             return None;
         }
@@ -235,7 +235,7 @@ fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
             };
             (line, rest)
         };
-        args.nextcmd = rest;
+        args.set_nextcmd_ptr(rest);
         return Some(Line(line));
     };
 
@@ -295,10 +295,8 @@ pub fn ex_change(excmd: &mut ExArg) {
 
 /// `:z` -- print a window of lines around the range's last line.
 pub fn ex_z(excmd: &mut ExArg) {
-    // SAFETY: caller's contract.
-    let excmd = &*excmd;
     let (arg, forceit, addr_count, flags, lnum) = (
-        excmd.arg,
+        excmd.arg_ptr(),
         excmd.forceit,
         excmd.addr_count,
         excmd.flags,

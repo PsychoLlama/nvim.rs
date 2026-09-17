@@ -15,10 +15,11 @@ use crate::api_error;
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::types::CmdIdx;
-use crate::types::{ExArgt, NUL};
+use crate::types::{CmdLine, ExArgt, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
+use core::slice;
 
 /// A `:map`-family right-hand side is one opaque string, however much
 /// whitespace it contains, so the arguments are exactly "lhs" and "rhs".
@@ -59,16 +60,21 @@ unsafe fn parse_map_cmd(arg_str: *const c_char) -> Array {
 ///
 /// # Safety
 /// As [`parse_map_cmd`]; `arena` must be the dispatcher's.
-unsafe fn parse_args(excmd: &ExArg, arena: *mut Arena) -> Array {
+unsafe fn parse_args(excmd: &mut ExArg, arena: *mut Arena) -> Array {
     // SAFETY: caller contract.
-    let (length, empty) = unsafe { (cstr::bytes_at(excmd.arg).len(), *excmd.arg == NUL as c_char) };
+    let (length, empty) = unsafe {
+        (
+            cstr::bytes_at(excmd.arg_ptr()).len(),
+            *excmd.arg_ptr() == NUL as c_char,
+        )
+    };
 
     // `is_map_cmd` indexes the command table by `cmdidx`, so the `CmdIdx::SIZE`
     // guard has to stay in front of it rather than be hoisted alongside.
     // SAFETY: `cmdidx` is in range, checked immediately to its left.
     if excmd.cmdidx != CmdIdx::SIZE && is_map_cmd(excmd.cmdidx) && !empty {
         // SAFETY: caller contract.
-        return unsafe { parse_map_cmd(excmd.arg) };
+        return unsafe { parse_map_cmd(excmd.arg_ptr()) };
     }
     if excmd.argt.has(ExArgt::NOSPC) {
         // One argument, whitespace and all.
@@ -78,7 +84,7 @@ unsafe fn parse_args(excmd: &ExArg, arena: *mut Arena) -> Array {
         let mut args: Array = Array::with_capacity(1);
         // SAFETY: room for the one item was just reserved.
         args.push(Object::string(unsafe {
-            cstrn_to_string(excmd.arg, length)
+            cstrn_to_string(excmd.arg_ptr(), length)
         }));
         return args;
     }
@@ -93,7 +99,7 @@ unsafe fn parse_args(excmd: &ExArg, arena: *mut Arena) -> Array {
         let buf: *mut c_char = arena_alloc(arena, length + 1, false).cast();
         (
             buf,
-            Array::with_capacity(uc_nargs_upper_bound(excmd.arg, length)),
+            Array::with_capacity(uc_nargs_upper_bound(excmd.arg_ptr(), length)),
         )
     };
     let (mut end, mut len): (size_t, size_t) = (0, 0);
@@ -102,7 +108,7 @@ unsafe fn parse_args(excmd: &ExArg, arena: *mut Arena) -> Array {
         // SAFETY: `end`/`len` are this frame's, and `buf` advances by
         // exactly what each call wrote, so it stays inside the block.
         unsafe {
-            done = uc_split_args_iter(excmd.arg, length, &raw mut end, buf, &raw mut len);
+            done = uc_split_args_iter(excmd.arg_ptr(), length, &raw mut end, buf, &raw mut len);
             if len > 0 {
                 args.push(Object::string(cstrn_to_string(buf, len)));
                 buf = buf.add(len + 1);
@@ -224,19 +230,17 @@ pub unsafe fn nvim_parse_cmd(
     let mut error = Error::none();
     // Every key unset; the answer names only what the parse found.
     let mut result = KeyDict_cmd::default();
-    // SAFETY (both): a plain C aggregate whose all-zero state is the valid
+    let mut excmd = ExArg::default();
+    // SAFETY: a plain C aggregate whose all-zero state is the valid
     // "nothing parsed yet" one, as the C original's CLEAR_FIELD relies on.
-    let mut excmd: ExArg = unsafe { ::core::mem::zeroed() };
-    // SAFETY: as above.
     let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
 
     let mut errormsg = None;
-    // SAFETY: `arena` is the dispatcher's and `str` is `size` readable bytes;
-    // the arena copy outlives everything `parse_cmdline` leaves pointing into
-    // it, including `excmd.arg` and `excmd.nextcmd`.
-    let mut cmdline = unsafe { arena_memdupz(arena, str.data(), str.len()) };
-    let (line, info) = (&raw mut cmdline, &raw mut cmdinfo);
-    // SAFETY: as above; the three out-parameters are this frame's.
+    // SAFETY: `str` names `len` readable bytes, copied into the line the
+    // parse takes over.
+    let line = CmdLine::from_bytes(unsafe { slice::from_raw_parts(str.data().cast(), str.len()) });
+    let info = &raw mut cmdinfo;
+    // SAFETY: the two out-parameters are this frame's.
     let parsed = unsafe { parse_cmdline(line, &mut excmd, info, &mut errormsg) };
     if !parsed {
         match &errormsg {
@@ -254,14 +258,15 @@ pub unsafe fn nvim_parse_cmd(
 
     // The `useridx`th entry of one of the two user-command tables, by
     // address: what the rest of this reads the command's own facts from.
+    let useridx = excmd.useridx as usize;
     let nth = |table: Table| {
         // SAFETY: `useridx` indexes the table the matching `cmdidx` names.
         unsafe { table.list() }
-            .get(excmd.useridx as usize)
+            .get(useridx)
             .map_or(ptr::null_mut(), |cmd| ptr::from_ref(cmd).cast_mut())
     };
     // SAFETY: `parse_args` reads the arguments `parse_cmdline` left in `excmd`.
-    let args = unsafe { parse_args(&excmd, arena) };
+    let args = unsafe { parse_args(&mut excmd, arena) };
     let cmd: *mut UserCmd = match excmd.cmdidx {
         CmdIdx::USER => nth(Table::Global),
         CmdIdx::USER_BUF => nth(Table::Buffer(Buf::current())),
@@ -324,7 +329,7 @@ pub unsafe fn nvim_parse_cmd(
     result.nargs = Some(Object::string(nargs));
     result.addr = Some(String_0::from_cstr(addr_type_name(excmd.addr_type)));
     // SAFETY: `excmd.nextcmd` points into the arena copy of the command line.
-    result.nextcmd = Some(unsafe { cstr_to_string(excmd.nextcmd) });
+    result.nextcmd = Some(unsafe { cstr_to_string(excmd.nextcmd_ptr()) });
     // SAFETY: `cmdinfo.cmdmod` is what `parse_cmdline` filled in.
     result.mods = Some(parse_mods(&cmdinfo.cmdmod));
     result.magic = Some(dict_of([

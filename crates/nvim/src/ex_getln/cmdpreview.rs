@@ -12,7 +12,7 @@ use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_split, cmdmod_set_tab};
 use crate::guard::{Allow, Suppress};
 use crate::option::vars::P_ICM;
-use crate::types::{CmdModFlags, ExArgt, OptionSetFlags};
+use crate::types::{CmdLine, CmdModFlags, ExArgt, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
@@ -343,9 +343,9 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
     let mut ea: ExArg = EXARG_T_INIT;
     let mut cmdinfo: CmdParseInfo = CMD_PARSE_INFO_INIT;
     let mut cmdpreview_type = 0;
-    // A copy of the command line, so `parse_cmdline` can modify it --
-    // it advances this pointer, so it has to be the local itself.
-    let mut cmdline = unsafe { xstrdup(Cc::current().text()) };
+    // A copy of the command line: the parse writes into it.
+    // SAFETY: the command line is NUL-terminated for as long as it is shown.
+    let line = CmdLine::from_bytes(unsafe { crate::cstr::bytes_at(Cc::current().text()) });
     let mut errormsg = None;
 
     // C's `goto end`: everything below happens only when the command line
@@ -354,8 +354,7 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // Block errors while parsing the command line, and don't update
         // v:errmsg.
         let no_emsg = Suppress::emsg();
-        let parsed =
-            unsafe { parse_cmdline(&raw mut cmdline, &mut ea, &raw mut cmdinfo, &mut errormsg) };
+        let parsed = unsafe { parse_cmdline(line, &mut ea, &raw mut cmdinfo, &mut errormsg) };
         drop(no_emsg);
         if !parsed {
             break 'end;
@@ -460,7 +459,6 @@ pub(crate) fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         redrawcmdline();
     }
 
-    unsafe { xfree(cmdline as *mut ::core::ffi::c_void) };
     cmdpreview_type != 0
 }
 

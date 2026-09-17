@@ -622,13 +622,14 @@ pub(crate) unsafe fn qf_store_title(qfl: *mut QfList, title: *const c_char) {
 /// front, in its own storage. Upstream answers a shared buffer the next
 /// call overwrites.
 ///
-/// # Safety
-///
-/// `cmd` must be NUL-terminated.
-pub(crate) unsafe fn qf_cmdtitle(cmd: *const c_char) -> [c_char; READ_CHUNK + 1] {
+pub(crate) fn qf_cmdtitle(cmd: &[u8]) -> [c_char; READ_CHUNK + 1] {
     let mut title = [0 as c_char; READ_CHUNK + 1];
-    // SAFETY: the caller's command is NUL-terminated, and the buffer holds
-    // the IOSIZE bytes `snprintf` is told about.
-    unsafe { snprintf(title.as_mut_ptr(), READ_CHUNK, c":%s".as_ptr(), cmd) };
+    title[0] = b':'.cast_signed();
+    // The `snprintf(":%s")` upstream writes: one colon and as much of the
+    // command as fits before the terminator.
+    let room = title.len() - 2;
+    for (slot, &byte) in title[1..].iter_mut().zip(cmd.iter().take(room)) {
+        *slot = byte.cast_signed();
+    }
     title
 }

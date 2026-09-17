@@ -55,16 +55,18 @@ pub(crate) fn ex_autocmd(excmd: &mut ExArg) {
         secure.set(2);
         excmd.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
     } else if excmd.cmdidx == CmdIdx::autocmd {
-        unsafe { do_autocmd(excmd, excmd.arg, c_int::from(excmd.forceit)) };
+        let (arg, forceit) = (excmd.arg_ptr(), c_int::from(excmd.forceit));
+        unsafe { do_autocmd(excmd, arg, forceit) };
     } else {
-        unsafe { do_augroup(excmd.arg, excmd.forceit) };
+        let (arg, forceit) = (excmd.arg_ptr(), excmd.forceit);
+        unsafe { do_augroup(arg, forceit) };
     }
 }
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
 pub(crate) fn ex_doautocmd(excmd: &mut ExArg) {
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
     let _ = do_doautocmd(arg, false, &raw mut did_aucmd);
@@ -75,12 +77,12 @@ pub(crate) fn ex_doautocmd(excmd: &mut ExArg) {
 
 /// `:filetype [plugin] [indent] on|off|detect`.
 pub(crate) fn ex_filetype(excmd: &mut ExArg) {
-    if byte(excmd.arg) == NUL {
+    if byte(excmd.arg_ptr()) == NUL {
         report_filetype_state();
         return;
     }
 
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     let mut plugin = false;
     let mut indent = false;
     loop {
@@ -202,7 +204,7 @@ pub(crate) fn ex_setfiletype(excmd: &mut ExArg) {
     if Buf::current().b_did_filetype {
         return;
     }
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     if starts_with(arg, b"FALLBACK ") {
         arg = unsafe { arg.add(9) };
     }
@@ -211,7 +213,7 @@ pub(crate) fn ex_setfiletype(excmd: &mut ExArg) {
         OptVal::string(cstr_to_string(arg)),
         OptionSetFlags::LOCAL,
     );
-    if arg != excmd.arg {
+    if arg != excmd.arg_ptr() {
         Buf::current().b_did_filetype = false;
     }
 }
@@ -238,7 +240,7 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
     let mods = unsafe { core::slice::from_raw_parts(mods.as_ptr().cast::<u8>(), mods_len) };
     let argv = Array::from(vec![
         Object::string(String_0::from_bytes(mods)),
-        Object::string(cstr_to_string(excmd.arg)),
+        Object::string(cstr_to_string(excmd.arg_ptr())),
     ]);
 
     let ran = unsafe {

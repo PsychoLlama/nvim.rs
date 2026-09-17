@@ -36,8 +36,7 @@ use crate::ex_docmd::filename::replace_makeprg;
 use crate::ex_docmd::lookup::{find_ex_command, is_user_cmd};
 use crate::ex_docmd::modifier::CmdModScope;
 use crate::ex_docmd::scan::{
-    check_nextcmd, get_flags, parse_bang, parse_count, parse_register, separate_nextcmd,
-    skip_colon_white,
+    get_flags, parse_bang, parse_count, parse_register, separate_nextcmd, skip_colons,
 };
 use crate::ex_docmd::source::{ex_errmsg, getline_cookie};
 
@@ -74,7 +73,9 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
-use crate::types::{CmdAddr, CondStack, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, NUL, size_t};
+use crate::types::{
+    CmdAddr, CmdLine, CondStack, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, NUL, size_t,
+};
 use crate::winlayer::{Buf, Live, Win};
 
 /// The conditional stack the command is running under, whose caller has
@@ -88,12 +89,11 @@ use ::libc::strcpy;
 /// `(ExArg){ .line1 = 1, .line2 = 1 }` sets to anything else are the two
 /// line numbers.
 pub(crate) fn fresh_exarg() -> ExArg {
-    // SAFETY: `ExArg` is a `repr(C)` aggregate of scalars, pointers and
-    // `Option<fn>`; all-zero is a valid value of every one of them.
-    let mut excmd: ExArg = unsafe { core::mem::zeroed() };
-    excmd.line1 = 1;
-    excmd.line2 = 1;
-    excmd
+    ExArg {
+        line1: 1,
+        line2: 1,
+        ..ExArg::default()
+    }
 }
 
 /// Is `func` this exact Ex-command handler?
@@ -119,33 +119,12 @@ pub fn is_cmd_ni(cmdidx: CmdIdx) -> bool {
 /// argument rather than null — a command that reads `eap->arg` as a string
 /// then sees an empty one.
 pub(crate) fn shift_cmd_args(excmd: &mut ExArg) {
-    debug_assert!(!excmd.args.is_null() && excmd.argc > 0);
-    let oldargs = excmd.args;
-    let oldarglens = excmd.arglens;
-
-    excmd.argc -= 1;
-    excmd.args = if excmd.argc > 0 {
-        xcalloc(excmd.argc, size_of::<*mut c_char>()) as *mut *mut c_char
-    } else {
-        ptr::null_mut()
+    debug_assert!(!excmd.line.args.is_empty());
+    let (first, first_len) = excmd.line.args.remove(0);
+    excmd.line.arg = match excmd.line.args.first() {
+        Some(&(at, _)) => at,
+        None => first + first_len,
     };
-    excmd.arglens = if excmd.argc > 0 {
-        xcalloc(excmd.argc, size_of::<size_t>()) as *mut size_t
-    } else {
-        ptr::null_mut()
-    };
-    for i in 0..excmd.argc {
-        unsafe { *excmd.args.add(i) = *oldargs.add(i + 1) };
-        unsafe { *excmd.arglens.add(i) = *oldarglens.add(i + 1) };
-    }
-    excmd.arg = if excmd.argc > 0 {
-        unsafe { *excmd.args }
-    } else {
-        unsafe { (*oldargs).add(*oldarglens) }
-    };
-
-    xfree(oldargs as *mut c_void);
-    xfree(oldarglens as *mut c_void);
 }
 
 /// Should this command be passed over rather than run?
@@ -208,15 +187,13 @@ fn locate_command(
     errormsg: &mut Option<CString>,
 ) -> Result<(), Refused> {
     // "#!anything" is a comment, so that a script can carry a shebang line.
-    // SAFETY: `cmdlinep` is the caller's, and names the command line.
-    let line = unsafe { *excmd.cmdlinep };
-    if byte_at(line, 0) == '#' as c_int && byte_at(line, 1) == '!' as c_int {
+    if excmd.line.byte_at(0) == b'#' && excmd.line.byte_at(1) == b'!' {
         return Err(Refused);
     }
 
     mods.parse(excmd, errormsg).map_err(|_| Refused)?;
     mods.apply();
-    let after_modifier = excmd.cmd;
+    let after_modifier = excmd.cmd_ptr();
 
     let cstack = excmd.cstack;
     // SAFETY: `cstack` is the caller's conditional stack, live for the
@@ -251,16 +228,14 @@ fn locate_command(
         return Err(Refused);
     }
 
-    // SAFETY: `cmd` walks the command line.
-    excmd.cmd = unsafe { skip_colon_white(excmd.cmd, true) };
+    excmd.line.cmd = skip_colons(&excmd.line, excmd.line.cmd, true);
 
     // A range with no command after it. Vi's behaviour, preserved: `:3`
     // jumps to line 3, `:3|…` *prints* line 3, and `:|` prints the current
     // line.
-    if byte(excmd.cmd) == NUL || byte(excmd.cmd) == '"' as c_int || {
-        // SAFETY: as above.
-        excmd.nextcmd = unsafe { check_nextcmd(excmd.cmd) };
-        !excmd.nextcmd.is_null()
+    if excmd.line.byte_at(excmd.line.cmd) == 0 || excmd.line.byte_at(excmd.line.cmd) == b'"' || {
+        excmd.line.next = excmd.line.check_next(excmd.line.cmd);
+        excmd.line.next.is_some()
     } {
         if !excmd.skip {
             debug_assert!(errormsg.is_none());
@@ -274,19 +249,19 @@ fn locate_command(
     if !p.is_null()
         && excmd.cmdidx == CmdIdx::SIZE
         && !excmd.skip
-        && (ubyte(excmd.cmd)).is_ascii_uppercase()
+        && (ubyte(excmd.cmd_ptr())).is_ascii_uppercase()
         && has_event(AutoEvent::CmdUndefined)
     {
         // SAFETY (this block): `cmd` is inside the NUL-terminated command
         // line, and `cmdname` is the copy made here, freed here.
-        let mut end = excmd.cmd;
+        let mut end = excmd.cmd_ptr();
         while (ubyte(end)).is_ascii_alphanumeric() {
             end = unsafe { end.add(1) };
         }
         let cmdname = unsafe {
             xmemdupz(
-                excmd.cmd as *const c_void,
-                end.offset_from(excmd.cmd) as size_t,
+                excmd.cmd_ptr() as *const c_void,
+                end.offset_from(excmd.cmd_ptr()) as size_t,
             ) as *mut c_char
         };
         let event = AutoEvent::CmdUndefined;
@@ -297,7 +272,7 @@ fn locate_command(
         p = if ret && !aborting() {
             unsafe { find_ex_command(excmd, ptr::null_mut()) }
         } else {
-            excmd.cmd
+            excmd.cmd_ptr()
         };
     }
 
@@ -312,8 +287,7 @@ fn locate_command(
         if !excmd.skip {
             // The modifiers parsed, so the error is in what follows them.
             let cmdname = if after_modifier.is_null() {
-                // SAFETY: the caller's command line.
-                unsafe { *excmd.cmdlinep }
+                excmd.line_ptr()
             } else {
                 after_modifier
             };
@@ -331,7 +305,7 @@ fn locate_command(
         }
         return Err(Refused);
     }
-    excmd.arg = p;
+    excmd.set_arg_ptr(p);
     Ok(())
 }
 
@@ -432,27 +406,22 @@ fn read_command_args(
 ) -> Result<(), Refused> {
     // `:make` and `:grep` splice 'makeprg'/'grepprg' into the line here, so
     // that `%` and friends expand inside it.
-    let (start, cmdlinep) = (excmd.arg, excmd.cmdlinep);
-    // SAFETY: both are the command's own cursors into its line.
-    let p = unsafe { replace_makeprg(excmd, start, cmdlinep) };
-    if p.is_null() {
-        return Err(Refused);
-    }
+    replace_makeprg(excmd);
 
     // `:!` keeps the space: `:!! -l` needs it.
-    excmd.arg = if excmd.cmdidx == CmdIdx::bang {
-        p
-    } else {
-        skipwhite(p)
-    };
+    if excmd.cmdidx != CmdIdx::bang {
+        excmd.line.arg = excmd.line.skip_white(excmd.line.arg);
+    }
 
-    if excmd.cmdidx == CmdIdx::file && byte(excmd.arg) != NUL && curbuf_locked() {
+    if excmd.cmdidx == CmdIdx::file && excmd.line.byte_at(excmd.line.arg) != 0 && curbuf_locked() {
         return Err(Refused);
     }
 
     // `++opt=val` first, so that `:w ++enc=utf8 !cmd` works.
     if excmd.argt.has(ExArgt::ARGOPT) {
-        while byte_at(excmd.arg, 0) == '+' as c_int && byte_at(excmd.arg, 1) == '+' as c_int {
+        while excmd.line.byte_at(excmd.line.arg) == b'+'
+            && excmd.line.byte_at(excmd.line.arg + 1) == b'+'
+        {
             if getargopt(excmd).is_err() && !ni {
                 *errormsg = Some(ex_msg(e_invarg.as_ptr()));
                 return Err(Refused);
@@ -460,19 +429,18 @@ fn read_command_args(
         }
     }
 
-    // SAFETY (through the redirections): `arg` walks the command line.
     if excmd.cmdidx == CmdIdx::write || excmd.cmdidx == CmdIdx::update {
-        if byte(excmd.arg) == '>' as c_int {
-            excmd.arg = unsafe { excmd.arg.add(1) };
-            if byte(excmd.arg) != '>' as c_int {
+        if excmd.line.byte_at(excmd.line.arg) == b'>' {
+            excmd.line.arg += 1;
+            if excmd.line.byte_at(excmd.line.arg) != b'>' {
                 *errormsg = Some(ex_msg(c"E494: Use w or w>>".as_ptr()));
                 return Err(Refused);
             }
-            excmd.arg = unsafe { skipwhite(excmd.arg.add(1)) };
+            excmd.line.arg = excmd.line.skip_white(excmd.line.arg + 1);
             excmd.append = true;
-        } else if byte(excmd.arg) == '!' as c_int && excmd.cmdidx == CmdIdx::write {
+        } else if excmd.line.byte_at(excmd.line.arg) == b'!' && excmd.cmdidx == CmdIdx::write {
             // `:w !filter`
-            excmd.arg = unsafe { excmd.arg.add(1) };
+            excmd.line.arg += 1;
             excmd.usefilter = true;
         }
     } else if excmd.cmdidx == CmdIdx::read {
@@ -480,26 +448,26 @@ fn read_command_args(
             // `:r!filter`
             excmd.usefilter = true;
             excmd.forceit = false;
-        } else if byte(excmd.arg) == '!' as c_int {
+        } else if excmd.line.byte_at(excmd.line.arg) == b'!' {
             // `:r !filter`
-            excmd.arg = unsafe { excmd.arg.add(1) };
+            excmd.line.arg += 1;
             excmd.usefilter = true;
         }
     } else if excmd.cmdidx == CmdIdx::lshift || excmd.cmdidx == CmdIdx::rshift {
         // How far to shift is how many `<` or `>` were typed.
         excmd.amount = 1;
-        while byte(excmd.arg) == byte(excmd.cmd) {
-            excmd.arg = unsafe { excmd.arg.add(1) };
+        while excmd.line.byte_at(excmd.line.arg) == excmd.line.byte_at(excmd.line.cmd) {
+            excmd.line.arg += 1;
             excmd.amount += 1;
         }
-        excmd.arg = skipwhite(excmd.arg);
+        excmd.line.arg = excmd.line.skip_white(excmd.line.arg);
     }
 
     // `+command`, before the next command is looked for. Not for
     // `:read !cmd` and `:write !cmd`.
     if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
         // SAFETY: `arg` is the command's own cursor into its line.
-        excmd.do_ecmd_cmd = unsafe { getargcmd(&raw mut excmd.arg) };
+        excmd.do_ecmd_cmd = unsafe { excmd.with_arg_cursor(|cursor| getargcmd(cursor)) };
     }
 
     if excmd.argt.has(ExArgt::TRLBAR) && !excmd.usefilter {
@@ -525,15 +493,15 @@ fn read_command_args(
     }
     if !ni
         && !excmd.argt.has(ExArgt::EXTRA)
-        && byte(excmd.arg) != NUL
-        && byte(excmd.arg) != '"' as c_int
-        && (byte(excmd.arg) != '|' as c_int || !excmd.argt.has(ExArgt::TRLBAR))
+        && byte(excmd.arg_ptr()) != NUL
+        && byte(excmd.arg_ptr()) != '"' as c_int
+        && (byte(excmd.arg_ptr()) != '|' as c_int || !excmd.argt.has(ExArgt::TRLBAR))
     {
         // SAFETY: the argument is a tail of the command line.
-        *errormsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), excmd.arg) });
+        *errormsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), excmd.arg_ptr()) });
         return Err(Refused);
     }
-    if !ni && excmd.argt.has(ExArgt::NEEDARG) && byte(excmd.arg) == NUL {
+    if !ni && excmd.argt.has(ExArgt::NEEDARG) && byte(excmd.arg_ptr()) == NUL {
         *errormsg = Some(ex_msg(e_argreq.as_ptr()));
         return Err(Refused);
     }
@@ -545,13 +513,13 @@ fn read_command_args(
 fn separate_at_newline(excmd: &mut ExArg) {
     // SAFETY (throughout): `s` walks the command's own NUL-terminated
     // argument, which is writable.
-    let mut s = excmd.arg;
+    let mut s = excmd.arg_ptr();
     while unsafe { *s } != 0 {
         if byte(s) == '\\' as c_int && byte_at(s, 1) == '\n' as c_int {
             let into = s.cast::<u8>();
             unsafe { into.copy_from(s.add(1).cast(), len_of(s.add(1)) + 1) };
         } else if byte(s) == '\n' as c_int {
-            excmd.nextcmd = unsafe { s.add(1) };
+            excmd.set_nextcmd_ptr(unsafe { s.add(1) });
             unsafe { *s = NUL as c_char };
             break;
         }
@@ -588,19 +556,23 @@ fn rethrow_from_nested(excmd: &mut ExArg) {
 /// lines from (`:append`, a `:function` body, a sourced file); either may be
 /// null. Re-entrant: a command that calls `do_cmdline` lands back here.
 ///
+/// `line` is taken over for the call and handed back: a command may
+/// *replace* the buffer under itself (`:make` splices in 'makeprg', an
+/// expanded `%` grows it, a continued `:let` swaps in the joined line), and
+/// the answer is the line the caller must go on running.
+///
 /// # Safety
 ///
-/// `cmdlinep` must point at a writable `*mut c_char` slot the caller owns for
-/// the call. `cstack` must point at a live `CondStack`, unaliased for the
+/// `cstack` must point at a live `CondStack`, unaliased for the
 /// call. `cookie` must be the payload `fgetline` was registered with, live
 /// for the call.
 pub(crate) unsafe fn do_one_cmd(
-    cmdlinep: *mut *mut c_char,
+    line: CmdLine,
     flags: DoCmdOpts,
     cstack: *mut CondStack,
     fgetline: LineGetter,
     cookie: *mut c_void,
-) -> *mut c_char {
+) -> CmdLine {
     let mut errormsg: Option<CString> = None;
     let save_reg_executing = reg_executing.get();
     let save_pending_end_reg_executing = pending_end_reg_executing.get();
@@ -620,9 +592,7 @@ pub(crate) unsafe fn do_one_cmd(
     // out until it puts them back.
     let mods = CmdModScope::cleared();
 
-    // SAFETY: the caller's command line.
-    excmd.cmd = unsafe { *cmdlinep };
-    excmd.cmdlinep = cmdlinep;
+    excmd.line = line;
     excmd.ea_getline = fgetline;
     excmd.cookie = cookie;
     excmd.cstack = cstack;
@@ -638,10 +608,10 @@ pub(crate) unsafe fn do_one_cmd(
 
         // The bang is read through a cursor of its own: the command is lent
         // to the scan, so its `arg` cannot be lent as well.
-        let mut cursor = excmd.arg;
+        let mut cursor = excmd.arg_ptr();
         // SAFETY: `cursor` is this frame's own, over the command's line.
         excmd.forceit = unsafe { parse_bang(&mut excmd, &raw mut cursor) };
-        excmd.arg = cursor;
+        excmd.set_arg_ptr(cursor);
         if !is_user_cmd(excmd.cmdidx) {
             excmd.argt = cmdnames[excmd.cmdidx.index()].cmd_argt;
         }
@@ -672,8 +642,9 @@ pub(crate) unsafe fn do_one_cmd(
         && did_emsg.get() == 0
     {
         let msg = if flags.has(DoCmdOpts::VERBOSE) {
+            let line = excmd.line_ptr();
             // SAFETY: the command line the command was parsed out of.
-            unsafe { append_command(&msg, *excmd.cmdlinep) }
+            unsafe { append_command(&msg, line) }
         } else {
             msg
         };
@@ -696,14 +667,16 @@ pub(crate) unsafe fn do_one_cmd(
     pending_end_reg_executing.set(save_pending_end_reg_executing);
 
     // A trailing bar with nothing after it is not really a next command.
-    if !excmd.nextcmd.is_null() && byte(excmd.nextcmd) == NUL {
-        excmd.nextcmd = ptr::null_mut();
+    if excmd
+        .line
+        .next
+        .is_some_and(|at| excmd.line.byte_at(at) == 0)
+    {
+        excmd.line.next = None;
     }
 
     drop(nesting);
-    xfree(excmd.cmdline_tofree as *mut c_void);
-
-    excmd.nextcmd
+    excmd.line
 }
 
 /// Does the "type `:q` twice" counter belong to a command the *user* typed?
@@ -807,8 +780,9 @@ fn refuses_here(excmd: &ExArg) -> Option<CString> {
 /// content.
 pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
     let mut errormsg: Option<CString> = None;
-    if byte(excmd.cmd) == '|' as c_int
-        || (exmode_active.get() && !ptr::eq(excmd.cmd, unsafe { exmode_plus.as_ptr().add(1) }))
+    if byte(excmd.cmd_ptr()) == '|' as c_int
+        || (exmode_active.get()
+            && !ptr::eq(excmd.cmd_ptr(), unsafe { exmode_plus.as_ptr().add(1) }))
     {
         excmd.cmdidx = CmdIdx::print;
         excmd.argt = ExArgt::RANGE | ExArgt::COUNT | ExArgt::TRLBAR;
@@ -921,18 +895,6 @@ fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) ->
 fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     crate::ex_docmd::address::invalid_range(excmd)
-}
-
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
-}
-
-/// `xcalloc()` as checked code.
-fn xcalloc(count: usize, size: usize) -> *mut c_void {
-    // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::memory::xcalloc(count, size) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

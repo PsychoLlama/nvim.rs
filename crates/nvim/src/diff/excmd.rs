@@ -76,9 +76,9 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
 
     if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
         // SAFETY: `args.arg` is the command's own argument string.
-        fullname = unsafe { full_name_save(excmd.arg, false) };
+        fullname = unsafe { full_name_save(excmd.arg_ptr(), false) };
         let name = if fullname.is_null() {
-            excmd.arg
+            excmd.arg_ptr()
         } else {
             fullname
         };
@@ -157,7 +157,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
             let flags = if vertical { WSP_VERT.cast_signed() } else { 0 };
             if win_split(0, flags).is_ok() {
                 excmd.cmdidx = CmdIdx::split;
-                excmd.arg = tmp_new;
+                excmd.set_arg_ptr(tmp_new);
                 // SAFETY: the caller's command, and a window that was live
                 // when it was read.
                 do_exedit(excmd, Some(old_curwin.id()));
@@ -166,7 +166,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
                     diff_win_options(Win::current(), true);
                     diff_win_options(old_curwin, true);
                     if let Some(patched) = newname.as_mut() {
-                        excmd.arg = patched.as_mut_ptr();
+                        excmd.set_arg_ptr(patched.as_mut_ptr());
                         // SAFETY: the caller's command; the group name and
                         // the command line are static strings.
                         ex_file(excmd);

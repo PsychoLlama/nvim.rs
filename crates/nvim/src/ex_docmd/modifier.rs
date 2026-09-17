@@ -121,7 +121,7 @@ pub(crate) fn parse_command_modifiers(
     cm: &mut CmdMod,
     skip_only: bool,
 ) -> Result<(), Failed> {
-    let orig_cmd = excmd.cmd;
+    let orig_cmd = excmd.cmd_ptr();
     let mut cmd_start: *mut c_char = ptr::null_mut();
     let mut use_plus_cmd = false;
     let mut has_visual_range = false;
@@ -131,49 +131,54 @@ pub(crate) fn parse_command_modifiers(
     // there) is stepped over so a modifier after it is still seen, and
     // put back below — the range has to reach the command, not the
     // modifier scan.
-    if unsafe { cstr::starts_with(excmd.cmd, b"'<,'>") } {
-        let p = unsafe { skipwhite(excmd.cmd.add(5)) };
+    if unsafe { cstr::starts_with(excmd.cmd_ptr(), b"'<,'>") } {
+        let p = unsafe { skipwhite(excmd.cmd_ptr().add(5)) };
         if byte(p) != NUL && byte(p) != '|' as c_int {
-            excmd.cmd = unsafe { excmd.cmd.add(5) };
-            cmd_start = excmd.cmd;
+            let visual_range = excmd.cmd_ptr();
+            excmd.set_cmd_ptr(unsafe { visual_range.add(5) });
+            cmd_start = excmd.cmd_ptr();
             has_visual_range = true;
         }
     }
 
     loop {
-        while byte(excmd.cmd) == ' ' as c_int
-            || byte(excmd.cmd) == '\t' as c_int
-            || byte(excmd.cmd) == ':' as c_int
+        while byte(excmd.cmd_ptr()) == ' ' as c_int
+            || byte(excmd.cmd_ptr()) == '\t' as c_int
+            || byte(excmd.cmd_ptr()) == ':' as c_int
         {
-            excmd.cmd = unsafe { excmd.cmd.add(1) };
+            let cmd_start = excmd.cmd_ptr();
+            excmd.set_cmd_ptr(unsafe { cmd_start.add(1) });
         }
 
         // In Ex mode an empty line means "print the next one", which is
         // spelled by substituting a `+` command.
-        if byte(excmd.cmd) == NUL
+        if byte(excmd.cmd_ptr()) == NUL
             && exmode_active.get()
             && unsafe { getline_equal(excmd.ea_getline, excmd.cookie, Some(getexline)) }
             && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
         {
-            excmd.cmd = exmode_plus.as_ptr().cast_mut();
+            excmd.set_cmd_ptr(exmode_plus.as_ptr().cast_mut());
             use_plus_cmd = true;
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
             break;
         }
-        if byte(excmd.cmd) == '"' as c_int {
-            excmd.nextcmd = unsafe { vim_strchr(excmd.cmd, '\n' as c_int) };
-            if !excmd.nextcmd.is_null() {
-                excmd.nextcmd = unsafe { excmd.nextcmd.add(1) };
+        if byte(excmd.cmd_ptr()) == '"' as c_int {
+            let cmd_start = excmd.cmd_ptr();
+            excmd.set_nextcmd_ptr(unsafe { vim_strchr(cmd_start, '\n' as c_int) });
+            if !excmd.line.next.is_none() {
+                let next_start = excmd.nextcmd_ptr();
+                excmd.set_nextcmd_ptr(unsafe { next_start.add(1) });
             }
             return Err(Failed);
         }
-        if byte(excmd.cmd) == '\n' as c_int {
-            excmd.nextcmd = unsafe { excmd.cmd.add(1) };
+        if byte(excmd.cmd_ptr()) == '\n' as c_int {
+            let cmd_start = excmd.cmd_ptr();
+            excmd.set_nextcmd_ptr(unsafe { cmd_start.add(1) });
             return Err(Failed);
         }
-        if byte(excmd.cmd) == NUL {
+        if byte(excmd.cmd_ptr()) == NUL {
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
@@ -183,39 +188,48 @@ pub(crate) fn parse_command_modifiers(
         // A modifier may follow a range (`:1,2 silent print`), so the
         // name is looked for past one — but `args.cmd` only moves for
         // the modifiers that accept that.
-        let mut p = unsafe { skip_range(excmd.cmd, ptr::null_mut()) };
+        let mut p = unsafe { skip_range(excmd.cmd_ptr(), ptr::null_mut()) };
         match ubyte(p) {
             b'a' => {
-                if !checkforcmd(&raw mut excmd.cmd, c"aboveleft".as_ptr(), 3) {
+                if !excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"aboveleft".as_ptr(), 3)) {
                     break;
                 }
                 cm.cmod_split |= WSP_ABOVE as c_int;
             }
             b'b' => {
-                if checkforcmd(&raw mut excmd.cmd, c"belowright".as_ptr(), 3) {
+                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"belowright".as_ptr(), 3)) {
                     cm.cmod_split |= WSP_BELOW as c_int;
-                } else if checkforcmd(&raw mut excmd.cmd, c"browse".as_ptr(), 3) {
+                } else if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"browse".as_ptr(), 3))
+                {
                     cm.cmod_flags |= CmdModFlags::BROWSE;
-                } else if checkforcmd(&raw mut excmd.cmd, c"botright".as_ptr(), 2) {
+                } else if excmd
+                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"botright".as_ptr(), 2))
+                {
                     cm.cmod_split |= WSP_BOT as c_int;
                 } else {
                     break;
                 }
             }
             b'c' => {
-                if !checkforcmd(&raw mut excmd.cmd, c"confirm".as_ptr(), 4) {
+                if !excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"confirm".as_ptr(), 4)) {
                     break;
                 }
                 cm.cmod_flags |= CmdModFlags::CONFIRM;
             }
             b'k' => {
-                if checkforcmd(&raw mut excmd.cmd, c"keepmarks".as_ptr(), 3) {
+                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"keepmarks".as_ptr(), 3)) {
                     cm.cmod_flags |= CmdModFlags::KEEPMARKS;
-                } else if checkforcmd(&raw mut excmd.cmd, c"keepalt".as_ptr(), 5) {
+                } else if excmd
+                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"keepalt".as_ptr(), 5))
+                {
                     cm.cmod_flags |= CmdModFlags::KEEPALT;
-                } else if checkforcmd(&raw mut excmd.cmd, c"keeppatterns".as_ptr(), 5) {
+                } else if excmd
+                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"keeppatterns".as_ptr(), 5))
+                {
                     cm.cmod_flags |= CmdModFlags::KEEPPATTERNS;
-                } else if checkforcmd(&raw mut excmd.cmd, c"keepjumps".as_ptr(), 5) {
+                } else if excmd
+                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"keepjumps".as_ptr(), 5))
+                {
                     cm.cmod_flags |= CmdModFlags::KEEPJUMPS;
                 } else {
                     break;
@@ -253,12 +267,12 @@ pub(crate) fn parse_command_modifiers(
                         break;
                     }
                 }
-                excmd.cmd = p;
+                excmd.set_cmd_ptr(p);
             }
             b'h' => {
-                if checkforcmd(&raw mut excmd.cmd, c"horizontal".as_ptr(), 3) {
+                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"horizontal".as_ptr(), 3)) {
                     cm.cmod_split |= WSP_HOR as c_int;
-                } else if p == excmd.cmd
+                } else if p == excmd.cmd_ptr()
                     && checkforcmd(&raw mut p, c"hide".as_ptr(), 3)
                     && byte(p) != NUL
                     && ends_excmd(byte(p)) == 0
@@ -266,46 +280,54 @@ pub(crate) fn parse_command_modifiers(
                     // `:hide` is a command in its own right, so it is
                     // only a modifier when a command follows it and no
                     // range precedes it.
-                    excmd.cmd = p;
+                    excmd.set_cmd_ptr(p);
                     cm.cmod_flags |= CmdModFlags::HIDE;
                 } else {
                     break;
                 }
             }
             b'l' => {
-                if checkforcmd(&raw mut excmd.cmd, c"lockmarks".as_ptr(), 3) {
+                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"lockmarks".as_ptr(), 3)) {
                     cm.cmod_flags |= CmdModFlags::LOCKMARKS;
-                } else if checkforcmd(&raw mut excmd.cmd, c"leftabove".as_ptr(), 5) {
+                } else if excmd
+                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"leftabove".as_ptr(), 5))
+                {
                     cm.cmod_split |= WSP_ABOVE as c_int;
                 } else {
                     break;
                 }
             }
             b'n' => {
-                if checkforcmd(&raw mut excmd.cmd, c"noautocmd".as_ptr(), 3) {
+                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"noautocmd".as_ptr(), 3)) {
                     cm.cmod_flags |= CmdModFlags::NOAUTOCMD;
-                } else if checkforcmd(&raw mut excmd.cmd, c"noswapfile".as_ptr(), 3) {
+                } else if excmd
+                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"noswapfile".as_ptr(), 3))
+                {
                     cm.cmod_flags |= CmdModFlags::NOSWAPFILE;
                 } else {
                     break;
                 }
             }
             b'r' => {
-                if !checkforcmd(&raw mut excmd.cmd, c"rightbelow".as_ptr(), 6) {
+                if !excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"rightbelow".as_ptr(), 6)) {
                     break;
                 }
                 cm.cmod_split |= WSP_BELOW as c_int;
             }
             b's' => {
-                if checkforcmd(&raw mut excmd.cmd, c"sandbox".as_ptr(), 3) {
+                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"sandbox".as_ptr(), 3)) {
                     cm.cmod_flags |= CmdModFlags::SANDBOX;
-                } else if checkforcmd(&raw mut excmd.cmd, c"silent".as_ptr(), 3) {
+                } else if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"silent".as_ptr(), 3))
+                {
                     cm.cmod_flags |= CmdModFlags::SILENT;
                     // `:silent!` only means "and silence errors" when
                     // the `!` is stuck to the word: `:silent !cmd` runs
                     // a shell command quietly.
-                    if byte(excmd.cmd) == '!' as c_int && !ascii_iswhite(byte_at(excmd.cmd, -1)) {
-                        excmd.cmd = unsafe { skipwhite(excmd.cmd.add(1)) };
+                    if byte(excmd.cmd_ptr()) == '!' as c_int
+                        && !ascii_iswhite(byte_at(excmd.cmd_ptr(), -1))
+                    {
+                        let cmd_start = excmd.cmd_ptr();
+                        excmd.set_cmd_ptr(unsafe { skipwhite(cmd_start.add(1)) });
                         cm.cmod_flags |= CmdModFlags::ERRSILENT;
                     }
                 } else {
@@ -317,7 +339,7 @@ pub(crate) fn parse_command_modifiers(
                     if !skip_only {
                         // The scan advances a cursor of its own; see
                         // `parse_cmd_address`.
-                        let mut cursor = excmd.cmd;
+                        let mut cursor = excmd.cmd_ptr();
                         let skip = excmd.skip;
                         let tabnr = unsafe {
                             get_address(
@@ -331,8 +353,8 @@ pub(crate) fn parse_command_modifiers(
                                 errormsg,
                             )
                         } as c_int;
-                        excmd.cmd = cursor;
-                        if excmd.cmd.is_null() {
+                        excmd.set_cmd_ptr(cursor);
+                        if excmd.cmd_ptr().is_null() {
                             return Err(Failed);
                         }
                         if tabnr == MAXLNUM {
@@ -345,21 +367,23 @@ pub(crate) fn parse_command_modifiers(
                             cm.cmod_tab = tabnr + 1;
                         }
                     }
-                    excmd.cmd = p;
-                } else if checkforcmd(&raw mut excmd.cmd, c"topleft".as_ptr(), 2) {
+                    excmd.set_cmd_ptr(p);
+                } else if excmd
+                    .with_cmd_cursor(|cursor| checkforcmd(cursor, c"topleft".as_ptr(), 2))
+                {
                     cm.cmod_split |= WSP_TOP as c_int;
                 } else {
                     break;
                 }
             }
             b'u' => {
-                if !checkforcmd(&raw mut excmd.cmd, c"unsilent".as_ptr(), 3) {
+                if !excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"unsilent".as_ptr(), 3)) {
                     break;
                 }
                 cm.cmod_flags |= CmdModFlags::UNSILENT;
             }
             b'v' => {
-                if checkforcmd(&raw mut excmd.cmd, c"vertical".as_ptr(), 4) {
+                if excmd.with_cmd_cursor(|cursor| checkforcmd(cursor, c"vertical".as_ptr(), 4)) {
                     cm.cmod_split |= WSP_VERT as c_int;
                 } else if checkforcmd(&raw mut p, c"verbose".as_ptr(), 4) {
                     // The count is read from `args.cmd`, which
@@ -367,12 +391,12 @@ pub(crate) fn parse_command_modifiers(
                     // Saturating: the count is whatever the user typed,
                     // so `:2147483647verbose set` would otherwise add one
                     // to `INT_MAX` and end the process.  C wraps here.
-                    cm.cmod_verbose = if ascii_isdigit(byte(excmd.cmd)) {
-                        unsafe { atoi(excmd.cmd) }.saturating_add(1)
+                    cm.cmod_verbose = if ascii_isdigit(byte(excmd.cmd_ptr())) {
+                        unsafe { atoi(excmd.cmd_ptr()) }.saturating_add(1)
                     } else {
                         2
                     };
-                    excmd.cmd = p;
+                    excmd.set_cmd_ptr(p);
                 } else {
                     break;
                 }
@@ -406,11 +430,11 @@ unsafe fn restore_visual_range(
 ) {
     if !has_visual_range {
         if use_plus_cmd {
-            excmd.cmd = exmode_plus.as_ptr().cast_mut();
+            excmd.set_cmd_ptr(exmode_plus.as_ptr().cast_mut());
         }
         return;
     }
-    if excmd.cmd > cmd_start {
+    if excmd.cmd_ptr() > cmd_start {
         if use_plus_cmd {
             let len = unsafe { cstr::bytes_at(cmd_start) }.len();
             move_bytes(orig_cmd, cmd_start, len);
@@ -418,16 +442,18 @@ unsafe fn restore_visual_range(
         } else {
             // SAFETY: the five bytes before `cmd_start` are the `:'<,'>` this
             // is making room for, and both ends are inside the command line.
-            let (into, kept) = unsafe { (cmd_start.offset(-5), excmd.cmd.offset_from(cmd_start)) };
+            let (into, kept) =
+                unsafe { (cmd_start.offset(-5), excmd.cmd_ptr().offset_from(cmd_start)) };
             move_bytes(into, cmd_start, kept as size_t);
-            excmd.cmd = unsafe { excmd.cmd.offset(-5) };
-            let at = unsafe { excmd.cmd.offset(-1) };
+            let cmd_start = excmd.cmd_ptr();
+            excmd.set_cmd_ptr(unsafe { cmd_start.offset(-5) });
+            let at = unsafe { excmd.cmd_ptr().offset(-1) };
             move_bytes(at, c":'<,'>".as_ptr(), 6);
         }
     } else if use_plus_cmd {
-        excmd.cmd = c"'<,'>+".as_ptr() as *mut c_char;
+        excmd.set_cmd_ptr(c"'<,'>+".as_ptr() as *mut c_char);
     } else {
-        excmd.cmd = orig_cmd;
+        excmd.set_cmd_ptr(orig_cmd);
     }
 }
 

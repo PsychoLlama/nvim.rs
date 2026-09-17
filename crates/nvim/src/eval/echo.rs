@@ -52,6 +52,7 @@ const UNSET_EVALARG: EvalArg = EvalArg {
     eval_getline: None,
     eval_cookie: null_mut(),
     eval_tofree: null_mut(),
+    next_cmd: None,
 };
 
 /// Does this byte end the `:echo` argument list?
@@ -63,7 +64,7 @@ fn ends_args(c: c_char) -> bool {
 pub fn ex_echo(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the `ExArg` outlives the command,
     // which the `do_cmdline` frame that owns it discharges.
-    let mut arg: *mut c_char = excmd.arg;
+    let mut arg: *mut c_char = excmd.arg_ptr();
     let mut rettv = UNSET_TV;
     let mut atstart = true;
     let mut need_clear = true;
@@ -131,7 +132,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
     }
 
     // SAFETY: `arg` is the tail of the command line.
-    excmd.nextcmd = unsafe { check_nextcmd(arg) };
+    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
     // SAFETY: `evalarg` is this frame's.
     unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
     msg_ext_set_append(false);
@@ -140,7 +141,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
         return;
     }
     // SAFETY: the command's argument is NUL-terminated.
-    if ui_has(kUIMessages) && ends_args(unsafe { *excmd.arg }) {
+    if ui_has(kUIMessages) && ends_args(unsafe { *excmd.arg_ptr() }) {
         // A bare `:echo` still has to produce an (empty) message.
         msg_bytes(b"", 0, false);
     } else if need_clear {
@@ -154,7 +155,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
 /// `:echohl`.
 pub fn ex_echohl(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the argument is NUL-terminated.
-    echo_hl_id.set(unsafe { syn_name2id(excmd.arg) });
+    echo_hl_id.set(unsafe { syn_name2id(excmd.arg_ptr()) });
 }
 
 /// The highlight group `:echohl` last named.
@@ -168,7 +169,7 @@ pub fn get_echo_hl_id() -> c_int {
 pub fn ex_execute(excmd: &mut ExArg) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise -- the `ExArg` outlives the command.
-    let mut arg: *mut c_char = excmd.arg;
+    let mut arg: *mut c_char = excmd.arg_ptr();
     let mut rettv = UNSET_TV;
     let mut ret = Ok(());
     let mut text = Vec::<u8>::new();
@@ -241,7 +242,7 @@ pub fn ex_execute(excmd: &mut ExArg) {
         }
     }
     // SAFETY: `arg` is the tail of the command line.
-    excmd.nextcmd = unsafe { check_nextcmd(arg) };
+    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
 }
 
 /// Which persistence a global variable's name asks for: `ALLCAPS` goes to

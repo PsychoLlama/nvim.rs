@@ -125,7 +125,7 @@ fn remembered_lnum(buffer: Buf) -> LineNr {
 /// List the buffers, one line each, as `:ls` and `:files` do.
 pub fn buflist_list(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     // SAFETY: as above.
     let forceit = excmd.forceit;
     // SAFETY: a NUL-terminated literal naming the message kind.

@@ -16,7 +16,7 @@ use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::CmdIdx;
-use crate::types::{ExArgt, NUL};
+use crate::types::{CmdLine, ExArgt, NUL};
 use crate::winlayer::{Buf, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -42,14 +42,7 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
         return;
     }
     let mut ea: ExArg = ExArg {
-        arg: ::core::ptr::null_mut::<c_char>(),
-        args: ::core::ptr::null_mut::<*mut c_char>(),
-        arglens: ::core::ptr::null_mut(),
-        argc: 0,
-        nextcmd: ::core::ptr::null_mut::<c_char>(),
-        cmd: ::core::ptr::null_mut::<c_char>(),
-        cmdlinep: ::core::ptr::null_mut::<*mut c_char>(),
-        cmdline_tofree: ::core::ptr::null_mut::<c_char>(),
+        line: CmdLine::EMPTY,
         cmdidx: if put {
             CmdIdx::diffput
         } else {
@@ -83,12 +76,12 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
     };
     let mut nrbuf: [c_char; 30] = [0; 30];
     if count == 0 as size_t {
-        ea.arg = c"".as_ptr() as *mut c_char;
+        ea.set_arg_ptr(c"".as_ptr() as *mut c_char);
     } else {
         let at = nrbuf.as_mut_ptr();
         // SAFETY: `nrbuf` holds the 30 bytes `vim_snprintf` is told about.
         unsafe { vim_snprintf(at, 30, c"%zu".as_ptr(), count) };
-        ea.arg = at;
+        ea.set_arg_ptr(at);
     }
     ea.line1 = Win::current().w_cursor.lnum;
     ea.line2 = Win::current().w_cursor.lnum;
@@ -112,7 +105,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     let cmdidx = excmd.cmdidx;
     let mut idx_other = 0;
     // SAFETY: the command's own NUL-terminated argument.
-    if unsafe { *excmd.arg } as c_int == NUL {
+    if unsafe { *excmd.arg_ptr() } as c_int == NUL {
         // No argument: the other side is the one other buffer in the diff,
         // and it is an error if there are two of them to choose from.
         let mut found_not_ma = false;
@@ -149,23 +142,24 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         // The argument names the other buffer, by number or by pattern.
         // SAFETY: the command's own NUL-terminated argument; `p` walks back
         // over its own bytes and stops at its start.
-        let mut p = unsafe { excmd.arg.add(cstr::bytes_at(excmd.arg).len()) };
+        let mut p = unsafe { excmd.arg_ptr().add(cstr::bytes_at(excmd.arg_ptr()).len()) };
         // SAFETY: as above.
-        while p > excmd.arg && ascii_iswhite(unsafe { *p.sub(1) } as c_int) {
+        while p > excmd.arg_ptr() && ascii_iswhite(unsafe { *p.sub(1) } as c_int) {
             p = p.wrapping_sub(1);
         }
         let mut digits = 0;
         // SAFETY: the walk stops at `p`, which is inside the argument.
-        while unsafe { ascii_isdigit(*excmd.arg.add(digits) as c_int) && excmd.arg.add(digits) < p }
-        {
+        while unsafe {
+            ascii_isdigit(*excmd.arg_ptr().add(digits) as c_int) && excmd.arg_ptr().add(digits) < p
+        } {
             digits += 1;
         }
-        let nr = if excmd.arg.wrapping_add(digits) == p {
+        let nr = if excmd.arg_ptr().wrapping_add(digits) == p {
             // SAFETY: a NUL-terminated decimal number.
-            unsafe { atol(excmd.arg) as c_int }
+            unsafe { atol(excmd.arg_ptr()) as c_int }
         } else {
             // SAFETY: the argument and the end of it.
-            let found = unsafe { buflist_findpat(excmd.arg, p, false, true, false) };
+            let found = unsafe { buflist_findpat(excmd.arg_ptr(), p, false, true, false) };
             if found < 0 {
                 return;
             }
@@ -173,7 +167,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         };
         let Some(buf) = find_buf(nr) else {
             // SAFETY: the command's own argument, for the one `%s`.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E102: Can't find buffer \"{arg}\"");
             return;
         };
@@ -183,7 +177,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         idx_other = diff_slot(buf, tp);
         if idx_other == DB_COUNT {
             // SAFETY: as above.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E103: Buffer \"{arg}\" is not in diff mode");
             return;
         }

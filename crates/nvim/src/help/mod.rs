@@ -144,7 +144,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
                 return;
             }
             // SAFETY: as above.
-            unsafe { trim_trailing_blanks(command.arg) }
+            unsafe { trim_trailing_blanks(command.arg_ptr()) }
         }
     };
 
@@ -251,7 +251,7 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
 /// text. Terminate the argument there and point `nextcmd` at the rest.
 fn split_off_next_cmd(excmd: &mut ExArg) {
     // SAFETY: caller contract.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     while unsafe { *arg } != NUL as c_char {
         if unsafe { *arg } == b'\n' as c_char
             || unsafe { *arg } == b'\r' as c_char
@@ -261,7 +261,7 @@ fn split_off_next_cmd(excmd: &mut ExArg) {
         {
             unsafe { *arg = NUL as c_char };
             arg = unsafe { arg.offset(1) };
-            excmd.nextcmd = arg;
+            excmd.set_nextcmd_ptr(arg);
             return;
         }
         arg = unsafe { arg.offset(1) };

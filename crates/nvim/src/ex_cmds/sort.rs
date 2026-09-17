@@ -294,11 +294,11 @@ unsafe fn flag_fallback(
     regmatch: &mut RegMatch,
     keep_nextcmd: bool,
 ) -> Option<Fallback> {
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     // SAFETY: caller's contract.
     let next = unsafe { check_nextcmd(arg.add(at)) };
-    if !next.is_null() && !(keep_nextcmd && !args.nextcmd.is_null()) {
-        args.nextcmd = next;
+    if !next.is_null() && !(keep_nextcmd && !args.line.next.is_none()) {
+        args.set_nextcmd_ptr(next);
         return Some(Fallback::NextCmd);
     }
     if is_alpha(byte) || !regmatch.regprog.is_null() {
@@ -318,7 +318,7 @@ fn parse_sort_flags(
     spec: &mut SortSpec,
     regmatch: &mut RegMatch,
 ) -> Option<StringOrder> {
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     let mut order = StringOrder::BYTES;
     // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
     let mut formats = 0;
@@ -376,7 +376,7 @@ fn parse_uniq_flags(
     use_match: &mut bool,
     regmatch: &mut RegMatch,
 ) -> Option<StringOrder> {
-    let arg = args.arg;
+    let arg = args.arg_ptr();
     let mut order = StringOrder::BYTES;
     let mut at = 0;
 

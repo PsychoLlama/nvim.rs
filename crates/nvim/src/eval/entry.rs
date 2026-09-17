@@ -65,6 +65,7 @@ const UNSET_EVALARG: EvalArg = EvalArg {
     eval_getline: None,
     eval_cookie: null_mut(),
     eval_tofree: null_mut(),
+    next_cmd: None,
 };
 
 /// One expression's evaluation state, owned by the frame that declared it.

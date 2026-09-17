@@ -399,6 +399,10 @@ pub struct EvalArg {
     pub eval_getline: LineGetter,
     pub eval_cookie: *mut ::core::ffi::c_void,
     pub eval_tofree: *mut ::core::ffi::c_char,
+    /// Where the command after the expression starts inside `eval_tofree`,
+    /// measured while that buffer is still the evaluator's and installed
+    /// with it when the command takes it over.
+    pub next_cmd: Option<usize>,
 }
 pub type ExprType = ::core::ffi::c_uint;
 pub struct LVal {

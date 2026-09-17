@@ -305,7 +305,7 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
 
 /// `:messages`.
 pub fn ex_messages(excmd: &mut ExArg) {
-    if unsafe { cstr::eq_bytes(excmd.arg, b"clear") } {
+    if unsafe { cstr::eq_bytes(excmd.arg_ptr(), b"clear") } {
         let keep = if excmd.addr_count != 0 {
             excmd.line2 as c_int
         } else {
@@ -314,7 +314,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
         msg_hist_clear(keep);
         return;
     }
-    if unsafe { *excmd.arg } != 0 {
+    if unsafe { *excmd.arg_ptr() } != 0 {
         emsg(gettext(e_invarg));
         return;
     }

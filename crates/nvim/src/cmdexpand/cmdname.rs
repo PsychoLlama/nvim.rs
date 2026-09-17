@@ -490,7 +490,7 @@ pub(crate) unsafe fn set_one_cmd_context(
     let mut ea = ExArg {
         cmdidx: CmdIdx::append,
         addr_type: CmdAddr::Lines,
-        ..unsafe { core::mem::zeroed() }
+        ..ExArg::default()
     };
     let mut context = ExpandContext::Nothing;
     let mut forceit = false;

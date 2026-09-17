@@ -258,11 +258,12 @@ pub(crate) fn ex_eval(excmd: &mut ExArg) {
         eval_getline: None,
         eval_cookie: ptr::null_mut(),
         eval_tofree: ptr::null_mut(),
+        next_cmd: None,
     };
     let skip = excmd.skip;
     // SAFETY: module contract.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
-    let arg = excmd.arg;
+    let arg = excmd.arg_ptr();
     if unsafe { eval0(arg, &mut tv, Some(excmd), &raw mut evalarg) }.is_ok() {
         tv_clear(&mut tv);
     }
@@ -283,7 +284,7 @@ pub(crate) fn ex_if(excmd: &mut ExArg) {
 
     let skip = unsafe { check_skip(cstack) };
     let mut error = false;
-    let result = unsafe { eval_to_bool(excmd.arg, &raw mut error, Some(excmd), skip, false) };
+    let result = unsafe { eval_to_bool(excmd.arg_ptr(), &raw mut error, Some(excmd), skip, false) };
 
     let flags = if skip || error {
         // Set TRUE, so this conditional never becomes active.
@@ -381,14 +382,14 @@ pub(crate) fn ex_else(excmd: &mut ExArg) {
     // is wrong -- perhaps it should have been ":else". A double quote
     // here starts a string, it is not a comment.
     if skip
-        && unsafe { *excmd.arg } != b'"' as c_char
-        && ends_excmd(unsafe { *excmd.arg } as c_int) != 0
+        && unsafe { *excmd.arg_ptr() } != b'"' as c_char
+        && ends_excmd(unsafe { *excmd.arg_ptr() } as c_int) != 0
     {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg) };
+        let arg = unsafe { c_str(excmd.arg_ptr()) };
         semsg!("E15: Invalid expression: \"{arg}\"");
     } else {
-        result = unsafe { eval_to_bool(excmd.arg, &raw mut error, Some(excmd), skip, false) };
+        result = unsafe { eval_to_bool(excmd.arg_ptr(), &raw mut error, Some(excmd), skip, false) };
     }
 
     // The first of several errors in a row is the one to throw. That is
@@ -438,7 +439,7 @@ pub(crate) fn ex_while(excmd: &mut ExArg) {
     let skip = unsafe { check_skip(cstack) };
     let mut error = false;
     let result = if is_while {
-        unsafe { eval_to_bool(excmd.arg, &raw mut error, Some(excmd), skip, false) }
+        unsafe { eval_to_bool(excmd.arg_ptr(), &raw mut error, Some(excmd), skip, false) }
     } else {
         unsafe { for_next_item(excmd, cstack, idx, jumped_back, skip, &mut error) }
     };
@@ -475,6 +476,7 @@ unsafe fn for_next_item(
         eval_getline: None,
         eval_cookie: ptr::null_mut(),
         eval_tofree: ptr::null_mut(),
+        next_cmd: None,
     };
     // SAFETY: module contract.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, Some(excmd), skip) };
@@ -484,13 +486,13 @@ unsafe fn for_next_item(
         *error = false;
         unsafe { (*cstack).cs_forinfo[idx] }
     } else {
-        let fi = unsafe { eval_for_line(excmd.arg, error, excmd, &raw mut evalarg) };
+        let fi = unsafe { eval_for_line(excmd.arg_ptr(), error, excmd, &raw mut evalarg) };
         unsafe { (*cstack).cs_forinfo[idx] = fi };
         fi
     };
 
     // Use the element at the start of the list and advance.
-    let result = !*error && !fi.is_null() && !skip && unsafe { next_for_item(fi, excmd.arg) };
+    let result = !*error && !fi.is_null() && !skip && unsafe { next_for_item(fi, excmd.arg_ptr()) };
     if !result {
         unsafe { free_for_info(fi) };
         unsafe { (*cstack).cs_forinfo[idx] = ptr::null_mut() };

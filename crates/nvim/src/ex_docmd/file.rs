@@ -109,8 +109,8 @@ pub(crate) fn ex_buffer(excmd: &mut ExArg) {
 pub(crate) fn do_exbuffer(excmd: &mut ExArg) {
     // The buffer was already resolved from the argument by
     // `execute_cmd0`'s `ExArgt::BUFNAME` handling, so anything left is junk.
-    if unsafe { *excmd.arg } != 0 {
-        excmd.errmsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), excmd.arg) });
+    if unsafe { *excmd.arg_ptr() } != 0 {
+        excmd.errmsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), excmd.arg_ptr()) });
         return;
     }
     if excmd.addr_count == 0 {
@@ -200,8 +200,8 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
             | CCGD_EXCMD as c_int,
     );
     if !unsaved
-        && (byte(excmd.arg) == NUL
-            || unsafe { setfname(Buf::current(), excmd.arg, ptr::null_mut(), true) }.is_ok())
+        && (byte(excmd.arg_ptr()) == NUL
+            || unsafe { setfname(Buf::current(), excmd.arg_ptr(), ptr::null_mut(), true) }.is_ok())
     {
         ml_recover(true);
     }
@@ -219,14 +219,20 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
         1
     };
     let fname = if !get_findfunc().is_empty() {
-        unsafe { findfunc_find_file(excmd.arg, cstr::bytes_at(excmd.arg).len(), count) }
+        unsafe {
+            findfunc_find_file(
+                excmd.arg_ptr(),
+                cstr::bytes_at(excmd.arg_ptr()).len(),
+                count,
+            )
+        }
     } else {
-        unsafe { find_nth_on_path(excmd.arg, excmd.addr_count, excmd.line2) }
+        unsafe { find_nth_on_path(excmd.arg_ptr(), excmd.addr_count, excmd.line2) }
     };
     if fname.is_null() {
         return;
     }
-    excmd.arg = fname;
+    excmd.set_arg_ptr(fname);
     do_exedit(excmd, None);
     xfree(fname as *mut c_void);
 }
@@ -283,7 +289,7 @@ pub(crate) fn ex_edit(excmd: &mut ExArg) {
     let ffname = if excmd.cmdidx == CmdIdx::enew {
         ptr::null_mut()
     } else {
-        excmd.arg
+        excmd.arg_ptr()
     };
     // `:badd` and `:balt` only add to the buffer list; they never leave
     // the current buffer, so they are not asked about it.
@@ -294,7 +300,8 @@ pub(crate) fn ex_edit(excmd: &mut ExArg) {
     {
         return;
     }
-    if buf_is_prompt(current_buf()) && excmd.cmdidx == CmdIdx::edit && byte(excmd.arg) == NUL {
+    if buf_is_prompt(current_buf()) && excmd.cmdidx == CmdIdx::edit && byte(excmd.arg_ptr()) == NUL
+    {
         emsg(c"cannot :edit a prompt buffer");
         return;
     }
@@ -315,13 +322,13 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         if ui_has(kUICmdline) {
             ui_ext_cmdline_block_leave();
         }
-        if byte(excmd.arg) == NUL {
+        if byte(excmd.arg_ptr()) == NUL {
             // Inside `:global`, normal mode is entered for the rest of
             // the line and Ex mode resumes afterwards.
             if global_busy.get() != 0 {
-                if !excmd.nextcmd.is_null() {
-                    unsafe { stuff_readbuf(excmd.nextcmd) };
-                    excmd.nextcmd = ptr::null_mut();
+                if !excmd.line.next.is_none() {
+                    unsafe { stuff_readbuf(excmd.nextcmd_ptr()) };
+                    excmd.set_nextcmd_ptr(ptr::null_mut());
                 }
                 let _redraw = Allow::redraw();
                 let _prompt = Allow::wait_return();
@@ -343,7 +350,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         || idx == CmdIdx::tabnew
         || idx == CmdIdx::tabedit
         || idx == CmdIdx::vnew)
-        && byte(excmd.arg) == NUL
+        && byte(excmd.arg_ptr()) == NUL
     {
         // A new, empty buffer.
         setpcmark();
@@ -356,8 +363,8 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit),
             old_curwin.is_none().then(|| Win::current().id()),
         );
-    } else if idx != CmdIdx::split && idx != CmdIdx::vsplit || byte(excmd.arg) != NUL {
-        if byte(excmd.arg) != NUL && text_or_buf_locked() {
+    } else if idx != CmdIdx::split && idx != CmdIdx::vsplit || byte(excmd.arg_ptr()) != NUL {
+        if byte(excmd.arg_ptr()) != NUL && text_or_buf_locked() {
             return;
         }
         let saved_readonly = readonlymode.get();
@@ -375,7 +382,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             if idx == CmdIdx::enew {
                 ptr::null_mut()
             } else {
-                excmd.arg
+                excmd.arg_ptr()
             },
             ptr::null_mut(),
             excmd,
@@ -417,7 +424,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
     }
 
     if let Some(mut old) = old_curwin.and_then(valid_win)
-        && byte(excmd.arg) != NUL
+        && byte(excmd.arg_ptr()) != NUL
         && !old.is_current()
         && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
@@ -448,7 +455,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         return;
     }
 
-    let read = if byte(excmd.arg) == NUL {
+    let read = if byte(excmd.arg_ptr()) == NUL {
         if check_fname().is_err() {
             return;
         }
@@ -465,10 +472,10 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
     } else {
         // 'cpoptions' `a` makes `:read file` set the alternate file.
         if cpo_has(CpoFlag::ALTREAD) {
-            unsafe { setaltfname(excmd.arg, excmd.arg, 1) };
+            unsafe { setaltfname(excmd.arg_ptr(), excmd.arg_ptr(), 1) };
         }
         readfile(
-            excmd.arg,
+            excmd.arg_ptr(),
             ptr::null_mut(),
             excmd.line2,
             0,
@@ -482,7 +489,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
     if read.is_err() {
         if !aborting() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg) };
+            let arg = unsafe { c_str(excmd.arg_ptr()) };
             semsg!("E484: Can't open file {arg}");
         }
         return;
@@ -519,14 +526,14 @@ pub(crate) fn ex_wundo(excmd: &mut ExArg) {
     u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
     let buffer = Buf::current();
     let hash = hash.as_mut_ptr();
-    unsafe { u_write_undo(excmd.arg, excmd.forceit, buffer, hash) };
+    unsafe { u_write_undo(excmd.arg_ptr(), excmd.forceit, buffer, hash) };
 }
 
 /// `:rundo`.
 pub(crate) fn ex_rundo(excmd: &mut ExArg) {
     let mut hash: [uint8_t; 32] = [0; 32];
     u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
-    unsafe { u_read_undo(excmd.arg, &raw mut hash as *mut uint8_t, ptr::null()) };
+    unsafe { u_read_undo(excmd.arg_ptr(), &raw mut hash as *mut uint8_t, ptr::null()) };
 }
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
@@ -560,9 +567,9 @@ pub(crate) fn ex_shada(excmd: &mut ExArg) {
     let save_shada =
         p_shada(CStr::is_empty).then(|| P_SHADA.swap(Some(XString::from_cstr(c"'100"))));
     if excmd.cmdidx == CmdIdx::rviminfo || excmd.cmdidx == CmdIdx::rshada {
-        let _ = unsafe { shada_read_everything(excmd.arg, excmd.forceit, false) };
+        let _ = unsafe { shada_read_everything(excmd.arg_ptr(), excmd.forceit, false) };
     } else {
-        unsafe { shada_write_file(excmd.arg, excmd.forceit) };
+        unsafe { shada_write_file(excmd.arg_ptr(), excmd.forceit) };
     }
     if let Some(saved) = save_shada {
         P_SHADA.restore(saved);

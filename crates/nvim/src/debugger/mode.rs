@@ -501,7 +501,7 @@ unsafe fn do_showbacktrace(cmd: *mut c_char) {
 pub fn ex_debug(excmd: &mut ExArg) {
     let outer_level = debug_break_level.replace(9999);
     // SAFETY: caller contract; `args.arg` is the NUL-terminated argument.
-    let _ = unsafe { do_cmdline_cmd(excmd.arg) };
+    let _ = unsafe { do_cmdline_cmd(excmd.arg_ptr()) };
     debug_break_level.set(outer_level);
 }
 

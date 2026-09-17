@@ -542,11 +542,18 @@ pub unsafe fn buf_write(
                 wfname = fname;
 
                 // A forced 'fileencoding' from a "++opt=val" argument.
-                let forced_enc = excmd.as_deref().filter(|command| command.force_enc != 0);
-                let fenc = if let Some(command) = forced_enc {
+                let forced_enc = excmd
+                    .as_deref()
+                    .filter(|command| command.force_enc != 0)
+                    .map(|command| command.line.cmd + command.force_enc as usize);
+                let fenc = if let Some(at) = forced_enc {
+                    let name = excmd
+                        .as_ref()
+                        .expect("the command is there")
+                        .line
+                        .ptr_from(at);
                     // SAFETY: `force_enc` is an offset into the command's line.
-                    fenc_tofree =
-                        unsafe { enc_canonize(command.cmd.offset(command.force_enc as isize)) };
+                    fenc_tofree = unsafe { enc_canonize(name.cast_mut()) };
                     fenc_tofree
                 } else {
                     b.b_p_fenc.value_ptr()

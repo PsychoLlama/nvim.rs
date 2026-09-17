@@ -77,7 +77,7 @@ unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> Ru
 pub fn ex_runtime(excmd: &mut ExArg) {
     // SAFETY: `excmd` is the live command being executed; `arg` is its
     // NUL-terminated argument text.
-    let mut arg = excmd.arg;
+    let mut arg = excmd.arg_ptr();
     let mut flags = if excmd.forceit {
         RuntimeOpts::ALL
     } else {

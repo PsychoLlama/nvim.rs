@@ -404,7 +404,7 @@ const SYNC_COUNTS: [(&CStr, SyncCount); 4] = [
 /// `:syntax sync {settings}`, `:syntax sync match|region|clear ..`, and with no
 /// argument the sync listing.
 pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
-    let mut arg_start = args.arg;
+    let mut arg_start = args.arg_ptr();
     if ends_excmd(unsafe { *arg_start } as c_int) != 0 {
         syn_cmd_list(args, 1);
         return;
@@ -485,7 +485,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
         } else {
             // Everything else is a subcommand of its own, run in syncing
             // mode; it consumes the rest of the line either way.
-            args.arg = next_arg;
+            args.set_arg_ptr(next_arg);
             if word == b"MATCH" {
                 syn_cmd_match(args, 1);
             } else if word == b"REGION" {
@@ -506,7 +506,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
         let arg_start = unsafe { c_str(arg_start) };
         semsg!("E404: Illegal arguments: {arg_start}");
     } else if !finished {
-        args.nextcmd = unsafe { check_nextcmd(arg_start) };
+        args.set_nextcmd_ptr(unsafe { check_nextcmd(arg_start) });
         redraw_curbuf_later(UPD_SOME_VALID);
         syn_stack_free_all(cur_syn_block()); // Need to recompute all syntax.
     }
