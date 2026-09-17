@@ -677,6 +677,11 @@ pub(crate) unsafe fn set_option(
 
 /// Write a value with no side effects at all: no callback, no autocommand,
 /// no validation. Only for values the editor itself computed.
+///
+/// **Takes ownership of nothing, and copies what it is given**, which is
+/// why every caller here hands it a *borrow* — `OptVal::static_string`, or
+/// `OptStr::borrowing` over a buffer the caller goes on owning. Building an
+/// owned value to pass in allocates the same bytes twice.
 pub(crate) fn set_option_direct(
     opt_idx: OptIndex,
     value: OptVal,

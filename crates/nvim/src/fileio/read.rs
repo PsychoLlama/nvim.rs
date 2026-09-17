@@ -26,7 +26,7 @@ use crate::keycodes::Ctrl_Z;
 use crate::memfile::MfDirty;
 use crate::option::cpo_has;
 use crate::pos::MAXCOL;
-use crate::types::{CmdModFlags, CpoFlag, Failed, OptionSetFlags};
+use crate::types::{CmdModFlags, CpoFlag, Failed, OptStr, OptionSetFlags};
 
 mod tail;
 
@@ -794,9 +794,12 @@ pub(crate) unsafe fn readfile(
             save_file_ff(Buf::current());
             // When editing a new file set 'fileencoding' for this buffer.
             // Also for ":read ++edit file".
+            // A borrow: `set_option_direct` copies, and `fenc` is freed
+            // just below either way.
+            // SAFETY: `fenc` is NUL-terminated and outlives the call.
             set_option_direct(
                 kOptFileencoding,
-                OptVal::string(unsafe { cstr_to_string(fenc) }),
+                OptVal::String(unsafe { OptStr::borrowing(fenc) }),
                 OptionSetFlags::LOCAL,
                 0 as ScriptId,
             );

@@ -53,8 +53,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, String_0,
-    size_t,
+    CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use ::libc::atoi;
@@ -577,7 +576,8 @@ fn apply_cmdmod() {
 
 /// The 'eventignore' value `:noautocmd` installs.
 fn eventignore_all() -> OptVal {
-    OptVal::string(String_0::from_cstr(c"all"))
+    // A `.rodata` borrow: `set_option_direct`, its only consumer, copies.
+    OptVal::static_string(c"all")
 }
 
 /// Take the modifiers back out of force.

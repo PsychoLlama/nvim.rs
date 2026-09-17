@@ -4,7 +4,6 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::ascii_isspace;
 use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{
@@ -93,9 +92,9 @@ use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AcoSave, BlnFlags, CheckItem, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo,
-    FileOffset, GArray, IOSIZE, LineNr, OK, OptInt, OptVal, OptionSetFlags, RegMatch, RegProg,
-    ScriptId, ShmFlag, iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t,
-    uv_gid_t, uv_uid_t,
+    FileOffset, GArray, IOSIZE, LineNr, OK, OptInt, OptStr, OptVal, OptionSetFlags, RegMatch,
+    RegProg, ScriptId, ShmFlag, iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t,
+    uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -701,9 +700,11 @@ pub fn set_forced_fenc(excmd: &mut ExArg) {
         return;
     }
     let fenc = unsafe { enc_canonize(excmd.cmd.offset(excmd.force_enc as isize)) };
+    // A borrow: `set_option_direct` copies, and `fenc` is freed just below.
+    // SAFETY: `fenc` is NUL-terminated and outlives the call.
     set_option_direct(
         kOptFileencoding,
-        OptVal::string(unsafe { cstr_to_string(fenc) }),
+        OptVal::String(unsafe { OptStr::borrowing(fenc) }),
         OptionSetFlags::LOCAL,
         0 as ScriptId,
     );

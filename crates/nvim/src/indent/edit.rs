@@ -9,7 +9,6 @@ use core::ffi::CStr;
 use core::ptr;
 
 use super::*;
-use crate::api::private::helpers::cstr_to_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::change::{changed_lines, ins_bytes, ins_str};
 use crate::charset::skip;
@@ -43,7 +42,7 @@ use crate::search::findmatch;
 use crate::state::mode::{Insstart, State, ai_col, can_si, can_si_back, did_si, old_indent};
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::strings::xstrnsave;
-use crate::types::CmdModFlags;
+use crate::types::{CmdModFlags, OptStr};
 use crate::undo::{u_clearline, u_save, u_savecommon};
 use crate::winlayer::{Buf, Win};
 
@@ -847,9 +846,12 @@ unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
     let old_vts_ary = buf.b_p_vts_array;
     if unsafe { tabstop_count(old_vts_ary) } > 0 || unsafe { tabstop_count(tabs.vts) } > 1 {
         // 'vartabstop' is in use, or more than one stop was given.
+        // A borrow: `set_option_direct` copies, and the caller owns
+        // `ts_str`.
+        // SAFETY: the caller's contract -- `ts_str` is NUL-terminated.
         set_option_direct(
             kOptVartabstop,
-            OptVal::string(unsafe { cstr_to_string(tabs.ts_str) }),
+            OptVal::String(unsafe { OptStr::borrowing(tabs.ts_str) }),
             OptionSetFlags::LOCAL,
             0,
         );

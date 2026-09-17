@@ -48,7 +48,7 @@ use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
     AdditionalData, ColNr, FileMark, FileMarkView, LineNr, NUL, OptInt, OptSet, OptVal,
-    OptionSetFlags, Pos, String_0,
+    OptionSetFlags, Pos,
 };
 use crate::window::global_stl_height;
 
@@ -161,7 +161,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Option<&CStr> {
         // mark (freeing what the old one held).
         set_option_direct(
             kOptComments,
-            OptVal::string(String_0::from_cstr(c"")),
+            OptVal::static_string(c""),
             OptionSetFlags::LOCAL,
             SID_NONE,
         );

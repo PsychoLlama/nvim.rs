@@ -17,7 +17,7 @@ count	callee	no_raw	defs	def
 120	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 108	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
 103	snprintf	0	1	crates/nvim/src/os/cshim.rs
-102	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
+99	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 87	zeroed	0	0	
 86	nlua_pop_string	0	1	crates/nvim/src/lua/converter/pop.rs
 86	starts_with	0	2	
@@ -224,6 +224,7 @@ count	callee	no_raw	defs	def
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	Dt::new	0	68	
 11	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
+11	OptStr::borrowing	0	1	crates/nvim/src/option/value.rs
 11	Qfe::new	0	68	
 11	Screen::of	0	1	crates/nvim/src/vterm/screen/mod.rs
 11	call_func	0	1	crates/nvim/src/eval/userfunc/dispatch.rs
@@ -332,7 +333,6 @@ count	callee	no_raw	defs	def
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
 8	Cur::new	0	1	crates/nvim/src/eval/expr/level.rs
 8	Lv::new	0	68	
-8	OptStr::borrowing	0	1	crates/nvim/src/option/value.rs
 8	Self::new	0	68	
 8	alist_name	0	1	crates/nvim/src/arglist/mod.rs
 8	captype	0	1	crates/nvim/src/spell/chartab.rs
