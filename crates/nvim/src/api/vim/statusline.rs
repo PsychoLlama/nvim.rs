@@ -69,9 +69,8 @@ pub unsafe fn nvim_eval_statusline(
     if !named_expr {
         // SAFETY: `str.data` is NUL-terminated, and the message is the
         // checker's own static text.
-        let errmsg = unsafe { check_stl_option(str.data()) };
-        if let Some(errmsg) = errmsg {
-            error = Error::validation(&errmsg);
+        if let Err(errmsg) = unsafe { check_stl_option(str.data()) } {
+            error = Error::validation(errmsg.as_cstr());
             return empty.reported(error);
         }
     }

@@ -162,7 +162,7 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
     // user's 'shada' says.
     // SAFETY: main-thread editor call; the option value is owned here.
     let op_shada = get_option_value(kOptShada, OptionSetFlags::GLOBAL);
-    set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
+    let _ = set_option_value(kOptShada, shada_while_restoring(), OptionSetFlags::GLOBAL);
 
     if flags & kCtxRegs as c_int != 0 {
         unsafe { shada_read_string((*ctx).regs.clone(), SHADA_RESTORE) };
@@ -183,7 +183,7 @@ pub unsafe fn ctx_restore(ctx: *mut Context, flags: c_int) -> bool {
         unsafe { ctx_free(ctx) };
     }
 
-    set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
+    let _ = set_option_value(kOptShada, op_shada, OptionSetFlags::GLOBAL);
     optval_free(op_shada);
     true
 }

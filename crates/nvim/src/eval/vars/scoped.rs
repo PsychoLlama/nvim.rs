@@ -294,8 +294,8 @@ unsafe fn set_option_from_tv(varname: *const c_char, varp: &TypVal) {
         // SAFETY: the caller's obligation -- a NUL-terminated name matching
         // the index the lookup above answered.
         let errmsg = unsafe { set_option_value_handle_tty(varname, opt_idx, value, local) };
-        if let Some(errmsg) = errmsg {
-            emsg(&errmsg);
+        if let Err(errmsg) = errmsg {
+            emsg(errmsg.as_cstr());
         }
     }
     optval_free(value);

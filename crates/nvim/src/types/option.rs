@@ -191,14 +191,53 @@ impl OptVal {
 }
 
 pub type OptValType = ::core::ffi::c_int;
-/// What the option table names for an option that has just been set: a
-/// callback that vets the new value and reports a message when it does not
-/// like it.
+
+/// Why a `did_set_*` callback refused a value.
 ///
-/// The message borrows the frame, because a callback that formats one
-/// writes it into the caller's `os_errbuf`; a callback that only names a
-/// constant answers a `'static` one, which coerces.
-pub type OptDidSetCb = Option<for<'a> unsafe fn(&'a mut OptSet) -> Option<&'a ::core::ffi::CStr>>;
+/// Upstream's callbacks answered a `char *` that was either one of the
+/// message statics or a pointer into a buffer the *caller* had to supply
+/// and keep alive -- `set_option` carried an `errbuf`/`errbuflen` pair down
+/// four levels for that, and the frame held a third copy of it. A message
+/// that names what it disliked owns its bytes here, so the buffer and both
+/// parameters are gone and a callback's answer outlives its frame.
+pub enum OptError {
+    /// One of the message statics, already translated.
+    Static(&'static ::core::ffi::CStr),
+    /// A message the callback formatted, naming the value it disliked.
+    Owned(crate::memory::XString),
+}
+
+impl OptError {
+    /// The room a formatted rejection is given, which is the size upstream
+    /// told `vim_snprintf` its `errbuf` was. Stated once, because the
+    /// message owns its bytes and is measured at the terminator the
+    /// formatter left rather than carried beside a length.
+    pub const ROOM: usize = IOSIZE as usize;
+
+    /// The message, for a caller that reports it.
+    pub fn as_cstr(&self) -> &::core::ffi::CStr {
+        match self {
+            OptError::Static(message) => message,
+            OptError::Owned(message) => message.as_cstr(),
+        }
+    }
+}
+
+impl From<&'static ::core::ffi::CStr> for OptError {
+    fn from(message: &'static ::core::ffi::CStr) -> Self {
+        OptError::Static(message)
+    }
+}
+
+impl From<crate::memory::XString> for OptError {
+    fn from(message: crate::memory::XString) -> Self {
+        OptError::Owned(message)
+    }
+}
+
+/// What the option table names for an option that has just been set: a
+/// callback that vets the new value and reports why it does not like it.
+pub type OptDidSetCb = Option<unsafe fn(&mut OptSet) -> Result<(), OptError>>;
 pub type OptExpandCb = Option<
     unsafe fn(
         *mut OptExpand,
@@ -237,8 +276,6 @@ pub struct OptSet {
     pub os_value_checked: bool,
     pub os_value_changed: bool,
     pub os_restore_chartab: bool,
-    pub os_errbuf: *mut ::core::ffi::c_char,
-    pub os_errbuflen: size_t,
     /// The window and buffer the set is happening in, as handles taken
     /// where `set_option` built the frame and both were provably live.
     /// Upstream carried two `void *` and left every `did_set_*` callback to

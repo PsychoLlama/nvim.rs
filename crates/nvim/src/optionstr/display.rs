@@ -33,16 +33,16 @@ use crate::option::vars::{
     P_BG, P_VE, breakat_flags, p_bg, p_breakat, p_km, p_mousescroll, p_mousescroll_hor,
     p_mousescroll_vert, p_pumborder, p_winborder, ve_flags,
 };
-use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
+use crate::option::{fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::state::mode::{km_startsel, km_stopsel};
 use crate::types::{
-    BreakAt, ColNr, FAIL, FloatAnchor, LPos, LineNr, NUL, OptInt, OptSet, OptionSetFlags, VirtText,
-    WinConfig, kFloatRelativeEditor,
+    BreakAt, ColNr, FAIL, FloatAnchor, LPos, LineNr, NUL, OptError, OptInt, OptSet, OptionSetFlags,
+    VirtText, WinConfig, kFloatRelativeEditor,
 };
 use crate::window::check_colorcolumn;
 
-use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
+use super::frame::{invalid, local_window, old_value, varp, win};
 use super::{
     COCU_ALL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, WW_ALL,
     check_chars_options, check_signcolumn, check_str_opt, did_set_option_listflag,
@@ -57,17 +57,14 @@ use crate::winlayer::{Win, buffers};
 
 /// 'ambiwidth' decides how wide an ambiguous-width character is drawn, so
 /// the two character options have to be re-checked against the new answer.
-pub fn did_set_ambiwidth(args: &mut OptSet) -> Option<&CStr> {
-    let errmsg = did_set_str_generic(args);
-    if errmsg.is_some() {
-        return errmsg;
-    }
+pub fn did_set_ambiwidth(args: &mut OptSet) -> Result<(), OptError> {
+    did_set_str_generic(args)?;
     check_chars_options()
 }
 
 /// 'emoji' has the same reach as 'ambiwidth', so it re-checks the same
 /// things — including 'ambiwidth' itself, whose mask depends on it.
-pub fn did_set_emoji(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_emoji(_args: &mut OptSet) -> Result<(), OptError> {
     if unsafe { check_str_opt(kOptAmbiwidth, None) }.is_err() {
         return invalid();
     }
@@ -80,16 +77,13 @@ pub fn did_set_emoji(_args: &mut OptSet) -> Option<&CStr> {
 /// being reloaded; when it does, the scheme is disowned (`g:colors_name`
 /// unset), the value the user asked for is restored, and the highlighting
 /// is built once more from the built-in defaults.
-pub fn did_set_background(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_background(args: &mut OptSet) -> Result<(), OptError> {
     let mut numbuf = NumBuf::new();
-    let errmsg = did_set_str_generic(args);
-    if errmsg.is_some() {
-        return errmsg;
-    }
+    did_set_str_generic(args)?;
     // SAFETY: both are C strings; only the first byte distinguishes "dark"
     // from "light".
     if p_bg(|value| unsafe { *old_value(args) == *value.as_ptr().cast_mut() }) {
-        return None;
+        return Ok(());
     }
 
     let dark = p_bg(|value| cstr::first(value) == b'd');
@@ -114,14 +108,14 @@ pub fn did_set_background(args: &mut OptSet) -> Option<&CStr> {
             unsafe { terminal_notify_theme(buf.terminal, dark) };
         }
     }
-    None
+    Ok(())
 }
 
 /// 'breakat' is consulted per character while wrapping, so it is kept as a
 /// 256-entry lookup rather than re-scanned.
-pub fn did_set_breakat(_args: &mut OptSet) -> Option<&'static CStr> {
+pub fn did_set_breakat(_args: &mut OptSet) -> Result<(), OptError> {
     derive_breakat_flags();
-    None
+    Ok(())
 }
 
 /// The `'breakat'` character set itself, for the startup sweep, which has
@@ -136,7 +130,7 @@ pub(crate) fn derive_breakat_flags() {
     breakat_flags.set(chars);
 }
 
-pub fn did_set_breakindentopt(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_breakindentopt(args: &mut OptSet) -> Result<(), OptError> {
     let (mut wp, varp) = (win(args), varp(args));
     let local = &raw mut wp.w_onebuf_opt.wo_briopt;
     let for_window = local_window(varp, wp, local);
@@ -149,22 +143,21 @@ pub fn did_set_breakindentopt(args: &mut OptSet) -> Option<&CStr> {
     if for_window.is_some() && wp.w_briopt_list != 0 {
         redraw_all_later(UPD_NOT_VALID);
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_colorcolumn(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_colorcolumn(args: &mut OptSet) -> Result<(), OptError> {
     let (mut wp, varp) = (win(args), varp(args));
     let local = &raw mut wp.w_onebuf_opt.wo_cc;
     unsafe { check_colorcolumn(varp.get(), local_window(varp, wp, local)) }
 }
 
-pub fn did_set_concealcursor(args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: the frame, its value and its error buffer.
-    let (buf, len) = errbuf(args);
-    unsafe { did_set_option_listflag(varp(args).get(), COCU_ALL.as_ptr(), buf, len) }
+pub fn did_set_concealcursor(args: &mut OptSet) -> Result<(), OptError> {
+    // SAFETY: the frame's own C string value.
+    unsafe { did_set_option_listflag(varp(args).get(), COCU_ALL.as_ptr()) }
 }
 
-pub fn did_set_cursorlineopt(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_cursorlineopt(args: &mut OptSet) -> Result<(), OptError> {
     let (wp, varp) = (win(args), varp(args));
     // An empty 'cursorlineopt' is not "no highlighting", it is no answer at
     // all.
@@ -175,80 +168,70 @@ pub fn did_set_cursorlineopt(args: &mut OptSet) -> Option<&CStr> {
     {
         return invalid();
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_display(args: &mut OptSet) -> Option<&CStr> {
-    let errmsg = did_set_str_generic(args);
-    if errmsg.is_some() {
-        return errmsg;
-    }
+pub fn did_set_display(args: &mut OptSet) -> Result<(), OptError> {
+    did_set_str_generic(args)?;
     // "uhex" changes how an unprintable character is drawn, and "msgsep"
     // changes whether the message area is its own grid.
     init_chartab();
     msg_grid_validate();
-    None
+    Ok(())
 }
 
-pub fn did_set_guicursor(_args: &mut OptSet) -> Option<&CStr> {
-    let errmsg = parse_shape_opt(SHAPE_CURSOR);
-    if errmsg.is_some() {
-        return errmsg;
-    }
+pub fn did_set_guicursor(_args: &mut OptSet) -> Result<(), OptError> {
+    parse_shape_opt(SHAPE_CURSOR)?;
     // The Visual-mode cursor shape is drawn as part of the line.
     if visual_active() {
         redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
     }
-    None
+    Ok(())
 }
 
 /// 'highlight' is Vim's highlight-group mapping, which nvim does not
 /// implement: only its default value is accepted.
-pub fn did_set_highlight(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_highlight(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: both are C strings.
     if !unsafe { cstr::eq(varp(args).get(), HIGHLIGHT_INIT.as_ptr()) } {
-        return Some(e_unsupportedoption);
+        return Err((e_unsupportedoption).into());
     }
-    None
+    Ok(())
 }
 
 /// 'inccommand' cannot change while a preview is on screen, because the
 /// preview was set up under the old value.
-pub fn did_set_inccommand(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_inccommand(args: &mut OptSet) -> Result<(), OptError> {
     if cmdpreview.get() {
         return invalid();
     }
     did_set_str_generic(args)
 }
 
-pub fn did_set_keymodel(args: &mut OptSet) -> Option<&CStr> {
-    let errmsg = did_set_str_generic(args);
-    if errmsg.is_some() {
-        return errmsg;
-    }
+pub fn did_set_keymodel(args: &mut OptSet) -> Result<(), OptError> {
+    did_set_str_generic(args)?;
     // SAFETY: the option's C string value, only read here.
     km_stopsel.set(p_km(|value| has_char(value, c_int::from(b'o'))));
     km_startsel.set(p_km(|value| has_char(value, c_int::from(b'a'))));
-    None
+    Ok(())
 }
 
-pub fn did_set_messagesopt(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_messagesopt(_args: &mut OptSet) -> Result<(), OptError> {
     if messagesopt_changed().is_err() {
         return invalid();
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_mouse(args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: the frame, its value and its error buffer.
-    let (buf, len) = errbuf(args);
-    unsafe { did_set_option_listflag(varp(args).get(), super::MOUSE_ALL.as_ptr(), buf, len) }
+pub fn did_set_mouse(args: &mut OptSet) -> Result<(), OptError> {
+    // SAFETY: the frame's own C string value.
+    unsafe { did_set_option_listflag(varp(args).get(), super::MOUSE_ALL.as_ptr()) }
 }
 
 /// 'mousescroll' is `ver:<n>` and/or `hor:<n>`, each at most once. A
 /// direction the value does not mention keeps its built-in default rather
 /// than whatever the previous value set.
-pub fn did_set_mousescroll(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_mousescroll(_args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the option's own value is a C string.
     let value =
         p_mousescroll(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
@@ -272,7 +255,7 @@ pub fn did_set_mousescroll(_args: &mut OptSet) -> Option<&CStr> {
             return invalid();
         }
         if !digits.iter().all(|b| ascii_isdigit(c_int::from(*b))) {
-            return Some(c"E5080: Digit expected");
+            return Err((c"E5080: Digit expected").into());
         }
         // The digits are read with `getdigits_int`, which is what rejects a
         // number too large for an `int`.
@@ -289,48 +272,45 @@ pub fn did_set_mousescroll(_args: &mut OptSet) -> Option<&CStr> {
 
     p_mousescroll_vert.set(vertical.unwrap_or(MOUSESCROLL_VERT_DFLT as OptInt));
     p_mousescroll_hor.set(horizontal.unwrap_or(MOUSESCROLL_HOR_DFLT as OptInt));
-    None
+    Ok(())
 }
 
-pub fn did_set_selection(args: &mut OptSet) -> Option<&CStr> {
-    let errmsg = did_set_str_generic(args);
-    if errmsg.is_some() {
-        return errmsg;
-    }
+pub fn did_set_selection(args: &mut OptSet) -> Result<(), OptError> {
+    did_set_str_generic(args)?;
     // Whether the character under the cursor is inside the selection just
     // changed.
     if visual_active() {
         // SAFETY: marks the current buffer's windows.
         redraw_curbuf_later(UPD_INVERTED);
     }
-    None
+    Ok(())
 }
 
 /// Every character of 'showbreak' has to fit in one cell, because the
 /// leader is drawn in a fixed-width margin.
-pub fn did_set_showbreak(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_showbreak(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's value is a C string, and the walk steps by the
     // length of the character it just measured.
     let mut s = unsafe { varp(args).get() };
     while unsafe { *s } != 0 {
         if unsafe { ptr2cells(s) } != 1 {
-            return Some(e_showbreak_contains_unprintable_or_wide_character);
+            return Err((e_showbreak_contains_unprintable_or_wide_character).into());
         }
         s = unsafe { s.add(utfc_ptr2len(s) as usize) };
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_showcmdloc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_showcmdloc(args: &mut OptSet) -> Result<(), OptError> {
     let errmsg = did_set_str_generic(args);
-    if errmsg.is_none() {
+    if errmsg.is_ok() {
         // The pending-command display shares the last line with the ruler.
         comp_col();
     }
     errmsg
 }
 
-pub fn did_set_signcolumn(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_signcolumn(args: &mut OptSet) -> Result<(), OptError> {
     let (mut wp, varp) = (win(args), varp(args));
     let local = &raw mut wp.w_onebuf_opt.wo_scl;
     if unsafe { check_signcolumn(varp.get(), local_window(varp, wp, local)) }.is_err() {
@@ -344,12 +324,12 @@ pub fn did_set_signcolumn(args: &mut OptSet) -> Option<&CStr> {
     {
         wp.w_nrwidth_line_count = 0 as LineNr;
     }
-    None
+    Ok(())
 }
 
 /// 'virtualedit' keeps a mask beside its string, and the window-local one
 /// uses an empty value to mean "no override" rather than "no virtual edit".
-pub fn did_set_virtualedit(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_virtualedit(args: &mut OptSet) -> Result<(), OptError> {
     let mut wp = win(args);
     let local = args.os_flags.has(OptionSetFlags::LOCAL);
     // A copy, so that the global value outlives the projection: `:set` rate.
@@ -370,7 +350,7 @@ pub fn did_set_virtualedit(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the option's C string value.
     if local && unsafe { c_int::from(*value) } == NUL {
         store(0 as c_uint);
-        return None;
+        return Ok(());
     }
     // SAFETY: the same C string, against the table's own word list.
     let Some(mask) = (unsafe { opt_strings_mask(value, &opt_ve_values, true) }) else {
@@ -383,28 +363,27 @@ pub fn did_set_virtualedit(args: &mut OptSet) -> Option<&CStr> {
         validate_virtcol(wp);
         coladvance(wp, wp.w_virtcol);
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_whichwrap(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_whichwrap(args: &mut OptSet) -> Result<(), OptError> {
     // 'whichwrap' is spelled as a comma-separated list but checked as a set
     // of letters, so the comma is one of the accepted letters.
     const WW_AND_COMMA: &CStr = c"bshl<>[]~,";
     debug_assert!(WW_AND_COMMA.to_bytes().starts_with(WW_ALL.to_bytes()));
-    // SAFETY: the frame, its value and its error buffer.
-    let (buf, len) = errbuf(args);
-    unsafe { did_set_option_listflag(varp(args).get(), WW_AND_COMMA.as_ptr(), buf, len) }
+    // SAFETY: the frame's own C string value.
+    unsafe { did_set_option_listflag(varp(args).get(), WW_AND_COMMA.as_ptr()) }
 }
 
-pub fn did_set_wildmode(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_wildmode(_args: &mut OptSet) -> Result<(), OptError> {
     if check_opt_wim().is_err() {
         return invalid();
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_winbar(args: &mut OptSet) -> Option<&CStr> {
-    unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, false)) }
+pub fn did_set_winbar(args: &mut OptSet) -> Result<(), OptError> {
+    did_set_statustabline_rulerformat(args, false, false)
 }
 
 /// Would `border_opt` be accepted as a floating window's border?
@@ -464,27 +443,27 @@ pub(crate) unsafe fn parse_border_opt(border_opt: *mut c_char) -> bool {
     unsafe { parse_winborder(&raw mut fconfig, border_opt) }.unwrap_or(false)
 }
 
-pub fn did_set_winborder(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_winborder(_args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the option's own C string value.
     if !p_winborder(|value| unsafe { parse_border_opt(value.as_ptr().cast_mut()) }) {
         return invalid();
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_pumborder(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_pumborder(_args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the option's own C string value.
     if !p_pumborder(|value| unsafe { parse_border_opt(value.as_ptr().cast_mut()) }) {
         return invalid();
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_winhighlight(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_winhighlight(args: &mut OptSet) -> Result<(), OptError> {
     let (mut wp, varp) = (win(args), varp(args));
     let local = &raw mut wp.w_onebuf_opt.wo_winhl;
     if !unsafe { parse_winhl_opt(varp.get(), local_window(varp, wp, local)) } {
         return invalid();
     }
-    None
+    Ok(())
 }

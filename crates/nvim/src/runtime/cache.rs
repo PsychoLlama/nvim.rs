@@ -43,7 +43,7 @@ use crate::path::ExpandFlags;
 use crate::semsg;
 use crate::smsg;
 
-use crate::types::{FAIL, MAXPATHL, OK};
+use crate::types::{FAIL, MAXPATHL, OK, OptError};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
@@ -580,9 +580,9 @@ fn runtime_search_path_build() -> RuntimeSearchPath {
 }
 
 /// `'runtimepath'`/`'packpath'` changed: the cache no longer describes them.
-pub fn did_set_runtimepackpath(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_runtimepackpath(_args: &mut OptSet) -> Result<(), OptError> {
     runtime_search_path_valid.set(false);
-    None
+    Ok(())
 }
 
 /// Free a search path and every string in it.

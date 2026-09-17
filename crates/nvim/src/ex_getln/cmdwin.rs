@@ -13,7 +13,7 @@ use crate::buffer::{BufRef, current_buf};
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_set_tab};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_C, Key};
-use crate::types::{CmdModFlags, NUL, OptionSetFlags};
+use crate::types::{CmdModFlags, NUL, OptError, OptionSetFlags};
 use crate::window::valid_win;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -81,7 +81,7 @@ pub fn cmdline_init() {
 }
 
 /// `'cedit'` changed: re-derive the key that opens the command-line window.
-pub fn did_set_cedit(_args: &mut OptSet) -> Option<&'static CStr> {
+pub fn did_set_cedit(_args: &mut OptSet) -> Result<(), OptError> {
     derive_cedit_key()
 }
 
@@ -90,17 +90,17 @@ pub fn did_set_cedit(_args: &mut OptSet) -> Option<&'static CStr> {
 ///
 /// Safe: the option's value is a C string from the moment the option table
 /// is initialised, which is the whole of the precondition.
-pub(crate) fn derive_cedit_key() -> Option<&'static CStr> {
+pub(crate) fn derive_cedit_key() -> Result<(), OptError> {
     if p_cedit(CStr::is_empty) {
         cedit_key.set(-1);
     } else {
         let n = p_cedit(|value| unsafe { string_to_key(value.as_ptr().cast_mut()) });
         if n == 0 || vim_isprintc(n) {
-            return Some(e_invarg);
+            return Err(e_invarg.into());
         }
         cedit_key.set(n);
     }
-    None
+    Ok(())
 }
 
 /// Open a window on the current command line and its history, and edit in it.

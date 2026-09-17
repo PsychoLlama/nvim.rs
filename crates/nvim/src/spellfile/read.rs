@@ -745,6 +745,6 @@ pub(super) unsafe fn spell_reload_one(fname: *mut c_char, added_word: bool) {
     // A word was added to a file no window had loaded; re-resolving
     // 'spelllang' is what picks it up.
     if added_word && !didit {
-        parse_spelllang(Win::current());
+        let _ = parse_spelllang(Win::current());
     }
 }

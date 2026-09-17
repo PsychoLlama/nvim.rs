@@ -31,7 +31,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
-use crate::types::NUL;
+use crate::types::{NUL, OptError};
 
 /// `:` for a Visual region, and the `!` filter `=` and `gq` fall back to.
 ///
@@ -112,19 +112,16 @@ fn global_opfunc() -> *mut Callback {
 }
 
 /// Parse a new 'operatorfunc' value; `E474` if it names nothing callable.
-///
-/// # Safety
-/// The option's current value must be a valid C string.
-pub unsafe fn did_set_operatorfunc(_args: &mut OptSet) -> Option<&CStr> {
-    // SAFETY: the caller's promise -- 'operatorfunc' is a valid C string.
+pub fn did_set_operatorfunc(_args: &mut OptSet) -> Result<(), OptError> {
+    // SAFETY: an option's value is a valid C string.
     if p_opfunc(|value| unsafe {
         option_set_callback_func(value.as_ptr().cast_mut(), global_opfunc())
     })
     .is_err()
     {
-        return Some(e_invarg);
+        return Err((e_invarg).into());
     }
-    None
+    Ok(())
 }
 
 /// Mark the 'operatorfunc' callback with `copy_id` so the collector keeps it.

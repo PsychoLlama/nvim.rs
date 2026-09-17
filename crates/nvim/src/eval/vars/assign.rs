@@ -569,8 +569,8 @@ unsafe fn ex_let_option(
 
         let err = unsafe { set_option_value_handle_tty(arg, opt_idx, newval, opt_flags) };
         arg_end = p;
-        if let Some(err) = err {
-            emsg(&gettext_owned(&err));
+        if let Err(err) = err {
+            emsg(&gettext_owned(err.as_cstr()));
         }
     }
 

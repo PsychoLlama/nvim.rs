@@ -21,6 +21,7 @@
 use super::*;
 use crate::cstr;
 use crate::eval::typval::{index_of, list_iter};
+use crate::os::cshim::gettext_owned;
 use crate::semsg;
 use crate::types::NUL;
 use core::cmp::Ordering;
@@ -318,9 +319,8 @@ pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
     let saved = CELL_WIDTHS.with_mut(|t| core::mem::replace(t, table));
 
     // The new widths must not conflict with 'listchars' or 'fillchars'.
-    let error = check_chars_options();
-    if let Some(error) = error {
-        emsg(gettext(error));
+    if let Err(error) = check_chars_options() {
+        emsg(&gettext_owned(error.as_cstr()));
         CELL_WIDTHS.with_mut(|t| *t = saved);
         return;
     }

@@ -18,17 +18,26 @@
 )]
 
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char};
+use core::ffi::c_char;
 
 use crate::option::StrVar;
 
+use crate::memory::XString;
 use crate::message::e_invarg;
-use crate::types::OptSet;
+use crate::types::{OptError, OptSet};
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
-pub(crate) fn invalid() -> Option<&'static CStr> {
-    Some(e_invarg)
+pub(crate) fn invalid() -> Result<(), OptError> {
+    Err(e_invarg.into())
+}
+
+/// A rejection the callback formats itself, naming what it disliked.
+///
+/// `fill` is handed [`OptError::ROOM`] bytes plus a terminator, which is the
+/// buffer upstream's `errbuf`/`errbuflen` pair named.
+pub(crate) fn formatted(fill: impl FnOnce(*mut c_char)) -> Result<(), OptError> {
+    Err(XString::filled(OptError::ROOM, fill).into())
 }
 
 /// The option's value variable — a string one, since every option here is.
@@ -69,9 +78,4 @@ pub(crate) fn old_value(args: &OptSet) -> *const c_char {
         .as_string()
         .expect("the table installs this callback on a string option only")
         .data()
-}
-
-/// The error buffer and its size, as the message helpers take them.
-pub(crate) fn errbuf(args: &OptSet) -> (*mut c_char, usize) {
-    (args.os_errbuf, args.os_errbuflen)
 }

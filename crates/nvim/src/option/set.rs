@@ -28,12 +28,10 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::ptr;
-use std::ffi::CString;
 
 use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, do_filetype_autocmd};
 use crate::charset::buf_init_chartab;
-use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, redraw_all_later};
 use crate::eval::vars::{
     get_vim_var_str, optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv,
@@ -41,7 +39,7 @@ use crate::eval::vars::{
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
 use crate::lua::executor::nlua_set_sctx;
-use crate::memory::{xfree, xmalloc, xstrdup, xstrlcpy};
+use crate::memory::{XString, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
 use crate::message_fmt::msg_cstr;
@@ -58,7 +56,7 @@ use crate::options::{
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, gettext_owned, snprintf};
 use crate::types::{
-    IOSIZE, NUL, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0,
+    NUL, OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0,
     VimOption, Vv, ptrdiff_t, size_t, uint32_t,
 };
 use crate::ui::ui_call_option_set;
@@ -367,12 +365,11 @@ pub(crate) fn is_option_local_value_unset(opt_idx: OptIndex) -> bool {
 /// skips every side effect, `value_replaced` says the whole value was
 /// written rather than amended.
 ///
-/// Returns an untranslated error message, or null.
+/// Returns an untranslated error message.
 ///
 /// # Safety
 ///
-/// `varp` must be `opt_idx`'s variable in the scope `opt_flags` names, and
-/// `errbuf` writable for `errbuflen` bytes.
+/// `varp` must be `opt_idx`'s variable in the scope `opt_flags` names.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn did_set_option(
     opt_idx: OptIndex,
@@ -383,17 +380,15 @@ pub(crate) unsafe fn did_set_option(
     set_sid: ScriptId,
     direct: bool,
     value_replaced: bool,
-    errbuf: *mut c_char,
-    errbuflen: size_t,
-) -> *const c_char {
+) -> Result<(), OptError> {
     let opt = get_option(opt_idx);
-    let mut errmsg: *const c_char = ptr::null();
+    let mut errmsg = Ok(());
     let mut restore_chartab = false;
     let mut value_changed = false;
     let mut value_checked = false;
 
-    // SAFETY: the caller's `varp` is this option's variable, `opt` a row of
-    // the table, and `errbuf` writable for `errbuflen` bytes.
+    // SAFETY: the caller's `varp` is this option's variable and `opt` a row
+    // of the table.
     let mut args = OptSet {
         os_varp: varp,
         os_idx: opt_idx,
@@ -403,8 +398,6 @@ pub(crate) unsafe fn did_set_option(
         os_value_checked: false,
         os_value_changed: false,
         os_restore_chartab: false,
-        os_errbuf: errbuf,
-        os_errbuflen: errbuflen,
         os_win: Win::current(),
         os_buf: Buf::current(),
     };
@@ -412,23 +405,20 @@ pub(crate) unsafe fn did_set_option(
     if direct {
         // Nothing to vet: the caller is putting a value back.
     } else if opt.immutable && !optval_equal(&old_value, &new_value) {
-        errmsg = e_unsupportedoption.as_ptr();
+        errmsg = Err(e_unsupportedoption.into());
     } else if (secure.get() != 0 || sandbox.get() != 0)
         && opt.flags & kOptFlagSecure as uint32_t != 0
     {
-        errmsg = e_secure.as_ptr();
+        errmsg = Err(e_secure.into());
     } else if new_value.as_string().is_some()
         && check_illegal_path_names(
             unsafe { CStr::from_ptr(varp.string_var().get()) },
             opt.flags,
         )
     {
-        errmsg = e_invarg.as_ptr();
+        errmsg = Err(e_invarg.into());
     } else if let Some(did_set_cb) = opt.opt_did_set_cb {
-        // The callback's message borrows the frame, and is either a static
-        // or the caller's `errbuf` — both outlive this call — so the
-        // pointer stays good once the borrow ends here.
-        errmsg = unsafe { did_set_cb(&mut args) }.map_or(ptr::null(), CStr::as_ptr);
+        errmsg = unsafe { did_set_cb(&mut args) };
         // 'filetype' and 'syntax' report whether the value really moved;
         // they, 'keymap' and the character-class options report whether
         // they have vetted it themselves; and the character-class
@@ -438,12 +428,12 @@ pub(crate) unsafe fn did_set_option(
         restore_chartab = args.os_restore_chartab;
     }
 
-    if !errmsg.is_null() {
+    if let Err(errmsg) = errmsg {
         unsafe { set_option_varp(opt_idx, varp, old_value, true) };
         if restore_chartab {
             buf_init_chartab(Buf::current(), true);
         }
-        return errmsg;
+        return Err(errmsg);
     }
 
     // The callback may have freed or rewritten what it was handed, so
@@ -548,32 +538,20 @@ pub(crate) unsafe fn did_set_option(
 /// Takes ownership of `value`. See the module docs for the ordering; see
 /// [`did_set_option`] for `set_sid`, `direct` and `value_replaced`.
 ///
-/// Returns an untranslated error message, or null.
-///
-/// # Safety
-///
-/// `errbuf` must be writable for `errbuflen` bytes.
-#[allow(clippy::too_many_arguments)]
-pub(crate) unsafe fn set_option(
+/// Returns an untranslated error message.
+pub(crate) fn set_option(
     opt_idx: OptIndex,
     mut value: OptVal,
     opt_flags: OptionSetFlags,
     set_sid: ScriptId,
     direct: bool,
     value_replaced: bool,
-    errbuf: *mut c_char,
-    errbuflen: size_t,
-) -> *const c_char {
+) -> Result<(), OptError> {
     debug_assert!(opt_idx != kOptInvalid);
 
-    if !direct {
-        // SAFETY: the caller's `errbuf` is writable for `errbuflen` bytes.
-        let errmsg =
-            unsafe { validate_option_value(opt_idx, &mut value, opt_flags, errbuf, errbuflen) };
-        if !errmsg.is_null() {
-            optval_free(value);
-            return errmsg;
-        }
+    if !direct && let Err(errmsg) = validate_option_value(opt_idx, &mut value, opt_flags) {
+        optval_free(value);
+        return Err(errmsg);
     }
 
     let opt = get_option(opt_idx);
@@ -583,8 +561,7 @@ pub(crate) unsafe fn set_option(
     // True only for a global-local option, by construction.
     let is_opt_local_unset = is_option_local_value_unset(opt_idx);
 
-    // SAFETY: every pointer below comes from the option table, and `errbuf`
-    // is the caller's writable buffer.
+    // SAFETY: every pointer below comes from the option table.
     // `:set opt=val` on a global-local option resets the local value, so
     // it is the global variable that is being written.
     let varp = if scope_both && option_is_global_local(opt_idx) {
@@ -641,14 +618,12 @@ pub(crate) unsafe fn set_option(
             set_sid,
             direct,
             value_replaced,
-            errbuf,
-            errbuflen,
         )
     };
 
     secure.set(secure_saved);
 
-    if errmsg.is_null() && !direct {
+    if errmsg.is_ok() && !direct {
         if starting.get() == 0 {
             apply_optionset_autocmd(
                 opt_idx,
@@ -691,41 +666,10 @@ pub(crate) fn set_option_direct(
     if is_option_hidden(opt_idx) {
         return;
     }
-    let mut errbuf = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `errbuf` is `IOSIZE` writable bytes. Nothing can report an
-    // error on this path, which is what the assertion says.
-    let errmsg = unsafe {
-        set_option(
-            opt_idx,
-            optval_copy(&value),
-            opt_flags,
-            set_sid,
-            true,
-            true,
-            errbuf.as_mut_ptr(),
-            IOSIZE as size_t,
-        )
-    };
-    debug_assert!(errmsg.is_null());
-}
-
-/// Copy a callback's message into the option frame's error buffer and
-/// answer it, or answer `None`.
-///
-/// A `did_set_*` callback's message borrows the frame, and `set_option`
-/// handed it the buffer that message has to live in; a callback whose
-/// message came from an owned source reports it through here.
-///
-/// # Safety
-///
-/// The frame's `os_errbuf` must be writable for `os_errbuflen` bytes.
-pub(crate) unsafe fn answer_err(args: &OptSet, msg: Option<CString>) -> Option<&CStr> {
-    let msg = msg?;
-    // SAFETY: the frame names a buffer of `os_errbuflen` bytes, and `msg`
-    // is NUL-terminated.
-    unsafe { xstrlcpy(args.os_errbuf, msg.as_ptr(), args.os_errbuflen) };
-    // SAFETY: `xstrlcpy` terminated what it wrote.
-    Some(unsafe { CStr::from_ptr(args.os_errbuf) })
+    // Nothing can report an error on this path, which is what the assertion
+    // says.
+    let errmsg = set_option(opt_idx, optval_copy(&value), opt_flags, set_sid, true, true);
+    debug_assert!(errmsg.is_ok());
 }
 
 /// Give an option a new value the way a script would. Takes ownership of
@@ -741,35 +685,20 @@ pub(crate) fn set_option_value(
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
-) -> Option<CString> {
+) -> Result<(), OptError> {
     debug_assert!(opt_idx != kOptInvalid);
-    let mut errbuf = [0 as c_char; IOSIZE as usize];
 
     if sandbox.get() > 0 && get_option(opt_idx).flags & kOptFlagSecure != 0 {
         // SAFETY: a NUL-terminated message static.
-        return Some(unsafe { CStr::from_ptr(gettext(e_sandbox).as_ptr()) }.to_owned());
+        let sandboxed = unsafe { CStr::from_ptr(gettext(e_sandbox).as_ptr()) };
+        return Err(OptError::Owned(XString::from_cstr(sandboxed)));
     }
-    // SAFETY: the option table is a plain array, and `errbuf` is `IOSIZE`
-    // writable bytes.
-    let errmsg = unsafe {
-        set_option(
-            opt_idx,
-            optval_copy(&value),
-            opt_flags,
-            0,
-            false,
-            true,
-            errbuf.as_mut_ptr(),
-            IOSIZE as size_t,
-        )
-    };
-    // SAFETY: `set_option` answers null or a NUL-terminated message.
-    unsafe { cstr::at_opt(errmsg) }.map(CStr::to_owned)
+    set_option(opt_idx, optval_copy(&value), opt_flags, 0, false, true)
 }
 
 /// Drop a global-local option's local value, so it reads through to the
 /// global one again.
-pub(crate) fn unset_option_local_value(opt_idx: OptIndex) -> Option<CString> {
+pub(crate) fn unset_option_local_value(opt_idx: OptIndex) -> Result<(), OptError> {
     debug_assert!(option_is_global_local(opt_idx));
     set_option_value(
         opt_idx,
@@ -789,17 +718,19 @@ pub(crate) unsafe fn set_option_value_handle_tty(
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
-) -> Option<CString> {
+) -> Result<(), OptError> {
     if opt_idx != kOptInvalid {
         return set_option_value(opt_idx, value, opt_flags);
     }
     // SAFETY: the caller's `name` is NUL-terminated.
     let name = unsafe { CStr::from_ptr(name) };
     if is_tty_option(name) {
-        return None;
+        return Ok(());
     }
     let name = msg_cstr(name);
-    Some(CString::new(tr!("E355: Unknown option: {name}")).unwrap_or_default())
+    Err(OptError::Owned(XString::from_bytes(
+        tr!("E355: Unknown option: {name}").as_bytes(),
+    )))
 }
 
 /// [`set_option_value`], reporting a rejection as an error message.
@@ -808,8 +739,8 @@ pub(crate) fn set_option_value_give_err(
     value: OptVal,
     opt_flags: OptionSetFlags,
 ) {
-    if let Some(errmsg) = set_option_value(opt_idx, value, opt_flags) {
-        emsg(&gettext_owned(&errmsg));
+    if let Err(errmsg) = set_option_value(opt_idx, value, opt_flags) {
+        emsg(&gettext_owned(errmsg.as_cstr()));
     }
 }
 

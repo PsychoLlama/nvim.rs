@@ -16,7 +16,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{CallFrame, DictRef, list_iter};
 use crate::types::TypVal;
 use crate::types::{
-    FAIL, OK, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,
+    FAIL, OK, OptError, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -46,7 +46,7 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 ///
 /// The value can be a function name, `function(<name>)`, `funcref(<name>)`
 /// or a lambda. Answers NULL, or the error message for an invalid one.
-pub fn did_set_tagfunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the caller's promise; the new value is a NUL-terminated
     // option string and `os_buf` is the buffer it applies to.
     let mut buf = args.os_buf;
@@ -66,9 +66,9 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Option<&CStr> {
         retval
     };
     if retval.is_err() {
-        Some(e_invarg)
+        Err(e_invarg.into())
     } else {
-        None
+        Ok(())
     }
 }
 

@@ -140,12 +140,12 @@ fn scroll_halfway(win: Win) {
 
 /// Load the keymap `'keymap'` names.
 fn init_keymap() {
-    keymap_init();
+    let _ = keymap_init();
 }
 
 /// Work out the spell-checking languages for `win`.
 fn set_spelllang(win: Win) {
-    parse_spelllang(win);
+    let _ = parse_spelllang(win);
 }
 
 /// Whether the window's `'spelllang'` is set. It lives in the syntax block

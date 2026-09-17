@@ -364,7 +364,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, mut buffer: Buf) 
     // Locked because setting 'buftype' can run OptionSet, and the buffer's
     // lines are the emulator's to write.
     buffer.b_locked += 1;
-    set_option_value(
+    let _ = set_option_value(
         kOptBuftype,
         OptVal::static_string(c"terminal"),
         OptionSetFlags::LOCAL,

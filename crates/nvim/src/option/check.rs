@@ -160,8 +160,8 @@ pub(crate) fn didset_options() {
     didset_string_options();
     let _ = spell_check_msm();
     let _ = spell_check_sps();
-    unsafe { compile_cap_prog(Win::current().w_s) };
-    did_set_spell_option();
+    let _ = unsafe { compile_cap_prog(Win::current().w_s) };
+    let _ = did_set_spell_option();
     // The two callbacks these stand in for read no frame at all, and the
     // startup sweep has none to give.
     let _ = derive_cedit_key();
@@ -174,11 +174,10 @@ pub(crate) fn didset_options() {
 pub(crate) fn didset_options2() {
     highlight_changed();
     let win = Win::current();
-    let no_err = ptr::null_mut::<c_char>();
     let fcs = win.w_onebuf_opt.wo_fcs;
-    unsafe { set_chars_option(win, fcs, kFillchars, true, no_err, 0) };
+    let _ = unsafe { set_chars_option(win, fcs, kFillchars, true) };
     let lcs = win.w_onebuf_opt.wo_lcs;
-    unsafe { set_chars_option(win, lcs, kListchars, true, no_err, 0) };
+    let _ = unsafe { set_chars_option(win, lcs, kListchars, true) };
     let _ = check_opt_wim();
     let mut buf = Buf::current();
     unsafe { xfree(buf.b_p_vsts_array.cast::<c_void>()) };

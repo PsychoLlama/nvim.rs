@@ -13,7 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{c_char, c_int, c_uint};
 use core::mem::size_of;
 use core::{ptr, slice};
 
@@ -28,7 +28,7 @@ use crate::r#move::WinValid;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Handle, Integer, LineNr, NUL, OptInt};
+use crate::types::{Handle, Integer, LineNr, NUL, OptError, OptInt};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
     Buf, FrameId, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
@@ -267,11 +267,11 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
 /// # Safety
 ///
 /// `cc` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Option<&'static CStr> {
+pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Result<(), OptError> {
     // The caller's promise: a NUL-terminated string or null.
     let win = window;
     if win.is_some_and(|w| w.w_buffer.is_null()) {
-        return None; // buffer was closed
+        return Ok(()); // buffer was closed
     }
     let mut s = match () {
         _ if !cc.is_null() => cc,
@@ -293,7 +293,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Option<
             col = if peek(s) == '-' as c_int { -1 } else { 1 };
             s = step(s);
             if !ascii_isdigit(peek(s)) {
-                return Some(e_invarg);
+                return Err((e_invarg).into());
             }
             col *= digits(&mut s);
             if tw == 0 {
@@ -310,7 +310,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Option<
         } else if ascii_isdigit(peek(s)) {
             col = digits(&mut s);
         } else {
-            return Some(e_invarg);
+            return Err((e_invarg).into());
         }
         if !skip {
             color_cols[count as usize] = col - 1; // 1-based to 0-based
@@ -320,21 +320,21 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Option<
             break;
         }
         if peek(s) != ',' as c_int {
-            return Some(e_invarg);
+            return Err((e_invarg).into());
         }
         s = step(s);
         if peek(s) == NUL {
-            return Some(e_invarg); // illegal trailing comma
+            return Err((e_invarg).into()); // illegal trailing comma
         }
     }
 
     let Some(mut win) = win else {
-        return None; // only parse the value, do not store it
+        return Ok(()); // only parse the value, do not store it
     };
     free(win.w_p_cc_cols);
     if count == 0 {
         win.w_p_cc_cols = ptr::null_mut::<c_int>();
-        return None;
+        return Ok(());
     }
     let cols = &mut color_cols[..count as usize];
     arith::sort_columns(cols);
@@ -354,7 +354,7 @@ pub unsafe fn check_colorcolumn(cc: *mut c_char, window: Option<Win>) -> Option<
         }
     }
     out[j] = -1; // end marker
-    None
+    Ok(())
 }
 
 /// The byte `s` points at, as the C reads it.

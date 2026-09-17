@@ -325,19 +325,18 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     } else {
         w.w_skipcol = 0 as ColNr;
     }
-    let no_err: *mut c_char = ptr::null_mut();
     // SAFETY: the caller's window, which is all any of these needs; the
     // null out-parameters say "report nothing", which each accepts.
-    unsafe { check_colorcolumn(ptr::null_mut(), Some(window)) };
+    let _ = unsafe { check_colorcolumn(ptr::null_mut(), Some(window)) };
     unsafe { briopt_check(ptr::null_mut(), Some(window)) };
     let _ = fill_culopt_flags(None, w);
     // Read each value where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
     let fcs = w.w_onebuf_opt.wo_fcs;
     // SAFETY: as above; 'fillchars' and 'listchars' are string options.
-    unsafe { set_chars_option(window, fcs, kFillchars, true, no_err, 0) };
+    let _ = unsafe { set_chars_option(window, fcs, kFillchars, true) };
     let lcs = w.w_onebuf_opt.wo_lcs;
-    unsafe { set_chars_option(window, lcs, kListchars, true, no_err, 0) };
+    let _ = unsafe { set_chars_option(window, lcs, kListchars, true) };
     // SAFETY: the caller's window.
     unsafe { parse_winhl_opt(ptr::null(), Some(window)) };
     check_blending(window);
@@ -536,7 +535,7 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
         b.b_s.b_p_spc = p_spc(dup);
         copy_sctx(b, kBufOptSpellcapcheck);
         // SAFETY: `b_s` is the buffer's own syntax block.
-        unsafe { compile_cap_prog(buf_field!(buffer.raw(), b_s)) };
+        let _ = unsafe { compile_cap_prog(buf_field!(buffer.raw(), b_s)) };
         b.b_s.b_p_spf = p_spf(dup);
         copy_sctx(b, kBufOptSpellfile);
         b.b_s.b_p_spl = p_spl(dup);

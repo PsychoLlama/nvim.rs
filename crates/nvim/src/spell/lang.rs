@@ -59,7 +59,8 @@ use crate::spellfile::spell_load_file;
 use crate::startup::starting;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    Failed, GArray, LangP, MAXPATHL, NUL, RegProg, SPL_FNAME_TMPL, SpellLang, SynBlock, size_t,
+    Failed, GArray, LangP, MAXPATHL, NUL, OptError, RegProg, SPL_FNAME_TMPL, SpellLang, SynBlock,
+    size_t,
 };
 use crate::window::win_valid_any_tab;
 
@@ -254,9 +255,9 @@ static recursive: GlobalCell<bool> = GlobalCell::new(false);
 /// Parse `'spelllang'` and fill `window.w_s->b_langp`.
 ///
 /// Returns null on success, or an untranslated error message.
-pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
+pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
     if recursive.get() {
-        return None;
+        return Ok(());
     }
     recursive.set(true);
 
@@ -266,7 +267,7 @@ pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
     let mut use_region: *mut c_char = core::ptr::null_mut();
     let mut dont_use_region = false;
     let mut nobreak = false;
-    let mut ret_msg: Option<&'static CStr> = None;
+    let mut ret_msg: Result<(), OptError> = Ok(());
 
     let bufref = BufRef::of_opt(window.buffer_or_none());
 
@@ -365,7 +366,7 @@ pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
                 // The autocommands may have destroyed the buffer being
                 // used, or closed the window.
                 if !bufref.valid() || !win_valid_any_tab(window.id()) {
-                    ret_msg = Some(c"E797: SpellFileMissing autocommand deleted buffer");
+                    ret_msg = Err(c"E797: SpellFileMissing autocommand deleted buffer".into());
                     break 'names;
                 }
             }
@@ -417,7 +418,7 @@ pub fn parse_spelllang(mut window: Win) -> Option<&'static CStr> {
         }
     }
 
-    if ret_msg.is_none() {
+    if ret_msg.is_ok() {
         // Round 0 is the internal word list; each round after that is one
         // entry of 'spellfile'.
         let mut spf = unsafe { (*Win::current().w_s).b_p_spf };
@@ -646,7 +647,7 @@ pub fn spell_reload() {
         // SAFETY: a live window of the current tab page, and the synblock it
         // points at.
         if unsafe { *(*wp.w_s).b_p_spl } != 0 && wp.w_onebuf_opt.wo_spell != 0 {
-            parse_spelllang(wp);
+            let _ = parse_spelllang(wp);
             break;
         }
     }
@@ -689,8 +690,8 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
 
 /// Re-parse `'spelllang'` for the current buffer after a spell option
 /// changed.
-pub fn did_set_spell_option() -> Option<&'static CStr> {
-    let mut errmsg = None;
+pub fn did_set_spell_option() -> Result<(), OptError> {
+    let mut errmsg = Ok(());
     for wp in windows() {
         if wp.w_buffer == Buf::current_raw() && wp.w_onebuf_opt.wo_spell != 0 {
             errmsg = parse_spelllang(wp);
@@ -709,7 +710,7 @@ pub fn did_set_spell_option() -> Option<&'static CStr> {
 /// # Safety
 ///
 /// `synblock` must point at a live `SynBlock`, unaliased for the call.
-pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr> {
+pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Result<(), OptError> {
     let rp: *mut RegProg = unsafe { (*synblock).b_cap_prog };
 
     if unsafe { (*synblock).b_p_spc }.is_null() || unsafe { *(*synblock).b_p_spc } == 0 {
@@ -720,12 +721,12 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr>
         unsafe { xfree(re as *mut c_void) };
         if unsafe { (*synblock).b_cap_prog }.is_null() {
             unsafe { (*synblock).b_cap_prog = rp }; // keep the previous program
-            return Some(e_invarg);
+            return Err(e_invarg.into());
         }
     }
 
     unsafe { vim_regfree(rp) };
-    None
+    Ok(())
 }
 
 /// Record `slang`'s `MIDWORD` characters in `window`, so that [`spell_iswordp`]

@@ -20,7 +20,7 @@ use crate::cursor::check_cursor;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::option::boolean_optval;
-use crate::types::{Failed, OptionSetFlags};
+use crate::types::{Failed, OptError, OptionSetFlags};
 use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
     setwidth_win, split, tabline_rows, valid_win,
@@ -449,12 +449,12 @@ pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
 }
 
 /// Process the `'quickfixtextfunc'` option value.
-pub fn did_set_quickfixtextfunc(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_quickfixtextfunc(_args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the option's own value and its callback slot.
     if p_qftf(|value| unsafe { option_set_callback_func(value.as_ptr().cast_mut(), global_qftf()) })
         .is_err()
     {
-        return Some(e_invarg);
+        return Err((e_invarg).into());
     }
-    None
+    Ok(())
 }

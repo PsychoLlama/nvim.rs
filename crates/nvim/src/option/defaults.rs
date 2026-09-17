@@ -535,7 +535,7 @@ pub(crate) fn set_init_3() {
         c"dash",
     ];
 
-    parse_shape_opt(SHAPE_CURSOR);
+    let _ = parse_shape_opt(SHAPE_CURSOR);
 
     let do_srr = !option_was_set(kOptShellredir);
     let do_sp = !option_was_set(kOptShellpipe);

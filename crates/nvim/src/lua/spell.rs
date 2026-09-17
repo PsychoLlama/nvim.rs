@@ -56,7 +56,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     let mut win = Win::current();
     let wo_spell_save = win.w_onebuf_opt.wo_spell;
     if wo_spell_save == 0 {
-        parse_spelllang(win);
+        let _ = parse_spelllang(win);
         win.w_onebuf_opt.wo_spell = 1;
     }
     // SAFETY: `w_s` is the window's synblock, always set.

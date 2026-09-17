@@ -16,8 +16,9 @@
 use super::*;
 use crate::message_fmt::c_str_len;
 use crate::option::vars::P_LANGMAP;
+use crate::optionstr::frame::formatted;
 use crate::swmsg;
-use crate::types::NUL;
+use crate::types::{NUL, OptError};
 use core::ffi::{c_char, c_int};
 
 /// One `'langmap'` pair for a character that does not fit `langmap_mapchar`.
@@ -78,13 +79,9 @@ pub(crate) fn langmap_init() {
 /// into the same slice, and the three pointer primitives it needs are the
 /// closures below — the whole unchecked surface of the parse.
 ///
-/// # Safety
-/// The frame's `os_errbuf` must have room for `os_errbuflen` bytes.
-pub unsafe fn did_set_langmap(args: &mut OptSet) -> Option<&CStr> {
-    let opts = &*args;
+pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
     langmap_init(); // back to a one-to-one map
-    // A copy: the walk below reports errors through the frame's buffer and
-    // outlives a projection's borrow.
+    // A copy: the walk below outlives a projection's borrow.
     let langmap = P_LANGMAP.get();
     let base = langmap.as_ptr().cast_mut();
     let opt = langmap.as_cstr().to_bytes();
@@ -104,18 +101,15 @@ pub unsafe fn did_set_langmap(args: &mut OptSet) -> Option<&CStr> {
         };
         at + len_at(at)
     };
-    let (errbuf, errlen) = (opts.os_errbuf, opts.os_errbuflen);
-    // The error texts, which both render into the caller's `os_errbuf`.
+    // The error texts, which both name the character they did not like.
     //
     // # Safety
     // `fmt` must hold exactly one `%s`, which `arg` fills.
     let fail = |fmt: &'static CStr, arg: *const c_char| {
-        // SAFETY: the caller's promise — `os_errbuf` has room for `os_errbuflen`
-        // bytes — the closure's, that the format's one conversion is `arg`, and
-        // `snprintf` terminates what it wrote.
-        Some(unsafe {
-            snprintf(errbuf, errlen, gettext(fmt).as_ptr(), arg);
-            CStr::from_ptr(errbuf)
+        // SAFETY: `formatted` hands the closure a buffer of the size it
+        // passes on, and the format's one conversion is `arg`.
+        formatted(|buf| unsafe {
+            snprintf(buf, OptError::ROOM, gettext(fmt).as_ptr(), arg);
         })
     };
 
@@ -213,5 +207,5 @@ pub unsafe fn did_set_langmap(args: &mut OptSet) -> Option<&CStr> {
             break;
         }
     }
-    None
+    Ok(())
 }

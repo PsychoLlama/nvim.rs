@@ -310,7 +310,7 @@ fn with_spell(body: impl FnOnce()) {
     let mut win = Win::current();
     let saved = win.w_onebuf_opt.wo_spell;
     if win.w_onebuf_opt.wo_spell == 0 {
-        parse_spelllang(win);
+        let _ = parse_spelllang(win);
         win.w_onebuf_opt.wo_spell = 1;
     }
     if unsafe { *(*win.w_s).b_p_spl } == NUL as c_char {

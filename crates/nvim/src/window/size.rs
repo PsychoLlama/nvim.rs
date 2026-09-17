@@ -14,7 +14,7 @@
 
 #![forbid(unsafe_code)]
 
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 
 use super::arith::NextCurwin;
 use super::*;
@@ -22,7 +22,7 @@ use crate::drawscreen::state::{cmdline_row, redraw_cmdline};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
 use crate::message::e_noroom;
 use crate::option::vars::{P_WMH, P_WMW, p_ch, p_wmh, p_wmw};
-use crate::types::{OptInt, OptSet, kFloatRelativeWindow};
+use crate::types::{OptError, OptInt, OptSet, kFloatRelativeWindow};
 use crate::ui::state::{Columns, Rows};
 use crate::winfloat::win_config_float;
 use crate::winlayer::{FrameRef, Win, frames, frames_back, windows_back};
@@ -378,7 +378,7 @@ pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
     }
 }
 
-pub fn did_set_winminheight(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_winminheight(_args: &mut OptSet) -> Result<(), OptError> {
     let mut first = true;
     // Loop until there is a 'winminheight' that is possible.
     while p_wmh() > 0 as OptInt {
@@ -392,10 +392,10 @@ pub fn did_set_winminheight(_args: &mut OptSet) -> Option<&CStr> {
             first = false;
         }
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_winminwidth(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_winminwidth(_args: &mut OptSet) -> Result<(), OptError> {
     let mut first = true;
     while p_wmw() > 0 as OptInt {
         if Columns.get() >= minwidth(current_topframe(), NextCurwin::Unset) {
@@ -407,7 +407,7 @@ pub fn did_set_winminwidth(_args: &mut OptSet) -> Option<&CStr> {
             first = false;
         }
     }
-    None
+    Ok(())
 }
 
 pub fn win_drag_status_line(dragwin: Win, offset: c_int) {

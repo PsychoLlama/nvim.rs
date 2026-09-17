@@ -15,7 +15,7 @@ use crate::smsg;
 use crate::types::CmdIdx;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use crate::eval::typval::{
@@ -49,9 +49,9 @@ use crate::os::env::expand_env;
 
 use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, MAXPATHL, NUL, OK, OptInt,
-    OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse,
-    kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
+    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, MAXPATHL, NUL, OK, OptError,
+    OptInt, OptSet, OptionSetFlags, ScriptCtx, TypVal, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, size_t,
 };
 
 /// The parsed `'findfunc'`.
@@ -195,7 +195,7 @@ pub(crate) unsafe fn findfunc_find_file(
 /// script-local function name to its `<SNR>` form.
 ///
 /// The generated option table holds it as an `opt_did_set_cb` fn pointer.
-pub fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
     let mut buf = args.os_buf;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         option_set_callback_func(buf.b_p_ffu, &raw mut buf.b_ffu_cb)
@@ -208,7 +208,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
         r
     };
     if retval.is_err() {
-        return Some(e_invarg);
+        return Err((e_invarg).into());
     }
     let varp = args.os_varp.string_var();
     let name = unsafe { get_scriptlocal_funcname(varp.get()) };
@@ -217,7 +217,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Option<&CStr> {
         let old = unsafe { varp.replace(name) };
         unsafe { free_string_option(old) };
     }
-    None
+    Ok(())
 }
 
 /// Mark what the global 'findfunc' callback holds, for the garbage

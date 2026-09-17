@@ -90,7 +90,7 @@ pub(crate) fn new_height(
         let new_ch = min_set_ch.get().max(want_ch);
         if new_ch != p_ch() {
             let save_ch = min_set_ch.get();
-            set_option_value(kOptCmdheight, OptVal::Number(new_ch), OptionSetFlags::NONE);
+            let _ = set_option_value(kOptCmdheight, OptVal::Number(new_ch), OptionSetFlags::NONE);
             min_set_ch.set(save_ch);
         }
         let room = OptInt::from(Rows.get())

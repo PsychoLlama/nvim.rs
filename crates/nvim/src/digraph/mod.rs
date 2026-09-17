@@ -42,8 +42,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_LIST, VarNumber,
-    int16_t,
+    BoolVarValue, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptError, OptInt, TypVal, VAR_LIST,
+    VarNumber, int16_t,
 };
 use crate::ui::state::Columns;
 use crate::winlayer::Buf;
@@ -601,7 +601,7 @@ const MAPTYPE_UNMAP: c_int = 1;
 
 /// Source the keymap file for the current buffer's 'keymap' (or unload
 /// language mappings when it is empty). Answers an error message.
-pub fn keymap_init() -> Option<&'static CStr> {
+pub fn keymap_init() -> Result<(), OptError> {
     let mut buf = Buf::current();
     // SAFETY: curbuf is valid, and the 'keymap' value it holds is a
     // NUL-terminated option string.
@@ -614,7 +614,7 @@ pub fn keymap_init() -> Option<&'static CStr> {
         keymap_unload();
         // SAFETY: a static command string, run like any other ex command.
         let _ = unsafe { do_cmdline_cmd(c"unlet! b:keymap_name".as_ptr()) };
-        return None;
+        return Ok(());
     }
     // Source the keymap file, first for this encoding and then without it.
     // The name is snapshotted above because the script can set 'keymap'.
@@ -625,9 +625,9 @@ pub fn keymap_init() -> Option<&'static CStr> {
             .to_vec()
     });
     if source_keymap_file(&keymap, Some(&enc)) || source_keymap_file(&keymap, None) {
-        return None;
+        return Ok(());
     }
-    Some(c"E544: Keymap file not found")
+    Err((c"E544: Keymap file not found").into())
 }
 
 /// Source `keymap/{name}_{enc}.vim` from the runtime path — or

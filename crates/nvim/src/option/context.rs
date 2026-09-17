@@ -195,8 +195,5 @@ pub(crate) unsafe fn set_option_value_for(
         // SAFETY: `enter` reported a switch and nothing has moved since.
         unsafe { ctx.leave() };
     }
-    match errmsg {
-        Some(errmsg) => Err(Error::exception(&errmsg)),
-        None => Ok(()),
-    }
+    errmsg.map_err(|errmsg| Error::exception(errmsg.as_cstr()))
 }

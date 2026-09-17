@@ -91,7 +91,7 @@ pub(crate) fn spell_suggest(count: c_int) {
     // for it, which is what turning the option on does.
     let wo_spell_save = Win::current().w_onebuf_opt.wo_spell;
     if Win::current().w_onebuf_opt.wo_spell == 0 {
-        parse_spelllang(Win::current());
+        let _ = parse_spelllang(Win::current());
         Win::current().w_onebuf_opt.wo_spell = 1;
     }
 

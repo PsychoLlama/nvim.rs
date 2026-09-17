@@ -34,7 +34,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use crate::message::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
-use crate::types::{FAIL, Failed, OK, OptIndex, OptSet, size_t};
+use crate::types::{FAIL, Failed, OK, OptError, OptIndex, OptSet};
 
 use super::illegal_char;
 
@@ -128,48 +128,41 @@ pub(crate) unsafe fn did_set_opt_flags(
     val: *const c_char,
     values: &[&CStr],
     list: bool,
-) -> Option<&'static CStr> {
+) -> Result<(), OptError> {
     if unsafe { opt_strings_ok(val, values, list) } {
-        None
+        Ok(())
     } else {
-        Some(e_invarg)
+        Err(e_invarg.into())
     }
 }
 
 /// The table callback for every option whose whole check is "is each word
 /// one of the accepted ones".
-pub fn did_set_str_generic(args: &mut OptSet) -> Option<&'static CStr> {
+pub fn did_set_str_generic(args: &mut OptSet) -> Result<(), OptError> {
     let (idx, varp) = (args.os_idx, args.os_varp.string_var());
     if unsafe { check_str_opt(idx, Some(varp)) }.is_err() {
-        Some(e_invarg)
+        Err(e_invarg.into())
     } else {
-        None
+        Ok(())
     }
 }
 
 /// Reject the first letter of `val` that is not in `flags`.
 ///
-/// The message goes into the caller's `errbuf`; see [`illegal_char`] for
-/// what a null one means.
-///
 /// # Safety
-/// `val` and `flags` are C strings; `errbuf` is null or points at
-/// `errbuflen` writable bytes.
-pub(crate) unsafe fn did_set_option_listflag<'a>(
+/// `val` and `flags` are C strings.
+pub(crate) unsafe fn did_set_option_listflag(
     val: *const c_char,
     flags: *const c_char,
-    errbuf: *mut c_char,
-    errbuflen: size_t,
-) -> Option<&'a CStr> {
+) -> Result<(), OptError> {
     // SAFETY: the caller guarantees a C string.
     for &byte in unsafe { CStr::from_ptr(val) }.to_bytes() {
         // SAFETY: `flags` is a C string, only read here.
         if !has_char(unsafe { cstr::at(flags) }, c_int::from(byte)) {
-            // SAFETY: the caller's buffer, as documented above.
-            return Some(unsafe { illegal_char(errbuf, errbuflen, c_int::from(byte)) });
+            return Err(illegal_char(c_int::from(byte)));
         }
     }
-    None
+    Ok(())
 }
 
 /// Re-run an option's word-list check against its current value, refreshing

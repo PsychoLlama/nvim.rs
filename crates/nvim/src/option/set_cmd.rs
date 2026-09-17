@@ -299,7 +299,7 @@ unsafe fn get_option_newval(
     // into the local one.
     if nextchar == '<' as c_int {
         if option_is_global_local(opt_idx) && !opt_flags.has(OptionSetFlags::LOCAL) {
-            unset_option_local_value(opt_idx);
+            let _ = unset_option_local_value(opt_idx);
         }
         return get_option_value(opt_idx, OptionSetFlags::GLOBAL);
     }
@@ -523,20 +523,20 @@ unsafe fn do_one_set_option(
     if newval.is_nil() || !errmsg.is_null() {
         return;
     }
-    *errmsg = unsafe {
-        set_option(
-            opt_idx,
-            newval,
-            opt_flags,
-            0 as ScriptId,
-            false,
-            // `+=`/`^=`/`-=` amend the value; only a plain assignment
-            // replaces it, which is what clears the insecure mark.
-            op == OP_NONE,
-            errbuf,
-            errbuflen,
-        )
-    };
+    // `+=`/`^=`/`-=` amend the value; only a plain assignment replaces it,
+    // which is what clears the insecure mark.
+    let replaced = op == OP_NONE;
+    if let Err(err) = set_option(opt_idx, newval, opt_flags, 0 as ScriptId, false, replaced) {
+        // `do_set`'s own buffer is where the message this loop reports has
+        // to live: the caller walks on to the next `:set` argument, and the
+        // `OptError` would not outlive the statement.
+        // SAFETY: the caller's `errbuf` is writable for `errbuflen` bytes,
+        // and the message is NUL-terminated.
+        *errmsg = unsafe {
+            xstrlcpy(errbuf, err.as_cstr().as_ptr(), errbuflen);
+            errbuf
+        };
+    }
 }
 
 /// Show one option's value, on its own line, opening the message area the

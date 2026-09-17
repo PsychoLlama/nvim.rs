@@ -26,7 +26,7 @@ use crate::types::{AlignTextPos, CharsOption, WinSplit, WinStyle};
 use core::ffi::{CStr, c_int, c_uint};
 
 mod check;
-mod frame;
+pub(crate) mod frame;
 pub use self::check::*;
 mod flags;
 pub use self::flags::*;

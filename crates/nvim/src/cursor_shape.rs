@@ -39,7 +39,7 @@ use crate::state::mode::{State, finish_op};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
 };
-use crate::types::{Array, CursorEntry, CursorShape, Object, size_t};
+use crate::types::{Array, CursorEntry, CursorShape, Object, OptError, size_t};
 use crate::ui::ui_mode_info_set;
 
 /// Where a mode's cursor shape sits in the shape table.
@@ -266,7 +266,7 @@ unsafe fn digits_at(opt: *mut c_char, at: usize) -> (c_int, usize) {
 /// Two passes: the first rejects the value as a whole without writing
 /// anything, the second applies it. `what` is [`SHAPE_CURSOR`] or
 /// [`SHAPE_MOUSE`] and decides which modes are legal to name.
-pub(crate) fn parse_shape_opt(what: c_int) -> Option<&'static CStr> {
+pub(crate) fn parse_shape_opt(what: c_int) -> Result<(), OptError> {
     // Set by a `ve` in the mode list, in either round.
     let mut found_ve = false;
 
@@ -280,7 +280,7 @@ pub(crate) fn parse_shape_opt(what: c_int) -> Option<&'static CStr> {
             clear_shape_table();
             if bytes.is_empty() {
                 ui_mode_info_set();
-                return None;
+                return Ok(());
             }
         }
         // SAFETY: `bytes` is the string `opt` points at.
@@ -295,7 +295,7 @@ pub(crate) fn parse_shape_opt(what: c_int) -> Option<&'static CStr> {
         } {
             // The option layer reports it, so it is handed back rather
             // than reported here.
-            return Some(msg);
+            return Err((msg).into());
         }
     }
 
@@ -314,7 +314,7 @@ pub(crate) fn parse_shape_opt(what: c_int) -> Option<&'static CStr> {
         });
     }
     ui_mode_info_set();
-    None
+    Ok(())
 }
 
 /// One pass over the option value. `apply` is upstream's `round == 2`: the

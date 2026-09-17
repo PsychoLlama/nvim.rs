@@ -547,7 +547,7 @@ fn enter_tab(
 
 /// `:set cmdheight=n`, without the frame resizing.
 fn set_cmdheight(n: OptInt) {
-    set_option_value(kOptCmdheight, OptVal::Number(n), OptionSetFlags::NONE);
+    let _ = set_option_value(kOptCmdheight, OptVal::Number(n), OptionSetFlags::NONE);
 }
 
 /// Tell an external UI that the windows and inline floats of `old_curtab` are

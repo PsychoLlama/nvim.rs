@@ -471,7 +471,7 @@ pub(crate) fn close_all_windows(buffer: Buf, keep_curwin: bool) {
 /// Re-check `'colorcolumn'` after `'textwidth'` changed under the window.
 pub(crate) fn recheck_colorcolumn(win: Win) {
     // SAFETY: a live window; a null pattern means "the option's own value".
-    unsafe { check_colorcolumn(ptr::null_mut(), Some(win)) };
+    let _ = unsafe { check_colorcolumn(ptr::null_mut(), Some(win)) };
 }
 
 pub(crate) fn clear_window_folds(win: Win) {

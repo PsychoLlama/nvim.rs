@@ -19,7 +19,7 @@
 )]
 
 use crate::cstr;
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::drawscreen::status_redraw_all;
@@ -35,7 +35,7 @@ use crate::options::{
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
-use crate::types::{ColNr, OptIndex, OptInt, OptSet, OptionSetFlags};
+use crate::types::{ColNr, OptError, OptIndex, OptInt, OptSet, OptionSetFlags};
 
 use crate::types::Buffer;
 use crate::winlayer::buffers;
@@ -117,7 +117,7 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 /// Where a buffer keeps its parsed 'varsofttabstop' stops.
 const VSTS_ARRAY: usize = core::mem::offset_of!(Buffer, b_p_vsts_array);
 
-pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
+pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the buffer list is the editor's own, and every string handled
     // here is either the shared empty string or an allocation this option
     // owns.
@@ -222,7 +222,7 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
         OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL,
         &PASTE_DEP_OPTS,
     );
-    None
+    Ok(())
 }
 
 /// What 'paste' stashes for a 'varsofttabstop' value: null for a value that

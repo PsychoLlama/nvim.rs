@@ -259,7 +259,7 @@ pub fn ui_refresh() {
         // message area needs. `ui_refresh_cmdheight` is off while the
         // user's own 'cmdheight' is being restored.
         if ui_refresh_cmdheight.get() {
-            set_option_value(
+            let _ = set_option_value(
                 kOptCmdheight,
                 OptVal::Number(had_message as _),
                 OptionSetFlags::NONE,

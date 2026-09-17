@@ -426,7 +426,7 @@ pub(crate) unsafe fn do_ecmd(
             && Win::current().w_onebuf_opt.wo_spell != 0
             && unsafe { *(*Win::current().w_s).b_p_spl } as c_int != NUL
         {
-            parse_spelllang(Win::current());
+            let _ = parse_spelllang(Win::current());
         }
 
         if command.is_null() {
@@ -448,7 +448,7 @@ pub(crate) unsafe fn do_ecmd(
             let _ = unsafe { do_cmdline(command, None, ptr::null_mut(), DoCmdOpts::VERBOSE) };
         }
         if Buf::current().b_kmap_state as c_int & KEYMAP_INIT != 0 {
-            keymap_init();
+            let _ = keymap_init();
         }
 
         drop(redraw_off.take());

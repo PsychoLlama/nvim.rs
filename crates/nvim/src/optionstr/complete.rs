@@ -20,9 +20,9 @@ use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, valid_spelllang};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
-use crate::types::{NUL, OptSet, OptionSetFlags};
+use crate::types::{NUL, OptError, OptSet, OptionSetFlags};
 
-use super::frame::{errbuf, invalid, varp, win};
+use super::frame::{invalid, varp, win};
 use super::{
     CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, free_string_option, illegal_char, illegal_char_after_chr,
     opt_strings_mask,
@@ -42,8 +42,7 @@ const CPT_WITH_ARGUMENT: &CStr = c"ksF";
 /// with a backslash — and because a part longer than the scratch buffer is
 /// simply cut there and the remainder checked as if it were the next part,
 /// which is upstream's behaviour and is preserved.
-pub fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
-    let (buf, buflen) = errbuf(args);
+pub fn did_set_complete(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value, walked to its terminator.
     let mut p = unsafe { varp(args).get() };
     while unsafe { *p } != 0 {
@@ -71,7 +70,7 @@ pub fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
             unsafe { cstr::at(CPT_SOURCES.as_ptr()) },
             c_int::from(source),
         ) {
-            return Some(unsafe { illegal_char(buf, buflen, c_int::from(source)) });
+            return Err(illegal_char(c_int::from(source)));
         }
 
         // Anything after the source letter is either that source's
@@ -95,12 +94,7 @@ pub fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
             }
         };
         if let Some(char_before) = char_before {
-            if buf.is_null() {
-                return None;
-            }
-            // SAFETY: the frame's error buffer, with its own length.
-            let msg = unsafe { illegal_char_after_chr(buf, buflen, c_int::from(char_before)) };
-            return Some(msg);
+            return Err(illegal_char_after_chr(c_int::from(char_before)));
         }
 
         while unsafe { *p } == b',' as c_char || unsafe { *p } == b' ' as c_char {
@@ -111,9 +105,9 @@ pub fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
     // The "F" source names a function, which is resolved last because
     // it can fail for a reason the letter walk cannot see.
     if unsafe { set_cpt_callbacks(args) }.is_err() {
-        return Some(unsafe { illegal_char_after_chr(buf, buflen, c_int::from(b'F')) });
+        return Err(illegal_char_after_chr(c_int::from(b'F')));
     }
-    None
+    Ok(())
 }
 
 /// 'completeitemalign' is the three completion-menu columns in the order
@@ -121,7 +115,7 @@ pub fn did_set_complete(args: &mut OptSet) -> Option<&CStr> {
 ///
 /// The order is kept as a base-10 number, one digit per column, which is
 /// what the menu drawing code reads.
-pub fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_completeitemalign(_args: &mut OptSet) -> Result<(), OptError> {
     const COLUMNS: [(&CStr, c_int); 3] = [
         (c"abbr", CPT_ABBR as c_int),
         (c"kind", CPT_KIND as c_int),
@@ -166,10 +160,10 @@ pub fn did_set_completeitemalign(_args: &mut OptSet) -> Option<&CStr> {
         return invalid();
     }
     cia_flags.set(order);
-    None
+    Ok(())
 }
 
-pub fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_completeopt(args: &mut OptSet) -> Result<(), OptError> {
     let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // A copy, so that the global value outlives the projection: `:set` rate.
@@ -192,12 +186,12 @@ pub fn did_set_completeopt(args: &mut OptSet) -> Option<&CStr> {
     } else {
         cot_flags.set(mask);
     }
-    None
+    Ok(())
 }
 
 /// A 'helpfile' the user chose overrides `$VIM`/`$VIMRUNTIME`, so the ones
 /// nvim derived for itself are dropped and re-derived from it.
-pub fn did_set_helpfile(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_helpfile(_args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: unsets this process's own environment variables.
     if didset_vim.get() {
         unsafe { vim_unsetenv_ext(c"VIM".as_ptr()) };
@@ -205,12 +199,12 @@ pub fn did_set_helpfile(_args: &mut OptSet) -> Option<&CStr> {
     if didset_vimruntime.get() {
         unsafe { vim_unsetenv_ext(c"VIMRUNTIME".as_ptr()) };
     }
-    None
+    Ok(())
 }
 
 /// 'helplang' is a comma-separated list of two-letter language codes, which
 /// is checked by position rather than by parsing.
-pub fn did_set_helplang(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_helplang(_args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the option's own C string value; each test below is reached
     // only once the byte before it is known not to be the terminator.
     // A copy: the cursor below walks past the end of a projection's borrow.
@@ -229,14 +223,14 @@ pub fn did_set_helplang(_args: &mut OptSet) -> Option<&CStr> {
         }
         s = unsafe { s.add(3) };
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_mkspellmem(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_mkspellmem(_args: &mut OptSet) -> Result<(), OptError> {
     if spell_check_msm().is_err() {
         return invalid();
     }
-    None
+    Ok(())
 }
 
 /// The callback for every option holding an expression or a function name
@@ -245,7 +239,7 @@ pub fn did_set_mkspellmem(_args: &mut OptSet) -> Option<&CStr> {
 /// A `s:`-prefixed name is resolved to its script-local spelling now, while
 /// the script that set the option is still on the stack; the option's value
 /// is rewritten in place with the answer.
-pub fn did_set_optexpr(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_optexpr(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's own variable; `get_scriptlocal_funcname` returns
     // a fresh allocation or null, and the old value is freed here.
     let varp = varp(args);
@@ -256,15 +250,15 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Option<&CStr> {
         let old = unsafe { varp.replace(resolved) };
         unsafe { free_string_option(old) };
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_spellcapcheck(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spellcapcheck(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's window and its syntax block.
     unsafe { compile_cap_prog(win(args).w_s) }
 }
 
-pub fn did_set_spellfile(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spellfile(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value.
     if !unsafe { valid_spellfile(varp(args).get()) } {
         return invalid();
@@ -272,7 +266,7 @@ pub fn did_set_spellfile(args: &mut OptSet) -> Option<&CStr> {
     did_set_spell_option()
 }
 
-pub fn did_set_spelllang(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spelllang(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value.
     if !valid_spelllang(unsafe { CStr::from_ptr(varp(args).get()) }) {
         return invalid();
@@ -284,7 +278,7 @@ pub fn did_set_spelllang(args: &mut OptSet) -> Option<&CStr> {
 ///
 /// The window's mask lives in its *syntax block*, which a diff or preview
 /// window may share with another window.
-pub fn did_set_spelloptions(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spelloptions(args: &mut OptSet) -> Result<(), OptError> {
     let (mut wp, opt_flags, new) = (win(args), args.os_flags, args.os_newval);
     let value = new
         .as_string()
@@ -305,17 +299,17 @@ pub fn did_set_spelloptions(args: &mut OptSet) -> Option<&CStr> {
             unsafe { (*wp.w_s).b_p_spo_flags = mask };
         }
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_spellsuggest(_args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_spellsuggest(_args: &mut OptSet) -> Result<(), OptError> {
     if spell_check_sps().is_err() {
         return invalid();
     }
-    None
+    Ok(())
 }
 
-pub fn did_set_tagcase(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_tagcase(args: &mut OptSet) -> Result<(), OptError> {
     let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // A copy, so that the global value outlives the projection: `:set` rate.
@@ -341,5 +335,5 @@ pub fn did_set_tagcase(args: &mut OptSet) -> Option<&CStr> {
     } else {
         tc_flags.set(mask);
     }
-    None
+    Ok(())
 }

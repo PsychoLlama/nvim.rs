@@ -45,7 +45,7 @@ use crate::charset::{char2cells, hexhex2nr, ptr2cells};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::grid::{schar_from_char, schar_from_str};
 use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
-use crate::memory::{xfree, xmalloc};
+use crate::memory::{XString, xfree, xmalloc};
 use crate::message::{e_invarg, e_leadtab_requires_tab};
 use crate::narrow::number_as_int;
 use crate::option::option_var;
@@ -54,8 +54,8 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CharsOption, Expand, FcsChars, LcsChars, NUL, OptSet, OptionSetFlags, ScreenChar, int64_t,
-    size_t,
+    CharsOption, Expand, FcsChars, LcsChars, NUL, OptError, OptSet, OptionSetFlags, ScreenChar,
+    int64_t, size_t,
 };
 use crate::winlayer;
 
@@ -346,26 +346,21 @@ fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
 }
 
 /// "E1511: Wrong number of characters for field \"x\"" and its width
-/// sibling, formatted into the caller's buffer. A null buffer means the
-/// caller wants no message, and gets the shared empty string.
+/// sibling, naming the field they did not like.
 ///
 /// # Safety
-/// `errbuf` is null or points at `errbuflen` writable bytes; `fmt` takes
-/// one string argument.
-unsafe fn field_value_err<'a>(
-    errbuf: *mut c_char,
-    errbuflen: size_t,
-    fmt: *const c_char,
-    field: &CStr,
-) -> &'a CStr {
-    if errbuf.is_null() {
-        return c"";
-    }
-    // SAFETY: the caller's buffer and format, with the one argument it
-    // takes.
-    unsafe { vim_snprintf(errbuf, errbuflen, gettext_ptr(fmt).as_ptr(), field.as_ptr()) };
-    // SAFETY: `vim_snprintf` terminated what it wrote.
-    unsafe { CStr::from_ptr(errbuf) }
+/// `fmt` takes one string argument.
+unsafe fn field_value_err(fmt: *const c_char, field: &CStr) -> OptError {
+    // SAFETY: `message` is the buffer the formatter is told the size of,
+    // and the caller's format takes the one argument it is given.
+    OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
+        vim_snprintf(
+            buf,
+            OptError::ROOM as size_t,
+            gettext_ptr(fmt).as_ptr(),
+            field.as_ptr(),
+        );
+    }))
 }
 
 /// A character struct as raw bytes, for the fields the table addresses by
@@ -391,19 +386,16 @@ fn store_field(chars: &mut [u8], slot: usize, value: ScreenChar) {
 /// the check runs, which is how `check_chars_options` asks whether a value
 /// would be accepted without disturbing anything.
 ///
-/// Returns an error message, or null when the value is good.
+/// Returns an error message when the value is not good.
 ///
 /// # Safety
-/// `window` is a live window, `value` a C string, and `errbuf` null or
-/// `errbuflen` writable bytes.
-pub unsafe fn set_chars_option<'a>(
+/// `window` is a live window and `value` a C string.
+pub unsafe fn set_chars_option(
     mut window: Win,
     value: *const c_char,
     what: CharsOption,
     apply: bool,
-    errbuf: *mut c_char,
-    errbuflen: size_t,
-) -> Option<&'a CStr> {
+) -> Result<(), OptError> {
     let listchars = is_listchars(what);
     let tab: &[Field] = if listchars { &LCS_TAB } else { &FCS_TAB };
     // SAFETY: the caller's window; both are C strings.
@@ -462,25 +454,16 @@ pub unsafe fn set_chars_option<'a>(
                 .iter()
                 .position(|field| field_opens_at(bytes, p, field.name))
             else {
-                return Some(e_invarg);
+                return Err((e_invarg).into());
             };
             let field = &tab[i];
             let mut s = p + field.name.to_bytes().len() + 1;
+            // SAFETY (both): each format takes the one string it is given.
             let width_err = |name| unsafe {
-                field_value_err(
-                    errbuf,
-                    errbuflen,
-                    e_wrong_character_width_for_field_str.as_ptr(),
-                    name,
-                )
+                field_value_err(e_wrong_character_width_for_field_str.as_ptr(), name)
             };
             let count_err = |name| unsafe {
-                field_value_err(
-                    errbuf,
-                    errbuflen,
-                    e_wrong_number_of_characters_for_field_str.as_ptr(),
-                    name,
-                )
+                field_value_err(e_wrong_number_of_characters_for_field_str.as_ptr(), name)
             };
 
             match field.shape {
@@ -496,13 +479,13 @@ pub unsafe fn set_chars_option<'a>(
                         *len = 0;
                         while !at_field_end(bytes, s) {
                             if take_encoded_char(value, &mut s) == 0 {
-                                return Some(width_err(field.name));
+                                return Err(width_err(field.name));
                             }
                             *len += 1;
                         }
                         // The field cannot be empty.
                         if *len == 0 {
-                            return Some(count_err(field.name));
+                            return Err(count_err(field.name));
                         }
                     } else {
                         // Only the last mention of the field fills the run;
@@ -530,27 +513,27 @@ pub unsafe fn set_chars_option<'a>(
                 }
                 _ => {
                     if at_end(bytes, s) {
-                        return Some(count_err(field.name));
+                        return Err(count_err(field.name));
                     }
                     let c1 = take_encoded_char(value, &mut s);
                     if c1 == 0 {
-                        return Some(width_err(field.name));
+                        return Err(width_err(field.name));
                     }
                     let mut c2: ScreenChar = 0;
                     let mut c3: ScreenChar = 0;
                     if matches!(field.shape, Shape::Tab | Shape::LeadTab) {
                         if at_end(bytes, s) {
-                            return Some(count_err(field.name));
+                            return Err(count_err(field.name));
                         }
                         c2 = take_encoded_char(value, &mut s);
                         if c2 == 0 {
-                            return Some(width_err(field.name));
+                            return Err(width_err(field.name));
                         }
                         // The third character is optional.
                         if !at_field_end(bytes, s) {
                             c3 = take_encoded_char(value, &mut s);
                             if c3 == 0 {
-                                return Some(width_err(field.name));
+                                return Err(width_err(field.name));
                             }
                         }
                         if field.shape == Shape::Tab {
@@ -560,7 +543,7 @@ pub unsafe fn set_chars_option<'a>(
                         }
                     }
                     if !at_field_end(bytes, s) {
-                        return Some(count_err(field.name));
+                        return Err(count_err(field.name));
                     }
                     if round > 0 {
                         match field.shape {
@@ -595,7 +578,7 @@ pub unsafe fn set_chars_option<'a>(
         }
 
         if listchars && has_leadtab && !has_tab {
-            return Some(e_leadtab_requires_tab);
+            return Err((e_leadtab_requires_tab).into());
         }
     }
 
@@ -610,7 +593,7 @@ pub unsafe fn set_chars_option<'a>(
             window.w_p_fcs_chars = fcs;
         }
     }
-    None
+    Ok(())
 }
 
 /// Does the field named `name` start at `p`? A field name is followed by a
@@ -681,16 +664,13 @@ unsafe fn alloc_run(len: c_int) -> *mut ScreenChar {
 /// drawing from the value that just changed.
 ///
 /// # Safety
-/// `win` is a live window, `val` a C string, `errbuf` null or `errbuflen`
-/// writable bytes.
-pub(crate) unsafe fn did_set_global_chars_option<'a>(
+/// `win` is a live window and `val` a C string.
+pub(crate) unsafe fn did_set_global_chars_option(
     mut win: Win,
     val: *mut c_char,
     what: CharsOption,
     opt_flags: OptionSetFlags,
-    errbuf: *mut c_char,
-    errbuflen: size_t,
-) -> Option<&'a CStr> {
+) -> Result<(), OptError> {
     let listchars = is_listchars(what);
     // SAFETY: the caller's window.
     let local_ptr = if listchars {
@@ -702,10 +682,7 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
     let for_this_window = local_is_empty || !opt_flags.has(OptionSetFlags::GLOBAL);
 
     // SAFETY: the caller's window and value.
-    let errmsg = unsafe { set_chars_option(win, val, what, for_this_window, errbuf, errbuflen) };
-    if errmsg.is_some() {
-        return errmsg;
-    }
+    unsafe { set_chars_option(win, val, what, for_this_window) }?;
 
     if !opt_flags.has(OptionSetFlags::GLOBAL) {
         // SAFETY: the window's own option variable.
@@ -721,25 +698,23 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
                 wp.w_onebuf_opt.wo_fcs
             };
             if c_int::from(*opt) == NUL {
-                set_chars_option(wp, opt, what, true, errbuf, errbuflen);
+                let _ = set_chars_option(wp, opt, what, true);
             }
             None
         })
     };
     redraw_all_later(UPD_NOT_VALID);
-    None
+    Ok(())
 }
 
 /// The option-table callback for both options and both scopes: which of the
 /// four cases this is comes from the variable being set.
-pub fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
-    let (mut win, varp, idx, flags, errbuf, errbuflen) = (
+pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
+    let (mut win, varp, idx, flags) = (
         args.os_win,
         args.os_varp.string_var(),
         args.os_idx,
         args.os_flags,
-        args.os_errbuf,
-        args.os_errbuflen,
     );
     // 'listchars' and 'fillchars' share this callback, so the row says which
     // option it is and the variable says which *scope*: the option's own
@@ -751,13 +726,13 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
     };
     // Which variable it is, not what it says.
     if varp == option_var(idx).string_var() {
-        unsafe { did_set_global_chars_option(win, varp.get(), which, flags, errbuf, errbuflen) }
+        unsafe { did_set_global_chars_option(win, varp.get(), which, flags) }
     } else if varp == crate::option::StrVar::Local(&raw mut win.w_onebuf_opt.wo_lcs)
         || varp == crate::option::StrVar::Local(&raw mut win.w_onebuf_opt.wo_fcs)
     {
-        unsafe { set_chars_option(win, varp.get(), which, true, errbuf, errbuflen) }
+        unsafe { set_chars_option(win, varp.get(), which, true) }
     } else {
-        None
+        Ok(())
     }
 }
 
@@ -785,10 +760,10 @@ fn field_name(tab: &'static [Field], idx: c_int) -> *mut c_char {
 /// Called after something other than `:set` changed what the screen can
 /// render — a new 'encoding', say — and reports which of the two options
 /// the new state conflicts with.
-pub fn check_chars_options() -> Option<&'static CStr> {
+pub fn check_chars_options() -> Result<(), OptError> {
     let check = |wp, value, what, apply| {
-        // SAFETY: a live window and a C string; no message is wanted.
-        if unsafe { set_chars_option(wp, value, what, apply, ptr::null_mut(), 0) }.is_none() {
+        // SAFETY: a live window and a C string.
+        if unsafe { set_chars_option(wp, value, what, apply) }.is_ok() {
             None
         } else if is_listchars(what) {
             Some(e_conflicts_with_value_of_listchars)
@@ -798,17 +773,19 @@ pub fn check_chars_options() -> Option<&'static CStr> {
     };
 
     if let Some(global) = p_lcs(|lcs| check(Win::current(), lcs.as_ptr(), kListchars, false)) {
-        return Some(global);
+        return Err((global).into());
     }
     if let Some(global) = p_fcs(|fcs| check(Win::current(), fcs.as_ptr(), kFillchars, false)) {
-        return Some(global);
+        return Err((global).into());
     }
-    for_each_window(|wp| {
-        if let Some(errmsg) = check(wp, wp.w_onebuf_opt.wo_lcs, kListchars, true) {
-            return Some(errmsg);
-        }
-        check(wp, wp.w_onebuf_opt.wo_fcs, kFillchars, true)
-    })
+    let per_window = for_each_window(|wp| {
+        check(wp, wp.w_onebuf_opt.wo_lcs, kListchars, true)
+            .or_else(|| check(wp, wp.w_onebuf_opt.wo_fcs, kFillchars, true))
+    });
+    match per_window {
+        Some(errmsg) => Err(errmsg.into()),
+        None => Ok(()),
+    }
 }
 
 /// Walk every window of every tab page, stopping at the first message a

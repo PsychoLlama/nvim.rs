@@ -12,10 +12,10 @@
 //! its value" is [`is_empty_option`] rather than a pointer comparison
 //! spelled out at each of the three dozen places that ask.
 //!
-//! The **error buffer**. A check that has to name what it disliked formats
-//! into a caller-supplied `errbuf`; the caller may decline one by passing
-//! null, and upstream then answers with the shared empty string rather than
-//! null, so the set still fails but reports nothing.
+//! The **rejection message**. A check that has to name what it disliked
+//! formats an owned [`OptError`]; upstream formatted into a caller-supplied
+//! `errbuf` and let the caller decline one by passing null, which is how a
+//! set could fail and report nothing.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -30,15 +30,13 @@
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
-use std::ffi::CString;
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
-use crate::cstr;
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;
 use crate::indent_c::parse_cino;
-use crate::memory::xfree;
+use crate::memory::{XString, xfree};
 use crate::option::{kOptFlagNDname, kOptFlagNFname, valid_name};
 use crate::options::{
     kOptBackupcopy, kOptBelloff, kOptCasemap, kOptClipboard, kOptCompleteopt, kOptDisplay,
@@ -48,7 +46,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
-use crate::types::{Failed, NUL, StlOpt, size_t, uint32_t};
+use crate::types::{Failed, NUL, OptError, StlOpt, size_t, uint32_t};
 
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
@@ -84,44 +82,30 @@ pub fn didset_string_options() {
     }
 }
 
-/// "E539: Illegal character <x>", formatted into the caller's buffer.
-///
-/// # Safety
-/// `errbuf` is null or points at `errbuflen` writable bytes. The answer
-/// borrows that buffer, so `'a` must not outlive it.
-pub unsafe fn illegal_char<'a>(errbuf: *mut c_char, errbuflen: size_t, c: c_int) -> &'a CStr {
-    if errbuf.is_null() {
-        return c"";
-    }
+/// "E539: Illegal character <x>", naming the byte it did not like.
+pub fn illegal_char(c: c_int) -> OptError {
     let fmt = gettext(c"E539: Illegal character <%s>");
-    // SAFETY: the caller's buffer; `transchar` answers a C string and
-    // `vim_snprintf` terminates what it writes.
-    unsafe {
-        vim_snprintf(errbuf, errbuflen, fmt.as_ptr(), transchar(c).as_ptr());
-        CStr::from_ptr(errbuf)
-    }
+    // SAFETY: `message` is the buffer the formatter is told the size of,
+    // and `transchar` answers a C string.
+    OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
+        vim_snprintf(
+            buf,
+            OptError::ROOM as size_t,
+            fmt.as_ptr(),
+            transchar(c).as_ptr(),
+        );
+    }))
 }
 
 /// "E535: Illegal character after <%c>", for the options that spell a field
 /// as a character followed by a value.
-///
-/// # Safety
-/// As [`illegal_char`].
-pub(crate) unsafe fn illegal_char_after_chr<'a>(
-    errbuf: *mut c_char,
-    errbuflen: size_t,
-    c: c_int,
-) -> &'a CStr {
-    if errbuf.is_null() {
-        return c"";
-    }
+pub(crate) fn illegal_char_after_chr(c: c_int) -> OptError {
     let fmt = gettext(e_illegal_character_after_chr);
-    // SAFETY: the caller's buffer; the format takes one `int`, and
-    // `vim_snprintf` terminates what it writes.
-    unsafe {
-        vim_snprintf(errbuf, errbuflen, fmt.as_ptr(), c);
-        CStr::from_ptr(errbuf)
-    }
+    // SAFETY: `message` is the buffer the formatter is told the size of,
+    // and the format takes one `int`.
+    OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
+        vim_snprintf(buf, OptError::ROOM as size_t, fmt.as_ptr(), c);
+    }))
 }
 
 /// Give every string option of a buffer the empty string in place of a null.
@@ -344,8 +328,8 @@ fn digit(byte: u8) -> c_int {
     c_int::from(byte) - c_int::from(b'0')
 }
 
-/// Check a 'statusline'-format value. Answers an untranslated message, or
-/// `None` when the format is good.
+/// Check a 'statusline'-format value. Answers an untranslated message when
+/// the format is bad.
 ///
 /// Upstream formats the message into a function-local static, because the
 /// answer has to outlive the call and the caller passes no buffer. The
@@ -353,13 +337,8 @@ fn digit(byte: u8) -> c_int {
 ///
 /// # Safety
 /// `s` is a C string.
-pub(crate) unsafe fn check_stl_option(s: *mut c_char) -> Option<CString> {
-    let mut errbuf = [0 as c_char; 80];
-    let mut illegal = |c: c_int| {
-        // SAFETY: `errbuf` is 80 writable bytes.
-        unsafe { illegal_char(errbuf.as_mut_ptr(), errbuf.len(), c) };
-        Some(cstr::in_chars(&errbuf).to_owned())
-    };
+pub(crate) unsafe fn check_stl_option(s: *mut c_char) -> Result<(), OptError> {
+    let illegal = |c: c_int| Err(illegal_char(c));
 
     // SAFETY: the caller's C string.
     let mut rest = unsafe { CStr::from_ptr(s) }.to_bytes();
@@ -425,16 +404,16 @@ pub(crate) unsafe fn check_stl_option(s: *mut c_char) -> Option<CString> {
                 rest.iter().position(|&b| b == b'}')
             };
             let Some(close) = close else {
-                return Some(e_unclosed_expression_sequence.to_owned());
+                return Err(e_unclosed_expression_sequence.into());
             };
             rest = &rest[close..];
         }
     }
 
     if groupdepth != 0 {
-        return Some(e_unbalanced_groups.to_owned());
+        return Err(e_unbalanced_groups.into());
     }
-    None
+    Ok(())
 }
 
 /// Does `val` hold a character an option marked as a file or directory name

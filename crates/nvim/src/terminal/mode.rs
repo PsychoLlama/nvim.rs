@@ -361,7 +361,7 @@ pub(crate) fn terminal_enter() -> bool {
     if !s.cursor_visible {
         ui_busy_stop();
     }
-    parse_shape_opt(SHAPE_CURSOR);
+    let _ = parse_shape_opt(SHAPE_CURSOR);
     unset_terminal_winopts(s);
     terminal_focus(s.term, false);
     let mut buf = current_buf();

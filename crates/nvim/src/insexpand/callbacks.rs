@@ -18,7 +18,7 @@ use crate::option::vars::P_TSRFU;
 use crate::guard::Lock;
 use crate::semsg;
 use crate::strings::vim_strchr;
-use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_DICT, VAR_LIST};
+use crate::types::{Failed, IOSIZE, NUL, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
 use crate::winlayer::{Buf, Win};
 
 /// One of the three global completion-function callbacks.
@@ -305,7 +305,7 @@ pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *m
 /// may be a function name, `function(<name>)`, `funcref(<name>)` or a lambda.
 ///
 /// This is an `opt_did_set_cb` row in the generated option table.
-pub fn did_set_completefunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_completefunc(args: &mut OptSet) -> Result<(), OptError> {
     let mut buf = args.os_buf;
     let value = args
         .os_newval
@@ -322,9 +322,9 @@ pub fn did_set_completefunc(args: &mut OptSet) -> Option<&CStr> {
         retval
     };
     if retval.is_err() {
-        Some(e_invarg)
+        Err(e_invarg.into())
     } else {
-        None
+        Ok(())
     }
 }
 
@@ -338,7 +338,7 @@ pub fn set_buflocal_cfu_callback(mut buffer: Buf) {
 
 /// Parse the `'omnifunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
-pub fn did_set_omnifunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_omnifunc(args: &mut OptSet) -> Result<(), OptError> {
     let mut buf = args.os_buf;
     let value = args
         .os_newval
@@ -355,9 +355,9 @@ pub fn did_set_omnifunc(args: &mut OptSet) -> Option<&CStr> {
         retval
     };
     if retval.is_err() {
-        Some(e_invarg)
+        Err(e_invarg.into())
     } else {
-        None
+        Ok(())
     }
 }
 
@@ -495,7 +495,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
 
 /// Parse the `'thesaurusfunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
-pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
+pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
     let mut buf = args.os_buf;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         // Buffer-local option set.
@@ -511,9 +511,9 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
         retval
     };
     if retval.is_err() {
-        Some(e_invarg)
+        Err(e_invarg.into())
     } else {
-        None
+        Ok(())
     }
 }
 
