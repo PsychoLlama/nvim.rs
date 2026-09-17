@@ -479,9 +479,8 @@ fn runtime_search_path_build() -> RuntimeSearchPath {
             rtp_entry = cur_entry;
             break;
         }
-        // SAFETY: `cur_entry` points into 'runtimepath'.
-        let pos_in_rtp = p_rtp(|value| unsafe { cur_entry.offset_from(value.as_ptr().cast_mut()) })
-            .cast_unsigned();
+        // SAFETY: `cur_entry` points into the copy `rtp_entry` walks.
+        let pos_in_rtp = unsafe { cur_entry.offset_from(rtp.as_ptr()) }.cast_unsigned();
         // Fact: 'runtimepath' entries can contain wildcards.
         // SAFETY: the frame's own vectors, and `buf` is NUL-terminated.
         unsafe {
@@ -513,9 +512,8 @@ fn runtime_search_path_build() -> RuntimeSearchPath {
 
     // What follows was not spelled in 'runtimepath'.  Keeping `pos_in_rtp`
     // monotonic means giving it the comma between the two halves.
-    // SAFETY: `rtp_entry` points into 'runtimepath'.
-    let mut sentinel_pos_in_rtp =
-        p_rtp(|value| unsafe { rtp_entry.offset_from(value.as_ptr().cast_mut()) }).cast_unsigned();
+    // SAFETY: `rtp_entry` points into the copy it walks.
+    let mut sentinel_pos_in_rtp = unsafe { rtp_entry.offset_from(rtp.as_ptr()) }.cast_unsigned();
     sentinel_pos_in_rtp -= usize::from(sentinel_pos_in_rtp > 0);
 
     for item in &pack_entries {
@@ -560,8 +558,8 @@ fn runtime_search_path_build() -> RuntimeSearchPath {
                 c",".as_ptr().cast_mut(),
             )
         };
-        let pos_in_rtp = p_rtp(|value| unsafe { cur_entry.offset_from(value.as_ptr().cast_mut()) })
-            .cast_unsigned();
+        // SAFETY: as above.
+        let pos_in_rtp = unsafe { cur_entry.offset_from(rtp.as_ptr()) }.cast_unsigned();
         unsafe {
             expand_rtp_entry(
                 &mut search_path,
