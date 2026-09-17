@@ -54,7 +54,7 @@ use crate::message::{
     msg_str_hl, set_keep_msg, verb_msg,
 };
 use crate::message_fmt::c_str;
-use crate::option::vars::{P_DIR, p_dir, p_shm, p_uc, p_verbose};
+use crate::option::vars::{P_DIR, P_SHM, p_dir, p_uc, p_verbose};
 use crate::option::{copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
 use crate::os::cshim::{gettext, strncasecmp};

@@ -425,9 +425,7 @@ unsafe fn resolve_swapfile_clash(
     // buffer was not already recovered, and 'shortmess' allows it.
     if unsafe { swapfile_is_for_other_file(buffer, fname) }
         || Buf::current().b_flags.has(BufFlags::RECOVERED)
-        || ShmFlag::ATTENTION.is_in(p_shm(|value| unsafe {
-            CStr::from_ptr(value.as_ptr().cast_mut())
-        }))
+        || P_SHM.has_byte(ShmFlag::ATTENTION.byte())
     {
         return false;
     }

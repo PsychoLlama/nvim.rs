@@ -30,7 +30,7 @@ use crate::lua::executor::{kRetObject, nlua_exec};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::state::msg_col;
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_str};
-use crate::option::vars::{p_ls, p_shm, p_verbose};
+use crate::option::vars::{P_SHM, p_ls, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::startup::starting;
@@ -367,9 +367,7 @@ pub(crate) fn may_show_intro() -> bool {
         && Buf::current().handle == 1
         && Win::current().handle == LOWEST_WIN_ID as c_int
         && one_window(Win::current(), None)
-        && !ShmFlag::INTRO.is_in(p_shm(|value| unsafe {
-            CStr::from_ptr(value.as_ptr().cast_mut())
-        }))
+        && !P_SHM.has_byte(ShmFlag::INTRO.byte())
 }
 
 /// The intro screen, top to bottom. The first three lines are the logo, and

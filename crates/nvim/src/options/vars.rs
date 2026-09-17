@@ -136,6 +136,22 @@ impl StrOpt {
         })
     }
 
+    /// Whether the value holds `byte` — upstream's
+    /// `vim_strchr(p_xx, c) != NULL`, which is how every *letter* option
+    /// ('cpoptions', 'shortmess', 'formatoptions', 'backspace') is
+    /// queried.
+    ///
+    /// Like [`first_byte`](Self::first_byte) this exists so a hot caller
+    /// does not go through the projecting reader: handing out a `&CStr`
+    /// means finding the value's NUL first, and `cpo_has` is asked once
+    /// per screen line by `Win::col_off2`. Measured at 45 M instructions
+    /// on `scrbench`.
+    pub fn has_byte(self, byte: u8) -> bool {
+        OPTIONS.with_field(self.project, |value| {
+            value.as_deref().is_some_and(|bytes| bytes.contains(&byte))
+        })
+    }
+
     /// A copy of the value, for a caller that needs it to outlive the
     /// borrow.
     pub fn get(self) -> XString {

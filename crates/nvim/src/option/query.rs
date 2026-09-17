@@ -24,7 +24,7 @@ use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::memory::{XString, xcalloc, xfree, xstrdup};
 use crate::option::vars::{
-    P_BS, P_FFS, P_SISO, P_SO, bkc_flags, p_bs, p_cpo, p_magic, p_sh, p_shm, p_siso, p_so, ve_flags,
+    P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, ve_flags,
 };
 use crate::options::*;
 use crate::optionstr::{LocalOptStr, empty_option};
@@ -96,12 +96,13 @@ pub(crate) fn get_findfunc() -> XString {
 /// an abbreviation standing for these four and nothing else.
 pub(crate) fn shortmess(x: ShmFlag) -> bool {
     const ABBREVIATED: [ShmFlag; 4] = [ShmFlag::RO, ShmFlag::MOD, ShmFlag::LINES, ShmFlag::WRI];
-    p_shm(|shm| x.is_in(shm) || (ShmFlag::ABBREVIATIONS.is_in(shm) && ABBREVIATED.contains(&x)))
+    P_SHM.has_byte(x.byte())
+        || (P_SHM.has_byte(ShmFlag::ABBREVIATIONS.byte()) && ABBREVIATED.contains(&x))
 }
 
 /// Whether 'cpoptions' contains `flag`.
 pub(crate) fn cpo_has(flag: CpoFlag) -> bool {
-    p_cpo(|cpo| flag.is_in(cpo))
+    P_CPO.has_byte(flag.byte())
 }
 
 /// Record where a vimrc was found in `$MYVIMRC`/`$MYVIMDIR`, unless the
@@ -233,9 +234,7 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
     if P_BS.first_byte() == b'2' {
         return what != BsFlag::NOSTOP;
     }
-    what.is_in(p_bs(|value| unsafe {
-        CStr::from_ptr(value.as_ptr().cast_mut())
-    }))
+    P_BS.has_byte(what.byte())
 }
 
 /// 'backupcopy' as flags, local where set.

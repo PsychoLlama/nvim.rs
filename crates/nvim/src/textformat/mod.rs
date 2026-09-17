@@ -21,7 +21,7 @@
 
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
 use crate::cursor::get_cursor_pos_ptr;
@@ -69,9 +69,7 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 /// carries. The dereference stays behind the `&&`: with 'paste' set the
 /// left half is what keeps the right one from running.
 pub fn has_format_option(x: FoFlag) -> bool {
-    // The dereference stays behind the `&&`: with no current buffer the
-    // left half is what keeps the right one from running.
-    unsafe { !p_paste() && x.is_in(CStr::from_ptr(Buf::current().b_p_fo.value_ptr())) }
+    !p_paste() && x.is_among(Buf::current().b_p_fo.bytes())
 }
 
 /// `WHITECHAR` (`v0.12.4:textformat.c:50`): `cc` is white space, and the

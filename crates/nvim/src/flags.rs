@@ -274,6 +274,14 @@ macro_rules! char_flags {
                 letters.to_bytes().contains(&self.0)
             }
 
+            /// [`is_in`](#method.is_in) over bytes that have already been
+            /// measured, for a caller holding the option's value as a
+            /// slice rather than as a C string.
+            #[inline]
+            $vis fn is_among(self, letters: &[u8]) -> bool {
+                letters.contains(&self.0)
+            }
+
             /// The letter itself.
             #[inline]
             $vis const fn byte(self) -> u8 {
