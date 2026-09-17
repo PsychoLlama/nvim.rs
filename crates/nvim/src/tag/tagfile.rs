@@ -21,7 +21,7 @@ use crate::cmdexpand::{WildMode, WildOpts};
 use crate::cstr;
 use crate::file_search::Name;
 use crate::option::local_or_global;
-use crate::option::vars::P_TAGS;
+use crate::option::vars::{P_HF, P_TAGS};
 use crate::path::tail_index;
 use crate::runtime::RuntimeOpts;
 use crate::strings::has_char;
@@ -237,8 +237,9 @@ impl HelpTags {
             return None;
         }
         self.at += 1;
-        // SAFETY: `'helpfile'` is a NUL-terminated option string.
-        let hf = p_hf(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
+        // A copy: the name is built out of it below.
+        let helpfile = P_HF.get();
+        let hf = &*helpfile;
         if hf.is_empty() {
             return None;
         }

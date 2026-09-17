@@ -440,20 +440,25 @@ pub(crate) unsafe fn copy_option_part(
 
 /// Whether 'shell' is a csh derivative, which needs its own quoting.
 pub(crate) fn csh_like_shell() -> bool {
-    // SAFETY: 'shell' is a string option; it is never null.
-    has_bytes(
-        p_sh(|value| unsafe { cstr::at(path_tail(value.as_ptr().cast_mut())) }),
-        b"csh",
-    )
+    // SAFETY: an option value is a C string, and `path_tail` answers a
+    // position inside it.
+    p_sh(|sh| {
+        has_bytes(
+            unsafe { cstr::at(path_tail(sh.as_ptr().cast_mut())) },
+            b"csh",
+        )
+    })
 }
 
 /// Whether 'shell' is fish, which needs its own quoting.
 pub(crate) fn fish_like_shell() -> bool {
-    // SAFETY: 'shell' is a string option; it is never null.
-    has_bytes(
-        p_sh(|value| unsafe { cstr::at(path_tail(value.as_ptr().cast_mut())) }),
-        b"fish",
-    )
+    // SAFETY: as [`csh_like_shell`].
+    p_sh(|sh| {
+        has_bytes(
+            unsafe { cstr::at(path_tail(sh.as_ptr().cast_mut())) },
+            b"fish",
+        )
+    })
 }
 
 /// Every buffer-local (or window-local) option of the current buffer and

@@ -52,7 +52,7 @@ use crate::message::{e_noprev, e_notmp};
 use crate::message_fmt::c_str;
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::option::cpo_has;
-use crate::option::vars::{p_report, p_sh, p_shq, p_srr, p_stmp, p_warn};
+use crate::option::vars::{P_SHQ, p_report, p_sh, p_srr, p_stmp, p_warn};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::input::os_breakcheck;
@@ -164,8 +164,9 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
             bangredo.set(false);
         }
 
-        // SAFETY: 'shellquote' is a live option string.
-        let shq = p_shq(|value| unsafe { cstr::bytes_at(value.as_ptr().cast_mut()) });
+        // A copy: the quoting below outlives the projection's borrow.
+        let shellquote = P_SHQ.get();
+        let shq = &*shellquote;
         if !shq.is_empty() {
             // `prevcmd` is set -- either `prevcmd_is_set` passed above, or
             // the assembled command was just stored in it.
@@ -666,12 +667,7 @@ pub(crate) fn make_filter_cmd(
         do_in,
     );
     if let Some(otmp) = otmp {
-        // SAFETY: 'shellredir' is a live option string.
-        append_redir(
-            &mut text,
-            p_srr(|value| unsafe { cstr::at(value.as_ptr().cast_mut()) }),
-            otmp,
-        );
+        p_srr(|srr| append_redir(&mut text, srr, otmp));
     }
     cstr::owned(&text)
 }

@@ -245,8 +245,7 @@ pub(crate) fn show_sub(
     cmdpreview_bufnr: Handle,
 ) -> c_int {
     // SAFETY: 'shortmess' is a live string option value.
-    let save_shm: CString =
-        p_shm(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).into();
+    let save_shm: CString = p_shm(CStr::to_owned);
     let orig_buf = Buf::current();
 
     // Disable the file info message.

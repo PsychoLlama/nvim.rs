@@ -30,8 +30,8 @@ use crate::message::e_unsupportedoption;
 use crate::message::{messagesopt_changed, msg_grid_validate};
 use crate::r#move::validate_virtcol;
 use crate::option::vars::{
-    P_BG, P_VE, breakat_flags, p_bg, p_breakat, p_km, p_mousescroll, p_mousescroll_hor,
-    p_mousescroll_vert, p_pumborder, p_winborder, ve_flags,
+    P_BG, P_MOUSESCROLL, P_VE, breakat_flags, p_bg, p_breakat, p_km, p_mousescroll,
+    p_mousescroll_hor, p_mousescroll_vert, p_pumborder, p_winborder, ve_flags,
 };
 use crate::option::{fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
@@ -232,9 +232,9 @@ pub fn did_set_mouse(args: &mut OptSet) -> Result<(), OptError> {
 /// direction the value does not mention keeps its built-in default rather
 /// than whatever the previous value set.
 pub fn did_set_mousescroll(_args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: the option's own value is a C string.
-    let value =
-        p_mousescroll(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
+    // A copy: the parse below outlives the projection's borrow.
+    let mousescroll = P_MOUSESCROLL.get();
+    let value = &*mousescroll;
     let mut vertical: Option<OptInt> = None;
     let mut horizontal: Option<OptInt> = None;
 

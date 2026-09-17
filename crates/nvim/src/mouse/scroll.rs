@@ -21,7 +21,6 @@
 use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
-use core::ffi::CStr;
 
 use super::*;
 use crate::buffer::buf_is_prompt;
@@ -205,5 +204,5 @@ pub(crate) fn mouse_model_popup() -> bool {
 /// before showing the menu.
 pub(crate) fn mouse_model_popup_setpos() -> bool {
     // SAFETY: an option string is NUL-terminated, never null.
-    p_mousem(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) == c"popup_setpos" })
+    p_mousem(|value| value == c"popup_setpos")
 }

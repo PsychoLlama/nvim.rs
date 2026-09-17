@@ -11,12 +11,12 @@
 use super::*;
 use crate::cstr;
 use crate::option::local_or_global;
-use crate::option::vars::P_EFM;
 use crate::option::vars::P_GEFM;
 use crate::option::vars::P_GP;
 use crate::option::vars::P_MENC;
 use crate::option::vars::P_SHQ;
 use crate::option::vars::P_SP;
+use crate::option::vars::{P_EFM, P_MEF};
 use crate::os::shell::ShellOpts;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int};
@@ -202,9 +202,12 @@ unsafe fn get_mef_name() -> *mut c_char {
         return name;
     }
 
-    let makeef = p_mef(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
+    // A copy: the name is built out of it below.
+    let mef = P_MEF.get();
+    let makeef = &*mef;
     let Some(at) = makeef.windows(2).position(|pair| pair == b"##") else {
-        return p_mef(|value| unsafe { xstrdup(value.as_ptr().cast_mut()) });
+        // SAFETY: the copy is NUL-terminated.
+        return unsafe { xstrdup(mef.as_ptr()) };
     };
 
     // Keep trying until the name doesn't exist yet.

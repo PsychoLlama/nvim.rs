@@ -56,7 +56,7 @@ impl Limits {
             max_kbyte: max_kbyte_i as size_t,
             max_reg_lines,
             num_marked_files: get_shada_parameter('\'' as c_int) as size_t,
-            global_vars: !find_shada_parameter('!' as c_int).is_null(),
+            global_vars: find_shada_parameter('!' as c_int).is_some(),
             global_marks: get_shada_parameter('f' as c_int) != 0,
         })
     }
@@ -182,7 +182,7 @@ impl Writing {
         if self.write_header() == kSDWriteFailed {
             return kSDWriteFailed;
         }
-        if !find_shada_parameter('%' as c_int).is_null() && self.write_buflist() == kSDWriteFailed {
+        if find_shada_parameter('%' as c_int).is_some() && self.write_buflist() == kSDWriteFailed {
             return kSDWriteFailed;
         }
         // Variables go out as they are found rather than into `wms`;
@@ -333,7 +333,7 @@ impl Writing {
         if !self.histories[HIST_SEARCH as usize] {
             return;
         }
-        let highlighted = !(no_hlsearch.get() || !find_shada_parameter('h' as c_int).is_null());
+        let highlighted = !(no_hlsearch.get() || find_shada_parameter('h' as c_int).is_some());
         let last_used = search_was_last_used();
 
         let slot = unsafe { &raw mut (*self.wms).search_pattern };

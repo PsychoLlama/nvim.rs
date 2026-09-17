@@ -26,7 +26,7 @@ use crate::memory::xstrdup;
 use crate::message::e_invalid_format_string_single_percent_s;
 use crate::message::{verbose_open, verbose_stop};
 use crate::option::vars::p_vfile;
-use crate::option::vars::{p_ruf, p_shada, ssop_flags};
+use crate::option::vars::{P_SHADA, p_ruf, ssop_flags};
 use crate::option::{did_set_title, get_option_default};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
 use crate::os::cshim::gettext;
@@ -206,8 +206,9 @@ pub fn did_set_sessionoptions(args: &mut OptSet) -> Result<(), OptError> {
 const SHADA_ITEMS: &[u8] = b"!\"%'/:<@cfhnrs";
 
 pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
-    // SAFETY: the option's own value, which is NUL-terminated.
-    let value = p_shada(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_bytes();
+    // A copy: the walk below outlives the projection's borrow.
+    let shada = P_SHADA.get();
+    let value = &*shada;
     // Reading past the end answers the terminator, as walking the C string
     // does.
     let at = |i: usize| value.get(i).copied().unwrap_or(0);

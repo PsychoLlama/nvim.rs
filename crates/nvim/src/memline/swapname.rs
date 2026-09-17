@@ -738,7 +738,7 @@ pub unsafe fn recover_names(
     // the whole of it as the bound. Upstream passed a 31000 it had reasoned
     // its way to instead.
     // SAFETY: `p_dir` is the option's NUL-terminated value.
-    let room = p_dir(|value| unsafe { cstr::bytes_at(value.as_ptr().cast_mut()) }).len() + 1;
+    let room = p_dir(CStr::count_bytes) + 1;
     let mut buf: Vec<c_char> = vec![0; room];
     let mut dir_len;
     // A copy: the cursor below walks past the end of a projection's borrow.

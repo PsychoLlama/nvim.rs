@@ -18,10 +18,9 @@
 
 use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text, msg_cstr};
-use crate::option::vars::P_SHADA;
+use crate::option::vars::{P_SHADA, p_shada};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::smsg;
-use crate::strings::vim_strchr;
 use crate::tr_c;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -137,15 +136,18 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
         if p_shadafile(|value| unsafe { strequal(value.as_ptr().cast_mut(), c"NONE".as_ptr()) }) {
             return None; // "-i NONE" or "--clean"
         }
-        return Some(
-            p_shadafile(|value| unsafe { CStr::from_ptr(value.as_ptr().cast_mut()) }).to_owned(),
-        );
+        return Some(p_shadafile(CStr::to_owned));
     }
 
-    let mut named = find_shada_parameter('n' as c_int);
-    if named.is_null() || unsafe { *named } == NUL as c_char {
-        named = shada_get_default_file().cast_mut();
-    }
+    // A copy, because `expand_env` reads it past the end of a projection.
+    let shada = P_SHADA.get();
+    let named = match find_shada_parameter('n' as c_int) {
+        // SAFETY: an index inside the copy, which is NUL-terminated.
+        Some(at) if unsafe { *shada.as_ptr().add(at) } != NUL as c_char => {
+            unsafe { shada.as_ptr().add(at) }.cast_mut()
+        }
+        _ => shada_get_default_file().cast_mut(),
+    };
     let len = unsafe { expand_env(named, expansion.as_mut_ptr(), MAXPATHL) };
     let expanded = unsafe { core::slice::from_raw_parts(expansion.as_ptr().cast::<u8>(), len) };
     Some(CString::new(expanded).expect("shada: expanded file name holds a NUL"))
@@ -568,33 +570,45 @@ pub(crate) unsafe fn shada_removable(name: *const c_char) -> bool {
 ///
 /// Only works for the number parameters, not for `r` or `n`.
 pub fn get_shada_parameter(type_0: c_int) -> c_int {
-    let p = find_shada_parameter(type_0);
-    if !p.is_null() && ascii_isdigit(unsafe { *p } as c_int) {
-        unsafe { atoi(p) }
-    } else {
-        -1
-    }
+    let Some(at) = find_shada_parameter(type_0) else {
+        return -1;
+    };
+    // SAFETY: `at` is an index inside the option's own NUL-terminated value,
+    // which is what `find_shada_parameter` answers.
+    p_shada(|shada| unsafe {
+        let p = shada.as_ptr().add(at);
+        if ascii_isdigit(*p as c_int) {
+            atoi(p)
+        } else {
+            -1
+        }
+    })
 }
 
-/// What follows a parameter's letter in `'shada'`, or null if it has none.
-pub fn find_shada_parameter(type_0: c_int) -> *mut c_char {
-    // A copy: the cursor below walks past the end of a projection's borrow.
-    let shada = P_SHADA.get();
-    let mut p = shada.as_ptr().cast_mut();
-    while unsafe { *p } != 0 {
-        if unsafe { *p } as c_int == type_0 {
-            return unsafe { p.add(1) };
+/// Where in `'shada'` a parameter's value starts — the byte after its
+/// letter — or `None` when the option does not name it.
+///
+/// An **offset**, not a pointer: the option owns its string, so a pointer
+/// into it could not outlive the projection that read it, and every caller
+/// but one only wants to know whether the letter is there at all.
+pub fn find_shada_parameter(type_0: c_int) -> Option<usize> {
+    p_shada(|shada| {
+        let value = shada.to_bytes();
+        let mut at = 0;
+        while at < value.len() {
+            if c_int::from(value[at]) == type_0 {
+                return Some(at + 1);
+            }
+            if value[at] == b'n' {
+                break; // 'n' is always last, and takes the rest
+            }
+            match value[at..].iter().position(|&b| b == b',') {
+                Some(comma) => at += comma + 1,
+                None => break,
+            }
         }
-        if unsafe { *p } as c_int == 'n' as c_int {
-            break; // 'n' is always last, and takes the rest
-        }
-        p = unsafe { vim_strchr(p, ',' as c_int) };
-        if p.is_null() {
-            break;
-        }
-        p = unsafe { p.add(1) };
-    }
-    core::ptr::null_mut()
+        None
+    })
 }
 
 /// Read the current buffer's marks, the first time it is looked at.
