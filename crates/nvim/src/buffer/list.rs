@@ -17,7 +17,7 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::types::AutoEvent;
 use crate::types::BufName;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 
 use super::*;
@@ -39,13 +39,13 @@ use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::memory::{xfree, xstrdup};
 use crate::message::e_noalt;
 use crate::message::state::{emsg_silent, in_assert_fails};
-use crate::message::{emsg_ptr, msg_delay};
+use crate::message::{emsg, msg_delay};
 use crate::message_fmt::c_str;
 use crate::option::vars::{jop_flags, p_sol, swb_flags};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
 use crate::optionstr::init_buf_string_options;
-use crate::os::cshim::gettext_ptr;
+use crate::os::cshim::gettext;
 use crate::os::fs::os_fileid;
 use crate::path::full_name_save;
 use crate::pos::MAXLNUM;
@@ -88,23 +88,6 @@ const NO_FILE_ID: FileID = FileID {
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
-
-/// `_()`.
-fn tr(msg: &CStr) -> *mut c_char {
-    tr_raw(msg.as_ptr())
-}
-
-/// `_()` over a pointer, for the message statics `main.rs` holds as byte
-/// arrays.
-fn tr_raw(msg: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated literal or message static.
-    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
-}
-
-fn err(msg: *mut c_char) {
-    // SAFETY: a NUL-terminated message.
-    unsafe { emsg_ptr(msg) };
-}
 
 fn free(p: *mut c_char) {
     // SAFETY: an owned allocation or null.
@@ -458,7 +441,7 @@ fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) -> Buf {
     lastbuf.set(Some(buffer.id()));
     if top_file_num.get() < 0 {
         // Wrap around; this may cause duplicates.
-        err(tr(c"W14: Warning: List of file names overflow"));
+        emsg(gettext(c"W14: Warning: List of file names overflow"));
         if emsg_silent.get() == 0 && !in_assert_fails.get() {
             // Make sure it is noticed.
             msg_delay(3001 as uint64_t, true);
@@ -622,7 +605,7 @@ pub fn buflist_getfile(
 ) -> Result<(), Failed> {
     let Some(buf) = find_buf(n) else {
         if options & GETF_ALT as c_int != 0 && n == 0 {
-            err(tr_raw(e_noalt.as_ptr()));
+            emsg(gettext(e_noalt));
         } else {
             semsg!("E92: Buffer {n} not found");
         }

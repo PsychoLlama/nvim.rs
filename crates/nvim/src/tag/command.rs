@@ -696,7 +696,7 @@ impl DoTag {
         }
 
         if ask {
-            let chosen = unsafe { prompt_for_input(ptr::null_mut(), 0, false, ptr::null_mut()) };
+            let chosen = unsafe { prompt_for_input(None, 0, false, ptr::null_mut()) };
             if chosen <= 0 || chosen > found || got_int.get() {
                 // No valid choice: change nothing.
                 if self.use_tagstack {

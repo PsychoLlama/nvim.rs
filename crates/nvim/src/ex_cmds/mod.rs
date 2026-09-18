@@ -335,7 +335,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
 
     quit_more.set(false);
     // SAFETY: main thread; no prompt text and no "did the user cancel" flag.
-    let nr = unsafe { prompt_for_input(ptr::null_mut(), 0, false, ptr::null_mut::<bool>()) };
+    let nr = unsafe { prompt_for_input(None, 0, false, ptr::null_mut::<bool>()) };
     say::starthere();
     // SAFETY: `list` is still the editor's list.
     if nr <= 0 || nr > list_len(unsafe { list.as_ref() }) {

@@ -46,9 +46,9 @@ fn verbosefile_set() -> bool {
 ///
 /// # Safety
 /// `s` must be a valid C string.
-pub unsafe fn verb_msg(s: *const c_char) -> c_int {
+pub fn verb_msg(s: &CStr) -> c_int {
     verbose_enter();
-    let n = unsafe { msg_keep(s, 0, false, false) as c_int };
+    let n = msg(s, 0) as c_int;
     verbose_leave();
     n
 }

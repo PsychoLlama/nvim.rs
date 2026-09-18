@@ -265,7 +265,7 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
     msg_col.set(0);
 
     let mut mouse_used = false;
-    let mut selected = unsafe { prompt_for_input(ptr::null_mut(), 0, false, &raw mut mouse_used) };
+    let mut selected = unsafe { prompt_for_input(None, 0, false, &raw mut mouse_used) };
     if mouse_used {
         selected = sug.su_ga.len() as c_int + 1 - (cmdline_row.get() - mouse_row.get());
     }

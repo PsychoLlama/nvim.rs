@@ -31,8 +31,8 @@ use crate::mark::fmarks_check_names;
 use crate::memline::{ml_setname, ml_timestamp};
 use crate::memory::{XString, xfree, xstrdup};
 use crate::message::e_noalt;
-use crate::message::emsg_ptr;
-use crate::os::cshim::gettext_ptr;
+use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_fileid, os_fileid_equal};
 use crate::path::{fix_fname, path_fnamecmp};
 use crate::types::{BufName, CmdModFlags, Failed, FileID, LineNr};
@@ -40,23 +40,6 @@ use crate::winlayer::{Buf, Win, tab_windows};
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
-
-/// `_()`.
-fn tr(msg: &CStr) -> *mut c_char {
-    tr_raw(msg.as_ptr())
-}
-
-/// `_()` over a pointer, for the message statics `main.rs` holds as byte
-/// arrays.
-fn tr_raw(msg: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated literal or message static.
-    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
-}
-
-fn err(msg: *mut c_char) {
-    // SAFETY: a NUL-terminated message.
-    unsafe { emsg_ptr(msg) };
-}
 
 fn free(p: *mut c_char) {
     // SAFETY: an owned allocation or null.
@@ -206,7 +189,7 @@ pub fn setfname(
             if !o.b_ml.ml_mfp.is_null() || in_use {
                 // It is loaded or used in a window: fail.
                 if message {
-                    err(tr(c"E95: Buffer with this name already exists"));
+                    emsg(gettext(c"E95: Buffer with this name already exists"));
                 }
                 free(ffname);
                 return Err(Failed);
@@ -298,7 +281,7 @@ pub fn getaltfname(errmsg: bool) -> *mut c_char {
     // SAFETY: two locals to fill in.
     if unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) }.is_err() {
         if errmsg {
-            err(tr_raw(e_noalt.as_ptr()));
+            emsg(gettext(e_noalt));
         }
         return ptr::null_mut();
     }

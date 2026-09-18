@@ -125,7 +125,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
     let in_cmdwin = || {
         let locked = cmdwin_type.get() != 0;
         if locked {
-            err(e_cmdwin.as_ptr());
+            err(e_cmdwin);
         }
         locked
     };
@@ -182,7 +182,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
         }
         // cursor to the preview window
         Err(NotAKey(PREVIEW)) => match windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
-            None => err(c"E441: There is no preview window".as_ptr()),
+            None => err(c"E441: There is no preview window"),
             Some(wp) => goto_win(wp),
         },
         // close all but the current window
@@ -365,7 +365,7 @@ fn split_alternate(prenum: c_int) {
     };
     if find_buffer(fnum).is_none() {
         if prenum == 0 {
-            err(e_noalt.as_ptr());
+            err(e_noalt);
         } else {
             err_number(e_buffer_nr_not_found, prenum);
         }
@@ -653,7 +653,7 @@ fn detach_window() {
         Ok(None) => beep(),
         Err(e) => {
             // SAFETY: the refusal owns its message.
-            err_raw(e.message_or_empty().as_ptr());
+            err_raw(e.message_or_empty());
             beep();
         }
     }

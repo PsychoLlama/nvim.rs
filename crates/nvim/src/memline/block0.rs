@@ -133,7 +133,7 @@ pub(crate) fn ml_upd_block0(buffer: Buf, what: UpdBlock0) {
 
     let b0p = unsafe { (*hp).bh_data } as *mut ZeroBlock;
     if !ml_check_b0_id(unsafe { &*b0p }) {
-        unsafe { iemsg_ptr(tr(c"E304: ml_upd_block0(): Didn't get block 0??")) };
+        iemsg(gettext(c"E304: ml_upd_block0(): Didn't get block 0??"));
     } else if what == UB_FNAME {
         unsafe { set_b0_fname(b0p, buffer) };
     } else {

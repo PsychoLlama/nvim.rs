@@ -181,7 +181,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
         .expect("not the only window");
     // Check that all frames in this row or column are leaves.
     if parent.children().any(|frp| frp.win().is_none()) {
-        err(c"E443: Cannot rotate when another window is split".as_ptr());
+        err(c"E443: Cannot rotate when another window is split");
         return;
     }
 

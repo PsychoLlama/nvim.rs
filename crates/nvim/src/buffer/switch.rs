@@ -526,7 +526,7 @@ fn do_buffer_ext(
     }
     // Whether splitting or not, don't open a closing buffer in more windows.
     if buf.raw() != Buf::current_raw() && buf.b_locked_split != 0 {
-        err_raw(tr_raw(e_cannot_switch_to_a_closing_buffer.as_ptr()));
+        err(e_cannot_switch_to_a_closing_buffer);
         return Err(Failed);
     }
     if action == DOBUF_SPLIT as c_int && split_window().is_err() {

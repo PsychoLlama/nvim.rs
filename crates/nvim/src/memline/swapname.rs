@@ -437,7 +437,9 @@ unsafe fn resolve_swapfile_clash(
     if unsafe { os_path_exists(buffer.name.shown_ptr()) } && unsafe { swapfile_unchanged(fname) } {
         choice = SEA_CHOICE_DELETE;
         if p_verbose() > 0 {
-            unsafe { verb_msg(tr(c"Found a swap file that is not useful, deleting it")) };
+            verb_msg(gettext(
+                c"Found a swap file that is not useful, deleting it",
+            ));
         }
     }
 
@@ -514,11 +516,12 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
         msg.extend_from_slice(unsafe { cstr::bytes_at(fhname) });
         push_tr(&mut msg, c"\" already exists!");
         // "Delete it" is not offered while the owning process is alive.
-        let run_but = tr(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort");
-        let but = tr(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort");
+        let run_but = gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Quit\n&Abort").as_ptr();
+        let but =
+            gettext(c"&Open Read-Only\n&Edit anyway\n&Recover\n&Delete it\n&Quit\n&Abort").as_ptr();
         let running = proc_running.get() != 0;
         let buttons = if running { run_but } else { but };
-        let (title, warn) = (tr(c"VIM - ATTENTION"), VIM_WARNING as c_int);
+        let (title, warn) = (gettext(c"VIM - ATTENTION").as_ptr(), VIM_WARNING as c_int);
         let none = core::ptr::null();
         // `do_dialog` reads the message as a C string; the vector's own
         // terminator is what the `vsnprintf` behind `kv_printf` used to

@@ -266,7 +266,7 @@ pub fn garbage_collect(testing: bool) -> bool {
         if p_verbose() > 0 as OptInt {
             let msg = c"Not enough memory to set references, garbage collection aborted!";
             // SAFETY: the message is a NUL-terminated literal.
-            unsafe { verb_msg(gettext(msg).as_ptr()) };
+            verb_msg(gettext(msg));
         }
         return false;
     }

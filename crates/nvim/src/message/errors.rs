@@ -328,20 +328,6 @@ pub const SEMSG_ERRBUF_LEN: size_t = 1025;
 /// multiline error can be much longer than one line's worth.
 pub const SEMSG_MULTILINE_ERRBUF_LEN: size_t = 8192;
 
-/// [`iemsg`] for a message still held as a raw pointer.
-///
-/// # Safety
-/// `s` must be a valid C string.
-pub(crate) unsafe fn iemsg_ptr(s: *const c_char) {
-    // SAFETY: reads message-state globals on the main thread, as every
-    // message call does.
-    if emsg_not_now() {
-        return;
-    }
-    // SAFETY: the caller's contract.
-    unsafe { emsg_ptr(s) };
-}
-
 /// An internal error: same as [`emsg`], but skipped when errors are off.
 pub fn iemsg(s: &CStr) {
     if emsg_not_now() {

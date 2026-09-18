@@ -90,9 +90,7 @@ unsafe fn write_undo_file(
     }
     if buffer.b_u_numhead == 0 && buffer.b_u_line_ptr.is_null() {
         if p_verbose() > 0 {
-            let mesg = gettext(c"Skipping undo file write, nothing to undo");
-            // SAFETY: as above.
-            unsafe { verb_msg(mesg.as_ptr()) };
+            verb_msg(gettext(c"Skipping undo file write, nothing to undo"));
         }
         return;
     }

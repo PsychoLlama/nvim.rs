@@ -73,8 +73,14 @@ pub unsafe fn do_dialog(
         }
 
         // Get a typed character directly from the user.
-        let mut c =
-            unsafe { prompt_for_input(confirm_buttons.get(), HLF_M, true, ptr::null_mut()) };
+        let mut c = unsafe {
+            prompt_for_input(
+                Some(cstr::at(confirm_buttons.get())),
+                HLF_M,
+                true,
+                ptr::null_mut(),
+            )
+        };
         match c {
             CAR | NUL => {
                 // User accepts the default option.

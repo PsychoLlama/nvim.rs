@@ -172,7 +172,7 @@ pub(crate) fn new_tabpage(
 ) -> Option<(TabPage, Win)> {
     let old_curtab = TabPage::current();
     if enter && cmdwin_type.get() != 0 {
-        err(e_cmdwin.as_ptr());
+        err(e_cmdwin);
         return None;
     }
     if layout_locked(CmdIdx::tabnew) {
@@ -648,7 +648,7 @@ pub(crate) fn goto_tab(
     trigger_leave_autocmds: bool,
 ) {
     if (trigger_enter_autocmds || trigger_leave_autocmds) && cmdwin_type.get() != 0 {
-        err(e_cmdwin.as_ptr());
+        err(e_cmdwin);
         return;
     }
     // Don't repeat a message in another tab page.

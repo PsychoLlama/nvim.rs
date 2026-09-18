@@ -59,10 +59,10 @@ use crate::memory::xfree;
 use crate::message::{
     e_not_allowed_to_change_window_layout_in_this_autocmd, e_winfixbuf_cannot_go_to_buffer,
 };
-use crate::message::{emsg, emsg_ptr, msg};
+use crate::message::{emsg, msg};
 use crate::option::vars::swb_flags;
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
-use crate::os::cshim::gettext_ptr;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::terminal::terminal_check_size;
 use crate::types::{
     AlignTextPos, BlnFlags, CdCause, Direction, DoBufAction, DoBufStart, Error, GetFileFlags,
@@ -223,8 +223,8 @@ fn layout_locked(cmd: CmdIdx) -> bool {
     match locked_err(cmd) {
         Ok(()) => false,
         Err(e) => {
-            // SAFETY: the refusal owns its message.
-            err(e.message_or_empty().as_ptr());
+            // The refusal's message is already translated; it is not a msgid.
+            emsg(e.message_or_empty());
             true
         }
     }
@@ -260,7 +260,7 @@ pub fn check_can_set_curbuf_forceit(forceit: ::core::ffi::c_int) -> bool {
 /// so if it does not.
 fn winfixbuf_allows() -> bool {
     if Win::current().w_onebuf_opt.wo_wfb != 0 {
-        err(e_winfixbuf_cannot_go_to_buffer.as_ptr());
+        err(e_winfixbuf_cannot_go_to_buffer);
         return false;
     }
     true
@@ -362,9 +362,8 @@ pub(crate) fn valid_win(win: WinId) -> Option<Win> {
 // line per neighbour rather than one per call site.
 
 /// `emsg(_(msg))`, the family's only way of reporting a failure.
-fn err(msg: *const ::core::ffi::c_char) {
-    // SAFETY: every caller passes a static NUL-terminated message.
-    unsafe { emsg(gettext_ptr(msg)) };
+fn err(msg: &'static ::core::ffi::CStr) {
+    emsg(gettext(msg));
 }
 
 /// Mark every window on the screen for redrawing at `redraw_type`.
@@ -379,9 +378,8 @@ fn is_only_window(win: Win, tabpage: Option<TabPage>) -> bool {
 
 /// `emsg()` over a message the caller has already translated, or that upstream
 /// deliberately does not translate.
-fn err_raw(msg: *const ::core::ffi::c_char) {
-    // SAFETY: every caller passes a static NUL-terminated message.
-    unsafe { emsg_ptr(msg) };
+fn err_raw(msg: &::core::ffi::CStr) {
+    emsg(msg);
 }
 
 /// "Already only one window", the answer to `:only` and CTRL-W T when there is

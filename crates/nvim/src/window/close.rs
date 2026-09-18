@@ -379,7 +379,7 @@ fn close_all_others(message: bool, forceit: bool) {
     let announce = message && !autocmd_busy.get();
     if old_curwin.w_floating {
         if announce {
-            err_raw(e_floatonly.as_ptr());
+            err_raw(e_floatonly);
         }
         return;
     }
@@ -435,7 +435,7 @@ fn close_all_others(message: bool, forceit: bool) {
     }
 
     if message && firstwin.get() != lastwin.get() {
-        err(c"E445: Other window contains changes".as_ptr());
+        err(c"E445: Other window contains changes");
     }
 }
 

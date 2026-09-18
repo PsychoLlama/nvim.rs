@@ -61,7 +61,7 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
     // Add flags from ":vertical", ":topleft" and ":botright".
     let flags = flags | cmdmod.with(|m| m.cmod_split);
     if flags & WSP_TOP as c_int != 0 && flags & WSP_BOT as c_int != 0 {
-        err(c"E442: Can't split topleft and botright at the same time".as_ptr());
+        err(c"E442: Can't split topleft and botright at the same time");
         return Err(Failed);
     }
     // When creating the help window make a snapshot of the window layout;
@@ -150,7 +150,7 @@ fn split_ins(
     let first = first_win();
     if is_only_window(first, None) && p_ls() == 1 as OptInt && oldwin.w_status_height == 0 {
         if oldwin.w_height as OptInt <= p_wmh() {
-            err(e_noroom.as_ptr());
+            err(e_noroom);
             return None;
         }
         need_status = STATUS_HEIGHT as c_int;
@@ -280,7 +280,7 @@ fn split_room_vertical(size: c_int, flags: c_int, oldwin: Win, toplevel: bool) -
     };
     needed += minwidth;
     if available < needed {
-        err(e_noroom.as_ptr());
+        err(e_noroom);
         return None;
     }
 
@@ -351,7 +351,7 @@ fn split_room_horizontal(
     };
     needed += minheight;
     if available < needed {
-        err(e_noroom.as_ptr());
+        err(e_noroom);
         return None;
     }
 

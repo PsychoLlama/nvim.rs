@@ -44,7 +44,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL, size_t};
 use crate::ui::ui_has;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// What the prompt decided for this match.
@@ -210,7 +210,7 @@ fn prompt_visual(st: &Sub) -> c_int {
 
     let mut ask = [0 as c_char; IOSIZE as usize];
     // SAFETY: `ask` is `IOSIZE` bytes and the format takes one string.
-    let mut prompt = unsafe {
+    let prompt = unsafe {
         snprintf(
             ask.as_mut_ptr(),
             IOSIZE as size_t,
@@ -224,9 +224,9 @@ fn prompt_visual(st: &Sub) -> c_int {
         prompt.push(NUL as u8);
         prompt
     };
-    // SAFETY: the prompt is this call's own NUL-terminated buffer.
-    let typed =
-        unsafe { prompt_for_input(prompt.as_mut_ptr().cast(), HLF_R, true, ptr::null_mut()) };
+    let prompt = CStr::from_bytes_with_nul(&prompt).expect("the prompt's own terminator");
+    // SAFETY: main-thread editor call, with no mouse slot.
+    let typed = unsafe { prompt_for_input(Some(prompt), HLF_R, true, ptr::null_mut()) };
     highlight_match.set(false);
 
     msg_didout.set(false); // don't scroll up

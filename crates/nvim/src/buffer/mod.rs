@@ -65,10 +65,10 @@ use crate::global_cell::GlobalCell;
 use crate::mark::setpcmark;
 use crate::memline::ml_delete;
 use crate::memory::{XString, xfree};
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::normal::end_visual_mode;
 use crate::option::shortmess;
-use crate::os::cshim::gettext_ptr;
+use crate::os::cshim::gettext;
 use crate::syntax::reset_synblock;
 use crate::types::{
     AlignTextPos, BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart,
@@ -349,27 +349,9 @@ pub fn buf_meta_total(b: Buf, m: MetaIndex) -> uint32_t {
 // They live here rather than in a child because each is reached from two or
 // more of them, and a child sees its parent's private items.
 
-/// `_()`.
-pub(crate) fn tr(msg: &CStr) -> *mut c_char {
-    tr_raw(msg.as_ptr())
-}
-
-/// `_()` over a pointer, for the message statics `main.rs` holds as byte
-/// arrays.
-pub(crate) fn tr_raw(msg: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated literal or message static.
-    unsafe { gettext_ptr(msg).as_ptr().cast_mut() }
-}
-
 /// `emsg(_(msg))`.
-pub(crate) fn err(msg: &CStr) {
-    err_raw(tr(msg));
-}
-
-/// `emsg()` over an already translated message.
-pub(crate) fn err_raw(msg: *mut c_char) {
-    // SAFETY: a NUL-terminated message.
-    unsafe { emsg_ptr(msg) };
+pub(crate) fn err(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 /// The current buffer, or `None` where the C tests `curbuf != NULL`.

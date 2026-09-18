@@ -417,7 +417,7 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
         }
         let nr = unsafe {
             prompt_for_input(
-                tr(c"Enter number of swap file to use (0 to quit): "),
+                Some(gettext(c"Enter number of swap file to use (0 to quit): ")),
                 0,
                 false,
                 core::ptr::null_mut(),
@@ -464,8 +464,9 @@ unsafe fn recover_lines(
     // negative (never written to the swap file) is simply lost.
     let mut cannot_open = Buf::current().name.full().is_none();
 
-    let append = |lnum: &mut LineNr, text: *const c_char| {
-        let _ = unsafe { ml_append(*lnum, text.cast_mut(), 0, true) };
+    let append = |lnum: &mut LineNr, text: &::core::ffi::CStr| {
+        // SAFETY: a `CStr` is the NUL-terminated line `ml_append` copies.
+        let _ = unsafe { ml_append(*lnum, text.as_ptr().cast_mut(), 0, true) };
         *lnum += 1;
     };
 
@@ -483,7 +484,7 @@ unsafe fn recover_lines(
                     return Err(());
                 }
                 error += 1;
-                append(&mut lnum, tr(c"???MANY LINES MISSING"));
+                append(&mut lnum, gettext(c"???MANY LINES MISSING"));
             } else if unsafe { (*((**hp).bh_data as *mut PointerBlock)).pb_id }
                 == PTR_ID as uint16_t
             {
@@ -513,12 +514,12 @@ unsafe fn recover_lines(
                     }
                     if line_count != 0 {
                         error += 1;
-                        append(&mut lnum, tr(c"???LINE COUNT WRONG"));
+                        append(&mut lnum, gettext(c"???LINE COUNT WRONG"));
                     }
                 }
 
                 if pp.pb_count == 0 {
-                    append(&mut lnum, tr(c"???EMPTY BLOCK"));
+                    append(&mut lnum, gettext(c"???EMPTY BLOCK"));
                     error += 1;
                 } else if idx < pp.pb_count as c_int {
                     let pe = unsafe { *pb_entries(pp).wrapping_add(idx as usize) };
@@ -543,7 +544,7 @@ unsafe fn recover_lines(
                         }
                         if cannot_open {
                             error += 1;
-                            append(&mut lnum, tr(c"???LINES MISSING"));
+                            append(&mut lnum, gettext(c"???LINES MISSING"));
                         }
                         idx += 1; // same block again, for the next index
                         break 'step;
@@ -570,7 +571,7 @@ unsafe fn recover_lines(
                         || bnum + page_count as BlockNr > unsafe { (*mfp).mf_blocknr_max } + 1
                     {
                         error += 1;
-                        append(&mut lnum, tr(c"???ILLEGAL BLOCK NUMBER"));
+                        append(&mut lnum, gettext(c"???ILLEGAL BLOCK NUMBER"));
                         // Skip this entry and pop back up, to recover
                         // whatever else there is.
                         let ip = buffer.b_ml.stack_at(top);
@@ -593,7 +594,7 @@ unsafe fn recover_lines(
                         return Err(());
                     }
                     error += 1;
-                    append(&mut lnum, tr(c"???BLOCK MISSING"));
+                    append(&mut lnum, gettext(c"???BLOCK MISSING"));
                 } else {
                     // A data block: append every line in it.
                     let mut has_error = false;
@@ -604,7 +605,7 @@ unsafe fn recover_lines(
                     if page_count.wrapping_mul(unsafe { (*mfp).mf_page_size }) != dp.db_txt_end {
                         append(
                             &mut lnum,
-                            tr(c"??? from here until ???END lines may be messed up"),
+                            gettext(c"??? from here until ???END lines may be messed up"),
                         );
                         error += 1;
                         has_error = true;
@@ -620,7 +621,9 @@ unsafe fn recover_lines(
                     if line_count as c_long != dp.db_line_count {
                         append(
                             &mut lnum,
-                            tr(c"??? from here until ???END lines may have been inserted/deleted"),
+                            gettext(
+                                c"??? from here until ???END lines may have been inserted/deleted",
+                            ),
                         );
                         error += 1;
                         has_error = true;
@@ -633,7 +636,7 @@ unsafe fn recover_lines(
                             // The line count must be wrong: the index
                             // array has run into the text.
                             error += 1;
-                            append(&mut lnum, tr(c"??? lines may be missing"));
+                            append(&mut lnum, gettext(c"??? lines may be missing"));
                             break;
                         }
                         let txt_start = (unsafe { index.read() } & DB_INDEX_MASK) as c_int;
@@ -651,10 +654,12 @@ unsafe fn recover_lines(
                             did_questions = false;
                             db_byte(dp, txt_start as isize)
                         };
-                        append(&mut lnum, text);
+                        // SAFETY: a `???` literal, or the data block's own
+                        // NUL-terminated line.
+                        append(&mut lnum, unsafe { cstr::at(text) });
                     }
                     if has_error {
-                        append(&mut lnum, tr(c"???END"));
+                        append(&mut lnum, gettext(c"???END"));
                     }
                 }
             }
@@ -688,11 +693,9 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
         let no_prompt = Suppress::wait_return();
         msg_ext_set_kind(c"emsg");
         msg(c">>>>>>>>>>>>>\n", 0);
-        unsafe {
-            emsg_ptr(tr(
-                c"E312: Errors detected while recovering; look for lines starting with ???",
-            ))
-        };
+        emsg(gettext(
+            c"E312: Errors detected while recovering; look for lines starting with ???",
+        ));
         drop(no_prompt);
         msg_putchar('\n' as c_int);
         tell(c"See \":help E312\" for more information.", 0);
@@ -706,16 +709,12 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
             c"Recovery completed. You should check if everything is OK.",
             0,
         );
-        msg_str(unsafe {
-            cstr::at(tr(
-                c"\n(You might want to write out this file under another name\n",
-            ))
-        });
-        msg_str(unsafe {
-            cstr::at(tr(
-                c"and run diff with the original file to check for changes)",
-            ))
-        });
+        msg_str(gettext(
+            c"\n(You might want to write out this file under another name\n",
+        ));
+        msg_str(gettext(
+            c"and run diff with the original file to check for changes)",
+        ));
     } else {
         tell(
             c"Recovery completed. Buffer contents equals file contents.",

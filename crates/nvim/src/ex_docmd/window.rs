@@ -46,7 +46,7 @@ use crate::message::{emsg, msg_display, msg_ext_set_kind, msg_putchar, msg_start
 use crate::normal::do_check_scrollbind;
 use crate::option::get_findfunc;
 use crate::option::vars::p_pvh;
-use crate::os::cshim::gettext_ptr;
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
@@ -93,9 +93,8 @@ fn err_msg(msg: *const c_char) -> Option<CString> {
 }
 
 /// `emsg(_(msg))`.
-fn err(msg: *const c_char) {
-    // SAFETY: a NUL-terminated message.
-    unsafe { emsg(gettext_ptr(msg)) };
+fn err(msg: &'static CStr) {
+    emsg(gettext(msg));
 }
 
 fn free<T>(p: *mut T) {
@@ -465,7 +464,7 @@ pub(crate) fn ex_mode(excmd: &mut ExArg) {
         // SAFETY: a live command.
         ex_redraw(excmd);
     } else {
-        err(e_screenmode.as_ptr());
+        err(e_screenmode);
     }
 }
 
@@ -537,7 +536,7 @@ fn winsize(excmd: &mut ExArg) {
     if excmd.line.byte_at(second) != 0 && excmd.line.byte_at(at) == 0 {
         screen_resize(w, h);
     } else {
-        err(c"E465: :winsize requires two number arguments".as_ptr());
+        err(c"E465: :winsize requires two number arguments");
     }
 }
 
@@ -555,7 +554,7 @@ fn wincmd(excmd: &mut ExArg) {
     {
         let second = excmd.line.byte_at(excmd.line.arg + 1);
         if second == 0 {
-            err(e_invarg.as_ptr());
+            err(e_invarg);
             return;
         }
         xchar = c_int::from(second);
@@ -568,7 +567,7 @@ fn wincmd(excmd: &mut ExArg) {
     at = excmd.line.skip_white(at);
     let byte = excmd.line.byte_at(at);
     if byte != 0 && byte != b'"' && excmd.line.next.is_none() {
-        err(e_invarg.as_ptr());
+        err(e_invarg);
     } else if !excmd.skip {
         // A `:vertical`/`:tab` in front applies to the split the window
         // command is about to make.

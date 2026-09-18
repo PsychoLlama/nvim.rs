@@ -72,7 +72,7 @@ pub fn wait_return(redraw: c_int) {
     if ui_has(kUIMessages) {
         let text = c"Press any key to continue".as_ptr().cast_mut();
         let no_cb = ptr::null_mut();
-        unsafe { prompt_for_input(text, HLF_M, true, no_cb) };
+        unsafe { prompt_for_input(Some(cstr::at(text)), HLF_M, true, no_cb) };
         return;
     }
 

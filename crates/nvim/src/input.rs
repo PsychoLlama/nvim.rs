@@ -29,7 +29,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ExpandContext, IOSIZE, MultiQueue, NUL};
 use crate::ui::{ui_flush, ui_has};
 use ::libc::atoi;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 
 const ESC: c_int = 0x1b;
 /// The unset callback, as `CALLBACK_NONE`.
@@ -60,7 +60,14 @@ pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
     while r != 'y' as c_int && r != 'n' as c_int {
         // Same highlighting as for wait_return().
         // SAFETY: `prompt` is the owned NUL-terminated question.
-        r = unsafe { prompt_for_input(prompt, HLF_R, true, core::ptr::null_mut()) };
+        r = unsafe {
+            prompt_for_input(
+                Some(crate::cstr::at(prompt)),
+                HLF_R,
+                true,
+                core::ptr::null_mut(),
+            )
+        };
         if r == Ctrl_C || r == ESC {
             r = 'n' as c_int;
             if !ui_has(kUIMessages) {
@@ -195,10 +202,9 @@ pub(crate) unsafe fn get_keystroke(events: *mut MultiQueue) -> c_int {
 /// the default "type a number" wording, which depends on `mouse_used`.
 ///
 /// # Safety
-/// Main-thread editor call; `prompt` is null or NUL-terminated, and
-/// `mouse_used` is null or writable.
+/// Main-thread editor call; `mouse_used` is null or writable.
 pub(crate) unsafe fn prompt_for_input(
-    prompt: *mut c_char,
+    prompt: Option<&CStr>,
     hl_id: c_int,
     one_key: bool,
     mouse_used: *mut bool,
@@ -215,16 +221,12 @@ pub(crate) unsafe fn prompt_for_input(
         }
     };
 
-    let prompt = if !prompt.is_null() {
-        prompt
-    } else if !mouse_used.is_null() {
-        gettext(c"Type number and <Enter> or click with the mouse (q or empty cancels): ")
-            .as_ptr()
-            .cast_mut()
-    } else {
-        gettext(c"Type number and <Enter> (q or empty cancels): ")
-            .as_ptr()
-            .cast_mut()
+    let prompt = match prompt {
+        Some(prompt) => prompt,
+        None if !mouse_used.is_null() => {
+            gettext(c"Type number and <Enter> or click with the mouse (q or empty cancels): ")
+        }
+        None => gettext(c"Type number and <Enter> (q or empty cancels): "),
     };
 
     cmdline_row.set(msg_row.get());
@@ -237,7 +239,7 @@ pub(crate) unsafe fn prompt_for_input(
     let resp = unsafe {
         getcmdline_prompt(
             -1,
-            prompt,
+            prompt.as_ptr().cast_mut(),
             hl_id,
             ExpandContext::Nothing,
             core::ptr::null(),

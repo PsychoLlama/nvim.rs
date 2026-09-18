@@ -475,7 +475,7 @@ pub fn no_write_message_nobang(buffer: Buf) {
 
 /// `emsg(_(msg))` over one of `main.rs`'s message statics.
 fn err_static(msg: &'static CStr) {
-    err_raw(tr_raw(msg.as_ptr()));
+    err(msg);
 }
 
 // ---------------------------------------------------------------------------

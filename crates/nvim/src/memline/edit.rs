@@ -442,7 +442,7 @@ unsafe fn ml_insert_pointer(buffer: Buf, mfp: *mut MemFile, split: &mut SplitBlo
         }
         let mut pp = unsafe { Pb::new((*hp).bh_data.cast()) };
         if pp.pb_id as c_int != PTR_ID as c_int {
-            unsafe { iemsg_ptr(tr(c"E317: Pointer block id wrong 3")) };
+            iemsg(gettext(c"E317: Pointer block id wrong 3"));
             unsafe { mf_put(mfp, hp, false, false) };
             return false;
         }
@@ -519,7 +519,7 @@ unsafe fn ml_insert_pointer(buffer: Buf, mfp: *mut MemFile, split: &mut SplitBlo
     }
 
     // Fallen off the bottom of the stack.
-    unsafe { iemsg_ptr(tr(c"E318: Updated too many blocks?")) };
+    iemsg(gettext(c"E318: Updated too many blocks?"));
     b.b_ml.stack_clear(); // invalidate the stack
     true
 }
@@ -787,7 +787,7 @@ unsafe fn ml_free_data_block(buffer: Buf, mfp: *mut MemFile, hp: *mut BlockHdr) 
         }
         let mut pp = unsafe { Pb::new((*hp).bh_data.cast()) };
         if pp.pb_id as c_int != PTR_ID as c_int {
-            unsafe { iemsg_ptr(tr(c"E317: Pointer block id wrong 4")) };
+            iemsg(gettext(c"E317: Pointer block id wrong 4"));
             unsafe { mf_put(mfp, hp, false, false) };
             b.b_ml.stack_clear();
             return false;

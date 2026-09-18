@@ -192,7 +192,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let mut mouse_used = false;
-    let mut selected = unsafe { prompt_for_input(ptr::null_mut(), 0, false, &raw mut mouse_used) };
+    let mut selected = unsafe { prompt_for_input(None, 0, false, &raw mut mouse_used) };
     // A click names a line rather than an item, so count back from the
     // bottom of the list.
     if mouse_used {
@@ -228,7 +228,7 @@ pub fn f_inputrestore(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     } else if p_verbose() > 1 {
         // SAFETY throughout: a static message, and the caller's return value.
         let msg = c"called inputrestore() more often than inputsave()";
-        unsafe { verb_msg(gettext(msg).as_ptr()) };
+        verb_msg(gettext(msg));
         result.write_number(1);
     }
 }

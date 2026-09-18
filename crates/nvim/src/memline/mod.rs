@@ -13,7 +13,6 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
-use crate::cstr;
 use crate::types::AutoEvent;
 use core::mem::offset_of;
 
@@ -49,9 +48,9 @@ use crate::message::state::{
     msg_ext_skip_flush, msg_row, msg_silent, need_wait_return, no_lines_msg,
 };
 use crate::message::{
-    do_dialog, emsg_ptr, iemsg_ptr, msg, msg_display, msg_end, msg_ext_set_kind, msg_home_replace,
-    msg_multiline, msg_outnum, msg_ptr, msg_putchar, msg_reset_scroll, msg_start, msg_str,
-    msg_str_hl, set_keep_msg, verb_msg,
+    do_dialog, emsg, iemsg, msg, msg_display, msg_end, msg_ext_set_kind, msg_home_replace,
+    msg_multiline, msg_outnum, msg_putchar, msg_reset_scroll, msg_start, msg_str, msg_str_hl,
+    set_keep_msg, verb_msg,
 };
 use crate::message_fmt::c_str;
 use crate::option::vars::{P_DIR, P_SHM, p_dir, p_uc, p_verbose};
@@ -243,44 +242,30 @@ pub const B0_FF_MASK: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 pub const B0_SAME_DIR: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const B0_HAS_FENC: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 pub const STACK_INCR: ::core::ffi::c_int = 5 as ::core::ffi::c_int;
-/// A translated static message, as the C string the message layer takes.
-///
-/// `gettext` asks only for a live NUL-terminated string, which is what a
-/// `CStr` is; paying that once here is what keeps the forty-odd
-/// `msg_str(gettext(c"..."))` in this family out of an `unsafe` region.
-fn tr(text: &'static ::core::ffi::CStr) -> *mut ::core::ffi::c_char {
-    // SAFETY: a `CStr` is NUL-terminated by construction.
-    gettext(text).as_ptr().cast_mut()
-}
-
 /// One translated static message on the report, in `hl_id`.
 ///
-/// These four exist for the same reason [`tr`] does: the message layer asks
-/// only for a live NUL-terminated string, and a `CStr` is one, so the
-/// forty-odd reports `recover.rs` and `swapname.rs` print need not each be
-/// an `unsafe` region -- and most of them went vertical, one line per
-/// argument, because the argument list did not fit.
+/// These four exist because `recover.rs` and `swapname.rs` print forty-odd
+/// fixed reports, and spelling each one `msg_str_hl(gettext(c"..."), hl, true)`
+/// put most of them over the line width -- they went vertical, one line per
+/// argument, for nothing. The translation is a `&'static CStr` in and a
+/// `&'static CStr` out; no pointer is made anywhere along the way.
 fn note(text: &'static ::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
-    // SAFETY: `tr` answers a live NUL-terminated string.
-    msg_str_hl(unsafe { cstr::at(tr(text)) }, hl_id, true);
+    msg_str_hl(gettext(text), hl_id, true);
 }
 
 /// [`note`], appended to the message being built.
 fn say(text: &'static ::core::ffi::CStr) {
-    // SAFETY: as [`note`].
-    msg_str(unsafe { cstr::at(tr(text)) });
+    msg_str(gettext(text));
 }
 
 /// [`note`], as an error.
 fn complain(text: &'static ::core::ffi::CStr) {
-    // SAFETY: as [`note`].
-    unsafe { emsg_ptr(tr(text)) };
+    emsg(gettext(text));
 }
 
 /// [`note`], as a message of its own.
 fn tell(text: &'static ::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
-    // SAFETY: as [`note`].
-    unsafe { msg_ptr(tr(text), hl_id) };
+    msg(gettext(text), hl_id);
 }
 
 /// The lowest line number that may still carry a [`DB_MARKED`] bit, so
@@ -341,7 +326,7 @@ unsafe fn ml_open_blocks(buffer: Buf, mfp: *mut MemFile, hp: &mut *mut BlockHdr)
     // Block zero: the header that says what the rest of the file means.
     *hp = unsafe { mf_new(mfp, false, 1) };
     if unsafe { (**hp).bh_bnum } != 0 {
-        unsafe { iemsg_ptr(tr(c"E298: Didn't get block nr 0?")) };
+        iemsg(gettext(c"E298: Didn't get block nr 0?"));
         return false;
     }
     let b0p = unsafe { (**hp).bh_data } as *mut ZeroBlock;
@@ -402,7 +387,7 @@ unsafe fn ml_open_blocks(buffer: Buf, mfp: *mut MemFile, hp: &mut *mut BlockHdr)
     *hp = unsafe { ml_new_ptr(mfp) };
     debug_assert!(!(*hp).is_null());
     if unsafe { (**hp).bh_bnum } != 1 {
-        unsafe { iemsg_ptr(tr(c"E298: Didn't get block nr 1?")) };
+        iemsg(gettext(c"E298: Didn't get block nr 1?"));
         return false;
     }
     let mut pp = unsafe { Pb::new((**hp).bh_data.cast()) };
@@ -419,7 +404,7 @@ unsafe fn ml_open_blocks(buffer: Buf, mfp: *mut MemFile, hp: &mut *mut BlockHdr)
     // Block two: the first data block, holding one empty line.
     *hp = unsafe { ml_new_data(mfp, false, 1) };
     if unsafe { (**hp).bh_bnum } != 2 {
-        unsafe { iemsg_ptr(tr(c"E298: Didn't get block nr 2?")) };
+        iemsg(gettext(c"E298: Didn't get block nr 2?"));
         return false;
     }
     let mut dp = unsafe { Db::new((**hp).bh_data.cast()) };

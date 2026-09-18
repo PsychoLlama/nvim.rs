@@ -27,9 +27,10 @@ use super::*;
 use crate::autocmd::apply_autocmds;
 use crate::eval::typval::{dict_find, dict_is_watched, dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::option::vars::p_hid;
 use crate::optionstr::LocalOptStr;
+use crate::os::cshim::gettext;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::quickfix::{msg_loclist, msg_qflist};
@@ -146,7 +147,7 @@ fn is_dontwrite(buffer: Buf) -> bool {
 pub(crate) fn buf_dontwrite_msg(buffer: Option<Buf>) -> bool {
     if buffer.is_some_and(is_dontwrite) {
         // SAFETY: a translated message literal.
-        unsafe { emsg_ptr(tr(c"E382: Cannot write, 'buftype' option is set")) };
+        emsg(gettext(c"E382: Cannot write, 'buftype' option is set"));
         return true;
     }
     false

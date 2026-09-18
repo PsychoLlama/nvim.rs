@@ -59,7 +59,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     let had_diffmode = win.w_onebuf_opt.wo_diff != 0;
 
     if is_last_window(win) {
-        err(e_cannot_close_last_window.as_ptr());
+        err(e_cannot_close_last_window);
         return FAIL;
     }
     if !win.w_floating && layout_locked(CmdIdx::close) {
@@ -69,7 +69,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         return FAIL; // window is already being closed
     }
     if is_autocmd_window(Some(win)) {
-        err(e_autocmd_close.as_ptr());
+        err(e_autocmd_close);
         return FAIL;
     }
     if last_win().w_floating
@@ -144,7 +144,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     }
     if only_window(win, None) && (first_tab().next().is_none() || last_win().w_floating) {
         if first_tab().next().is_some() {
-            err_raw(e_floatonly.as_ptr());
+            err_raw(e_floatonly);
         }
         unclose_win_buffer(win, bufref, did_decrement);
         return FAIL;
@@ -290,11 +290,11 @@ fn snapshot_index(help_window: bool) -> c_int {
 /// `None` when the caller may go on, `Some(FAIL)` when it may not.
 fn close_the_floats(win: Win, force: bool) -> Option<c_int> {
     if is_autocmd_window(Some(last_win())) {
-        err(c"E814: Cannot close window, only autocmd window would remain".as_ptr());
+        err(c"E814: Cannot close window, only autocmd window would remain");
         return Some(FAIL);
     }
     if !force && !can_close_floats(None) {
-        err_raw(e_floatonly.as_ptr());
+        err_raw(e_floatonly);
         return Some(FAIL);
     }
     // Close the last window until there are no floating windows left. The
@@ -310,7 +310,7 @@ fn close_the_floats(win: Win, force: bool) -> Option<c_int> {
     }
     // Autocommands may have closed all other tab pages; check again.
     if is_last_window(win) {
-        err(e_cannot_close_last_window.as_ptr());
+        err(e_cannot_close_last_window);
         return Some(FAIL);
     }
     None
@@ -475,7 +475,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         return false; // window is already being closed
     }
     if is_autocmd_window(Some(win)) {
-        err(e_autocmd_close.as_ptr());
+        err(e_autocmd_close);
         return false;
     }
 
@@ -483,7 +483,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         // Would closing this window leave only floating windows?
         if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
             if !force && !can_close_floats(Some(tabpage)) {
-                err_raw(e_floatonly.as_ptr());
+                err_raw(e_floatonly);
                 break 'leave_open;
             }
             // Close the last window until there are no floating windows left.
@@ -538,7 +538,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
         // Autocommands may again leave only floats; check again, but this time
         // without bothering to close them.
         if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
-            err_raw(e_floatonly.as_ptr());
+            err_raw(e_floatonly);
             break 'leave_open;
         }
 

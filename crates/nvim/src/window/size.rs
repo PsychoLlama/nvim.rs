@@ -388,7 +388,7 @@ pub fn did_set_winminheight(_args: &mut OptSet) -> Result<(), OptError> {
         }
         P_WMH.set(p_wmh() - 1);
         if first {
-            err(e_noroom.as_ptr());
+            err(e_noroom);
             first = false;
         }
     }
@@ -403,7 +403,7 @@ pub fn did_set_winminwidth(_args: &mut OptSet) -> Result<(), OptError> {
         }
         P_WMW.set(p_wmw() - 1);
         if first {
-            err(e_noroom.as_ptr());
+            err(e_noroom);
             first = false;
         }
     }

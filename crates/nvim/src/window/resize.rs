@@ -487,7 +487,7 @@ pub fn command_height() {
 
     while p_ch() > old_p_ch as OptInt && command_frame_height.get() {
         let Some(fr) = frp else {
-            err(e_noroom.as_ptr());
+            err(e_noroom);
             P_CH.set(old_p_ch as OptInt);
             break;
         };
@@ -595,7 +595,7 @@ fn resizable_frame(fr: FrameRef) -> Option<FrameRef> {
 fn resize_frame_for_status(fr: FrameRef) -> bool {
     let wp = fr.win().expect("a leaf frame holds a window");
     let Some(fp) = resizable_frame(fr) else {
-        err(e_noroom.as_ptr());
+        err(e_noroom);
         return false;
     };
     if fp != fr {
@@ -613,7 +613,7 @@ fn resize_frame_for_status(fr: FrameRef) -> bool {
 fn resize_frame_for_winbar(fr: FrameRef) -> bool {
     let wp = fr.win().expect("a leaf frame holds a window");
     let Some(fp) = resizable_frame(fr).filter(|fp| *fp != fr) else {
-        err(e_noroom.as_ptr());
+        err(e_noroom);
         return false;
     };
     new_height(fp, fp.fr_height - 1, false, false, false);
@@ -677,7 +677,7 @@ fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
     if window.w_winbar_height != winbar_height {
         if winbar_height == 1 && window.w_view_height <= 1 {
             if window.w_floating {
-                err(e_noroom.as_ptr());
+                err(e_noroom);
                 return NOTDONE;
             } else if !make_room || !resize_frame_for_winbar(window.frame()) {
                 return FAIL;
