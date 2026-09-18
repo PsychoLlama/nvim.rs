@@ -216,9 +216,12 @@ pub unsafe fn get_spec_reg(
         }
         // CTRL-R CTRL-L -- the whole cursor line.
         Ctrl_L if errmsg => {
-            // SAFETY: main thread; the cursor is on a line of its own window's
-            // buffer, and the line stays put until the buffer changes.
-            value = unsafe { ml_get_buf(Win::current().buffer(), Win::current().w_cursor.lnum) };
+            // Copied rather than lent: every caller here goes on to insert
+            // the text, and inserting re-enters the editor, which may move
+            // or free the block the line was read out of.
+            let win = Win::current();
+            value = XString::from_bytes(win.buffer().lines().line(win.w_cursor.lnum)).into_raw();
+            owned = true;
             true
         }
         // `"_` -- the black hole, which reads as empty.

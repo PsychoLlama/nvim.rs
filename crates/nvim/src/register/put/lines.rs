@@ -15,16 +15,15 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::mbyte::head_off;
 use crate::memory::XString;
 use crate::winlayer::{Buf, PosRef, Win};
-use core::ffi::{c_char, c_int, c_void};
-use core::slice;
+use core::ffi::c_int;
 
 use super::Put;
 use crate::edit::BeginlineOpts;
 use crate::normal::visual_active;
 use crate::register::*;
-use crate::types::NUL;
 
 impl Put {
     /// Splice `count` copies of the register's single line into the buffer at
@@ -66,11 +65,7 @@ impl Put {
         } else {
             totlen = (self.count as size_t).wrapping_mul(yanklen as size_t);
             loop {
-                // SAFETY: `lnum` starts at the caller's valid line and the
-                // walk stops at the end of the Visual selection, so it is a
-                // line of the buffer; `ml_get` hands back its NUL-terminated
-                // text and `ml_get_len` its length.
-                let (oldp, oldlen) = (ml_get(lnum), ml_get_len(lnum));
+                let oldlen = Buf::current().lines().line_len(lnum);
                 if lnum > start_lnum {
                     let mut pos = Pos {
                         lnum,
@@ -92,37 +87,31 @@ impl Put {
                     continue;
                 }
 
-                // SAFETY: the new line is `col` bytes of the old one, then
-                // `count` copies of the register's `yanklen`-byte line, then
-                // the rest of the old line and its NUL -- which is exactly
-                // the `totlen + oldlen + 1` bytes asked for here.
-                let room = totlen.wrapping_add(oldlen as size_t).wrapping_add(1);
-                let newp = unsafe { xmalloc(room) } as *mut c_char;
-                // SAFETY: as above; `oldp` is `oldlen` bytes plus a NUL and
-                // `col` is within it, and the register's line is `yanklen`.
-                let ptr = unsafe {
-                    newp.cast::<u8>().copy_from(oldp.cast(), col as size_t);
-                    let mut ptr = newp.offset(col as isize);
-                    let put = (*self.y_array).data() as *const c_void;
-                    for _ in 0..self.count {
-                        ptr.cast::<u8>().copy_from(put.cast(), yanklen as size_t);
-                        ptr = ptr.offset(yanklen as isize);
-                    }
-                    // +1 for the NUL.
-                    let tail = oldp.offset(col as isize) as *const c_void;
-                    ptr.cast::<u8>()
-                        .copy_from(tail.cast(), (oldlen - col) as size_t + 1);
-                    ptr
-                };
-                // SAFETY: `newp` is a NUL-terminated line the buffer takes
-                // ownership of.
-                let _ = unsafe { ml_replace(lnum, newp, false) };
-
-                // Where the last character of the put text starts.
+                // The new line is `col` bytes of the old one, then `count`
+                // copies of the register's line, then the rest of the old
+                // one.
                 //
-                // SAFETY: `ptr` is one past the put text, so `ptr - 1` is its
-                // last byte, and `newp` is the line it belongs to.
-                first_byte_off = unsafe { utf_head_off(newp, ptr.offset(-1)) };
+                // SAFETY: a charwise register holds at least one line, so
+                // `y_array`'s first string is there.
+                let put = unsafe { (*self.y_array).as_bytes() };
+                let mut newline = XString::with_capacity(totlen + oldlen as usize);
+                {
+                    let mut lines = Buf::current().lines();
+                    let old = lines.line(lnum);
+                    newline.push_bytes(&old[..col as usize]);
+                    for _ in 0..self.count {
+                        newline.push_bytes(put);
+                    }
+                    newline.push_bytes(&old[col as usize..]);
+                }
+
+                // Where the last character of the put text starts: the byte
+                // before the old line's tail.
+                let end = col as usize + totlen;
+                first_byte_off = ColNr::try_from(head_off(&newline, end - 1)).unwrap_or(0);
+
+                // SAFETY: a NUL-terminated line the buffer takes ownership of.
+                let _ = unsafe { ml_replace(lnum, newline.into_raw(), false) };
 
                 if lnum == Win::current().w_cursor.lnum {
                     // Land the cursor on the last character put, keeping
@@ -166,34 +155,21 @@ impl Put {
         // The tail of the cursor line, with the register's *last* line in
         // front of it, becomes a new line below.
         //
-        // SAFETY: the caller promises `lnum`/`col` is a valid position, so
-        // `ml_get` hands back a NUL-terminated line with at least `col` bytes
-        // in it; `y_array` holds `y_size` strings and `y_size` is at least
+        // SAFETY: `y_array` holds `y_size` strings and `y_size` is at least
         // one, so the last is there.
-        let mut appended = unsafe {
-            let tail = ml_get(lnum).offset(col as isize);
-            let tail_len = (ml_get_len(lnum) - col) as size_t;
-            let last = &*self.y_array.add(self.y_size.wrapping_sub(1));
-            let mut joined = XString::from_bytes(last.as_bytes());
-            joined.push_bytes(slice::from_raw_parts(tail.cast::<u8>(), tail_len));
-            joined
-        };
+        let last = unsafe { (*self.y_array.add(self.y_size.wrapping_sub(1))).as_bytes() };
+        let mut appended = XString::from_bytes(last);
+        appended.push_bytes(&Buf::current().lines().line(lnum)[col as usize..]);
         // SAFETY: the line just built, which `ml_append` copies.
         let _ = unsafe { ml_append(lnum, appended.as_mut_ptr(), 0, false) };
 
-        // The head of the cursor line keeps the register's *first* line.
-        //
-        // SAFETY: the same position, re-read because `ml_append` moved the
-        // line; `newp` is `col` bytes of it followed by the register's first
-        // line and that line's NUL, which is the `col + yanklen + 1` asked
-        // for, and `ml_replace` takes ownership of it.
-        let replacement = unsafe {
-            let oldp = ml_get(lnum);
-            let mut head =
-                XString::from_bytes(slice::from_raw_parts(oldp.cast::<u8>(), col as size_t));
-            head.push_bytes((*self.y_array).as_bytes());
-            head
-        };
+        // The head of the cursor line keeps the register's *first* line. The
+        // line is read again rather than held: `ml_append` above flushed and
+        // relocked the block the first read answered out of.
+        let mut replacement =
+            XString::from_bytes(&Buf::current().lines().line(lnum)[..col as usize]);
+        // SAFETY: a charwise register holds at least one line.
+        replacement.push_bytes(unsafe { (*self.y_array).as_bytes() });
         // SAFETY: the line just built, whose block `ml_replace` takes over.
         let _ = unsafe { ml_replace(lnum, replacement.into_raw(), false) };
     }
@@ -203,13 +179,11 @@ impl Put {
     fn fix_indent(&self, lnum: LineNr, state: &mut FixIndent) {
         let old_pos = Win::current().w_cursor;
         Win::current().w_cursor.lnum = lnum;
-        // SAFETY: the caller promises `lnum` is a line of the buffer, so
-        // `ml_get` hands back its NUL-terminated text.
-        let first = unsafe { c_int::from(*ml_get(lnum)) };
+        let first = Buf::current().lines().line(lnum).first().copied();
         // A `#` line stays at the start of the line, and an empty line
         // has no indent to keep.
         //
-        let indent = if (first == '#' as c_int && preprocs_left()) || first == NUL {
+        let indent = if (first == Some(b'#') && preprocs_left()) || first.is_none() {
             0
         } else if state.first {
             state.diff = state.orig_indent - get_indent();
@@ -361,11 +335,11 @@ impl Put {
                         // what the reindent took off it.
                         let measured = cnt == self.count && i == self.y_size.wrapping_sub(1);
                         if measured {
-                            lendiff = ml_get_len(lnum);
+                            lendiff = Buf::current().lines().line_len(lnum);
                         }
                         self.fix_indent(lnum, &mut indent_state);
                         if measured {
-                            lendiff -= ml_get_len(lnum);
+                            lendiff -= Buf::current().lines().line_len(lnum);
                         }
                     }
                     i = i.wrapping_add(1);

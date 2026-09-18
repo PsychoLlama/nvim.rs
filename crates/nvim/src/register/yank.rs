@@ -320,10 +320,8 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
                 unsafe { yank_copy_line(reg, &raw mut bd, y_idx, region.excl_tr_ws) };
             }
             kMTLineWise => {
-                // SAFETY: `lnum` is a line of the current buffer, so `ml_get`
-                // hands back its NUL-terminated text and `ml_get_len` its
-                // length; the slot is this walk's own.
-                let text = unsafe { cbuf_to_string(ml_get(lnum), ml_get_len(lnum) as size_t) };
+                let text = String_0::from_bytes(Buf::current().lines().line(lnum));
+                // SAFETY: the slot is this walk's own.
                 unsafe { *(*reg).y_array.add(y_idx) = text };
             }
             kMTCharWise => {
