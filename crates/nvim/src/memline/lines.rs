@@ -137,7 +137,7 @@ pub unsafe fn ml_get_buf_mut(buffer: Buf, lnum: LineNr) -> *mut ::core::ffi::c_c
 /// used to step one past the last character and read the terminator want
 /// [`crate::cstr::byte_at`], which answers `NUL` past the end.
 ///
-/// [`Buf::line`] is the same read as a raw pointer, for callers that still
+/// [`Buf::line_raw`] is the same read as a raw pointer, for callers that still
 /// want one; [`ml_get`] and kin are the free-function spelling. Both stay
 /// while any caller still holds a line as a pointer, and
 /// `ml_get_placeholder`'s `static` — the `???` an out-of-range line answers
