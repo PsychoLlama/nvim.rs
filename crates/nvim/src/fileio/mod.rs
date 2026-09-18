@@ -311,9 +311,8 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
     // Do filetype detection now if 'filetype' is empty.
     if Buf::current().b_p_ft.first_byte() == 0 {
         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
-            let cmd = c"filetypedetect BufRead".as_ptr().cast_mut();
-            // SAFETY: a static command line.
-            let _ = unsafe { do_doautocmd(cmd, false, ptr::null_mut()) };
+            // SAFETY: nothing to write through.
+            let _ = unsafe { do_doautocmd(c"filetypedetect BufRead", false, ptr::null_mut()) };
         }
         do_modelines(OptionSetFlags::NONE);
     }

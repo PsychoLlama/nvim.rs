@@ -23,7 +23,7 @@
 use super::*;
 use crate::buffer::BufRef;
 use crate::guard::Depth;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::optionstr::LocalOptStr;
 use crate::smsg;
 use crate::types::TypVal;
@@ -42,14 +42,13 @@ const NO_ARGV: [*mut ::core::ffi::c_void; 10] = [::core::ptr::null_mut(); 10];
 ///
 /// # Safety
 ///
-/// `arg_start` must point at a NUL-terminated string, unaliased for the call.
 /// `did_something` must point at a writable `bool` the caller owns.
 pub unsafe fn do_doautocmd(
-    arg_start: *mut ::core::ffi::c_char,
+    arg_start: &CStr,
     do_msg: bool,
     did_something: *mut bool,
 ) -> Result<(), Failed> {
-    let mut arg = arg_start;
+    let mut arg = arg_start.as_ptr().cast_mut();
     let mut nothing_done = true;
 
     if !did_something.is_null() {
@@ -108,8 +107,7 @@ pub unsafe fn do_doautocmd(
     }
 
     if nothing_done && do_msg && !aborting() {
-        // SAFETY: a NUL-terminated format literal and the caller's argument.
-        let arg_start = unsafe { c_str(arg_start) };
+        let arg_start = msg_bytes(arg_start.to_bytes());
         smsg!(0, "No matching autocommands: {arg_start}");
     }
     if !did_something.is_null() {
@@ -129,10 +127,9 @@ pub unsafe fn do_doautocmd(
 /// sweep, which is what the `bufref` is for.
 pub fn ex_doautoall(excmd: &mut ExArg) {
     let mut aco = AcoSave::default();
-    // SAFETY: a live command block, by the contract above, and
-    // `check_nomodeline` only advances `arg` inside its own argument.
-    let mut arg = excmd.arg_ptr();
-    let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
+    let (call_do_modelines, skip) = check_nomodeline(excmd.line.arg());
+    let arg = excmd.line.cstr_from(excmd.line.arg + skip).to_owned();
+    let arg = arg.as_c_str();
     let mut did_aucmd = false;
 
     let mut retval = Ok(());
@@ -146,8 +143,7 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
             unsafe { aucmd_prepbuf(&raw mut aco, buf) };
             let bufref = BufRef::of(buf);
 
-            // SAFETY: `arg` is the command's own argument and `did_aucmd`
-            // this frame's own `bool`.
+            // SAFETY: `did_aucmd` is this frame's own `bool`.
             retval = unsafe { do_doautocmd(arg, false, &raw mut did_aucmd) };
 
             if call_do_modelines && did_aucmd {

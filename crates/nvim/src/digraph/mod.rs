@@ -644,9 +644,7 @@ fn source_keymap_file(keymap: &[u8], enc: Option<&[u8]>) -> bool {
         name.extend_from_slice(enc);
     }
     name.extend_from_slice(b".vim\0");
-    // SAFETY: `name` is NUL-terminated and outlives the call, which only
-    // reads it.
-    unsafe { source_runtime(name.as_mut_ptr() as *mut c_char, RuntimeOpts::NONE) }.is_ok()
+    source_runtime(cstr::in_bytes(&name), RuntimeOpts::NONE).is_ok()
 }
 
 /// `:loadkeymap` — read language mappings from the file being sourced.

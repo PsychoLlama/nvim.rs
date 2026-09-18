@@ -11,7 +11,8 @@
 )]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
+use crate::runtime::source_runtime;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::smsg;
@@ -58,16 +59,15 @@ pub(crate) fn ex_autocmd(excmd: &mut ExArg) {
         let (arg, forceit) = (excmd.arg_ptr(), c_int::from(excmd.forceit));
         unsafe { do_autocmd(excmd, arg, forceit) };
     } else {
-        let (arg, forceit) = (excmd.arg_ptr(), excmd.forceit);
-        unsafe { do_augroup(arg, forceit) };
+        do_augroup(excmd.line.cstr_from(excmd.line.arg), excmd.forceit);
     }
 }
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
 pub(crate) fn ex_doautocmd(excmd: &mut ExArg) {
-    let mut arg = excmd.arg_ptr();
-    let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
+    let (call_do_modelines, skip) = check_nomodeline(excmd.line.arg());
+    let arg = excmd.line.cstr_from(excmd.line.arg + skip);
     let mut did_aucmd = false;
     let _ = do_doautocmd(arg, false, &raw mut did_aucmd);
     if call_do_modelines && did_aucmd {
@@ -82,64 +82,60 @@ pub(crate) fn ex_filetype(excmd: &mut ExArg) {
         return;
     }
 
-    let mut arg = excmd.arg_ptr();
+    let mut at = excmd.line.arg;
     let mut plugin = false;
     let mut indent = false;
     loop {
-        if starts_with(arg, b"plugin") {
+        if excmd.line.starts_with(at, b"plugin") {
             plugin = true;
-            arg = unsafe { skipwhite(arg.add(6)) };
-        } else if starts_with(arg, b"indent") {
+            at = excmd.line.skip_white(at + 6);
+        } else if excmd.line.starts_with(at, b"indent") {
             indent = true;
-            arg = unsafe { skipwhite(arg.add(6)) };
+            at = excmd.line.skip_white(at + 6);
         } else {
             break;
         }
     }
 
-    if equals(arg, b"on") || equals(arg, b"detect") {
+    let arg = excmd.line.rest_of(at);
+    if arg == b"on" || arg == b"detect" {
         // `:filetype detect` only re-sources the scripts when detection
         // was off; `:filetype on` always does.
-        if byte(arg) == 'o' as c_int || filetype_detect.get() != Some(true) {
-            let _ = source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+        if arg[0] == b'o' || filetype_detect.get() != Some(true) {
+            let _ = source_runtime(FILETYPE_FILE, RuntimeOpts::ALL);
             filetype_detect.set(Some(true));
             if plugin {
-                let _ = source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+                let _ = source_runtime(FTPLUGIN_FILE, RuntimeOpts::ALL);
                 filetype_plugin.set(Some(true));
             }
             if indent {
-                let _ = source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+                let _ = source_runtime(INDENT_FILE, RuntimeOpts::ALL);
                 filetype_indent.set(Some(true));
             }
         }
-        if byte(arg) == 'd' as c_int {
+        if arg[0] == b'd' {
             // `detect` also applies the result to the buffers already
             // open.
-            let _ = do_doautocmd(
-                c"filetypedetect BufRead".as_ptr() as *mut c_char,
-                true,
-                ptr::null_mut(),
-            );
+            let _ = do_doautocmd(c"filetypedetect BufRead", true, ptr::null_mut());
             do_modelines(OptionSetFlags::NONE);
         }
-    } else if equals(arg, b"off") {
+    } else if arg == b"off" {
         if plugin || indent {
             // Only what was named is turned off; detection stays on.
             if plugin {
-                let _ = source_runtime(FTPLUGOF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+                let _ = source_runtime(FTPLUGOF_FILE, RuntimeOpts::ALL);
                 filetype_plugin.set(Some(false));
             }
             if indent {
-                let _ = source_runtime(INDOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+                let _ = source_runtime(INDOFF_FILE, RuntimeOpts::ALL);
                 filetype_indent.set(Some(false));
             }
         } else {
-            let _ = source_runtime(FTOFF_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+            let _ = source_runtime(FTOFF_FILE, RuntimeOpts::ALL);
             filetype_detect.set(Some(false));
         }
     } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
+        let arg = msg_bytes(arg);
         semsg!("E475: Invalid argument: {arg}");
     }
 }
@@ -178,11 +174,11 @@ fn report_filetype_state() {
 /// explicitly turned off.
 pub fn filetype_plugin_enable() {
     if filetype_plugin.get().is_none() {
-        let _ = source_runtime(FTPLUGIN_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+        let _ = source_runtime(FTPLUGIN_FILE, RuntimeOpts::ALL);
         filetype_plugin.set(Some(true));
     }
     if filetype_indent.get().is_none() {
-        let _ = source_runtime(INDENT_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+        let _ = source_runtime(INDENT_FILE, RuntimeOpts::ALL);
         filetype_indent.set(Some(true));
     }
 }
@@ -190,7 +186,7 @@ pub fn filetype_plugin_enable() {
 /// The same for detection.
 pub fn filetype_maybe_enable() {
     if filetype_detect.get().is_none() {
-        let _ = source_runtime(FILETYPE_FILE.as_ptr() as *mut c_char, RuntimeOpts::ALL);
+        let _ = source_runtime(FILETYPE_FILE, RuntimeOpts::ALL);
         filetype_detect.set(Some(true));
     }
 }
@@ -204,16 +200,14 @@ pub(crate) fn ex_setfiletype(excmd: &mut ExArg) {
     if Buf::current().b_did_filetype {
         return;
     }
-    let mut arg = excmd.arg_ptr();
-    if starts_with(arg, b"FALLBACK ") {
-        arg = unsafe { arg.add(9) };
-    }
+    let fallback = excmd.line.starts_with(excmd.line.arg, b"FALLBACK ");
+    let at = excmd.line.arg + if fallback { 9 } else { 0 };
     set_option_value_give_err(
         kOptFiletype,
-        OptVal::string(cstr_to_string(arg)),
+        OptVal::string(String_0::from_bytes(excmd.line.rest_of(at))),
         OptionSetFlags::LOCAL,
     );
-    if arg != excmd.arg_ptr() {
+    if fallback {
         Buf::current().b_did_filetype = false;
     }
 }
@@ -240,7 +234,7 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
     let mods = unsafe { core::slice::from_raw_parts(mods.as_ptr().cast::<u8>(), mods_len) };
     let argv = Array::from(vec![
         Object::string(String_0::from_bytes(mods)),
-        Object::string(cstr_to_string(excmd.arg_ptr())),
+        Object::string(String_0::from_bytes(excmd.line.arg())),
     ]);
 
     let ran = unsafe {
@@ -286,25 +280,9 @@ fn lua_chunk(src: &'static CStr) -> String_0 {
     String_0::from_cstr(src)
 }
 
-/// `strncmp()`'s prefix test as checked code.
-fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
-    // SAFETY: a NUL-terminated string; the scan stops at its terminator.
-    unsafe { cstr::starts_with(p, prefix) }
-}
-
-/// `cstr_to_string()` as checked code.
-fn cstr_to_string(str: *const c_char) -> String_0 {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::api::private::helpers::cstr_to_string(str) }
-}
-
 /// `do_doautocmd()` as checked code.
-fn do_doautocmd(
-    arg_start: *mut ::core::ffi::c_char,
-    do_msg: bool,
-    did_something: *mut bool,
-) -> Result<(), Failed> {
-    // SAFETY: the pointers are the command line's own, and live for the call.
+fn do_doautocmd(arg_start: &CStr, do_msg: bool, did_something: *mut bool) -> Result<(), Failed> {
+    // SAFETY: `did_something` is the caller's own slot, or null.
     unsafe { crate::autocmd::do_doautocmd(arg_start, do_msg, did_something) }
 }
 
@@ -318,29 +296,4 @@ fn emsg(s: *const c_char) -> bool {
 fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
     // SAFETY: a NUL-terminated message; `gettext` answers one too.
     unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
-}
-
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
-}
-
-/// `source_runtime()` as checked code.
-fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> Result<(), Failed> {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::runtime::source_runtime(name, flags) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { c_int::from(*p) }
-}
-
-/// Whether the string at `p` is exactly `lit` -- `strcmp(p, lit) == 0` --
-/// as checked code.
-fn equals(p: *const c_char, lit: &[u8]) -> bool {
-    // SAFETY: a NUL-terminated string.
-    unsafe { cstr::eq_bytes(p, lit) }
 }

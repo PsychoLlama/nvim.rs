@@ -87,7 +87,8 @@ pub fn ex_runtime(excmd: &mut ExArg) {
     let where_len = unsafe { skiptowhite(arg).offset_from(arg) } as size_t;
     flags |= unsafe { get_runtime_cmd_flags(&raw mut arg, where_len) };
     debug_assert!(!arg.is_null(), "arg != NULL");
-    let _ = unsafe { source_runtime(arg, flags) };
+    // SAFETY: `arg` is the command's NUL-terminated argument.
+    let _ = source_runtime(unsafe { cstr::at(arg) }, flags);
 }
 
 /// Set the completion context for the `:runtime` command.
@@ -742,11 +743,11 @@ pub unsafe fn do_in_runtimepath(
 ///
 /// # Safety
 /// `name` must be NUL-terminated.
-pub unsafe fn source_runtime(name: *mut c_char, flags: RuntimeOpts) -> Result<(), Failed> {
-    // SAFETY: `source_callback` takes a null cookie.
+pub fn source_runtime(name: &CStr, flags: RuntimeOpts) -> Result<(), Failed> {
+    // SAFETY: a NUL-terminated name; `source_callback` takes a null cookie.
     unsafe {
         do_in_runtimepath(
-            name,
+            name.as_ptr().cast_mut(),
             flags,
             Some(source_callback as DoInRuntimepathCBFn),
             ptr::null_mut(),

@@ -99,7 +99,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
         unsafe { do_source(arg.as_ptr().cast_mut(), false, DOSO_NONE as c_int, none) == FAIL }
     } else {
         // SAFETY: as above -- the name is NUL-terminated and only read.
-        unsafe { source_runtime(arg.as_ptr().cast_mut(), RuntimeOpts::ALL) }.is_err()
+        source_runtime(arg, RuntimeOpts::ALL).is_err()
     };
     if failed {
         let arg = msg_bytes(args.line.arg());

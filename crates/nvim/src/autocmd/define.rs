@@ -12,6 +12,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::charset::skip;
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -541,19 +542,13 @@ pub unsafe fn aucmd_span_pattern(
     unsafe { p.offset_from(pat) as size_t }
 }
 
-/// Whether `do_modelines` should be called: false when `*argp` begins with
-/// `<nomodeline>`, which is then skipped.
-///
-/// # Safety
-///
-/// `argp` must point at a writable `*mut c_char` slot the caller owns for the
-/// call.
-pub unsafe fn check_nomodeline(argp: *mut *mut ::core::ffi::c_char) -> bool {
-    if unsafe { cstr::starts_with(*argp, b"<nomodeline>") } {
-        unsafe { *argp = skipwhite((*argp).add(12)) };
-        return false;
+/// Whether `do_modelines` should be called, and how far past a leading
+/// `<nomodeline>` to step. False means the argument began with it.
+pub fn check_nomodeline(arg: &[u8]) -> (bool, usize) {
+    match arg.strip_prefix(b"<nomodeline>") {
+        Some(rest) => (false, 12 + skip::white(rest)),
+        None => (true, 0),
     }
-    true
 }
 
 /// Delete the autocommand with this id, wherever it is.

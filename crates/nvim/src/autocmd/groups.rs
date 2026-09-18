@@ -256,7 +256,8 @@ pub unsafe fn augroup_exists(name: *const ::core::ffi::c_char) -> bool {
 /// # Safety
 ///
 /// `arg` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
+pub fn do_augroup(arg: &CStr, del_group: bool) {
+    let arg = arg.as_ptr().cast_mut();
     // SAFETY, for every region in this function: `arg` is the caller's
     // NUL-terminated string, so reading its first byte and comparing it
     // against a literal are both in bounds, and it stays live throughout.
