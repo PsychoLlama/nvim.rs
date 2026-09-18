@@ -123,8 +123,7 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
     let mut at = excmd.line.arg + 2;
 
     // `++bin`/`++nobin` and `++binary`/`++nobinary`.
-    let word = excmd.line.rest_of(at);
-    if word.starts_with(b"bin") || word.starts_with(b"nobin") {
+    if excmd.line.starts_with(at, b"bin") || excmd.line.starts_with(at, b"nobin") {
         if excmd.line.byte_at(at) == b'n' {
             at += 2;
             excmd.force_bin = FORCE_NOBIN;
@@ -139,9 +138,7 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
     }
 
     // `++edit`, and not `++editsomething`.
-    if excmd.line.rest_of(at).starts_with(b"edit")
-        && !excmd.line.byte_at(at + 4).is_ascii_alphabetic()
-    {
+    if excmd.line.starts_with(at, b"edit") && !excmd.line.byte_at(at + 4).is_ascii_alphabetic() {
         excmd.read_edit = true;
         excmd.line.arg = excmd.line.skip_white(at + 4);
         return Ok(());
@@ -156,16 +153,16 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
 
     // Which of the three offsets the value is recorded in, and how long the
     // option's own name was.
-    let word = excmd.line.rest_of(at);
-    let opt = if word.starts_with(b"fileformat") {
+    let starts = |word: &[u8]| excmd.line.starts_with(at, word);
+    let opt = if starts(b"fileformat") {
         Some((Opt::FileFormat, 10))
-    } else if word.starts_with(b"ff") {
+    } else if starts(b"ff") {
         Some((Opt::FileFormat, 2))
-    } else if word.starts_with(b"encoding") {
+    } else if starts(b"encoding") {
         Some((Opt::Encoding, 8))
-    } else if word.starts_with(b"enc") {
+    } else if starts(b"enc") {
         Some((Opt::Encoding, 3))
-    } else if word.starts_with(b"bad") {
+    } else if starts(b"bad") {
         Some((Opt::BadChar, 3))
     } else {
         None

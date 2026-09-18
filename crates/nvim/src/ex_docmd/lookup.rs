@@ -75,12 +75,7 @@ pub unsafe fn checkforcmd(cursor: *mut *mut c_char, cmd: *const c_char, len: c_i
 /// `:sile`, `:silen` and `:silent` are all `("silent", 3)` -- but `:silentx`
 /// is not, because a letter after the abbreviation makes it a longer word.
 pub(crate) fn check_for_word(line: &CmdLine, at: usize, name: &[u8], min: usize) -> Option<usize> {
-    let typed = line.rest_of(at);
-    let matched = name
-        .iter()
-        .zip(typed)
-        .take_while(|(want, got)| want == got)
-        .count();
+    let matched = line.shared_prefix(at, name);
     let follows = line.byte_at(at + matched);
     (matched >= min && !follows.is_ascii_alphabetic()).then(|| line.skip_white(at + matched))
 }

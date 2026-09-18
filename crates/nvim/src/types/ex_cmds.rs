@@ -389,19 +389,49 @@ impl CmdLine {
         self.next.map(|at| self.rest_of(at))
     }
 
-    /// Past the white space at `at`.
-    pub fn skip_white(&self, at: usize) -> usize {
-        at + crate::charset::skip::white(self.rest_of(at))
+    /// Everything from `at` on, terminators and all.
+    ///
+    /// The *cheap* tail: [`rest_of`](CmdLine::rest_of) has to find the NUL
+    /// first, which is a scan of the whole argument, so a walk that stops at
+    /// a NUL of its own accord reads this instead and pays nothing. That is
+    /// the difference between a `skipwhite` and a `strlen` at every step of
+    /// the parse, and a bench said so: `evalbench` +2.5 % when these three
+    /// and `check_for_word` went through `rest_of`.
+    fn tail(&self, at: usize) -> &[u8] {
+        &self.text[at.min(self.text.len())..]
     }
 
-    /// Past the non-white bytes at `at`.
+    /// Past the white space at `at`. Stops at the NUL, which is not white.
+    pub fn skip_white(&self, at: usize) -> usize {
+        at + crate::charset::skip::white(self.tail(at))
+    }
+
+    /// Past the non-white bytes at `at`. Bounded by the string, because a
+    /// NUL *is* a non-white byte.
     pub fn skip_to_white(&self, at: usize) -> usize {
         at + crate::charset::skip::to_white(self.rest_of(at))
     }
 
-    /// Past the decimal digits at `at`.
+    /// Past the decimal digits at `at`. Stops at the NUL.
     pub fn skip_digits(&self, at: usize) -> usize {
-        at + crate::charset::skip::digits(self.rest_of(at))
+        at + crate::charset::skip::digits(self.tail(at))
+    }
+
+    /// Does the string at `at` start with `prefix`? Stops at the NUL, which
+    /// matches nothing a caller passes.
+    pub fn starts_with(&self, at: usize, prefix: &[u8]) -> bool {
+        debug_assert!(!prefix.contains(&0), "a NUL would match past the end");
+        self.tail(at).starts_with(prefix)
+    }
+
+    /// How many bytes of `name` the string at `at` matches, stopping at the
+    /// first difference — and so at the NUL. [`starts_with`]'s partial form.
+    pub fn shared_prefix(&self, at: usize, name: &[u8]) -> usize {
+        self.tail(at)
+            .iter()
+            .zip(name)
+            .take_while(|(got, want)| got == want)
+            .count()
     }
 
     /// Where the string that starts at `at` ends.

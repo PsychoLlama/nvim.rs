@@ -131,7 +131,7 @@ pub(crate) fn parse_command_modifiers(
     // there) is stepped over so a modifier after it is still seen, and
     // put back below — the range has to reach the command, not the
     // modifier scan.
-    if excmd.line.cmd().starts_with(b"'<,'>") {
+    if excmd.line.starts_with(excmd.line.cmd, b"'<,'>") {
         let after = excmd.line.skip_white(excmd.line.cmd + 5);
         if excmd.line.byte_at(after) != 0 && excmd.line.byte_at(after) != b'|' {
             excmd.line.cmd += 5;
