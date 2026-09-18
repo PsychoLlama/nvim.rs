@@ -18,7 +18,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::message_fmt::c_str;
 use crate::smsg;
@@ -89,7 +88,7 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
 
             let name = event_nr2name(unsafe { (*apc).event });
             let s = gettext(c"%s Autocommands for \"%s\"");
-            let name_len = unsafe { cstr::bytes_at(name) }.len();
+            let name_len = name.count_bytes();
             let sourcing_name_len = unsafe {
                 s.count_bytes()
                     .wrapping_add(name_len)
@@ -97,7 +96,15 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
                     .wrapping_add(1)
             };
             let namep = unsafe { xmalloc(sourcing_name_len) }.cast::<::core::ffi::c_char>();
-            unsafe { snprintf(namep, sourcing_name_len, s.as_ptr(), name, (*ap).pat) };
+            unsafe {
+                snprintf(
+                    namep,
+                    sourcing_name_len,
+                    s.as_ptr(),
+                    name.as_ptr(),
+                    (*ap).pat,
+                )
+            };
             if p_verbose() >= 8 {
                 verbose_enter();
                 // SAFETY: `namep` is the NUL-terminated name just built.
@@ -168,7 +175,7 @@ unsafe fn au_callback(ac: *const AutoCmd, apc: *const AutoPatCmd) -> bool {
     data.insert(c"id", Object::integer(unsafe { (*ac).id }));
     data.insert(
         c"event",
-        Object::string(unsafe { cstr_to_string(event_nr2name((*apc).event)) }),
+        Object::string(String_0::from_cstr(event_nr2name(unsafe { (*apc).event }))),
     );
     data.insert(
         c"file",

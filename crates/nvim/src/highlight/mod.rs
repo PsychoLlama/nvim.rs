@@ -633,7 +633,7 @@ fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
             put(&mut item, c"kind", Object::literal("syntax"));
             // SAFETY: `syn_id2name` answers a NUL-terminated group name.
             put(&mut item, c"hi_name", unsafe {
-                name_object(syn_id2name(entry.id1))
+                name_object(syn_id2name(entry.id1).as_ptr())
             });
             item
         }
@@ -650,7 +650,7 @@ fn hl_inspect_impl(arr: &mut Array, attr: c_int) {
             put(&mut item, c"ui_name", unsafe { name_object(ui_name) });
             // SAFETY: `syn_id2name` answers a NUL-terminated group name.
             put(&mut item, c"hi_name", unsafe {
-                name_object(syn_id2name(entry.id2))
+                name_object(syn_id2name(entry.id2).as_ptr())
             });
             item
         }

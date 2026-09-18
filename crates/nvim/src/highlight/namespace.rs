@@ -30,7 +30,7 @@ use super::{
 };
 use super::{default_hl_attr, default_hl_attr_table};
 use crate::api::private::dispatch::key_dict_highlight_get_field;
-use crate::api::private::helpers::{api_dict_to_keydict, cstr_to_string};
+use crate::api::private::helpers::api_dict_to_keydict;
 use crate::cstr;
 use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
@@ -51,7 +51,7 @@ use crate::popupmenu::state::must_redraw_pum;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     ColorItem, ColorKey, DecorProvider, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
-    LuaRetMode, NS, Object,
+    LuaRetMode, NS, Object, String_0,
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -217,9 +217,7 @@ pub fn ns_get_hl(ns_hl: &mut NS, hl_id: c_int, link: bool, nodefault: bool) -> c
     if !valid && hl_def != LUA_NOREF && RECURSIVE.get() == 0 {
         let mut args = ArrayBuf::<3>::new();
         args.push(Object::integer(ns_id.into()));
-        args.push(Object::string(unsafe {
-            cstr_to_string(syn_id2name(hl_id))
-        }));
+        args.push(Object::string(String_0::from_cstr(syn_id2name(hl_id))));
         args.push(Object::boolean(link));
 
         let recursing = Depth::of(&RECURSIVE);

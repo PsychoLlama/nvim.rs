@@ -91,20 +91,16 @@ unsafe fn border_array(fconfig: WinCfg) -> Array {
             )
         };
         let name = syn_id2name(fconfig.border_hl_ids[i]);
-        // SAFETY: `syn_id2name` answers a NUL-terminated name, empty for an
-        // id with no group.
-        let highlighted = unsafe { *name } != 0;
+        let highlighted = !name.is_empty();
         // SAFETY: `arena` is the caller's, and both strings live as long as
         // it does.
-        unsafe {
-            if highlighted {
-                let mut tuple = Array::with_capacity(2);
-                tuple.push(Object::string(cell));
-                tuple.push(Object::string(cstr_to_string(name)));
-                border.push(Object::array(tuple));
-            } else {
-                border.push(Object::string(cell));
-            }
+        if highlighted {
+            let mut tuple = Array::with_capacity(2);
+            tuple.push(Object::string(cell));
+            tuple.push(Object::string(String_0::from_cstr(name)));
+            border.push(Object::array(tuple));
+        } else {
+            border.push(Object::string(cell));
         }
     }
     border

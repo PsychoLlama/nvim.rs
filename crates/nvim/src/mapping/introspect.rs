@@ -130,18 +130,23 @@ pub(crate) fn mapblock_fill_dict(
     }
     if let Some(desc) = &rhs.desc {
         // SAFETY: the mapping's own NUL-terminated text.
-        let desc = unsafe { cstr_to_string(desc.as_ptr()) };
+        let desc = String_0::from_cstr(desc.as_cstr());
         out.put(c"desc", Object::string(desc));
     }
     // SAFETY: `lhs` is `str2special_arena`'s answer and `m_keys` the mapping's
     // own LHS; both are NUL-terminated.
-    let (lhs, lhsraw) = unsafe { (cstr_to_string(lhs), cstr_to_string(mp.m_keys.as_ptr())) };
+    let (lhs, lhsraw) = unsafe {
+        (
+            cstr_to_string(lhs),
+            String_0::from_cstr(mp.m_keys.as_cstr()),
+        )
+    };
     out.put(c"lhs", Object::string(lhs));
     out.put(c"lhsraw", Object::string(lhsraw));
     if let Some(alt) = lhsrawalt {
         // Also add the value for the simplified entry.
         // SAFETY: a `MapStr` is NUL-terminated by its own invariant.
-        let alt = unsafe { cstr_to_string(alt.as_ptr()) };
+        let alt = String_0::from_cstr(alt.as_cstr());
         out.put(c"lhsrawalt", Object::string(alt));
     }
     out.put(c"noremap", Object::integer(noremap_value.into()));

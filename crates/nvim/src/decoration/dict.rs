@@ -287,7 +287,7 @@ pub fn decor_type_flags(decor: DecorInline) -> uint16_t {
 pub fn hl_group_name(hl_id: c_int, hl_name: bool) -> Object {
     if hl_name {
         // SAFETY: `syn_id2name` answers a static or table-owned string.
-        Object::string(unsafe { cstr_to_string(syn_id2name(hl_id)) })
+        Object::string(String_0::from_cstr(syn_id2name(hl_id)))
     } else {
         Object::integer(hl_id.into())
     }

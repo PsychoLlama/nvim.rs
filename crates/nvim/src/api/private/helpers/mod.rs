@@ -370,7 +370,7 @@ pub(crate) fn get_default_stl_hl(
             c"WinBarNC".as_ptr()
         }
     } else if stc_hl_id > 0 {
-        syn_id2name(stc_hl_id)
+        syn_id2name(stc_hl_id).as_ptr()
     } else if window == Win::current_or_none() {
         c"StatusLine".as_ptr()
     } else {

@@ -72,8 +72,8 @@ pub fn event_name2nr_str(str: &String_0) -> Option<AutoEvent> {
 ///
 /// Upstream took an `int` here and answered `"Unknown"` for a number that
 /// was not an event; every event is one now, so the fallback is gone.
-pub fn event_nr2name(event: AutoEvent) -> *const ::core::ffi::c_char {
-    EVENT_NAMES[event.index()].name.as_ptr()
+pub fn event_nr2name(event: AutoEvent) -> &'static ::core::ffi::CStr {
+    EVENT_NAMES[event.index()].name
 }
 
 /// Whether `ei` -- a value of 'eventignore' or 'eventignorewin' -- names

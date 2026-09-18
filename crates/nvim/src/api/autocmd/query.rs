@@ -310,7 +310,7 @@ unsafe fn autocmd_dict(event: AutoEvent, ac: &AutoCmd, ap: &AutoPat) -> ApiDict 
         Object::string(unsafe { cstr_to_string(ap.pat) }),
     );
     // SAFETY: `event_nr2name` answers a static C string.
-    let event = unsafe { cstr_to_string(event_nr2name(event)) };
+    let event = String_0::from_cstr(event_nr2name(event));
     info.insert(c"event", Object::string(event));
     info.insert(c"once", Object::boolean(ac.once));
     if ap.buflocal_nr == 0 {

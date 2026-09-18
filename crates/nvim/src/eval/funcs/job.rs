@@ -3,7 +3,7 @@
 #![allow(unsafe_code)]
 
 use super::{NUMBUFLEN, f_environ, kChannelPartRpc, kChannelStreamProc, kProcTypePty};
-use crate::api::private::helpers::{cstr_to_string, dict_set_var};
+use crate::api::private::helpers::dict_set_var;
 use crate::autocmd::apply_autocmds;
 use crate::buffer::{buf_close_terminal, setfname};
 use crate::channel::{
@@ -45,8 +45,8 @@ use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Callback, CallbackReader, Channel, ChannelStdinMode, Dict, EvalFuncData, IOSIZE, Integer, List,
-    MAXPATHL, NUL, Object, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VarNumber, Vv,
-    uint16_t, uint64_t,
+    MAXPATHL, NUL, Object, String_0, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VarNumber,
+    Vv, uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -668,6 +668,6 @@ fn set_buf_var(buffer: Buf, name: &CStr, value: Integer) {
     let value = Object::Integer(value);
     // SAFETY: the caller's obligation; the name is `'static`.
     let vars = buffer.b_vars;
-    let name = unsafe { cstr_to_string(name.as_ptr()) };
+    let name = String_0::from_cstr(name);
     drop(unsafe { dict_set_var(vars, &name, value, false, false) });
 }

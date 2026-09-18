@@ -132,7 +132,13 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         } else {
             unsafe { put_str(dict, "pattern", (*cur).mit_pattern) };
         }
-        unsafe { put_str(dict, "group", syn_id2name((*cur).mit_hlg_id)) };
+        unsafe {
+            put_str(
+                dict,
+                "group",
+                syn_id2name((*cur).mit_hlg_id).as_ptr().cast_mut(),
+            )
+        };
         unsafe { put_nr(dict, "priority", (*cur).mit_priority as VarNumber) };
         unsafe { put_nr(dict, "id", (*cur).mit_id as VarNumber) };
 
@@ -387,7 +393,7 @@ pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
         unsafe { (*l).push_string(::core::ptr::null(), 0) };
         unsafe { (*l).push_string(::core::ptr::null(), 0) };
     } else {
-        unsafe { (*l).push_string(syn_id2name((*m).mit_hlg_id), -1) };
+        unsafe { (*l).push_string(syn_id2name((*m).mit_hlg_id).as_ptr().cast_mut(), -1) };
         unsafe { (*l).push_string((*m).mit_pattern, -1) };
     }
 }

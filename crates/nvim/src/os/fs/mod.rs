@@ -40,7 +40,6 @@ use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_EINVAL, UV_UNKNOWN};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::event::libuv::{
     uv_chdir, uv_cwd, uv_exepath, uv_fs_access, uv_fs_close, uv_fs_copyfile, uv_fs_fsync,
     uv_fs_lstat, uv_fs_open, uv_fs_realpath, uv_fs_req_cleanup, uv_strerror,
@@ -56,6 +55,7 @@ use crate::os::env::os_getenv;
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
 use crate::startup::stdin_fd;
+use crate::types::String_0;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
     FAIL, FILE, Failed, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t,
@@ -262,7 +262,7 @@ pub fn os_chdir(path: &CStr) -> c_int {
     let err = unsafe { uv_chdir(path.as_ptr()) };
     if err == 0 {
         // SAFETY: same; `cstr_to_string` borrows it for the length only.
-        ui_call_chdir(unsafe { cstr_to_string(path.as_ptr()) });
+        ui_call_chdir(String_0::from_cstr(path));
     }
     err
 }

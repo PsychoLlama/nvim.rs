@@ -240,20 +240,15 @@ pub(crate) fn ui_client_reattach() {
     let mut info = DictBuf::<3>::new();
     info.insert(
         c"website",
-        Object::string(unsafe { cstr_to_string(c"https://neovim.io".as_ptr()) }),
+        Object::string(String_0::from_cstr(c"https://neovim.io")),
     );
-    info.insert(
-        c"license",
-        Object::string(unsafe { cstr_to_string(c"Apache 2".as_ptr()) }),
-    );
+    info.insert(c"license", Object::string(String_0::from_cstr(c"Apache 2")));
     info.insert(c"pid", Object::integer(os_get_pid()));
 
     let mut client = ArrayBuf::<5>::new();
-    client.push(Object::string(unsafe {
-        cstr_to_string(c"nvim-tui".as_ptr())
-    }));
+    client.push(Object::string(String_0::from_cstr(c"nvim-tui")));
     client.push(Object::dict(api_version()));
-    client.push(Object::string(unsafe { cstr_to_string(c"ui".as_ptr()) }));
+    client.push(Object::string(String_0::from_cstr(c"ui")));
     // A UI exposes no methods of its own.
     client.push(Object::array(Array::EMPTY));
     client.push(info.object());

@@ -566,7 +566,7 @@ fn pum_send_float_pos() {
     let anchor = if above { c"SW" } else { c"NW" };
     let row_off = if above { -pum_height.get() } else { 0 };
     // SAFETY: the anchor is a literal.
-    let anchor = unsafe { cstr_to_string(anchor.as_ptr()) };
+    let anchor = String_0::from_cstr(anchor);
     ui_call_win_float_pos(
         grid.handle as Integer,
         -1 as WindowHandle,

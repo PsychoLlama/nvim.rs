@@ -321,7 +321,7 @@ fn highlight_dicts(
         let grpname = if run.userhl == 0 {
             get_default_stl_hl(ctxwin, opts.use_winbar.unwrap_or(false), ctx.stc_hl_id)
         } else if run.userhl < 0 {
-            syn_id2name(-run.userhl)
+            syn_id2name(-run.userhl).as_ptr().cast_mut()
         } else {
             let (out, room, fmt) = (
                 user_group.as_mut_ptr(),
@@ -338,7 +338,7 @@ fn highlight_dicts(
         // These are POINTER comparisons upstream, and the group names are
         // interned, so a name equal by value is still a second entry.
         let combine = if run.item == Some(StlOpt::SignCol) {
-            syn_id2name(ctx.scl_hl_id)
+            syn_id2name(ctx.scl_hl_id).as_ptr().cast_mut()
         } else if run.item == Some(StlOpt::FoldCol) {
             grpname
         } else {

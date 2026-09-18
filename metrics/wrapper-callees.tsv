@@ -2,9 +2,9 @@ count	callee	no_raw	defs	def
 865	xfree	0	1	crates/nvim/src/memory/mod.rs
 736	.add	0	3	
 450	.offset	0	0	
-450	bytes_at	0	1	crates/nvim/src/cstr.rs
-342	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-303	at	0	3	
+449	bytes_at	0	1	crates/nvim/src/cstr.rs
+341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+302	at	0	3	
 281	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
 184	xstrdup	0	1	crates/nvim/src/memory/mod.rs
@@ -17,10 +17,10 @@ count	callee	no_raw	defs	def
 113	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 104	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
 101	snprintf	0	1	crates/nvim/src/os/cshim.rs
-94	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 86	nlua_pop_string	0	1	crates/nvim/src/lua/converter/pop.rs
 83	zeroed	0	0	
 82	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
+81	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 80	starts_with	0	2	
 79	nlua_pop_handle	0	1	crates/nvim/src/lua/converter/pop.rs
 76	apply_autocmds	0	1	crates/nvim/src/autocmd/fire.rs
