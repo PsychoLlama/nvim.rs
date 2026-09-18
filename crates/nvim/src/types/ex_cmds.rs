@@ -425,7 +425,7 @@ impl CmdLine {
     }
 
     /// How many bytes of `name` the string at `at` matches, stopping at the
-    /// first difference — and so at the NUL. [`starts_with`]'s partial form.
+    /// first difference — and so at the NUL. [`starts_with`](CmdLine::starts_with)'s partial form.
     pub fn shared_prefix(&self, at: usize, name: &[u8]) -> usize {
         self.tail(at)
             .iter()
