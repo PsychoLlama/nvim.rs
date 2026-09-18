@@ -12,12 +12,10 @@
 use crate::ops::Op;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 use core::ptr;
 
-use crate::cursor::{
-    adjust_cursor_col, check_cursor, coladvance, gchar_cursor, get_cursor_line_len,
-    get_cursor_line_ptr, inc_cursor,
-};
+use crate::cursor::{adjust_cursor_col, check_cursor, coladvance, gchar_cursor, inc_cursor};
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{
     UPD_INVERTED, UPD_VALID, conceal_check_cursor_line, redraw_curbuf_later, showmode,
@@ -26,8 +24,7 @@ use crate::fold::fold_adjust_visual;
 use crate::getchar::{beep_flush, stuff_empty, typeahead};
 use crate::global_cell::GlobalCell;
 use crate::mark::mark_mb_adjustpos;
-use crate::mbyte::utfc_ptr2len;
-use crate::memline::{ml_get_len, ml_get_pos};
+use crate::mbyte::cluster_len;
 use crate::message::state::msg_silent;
 use crate::mouse::setmouse;
 use crate::mouse::state::mouse_dragging;
@@ -49,8 +46,8 @@ use crate::state::{may_trigger_modechanged, virtual_active};
 use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
-use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Outcome, Pos, size_t};
-use core::ffi::{c_char, c_int, c_uint};
+use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Outcome, Pos};
+use core::ffi::{c_int, c_uint};
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};
 use crate::memory::XString;
@@ -300,64 +297,97 @@ pub(crate) fn restore_visual_mode() {
     }
 }
 
-/// The text the Visual selection covers, for a command that wants it as a
+/// The text a Visual selection covers, for a command that wants it as a
 /// string rather than as an operator target.
 ///
-/// Refuses -- and beeps, when it was given an operator to clear -- for a
-/// selection spanning more than one line. Leaves Visual mode either way it
-/// succeeds.
-///
-/// # Safety
-///
-/// `cursor` must point at a writable `*mut c_char` slot the caller owns for
-/// the call. `lenp` must point at a writable `size_t` the caller owns.
-pub(crate) unsafe fn get_visual_text(
-    cmd_arg: Option<&mut CmdArg>,
-    cursor: *mut *mut c_char,
-    lenp: *mut size_t,
-) -> bool {
+/// The rest of the selection's line is carried, not just the selected bytes:
+/// `grab_file_name` looks at the two bytes *after* the selection to find a
+/// `:123` line number, which is what upstream's pointer into the buffer's own
+/// line let it do. It is a copy, because every caller goes on to run a
+/// command with it.
+pub(crate) struct VisualText {
+    /// The line from the selection's first byte on.
+    line: XString,
+    /// How many of those bytes the selection covers.
+    len: usize,
+}
+
+impl VisualText {
+    /// The selected bytes.
+    ///
+    /// Clamped to the line: a blockwise selection over a short line names
+    /// more columns than the line has, and upstream read the buffer's own
+    /// bytes past its terminator to answer that.
+    pub(crate) fn selected(&self) -> &[u8] {
+        &self.line[..self.len.min(self.line.len())]
+    }
+
+    /// The selection and everything after it on its line, NUL-terminated.
+    pub(crate) fn to_end_of_line(&self) -> &CStr {
+        self.line.as_cstr()
+    }
+
+    /// How many bytes the selection covers.
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+}
+
+/// The text the Visual selection covers, or `None` for a selection spanning
+/// more than one line -- which is not a name, and which beeps when this was
+/// given an operator to clear. Leaves Visual mode either way it succeeds.
+pub(crate) fn get_visual_text(cmd_arg: Option<&mut CmdArg>) -> Option<VisualText> {
     if !visual_mode().is_line() {
-        // SAFETY: adjusts the current window's cursor or `VIsual`.
         unadjust_for_sel();
     }
     let anchor = visual_anchor();
-    if anchor.lnum != Win::current().w_cursor.lnum {
-        // A selection spanning lines is not a name; whoever asked for one
-        // through a command gets the refusal.
+    let cursor = Win::current().w_cursor;
+    if anchor.lnum != cursor.lnum {
         if let Some(command) = cmd_arg {
             clear_op_beep(command.op());
         }
-        return false;
+        return None;
     }
-    if visual_mode().is_line() {
-        unsafe { *cursor = get_cursor_line_ptr() };
-        unsafe { *lenp = get_cursor_line_len() as size_t };
+
+    let mut lines = Buf::current().lines();
+    let line = lines.line(cursor.lnum);
+    // The earlier of the two ends is the start; the length is the column
+    // difference, inclusive.
+    let (at, mut len) = if visual_mode().is_line() {
+        (0, line.len())
+    } else if lt(cursor, anchor) {
+        (cursor.col, (anchor.col - cursor.col + 1) as usize)
     } else {
-        // The earlier of the two ends is the start; the length is the
-        // column difference, inclusive.
-        if lt(Win::current().w_cursor, anchor) {
-            unsafe { *cursor = ml_get_pos(&raw mut (*Win::current_raw()).w_cursor) };
-            unsafe { *lenp = (anchor.col - Win::current().w_cursor.col + 1) as size_t };
-        } else {
-            unsafe { *cursor = ml_get_pos(&raw const anchor) };
-            unsafe { *lenp = (Win::current().w_cursor.col - anchor.col + 1) as size_t };
-        }
-        if unsafe { **cursor } as c_int == NUL {
-            unsafe { *lenp = 0 };
+        (anchor.col, (cursor.col - anchor.col + 1) as usize)
+    };
+    let from = usize::try_from(at).unwrap_or(0).min(line.len());
+    let tail = &line[from..];
+
+    if !visual_mode().is_line() {
+        if tail.is_empty() {
+            len = 0;
         }
         // The last character may be multibyte; take the rest of it.
         //
-        // `utfc_ptr2len` answers 0 for a NUL, and upstream adds `0 - 1`
-        // as a `size_t` -- which wraps and so takes one *off* the length.
-        // Reachable: a blockwise selection whose last line is short ends
-        // on the terminator. Kept wrapping, deliberately.
-        if unsafe { *lenp } > 0 {
-            let tail = unsafe { utfc_ptr2len((*cursor).add(*lenp - 1)) };
-            unsafe { *lenp = (*lenp).wrapping_add((tail - 1) as size_t) };
+        // A cluster length of 0 -- the selection ending on the line's own
+        // terminator, which a blockwise selection over a short line does --
+        // takes one *off* the length, upstream adding `0 - 1` as a `size_t`.
+        // Kept wrapping, deliberately.
+        if len > 0 {
+            let last = if len - 1 < tail.len() {
+                cluster_len(&tail[len - 1..])
+            } else {
+                0
+            };
+            len = len.wrapping_add(last.wrapping_sub(1));
         }
     }
+    let text = VisualText {
+        line: XString::from_bytes(tail),
+        len,
+    };
     reset_visual_and_resel();
-    true
+    Some(text)
 }
 
 /// Swap the two ends of the selection.
@@ -737,7 +767,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
         }
     } else if pos.lnum > 1 {
         pos.lnum -= 1;
-        pos.col = ml_get_len(pos.lnum);
+        pos.col = Buf::current().lines().line_len(pos.lnum);
         return true;
     }
     false

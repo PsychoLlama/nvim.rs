@@ -32,7 +32,7 @@ use crate::getchar::{
 };
 use crate::guard::Suppress;
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
-use crate::memline::{inc, ml_delete_flags, ml_get};
+use crate::memline::{inc, ml_delete_flags};
 use crate::memory::xfree;
 use crate::message::e_modifiable;
 use crate::message::emsg;
@@ -293,7 +293,12 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
     // An empty line has nothing to swap unless 'whichwrap' lets `~` move
     // to the next one.
     let wraps = p_ww(|value| has_char(value, '~' as c_int));
-    if unsafe { *ml_get(Win::current().w_cursor.lnum) } as c_int == NUL && !wraps {
+    if Buf::current()
+        .lines()
+        .line(Win::current().w_cursor.lnum)
+        .is_empty()
+        && !wraps
+    {
         clear_op_beep(cmd_arg.op());
         return;
     }
@@ -734,7 +739,8 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
             unsafe { inc(&mut (*Buf::current_raw()).b_visual.vi_end) };
         }
     }
-    if emptied && unsafe { *ml_get(Buf::current().b_ml.ml_line_count) } as c_int == NUL {
+    let last = Buf::current().b_ml.ml_line_count;
+    if emptied && Buf::current().lines().line(last).is_empty() {
         let _ = ml_delete_flags(Buf::current().b_ml.ml_line_count, ML_DEL_MESSAGE as c_int);
         deleted_lines(Buf::current().b_ml.ml_line_count + 1, 1);
         if win.w_cursor.lnum > Buf::current().b_ml.ml_line_count {

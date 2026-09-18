@@ -26,7 +26,6 @@ use crate::getchar::beep_flush;
 use crate::getchar::state::mod_mask;
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
-use crate::memline::ml_get;
 use crate::normal::{
     CAR, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise, may_fold_open, nv_page,
     unadjust_for_sel, visual_active, visual_mode,
@@ -333,12 +332,9 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
             {
                 // A pending exclusive operator eats the line break by
                 // becoming inclusive instead of moving.
-                // SAFETY: `op` is live and the cursor line is terminated.
-                let eat = unsafe {
-                    op.op_type != OpType::Nop
-                        && !op.inclusive
-                        && *ml_get(win.w_cursor.lnum) as c_int != NUL
-                };
+                let eat = op.op_type != OpType::Nop
+                    && !op.inclusive
+                    && !Buf::current().lines().line(win.w_cursor.lnum).is_empty();
                 if eat {
                     op.inclusive = true;
                 } else {
@@ -355,8 +351,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
                     if n == count1 {
                         beep_flush();
                     }
-                    // SAFETY: the cursor line is NUL-terminated.
-                } else if unsafe { *ml_get(win.w_cursor.lnum) } as c_int != NUL {
+                } else if !Buf::current().lines().line(win.w_cursor.lnum).is_empty() {
                     op.inclusive = true;
                 }
                 break;
@@ -416,7 +411,7 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
                 // pull it back.
                 if (cmd_arg.op().op_type == OpType::Delete
                     || cmd_arg.op().op_type == OpType::Change)
-                    && unsafe { *ml_get(win.w_cursor.lnum) } as c_int != NUL
+                    && !Buf::current().lines().line(win.w_cursor.lnum).is_empty()
                 {
                     let cp = get_cursor_pos_ptr();
                     if unsafe { *cp } as c_int != NUL {

@@ -323,15 +323,21 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     let mut word: *mut c_char = ptr::null_mut();
     let mut n: size_t = 0;
     // Three of the commands take a Visual selection instead of the word
-    // under the cursor.
+    // under the cursor. Its copy stays in this frame, because `word` names
+    // it -- the other source below is a pointer into the cursor's own line,
+    // and the two are told apart by `visual_sel`.
+    let selection;
     let mut visual_sel = false;
     if cmdchar == ']' as c_int || cmdchar == Ctrl_RSB || cmdchar == 'K' as c_int {
-        // SAFETY: `cmd_arg` is live and `word`/`n` are this frame's own.
-        if visual_active() && !unsafe { get_visual_text(Some(cmd_arg), &raw mut word, &raw mut n) }
-        {
-            return;
+        if visual_active() {
+            let Some(text) = get_visual_text(Some(cmd_arg)) else {
+                return;
+            };
+            n = text.len();
+            selection = text;
+            word = selection.to_end_of_line().as_ptr().cast_mut();
+            visual_sel = true;
         }
-        visual_sel = !word.is_null();
         if check_clear_op_quit(cmd_arg.op()) {
             return;
         }

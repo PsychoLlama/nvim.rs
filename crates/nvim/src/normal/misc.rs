@@ -29,7 +29,6 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::help::open_help;
-use crate::memline::ml_get_len;
 use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
@@ -120,7 +119,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
         clear_op(op);
     } else if op.op_type != OpType::Nop
         && (op.start.lnum > Buf::current().b_ml.ml_line_count
-            || op.start.col > ml_get_len(op.start.lnum)
+            || op.start.col > Buf::current().lines().line_len(op.start.lnum)
             || did_emsg.get() != 0)
     {
         // The command moved or deleted the line the operator started on,

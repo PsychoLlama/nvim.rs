@@ -1,8 +1,8 @@
 count	callee	no_raw	defs	def
 871	xfree	0	1	crates/nvim/src/memory/mod.rs
-737	.add	0	3	
+736	.add	0	3	
 452	bytes_at	0	1	crates/nvim/src/cstr.rs
-451	.offset	0	0	
+450	.offset	0	0	
 399	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 304	at	0	3	
 282	CStr::from_ptr	0	2	
@@ -11,10 +11,10 @@ count	callee	no_raw	defs	def
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 161	xmalloc	0	1	crates/nvim/src/memory/mod.rs
-155	from_raw_parts	0	0	
+156	from_raw_parts	0	0	
 131	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
-119	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
+116	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 109	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
 101	snprintf	0	1	crates/nvim/src/os/cshim.rs
 95	cstr_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
@@ -57,7 +57,7 @@ count	callee	no_raw	defs	def
 35	ga_init	0	1	crates/nvim/src/garray.rs
 35	xcalloc	0	1	crates/nvim/src/memory/mod.rs
 34	Qi::new	0	67	
-34	ml_get_buf	0	1	crates/nvim/src/memline/lines.rs
+33	ml_get_buf	0	1	crates/nvim/src/memline/lines.rs
 33	os_isdir	0	1	crates/nvim/src/os/fs/mod.rs
 33	undo_write_bytes	0	1	crates/nvim/src/undo/file.rs
 33	xstrlcat	0	1	crates/nvim/src/memory/mod.rs
@@ -799,7 +799,6 @@ count	callee	no_raw	defs	def
 4	matches	0	1	crates/nvim/src/runtime/search.rs
 4	ml_add_deleted_len_buf	0	1	crates/nvim/src/memline/lines.rs
 4	ml_find_line_or_offset	0	1	crates/nvim/src/memline/offsets.rs
-4	ml_get_pos	0	1	crates/nvim/src/memline/lines.rs
 4	ml_replace_buf_len	0	1	crates/nvim/src/memline/lines.rs
 4	ml_replace_len	0	1	crates/nvim/src/memline/lines.rs
 4	mpack_parser_init	0	1	crates/nvim/src/mpack/object.rs
@@ -1059,7 +1058,6 @@ count	callee	no_raw	defs	def
 3	get_userdefined_compl_info	0	1	crates/nvim/src/insexpand/session.rs
 3	get_var_from	0	1	crates/nvim/src/eval/vars/scoped.rs
 3	get_varp_from	1	1	crates/nvim/src/option/scope.rs
-3	get_visual_text	0	1	crates/nvim/src/normal/visual.rs
 3	getc	0	0	
 3	getdigits_int32	0	1	crates/nvim/src/charset/walk.rs
 3	getline	0	0	
@@ -3060,6 +3058,7 @@ count	callee	no_raw	defs	def
 1	ml_get	0	0	
 1	ml_get_buf_len	0	0	
 1	ml_get_len	0	0	
+1	ml_get_pos	0	1	crates/nvim/src/memline/lines.rs
 1	ml_insert_in_block	1	1	crates/nvim/src/memline/edit.rs
 1	ml_insert_pointer	0	1	crates/nvim/src/memline/edit.rs
 1	ml_open_blocks	0	1	crates/nvim/src/memline/mod.rs

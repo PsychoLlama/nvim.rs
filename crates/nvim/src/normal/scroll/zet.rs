@@ -8,6 +8,7 @@ use crate::keycodes::Key;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win, windows};
 use core::ptr;
+use core::slice;
 
 use crate::ascii::ascii_isdigit;
 use crate::cursor::{check_cursor_col, set_leftcol};
@@ -20,7 +21,7 @@ use crate::fold::{
 };
 use crate::guard::Suppress;
 use crate::mark::setpcmark;
-use crate::memline::ml_get_pos;
+use crate::memory::XString;
 use crate::message::emsg;
 use crate::normal::{
     CAR, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, check_clear_op, clear_op_beep,
@@ -126,33 +127,52 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: c_int) -> Result<(), Fai
 
     // Three ways to find the word, in order: the selection, the
     // misspelling the cursor is inside, and the identifier under it.
-    let mut word: *mut c_char = ptr::null_mut();
-    let mut len: size_t = 0;
-    if visual_active() && !unsafe { get_visual_text(Some(cmd_arg), &raw mut word, &raw mut len) } {
-        return Err(Failed);
+    // The word to add, copied out of the buffer: `spell_add_word` rewrites
+    // a word list and reloads it, which is not something to hold a line
+    // pointer across.
+    let mut word: Option<XString> = None;
+    if visual_active() {
+        let Some(text) = get_visual_text(Some(cmd_arg)) else {
+            return Err(Failed);
+        };
+        word = Some(XString::from_bytes(text.selected()));
     }
-    if word.is_null() {
+    if word.is_none() {
         let pos = Win::current().w_cursor;
         // The search is only being used to find where the bad word
         // starts; its "no more misspellings" message is not wanted.
         let no_emsg = Suppress::emsg();
         let (fwd, none) = (FORWARD as c_int, ptr::null_mut());
-        len = unsafe { spell_move_to(Win::current(), fwd, SMT_ALL, true, none) };
+        let bad_len = unsafe { spell_move_to(Win::current(), fwd, SMT_ALL, true, none) };
         drop(no_emsg);
         // Only if it found one at or before the cursor, i.e. the one the
         // cursor is inside rather than the next one.
-        if len != 0 && Win::current().w_cursor.col <= pos.col {
-            word = unsafe { ml_get_pos(&raw mut (*Win::current_raw()).w_cursor) };
+        if bad_len != 0 && Win::current().w_cursor.col <= pos.col {
+            let win = Win::current();
+            let at = usize::try_from(win.w_cursor.col).unwrap_or(0);
+            let mut lines = win.buffer().lines();
+            let line = lines.line(win.w_cursor.lnum);
+            let end = at.saturating_add(bad_len).min(line.len());
+            word = Some(XString::from_bytes(&line[at.min(end)..end]));
         }
         Win::current().w_cursor = pos;
     }
-    if word.is_null() {
-        len =
-            unsafe { find_ident_under_cursor(&raw mut word, FIND_IDENT as c_int, ptr::null_mut()) };
-        if len == 0 {
-            return Err(Failed);
+    let word = match word {
+        Some(word) => word,
+        None => {
+            let mut found: *mut c_char = ptr::null_mut();
+            // SAFETY: both out-parameters are this frame's own.
+            let n = unsafe {
+                find_ident_under_cursor(&raw mut found, FIND_IDENT as c_int, ptr::null_mut())
+            };
+            if n == 0 {
+                return Err(Failed);
+            }
+            // SAFETY: `n` bytes of the cursor's own line.
+            XString::from_bytes(unsafe { slice::from_raw_parts(found.cast::<u8>(), n) })
         }
-    }
+    };
+    let len = word.len();
     debug_assert!(len <= c_int::MAX as size_t);
 
     // Lower case adds to the file 'spellfile' names, upper case to the
@@ -168,7 +188,8 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: c_int) -> Result<(), Fai
     } else {
         cmd_arg.count1
     };
-    unsafe { spell_add_word(word, len as c_int, what, index, undo) };
+    // SAFETY: the copy just made, of `len` bytes.
+    unsafe { spell_add_word(word.as_ptr().cast_mut(), len as c_int, what, index, undo) };
     Ok(())
 }
 

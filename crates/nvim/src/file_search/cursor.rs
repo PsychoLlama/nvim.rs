@@ -18,7 +18,7 @@ use crate::normal::visual_active;
 use crate::optionstr::LocalOptStr;
 use crate::semsg;
 use crate::strings::has_char;
-use crate::types::{FAIL, OptionSetFlags, Vv};
+use crate::types::{OptionSetFlags, Vv};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
@@ -37,22 +37,25 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mu
         return unsafe { file_name_at_cursor(options | FileNameOpts::HYP, count, file_lnum) };
     }
 
-    let mut len: size_t = 0;
-    let mut ptr: *mut c_char = ptr::null_mut();
-    if unsafe { get_visual_text(None, &raw mut ptr, &raw mut len) } as c_int == FAIL {
+    let Some(selection) = get_visual_text(None) else {
         return ptr::null_mut();
-    }
-    // Only recognize ":123" here.
+    };
+    let (text, len) = (selection.to_end_of_line(), selection.len());
+    let rest = text.to_bytes();
+    // Only recognize ":123" here. The bytes looked at are past the
+    // selection but still on its line, which is why the selection carries
+    // the rest of the line with it.
     if !file_lnum.is_null()
-        && unsafe { *ptr.add(len) } == b':' as c_char
-        && (unsafe { *ptr.add(len + 1) } as u8).is_ascii_digit()
+        && cstr::byte_at(rest, len) == b':'
+        && cstr::byte_at(rest, len + 1).is_ascii_digit()
     {
-        let mut p = unsafe { ptr.add(len + 1) };
+        // SAFETY: a position inside the copy, which is NUL-terminated.
+        let mut p = unsafe { text.as_ptr().cast_mut().add(len + 1) };
         unsafe { *file_lnum = getdigits_int32(&raw mut p, false, 0) as LineNr };
     }
     unsafe {
         find_file_name_in_path(
-            ptr,
+            text.as_ptr().cast_mut(),
             len,
             options,
             count as c_long,

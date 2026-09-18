@@ -13,11 +13,10 @@
 #![allow(non_upper_case_globals)]
 
 use crate::memory::xstrlcpy;
-use crate::winlayer::Win;
+use crate::winlayer::{Buf, Win};
 
 use crate::charset::{transchar, vim_isprintc};
 use crate::cstr;
-use crate::cursor::get_cursor_pos_ptr;
 use crate::drawscreen::setcursor;
 use crate::drawscreen::state::{redraw_tabline, sc_col};
 use crate::ex_docmd::state::ex_normal_busy;
@@ -26,8 +25,7 @@ use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::highlight::state::hl_attr_active;
-use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
-use crate::memline::ml_get_pos;
+use crate::mbyte::{cluster_len, utf_char2bytes};
 use crate::message::state::msg_silent;
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::normal::{
@@ -213,21 +211,26 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
 fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
     let (mut bytes, mut chars) = (0, 0);
     let anchor = sel.anchor;
-    // SAFETY: both pointers are into the current line, and the walk stops at
-    // or before `e`.
-    let (mut s, e) = if cursor_bot {
-        (
-            unsafe { ml_get_pos(&raw const anchor) },
-            get_cursor_pos_ptr(),
-        )
+    let cursor = Win::current().w_cursor;
+    // The selection is within one line, so both ends are columns of it.
+    let (start, end) = if cursor_bot {
+        (anchor.col, cursor.col)
     } else {
-        (get_cursor_pos_ptr(), unsafe {
-            ml_get_pos(&raw const anchor)
-        })
+        (cursor.col, anchor.col)
     };
+    let mut lines = Buf::current().lines();
+    let line = lines.line(cursor.lnum);
+    let end = usize::try_from(end).unwrap_or(0);
+    let mut at = usize::try_from(start).unwrap_or(0);
     let exclusive = P_SEL.first_byte() == b'e';
-    while if exclusive { s < e } else { s <= e } {
-        let l = unsafe { utfc_ptr2len(s) };
+    while if exclusive { at < end } else { at <= end } {
+        // A character the decoder rejects, and the line's own end, both
+        // count as one byte and one character and end the walk.
+        let l = if at < line.len() {
+            cluster_len(&line[at..])
+        } else {
+            0
+        };
         if l == 0 {
             bytes += 1;
             chars += 1;
@@ -235,9 +238,12 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
         }
         bytes += l;
         chars += 1;
-        s = unsafe { s.offset(l as isize) };
+        at += l;
     }
-    (chars, bytes)
+    (
+        c_int::try_from(chars).unwrap_or(0),
+        c_int::try_from(bytes).unwrap_or(0),
+    )
 }
 
 /// Describe the Visual selection into the 'showcmd' buffer.

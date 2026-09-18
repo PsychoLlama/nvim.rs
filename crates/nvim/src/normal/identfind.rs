@@ -16,13 +16,13 @@ use core::ptr;
 
 use crate::change::get_leader_len;
 use crate::charset::{skipwhite, vim_iswordp};
+use crate::cstr;
 use crate::cursor::get_cursor_line_ptr;
 use crate::drawscreen::state::clear_cmdline;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::KeyTyped;
 use crate::mark::setpcmark;
-use crate::mbyte::{mb_get_class, utf_head_off, utfc_ptr2len};
-use crate::memline::ml_get_buf;
+use crate::mbyte::{cluster_len, head_off, mb_get_class};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_noident;
 use crate::message::state::msg_silent;
@@ -120,36 +120,48 @@ pub(crate) unsafe fn find_ident_under_cursor(
 /// method's precondition is the constructor's: the pointer addresses a
 /// NUL-terminated line, and the walk never steps past its terminator.
 #[derive(Clone, Copy)]
-struct ScanLine(*mut c_char);
+struct ScanLine<'a>(&'a [u8]);
 
-impl ScanLine {
-    /// The byte at `col`.
+impl<'a> ScanLine<'a> {
+    /// The byte at `col`, or NUL at and past the end of the line.
     fn at(self, col: c_int) -> c_int {
-        // SAFETY: `col` is at most the terminator's own column.
-        unsafe { *self.0.offset(col as isize) as c_int }
+        c_int::from(cstr::byte_at(self.0, Self::index(col)))
     }
     /// The address of the byte at `col`.
     fn ptr(self, col: c_int) -> *mut c_char {
-        unsafe { self.0.offset(col as isize) }
+        self.0[Self::index(col)..]
+            .as_ptr()
+            .cast::<c_char>()
+            .cast_mut()
+    }
+    /// The rest of the line from `col` on.
+    fn from(self, col: c_int) -> Self {
+        ScanLine(&self.0[Self::index(col)..])
     }
     /// The character class of the character starting at `col`.
     fn class(self, col: c_int) -> c_int {
-        unsafe { mb_get_class(self.0.offset(col as isize)) }
+        // SAFETY: a column of the line, whose bytes end in the memline's own
+        // terminator.
+        unsafe { mb_get_class(self.ptr(col)) }
     }
     /// The length of the character at `col`, its combining marks included.
     fn char_len(self, col: c_int) -> c_int {
-        unsafe { utfc_ptr2len(self.0.offset(col as isize)) }
+        c_int::try_from(cluster_len(&self.0[Self::index(col)..])).unwrap_or(0)
     }
     /// The column the character in front of `col` starts at.
     fn prev_col(self, col: c_int) -> c_int {
-        // SAFETY: only asked past column 0, so `col - 1` is a byte of this line.
-        unsafe { col - 1 - utf_head_off(self.0, self.0.offset(col as isize).offset(-1)) }
+        // Only asked past column 0, so `col - 1` is a byte of this line.
+        col - 1 - c_int::try_from(head_off(self.0, Self::index(col - 1))).unwrap_or(0)
     }
     /// `find_is_eval_item` at `col`, advancing `col` and the bracket depth.
     fn is_eval_item(self, col: &mut c_int, bn: &mut c_int, dir: c_int) -> bool {
-        // SAFETY: as `at`; `col`/`bn` are the walk's own, and a backwards walk
-        // is only asked past column 0.
-        unsafe { find_is_eval_item(self.0.offset(*col as isize), col, bn, dir) }
+        // SAFETY: a column of the line; `col`/`bn` are the walk's own, and a
+        // backwards walk is only asked past column 0.
+        unsafe { find_is_eval_item(self.ptr(*col), col, bn, dir) }
+    }
+    /// A column as an index, clamped: the walks ask about the terminator.
+    fn index(col: c_int) -> usize {
+        usize::try_from(col).unwrap_or(0)
     }
 }
 
@@ -173,8 +185,8 @@ pub(crate) unsafe fn find_ident_at_pos(
     find_type: c_int,
 ) -> size_t {
     let eval = find_type & FIND_EVAL as c_int != 0;
-    // SAFETY: `window` is a live window, so its buffer is live too.
-    let mut line = ScanLine(unsafe { ml_get_buf(window.buffer(), lnum) });
+    let mut lines = window.buffer().lines();
+    let mut line = ScanLine(lines.line(lnum));
     let mut col: c_int = 0;
     let mut this_class: c_int = 0;
     // Pass 0 wants a word character; pass 1 will take punctuation too.
@@ -233,9 +245,11 @@ pub(crate) unsafe fn find_ident_at_pos(
         return 0;
     }
 
-    line = ScanLine(line.ptr(col));
-    // SAFETY: `text` is the caller's own out-parameter.
-    unsafe { *text = line.0 };
+    line = line.from(col);
+    // SAFETY: `text` is the caller's own out-parameter. It answers a pointer
+    // *into* the buffer's line, which is what every caller here wants and
+    // what none of them holds across a change.
+    unsafe { *text = line.ptr(0) };
     if !textcol.is_null() {
         // SAFETY: `textcol` is the caller's own out-parameter.
         unsafe { *textcol = col };
