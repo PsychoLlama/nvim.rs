@@ -223,7 +223,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
             }
         }
         ListDo::Quickfix { .. } => {
-            qf_size = qf_get_valid_size(excmd);
+            qf_size = qf_get_valid_size(excmd.cmdidx);
             debug_assert!(excmd.line1 >= 0 as LineNr, "eap->line1 >= 0");
             if qf_size == 0 || excmd.line1 as size_t > qf_size {
                 buf = ptr::null_mut();
@@ -335,10 +335,10 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                 if i as size_t >= qf_size || i as LineNr >= excmd.line2 {
                     break;
                 }
-                let qf_idx = qf_get_cur_idx(excmd);
+                let qf_idx = qf_get_cur_idx(excmd.cmdidx);
                 ex_cnext(excmd);
                 // If jumping to the next quickfix entry fails, quit here.
-                if qf_get_cur_idx(excmd) == qf_idx {
+                if qf_get_cur_idx(excmd.cmdidx) == qf_idx {
                     break;
                 }
             }

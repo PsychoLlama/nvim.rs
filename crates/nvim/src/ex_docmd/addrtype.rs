@@ -6,7 +6,8 @@
 //! rest of `address` reads is the `addr_type` these leave behind.
 #![forbid(unsafe_code)]
 
-use super::address::{head, qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_valid_size, tail};
+use super::address::{head, tail};
+use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_valid_size};
 
 use crate::ex_docmd::is_user_cmd;
 use crate::types::CmdIdx;
@@ -104,8 +105,8 @@ pub fn get_cmd_default_range(excmd: &mut ExArg) -> LineNr {
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle as LineNr,
         CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()) as LineNr,
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
-        CmdAddr::Quickfix => qf_get_cur_idx(excmd) as LineNr,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(excmd) as LineNr,
+        CmdAddr::Quickfix => qf_get_cur_idx(excmd.cmdidx) as LineNr,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(excmd.cmdidx) as LineNr,
         _ => 0,
     }
 }
@@ -143,7 +144,7 @@ pub fn set_cmd_dflall_range(excmd: &mut ExArg) {
             }
         }
         CmdAddr::QuickfixValid => {
-            excmd.line2 = qf_get_valid_size(excmd) as LineNr;
+            excmd.line2 = qf_get_valid_size(excmd.cmdidx) as LineNr;
             if excmd.line2 == 0 {
                 excmd.line2 = 1;
             }

@@ -24,6 +24,7 @@
 use super::*;
 use crate::os::cshim::gettext_ptr;
 use crate::types::AutoEvent;
+use crate::types::CmdIdx;
 
 use crate::types::{Failed, Refcount};
 use crate::winlayer::{Buf, Live, Win, windows};
@@ -157,9 +158,8 @@ pub(crate) fn qf_opt(qi: *mut QfInfo) -> Option<Qi> {
 }
 
 /// [`qf_cmd_get_stack`], as a stack that may be absent.
-pub(crate) fn qf_cmd_stack(excmd: &mut ExArg, print_emsg: bool) -> Option<Qi> {
-    // SAFETY: `excmd`'s promise — a live command.
-    qf_opt(unsafe { qf_cmd_get_stack(excmd, print_emsg) })
+pub(crate) fn qf_cmd_stack(cmdidx: CmdIdx, print_emsg: bool) -> Option<Qi> {
+    qf_opt(qf_cmd_get_stack(cmdidx, print_emsg))
 }
 
 /// The stack an Ex command works on, allocating a location list stack for
@@ -620,12 +620,11 @@ pub(crate) fn ll_get_or_alloc_list(mut window: Win) -> *mut QfInfo {
 /// the current window's, and there may be none — reported as E776 when
 /// `print_emsg`.
 ///
-/// # Safety
-///
-/// `excmd` must be a live command.
-pub(crate) unsafe fn qf_cmd_get_stack(excmd: &mut ExArg, print_emsg: bool) -> *mut QfInfo {
-    // SAFETY: the caller's promise -- a live `ExArg`.
-    if !is_loclist_cmd(excmd.cmdidx) {
+/// The command is named by its `cmdidx` alone, which is all that decides
+/// between the two stacks -- so an address that asks a quickfix question
+/// can ask it while `get_address` still holds the command line.
+pub(crate) fn qf_cmd_get_stack(cmdidx: CmdIdx, print_emsg: bool) -> *mut QfInfo {
+    if !is_loclist_cmd(cmdidx) {
         return QfStack::Global.raw();
     }
     let qi = win_loclist(Win::current());

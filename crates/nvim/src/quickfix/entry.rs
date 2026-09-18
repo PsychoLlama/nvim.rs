@@ -434,9 +434,8 @@ pub(crate) fn qf_get_entry(
 }
 
 /// How many entries the current list holds. Zero when there is no list.
-pub fn qf_get_size(excmd: &mut ExArg) -> size_t {
-    // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(excmd, false) };
+pub fn qf_get_size(cmdidx: CmdIdx) -> size_t {
+    let qi = qf_cmd_get_stack(cmdidx, false);
     if qi.is_null() {
         return 0;
     }
@@ -446,13 +445,12 @@ pub fn qf_get_size(excmd: &mut ExArg) -> size_t {
 
 /// How many entries `:cdo`/`:ldo` would visit, or how many files
 /// `:cfdo`/`:lfdo` would.
-pub fn qf_get_valid_size(excmd: &mut ExArg) -> size_t {
-    // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(excmd, false) };
+pub fn qf_get_valid_size(cmdidx: CmdIdx) -> size_t {
+    let qi = qf_cmd_get_stack(cmdidx, false);
     if qi.is_null() {
         return 0;
     }
-    let per_entry = excmd.cmdidx == CmdIdx::cdo || excmd.cmdidx == CmdIdx::ldo;
+    let per_entry = cmdidx == CmdIdx::cdo || cmdidx == CmdIdx::ldo;
     let qfl = unsafe { qf_get_curlist(qi) };
     let mut prev_fnum = 0;
     let mut size: size_t = 0;
@@ -474,9 +472,8 @@ pub fn qf_get_valid_size(excmd: &mut ExArg) -> size_t {
 }
 
 /// Which entry of the current list is current. Zero when there is no list.
-pub fn qf_get_cur_idx(excmd: &mut ExArg) -> size_t {
-    // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(excmd, false) };
+pub fn qf_get_cur_idx(cmdidx: CmdIdx) -> size_t {
+    let qi = qf_cmd_get_stack(cmdidx, false);
     if qi.is_null() {
         return 0;
     }
@@ -486,9 +483,8 @@ pub fn qf_get_cur_idx(excmd: &mut ExArg) -> size_t {
 
 /// Which entry is current, counting only the entries `:cdo` would visit —
 /// or, for `:cfdo`/`:lfdo`, only the files. One when there are none.
-pub fn qf_get_cur_valid_idx(excmd: &mut ExArg) -> c_int {
-    // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(excmd, false) };
+pub fn qf_get_cur_valid_idx(cmdidx: CmdIdx) -> c_int {
+    let qi = qf_cmd_get_stack(cmdidx, false);
     if qi.is_null() {
         return 1;
     }
@@ -496,7 +492,7 @@ pub fn qf_get_cur_valid_idx(excmd: &mut ExArg) -> c_int {
     if !unsafe { qf_list_has_valid_entries(qfl) } {
         return 1;
     }
-    let per_file = excmd.cmdidx == CmdIdx::cfdo || excmd.cmdidx == CmdIdx::lfdo;
+    let per_file = cmdidx == CmdIdx::cfdo || cmdidx == CmdIdx::lfdo;
     let mut prev_fnum = 0;
     let mut eidx = 0;
     let mut i = 1;

@@ -20,6 +20,7 @@ use crate::cursor::check_cursor;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::option::boolean_optval;
+use crate::types::CmdIdx;
 use crate::types::{Failed, OptError, OptionSetFlags};
 use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
@@ -115,10 +116,9 @@ fn clamp_cursor(window: Win) {
     check_cursor(window);
 }
 
-/// The stack `excmd`'s command names, or none when there is not one.
-fn stack_of(excmd: &mut ExArg, print_emsg: bool) -> Option<Qi> {
-    // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(excmd, print_emsg) };
+/// The stack the command `cmdidx` names, or none when there is not one.
+fn stack_of(cmdidx: CmdIdx, print_emsg: bool) -> Option<Qi> {
+    let qi = qf_cmd_get_stack(cmdidx, print_emsg);
     (!qi.is_null()).then_some(unsafe { Qi::new(qi) })
 }
 
@@ -318,7 +318,7 @@ pub(crate) fn qf_update_win_titlevar(qi: Qi) {
 /// `:copen`/`:lopen`: open a window showing the list.
 pub fn ex_copen(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = stack_of(excmd, true) else {
+    let Some(qi) = stack_of(excmd.cmdidx, true) else {
         return;
     };
     incr_quickfix_busy();
@@ -361,7 +361,7 @@ pub fn ex_copen(excmd: &mut ExArg) {
 /// close it if there is not.
 pub fn ex_cwindow(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = stack_of(excmd, true) else {
+    let Some(qi) = stack_of(excmd.cmdidx, true) else {
         return;
     };
     let qfl = qi.curlist();
@@ -380,7 +380,7 @@ pub fn ex_cwindow(excmd: &mut ExArg) {
 /// `:cclose`/`:lclose`: close the window showing the list.
 pub fn ex_cclose(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = stack_of(excmd, false) else {
+    let Some(qi) = stack_of(excmd.cmdidx, false) else {
         return;
     };
     if let Some(win) = qf_find_win(qi) {
@@ -408,7 +408,7 @@ fn win_goto_line(mut win: Win, lnum: LineNr) {
 /// `:cbottom`/`:lbottom`: put the cursor on the last line of the window.
 pub fn ex_cbottom(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = stack_of(excmd, true) else {
+    let Some(qi) = stack_of(excmd.cmdidx, true) else {
         return;
     };
     if let Some(win) = qf_find_win(qi) {

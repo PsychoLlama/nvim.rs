@@ -101,13 +101,20 @@ pub(crate) unsafe fn parse_diffanchors(
     anchors: *mut LineNr,
     num_anchors: *mut c_int,
 ) -> Result<(), Failed> {
-    // A copy: the walk below outlives a projection's borrow.
+    // A copy, for two reasons: the walk below outlives a projection's
+    // borrow, and `get_address` needs a *writable* buffer -- a `/pat/`
+    // anchor goes to `do_search`, which terminates the pattern in place.
+    // Upstream writes that NUL into the option's own storage and puts the
+    // byte back; a copy has nothing to put back.
     let global_dia = P_DIA.get();
-    let mut dia = if buffer.b_p_dia.first_byte() == 0 {
-        global_dia.as_ptr().cast_mut()
+    let mut dia: Vec<u8> = if buffer.b_p_dia.first_byte() == 0 {
+        global_dia.as_cstr().to_bytes()
     } else {
-        buffer.b_p_dia.value_ptr()
-    };
+        buffer.b_p_dia.bytes()
+    }
+    .to_vec();
+    dia.push(0);
+    let mut at = 0;
     // `None` means "stay where you are": `check_only` resolves the address in
     // the window the user is in, and the one case where no window shows the
     // buffer is one the loop below never runs in.
@@ -115,7 +122,7 @@ pub(crate) unsafe fn parse_diffanchors(
         None
     } else {
         let shown = windows().find(|w| w.w_buffer == buffer.raw() && w.w_onebuf_opt.wo_diff != 0);
-        if shown.is_none() && unsafe { *dia } != 0 {
+        if shown.is_none() && dia[at] != 0 {
             emsg(gettext(e_diff_anchors_with_hidden_windows));
             return Err(Failed);
         }
@@ -123,27 +130,27 @@ pub(crate) unsafe fn parse_diffanchors(
     };
 
     let mut i = 0;
-    while i < MAX_DIFF_ANCHORS && unsafe { *dia } != 0 {
+    while i < MAX_DIFF_ANCHORS && dia[at] != 0 {
         // An empty item -- a leading or doubled comma -- is not an
         // address, and `get_address` would answer the cursor line.
-        if unsafe { *dia } == b','.cast_signed() {
+        if dia[at] == b',' {
             return Err(Failed);
         }
         let saved_buf = switch_buffer(buffer);
         let saved_win = bufwin.map(switch_window);
         let mut errormsg = None;
-        let lnum = unsafe {
-            get_address(
-                None,
-                &raw mut dia,
-                CmdAddr::Lines,
-                check_only,
-                true,
-                0,
-                1,
-                &mut errormsg,
-            )
-        };
+        let mut cursor = Some(at);
+        let lnum = get_address(
+            None,
+            &mut dia,
+            &mut cursor,
+            CmdAddr::Lines,
+            check_only,
+            true,
+            0,
+            1,
+            &mut errormsg,
+        );
         saved_buf.restore();
         if let Some(saved_win) = saved_win {
             saved_win.restore();
@@ -151,10 +158,11 @@ pub(crate) unsafe fn parse_diffanchors(
         if let Some(msg) = &errormsg {
             emsg(msg);
         }
-        if dia.is_null() {
+        let Some(cursor) = cursor else {
             return Err(Failed);
-        }
-        if unsafe { *dia } != b','.cast_signed() && unsafe { *dia } != 0 {
+        };
+        at = cursor;
+        if dia[at] != b',' && dia[at] != 0 {
             return Err(Failed);
         }
         // The validator accepts an address it cannot resolve yet; only
@@ -166,12 +174,12 @@ pub(crate) unsafe fn parse_diffanchors(
         if !anchors.is_null() {
             unsafe { *anchors.offset(i as isize) = lnum };
         }
-        if unsafe { *dia } == b','.cast_signed() {
-            dia = unsafe { dia.offset(1) };
+        if dia[at] == b',' {
+            at += 1;
         }
         i += 1;
     }
-    if i == MAX_DIFF_ANCHORS && unsafe { *dia } != 0 {
+    if i == MAX_DIFF_ANCHORS && dia[at] != 0 {
         semsg!(
             "E1549: Cannot have more than {} diff anchors",
             MAX_DIFF_ANCHORS

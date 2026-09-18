@@ -35,7 +35,7 @@ struct At {
 /// plus `:cdo`/`:cfdo`, which start by jumping to the entry they run on.
 pub fn ex_cc(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let Some(qi) = qf_cmd_stack(excmd, true) else {
+    let Some(qi) = qf_cmd_stack(excmd.cmdidx, true) else {
         return;
     };
 
@@ -75,7 +75,7 @@ pub fn ex_cc(excmd: &mut ExArg) {
 /// the `:cdo`/`:cfdo` family's step to the next entry or file.
 pub fn ex_cnext(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let Some(qi) = qf_cmd_stack(excmd, true) else {
+    let Some(qi) = qf_cmd_stack(excmd.cmdidx, true) else {
         return;
     };
 
@@ -374,7 +374,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
         return;
     }
 
-    let Some(qi) = qf_cmd_stack(excmd, true) else {
+    let Some(qi) = qf_cmd_stack(excmd.cmdidx, true) else {
         return;
     };
     let qfl = qf_current_list(qi);

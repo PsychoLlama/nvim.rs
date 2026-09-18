@@ -295,31 +295,29 @@ fn put_lines(excmd: &mut ExArg, flags: c_int) {
 /// command, which is why they parse one more address here.
 pub(crate) fn ex_copymove(excmd: &mut ExArg) {
     let mut errormsg = None;
-    // The scan advances a cursor of its own; see `parse_cmd_address`.
-    let mut cursor = excmd.arg_ptr();
-    let addr_type = excmd.addr_type;
-    let n = unsafe {
-        get_address(
-            Some(excmd),
-            &raw mut cursor,
-            addr_type,
-            false,
-            false,
-            0,
-            1,
-            &mut errormsg,
-        )
-    };
-    // `get_address` answers a null cursor when the address was malformed;
-    // an offset cannot say null, so the test comes before the store.
-    if cursor.is_null() {
+    // The scan walks a cursor of its own; see `parse_cmd_address`.
+    let (cmdidx, addr_type) = (excmd.cmdidx, excmd.addr_type);
+    let mut at = Some(excmd.line.arg);
+    let n = get_address(
+        Some(cmdidx),
+        excmd.line.buffer_mut(),
+        &mut at,
+        addr_type,
+        false,
+        false,
+        0,
+        1,
+        &mut errormsg,
+    );
+    // `get_address` answers no offset when the address was malformed.
+    let Some(at) = at else {
         if let Some(msg) = &errormsg {
             emsg(msg.as_ptr());
         }
         excmd.line.next = None;
         return;
-    }
-    excmd.set_arg_ptr(cursor);
+    };
+    excmd.line.arg = at;
     get_flags(excmd);
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".

@@ -122,6 +122,26 @@ pub unsafe fn skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *m
     }
 }
 
+/// [`skip_regexp`] as an offset walk: how many bytes of `text` the pattern
+/// takes, stopping at `delim` or at the NUL that ends the string `text`
+/// starts with.
+///
+/// The slice form an address or a command-line parse wants. Nothing is
+/// written: [`skip_regexp_ex`] only rewrites the pattern when it is given a
+/// `newp` slot, and this passes none.
+///
+/// # Panics
+/// If `text` holds no NUL at all.
+pub(crate) fn skip_regexp_at(text: &[u8], delim: c_int, magic: c_int) -> usize {
+    assert!(text.contains(&0), "the walk needs a terminator to stop at");
+    let start = text.as_ptr().cast::<c_char>().cast_mut();
+    // SAFETY: the assert above says `text` is a NUL-terminated string, and
+    // with no `newp` slot the walk only reads it -- so the pointer, derived
+    // from a shared borrow, is never written through. The end it answers is
+    // inside `text`, the start first.
+    unsafe { skip_regexp(start, delim, magic).offset_from(start) }.cast_unsigned()
+}
+
 /// [`skip_regexp`], but complain and return NULL when the delimiter is
 /// missing rather than returning the pattern's end.
 ///

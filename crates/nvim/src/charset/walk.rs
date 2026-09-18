@@ -184,11 +184,7 @@ pub unsafe fn getdigits(cursor: *mut *mut c_char, strict: bool, def: intmax_t) -
 /// `*pp` must be a NUL-terminated string.
 pub unsafe fn getdigits_int(cursor: *mut *mut c_char, strict: bool, def: c_int) -> c_int {
     let number = unsafe { getdigits(cursor, strict, intmax_t::from(def)) };
-    if strict {
-        let clamped = number.clamp(intmax_t::from(c_int::MIN), intmax_t::from(c_int::MAX));
-        return c_int::try_from(clamped).expect("clamped into `c_int`'s range");
-    }
-    c_int::try_from(number).unwrap_or(def)
+    narrow_int(number, strict, def)
 }
 
 /// [`getdigits_int`] as an offset walk: the number `buffer[at..]` starts with,
@@ -208,6 +204,22 @@ pub(crate) fn getdigits_int_at(
     strict: bool,
     def: c_int,
 ) -> (c_int, usize) {
+    let (number, past) = getdigits_at(buffer, at, strict, intmax_t::from(def));
+    (narrow_int(number, strict, def), past)
+}
+
+/// [`getdigits`] as an offset walk, in its full width -- the shape a caller
+/// that wants C's truncating cast rather than [`getdigits_int_at`]'s clamp
+/// reads. See [`getdigits_int_at`] for why the buffer is `&mut`.
+///
+/// # Panics
+/// If `buffer` holds no NUL at or after `at`.
+pub(crate) fn getdigits_at(
+    buffer: &mut [u8],
+    at: usize,
+    strict: bool,
+    def: intmax_t,
+) -> (intmax_t, usize) {
     assert!(
         buffer[at..].contains(&0),
         "the walk needs a terminator to stop at"
@@ -216,11 +228,20 @@ pub(crate) fn getdigits_int_at(
     // SAFETY: `at` is in bounds of `buffer`, which the assert above says is
     // NUL-terminated from there.
     let mut cursor = unsafe { base.add(at) }.cast::<c_char>();
-    // SAFETY: as above; `getdigits_int` leaves the cursor within the string.
-    let number = unsafe { getdigits_int(&raw mut cursor, strict, def) };
+    // SAFETY: as above; `getdigits` leaves the cursor within the string.
+    let number = unsafe { getdigits(&raw mut cursor, strict, def) };
     // SAFETY: both pointers are into `buffer`, the base first.
     let past = unsafe { cursor.cast::<uint8_t>().offset_from(base) };
     (number, past.cast_unsigned())
+}
+
+/// [`getdigits_int`]'s narrowing, shared with [`getdigits_int_at`].
+fn narrow_int(number: intmax_t, strict: bool, def: c_int) -> c_int {
+    if strict {
+        let clamped = number.clamp(intmax_t::from(c_int::MIN), intmax_t::from(c_int::MAX));
+        return c_int::try_from(clamped).expect("clamped into `c_int`'s range");
+    }
+    c_int::try_from(number).unwrap_or(def)
 }
 
 /// [`getdigits`] narrowed to an `int32_t`, with [`getdigits_int`]'s shape.

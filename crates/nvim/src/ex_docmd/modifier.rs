@@ -335,26 +335,25 @@ pub(crate) fn parse_command_modifiers(
                 if let Some(after) = check_for_word(&excmd.line, at, b"tab", 3) {
                     at = after;
                     if !skip_only {
-                        // The scan advances a cursor of its own; see
+                        // The scan walks a cursor of its own; see
                         // `parse_cmd_address`.
-                        let mut cursor = excmd.cmd_ptr();
-                        let skip = excmd.skip;
-                        let tabnr = unsafe {
-                            get_address(
-                                Some(excmd),
-                                &raw mut cursor,
-                                CmdAddr::Tabs,
-                                skip,
-                                skip_only,
-                                0,
-                                1,
-                                errormsg,
-                            )
-                        } as c_int;
-                        if cursor.is_null() {
+                        let (cmdidx, skip) = (excmd.cmdidx, excmd.skip);
+                        let mut cursor = Some(excmd.line.cmd);
+                        let tabnr = get_address(
+                            Some(cmdidx),
+                            excmd.line.buffer_mut(),
+                            &mut cursor,
+                            CmdAddr::Tabs,
+                            skip,
+                            skip_only,
+                            0,
+                            1,
+                            errormsg,
+                        ) as c_int;
+                        let Some(cursor) = cursor else {
                             return Err(Failed);
-                        }
-                        excmd.set_cmd_ptr(cursor);
+                        };
+                        excmd.line.cmd = cursor;
                         if tabnr == MAXLNUM {
                             cm.cmod_tab = tab_index(TabPage::current()) + 1;
                         } else {

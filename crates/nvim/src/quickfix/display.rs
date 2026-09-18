@@ -182,7 +182,7 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
 /// `:clist`/`:llist`: print the entries of the current list.
 pub fn qf_list(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let Some(qi) = qf_cmd_stack(excmd, true) else {
+    let Some(qi) = qf_cmd_stack(excmd.cmdidx, true) else {
         return;
     };
     if qf_is_empty(qi) || qfl_is_empty(qf_current_list(qi)) {
@@ -365,7 +365,7 @@ unsafe fn qf_msg(qi: *mut QfInfo, which: c_int, lead: *const c_char) {
 /// `:colder`/`:cnewer`/`:lolder`/`:lnewer`: move up or down the stack.
 pub fn qf_age(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let Some(mut qi) = qf_cmd_stack(excmd, true) else {
+    let Some(mut qi) = qf_cmd_stack(excmd.cmdidx, true) else {
         return;
     };
     let count = if excmd.addr_count != 0 {
@@ -397,7 +397,7 @@ pub fn qf_age(excmd: &mut ExArg) {
 /// go to one of them.
 pub fn qf_history(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let stack = qf_cmd_stack(excmd, false);
+    let stack = qf_cmd_stack(excmd.cmdidx, false);
     if excmd.addr_count > 0 {
         match stack {
             None => qf_emsg(e_loclist.as_ptr()),

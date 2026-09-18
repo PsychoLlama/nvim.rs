@@ -69,8 +69,8 @@ pub use walk::{
     skiptowhite, skiptowhite_esc, skipwhite,
 };
 pub(crate) use walk::{
-    getdigits_int_at, getdigits_long, getwhitecols, getwhitecols_curline, skip_to_newline,
-    skipwhite_len, try_getdigits, vim_isblankline,
+    getdigits_at, getdigits_int_at, getdigits_long, getwhitecols, getwhitecols_curline,
+    skip_to_newline, skipwhite_len, try_getdigits, vim_isblankline,
 };
 
 /// Bits of a `g_chartab` entry.

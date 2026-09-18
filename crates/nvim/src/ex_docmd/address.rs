@@ -15,8 +15,7 @@
 #![allow(unsafe_code)]
 
 use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
-use crate::ascii::ascii_isdigit;
-use crate::cstr;
+use crate::cstr::byte_at;
 use crate::ex_docmd::is_user_cmd;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
@@ -27,7 +26,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::buffer::get_highest_fnum;
-use crate::charset::{getdigits, getdigits_int32};
+use crate::charset::{getdigits_at, getdigits_int_at, skip};
 
 use crate::cursor::{check_cursor, check_cursor_col};
 
@@ -43,13 +42,13 @@ use crate::mark::{mark_check, mark_get, mark_move_to};
 
 use crate::option::magic_isset;
 use crate::pos::{MAXCOL, MAXLNUM};
-use crate::quickfix::qf_get_size;
+use crate::quickfix::{qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_size, qf_get_valid_size};
 
-use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
+use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp_at};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::types::{
     CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr, MarkGet,
-    MarkMove, NUL, OK, Pos, size_t,
+    MarkMove, OK, Pos, size_t,
 };
 use crate::winlayer::{Buf, Win, first_buffer, last_buffer};
 
@@ -136,31 +135,30 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
             excmd.line1 = excmd.line2;
             excmd.line2 = get_cmd_default_range(excmd);
             excmd.line.cmd = excmd.line.skip_white(excmd.line.cmd);
-            // The scan advances a cursor of its own: the command is lent to
-            // it for the quickfix addresses, so its `cmd` cannot be lent as
-            // well.
-            let mut cursor = excmd.cmd_ptr();
-            let (addr_type, skip) = (excmd.addr_type, excmd.skip);
+            // The scan walks a cursor of its own, and the buffer it walks is
+            // the command's, so everything it needs of the command is read
+            // out before the line is lent.
+            let (cmdidx, addr_type, skip) = (excmd.cmdidx, excmd.addr_type, excmd.skip);
             let to_other_file = (excmd.addr_count == 0) as c_int;
-            lnum = unsafe {
-                get_address(
-                    Some(excmd),
-                    &raw mut cursor,
-                    addr_type,
-                    skip,
-                    silent,
-                    to_other_file,
-                    address_count,
-                    errormsg,
-                )
-            };
-            // `get_address` answers a null cursor when the address was
-            // malformed: upstream stores it in `eap->cmd` and tests that,
-            // which an offset cannot say, so the test comes first.
-            if cursor.is_null() {
+            let mut at = Some(excmd.line.cmd);
+            lnum = get_address(
+                Some(cmdidx),
+                excmd.line.buffer_mut(),
+                &mut at,
+                addr_type,
+                skip,
+                silent,
+                to_other_file,
+                address_count,
+                errormsg,
+            );
+            // `get_address` answers no offset when the address was
+            // malformed: upstream stores a null in `eap->cmd` and tests
+            // that, which an offset cannot say, so the test comes first.
+            let Some(at) = at else {
                 break 'theend;
-            }
-            excmd.set_cmd_ptr(cursor);
+            };
+            excmd.line.cmd = at;
             address_count += 1;
             if lnum != MAXLNUM {
                 excmd.line2 = lnum;
@@ -278,7 +276,7 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
         }
         CmdAddr::QuickfixValid => {
             // SAFETY: the caller's promise -- a live command.
-            let valid = qf_get_valid_size(excmd) as LineNr;
+            let valid = qf_get_valid_size(excmd.cmdidx) as LineNr;
             excmd.line1 = 1;
             excmd.line2 = valid;
             if excmd.line2 == 0 {
@@ -345,11 +343,11 @@ pub unsafe fn skip_range(text: &[u8], ctx: *mut ExpandContext) -> usize {
         }
     }
     while byte(at) == b':' {
-        at += 1 + crate::charset::skip::white(&text[(at + 1).min(text.len())..]);
+        at += 1 + skip::white(&text[(at + 1).min(text.len())..]);
     }
     // `:*` is the "last Visual area" range, spelled after the colons.
     if byte(at) == b'*' {
-        at += 1 + crate::charset::skip::white(&text[(at + 1).min(text.len())..]);
+        at += 1 + skip::white(&text[(at + 1).min(text.len())..]);
     }
     at
 }
@@ -365,19 +363,26 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 
 /// Read one address, including any `+N`/`-N` offsets after it.
 ///
+/// `text` is the buffer the address is written in — a command line, or an
+/// item of `'diffanchors'` — and `at` says where to start and comes back
+/// saying where the address ended. It comes back `None` for an error, with
+/// the message in `errormsg`; upstream reports that by writing a null
+/// cursor, which an offset cannot spell. The buffer is writable because a
+/// `/pat/` address hands the pattern to `do_search`, which NUL-terminates
+/// it in place and puts the byte back.
+///
+/// `cmdidx` names the command asking. Only the quickfix address kinds look
+/// at it — they ask which list `:cdo` and friends would count — and only a
+/// quickfix command can name one, so an address parsed outside a command
+/// passes `None` and never reaches them.
+///
 /// Answers `MAXLNUM` for "there was no address here", which is not the same
-/// as an address that resolved to nothing, and writes null through `cursor` to
-/// report an error (the message goes to `errormsg`).
-///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`, unaliased for the call.
-/// `cursor` must point at a writable `*mut c_char` slot the caller owns for
-/// the call.
+/// as an address that resolved to nothing.
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn get_address(
-    mut excmd: Option<&mut ExArg>,
-    cursor: *mut *mut c_char,
+pub fn get_address(
+    cmdidx: Option<CmdIdx>,
+    text: &mut [u8],
+    at: &mut Option<usize>,
     addr_type: CmdAddr,
     skip: bool,
     silent: bool,
@@ -387,70 +392,72 @@ pub unsafe fn get_address(
 ) -> LineNr {
     // The record a `'m` address answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
-    let mut cmd: *mut c_char = unsafe { skipwhite(*cursor) };
+    let mut cmd = at.expect("an address is read from somewhere in its own text");
+    cmd = cmd + skip::white(&text[cmd.min(text.len())..]);
     let mut lnum: LineNr = MAXLNUM;
     let mut pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
     };
+    // Upstream's null `cmd`: the address was malformed and the caller's
+    // cursor must not move.
+    let mut failed = false;
     'error: loop {
-        match ubyte(cmd) {
+        match byte_at(text, cmd) {
             b'.' | b'$' => {
-                let want_last = ubyte(cmd) == b'$';
-                cmd = unsafe { cmd.add(1) };
-                let at = if want_last {
-                    last_lnum(excmd.as_deref_mut(), addr_type)
+                let want_last = byte_at(text, cmd) == b'$';
+                cmd += 1;
+                let addr = if want_last {
+                    last_lnum(cmdidx, addr_type)
                 } else {
-                    dot_lnum(excmd.as_deref_mut(), addr_type)
+                    dot_lnum(cmdidx, addr_type)
                 };
-                match at {
+                match addr {
                     Addr::At(n) => lnum = n,
                     Addr::Unchanged => {}
                     Addr::Refused => {
                         *errormsg = Some(addr_error(addr_type));
-                        cmd = ptr::null_mut();
+                        failed = true;
                         break;
                     }
                 }
             }
             b'\'' => {
-                cmd = unsafe { cmd.add(1) };
-                if byte(cmd) == NUL {
-                    cmd = ptr::null_mut();
+                cmd += 1;
+                if byte_at(text, cmd) == 0 {
+                    failed = true;
                     break;
                 }
                 if addr_type != CmdAddr::Lines {
                     *errormsg = Some(addr_error(addr_type));
-                    cmd = ptr::null_mut();
+                    failed = true;
                     break;
                 }
                 if skip {
-                    cmd = unsafe { cmd.add(1) };
+                    cmd += 1;
                 } else {
                     // A mark in another file is only followed when it
                     // is the whole address and the command can change
                     // file; otherwise only this buffer's marks count.
-                    let flag = if to_other_file != 0 && byte(unsafe { cmd.add(1) }) == NUL {
+                    let flag = if to_other_file != 0 && byte_at(text, cmd + 1) == 0 {
                         kMarkAll as c_int
                     } else {
                         kMarkBufLocal as c_int
                     } as MarkGet;
+                    // The mark's name, as the C's `*cmd` reads it: signed,
+                    // so a mark named with a high byte is a negative
+                    // number and matches nothing.
+                    let name = c_int::from(byte_at(text, cmd).cast_signed());
                     let fm = unsafe {
-                        mark_get(
-                            Buf::current(),
-                            Win::current(),
-                            &raw mut slot,
-                            flag,
-                            *cmd as c_int,
-                        )
+                        mark_get(Buf::current(), Win::current(), &raw mut slot, flag, name)
                     };
-                    cmd = unsafe { cmd.add(1) };
+                    cmd += 1;
                     if !fm.is_null() && unsafe { (*fm).fnum } != Buf::current().handle {
                         unsafe { mark_move_to(fm, 0 as MarkMove) };
                         lnum = Win::current().w_cursor.lnum;
                     } else if !unsafe { mark_check(fm, errormsg) } {
-                        cmd = ptr::null_mut();
+                        failed = true;
                         break;
                     } else {
                         debug_assert!(!fm.is_null());
@@ -458,18 +465,18 @@ pub unsafe fn get_address(
                     }
                 }
             }
-            c @ (b'/' | b'?') => {
-                cmd = unsafe { cmd.add(1) };
-                let c = c as c_int;
+            delim @ (b'/' | b'?') => {
+                cmd += 1;
+                let c = c_int::from(delim);
                 if addr_type != CmdAddr::Lines {
                     *errormsg = Some(addr_error(addr_type));
-                    cmd = ptr::null_mut();
+                    failed = true;
                     break;
                 }
                 if skip {
-                    cmd = unsafe { skip_regexp(cmd, c, magic_isset() as c_int) };
-                    if byte(cmd) == c {
-                        cmd = unsafe { cmd.add(1) };
+                    cmd += skip_regexp_at(&text[cmd..], c, magic_isset() as c_int);
+                    if byte_at(text, cmd) == delim {
+                        cmd += 1;
                     }
                 } else {
                     // The search starts from the address read so far,
@@ -490,13 +497,23 @@ pub unsafe fn get_address(
                     } else {
                         SEARCH_HIS as c_int | SEARCH_MSG as c_int
                     };
+                    let tail = &mut text[cmd..];
+                    let patlen = tail
+                        .iter()
+                        .position(|byte| *byte == 0)
+                        .unwrap_or(tail.len());
+                    let pat = tail.as_mut_ptr().cast::<c_char>();
+                    // SAFETY: `pat` is the NUL-terminated pattern the
+                    // caller's own buffer holds, writable for the call --
+                    // `do_search` terminates the pattern in place and puts
+                    // the byte back.
                     if unsafe {
                         do_search(
                             ptr::null_mut(),
                             c,
                             c,
-                            cmd,
-                            cstr::bytes_at(cmd).len(),
+                            pat,
+                            patlen,
                             1,
                             flags,
                             ptr::null_mut(),
@@ -504,31 +521,36 @@ pub unsafe fn get_address(
                     } == 0
                     {
                         Win::current().w_cursor = pos;
-                        cmd = ptr::null_mut();
+                        failed = true;
                         break;
                     }
                     lnum = Win::current().w_cursor.lnum;
                     Win::current().w_cursor = pos;
-                    cmd = unsafe { cmd.add(searchcmdlen.get() as usize) };
+                    // What `do_search` consumed. Wrapping, as upstream's
+                    // pointer arithmetic: the unescaping copy can leave
+                    // this negative.
+                    cmd = cmd.wrapping_add_signed(
+                        isize::try_from(searchcmdlen.get()).expect("an int is an isize"),
+                    );
                 }
             }
             b'\\' => {
                 // `\/` and `\?` repeat the last search pattern, `\&`
                 // the last substitute pattern.
-                cmd = unsafe { cmd.add(1) };
+                cmd += 1;
                 if addr_type != CmdAddr::Lines {
                     *errormsg = Some(addr_error(addr_type));
-                    cmd = ptr::null_mut();
+                    failed = true;
                     break;
                 }
-                let i = if byte(cmd) == '&' as c_int {
-                    RE_SUBST as c_int
-                } else if byte(cmd) == '?' as c_int || byte(cmd) == '/' as c_int {
-                    RE_SEARCH as c_int
-                } else {
-                    *errormsg = Some(ex_msg(e_backslash.as_ptr()));
-                    cmd = ptr::null_mut();
-                    break;
+                let i = match byte_at(text, cmd) {
+                    b'&' => RE_SUBST as c_int,
+                    b'?' | b'/' => RE_SEARCH as c_int,
+                    _ => {
+                        *errormsg = Some(ex_msg(e_backslash.as_ptr()));
+                        failed = true;
+                        break;
+                    }
                 };
                 if !skip {
                     pos.lnum = if lnum != MAXLNUM {
@@ -536,13 +558,13 @@ pub unsafe fn get_address(
                     } else {
                         Win::current().w_cursor.lnum
                     };
-                    pos.col = if byte(cmd) != '?' as c_int {
+                    pos.col = if byte_at(text, cmd) != b'?' {
                         MAXCOL as ColNr
                     } else {
                         0
                     };
                     pos.coladd = 0;
-                    let dir = if byte(cmd) == '?' as c_int {
+                    let dir = if byte_at(text, cmd) == b'?' {
                         BACKWARD as c_int
                     } else {
                         FORWARD as c_int
@@ -563,72 +585,72 @@ pub unsafe fn get_address(
                         )
                     } == FAIL
                     {
-                        cmd = ptr::null_mut();
+                        failed = true;
                         break;
                     }
                     lnum = pos.lnum;
                 }
-                cmd = unsafe { cmd.add(1) };
+                cmd += 1;
             }
-            _ => {
-                if ascii_isdigit(byte(cmd)) {
-                    lnum = unsafe { getdigits(&raw mut cmd, false, 0) } as LineNr;
-                }
+            digit if digit.is_ascii_digit() => {
+                let (number, past) = getdigits_at(text, cmd, false, 0);
+                lnum = number as LineNr;
+                cmd = past;
             }
+            _ => {}
         }
 
         // Offsets. A `+`/`-` with no address before it counts from the
         // address kind's "here".
         loop {
-            cmd = skipwhite(cmd);
-            if byte(cmd) != '-' as c_int && byte(cmd) != '+' as c_int && !ascii_isdigit(byte(cmd)) {
+            cmd += skip::white(&text[cmd.min(text.len())..]);
+            if !matches!(byte_at(text, cmd), b'-' | b'+' | b'0'..=b'9') {
                 break;
             }
             if lnum == MAXLNUM
-                && let Addr::At(n) = offset_base(excmd.as_deref_mut(), addr_type)
+                && let Addr::At(n) = offset_base(cmdidx, addr_type)
             {
                 lnum = n;
             }
-            let i = if ascii_isdigit(byte(cmd)) {
-                '+' as c_int
+            let sign = if byte_at(text, cmd).is_ascii_digit() {
+                b'+'
             } else {
-                let at = cmd;
-                cmd = unsafe { cmd.add(1) };
-                unsafe { *at as u8 as c_int }
+                let sign = byte_at(text, cmd);
+                cmd += 1;
+                sign
             };
-            let n: LineNr = if !ascii_isdigit(byte(cmd)) {
+            let n: LineNr = if !byte_at(text, cmd).is_ascii_digit() {
                 1
             } else {
-                let n = unsafe { getdigits_int32(&raw mut cmd, false, MAXLNUM) } as LineNr;
+                let (n, past) = getdigits_int_at(text, cmd, false, MAXLNUM);
+                cmd = past;
                 if n == MAXLNUM {
                     *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
-                    cmd = ptr::null_mut();
+                    failed = true;
                     break 'error;
                 }
                 n
             };
             if addr_type == CmdAddr::TabsRelative {
                 *errormsg = Some(ex_msg(e_invrange.as_ptr()));
-                cmd = ptr::null_mut();
+                failed = true;
                 break 'error;
             } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
-                let offset = if i == '-' as c_int { -n } else { n };
+                let offset = if sign == b'-' { -n } else { n };
                 lnum = compute_buffer_local_count(addr_type, lnum, offset) as LineNr;
             } else {
                 // An offset in the *second* address of a range counts
                 // from the end of a closed fold, so `:.,+1d` deletes
                 // the whole fold and the line after it.
-                if addr_type == CmdAddr::Lines
-                    && (i == '-' as c_int || i == '+' as c_int)
-                    && address_count >= 2
+                if addr_type == CmdAddr::Lines && matches!(sign, b'-' | b'+') && address_count >= 2
                 {
                     has_folding(Win::current(), lnum, None, Some(&mut lnum));
                 }
-                if i == '-' as c_int {
+                if sign == b'-' {
                     lnum -= n;
                 } else if lnum >= 0 && n >= INT32_MAX as LineNr - lnum {
                     *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
-                    cmd = ptr::null_mut();
+                    failed = true;
                     break 'error;
                 } else {
                     lnum += n;
@@ -638,11 +660,11 @@ pub unsafe fn get_address(
 
         // A search address may be followed by another one, which
         // searches on from where the first landed.
-        if byte(cmd) != '/' as c_int && byte(cmd) != '?' as c_int {
+        if !matches!(byte_at(text, cmd), b'/' | b'?') {
             break;
         }
     }
-    unsafe { *cursor = cmd };
+    *at = (!failed).then_some(cmd);
     lnum
 }
 
@@ -665,10 +687,10 @@ enum Addr {
 }
 
 /// What `.` means for this address kind.
-fn dot_lnum(excmd: Option<&mut ExArg>, addr_type: CmdAddr) -> Addr {
+fn dot_lnum(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
     // Only the quickfix kinds read the command, and only a quickfix command
     // can name one: `get_address` with no command never reaches them.
-    let quickfix = || excmd.expect("a quickfix address is asked by a quickfix command");
+    let quickfix = || cmdidx.expect("a quickfix address is asked by a quickfix command");
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => Win::current().w_cursor.lnum,
         CmdAddr::Windows => current_win_nr(Win::current_or_none()) as LineNr,
@@ -685,9 +707,9 @@ fn dot_lnum(excmd: Option<&mut ExArg>, addr_type: CmdAddr) -> Addr {
 }
 
 /// What `$` means for this address kind.
-fn last_lnum(excmd: Option<&mut ExArg>, addr_type: CmdAddr) -> Addr {
+fn last_lnum(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
     // As [`dot_lnum`].
-    let quickfix = || excmd.expect("a quickfix address is asked by a quickfix command");
+    let quickfix = || cmdidx.expect("a quickfix address is asked by a quickfix command");
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => Buf::current().b_ml.ml_line_count,
         CmdAddr::Windows => current_win_nr(None) as LineNr,
@@ -707,11 +729,11 @@ fn last_lnum(excmd: Option<&mut ExArg>, addr_type: CmdAddr) -> Addr {
 
 /// What a bare `+N`/`-N` counts from. Unlike `.`, the three cursor-less
 /// kinds answer a number here rather than an error.
-fn offset_base(excmd: Option<&mut ExArg>, addr_type: CmdAddr) -> Addr {
+fn offset_base(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
     match addr_type {
         CmdAddr::TabsRelative => Addr::At(1),
         CmdAddr::NoRange | CmdAddr::Unsigned => Addr::At(0),
-        _ => dot_lnum(excmd, addr_type),
+        _ => dot_lnum(cmdidx, addr_type),
     }
 }
 
@@ -793,7 +815,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
         }
         CmdAddr::QuickfixValid => {
             let line2 = excmd.line2;
-            if (line2 != 1 && line2 as size_t > qf_get_valid_size(excmd)) || line2 < 0 {
+            if (line2 != 1 && line2 as size_t > qf_get_valid_size(excmd.cmdidx)) || line2 < 0 {
                 return invrange();
             }
         }
@@ -826,40 +848,4 @@ fn ex_msg(msg: *const c_char) -> CString {
 fn mark_get_visual(buffer: Buf, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::mark::mark_get_visual(buffer, fmp, name) }
-}
-
-/// `qf_get_cur_idx()` as checked code.
-pub(super) fn qf_get_cur_idx(excmd: &mut ExArg) -> size_t {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    crate::quickfix::qf_get_cur_idx(excmd)
-}
-
-/// `qf_get_cur_valid_idx()` as checked code.
-pub(super) fn qf_get_cur_valid_idx(excmd: &mut ExArg) -> c_int {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    crate::quickfix::qf_get_cur_valid_idx(excmd)
-}
-
-/// `qf_get_valid_size()` as checked code.
-pub(super) fn qf_get_valid_size(excmd: &mut ExArg) -> size_t {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    crate::quickfix::qf_get_valid_size(excmd)
-}
-
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
-}
-
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-pub(super) fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
 }
