@@ -55,7 +55,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
 
     // A leading count is which match to take.
     let mut n = 1;
-    if ascii_isdigit(byte(excmd.arg_ptr())) {
+    if ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.arg))) {
         n = unsafe { excmd.with_arg_cursor(|cursor| getdigits_int(cursor, false, 0)) };
         let arg_start = excmd.arg_ptr();
         excmd.set_arg_ptr(skipwhite(arg_start));
@@ -64,7 +64,7 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
     // `/pat/` searches for a pattern rather than for a whole word, and
     // the rest of the line after it may be another command.
     let mut whole = true;
-    if byte(excmd.arg_ptr()) == '/' as c_int {
+    if c_int::from(excmd.line.byte_at(excmd.line.arg)) == '/' as c_int {
         whole = false;
         let arg_start = excmd.arg_ptr();
         excmd.set_arg_ptr(unsafe { arg_start.add(1) });

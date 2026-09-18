@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
@@ -160,7 +160,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         };
         let Some(buf) = find_buf(nr) else {
             // SAFETY: the command's own argument, for the one `%s`.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E102: Can't find buffer \"{arg}\"");
             return;
         };
@@ -170,7 +170,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         idx_other = diff_slot(buf, tp);
         if idx_other == DB_COUNT {
             // SAFETY: as above.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E103: Buffer \"{arg}\" is not in diff mode");
             return;
         }

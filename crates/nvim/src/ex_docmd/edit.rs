@@ -4,7 +4,7 @@
 #![allow(unsafe_code)]
 
 use crate::memline::MlFlags;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
@@ -153,7 +153,9 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
 /// `:=` — the line number, unless something follows it, in which case it
 /// is `:lua`'s alias.
 pub(crate) fn ex_equal(excmd: &mut ExArg) {
-    if byte(excmd.arg_ptr()) != NUL && byte(excmd.arg_ptr()) != '|' as c_int {
+    if excmd.line.byte_at(excmd.line.arg) != 0
+        && c_int::from(excmd.line.byte_at(excmd.line.arg)) != '|' as c_int
+    {
         ex_lua(excmd);
     } else {
         let arg_start = excmd.arg_ptr();
@@ -168,12 +170,12 @@ pub(crate) fn ex_sleep(excmd: &mut ExArg) {
         setcursor_mayforce(Win::current(), true);
     }
     let mut len = excmd.line2 as int64_t;
-    match byte(excmd.arg_ptr()) {
+    match c_int::from(excmd.line.byte_at(excmd.line.arg)) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
         _ => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
             return;
         }
@@ -418,7 +420,7 @@ pub(crate) fn ex_at(excmd: &mut ExArg) {
     Win::current().w_cursor.lnum = excmd.line2;
     check_cursor_col(Win::current());
 
-    let mut c = ubyte(excmd.arg_ptr()) as c_int;
+    let mut c = excmd.line.byte_at(excmd.line.arg) as c_int;
     if c == NUL {
         c = '@' as c_int;
     }
@@ -541,7 +543,7 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
     }
     if byte(p) != NUL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E475: Invalid argument: {arg}");
         return;
     }
@@ -559,13 +561,13 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
 
 /// `:mark` and `:k`.
 pub(crate) fn ex_mark(excmd: &mut ExArg) {
-    if byte(excmd.arg_ptr()) == NUL {
+    if excmd.line.byte_at(excmd.line.arg) == 0 {
         emsg(gettext(e_argreq.as_ptr()));
         return;
     }
     if byte_at(excmd.arg_ptr(), 1) != NUL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E488: Trailing characters: {arg}");
         return;
     }

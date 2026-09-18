@@ -1,9 +1,9 @@
 count	callee	no_raw	defs	def
 871	xfree	0	1	crates/nvim/src/memory/mod.rs
-761	.add	0	3	
+759	.add	0	3	
 457	.offset	0	0	
 455	bytes_at	0	1	crates/nvim/src/cstr.rs
-436	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+416	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 283	CStr::from_ptr	0	2	
 239	.offset_from	0	0	
 224	at	0	3	
@@ -12,7 +12,7 @@ count	callee	no_raw	defs	def
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 164	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 155	from_raw_parts	0	0	
-152	skipwhite	0	1	crates/nvim/src/charset/walk.rs
+151	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 121	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 109	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
@@ -527,7 +527,6 @@ count	callee	no_raw	defs	def
 6	set_internal_string_var	0	1	crates/nvim/src/eval/vars/lifecycle.rs
 6	set_option_varp	1	1	crates/nvim/src/option/value.rs
 6	skip_regexp_ex	0	1	crates/nvim/src/regexp/parse.rs
-6	skipdigits	0	1	crates/nvim/src/charset/walk.rs
 6	spell_check	0	1	crates/nvim/src/spell/check.rs
 6	spell_move_to	0	1	crates/nvim/src/spell/navigate.rs
 6	strstr	0	1	crates/nvim/src/os/cshim.rs
@@ -667,6 +666,7 @@ count	callee	no_raw	defs	def
 5	simplify_filename	0	1	crates/nvim/src/path/mod.rs
 5	skip_cpt_delims	0	1	crates/nvim/src/insexpand/callbacks.rs
 5	skip_expr	0	1	crates/nvim/src/eval/entry.rs
+5	skipdigits	0	1	crates/nvim/src/charset/walk.rs
 5	skiptowhite_esc	0	1	crates/nvim/src/charset/walk.rs
 5	spell_iswordp_w	1	1	crates/nvim/src/spell/chartab.rs
 5	spell_load_file	0	1	crates/nvim/src/spellfile/read.rs
@@ -695,7 +695,6 @@ count	callee	no_raw	defs	def
 4	.pack_sparse	0	1	crates/nvim/src/shada/write.rs
 4	.read	0	5	
 4	.step_over	0	1	crates/nvim/src/search/find.rs
-4	.with_arg_cursor	0	0	
 4	.write_at	0	1	crates/nvim/src/file_search/mod.rs
 4	AffHeader::of_key	0	1	crates/nvim/src/spellfile/mod.rs
 4	Bl::new	0	68	
@@ -923,6 +922,7 @@ count	callee	no_raw	defs	def
 3	.stash	0	1	crates/nvim/src/fileio/convert.rs
 3	.take	0	1	crates/nvim/src/change/leader.rs
 3	.unpacker	1	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
+3	.with_arg_cursor	0	0	
 3	ClickDefs::new	0	1	crates/nvim/src/mouse/mod.rs
 3	Cls::new	0	68	
 3	Fi::new	0	68	
@@ -2206,7 +2206,6 @@ count	callee	no_raw	defs	def
 2	uv_signal_stop	0	0	
 2	uv_sleep	0	0	
 2	valid_spell_word	0	1	crates/nvim/src/spellfile/wordtree.rs
-2	valid_yank_reg	0	0	
 2	var_check_lock	0	1	crates/nvim/src/eval/vars/store.rs
 2	var_flavour	0	1	crates/nvim/src/eval/echo.rs
 2	var_redir_str	0	1	crates/nvim/src/eval/vars/redir.rs
@@ -3855,6 +3854,7 @@ count	callee	no_raw	defs	def
 1	valid_diff	0	1	crates/nvim/src/diff/block.rs
 1	valid_filetype	0	0	
 1	valid_spellfile	0	1	crates/nvim/src/spell/lang.rs
+1	valid_yank_reg	0	0	
 1	validate_opt_idx	0	1	crates/nvim/src/option/set_cmd.rs
 1	var_redir_start	0	1	crates/nvim/src/eval/vars/redir.rs
 1	var_set_global	0	1	crates/nvim/src/eval/echo.rs

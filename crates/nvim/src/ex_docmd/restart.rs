@@ -8,7 +8,7 @@ use crate::message_fmt::c_str;
 use crate::types::{Channel, Proc};
 
 use crate::semsg;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::api::ui::{remote_ui_connect, remote_ui_disconnect};
@@ -34,7 +34,7 @@ use crate::strings::{concat_str, has_bytes};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair,
-    NUL, Object, String_0, VarNumber, Vv, key_value_pair, ptrdiff_t, size_t, uint16_t, uint64_t,
+    Object, String_0, VarNumber, Vv, key_value_pair, ptrdiff_t, size_t, uint16_t, uint64_t,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 
@@ -196,7 +196,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
 
             // `:restart {cmd}` runs {cmd} over there, once a UI has
             // arrived.
-            if byte(excmd.arg_ptr()) != NUL {
+            if excmd.line.byte_at(excmd.line.arg) != 0 {
                 let opt_items = [
                     entry(c"once", obj_bool(true)),
                     entry(c"nested", obj_bool(true)),
@@ -434,10 +434,4 @@ fn strequal(a: *const c_char, b: *const c_char) -> bool {
 fn xstrdup(str: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::memory::xstrdup(str) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
 }

@@ -338,7 +338,7 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
     };
 
     'theend: {
-        if !excmd.arg_ptr().is_null() && byte(excmd.arg_ptr()) != NUL {
+        if !excmd.arg_ptr().is_null() && excmd.line.byte_at(excmd.line.arg) != 0 {
             let mut p = excmd.arg_ptr();
             // `+N`/`-N` means N places to the right/left of here.
             let relative = match byte(p) {

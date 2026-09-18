@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::{c_str, msg_bytes};
+use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
@@ -107,7 +107,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     };
     if failed {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(args.arg_ptr()) };
+        let arg = msg_bytes(args.line.arg());
         semsg!("E484: Can't open file {arg}");
     }
 

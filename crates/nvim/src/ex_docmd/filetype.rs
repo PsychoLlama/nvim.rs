@@ -41,7 +41,7 @@ use crate::options::kOptFiletype;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::runtime::RuntimeOpts;
 
-use crate::types::{Array, ExArg, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, size_t};
+use crate::types::{Array, ExArg, Failed, Object, OptVal, OptionSetFlags, String_0, size_t};
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::Buf;
 
@@ -77,7 +77,7 @@ pub(crate) fn ex_doautocmd(excmd: &mut ExArg) {
 
 /// `:filetype [plugin] [indent] on|off|detect`.
 pub(crate) fn ex_filetype(excmd: &mut ExArg) {
-    if byte(excmd.arg_ptr()) == NUL {
+    if excmd.line.byte_at(excmd.line.arg) == 0 {
         report_filetype_state();
         return;
     }

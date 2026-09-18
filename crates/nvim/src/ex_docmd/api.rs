@@ -258,7 +258,7 @@ pub(crate) unsafe fn execute_cmd0(
     // A buffer name may stand in for a buffer number, but not alongside
     // one, and not for a user command.
     if excmd.argt.has(ExArgt::BUFNAME)
-        && byte(excmd.arg_ptr()) != NUL
+        && excmd.line.byte_at(excmd.line.arg) != 0
         && excmd.addr_count == 0
         && !is_user_cmd(excmd.cmdidx)
     {
@@ -393,7 +393,7 @@ pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview
         if !excmd.argt.has(ExArgt::CMDWIN)
             && excmd.cmdidx != CmdIdx::checktime
             && excmd.cmdidx != CmdIdx::edit
-            && !(excmd.cmdidx == CmdIdx::file && byte(excmd.arg_ptr()) == NUL)
+            && !(excmd.cmdidx == CmdIdx::file && excmd.line.byte_at(excmd.line.arg) == 0)
             && !is_user_cmd(excmd.cmdidx)
             && curbuf_locked()
         {

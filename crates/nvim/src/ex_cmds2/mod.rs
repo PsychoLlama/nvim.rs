@@ -72,6 +72,7 @@ use crate::message::{
     vim_dialog_yesnocancel, wait_return,
 };
 use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
 use crate::os::cshim::gettext;
 use crate::path::vim_full_name;
@@ -698,7 +699,7 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     pattern.extend_from_slice(b".*\0");
     if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) }.is_err() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E666: Compiler not supported: {arg}");
     }
 

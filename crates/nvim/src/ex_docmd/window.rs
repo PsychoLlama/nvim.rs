@@ -217,7 +217,7 @@ fn splitview(excmd: &mut ExArg) {
     } else if split(count(excmd, 0), vertical_flag(excmd.cmd_ptr())).is_ok() {
         // A split that will show a *different* file must not stay bound to
         // the one it came from.
-        if byte(excmd.arg_ptr()) != NUL {
+        if excmd.line.byte_at(excmd.line.arg) != 0 {
             reset_binding(Win::current());
         } else {
             do_check_scrollbind(false);
@@ -341,7 +341,7 @@ fn tabnext(excmd: &mut ExArg) {
     // *signed* argument is not a count of places to go back — `:tabp -1`
     // is an error, not `:tabp 1`.
     let tab_number;
-    if !excmd.arg_ptr().is_null() && byte(excmd.arg_ptr()) != NUL {
+    if !excmd.arg_ptr().is_null() && excmd.line.byte_at(excmd.line.arg) != 0 {
         let mut p = excmd.arg_ptr();
         let p_save = p;
         // SAFETY: a NUL-terminated argument; `p` is left on the first byte
@@ -483,7 +483,7 @@ fn is_changed(buffer: Buf) -> bool {
 /// `:mode` — a redraw; the Vim spelling that took a terminal mode name is
 /// refused.
 pub(crate) fn ex_mode(excmd: &mut ExArg) {
-    if byte(excmd.arg_ptr()) == NUL {
+    if excmd.line.byte_at(excmd.line.arg) == 0 {
         must_redraw.set(UPD_CLEAR);
         // SAFETY: a live command.
         ex_redraw(excmd);
@@ -517,8 +517,9 @@ fn resize(excmd: &mut ExArg) {
         }
     }
 
-    let relative = byte(excmd.arg_ptr()) == '-' as c_int || byte(excmd.arg_ptr()) == '+' as c_int;
-    let empty = byte(excmd.arg_ptr()) == NUL;
+    let relative = c_int::from(excmd.line.byte_at(excmd.line.arg)) == '-' as c_int
+        || c_int::from(excmd.line.byte_at(excmd.line.arg)) == '+' as c_int;
+    let empty = excmd.line.byte_at(excmd.line.arg) == 0;
     // SAFETY: a NUL-terminated argument; a non-number reads as zero.
     let mut n = unsafe { atol(excmd.arg_ptr()) } as c_int;
     if cmdmod.with(|m| m.cmod_split) & WSP_VERT as c_int != 0 {
@@ -579,7 +580,9 @@ fn wincmd(excmd: &mut ExArg) {
     // `CTRL-W g` takes a second character.
     let mut xchar = NUL;
     let mut p;
-    if byte(excmd.arg_ptr()) == 'g' as c_int || byte(excmd.arg_ptr()) == Ctrl_G {
+    if c_int::from(excmd.line.byte_at(excmd.line.arg)) == 'g' as c_int
+        || c_int::from(excmd.line.byte_at(excmd.line.arg)) == Ctrl_G
+    {
         let second = excmd.arg_ptr().wrapping_add(1);
         if byte(second) == NUL {
             err(e_invarg.as_ptr());
@@ -601,7 +604,10 @@ fn wincmd(excmd: &mut ExArg) {
         // command is about to make.
         postponed_split_flags.set(cmdmod.with(|m| m.cmod_split));
         postponed_split_tab.set(cmdmod.with(|m| m.cmod_tab));
-        let (nchar, prenum) = (byte(excmd.arg_ptr()), count(excmd, 0));
+        let (nchar, prenum) = (
+            c_int::from(excmd.line.byte_at(excmd.line.arg)),
+            count(excmd, 0),
+        );
         do_window(nchar, prenum, xchar);
         postponed_split_flags.set(0);
         postponed_split_tab.set(0);

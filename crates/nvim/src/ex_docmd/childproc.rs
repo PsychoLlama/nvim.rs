@@ -4,7 +4,7 @@
 
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::xfree;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
 use crate::api::private::helpers::cstr_to_string;
@@ -21,7 +21,7 @@ use crate::os::cshim::{gettext, snprintf};
 
 use crate::os::shell::{shell_build_argv, shell_free_argv};
 
-use crate::types::{Array, ExArg, NUL, Object, String_0, size_t};
+use crate::types::{Array, ExArg, Object, String_0, size_t};
 use crate::usercmd::add_win_cmd_modifiers;
 
 /// `:terminal` — spelled as a command line, not as a call.
@@ -71,7 +71,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
     }
     debug_assert!(len < CMD_LEN);
 
-    if byte(excmd.arg_ptr()) != NUL {
+    if excmd.line.byte_at(excmd.line.arg) != 0 {
         let name = vim_strsave_escaped(excmd.arg_ptr(), c"\"\\".as_ptr());
         unsafe {
             snprintf(
@@ -155,10 +155,4 @@ pub(crate) fn ex_lsp(excmd: &mut ExArg) {
 fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
     // SAFETY: two NUL-terminated strings.
     unsafe { crate::strings::vim_strsave_escaped(string, esc_chars) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
 }

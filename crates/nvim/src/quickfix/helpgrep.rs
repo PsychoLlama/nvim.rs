@@ -10,7 +10,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 use crate::option::vars::P_RTP;
 
@@ -269,7 +269,7 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
         qf_goto(qi, 0, 0, false as c_int);
     } else {
         // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E480: No match: {arg}");
     }
 

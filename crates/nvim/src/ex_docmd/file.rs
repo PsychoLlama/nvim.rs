@@ -10,6 +10,7 @@ use crate::fileio::Loaded;
 use crate::guard::Allow;
 use crate::memline::MlFlags;
 use crate::memory::XString;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::window::valid_win;
@@ -49,7 +50,6 @@ use crate::state::mode::{exmode_active, pending_exmode_active};
 use crate::memline::{ml_delete, ml_get, ml_preserve, ml_recover};
 
 use crate::message::emsg;
-use crate::message_fmt::c_str;
 
 use crate::normal::normal_enter;
 use crate::option::{cpo_has, get_findfunc};
@@ -200,7 +200,7 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
             | CCGD_EXCMD as c_int,
     );
     if !unsaved
-        && (byte(excmd.arg_ptr()) == NUL
+        && (excmd.line.byte_at(excmd.line.arg) == 0
             || unsafe { setfname(Buf::current(), excmd.arg_ptr(), ptr::null_mut(), true) }.is_ok())
     {
         ml_recover(true);
@@ -301,7 +301,9 @@ pub(crate) fn ex_edit(excmd: &mut ExArg) {
     {
         return;
     }
-    if buf_is_prompt(current_buf()) && excmd.cmdidx == CmdIdx::edit && byte(excmd.arg_ptr()) == NUL
+    if buf_is_prompt(current_buf())
+        && excmd.cmdidx == CmdIdx::edit
+        && excmd.line.byte_at(excmd.line.arg) == 0
     {
         emsg(c"cannot :edit a prompt buffer");
         return;
@@ -323,7 +325,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         if ui_has(kUICmdline) {
             ui_ext_cmdline_block_leave();
         }
-        if byte(excmd.arg_ptr()) == NUL {
+        if excmd.line.byte_at(excmd.line.arg) == 0 {
             // Inside `:global`, normal mode is entered for the rest of
             // the line and Ex mode resumes afterwards.
             if global_busy.get() != 0 {
@@ -351,7 +353,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         || idx == CmdIdx::tabnew
         || idx == CmdIdx::tabedit
         || idx == CmdIdx::vnew)
-        && byte(excmd.arg_ptr()) == NUL
+        && excmd.line.byte_at(excmd.line.arg) == 0
     {
         // A new, empty buffer.
         setpcmark();
@@ -364,8 +366,10 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit),
             old_curwin.is_none().then(|| Win::current().id()),
         );
-    } else if idx != CmdIdx::split && idx != CmdIdx::vsplit || byte(excmd.arg_ptr()) != NUL {
-        if byte(excmd.arg_ptr()) != NUL && text_or_buf_locked() {
+    } else if idx != CmdIdx::split && idx != CmdIdx::vsplit
+        || excmd.line.byte_at(excmd.line.arg) != 0
+    {
+        if excmd.line.byte_at(excmd.line.arg) != 0 && text_or_buf_locked() {
             return;
         }
         let saved_readonly = readonlymode.get();
@@ -425,7 +429,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
     }
 
     if let Some(mut old) = old_curwin.and_then(valid_win)
-        && byte(excmd.arg_ptr()) != NUL
+        && excmd.line.byte_at(excmd.line.arg) != 0
         && !old.is_current()
         && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
@@ -456,7 +460,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         return;
     }
 
-    let read = if byte(excmd.arg_ptr()) == NUL {
+    let read = if excmd.line.byte_at(excmd.line.arg) == 0 {
         if check_fname().is_err() {
             return;
         }
@@ -490,7 +494,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
     if read.is_err() {
         if !aborting() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E484: Can't open file {arg}");
         }
         return;

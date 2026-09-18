@@ -67,7 +67,7 @@ use crate::global_cell::GlobalCell;
 use crate::memory::xfree;
 use crate::message::state::{did_emsg, emsg_silent};
 use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{CondStack, EsList, EvalArg, ExArg, FAIL, Failed, OK, TypVal};
@@ -386,7 +386,7 @@ pub(crate) fn ex_else(excmd: &mut ExArg) {
         && ends_excmd(unsafe { *excmd.arg_ptr() } as c_int) != 0
     {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E15: Invalid expression: \"{arg}\"");
     } else {
         result = unsafe { eval_to_bool(excmd.arg_ptr(), &raw mut error, Some(excmd), skip, false) };

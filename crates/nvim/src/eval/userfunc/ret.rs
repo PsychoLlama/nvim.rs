@@ -14,6 +14,7 @@ use crate::cstr;
 use crate::ex_eval::CsFlags;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::winlayer::{Buf, Win};
@@ -397,7 +398,7 @@ pub fn ex_call(excmd: &mut ExArg) {
     let startarg = unsafe { skipwhite(arg) };
     if unsafe { *startarg } != b'(' as c_char {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E107: Missing parentheses: {arg}");
     } else {
         let failed = if excmd.cmdidx == CmdIdx::defer {

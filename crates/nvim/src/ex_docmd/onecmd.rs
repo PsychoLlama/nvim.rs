@@ -493,15 +493,16 @@ fn read_command_args(
     }
     if !ni
         && !excmd.argt.has(ExArgt::EXTRA)
-        && byte(excmd.arg_ptr()) != NUL
-        && byte(excmd.arg_ptr()) != '"' as c_int
-        && (byte(excmd.arg_ptr()) != '|' as c_int || !excmd.argt.has(ExArgt::TRLBAR))
+        && excmd.line.byte_at(excmd.line.arg) != 0
+        && c_int::from(excmd.line.byte_at(excmd.line.arg)) != '"' as c_int
+        && (c_int::from(excmd.line.byte_at(excmd.line.arg)) != '|' as c_int
+            || !excmd.argt.has(ExArgt::TRLBAR))
     {
         // SAFETY: the argument is a tail of the command line.
         *errormsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), excmd.arg_ptr()) });
         return Err(Refused);
     }
-    if !ni && excmd.argt.has(ExArgt::NEEDARG) && byte(excmd.arg_ptr()) == NUL {
+    if !ni && excmd.argt.has(ExArgt::NEEDARG) && excmd.line.byte_at(excmd.line.arg) == 0 {
         *errormsg = Some(ex_msg(e_argreq.as_ptr()));
         return Err(Refused);
     }

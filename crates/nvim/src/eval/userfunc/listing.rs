@@ -13,6 +13,7 @@
 
 use crate::cstr;
 use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -303,7 +304,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
         // Numbered function.
         if !excmd.skip {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
         }
         unsafe { xfree(name as *mut c_void) };
@@ -322,14 +323,14 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
     if fp.is_null() {
         if !excmd.forceit {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E130: Unknown function: {arg}");
         }
         return;
     }
     if unsafe { (*fp).uf_calls } > 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E131: Cannot delete function {arg}: It is in use");
         return;
     }
@@ -340,7 +341,7 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
     // arm is reachable at all (see the docket's O-B14-13).
     if unsafe { (*fp).uf_refcount }.get() > 2 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("Cannot delete function {arg}: It is being used internally");
         return;
     }

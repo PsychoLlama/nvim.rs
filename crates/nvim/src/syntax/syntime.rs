@@ -8,7 +8,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -25,7 +25,7 @@ pub(crate) fn ex_syntime(excmd: &mut ExArg) {
         b"report" => syntime_report(),
         _ => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
         }
     }

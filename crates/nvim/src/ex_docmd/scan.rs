@@ -18,7 +18,7 @@ use std::ffi::CString;
 
 use crate::ascii::{ascii_isdigit, ascii_isspace, ascii_iswhite};
 
-use crate::charset::{getdigits_int32, skipdigits};
+use crate::charset::getdigits_int_at;
 
 use crate::eval::skip_expr;
 use crate::ex_cmds::skip_vimgrep_pat;
@@ -76,32 +76,31 @@ pub(crate) fn skip_colons(line: &CmdLine, at: usize, skipleadingwhite: bool) -> 
 pub(crate) fn parse_register(excmd: &mut ExArg) {
     let is_user_command = is_user_cmd(excmd.cmdidx);
     if !excmd.argt.has(ExArgt::REGSTR)
-        || byte(excmd.arg_ptr()) == NUL
-        || (is_user_command && byte(excmd.arg_ptr()) == '=' as c_int)
-        || (excmd.argt.has(ExArgt::COUNT) && ascii_isdigit(byte(excmd.arg_ptr())))
+        || excmd.line.byte_at(excmd.line.arg) == 0
+        || (is_user_command && c_int::from(excmd.line.byte_at(excmd.line.arg)) == '=' as c_int)
+        || (excmd.argt.has(ExArgt::COUNT)
+            && ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.arg))))
     {
         return;
     }
     // `:put` and `:iput` are the two commands that may name a write-only
     // register; every other one is writing to whichever it names.
     let writing = !is_user_command && excmd.cmdidx != CmdIdx::put && excmd.cmdidx != CmdIdx::iput;
-    if !unsafe { valid_yank_reg(*excmd.arg_ptr() as c_int, writing) } {
+    if !valid_yank_reg(c_int::from(excmd.line.byte_at(excmd.line.arg)), writing) {
         return;
     }
-    excmd.regname = ubyte(excmd.arg_ptr()) as c_int;
-    let arg_start = excmd.arg_ptr();
-    excmd.set_arg_ptr(unsafe { arg_start.add(1) });
+    excmd.regname = excmd.line.byte_at(excmd.line.arg) as c_int;
+    excmd.line.arg += 1;
     // The expression register swallows the rest of the line: it *is* the
     // expression, and evaluating it is deferred until the register is read.
-    if excmd.regname == '=' as c_int && byte(excmd.arg_ptr()) != NUL {
+    if excmd.regname == '=' as c_int && excmd.line.byte_at(excmd.line.arg) != 0 {
         if !excmd.skip {
-            unsafe { set_expr_line(xstrdup(excmd.arg_ptr())) };
+            let expr = excmd.line.ptr_from(excmd.line.arg);
+            unsafe { set_expr_line(xstrdup(expr)) };
         }
-        let arg_start = excmd.arg_ptr();
-        excmd.set_arg_ptr(unsafe { arg_start.add(cstr::bytes_at(arg_start).len()) });
+        excmd.line.arg = excmd.line.end_of(excmd.line.arg);
     }
-    let arg_start = excmd.arg_ptr();
-    excmd.set_arg_ptr(skipwhite(arg_start));
+    excmd.line.arg = excmd.line.skip_white(excmd.line.arg);
 }
 
 /// Turn a count into a range, which is what a count means for every command
@@ -138,22 +137,25 @@ pub(crate) fn parse_count(
     errormsg: &mut Option<CString>,
     validate: bool,
 ) -> Result<(), Failed> {
-    if !excmd.argt.has(ExArgt::COUNT) || !ascii_isdigit(byte(excmd.arg_ptr())) {
+    if !excmd.argt.has(ExArgt::COUNT)
+        || !ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.arg)))
+    {
         return Ok(());
     }
     // A command that also takes a buffer name (`:buffer 2x`) only reads
     // the digits as a count when they are the whole word.
     if excmd.argt.has(ExArgt::BUFNAME) {
-        let p = unsafe { skipdigits(excmd.arg_ptr().add(1)) };
-        if byte(p) != NUL && !ascii_iswhite(byte(p)) {
+        let past = excmd.line.skip_digits(excmd.line.arg + 1);
+        let after = c_int::from(excmd.line.byte_at(past));
+        if after != NUL && !ascii_iswhite(after) {
             return Ok(());
         }
     }
 
-    let n: LineNr =
-        unsafe { excmd.with_arg_cursor(|cursor| getdigits_int32(cursor, false, INT32_MAX)) };
-    let arg_start = excmd.arg_ptr();
-    excmd.set_arg_ptr(skipwhite(arg_start));
+    let arg = excmd.line.arg;
+    let (n, past) = getdigits_int_at(excmd.line.buffer_mut(), arg, false, INT32_MAX);
+    let n = n as LineNr;
+    excmd.line.arg = excmd.line.skip_white(past);
     if let Some(&(first, first_len)) = excmd.line.args.first() {
         // `nvim_cmd` supplies the arguments already split, so the count
         // that was just consumed has to come off the first of them.
@@ -192,15 +194,14 @@ pub(crate) fn parse_bang(excmd: &mut ExArg, at: &mut usize) -> bool {
 /// Take the trailing `l`, `p` and `#` flags a printing command may carry.
 pub(crate) fn get_flags(excmd: &mut ExArg) {
     loop {
-        let flag = match ubyte(excmd.arg_ptr()) {
+        let flag = match excmd.line.byte_at(excmd.line.arg) {
             b'l' => EXFLAG_LIST,
             b'p' => EXFLAG_PRINT,
             b'#' => EXFLAG_NR,
             _ => return,
         };
         excmd.flags |= flag;
-        let arg_start = excmd.arg_ptr();
-        excmd.set_arg_ptr(unsafe { skipwhite(arg_start.add(1)) });
+        excmd.line.arg = excmd.line.skip_white(excmd.line.arg + 1);
     }
 }
 
@@ -396,12 +397,6 @@ fn utfc_ptr2len(p: *const c_char) -> c_int {
 fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
     unsafe { *p as c_int }
-}
-
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
 }
 
 /// The byte at `p[i]`, as the C's `*(p + i)` reads it.

@@ -4,6 +4,7 @@
 #![allow(unsafe_code)]
 
 use crate::guard::{Allow, Saved, Suppress};
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -33,7 +34,6 @@ use crate::search::state::no_hlsearch;
 use crate::state::mode::State;
 
 use crate::message::msg_ext_set_kind;
-use crate::message_fmt::c_str;
 
 use crate::r#move::{update_topline, validate_cursor};
 use crate::normal::visual_active;
@@ -49,10 +49,10 @@ use ::libc::{fclose, strcasecmp};
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
-    if byte(excmd.arg_ptr()) != NUL {
+    if excmd.line.byte_at(excmd.line.arg) != 0 {
         if unsafe { load_colors(excmd.arg_ptr()) }.is_err() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E185: Cannot find color scheme '{arg}'");
         }
         return;
@@ -76,7 +76,7 @@ pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
 pub(crate) fn ex_highlight(excmd: &mut ExArg) {
-    if byte(excmd.arg_ptr()) == NUL && byte_at(excmd.cmd_ptr(), 2) == '!' as c_int {
+    if excmd.line.byte_at(excmd.line.arg) == 0 && byte_at(excmd.cmd_ptr(), 2) == '!' as c_int {
         msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
     unsafe { do_highlight(excmd.arg_ptr(), excmd.forceit, false) };
@@ -131,7 +131,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         if byte(arg) != NUL {
             redir_reg.set(0);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(excmd.arg_ptr()) };
+            let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
         }
     } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
@@ -146,7 +146,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         }
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E475: Invalid argument: {arg}");
     }
     // Whichever form succeeded, output is being captured again.
@@ -252,7 +252,7 @@ pub(crate) fn close_redir() {
 
 /// `:digraphs` — define digraphs, or list them.
 pub(crate) fn ex_digraphs(excmd: &mut ExArg) {
-    if byte(excmd.arg_ptr()) != NUL {
+    if excmd.line.byte_at(excmd.line.arg) != 0 {
         putdigraph(unsafe { core::ffi::CStr::from_ptr(excmd.arg_ptr()) }.to_bytes());
     } else {
         listdigraphs(excmd.forceit);

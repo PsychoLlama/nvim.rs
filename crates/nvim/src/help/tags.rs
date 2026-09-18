@@ -32,6 +32,7 @@ use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::e_fnametoolong;
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_RTP;
 use crate::os::cshim::{gettext, putc, snprintf, strchr};
 use crate::os::fs::{os_fopen, os_isdir};
@@ -94,7 +95,7 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     let dirname = unsafe { expand_one(&raw mut xpc, arg, orig, opts, mode) };
     if dirname.is_null() || !unsafe { os_isdir(dirname) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(excmd.arg_ptr()) };
+        let arg = msg_bytes(excmd.line.arg());
         semsg!("E150: Not a directory: {arg}");
     } else {
         unsafe { do_helptags(dirname, add_help_tags, false) };
