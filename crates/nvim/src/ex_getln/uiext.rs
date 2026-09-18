@@ -9,7 +9,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 
 /// Send `cmdline_show` for one command line: its content as
 /// `[[attr, text, hl_id], …]`, the cursor position and the prompt.
@@ -119,15 +118,14 @@ impl Default for CmdlineBlock {
 /// Append one line to the `ext_cmdline` block — the body a `:if` or
 /// `:function` accumulates while it is being typed.
 ///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string.
-pub unsafe fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
-    let line_len = unsafe { cstr::bytes_at(line) }.len();
+pub fn ui_ext_cmdline_block_append(indent: size_t, line: &[u8]) {
+    let line_len = line.len();
+    // SAFETY: `xmallocz` answers `indent + line_len + 1` zeroed bytes, so
+    // the fill and the copy stay inside it and the terminator stays.
     let buf = unsafe { xmallocz(indent + line_len) } as *mut ::core::ffi::c_char;
     unsafe { buf.cast::<u8>().write_bytes(b' ', indent) };
     let into = unsafe { buf.add(indent) }.cast::<u8>();
-    unsafe { into.copy_from_nonoverlapping(line.cast(), line_len) };
+    unsafe { into.copy_from_nonoverlapping(line.as_ptr(), line_len) };
 
     let mut item = Array::with_capacity(3);
     item.push(Object::integer(0));

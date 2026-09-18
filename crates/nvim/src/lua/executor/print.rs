@@ -247,7 +247,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
                     c"lua_debug> %s".as_ptr(),
                     input.string_or_null(),
                 );
-                ui_ext_cmdline_block_append(0, line.as_ptr());
+                ui_ext_cmdline_block_append(0, cstr::in_chars(&line).to_bytes());
             } else {
                 msg_putchar(b'\n' as c_int);
             }

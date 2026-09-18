@@ -63,30 +63,30 @@ pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
 }
 
 /// `:function /pattern/`: compile the pattern, list what it matches, and
-/// answer the end of it.
-///
-/// # Safety
-/// `excmd` is a live `:function` command whose argument starts with `/`.
-pub(crate) unsafe fn list_functions_matching_pat(excmd: &mut ExArg) -> *mut c_char {
-    // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
-    let mut p = unsafe { skip_regexp(excmd.arg_ptr().add(1), b'/' as c_int, 1) };
+/// answer where it ends.
+pub(crate) fn list_functions_matching_pat(excmd: &mut ExArg) -> usize {
+    let start = excmd.line.arg + 1;
+    let mut at = start + skip_regexp_at(excmd.line.tail(start), b'/' as c_int, 1);
     if !excmd.skip {
         let mut regmatch = REGMATCH_INIT;
         // Terminate the pattern for `vim_regcomp`, then put the byte back.
-        let c = unsafe { *p };
-        unsafe { *p = NUL as c_char };
-        regmatch.regprog = unsafe { vim_regcomp(excmd.arg_ptr().add(1), RE_MAGIC) };
-        unsafe { *p = c };
+        // The compiler still takes a `char *`; p32-8 gives it the slice.
+        let c = excmd.line.byte_at(at);
+        excmd.line.set_byte(at, 0);
+        let pat = excmd.line.ptr_at(start);
+        // SAFETY: the pattern, terminated in place just above.
+        regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
+        excmd.line.set_byte(at, c);
         if !regmatch.regprog.is_null() {
             regmatch.rm_ic = p_ic();
             unsafe { list_functions(&raw mut regmatch) };
             unsafe { vim_regfree(regmatch.regprog) };
         }
     }
-    if unsafe { *p } == b'/' as c_char {
-        p = unsafe { p.add(1) };
+    if excmd.line.byte_at(at) == b'/' {
+        at += 1;
     }
-    p
+    at
 }
 
 /// `:function Name`: print one function with its numbered body lines.
@@ -107,9 +107,12 @@ pub(crate) unsafe fn list_one_function(
         semsg!("E488: Trailing characters: {p}");
         return ptr::null_mut();
     }
-    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
-    if !excmd.line.next.is_none() {
-        unsafe { *p = NUL as c_char };
+    // `p` is the cursor `trans_function_name` left in the line; the walk
+    // still answers a pointer, so it comes back to an offset here.
+    let at = excmd.line.offset_of(p);
+    excmd.line.next = excmd.line.check_next(at);
+    if excmd.line.next.is_some() {
+        excmd.line.terminate_at(at);
     }
     if excmd.skip || got_int.get() {
         return ptr::null_mut();
@@ -295,9 +298,11 @@ pub fn ex_delfunction(excmd: &mut ExArg) {
         semsg!("E488: Trailing characters: {p}");
         return;
     }
-    excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
-    if !excmd.line.next.is_none() {
-        unsafe { *p = NUL as c_char };
+    // As `list_one_function`: `p` is where the name walk stopped.
+    let at = excmd.line.offset_of(p);
+    excmd.line.next = excmd.line.check_next(at);
+    if excmd.line.next.is_some() {
+        excmd.line.terminate_at(at);
     }
 
     if (unsafe { *name } as u8).is_ascii_digit() && fudi.fd_dict.is_null() {

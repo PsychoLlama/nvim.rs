@@ -13,6 +13,7 @@
 
 use super::*;
 use crate::cmdexpand::{Expanded, WildMode, WildOpts};
+use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
@@ -511,7 +512,8 @@ pub(crate) fn command_line_enter(
         // Emit cmdline_block in Ex mode unless there is no command line,
         // which happens with <C-\><C-N> (upstream #39021).
         if exmode_active.get() && cc.in_use() {
-            unsafe { ui_ext_cmdline_block_append(0, cc.text()) };
+            // SAFETY: the command line's own NUL-terminated text.
+            ui_ext_cmdline_block_append(0, unsafe { cstr::bytes_at(cc.text()) });
         }
         ui_ext_cmdline_hide(s.gotesc);
     }

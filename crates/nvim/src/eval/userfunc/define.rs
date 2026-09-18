@@ -13,6 +13,7 @@
 
 use crate::cstr;
 use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
@@ -187,9 +188,7 @@ impl Definition<'_> {
         self.cursor.skip(0);
         if self.cursor.byte() != b'(' {
             if !self.excmd.skip {
-                // SAFETY: a message argument the caller holds as a
-                // NUL-terminated string.
-                let arg = unsafe { c_str(self.excmd.arg_ptr()) };
+                let arg = msg_bytes(self.excmd.line.arg());
                 semsg!("E124: Missing '(': {arg}");
                 return;
             }
@@ -275,7 +274,7 @@ impl Definition<'_> {
             if KeyTyped.get() && ui_has(kUICmdline) {
                 self.show_block = true;
                 // SAFETY: the live command's own text.
-                unsafe { ui_ext_cmdline_block_append(0, self.excmd.cmd_ptr()) };
+                ui_ext_cmdline_block_append(0, self.excmd.line.cmd());
             }
             match self.build() {
                 Ok(()) => return Some(()),
@@ -702,25 +701,19 @@ pub fn ex_function(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- `excmd` is the Ex command being run.
 
     // ":function" without argument: list functions.
-    // SAFETY: `ea.arg` is the command's NUL-terminated argument.
-    if ends_excmd(unsafe { *excmd.arg_ptr() } as c_int) != 0 {
+    if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.arg))) != 0 {
         if !excmd.skip {
             // SAFETY: no pattern means every function.
             unsafe { list_functions(ptr::null_mut()) };
         }
-        // SAFETY: as above.
-        let arg_start = excmd.arg_ptr();
-        excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg_start) });
+        excmd.line.next = excmd.line.check_next(excmd.line.arg);
         return;
     }
 
     // ":function /pat": list functions matching the pattern.
-    // SAFETY: as above.
-    if unsafe { *excmd.arg_ptr() } == b'/' as c_char {
-        // SAFETY: the live command.
-        let p = unsafe { list_functions_matching_pat(excmd) };
-        // SAFETY: `p` is the cursor that listing left.
-        excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
+    if excmd.line.byte_at(excmd.line.arg) == b'/' {
+        let at = list_functions_matching_pat(excmd);
+        excmd.line.next = excmd.line.check_next(at);
         return;
     }
 

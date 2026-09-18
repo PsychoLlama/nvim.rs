@@ -15,6 +15,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::ex_getln::ui_ext_cmdline_block_append;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -237,7 +238,9 @@ fn ask_for_line(
 ) -> Option<Line> {
     if count == 1 && source.is_typed() {
         if ui_has(kUICmdline) {
-            ui_ext_cmdline_block_append(0, last_cmdline.get());
+            // SAFETY: the last command line, NUL-terminated or null.
+            let last = unsafe { cstr::bytes_at_or_empty(last_cmdline.get()) };
+            ui_ext_cmdline_block_append(0, last);
             *did_block = true;
         }
         // The first line after an `:if` needs this, or the `:if` is
@@ -264,7 +267,8 @@ fn ask_for_line(
     // holding them until the commands have run would interleave them
     // wrongly with a nested command line.
     if ui_has(kUICmdline) && count > 0 && source.is_typed() {
-        ui_ext_cmdline_block_append(indent as size_t, line);
+        // SAFETY: the line the getter just answered, NUL-terminated.
+        ui_ext_cmdline_block_append(indent as size_t, unsafe { cstr::bytes_at(line) });
     }
 
     // Keep the first typed line for `.` to repeat; forget it as soon as a
@@ -983,12 +987,6 @@ fn rewind_conditionals(
 fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::runtime::source_finished(fgetline, cookie) }
-}
-
-/// `ui_ext_cmdline_block_append()` as checked code.
-fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_getln::ui_ext_cmdline_block_append(indent, line) }
 }
 
 /// `xstrdup()`, checked.

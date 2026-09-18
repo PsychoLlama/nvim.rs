@@ -37,7 +37,7 @@ use crate::eval::{
     set_ref_in_ht, set_ref_in_item, set_ref_in_list_items, skip_expr,
 };
 use crate::ex_docmd::state::ex_nesting_level;
-use crate::ex_docmd::{check_nextcmd, checkforcmd, do_cmdline, ends_excmd, skip_range};
+use crate::ex_docmd::{checkforcmd, do_cmdline, ends_excmd, skip_range};
 use crate::ex_eval::state::{did_throw, trylevel};
 use crate::ex_eval::{
     aborted_in_try, aborting, cleanup_conditionals, exception_state_clear, exception_state_restore,
@@ -82,7 +82,7 @@ use crate::profile::{
     profile_self, profile_start, profile_sub_wait, profile_zero, script_prof_restore,
     script_prof_save,
 };
-use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec, vim_regfree};
+use crate::regexp::{RE_MAGIC, skip_regexp_at, vim_regcomp, vim_regexec, vim_regfree};
 use crate::runtime::state::current_sctx;
 use crate::runtime::{
     autoload_name, estack_pop, estack_push_ufunc, get_sourced_lnum, script_autoload,

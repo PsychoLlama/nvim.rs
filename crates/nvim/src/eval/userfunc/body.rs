@@ -134,7 +134,8 @@ pub(crate) unsafe fn get_function_body(
             }
             if show_block {
                 debug_assert!(indent >= 0);
-                unsafe { ui_ext_cmdline_block_append(indent as size_t, theline) };
+                // SAFETY: the line just read, NUL-terminated.
+                ui_ext_cmdline_block_append(indent as size_t, unsafe { cstr::bytes_at(theline) });
             }
 
             // Detect line continuation: SOURCING_LNUM increased by more

@@ -23,7 +23,7 @@ use core::ptr;
 
 use super::*;
 use crate::os::cshim::gettext_ptr;
-use crate::types::{Failed, IOSIZE, NUL};
+use crate::types::{Failed, IOSIZE};
 
 /// One call recorded by `:defer`, to be made when the function returns.
 pub struct Defer {
@@ -62,10 +62,8 @@ pub fn ex_return(excmd: &mut ExArg) {
 
     let skipping = (excmd.skip).then(Suppress::emsg_skip);
 
-    excmd.set_nextcmd_ptr(ptr::null_mut());
-    if unsafe { *arg } != NUL as c_char
-        && unsafe { *arg } != b'|' as c_char
-        && unsafe { *arg } != b'\n' as c_char
+    excmd.line.next = None;
+    if !matches!(excmd.line.byte_at(excmd.line.arg), 0 | b'|' | b'\n')
         && unsafe { eval0(arg, &mut rettv, Some(excmd), &raw mut evalarg) }.is_ok()
     {
         if !excmd.skip {
@@ -87,9 +85,9 @@ pub fn ex_return(excmd: &mut ExArg) {
     // When skipping or the return gets pending, advance to the next
     // command in this line; otherwise the whole line is used.
     if returning {
-        excmd.set_nextcmd_ptr(ptr::null_mut());
+        excmd.line.next = None;
     } else if excmd.line.next.is_none() {
-        excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
+        excmd.line.next = excmd.line.check_next(excmd.line.arg);
     }
 
     drop(skipping);
@@ -430,7 +428,8 @@ pub fn ex_call(excmd: &mut ExArg) {
                     semsg!("E488: Trailing characters: {arg}");
                 }
             } else {
-                excmd.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
+                // `arg` is where the call walk stopped, inside the line.
+                excmd.line.next = excmd.line.check_next(excmd.line.offset_of(arg));
             }
         }
         unsafe { clear_evalarg(&raw mut evalarg, Some(excmd)) };
