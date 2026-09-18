@@ -31,7 +31,6 @@ use crate::window::{
 use crate::winlayer::graph::{cmdwin_buf, cmdwin_type};
 use crate::winlayer::{Win, windows_in_tab};
 use ::libc::abort;
-use core::ptr;
 
 /// The windows of `tabpage`, oldest first.
 ///
@@ -164,11 +163,7 @@ pub unsafe fn nvim_open_tabpage(
 
     let mut wp: Option<Win> = None;
     // SAFETY: `wp` is this frame's own out-parameter and `b` is live.
-    let tp = api_try(|| {
-        let filename = ptr::null_mut::<::core::ffi::c_char>();
-        // SAFETY: `wp` is this frame's own out-parameter.
-        unsafe { win_new_tabpage(after + 1, filename, enter, Some(&mut wp)) }
-    })?;
+    let tp = api_try(|| win_new_tabpage(after + 1, None, enter, Some(&mut wp)))?;
     let Some(tp) = tp else {
         return Err(Error::exception(c"Failed to create new tabpage"));
     };

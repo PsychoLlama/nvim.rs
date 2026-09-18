@@ -17,6 +17,7 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::winlayer::TabId;
 use crate::winlayer::last_used_tab;
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -142,13 +143,9 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     drop(owned);
 }
 
-/// # Safety
-///
-/// `filename` must be null, or point at a NUL-terminated name that stays live
-/// across the `TabNew` autocommand this passes it to.
-pub unsafe fn win_new_tabpage(
+pub fn win_new_tabpage(
     after: c_int,
-    filename: *mut c_char,
+    filename: Option<&CStr>,
     enter: bool,
     first: Option<&mut Option<Win>>,
 ) -> Option<TabPage> {
@@ -170,7 +167,7 @@ pub unsafe fn win_new_tabpage(
 /// is zero; `filename` is passed to the `TabNew` autocommand.
 pub(crate) fn new_tabpage(
     after: c_int,
-    filename: *mut c_char,
+    filename: Option<&CStr>,
     enter: bool,
 ) -> Option<(TabPage, Win)> {
     let old_curtab = TabPage::current();
@@ -239,6 +236,7 @@ pub(crate) fn new_tabpage(
     update_last_status(false);
     resize_terminal(Buf::current());
 
+    let name = filename.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
     if enter {
         redraw_all(UPD_NOT_VALID);
         check_tabpage_windows(old_curtab);
@@ -246,7 +244,7 @@ pub(crate) fn new_tabpage(
         enter_window(Win::current());
         fire(AutoEvent::WinNew, Buf::current());
         fire(AutoEvent::WinEnter, Buf::current());
-        fire_named(AutoEvent::TabNew, filename, Some(Buf::current()));
+        fire_named(AutoEvent::TabNew, name, Some(Buf::current()));
         fire(AutoEvent::TabEnter, Buf::current());
     } else {
         stash_tabpage(TabPage::current());
@@ -259,7 +257,7 @@ pub(crate) fn new_tabpage(
         // `switch_win_noblock` handle things like resetting `VIsual_active`.
         in_window(newtp, || {
             fire(AutoEvent::WinNew, Buf::current());
-            fire_named(AutoEvent::TabNew, filename, Some(Buf::current()));
+            fire_named(AutoEvent::TabNew, name, Some(Buf::current()));
         });
     }
     Some((newtp, opened))
@@ -315,7 +313,7 @@ pub(crate) fn may_open_tabpage() -> Result<(), Failed> {
     }
     cmdmod.with_mut(|m| m.cmod_tab = 0);
     postponed_split_tab.set(0);
-    let status = if new_tabpage(n, ptr::null_mut(), true).is_some() {
+    let status = if new_tabpage(n, None, true).is_some() {
         Ok(())
     } else {
         Err(Failed)
@@ -334,7 +332,7 @@ pub fn make_tabpages(maxcount: c_int) -> c_int {
     block_autocmds();
     let mut todo = count - 1;
     while todo > 0 {
-        if new_tabpage(0, ptr::null_mut(), true).is_none() {
+        if new_tabpage(0, None, true).is_none() {
             break;
         }
         todo -= 1;

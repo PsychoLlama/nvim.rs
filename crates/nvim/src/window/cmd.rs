@@ -478,7 +478,7 @@ fn move_to_new_tabpage(prenum: c_int) {
     }
     let oldtab = TabPage::current().id();
     let wp = Win::current().id();
-    if new_tabpage(prenum, ptr::null_mut(), true).is_none() {
+    if new_tabpage(prenum, None, true).is_none() {
         return;
     }
     let Some(oldtab) = valid_tab(oldtab) else {

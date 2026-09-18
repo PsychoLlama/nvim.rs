@@ -20,6 +20,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::keycodes::{Ctrl_C, Key};
+use core::ffi::CStr;
 use core::ptr;
 use std::ffi::CString;
 
@@ -276,7 +277,7 @@ fn set_mousemoveevent(on: bool) {
 ///
 /// # Safety
 /// `path_name` must be NUL-terminated. Pumps the event loop.
-pub unsafe fn pum_make_popup(path_name: *const c_char, use_mouse_pos: c_int) {
+pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
     if use_mouse_pos == 0 {
         // Put the mouse where the cursor is, so the menu pops up there.
         let win = Win::current();
@@ -304,8 +305,8 @@ pub unsafe fn pum_make_popup(path_name: *const c_char, use_mouse_pos: c_int) {
         }
     }
 
-    // SAFETY: the caller's promise; `menu_find` answers a live menu or null.
-    let menu = unsafe { menu_find(path_name) };
+    // SAFETY: a NUL-terminated path; `menu_find` answers a live menu or null.
+    let menu = unsafe { menu_find(path_name.as_ptr()) };
     if !menu.is_null() {
         // SAFETY: a live menu; this pumps the event loop.
         unsafe { pum_show_popupmenu(menu) };
