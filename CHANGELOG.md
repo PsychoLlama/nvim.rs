@@ -11,6 +11,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 - Rewrote where every option's value is kept and how an option that refuses a
   value says so. No option changed what it accepts or what it does.
+- Rewrote who owns an Ex command line and how a command finds its way around
+  it. No command changed what it accepts or what it does.
 
 ## [2026.09.16-b12dec0bc2]
 
