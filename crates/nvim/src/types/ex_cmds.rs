@@ -434,6 +434,15 @@ impl CmdLine {
             .count()
     }
 
+    /// The `len` bytes at `at`, without looking for a terminator.
+    ///
+    /// The caller already knows how long the word is -- it counted the
+    /// bytes -- so this is [`tail`](CmdLine::tail) trimmed, not a scan.
+    pub fn slice_at(&self, at: usize, len: usize) -> &[u8] {
+        let end = (at + len).min(self.text.len());
+        &self.text[at.min(end)..end]
+    }
+
     /// Where the string that starts at `at` ends.
     pub fn end_of(&self, at: usize) -> usize {
         at + self.rest_of(at).len()

@@ -197,14 +197,14 @@ pub(crate) unsafe fn set_cmd_index(
             let typed = p.addr() - cmd.addr();
             // SAFETY: `cmd` is inside the NUL-terminated line.
             excmd.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(cmd) });
-            let end = excmd.line.ptr_at(typed);
-            // SAFETY: `end` is inside the copy, past its command word.
-            let found = unsafe { find_ucmd(excmd, end, ptr::null_mut(), expand.raw(), complp) };
-            if found.is_null() {
-                excmd.cmdidx = CmdIdx::SIZE; // Ambiguous user command.
-                p = ptr::null();
-            } else {
-                p = cmd.wrapping_add(excmd.line.offset_of(found));
+            // SAFETY: `typed` is inside the copy, past its command word.
+            let found = unsafe { find_ucmd(excmd, typed, None, expand.raw(), complp) };
+            match found {
+                Some(at) => p = cmd.wrapping_add(at),
+                None => {
+                    excmd.cmdidx = CmdIdx::SIZE; // Ambiguous user command.
+                    p = ptr::null();
+                }
             }
         }
     }

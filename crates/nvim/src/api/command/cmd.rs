@@ -137,12 +137,15 @@ fn prepare_cmd(
         // Only the first argument is ever consulted.
         // `args` was built above, so item 0 is in bounds when it is not
         // empty.
-        let first = args.first().map_or(ptr::null_mut(), |arg| {
-            arg.as_string()
+        let first = args.first().map(|arg| {
+            let arg = arg
+                .as_string()
                 .expect("`collect_args` puts only Strings in the array")
-                .data()
+                .as_bytes();
+            let at = crate::charset::skip::white(arg);
+            arg.get(at).copied().unwrap_or(0)
         });
-        unsafe { set_cmd_addr_type(excmd, first) };
+        set_cmd_addr_type(excmd, first);
     }
 
     apply_range(cmd, excmd)?;
@@ -187,25 +190,25 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
     // the line until `build_cmdline_str` renders the real one.
     excmd.line = CmdLine::from_bytes(name.as_bytes());
     let cmdname = excmd.line.ptr_at(0);
-    let mut p = unsafe { find_ex_command(excmd, ptr::null_mut()) };
+    let mut found = find_ex_command(excmd, None);
 
     // An unknown capitalised name plus a CmdUndefined autocommand is a lazily
     // defined user command: fire the event, then look again.
-    if !p.is_null()
+    if found.is_some()
         && excmd.cmdidx == CmdIdx::SIZE
-        && unsafe { *excmd.cmd_ptr() as u8 }.is_ascii_uppercase()
+        && excmd.line.byte_at(excmd.line.cmd).is_ascii_uppercase()
         && has_event(AutoEvent::CmdUndefined)
     {
-        // SAFETY: as above.
-        unsafe {
-            p = name.data();
-            let ret = apply_autocmds(AutoEvent::CmdUndefined, p, p, true, None);
-            p = if ret as c_int != 0 && !aborting() {
-                find_ex_command(excmd, ptr::null_mut())
-            } else {
-                excmd.cmd_ptr()
-            };
-        }
+        // SAFETY: `name` is the caller's NUL-terminated name.
+        let ret = unsafe {
+            let event = name.data();
+            apply_autocmds(AutoEvent::CmdUndefined, event, event, true, None)
+        };
+        found = if ret as c_int != 0 && !aborting() {
+            find_ex_command(excmd, None)
+        } else {
+            Some(excmd.line.cmd)
+        };
     }
 
     let unnamed_unknown = excmd.cmdidx == CmdIdx::SIZE && !named;
@@ -217,7 +220,7 @@ fn resolve_command(cmd: &KeyDict_cmd, excmd: &mut ExArg) -> Result<Option<bool>,
         return Ok(None);
     }
 
-    if !(!p.is_null() && excmd.cmdidx != CmdIdx::SIZE) && !range_only {
+    if !(found.is_some() && excmd.cmdidx != CmdIdx::SIZE) && !range_only {
         // SAFETY: `cmdname` is the caller's NUL-terminated name.
         let name = unsafe { c_str(cmdname) };
         return Err(api_error!(

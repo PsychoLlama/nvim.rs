@@ -105,16 +105,16 @@ pub(super) fn tail() -> Buf {
     last_buffer().expect("the editor always has a buffer")
 }
 
-/// Where the command word starts, without consuming the range.
-pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> *mut c_char {
-    let cmd = excmd.cmd_ptr();
-    // SAFETY (both): `cmd` walks the command's own NUL-terminated line, and
-    // a null `full` is "do not report whether the name was spelled out".
-    let cmd_start = excmd.cmd_ptr();
-    excmd.set_cmd_ptr(unsafe { skip_range(cmd_start, ptr::null_mut()) });
-    let p = unsafe { find_ex_command(excmd, ptr::null_mut()) };
-    excmd.set_cmd_ptr(cmd);
-    p
+/// Where the command word ends, without consuming the range. `None` is
+/// `find_ex_command`'s ambiguous user command.
+pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> Option<usize> {
+    let cmd = excmd.line.cmd;
+    // SAFETY: `cmd` walks the command's own NUL-terminated line.
+    let skipped = unsafe { skip_range(excmd.line.ptr_at(cmd), ptr::null_mut()) };
+    excmd.line.cmd = excmd.line.offset_of(skipped);
+    let end = find_ex_command(excmd, None);
+    excmd.line.cmd = cmd;
+    end
 }
 
 /// Read the whole range — one address, or a pair around `,` or `;` — into

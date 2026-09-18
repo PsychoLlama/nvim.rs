@@ -191,31 +191,28 @@ pub(crate) fn ucmd_name(cmd: &UserCmd) -> &[u8] {
 /// Search both tables for a command matching `args.cmd`.
 ///
 /// Sets `args.cmdidx`, `args.argt`, `args.useridx` and `args.addr_type`,
-/// and answers a pointer to just after the command name -- which may be
-/// *before* `p`, because the match may be followed immediately by a count
-/// that `p` has already skipped. Answers null when nothing matched.
+/// and answers where the command name ends -- which may be *before* `end`,
+/// because the match may be followed immediately by a count that `end` has
+/// already skipped. Answers `None` when nothing matched.
 ///
 /// `full` is set when the match was exact, `expand` filled in for completion
-/// and `complp` given the command's completion type; each may be null.
+/// and `complp` given the command's completion type; the last two may be null.
 ///
 /// # Safety
-/// Module contract; `excmd` must be the command being looked up, and `full`,
+/// Module contract; `excmd` must be the command being looked up, and
 /// `expand` and `complp` null or writable.
 pub(crate) unsafe fn find_ucmd(
     excmd: &mut ExArg,
-    p: *mut c_char,
-    full: *mut c_int,
+    end: usize,
+    full: Option<&mut bool>,
     expand: *mut Expand,
     complp: *mut ExpandContext,
-) -> *mut c_char {
-    // SAFETY: caller contract; `p` points into the same line as `args.cmd`.
-    let typed = unsafe {
-        slice::from_raw_parts(
-            excmd.cmd_ptr().cast::<u8>(),
-            p.offset_from(excmd.cmd_ptr()) as _,
-        )
-    };
+) -> Option<usize> {
+    let cmd = excmd.line.cmd;
+    let typed = excmd.line.slice_at(cmd, end - cmd);
 
+    let typed_len = typed.len();
+    let mut exact_match = false;
     let mut matchlen = 0;
     let mut found = false;
     let mut possible = false;
@@ -237,7 +234,7 @@ pub(crate) unsafe fn find_ucmd(
             }
             if k == typed.len() && found && !at_nul {
                 if scope == Scope::Global {
-                    return ptr::null_mut();
+                    return None;
                 }
                 amb_local = true;
             }
@@ -271,10 +268,7 @@ pub(crate) unsafe fn find_ucmd(
             // Do not look for further abbreviations of an exact match.
             matchlen = k;
             if k == typed.len() && at_nul {
-                if !full.is_null() {
-                    // SAFETY: caller contract.
-                    unsafe { *full = true as c_int };
-                }
+                exact_match = true;
                 amb_local = false;
                 exact = true;
                 break;
@@ -286,20 +280,24 @@ pub(crate) unsafe fn find_ucmd(
         }
     }
 
+    if let Some(full) = full
+        && exact_match
+    {
+        *full = true;
+    }
     if amb_local {
         if !expand.is_null() {
             // SAFETY: caller contract.
             unsafe { (*expand).xp_context = ExpandContext::Unsuccessful };
         }
-        return ptr::null_mut();
+        return None;
     }
     if found || possible {
         // The match may be followed immediately by a number: move back onto
-        // it.
-        // SAFETY: `matchlen <= typed.len()`, so this stays inside the line.
-        return unsafe { p.offset(matchlen as isize - typed.len() as isize) };
+        // it. `matchlen <= typed.len()`, so this stays inside the line.
+        return Some(end + matchlen - typed_len);
     }
-    p
+    Some(end)
 }
 
 /// How far `typed` and `name` agree, and whether upstream's cursor into the

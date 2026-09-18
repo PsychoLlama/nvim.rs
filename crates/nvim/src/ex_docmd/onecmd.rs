@@ -58,7 +58,7 @@ use crate::guard::Depth;
 use crate::guard::sandbox;
 use crate::input::ask_yesno;
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
-use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
+use crate::memory::{xstrlcat, xstrlcpy};
 use crate::message::state::{did_emsg, msg_silent};
 use crate::message::{
     e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange, e_sandbox,
@@ -193,7 +193,7 @@ fn locate_command(
 
     mods.parse(excmd, errormsg).map_err(|_| Refused)?;
     mods.apply();
-    let after_modifier = excmd.cmd_ptr();
+    let after_modifier = excmd.line.cmd;
 
     let cstack = excmd.cstack;
     // SAFETY: `cstack` is the caller's conditional stack, live for the
@@ -222,8 +222,10 @@ fn locate_command(
         unsafe { do_intthrow(cstack) };
     }
 
-    // SAFETY: `p` is inside the command line, or null.
-    unsafe { set_cmd_addr_type(excmd, p) };
+    set_cmd_addr_type(
+        excmd,
+        p.map(|at| excmd.line.byte_at(excmd.line.skip_white(at))),
+    );
     if parse_cmd_address(excmd, errormsg, false) == FAIL {
         return Err(Refused);
     }
@@ -246,51 +248,49 @@ fn locate_command(
 
     // An unknown command spelled like a user command, with a CmdUndefined
     // autocommand waiting to define it.
-    if !p.is_null()
+    if p.is_some()
         && excmd.cmdidx == CmdIdx::SIZE
         && !excmd.skip
-        && (ubyte(excmd.cmd_ptr())).is_ascii_uppercase()
+        && excmd.line.byte_at(excmd.line.cmd).is_ascii_uppercase()
         && has_event(AutoEvent::CmdUndefined)
     {
-        // SAFETY (this block): `cmd` is inside the NUL-terminated command
-        // line, and `cmdname` is the copy made here, freed here.
-        let mut end = excmd.cmd_ptr();
-        while (ubyte(end)).is_ascii_alphanumeric() {
-            end = unsafe { end.add(1) };
+        let mut end = excmd.line.cmd;
+        while excmd.line.byte_at(end).is_ascii_alphanumeric() {
+            end += 1;
         }
-        let cmdname = unsafe {
-            xmemdupz(
-                excmd.cmd_ptr() as *const c_void,
-                end.offset_from(excmd.cmd_ptr()) as size_t,
-            ) as *mut c_char
-        };
+        let name = excmd.line.slice_at(excmd.line.cmd, end - excmd.line.cmd);
+        let cmdname = CString::new(name).expect("a command name holds no NUL");
         let event = AutoEvent::CmdUndefined;
-        let ret = unsafe { apply_autocmds(event, cmdname, cmdname, true, None) };
-        xfree(cmdname as *mut c_void);
+        // SAFETY: `cmdname` is this frame's own, NUL-terminated.
+        let ret = unsafe {
+            apply_autocmds(
+                event,
+                cmdname.as_ptr().cast_mut(),
+                cmdname.as_ptr().cast_mut(),
+                true,
+                None,
+            )
+        };
         // Look again only if the autocommands did something and did not
         // fail.
         p = if ret && !aborting() {
-            unsafe { find_ex_command(excmd, ptr::null_mut()) }
+            find_ex_command(excmd, None)
         } else {
-            excmd.cmd_ptr()
+            Some(excmd.line.cmd)
         };
     }
 
-    if p.is_null() {
+    let Some(p) = p else {
         if !excmd.skip {
             *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
         }
         return Err(Refused);
-    }
+    };
 
     if excmd.cmdidx == CmdIdx::SIZE {
         if !excmd.skip {
             // The modifiers parsed, so the error is in what follows them.
-            let cmdname = if after_modifier.is_null() {
-                excmd.line_ptr()
-            } else {
-                after_modifier
-            };
+            let cmdname = excmd.line.ptr_at(after_modifier);
             let msg = ex_msg(e_not_an_editor_command.as_ptr());
             *errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
                 // The whole line is appended by `do_one_cmd` instead.
@@ -305,7 +305,7 @@ fn locate_command(
         }
         return Err(Refused);
     }
-    excmd.set_arg_ptr(p);
+    excmd.line.arg = p;
     Ok(())
 }
 
@@ -608,10 +608,9 @@ pub(crate) unsafe fn do_one_cmd(
 
         // The bang is read through a cursor of its own: the command is lent
         // to the scan, so its `arg` cannot be lent as well.
-        let mut cursor = excmd.arg_ptr();
-        // SAFETY: `cursor` is this frame's own, over the command's line.
-        excmd.forceit = unsafe { parse_bang(&mut excmd, &raw mut cursor) };
-        excmd.set_arg_ptr(cursor);
+        let mut cursor = excmd.line.arg;
+        excmd.forceit = parse_bang(&mut excmd, &mut cursor);
+        excmd.line.arg = cursor;
         if !is_user_cmd(excmd.cmdidx) {
             excmd.argt = cmdnames[excmd.cmdidx.index()].cmd_argt;
         }
@@ -901,12 +900,6 @@ fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
 fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
     unsafe { *p as c_int }
-}
-
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
 }
 
 /// The byte at `p[i]`, as the C's `*(p + i)` reads it.

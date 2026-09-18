@@ -88,91 +88,77 @@ pub(crate) fn check_for_word(line: &CmdLine, at: usize, name: &[u8], min: usize)
 /// `:scriptencoding`, `:sign`, `:simalt`, `:sil…`, `:sre…` and the rest —
 /// which is what the nest of tests below spells out. It is upstream's, byte
 /// for byte, including the `p[3]`/`p[4]` asymmetry in the `:sc…` arm.
-pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut CmdIdx) -> bool {
-    let at = |n: usize| byte_at(p, n as isize);
-    if at(0) == 'k' as c_int
-        && (at(1) != 'e' as c_int || (at(1) == 'e' as c_int && at(2) != 'e' as c_int))
-    {
-        unsafe { *idx = CmdIdx::k };
-        return true;
+pub(crate) fn one_letter_cmd(at: impl Fn(usize) -> u8) -> Option<CmdIdx> {
+    if at(0) == b'k' && (at(1) != b'e' || (at(1) == b'e' && at(2) != b'e')) {
+        return Some(CmdIdx::k);
     }
-    if at(0) == 's' as c_int
-        && (at(1) == 'c' as c_int
-            && (at(2) == NUL
-                || (at(2) != 's' as c_int
-                    && at(2) != 'r' as c_int
-                    && (at(3) == NUL || (at(3) != 'i' as c_int && at(4) != 'p' as c_int))))
-            || at(1) == 'g' as c_int
-            || at(1) == 'i' as c_int
-                && at(2) != 'm' as c_int
-                && at(2) != 'l' as c_int
-                && at(2) != 'g' as c_int
-            || at(1) == 'I' as c_int
-            || at(1) == 'r' as c_int && at(2) != 'e' as c_int)
+    if at(0) == b's'
+        && (at(1) == b'c'
+            && (at(2) == 0
+                || (at(2) != b's'
+                    && at(2) != b'r'
+                    && (at(3) == 0 || (at(3) != b'i' && at(4) != b'p'))))
+            || at(1) == b'g'
+            || at(1) == b'i' && at(2) != b'm' && at(2) != b'l' && at(2) != b'g'
+            || at(1) == b'I'
+            || at(1) == b'r' && at(2) != b'e')
     {
-        unsafe { *idx = CmdIdx::substitute };
-        return true;
+        return Some(CmdIdx::substitute);
     }
-    false
+    None
 }
 
 /// Resolve `args.cmd` to a command index, and answer where the name ends.
 ///
 /// `args.cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
 /// as a *negative* index for a user command. `full`, when given, is set
-/// when the name was spelled out in full rather than abbreviated.
-///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`, unaliased for the call. `full`
-/// must point at a writable `int` the caller owns.
-pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_char {
-    // The command word, read once. `ExArg::cmd_ptr` measures the line to
-    // answer, and the row scan below asked it per row: nine calls here were
-    // `evalbench`'s biggest single item after the cursors became offsets.
-    let cmd = excmd.cmd_ptr();
-    let mut p = cmd;
-    if one_letter_cmd(p, &raw mut excmd.cmdidx) {
-        if !full.is_null() {
-            unsafe { *full = 1 };
+/// when the name was spelled out in full rather than abbreviated. `None` is
+/// upstream's null answer: a user command the typed abbreviation cannot
+/// choose between.
+pub fn find_ex_command(excmd: &mut ExArg, full: Option<&mut bool>) -> Option<usize> {
+    let cmd = excmd.line.cmd;
+    if let Some(idx) = one_letter_cmd(|n| excmd.line.byte_at(cmd + n)) {
+        excmd.cmdidx = idx;
+        if let Some(full) = full {
+            *full = true;
         }
-        return unsafe { p.add(1) };
+        return Some(cmd + 1);
     }
 
-    while (ubyte(p)).is_ascii_alphabetic() {
-        p = unsafe { p.add(1) };
+    let mut at = cmd;
+    while excmd.line.byte_at(at).is_ascii_alphabetic() {
+        at += 1;
     }
     // `:py3`, `:python3` and `:py3file` are the only commands with a
     // digit in the name.
-    if byte(cmd) == 'p' as c_int && byte_at(cmd, 1) == 'y' as c_int {
-        while (ubyte(p)).is_ascii_alphanumeric() {
-            p = unsafe { p.add(1) };
+    if excmd.line.byte_at(cmd) == b'p' && excmd.line.byte_at(cmd + 1) == b'y' {
+        while excmd.line.byte_at(at).is_ascii_alphanumeric() {
+            at += 1;
         }
     }
     // A command that is punctuation rather than a word.
-    if p == cmd && c"@!=><&~#".to_bytes().contains(&(ubyte(p))) {
-        p = unsafe { p.add(1) };
+    if at == cmd && b"@!=><&~#".contains(&excmd.line.byte_at(at)) {
+        at += 1;
     }
 
-    let mut len = unsafe { p.offset_from(cmd) } as c_int;
+    let mut len = at - cmd;
     // `:dl` and `:dp` are `:delete` with a trailing `l`/`p` flag stuck
     // to it, and only when the rest really is an abbreviation of
     // "delete" — `:dj` is `:djump`.
-    if byte(cmd) == 'd' as c_int
-        && (byte_at(p, -1) == 'l' as c_int || byte_at(p, -1) == 'p' as c_int)
-    {
+    let last = excmd.line.byte_at(at.wrapping_sub(1));
+    if excmd.line.byte_at(cmd) == b'd' && (last == b'l' || last == b'p') {
         // `with_nul`, not `to_bytes`: the walk is over the *typed*
         // word, which may be longer than "delete", and it is the
         // terminator that stops it — `:ddddddddl` would otherwise
         // index past the end.
         let delete = c"delete".to_bytes_with_nul();
         let mut i = 0;
-        while i < len && ubyte_at(cmd, i as isize) == delete[i as usize] {
+        while i < len && excmd.line.byte_at(cmd + i) == delete[i] {
             i += 1;
         }
-        if i == len - 1 {
+        if i + 1 == len {
             len -= 1;
-            if byte_at(p, -1) == 'l' as c_int {
+            if last == b'l' {
                 excmd.flags |= EXFLAG_LIST;
             } else {
                 excmd.flags |= EXFLAG_PRINT;
@@ -183,15 +169,21 @@ pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_cha
     excmd.cmdidx = CmdIdx::SIZE;
     // `:def` is Vim9 script's, which this editor does not have; it must
     // not resolve to `:defer`.
-    if !(len == 3 && prefix_eq(cmd, c"def".as_ptr(), 3)) {
+    if !(len == 3 && excmd.line.starts_with(cmd, b"def")) {
+        // The word, read once: the scan below asks about it per row, and
+        // measuring the line each time is what made this the parse's
+        // hottest function when the cursors became offsets.
+        let word = excmd.line.slice_at(cmd, len);
         // The scan walks rows rather than `CmdIdx`es and names what it
         // stopped at once: stepping an enum would be a conversion per row.
-        let mut row = unsafe { start_index(cmd, len) };
+        let mut row = start_index(word);
         while row < ROWS {
             let name = cmdnames[row].cmd_name;
-            if prefix_eq(name, cmd, len as size_t) {
-                if !full.is_null() && byte_at(name, len as isize) == NUL {
-                    unsafe { *full = 1 };
+            if name_matches(name, word) {
+                if let Some(full) = full
+                    && byte_at(name, len as isize) == NUL
+                {
+                    *full = true;
                 }
                 excmd.cmdidx = CmdIdx::at_row(row);
                 break;
@@ -202,16 +194,31 @@ pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_cha
 
     // Nothing in the table, and it starts with an upper-case letter:
     // it may be a user command, whose name may hold digits too.
-    if excmd.cmdidx == CmdIdx::SIZE && (ubyte(cmd)).is_ascii_uppercase() {
-        while (ubyte(p)).is_ascii_alphanumeric() {
-            p = unsafe { p.add(1) };
+    let mut end = Some(at);
+    if excmd.cmdidx == CmdIdx::SIZE && excmd.line.byte_at(cmd).is_ascii_uppercase() {
+        let mut at = at;
+        while excmd.line.byte_at(at).is_ascii_alphanumeric() {
+            at += 1;
         }
-        p = unsafe { find_ucmd(excmd, p, full, ptr::null_mut(), ptr::null_mut()) };
+        end = unsafe { find_ucmd(excmd, at, None, ptr::null_mut(), ptr::null_mut()) };
     }
-    if p == cmd {
+    if end == Some(cmd) {
         excmd.cmdidx = CmdIdx::SIZE;
     }
-    p
+    end
+}
+
+/// Do the first `word.len()` bytes of the NUL-terminated `name` spell
+/// `word`? `strncmp(name, word, word.len()) == 0`, with the typed side
+/// already a slice.
+fn name_matches(name: *const c_char, word: &[u8]) -> bool {
+    // SAFETY: `name` is a table entry, NUL-terminated; the walk stops at
+    // the first byte that differs, and the terminator differs from every
+    // byte of `word`, which the caller counted out of a NUL-terminated
+    // line.
+    word.iter()
+        .enumerate()
+        .all(|(i, want)| unsafe { *name.add(i) } as u8 == *want)
 }
 
 /// Where the linear scan over `cmdnames` starts for this name.
@@ -222,12 +229,8 @@ pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_cha
 /// has been reordered without regenerating them sends the scan to the wrong
 /// place — hence the `command_count` check, which is upstream's own guard
 /// against a stale generated header.
-///
-/// # Safety
-///
-/// `cmd` must point at `len` readable bytes.
-unsafe fn start_index(cmd: *const c_char, len: c_int) -> usize {
-    let c1 = ubyte(cmd);
+fn start_index(word: &[u8]) -> usize {
+    let c1 = word.first().copied().unwrap_or(0);
     if !c1.is_ascii_lowercase() {
         return if c1.is_ascii_uppercase() {
             CmdIdx::Next.index()
@@ -241,11 +244,7 @@ unsafe fn start_index(cmd: *const c_char, len: c_int) -> usize {
         ));
         getout(1);
     }
-    let c2 = if len == 1 {
-        0u8
-    } else {
-        unsafe { *cmd.add(1) as u8 }
-    };
+    let c2 = word.get(1).copied().unwrap_or(0);
     let mut idx = cmdidxs1[(c1 - b'a') as usize] as usize;
     if c2.is_ascii_lowercase() {
         idx += cmdidxs2[(c1 - b'a') as usize][(c2 - b'a') as usize] as usize;
@@ -273,21 +272,20 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
     ea.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(name) });
     // `:2match`/`:3match` carry their count in the name.
     ea.line.cmd = usize::from(byte(name) == '2' as c_int || byte(name) == '3' as c_int);
-    let mut full: c_int = 0;
-    let p = unsafe { find_ex_command(&mut ea, &raw mut full) };
-    if p.is_null() {
+    let mut full = false;
+    let Some(at) = find_ex_command(&mut ea, Some(&mut full)) else {
         return 3;
-    }
+    };
     // A leading digit is a range for every command but `:match`.
     if ascii_isdigit(byte(name)) && ea.cmdidx != CmdIdx::r#match {
         return 0;
     }
-    if byte(skipwhite(p)) != NUL {
+    if ea.line.byte_at(ea.line.skip_white(at)) != 0 {
         return 0;
     }
     if ea.cmdidx == CmdIdx::SIZE {
         0
-    } else if full != 0 {
+    } else if full {
         2
     } else {
         1
@@ -312,8 +310,7 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     ea.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(name) });
     // `:2match`/`:3match` carry their count in the name.
     ea.line.cmd = usize::from(byte(name) == '2' as c_int || byte(name) == '3' as c_int);
-    let p = unsafe { find_ex_command(&mut ea, ptr::null_mut()) };
-    if p.is_null() || ea.cmdidx == CmdIdx::SIZE {
+    if find_ex_command(&mut ea, None).is_none() || ea.cmdidx == CmdIdx::SIZE {
         return;
     }
     unsafe {
@@ -347,8 +344,9 @@ pub unsafe fn excmd_get_cmdidx(cmd: *const c_char, len: size_t) -> CmdIdx {
     if len == 3 && prefix_eq(cmd, c"def".as_ptr(), 3) {
         return CmdIdx::SIZE;
     }
-    let mut idx: CmdIdx = CmdIdx::append;
-    if one_letter_cmd(cmd, &raw mut idx) {
+    // SAFETY: caller contract -- `cmd` is a NUL-terminated name, and the
+    // walk stops at the terminator.
+    if let Some(idx) = one_letter_cmd(|n| unsafe { *cmd.add(n) } as u8) {
         return idx;
     }
     // A linear scan from the head of the table, not the `cmdidxs`
@@ -401,12 +399,6 @@ fn skipwhite(p: *const c_char) -> *mut c_char {
 fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
     unsafe { *p as c_int }
-}
-
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
 }
 
 /// The byte at `p[i]`, as the C's `*(p + i)` reads it.

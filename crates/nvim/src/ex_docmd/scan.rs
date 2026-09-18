@@ -173,21 +173,17 @@ pub(crate) fn parse_count(
     Ok(())
 }
 
-/// Take the `!` a command may carry. `:substitute` and its two magic
-/// spellings are the exception: there a `!` belongs to the pattern.
-///
-/// # Safety
-///
-/// `p` must point at a writable `*mut c_char` slot the caller owns for the
-/// call.
-pub(crate) unsafe fn parse_bang(excmd: &mut ExArg, p: *mut *mut c_char) -> bool {
+/// Take the `!` a command may carry, moving `at` past it. `:substitute`
+/// and its two magic spellings are the exception: there a `!` belongs to
+/// the pattern.
+pub(crate) fn parse_bang(excmd: &mut ExArg, at: &mut usize) -> bool {
     let cmdidx = excmd.cmdidx;
-    if byte(unsafe { *p }) == '!' as c_int
+    if excmd.line.byte_at(*at) == b'!'
         && cmdidx != CmdIdx::substitute
         && cmdidx != CmdIdx::smagic
         && cmdidx != CmdIdx::snomagic
     {
-        unsafe { *p = (*p).add(1) };
+        *at += 1;
         return true;
     }
     false

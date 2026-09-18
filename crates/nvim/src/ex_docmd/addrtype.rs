@@ -7,14 +7,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use super::address::{head, qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_valid_size, tail, ubyte};
-use crate::charset::skipwhite;
+use super::address::{head, qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_valid_size, tail};
 
 use crate::ex_docmd::is_user_cmd;
 use crate::types::CmdIdx;
 use crate::winlayer::TabPage;
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use crate::buffer::{buf_is_quickfix, current_buf};
 
@@ -39,11 +38,8 @@ const WINCMD_BUFFERS: &[u8] = b"^\x1e";
 const WINCMD_WINDOWS: &[u8] = b"qcowWx\x11\x03\x0f\x17\x18";
 const WINCMD_NONE: &[u8] = b"zPtbp=\x1a\x14\x02\x10\x0d";
 
-/// # Safety
-///
-/// `arg` must point at a NUL-terminated string.
-pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, excmd: &mut ExArg) {
-    let c = ubyte(arg);
+/// `c` is the first byte of the window command, white space skipped.
+pub(crate) fn get_wincmd_addr_type(c: u8, excmd: &mut ExArg) {
     excmd.addr_type = if WINCMD_OTHER.contains(&c) {
         CmdAddr::Other
     } else if WINCMD_BUFFERS.contains(&c) {
@@ -61,11 +57,10 @@ pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, excmd: &mut ExArg)
 /// Take the address kind from the command table, with the three exceptions
 /// the table cannot express.
 ///
-/// # Safety
-///
-/// `excmd` must point at the command's `ExArg`, unaliased for the call. `p`
-/// must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn set_cmd_addr_type(excmd: &mut ExArg, p: *mut c_char) {
+/// `first` is the first byte of the command's argument, white space
+/// skipped, which only `:wincmd` consults; `None` is "there is no
+/// argument", upstream's null `p`.
+pub fn set_cmd_addr_type(excmd: &mut ExArg, first: Option<u8>) {
     if is_user_cmd(excmd.cmdidx) {
         return;
     }
@@ -74,8 +69,10 @@ pub unsafe fn set_cmd_addr_type(excmd: &mut ExArg, p: *mut c_char) {
     } else {
         CmdAddr::Lines
     };
-    if excmd.cmdidx == CmdIdx::wincmd && !p.is_null() {
-        unsafe { get_wincmd_addr_type(skipwhite(p), excmd) };
+    if excmd.cmdidx == CmdIdx::wincmd
+        && let Some(first) = first
+    {
+        get_wincmd_addr_type(first, excmd);
     }
     // `:cc`/`:ll` in a quickfix window address the window's entries.
     if (excmd.cmdidx == CmdIdx::cc || excmd.cmdidx == CmdIdx::ll) && buf_is_quickfix(current_buf())

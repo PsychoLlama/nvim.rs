@@ -102,44 +102,40 @@ pub unsafe fn parse_cmdline(
 
     let mut retval = false;
     'end: {
-        let orig_cmd = excmd.cmd_ptr();
+        let orig_cmd = excmd.line.cmd;
         // A modifier that failed to parse is still a modifier: keep
         // going, so that the error is reported against the command
         // rather than against the line.
         let result =
             unsafe { parse_command_modifiers(excmd, errormsg, &mut (*cmdinfo).cmdmod, false) };
-        let after_modifier = excmd.cmd_ptr();
+        let after_modifier = excmd.line.cmd;
         if result.is_err() && after_modifier == orig_cmd {
             break 'end;
         }
 
         // The command name says what kind of address the range counts in.
-        let mut p = find_excmd_after_range(excmd);
-        if p.is_null() {
+        let Some(mut p) = find_excmd_after_range(excmd) else {
             *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
             break 'end;
-        }
+        };
 
-        unsafe { set_cmd_addr_type(excmd, p) };
+        set_cmd_addr_type(excmd, Some(excmd.line.byte_at(excmd.line.skip_white(p))));
         if parse_cmd_address(excmd, errormsg, true) == FAIL {
             break 'end;
         }
 
         excmd.line.cmd = skip_colons(&excmd.line, excmd.line.cmd, true);
-        if byte(excmd.cmd_ptr()) == '"' as c_int {
+        if excmd.line.byte_at(excmd.line.cmd) == b'"' {
             break 'end;
         }
         // Nothing at all: no command, no range, no modifier.
-        if byte(excmd.cmd_ptr()) == NUL
-            && excmd.addr_count == 0
-            && excmd.line.offset_of(after_modifier) == 0
-        {
+        if excmd.line.byte_at(excmd.line.cmd) == 0 && excmd.addr_count == 0 && after_modifier == 0 {
             break 'end;
         }
 
         // A range on its own (`:1`) or a modifier on its own
         // (`:aboveleft`) is a legal thing to parse.
-        if byte(excmd.cmd_ptr()) == NUL && excmd.cmdidx == CmdIdx::SIZE {
+        if excmd.line.byte_at(excmd.line.cmd) == 0 && excmd.cmdidx == CmdIdx::SIZE {
             excmd.line.arg = excmd.line.cmd;
             if excmd.addr_count > 0 {
                 excmd.argt = ExArgt::RANGE;
@@ -153,26 +149,23 @@ pub unsafe fn parse_cmdline(
 
         if excmd.cmdidx == CmdIdx::SIZE {
             // The modifiers parsed, so the error is in what follows them.
-            let cmdname = if after_modifier.is_null() {
-                excmd.line_ptr()
-            } else {
-                after_modifier
-            };
+            let cmdname = excmd.line.ptr_at(after_modifier);
             let msg = ex_msg(e_not_an_editor_command.as_ptr());
+            // SAFETY: `cmdname` is inside the command line.
             *errormsg = Some(unsafe { append_command(&msg, cmdname) });
             break 'end;
         }
 
-        excmd.forceit = unsafe { parse_bang(excmd, &raw mut p) };
+        excmd.forceit = parse_bang(excmd, &mut p);
         if !is_user_cmd(excmd.cmdidx) {
             excmd.argt = cmdnames[excmd.cmdidx.index()].cmd_argt;
         }
         // `:!` keeps the space: `:!! -l` needs it.
-        excmd.set_arg_ptr(if excmd.cmdidx == CmdIdx::bang {
+        excmd.line.arg = if excmd.cmdidx == CmdIdx::bang {
             p
         } else {
-            skipwhite(p)
-        });
+            excmd.line.skip_white(p)
+        };
         // `:r!` is a filter, not a bang.
         if excmd.cmdidx == CmdIdx::read && excmd.forceit {
             excmd.forceit = false;
