@@ -57,7 +57,10 @@ pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
     let mut expr = expr_arg;
     regexp_engine.set(p_re() as c_int);
     if expr.to_bytes().starts_with(b"\\%#=") {
-        let chosen = c_int::from(expr.to_bytes()[4]) - '0' as c_int;
+        // The prefix may be the whole pattern, and then the byte after it
+        // is the terminator -- which is not a digit, so the error below is
+        // what upstream reports for it too.
+        let chosen = c_int::from(cstr::byte_at(expr.to_bytes(), 4)) - '0' as c_int;
         if chosen == AUTOMATIC_ENGINE as c_int
             || chosen == BACKTRACKING_ENGINE as c_int
             || chosen == NFA_ENGINE as c_int

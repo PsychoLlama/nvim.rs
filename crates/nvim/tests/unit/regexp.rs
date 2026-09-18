@@ -1731,3 +1731,20 @@ fn a_string_substitution_expands_captures_and_submatches() {
         "Qab"
     );
 }
+
+/// The `\%#=N` engine prefix is read *before* the pattern is handed to an
+/// engine, and it can be the whole pattern — every other case in the
+/// truncated-pattern corpus above is prefixed with a `\%#=1`/`\%#=2` of its
+/// own, so the bare form is only reachable here.
+#[test]
+fn an_engine_prefix_with_nothing_after_it_is_an_error_rather_than_a_read_past_the_end() {
+    let _sandbox = Sandbox::globals();
+    for pat in [r"\%#=", r"\%#", r"\%", r"\%#=9", r"\%#=1"] {
+        let pattern = cstr(pat);
+        let prog = vim_regcomp(&pattern, RE_MAGIC | RE_STRING);
+        if !prog.is_null() {
+            // SAFETY: what `vim_regcomp` just answered, freed once.
+            unsafe { vim_regfree(prog) };
+        }
+    }
+}
