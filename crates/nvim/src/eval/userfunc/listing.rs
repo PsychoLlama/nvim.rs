@@ -22,11 +22,8 @@ use core::ptr;
 use super::*;
 use crate::types::{ExpandContext, IOSIZE, NUL};
 
-/// Print the head of every function, or of the ones `regmatch` matches.
-///
-/// # Safety
-/// `regmatch` is null or a compiled pattern.
-pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
+/// Print the head of every function, or of the ones `pattern` matches.
+pub(crate) fn list_functions(mut pattern: Option<&mut RegMatch>) {
     let prev_ht_changed = func_table().changed();
     let mut todo = func_table().used();
     let mut idx = 0;
@@ -42,12 +39,13 @@ pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
             // Without a pattern, skip what the user filtered out and the
             // numbered/lambda functions; with one, skip the numbered
             // functions and ask the pattern.
-            let show = if regmatch.is_null() {
-                !message_filtered(unsafe { cstr::at(uf_name_ptr(fp)) })
-                    && !unsafe { func_name_refcount(uf_name_ptr(fp)) }
-            } else {
-                !(unsafe { *uf_name_ptr(fp) } as u8).is_ascii_digit()
-                    && unsafe { vim_regexec(regmatch, uf_name_ptr(fp), 0) }
+            // SAFETY: a function's name is NUL-terminated.
+            let name = unsafe { cstr::at(uf_name_ptr(fp)) };
+            let show = match pattern.as_deref_mut() {
+                None => !message_filtered(name) && !unsafe { func_name_refcount(uf_name_ptr(fp)) },
+                Some(pattern) => {
+                    !cstr::first(name).is_ascii_digit() && vim_regexec(pattern, name, 0)
+                }
             };
             if show {
                 if unsafe { list_func_head(fp, false, false) }.is_err() {
@@ -79,7 +77,7 @@ pub(crate) fn list_functions_matching_pat(excmd: &mut ExArg) -> usize {
         excmd.line.set_byte(at, c);
         if !regmatch.regprog.is_null() {
             regmatch.rm_ic = p_ic();
-            unsafe { list_functions(&raw mut regmatch) };
+            list_functions(Some(&mut regmatch));
             unsafe { vim_regfree(regmatch.regprog) };
         }
     }

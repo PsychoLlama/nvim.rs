@@ -544,19 +544,15 @@ fn remove_arg(idx: c_int) {
     unsafe { xfree(gone.ae_fname.cast()) };
 }
 
-/// Delete every argument whose name `regmatch` matches, and report whether
-/// any did.
-///
-/// # Safety
-///
-/// `regmatch` must hold a compiled program.
-unsafe fn delete_matching_args(regmatch: *mut RegMatch) -> bool {
+/// Delete every argument whose name `regex_match` matches, and report
+/// whether any did.
+fn delete_matching_args(regex_match: &mut RegMatch) -> bool {
     let mut didone = false;
     let mut i = 0;
     while i < argcount() {
-        // SAFETY: caller contract; `i` is in range and the entry's name is
-        // NUL-terminated.
-        if !unsafe { vim_regexec(regmatch, arg_name(i), 0 as ColNr) } {
+        // SAFETY: `i` is in range and the entry's name is NUL-terminated.
+        let name = unsafe { cstr::at(arg_name(i)) };
+        if !vim_regexec(regex_match, name, 0) {
             i += 1;
             continue;
         }
@@ -576,14 +572,8 @@ unsafe fn delete_matching_args(regmatch: *mut RegMatch) -> bool {
 ///
 /// Every pattern must be NUL-terminated and stay alive for the call.
 unsafe fn arglist_del_files(patterns: &[*mut c_char]) {
-    let mut regmatch = RegMatch {
-        regprog: ptr::null_mut(),
-        startp: [ptr::null_mut(); 10],
-        endp: [ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        // Ignore case when 'fileignorecase' is set.
-        rm_ic: p_fic(),
-    };
+    // Ignore case when 'fileignorecase' is set.
+    let mut regmatch = RegMatch::new(ptr::null_mut(), p_fic());
     for &pattern in patterns {
         if got_int.get() {
             break;
@@ -603,9 +593,8 @@ unsafe fn arglist_del_files(patterns: &[*mut c_char]) {
             break;
         }
         // SAFETY: the program was just compiled and is freed right after.
-        // SAFETY: `regmatch` is this frame's and `regexp` is ours to free
-        // once the walk that reads it has finished.
-        let didone = unsafe { delete_matching_args(&raw mut regmatch) };
+        let didone = delete_matching_args(&mut regmatch);
+        // SAFETY: `regexp` is ours to free once the walk has finished.
         unsafe { vim_regfree(regmatch.regprog) };
         unsafe { xfree(regexp.cast()) };
         if !didone {

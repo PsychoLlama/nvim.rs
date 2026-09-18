@@ -260,7 +260,7 @@ const EXPAND_ARG_BUFFER: usize = 4;
 /// written unconditionally.
 pub unsafe fn expand_mappings(
     pat: *mut c_char,
-    regmatch: *mut RegMatch,
+    regmatch: &mut RegMatch,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -278,15 +278,14 @@ pub unsafe fn expand_mappings(
     let mut plain = Vec::<*mut c_char>::new();
 
     // Whether `p` matches, and with what fuzzy score.
-    let matched = |p: *mut c_char| -> Option<c_int> {
+    let matched = |regex_match: &mut RegMatch, p: *mut c_char| -> Option<c_int> {
         if fuzzy {
             // SAFETY: `p` and `pat` are both live and NUL-terminated.
             let score = unsafe { fuzzy_match_str(cstr::at(p), cstr::at(pat)) };
             (score != FUZZY_SCORE_NONE).then_some(score)
         } else {
-            // SAFETY: the caller's promise — `regmatch` is a live, compiled
-            // match — and `p` is NUL-terminated.
-            unsafe { vim_regexec(regmatch, p, 0) }.then_some(0)
+            // SAFETY: `p` is NUL-terminated.
+            vim_regexec(regex_match, unsafe { cstr::at(p) }, 0).then_some(0)
         }
     };
     // C's `GA_APPEND`, in whichever of the two element shapes is in use.
@@ -307,7 +306,7 @@ pub unsafe fn expand_mappings(
             continue;
         }
         let p = word.as_ptr().cast_mut();
-        if let Some(score) = matched(p) {
+        if let Some(score) = matched(regmatch, p) {
             // The copy is owned by the growarray from here on.
             push(
                 &mut scored,
@@ -339,7 +338,7 @@ pub unsafe fn expand_mappings(
         // Matched as a C string out of this frame's own buffer, and only
         // handed to the growarray -- which owns it from then on -- if it hit.
         rendering.push(0);
-        if let Some(score) = matched(rendering.as_mut_ptr().cast()) {
+        if let Some(score) = matched(regmatch, rendering.as_mut_ptr().cast()) {
             rendering.pop();
             push(&mut scored, &mut plain, owned_cstr(rendering), score);
         }

@@ -42,8 +42,8 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    CONV_NONE, ColNr, EvalFuncData, GArray, Hlf, List, NUL, RegMatch, RegProg, TypVal, VAR_BLOB,
-    VAR_LIST, VAR_STRING, VarNumber, VimConv, kListLenMayKnow, time_t, tm,
+    CONV_NONE, EvalFuncData, GArray, Hlf, List, NUL, RegMatch, RegProg, TypVal, VAR_BLOB, VAR_LIST,
+    VAR_STRING, VarNumber, VimConv, kListLenMayKnow, time_t, tm,
 };
 use crate::winlayer::{Buf, Win};
 use ::libc::{mktime, strftime, time};
@@ -469,46 +469,48 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// # Safety
 /// `list` is a live list, `str` is NUL-terminated, and `prog` is a compiled
 /// program the caller frees.
-unsafe fn split_into(list: *mut List, mut str: *const c_char, prog: *mut RegProg, keepempty: bool) {
-    // SAFETY throughout: the caller's obligation. The match positions come back
-    // pointing into `str`, so every pointer difference below is within one
-    // allocation.
-    let mut regmatch: RegMatch = RegMatch {
-        regprog: prog,
-        startp: [ptr::null_mut(); 10],
-        endp: [ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: false,
-    };
-    let mut col: ColNr = 0;
-    while unsafe { *str } != NUL as c_char || keepempty {
-        let matched = unsafe { *str } != NUL as c_char
-            && unsafe { vim_regexec_nl(&raw mut regmatch, str, col) };
-        let end: *const c_char = if matched {
-            regmatch.startp[0]
-        } else {
-            unsafe { str.add(cstr::bytes_at(str).len()) }
+unsafe fn split_into(list: *mut List, str: *const c_char, prog: *mut RegProg, keepempty: bool) {
+    // SAFETY: the caller's obligation -- `str` is NUL-terminated.
+    let subject = unsafe { cstr::at(str) };
+    let mut regmatch: RegMatch = RegMatch::new(prog, false);
+    // Where the piece being cut starts, and how far into it the next match
+    // may begin. The pattern is run against the *tail* rather than the whole
+    // subject, because a `^` in it anchors at each piece.
+    let mut at = 0;
+    let mut col = 0;
+    loop {
+        let tail = cstr::suffix(subject, at);
+        let rest = tail.to_bytes();
+        if rest.is_empty() && !keepempty {
+            break;
+        }
+        let matched = !rest.is_empty() && vim_regexec_nl(&mut regmatch, tail, col);
+        let (start, match_end) = match regmatch.group(0).filter(|_| matched) {
+            Some(span) => (span.start, span.end),
+            None => (rest.len(), 0),
         };
         if keepempty
-            || end > str
+            || start > 0
             || (list_len(unsafe { list.as_ref() }) > 0
-                && unsafe { *str } != NUL as c_char
+                && !rest.is_empty()
                 && matched
-                && end < regmatch.endp[0] as *const c_char)
+                && start < match_end)
         {
-            unsafe { (*list).push_string(str, end.offset_from(str) as isize) };
+            // SAFETY: `start` bytes of the tail, which is NUL-terminated.
+            unsafe { (*list).push_string(tail.as_ptr(), start as isize) };
         }
         if !matched {
             break;
         }
         // An empty match would not advance, so the next attempt starts
-        // one character further in while `str` stays put.
-        col = if regmatch.endp[0] > str as *mut c_char {
+        // one character further in while the piece stays put.
+        col = if match_end > 0 {
             0
         } else {
-            unsafe { utfc_ptr2len(regmatch.endp[0]) as ColNr }
+            // SAFETY: the tail is NUL-terminated.
+            unsafe { utfc_ptr2len(tail.as_ptr()) as usize }
         };
-        str = regmatch.endp[0];
+        at += match_end;
     }
 }
 

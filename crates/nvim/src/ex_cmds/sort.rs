@@ -154,13 +154,7 @@ fn compare_lines(order: StringOrder, l1: &SortLine, l2: &SortLine) -> Ordering {
 
 /// A zeroed `RegMatch`; only `regprog` is meaningful before a match.
 fn no_regmatch() -> RegMatch {
-    RegMatch {
-        regprog: ptr::null_mut(),
-        startp: [ptr::null_mut(); 10],
-        endp: [ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: false,
-    }
+    RegMatch::new(ptr::null_mut(), false)
 }
 
 /// The `/pat/` argument both commands accept in place of a flag letter.
@@ -410,22 +404,26 @@ fn parse_uniq_flags(
 /// there is no pattern, what the pattern matched under `r`, what follows the
 /// match otherwise -- and nothing at all for a line the pattern misses.
 ///
-/// # Safety
-/// `line` must be a buffer line, so that the byte past its last is a NUL:
-/// `vim_regexec` reads a string, not a slice.
-unsafe fn match_range(regmatch: &mut RegMatch, line: &mut [u8], use_match: bool) -> (ColNr, ColNr) {
-    let len = line.len() as ColNr;
+/// The line is read through the cache rather than handed in as bytes: the
+/// match runs over a C string, and the memline's terminator is the only
+/// thing that says where a line's bytes end.
+fn match_range(
+    regmatch: &mut RegMatch,
+    lines: &mut Lines,
+    lnum: LineNr,
+    use_match: bool,
+) -> (ColNr, ColNr) {
+    let len = lines.line_len(lnum);
     if regmatch.regprog.is_null() {
         return (0, len);
     }
-    let base = line.as_mut_ptr().cast::<c_char>();
-    // SAFETY: caller's contract.
-    if !unsafe { vim_regexec(regmatch, base, 0) } {
+    if !vim_regexec(regmatch, lines.line_cstr(lnum, 0), 0) {
         return (0, 0);
     }
-    // SAFETY: both are positions inside the line just matched.
-    let start = unsafe { regmatch.startp[0].offset_from(base) } as ColNr;
-    let end = unsafe { regmatch.endp[0].offset_from(base) } as ColNr;
+    let (start, end) = match regmatch.group(0) {
+        Some(span) => (span.start as ColNr, span.end as ColNr),
+        None => (0, 0),
+    };
     if use_match { (start, end) } else { (end, len) }
 }
 
@@ -519,9 +517,8 @@ fn collect_sort_keys(
     let mut lines = Lines::current();
 
     for lnum in line1..=line2 {
+        let (start, end) = match_range(regmatch, &mut lines, lnum, spec.use_match);
         let text = lines.line_mut(lnum);
-        // SAFETY: a buffer line is NUL-terminated past its last byte.
-        let (start, end) = unsafe { match_range(regmatch, text, spec.use_match) };
         let key = if spec.numeric || spec.float {
             // SAFETY: as above; `match_range` answers offsets into `text`.
             unsafe { number_key(text, start, end, spec) }
@@ -841,9 +838,8 @@ fn uniq_range(args: &mut ExArg) {
             // handle dies before anything else touches the memline.
             {
                 let mut lines = Lines::current();
+                let (start, end) = match_range(&mut regmatch, &mut lines, get_lnum, use_match);
                 let text = lines.line_mut(get_lnum);
-                // SAFETY: a buffer line is NUL-terminated past its last byte.
-                let (start, end) = unsafe { match_range(&mut regmatch, text, use_match) };
                 // A line the pattern missed compares its whole text, which is
                 // what upstream's "terminate at `end` only when there is an
                 // end to terminate at" comes to.

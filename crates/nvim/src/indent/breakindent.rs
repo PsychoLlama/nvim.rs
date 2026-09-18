@@ -267,24 +267,24 @@ impl BreakindentCache {
     /// must hold the current 'formatlistpat'.
     unsafe fn add_list_indent(&mut self, window: Win, line: *mut c_char) {
         // SAFETY: the caller's window and line, and the cache's own pattern.
-        let mut regmatch: RegMatch = RegMatch {
-            regprog: unsafe { vim_regcomp(self.flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT) },
-            startp: [::core::ptr::null_mut(); 10],
-            endp: [::core::ptr::null_mut(); 10],
-            rm_matchcol: 0,
-            rm_ic: false,
-        };
+        let mut regmatch: RegMatch = RegMatch::new(
+            unsafe { vim_regcomp(self.flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT) },
+            false,
+        );
         if regmatch.regprog.is_null() {
             return;
         }
-        if unsafe { vim_regexec(&raw mut regmatch, line, 0 as ColNr) } {
+        // SAFETY: the caller's NUL-terminated line.
+        if vim_regexec(&mut regmatch, unsafe { cstr::at(line) }, 0) {
             if window.w_briopt_list > 0 {
                 self.list += window.w_briopt_list;
             } else {
                 // Measure the match with `win_chartabsize`, so that a TAB
                 // is the right width and wrapping is ignored.
-                let end = regmatch.endp[0];
-                let mut ptr = regmatch.startp[0];
+                let span = regmatch.group(0).unwrap_or(0..0);
+                // SAFETY: offsets into the line just matched.
+                let end = unsafe { line.add(span.end) };
+                let mut ptr = unsafe { line.add(span.start) };
                 let mut indent = 0;
                 while ptr < end {
                     indent += unsafe { win_chartabsize(window, ptr, indent as ColNr) };

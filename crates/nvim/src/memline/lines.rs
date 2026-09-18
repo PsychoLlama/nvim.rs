@@ -176,6 +176,29 @@ impl Lines {
         ColNr::try_from(self.line(lnum).len()).unwrap_or(ColNr::MAX)
     }
 
+    /// Line `lnum` as a C string, from byte `at` on.
+    ///
+    /// The cache's line is followed by a NUL in the same allocation and a
+    /// memline line holds no interior NUL — it stores one as an `NL` — so
+    /// the terminated view costs nothing to build and is the shape the
+    /// callers that still hand text to a C-string reader want, `vim_regexec`
+    /// above all. `at` may be the line's length, which answers the empty
+    /// string.
+    ///
+    /// # Panics
+    /// When `at` is past the end of the line.
+    pub fn line_cstr(&mut self, lnum: LineNr, at: usize) -> &CStr {
+        let bytes = self.line(lnum);
+        assert!(at <= bytes.len(), "column past the end of the line");
+        // SAFETY: the memline keeps a NUL after every line, in the same
+        // allocation as the bytes [`Lines::line`] just answered, and a line
+        // holds no interior NUL -- it stores one as an `NL`.
+        unsafe {
+            let from = ::core::slice::from_raw_parts(bytes.as_ptr().add(at), bytes.len() - at + 1);
+            CStr::from_bytes_with_nul_unchecked(from)
+        }
+    }
+
     /// Line `lnum`, copied out of the cache.
     ///
     /// The escape hatch for the two shapes the borrow cannot express: a

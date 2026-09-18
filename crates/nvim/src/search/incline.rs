@@ -93,11 +93,14 @@ pub(crate) unsafe fn match_on_line(
 ) -> Option<*mut c_char> {
     let mut p = from;
     let mut define_matched = false;
-    if !pats.def.regprog.is_null() && unsafe { vim_regexec(&raw mut pats.def, line, 0) } {
+    // SAFETY: the caller's line, NUL-terminated.
+    let text_line = unsafe { cstr::at(line) };
+    if !pats.def.regprog.is_null() && vim_regexec(&mut pats.def, text_line, 0) {
         // The pattern has to be the first identifier after 'define',
         // so skip to it before testing, and don't let the match run
         // past the end of that identifier.
-        p = pats.def.endp[0];
+        // SAFETY: an offset into the line just matched.
+        p = unsafe { line.add(pats.def.ends[0].unwrap_or(0)) };
         while unsafe { *p } as c_int != NUL && !unsafe { vim_iswordc(*p as u8 as c_int) } {
             p = unsafe { p.offset(1) };
         }
@@ -127,11 +130,13 @@ pub(crate) unsafe fn match_on_line(
     }
 
     if pats.pat.regprog.is_null()
-        || !unsafe { vim_regexec(&raw mut pats.pat, line, p.offset_from(line) as ColNr) }
+        || !vim_regexec(&mut pats.pat, text_line, unsafe { p.offset_from(line) }
+            as usize)
     {
         return None;
     }
-    let startp = pats.pat.startp[0];
+    // SAFETY: an offset into the line just matched.
+    let startp = unsafe { line.add(pats.pat.starts[0].unwrap_or(0)) };
     // Check that the line is not a comment line, unless a define is
     // what is being looked for.
     if skip_comments && !unsafe { match_is_code(line, startp) } {

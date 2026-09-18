@@ -11,6 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::winlayer::{Buf, Win};
+use core::ops::Range;
 
 /// The head every compiled pattern starts with, whichever engine built it.
 #[repr(C)]
@@ -54,13 +55,68 @@ pub struct RegExtMatch {
     pub refcnt: int16_t,
     pub matches: [*mut uint8_t; 10],
 }
+/// A pattern and where its groups landed in the string it last ran over.
+///
+/// Upstream's `startp`/`endp` are `char *` into the matched text, which
+/// makes every holder of a `regmatch_T` a holder of a borrow nothing
+/// spells: the text has to outlive the structure, and the compiler is not
+/// told. Here they are **byte offsets into the line the match ran over**,
+/// the same shape [`RegMMatch`]'s `startpos`/`endpos` have always had, and
+/// the line comes back at the reading end — [`RegMatch::group_bytes`] takes
+/// it, and the caller that has no line to hand has a bug the type now
+/// shows.
+///
+/// A group the pattern never filled is `None`. After a match that failed
+/// every group is `None`: upstream leaves the last attempt's pointers
+/// lying in the structure, which is only ever read by mistake.
 #[derive(Clone)]
 pub struct RegMatch {
     pub regprog: *mut RegProg,
-    pub startp: [*mut ::core::ffi::c_char; 10],
-    pub endp: [*mut ::core::ffi::c_char; 10],
+    /// Where each `\0`..`\9` group starts, and where it ends.
+    pub starts: [Option<usize>; RE_GROUPS],
+    pub ends: [Option<usize>; RE_GROUPS],
     pub rm_matchcol: ColNr,
     pub rm_ic: bool,
+}
+
+/// How many capture groups a match records: `\0` and `\1`..`\9`.
+pub const RE_GROUPS: usize = 10;
+
+impl RegMatch {
+    /// A match structure for `regprog`, with no groups filled in yet.
+    ///
+    /// `regprog` may be null, which every caller that compiles a pattern
+    /// into the structure afterwards relies on.
+    pub const fn new(regprog: *mut RegProg, ignore_case: bool) -> Self {
+        RegMatch {
+            regprog,
+            starts: [None; RE_GROUPS],
+            ends: [None; RE_GROUPS],
+            rm_matchcol: 0,
+            rm_ic: ignore_case,
+        }
+    }
+
+    /// The span group `no` covers, or `None` if the pattern never filled
+    /// both of its ends.
+    pub fn group(&self, no: usize) -> Option<Range<usize>> {
+        Some(self.starts[no]?..self.ends[no]?)
+    }
+
+    /// Group `no`'s text, given the line the match ran over.
+    ///
+    /// `None` for a group that did not match; an empty slice for one that
+    /// matched nothing, which is a different answer.
+    pub fn group_bytes<'a>(&self, no: usize, line: &'a [u8]) -> Option<&'a [u8]> {
+        let span = self.group(no)?;
+        line.get(span)
+    }
+
+    /// Forget every group, as a failed match does.
+    pub fn clear_groups(&mut self) {
+        self.starts = [None; RE_GROUPS];
+        self.ends = [None; RE_GROUPS];
+    }
 }
 #[derive(Clone)]
 pub struct RegMMatch {
@@ -87,12 +143,6 @@ impl Default for RegMMatch {
 
 impl Default for RegMatch {
     fn default() -> Self {
-        RegMatch {
-            regprog: ::core::ptr::null_mut(),
-            startp: [::core::ptr::null_mut(); 10],
-            endp: [::core::ptr::null_mut(); 10],
-            rm_matchcol: 0,
-            rm_ic: false,
-        }
+        RegMatch::new(::core::ptr::null_mut(), false)
     }
 }

@@ -196,8 +196,7 @@ fn nfa_regexec_both(
         rex.set_reg_endpos((unsafe { &raw mut (*rex.reg_mmatch()).endpos }).cast());
         unsafe { (*rex.reg_mmatch()).regprog.cast() }
     } else {
-        rex.set_reg_startp((unsafe { &raw mut (*rex.reg_match()).startp }).cast());
-        rex.set_reg_endp((unsafe { &raw mut (*rex.reg_match()).endp }).cast());
+        // A string match's capture slots are the context's own.
         unsafe { (*rex.reg_match()).regprog.cast() }
     };
 
@@ -242,11 +241,13 @@ fn nfa_regexec_both(
                 unsafe { (*rmm).endpos[0] = start };
             }
         } else {
-            let rm = rex.reg_match();
-            if unsafe { (*rm).endp[0] } < unsafe { (*rm).startp[0] } {
-                unsafe { (*rm).endp[0] = (*rm).startp[0] };
+            // The slots a string match fills are the context's own; the
+            // API layer turns them into the caller's offsets.
+            let (starts, ends) = (rex.reg_startp(), rex.reg_endp());
+            if unsafe { *ends } < unsafe { *starts } {
+                unsafe { *ends = *starts };
             }
-            unsafe { (*rm).rm_matchcol = col };
+            unsafe { (*rex.reg_match()).rm_matchcol = col };
         }
     }
     retval

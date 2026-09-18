@@ -247,7 +247,7 @@ pub(crate) unsafe fn uniquefy_paths(
         let cutoff = unsafe { get_path_cutoff(path, &raw mut path_ga) };
         if starstar
             && !cutoff.is_null()
-            && unsafe { vim_regexec(&raw mut regmatch, cutoff, 0) }
+            && vim_regexec(&mut regmatch, unsafe { cstr::at(cutoff) }, 0)
             && unsafe { is_unique(cutoff, gap, i as c_int) }
         {
             sort_again = true;
@@ -260,7 +260,7 @@ pub(crate) unsafe fn uniquefy_paths(
             let mut sep = unsafe { path.add(len.saturating_sub(1)) };
             while unsafe { find_previous_pathsep(path, &mut sep) } {
                 let tail = unsafe { sep.add(1) };
-                if unsafe { vim_regexec(&raw mut regmatch, tail, 0) }
+                if vim_regexec(&mut regmatch, unsafe { cstr::at(tail) }, 0)
                     && unsafe { is_unique(tail, gap, i as c_int) }
                     && !cutoff.is_null()
                     && tail >= cutoff

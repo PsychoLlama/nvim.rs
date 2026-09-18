@@ -648,7 +648,10 @@ pub unsafe fn can_compound(
     }
     unsafe { *p = NUL as c_char };
 
-    if !unsafe { vim_regexec_prog(&raw mut (*slang).sl_compprog, false, uflags.as_ptr(), 0) } {
+    // SAFETY: `uflags` was just NUL-terminated, and `sl_compprog` is this
+    // language's compiled pattern.
+    let compprog = unsafe { &mut (*slang).sl_compprog };
+    if !vim_regexec_prog(compprog, false, cstr::in_chars(&uflags), 0) {
         return false;
     }
 
@@ -753,9 +756,11 @@ pub unsafe fn valid_word_prefix(
         }
 
         let prefprog_idx = ((pidx as c_uint >> 8) & 0xffff) as isize;
-        let rp: *mut *mut RegProg = unsafe { (*slang).sl_prefprog.offset(prefprog_idx) };
-        if !unsafe { *rp }.is_null() {
-            if !unsafe { vim_regexec_prog(rp, false, word, 0) } {
+        // SAFETY: the language's own array of compiled conditions.
+        let rp: &mut *mut RegProg = unsafe { &mut *(*slang).sl_prefprog.offset(prefprog_idx) };
+        if !rp.is_null() {
+            // SAFETY: the caller's NUL-terminated word.
+            if !vim_regexec_prog(rp, false, unsafe { cstr::at(word) }, 0) {
                 continue;
             }
         } else if cond_req {

@@ -185,7 +185,7 @@ impl Fields {
 
         // Case is always ignored when looking for an error.
         // SAFETY: the caller's line is NUL-terminated.
-        let Some(regmatch) = (unsafe { fmt.exec(linebuf) }) else {
+        let Some(regmatch) = fmt.exec(unsafe { cstr::at(linebuf) }) else {
             return Status::Fail;
         };
         // SAFETY: the submatches point into the line just matched.
@@ -200,8 +200,8 @@ impl Fields {
     ///
     /// # Safety
     ///
-    /// `regmatch`'s submatch pointers must point into `linebuf`, which must
-    /// be writable, NUL-terminated and `linelen` bytes long.
+    /// `regmatch`'s submatch spans must be offsets into `linebuf`, which
+    /// must be writable, NUL-terminated and `linelen` bytes long.
     #[allow(clippy::too_many_arguments)]
     unsafe fn take_match(
         &mut self,
@@ -232,28 +232,30 @@ impl Fields {
             let midx = fmt.submatch(idx);
             let status = match idx {
                 // SAFETY (each arm): the submatch is inside the line.
-                0 if midx > 0 => unsafe { self.take_file(regmatch, midx, prefix) },
+                0 if midx > 0 => unsafe { self.take_file(linebuf, regmatch, midx, prefix) },
                 FMT_PATTERN_M => {
                     if fmt.flags() == b'+' && !multiscan {
                         // %+ : the whole line is the message.
                         unsafe { self.set_message(linebuf, linelen) };
                         Status::Ok
                     } else if midx > 0 {
-                        unsafe { self.take_message(regmatch, midx) }
+                        unsafe { self.take_message(linebuf, regmatch, midx) }
                     } else {
                         Status::Ok
                     }
                 }
                 FMT_PATTERN_R if midx > 0 => {
                     // %r : whatever follows a file name, to be re-scanned.
-                    if regmatch.startp[midx].is_null() {
-                        Status::Fail
-                    } else {
-                        *tail = regmatch.startp[midx];
-                        Status::Ok
+                    match regmatch.starts[midx] {
+                        None => Status::Fail,
+                        Some(at) => {
+                            // SAFETY: an offset into the line just matched.
+                            *tail = unsafe { linebuf.add(at) };
+                            Status::Ok
+                        }
                     }
                 }
-                _ if midx > 0 => unsafe { self.take_conversion(regmatch, midx, idx) },
+                _ if midx > 0 => unsafe { self.take_conversion(linebuf, regmatch, midx, idx) },
                 _ => Status::Ok,
             };
             if status != Status::Ok {
@@ -268,12 +270,20 @@ impl Fields {
     ///
     /// # Safety
     ///
-    /// The submatch must delimit a range of a writable, NUL-terminated line.
-    unsafe fn take_file(&mut self, rmp: &RegMatch, midx: usize, prefix: u8) -> Status {
-        let (start, end) = (rmp.startp[midx], rmp.endp[midx]);
-        if start.is_null() || end.is_null() {
+    /// The submatch must be a span of `line`, which is writable and
+    /// NUL-terminated.
+    unsafe fn take_file(
+        &mut self,
+        line: *mut c_char,
+        rmp: &RegMatch,
+        midx: usize,
+        prefix: u8,
+    ) -> Status {
+        let Some(span) = rmp.group(midx) else {
             return Status::Fail;
-        }
+        };
+        // SAFETY: the span is an offset range into `line`.
+        let (start, end) = unsafe { (line.add(span.start), line.add(span.end)) };
         // SAFETY: `end` points into the line, so terminating there makes
         // the match a C string for the length of the call; the byte it
         // displaced is put straight back.
@@ -293,16 +303,13 @@ impl Fields {
     ///
     /// # Safety
     ///
-    /// The submatch must delimit a range of a NUL-terminated line.
-    unsafe fn take_message(&mut self, rmp: &RegMatch, midx: usize) -> Status {
-        let (start, end) = (rmp.startp[midx], rmp.endp[midx]);
-        if start.is_null() || end.is_null() {
+    /// The submatch must be a span of `line`, which is NUL-terminated.
+    unsafe fn take_message(&mut self, line: *mut c_char, rmp: &RegMatch, midx: usize) -> Status {
+        let Some(span) = rmp.group(midx) else {
             return Status::Fail;
-        }
-        // SAFETY: both pointers are into the same line.
-        let len = unsafe { end.offset_from(start) } as usize;
-        // SAFETY: the source has at least `len` bytes before its NUL.
-        unsafe { self.set_message(start, len) };
+        };
+        // SAFETY: the span is an offset range into `line`.
+        unsafe { self.set_message(line.add(span.start), span.end - span.start) };
         Status::Ok
     }
 
@@ -311,19 +318,29 @@ impl Fields {
     ///
     /// # Safety
     ///
-    /// The submatch must delimit a range of a NUL-terminated line.
-    unsafe fn take_conversion(&mut self, rmp: &RegMatch, midx: usize, idx: usize) -> Status {
-        let start = rmp.startp[midx];
-        if start.is_null() {
+    /// The submatch must be a span of `line`, which is NUL-terminated.
+    unsafe fn take_conversion(
+        &mut self,
+        line: *mut c_char,
+        rmp: &RegMatch,
+        midx: usize,
+        idx: usize,
+    ) -> Status {
+        let Some(at) = rmp.starts[midx] else {
             return Status::Fail;
-        }
+        };
+        // SAFETY: the span is an offset into `line`.
+        let start = unsafe { line.add(at) };
         // The submatch begins inside a NUL-terminated line and `atol` stops
         // at the first byte that is not part of a number, so the end of the
         // match does not have to be marked.
         // SAFETY: `start` points into the line.
         let number = || unsafe { atol(start) };
-        // SAFETY (each arm): `start`/`endp[midx]` are inside the line, and
-        // the field buffers hold `FIELD_MAX + 1` bytes.
+        // The end of the same submatch, where an arm needs it.
+        // SAFETY: as `start`.
+        let end_of = || rmp.ends[midx].map(|at| unsafe { line.add(at) });
+        // SAFETY (each arm): both ends are inside the line, and the field
+        // buffers hold `FIELD_MAX + 1` bytes.
         match idx {
             1 => {
                 // %b: a buffer number, which must name a live buffer.
@@ -342,10 +359,9 @@ impl Fields {
             10 => {
                 // %p: a pointer line such as "   ^", whose width is the
                 // column. A tab advances to the next multiple of eight.
-                let end = rmp.endp[midx];
-                if end.is_null() {
+                let Some(end) = end_of() else {
                     return Status::Fail;
-                }
+                };
                 self.col = 0;
                 let mut at = start;
                 while at != end {
@@ -368,10 +384,9 @@ impl Fields {
                 // %s: the matched text, as a very-nomagic pattern
                 // anchored at both ends. Five bytes go around it, so
                 // that much less of the match fits.
-                let end = rmp.endp[midx];
-                if end.is_null() {
+                let Some(end) = end_of() else {
                     return Status::Fail;
-                }
+                };
                 let len = (unsafe { end.offset_from(start) } as usize).min(FIELD_MAX - 5);
                 unsafe { xstrlcpy(self.pattern.as_mut_ptr(), c"^\\V".as_ptr(), 4) };
                 unsafe { xstrlcat(self.pattern.as_mut_ptr(), start, len + 4) };
@@ -381,10 +396,9 @@ impl Fields {
             }
             13 => {
                 // %o: the module name, appended to whatever is there.
-                let end = rmp.endp[midx];
-                if end.is_null() {
+                let Some(end) = end_of() else {
                     return Status::Fail;
-                }
+                };
                 let len = unsafe { end.offset_from(start) } as usize;
                 let dsize = (unsafe { cstr::bytes_at(self.module.as_ptr()) }.len() + len + 1)
                     .min(FIELD_MAX);

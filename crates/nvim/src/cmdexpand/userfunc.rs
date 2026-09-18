@@ -317,7 +317,7 @@ pub(crate) unsafe fn call_user_expand_func(
 pub(crate) unsafe fn expand_user_defined(
     pat: *const c_char,
     expand: *mut Expand,
-    regmatch: *mut RegMatch,
+    regmatch: &mut RegMatch,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
 ) -> Result<(), Failed> {
@@ -356,7 +356,8 @@ pub(crate) unsafe fn expand_user_defined(
             score = unsafe { fuzzy_match_str(cstr::at(s), cstr::at(pat)) };
             score != FUZZY_SCORE_NONE
         } else {
-            unsafe { vim_regexec(regmatch, s, 0) }
+            // SAFETY: `s` was just NUL-terminated at `e`.
+            vim_regexec(regmatch, unsafe { cstr::at(s) }, 0)
         };
 
         unsafe { *e = keep };

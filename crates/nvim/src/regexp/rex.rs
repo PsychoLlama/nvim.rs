@@ -35,7 +35,7 @@ use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use super::pos::{MatchPos, PosKind};
-use super::{RegExec, rex};
+use super::{NSUBEXP, RegExec, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::types::{ColNr, LPos, LineNr, RegMMatch, RegMatch, RegProg, uint8_t};
@@ -462,25 +462,29 @@ impl Rex {
     }
 
     /// The `\1`..`\9` start slots of a string match.
+    ///
+    /// The context's own array rather than the caller's, so that the
+    /// caller's [`RegMatch`] can hold offsets: see [`super::RegExec`].
     #[inline(always)]
     pub(crate) fn reg_startp(self) -> *mut *mut uint8_t {
-        unsafe { (*self.0).reg_startp }
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_reg_startp(self, p: *mut *mut uint8_t) {
-        unsafe { (*self.0).reg_startp = p }
+        unsafe { (&raw mut (*self.0).str_start).cast() }
     }
 
     /// The `\1`..`\9` end slots of a string match.
     #[inline(always)]
     pub(crate) fn reg_endp(self) -> *mut *mut uint8_t {
-        unsafe { (*self.0).reg_endp }
+        unsafe { (&raw mut (*self.0).str_end).cast() }
+    }
+
+    /// Those two arrays, copied out for the API layer to turn into offsets.
+    #[inline(always)]
+    pub(crate) fn str_starts(self) -> [*mut uint8_t; NSUBEXP as usize] {
+        unsafe { (*self.0).str_start }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_endp(self, p: *mut *mut uint8_t) {
-        unsafe { (*self.0).reg_endp = p }
+    pub(crate) fn str_ends(self) -> [*mut uint8_t; NSUBEXP as usize] {
+        unsafe { (*self.0).str_end }
     }
 
     /// The `\1`..`\9` start slots of a buffer match.

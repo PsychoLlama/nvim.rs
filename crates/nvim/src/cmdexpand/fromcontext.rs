@@ -197,13 +197,7 @@ pub(crate) unsafe fn expand_from_context(
         return unsafe { nlua_expand_get_matches(num_matches, matches) };
     }
 
-    let mut regmatch = RegMatch {
-        regprog: ptr::null_mut(),
-        startp: [ptr::null_mut(); 10],
-        endp: [ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: false,
-    };
+    let mut regmatch = RegMatch::new(ptr::null_mut(), false);
     if !fuzzy {
         regmatch.regprog = unsafe { vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 }) };
         if regmatch.regprog.is_null() {
@@ -218,7 +212,7 @@ pub(crate) unsafe fn expand_from_context(
         ExpandContext::Settings | ExpandContext::BoolSettings => unsafe {
             expand_settings(
                 expand.raw(),
-                &raw mut regmatch,
+                &mut regmatch,
                 pat,
                 num_matches,
                 matches,
@@ -226,21 +220,21 @@ pub(crate) unsafe fn expand_from_context(
             )
         },
         ExpandContext::StringSetting => unsafe {
-            expand_string_setting(expand.raw(), &raw mut regmatch, num_matches, matches)
+            expand_string_setting(expand.raw(), &mut regmatch, num_matches, matches)
         },
         ExpandContext::SettingSubtract => unsafe {
-            expand_setting_subtract(expand.raw(), &raw mut regmatch, num_matches, matches)
+            expand_setting_subtract(expand.raw(), &mut regmatch, num_matches, matches)
         },
         ExpandContext::Mappings => unsafe {
-            expand_mappings(pat, &raw mut regmatch, num_matches, matches)
+            expand_mappings(pat, &mut regmatch, num_matches, matches)
         },
         ExpandContext::Argopt => unsafe {
-            expand_argopt(pat, expand.raw(), &raw mut regmatch, matches, num_matches)
+            expand_argopt(pat, expand.raw(), &mut regmatch, matches, num_matches)
         },
         ExpandContext::UserDefined => unsafe {
-            expand_user_defined(pat, expand.raw(), &raw mut regmatch, matches, num_matches)
+            expand_user_defined(pat, expand.raw(), &mut regmatch, matches, num_matches)
         },
-        _ => unsafe { expand_other(pat, expand.raw(), &raw mut regmatch, matches, num_matches) },
+        _ => unsafe { expand_other(pat, expand.raw(), &mut regmatch, matches, num_matches) },
     };
 
     if !fuzzy {
@@ -272,7 +266,7 @@ pub(crate) unsafe fn expand_from_context(
 pub unsafe fn expand_generic(
     pat: *const c_char,
     expand: *mut Expand,
-    regmatch: *mut RegMatch,
+    regmatch: &mut RegMatch,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
     func: CompleteListItemGetter,
@@ -322,7 +316,8 @@ pub unsafe fn expand_generic(
             score = unsafe { fuzzy_match_str(cstr::at(str), cstr::at(pat)) };
             score != FUZZY_SCORE_NONE
         } else {
-            unsafe { vim_regexec(regmatch, str, 0) }
+            // SAFETY: `str` is a generated candidate, NUL-terminated.
+            vim_regexec(regmatch, unsafe { cstr::at(str) }, 0)
         };
         if !matched {
             continue;

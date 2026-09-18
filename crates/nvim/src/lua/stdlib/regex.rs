@@ -9,6 +9,7 @@
 // Unsafe perimeter: the `lua/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::winlayer::{self, Buf};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -24,7 +25,7 @@ use crate::lua::ffi::{
 use crate::luaL_reg_table;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{Buffer, ColNr, Error, Handle, LineNr, RegMatch, RegProg, lua_State, luaL_Reg};
+use crate::types::{Buffer, Error, Handle, LineNr, RegMatch, RegProg, lua_State, luaL_Reg};
 
 /// The registry key the metatable is stored under, and the type name
 /// `luaL_checkudata` matches against.
@@ -56,23 +57,18 @@ unsafe fn regex_check(lstate: *mut lua_State) -> *mut *mut RegProg {
 /// `lstate` must be a live Lua state, `prog` a live compiled program and
 /// `str` a NUL-terminated subject.
 unsafe fn regex_match(lstate: *mut lua_State, prog: *mut *mut RegProg, str: *mut c_char) -> c_int {
-    unsafe {
-        let mut rm = RegMatch {
-            regprog: *prog,
-            startp: [ptr::null_mut(); 10],
-            endp: [ptr::null_mut(); 10],
-            rm_matchcol: 0,
-            rm_ic: false,
-        };
-        let matched = vim_regexec(&raw mut rm, str, 0 as ColNr);
-        *prog = rm.regprog;
+    let mut rm = RegMatch::new(unsafe { *prog }, false);
+    // SAFETY: the caller's NUL-terminated subject.
+    let matched = vim_regexec(&mut rm, unsafe { cstr::at(str) }, 0);
+    unsafe { *prog = rm.regprog };
 
-        if matched {
-            lua_pushinteger(lstate, rm.startp[0].offset_from(str));
-            lua_pushinteger(lstate, rm.endp[0].offset_from(str));
-            return 2;
+    match rm.group(0).filter(|_| matched) {
+        Some(span) => {
+            unsafe { lua_pushinteger(lstate, span.start as isize) };
+            unsafe { lua_pushinteger(lstate, span.end as isize) };
+            2
         }
-        0
+        None => 0,
     }
 }
 

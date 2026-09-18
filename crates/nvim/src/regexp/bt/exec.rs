@@ -162,8 +162,7 @@ unsafe fn aim_at_capture_arrays(rex: Rex, line: *mut uint8_t) -> *mut uint8_t {
         rex.set_reg_endpos((unsafe { &raw mut (*rex.reg_mmatch()).endpos }).cast());
         reg_getline(rex, 0).cast()
     } else {
-        rex.set_reg_startp((unsafe { &raw mut (*rex.reg_match()).startp }).cast());
-        rex.set_reg_endp((unsafe { &raw mut (*rex.reg_match()).endp }).cast());
+        // A string match's capture slots are the context's own.
         line
     }
 }

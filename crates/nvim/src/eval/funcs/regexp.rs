@@ -44,13 +44,7 @@ use core::ptr;
 const TV_UNKNOWN: TypVal = TV_INITIAL_VALUE;
 
 /// A cleared `RegMatch`, which `vim_regcomp`'s result is dropped into.
-const EMPTY_REGMATCH: RegMatch = RegMatch {
-    regprog: ptr::null_mut::<RegProg>(),
-    startp: [ptr::null_mut(); 10],
-    endp: [ptr::null_mut(); 10],
-    rm_matchcol: 0,
-    rm_ic: false,
-};
+const EMPTY_REGMATCH: RegMatch = RegMatch::new(ptr::null_mut::<RegProg>(), false);
 
 /// A compiled pattern, freed on drop.
 struct Regprog(RegMatch);
@@ -210,7 +204,8 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                     break;
                 }
             }
-            matched = unsafe { vim_regexec_nl(regmatch, str, startcol) };
+            // SAFETY: `str` is the subject, NUL-terminated.
+            matched = vim_regexec_nl(regmatch, unsafe { cstr::at(str) }, startcol as usize);
             // `nth` counts down only on a match: the C spells this as
             // `match && (--nth <= 0)`, and the short circuit is what
             // stops a non-matching List item from consuming a count.
@@ -231,9 +226,11 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
             // Same string, next match: step past the character the
             // match started on. A match that did not advance, or one
             // past the end, ends the search.
-            let hit = regmatch.startp[0];
-            startcol = unsafe { hit.add(utfc_ptr2len(hit) as usize).offset_from(str) } as ColNr;
-            if startcol > len as ColNr || unsafe { str.offset(startcol as isize) } <= hit {
+            let start = regmatch.starts[0].unwrap_or(0);
+            // SAFETY: an offset into the subject.
+            let hit = unsafe { str.add(start) };
+            startcol = (start + unsafe { utfc_ptr2len(hit) } as usize) as ColNr;
+            if startcol > len as ColNr || startcol as usize <= start {
                 matched = false;
                 break;
             }
@@ -249,26 +246,32 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                 // SAFETY: the four items seeded above.
                 let seeded = list_items_mut(unsafe { ret_l.as_mut() });
                 unsafe { xfree(seeded[0].li_tv.string_or_null() as *mut c_void) };
-                let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
-                let text = unsafe { xmemdupz(regmatch.startp[0].cast(), rd) };
+                let span = regmatch.group(0).unwrap_or(0..0);
+                // SAFETY: the span is an offset range into `str`.
+                let text = unsafe { xmemdupz(str.add(span.start).cast(), span.len()) };
                 seeded[0].li_tv.write_string(text as *mut c_char);
-                let start = unsafe { regmatch.startp[0].offset_from(expr) };
-                seeded[2].li_tv.write_number(start as VarNumber);
-                let end = unsafe { regmatch.endp[0].offset_from(expr) };
-                seeded[3].li_tv.write_number(end as VarNumber);
+                // `str` may have moved on from `expr`, and the answer is
+                // counted from where the subject began.
+                let skipped = unsafe { str.offset_from(expr) } as usize;
+                seeded[2]
+                    .li_tv
+                    .write_number((skipped + span.start) as VarNumber);
+                seeded[3]
+                    .li_tv
+                    .write_number((skipped + span.end) as VarNumber);
                 if !l.is_null() {
                     seeded[1].li_tv.write_number(VarNumber::from(idx));
                 }
             }
             kSomeMatchList => {
                 for i in 0..NSUBEXP as usize {
-                    if regmatch.endp[i].is_null() {
-                        unsafe { (*result.list_or_null()).push_string(ptr::null(), 0) };
-                    } else {
-                        let (start, end) = (regmatch.startp[i], regmatch.endp[i]);
-                        let list = result.list_or_null();
-                        let len = unsafe { end.offset_from(start) };
-                        unsafe { (*list).push_string(start, len) };
+                    let list = result.list_or_null();
+                    match regmatch.group(i) {
+                        None => unsafe { (*list).push_string(ptr::null(), 0) },
+                        // SAFETY: the span is an offset range into `str`.
+                        Some(span) => unsafe {
+                            (*list).push_string(str.add(span.start), span.len() as isize)
+                        },
                     }
                 }
             }
@@ -279,10 +282,11 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                     // SAFETY: a live list and the index the walk matched at.
                     tv_copy(&list_items(unsafe { l.as_ref() })[at].li_tv, result);
                 } else {
-                    let rd = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) } as usize;
-                    result
-                        .write_string(unsafe { xmemdupz(regmatch.startp[0] as *const c_void, rd) }
-                            as *mut c_char);
+                    let span = regmatch.group(0).unwrap_or(0..0);
+                    // SAFETY: the span is an offset range into `str`.
+                    let text =
+                        unsafe { xmemdupz(str.add(span.start) as *const c_void, span.len()) };
+                    result.write_string(text as *mut c_char);
                 }
             }
             _ => {
@@ -290,16 +294,14 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
                     result.write_number(idx as VarNumber);
                 } else {
                     let edge = if kind == kSomeMatch {
-                        regmatch.startp[0]
+                        regmatch.starts[0]
                     } else {
-                        regmatch.endp[0]
+                        regmatch.ends[0]
                     };
                     // Two offsets, because a `{start}` without a
                     // `{count}` moved `str` forward.
-                    result.write_number(
-                        (unsafe { edge.offset_from(str) } + unsafe { str.offset_from(expr) })
-                            as VarNumber,
-                    );
+                    let skipped = unsafe { str.offset_from(expr) } as usize;
+                    result.write_number((skipped + edge.unwrap_or(0)) as VarNumber);
                 }
             }
         }
@@ -318,22 +320,19 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
 /// Append one dict per match of `rmp` in `str` to `mlist`.
 ///
 /// # Safety
-/// `str` is NUL-terminated, `rmp` holds a compiled program, `mlist` is a
-/// live list.
+/// `rmp` holds a compiled program and `mlist` is a live list.
 unsafe fn get_matches_in_str(
-    str: *const c_char,
-    rmp: *mut RegMatch,
+    str: &CStr,
+    rmp: &mut RegMatch,
     mlist: *mut List,
     idx: c_int,
     submatches: bool,
     matchbuf: bool,
 ) {
-    // SAFETY: the caller's obligation; every pointer written below comes
-    // back from the matcher and points into `str`.
-    let len = unsafe { cstr::bytes_at(str) }.len();
-    let mut startidx: ColNr = 0;
+    let len = str.count_bytes();
+    let mut startidx = 0;
     loop {
-        if !unsafe { vim_regexec_nl(rmp, str, startidx) } {
+        if !vim_regexec_nl(rmp, str, startidx) {
             return;
         }
         let d_held = tv_dict_alloc();
@@ -346,33 +345,30 @@ unsafe fn get_matches_in_str(
         } else {
             let _ = unsafe { (*d).add_number(b"idx", idx as VarNumber) };
         }
-        let (start, end) = unsafe { ((*rmp).startp[0], (*rmp).endp[0]) };
-        let byteidx = unsafe { start.offset_from(str) } as ColNr as VarNumber;
-        let _ = unsafe { (*d).add_number(b"byteidx", byteidx) };
-        let matchlen = unsafe { end.offset_from(start) } as c_int;
-        let _ = unsafe { (*d).add_str_len(b"text", start, matchlen) };
+        let span = rmp.group(0).unwrap_or(0..0);
+        let _ = unsafe { (*d).add_number(b"byteidx", span.start as VarNumber) };
+        // SAFETY: the span is an offset range into `str`.
+        let start = unsafe { str.as_ptr().add(span.start) };
+        let _ = unsafe { (*d).add_str_len(b"text", start, span.len() as c_int) };
         if submatches {
             let submatch_list = tv_list_alloc(NSUBEXP as isize - 1);
             // A borrow of the list the dictionary owns from here on.
             let sml = submatch_list.as_ptr();
             let _ = unsafe { (*d).add_list(b"submatches", Some(submatch_list)) };
             for i in 1..NSUBEXP as usize {
-                if unsafe { (*rmp).endp[i] }.is_null() {
-                    unsafe { (*sml).push_string(c"".as_ptr(), 0) };
-                } else {
-                    let (start, end) = unsafe { ((*rmp).startp[i], (*rmp).endp[i]) };
-                    let len = unsafe { end.offset_from(start) };
-                    unsafe { (*sml).push_string(start, len) };
+                match rmp.group(i) {
+                    None => unsafe { (*sml).push_string(c"".as_ptr(), 0) },
+                    // SAFETY: the span is an offset range into `str`.
+                    Some(span) => unsafe {
+                        (*sml).push_string(str.as_ptr().add(span.start), span.len() as isize)
+                    },
                 }
             }
         }
         // Resume past this match; stop at the end of the string, and
         // stop on a match that did not advance.
-        startidx = unsafe { (*rmp).endp[0].offset_from(str) } as ColNr;
-        if startidx >= len as ColNr
-            || unsafe { str.offset(startidx as isize) }
-                <= unsafe { (*rmp).startp[0] } as *const c_char
-        {
+        startidx = span.end;
+        if startidx >= len || startidx <= span.start {
             return;
         }
     }
@@ -443,8 +439,9 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         return;
     };
     while slnum <= elnum {
-        let str = unsafe { ml_get_buf(buf, slnum) };
-        unsafe { get_matches_in_str(str, &raw mut prog.0, retlist, slnum, submatches, true) };
+        // SAFETY: a buffer line, NUL-terminated.
+        let str = unsafe { cstr::at(ml_get_buf(buf, slnum)) };
+        unsafe { get_matches_in_str(str, &mut prog.0, retlist, slnum, submatches, true) };
         slnum += 1;
     }
 }
@@ -529,10 +526,10 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         let li_tv = &list_items(unsafe { l.as_ref() })[at].li_tv;
         // A non-String item, and the null String, contribute nothing.
         if li_tv.v_type() == VAR_STRING && !li_tv.string_or_null().is_null() {
-            let str = li_tv.string_or_null();
-            let rmp = &raw mut prog.0;
+            // SAFETY: a live String typval's text is NUL-terminated.
+            let str = unsafe { cstr::at(li_tv.string_or_null()) };
             let idx = index_of(at);
-            unsafe { get_matches_in_str(str, rmp, retlist, idx, submatches, false) };
+            unsafe { get_matches_in_str(str, &mut prog.0, retlist, idx, submatches, false) };
         }
         at += 1;
     }

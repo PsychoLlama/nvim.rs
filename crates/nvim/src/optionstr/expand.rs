@@ -43,9 +43,7 @@ use crate::options::{
 };
 use crate::os::cshim::snprintf;
 use crate::syntax::EXPAND_BUF_LEN;
-use crate::types::{
-    ColNr, CompleteListItemGetter, Expand, Failed, NUL, OptExpand, RegMatch, size_t,
-};
+use crate::types::{CompleteListItemGetter, Expand, Failed, NUL, OptExpand, size_t};
 
 use super::{
     COCU_ALL, CPO_VI, FO_ALL, MOUSE_ALL, SHM_ALL, WW_ALL, get_fillchars_name, get_listchars_name,
@@ -126,7 +124,7 @@ pub(crate) unsafe fn expand_set_opt_string(
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's frame.
-    let regmatch: *mut RegMatch = unsafe { (*args).oe_regmatch };
+    let regex_match = unsafe { &mut *(*args).oe_regmatch };
     let original = unsafe { original_value(args) };
 
     // SAFETY: at most one push per word, plus the original value.
@@ -150,9 +148,8 @@ pub(crate) unsafe fn expand_set_opt_string(
         {
             continue;
         }
-        // SAFETY: `regmatch` is the command line's compiled pattern and
-        // `word` a C string.
-        if unsafe { vim_regexec(regmatch, word, 0 as ColNr) } {
+        // SAFETY: `entry` is a C string.
+        if vim_regexec(regex_match, entry, 0) {
             unsafe { out.push(xstrdup(word)) };
         }
     }
@@ -231,7 +228,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
         expand_generic(
             c"".as_ptr(),
             (*args).oe_xp,
-            (*args).oe_regmatch,
+            &mut *(*args).oe_regmatch,
             matches,
             num_matches,
             Some(expand_set_opt_callback),

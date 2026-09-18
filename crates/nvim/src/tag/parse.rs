@@ -424,16 +424,17 @@ impl FindTags {
         if !matched && !self.orgpat.regmatch.regprog.is_null() {
             let saved = unsafe { *tagp.tagname_end };
             unsafe { *tagp.tagname_end = 0 };
-            matched = unsafe { vim_regexec(&raw mut self.orgpat.regmatch, tagp.tagname, 0) };
+            // SAFETY: the name is NUL-terminated for the length of the
+            // match, by the byte just written.
+            let name = unsafe { cstr::at(tagp.tagname) };
+            matched = vim_regexec(&mut self.orgpat.regmatch, name, 0);
             if matched {
-                margs.matchoff =
-                    unsafe { self.orgpat.regmatch.startp[0].offset_from(tagp.tagname) } as c_int;
+                margs.matchoff = self.orgpat.regmatch.starts[0].unwrap_or(0) as c_int;
                 if self.orgpat.regmatch.rm_ic {
                     // Ask again with case, to find out how good the
                     // match is.
                     self.orgpat.regmatch.rm_ic = false;
-                    margs.match_no_ic =
-                        unsafe { vim_regexec(&raw mut self.orgpat.regmatch, tagp.tagname, 0) };
+                    margs.match_no_ic = vim_regexec(&mut self.orgpat.regmatch, name, 0);
                     self.orgpat.regmatch.rm_ic = true;
                 }
             }

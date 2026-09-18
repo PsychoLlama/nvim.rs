@@ -50,13 +50,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
 
     let mut buf = unsafe { xmalloc(LSIZE as size_t) }.cast::<c_char>();
     // So that we can leave through 'theend.
-    let mut regmatch = RegMatch {
-        regprog: ptr::null_mut(),
-        startp: [ptr::null_mut(); 10],
-        endp: [ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: false,
-    };
+    let mut regmatch = RegMatch::new(ptr::null_mut(), false);
 
     // If 'infercase' is set, don't use 'smartcase' here.
     let save_p_scs = p_scs();
@@ -137,10 +131,20 @@ pub(crate) unsafe fn ins_compl_dictionaries(
                 unsafe { spell_dump_compl(word, regmatch.rm_ic as c_int, &raw mut dir, 0) };
             } else if count > 0 {
                 // Avoid a warning for using "files" uninitialised.
-                let (rm, direction) = (&raw mut regmatch, &raw mut dir);
-                // SAFETY: `files` is `count` NUL-terminated names, `rm` the
-                // compiled pattern and `buf` a scratch buffer of `LSIZE`.
-                unsafe { ins_compl_files(count, files, thesaurus, flags, rm, buf, direction) };
+                let direction = &raw mut dir;
+                // SAFETY: `files` is `count` NUL-terminated names and `buf`
+                // a scratch buffer of `LSIZE`.
+                unsafe {
+                    ins_compl_files(
+                        count,
+                        files,
+                        thesaurus,
+                        flags,
+                        &mut regmatch,
+                        buf,
+                        direction,
+                    )
+                };
                 if flags != DICT_EXACT {
                     unsafe { free_wild(count, files) };
                 }
@@ -214,15 +218,14 @@ pub(crate) unsafe fn thesaurus_add_words_in_line(
 /// # Safety
 ///
 /// `files` must point at a writable `*mut c_char` slot the caller owns for
-/// the call. `regmatch` must point at a live `RegMatch`, unaliased for the
-/// call. `buf` must point at a NUL-terminated string, unaliased for the call.
-/// `dir` must point at a live `Direction`, unaliased for the call.
+/// the call. `buf` must point at a NUL-terminated string, unaliased for the
+/// call. `dir` must point at a live `Direction`, unaliased for the call.
 pub(crate) unsafe fn ins_compl_files(
     count: c_int,
     files: *mut *mut c_char,
     thesaurus: bool,
     flags: c_int,
-    regmatch: *mut RegMatch,
+    regmatch: &mut RegMatch,
     buf: *mut c_char,
     dir: *mut Direction,
 ) {
@@ -291,9 +294,14 @@ pub(crate) unsafe fn ins_compl_files(
                         }
                     }
                 }
-            } else if !regmatch.is_null() {
-                while unsafe { vim_regexec(regmatch, buf, ptr.offset_from(buf) as ColNr) } {
-                    let start = unsafe { (*regmatch).startp[0] };
+            } else {
+                // SAFETY: `vim_fgets` left one NUL-terminated line in `buf`,
+                // and nothing below rewrites it.
+                let line = unsafe { cstr::at(buf) };
+                while vim_regexec(regmatch, line, unsafe { ptr.offset_from(buf) } as usize) {
+                    let at = regmatch.starts[0].unwrap_or(0);
+                    // SAFETY: an offset into the line just matched.
+                    let start = unsafe { buf.add(at) };
                     ptr = if ctrl_x_mode_line_or_eval() {
                         unsafe { find_line_end(start) }
                     } else {

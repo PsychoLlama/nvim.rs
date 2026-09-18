@@ -411,8 +411,10 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
         if name.is_null() {
             continue;
         }
-        // SAFETY: the pattern compiled, and `name` is NUL-terminated.
-        if matches!(query, ScriptQuery::Matching) && !unsafe { vim_regexec(regmatch, name, 0) } {
+        // SAFETY: `name` is NUL-terminated.
+        if matches!(query, ScriptQuery::Matching)
+            && !vim_regexec(regmatch, unsafe { cstr::at(name) }, 0)
+        {
             continue;
         }
 
@@ -441,13 +443,7 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
 
 /// An unprogrammed `RegMatch` carrying the current 'ignorecase'.
 fn empty_regmatch() -> RegMatch {
-    RegMatch {
-        regprog: ptr::null_mut(),
-        startp: [ptr::null_mut(); 10],
-        endp: [ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: p_ic(),
-    }
+    RegMatch::new(ptr::null_mut(), p_ic())
 }
 
 /// `tv_dict_add_*` take the key and its length separately; upstream spells that

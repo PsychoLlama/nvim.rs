@@ -127,13 +127,7 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
         return true;
     }
 
-    let mut regmatch = RegMatch {
-        regprog: ptr::null_mut(),
-        startp: [ptr::null_mut(); 10],
-        endp: [ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: false,
-    };
+    let mut regmatch = RegMatch::new(ptr::null_mut(), false);
 
     let quiet = Suppress::output();
     regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
@@ -148,7 +142,8 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
     }
 
     let quiet = Suppress::output();
-    let result = unsafe { vim_regexec_nl(&raw mut regmatch, str, 0) };
+    // SAFETY: the caller's NUL-terminated candidate.
+    let result = vim_regexec_nl(&mut regmatch, unsafe { cstr::at(str) }, 0);
     drop(quiet);
 
     unsafe { vim_regfree(regmatch.regprog) };

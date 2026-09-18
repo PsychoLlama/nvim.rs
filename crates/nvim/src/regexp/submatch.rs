@@ -43,6 +43,10 @@ impl Rsm {
     /// for as long as the handle does — [`super::substitute`] sets it around
     /// one evaluation and puts the outer one back afterwards. Nothing else
     /// may hold a reference into the cell meanwhile.
+    ///
+    /// The text a string match ran over is part of that: the snapshot holds
+    /// the capture spans' base, so [`Rsm::line`] borrows it and the caller
+    /// of [`super::vim_regsub`] keeps it alive for the whole evaluation.
     #[inline(always)]
     pub(crate) unsafe fn acquire() -> Rsm {
         Rsm(rsm.ptr())
@@ -61,6 +65,15 @@ impl Rsm {
     pub(crate) fn mmatch(self) -> *mut RegMMatch {
         // SAFETY: as `match_`.
         unsafe { (*self.0).sm_mmatch }
+    }
+
+    /// The string a string match ran over, whose bytes its capture spans
+    /// index. Empty for a buffer match, which names lines instead.
+    #[inline(always)]
+    pub(crate) fn line(self) -> &'static [u8] {
+        // SAFETY: holding the handle is the claim that the snapshot is live
+        // and the text with it -- see [`Rsm::acquire`].
+        unsafe { cstr::bytes_at_or_empty((*self.0).sm_line) }
     }
 
     /// The buffer line the snapshot's line 0 sits on.
@@ -130,12 +143,13 @@ pub(crate) unsafe fn fill_submatch_list(
     // SAFETY: the slot holds the caller's list, which nothing else names.
     let items = unsafe { &mut (*list).lv_items };
     items.reserve_exact(SL_SIZE);
+    // SAFETY: the running string match is the caller's structure.
+    let line = unsafe { Rsm::acquire() }.line();
     for i in 0..SL_SIZE {
-        let start = match_.startp[i];
-        let text = if start.is_null() || match_.endp[i].is_null() {
-            core::ptr::null_mut()
-        } else {
-            unsafe { xstrnsave(start, match_.endp[i].offset_from(start) as usize) }
+        let text = match match_.group_bytes(i, line) {
+            None => core::ptr::null_mut(),
+            // SAFETY: a borrow of the line the match ran over.
+            Some(bytes) => unsafe { xstrnsave(bytes.as_ptr().cast(), bytes.len()) },
         };
         items.push(ListItem {
             li_tv: TypVal::String(text),
@@ -168,15 +182,9 @@ pub(crate) fn reg_submatch(no: c_int) -> Option<XString> {
     if !snapshot.match_().is_null() {
         // SAFETY: the snapshot names the string match that is running.
         let match_ = unsafe { Live::new(snapshot.match_()) };
-        let start = match_.startp[no];
-        if start.is_null() || match_.endp[no].is_null() {
-            return None;
-        }
-        // SAFETY: both ends point into the one NUL-terminated string being
-        // matched, so the capture is that many of its bytes.
-        return Some(XString::from_bytes(unsafe {
-            cstr::prefix_at(start, match_.endp[no].offset_from(start) as usize)
-        }));
+        return match_
+            .group_bytes(no, snapshot.line())
+            .map(XString::from_bytes);
     }
 
     // SAFETY: the snapshot names the buffer match that is running.
@@ -245,12 +253,10 @@ pub(crate) fn reg_submatch_list(no: c_int) -> Option<ListRef> {
     if !snapshot.match_().is_null() {
         // SAFETY: the snapshot names the string match that is running.
         let match_ = unsafe { Live::new(snapshot.match_()) };
-        let start = match_.startp[no];
-        if start.is_null() || match_.endp[no].is_null() {
-            return None;
-        }
+        let bytes = match_.group_bytes(no, snapshot.line())?;
         let list = tv_list_alloc(1);
-        unsafe { (*list.as_ptr()).push_string(start, match_.endp[no].offset_from(start)) };
+        // SAFETY: a borrow of the line the match ran over.
+        unsafe { (*list.as_ptr()).push_string(bytes.as_ptr().cast(), bytes.len() as isize) };
         return Some(list);
     }
 

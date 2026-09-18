@@ -373,7 +373,7 @@ const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
 pub(crate) unsafe fn expand_other(
     pat: *mut c_char,
     expand: *mut Expand,
-    rmp: *mut RegMatch,
+    rmp: &mut RegMatch,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
 ) -> Result<(), Failed> {
@@ -389,7 +389,7 @@ pub(crate) unsafe fn expand_other(
         return Err(Failed);
     };
     if ic {
-        unsafe { (*rmp).rm_ic = true };
+        rmp.rm_ic = true;
     }
     unsafe {
         expand_generic(

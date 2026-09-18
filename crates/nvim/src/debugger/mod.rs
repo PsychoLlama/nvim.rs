@@ -68,8 +68,8 @@ use crate::state::mode::State;
 use crate::strings::has_bytes;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,
-    TypeaheadSave, int32_t, int64_t, size_t, uint8_t,
+    Callback, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal, TypeaheadSave,
+    int32_t, int64_t, size_t, uint8_t,
 };
 use crate::ui::state::Rows;
 use crate::winlayer::{Buf, Win};
@@ -701,7 +701,8 @@ unsafe fn debuggy_find(
             got_int.set(false);
             // SAFETY: `dbg_prog` is this entry's compiled pattern and `name`
             // is NUL-terminated.
-            if unsafe { vim_regexec_prog(&raw mut (*bp).dbg_prog, false, name, 0 as ColNr) } {
+            let prog = unsafe { &mut (*bp).dbg_prog };
+            if vim_regexec_prog(prog, false, unsafe { cstr::at(name) }, 0) {
                 lnum = unsafe { (*bp).dbg_lnum };
                 if !found.is_null() {
                     unsafe { *found = (*bp).dbg_forceit != 0 };

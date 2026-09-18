@@ -341,6 +341,23 @@ pub(crate) unsafe fn slice_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
 /// A buffer holding no terminator answers `c""`: every caller is reading a
 /// buffer some writer was supposed to terminate, and the empty string is
 /// the answer that keeps a formatting bug from becoming a panic.
+/// The string `s` from byte `at` on.
+///
+/// Safe, and free: a terminated string stays terminated however much of its
+/// front is dropped, so this is the one shape of "a pointer into a C string"
+/// that needs no promise from the caller. It is what a caller that used to
+/// write `p + n` and pass that on wants.
+///
+/// # Panics
+/// When `at` is past the terminator.
+pub(crate) fn suffix(s: &CStr, at: usize) -> &CStr {
+    let bytes = s.to_bytes_with_nul();
+    assert!(at < bytes.len(), "suffix past the end of the string");
+    // SAFETY: the tail of a NUL-terminated string is NUL-terminated, and
+    // `s` held no interior NUL to begin with.
+    unsafe { CStr::from_bytes_with_nul_unchecked(&bytes[at..]) }
+}
+
 pub(crate) fn in_bytes(buf: &[u8]) -> &CStr {
     CStr::from_bytes_until_nul(buf).unwrap_or(c"")
 }

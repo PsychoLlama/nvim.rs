@@ -271,7 +271,7 @@ pub(crate) fn get_argopt_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
 pub unsafe fn expand_argopt(
     pat: *mut c_char,
     expand: *mut Expand,
-    rmp: *mut RegMatch,
+    rmp: &mut RegMatch,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
 ) -> Result<(), Failed> {
@@ -596,7 +596,7 @@ fn ex_msg(msg: *const c_char) -> CString {
 fn expand_generic(
     pat: *const c_char,
     expand: *mut Expand,
-    regmatch: *mut RegMatch,
+    regmatch: &mut RegMatch,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
     func: CompleteListItemGetter,

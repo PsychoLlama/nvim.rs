@@ -121,17 +121,13 @@ impl Format {
     /// recompiled the first time it is used with different settings), so
     /// the answer is stored back.
     ///
-    /// # Safety
-    ///
-    /// `line` must be NUL-terminated.
-    pub(crate) unsafe fn exec(&mut self, line: *mut c_char) -> Option<RegMatch> {
+    pub(crate) fn exec(&mut self, line: &CStr) -> Option<RegMatch> {
         let mut regmatch = RegMatch {
             regprog: self.prog,
             rm_ic: true,
             ..Default::default()
         };
-        // SAFETY: the caller's line is NUL-terminated; `regprog` is ours.
-        let matched = unsafe { vim_regexec(&mut regmatch, line, 0) };
+        let matched = vim_regexec(&mut regmatch, line, 0);
         self.prog = regmatch.regprog;
         matched.then_some(regmatch)
     }

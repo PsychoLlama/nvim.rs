@@ -8,6 +8,7 @@
 //! every exit path, including the ones an error takes.
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
+use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;
@@ -539,9 +540,8 @@ pub(crate) unsafe fn cmdmod_filters_out(msg: *const c_char) -> bool {
     if regmatch.regprog.is_null() {
         return false;
     }
-    // SAFETY: the caller's contract; `regmatch` holds this command's
-    // `:filter` program.
-    let matched = unsafe { vim_regexec(&raw mut regmatch, msg, 0) };
+    // SAFETY: the caller's contract -- a NUL-terminated message.
+    let matched = vim_regexec(&mut regmatch, unsafe { cstr::at(msg) }, 0);
     cmdmod.with_mut(|mods| mods.cmod_filter_regmatch = regmatch);
     if cmdmod.with(|mods| mods.cmod_filter_force) {
         matched

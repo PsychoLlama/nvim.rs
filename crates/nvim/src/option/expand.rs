@@ -39,8 +39,8 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    BackslashEscape, ColNr, Expand, ExpandContext, Failed, FuzMatchStr, GArray, MAXPATHL, NUL,
-    OptExpand, OptIndex, OptionSetFlags, RegMatch, XpPrefix, size_t, uint32_t,
+    BackslashEscape, Expand, ExpandContext, Failed, FuzMatchStr, GArray, MAXPATHL, NUL, OptExpand,
+    OptIndex, OptionSetFlags, RegMatch, XpPrefix, size_t, uint32_t,
 };
 use crate::winlayer::Live;
 
@@ -424,12 +424,13 @@ unsafe fn seek_item_start(expand: *mut Expand, argend: *mut c_char, flags: uint3
 
 /// Where one completion pass puts what it matches, and how it matches.
 ///
-/// `match_str` used to take these five alongside the candidate and the
-/// index, which is what its `too_many_arguments` allow was for; a pass sees
-/// one set of them throughout, so it builds the value once.
+/// `match_str` used to take these alongside the candidate and the index,
+/// which is what its `too_many_arguments` allow was for; a pass sees one
+/// set of them throughout, so it builds the value once. The match state
+/// stays a parameter: it is written to, so it cannot ride in a `Copy`
+/// bundle.
 #[derive(Clone, Copy)]
 struct Matcher {
-    regmatch: *mut RegMatch,
     /// The plain array of names.
     matches: *mut *mut c_char,
     /// The scored array, used instead when `fuzzy`.
@@ -446,10 +447,16 @@ struct Matcher {
 ///
 /// `matches`/`fuzmatch` must have room for `idx`, and the strings must be
 /// NUL-terminated.
-unsafe fn match_str(str: *mut c_char, idx: c_int, test_only: bool, m: Matcher) -> bool {
+unsafe fn match_str(
+    str: *mut c_char,
+    idx: c_int,
+    test_only: bool,
+    regex_match: &mut RegMatch,
+    m: Matcher,
+) -> bool {
     // SAFETY: the caller's strings and output arrays.
     if !m.fuzzy {
-        if !unsafe { vim_regexec(m.regmatch, str, 0 as ColNr) } {
+        if !vim_regexec(regex_match, unsafe { cstr::at(str) }, 0) {
             return false;
         }
         if !test_only {
@@ -483,7 +490,7 @@ unsafe fn match_str(str: *mut c_char, idx: c_int, test_only: bool, m: Matcher) -
 /// The out-parameters must be writable, and `regmatch`/`fuzzystr` valid.
 pub(crate) unsafe fn expand_settings(
     expand: *mut Expand,
-    regmatch: *mut RegMatch,
+    regmatch: &mut RegMatch,
     fuzzystr: *mut c_char,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -495,17 +502,16 @@ pub(crate) unsafe fn expand_settings(
 
     // SAFETY: the caller's expansion state and out-parameters, and the
     // option table.
-    let ic = unsafe { (*regmatch).rm_ic };
+    let ic = regmatch.rm_ic;
     let fuzzy = can_fuzzy && unsafe { cmdline_fuzzy_complete(fuzzystr) };
     let booleans_only = unsafe { (*expand).xp_context } == ExpandContext::BoolSettings;
 
     for pass in 0..2 {
         let counting = pass == 0;
-        unsafe { (*regmatch).rm_ic = ic };
+        regmatch.rm_ic = ic;
         // Both output arrays are allocated at the end of the counting
         // pass, so one matcher stands for the whole of this one.
         let m = Matcher {
-            regmatch,
             // SAFETY: the caller's out-parameter.
             matches: unsafe { *matches },
             fuzmatch,
@@ -516,7 +522,7 @@ pub(crate) unsafe fn expand_settings(
         // "all" is a `:set` keyword rather than an option, so it is
         // only offered where a non-boolean name would be.
         let all = c"all".as_ptr() as *mut c_char;
-        if !booleans_only && unsafe { match_str(all, count, counting, m) } {
+        if !booleans_only && unsafe { match_str(all, count, counting, regmatch, m) } {
             if counting {
                 num_normal += 1;
             } else {
@@ -531,7 +537,7 @@ pub(crate) unsafe fn expand_settings(
             {
                 continue;
             }
-            if unsafe { match_str(opt.fullname, count, counting, m) } {
+            if unsafe { match_str(opt.fullname, count, counting, regmatch, m) } {
                 if counting {
                     num_normal += 1;
                 } else {
@@ -539,7 +545,7 @@ pub(crate) unsafe fn expand_settings(
                 }
             } else if !fuzzy
                 && !opt.shortname.is_null()
-                && unsafe { vim_regexec(regmatch, opt.shortname, 0 as ColNr) }
+                && vim_regexec(regmatch, unsafe { cstr::at(opt.shortname) }, 0)
             {
                 // A short name matches, but what is offered is the
                 // full one.
@@ -621,7 +627,7 @@ pub(crate) unsafe fn expand_old_setting(
 /// The out-parameters must be writable and `expand`/`regmatch` valid.
 pub(crate) unsafe fn expand_string_setting(
     expand: *mut Expand,
-    regmatch: *mut RegMatch,
+    regmatch: &mut RegMatch,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -664,7 +670,7 @@ pub(crate) unsafe fn expand_string_setting(
 /// The out-parameters must be writable and `expand`/`regmatch` valid.
 pub(crate) unsafe fn expand_setting_subtract(
     expand: *mut Expand,
-    regmatch: *mut RegMatch,
+    regmatch: &mut RegMatch,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -710,8 +716,9 @@ pub(crate) unsafe fn expand_setting_subtract(
                 unsafe { *comma = NUL as c_char };
                 next = unsafe { comma.add(1) };
             }
+            // SAFETY: `item` is a NUL-terminated piece of the option value.
             if unsafe { *item } != NUL as c_char
-                && unsafe { vim_regexec(regmatch, item, 0 as ColNr) }
+                && vim_regexec(regmatch, unsafe { cstr::at(item) }, 0)
             {
                 unsafe { ga_grow(&raw mut ga, 1) };
                 let slot = ga.ga_data.cast::<*mut c_char>();

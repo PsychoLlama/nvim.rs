@@ -82,8 +82,18 @@ pub const kMarkBufLocal: MarkGet = 0;
 pub struct RegExec {
     pub reg_match: *mut RegMatch,
     pub reg_mmatch: *mut RegMMatch,
-    pub reg_startp: *mut *mut uint8_t,
-    pub reg_endp: *mut *mut uint8_t,
+    /// A string match's `\1`..`\9` start slots, and the ends.
+    ///
+    /// Upstream points these at the caller's `RegMatch`, so the engine
+    /// writes the reported captures straight into it. Here they are the
+    /// context's own, and [`api::vim_regexec`] turns them into the offsets
+    /// the caller's match structure carries — which is what lets that
+    /// structure hold spans rather than pointers into text it does not own.
+    /// Being part of the context also means `with_rex` saves and restores
+    /// them, so a `\=` expression that runs a match of its own cannot
+    /// overwrite the captures the outer `submatch()` is about to read.
+    pub str_start: [*mut uint8_t; NSUBEXP as usize],
+    pub str_end: [*mut uint8_t; NSUBEXP as usize],
     pub reg_startpos: *mut LPos,
     pub reg_endpos: *mut LPos,
     pub reg_win: *mut Window,
@@ -111,6 +121,9 @@ pub struct RegExec {
 pub struct RegSubMatch {
     pub sm_match: *mut RegMatch,
     pub sm_mmatch: *mut RegMMatch,
+    /// The string a string match ran over, which its capture offsets are
+    /// relative to. Null for a buffer match, whose captures name lines.
+    pub sm_line: *const c_char,
     pub sm_firstlnum: LineNr,
     pub sm_maxline: LineNr,
     pub sm_line_lbr: c_int,
@@ -321,8 +334,8 @@ static reg_tofreelen: GlobalCell<c_uint> = GlobalCell::new(0);
 static rex: GlobalCell<RegExec> = GlobalCell::new(RegExec {
     reg_match: core::ptr::null_mut::<RegMatch>(),
     reg_mmatch: core::ptr::null_mut::<RegMMatch>(),
-    reg_startp: core::ptr::null_mut::<*mut uint8_t>(),
-    reg_endp: core::ptr::null_mut::<*mut uint8_t>(),
+    str_start: [core::ptr::null_mut::<uint8_t>(); NSUBEXP as usize],
+    str_end: [core::ptr::null_mut::<uint8_t>(); NSUBEXP as usize],
     reg_startpos: core::ptr::null_mut::<LPos>(),
     reg_endpos: core::ptr::null_mut::<LPos>(),
     reg_win: core::ptr::null_mut::<Window>(),
@@ -351,6 +364,7 @@ static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false);
 static rsm: GlobalCell<RegSubMatch> = GlobalCell::new(RegSubMatch {
     sm_match: core::ptr::null_mut::<RegMatch>(),
     sm_mmatch: core::ptr::null_mut::<RegMMatch>(),
+    sm_line: core::ptr::null::<c_char>(),
     sm_firstlnum: 0,
     sm_maxline: 0,
     sm_line_lbr: 0,

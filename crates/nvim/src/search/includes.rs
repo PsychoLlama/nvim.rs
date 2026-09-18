@@ -385,8 +385,9 @@ unsafe fn handle_include(
     } else {
         walk.curr_fname
     };
-    let start = pats.incl.startp[0];
-    let end = pats.incl.endp[0];
+    // SAFETY: the 'include' match's spans are offsets into `walk.line`.
+    let start = unsafe { walk.line.add(pats.incl.starts[0].unwrap_or(0)) };
+    let end = unsafe { walk.line.add(pats.incl.ends[0].unwrap_or(0)) };
     let flags = FileNameOpts::EXP | FileNameOpts::INCL | FileNameOpts::REL;
     let raw = if unsafe { include_uses_zs(inc_opt) } {
         // Use the text from '\zs' to '\ze' (or the end) of 'include'.
@@ -514,12 +515,14 @@ unsafe fn show_include_name(
             let line = walk.line;
             let (mut p, mut i) = if unsafe { include_uses_zs(inc_opt) } {
                 // The pattern contains \zs: use the match.
-                let start = pats.incl.startp[0];
-                (start, unsafe { pats.incl.endp[0].offset_from(start) }
-                    as c_int)
+                let span = pats.incl.group(0).unwrap_or(0..0);
+                // SAFETY: an offset into the line just matched.
+                let start = unsafe { line.add(span.start) };
+                (start, (span.end - span.start) as c_int)
             } else {
                 // Find the file name after the end of the match.
-                let mut p = pats.incl.endp[0];
+                // SAFETY: as above.
+                let mut p = unsafe { line.add(pats.incl.ends[0].unwrap_or(0)) };
                 while unsafe { *p } as c_int != NUL && !unsafe { vim_isfilec(*p as u8 as c_int) } {
                     p = unsafe { p.offset(1) };
                 }
@@ -531,7 +534,8 @@ unsafe fn show_include_name(
             };
             if i == 0 {
                 // Nothing found; use the rest of the line.
-                p = pats.incl.endp[0];
+                // SAFETY: an offset into the line just matched.
+                p = unsafe { line.add(pats.incl.ends[0].unwrap_or(0)) };
                 i = unsafe { cstr::bytes_at(p) }.len() as c_int;
             } else if p > line {
                 // Avoid looking before the start of the line, which
@@ -849,7 +853,9 @@ pub fn find_pattern_in_path(
     };
 
     loop {
-        if !pats.incl.regprog.is_null() && unsafe { vim_regexec(&raw mut pats.incl, walk.line, 0) }
+        // SAFETY: the walk's line is NUL-terminated.
+        if !pats.incl.regprog.is_null()
+            && vim_regexec(&mut pats.incl, unsafe { cstr::at(walk.line) }, 0)
         {
             unsafe { handle_include(&mut walk, &pats, inc_opt, kind, action, silent) };
         } else {

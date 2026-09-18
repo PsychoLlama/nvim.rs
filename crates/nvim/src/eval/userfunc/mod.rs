@@ -254,13 +254,7 @@ pub const FUNCEXE_INIT: FuncExe = FuncExe {
 };
 
 /// A zeroed `RegMatch`, for the two places that compile a pattern here.
-pub(crate) const REGMATCH_INIT: RegMatch = RegMatch {
-    regprog: ptr::null_mut(),
-    startp: [ptr::null_mut(); 10],
-    endp: [ptr::null_mut(); 10],
-    rm_matchcol: 0,
-    rm_ic: false,
-};
+pub(crate) const REGMATCH_INIT: RegMatch = RegMatch::new(ptr::null_mut(), false);
 
 /// A zeroed `FuncDict`: no dictionary, no key, no item.
 pub(crate) const FUNCDICT_INIT: FuncDict = FuncDict {

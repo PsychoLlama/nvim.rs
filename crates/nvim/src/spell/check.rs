@@ -235,10 +235,13 @@ pub unsafe fn spell_check(
                 let mut regmatch: RegMatch = unsafe { mem::zeroed() };
                 regmatch.regprog = unsafe { (*window.w_s).b_cap_prog };
                 regmatch.rm_ic = false;
-                let r = unsafe { vim_regexec(&raw mut regmatch, text, 0) };
+                // SAFETY: the caller's NUL-terminated text.
+                let r = vim_regexec(&mut regmatch, unsafe { cstr::at(text) }, 0);
                 unsafe { (*window.w_s).b_cap_prog = regmatch.regprog };
-                if r {
-                    unsafe { *capcol = regmatch.endp[0].offset_from(text) as c_int };
+                if let Some(end) = regmatch.ends[0]
+                    && r
+                {
+                    unsafe { *capcol = end as c_int };
                 }
             }
 
@@ -422,17 +425,17 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
     // `text` is this frame's own NUL-terminated buffer, and `at` stays
     // inside it: the walk starts at `endcol` and only ever moves back.
     let base = text.as_mut_ptr().cast::<c_char>();
-    let end = base.wrapping_add(endcol);
     let mut at = endcol;
     loop {
         at -= head_off(&text[..endcol], at - 1) + 1;
-        let word = base.wrapping_add(at);
-        // SAFETY: `word` is inside `text`, which is NUL-terminated.
-        if at == 0 || unsafe { spell_iswordp_nmw(word, window) } {
+        // SAFETY: `base + at` is inside `text`, which is NUL-terminated.
+        if at == 0 || unsafe { spell_iswordp_nmw(base.wrapping_add(at), window) } {
             break;
         }
-        // SAFETY: as above, and `regmatch` is this frame's.
-        if unsafe { vim_regexec(&raw mut regmatch, word, 0) } && regmatch.endp[0] == end {
+        // The match has to end exactly where the word begins, which is
+        // `endcol` bytes into `text` and so that many past `at`.
+        let word = cstr::in_bytes(&text[at..]);
+        if vim_regexec(&mut regmatch, word, 0) && regmatch.ends[0] == Some(endcol - at) {
             need_cap = true;
             break;
         }

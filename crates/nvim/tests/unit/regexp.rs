@@ -31,7 +31,7 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::{CString, c_char};
+use std::ffi::CString;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -76,22 +76,14 @@ fn run(engine: &str, pat: impl AsRef<[u8]>, line: impl AsRef<[u8]>, ic: bool) ->
         rm_ic: ic,
         ..Default::default()
     };
-    // The subject must outlive the match: `startp`/`endp` point into it.
     let text = CString::new(line.as_ref().to_vec()).expect("a subject holds no NUL");
-    let base = text.as_ptr();
-    // SAFETY: `rm` holds a program this call compiled, `base` is
-    // NUL-terminated and outlives the match, and column 0 is in range.
-    let hit = unsafe { vim_regexec(&raw mut rm, base, 0) };
-    let at = |p: *mut c_char| {
-        // SAFETY: on a hit the engine sets both ends to positions inside
-        // `text`, which is the allocation `base` points at.
-        unsafe { p.cast_const().offset_from(base) }
-    };
+    let hit = vim_regexec(&mut rm, &text, 0);
     let answer = if hit {
-        let mut answer = format!("{}-{}", at(rm.startp[0]), at(rm.endp[0]));
+        let whole = rm.group(0).expect("a hit fills group zero");
+        let mut answer = format!("{}-{}", whole.start, whole.end);
         for i in 1..10 {
-            if !rm.startp[i].is_null() && !rm.endp[i].is_null() {
-                answer += &format!(" {i}:{}-{}", at(rm.startp[i]), at(rm.endp[i]));
+            if let Some(span) = rm.group(i) {
+                answer += &format!(" {i}:{}-{}", span.start, span.end);
             }
         }
         answer
@@ -1511,9 +1503,8 @@ fn random_patterns_are_rejected_or_matched_but_never_hang() {
 // Everything above matches a whole string from column zero. The engines'
 // other two callers do not: a search resumes at a column inside the line,
 // and a multi-line match runs over buffer lines the engine reads for
-// itself. Both are about to be retyped -- `line: *const c_char` becomes a
-// slice and `startp`/`endp` become offsets -- so the answers they give are
-// pinned here first.
+// itself. These were pinned before `line` became a `&CStr` and `startp`/
+// `endp` became offsets, and are what says that retyping changed nothing.
 
 /// Compile `pat` and match it against `line` starting at byte `col`,
 /// answering the same shape [`run`] does. The subject is *not* re-anchored:
@@ -1528,21 +1519,10 @@ fn run_at(pat: &str, line: &str, col: usize) -> String {
         ..Default::default()
     };
     let text = CString::new(line).expect("a subject holds no NUL");
-    let base = text.as_ptr();
-    // SAFETY: `base` is NUL-terminated and outlives the match, and `col` is
-    // inside it.
-    let hit = unsafe { vim_regexec(&raw mut rm, base, col as neovim::types::ColNr) };
-    let answer = if hit {
-        // SAFETY: on a hit both ends point inside `text`.
-        unsafe {
-            format!(
-                "{}-{}",
-                rm.startp[0].cast_const().offset_from(base),
-                rm.endp[0].cast_const().offset_from(base)
-            )
-        }
-    } else {
-        "nomatch".to_string()
+    let hit = vim_regexec(&mut rm, &text, col);
+    let answer = match rm.group(0).filter(|_| hit) {
+        Some(span) => format!("{}-{}", span.start, span.end),
+        None => "nomatch".to_string(),
     };
     // SAFETY: `regprog` is what the match left behind.
     unsafe { vim_regfree(rm.regprog) };

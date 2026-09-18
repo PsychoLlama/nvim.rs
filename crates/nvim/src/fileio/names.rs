@@ -363,10 +363,11 @@ pub unsafe fn match_file_pat(
         && if allow_dirs != 0 {
             // Short-circuits: the second `vim_regexec` must not run when the
             // full name already matched, as it overwrites `regmatch`.
-            let full = unsafe { vim_regexec(&raw mut regmatch, fname, 0) };
-            full || (!sfname.is_null() && unsafe { vim_regexec(&raw mut regmatch, sfname, 0) })
+            let full = vim_regexec(&mut regmatch, unsafe { cstr::at(fname) }, 0);
+            full || (!sfname.is_null()
+                && vim_regexec(&mut regmatch, unsafe { cstr::at(sfname) }, 0))
         } else {
-            unsafe { vim_regexec(&raw mut regmatch, tail, 0) }
+            vim_regexec(&mut regmatch, unsafe { cstr::at(tail) }, 0)
         };
 
     if prog.is_null() {

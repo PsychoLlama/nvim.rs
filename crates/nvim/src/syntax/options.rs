@@ -471,13 +471,10 @@ fn parse_id_name(
     name.pop();
     name.push(b'$');
     name.push(0);
-    let mut regmatch = RegMatch {
-        regprog: unsafe { vim_regcomp(name.as_ptr() as *const c_char, RE_MAGIC) },
-        startp: [::core::ptr::null_mut(); 10],
-        endp: [::core::ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: true,
-    };
+    let mut regmatch = RegMatch::new(
+        unsafe { vim_regcomp(name.as_ptr() as *const c_char, RE_MAGIC) },
+        true,
+    );
     if regmatch.regprog.is_null() {
         return Err(());
     }
@@ -485,7 +482,12 @@ fn parse_id_name(
     let mut i = highlight_num_groups();
     while i > 0 {
         i -= 1;
-        if unsafe { vim_regexec(&raw mut regmatch, highlight_group_name(i), 0) } {
+        // SAFETY: a highlight group's name is NUL-terminated.
+        if vim_regexec(
+            &mut regmatch,
+            unsafe { cstr::at(highlight_group_name(i)) },
+            0,
+        ) {
             ids.push((i + 1) as int16_t);
             matched = true;
         }

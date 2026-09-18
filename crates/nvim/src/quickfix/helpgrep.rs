@@ -53,7 +53,7 @@ fn hgr_get_ll(new_ll: &mut bool) -> Qi {
 ///
 /// `qfl` must be a live list, `fname` NUL-terminated and `p_regmatch` a
 /// compiled pattern.
-unsafe fn hgr_search_file(qfl: *mut QfList, fname: *mut c_char, p_regmatch: *mut RegMatch) {
+unsafe fn hgr_search_file(qfl: *mut QfList, fname: *mut c_char, p_regmatch: &mut RegMatch) {
     // Where each line is read. Upstream shares `IObuff`, which the entry
     // it builds and the messages it may raise both write.
     let mut read = [0 as c_char; IOSIZE as usize];
@@ -66,7 +66,8 @@ unsafe fn hgr_search_file(qfl: *mut QfList, fname: *mut c_char, p_regmatch: *mut
     let line = read.as_mut_ptr();
     let mut lnum: LineNr = 1;
     while !unsafe { vim_fgets(line, IOSIZE, fd) } && !got_int.get() {
-        if unsafe { vim_regexec(p_regmatch, line, 0) } {
+        // SAFETY: `vim_fgets` left one NUL-terminated line in `read`.
+        if vim_regexec(p_regmatch, unsafe { cstr::at(line) }, 0) {
             // Remove the trailing CR, LF, spaces, etc.
             let mut l = unsafe { cstr::bytes_at(line) }.len();
             while l > 0 && unsafe { *line.add(l - 1) } as c_int <= ' ' as c_int {
@@ -77,8 +78,8 @@ unsafe fn hgr_search_file(qfl: *mut QfList, fname: *mut c_char, p_regmatch: *mut
             let entry = &NewEntry {
                 fname,
                 lnum,
-                col: unsafe { (*p_regmatch).startp[0].offset_from(line) } as c_int + 1,
-                end_col: unsafe { (*p_regmatch).endp[0].offset_from(line) } as c_int + 1,
+                col: p_regmatch.starts[0].unwrap_or(0) as c_int + 1,
+                end_col: p_regmatch.ends[0].unwrap_or(0) as c_int + 1,
                 // A help entry, which `qf_jump` opens as help.
                 kind: 1,
                 ..NewEntry::new(line)
@@ -101,7 +102,7 @@ unsafe fn hgr_search_file(qfl: *mut QfList, fname: *mut c_char, p_regmatch: *mut
 unsafe fn hgr_search_files_in_dir(
     qfl: *mut QfList,
     dir: &[u8],
-    p_regmatch: *mut RegMatch,
+    p_regmatch: &mut RegMatch,
     lang: *const c_char,
 ) {
     // SAFETY: the caller's list, pattern and language, plus one owned file
@@ -174,7 +175,7 @@ unsafe fn wanted_language(lang: *const c_char, fname: *const c_char) -> bool {
 /// # Safety
 ///
 /// `qfl` must be a live list and `p_regmatch` a compiled pattern.
-unsafe fn hgr_search_in_rtp(qfl: *mut QfList, p_regmatch: *mut RegMatch, lang: *const c_char) {
+unsafe fn hgr_search_in_rtp(qfl: *mut QfList, p_regmatch: &mut RegMatch, lang: *const c_char) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     // SAFETY: forwarded from the caller; `dir` holds MAXPATHL bytes.
     // A copy: the cursor below walks past the end of a projection's borrow.
@@ -233,7 +234,7 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
         unsafe { qf_new_list(qi.raw(), title.as_ptr()) };
         let mut qfl = qf_current_list(qi);
 
-        unsafe { hgr_search_in_rtp(qfl.raw(), &raw mut regmatch, lang) };
+        unsafe { hgr_search_in_rtp(qfl.raw(), &mut regmatch, lang) };
         unsafe { vim_regfree(regmatch.regprog) };
 
         qfl.qf_nonevalid = false;

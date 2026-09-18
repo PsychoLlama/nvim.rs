@@ -24,7 +24,7 @@ use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::api::with_rex;
 use super::submatch::{Rsm, fill_submatch_list};
@@ -49,7 +49,7 @@ use crate::pos::MAXCOL;
 use crate::strings::{vim_strsave_escaped, xstrnsave};
 use crate::types::{
     FuncExe, LineNr, List, NUL, Partial, RegMMatch, RegMatch, TypVal, VAR_FUNC, VAR_PARTIAL,
-    VAR_UNKNOWN,
+    VAR_UNKNOWN, uint8_t,
 };
 use crate::winlayer::Live;
 use ::libc::strcpy;
@@ -86,7 +86,7 @@ fn stash(nested: usize, text: *mut c_char) {
 /// The message a pass that would overrun the caller's buffer reports. That
 /// means the two passes disagreed, which is a bug here rather than in the
 /// user's pattern.
-const E_NOT_ENOUGH_SPACE: &core::ffi::CStr = c"vim_regsub_both(): not enough space";
+const E_NOT_ENOUGH_SPACE: &CStr = c"vim_regsub_both(): not enough space";
 
 /// A `FuncExe` that asks for nothing.
 const FUNCEXE_INIT: FuncExe = FuncExe {
@@ -334,27 +334,30 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 }
 
 /// Expand `source` into `dest` using the captures of the string match
-/// `rmp`, or the result of `expr` when the replacement is an expression.
-/// Returns the length written, plus one for the NUL.
+/// `matches`, or the result of `expr` when the replacement is an
+/// expression. Returns the length written, plus one for the NUL.
 ///
-/// The match must not have changed since [`vim_regexec`](super::vim_regexec)
-/// ran: the captures point straight into the matched text.
+/// `line` is the text `matches` ran over, which its capture spans index;
+/// neither it nor the match may have changed since
+/// [`vim_regexec`](super::vim_regexec) filled them.
 ///
 /// # Safety
 ///
-/// `rmp` must point at a live `RegMatch`, unaliased for the call. `source`
-/// must point at a NUL-terminated string, unaliased for the call. `expr` must
-/// point at an initialized typval, unaliased for the call. `dest` must point at
-/// `destlen` writable bytes, unaliased for the call, whenever `flags` sets
-/// `REGSUB_COPY`; the measuring pass writes nothing and takes a null.
+/// `source` must point at a NUL-terminated string, unaliased for the call.
+/// `expr` must point at an initialized typval, unaliased for the call.
+/// `dest` must point at `destlen` writable bytes, unaliased for the call,
+/// whenever `flags` sets `REGSUB_COPY`; the measuring pass writes nothing
+/// and takes a null.
 pub(crate) unsafe fn vim_regsub(
-    rmp: *mut RegMatch,
+    matches: &mut RegMatch,
+    line: &CStr,
     source: *mut c_char,
     expr: Option<&TypVal>,
     dest: *mut c_char,
     destlen: c_int,
     flags: c_int,
 ) -> c_int {
+    let rmp: *mut RegMatch = matches;
     // SAFETY: the arguments are the caller's; `with_rex` makes the context
     // ours for the call and restores any outer match's after it.
     with_rex(|| {
@@ -363,6 +366,9 @@ pub(crate) unsafe fn vim_regsub(
         rex.set_reg_mmatch(core::ptr::null_mut());
         rex.set_reg_maxline(0);
         rex.set_reg_buf(Buf::current());
+        // The capture spans are offsets into `line`, so the context has to
+        // name it for `copy_capture` and `submatch()` to resolve them.
+        rex.set_line(line.as_ptr().cast::<uint8_t>().cast_mut());
         // A string replacement has no lines to cross, so a `\n` in it
         // is a literal newline rather than a line break.
         rex.set_reg_line_lbr(true);
@@ -510,6 +516,9 @@ unsafe fn eval_replacement(
     let outer_rsm = rsm.replace(RegSubMatch {
         sm_match: rex.reg_match(),
         sm_mmatch: rex.reg_mmatch(),
+        // `submatch()` reads the captures as offsets, so it needs the text
+        // they are offsets into; a buffer match reads lines instead.
+        sm_line: rex.line().cast(),
         sm_firstlnum: rex.reg_firstlnum(),
         sm_maxline: rex.reg_maxline(),
         sm_line_lbr: rex.reg_line_lbr() as c_int,
@@ -785,13 +794,14 @@ fn copy_capture(rex: Rex, no: c_int, case: &mut Case, backslash: bool, out: &mut
     } else {
         // SAFETY: a string match's `reg_match` is the caller's live structure.
         let match_ = unsafe { Live::new(rex.reg_match()) };
-        let start = match_.startp[no];
-        if match_.endp[no].is_null() {
-            core::ptr::null_mut()
-        } else {
-            // SAFETY: both slots point into the same matched string.
-            len = unsafe { match_.endp[no].offset_from(start) } as c_int;
-            start
+        match match_.group(no) {
+            None => core::ptr::null_mut(),
+            Some(span) => {
+                len = (span.end - span.start) as c_int;
+                // SAFETY: the span is an offset into the line the match ran
+                // over, which `vim_regsub` pointed the context at.
+                unsafe { rex.line().cast::<c_char>().add(span.start) }
+            }
         }
     };
     // A capture that did not participate contributes nothing.

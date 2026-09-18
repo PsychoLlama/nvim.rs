@@ -16,7 +16,7 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 
 use super::{
     AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg,
@@ -28,7 +28,9 @@ use crate::option::vars::{P_RE, p_re, p_verbose};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::regexp::state::reg_do_extmatch;
-use crate::types::{ColNr, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg, uint8_t};
+use crate::types::{
+    ColNr, LineNr, OptInt, ProfTime, RE_GROUPS, RegMMatch, RegMatch, RegProg, uint8_t,
+};
 
 /// Reserve `rex` for `run`, restoring an outer match's context after. The
 /// nesting is real: `:s/…/\=…/` can evaluate an expression that searches.
@@ -171,20 +173,22 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
     new
 }
 
-/// Run `rmp`'s program over the single line `line`, starting at `col`.
-/// `nl` allows a `$` to match at the end of the string.
+/// Run `matches`'s program over the whole of `line`, starting at byte
+/// `col`. `nl` allows a `$` to match at the end of the string.
 ///
-/// # Safety
-///
-/// `rmp` must point at a live `RegMatch`, unaliased for the call. `line` must
-/// point at a NUL-terminated string.
-unsafe fn vim_regexec_string(
-    rmp: *mut RegMatch,
-    line: *const c_char,
-    col: ColNr,
-    nl: bool,
-) -> bool {
-    // SAFETY: `rmp` holds a live program and `line` is the caller's text.
+/// The line is a `&CStr` and not a `&[u8]` on purpose. Both engines treat
+/// the terminator as a *position* rather than a bound — `$` matches there,
+/// `\n` is tested for there, and every character step reads it before
+/// deciding it has run out — so a length alone would not tell them where
+/// the line ends. Taking the terminated string says that, and hands the
+/// callers a type they can hold.
+fn vim_regexec_string(matches: &mut RegMatch, line: &CStr, col: usize, nl: bool) -> bool {
+    let text = line.as_ptr();
+    debug_assert!(col <= line.count_bytes(), "col past the end of the line");
+    let col = ColNr::try_from(col).unwrap_or(ColNr::MAX);
+    let rmp: *mut RegMatch = matches;
+    // SAFETY: `rmp` is the caller's match structure, borrowed exclusively
+    // for the call, and `text` its NUL-terminated line.
     // A program cannot match against itself: `\=` calling back into the
     // same pattern would reuse the program's own state.
     if unsafe { (*(*rmp).regprog).re_in_use } {
@@ -193,17 +197,16 @@ unsafe fn vim_regexec_string(
     }
     let result = with_rex(|| {
         unsafe { (*(*rmp).regprog).re_in_use = true };
-        // A string match has no position slots, only pointer ones.
+        // A string match has no position slots, only the pointer ones the
+        // context holds itself.
         // SAFETY: `with_rex` reserved the context for this match.
         let rex = unsafe { Rex::acquire() };
-        rex.set_reg_startp(core::ptr::null_mut());
-        rex.set_reg_endp(core::ptr::null_mut());
         rex.set_reg_startpos(core::ptr::null_mut());
         rex.set_reg_endpos(core::ptr::null_mut());
         let exec = |rmp: *mut RegMatch| unsafe {
             (*(*(*rmp).regprog).engine)
                 .regexec_nl
-                .expect("non-null function pointer")(rmp, line as *mut uint8_t, col, nl)
+                .expect("non-null function pointer")(rmp, text as *mut uint8_t, col, nl)
         };
         let mut result = exec(rmp);
         unsafe { (*(*rmp).regprog).re_in_use = false };
@@ -219,61 +222,80 @@ unsafe fn vim_regexec_string(
                 unsafe { (*(*rmp).regprog).re_in_use = false };
             }
         }
-        result
+        // The slots have to be read before `with_rex` puts an outer
+        // match's context back, and `matches` must not be touched while
+        // `rmp` is live, so what comes out is a copy.
+        // SAFETY: the context is still this match's.
+        let rex = unsafe { Rex::acquire() };
+        (result, rex.str_starts(), rex.str_ends())
     });
+    let (result, starts, ends) = result;
+    if result > 0 {
+        record_groups(matches, &starts, &ends, line);
+    } else {
+        matches.clear_groups();
+    }
     result > 0
 }
 
-/// [`vim_regexec`] against a program the caller owns by pointer, so that
-/// the fall back to the backtracking engine can replace it.
+/// Copy the slots the engine filled into `matches`, as offsets into `line`.
 ///
-/// # Safety
-///
-/// `prog` must point at a writable `*mut RegProg` slot the caller owns for
-/// the call. `line` must point at a NUL-terminated string.
-pub unsafe fn vim_regexec_prog(
-    prog: *mut *mut RegProg,
-    ignore_case: bool,
-    line: *const c_char,
-    col: ColNr,
-) -> bool {
-    // SAFETY: `prog` points at the caller's program handle.
-    let mut regmatch = RegMatch {
-        regprog: unsafe { *prog },
-        startp: [core::ptr::null_mut(); 10],
-        endp: [core::ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: ignore_case,
+/// A slot is null for a group the pattern never reached, and otherwise
+/// points into the line the match ran over — which for a string match is
+/// `line` itself from the first byte to the last: nothing in either engine
+/// moves a string match onto another line.
+fn record_groups(
+    matches: &mut RegMatch,
+    starts: &[*mut uint8_t; RE_GROUPS],
+    ends: &[*mut uint8_t; RE_GROUPS],
+    line: &CStr,
+) {
+    let first = line.as_ptr().cast::<uint8_t>();
+    let len = line.count_bytes();
+    let offset = |slot: *mut uint8_t| {
+        if slot.is_null() {
+            return None;
+        }
+        // SAFETY: the slot is a position inside the line just matched.
+        let at = unsafe { slot.offset_from(first) };
+        debug_assert!(
+            (0..=len as isize).contains(&at),
+            "capture outside the matched line"
+        );
+        Some(at as usize)
     };
-    let matched = unsafe { vim_regexec_string(&raw mut regmatch, line, col, false) };
-    unsafe { *prog = regmatch.regprog };
+    for no in 0..RE_GROUPS {
+        matches.starts[no] = offset(starts[no]);
+        matches.ends[no] = offset(ends[no]);
+    }
+}
+
+/// [`vim_regexec`] against a program the caller owns, so that the fall back
+/// to the backtracking engine can replace it.
+pub fn vim_regexec_prog(
+    prog: &mut *mut RegProg,
+    ignore_case: bool,
+    line: &CStr,
+    col: usize,
+) -> bool {
+    let mut regex_match = RegMatch::new(*prog, ignore_case);
+    let matched = vim_regexec_string(&mut regex_match, line, col, false);
+    *prog = regex_match.regprog;
     matched
 }
 
-/// Run `rmp`'s program over the string `line`, starting at byte `col`.
+/// Run `matches`'s program over `line`, starting at byte `col`.
 ///
-/// On a hit `rmp`'s `startp`/`endp` point into `line`, so `line` has to
-/// outlive every read of them.
-///
-/// # Safety
-/// `rmp` must be writable and hold a live program, `line` must be
-/// NUL-terminated, and `col` must be within it. This re-enters the editor —
-/// a `\=` expression can start a match of its own — so nothing may be held
-/// across it.
-pub unsafe fn vim_regexec(rmp: *mut RegMatch, line: *const c_char, col: ColNr) -> bool {
-    // SAFETY: as `vim_regexec_string`.
-    unsafe { vim_regexec_string(rmp, line, col, false) }
+/// On a hit `matches`'s groups are byte offsets into `line`; on a miss they
+/// are all unset. This re-enters the editor — a `\=` expression can start a
+/// match of its own — so nothing may be held across it.
+pub fn vim_regexec(matches: &mut RegMatch, line: &CStr, col: usize) -> bool {
+    vim_regexec_string(matches, line, col, false)
 }
 
 /// [`vim_regexec`] with `$` allowed to match at the end of the string.
-///
-/// # Safety
-///
-/// `rmp` must point at a live `RegMatch`, unaliased for the call. `line` must
-/// point at a NUL-terminated string.
-pub unsafe fn vim_regexec_nl(rmp: *mut RegMatch, line: *const c_char, col: ColNr) -> bool {
-    // SAFETY: as `vim_regexec_string`.
-    unsafe { vim_regexec_string(rmp, line, col, true) }
+pub fn vim_regexec_nl(matches: &mut RegMatch, line: &CStr, col: usize) -> bool {
+    vim_regexec_string(matches, line, col, true)
 }
 
 /// Run `rmp`'s program over `buffer` starting at line `lnum`, column `col`.

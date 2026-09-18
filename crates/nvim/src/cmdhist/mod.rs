@@ -270,17 +270,11 @@ unsafe fn del_history_entry(histype: c_int, pat: *const c_char) -> bool {
     if regprog.is_null() {
         return false;
     }
-    let mut regmatch = RegMatch {
-        regprog,
-        startp: [core::ptr::null_mut(); 10],
-        endp: [core::ptr::null_mut(); 10],
-        rm_matchcol: 0,
-        rm_ic: false,
-    };
+    let mut regmatch = RegMatch::new(regprog, false);
     let found = HISTORY.with_mut(|h| {
         h[histype as usize].delete_matching(|e| {
             // SAFETY: entry text is NUL-terminated and outlives the call.
-            unsafe { vim_regexec(&raw mut regmatch, e.c_ptr(), 0) }
+            vim_regexec(&mut regmatch, unsafe { cstr::at(e.c_ptr()) }, 0)
         })
     });
     // SAFETY: the program was compiled above and nothing references it now.

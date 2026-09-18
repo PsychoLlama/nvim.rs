@@ -19,6 +19,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cstr;
 use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -31,7 +32,7 @@ use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::edit::get_nolist_virtcol;
 use crate::extmark::extmark_splice_cols;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memline::{Lines, ml_get, ml_replace};
+use crate::memline::{Lines, ml_replace};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_positive;
 use crate::message::emsg;
@@ -736,31 +737,32 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     };
     // In `format_lines` -- that is, outside Insert mode -- 'formatoptions'
     // `q` is needed as well before a leader is stepped over.
+    // The match re-enters the editor (a `\=` in 'formatlistpat' evaluates),
+    // so the line is copied rather than borrowed from the memline.
+    let line = Lines::current().line_copy(lnum);
     let mut lead_len = 0;
     if State.get() & MODE_INSERT != 0 || has_format_option(FoFlag::Q_COMS) {
+        // SAFETY: the copy is NUL-terminated and this frame owns it.
         lead_len = unsafe {
             get_leader_len(
-                ml_get(lnum),
+                line.as_cstr().as_ptr(),
                 ::core::ptr::null_mut::<*mut c_char>(),
                 false,
                 true,
             )
         };
     }
-    let mut regmatch = RegMatch {
-        regprog: unsafe { vim_regcomp(Buf::current().b_p_flp.value_ptr(), RE_MAGIC) },
-        startp: [::core::ptr::null_mut::<c_char>(); 10],
-        endp: [::core::ptr::null_mut::<c_char>(); 10],
-        rm_matchcol: 0,
-        rm_ic: false,
-    };
+    let flp = Buf::current().b_p_flp.value_ptr();
+    // SAFETY: 'formatlistpat' is a NUL-terminated option value.
+    let mut regmatch = RegMatch::new(unsafe { vim_regcomp(flp, RE_MAGIC) }, false);
     if !regmatch.regprog.is_null() {
         regmatch.rm_ic = false;
-        // `vim_regexec` wants a pointer to a line, which is what lets the
-        // match start past the comment leader.
-        if unsafe { vim_regexec(&raw mut regmatch, ml_get(lnum).offset(lead_len as isize), 0) } {
+        // The match starts past the comment leader, so its offsets are
+        // relative to there and the leader goes back on at the end.
+        let lead_len = lead_len as usize;
+        if vim_regexec(&mut regmatch, cstr::suffix(line.as_cstr(), lead_len), 0) {
             pos.lnum = lnum;
-            pos.col = unsafe { regmatch.endp[0].offset_from(ml_get(lnum)) } as ColNr;
+            pos.col = (lead_len + regmatch.ends[0].unwrap_or(0)) as ColNr;
             pos.coladd = 0;
         }
         unsafe { vim_regfree(regmatch.regprog) };

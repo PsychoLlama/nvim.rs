@@ -704,7 +704,7 @@ pub fn ex_function(excmd: &mut ExArg) {
     if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.arg))) != 0 {
         if !excmd.skip {
             // SAFETY: no pattern means every function.
-            unsafe { list_functions(ptr::null_mut()) };
+            list_functions(None);
         }
         excmd.line.next = excmd.line.check_next(excmd.line.arg);
         return;

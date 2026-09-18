@@ -33,18 +33,12 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::vars::{p_fic, p_wic};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{ColNr, Failed, FuzMatchStr, RegMatch, RegProg};
+use crate::types::{Failed, FuzMatchStr, RegMatch, RegProg};
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
 /// A `RegMatch` holding no compiled program.
-pub(crate) const NO_REGMATCH: RegMatch = RegMatch {
-    regprog: ptr::null_mut::<RegProg>(),
-    startp: [ptr::null_mut::<c_char>(); 10],
-    endp: [ptr::null_mut::<c_char>(); 10],
-    rm_matchcol: 0,
-    rm_ic: false,
-};
+pub(crate) const NO_REGMATCH: RegMatch = RegMatch::new(ptr::null_mut::<RegProg>(), false);
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -92,10 +86,8 @@ fn regfree(prog: *mut RegProg) {
     unsafe { vim_regfree(prog) };
 }
 
-fn regexec(rmp: &mut RegMatch, name: *mut c_char) -> bool {
-    // SAFETY: a live match state with a compiled program, and a
-    // NUL-terminated string to match it against.
-    unsafe { vim_regexec(rmp, name, 0 as ColNr) }
+fn regexec(rmp: &mut RegMatch, name: &CStr) -> bool {
+    vim_regexec(rmp, name, 0)
 }
 
 /// `home_replace_save`: `name` with `$HOME` written as `~`, freshly
@@ -350,7 +342,8 @@ fn fname_match(rmp: &mut RegMatch, name: *mut c_char, ignore_case: bool) -> *mut
 
     // Ignore case when 'fileignorecase' or the argument is set.
     rmp.rm_ic = p_fic() || ignore_case;
-    if regexec(rmp, name) {
+    // SAFETY: the caller's NUL-terminated name.
+    if regexec(rmp, unsafe { cstr::at(name) }) {
         return name;
     }
     if rmp.regprog.is_null() {
@@ -358,7 +351,8 @@ fn fname_match(rmp: &mut RegMatch, name: *mut c_char, ignore_case: bool) -> *mut
     }
     // Replace $(HOME) with '~' and try matching again.
     let p = home_replaced(None, name);
-    let matched = if regexec(rmp, p) {
+    // SAFETY: `home_replaced` answers a NUL-terminated copy.
+    let matched = if regexec(rmp, unsafe { cstr::at(p) }) {
         name
     } else {
         ptr::null_mut()

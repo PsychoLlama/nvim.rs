@@ -320,7 +320,9 @@ fn pattern_catches(pat: &[u8]) -> bool {
     // the match, only a CTRL-C hit during it.
     let prev_got_int = got_int.get();
     got_int.set(false);
-    let caught = unsafe { vim_regexec_nl(&raw mut regmatch, (*current_exception.get()).value, 0) };
+    // SAFETY: the exception's message, NUL-terminated for its lifetime.
+    let value = unsafe { cstr::at((*current_exception.get()).value) };
+    let caught = vim_regexec_nl(&mut regmatch, value, 0);
     got_int.set(got_int.get() | prev_got_int);
     unsafe { vim_regfree(regmatch.regprog) };
     caught

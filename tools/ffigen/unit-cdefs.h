@@ -3429,6 +3429,7 @@ static const int REX_SET = 1;
 static const int REX_USE = 2;
 static const int RE_AUTO = 8;
 static const int RE_BOTH = 2;
+static const int RE_GROUPS = 10;
 static const int RE_LAST = 2;
 static const int RE_MAGIC = 1;
 static const int RE_NOBREAK = 16;

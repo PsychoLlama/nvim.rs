@@ -443,8 +443,7 @@ unsafe fn name_matches(
     comp: &CStr,
     comp_len: usize,
 ) -> bool {
-    // SAFETY: `name` is NUL-terminated, which is all `vim_regexec` needs.
-    if !regmatch.regprog.is_null() && unsafe { vim_regexec(regmatch, name.as_ptr(), 0) } {
+    if !regmatch.regprog.is_null() && vim_regexec(regmatch, name, 0) {
         return true;
     }
     flags.has(ExpandFlags::NOTWILD) && path_fnamencmp(comp, name, comp_len as size_t) == 0

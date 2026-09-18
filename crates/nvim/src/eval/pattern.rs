@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::option::SavedCpo;
 use core::ffi::{c_char, c_int};
 use core::ptr::{copy_nonoverlapping, null_mut};
@@ -17,17 +18,11 @@ use crate::option::vars::p_ic;
 
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, NUL, RegMatch, RegProg, TypVal, size_t};
+use crate::types::{NUL, RegMatch, RegProg, TypVal, size_t};
 use core::slice;
 
 /// A `RegMatch` with nothing in it.
-const EMPTY_REGMATCH: RegMatch = RegMatch {
-    regprog: null_mut::<RegProg>(),
-    startp: [null_mut::<c_char>(); 10],
-    endp: [null_mut::<c_char>(); 10],
-    rm_matchcol: 0,
-    rm_ic: false,
-};
+const EMPTY_REGMATCH: RegMatch = RegMatch::new(null_mut::<RegProg>(), false);
 
 /// Does `pat` match anywhere in `text`?
 ///
@@ -42,9 +37,8 @@ pub unsafe fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -
         return false;
     }
     regmatch.rm_ic = ic;
-    // SAFETY: `regmatch` is this frame's and holds a compiled program;
-    // `text` is the caller's NUL-terminated subject.
-    let matched = unsafe { vim_regexec_nl(&raw mut regmatch, text, 0 as ColNr) };
+    // SAFETY: `text` is the caller's NUL-terminated subject.
+    let matched = vim_regexec_nl(&mut regmatch, unsafe { cstr::at(text) }, 0);
     // SAFETY: nothing else owns the program.
     unsafe { vim_regfree(regmatch.regprog) };
     matched
@@ -88,13 +82,17 @@ pub unsafe fn do_string_sub(
         let do_all = unsafe { *flags } == b'g' as c_char;
         // The start of the last zero-width match, so that the next one
         // at the same place is stepped over rather than repeated.
-        let mut zero_width: *mut c_char = null_mut();
+        let mut zero_width: Option<usize> = None;
+        // SAFETY: the caller's promise -- `str` is NUL-terminated.
+        let subject = unsafe { cstr::at(str) };
 
-        // SAFETY: `regmatch` holds a compiled program, `str` is the
-        // caller's subject and `tail` is inside it.
-        while unsafe { vim_regexec_nl(&raw mut regmatch, str, tail.offset_from(str) as ColNr) } {
-            if regmatch.startp[0] == regmatch.endp[0] {
-                if zero_width == regmatch.startp[0] {
+        // SAFETY: `tail` is inside the subject throughout.
+        while vim_regexec_nl(&mut regmatch, subject, unsafe { tail.offset_from(str) }
+            as usize)
+        {
+            let span = regmatch.group(0).unwrap_or(0..0);
+            if span.is_empty() {
+                if zero_width == Some(span.start) {
                     // Copy one whole character across and try again.
                     // SAFETY: `tail` is inside the subject string, so its
                     // first character's bytes are readable.
@@ -106,27 +104,25 @@ pub unsafe fn do_string_sub(
                     tail = unsafe { tail.offset(i as isize) };
                     continue;
                 }
-                zero_width = regmatch.startp[0];
+                zero_width = Some(span.start);
             }
 
             // First pass measures the replacement, second writes it.
             let magic = REGSUB_MAGIC as c_int;
             // SAFETY: `regmatch` holds this iteration's match, `sub` and
             // `expr` are the caller's, and a length of 0 means "measure".
-            let sublen = unsafe { vim_regsub(&raw mut regmatch, sub, expr, tail, 0, magic) };
+            let sublen = unsafe { vim_regsub(&mut regmatch, subject, sub, expr, tail, 0, magic) };
             if sublen <= 0 {
                 out.clear();
                 substituted = false;
                 break;
             }
-            // SAFETY: both ends of the match are inside the subject
-            // string, as are `tail` and `end`.
-            let matched = unsafe { regmatch.endp[0].offset_from(regmatch.startp[0]) };
-            // SAFETY: as above.
+            let matched = (span.end - span.start) as isize;
+            // SAFETY: `tail` and `end` are inside the subject string.
             let grow = unsafe { end.offset_from(tail) + sublen as isize - matched } as c_int;
             out.reserve(grow as usize);
-            // SAFETY: the match starts at or after `tail`.
-            let before = unsafe { regmatch.startp[0].offset_from(tail) } as usize;
+            // The match starts at or after `tail`.
+            let before = span.start - unsafe { tail.offset_from(str) } as usize;
             let copy = REGSUB_COPY as c_int | REGSUB_MAGIC as c_int;
             let at = out.len();
             // SAFETY: `grow` is at least `before + sublen` (the match ends
@@ -137,11 +133,20 @@ pub unsafe fn do_string_sub(
             unsafe {
                 let dest = out.as_mut_ptr().add(at).cast::<c_char>();
                 copy_nonoverlapping(tail, dest, before);
-                vim_regsub(&raw mut regmatch, sub, expr, dest.add(before), sublen, copy);
+                vim_regsub(
+                    &mut regmatch,
+                    subject,
+                    sub,
+                    expr,
+                    dest.add(before),
+                    sublen,
+                    copy,
+                );
                 out.set_len(at + before + sublen as usize - 1);
             }
             substituted = true;
-            tail = regmatch.endp[0];
+            // SAFETY: an offset into the subject.
+            tail = unsafe { str.add(span.end) };
             // SAFETY: `tail` is inside the NUL-terminated subject.
             if unsafe { *tail } == NUL as c_char || !do_all {
                 break;
