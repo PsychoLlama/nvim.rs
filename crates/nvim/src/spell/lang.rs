@@ -730,7 +730,7 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Result<(), OptError> 
         unsafe { (*synblock).b_cap_prog = core::ptr::null_mut() };
     } else {
         let re = unsafe { concat_str(c"^".as_ptr(), (*synblock).b_p_spc.value_ptr()) };
-        unsafe { (*synblock).b_cap_prog = vim_regcomp(re, RE_MAGIC as c_int) };
+        unsafe { (*synblock).b_cap_prog = vim_regcomp(cstr::at(re), RE_MAGIC as c_int) };
         unsafe { xfree(re as *mut c_void) };
         if unsafe { (*synblock).b_cap_prog }.is_null() {
             unsafe { (*synblock).b_cap_prog = rp }; // keep the previous program

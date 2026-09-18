@@ -203,7 +203,7 @@ pub(crate) unsafe fn uniquefy_paths(
         rm_ic: true, // always ignore case
         ..Default::default()
     };
-    regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
+    regmatch.regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
     unsafe { xfree(pat.cast()) };
     if regmatch.regprog.is_null() {
         return;

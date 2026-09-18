@@ -317,7 +317,10 @@ pub(crate) unsafe fn do_path_expand(
         .has(ExpandFlags::NOERROR | ExpandFlags::NOTWILD)
         .then(Suppress::emsg_silent);
     let nobreak = flags.has(ExpandFlags::NOBREAK);
-    regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC | if nobreak { RE_NOBREAK } else { 0 }) };
+    regmatch.regprog = vim_regcomp(
+        unsafe { cstr::at(pat) },
+        RE_MAGIC | if nobreak { RE_NOBREAK } else { 0 },
+    );
     drop(silent);
     unsafe { xfree(pat.cast()) };
     if regmatch.regprog.is_null() && !flags.has(ExpandFlags::NOTWILD) {

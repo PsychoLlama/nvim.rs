@@ -307,7 +307,10 @@ fn pattern_catches(pat: &[u8]) -> bool {
     let no_emsg = Suppress::emsg();
     let mut regmatch = RegMatch {
         // SAFETY: the owned NUL-terminated copy above.
-        regprog: unsafe { vim_regcomp(owned.as_ptr().cast_mut(), RE_MAGIC + RE_STRING) },
+        regprog: vim_regcomp(
+            unsafe { cstr::at(owned.as_ptr().cast_mut()) },
+            RE_MAGIC + RE_STRING,
+        ),
         ..RegMatch::default()
     };
     drop(no_emsg);

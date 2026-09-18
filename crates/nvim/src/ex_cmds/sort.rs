@@ -185,9 +185,9 @@ unsafe fn compile_sort_pattern(
             emsg(gettext(e_noprevre));
             return None;
         }
-        unsafe { vim_regcomp(last_search_pat(), RE_MAGIC) }
+        vim_regcomp(unsafe { cstr::at(last_search_pat()) }, RE_MAGIC)
     } else {
-        unsafe { vim_regcomp(delim.add(1), RE_MAGIC) }
+        vim_regcomp(unsafe { cstr::at(delim.add(1)) }, RE_MAGIC)
     };
     if regmatch.regprog.is_null() {
         return None;

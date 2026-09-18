@@ -223,7 +223,7 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
     // Check for a specified language.
     let lang = unsafe { check_help_lang(excmd.arg_ptr()) };
     let mut regmatch = RegMatch {
-        regprog: unsafe { vim_regcomp(excmd.arg_ptr(), RE_MAGIC + RE_STRING) },
+        regprog: vim_regcomp(unsafe { cstr::at(excmd.arg_ptr()) }, RE_MAGIC + RE_STRING),
         rm_ic: false,
         ..RegMatch::default()
     };

@@ -264,7 +264,8 @@ pub(crate) fn parse_command_modifiers(
                 }
                 if !skip_only {
                     cm.cmod_filter_pat = xstrdup(reg_pat);
-                    cm.cmod_filter_regmatch.regprog = unsafe { vim_regcomp(reg_pat, RE_MAGIC) };
+                    cm.cmod_filter_regmatch.regprog =
+                        vim_regcomp(unsafe { cstr::at(reg_pat) }, RE_MAGIC);
                     if cm.cmod_filter_regmatch.regprog.is_null() {
                         break;
                     }

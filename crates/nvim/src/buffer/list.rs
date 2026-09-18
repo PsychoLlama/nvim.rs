@@ -141,7 +141,7 @@ fn free_regprog(prog: &mut *mut RegProg) {
 
 fn regcomp(pat: &[u8], flags: c_int) -> *mut RegProg {
     // SAFETY: a NUL-terminated pattern; the answer is null on a bad one.
-    unsafe { vim_regcomp(pat.as_ptr().cast::<c_char>(), flags) }
+    vim_regcomp(unsafe { cstr::at(pat.as_ptr().cast::<c_char>()) }, flags)
 }
 
 fn is_diff_mode(buffer: Buf) -> bool {

@@ -266,7 +266,7 @@ unsafe fn del_history_entry(histype: c_int, pat: *const c_char) -> bool {
         return false;
     }
     // SAFETY: caller contract; the compiled program is ours to free below.
-    let regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
+    let regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
     if regprog.is_null() {
         return false;
     }

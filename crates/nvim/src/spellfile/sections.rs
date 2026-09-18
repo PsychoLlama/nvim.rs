@@ -106,7 +106,10 @@ pub(super) fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> Spl
         pat.extend_from_slice(&spl.read_nonnul_bytes(n)?);
         pat.push(NUL as u8);
         // SAFETY: `pat` is NUL-terminated and outlives the call.
-        *slot = unsafe { vim_regcomp(pat.as_mut_ptr().cast::<c_char>(), RE_MAGIC | RE_STRING) };
+        *slot = vim_regcomp(
+            unsafe { cstr::at(pat.as_mut_ptr().cast::<c_char>()) },
+            RE_MAGIC | RE_STRING,
+        );
     }
 
     slang.sl_prefixcnt = cnt as c_int;
@@ -444,13 +447,7 @@ pub(super) fn read_compound(spl: &mut Spl, slang: &mut SpellLang, len: c_int) ->
         None => core::ptr::null_mut(),
     };
 
-    // SAFETY: `pat` is NUL-terminated and outlives the call.
-    slang.sl_compprog = unsafe {
-        vim_regcomp(
-            pat.as_mut_ptr().cast::<c_char>(),
-            RE_MAGIC + RE_STRING + RE_STRICT,
-        )
-    };
+    slang.sl_compprog = vim_regcomp(cstr::in_bytes(&pat), RE_MAGIC + RE_STRING + RE_STRICT);
     if slang.sl_compprog.is_null() {
         return Err(SpellReadError::Format);
     }

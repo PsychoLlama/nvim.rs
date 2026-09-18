@@ -467,7 +467,7 @@ pub fn ex_breakadd(excmd: &mut ExArg) {
     let compiled = unsafe {
         let pat = file_pat_to_reg_pat(bp.dbg_name, ptr::null(), ptr::null_mut(), 0);
         if !pat.is_null() {
-            bp.dbg_prog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
+            bp.dbg_prog = vim_regcomp(cstr::at(pat), RE_MAGIC + RE_STRING);
             xfree(pat.cast());
         }
         !pat.is_null() && !bp.dbg_prog.is_null()

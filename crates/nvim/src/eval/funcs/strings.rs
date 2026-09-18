@@ -449,7 +449,7 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     let list = list_alloc_ret(result, kListLenMayKnow as isize);
     if !typeerr {
-        let prog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
+        let prog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
         if !prog.is_null() {
             unsafe { split_into(list, str, prog, keepempty) };
             unsafe { vim_regfree(prog) };

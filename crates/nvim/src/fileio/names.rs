@@ -348,7 +348,7 @@ pub unsafe fn match_file_pat(
     let mut regmatch = RegMatch {
         rm_ic: p_fic(), // ignore case if 'fileignorecase' is set
         regprog: if prog.is_null() {
-            unsafe { vim_regcomp(pattern, RE_MAGIC) }
+            vim_regcomp(unsafe { cstr::at(pattern) }, RE_MAGIC)
         } else {
             unsafe { *prog }
         },

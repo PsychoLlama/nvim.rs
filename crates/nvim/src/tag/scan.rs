@@ -12,6 +12,7 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
+use crate::cstr;
 use crate::file_search::Name;
 use crate::guard::Suppress;
 use crate::message_fmt::c_str;
@@ -130,8 +131,9 @@ impl Pattern {
         if p_tl() != 0 && self.headlen as OptInt > p_tl() {
             self.headlen = p_tl() as c_int;
         }
-        self.regmatch.regprog =
-            unsafe { vim_regcomp(self.pat, if magic_isset() { RE_MAGIC } else { 0 }) };
+        // SAFETY: the pattern this scan was built with, NUL-terminated.
+        let pat = unsafe { cstr::at(self.pat) };
+        self.regmatch.regprog = vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 });
     }
 }
 

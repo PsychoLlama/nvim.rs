@@ -68,12 +68,14 @@ pub(crate) unsafe fn ins_compl_dictionaries(
             let len = unsafe { cstr::bytes_at(pat_esc) }.len() + 10;
             let ptr = unsafe { xmalloc(len) }.cast::<c_char>();
             unsafe { vim_snprintf(ptr, len, c"^\\s*\\zs\\V%s".as_ptr(), pat_esc) };
-            regmatch.regprog = unsafe { vim_regcomp(ptr, RE_MAGIC) };
+            regmatch.regprog = vim_regcomp(unsafe { cstr::at(ptr) }, RE_MAGIC);
             unsafe { xfree(pat_esc.cast::<c_void>()) };
             unsafe { xfree(ptr.cast::<c_void>()) };
         } else {
-            regmatch.regprog =
-                unsafe { vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 }) };
+            regmatch.regprog = vim_regcomp(
+                unsafe { cstr::at(pat) },
+                if magic_isset() { RE_MAGIC } else { 0 },
+            );
             if regmatch.regprog.is_null() {
                 break 'theend;
             }

@@ -66,8 +66,7 @@ const ENGINES: [(&str, &str); 2] = [("bt", BT), ("nfa", NFA)];
 fn run(engine: &str, pat: impl AsRef<[u8]>, line: impl AsRef<[u8]>, ic: bool) -> String {
     let pattern =
         CString::new([engine.as_bytes(), pat.as_ref()].concat()).expect("a pattern holds no NUL");
-    // SAFETY: a NUL-terminated pattern that outlives the call.
-    let prog = unsafe { vim_regcomp(pattern.as_ptr(), RE_MAGIC | RE_STRING) };
+    let prog = vim_regcomp(&pattern, RE_MAGIC | RE_STRING);
     if prog.is_null() {
         return "compile-error".to_string();
     }
@@ -784,8 +783,7 @@ fn a_program_can_be_freed_without_ever_matching() {
     let _sandbox = Sandbox::globals();
     let pat = CString::new(r"\(a\+\)\(b\|c\)\{2,5}").expect("a pattern holds no NUL");
     for _ in 0..100 {
-        // SAFETY: a NUL-terminated pattern that outlives the call.
-        let prog = unsafe { vim_regcomp(pat.as_ptr(), RE_MAGIC) };
+        let prog = vim_regcomp(&pat, RE_MAGIC);
         assert!(!prog.is_null(), "compile failed");
         // SAFETY: the program this loop just compiled, freed once.
         unsafe { vim_regfree(prog) };
@@ -1511,8 +1509,7 @@ fn random_patterns_are_rejected_or_matched_but_never_hang() {
 /// `^` still means the start of the string, not the start of `col`.
 fn run_at(pat: &str, line: &str, col: usize) -> String {
     let pattern = CString::new(pat).expect("a pattern holds no NUL");
-    // SAFETY: a NUL-terminated pattern that outlives the call.
-    let prog = unsafe { vim_regcomp(pattern.as_ptr(), RE_MAGIC | RE_STRING) };
+    let prog = vim_regcomp(&pattern, RE_MAGIC | RE_STRING);
     assert!(!prog.is_null(), "/{pat}/ did not compile");
     let mut rm = RegMatch {
         regprog: prog,
@@ -1562,8 +1559,7 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
     put("call setline(1, ['alpha', 'beta', 'gamma', 'delta'])");
 
     let pattern = CString::new(r"beta\ngamma").expect("a pattern holds no NUL");
-    // SAFETY: a NUL-terminated pattern that outlives the call.
-    let prog = unsafe { vim_regcomp(pattern.as_ptr(), RE_MAGIC) };
+    let prog = vim_regcomp(&pattern, RE_MAGIC);
     assert!(!prog.is_null(), "the pattern compiles");
     let mut rmm = RegMMatch {
         regprog: prog,

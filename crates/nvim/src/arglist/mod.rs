@@ -586,7 +586,10 @@ unsafe fn arglist_del_files(patterns: &[*mut c_char]) {
             break;
         }
         // SAFETY: `regexp` is a NUL-terminated pattern owned here.
-        regmatch.regprog = unsafe { vim_regcomp(regexp, if magic_isset() { RE_MAGIC } else { 0 }) };
+        regmatch.regprog = vim_regcomp(
+            unsafe { cstr::at(regexp) },
+            if magic_isset() { RE_MAGIC } else { 0 },
+        );
         if regmatch.regprog.is_null() {
             // SAFETY: `regexp` is ours to free.
             unsafe { xfree(regexp as *mut c_void) };

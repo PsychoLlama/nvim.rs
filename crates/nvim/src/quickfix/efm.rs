@@ -22,6 +22,7 @@
 )]
 
 use super::*;
+use crate::cstr;
 use crate::regexp::{RE_MAGIC, RE_STRING};
 use crate::semsg;
 use core::ffi::{CStr, c_char};
@@ -161,8 +162,8 @@ impl Efm {
             let len = option_part_len(part);
             let mut fmt = Format::new();
             let pat = fmt.compile_regpat(part, len)?;
-            // SAFETY: `compile_regpat` NUL-terminates what it builds.
-            fmt.prog = unsafe { vim_regcomp(pat.as_ptr().cast(), RE_MAGIC + RE_STRING) };
+            // `compile_regpat` NUL-terminates what it builds.
+            fmt.prog = vim_regcomp(cstr::in_bytes(&pat), RE_MAGIC + RE_STRING);
             if fmt.prog.is_null() {
                 return None;
             }

@@ -78,7 +78,7 @@ fn wants_fuzzy(pat: *const c_char) -> bool {
 
 fn regcomp(pat: *const c_char, flags: c_int) -> *mut RegProg {
     // SAFETY: a NUL-terminated pattern; the answer is null on a bad one.
-    unsafe { vim_regcomp(pat, flags) }
+    vim_regcomp(unsafe { cstr::at(pat) }, flags)
 }
 
 fn regfree(prog: *mut RegProg) {

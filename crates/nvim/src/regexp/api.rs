@@ -16,7 +16,7 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 use super::{
     AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg,
@@ -25,7 +25,7 @@ use super::{
 use crate::message::state::called_emsg;
 use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
 use crate::option::vars::{P_RE, p_re, p_verbose};
-use crate::os::cshim::{gettext, gettext_ptr};
+use crate::os::cshim::gettext;
 use crate::regexp::RE_AUTO;
 use crate::regexp::state::reg_do_extmatch;
 use crate::types::{
@@ -53,27 +53,21 @@ pub(crate) fn with_rex<R>(run: impl FnOnce() -> R) -> R {
 ///
 /// Answers null when the pattern does not parse, having reported why;
 /// otherwise the caller owns the program and frees it with [`vim_regfree`].
-///
-/// # Safety
-/// `expr_arg` must be a NUL-terminated pattern, borrowed for the call only.
-pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegProg {
-    // SAFETY: `expr_arg` is the caller's NUL-terminated pattern, and the
-    // engine table's entries are set at compile time.
+pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
     let mut expr = expr_arg;
     regexp_engine.set(p_re() as c_int);
-    if unsafe { cstr::starts_with(expr, b"\\%#=") } {
-        let chosen = unsafe { *expr.offset(4) } as c_int - '0' as c_int;
+    if expr.to_bytes().starts_with(b"\\%#=") {
+        let chosen = c_int::from(expr.to_bytes()[4]) - '0' as c_int;
         if chosen == AUTOMATIC_ENGINE as c_int
             || chosen == BACKTRACKING_ENGINE as c_int
             || chosen == NFA_ENGINE as c_int
         {
             regexp_engine.set(chosen);
-            expr = unsafe { expr.offset(5) };
+            expr = cstr::suffix(expr, 5);
         } else {
-            let fmt = c"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used "
-                .as_ptr();
-            // SAFETY: a static, NUL-terminated message.
-            unsafe { emsg(gettext_ptr(fmt)) };
+            emsg(gettext(
+                c"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used ",
+            ));
             regexp_engine.set(AUTOMATIC_ENGINE as c_int);
         }
     }
@@ -84,6 +78,10 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegP
     unsafe { Rex::acquire() }.set_reg_buf(Buf::current());
 
     let called_emsg_before = called_emsg.get();
+    let text = expr.as_ptr().cast::<uint8_t>().cast_mut();
+    // SAFETY (every call below): the engine table's entries are set at
+    // compile time, and each engine's `regcomp` reads the NUL-terminated
+    // pattern without writing to it.
     let mut prog = if regexp_engine.get() != BACKTRACKING_ENGINE as c_int {
         let auto = if regexp_engine.get() == AUTOMATIC_ENGINE as c_int {
             RE_AUTO
@@ -91,10 +89,10 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegP
             0
         };
         let regcomp = nfa_regengine.regcomp.expect("non-null function pointer");
-        unsafe { regcomp(expr as *mut uint8_t, re_flags + auto) }
+        unsafe { regcomp(text, re_flags + auto) }
     } else {
         let regcomp = bt_regengine.regcomp.expect("non-null function pointer");
-        unsafe { regcomp(expr as *mut uint8_t, re_flags) }
+        unsafe { regcomp(text, re_flags) }
     };
     // Only retry when the NFA engine declined quietly: an error means the
     // pattern is bad, not merely too much for that engine.
@@ -105,14 +103,14 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegP
         regexp_engine.set(BACKTRACKING_ENGINE as c_int);
         if p_verbose() > 0 as OptInt {
             verbose_enter();
-            let note = c"Switching to backtracking RE engine for pattern: ".as_ptr();
-            // SAFETY: the translation of a static message.
-            msg_str(unsafe { gettext_ptr(note) });
-            msg_str(unsafe { cstr::at(expr) });
+            msg_str(gettext(
+                c"Switching to backtracking RE engine for pattern: ",
+            ));
+            msg_str(expr);
             verbose_leave();
         }
         let regcomp = bt_regengine.regcomp.expect("non-null function pointer");
-        prog = unsafe { regcomp(expr as *mut uint8_t, re_flags) };
+        prog = unsafe { regcomp(text, re_flags) };
     }
     if !prog.is_null() {
         unsafe { (*prog).re_engine = regexp_engine.get() as u32 };
@@ -149,7 +147,7 @@ pub unsafe fn vim_regfree(prog: *mut RegProg) {
 unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut RegProg {
     // SAFETY: `prog` is a live NFA program, so it carries a pattern.
     let re_flags = unsafe { (*prog).re_flags } as c_int;
-    let mut pat = XString::from_cstr(unsafe { cstr::at((*(prog as *mut NfaRegProg)).pattern) });
+    let pat = XString::from_cstr(unsafe { cstr::at((*(prog as *mut NfaRegProg)).pattern) });
     let save_p_re = p_re();
     P_RE.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose() > 0 as OptInt {
@@ -165,7 +163,7 @@ unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut Reg
         // to survive the recompile.
         reg_do_extmatch.set(REX_ALL);
     }
-    let new = unsafe { vim_regcomp(pat.as_mut_ptr(), re_flags) };
+    let new = vim_regcomp(pat.as_cstr(), re_flags);
     if extmatch {
         reg_do_extmatch.set(0);
     }

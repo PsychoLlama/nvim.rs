@@ -454,7 +454,7 @@ pub(crate) fn read_pattern(line: &[u8], at: usize, ci: &mut SynPat) -> Option<us
     let pattern = cstr::owned(&tail[1..end]);
     let _cpo = SavedCpo::empty();
     // SAFETY: an owned NUL-terminated copy of the pattern text.
-    ci.sp_prog = unsafe { vim_regcomp(pattern.as_ptr().cast_mut(), RE_MAGIC) };
+    ci.sp_prog = vim_regcomp(unsafe { cstr::at(pattern.as_ptr().cast_mut()) }, RE_MAGIC);
     ci.sp_pattern = Some(pattern);
     if ci.sp_prog.is_null() {
         return None;

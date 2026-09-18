@@ -218,7 +218,7 @@ pub unsafe fn search_regcomp(
 
     unsafe { (*regmatch).rmm_ic = c_int::from(ignorecase(pat)) };
     unsafe { (*regmatch).rmm_maxcol = 0 };
-    unsafe { (*regmatch).regprog = vim_regcomp(pat, if magic { RE_MAGIC } else { 0 }) };
+    unsafe { (*regmatch).regprog = vim_regcomp(cstr::at(pat), if magic { RE_MAGIC } else { 0 }) };
     if unsafe { (*regmatch).regprog.is_null() } {
         Err(Failed)
     } else {

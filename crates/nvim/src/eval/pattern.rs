@@ -32,7 +32,7 @@ pub unsafe fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -
     let _cpo = SavedCpo::empty_under_user_code();
     let mut regmatch = EMPTY_REGMATCH;
     // SAFETY: the caller's promise -- `pat` is NUL-terminated.
-    regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
+    regmatch.regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
     if regmatch.regprog.is_null() {
         return false;
     }
@@ -71,7 +71,7 @@ pub unsafe fn do_string_sub(
     let mut regmatch = EMPTY_REGMATCH;
     regmatch.rm_ic = p_ic();
     // SAFETY: the caller's promise -- `pat` is NUL-terminated.
-    regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
+    regmatch.regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
 
     if !regmatch.regprog.is_null() {
         let mut tail = str;

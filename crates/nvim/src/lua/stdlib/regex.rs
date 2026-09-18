@@ -206,7 +206,7 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
         // vim_regcomp reports a bad pattern by throwing, so it runs bracketed.
         let mut tstate = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
-        let prog = vim_regcomp(text, RE_AUTO | RE_MAGIC | RE_STRICT);
+        let prog = vim_regcomp(cstr::at(text), RE_AUTO | RE_MAGIC | RE_STRICT);
         err.absorb(try_leave(&raw mut tstate));
 
         if err.is_set() {

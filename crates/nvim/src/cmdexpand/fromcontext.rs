@@ -199,7 +199,10 @@ pub(crate) unsafe fn expand_from_context(
 
     let mut regmatch = RegMatch::new(ptr::null_mut(), false);
     if !fuzzy {
-        regmatch.regprog = unsafe { vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 }) };
+        regmatch.regprog = vim_regcomp(
+            unsafe { cstr::at(pat) },
+            if magic_isset() { RE_MAGIC } else { 0 },
+        );
         if regmatch.regprog.is_null() {
             unsafe { xfree(tofree as *mut c_void) };
             return Err(Failed);

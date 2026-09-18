@@ -1,11 +1,11 @@
 count	callee	no_raw	defs	def
 871	xfree	0	1	crates/nvim/src/memory/mod.rs
 738	.add	0	3	
-452	.offset	0	0	
+451	.offset	0	0	
 451	bytes_at	0	1	crates/nvim/src/cstr.rs
 399	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+304	at	0	3	
 282	CStr::from_ptr	0	2	
-271	at	0	3	
 238	.offset_from	0	0	
 186	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
@@ -21,7 +21,7 @@ count	callee	no_raw	defs	def
 86	nlua_pop_string	0	1	crates/nvim/src/lua/converter/pop.rs
 84	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
 83	zeroed	0	0	
-81	starts_with	0	2	
+80	starts_with	0	2	
 79	nlua_pop_handle	0	1	crates/nvim/src/lua/converter/pop.rs
 76	apply_autocmds	0	1	crates/nvim/src/autocmd/fire.rs
 69	prefix_eq	0	1	crates/nvim/src/cstr.rs
@@ -53,7 +53,6 @@ count	callee	no_raw	defs	def
 39	emsg_ptr	0	1	crates/nvim/src/message/errors.rs
 39	tv_copy	0	0	
 38	shada_free_shada_entry	0	1	crates/nvim/src/shada/read.rs
-37	vim_regcomp	0	1	crates/nvim/src/regexp/api.rs
 35	fclose	0	0	
 35	ga_init	0	1	crates/nvim/src/garray.rs
 35	ml_get_buf	0	1	crates/nvim/src/memline/lines.rs
@@ -89,10 +88,10 @@ count	callee	no_raw	defs	def
 25	internal_error	0	1	crates/nvim/src/message/errors.rs
 24	Walk::new	0	2	
 24	at_opt	0	2	
-24	emsg	0	0	
 24	nlua_push_array	0	1	crates/nvim/src/lua/converter/push_object.rs
 23	.copy_from	0	0	
 23	callback_free	0	1	crates/nvim/src/eval/typval/watcher.rs
+23	emsg	0	0	
 23	ml_append	0	1	crates/nvim/src/memline/lines.rs
 23	skiptowhite	0	1	crates/nvim/src/charset/walk.rs
 23	tv_clear	0	0	
@@ -299,7 +298,6 @@ count	callee	no_raw	defs	def
 9	do_put	0	1	crates/nvim/src/register/put/mod.rs
 9	free_register	0	1	crates/nvim/src/register/store.rs
 9	get_unsigned_int	0	1	crates/nvim/src/strings/printf/spec.rs
-9	gettext_ptr	0	1	crates/nvim/src/os/cshim.rs
 9	hash_remove	0	1	crates/nvim/src/hashtab.rs
 9	home_replace_save	0	1	crates/nvim/src/os/env/dirs.rs
 9	iemsg_ptr	0	1	crates/nvim/src/message/errors.rs
@@ -341,6 +339,7 @@ count	callee	no_raw	defs	def
 8	expand_wildcards	0	1	crates/nvim/src/path/expand.rs
 8	find_var	0	1	crates/nvim/src/eval/vars/lookup.rs
 8	get_var_value	0	1	crates/nvim/src/eval/vars/lookup.rs
+8	gettext_ptr	0	1	crates/nvim/src/os/cshim.rs
 8	hash_add_item	0	1	crates/nvim/src/hashtab.rs
 8	hash_hash	0	1	crates/nvim/src/hashtab.rs
 8	hash_lock	0	1	crates/nvim/src/hashtab.rs

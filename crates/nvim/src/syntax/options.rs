@@ -472,7 +472,10 @@ fn parse_id_name(
     name.push(b'$');
     name.push(0);
     let mut regmatch = RegMatch::new(
-        unsafe { vim_regcomp(name.as_ptr() as *const c_char, RE_MAGIC) },
+        vim_regcomp(
+            unsafe { cstr::at(name.as_ptr() as *const c_char) },
+            RE_MAGIC,
+        ),
         true,
     );
     if regmatch.regprog.is_null() {

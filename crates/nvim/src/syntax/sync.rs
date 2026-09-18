@@ -548,7 +548,8 @@ fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, LineContError> 
         block.b_syn_linecont_ic = block.b_syn_ic;
         let _cpo = SavedCpo::empty();
         // SAFETY: `pat` is live across the call, which only reads it.
-        unsafe { block.b_syn_linecont_prog = vim_regcomp(pat.as_ptr().cast_mut(), RE_MAGIC) };
+        block.b_syn_linecont_prog =
+            vim_regcomp(unsafe { cstr::at(pat.as_ptr().cast_mut()) }, RE_MAGIC);
         syn_clear_time(&mut block.b_syn_linecont_time);
 
         if block.b_syn_linecont_prog.is_null() {

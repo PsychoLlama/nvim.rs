@@ -171,13 +171,13 @@ impl Search {
 unsafe fn compile_pattern(spat: *mut c_char) -> *mut RegProg {
     // SAFETY: forwarded from the caller.
     if !spat.is_null() && unsafe { *spat } as c_int != NUL {
-        return unsafe { vim_regcomp(spat, RE_MAGIC) };
+        return vim_regcomp(unsafe { cstr::at(spat) }, RE_MAGIC);
     }
     if last_search_pat().is_null() {
         qf_emsg(e_noprevre.as_ptr());
         return ptr::null_mut();
     }
-    unsafe { vim_regcomp(last_search_pat(), RE_MAGIC) }
+    vim_regcomp(unsafe { cstr::at(last_search_pat()) }, RE_MAGIC)
 }
 
 /// Show which file is being searched, on the command line and without

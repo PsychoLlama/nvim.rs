@@ -219,7 +219,8 @@ pub(super) unsafe fn handle_affix_entry(
         let (out, room) = (buf.as_mut_ptr(), size_of_val(&buf));
         unsafe { snprintf(out, room, pattern.as_ptr(), item_ptr(items[4])) };
         unsafe {
-            (*entry).ae_prog = vim_regcomp(buf.as_mut_ptr(), RE_MAGIC + RE_STRING + RE_STRICT)
+            (*entry).ae_prog =
+                vim_regcomp(cstr::at(buf.as_mut_ptr()), RE_MAGIC + RE_STRING + RE_STRICT)
         };
         if unsafe { (*entry).ae_prog }.is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -286,7 +287,8 @@ pub(super) unsafe fn postpone_prefix(
                         unsafe { snprintf(out, MAXLINELEN as size_t, c"^%s".as_ptr(), cond) };
                         unsafe { vim_regfree((*entry).ae_prog) };
                         unsafe {
-                            (*entry).ae_prog = vim_regcomp(buf.as_mut_ptr(), RE_MAGIC + RE_STRING)
+                            (*entry).ae_prog =
+                                vim_regcomp(cstr::at(buf.as_mut_ptr()), RE_MAGIC + RE_STRING)
                         };
                     }
                 }

@@ -625,7 +625,8 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo) -> Resu
         let pat = string_to_cstr(pattern);
         cmdinfo.cmdmod.cmod_filter_pat = pat;
         // SAFETY: as above.
-        cmdinfo.cmdmod.cmod_filter_regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
+        cmdinfo.cmdmod.cmod_filter_regmatch.regprog =
+            vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC);
     }
     Ok(())
 }

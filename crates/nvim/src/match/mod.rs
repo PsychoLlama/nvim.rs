@@ -133,7 +133,7 @@ unsafe fn match_add(
     }
     let mut regprog: *mut RegProg = ::core::ptr::null_mut();
     if !pat.is_null() {
-        regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
+        regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC);
         if regprog.is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let pat = unsafe { c_str(pat) };

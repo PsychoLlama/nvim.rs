@@ -170,7 +170,10 @@ impl Drop for Patterns {
 /// # Safety
 /// `pat` must be NUL-terminated; `into` must be writable.
 unsafe fn compile(into: &mut RegMatch, pat: *const c_char, ignore_case: bool) -> bool {
-    into.regprog = unsafe { vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 }) };
+    into.regprog = vim_regcomp(
+        unsafe { cstr::at(pat) },
+        if magic_isset() { RE_MAGIC } else { 0 },
+    );
     into.rm_ic = ignore_case;
     !into.regprog.is_null()
 }

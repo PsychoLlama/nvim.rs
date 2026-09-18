@@ -396,7 +396,7 @@ pub unsafe fn autocmd_register(
                 )
             };
             if !reg_pat.is_null() {
-                new_pat.reg_prog = unsafe { vim_regcomp(reg_pat, RE_MAGIC) };
+                new_pat.reg_prog = vim_regcomp(unsafe { cstr::at(reg_pat) }, RE_MAGIC);
             }
             unsafe { xfree(reg_pat.cast::<::core::ffi::c_void>()) };
             if reg_pat.is_null() || new_pat.reg_prog.is_null() {

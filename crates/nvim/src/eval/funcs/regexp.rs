@@ -58,7 +58,7 @@ impl Regprog {
     unsafe fn compile(pat: *const c_char) -> Option<Self> {
         let mut rm = EMPTY_REGMATCH;
         // SAFETY: the caller's obligation.
-        rm.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
+        rm.regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
         if rm.regprog.is_null() {
             return None;
         }

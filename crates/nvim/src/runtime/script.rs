@@ -380,7 +380,7 @@ unsafe fn script_query(
     // SAFETY: the string is allocated for us and handed straight to the caller.
     unsafe { *pat = dict_get_string_alloc((dict).as_ref(), b"name") };
     if !unsafe { *pat }.is_null() {
-        regmatch.regprog = unsafe { vim_regcomp(*pat, RE_MAGIC + RE_STRING) };
+        regmatch.regprog = vim_regcomp(unsafe { cstr::at(*pat) }, RE_MAGIC + RE_STRING);
     }
     if regmatch.regprog.is_null() {
         ScriptQuery::All

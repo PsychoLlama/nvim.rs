@@ -67,14 +67,10 @@ pub(crate) fn list_functions_matching_pat(excmd: &mut ExArg) -> usize {
     let mut at = start + skip_regexp_at(excmd.line.tail(start), b'/' as c_int, 1);
     if !excmd.skip {
         let mut regmatch = REGMATCH_INIT;
-        // Terminate the pattern for `vim_regcomp`, then put the byte back.
-        // The compiler still takes a `char *`; p32-8 gives it the slice.
-        let c = excmd.line.byte_at(at);
-        excmd.line.set_byte(at, 0);
-        let pat = excmd.line.ptr_at(start);
-        // SAFETY: the pattern, terminated in place just above.
-        regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
-        excmd.line.set_byte(at, c);
+        // The compiler reads a C string and the pattern is a span of the
+        // command line, so it is copied rather than terminated in place.
+        let pat = cstr::owned(excmd.line.slice_at(start, at - start));
+        regmatch.regprog = vim_regcomp(&pat, RE_MAGIC);
         if !regmatch.regprog.is_null() {
             regmatch.rm_ic = p_ic();
             list_functions(Some(&mut regmatch));

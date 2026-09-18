@@ -754,7 +754,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     }
     let flp = Buf::current().b_p_flp.value_ptr();
     // SAFETY: 'formatlistpat' is a NUL-terminated option value.
-    let mut regmatch = RegMatch::new(unsafe { vim_regcomp(flp, RE_MAGIC) }, false);
+    let mut regmatch = RegMatch::new(vim_regcomp(unsafe { cstr::at(flp) }, RE_MAGIC), false);
     if !regmatch.regprog.is_null() {
         regmatch.rm_ic = false;
         // The match starts past the comment leader, so its offsets are

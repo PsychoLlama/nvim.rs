@@ -130,7 +130,7 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
     let mut regmatch = RegMatch::new(ptr::null_mut(), false);
 
     let quiet = Suppress::output();
-    regmatch.regprog = unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) };
+    regmatch.regprog = vim_regcomp(unsafe { cstr::at(pat) }, RE_MAGIC + RE_STRING);
     drop(quiet);
 
     if regmatch.regprog.is_null() {
