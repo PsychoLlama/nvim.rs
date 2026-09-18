@@ -103,10 +103,7 @@ const NO_VIEW: FileMarkView = FileMarkView {
 /// `forceit` its `!`, and `verbose` asks for "tag not found" to be
 /// reported.
 ///
-/// # Safety
-/// `tag` must be NUL-terminated, and the editor must be in a state where a
-/// buffer may be entered.
-pub unsafe fn do_tag(tag: *mut c_char, kind: c_int, count: c_int, forceit: c_int, verbose: bool) {
+pub fn do_tag(tag: &CStr, kind: c_int, count: c_int, forceit: c_int, verbose: bool) {
     // SAFETY: the caller's promise; the globals are live.
     if tfu_in_use.get() {
         // The stack is what `'tagfunc'` is being asked to describe.
@@ -117,7 +114,7 @@ pub unsafe fn do_tag(tag: *mut c_char, kind: c_int, count: c_int, forceit: c_int
         return;
     }
 
-    let mut cmd = unsafe { DoTag::new(tag, kind, count, forceit, verbose) };
+    let mut cmd = unsafe { DoTag::new(tag.as_ptr().cast_mut(), kind, count, forceit, verbose) };
     if cmd.prepare() {
         cmd.set_priority_buffer();
         cmd.run();

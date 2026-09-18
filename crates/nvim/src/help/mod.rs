@@ -224,7 +224,8 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
         // and `do_tag` needs it to open folds under the cursor.
         KeyTyped.set(old_key_typed);
 
-        unsafe { do_tag(tag, DT_HELP as c_int, 1, 0, true) };
+        // SAFETY: `tag` is the owned NUL-terminated name.
+        do_tag(unsafe { cstr::at(tag) }, DT_HELP as c_int, 1, 0, true);
 
         // Delete the empty buffer if we are not using it. Careful:
         // autocommands may have jumped to another window, so check that

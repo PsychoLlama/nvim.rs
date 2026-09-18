@@ -801,14 +801,11 @@ unsafe fn goto_match(
 /// from, `forceit` always switches to the file found, and `silent`
 /// suppresses the messages for `ACTION_EXPAND`.
 ///
-/// # Safety
-/// `pattern` must point at `len` readable bytes, or be null when `kind` is
-/// `CHECK_PATH`.
+/// `pattern` is empty when `kind` is `CHECK_PATH`.
 #[allow(clippy::too_many_arguments)]
-pub unsafe fn find_pattern_in_path(
-    pattern: *mut c_char,
+pub fn find_pattern_in_path(
+    pattern: &[u8],
     dir: Direction,
-    len: size_t,
     whole: bool,
     skip_comments: bool,
     kind: c_int,
@@ -822,7 +819,10 @@ pub unsafe fn find_pattern_in_path(
     let mut dir = dir;
     let mut count = count;
     let tagpreview = g_do_tagpreview.get();
-    let found = unsafe { compile_patterns(pattern, len, whole, kind) };
+    // SAFETY: the caller's pattern, `pattern.len()` bytes of it, which the
+    // compiler only reads.
+    let pat = pattern.as_ptr().cast::<c_char>().cast_mut();
+    let found = unsafe { compile_patterns(pat, pattern.len(), whole, kind) };
     let Some(mut pats) = found else {
         return;
     };
@@ -861,8 +861,8 @@ pub unsafe fn find_pattern_in_path(
                     walk.line,
                     &mut pats,
                     from,
-                    pattern,
-                    len,
+                    pat,
+                    pattern.len(),
                     whole,
                     skip_comments,
                 )

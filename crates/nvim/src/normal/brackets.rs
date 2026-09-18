@@ -4,6 +4,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::keycodes::Key;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
@@ -232,11 +233,10 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     let (dir, n) = (kDirectionNotSet, cmd_arg.count1);
     let last = MAXLNUM;
     // SAFETY: `name` is the NUL-terminated identifier copied above.
-    unsafe {
-        find_pattern_in_path(
-            name, dir, len, true, fold_case, what, n, action, from, last, false, false,
-        )
-    };
+    let pat = unsafe { cstr::slice_at(name, len) };
+    find_pattern_in_path(
+        pat, dir, true, fold_case, what, n, action, from, last, false, false,
+    );
     unsafe { xfree(name as *mut c_void) };
     Win::current().w_set_curswant = true;
 }

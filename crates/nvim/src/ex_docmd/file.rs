@@ -545,26 +545,23 @@ pub(crate) fn ex_rundo(excmd: &mut ExArg) {
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
 pub(crate) fn ex_checkpath(excmd: &mut ExArg) {
-    unsafe {
-        find_pattern_in_path(
-            ptr::null_mut(),
-            kDirectionNotSet,
-            0 as size_t,
-            false,
-            false,
-            CHECK_PATH as c_int,
-            1,
-            if excmd.forceit {
-                ACTION_SHOW_ALL as c_int
-            } else {
-                ACTION_SHOW as c_int
-            },
-            1,
-            MAXLNUM,
-            excmd.forceit,
-            false,
-        )
-    };
+    find_pattern_in_path(
+        b"",
+        kDirectionNotSet,
+        false,
+        false,
+        CHECK_PATH as c_int,
+        1,
+        if excmd.forceit {
+            ACTION_SHOW_ALL as c_int
+        } else {
+            ACTION_SHOW as c_int
+        },
+        1,
+        MAXLNUM,
+        excmd.forceit,
+        false,
+    );
 }
 
 /// `:rshada`, `:wshada` and their `viminfo` spellings.

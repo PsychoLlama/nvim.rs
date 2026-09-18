@@ -490,9 +490,7 @@ pub(crate) fn nv_tagpop(cmd_arg: &mut CmdArg) {
     if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    let none = c"".as_ptr() as *mut c_char;
-    // SAFETY: `cmd_arg` is live and `none` is an empty NUL-terminated literal.
-    unsafe { do_tag(none, DT_POP as c_int, cmd_arg.count1, 0, true) };
+    do_tag(c"", DT_POP as c_int, cmd_arg.count1, 0, true);
 }
 
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.

@@ -768,23 +768,21 @@ fn dup_bytes(src: *mut c_char, len: size_t) -> *mut c_char {
 fn search_path(pat: *mut c_char, len: size_t, kind: c_int, skip_comments: bool, prenum1: c_int) {
     let (first, last) = (1 as LineNr, MAXLNUM);
     let action = ACTION_SPLIT as c_int;
-    // SAFETY: a NUL-terminated pattern of `len` bytes.
-    unsafe {
-        find_pattern_in_path(
-            pat,
-            kDirectionNotSet,
-            len,
-            true,
-            skip_comments,
-            kind,
-            prenum1,
-            action,
-            first,
-            last,
-            false,
-            false,
-        )
-    };
+    // SAFETY: a pattern of `len` readable bytes.
+    let pat = unsafe { cstr::slice_at(pat, len) };
+    find_pattern_in_path(
+        pat,
+        kDirectionNotSet,
+        true,
+        skip_comments,
+        kind,
+        prenum1,
+        action,
+        first,
+        last,
+        false,
+        false,
+    );
 }
 
 /// Open the quickfix entry under the cursor in a new split.

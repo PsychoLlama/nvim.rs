@@ -356,11 +356,10 @@ pub(crate) fn get_next_include_file_completion(compl_type: c_int) {
     let auto = compl_autocomplete.get();
     // SAFETY: `pat` is `len` readable bytes of the running completion's
     // pattern, and the search runs over the current buffer's include path.
-    unsafe {
+    let pat = unsafe { cstr::slice_at(pat, len) };
+    {
         let action = ACTION_EXPAND;
-        find_pattern_in_path(
-            pat, dir, len, false, false, what, 1, action, 1, end, false, auto,
-        )
+        find_pattern_in_path(pat, dir, false, false, what, 1, action, 1, end, false, auto)
     };
 }
 
