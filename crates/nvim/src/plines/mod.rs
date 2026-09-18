@@ -199,7 +199,7 @@ unsafe fn win_linetabsize_col(
 /// Cells line `lnum` takes in `window`, counting inline virtual text but not the
 /// 'listchars' "eol".
 pub(crate) fn linetabsize(window: Win, lnum: LineNr) -> c_int {
-    let line = window.buffer().line(lnum);
+    let line = window.buffer().line_raw(lnum);
     // SAFETY: as above.
     unsafe { win_linetabsize(window, lnum, line.raw(), MAXCOL) }
 }

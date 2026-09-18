@@ -500,13 +500,13 @@ pub fn get_region_bytecount(
     }
 
     // The rest of the first line, its break included.
-    let first_len = buffer.line_len(start_lnum);
+    let first_len = buffer.line_len_raw(start_lnum);
     let mut bytes = (first_len - start_col + 1) as BCount;
     for i in 1..=end_lnum - start_lnum - 1 {
         if start_lnum + i > max_lnum {
             return bytes;
         }
-        bytes += (buffer.line_len(start_lnum + i) + 1) as BCount;
+        bytes += (buffer.line_len_raw(start_lnum + i) + 1) as BCount;
     }
     if end_lnum > max_lnum {
         return bytes;

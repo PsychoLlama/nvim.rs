@@ -308,7 +308,10 @@ fn with_line<R>(lnum: LineNr, f: impl FnOnce(&[u8]) -> R) -> R {
     // line of `ml_get_buf_len` bytes, so one byte more is still in bounds.
     let line = unsafe {
         let buf = Buf::current();
-        slice::from_raw_parts(buf.line(lnum).raw().cast(), buf.line_len(lnum) as usize + 1)
+        slice::from_raw_parts(
+            buf.line_raw(lnum).raw().cast(),
+            buf.line_len_raw(lnum) as usize + 1,
+        )
     };
     f(line)
 }
@@ -436,7 +439,7 @@ fn mouse_tab_close(c1: c_int) {
 /// Length of line `lnum` in screen cells, for horizontal scrolling.  The last
 /// character is deliberately not counted.
 fn scroll_line_len(win: Win, lnum: LineNr) -> ColNr {
-    let mut p = win.buffer().line(lnum).raw();
+    let mut p = win.buffer().line_raw(lnum).raw();
     let mut col: ColNr = 0;
     while unsafe { *p } != NUL as c_char {
         let numchar = unsafe { win_chartabsize(win, p, col) };

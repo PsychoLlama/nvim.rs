@@ -613,7 +613,13 @@ fn clamp(
     strict: bool,
     ephemeral: bool,
 ) -> Result<Range, Error> {
-    let line_len = |at: LineNr| -> ColNr { if ephemeral { MAXCOL } else { b.line_len(at) } };
+    let line_len = |at: LineNr| -> ColNr {
+        if ephemeral {
+            MAXCOL
+        } else {
+            b.line_len_raw(at)
+        }
+    };
     if line < 0 {
         return Err(err_out_of_range(c"line"));
     }

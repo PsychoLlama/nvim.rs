@@ -224,7 +224,7 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
 /// being zero.  Answers the byte index and the columns left over inside the
 /// character it landed in.
 pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr) {
-    let line = win.buffer().line(lnum);
+    let line = win.buffer().line_raw(lnum);
     let mut csarg = CharsizeArg::default();
     // SAFETY: a live window and a NUL-terminated line of its buffer.
     let cstype = unsafe { init_charsize_arg(&mut csarg, win, lnum, line.raw()) };

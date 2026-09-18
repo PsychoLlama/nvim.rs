@@ -250,7 +250,7 @@ pub fn coladvance(win: Win, wcol: ColNr) -> bool {
         win.invalidate_virtcol();
     // SAFETY: the cursor's line, and a column `coladvance2` just clamped to
     // it.
-    } else if unsafe { win.buffer().line(cursor.lnum()).byte(cursor.col()) } as c_int != TAB {
+    } else if unsafe { win.buffer().line_raw(cursor.lnum()).byte(cursor.col()) } as c_int != TAB {
         // The current window, not `win` — which is what the C does.
         Win::current().note_virtcol(wcol);
     }
@@ -277,8 +277,8 @@ fn coladvance2(win: Win, pos: PosRef, addspaces: bool, finetune: bool, wcol_arg:
         || (visual_active() && !selection_is_old())
         || (win.ve_flags() & kOptVeFlagOnemore != 0 && wcol < MAXCOL);
     let buf = win.buffer();
-    let line = buf.line(pos.lnum());
-    let linelen = buf.line_len(pos.lnum());
+    let line = buf.line_raw(pos.lnum());
+    let linelen = buf.line_len_raw(pos.lnum());
 
     let mut idx;
     let mut col: ColNr = 0;
@@ -444,7 +444,7 @@ pub fn get_cursor_rel_lnum(win: Win, lnum: LineNr) -> LineNr {
 pub fn check_pos(buffer: Buf, pos: &mut Pos) {
     pos.lnum = pos.lnum.min(buffer.line_count());
     if pos.col > 0 {
-        pos.col = pos.col.min(buffer.line_len(pos.lnum));
+        pos.col = pos.col.min(buffer.line_len_raw(pos.lnum));
     }
 }
 
@@ -473,7 +473,7 @@ pub fn check_cursor_col(win: Win) {
     let oldcol = cursor.col();
     let oldcoladd = cursor.col() + cursor.coladd();
     let cur_ve_flags = win.ve_flags();
-    let len = buf.line_len(cursor.lnum());
+    let len = buf.line_len_raw(cursor.lnum());
 
     let (col, snap) = checked_col(oldcol, len, || {
         State.get() & MODE_INSERT != 0
@@ -618,7 +618,7 @@ pub fn pchar_cursor(c: c_char) {
     let cursor = Win::current().cursor();
     unsafe {
         *Buf::current()
-            .line_mut(cursor.lnum())
+            .line_mut_raw(cursor.lnum())
             .raw()
             .offset(cursor.col() as isize) = c;
     }
@@ -630,7 +630,9 @@ pub fn pchar_cursor(c: c_char) {
 /// `Win::current()`/`Buf::current()` carry. The answer is a raw pointer;
 /// reading through it is still the caller's business.
 pub fn get_cursor_line_ptr() -> *mut c_char {
-    Buf::current().line(Win::current().cursor().lnum()).raw()
+    Buf::current()
+        .line_raw(Win::current().cursor().lnum())
+        .raw()
 }
 
 /// The cursor's line, from the cursor onwards.
@@ -640,7 +642,7 @@ pub fn get_cursor_pos_ptr() -> *mut c_char {
     let cursor = Win::current().cursor();
     unsafe {
         Buf::current()
-            .line(cursor.lnum())
+            .line_raw(cursor.lnum())
             .raw()
             .offset(cursor.col() as isize)
     }
@@ -650,7 +652,7 @@ pub fn get_cursor_pos_ptr() -> *mut c_char {
 ///
 /// Safe: as [`get_cursor_line_ptr`].
 pub fn get_cursor_line_len() -> ColNr {
-    Buf::current().line_len(Win::current().cursor().lnum())
+    Buf::current().line_len_raw(Win::current().cursor().lnum())
 }
 
 /// The number of bytes from the cursor to the end of its line.
@@ -658,5 +660,5 @@ pub fn get_cursor_line_len() -> ColNr {
 /// Safe: as [`get_cursor_line_ptr`].
 pub fn get_cursor_pos_len() -> ColNr {
     let cursor = Win::current().cursor();
-    Buf::current().line_len(cursor.lnum()) - cursor.col()
+    Buf::current().line_len_raw(cursor.lnum()) - cursor.col()
 }

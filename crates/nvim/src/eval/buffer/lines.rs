@@ -167,8 +167,12 @@ fn get_buffer_lines(
     let buffer = buffer.expect("the early return covers an absent buffer");
     if !retlist {
         let len = |n| size_t::try_from(n).expect("a line length is not negative");
-        let line = (start >= 1 && start <= buffer.line_count())
-            .then(|| unsafe { xstrnsave(buffer.line(start).raw(), len(buffer.line_len(start))) });
+        let line = (start >= 1 && start <= buffer.line_count()).then(|| unsafe {
+            xstrnsave(
+                buffer.line_raw(start).raw(),
+                len(buffer.line_len_raw(start)),
+            )
+        });
         ret.write_string(line.unwrap_or(ptr::null_mut()));
         return;
     }
@@ -176,7 +180,10 @@ fn get_buffer_lines(
     end = end.min(buffer.line_count());
     let list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
     for lnum in start..=end {
-        let (text, len) = (buffer.line(lnum).raw(), buffer.line_len(lnum) as ssize_t);
+        let (text, len) = (
+            buffer.line_raw(lnum).raw(),
+            buffer.line_len_raw(lnum) as ssize_t,
+        );
         unsafe { (*list).push_string(text, len) };
     }
 }

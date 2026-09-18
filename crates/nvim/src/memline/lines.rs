@@ -28,9 +28,13 @@
 //! # The pointer forms that stay
 //!
 //! Four of upstream's `ml_get*` spellings are left, and the ratchet's
-//! `ml_get_raw` needle counts every call to one. This is what each is for;
-//! anything not on this list has been deleted (`ml_get_pos`,
-//! `ml_get_pos_len`, and `ml_get_cursor`, which never had a caller here).
+//! `ml_get_raw` needle counts every call to one -- *including* the calls
+//! spelled through an alias: [`Buf::line_raw`], [`Buf::line_mut_raw`],
+//! [`Buf::line_len_raw`] and `cursor`'s four `get_cursor_{line,pos}_{ptr,len}`
+//! accessors are the same read with a shorter name, and the needle sees them
+//! by name. This is what each form is for; anything not on this list has been
+//! deleted (`ml_get_pos`, `ml_get_pos_len`, and `ml_get_cursor`, which never
+//! had a caller here).
 //!
 //! | form | why it stays |
 //! | --- | --- |
@@ -38,7 +42,7 @@
 //!   [`Lines::line`] is written on top of it. Nothing under it can answer a
 //!   slice, because the length is not known until the block is locked. |
 //! | [`ml_get_buf_mut`] | the same read, marking the line dirty.
-//!   [`Lines::line_mut`] and [`Buf::line_mut`] are written on top of it, and
+//!   [`Lines::line_mut`] and [`Buf::line_mut_raw`] are written on top of it, and
 //!   the read also books the old text as deleted — so a caller that wants
 //!   only the bytes must *not* reach for it. |
 //! | [`ml_get_buf_len`] | a line's length without a slice to measure. It

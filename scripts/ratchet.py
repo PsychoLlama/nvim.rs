@@ -697,7 +697,8 @@ plus these whole-tree metrics, which are not per-file:
                         (`ml_get*`), a multibyte cursor (`utf_ptr2*`, pointer
                         forms only — the `_len` variants are the safe bodies
                         and are deliberately not matched), a message
-                        (`msg_puts*`/`msg_outtrans*`), and `bytes_at`. Each
+                        (the `msg_*` entry points that still take a
+                        `*const c_char`), and `bytes_at`. Each
                         has a documented FFI floor rather than a zero. Phase
                         29.
                       vval_raw · typval_raw_params  the C value model: reads
@@ -1299,14 +1300,30 @@ API_DIR = "crates/nvim/src/api/"
 # Counted over every masked file, tree-wide.
 INSTRUMENTS = {
     # `ml_get_buf_len(` is the same needle as `ml_get_buf(` with the `_len`
-    # branch taken; both are pointer forms and both retire together.
-    "ml_get_raw": re.compile(r"\bml_get(?:_buf)?(?:_len)?\(|\bml_get_(?:pos|cursor)\("),
+    # branch taken; both are pointer forms and both retire together. The
+    # `_raw`/`_ptr` spellings are the *aliases*: `Buf::line_raw`,
+    # `Buf::line_len_raw` and the four `get_cursor_*` accessors are thin
+    # wrappers over `ml_get_buf*` that a caller reaches for instead of the
+    # free function, so a needle blind to them books a rename as progress
+    # (p31-e). They carry the pointer form's contract; they count as it.
+    "ml_get_raw": re.compile(
+        r"\bml_get(?:_buf)?(?:_len)?\(|\bml_get_(?:pos|cursor)\("
+        r"|\bline(?:_mut|_len)?_raw\("
+        r"|\bget_cursor_(?:line|pos)_(?:ptr|len)\("
+    ),
     # The `(` is what keeps the *pointer* forms apart from the `_len` ones
     # that take a slice's length and are the safe bodies underneath them:
     # `utfc_ptr2len(` matches, `utfc_ptr2len_len(` does not.
     "mbyte_raw": re.compile(r"\butfc?_ptr2(?:char|len|cells)\("),
+    # Upstream's `msg_puts`/`msg_outtrans` family is gone: what took their
+    # place is `msg_str`/`msg_bytes`/`msg_display*`, which take `&CStr` and
+    # `&[u8]`. Spelling the old names kept the number at a flattering zero
+    # while eight pointer forms were still in the tree, so the needle names
+    # the ones that *exist* -- every message entry point whose text (or, for
+    # `msg_multihl`, whose kind) still arrives as a raw C string.
     "msg_raw": re.compile(
-        r"\bmsg_(?:puts|puts_hl|puts_title|puts_len|outtrans|outtrans_len)\("
+        r"\bmsg_(?:ptr|keep|trunc|may_trunc|strtrunc|prt_line|progress"
+        r"|multihl|ext_set_kind)\("
     ),
     "bytes_at": re.compile(r"\bbytes_at\("),
     "vval_raw": re.compile(r"\.vval\."),
@@ -4141,11 +4158,13 @@ SELF_TEST_INSTRUMENTS = [
             "    utf_ptr2char(p);\n    utfc_ptr2len(p);\n"
             "    utfc_ptr2len_len(s, n);\n    utf_ptr2char_info(p);\n"
             "    ml_get(lnum);\n    ml_get_buf_len(buf, lnum);\n"
-            "    msg_puts(s);\n    msg_puts_hl(s, hl, false);\n"
-            "    msg_puts_bytes(s);\n"
+            "    buf.line_raw(lnum);\n    buf.line_len_raw(lnum);\n"
+            "    get_cursor_pos_ptr();\n    buf.lines().line(lnum);\n"
+            "    msg_keep(s, hl, false, false);\n    msg_ext_set_kind(k);\n"
+            "    msg_str(s);\n    msg_bytes(b, hl, false);\n"
             "}\n",
         },
-        {"mbyte_raw": 2, "ml_get_raw": 2, "msg_raw": 2},
+        {"mbyte_raw": 2, "ml_get_raw": 5, "msg_raw": 2},
     ),
     # A char-literal cast counts; the same text in a comment or a string does
     # not, and neither does an ordinary `as c_int` on a name.

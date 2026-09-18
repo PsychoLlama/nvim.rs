@@ -679,20 +679,34 @@ impl Buf {
         crate::memline::Lines::in_buffer(self)
     }
 
+    /// Line `lnum` as a raw pointer -- [`ml_get_buf`] spelled as a method.
+    ///
+    /// The `_raw` in the name is not decoration: this is the pointer form of
+    /// the memline read, it carries the pointer form's whole contract (the
+    /// answer is invalidated by the next memline call), and the `ml_get_raw`
+    /// needle in `scripts/ratchet.py` matches the name so that the debt is
+    /// counted where it is *spent*. Reading text is [`Buf::lines`].
     #[inline(always)]
-    pub fn line(self, lnum: LineNr) -> Line {
+    pub fn line_raw(self, lnum: LineNr) -> Line {
         Line(unsafe { ml_get_buf(self, lnum) })
     }
 
-    /// [`Buf::line`], marking the line dirty so the caller may write to it.
+    /// [`Buf::line_raw`], marking the line dirty so the caller may write to
+    /// it.
     #[inline(always)]
-    pub fn line_mut(self, lnum: LineNr) -> Line {
+    pub fn line_mut_raw(self, lnum: LineNr) -> Line {
         Line(unsafe { ml_get_buf_mut(self, lnum) })
     }
 
     /// Bytes in line `lnum`, the terminating NUL excluded.
+    ///
+    /// Named `_raw` for the same reason as [`Buf::line_raw`]: `ml_get_buf_len`
+    /// walks the block tree exactly as `ml_get_buf` does, so a caller pairing
+    /// the two walks it twice, and the needle has to see both halves of that
+    /// pair. [`Lines::line_len`](crate::memline::Lines::line_len) measures the
+    /// slice it already holds.
     #[inline(always)]
-    pub fn line_len(self, lnum: LineNr) -> ColNr {
+    pub fn line_len_raw(self, lnum: LineNr) -> ColNr {
         ml_get_buf_len(self, lnum)
     }
 
