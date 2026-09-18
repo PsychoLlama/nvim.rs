@@ -60,7 +60,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         }
     }
 
-    if c_int::from(unsafe { *excmd.arg_ptr() }) != NUL {
+    if c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL {
         set_option_direct(
             kOptErrorfile,
             // SAFETY: the command line's own NUL-terminated argument,
@@ -139,7 +139,7 @@ fn cbuffer_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
     // SAFETY: the caller's promise -- a live `ExArg`.
     // SAFETY: forwarded from the caller.
-    let buf = if c_int::from(unsafe { *excmd.arg_ptr() }) == NUL {
+    let buf = if c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL {
         Buf::current_raw()
     } else if c_int::from(unsafe { *skipwhite(skipdigits(excmd.arg_ptr())) }) == NUL {
         find_buf(unsafe { atoi(excmd.arg_ptr()) }).map_or(ptr::null_mut(), |b| b.raw())

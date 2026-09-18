@@ -636,12 +636,8 @@ fn apply_argopt(excmd: &mut ExArg) -> Result<(), Error> {
         return Ok(());
     }
     loop {
-        // SAFETY: caller contract; `getargopt` only ever advances `excmd.arg`
-        // within the same line, so the two bytes stay readable.
-        let opt = unsafe {
-            *excmd.arg_ptr() as c_int == '+' as c_int
-                && *excmd.arg_ptr().add(1) as c_int == '+' as c_int
-        };
+        let opt = excmd.line.byte_at(excmd.line.arg) == b'+'
+            && excmd.line.byte_at(excmd.line.arg + 1) == b'+';
         if !opt {
             return Ok(());
         }

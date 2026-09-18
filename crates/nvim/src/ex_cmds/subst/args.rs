@@ -93,7 +93,7 @@ fn read_pattern(args: &mut ExArg, cmdpreview_ns: c_int, keeppatterns: bool) -> O
     // as a separator.
     // SAFETY: the argument is NUL-terminated.
     let fresh = unsafe {
-        *args.cmd_ptr() as u8 == b's'
+        args.line.byte_at(args.line.cmd) == b's'
             && *cmd as c_int != NUL
             && !ascii_iswhite(*cmd as c_int)
             && !has_char(c"0123456789cegriIp|\"", *cmd as u8 as c_int)

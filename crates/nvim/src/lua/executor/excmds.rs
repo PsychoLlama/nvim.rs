@@ -49,7 +49,7 @@ const STDIN_CHUNK: size_t = 64;
 /// `:lua {chunk}`, `:lua ={expr}` and `:={expr}`.
 pub fn ex_lua(excmd: &mut ExArg) {
     unsafe {
-        if *excmd.arg_ptr() == 0 {
+        if excmd.line.byte_at(excmd.line.arg) == 0 {
             // `:{range}lua` with no body sources the range as Lua.
             if excmd.addr_count > 0 {
                 cmd_source_buffer(excmd, true);

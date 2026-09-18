@@ -380,7 +380,7 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
 /// `:loadview [nr]`.
 pub(crate) fn ex_loadview(excmd: &mut ExArg) {
     // SAFETY: caller contract; `fname` is owned and NUL-terminated.
-    let fname = unsafe { get_view_file(*excmd.arg_ptr()) };
+    let fname = unsafe { get_view_file(excmd.line.byte_at(excmd.line.arg).cast_signed()) };
     if fname.is_null() {
         return;
     }

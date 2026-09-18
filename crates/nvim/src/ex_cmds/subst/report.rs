@@ -358,7 +358,7 @@ pub fn ex_substitute_preview(
 ) -> c_int {
     // Only preview once the pattern delimiter has been typed.
     // SAFETY: the argument is NUL-terminated.
-    let first = unsafe { *excmd.arg_ptr() } as u8;
+    let first = excmd.line.byte_at(excmd.line.arg);
     if first == 0 || first.is_ascii_alphabetic() || ascii_isdigit(first as c_int) {
         return 0 as c_int;
     }

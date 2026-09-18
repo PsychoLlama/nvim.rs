@@ -152,7 +152,7 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
 /// `:file[!] [fname]`.
 pub fn ex_file(excmd: &mut ExArg) {
     // SAFETY: `args.arg` is the command's NUL-terminated argument.
-    let no_arg = unsafe { *excmd.arg_ptr() } as c_int == NUL;
+    let no_arg = c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL;
 
     // ":0file" removes the file name.  Check for illegal uses ":3file",
     // "0file name", etc.
@@ -575,7 +575,7 @@ fn swap_dir() -> Vec<u8> {
 pub fn ex_wnext(excmd: &mut ExArg) {
     let step = excmd.line2 as c_int;
     // SAFETY: the command name is at least two bytes long.
-    let forwards = unsafe { *excmd.cmd_ptr().add(1) } as c_int == 'n' as c_int;
+    let forwards = c_int::from(excmd.line.byte_at(excmd.line.cmd + 1)) == 'n' as c_int;
     let i = if forwards {
         Win::current().w_arg_idx + step
     } else {

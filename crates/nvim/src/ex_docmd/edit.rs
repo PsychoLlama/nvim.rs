@@ -574,7 +574,7 @@ pub(crate) fn ex_mark(excmd: &mut ExArg) {
     let pos = Win::current().w_cursor;
     Win::current().w_cursor.lnum = excmd.line2;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    if unsafe { setmark(*excmd.arg_ptr() as c_int) }.is_err() {
+    if setmark(c_int::from(excmd.line.byte_at(excmd.line.arg))).is_err() {
         emsg(gettext(
             c"E191: Argument must be a letter or forward/backward quote".as_ptr(),
         ));

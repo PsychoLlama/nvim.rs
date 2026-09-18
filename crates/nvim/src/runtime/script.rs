@@ -25,7 +25,7 @@ use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::ex_eval::CsFlags;
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL, NUL};
+use crate::types::{CpoFlag, IOSIZE, ListRef, MAXPATHL};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -106,7 +106,10 @@ pub fn find_script_by_name(name: &CStr) -> c_int {
 /// `":scriptnames"`, and `":script {id}"` which edits the script instead.
 pub fn ex_scriptnames(excmd: &mut ExArg) {
     // SAFETY: `excmd` is the command's own argument block.
-    let (by_number, has_arg) = unsafe { (excmd.addr_count > 0, *excmd.arg_ptr() != NUL as c_char) };
+    let (by_number, has_arg) = (
+        excmd.addr_count > 0,
+        excmd.line.byte_at(excmd.line.arg) != 0,
+    );
     if by_number || has_arg {
         // SAFETY: same block; `edit_script` only reads it and `do_exedit`.
         edit_script(excmd, by_number);
@@ -772,7 +775,7 @@ pub fn ex_scriptencoding(excmd: &mut ExArg) {
         ));
         return;
     }
-    let name = if unsafe { *excmd.arg_ptr() } != NUL as c_char {
+    let name = if excmd.line.byte_at(excmd.line.arg) != 0 {
         unsafe { enc_canonize(excmd.arg_ptr()) }
     } else {
         excmd.arg_ptr()

@@ -141,7 +141,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
         return;
     }
     // SAFETY: the command's argument is NUL-terminated.
-    if ui_has(kUIMessages) && ends_args(unsafe { *excmd.arg_ptr() }) {
+    if ui_has(kUIMessages) && ends_args(excmd.line.byte_at(excmd.line.arg).cast_signed()) {
         // A bare `:echo` still has to produce an (empty) message.
         msg_bytes(b"", 0, false);
     } else if need_clear {

@@ -81,7 +81,7 @@ use crate::semsg;
 use crate::startup::exiting;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, NUL, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
+    CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, VarNumber, Vv, ptrdiff_t, size_t, ssize_t,
     uint64_t,
 };
 use crate::undo::buf_is_changed;
@@ -661,7 +661,7 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
 
     // SAFETY: module contract; `args.arg` is NUL-terminated.
-    if unsafe { *excmd.arg_ptr() } == NUL as c_char {
+    if excmd.line.byte_at(excmd.line.arg) == 0 {
         // List all compiler scripts.
         let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr()) };
         let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr()) };

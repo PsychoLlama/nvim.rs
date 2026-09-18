@@ -41,7 +41,7 @@ pub fn ex_args(excmd: &mut ExArg) {
     // ":args file ..": define a new argument list, handled like ":next".
     // Also for ":arglocal file .." and ":argglobal file ..".
     // SAFETY: an ex-command argument is NUL-terminated.
-    if unsafe { *excmd.arg_ptr() } as c_int != NUL {
+    if c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL {
         if arglist_is_locked() {
             return;
         }
@@ -181,7 +181,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     // SAFETY: caller contract.
     // SAFETY: `cmd` points at the command's own text, which is not empty.
-    let is_split_cmd = unsafe { *excmd.cmd_ptr() } as c_int == 's' as c_int;
+    let is_split_cmd = c_int::from(excmd.line.byte_at(excmd.line.cmd)) == 's' as c_int;
     let forceit = excmd.forceit;
     let cmdidx = excmd.cmdidx;
     let old_arg_idx = cur_arg_idx();
@@ -249,7 +249,7 @@ pub fn ex_next(excmd: &mut ExArg) {
     let forceit = excmd.forceit;
     let is_snext = excmd.cmdidx == CmdIdx::snext;
     // SAFETY: `arg` points at the command's own text.
-    let has_arg = unsafe { *excmd.arg_ptr() } as c_int != NUL;
+    let has_arg = c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL;
     // Check for a changed buffer now: if this fails the argument list is not
     // redefined.
     // SAFETY: curbuf is valid; `check_changed` only reads it and may prompt.
@@ -360,7 +360,7 @@ pub fn ex_argdelete(excmd: &mut ExArg) {
         return;
     }
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let by_range = unsafe { excmd.addr_count > 0 || *excmd.arg_ptr() as c_int == NUL };
+    let by_range = excmd.addr_count > 0 || excmd.line.byte_at(excmd.line.arg) == 0;
     // SAFETY: caller contract.
     if by_range {
         delete_arg_range(excmd);
@@ -375,7 +375,7 @@ pub fn ex_argdelete(excmd: &mut ExArg) {
 fn delete_arg_range(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
     // SAFETY: caller contract; the argument is NUL-terminated.
-    let (addr_count, has_arg) = unsafe { (excmd.addr_count, *excmd.arg_ptr() as c_int != NUL) };
+    let (addr_count, has_arg) = (excmd.addr_count, excmd.line.byte_at(excmd.line.arg) != 0);
     if addr_count == 0 {
         // ":argdel" works like ":.argdel".
         if cur_arg_idx() >= argcount() {

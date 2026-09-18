@@ -99,7 +99,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     let cmdidx = excmd.cmdidx;
     let mut idx_other = 0;
     // SAFETY: the command's own NUL-terminated argument.
-    if unsafe { *excmd.arg_ptr() } as c_int == NUL {
+    if c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL {
         // No argument: the other side is the one other buffer in the diff,
         // and it is an error if there are two of them to choose from.
         let mut found_not_ma = false;
@@ -144,7 +144,8 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         let mut digits = 0;
         // SAFETY: the walk stops at `p`, which is inside the argument.
         while unsafe {
-            ascii_isdigit(*excmd.arg_ptr().add(digits) as c_int) && excmd.arg_ptr().add(digits) < p
+            ascii_isdigit(c_int::from(excmd.line.byte_at(excmd.line.arg + digits)))
+                && excmd.arg_ptr().add(digits) < p
         } {
             digits += 1;
         }

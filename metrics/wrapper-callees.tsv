@@ -3534,7 +3534,6 @@ count	callee	no_raw	defs	def
 1	set_whole_var	0	1	crates/nvim/src/eval/lval/assign.rs
 1	set_window_layout	0	1	crates/nvim/src/startup/args.rs
 1	setbuf	0	0	
-1	setmark	0	0	
 1	setpenattr	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	settermprop	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	setxattr	0	0	

@@ -314,7 +314,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
         msg_hist_clear(keep);
         return;
     }
-    if unsafe { *excmd.arg_ptr() } != 0 {
+    if excmd.line.byte_at(excmd.line.arg) != 0 {
         emsg(gettext(e_invarg));
         return;
     }

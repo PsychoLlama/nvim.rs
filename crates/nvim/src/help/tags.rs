@@ -55,7 +55,7 @@ pub(crate) fn ex_helptags(excmd: &mut ExArg) {
     let mut add_help_tags = false;
     // SAFETY: caller contract.
     if unsafe { cstr::starts_with(excmd.arg_ptr(), b"++t") }
-        && ascii_iswhite(unsafe { *excmd.arg_ptr().offset(3) } as c_int)
+        && ascii_iswhite(c_int::from(excmd.line.byte_at(excmd.line.arg + 3)))
     {
         add_help_tags = true;
         let arg = excmd.arg_ptr();

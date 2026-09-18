@@ -234,7 +234,7 @@ pub fn ex_global(excmd: &mut ExArg) {
         b'v'
     } else {
         // SAFETY: `args.cmd` points at the command word.
-        unsafe { *excmd.cmd_ptr() as u8 }
+        excmd.line.byte_at(excmd.line.cmd)
     };
     let Some(parsed) = global_pattern(excmd) else {
         return;
