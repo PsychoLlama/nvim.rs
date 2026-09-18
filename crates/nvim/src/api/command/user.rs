@@ -17,7 +17,7 @@ use crate::api::private::validate::{
 };
 use crate::api_error;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::types::{ExArgt, ExpandContext};
 use crate::winlayer::Live;
 use crate::winlayer::graph::switch_buffer;
@@ -99,7 +99,7 @@ pub fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<()
         return ().reported(error);
     }
     // SAFETY: `name` names its own NUL-terminated bytes.
-    let name = unsafe { c_str(name.data()) };
+    let name = msg_cstr(name.as_cstr());
     error = api_error!(kErrorTypeException, "Invalid command (not found): {name}");
     ().reported(error)
 }

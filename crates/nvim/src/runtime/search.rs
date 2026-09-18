@@ -21,7 +21,7 @@
 use super::*;
 use crate::cstr;
 use crate::memory::XString;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::P_PP;
 use crate::option::vars::P_RTP;
 use crate::path::ExpandFlags;
@@ -447,12 +447,12 @@ pub unsafe fn do_in_path(
         // SAFETY: `basepath` is a literal and `name` the caller's pattern.
         if flags.has(RuntimeOpts::ERR) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (basepath, name) = unsafe { (c_str(basepath.as_ptr()), c_str(name)) };
+            let (basepath, name) = unsafe { (msg_cstr(basepath), c_str(name)) };
             semsg!("E919: Directory not found in '{basepath}': \"{name}\"");
         } else if p_verbose() > 1 {
             verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (basepath, name) = unsafe { (c_str(basepath.as_ptr()), c_str(name)) };
+            let (basepath, name) = unsafe { (msg_cstr(basepath), c_str(name)) };
             smsg!(0, "not found in '{basepath}': \"{name}\"");
             verbose_leave();
         }

@@ -23,7 +23,7 @@ use crate::charset::{skiptowhite, skipwhite};
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xfree, xstrlcpy};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::{PROJECT_NAME, set_helplang_default};
 use crate::os::cshim::{bindtextdomain, bump_catalogue_epoch, textdomain};
 use crate::os::env::os_setenv;
@@ -267,7 +267,7 @@ fn report(what: c_int, whatstr: &CStr) {
         smsg!(
             0,
             "Current {}language: \"{}\"",
-            c_str(whatstr.as_ptr()),
+            msg_cstr(whatstr),
             c_str(p.cast_const())
         );
     }

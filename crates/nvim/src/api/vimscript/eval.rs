@@ -28,7 +28,7 @@ use crate::api::private::validate::err_expected;
 use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::message_fmt::{c_str, c_str_len};
+use crate::message_fmt::{c_str_len, msg_cstr};
 use crate::narrow::len_as_int;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -227,7 +227,7 @@ unsafe fn call_in_dict(
         let di = unsafe { (*self_dict).find_ptr(fn_0.as_bytes()) };
         if di.is_null() {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
-            let name = unsafe { c_str(fn_0.data()) };
+            let name = msg_cstr(fn_0.as_cstr());
             return Err(api_error!(kErrorTypeValidation, "Not found: {name}"));
         }
         // SAFETY: the lookup answered a live item of `self_dict`.
@@ -237,7 +237,7 @@ unsafe fn call_in_dict(
         }
         if v_type != VAR_FUNC {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.
-            let name = unsafe { c_str(fn_0.data()) };
+            let name = msg_cstr(fn_0.as_cstr());
             return Err(api_error!(kErrorTypeValidation, "Not a function: {name}"));
         }
         // SAFETY: a `VAR_FUNC` carries a NUL-terminated function name.

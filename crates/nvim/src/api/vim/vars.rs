@@ -18,7 +18,7 @@
 use super::*;
 use crate::api::private::helpers::Reported;
 use crate::api_error;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::winlayer::{Buf, Win};
 
 /// The current buffer's handle and the cursor's line, as the deprecated
@@ -99,7 +99,7 @@ unsafe fn find_globvar(name: &String_0) -> *mut DictItem {
 /// "Key not found: `name`".
 fn key_not_found(name: &String_0) -> Error {
     // SAFETY: the caller's promise.
-    let name = unsafe { c_str(name.data()) };
+    let name = msg_cstr(name.as_cstr());
     api_error!(kErrorTypeValidation, "Key not found: {name}")
 }
 

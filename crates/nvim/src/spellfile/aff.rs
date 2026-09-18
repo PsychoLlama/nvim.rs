@@ -834,7 +834,7 @@ fn finish_aff(spin: &mut SpellInfo, aff: &mut AffFile, st: &mut AffState, fname:
         if st.syllable.is_null() {
             let fmt = gettext(c"COMPOUNDSYLMAX used without SYLLABLE");
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg0 = unsafe { c_str(fmt.as_ptr()) };
+            let arg0 = msg_cstr(fmt);
             smsg!(0, "{arg0}");
         }
         aff_check_number(spin.si_compsylmax, st.compsylmax, c"COMPOUNDSYLMAX");
@@ -900,7 +900,7 @@ fn finish_aff(spin: &mut SpellInfo, aff: &mut AffFile, st: &mut AffState, fname:
 fn aff_check_number(spinval: c_int, affval: c_int, name: &CStr) {
     if spinval != 0 && spinval != affval {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let name = unsafe { c_str(name.as_ptr()) };
+        let name = msg_cstr(name);
         smsg!(
             0,
             "{name} value differs from what is used in another .aff file"
@@ -917,7 +917,7 @@ unsafe fn aff_check_string(spinval: *mut c_char, affval: *mut c_char, name: &CSt
     // SAFETY: the caller promises the strings.
     if !spinval.is_null() && !unsafe { cstr::eq(spinval, affval) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let name = unsafe { c_str(name.as_ptr()) };
+        let name = msg_cstr(name);
         smsg!(
             0,
             "{name} value differs from what is used in another .aff file"

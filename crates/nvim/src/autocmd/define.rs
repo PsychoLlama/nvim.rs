@@ -14,7 +14,7 @@
 use super::*;
 use crate::charset::skip;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{Failed, RefcountSize};
@@ -657,7 +657,7 @@ unsafe fn arg_autocmd_flag_get(
     {
         if unsafe { *flag } {
             // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-            let pattern = unsafe { c_str(pattern.as_ptr()) };
+            let pattern = msg_cstr(pattern);
             semsg!("E983: Duplicate argument: {pattern}");
             return true;
         }

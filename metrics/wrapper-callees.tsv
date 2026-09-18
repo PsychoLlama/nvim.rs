@@ -3,7 +3,7 @@ count	callee	no_raw	defs	def
 736	.add	0	3	
 450	.offset	0	0	
 450	bytes_at	0	1	crates/nvim/src/cstr.rs
-366	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+342	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 306	at	0	3	
 281	CStr::from_ptr	0	2	
 238	.offset_from	0	0	

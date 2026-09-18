@@ -12,7 +12,7 @@ use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::eval::userfunc::FuncFlags;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::P_CPO;
 use crate::semsg;
 use crate::types::{VAR_DICT, VAR_FUNC, kErrorTypeException, kErrorTypeValidation};
@@ -294,7 +294,7 @@ pub unsafe fn modify_keymap(
             || parsed_args.alt_lhs_len > MAXMAPLEN as size_t
         {
             // SAFETY: `lhs` is a live API string.
-            let lhs = unsafe { c_str(lhs.data()) };
+            let lhs = msg_cstr(lhs.as_cstr());
             failed = Some(api_error!(
                 kErrorTypeValidation,
                 "LHS exceeds maximum map length: {lhs}"
@@ -313,7 +313,7 @@ pub unsafe fn modify_keymap(
         let consumed = unsafe { p.offset_from(mode.data()) } as size_t;
         if !mode.is_empty() && consumed != mode.len() {
             // SAFETY: `mode` is a live API string.
-            let mode = unsafe { c_str(mode.data()) };
+            let mode = msg_cstr(mode.as_cstr());
             failed = Some(api_error!(
                 kErrorTypeValidation,
                 "Invalid mode shortname: \"{mode}\""
@@ -371,7 +371,7 @@ pub unsafe fn modify_keymap(
         // written out here rather than shared with `domap`'s copies, which
         // still hand them to a `printf`.
         // SAFETY: `lhs` is a live API string.
-        let lhs = unsafe { c_str(lhs.data()) };
+        let lhs = msg_cstr(lhs.as_cstr());
         let refused = match (answer, is_abbrev) {
             (1, _) => Some(Error::exception(e_invarg)),
             (2, _) => Some(Error::exception(e_nomap)),

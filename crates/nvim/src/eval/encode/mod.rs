@@ -42,7 +42,7 @@ use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_char2len, utf_printable, utf_ptr2char, utf_ptr2len};
 use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc};
-use crate::message_fmt::{c_str, emsg_text, msg_bytes};
+use crate::message_fmt::{c_str, emsg_text, msg_bytes, msg_cstr};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::strings::vim_snprintf;
 use crate::tr_c;
@@ -334,7 +334,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
     let (template, objname, where_0) = unsafe {
         (
             gettext_ptr(msg),
-            c_str(path.objname.as_ptr()),
+            msg_cstr(path.objname),
             if path.stack.is_empty() {
                 c_str(tr(c"itself"))
             } else {

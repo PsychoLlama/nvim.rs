@@ -236,7 +236,7 @@ unsafe fn read_spl(
         Err(SpellReadError::Format | SpellReadError::Trunc) => {
             let fmt = gettext(c"E757: This does not look like a spell file");
             // SAFETY: `gettext`'s answer is a NUL-terminated string.
-            let arg0 = unsafe { c_str(fmt.as_ptr()) };
+            let arg0 = msg_cstr(fmt);
             semsg!("{arg0}");
             return false;
         }

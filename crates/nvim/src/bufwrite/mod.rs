@@ -37,7 +37,7 @@ use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
 use crate::message::state::{msg_scroll, msg_silent, no_wait_return};
 use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
 use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_str_hl, set_keep_msg};
-use crate::message_fmt::{c_str, emsg_text};
+use crate::message_fmt::{c_str, emsg_text, msg_cstr};
 use crate::option::vars::{P_BSK, P_CCV, P_PM, p_bk, p_bsk, p_fs, p_pm, p_wb};
 use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_force, shortmess};
 use crate::options::{
@@ -155,15 +155,14 @@ impl WriteError {
         match (self.num, self.arg) {
             (Some(num), 0) => {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (num, iobuff, msg) =
-                    unsafe { (c_str(num.as_ptr()), c_str(iobuff), c_str(msg)) };
+                let (num, iobuff, msg) = unsafe { (msg_cstr(num), c_str(iobuff), c_str(msg)) };
                 semsg!("{num}: {iobuff}{msg}");
             }
             (Some(num), arg) => {
                 let why = unsafe { uv_strerror(arg) };
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (num, iobuff, msg, why) =
-                    unsafe { (c_str(num.as_ptr()), c_str(iobuff), c_str(msg), c_str(why)) };
+                    unsafe { (msg_cstr(num), c_str(iobuff), c_str(msg), c_str(why)) };
                 semsg!("{num}: {iobuff}{msg}: {why}");
             }
             // The message is deliberately its own format string here.

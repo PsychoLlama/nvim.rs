@@ -23,7 +23,7 @@
 
 use crate::event::libuv::uv_kill;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::uv_error::UV_ESRCH;
 use core::ffi::c_int;
 use std::ffi::CString;
@@ -47,13 +47,7 @@ pub fn os_proc_tree_kill(pid: c_int, sig: c_int) -> bool {
     // through `%s` rather than becoming the format string itself; both
     // pointers outlive the call. `uv_kill` takes no pointers.
     unsafe {
-        logmsg!(
-            LOGLVL_INF,
-            c"os_proc_tree_kill",
-            103,
-            "{}",
-            c_str(text.as_ptr())
-        );
+        logmsg!(LOGLVL_INF, c"os_proc_tree_kill", 103, "{}", msg_cstr(&text));
         uv_kill(-pid, sig) == 0
     }
 }

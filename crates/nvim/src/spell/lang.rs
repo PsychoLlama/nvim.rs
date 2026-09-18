@@ -32,7 +32,7 @@
 
 use crate::cstr;
 use crate::memory::XString;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::smsg;
 use crate::types::AutoEvent;
 use crate::winlayer::Win;
@@ -182,7 +182,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         } else {
             // SAFETY: the language name and the encoding are NUL-terminated.
             let encoding = spell_enc();
-            let (lang, enc) = unsafe { (c_str(lang), c_str(encoding.as_ptr())) };
+            let (lang, enc) = unsafe { (c_str(lang), msg_cstr(encoding.as_cstr())) };
             smsg!(
                 0,
                 "Warning: Cannot find word list \"{lang}.{enc}.spl\" or \"{lang}.ascii.spl\""

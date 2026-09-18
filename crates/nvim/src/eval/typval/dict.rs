@@ -28,7 +28,7 @@ use ::core::ptr::NonNull;
 
 use super::*;
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::semsg;
 use crate::types::{CONV_NONE, Failed, Refcount};
 
@@ -567,7 +567,7 @@ impl Dict {
             }
             if action == b'e' {
                 // SAFETY: as above.
-                let key = unsafe { c_str(key.as_ptr()) };
+                let key = msg_bytes(key.bytes());
                 semsg!("E737: Key already exists: {key}");
                 break;
             }
@@ -651,7 +651,7 @@ pub unsafe fn dict_extend(d1: *mut Dict, d2: *mut Dict, action: u8) {
             }
         } else if action == b'e' {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let di2_key = unsafe { c_str(di2_key.as_ptr()) };
+            let di2_key = msg_bytes(di2_key.bytes());
             semsg!("E737: Key already exists: {di2_key}");
             break;
         } else if action == b'f' && di2 != di1 {

@@ -26,7 +26,7 @@ use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::{Allow, Bump, Saved, Suppress};
 use crate::message::msg_ptr;
-use crate::message_fmt::{c_str, report_msg};
+use crate::message_fmt::{c_str, msg_cstr, report_msg};
 use crate::os::cshim::strstr;
 use crate::smsg;
 use crate::tr_c;
@@ -131,7 +131,7 @@ unsafe fn show_debug_banner(cmd: *mut c_char) {
         };
         // SAFETY: an `XString` is NUL-terminated by construction, and it
         // outlives the message the formatter builds from it.
-        let shown = unsafe { c_str(text.as_ptr()) };
+        let shown = msg_cstr(text.as_cstr());
         let _: bool = report_msg(0, || tr_c!(label, shown));
     }
 

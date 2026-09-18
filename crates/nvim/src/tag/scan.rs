@@ -15,7 +15,7 @@ use super::*;
 use crate::cstr;
 use crate::file_search::Name;
 use crate::guard::Suppress;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::option::vars::P_HLG;
 use crate::options::{
     kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
@@ -512,7 +512,7 @@ impl FindTags {
         if p_verbose() >= 5 {
             verbose_enter();
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
-            let tag_fname = unsafe { c_str(self.tag_fname.as_ptr()) };
+            let tag_fname = msg_cstr(self.tag_fname.as_cstr());
             smsg!(0, "Searching tags file {tag_fname}");
             verbose_leave();
         }
@@ -529,7 +529,7 @@ impl FindTags {
         }
         if margs.sort_error {
             // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
-            let tag_fname = unsafe { c_str(self.tag_fname.as_ptr()) };
+            let tag_fname = msg_cstr(self.tag_fname.as_cstr());
             semsg!("E432: Tags file not sorted: {tag_fname}");
         }
 
@@ -605,7 +605,7 @@ impl FindTags {
                 TagMatch::Stop => break,
                 TagMatch::Fail => {
                     // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
-                    let tag_fname = unsafe { c_str(self.tag_fname.as_ptr()) };
+                    let tag_fname = msg_cstr(self.tag_fname.as_cstr());
                     semsg!("E431: Format error in tags file \"{tag_fname}\"");
                     // SAFETY: `self.fp` is the tag file this scan holds open.
                     let at = unsafe { ftello(self.fp) } as int64_t;

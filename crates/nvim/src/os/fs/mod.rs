@@ -50,7 +50,7 @@ use crate::log::g_stats;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{verbose_enter, verbose_leave};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_verbose;
 use crate::os::env::os_getenv;
 use crate::path::{append_path, gettail_dir, save_abs_path};
@@ -254,11 +254,9 @@ pub fn os_chdir(path: &CStr) -> c_int {
     if p_verbose() >= 5 as OptInt {
         // SAFETY: `path` is NUL-terminated, and `%s` is the one conversion
         // the format string asks for.
-        unsafe {
-            verbose_enter();
-            smsg!(0, "chdir({})", c_str(path.as_ptr()));
-            verbose_leave();
-        }
+        verbose_enter();
+        smsg!(0, "chdir({})", msg_cstr(path));
+        verbose_leave();
     }
     // SAFETY: `path` is NUL-terminated and outlives the call.
     let err = unsafe { uv_chdir(path.as_ptr()) };

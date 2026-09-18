@@ -136,7 +136,7 @@ fn vim_mktempdir() {
                     log_at!(LOGLVL_DBG, 3323, "$TMPDIR is unset");
                 } else {
                     // SAFETY: `tmp` is this frame's NUL-terminated path.
-                    let at = unsafe { c_str(tmp.as_ptr()) };
+                    let at = msg_cstr(tmp.as_cstr());
                     log_at!(
                         LOGLVL_WRN,
                         3325,
@@ -164,7 +164,7 @@ fn vim_mktempdir() {
             }
         } else {
             // SAFETY: `tmp` is this frame's NUL-terminated path.
-            let at = unsafe { c_str(tmp.as_ptr()) };
+            let at = msg_cstr(tmp.as_cstr());
             if !owned {
                 let who = msg_bytes(user);
                 log_at!(
@@ -196,7 +196,7 @@ fn vim_mktempdir() {
         if r != 0 {
             // SAFETY: libuv's error strings are static; `tmp` is this
             // frame's NUL-terminated path.
-            let (why, at) = unsafe { (c_str(uv_strerror(r)), c_str(tmp.as_ptr())) };
+            let (why, at) = unsafe { (c_str(uv_strerror(r)), msg_cstr(tmp.as_cstr())) };
             log_at!(LOGLVL_WRN, 3377, "tempdir create failed: {why}: {at}");
             continue;
         }

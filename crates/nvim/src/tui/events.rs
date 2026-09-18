@@ -22,7 +22,7 @@
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::memory::strequal;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::startup::{stdin_isatty, ui_client_channel_id};
 use crate::tui::cursor::{
@@ -328,7 +328,7 @@ pub unsafe fn tui_chdir(_tui: &mut TUIData, path: String_0) {
                 c"tui_chdir",
                 0,
                 "Failed to chdir to {}: {}",
-                c_str(path.data()),
+                msg_cstr(path.as_cstr()),
                 c_str(uv_strerror(err))
             );
         }

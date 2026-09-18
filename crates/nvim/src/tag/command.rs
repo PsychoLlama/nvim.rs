@@ -20,7 +20,7 @@ use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
 use crate::memory::XString;
 use crate::message::msg_ptr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
@@ -776,7 +776,7 @@ impl DoTag {
         {
             // SAFETY: the message macros expand to a `vim_snprintf` over
             // the format literal above and the editor's message buffers.
-            let arg0 = unsafe { c_str(missing.as_ptr()) };
+            let arg0 = msg_cstr(missing.as_cstr());
             smsg!(0, "File \"{arg0}\" does not exist");
         }
 
@@ -811,7 +811,7 @@ impl DoTag {
             let missing = nofile_fname.with(Clone::clone).unwrap_or_default();
             // SAFETY: the message macros expand to a `vim_snprintf` over
             // the format literal above and the editor's message buffers.
-            let arg0 = unsafe { c_str(missing.as_ptr()) };
+            let arg0 = msg_cstr(missing.as_cstr());
             semsg!("E429: File \"{arg0}\" does not exist");
             return false;
         }

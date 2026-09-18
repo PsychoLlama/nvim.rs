@@ -421,7 +421,7 @@ pub fn shada_write_file(file: Option<&CStr>, nomerge: bool) -> c_int {
     if p_verbose() > 1 {
         verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname.as_ptr()) };
+        let fname = msg_cstr(&fname);
         smsg!(0, "Writing ShaDa file \"{fname}\"");
         verbose_leave();
     }

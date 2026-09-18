@@ -19,7 +19,7 @@ use crate::memline::{ml_get, ml_get_buf_len, ml_get_len};
 use crate::memory::xmalloc;
 use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::normal::unadjust_for_sel_inner;
 use crate::ops::{block_prep, charwise_block_prep, reset_lbr, restore_lbr};
 use crate::option::vars::P_SEL;
@@ -258,7 +258,7 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
     // whole width.
     let bad = || {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (arg0, spec) = unsafe { (c_str(c"type".as_ptr()), c_str(spec)) };
+        let (arg0, spec) = unsafe { (msg_cstr(c"type"), c_str(spec)) };
         semsg!("E475: Invalid value for argument {arg0}: {spec}");
         None
     };

@@ -31,7 +31,7 @@ use crate::memline::ml_get_buf;
 use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::e_invarg;
 use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::snprintf;
 use crate::os::fs::os_can_exe;
@@ -217,7 +217,7 @@ pub(crate) fn get_system_output_as_rettv(args: &[TypVal], result: &mut TypVal, r
         let cmdstr = unsafe { shell_argv_to_str(argv) };
         verbose_enter_scroll();
         // SAFETY: `cmdstr` owns its NUL-terminated bytes for this block.
-        let shown = unsafe { c_str(cmdstr.as_ptr()) };
+        let shown = msg_cstr(cmdstr.as_cstr());
         smsg!(0, "Executing command: \"{shown}\"");
         // SAFETY: the literal is NUL-terminated.
         msg_str(c"\n\n");

@@ -29,7 +29,7 @@ use crate::memline::ml_open;
 use crate::memory::{xcalloc, xfree};
 use crate::message::{e_channotpty, e_invarg};
 use crate::message::{emsg, emsg_ptr};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_tgc;
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::env::{home_replace, os_getenv};
@@ -441,7 +441,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 stdin_mode = kChannelStdinNull;
             } else if !unsafe { cstr::prefix_eq(s, c"pipe".as_ptr(), NUMBUFLEN as usize) } {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (arg0, s) = unsafe { (c_str(c"stdin".as_ptr()), c_str(s)) };
+                let (arg0, s) = unsafe { (msg_cstr(c"stdin"), c_str(s)) };
                 semsg!("E475: Invalid value for argument {arg0}: {s}");
             }
         }
