@@ -128,8 +128,11 @@ pub(crate) fn do_exbuffer(excmd: &mut ExArg) {
 
 /// Run the `+cmd` argument, once the buffer it applies to is current.
 fn run_ecmd_cmd(excmd: &mut ExArg) {
-    if !excmd.do_ecmd_cmd.is_null() {
-        let _ = unsafe { do_cmdline_cmd(excmd.do_ecmd_cmd) };
+    if !excmd.do_ecmd_cmd.is_none() {
+        let cmd = excmd.do_ecmd_cmd.ptr(&excmd.line);
+        // SAFETY: a NUL-terminated command, either the line's own or the
+        // shared `$`.
+        let _ = unsafe { do_cmdline_cmd(cmd) };
     }
 }
 

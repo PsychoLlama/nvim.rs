@@ -577,6 +577,45 @@ impl CmdLine {
     }
 }
 
+/// The `+cmd` a file command was given -- upstream's `eap->do_ecmd_cmd`.
+///
+/// Upstream threads a `char *` that is one of three things, and tells them
+/// apart by *address*: null for no `+cmd`, a shared `"$"` static for a bare
+/// `+`, and a pointer into the command line otherwise (which `getargcmd`
+/// NUL-terminates in place). Only the third moves when `%` expansion
+/// reallocates the line, so the caller had to compare against the static to
+/// know whether to re-point it. Saying which it is removes the comparison.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub enum EcmdCmd {
+    /// No `+cmd` at all.
+    #[default]
+    None,
+    /// A bare `+`: go to the last line, which is what `:$` does.
+    Dollar,
+    /// The command at this offset into the command line.
+    At(usize),
+}
+
+impl EcmdCmd {
+    /// The `$` a bare `+` means, as the C string every consumer expects.
+    const DOLLAR: &'static ::core::ffi::CStr = c"$";
+
+    /// Is there no `+cmd`?
+    pub fn is_none(self) -> bool {
+        self == EcmdCmd::None
+    }
+
+    /// The command as a NUL-terminated string, for a callee that takes one.
+    /// Null when there is no `+cmd`.
+    pub fn ptr(self, line: &CmdLine) -> *const ::core::ffi::c_char {
+        match self {
+            EcmdCmd::None => ::core::ptr::null(),
+            EcmdCmd::Dollar => EcmdCmd::DOLLAR.as_ptr(),
+            EcmdCmd::At(at) => line.ptr_from(at),
+        }
+    }
+}
+
 /// One parsed Ex command line.
 ///
 /// Not `Copy`: `line` is the buffer the command is parsed out of, owned for
@@ -594,7 +633,7 @@ pub struct ExArg {
     pub line2: LineNr,
     pub addr_type: CmdAddr,
     pub flags: ::core::ffi::c_int,
-    pub do_ecmd_cmd: *mut ::core::ffi::c_char,
+    pub do_ecmd_cmd: EcmdCmd,
     pub do_ecmd_lnum: LineNr,
     pub append: bool,
     pub usefilter: bool,
@@ -724,7 +763,7 @@ impl Default for ExArg {
             line2: 0,
             addr_type: CmdAddr::Lines,
             flags: 0,
-            do_ecmd_cmd: ::core::ptr::null_mut(),
+            do_ecmd_cmd: EcmdCmd::None,
             do_ecmd_lnum: 0,
             append: false,
             usefilter: false,

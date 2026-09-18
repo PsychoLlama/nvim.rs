@@ -12,6 +12,7 @@ use crate::ex_cmds::newlnum;
 use crate::option::local_or_global;
 use crate::os::cshim::snprintf;
 use crate::types::CmdIdx;
+use crate::types::EcmdCmd;
 
 use crate::cmdexpand::{WildMode, WildOpts};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -34,7 +35,7 @@ use crate::ex_docmd::state::escape_chars;
 use crate::ex_docmd::xfree;
 use crate::ex_docmd::{
     ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING, VALID_HEAD,
-    VALID_PATH, dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
+    VALID_PATH, e_no_autocommand_buffer_number_to_substitute_for_abuf,
     e_no_autocommand_file_name_to_substitute_for_afile,
     e_no_autocommand_match_name_to_substitute_for_amatch, e_no_call_stack_to_substitute_for_stack,
     e_no_line_number_to_use_for_sflnum, e_no_line_number_to_use_for_slnum,
@@ -303,21 +304,14 @@ pub(crate) fn expand_filename(
 /// `do_ecmd_cmd`. Answers where the text after the replacement now starts,
 /// which is where the caller's scan resumes.
 pub(crate) fn repl_cmdline(excmd: &mut ExArg, at: usize, srclen: usize, repl: &[u8]) -> usize {
-    // The `+cmd` argument points into the line, unless it is the shared
-    // `$` constant, which is not in the line at all.
-    let ecmd = (!excmd.do_ecmd_cmd.is_null()
-        && !ptr::eq(excmd.do_ecmd_cmd, dollar_command.as_ptr()))
-    .then(|| excmd.line.offset_of(excmd.do_ecmd_cmd));
-
     let delta = excmd.line.splice(at, srclen, repl);
 
-    if let Some(off) = ecmd {
-        let off = if off > at {
-            off.wrapping_add_signed(delta)
-        } else {
-            off
-        };
-        excmd.do_ecmd_cmd = excmd.line.ptr_at(off);
+    // The `+cmd` argument is the one cursor `CmdLine::splice` does not know
+    // about; a bare `+` is the shared `$`, which is not in the line at all.
+    if let EcmdCmd::At(off) = excmd.do_ecmd_cmd
+        && off > at
+    {
+        excmd.do_ecmd_cmd = EcmdCmd::At(off.wrapping_add_signed(delta));
     }
     at + repl.len()
 }

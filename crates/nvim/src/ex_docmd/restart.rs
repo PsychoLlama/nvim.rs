@@ -246,10 +246,10 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
 
             set_vim_var_string(Vv::Exitreason, c"restart".as_ptr(), 7 as ptrdiff_t);
 
-            let mut quit_cmd = if excmd.do_ecmd_cmd.is_null() {
-                c"qall".as_ptr() as *mut c_char
+            let mut quit_cmd = if excmd.do_ecmd_cmd.is_none() {
+                c"qall".as_ptr().cast_mut()
             } else {
-                excmd.do_ecmd_cmd
+                excmd.do_ecmd_cmd.ptr(&excmd.line).cast_mut()
             };
             let mut quit_cmd_copy: *mut c_char = ptr::null_mut();
             if cmdmod_has(CmdModFlags::CONFIRM) {

@@ -467,7 +467,7 @@ fn read_command_args(
     // `:read !cmd` and `:write !cmd`.
     if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
         // SAFETY: `arg` is the command's own cursor into its line.
-        excmd.do_ecmd_cmd = unsafe { excmd.with_arg_cursor(|cursor| getargcmd(cursor)) };
+        excmd.do_ecmd_cmd = getargcmd(excmd);
     }
 
     if excmd.argt.has(ExArgt::TRLBAR) && !excmd.usefilter {

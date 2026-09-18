@@ -15,6 +15,7 @@ use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::CmdIdx;
+use crate::types::EcmdCmd;
 use crate::types::{CmdLine, ExArgt, NUL};
 use crate::winlayer::{Buf, TabPage, Win, windows};
 use core::ffi::{c_char, c_int, c_uint};
@@ -55,7 +56,7 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
         line2: 0,
         addr_type: CmdAddr::Lines,
         flags: 0,
-        do_ecmd_cmd: ::core::ptr::null_mut::<c_char>(),
+        do_ecmd_cmd: EcmdCmd::None,
         do_ecmd_lnum: 0,
         append: false,
         usefilter: false,

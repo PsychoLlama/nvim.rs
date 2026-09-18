@@ -793,10 +793,11 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
         }
         // Execute [+cmd]. No need to execute [++opts]: those only apply
         // to newly loaded buffers.
-        if !excmd.do_ecmd_cmd.is_null() {
-            let did_set_swapcommand = unsafe { set_swapcommand(excmd.do_ecmd_cmd, 0 as LineNr) };
+        if !excmd.do_ecmd_cmd.is_none() {
+            let cmd = excmd.do_ecmd_cmd.ptr(&excmd.line).cast_mut();
+            let did_set_swapcommand = unsafe { set_swapcommand(cmd, 0 as LineNr) };
             let verbose = DoCmdOpts::VERBOSE;
-            let _ = unsafe { do_cmdline(excmd.do_ecmd_cmd, None, ptr::null_mut(), verbose) };
+            let _ = unsafe { do_cmdline(cmd, None, ptr::null_mut(), verbose) };
             if did_set_swapcommand {
                 unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1 as ptrdiff_t) };
             }

@@ -31,7 +31,7 @@ use crate::arglist::state::arg_had_last;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
     BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES, cmdmod_has,
-    dollar_command, quitmore,
+    quitmore,
 };
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
@@ -46,8 +46,8 @@ use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
-    CmdLine, CmdModFlags, CompleteListItemGetter, ExArg, Expand, FAIL, FILE, Failed, NUL, OK,
-    int32_t, intmax_t, size_t,
+    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, FILE, Failed, NUL,
+    OK, int32_t, intmax_t, size_t,
 };
 use crate::window::{only_one_window, tabpage_index};
 
@@ -55,31 +55,32 @@ use crate::window::{only_one_window, tabpage_index};
 ///
 /// `+` alone means `$`, the last line. The command runs to the end of the
 /// argument unless a space that is not backslash-escaped ends it, which is
-/// what `skip_cmd_arg` finds; the byte after it is overwritten with a
-/// terminator, so the answer borrows the command line.
+/// what `skip_cmd_arg` finds; that byte is overwritten with a terminator,
+/// so the answer is an offset into the command line's own buffer.
 ///
-/// # Safety
+/// Leaves `args.arg` past the `+cmd`.
 ///
-/// `argp` must point at a writable `*mut c_char` slot the caller owns for the
-/// call.
-pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
-    let mut arg = unsafe { *argp };
-    if byte(arg) != '+' as c_int {
-        return ptr::null_mut();
+pub fn getargcmd(excmd: &mut ExArg) -> EcmdCmd {
+    let mut at = excmd.line.arg;
+    if excmd.line.byte_at(at) != b'+' {
+        return EcmdCmd::None;
     }
-    arg = unsafe { arg.add(1) };
-    let command;
-    if ascii_isspace(byte(arg)) || byte(arg) == NUL {
-        command = dollar_command.as_ptr().cast_mut();
-    } else {
-        command = arg;
-        arg = skip_cmd_arg(command, true);
-        if byte(arg) != NUL {
-            unsafe { *arg = NUL as c_char };
-            arg = unsafe { arg.add(1) };
-        }
-    }
-    unsafe { *argp = skipwhite(arg) };
+    at += 1;
+    let command =
+        if ascii_isspace(c_int::from(excmd.line.byte_at(at))) || excmd.line.byte_at(at) == 0 {
+            EcmdCmd::Dollar
+        } else {
+            let command = EcmdCmd::At(at);
+            at = skip_arg_at(&mut excmd.line, at, true);
+            // The command is handed on as a NUL-terminated string of its own,
+            // so the byte that ended it becomes its terminator.
+            if excmd.line.byte_at(at) != 0 {
+                excmd.line.terminate_at(at);
+                at += 1;
+            }
+            command
+        };
+    excmd.line.arg = excmd.line.skip_white(at);
     command
 }
 
@@ -186,7 +187,7 @@ pub fn getargopt(excmd: &mut ExArg) -> Result<(), Failed> {
         // `get_bad_opt` reads the value itself, so nothing records it.
         Opt::BadChar => {}
     }
-    let end = skip_arg_at(&mut excmd.line, at);
+    let end = skip_arg_at(&mut excmd.line, at, false);
     excmd.line.arg = excmd.line.skip_white(end);
     excmd.line.terminate_at(end);
 
@@ -227,10 +228,13 @@ enum Opt {
 }
 
 /// [`skip_cmd_arg`] over a command line, answering where the argument ends.
-fn skip_arg_at(line: &mut CmdLine, at: usize) -> usize {
+///
+/// `rembs` deletes the backslash of each escaped byte, in place, which
+/// shortens the line -- so the answer is an offset into what the line is
+/// *after* the walk.
+fn skip_arg_at(line: &mut CmdLine, at: usize, rembs: bool) -> usize {
     let start = line.ptr_at(at);
-    // `rembs = false` leaves the line alone, so the walk only reads.
-    let end = skip_cmd_arg(start, false);
+    let end = skip_cmd_arg(start, rembs);
     line.offset_of(end)
 }
 
@@ -616,12 +620,6 @@ fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
 fn skip_cmd_arg(p: *mut c_char, rembs: bool) -> *mut c_char {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_docmd::scan::skip_cmd_arg(p, rembs) }
-}
-
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

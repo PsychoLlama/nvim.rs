@@ -344,6 +344,34 @@ fn modifiers_are_read_off_the_front_of_the_line() {
 }
 
 #[test]
+fn a_visual_range_survives_the_modifiers_it_was_typed_in_front_of() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    run(&editor, LINES);
+    run(&editor, r#"call setpos("'<", [0, 2, 1, 0])"#);
+    run(&editor, r#"call setpos("'>", [0, 4, 1, 0])"#);
+    // The modifier scan steps over the `'<,'>` so that a modifier behind it
+    // is still seen, and then has to shuffle the modifier out of the way so
+    // the range reaches the command. Both have to survive it.
+    let got = parse(&editor, "'<,'>keepjumps print").unwrap();
+    assert_eq!((got.cmdidx, got.line1, got.line2), ("print", 2, 4));
+    let (flags, _) = parse_mods(&editor, "'<,'>keepjumps print");
+    assert!(flags.has(CmdModFlags::KEEPJUMPS));
+    // Two modifiers: the shuffle moves both, and the range still lands
+    // immediately in front of the command word.
+    let got = parse(&editor, "'<,'>keepjumps keepmarks print").unwrap();
+    assert_eq!((got.cmdidx, got.line1, got.line2), ("print", 2, 4));
+    // No modifier at all: the scan puts the cursor back where it found it
+    // rather than moving anything.
+    let got = parse(&editor, "'<,'>print").unwrap();
+    assert_eq!((got.cmdidx, got.line1, got.line2), ("print", 2, 4));
+    // A `'<,'>` with nothing behind it is not stepped over at all: it is
+    // a bare range, which `parse_cmdline` reads without finding a command.
+    let got = parse(&editor, "'<,'>").unwrap();
+    assert_eq!((got.cmdidx, got.line1, got.line2), ("SIZE", 2, 4));
+}
+
+#[test]
 fn an_unknown_command_is_named_in_the_message() {
     let editor = editor_lock();
     let _restore = Restore::new(&editor);

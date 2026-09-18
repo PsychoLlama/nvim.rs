@@ -8,7 +8,6 @@
 //! every exit path, including the ones an error takes.
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
-use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;
@@ -40,7 +39,7 @@ use crate::ex_docmd::{
 use crate::getchar::state::expr_map_lock;
 use crate::guard::sandbox;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
-use crate::memory::{xfree, xmemcpyz};
+use crate::memory::xfree;
 use crate::message::state::{did_emsg, emsg_silent, msg_col, msg_scroll, msg_silent};
 use crate::option::vars::{P_EI, P_VERBOSE, p_verbose};
 use crate::state::mode::exmode_active;
@@ -53,7 +52,7 @@ use crate::optionstr::free_string_option;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{
-    CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, size_t,
+    CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use ::libc::atoi;
@@ -121,8 +120,8 @@ pub(crate) fn parse_command_modifiers(
     cm: &mut CmdMod,
     skip_only: bool,
 ) -> Result<(), Failed> {
-    let orig_cmd = excmd.cmd_ptr();
-    let mut cmd_start: *mut c_char = ptr::null_mut();
+    let orig_cmd = excmd.line.cmd;
+    let mut cmd_start = 0;
     let mut use_plus_cmd = false;
     let mut has_visual_range = false;
     *cm = CmdMod::default();
@@ -135,7 +134,7 @@ pub(crate) fn parse_command_modifiers(
         let after = excmd.line.skip_white(excmd.line.cmd + 5);
         if excmd.line.byte_at(after) != 0 && excmd.line.byte_at(after) != b'|' {
             excmd.line.cmd += 5;
-            cmd_start = excmd.cmd_ptr();
+            cmd_start = excmd.line.cmd;
             has_visual_range = true;
         }
     }
@@ -408,7 +407,7 @@ pub(crate) fn parse_command_modifiers(
         }
     }
 
-    unsafe { restore_visual_range(excmd, orig_cmd, cmd_start, has_visual_range, use_plus_cmd) };
+    restore_visual_range(excmd, orig_cmd, cmd_start, has_visual_range, use_plus_cmd);
     Ok(())
 }
 
@@ -420,14 +419,12 @@ pub(crate) fn parse_command_modifiers(
 /// substituted `+` command is not in the buffer at all, so it takes the
 /// other branch and the range is prefixed rather than moved.
 ///
-/// # Safety
-///
-/// `orig_cmd` must point at a NUL-terminated string, unaliased for the call.
-/// `cmd_start` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn restore_visual_range(
+/// `cmd_start` is where the command word was when the scan stepped over the
+/// range, and is only read when `has_visual_range`.
+fn restore_visual_range(
     excmd: &mut ExArg,
-    orig_cmd: *mut c_char,
-    cmd_start: *mut c_char,
+    orig_cmd: usize,
+    cmd_start: usize,
     has_visual_range: bool,
     use_plus_cmd: bool,
 ) {
@@ -439,22 +436,21 @@ unsafe fn restore_visual_range(
         }
         return;
     }
-    if excmd.cmd_ptr() > cmd_start {
-        if use_plus_cmd {
-            let len = unsafe { cstr::bytes_at(cmd_start) }.len();
-            move_bytes(orig_cmd, cmd_start, len);
-            unsafe { xmemcpyz(orig_cmd.add(len) as *mut c_void, c" *+".as_ptr().cast(), 3) };
-        } else {
-            // SAFETY: the five bytes before `cmd_start` are the `:'<,'>` this
-            // is making room for, and both ends are inside the command line.
-            let (into, kept) =
-                unsafe { (cmd_start.offset(-5), excmd.cmd_ptr().offset_from(cmd_start)) };
-            move_bytes(into, cmd_start, kept as size_t);
-            let cmd_start = excmd.cmd_ptr();
-            excmd.set_cmd_ptr(unsafe { cmd_start.offset(-5) });
-            let at = unsafe { excmd.cmd_ptr().offset(-1) };
-            move_bytes(at, c":'<,'>".as_ptr(), 6);
-        }
+    if excmd.line.cmd > cmd_start {
+        // A modifier was taken. `use_plus_cmd` cannot be set here: the Ex
+        // mode substitution *replaces* the line, which leaves `cmd` at zero
+        // and `cmd_start` at five or more. Upstream still tests for it, and
+        // compares `eap->cmd` — by then the address of a static `"+"` —
+        // against a pointer into the heap line, which is why the branch
+        // looks live there.
+        let kept = excmd.line.cmd - cmd_start;
+        let text = excmd.line.buffer_mut();
+        text.copy_within(cmd_start..cmd_start + kept, cmd_start - 5);
+        excmd.line.cmd -= 5;
+        // The five bytes the shuffle freed, plus the white space that used
+        // to separate the last modifier from the command word.
+        let at = excmd.line.cmd - 1;
+        excmd.line.buffer_mut()[at..at + 6].copy_from_slice(b":'<,'>");
     } else if use_plus_cmd {
         // The Visual range is put back in front of the `+` this run
         // substituted for an empty Ex-mode line.
@@ -463,7 +459,7 @@ unsafe fn restore_visual_range(
         // Not the bare substitution any more: the range is the user's.
         excmd.line.substituted = false;
     } else {
-        excmd.set_cmd_ptr(orig_cmd);
+        excmd.line.cmd = orig_cmd;
     }
 }
 
@@ -823,12 +819,6 @@ fn takes(excmd: &mut ExArg, name: &[u8], min: usize) -> bool {
         }
         None => false,
     }
-}
-
-/// `memmove()`'s byte copy as checked code: `n` bytes, overlap allowed.
-fn move_bytes(dest: *mut c_char, src: *const c_char, n: size_t) {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { dest.cast::<u8>().copy_from(src.cast(), n) };
 }
 
 /// `skip_vimgrep_pat()` as checked code.

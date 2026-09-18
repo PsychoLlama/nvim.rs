@@ -266,9 +266,9 @@ pub(crate) unsafe fn do_ecmd(
     // SAFETY: `curwin` is the live current window, and the handle is used
     // only inside this call.
     let so = ScrollOff::of(Win::current(), ScrollMargin::Lines);
-    let command = excmd
-        .as_deref()
-        .map_or(ptr::null_mut(), |asked| asked.do_ecmd_cmd);
+    let command = excmd.as_deref().map_or(ptr::null_mut(), |asked| {
+        asked.do_ecmd_cmd.ptr(&asked.line).cast_mut()
+    });
     let has_command = excmd.is_some();
 
     let mut old_curbuf = BufRef::of_opt(current_buf());

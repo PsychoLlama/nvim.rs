@@ -162,7 +162,7 @@ fn prepare_cmd(
     apply_argopt(excmd)?;
     if excmd.argt.has(ExArgt::CMDARG) && !excmd.usefilter {
         // SAFETY: as above.
-        excmd.do_ecmd_cmd = unsafe { excmd.with_arg_cursor(|cursor| getargcmd(cursor)) };
+        excmd.do_ecmd_cmd = getargcmd(excmd);
     }
     Ok(true)
 }

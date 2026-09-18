@@ -140,6 +140,7 @@ use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;
 use crate::types::ESC;
+use crate::types::EcmdCmd;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
@@ -540,7 +541,7 @@ pub(crate) const EXARG_T_INIT: ExArg = ExArg {
     line2: 0,
     addr_type: CmdAddr::Lines,
     flags: 0,
-    do_ecmd_cmd: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    do_ecmd_cmd: EcmdCmd::None,
     do_ecmd_lnum: 0,
     append: false,
     usefilter: false,

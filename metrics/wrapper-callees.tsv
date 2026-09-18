@@ -1,8 +1,8 @@
 count	callee	no_raw	defs	def
 871	xfree	0	1	crates/nvim/src/memory/mod.rs
-759	.add	0	3	
-457	.offset	0	0	
-455	bytes_at	0	1	crates/nvim/src/cstr.rs
+757	.add	0	3	
+456	.offset	0	0	
+454	bytes_at	0	1	crates/nvim/src/cstr.rs
 416	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 283	CStr::from_ptr	0	2	
 239	.offset_from	0	0	
@@ -12,7 +12,7 @@ count	callee	no_raw	defs	def
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 164	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 155	from_raw_parts	0	0	
-151	skipwhite	0	1	crates/nvim/src/charset/walk.rs
+150	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 121	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 109	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
@@ -85,10 +85,10 @@ count	callee	no_raw	defs	def
 27	grid_line_puts	0	1	crates/nvim/src/grid/line.rs
 27	os_remove	0	0	
 27	vim_snprintf_safelen	0	1	crates/nvim/src/strings/printf/mod.rs
-27	xmemcpyz	0	1	crates/nvim/src/memory/mod.rs
 26	Node::new	0	1	crates/nvim/src/marktree/node.rs
 26	nlua_pop_boolean	0	1	crates/nvim/src/lua/converter/pop.rs
 26	skiptowhite	0	1	crates/nvim/src/charset/walk.rs
+26	xmemcpyz	0	1	crates/nvim/src/memory/mod.rs
 25	internal_error	0	1	crates/nvim/src/message/errors.rs
 24	.copy_from	0	0	
 24	Walk::new	0	2	
@@ -922,7 +922,6 @@ count	callee	no_raw	defs	def
 3	.stash	0	1	crates/nvim/src/fileio/convert.rs
 3	.take	0	1	crates/nvim/src/change/leader.rs
 3	.unpacker	1	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
-3	.with_arg_cursor	0	0	
 3	ClickDefs::new	0	1	crates/nvim/src/mouse/mod.rs
 3	Cls::new	0	68	
 3	Fi::new	0	68	
@@ -2341,6 +2340,7 @@ count	callee	no_raw	defs	def
 1	.take_message	1	1	crates/nvim/src/quickfix/parse.rs
 1	.track_multispace	0	1	crates/nvim/src/drawline/prologue.rs
 1	.try_format	0	1	crates/nvim/src/quickfix/parse.rs
+1	.with_arg_cursor	0	0	
 1	.write_lines	1	1	crates/nvim/src/api/buffer/text.rs
 1	Args::new	0	1	crates/nvim/src/strings/printf/emit.rs
 1	BlobRef::from_owned	1	1	crates/nvim/src/eval/typval/blob.rs
@@ -3460,7 +3460,6 @@ count	callee	no_raw	defs	def
 1	restore_backup	0	1	crates/nvim/src/bufwrite/backup.rs
 1	restore_current_state	0	1	crates/nvim/src/ex_docmd/exnormal.rs
 1	restore_dbg_stuff	0	1	crates/nvim/src/ex_docmd/source.rs
-1	restore_visual_range	0	1	crates/nvim/src/ex_docmd/modifier.rs
 1	reverse_echo	1	1	crates/nvim/src/search/command.rs
 1	rewrite_prompt_line	0	1	crates/nvim/src/eval/buffer/prompt.rs
 1	right_adjust	0	1	crates/nvim/src/change/open_line/comment.rs

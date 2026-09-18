@@ -289,10 +289,6 @@ static e_no_script_file_name_to_substitute_for_script: &CStr =
     c"E1274: No script file name to substitute for \"<script>\"";
 static quitmore: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ex_pressedreturn: GlobalCell<bool> = GlobalCell::new(false);
-/// The `+cmd` argument a bare `+` stands for. Never written, and
-/// recognised by *address* in `expand_filename`, which is why it is one
-/// static rather than a literal at each of its two uses.
-static dollar_command: &CStr = c"$";
 static cmdline_call_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 static ffu_cb: GlobalCell<Callback> = GlobalCell::new(Callback::None);
 static prev_dir: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
