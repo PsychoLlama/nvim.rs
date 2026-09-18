@@ -72,9 +72,8 @@ impl CursorPick {
             // SAFETY: a live entry with `newsize` lines, by the contract
             // above.
             let was = unsafe { *(*uep).ue_array.offset(same as isize) };
-            // SAFETY: as above, and every line compared is one the buffer
-            // still holds.
-            if !unsafe { cstr::eq(was, ml_get(top + 1 + same)) } {
+            // SAFETY: as above -- a NUL-terminated saved line.
+            if unsafe { cstr::at(was) }.to_bytes() != Buf::current().lines().line(top + 1 + same) {
                 break;
             }
             same += 1;

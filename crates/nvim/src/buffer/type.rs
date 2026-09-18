@@ -27,7 +27,6 @@ use super::*;
 use crate::autocmd::apply_autocmds;
 use crate::eval::typval::{dict_find, dict_is_watched, dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
-use crate::memline::ml_get_buf;
 use crate::message::emsg_ptr;
 use crate::option::vars::p_hid;
 use crate::optionstr::LocalOptStr;
@@ -227,7 +226,7 @@ pub fn buf_is_empty(buffer: Buf) -> bool {
     let b = buffer;
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
     // NUL-terminated line.
-    b.b_ml.ml_line_count == 1 as LineNr && unsafe { *ml_get_buf(buffer, 1 as LineNr) } == 0
+    b.b_ml.ml_line_count == 1 as LineNr && buffer.lines().line(1).is_empty()
 }
 
 pub fn buf_inc_changedtick(buffer: Buf) {

@@ -53,8 +53,8 @@ pub fn show_cursor_info_later(force: bool) {
     let state = get_real_state();
     // "The cursor is on an empty line" is a status-line item of its own, and
     // in Insert mode it is deliberately always reported as false.
-    let empty_line = State.get() & MODE_INSERT == 0
-        && unsafe { *ml_get_buf(wp.buffer(), wp.w_cursor.lnum) } == 0;
+    let empty_line =
+        State.get() & MODE_INSERT == 0 && wp.buffer().lines().line(wp.w_cursor.lnum).is_empty();
 
     validate_virtcol(wp);
 

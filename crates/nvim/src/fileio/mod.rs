@@ -40,9 +40,7 @@ use crate::mbyte::{
     utf_head_off, utf_ptr2char, utf_ptr2len_len,
 };
 use crate::memfile::mf_fullname;
-use crate::memline::{
-    check_need_swap, ml_append, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len, ml_open,
-};
+use crate::memline::{check_need_swap, ml_append, ml_delete, ml_get, ml_get_len, ml_open};
 use crate::memory::{
     memchrsub, time_to_bytes, verbose_try_malloc, xfree, xmallocz, xmemdupz, xstrdup, xstrlcat,
 };

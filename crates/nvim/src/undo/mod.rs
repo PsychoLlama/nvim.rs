@@ -42,7 +42,7 @@ use crate::guard::{sandbox, textlock};
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::MlFlags;
-use crate::memline::{ml_append_flags, ml_delete, ml_get, ml_get_buf, ml_replace, resolve_symlink};
+use crate::memline::{ml_append_flags, ml_delete, ml_replace, resolve_symlink};
 use crate::memory::{time_to_bytes, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
 use crate::message::{e_modifiable, e_sandbox, e_textlock};
 use crate::message::{
@@ -675,7 +675,8 @@ pub fn u_find_first_changed() {
     let mut lnum: LineNr = 1;
     while lnum < b.line_count() && lnum <= unsafe { (*uep).ue_size } {
         let saved = unsafe { *(*uep).ue_array.offset((lnum - 1) as isize) };
-        if !unsafe { cstr::eq(ml_get_buf(b, lnum), saved) } {
+        // SAFETY: the entry's own saved line, NUL-terminated.
+        if b.lines().line(lnum) != unsafe { cstr::at(saved) }.to_bytes() {
             clearpos(&mut uhp.uh_cursor);
             uhp.uh_cursor.lnum = lnum;
             return;

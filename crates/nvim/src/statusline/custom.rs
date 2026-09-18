@@ -41,7 +41,6 @@ use crate::highlight_group::{
     HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_bytes,
 };
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
-use crate::memline::ml_get_buf;
 use crate::message::state::{msg_col, msg_row};
 use crate::message::{msg_clr_eos, msg_grid_view};
 use crate::option::vars::{P_RUF, P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal};
@@ -662,9 +661,8 @@ pub fn redraw_ruler() {
 /// Insert mode on an empty line -- which is what makes that read "0-1".
 fn ruler_position(win: Win, virtcol: ColNr, buffer: &mut [c_char]) -> c_int {
     let empty_buffer = win.buffer().b_ml.ml_flags.has(MlFlags::EMPTY);
-    // SAFETY: a live window's cursor line, which is NUL-terminated.
-    let first = unsafe { *ml_get_buf(win.buffer(), win.w_cursor.lnum) };
-    let empty_line = State.get() & MODE_INSERT == 0 && c_int::from(first) == NUL;
+    let cursor_line_empty = win.buffer().lines().line(win.w_cursor.lnum).is_empty();
+    let empty_line = State.get() & MODE_INSERT == 0 && cursor_line_empty;
     let lnum = if empty_buffer {
         0 as int64_t
     } else {

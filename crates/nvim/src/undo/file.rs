@@ -31,13 +31,10 @@ use crate::semsg;
 pub unsafe fn u_compute_hash(buffer: Buf, hash: *mut uint8_t) {
     let mut ctx = Sha256::new();
     for lnum in 1..=buffer.b_ml.ml_line_count {
-        // SAFETY: a live buffer, so every line up to its own count is there.
-        let line: *mut c_char = unsafe { ml_get_buf(buffer, lnum) };
+        let mut lines = buffer.lines();
+        ctx.update(lines.line(lnum));
         // The terminating NUL goes in too, as a line separator.
-        // SAFETY: that line, NUL-terminated, as `ml_get_buf` hands it back.
-        let bytes =
-            unsafe { ::core::slice::from_raw_parts(line.cast(), cstr::bytes_at(line).len() + 1) };
-        ctx.update(bytes);
+        ctx.update(&[0]);
     }
     // SAFETY: `hash` points at `UNDO_HASH_SIZE` writable bytes, by the
     // contract above.

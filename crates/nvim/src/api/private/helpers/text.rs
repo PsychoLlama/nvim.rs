@@ -11,7 +11,7 @@
 use super::{CAR, NL};
 use crate::api::private::validate::err_out_of_range;
 use crate::cstr;
-use crate::memline::{ml_get_buf, ml_get_buf_len};
+
 use crate::memory::XString;
 use crate::memory::{memchrsub, xfree, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
@@ -321,10 +321,9 @@ pub(crate) fn buf_get_text(
     if lnum >= i64::from(MAXLNUM) {
         return Err(err_out_of_range(c"line index"));
     }
-    // SAFETY: the caller's promise -- `buffer` is a loaded buffer, and `lnum`
-    // is below `MAXLNUM`.
-    let bufstr = unsafe { ml_get_buf(buffer, lnum as LineNr) };
-    let line_length = ml_get_buf_len(buffer, lnum as LineNr) as int64_t;
+    let mut lines = buffer.lines();
+    let bufstr = lines.line(lnum as LineNr);
+    let line_length = int64_t::try_from(bufstr.len()).unwrap_or(0);
 
     let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
     let start_col = relative(start_col).clamp(0, line_length);
@@ -333,13 +332,7 @@ pub(crate) fn buf_get_text(
         let why = c"start_col must be less than or equal to end_col";
         return Err(Error::validation(why));
     }
-    // SAFETY: `start_col` and `end_col` were clamped into the line, whose
-    // bytes `ml_get_buf` answered.
-    let text = unsafe {
-        slice::from_raw_parts(
-            bufstr.cast::<u8>().offset(start_col as isize),
-            (end_col - start_col) as size_t,
-        )
-    };
-    Ok(String_0::from_bytes(text))
+    // `start_col` and `end_col` were clamped into the line.
+    let (from, to) = (start_col as usize, end_col as usize);
+    Ok(String_0::from_bytes(&bufstr[from..to]))
 }

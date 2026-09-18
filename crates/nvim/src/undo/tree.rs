@@ -11,6 +11,7 @@
 use super::store::{Header, header_chain, header_free, store_release};
 use super::*;
 use crate::cstr;
+use crate::memory::XString;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
@@ -248,7 +249,7 @@ pub(crate) fn u_saveline(mut buffer: Buf, lnum: LineNr) {
         buffer.b_u_line_colnr = 0;
     }
     // SAFETY: `lnum` was checked against the buffer's line count above.
-    buffer.b_u_line_ptr = unsafe { u_save_line_buf(buffer, lnum) };
+    buffer.b_u_line_ptr = u_save_line_buf(buffer, lnum);
 }
 
 /// Forgets the line `U` would have put back.
@@ -311,15 +312,11 @@ pub fn u_undoline() {
 /// A live current buffer holding line `lnum`.
 pub(crate) unsafe fn u_save_line(lnum: LineNr) -> *mut c_char {
     // SAFETY: a live current buffer holding that line, by the contract above.
-    unsafe { u_save_line_buf(Buf::current(), lnum) }
+    u_save_line_buf(Buf::current(), lnum)
 }
 
 /// A fresh copy of line `lnum` of `buffer`.
 ///
-/// # Safety
-///
-/// `buffer` holds line `lnum`.
-pub(crate) unsafe fn u_save_line_buf(buffer: Buf, lnum: LineNr) -> *mut c_char {
-    // SAFETY: the buffer holds that line, by the contract above.
-    unsafe { xstrdup(ml_get_buf(buffer, lnum)) }
+pub(crate) fn u_save_line_buf(buffer: Buf, lnum: LineNr) -> *mut c_char {
+    XString::from_bytes(buffer.lines().line(lnum)).into_raw()
 }

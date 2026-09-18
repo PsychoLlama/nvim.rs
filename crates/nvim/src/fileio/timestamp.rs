@@ -14,6 +14,7 @@ use crate::buffer::BufFlags;
 use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::{Lock, Suppress};
+use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::undo::UNDO_HASH_SIZE;
@@ -191,18 +192,12 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> c_int {
     // Copy the lines in "frombuf" to "tobuf".
     let mut lnum = 1;
     while lnum <= frombuf.b_ml.ml_line_count {
-        let p = {
-            let from = frombuf.raw();
-            // SAFETY: a live buffer.
-            let from = unsafe { Buf::new(from) };
-            // SAFETY: a live buffer and a line number inside it.
-            let (at, len) = unsafe { (ml_get_buf(from, lnum), ml_get_buf_len(from, lnum)) };
-            // SAFETY: `len` bytes of the line just named.
-            unsafe { xmemdupz(at.cast(), len as size_t) }
-        }
-        .cast::<c_char>();
-        let appended = unsafe { ml_append(lnum - 1, p, 0, false) };
-        unsafe { xfree(p.cast()) };
+        // Copied out: `ml_append` writes into the *other* buffer, and the
+        // line came from this one's cache.
+        let mut p = XString::from_bytes(frombuf.lines().line(lnum));
+        // SAFETY: the copy just made, NUL-terminated, which `ml_append`
+        // copies again.
+        let appended = unsafe { ml_append(lnum - 1, p.as_mut_ptr(), 0, false) };
         if appended.is_err() {
             retval = FAIL;
             break;

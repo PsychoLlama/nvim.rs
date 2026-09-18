@@ -272,10 +272,12 @@ impl Reader {
         if lnum > last {
             return Status::EndOfInput;
         }
-        // SAFETY: the caller's buffer is loaded and `lnum` is within it.
-        let text = unsafe { ml_get_buf(buf, lnum) };
-        self.len = self.fit(ml_get_buf_len(buf, lnum) as usize);
-        unsafe { xstrlcpy(self.line(), text, self.len + 1) };
+        let mut lines = buf.lines();
+        let text = lines.line_cstr(lnum, 0);
+        self.len = self.fit(text.count_bytes());
+        // SAFETY: the reader's own buffer, sized by `fit`, and a
+        // NUL-terminated line.
+        unsafe { xstrlcpy(self.line(), text.as_ptr(), self.len + 1) };
         self.source = Source::Buffer {
             buf,
             lnum: lnum + 1,

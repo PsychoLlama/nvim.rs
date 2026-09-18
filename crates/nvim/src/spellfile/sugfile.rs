@@ -44,7 +44,7 @@ use std::path::Path;
 
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::getchar::state::got_int;
-use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
+use crate::memline::ml_append_buf;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::e_write;
 use crate::message::emsg;
@@ -405,13 +405,9 @@ unsafe fn sug_write(spin: &mut SpellInfo, fname: *mut c_char) {
     w.u32(wcount as usize);
 
     for lnum in 1..=wcount {
-        // SAFETY: `lnum` is inside the buffer, and the line is
-        // NUL-terminated: the stored terminator goes out with it.
-        let line = unsafe {
-            let at = ml_get_buf(spellbuf, lnum);
-            let len = ml_get_buf_len(spellbuf, lnum) + 1;
-            core::slice::from_raw_parts(at.cast::<u8>(), len as usize)
-        };
+        // The stored terminator goes out with the line.
+        let mut lines = spellbuf.lines();
+        let line = lines.line_cstr(lnum, 0).to_bytes_with_nul();
         w.bytes(line);
         if !w.landed() {
             emsg(gettext(e_write));
