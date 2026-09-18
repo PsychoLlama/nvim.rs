@@ -121,13 +121,10 @@ fn del_char_after_col(limit_col: c_int) -> bool {
 /// passed.  Upstream grew the vector to `kv_roundup32(size + len)` and then
 /// `memmove`d those bytes up by hand; a `splice` at the same index is both.
 ///
-/// # Safety
-/// `str` must point to `len` readable bytes, and they must not be part of
-/// the stack itself.
-pub(crate) unsafe fn replace_push(str: *mut c_char, len: size_t) {
-    // SAFETY: the caller promises `str` holds `len` readable bytes, and no
-    // caller passes the stack's own storage.
-    let bytes = unsafe { ::core::slice::from_raw_parts(str.cast::<u8>(), len) };
+/// `bytes` must not be part of the stack itself -- no caller passes it, and
+/// the stack lives behind a [`GlobalCell`](crate::guard::GlobalCell), so the
+/// borrow checker cannot say so for us.
+pub(crate) fn replace_push(bytes: &[u8]) {
     replace_stack.with_mut(|stack| {
         let above = replace_offset.get() as size_t;
         if stack.len() < above {
@@ -140,8 +137,7 @@ pub(crate) unsafe fn replace_push(str: *mut c_char, len: size_t) {
 
 /// Push a NUL, the separator between entries.
 pub(crate) fn replace_push_nul() {
-    // SAFETY: a static one-byte string, one byte of which is read.
-    unsafe { replace_push(c"".as_ptr().cast_mut(), 1) }
+    replace_push(&[NUL as u8]);
 }
 
 /// Look at the top of the stack, popping it if it is a NUL.

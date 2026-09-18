@@ -32,6 +32,7 @@
 
 use crate::cstr;
 use crate::guard::Suppress;
+use crate::memory::XString;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
@@ -69,21 +70,20 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
     {
         return ::core::ptr::null_mut();
     }
-    let prompt_line = ml_get(Win::current().w_cursor.lnum);
+    let lnum = Win::current().w_cursor.lnum;
     let prompt = prompt_text();
-    let prompt_len = unsafe { cstr::bytes_at(prompt) }.len();
-    if !unsafe { cstr::prefix_eq(prompt_line, prompt, prompt_len) } {
+    // SAFETY: `prompt_text` answers a NUL-terminated string.
+    let prompt_bytes = unsafe { cstr::bytes_at(prompt) };
+    let mut lines = Buf::current().lines();
+    let line = lines.line(lnum);
+    if !line.starts_with(prompt_bytes) {
         return ::core::ptr::null_mut();
     }
-    // STRMOVE: take the prompt off the front of the line.
-    let rest = prompt_line.wrapping_add(prompt_len);
-    // SAFETY: the prompt is the first `prompt_len` bytes of the line, so the
-    // rest of it -- including the NUL -- fits where the prompt was.
-    let rest_len = unsafe { cstr::bytes_at(rest) }.len();
-    let into = prompt_line.cast::<u8>();
-    unsafe { into.copy_from(rest.cast(), rest_len + 1) };
+    // Take the prompt off the front of the line.
+    let rest = XString::from_bytes(&line[prompt_bytes.len()..]);
     cmdmod_add_flags(CmdModFlags::LOCKMARKS);
-    let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, prompt_line, true) };
+    // SAFETY: our own NUL-terminated line, which the buffer takes over.
+    let _ = unsafe { ml_replace(lnum, rest.into_raw(), false) };
     unsafe { concat_str(prompt, p_extra) }
 }
 
@@ -307,8 +307,7 @@ pub unsafe fn open_line(
         // character over the original.  -- webb.
         next_line = if Win::current().w_cursor.lnum < orig_line_count.get() {
             let next = Win::current().w_cursor.lnum + 1;
-            // SAFETY: `next` is a line of the current buffer, as just tested.
-            unsafe { xstrnsave(ml_get(next), ml_get_len(next) as size_t) }
+            XString::from_bytes(Buf::current().lines().line(next)).into_raw()
         } else {
             // SAFETY: a static empty string.
             unsafe { xstrdup(c"".as_ptr()) }
@@ -320,7 +319,8 @@ pub unsafe fn open_line(
         replace_push_nul();
         replace_push_nul();
         let p = unsafe { saved_line.offset(Win::current().w_cursor.col as isize) };
-        unsafe { replace_push(p, cstr::bytes_at(p).len()) };
+        // SAFETY: `saved_line` is our own NUL-terminated copy.
+        replace_push(unsafe { cstr::bytes_at(p) });
         unsafe { *p = NUL as c_char };
     }
 
@@ -472,7 +472,8 @@ pub unsafe fn open_line(
                 && !utf_iscomposing_first(unsafe { utf_ptr2char(p_extra.add(1)) })
             {
                 if replace_normal(State.get()) {
-                    unsafe { replace_push(p_extra, 1) }; // always ascii, len = 1
+                    // SAFETY: the byte the loop just tested. Always ASCII.
+                    replace_push(&[unsafe { *p_extra } as u8]);
                 }
                 p_extra = unsafe { p_extra.add(1) };
                 less_cols_off += 1;
@@ -566,8 +567,7 @@ pub unsafe fn open_line(
         if did_append {
             let cb = Buf::current();
             let at = Win::current().w_cursor.lnum;
-            // SAFETY: the current buffer is live and `at` is the new line.
-            let extra = ml_get_len(at) as BCount;
+            let extra = BCount::try_from(cb.lines().line_len(at)).unwrap_or(0);
             extmark_splice(cb, at - 1, 0, 0, 0, 0, 1, 0, 1 + extra, kExtmarkUndo);
             changed_lines(cb, at, 0, at, 1, true);
         }

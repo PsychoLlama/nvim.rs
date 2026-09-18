@@ -23,65 +23,20 @@
 )]
 
 use crate::cstr;
+use crate::memory::XString;
 use core::ffi::{c_char, c_int};
 
 use crate::change::*;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 
-/// A cursor into the NUL-terminated line 'smartindent' is looking at.
+/// The byte at `at` of `text`, or NUL at and past its end.
 ///
-/// Every walk below tests the byte under the cursor before stepping, so the
-/// cursor stays inside the line -- which leaves *taking* it as the one
-/// unchecked step and makes every read after it ordinary code.
-#[derive(Clone, Copy)]
-struct Ln(*mut c_char);
-
-impl Ln {
-    /// # Safety
-    /// `p` must point inside a NUL-terminated line and stay valid for as long
-    /// as the cursor is used.
-    unsafe fn new(p: *mut c_char) -> Self {
-        Self(p)
-    }
-
-    /// The byte under the cursor.
-    fn byte(self) -> c_int {
-        // SAFETY: the constructor's promise, and no walk here steps past the
-        // terminating NUL or before the start of the line.
-        c_int::from(unsafe { *self.0 })
-    }
-
-    /// The byte `off` bytes from the cursor.
-    fn byte_at(self, off: isize) -> c_int {
-        // SAFETY: as [`Ln::byte`]; `off` names a byte the walk has already
-        // passed or is about to reach.
-        c_int::from(unsafe { *self.0.offset(off) })
-    }
-
-    /// Whether the byte under the cursor is white space.
-    fn white(self) -> bool {
-        ascii_iswhite(self.byte())
-    }
-
-    fn step(&mut self) {
-        self.0 = self.0.wrapping_add(1);
-    }
-
-    fn back(&mut self) {
-        self.0 = self.0.wrapping_sub(1);
-    }
-
-    fn raw(self) -> *mut c_char {
-        self.0
-    }
-
-    /// How far into `start` the cursor is.
-    fn col_in(self, start: Ln) -> ColNr {
-        // SAFETY: both cursors are inside the same line.
-        let off = unsafe { self.0.offset_from(start.0) };
-        ColNr::try_from(off).expect("a cursor's column is inside its own line")
-    }
+/// Every walk below tests the byte it is on before stepping, so the offset
+/// stays inside the line; the one place it can run off is the end, which is
+/// what upstream's terminating NUL answered and what this answers too.
+fn byte(text: &[u8], at: usize) -> c_int {
+    c_int::from(cstr::byte_at(text, at))
 }
 
 /// The indent of the line the cursor is on.
@@ -90,10 +45,13 @@ fn indent_here() -> c_int {
     get_indent()
 }
 
-/// Line `lnum` of the current buffer.
-fn line_at(lnum: LineNr) -> *mut c_char {
-    // SAFETY: every caller has just clamped `lnum` into the buffer.
-    ml_get(lnum)
+/// Line `lnum` of the current buffer, copied.
+///
+/// A copy, not a borrow: every walk below hands control back to the editor --
+/// `findmatch` searches, `get_indent` reads another line -- while it is still
+/// looking at the text.
+fn line_copy(lnum: LineNr) -> XString {
+    XString::from_bytes(Buf::current().lines().line(lnum))
 }
 
 /// `findmatch` from the cursor, for `initc`.
@@ -103,19 +61,23 @@ fn find_match(initc: c_int) -> Option<Pos> {
 }
 
 /// [`get_leader_len`] when only the length is wanted.
-fn leader_len_of(text: *mut c_char) -> c_int {
-    // SAFETY: a NUL-terminated line, and no flags are asked for.
-    unsafe { get_leader_len(text, ::core::ptr::null_mut(), false, true) }
+fn leader_len_of(text: &XString) -> c_int {
+    // SAFETY: an owned NUL-terminated line, and no flags are asked for.
+    unsafe {
+        get_leader_len(
+            text.as_ptr().cast_mut(),
+            ::core::ptr::null_mut(),
+            false,
+            true,
+        )
+    }
 }
 
-/// The first non-white byte of `text`, as a cursor.
-///
-/// # Safety
-/// `text` must be NUL-terminated.
-unsafe fn skip_white(text: *mut c_char) -> Ln {
-    // SAFETY: the caller's NUL-terminated line; `skipwhite` stops at its NUL
-    // at the latest.
-    unsafe { Ln::new(skipwhite(text)) }
+/// The offset of the first non-white byte of `text`.
+fn skip_white_at(text: &[u8]) -> usize {
+    text.iter()
+        .position(|&b| !ascii_iswhite(c_int::from(b)))
+        .unwrap_or(text.len())
 }
 
 /// Where the C comment that ends on this line began, as an indent.
@@ -132,37 +94,31 @@ unsafe fn skip_white(text: *mut c_char) -> Ln {
 ///     This should line up here;
 /// ```
 ///
-/// # Safety
-/// `text` must be the current cursor line, NUL-terminated.
-unsafe fn indent_of_comment_start(text: *mut c_char) -> Option<c_int> {
-    // SAFETY: the caller's NUL-terminated line.
-    let mut start = unsafe { Ln::new(text) };
-    // SAFETY: as above.
-    let mut p = unsafe { skip_white(text) };
-    if p.byte() == '/' as c_int && p.byte_at(1) == '*' as c_int {
-        p.step();
+fn indent_of_comment_start(line: &XString) -> Option<c_int> {
+    // Owned, because `findmatch` below can leave the walk on another line.
+    let mut text = XString::from_bytes(line);
+    let mut at = skip_white_at(&text);
+    if byte(&text, at) == '/' as c_int && byte(&text, at + 1) == '*' as c_int {
+        at += 1;
     }
-    if p.byte() != '*' as c_int {
+    if byte(&text, at) != '*' as c_int {
         return None;
     }
-    p.step();
-    while p.byte() != 0 {
-        if p.byte() == '/' as c_int && p.byte_at(-1) == '*' as c_int {
+    at += 1;
+    while byte(&text, at) != 0 {
+        if byte(&text, at) == '/' as c_int && byte(&text, at - 1) == '*' as c_int {
             // End of a C comment: line the indent up with the line
             // holding the start of it.
-            Win::current().w_cursor.col = p.col_in(start);
+            Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
             if let Some(pos) = find_match(NUL) {
                 Win::current().w_cursor.lnum = pos.lnum;
                 return Some(indent_here());
             }
-            // findmatch may have made `text` stale; fetch it again.
-            let at = line_at(Win::current().w_cursor.lnum);
-            // SAFETY: a line of the current buffer, and the cursor column is
-            // inside it.
-            start = unsafe { Ln::new(at) };
-            p = unsafe { Ln::new(at.wrapping_offset(Win::current().w_cursor.col as isize)) };
+            // findmatch may have left us on another line; fetch it again.
+            text = line_copy(Win::current().w_cursor.lnum);
+            at = usize::try_from(Win::current().w_cursor.col).unwrap_or(0);
         }
-        p.step();
+        at += 1;
     }
     None
 }
@@ -173,37 +129,32 @@ unsafe fn indent_of_comment_start(text: *mut c_char) -> Option<c_int> {
 /// caller has to undo after applying the indent, so that typing `{` on the
 /// new line does not un-indent it a second time.
 ///
-/// # Safety
-/// `text` must be the cursor line and `newindent` its measured indent. The
-/// caller must restore `w_cursor` afterwards.
-unsafe fn smart_indent_forward(
-    mut text: *mut c_char,
+/// The caller must restore `w_cursor` afterwards.
+fn smart_indent_forward(
+    line: &XString,
     flags: c_int,
     lead_len: c_int,
     mut newindent: c_int,
 ) -> (c_int, bool) {
-    // SAFETY: the caller's NUL-terminated line.
-    let mut start = unsafe { Ln::new(text) };
+    // Owned: the walk moves to other lines and calls back into the editor.
+    let mut text = XString::from_bytes(line);
     // Skip preprocessor directives, unless they are comments.
-    if lead_len == 0 && start.byte() == '#' as c_int {
-        while start.byte() == '#' as c_int && Win::current().w_cursor.lnum > 1 {
+    if lead_len == 0 && byte(&text, 0) == '#' as c_int {
+        while byte(&text, 0) == '#' as c_int && Win::current().w_cursor.lnum > 1 {
             Win::current().w_cursor.lnum -= 1;
-            text = line_at(Win::current().w_cursor.lnum);
-            // SAFETY: a line of the current buffer.
-            start = unsafe { Ln::new(text) };
+            text = line_copy(Win::current().w_cursor.lnum);
         }
         newindent = indent_here();
     }
     // Re-measure: the `#` walk above may have landed on another line.
     let lead_len = if flags & OPENLINE_DO_COM != 0 {
-        leader_len_of(text)
+        leader_len_of(&text)
     } else {
         0
     };
 
     if lead_len > 0 {
-        // SAFETY: `text` is a NUL-terminated line of the current buffer.
-        if let Some(indent) = unsafe { indent_of_comment_start(text) } {
+        if let Some(indent) = indent_of_comment_start(&text) {
             newindent = indent;
         }
         return (newindent, false);
@@ -211,29 +162,22 @@ unsafe fn smart_indent_forward(
 
     // Not a comment line: look at what the line ends with.
     //
-    // `wrapping_offset`, not `offset`: on an empty line upstream forms
-    // `ptr - 1` and reads it, which is out of bounds. The `#` walk above
-    // can land on an empty line, so this is reachable (O-B15-20); the
-    // read is kept as upstream has it, only the pointer arithmetic is
-    // spelled so that forming the address is not itself UB.
-    //
-    // SAFETY: the line's own NUL, stepped back one -- which is the read
-    // upstream makes.
-    let end = unsafe { text.add(cstr::bytes_at(text).len()) }.wrapping_offset(-1);
-    // SAFETY: as above.
-    let mut p = unsafe { Ln::new(end) };
-    while p.raw() > start.raw() && p.white() {
-        p.back();
+    // On an *empty* line upstream forms `ptr - 1` and reads it, which is
+    // out of bounds -- the `#` walk above can land on one, so it is
+    // reachable (O-B15-20), and what it answers is whatever the allocator
+    // left in front of the copy. There is no last character there, so this
+    // answers NUL, which is none of the three bytes tested below.
+    let mut at = text.len().saturating_sub(1);
+    while at > 0 && ascii_iswhite(byte(&text, at)) {
+        at -= 1;
     }
-    let last_char = p.byte();
+    let last_char = byte(&text, at);
 
     // Step back over the `{` or `;` to whatever came before it.
     if last_char == '{' as c_int || last_char == ';' as c_int {
-        if p.raw() > start.raw() {
-            p.back();
-        }
-        while p.raw() > start.raw() && p.white() {
-            p.back();
+        at = at.saturating_sub(1);
+        while at > 0 && ascii_iswhite(byte(&text, at)) {
+            at -= 1;
         }
     }
 
@@ -243,13 +187,12 @@ unsafe fn smart_indent_forward(
     //             condition) {
     //         Should line up here!
     //     }
-    if p.byte() == ')' as c_int {
-        Win::current().w_cursor.col = p.col_in(start);
+    if byte(&text, at) == ')' as c_int {
+        Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
         if let Some(pos) = find_match('(' as c_int) {
             Win::current().w_cursor.lnum = pos.lnum;
             newindent = indent_here();
-            // SAFETY: the cursor is on a valid line of the current buffer.
-            text = get_cursor_line_ptr();
+            text = line_copy(Win::current().w_cursor.lnum);
         }
     }
 
@@ -258,12 +201,7 @@ unsafe fn smart_indent_forward(
         // A trailing `{` indents, with no need to look for an `if`.
         did_si.set(true);
         no_si = true; // ... and typing `{` must not un-indent it again
-    } else if last_char != ';' as c_int
-        && last_char != '}' as c_int
-        // SAFETY: `text` is a NUL-terminated line of the current buffer, and
-        // `starts_with_cinword` reads the buffer's 'cinwords' and 'iskeyword'.
-        && unsafe { starts_with_cinword(cstr::bytes_at(text)) }
-    {
+    } else if last_char != ';' as c_int && last_char != '}' as c_int && starts_with_cinword(&text) {
         // One of 'cinwords', and the line before did not finish a
         // statement.
         did_si.set(true);
@@ -273,31 +211,20 @@ unsafe fn smart_indent_forward(
 
 /// 'smartindent' looking *up* the file, for `O`.
 ///
-/// # Safety
-/// `text` must be the cursor line. The caller must restore `w_cursor`
-/// afterwards.
-unsafe fn smart_indent_backward(
-    mut text: *mut c_char,
-    lead_len: c_int,
-    mut newindent: c_int,
-) -> c_int {
-    // SAFETY: the caller's NUL-terminated line.
-    let mut start = unsafe { Ln::new(text) };
+/// The caller must restore `w_cursor` afterwards.
+fn smart_indent_backward(line: &XString, lead_len: c_int, mut newindent: c_int) -> c_int {
+    // Owned, as [`smart_indent_forward`].
+    let mut text = XString::from_bytes(line);
     // Skip preprocessor directives, unless they are comments. A `\`
     // continuation carries the directive onto the next line.
-    if lead_len == 0 && start.byte() == '#' as c_int {
+    if lead_len == 0 && byte(&text, 0) == '#' as c_int {
         let mut was_backslashed = false;
-        while (start.byte() == '#' as c_int || was_backslashed)
+        while (byte(&text, 0) == '#' as c_int || was_backslashed)
             && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
         {
-            // SAFETY: `text` is NUL-terminated and not empty, as just tested.
-            was_backslashed = start.byte() != 0
-                && unsafe { c_int::from(*text.add(cstr::bytes_at(text).len().wrapping_sub(1))) }
-                    == '\\' as c_int;
+            was_backslashed = text.last() == Some(&b'\\');
             Win::current().w_cursor.lnum += 1;
-            text = line_at(Win::current().w_cursor.lnum);
-            // SAFETY: a line of the current buffer.
-            start = unsafe { Ln::new(text) };
+            text = line_copy(Win::current().w_cursor.lnum);
         }
         newindent = if was_backslashed {
             0 // ran off the end of the file
@@ -306,8 +233,7 @@ unsafe fn smart_indent_backward(
         };
     }
 
-    // SAFETY: `text` is a NUL-terminated line of the current buffer.
-    if unsafe { skip_white(text) }.byte() == '}' as c_int {
+    if byte(&text, skip_white_at(&text)) == '}' as c_int {
         did_si.set(true); // a line starting with `}` indents
     } else {
         can_si_back.set(true); // a `{` typed next can delete the indent
@@ -329,19 +255,17 @@ pub(crate) unsafe fn smart_indent(
     newindent: c_int,
 ) -> (c_int, bool) {
     let old_cursor = Win::current().w_cursor;
-    let ptr = saved_line;
+    // SAFETY: the caller's NUL-terminated copy of the cursor line.
+    let line = XString::from_bytes(unsafe { cstr::bytes_at(saved_line) });
     let lead_len = if flags & OPENLINE_DO_COM != 0 {
-        leader_len_of(ptr)
+        leader_len_of(&line)
     } else {
         0
     };
-    // SAFETY: the caller's copy of the cursor line.
-    let answer = unsafe {
-        if dir == FORWARD {
-            smart_indent_forward(ptr, flags, lead_len, newindent)
-        } else {
-            (smart_indent_backward(ptr, lead_len, newindent), false)
-        }
+    let answer = if dir == FORWARD {
+        smart_indent_forward(&line, flags, lead_len, newindent)
+    } else {
+        (smart_indent_backward(&line, lead_len, newindent), false)
     };
     Win::current().w_cursor = old_cursor;
     answer

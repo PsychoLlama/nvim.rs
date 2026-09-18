@@ -25,7 +25,6 @@ use super::*;
 use crate::buffer::BufFlags;
 use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
-use crate::types::NUL;
 use crate::winlayer::Buf;
 
 /// The message [`change_warning`] gives, once per buffer.
@@ -212,8 +211,7 @@ pub fn file_ff_differs(buffer: Buf, ignore_empty: bool) -> bool {
     if ignore_empty
         && buffer.b_flags.has(BufFlags::NEW)
         && buffer.b_ml.ml_line_count == 1
-        // SAFETY: the line the count just promised, NUL-terminated.
-        && c_int::from(unsafe { *ml_get_buf(buffer, 1) }) == NUL
+        && buffer.lines().line(1).is_empty()
     {
         return false;
     }

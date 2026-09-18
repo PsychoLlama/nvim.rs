@@ -58,10 +58,10 @@ use crate::mbyte::{
     utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len,
 };
 use crate::memline::{
-    ml_add_deleted_len, ml_append, ml_delete_flags, ml_get, ml_get_buf, ml_get_len,
-    ml_line_alloced, ml_open_file, ml_replace, ml_setflags,
+    ml_add_deleted_len, ml_append, ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace,
+    ml_setflags,
 };
-use crate::memory::{xfree, xmalloc, xmallocz, xmemcpyz, xstrdup};
+use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::message::state::{
     emsg_silent, in_assert_fails, msg_col, msg_row, msg_scroll, msg_silent, need_wait_return,
 };
