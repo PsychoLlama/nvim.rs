@@ -14,7 +14,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::smsg;
 use crate::strings::find_char;
 use crate::winlayer::Win;
@@ -74,16 +74,16 @@ pub(super) fn add_comppat(spin: &mut SpellInfo, items: &[&CStr]) {
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn add_rep_entry(
+pub(super) fn add_rep_entry(
     spin: &mut SpellInfo,
     st: &AffState,
     items: &[&CStr],
-    fname: *mut c_char,
+    fname: &CStr,
     lnum: c_int,
 ) {
     if items.len() > 3 && !items[3].to_bytes().starts_with(b"#") {
         // SAFETY: the affix file's name, NUL-terminated.
-        let (file, item) = (unsafe { c_str(fname) }, msg_cstr(items[3]));
+        let (file, item) = (msg_cstr(fname), msg_cstr(items[3]));
         smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
     // "REPSAL" has an S where "REP" has its terminator.
@@ -119,11 +119,11 @@ pub(super) unsafe fn add_rep_entry(
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn handle_map(
+pub(super) fn handle_map(
     spin: &mut SpellInfo,
     st: &mut AffState,
     items: &[&CStr],
-    fname: *mut c_char,
+    fname: &CStr,
     lnum: c_int,
 ) {
     if !st.found_map {
@@ -132,7 +132,7 @@ pub(super) unsafe fn handle_map(
         // SAFETY: reading the locale table.
         if !is_digit_byte(first_byte(items[1]) as c_char) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = unsafe { c_str(fname) };
+            let fname = msg_cstr(fname);
             smsg!(0, "Expected MAP count in {fname} line {}", lnum);
         }
         return;
@@ -149,7 +149,7 @@ pub(super) unsafe fn handle_map(
         at += cluster_len(&group[at..]);
         if chars_of(&spin.si_map).any(|seen| seen == c) || find_char(&group[at..], c).is_some() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = unsafe { c_str(fname) };
+            let fname = msg_cstr(fname);
             smsg!(0, "Duplicate character in MAP in {fname} line {}", lnum);
         }
     }

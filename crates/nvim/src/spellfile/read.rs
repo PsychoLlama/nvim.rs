@@ -38,7 +38,7 @@ use crate::spell::{WordFlags, WordTree};
 use crate::strings::has_bytes;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -49,7 +49,7 @@ use crate::memline::ml_append_buf;
 use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::fast_breakcheck;
@@ -119,13 +119,13 @@ fn spell_check_magic_string(spl: &mut Spl) -> SplResult<()> {
 /// `fname` must be a NUL-terminated path; `lang`, when given, must point at
 /// a writable language name.
 pub unsafe fn spell_load_file(
-    fname: *mut c_char,
+    fname: &CStr,
     lang: *mut c_char,
     old_lp: *mut SpellLang,
     silent: bool,
 ) -> *mut SpellLang {
     // SAFETY: the caller promises the path.
-    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname) }));
+    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname.as_ptr()) }));
     let opened = Spl::open(path);
 
     let mut lp: *mut SpellLang = core::ptr::null_mut();
@@ -161,7 +161,7 @@ pub unsafe fn spell_load_file(
 /// As [`spell_load_file`].
 unsafe fn load_spl(
     opened: std::io::Result<Spl>,
-    fname: *mut c_char,
+    fname: &CStr,
     lang: *mut c_char,
     old_lp: *mut SpellLang,
     silent: bool,
@@ -171,12 +171,12 @@ unsafe fn load_spl(
     let Ok(mut spl) = opened else {
         if !silent {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = unsafe { c_str(fname) };
+            let fname = msg_cstr(fname);
             semsg!("E484: Can't open file {fname}");
         } else if p_verbose() > 2 as OptInt {
             verbose_enter();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = unsafe { c_str(fname) };
+            let fname = msg_cstr(fname);
             smsg!(0, "E484: Can't open file {fname}");
             verbose_leave();
         }
@@ -185,7 +185,7 @@ unsafe fn load_spl(
     if p_verbose() > 2 as OptInt {
         verbose_enter();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         smsg!(0, "Reading spell file \"{fname}\"");
         verbose_leave();
     }
@@ -194,18 +194,23 @@ unsafe fn load_spl(
         // SAFETY: the caller promises the language buffer and the path.
         let lp = unsafe { slang_alloc(lang) };
         // SAFETY: freshly allocated, and the caller's path.
-        unsafe { (*lp).sl_fname = xstrdup(fname) };
+        unsafe { (*lp).sl_fname = xstrdup(fname.as_ptr()) };
         // ".add.spl" files add to an existing language rather than
         // defining one.
         // SAFETY: as above.
-        unsafe { (*lp).sl_add = has_bytes(cstr::at(path_tail(fname)), SPL_FNAME_ADD.to_bytes()) };
+        unsafe {
+            (*lp).sl_add = has_bytes(
+                cstr::at(path_tail(fname.as_ptr())),
+                SPL_FNAME_ADD.to_bytes(),
+            )
+        };
         lp
     } else {
         old_lp
     };
     *lpp = lp;
 
-    estack_push(ETYPE_SPELL, fname, 0 as LineNr);
+    estack_push(ETYPE_SPELL, fname.as_ptr().cast_mut(), 0 as LineNr);
     *did_estack_push = true;
 
     // SAFETY: `lp` is either this frame's allocation or the caller's
@@ -223,7 +228,7 @@ unsafe fn load_spl(
 unsafe fn read_spl(
     spl: &mut Spl,
     slang: &mut SpellLang,
-    fname: *mut c_char,
+    fname: &CStr,
     lang: *mut c_char,
     fresh: bool,
 ) -> bool {
@@ -238,7 +243,7 @@ unsafe fn read_spl(
         Err(SpellReadError::Other) => {
             let why = spl.last_error();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = unsafe { c_str(fname) };
+            let fname = msg_cstr(fname);
             semsg!("E5042: Failed to read spell file {fname}: {why}");
             return false;
         }
@@ -720,13 +725,14 @@ fn read_tree_node(
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-pub(super) unsafe fn spell_reload_one(fname: *mut c_char, added_word: bool) {
+pub(super) fn spell_reload_one(fname: &CStr, added_word: bool) {
     // SAFETY: the caller promises the path; the language list is global
     // and only walked here.
     let mut didit = false;
     let mut slang = first_lang.get();
     while !slang.is_null() {
-        if unsafe { path_full_compare(fname, (*slang).sl_fname, false, true) } as c_uint
+        if unsafe { path_full_compare(fname.as_ptr().cast_mut(), (*slang).sl_fname, false, true) }
+            as c_uint
             == kEqualFiles as c_uint
         {
             unsafe { slang_clear(slang) };

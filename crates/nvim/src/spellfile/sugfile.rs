@@ -45,17 +45,15 @@ use std::path::Path;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::getchar::state::got_int;
 use crate::memline::ml_append_buf;
-use crate::memory::{xfree, xmalloc, xstrlcpy};
+use crate::memory::XString;
 use crate::message::e_write;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
-use crate::types::{
-    ColNr, Failed, GArray, LineNr, MAXPATHL, NUL, SpellIdx, SpellLang, int16_t, size_t, uint16_t,
-};
+use crate::types::{ColNr, Failed, GArray, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
 
 use super::wordtree::{WordNode, tree_add_word, wordtree_alloc, wordtree_compress};
 use super::write::{SplWriter, clear_node, put_node};
@@ -73,13 +71,14 @@ use super::{
 /// # Safety
 ///
 /// `wfname` must be the NUL-terminated path of a readable `.spl`.
-pub(super) unsafe fn spell_make_sugfile(spin: &mut SpellInfo, wfname: *mut c_char) {
+pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
     // SAFETY: `wfname` is a valid path and every pointer below is either
     // from `spin` or from the language just loaded.
     // Prefer an already-loaded copy of this file.
     let mut slang = first_lang.get();
     while !slang.is_null() {
-        if unsafe { path_full_compare(wfname, (*slang).sl_fname, false, true) } as c_uint
+        if unsafe { path_full_compare(wfname.as_ptr().cast_mut(), (*slang).sl_fname, false, true) }
+            as c_uint
             == kEqualFiles as c_uint
         {
             break;
@@ -105,7 +104,6 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut SpellInfo, wfname: *mut c_cha
     spin.si_foldwcount = 0;
 
     spell_message(spin, c"Performing soundfolding...");
-    let mut fname: *mut c_char = core::ptr::null_mut();
     if unsafe { sug_filltree(spin, slang) }.is_ok() && sug_maketable(spin) != FAIL {
         let done = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count } as i64;
         smsg!(0, "Number of words after soundfolding: {}", done);
@@ -115,15 +113,14 @@ pub(super) unsafe fn spell_make_sugfile(spin: &mut SpellInfo, wfname: *mut c_cha
 
         // Same path as the `.spl`, with the extension's last two
         // letters swapped: "spl" becomes "sug".
-        fname = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<c_char>();
-        unsafe { xstrlcpy(fname, wfname, MAXPATHL as size_t) };
-        let len = unsafe { cstr::bytes_at(fname) }.len() as isize;
-        unsafe { *fname.offset(len - 2) = b'u' as c_char };
-        unsafe { *fname.offset(len - 1) = b'g' as c_char };
-        unsafe { sug_write(spin, fname) };
+        let mut bytes = wfname.to_bytes().to_vec();
+        let len = bytes.len();
+        bytes[len - 2] = b'u';
+        bytes[len - 1] = b'g';
+        let fname = XString::from_bytes(&bytes);
+        sug_write(spin, fname.as_cstr());
     }
 
-    unsafe { xfree(fname.cast()) };
     if free_slang {
         unsafe { slang_free(slang) };
     }
@@ -359,17 +356,17 @@ fn offset2bytes(nr: c_int, buf: &mut [u8; 4]) -> usize {
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-unsafe fn sug_write(spin: &mut SpellInfo, fname: *mut c_char) {
+fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
     // SAFETY: the caller promises the path.
-    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname) }));
+    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname.as_ptr()) }));
     let Ok(file) = File::create(path) else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
         return;
     };
     // SAFETY: as above.
-    let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
+    let name = unsafe { CStr::from_ptr(fname.as_ptr()) }.to_string_lossy();
     spell_message_fmt(spin, format_args!("Writing suggestion file {name}..."));
 
     let mut w = SplWriter::new(file);

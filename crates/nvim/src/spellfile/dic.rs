@@ -48,7 +48,7 @@ use crate::mbyte::{mb_charlen, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::state::{msg_col, msg_didout};
 use crate::message::{msg_clr_eos, msg_display_elided, msg_start};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
@@ -73,23 +73,23 @@ use super::{
 ///
 /// `fname` must be a NUL-terminated path and `affile` the affix file that
 /// goes with it.
-pub(super) unsafe fn spell_read_dic(
+pub(super) fn spell_read_dic(
     spin: &mut SpellInfo,
-    fname: *mut c_char,
+    fname: &CStr,
     affile: &mut AffFile,
 ) -> Result<(), Failed> {
     // SAFETY: the caller promises the path and the affix file; every buffer
     // below is sized for what is written into it.
-    let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
+    let fd = unsafe { os_fopen(fname.as_ptr(), c"r".as_ptr()) };
     if fd.is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
         return Err(Failed);
     }
 
     let mut ht = HashTab::init();
-    let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
+    let name = unsafe { CStr::from_ptr(fname.as_ptr()) }.to_string_lossy();
     spell_message_fmt(&*spin, format_args!("Reading dictionary file {name}..."));
 
     // Force the first progress message.
@@ -101,7 +101,7 @@ pub(super) unsafe fn spell_read_dic(
         || !ascii_isdigit(unsafe { *skipwhite(line.as_mut_ptr()) } as c_int)
     {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         semsg!("E760: No word count in {fname}");
     }
 
@@ -136,7 +136,7 @@ pub(super) unsafe fn spell_read_dic(
             pc = unsafe { string_convert(conv, line.as_mut_ptr(), core::ptr::null_mut()) };
             if pc.is_null() {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, line) = unsafe { (c_str(fname), c_str(line.as_mut_ptr())) };
+                let (fname, line) = unsafe { (msg_cstr(fname), c_str(line.as_mut_ptr())) };
                 smsg!(
                     0,
                     "Conversion failure for word in {fname} line {}: {line}",
@@ -210,11 +210,11 @@ pub(super) unsafe fn spell_read_dic(
             // just the first, plus a count at the end.
             if p_verbose() > 0 {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, dw) = unsafe { (c_str(fname), c_str(dw)) };
+                let (fname, dw) = unsafe { (msg_cstr(fname), c_str(dw)) };
                 smsg!(0, "Duplicate word in {fname} line {}: {dw}", lnum);
             } else if duplicate == 0 {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, dw) = unsafe { (c_str(fname), c_str(dw)) };
+                let (fname, dw) = unsafe { (msg_cstr(fname), c_str(dw)) };
                 smsg!(0, "First duplicate word in {fname} line {}: {dw}", lnum);
             }
             duplicate += 1;
@@ -277,12 +277,12 @@ pub(super) unsafe fn spell_read_dic(
 
     if duplicate > 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         smsg!(0, "{} duplicate word(s) in {fname}", duplicate);
     }
     if spin.si_ascii != 0 && non_ascii > 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         smsg!(
             0,
             "Ignored {} word(s) with non-ASCII characters in {fname}",

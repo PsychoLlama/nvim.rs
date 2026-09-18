@@ -238,7 +238,7 @@ unsafe fn spell_load_cb(
         let fname = unsafe { *fnames.offset(i as isize) };
         let lang = unsafe { (*slp).sl_lang.as_mut_ptr() };
         let none = core::ptr::null_mut();
-        let slang = unsafe { spell_load_file(fname, lang, none, false) };
+        let slang = unsafe { spell_load_file(cstr::at(fname), lang, none, false) };
         if slang.is_null() {
             continue;
         }
@@ -371,7 +371,7 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
         if slang.is_null() {
             if filename {
                 let name = lang.as_mut_ptr();
-                unsafe { spell_load_file(name, name, core::ptr::null_mut(), false) };
+                unsafe { spell_load_file(cstr::at(name), name, core::ptr::null_mut(), false) };
             } else {
                 unsafe { spell_load_lang(lang.as_mut_ptr()) };
                 // The autocommands may have destroyed the buffer being
@@ -495,7 +495,8 @@ pub fn parse_spelllang(mut window: Win) -> Result<(), OptError> {
                     }
                 }
                 let (file, name) = (spf_name.as_mut_ptr(), lang.as_mut_ptr());
-                slang = unsafe { spell_load_file(file, name, core::ptr::null_mut(), true) };
+                slang =
+                    unsafe { spell_load_file(cstr::at(file), name, core::ptr::null_mut(), true) };
 
                 // If any language has NOBREAK assume the additions do too.
                 if !slang.is_null() && nobreak {

@@ -10,10 +10,10 @@ use crate::cstr;
 use crate::getchar::state::got_int;
 use crate::hashtab::{hash_clear_all, hash_init};
 use crate::mbyte::convert_setup;
-use crate::memory::{xfree, xmalloc, xstrlcpy};
+use crate::memory::XString;
 use crate::message::{e_exists, e_invarg};
 use crate::message::{emsg, msg, verbose_enter, verbose_leave};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::{p_msm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_isdir, os_path_exists};
@@ -22,13 +22,11 @@ use crate::semsg;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::strings::has_bytes;
 use crate::strings::has_char;
-use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
     Buffer, CONV_NONE, EStackType, ExArg, FAIL, Failed, FileComparison, HashTab, MAXPATHL, NUL, OK,
-    OptInt, RegProg, RepItem, SPL_FNAME_TMPL, SpellAddType, SpellTab, VimConv, XDGVarType, size_t,
-    time_t,
+    OptInt, RegProg, RepItem, SpellAddType, SpellTab, VimConv, XDGVarType, time_t,
 };
 use crate::ui::ui_flush;
 use core::ffi::CStr;
@@ -474,7 +472,6 @@ pub unsafe fn mkspell(
     over_write: bool,
     added_word: bool,
 ) {
-    let mut fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut afile = [::core::ptr::null_mut::<AffFile>(); MAXREGIONS as usize];
     let mut spin = SpellInfo::new();
     spin.si_verbose = !added_word as ::core::ffi::c_int;
@@ -482,8 +479,7 @@ pub unsafe fn mkspell(
     spin.si_followup = 1;
     spin.si_rem_accents = 1;
 
-    // SAFETY: the caller promises the paths; `wfname` and `fname` are
-    // MAXPATHL buffers, which is the bound every writer below is given.
+    // SAFETY: `si_commonwords` is this frame's own.
     unsafe { hash_init(&raw mut spin.si_commonwords) };
     spin.si_newcomp_id = 127;
 
@@ -491,28 +487,25 @@ pub unsafe fn mkspell(
     // more, the first is the output and the rest are the inputs.
     let innames = unsafe { fnames.offset(if fcount == 1 { 0 } else { 1 }) };
     let mut incount = fcount - 1;
-    let wfname = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<::core::ffi::c_char>();
+    let mut wfname = XString::new();
     if fcount >= 1 {
-        incount = unsafe { output_name(wfname, fnames, fcount, spin.si_ascii != 0, incount) };
-        if has_bytes(
-            unsafe { cstr::at(path_tail(wfname)) },
-            SPL_FNAME_ASCII.to_bytes(),
-        ) {
+        // SAFETY: the caller promises the paths.
+        (wfname, incount) = unsafe { output_name(fnames, fcount, spin.si_ascii != 0, incount) };
+        // SAFETY: `wfname` is NUL-terminated, so its tail is too.
+        let tail = unsafe { cstr::at(path_tail(wfname.as_ptr())) };
+        if has_bytes(tail, SPL_FNAME_ASCII.to_bytes()) {
             spin.si_ascii = 1;
         }
-        if has_bytes(
-            unsafe { cstr::at(path_tail(wfname)) },
-            SPL_FNAME_ADD.to_bytes(),
-        ) {
+        if has_bytes(tail, SPL_FNAME_ADD.to_bytes()) {
             spin.si_add = 1;
         }
     }
+    let wfname = wfname.as_cstr();
 
     '_theend: {
-        if !unsafe { output_is_writable(wfname, incount, over_write) } {
+        if !output_is_writable(wfname, incount, over_write) {
             break '_theend;
         }
-        fname = unsafe { xmalloc(MAXPATHL as size_t) }.cast::<::core::ffi::c_char>();
         if !unsafe { read_region_names(&mut spin, innames, incount) } {
             break '_theend;
         }
@@ -524,7 +517,7 @@ pub unsafe fn mkspell(
             spin.si_clear_chartab = 1;
         }
 
-        let mut error = unsafe { read_inputs(&mut spin, innames, incount, fname, &mut afile) };
+        let mut error = unsafe { read_inputs(&mut spin, innames, incount, &mut afile) };
         if !spin.si_compflags.is_null() && spin.si_nobreak != 0 {
             let text = c"Warning: both compounding and NOBREAK specified";
             msg(gettext(text), 0);
@@ -539,9 +532,9 @@ pub unsafe fn mkspell(
             unsafe { wordtree_compress(&mut spin, root, c"prefixes") };
         }
         if !error && !got_int.get() {
-            let name = unsafe { CStr::from_ptr(wfname) }.to_string_lossy();
+            let name = wfname.to_string_lossy();
             spell_message_fmt(&spin, format_args!("Writing spell file {name}..."));
-            error = unsafe { write_vim_spell(&mut spin, wfname) }.is_err();
+            error = write_vim_spell(&mut spin, wfname).is_err();
             spell_message(&spin, c"Done!");
             let used = spin.si_memtot;
             spell_message_fmt(
@@ -549,7 +542,7 @@ pub unsafe fn mkspell(
                 format_args!("Estimated runtime memory use: {used} bytes"),
             );
             if !error {
-                unsafe { spell_reload_one(wfname, added_word) };
+                spell_reload_one(wfname, added_word);
             }
         }
 
@@ -569,62 +562,55 @@ pub unsafe fn mkspell(
         // so the arena goes first.
         spin.si_arena.clear();
         if spin.si_sugtime != 0 && !error && !got_int.get() {
-            unsafe { spell_make_sugfile(&mut spin, wfname) };
+            spell_make_sugfile(&mut spin, wfname);
         }
     }
-
-    unsafe { xfree(fname.cast()) };
-    unsafe { xfree(wfname.cast()) };
 }
 
-/// Write the output path into `wfname` and say how many inputs there are.
+/// The output path, and how many inputs there are.
 ///
 /// A lone `foo.add` writes `foo.add.spl`; any other lone name is a stem the
 /// encoding is appended to; a first name already ending in `.spl` is taken
 /// as it stands. `default_incount` is what to report when the first name
 /// was only the output.
 ///
+/// The name is built by concatenation rather than by `vim_snprintf` into a
+/// [`MAXPATHL`] buffer -- the format was `"%s.spl"`, `"%s.%s.spl"` and a
+/// straight copy, none of which needs a formatter. The cap stays: upstream
+/// truncated at `MAXPATHL`, and a path longer than that only fails to open,
+/// so truncating here keeps the same answer.
+///
 /// # Safety
 ///
-/// `wfname` must have room for [`MAXPATHL`] bytes and `fnames` hold
-/// `fcount` NUL-terminated paths, at least one.
+/// `fnames` must hold `fcount` NUL-terminated paths, at least one.
 unsafe fn output_name(
-    wfname: *mut ::core::ffi::c_char,
     fnames: *mut *mut ::core::ffi::c_char,
     fcount: ::core::ffi::c_int,
     ascii: bool,
     default_incount: ::core::ffi::c_int,
-) -> ::core::ffi::c_int {
-    // SAFETY: the caller promises the paths and the buffer's size, which is
-    // the bound both writers below are given.
-    let first = unsafe { *fnames };
-    let len = unsafe { cstr::bytes_at(first) }.len();
+) -> (XString, ::core::ffi::c_int) {
+    // SAFETY: the caller promises the paths.
+    let first = unsafe { cstr::bytes_at(*fnames) };
     let ends_with = |ext: &::core::ffi::CStr| {
-        len > 4 && unsafe { cstr::eq(first.add(len).sub(4), ext.as_ptr()) }
+        let ext = ext.to_bytes();
+        first.len() > ext.len() && first.ends_with(ext)
     };
     let encoding = spell_enc();
-    let enc = if ascii {
-        c"ascii".as_ptr()
-    } else {
-        encoding.as_ptr()
-    };
+    let enc: &[u8] = if ascii { b"ascii" } else { &encoding };
 
-    if fcount == 1 {
-        if ends_with(c".add") {
-            unsafe { vim_snprintf(wfname, MAXPATHL as size_t, c"%s.spl".as_ptr(), first) };
-        } else {
-            let fmt = SPL_FNAME_TMPL.as_ptr();
-            unsafe { vim_snprintf(wfname, MAXPATHL as size_t, fmt, first, enc) };
-        }
-        return 1;
-    }
-    if ends_with(c".spl") {
-        unsafe { xstrlcpy(wfname, first, MAXPATHL as size_t) };
+    let mut name = XString::new();
+    if ends_with(c".spl") && fcount != 1 {
+        name.push_bytes(first);
     } else {
-        let fmt = SPL_FNAME_TMPL.as_ptr();
-        unsafe { vim_snprintf(wfname, MAXPATHL as size_t, fmt, first, enc) };
+        name.push_bytes(first);
+        if !(fcount == 1 && ends_with(c".add")) {
+            name.push_byte(b'.');
+            name.push_bytes(enc);
+        }
+        name.push_bytes(b".spl");
     }
-    default_incount
+    name.truncate(name.len().min(MAXPATHL as usize - 1));
+    (name, if fcount == 1 { 1 } else { default_incount })
 }
 
 /// Can `:mkspell` write here? Reports why not, if not.
@@ -632,16 +618,12 @@ unsafe fn output_name(
 /// # Safety
 ///
 /// `wfname` must be a NUL-terminated path.
-unsafe fn output_is_writable(
-    wfname: *mut ::core::ffi::c_char,
-    incount: ::core::ffi::c_int,
-    over_write: bool,
-) -> bool {
+fn output_is_writable(wfname: &CStr, incount: ::core::ffi::c_int, over_write: bool) -> bool {
     // SAFETY: the caller promises the path.
     if incount <= 0 {
         emsg(gettext(e_invarg));
     } else if has_char(
-        unsafe { cstr::at(path_tail(wfname)) },
+        unsafe { cstr::at(path_tail(wfname.as_ptr())) },
         '_' as ::core::ffi::c_int,
     ) {
         emsg(gettext(c"E751: Output file name must not have region name"));
@@ -650,11 +632,11 @@ unsafe fn output_is_writable(
             "E754: Only up to {} regions supported",
             MAXREGIONS as ::core::ffi::c_int
         );
-    } else if !over_write && unsafe { os_path_exists(wfname) } {
+    } else if !over_write && unsafe { os_path_exists(wfname.as_ptr()) } {
         emsg(gettext(e_exists));
-    } else if unsafe { os_isdir(wfname) } {
+    } else if unsafe { os_isdir(wfname.as_ptr()) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let wfname = unsafe { c_str(wfname) };
+        let wfname = msg_cstr(wfname);
         semsg!("E17: \"{wfname}\" is a directory");
     } else {
         return true;
@@ -713,31 +695,35 @@ fn to_lower_ascii(c: ::core::ffi::c_char) -> ::core::ffi::c_char {
 ///
 /// # Safety
 ///
-/// `innames` must hold `incount` NUL-terminated paths, `fname` must have
-/// room for [`MAXPATHL`] bytes, and `afile` at least `incount` slots.
+/// `innames` must hold `incount` NUL-terminated paths and `afile` at least
+/// `incount` slots.
 unsafe fn read_inputs(
     spin: &mut SpellInfo,
     innames: *mut *mut ::core::ffi::c_char,
     incount: ::core::ffi::c_int,
-    fname: *mut ::core::ffi::c_char,
     afile: &mut [*mut AffFile],
 ) -> bool {
-    // SAFETY: the caller promises the paths and the buffer's size, which is
-    // the bound `vim_snprintf` is given.
+    // SAFETY: the caller promises the paths.
     for (i, aff) in afile.iter_mut().enumerate().take(incount as usize) {
         spin.si_conv.vc_type = CONV_NONE;
         spin.si_region = 1 << i;
-        let stem = unsafe { *innames.add(i) };
-        unsafe { vim_snprintf(fname, MAXPATHL as size_t, c"%s.aff".as_ptr(), stem) };
+        // SAFETY: the caller promises `incount` NUL-terminated paths.
+        let stem = unsafe { cstr::at(*innames.add(i)) };
+        let with_ext = |ext: &[u8]| {
+            let mut name = XString::from_cstr(stem);
+            name.push_bytes(ext);
+            name
+        };
 
-        let failed = if unsafe { os_path_exists(fname) } {
-            *aff = unsafe { spell_read_aff(spin, fname) };
+        let aff_name = with_ext(b".aff");
+        let failed = if unsafe { os_path_exists(aff_name.as_ptr()) } {
+            *aff = unsafe { spell_read_aff(spin, aff_name.as_cstr()) };
             aff.is_null() || {
-                unsafe { vim_snprintf(fname, MAXPATHL as size_t, c"%s.dic".as_ptr(), stem) };
-                unsafe { spell_read_dic(spin, fname, &mut **aff).is_err() }
+                let dic_name = with_ext(b".dic");
+                unsafe { spell_read_dic(spin, dic_name.as_cstr(), &mut **aff).is_err() }
             }
         } else {
-            unsafe { spell_read_wordfile(spin, stem).is_err() }
+            spell_read_wordfile(spin, stem).is_err()
         };
         let none = ::core::ptr::null_mut();
         let _ = unsafe { convert_setup(&raw mut spin.si_conv, none, none) };

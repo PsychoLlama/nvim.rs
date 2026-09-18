@@ -35,7 +35,7 @@ use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::types::OptStr;
 use crate::winlayer::Win;
-use core::ffi::{c_char, c_int, c_long, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 
 use crate::buffer::BufRef;
 use crate::buffer::buflist_findname_exp;
@@ -160,7 +160,7 @@ pub unsafe fn spell_add_word(
     if what == SPELL_ADD_BAD as SpellAddType || undo {
         // A good entry for the word sorts ahead of the banned one and
         // would win, so it has to go first.
-        opened = unsafe { comment_out_word(fname, word, len, undo) };
+        opened = unsafe { comment_out_word(cstr::at(fname), word, len, undo) };
     }
 
     if !undo {
@@ -232,10 +232,10 @@ pub unsafe fn spell_add_word(
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
 /// `word` must point at `len` bytes the caller owns, readable and writable,
 /// unaliased for the call.
-unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, undo: bool) -> bool {
+unsafe fn comment_out_word(fname: &CStr, word: *mut c_char, len: c_int, undo: bool) -> bool {
     let mut shown = [0 as c_char; MAXPATHL as usize];
     let mut line = [0 as c_char; MAXWLEN * 2];
-    let mut fd: *mut FILE = unsafe { os_fopen(fname, c"r".as_ptr()) };
+    let mut fd: *mut FILE = unsafe { os_fopen(fname.as_ptr(), c"r".as_ptr()) };
     if fd.is_null() {
         return false;
     }
@@ -260,7 +260,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
         }
 
         unsafe { fclose(fd) };
-        fd = unsafe { os_fopen(fname, c"r+".as_ptr()) };
+        fd = unsafe { os_fopen(fname.as_ptr(), c"r+".as_ptr()) };
         if fd.is_null() {
             break;
         }
@@ -268,7 +268,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
             unsafe { fputc('#' as c_int, fd) };
             if undo {
                 let out = shown.as_mut_ptr();
-                unsafe { home_replace(None, fname, out, MAXPATHL as size_t, true) };
+                unsafe { home_replace(None, fname.as_ptr(), out, MAXPATHL as size_t, true) };
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (word, shown) =
                     unsafe { (c_str_len(word, len as usize), c_str(shown.as_ptr())) };

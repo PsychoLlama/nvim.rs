@@ -219,14 +219,7 @@ fn the_golden_round_trips_through_the_reader() {
     let path = CString::new(at.to_str().expect("a temp path is text")).expect("no interior NUL");
     // SAFETY: the path is this frame's and NUL-terminated; no language name
     // and no old language means a fresh one this case owns.
-    let lp = unsafe {
-        spell_load_file(
-            path.as_ptr().cast_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            true,
-        )
-    };
+    let lp = unsafe { spell_load_file(&path, std::ptr::null_mut(), std::ptr::null_mut(), true) };
     assert!(!lp.is_null(), "the golden loads");
     // SAFETY: the language was just allocated and is freed below.
     let words = unsafe { fold_words(lp) };
@@ -248,14 +241,7 @@ fn the_writer_and_the_reader_agree() {
     let at = sandbox.path("Xdet-utf8.spl");
     let path = CString::new(at.to_str().expect("a temp path is text")).expect("no interior NUL");
     // SAFETY: as the round-trip case above.
-    let lp = unsafe {
-        spell_load_file(
-            path.as_ptr().cast_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            true,
-        )
-    };
+    let lp = unsafe { spell_load_file(&path, std::ptr::null_mut(), std::ptr::null_mut(), true) };
     assert!(!lp.is_null(), "what the writer wrote loads");
     // SAFETY: the language was just allocated and is freed below.
     assert_eq!(unsafe { fold_words(lp) }, vec![WORD.to_string()]);
@@ -277,14 +263,7 @@ fn the_shipped_english_language_loads_with_its_sections() {
         .expect("the shipped language is in the tree");
     let path = CString::new(at.to_str().expect("a repo path is text")).expect("no interior NUL");
     // SAFETY: the path is this frame's and NUL-terminated.
-    let lp = unsafe {
-        spell_load_file(
-            path.as_ptr().cast_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            true,
-        )
-    };
+    let lp = unsafe { spell_load_file(&path, std::ptr::null_mut(), std::ptr::null_mut(), true) };
     assert!(!lp.is_null(), "en.utf-8.spl loads");
     assert_eq!(
         describe(&std::fs::read(&at).expect("the shipped language is readable")),
@@ -378,14 +357,7 @@ fn the_golden_answers_spell_check() {
     let at = sandbox.write("one-utf8.spl", GOLDEN);
     let path = CString::new(at.to_str().expect("a temp path is text")).expect("no interior NUL");
     // SAFETY: the path is this frame's and NUL-terminated.
-    let lp = unsafe {
-        spell_load_file(
-            path.as_ptr().cast_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            true,
-        )
-    };
+    let lp = unsafe { spell_load_file(&path, std::ptr::null_mut(), std::ptr::null_mut(), true) };
     assert!(!lp.is_null(), "the golden loads");
     init_spell_chartab();
 

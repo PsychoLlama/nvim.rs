@@ -35,7 +35,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::spell::WordFlags;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -45,7 +45,7 @@ use std::path::Path;
 use crate::mbyte::encode_char;
 use crate::message::e_write;
 use crate::message::emsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
 use crate::types::{Failed, NUL, time_t};
@@ -119,15 +119,12 @@ impl SplWriter {
 ///
 /// `fname` must be a NUL-terminated path and `spin` must hold finished,
 /// compressed trees.
-pub(super) unsafe fn write_vim_spell(
-    spin: &mut SpellInfo,
-    fname: *mut c_char,
-) -> Result<(), Failed> {
+pub(super) fn write_vim_spell(spin: &mut SpellInfo, fname: &CStr) -> Result<(), Failed> {
     // SAFETY: the caller promises the path.
-    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname) }));
+    let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname.as_ptr()) }));
     let Ok(file) = File::create(path) else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
         return Err(Failed);
     };

@@ -32,10 +32,10 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::smsg;
 use crate::strings::has_char;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
@@ -96,7 +96,7 @@ pub(super) unsafe fn get_affitem(flagtype: c_int, cursor: *mut *mut c_char) -> c
 pub(super) unsafe fn affitem2flag(
     flagtype: c_int,
     item: *mut c_char,
-    fname: *mut c_char,
+    fname: &CStr,
     lnum: c_int,
 ) -> c_uint {
     // SAFETY: the caller promises the strings.
@@ -104,7 +104,7 @@ pub(super) unsafe fn affitem2flag(
     let res = unsafe { get_affitem(flagtype, &raw mut p) };
     if res == 0 {
         // SAFETY: the affix file's name and the offending item.
-        let (file, shown) = unsafe { (c_str(fname), c_str(item)) };
+        let (file, shown) = unsafe { (msg_cstr(fname), c_str(item)) };
         if flagtype == AFT_NUM {
             smsg!(0, "Flag is not a number in {file} line {lnum}: {shown}");
         } else {
@@ -114,7 +114,7 @@ pub(super) unsafe fn affitem2flag(
     // Anything left over means the item was more than one flag.
     if unsafe { *p } as c_int != NUL {
         // SAFETY: as above.
-        let (file, shown) = unsafe { (c_str(fname), c_str(item)) };
+        let (file, shown) = unsafe { (msg_cstr(fname), c_str(item)) };
         smsg!(0, "Affix name too long in {file} line {lnum}: {shown}");
         return 0;
     }

@@ -285,17 +285,17 @@ fn is_info_keyword(name: &[uint8_t]) -> bool {
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: *mut c_char) -> *mut AffFile {
+pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> *mut AffFile {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, the
     // bound `vim_fgets` is given.
-    let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
+    let fd = unsafe { os_fopen(fname.as_ptr(), c"r".as_ptr()) };
     if fd.is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
         return core::ptr::null_mut();
     }
-    let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
+    let name = unsafe { CStr::from_ptr(fname.as_ptr()) }.to_string_lossy();
     spell_message_fmt(&*spin, format_args!("Reading affix file {name}..."));
 
     let mut st = AffState {
@@ -362,7 +362,7 @@ pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: *mut c_char) ->
             };
             if converted_line.is_null() {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let fname = unsafe { c_str(fname) };
+                let fname = msg_cstr(fname);
                 let rline = msg_bytes(read_line(&rline));
                 smsg!(
                     0,
@@ -385,12 +385,12 @@ pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: *mut c_char) ->
         if items.is_empty() {
             continue;
         }
-        if !unsafe { handle_line(spin, aff, &mut st, &items, fname, lnum) } {
+        if !handle_line(spin, aff, &mut st, &items, fname, lnum) {
             break;
         }
     }
 
-    unsafe { finish_aff(spin, aff, &mut st, fname) };
+    finish_aff(spin, aff, &mut st, fname);
     unsafe { fclose(fd) };
     aff
 }
@@ -461,12 +461,12 @@ fn split_items(line: &mut [uint8_t]) -> Vec<&CStr> {
 /// # Safety
 ///
 /// `aff` and `spin` must be live.
-unsafe fn handle_line(
+fn handle_line(
     spin: &mut SpellInfo,
     aff: &mut AffFile,
     st: &mut AffState,
     items: &[&CStr],
-    fname: *mut c_char,
+    fname: &CStr,
     lnum: c_int,
 ) -> bool {
     // SAFETY: the caller promises the two structures.
@@ -482,7 +482,7 @@ unsafe fn handle_line(
         {
             let (fname, af_enc, arg2) = p_enc(|value| unsafe {
                 (
-                    c_str(fname),
+                    msg_cstr(fname),
                     c_str(aff.af_enc),
                     c_str(value.as_ptr().cast_mut()),
                 )
@@ -497,7 +497,7 @@ unsafe fn handle_line(
     }
 
     if is_aff_rule(items, c"FLAG", 2) && aff.af_flagtype == AFT_CHAR {
-        unsafe { handle_flag_type(aff, items, fname, lnum) };
+        handle_flag_type(aff, items, fname, lnum);
         return true;
     }
 
@@ -532,7 +532,7 @@ unsafe fn handle_line(
             && aff.af_pref.ht_used > 0
         {
             // SAFETY: the affix file's own name, NUL-terminated.
-            let fname = unsafe { c_str(fname) };
+            let fname = msg_cstr(fname);
             let _: bool = report_msg(0, || tr_c!(warning, fname, lnum));
         }
         return true;
@@ -552,7 +552,7 @@ unsafe fn handle_line(
     if is_aff_rule(items, c"COMPOUNDRULES", 2) {
         if item_number(items[1]) == 0 {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
+            let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
             smsg!(
                 0,
                 "Wrong COMPOUNDRULES value in {fname} line {}: {arg2}",
@@ -601,7 +601,7 @@ unsafe fn handle_line(
         *slot = item_number(items[1]);
         if *slot == 0 {
             // SAFETY: the affix file's name, NUL-terminated.
-            let (fname, item) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
+            let (fname, item) = (msg_cstr(fname), msg_cstr(items[1]));
             let _: bool = report_msg(0, || tr_c!(complaint, fname, lnum, item));
         }
         return true;
@@ -619,7 +619,7 @@ unsafe fn handle_line(
     if is_aff_rule(items, c"CHECKCOMPOUNDPATTERN", 2) {
         if item_number(items[1]) == 0 {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
+            let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
             smsg!(
                 0,
                 "Wrong CHECKCOMPOUNDPATTERN value in {fname} line {}: {arg2}",
@@ -655,14 +655,14 @@ unsafe fn handle_line(
 
     let is_affix = items[0] == c"PFX" || items[0] == c"SFX";
     if is_affix && st.aff_todo == 0 && items.len() >= 4 {
-        return unsafe { handle_affix_header(spin, aff, st, items, fname, lnum) };
+        return handle_affix_header(spin, aff, st, items, fname, lnum);
     }
     if is_affix
         && st.aff_todo > 0
         && unsafe { cstr::eq(AffHeader::key(st.cur_aff), item_ptr(items[1])) }
         && items.len() >= 5
     {
-        unsafe { handle_affix_entry(spin, aff, st, items, fname, lnum) };
+        handle_affix_entry(spin, aff, st, items, fname, lnum);
         return true;
     }
 
@@ -686,19 +686,19 @@ unsafe fn handle_line(
     if is_aff_rule(items, c"REP", 2) || is_aff_rule(items, c"REPSAL", 2) {
         if !is_digit_byte(first_byte(items[1]) as c_char) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = unsafe { c_str(fname) };
+            let fname = msg_cstr(fname);
             smsg!(0, "Expected REP(SAL) count in {fname} line {}", lnum);
         }
         return true;
     }
     let is_rep = items[0] == c"REP" || items[0] == c"REPSAL";
     if is_rep && items.len() >= 3 {
-        unsafe { add_rep_entry(spin, st, items, fname, lnum) };
+        add_rep_entry(spin, st, items, fname, lnum);
         return true;
     }
 
     if is_aff_rule(items, c"MAP", 2) {
-        unsafe { handle_map(spin, st, items, fname, lnum) };
+        handle_map(spin, st, items, fname, lnum);
         return true;
     }
 
@@ -732,7 +732,7 @@ unsafe fn handle_line(
     }
 
     // SAFETY: a message argument the caller holds as a NUL-terminated string.
-    let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[0]));
+    let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[0]));
     smsg!(
         0,
         "Unrecognized or duplicate item in {fname} line {}: {arg2}",
@@ -771,7 +771,7 @@ pub(super) fn is_digit_byte(c: c_char) -> bool {
 /// # Safety
 ///
 /// As [`handle_line`].
-unsafe fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: *mut c_char, lnum: c_int) {
+fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: &CStr, lnum: c_int) {
     if items[1] == c"long" {
         aff.af_flagtype = AFT_LONG;
     } else if items[1] == c"num" {
@@ -780,7 +780,7 @@ unsafe fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: *mut c_cha
         aff.af_flagtype = AFT_CAPLONG;
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
+        let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
         smsg!(0, "Invalid value for FLAG in {fname} line {}: {arg2}", lnum);
     }
     // Anything already read used the old spelling, so it would be
@@ -797,7 +797,7 @@ unsafe fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: *mut c_cha
         || aff.af_pref.ht_used > 0;
     if used {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
+        let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
         smsg!(0, "FLAG after using flags in {fname} line {}: {arg2}", lnum);
     }
 }
@@ -808,12 +808,7 @@ unsafe fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: *mut c_cha
 /// # Safety
 ///
 /// `spin`, `aff` and the state must be live.
-unsafe fn finish_aff(
-    spin: &mut SpellInfo,
-    aff: &mut AffFile,
-    st: &mut AffState,
-    fname: *mut c_char,
-) {
+fn finish_aff(spin: &mut SpellInfo, aff: &mut AffFile, st: &mut AffState, fname: &CStr) {
     // SAFETY: the caller promises the structures.
     // The case tables are only used to decide whether the word
     // characters need rebuilding; their contents are not kept.
@@ -879,13 +874,13 @@ unsafe fn finish_aff(
                 c"TO".as_ptr()
             };
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (which, fname) = unsafe { (c_str(which), c_str(fname)) };
+            let (which, fname) = unsafe { (c_str(which), msg_cstr(fname)) };
             smsg!(0, "Missing SOFO{which} line in {fname}");
         } else if !spin.si_sal.is_empty() {
             // SAL rules and a SOFO pair are two ways to do the same
             // thing; taking both would be ambiguous.
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let fname = unsafe { c_str(fname) };
+            let fname = msg_cstr(fname);
             smsg!(0, "Both SAL and SOFO lines in {fname}");
         } else {
             unsafe { aff_check_string(spin.si_sofofr, st.sofofrom, c"SOFOFROM") };

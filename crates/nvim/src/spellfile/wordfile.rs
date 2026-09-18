@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::semsg;
 use crate::smsg;
 use crate::spell::WordFlags;
@@ -36,20 +36,17 @@ use super::{MAXLINELEN, MAXREGIONS, SpellInfo, spell_message_fmt};
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-pub(super) unsafe fn spell_read_wordfile(
-    spin: &mut SpellInfo,
-    fname: *mut c_char,
-) -> Result<(), Failed> {
+pub(super) fn spell_read_wordfile(spin: &mut SpellInfo, fname: &CStr) -> Result<(), Failed> {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, which is
     // the bound `vim_fgets` is given.
-    let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
+    let fd = unsafe { os_fopen(fname.as_ptr(), c"r".as_ptr()) };
     if fd.is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let fname = unsafe { c_str(fname) };
+        let fname = msg_cstr(fname);
         semsg!("E484: Can't open file {fname}");
         return Err(Failed);
     }
-    let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
+    let name = unsafe { CStr::from_ptr(fname.as_ptr()) }.to_string_lossy();
     spell_message_fmt(&*spin, format_args!("Reading word file {name}..."));
 
     let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
@@ -81,7 +78,7 @@ pub(super) unsafe fn spell_read_wordfile(
             pc = unsafe { string_convert(conv, rline.as_mut_ptr(), core::ptr::null_mut()) };
             if pc.is_null() {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, rline) = unsafe { (c_str(fname), c_str(rline.as_mut_ptr())) };
+                let (fname, rline) = unsafe { (msg_cstr(fname), c_str(rline.as_mut_ptr())) };
                 smsg!(
                     0,
                     "Conversion failure for word in {fname} line {}: {rline}",
@@ -96,7 +93,7 @@ pub(super) unsafe fn spell_read_wordfile(
 
         if unsafe { *line } as c_int == b'/' as c_int {
             line = unsafe { line.add(1) };
-            unsafe { read_wordfile_header(spin, line, fname, lnum, did_word) };
+            read_wordfile_header(spin, line, fname, lnum, did_word);
             continue;
         }
 
@@ -122,7 +119,7 @@ pub(super) unsafe fn spell_read_wordfile(
                         let n = (d - b'0') as c_int;
                         if n == 0 || n > spin.si_region_count {
                             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                            let (fname, p) = unsafe { (c_str(fname), c_str(p)) };
+                            let (fname, p) = unsafe { (msg_cstr(fname), c_str(p)) };
                             smsg!(0, "Invalid region nr in {fname} line {}: {p}", lnum);
                             break;
                         }
@@ -130,7 +127,7 @@ pub(super) unsafe fn spell_read_wordfile(
                     }
                     _ => {
                         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                        let (fname, p) = unsafe { (c_str(fname), c_str(p)) };
+                        let (fname, p) = unsafe { (msg_cstr(fname), c_str(p)) };
                         smsg!(0, "Unrecognized flags in {fname} line {}: {p}", lnum);
                         break;
                     }
@@ -168,10 +165,10 @@ pub(super) unsafe fn spell_read_wordfile(
 /// # Safety
 ///
 /// `line` and `fname` must be NUL-terminated.
-unsafe fn read_wordfile_header(
+fn read_wordfile_header(
     spin: &mut SpellInfo,
     mut line: *mut c_char,
-    fname: *mut c_char,
+    fname: &CStr,
     lnum: LineNr,
     did_word: bool,
 ) {
@@ -180,7 +177,7 @@ unsafe fn read_wordfile_header(
     if unsafe { cstr::starts_with(line, b"encoding=") } {
         if spin.si_conv.vc_type != CONV_NONE {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (fname, arg2) = unsafe { (c_str(fname), c_str(line.sub(1))) };
+            let (fname, arg2) = unsafe { (msg_cstr(fname), c_str(line.sub(1))) };
             smsg!(
                 0,
                 "Duplicate /encoding= line ignored in {fname} line {}: {arg2}",
@@ -188,7 +185,7 @@ unsafe fn read_wordfile_header(
             );
         } else if did_word {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (fname, arg2) = unsafe { (c_str(fname), c_str(line.sub(1))) };
+            let (fname, arg2) = unsafe { (msg_cstr(fname), c_str(line.sub(1))) };
             smsg!(
                 0,
                 "/encoding= line after word ignored in {fname} line {}: {arg2}",
@@ -205,7 +202,11 @@ unsafe fn read_wordfile_header(
             {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
                 let (fname, line, arg2) = p_enc(|value| unsafe {
-                    (c_str(fname), c_str(line), c_str(value.as_ptr().cast_mut()))
+                    (
+                        msg_cstr(fname),
+                        c_str(line),
+                        c_str(value.as_ptr().cast_mut()),
+                    )
                 });
                 smsg!(
                     0,
@@ -218,7 +219,7 @@ unsafe fn read_wordfile_header(
     } else if unsafe { cstr::starts_with(line, b"regions=") } {
         if spin.si_region_count > 1 {
             // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-            let (fname, line) = unsafe { (c_str(fname), c_str(line)) };
+            let (fname, line) = unsafe { (msg_cstr(fname), c_str(line)) };
             smsg!(
                 0,
                 "Duplicate /regions= line ignored in {fname} line {}: {line}",
@@ -228,7 +229,7 @@ unsafe fn read_wordfile_header(
             line = unsafe { line.add(8) };
             if unsafe { cstr::bytes_at(line) }.len() > (MAXREGIONS as c_int * 2) as size_t {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-                let (fname, line) = unsafe { (c_str(fname), c_str(line)) };
+                let (fname, line) = unsafe { (msg_cstr(fname), c_str(line)) };
                 smsg!(0, "Too many regions in {fname} line {}: {line}", lnum);
             } else {
                 // SAFETY: the caller's NUL-terminated line.
@@ -239,7 +240,7 @@ unsafe fn read_wordfile_header(
         }
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string, one apiece.
-        let (fname, arg2) = unsafe { (c_str(fname), c_str(line.sub(1))) };
+        let (fname, arg2) = unsafe { (msg_cstr(fname), c_str(line.sub(1))) };
         smsg!(0, "/ line ignored in {fname} line {}: {arg2}", lnum);
     }
 }

@@ -22,7 +22,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message_fmt::msg_cstr;
 use crate::smsg;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -49,12 +49,12 @@ use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn handle_affix_header(
+pub(super) fn handle_affix_header(
     spin: &mut SpellInfo,
     aff: &mut AffFile,
     st: &mut AffState,
     items: &[&CStr],
-    fname: *mut c_char,
+    fname: &CStr,
     lnum: c_int,
 ) -> bool {
     // SAFETY: `key` is AH_KEY_LEN and `xstrlcpy` is given that bound.
@@ -75,7 +75,7 @@ pub(super) unsafe fn handle_affix_header(
         st.cur_aff = unsafe { AffHeader::of_key(hi.hi_key) };
         if (unsafe { (*st.cur_aff).ah_combine } != 0) != combines {
             // SAFETY: the affix file's name, NUL-terminated.
-            let (file, item) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
+            let (file, item) = (msg_cstr(fname), msg_cstr(items[1]));
             smsg!(
                 0,
                 "Different combining flag in continued affix block in {file} line {lnum}: {item}"
@@ -83,7 +83,7 @@ pub(super) unsafe fn handle_affix_header(
         }
         if unsafe { (*st.cur_aff).ah_follows } == 0 {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
+            let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
             smsg!(0, "Duplicate affix in {fname} line {}: {arg2}", lnum);
         }
     } else {
@@ -110,7 +110,7 @@ pub(super) unsafe fn handle_affix_header(
         ];
         if clashes.contains(&unsafe { (*st.cur_aff).ah_flag }) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[1]));
+            let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[1]));
             smsg!(
                 0,
                 "Affix also used for BAD/RARE/KEEPCASE/NEEDAFFIX/NEEDCOMPOUND/NOSUGGEST in {fname} line {}: {arg2}",
@@ -132,12 +132,12 @@ pub(super) unsafe fn handle_affix_header(
     }
     if items.len() > lasti && !aff.af_ignoreextra && !items[lasti].to_bytes().starts_with(b"#") {
         // SAFETY: the affix file's name, NUL-terminated.
-        let (file, item) = (unsafe { c_str(fname) }, msg_cstr(items[lasti]));
+        let (file, item) = (msg_cstr(fname), msg_cstr(items[lasti]));
         smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
     if items[2] != c"Y" && items[2] != c"N" {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[2]));
+        let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[2]));
         smsg!(0, "Expected Y or N in {fname} line {}: {arg2}", lnum);
     }
 
@@ -163,12 +163,12 @@ pub(super) unsafe fn handle_affix_header(
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn handle_affix_entry(
+pub(super) fn handle_affix_entry(
     spin: &mut SpellInfo,
     aff: &mut AffFile,
     st: &mut AffState,
     items: &[&CStr],
-    fname: *mut c_char,
+    fname: &CStr,
     lnum: c_int,
 ) {
     // SAFETY: `buf` is MAXLINELEN, which is the bound the snprintf calls
@@ -180,7 +180,7 @@ pub(super) unsafe fn handle_affix_entry(
         && (items[lasti] != c"-" || items.len() != lasti + 1)
     {
         // SAFETY: the affix file's name, NUL-terminated.
-        let (file, item) = (unsafe { c_str(fname) }, msg_cstr(items[lasti]));
+        let (file, item) = (msg_cstr(fname), msg_cstr(items[lasti]));
         smsg!(0, "Trailing text in {file} line {lnum}: {item}");
     }
     st.aff_todo -= 1;
@@ -224,13 +224,13 @@ pub(super) unsafe fn handle_affix_entry(
         };
         if unsafe { (*entry).ae_prog }.is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let (fname, arg2) = (unsafe { c_str(fname) }, msg_cstr(items[4]));
+            let (fname, arg2) = (msg_cstr(fname), msg_cstr(items[4]));
             smsg!(0, "Broken condition in {fname} line {}: {arg2}", lnum);
         }
     }
 
     if is_prefix && aff.af_pfxpostpone != 0 && unsafe { (*entry).ae_flags }.is_null() {
-        unsafe { postpone_prefix(spin, st, entry, items) };
+        postpone_prefix(spin, st, entry, items);
     }
 }
 
@@ -239,7 +239,7 @@ pub(super) unsafe fn handle_affix_entry(
 /// # Safety
 ///
 /// As [`handle_affix_entry`].
-pub(super) unsafe fn postpone_prefix(
+pub(super) fn postpone_prefix(
     spin: &mut SpellInfo,
     st: &mut AffState,
     entry: *mut AffEntry,
@@ -298,7 +298,7 @@ pub(super) unsafe fn postpone_prefix(
 
     // Only a prefix with nothing to chop can be applied at match time.
     if unsafe { (*entry).ae_chop }.is_null() {
-        unsafe { file_postponed_prefix(spin, st, entry, upper) };
+        file_postponed_prefix(spin, st, entry, upper);
     }
 
     // Nothing in the block was postponed after all; give the id back.
@@ -313,7 +313,7 @@ pub(super) unsafe fn postpone_prefix(
 /// # Safety
 ///
 /// As [`postpone_prefix`].
-pub(super) unsafe fn file_postponed_prefix(
+pub(super) fn file_postponed_prefix(
     spin: &mut SpellInfo,
     st: &mut AffState,
     entry: *mut AffEntry,
