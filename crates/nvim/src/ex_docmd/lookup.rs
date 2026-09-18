@@ -115,11 +115,11 @@ pub(crate) fn one_letter_cmd(at: impl Fn(usize) -> u8) -> Option<CmdIdx> {
 /// when the name was spelled out in full rather than abbreviated. `None` is
 /// upstream's null answer: a user command the typed abbreviation cannot
 /// choose between.
-pub fn find_ex_command(excmd: &mut ExArg, full: Option<&mut bool>) -> Option<usize> {
+pub fn find_ex_command(excmd: &mut ExArg, mut full: Option<&mut bool>) -> Option<usize> {
     let cmd = excmd.line.cmd;
     if let Some(idx) = one_letter_cmd(|n| excmd.line.byte_at(cmd + n)) {
         excmd.cmdidx = idx;
-        if let Some(full) = full {
+        if let Some(full) = full.as_deref_mut() {
             *full = true;
         }
         return Some(cmd + 1);
@@ -180,7 +180,7 @@ pub fn find_ex_command(excmd: &mut ExArg, full: Option<&mut bool>) -> Option<usi
         while row < ROWS {
             let name = cmdnames[row].cmd_name;
             if name_matches(name, word) {
-                if let Some(full) = full
+                if let Some(full) = full.as_deref_mut()
                     && byte_at(name, len as isize) == NUL
                 {
                     *full = true;
@@ -200,7 +200,7 @@ pub fn find_ex_command(excmd: &mut ExArg, full: Option<&mut bool>) -> Option<usi
         while excmd.line.byte_at(at).is_ascii_alphanumeric() {
             at += 1;
         }
-        end = unsafe { find_ucmd(excmd, at, None, ptr::null_mut(), ptr::null_mut()) };
+        end = unsafe { find_ucmd(excmd, at, full, ptr::null_mut(), ptr::null_mut()) };
     }
     if end == Some(cmd) {
         excmd.cmdidx = CmdIdx::SIZE;

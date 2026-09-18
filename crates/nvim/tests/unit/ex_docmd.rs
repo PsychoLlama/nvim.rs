@@ -398,6 +398,30 @@ fn a_user_command_parses_to_the_user_row() {
     run(&editor, "delcommand Rec");
 }
 
+#[test]
+fn exists_says_whether_a_command_name_was_spelled_out_in_full() {
+    let editor = editor_lock();
+    let _restore = Restore::new(&editor);
+    // 0 is "no such command", 1 an abbreviation, 2 the full name, 3 a user
+    // command the abbreviation cannot choose between. The 1-versus-2 answer
+    // is the `full` flag `find_ex_command` writes, which nothing else in the
+    // crate reads -- and which a user command gets from `find_ucmd` rather
+    // than from the command table.
+    assert_eq!(num(&editor, r#"exists(":print")"#), 2);
+    assert_eq!(num(&editor, r#"exists(":pri")"#), 1);
+    assert_eq!(num(&editor, r#"exists(":Nosuchcommand")"#), 0);
+    run(&editor, "command! MyCmd let g:seen = 1");
+    assert_eq!(num(&editor, r#"exists(":MyCmd")"#), 2);
+    assert_eq!(num(&editor, r#"exists(":My")"#), 1);
+    run(&editor, "command! MyOther let g:seen = 2");
+    assert_eq!(num(&editor, r#"exists(":My")"#), 3);
+    run(&editor, "delcommand MyCmd");
+    run(&editor, "delcommand MyOther");
+    // A modifier counts as a command, and answers the same 1/2.
+    assert_eq!(num(&editor, r#"exists(":silent")"#), 2);
+    assert_eq!(num(&editor, r#"exists(":sil")"#), 1);
+}
+
 // ---------------------------------------------------------------------------
 // The dispatch
 
