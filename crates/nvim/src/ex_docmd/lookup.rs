@@ -127,7 +127,11 @@ pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut CmdIdx) -> bool {
 /// `excmd` must point at the command's `ExArg`, unaliased for the call. `full`
 /// must point at a writable `int` the caller owns.
 pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_char {
-    let mut p = excmd.cmd_ptr();
+    // The command word, read once. `ExArg::cmd_ptr` measures the line to
+    // answer, and the row scan below asked it per row: nine calls here were
+    // `evalbench`'s biggest single item after the cursors became offsets.
+    let cmd = excmd.cmd_ptr();
+    let mut p = cmd;
     if one_letter_cmd(p, &raw mut excmd.cmdidx) {
         if !full.is_null() {
             unsafe { *full = 1 };
@@ -140,21 +144,21 @@ pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_cha
     }
     // `:py3`, `:python3` and `:py3file` are the only commands with a
     // digit in the name.
-    if byte(excmd.cmd_ptr()) == 'p' as c_int && byte_at(excmd.cmd_ptr(), 1) == 'y' as c_int {
+    if byte(cmd) == 'p' as c_int && byte_at(cmd, 1) == 'y' as c_int {
         while (ubyte(p)).is_ascii_alphanumeric() {
             p = unsafe { p.add(1) };
         }
     }
     // A command that is punctuation rather than a word.
-    if p == excmd.cmd_ptr() && c"@!=><&~#".to_bytes().contains(&(ubyte(p))) {
+    if p == cmd && c"@!=><&~#".to_bytes().contains(&(ubyte(p))) {
         p = unsafe { p.add(1) };
     }
 
-    let mut len = unsafe { p.offset_from(excmd.cmd_ptr()) } as c_int;
+    let mut len = unsafe { p.offset_from(cmd) } as c_int;
     // `:dl` and `:dp` are `:delete` with a trailing `l`/`p` flag stuck
     // to it, and only when the rest really is an abbreviation of
     // "delete" — `:dj` is `:djump`.
-    if byte(excmd.cmd_ptr()) == 'd' as c_int
+    if byte(cmd) == 'd' as c_int
         && (byte_at(p, -1) == 'l' as c_int || byte_at(p, -1) == 'p' as c_int)
     {
         // `with_nul`, not `to_bytes`: the walk is over the *typed*
@@ -163,7 +167,7 @@ pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_cha
         // index past the end.
         let delete = c"delete".to_bytes_with_nul();
         let mut i = 0;
-        while i < len && ubyte_at(excmd.cmd_ptr(), i as isize) == delete[i as usize] {
+        while i < len && ubyte_at(cmd, i as isize) == delete[i as usize] {
             i += 1;
         }
         if i == len - 1 {
@@ -179,13 +183,13 @@ pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_cha
     excmd.cmdidx = CmdIdx::SIZE;
     // `:def` is Vim9 script's, which this editor does not have; it must
     // not resolve to `:defer`.
-    if !(len == 3 && prefix_eq(excmd.cmd_ptr(), c"def".as_ptr(), 3)) {
+    if !(len == 3 && prefix_eq(cmd, c"def".as_ptr(), 3)) {
         // The scan walks rows rather than `CmdIdx`es and names what it
         // stopped at once: stepping an enum would be a conversion per row.
-        let mut row = unsafe { start_index(excmd.cmd_ptr(), len) };
+        let mut row = unsafe { start_index(cmd, len) };
         while row < ROWS {
             let name = cmdnames[row].cmd_name;
-            if prefix_eq(name, excmd.cmd_ptr(), len as size_t) {
+            if prefix_eq(name, cmd, len as size_t) {
                 if !full.is_null() && byte_at(name, len as isize) == NUL {
                     unsafe { *full = 1 };
                 }
@@ -198,13 +202,13 @@ pub unsafe fn find_ex_command(excmd: &mut ExArg, full: *mut c_int) -> *mut c_cha
 
     // Nothing in the table, and it starts with an upper-case letter:
     // it may be a user command, whose name may hold digits too.
-    if excmd.cmdidx == CmdIdx::SIZE && (ubyte(excmd.cmd_ptr())).is_ascii_uppercase() {
+    if excmd.cmdidx == CmdIdx::SIZE && (ubyte(cmd)).is_ascii_uppercase() {
         while (ubyte(p)).is_ascii_alphanumeric() {
             p = unsafe { p.add(1) };
         }
         p = unsafe { find_ucmd(excmd, p, full, ptr::null_mut(), ptr::null_mut()) };
     }
-    if p == excmd.cmd_ptr() {
+    if p == cmd {
         excmd.cmdidx = CmdIdx::SIZE;
     }
     p

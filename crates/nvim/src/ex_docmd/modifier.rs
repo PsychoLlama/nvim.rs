@@ -141,13 +141,19 @@ pub(crate) fn parse_command_modifiers(
     }
 
     loop {
-        while matches!(excmd.line.byte_at(excmd.line.cmd), b' ' | b'\t' | b':') {
-            excmd.line.cmd += 1;
+        // The cursor walks in a local and is stored once: the line has to
+        // be measured for every `byte_at`, and doing that through the
+        // field made this the hottest line in the command parse.
+        let mut cmd = excmd.line.cmd;
+        while matches!(excmd.line.byte_at(cmd), b' ' | b'\t' | b':') {
+            cmd += 1;
         }
+        excmd.line.cmd = cmd;
+        let first = excmd.line.byte_at(cmd);
 
         // In Ex mode an empty line means "print the next one", which is
         // spelled by substituting a `+` command.
-        if excmd.line.byte_at(excmd.line.cmd) == 0
+        if first == 0
             && exmode_active.get()
             && unsafe { getline_equal(excmd.ea_getline, excmd.cookie, Some(getexline)) }
             && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
@@ -163,19 +169,18 @@ pub(crate) fn parse_command_modifiers(
             }
             break;
         }
-        if excmd.line.byte_at(excmd.line.cmd) == b'"' {
+        if first == b'"' {
             // The comment runs to the newline; whatever follows it is the
             // next command.
-            let cmd = excmd.line.cmd;
             excmd.line.next = excmd.line.rest_of(cmd).iter().position(|b| *b == b'\n');
             excmd.line.next = excmd.line.next.map(|at| cmd + at + 1);
             return Err(Failed);
         }
-        if excmd.line.byte_at(excmd.line.cmd) == b'\n' {
-            excmd.line.next = Some(excmd.line.cmd + 1);
+        if first == b'\n' {
+            excmd.line.next = Some(cmd + 1);
             return Err(Failed);
         }
-        if excmd.line.byte_at(excmd.line.cmd) == 0 {
+        if first == 0 {
             if !skip_only {
                 ex_pressedreturn.set(true);
             }
@@ -185,10 +190,9 @@ pub(crate) fn parse_command_modifiers(
         // A modifier may follow a range (`:1,2 silent print`), so the
         // name is looked for past one — but `args.cmd` only moves for
         // the modifiers that accept that.
-        let cmd = excmd.cmd_ptr();
         // SAFETY: the command's own NUL-terminated line, and a null context
         // is "not completing".
-        let skipped = unsafe { skip_range(cmd, ptr::null_mut()) };
+        let skipped = unsafe { skip_range(excmd.line.ptr_at(cmd), ptr::null_mut()) };
         let mut at = excmd.line.offset_of(skipped);
         match excmd.line.byte_at(at) {
             b'a' => {
