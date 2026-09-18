@@ -9,8 +9,7 @@
 //!
 //! Original: `src/nvim/window.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use core::ffi::c_int;
 

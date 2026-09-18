@@ -12,8 +12,7 @@
 //! paren is on, and `cur_amount`, the column of the paren (or of what follows
 //! it).  Which one wins is the whole of the second half.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};

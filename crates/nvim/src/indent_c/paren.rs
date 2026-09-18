@@ -15,8 +15,7 @@
 //! | --- | --- |
 //! | `cin_skip2pos` | [`first_code_col`] |
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

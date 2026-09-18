@@ -12,8 +12,7 @@
 //! per-window recomputation `win_update` does before deciding what to redraw,
 //! and it answers whether the sign column changed width.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

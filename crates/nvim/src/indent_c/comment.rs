@@ -21,8 +21,7 @@
 //! | `cin_iscomment` | [`starts_comment`] |
 //! | `cin_islinecomment` | [`starts_line_comment`] |
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::*;
 use crate::winlayer::{Buf, Win};

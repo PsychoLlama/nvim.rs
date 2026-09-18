@@ -5,8 +5,7 @@
 //! [`syn_combine_list`] is the `contains=`/`add=`/`remove=` set arithmetic, and
 //! [`syn_check_cluster`] resolves a name to an id, creating it if needed.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
