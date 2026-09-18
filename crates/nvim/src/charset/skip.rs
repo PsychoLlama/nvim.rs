@@ -2,12 +2,11 @@
 //!
 //! Upstream's skippers take a NUL-terminated string and hand back a pointer
 //! into it; the caller then either walks on from there or subtracts to get a
-//! length ([`getwhitecols`](super::getwhitecols) is that subtraction, written
-//! out). A slice already carries its own end, so the honest answer is the
+//! length. A slice already carries its own end, so the honest answer is the
 //! offset — the count of leading bytes the skip stepped over, which is
 //! equally the index the caller wants to resume at and the length of what was
 //! skipped. `s[skip::white(s)..]` is the pointer form; `skip::white(s)` on its
-//! own is `getwhitecols`.
+//! own is the indent `getwhitecols` used to measure.
 //!
 //! The offset is always in `0..=s.len()`, so indexing with it cannot panic,
 //! and every function here answers `s.len()` for a slice made entirely of the
@@ -29,8 +28,7 @@ use crate::keycodes::Ctrl_V;
 
 /// How many leading bytes of `s` are spaces or tabs.
 ///
-/// The slice form of [`skipwhite`](super::skipwhite), and of
-/// [`getwhitecols`](super::getwhitecols), which are the same function.
+/// The slice form of [`skipwhite`](super::skipwhite).
 pub fn white(s: &[u8]) -> usize {
     count(s, is_white)
 }

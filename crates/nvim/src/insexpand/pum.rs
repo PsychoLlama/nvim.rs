@@ -13,11 +13,14 @@
 
 use super::*;
 use crate::guard::{Allow, Lock};
+use crate::memline::Lines;
+use crate::memory::XString;
 use crate::message::msg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::types::{IOSIZE, NUL, ShmFlag};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
+use core::slice;
 
 /// The popup menu's view of the match list.
 ///
@@ -254,26 +257,21 @@ unsafe fn match_position_message(number: c_int, total: c_int) -> *mut c_char {
 /// Build `dest` by prepending the buffer text from `startcol` to `compl_col`
 /// to `src`.
 pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: c_int) {
-    let prepend_len = compl_col.get() - startcol;
-    let new_length = prepend_len + src.len() as c_int;
+    let prepend_len = usize::try_from(compl_col.get() - startcol).unwrap_or(0);
+    let new_length = prepend_len + src.len();
 
-    // SAFETY: `xmalloc` answers `new_length + 1` writable bytes or aborts.
-    let buf = unsafe { xmalloc(new_length as size_t + 1) } as *mut c_char; // +1 for NUL
-
-    // SAFETY: the cursor line exists, `startcol .. compl_col` is inside it,
-    // and `buf` has room for the two pieces and the NUL.
-    unsafe {
-        let line = ml_get(Win::current().w_cursor.lnum);
-        let head = line.offset(startcol as isize);
-        buf.cast::<u8>()
-            .copy_from(head.cast(), prepend_len as size_t);
-        let tail = buf.offset(prepend_len as isize);
-        let (src_data, src_len) = src.parts();
-        tail.cast::<u8>().copy_from(src_data.cast(), src_len);
-        *buf.offset(new_length as isize) = NUL as c_char;
+    let mut text = XString::with_capacity(new_length);
+    {
+        let mut lines = Lines::current();
+        let line = lines.line(Win::current().w_cursor.lnum);
+        let at = usize::try_from(startcol).unwrap_or(0).min(line.len());
+        text.push_bytes(&line[at..at.saturating_add(prepend_len).min(line.len())]);
     }
-    // SAFETY: the block above is this function's own, filled and terminated.
-    unsafe { dest.set_owned(buf, new_length as size_t) };
+    let (src_data, src_len) = src.parts();
+    // SAFETY: `src` is a completion string, which holds the bytes it reports.
+    text.push_bytes(unsafe { slice::from_raw_parts(src_data.cast::<u8>(), src_len) });
+    // SAFETY: the block just built, filled and terminated.
+    unsafe { dest.set_owned(text.into_raw(), new_length) };
 }
 
 /// Drop the cached [`adjusted_leader`] — upstream's

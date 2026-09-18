@@ -49,7 +49,7 @@ use crate::mbyte::{
     cluster_len, head_off, mb_isupper, mb_strcmp_ic, mb_strnicmp, utf_char2bytes, utf_head_off,
     utf_iscomposing_first, utf_ptr2char, utfc_ptr2len,
 };
-use crate::memline::{Lines, decl, inc, incl, ml_get, ml_get_buf, ml_get_len};
+use crate::memline::{Lines, decl, inc, incl, ml_get, ml_get_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::state::{
     bot_top_msg, called_emsg, cmd_silent, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row,

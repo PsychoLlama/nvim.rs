@@ -296,10 +296,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     compl_lnum.set(Win::current().w_cursor.lnum);
     compl_length.set(Win::current().w_cursor.col - startcol);
     // compl_pattern doesn't need to be set.
-    // SAFETY: `compl_col`/`compl_length` were just set to a range of the
-    // cursor line.
-    let orig = unsafe { compl_text_from_line(get_cursor_line_ptr()) };
-    compl_orig_text().set(orig);
+    compl_orig_text().set(compl_text_from_line());
     unsafe { compl_orig_extmarks().save() };
 
     let mut flags = CP_ORIGINAL_TEXT;

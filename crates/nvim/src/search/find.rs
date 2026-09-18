@@ -106,20 +106,30 @@ impl Searcher {
         }
     }
 
-    /// Text of line `lnum`, as the pointer `vim_regexec_multi` wants.
+    /// The buffer's line cache.
     ///
-    /// # Safety
-    /// `lnum` must be a line of `self.buf`.
-    #[inline(always)]
-    unsafe fn line(&self, lnum: LineNr) -> *mut c_char {
-        unsafe { ml_get_buf(self.buf, lnum) }
-    }
-
-    /// The buffer's line cache, for the places that read text rather than
-    /// hand it to the regexp engine.
+    /// Read afresh at every use rather than held: `exec` hands the line to
+    /// `vim_regexec_multi`, which reads other lines of this same buffer for
+    /// a multi-line pattern, so a slice taken before it is stale after it.
+    /// That is the pointer upstream re-fetched by hand ("a multi-line search
+    /// may have invalidated the pointer"), with the re-fetch made
+    /// unnecessary instead of remembered.
     #[inline(always)]
     fn lines(&self) -> Lines {
         self.buf.lines()
+    }
+
+    /// The byte at column `col` of line `lnum`.
+    ///
+    /// NUL at the end of the line, and for a line past the end of the
+    /// buffer -- which `\n\zs` can name, and which upstream answered with a
+    /// static empty string.
+    #[inline(always)]
+    fn byte_at(&self, lnum: LineNr, col: ColNr) -> u8 {
+        if lnum > self.buf.b_ml.ml_line_count {
+            return NUL as u8;
+        }
+        cstr::byte_at(self.lines().line(lnum), usize::try_from(col).unwrap_or(0))
     }
 
     /// Whether an error was reported or the timeout was passed — either
@@ -140,13 +150,16 @@ impl Searcher {
     }
 
     /// Advance `col` over the character at it, if there is one.
-    ///
-    /// # Safety
-    /// `line` must be NUL-terminated and `col` within it.
     #[inline(always)]
-    unsafe fn step_over(&self, line: *mut c_char, col: ColNr) -> ColNr {
-        if unsafe { *line.offset(col as isize) } as c_int != NUL {
-            col + unsafe { utfc_ptr2len(line.offset(col as isize)) }
+    fn step_over(&self, lnum: LineNr, col: ColNr) -> ColNr {
+        if lnum > self.buf.b_ml.ml_line_count {
+            return col;
+        }
+        let at = usize::try_from(col).unwrap_or(0);
+        let mut lines = self.lines();
+        let line = lines.line(lnum);
+        if at < line.len() {
+            col + ColNr::try_from(cluster_len(&line[at..])).unwrap_or(0)
         } else {
             col
         }
@@ -160,12 +173,11 @@ impl Searcher {
     ///
     /// Answers false when this line holds nothing usable.
     ///
-    /// # Safety
-    /// `lnum` must be a line of `self.buf` and `line` its text.
-    unsafe fn skip_to_start_pos(
+    /// The loop only runs while the match starts in `lnum` itself, which is
+    /// why every read below names that one line.
+    fn skip_to_start_pos(
         &mut self,
         lnum: LineNr,
-        mut line: *mut c_char,
         found: &mut Found,
         nmatched: &mut c_int,
         start: StartPos,
@@ -178,7 +190,7 @@ impl Searcher {
                 // the end of the line.
                 *nmatched == 1 && found.end.col - 1 < start.pos.col + start.extra_col
             } else {
-                let on_nul = c_int::from(unsafe { *line.offset(found.start.col as isize) } == 0);
+                let on_nul = c_int::from(self.byte_at(lnum, found.start.col) == 0);
                 found.start.col - on_nul < start.pos.col + start.extra_col
             }
         {
@@ -190,19 +202,19 @@ impl Searcher {
                 }
                 // For an empty match, advance one character.
                 if found.end.col == found.start.col {
-                    unsafe { self.step_over(line, found.end.col) }
+                    self.step_over(lnum, found.end.col)
                 } else {
                     found.end.col
                 }
             } else {
                 // `rmm_matchcol` is the actual start of the match,
                 // ignoring `\zs`.
-                unsafe { self.step_over(line, self.regmatch.rmm_matchcol) }
+                self.step_over(lnum, self.regmatch.rmm_matchcol)
             };
             if matchcol == 0 && self.opt(SEARCH_START) {
                 return true;
             }
-            if unsafe { *line.offset(matchcol as isize) } as c_int == NUL {
+            if self.byte_at(lnum, matchcol) == NUL as u8 {
                 return false;
             }
             *nmatched = self.exec(lnum, matchcol);
@@ -218,8 +230,6 @@ impl Searcher {
             if found.start.lnum != 0 {
                 return true;
             }
-            // A multi-line search may have invalidated the pointer.
-            line = unsafe { self.line(lnum) };
         }
         true
     }
@@ -228,13 +238,9 @@ impl Searcher {
     /// the search started in — the last one before the start position.
     ///
     /// Answers false when every match in the line is after the cursor.
-    ///
-    /// # Safety
-    /// `lnum` must be a line of `self.buf` and `line` its text.
-    unsafe fn last_match_before(
+    fn last_match_before(
         &mut self,
         lnum: LineNr,
-        mut line: *mut c_char,
         found: &mut Found,
         nmatched: &mut c_int,
         start: StartPos,
@@ -249,13 +255,15 @@ impl Searcher {
             *found = self.found();
 
             // A valid match; now see whether another one follows it.
+            // Every read below is of the line the match starts in.
+            let at = lnum + found.start.lnum;
             let matchcol = if self.from_match_end {
                 if *nmatched > 1 {
                     break;
                 }
                 // For an empty match, advance one character.
                 if found.end.col == found.start.col {
-                    unsafe { self.step_over(line, found.end.col) }
+                    self.step_over(at, found.end.col)
                 } else {
                     found.end.col
                 }
@@ -264,10 +272,10 @@ impl Searcher {
                 if found.start.lnum > 0 {
                     break;
                 }
-                unsafe { self.step_over(line, found.start.col) }
+                self.step_over(at, found.start.col)
             };
-            if unsafe { *line.offset(matchcol as isize) } as c_int == NUL || {
-                *nmatched = self.exec(lnum + found.start.lnum, matchcol);
+            if self.byte_at(at, matchcol) == NUL as u8 || {
+                *nmatched = self.exec(at, matchcol);
                 *nmatched == 0
             } {
                 // A search that timed out did find a match, but it may
@@ -280,8 +288,6 @@ impl Searcher {
             if self.regmatch.regprog.is_null() {
                 break;
             }
-            // A multi-line search may have invalidated the pointer.
-            line = unsafe { self.line(lnum + found.start.lnum) };
         }
         match_ok
     }
@@ -548,32 +554,15 @@ pub unsafe fn searchit(
 
                     // The match may be in another line, with `\zs`.
                     let mut m = s.found();
-                    // "lnum" may be past the end of the buffer for "\n\zs".
-                    let line = if lnum + m.start.lnum > buffer.b_ml.ml_line_count {
-                        c"".as_ptr() as *mut c_char
-                    } else {
-                        unsafe { s.line(lnum + m.start.lnum) }
-                    };
 
                     if dir == FORWARD
                         && at_first_line
-                        && !unsafe {
-                            s.skip_to_start_pos(
-                                lnum,
-                                line,
-                                &mut m,
-                                &mut nmatched,
-                                start,
-                                first_match,
-                            )
-                        }
+                        && !s.skip_to_start_pos(lnum, &mut m, &mut nmatched, start, first_match)
                     {
                         break 'next_line;
                     }
                     if dir == BACKWARD
-                        && !unsafe {
-                            s.last_match_before(lnum, line, &mut m, &mut nmatched, start, wrapped)
-                        }
+                        && !s.last_match_before(lnum, &mut m, &mut nmatched, start, wrapped)
                     {
                         // There is only a match after the cursor.
                         break 'next_line;

@@ -9,9 +9,11 @@
 #![allow(unsafe_code)]
 
 use super::*;
+use crate::charset::skip;
 use crate::eval::typval::CallFrame;
 use crate::guard::Lock;
 use crate::keycodes::{Ctrl_N, Ctrl_P, Ctrl_R};
+use crate::memline::Lines;
 use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -29,15 +31,16 @@ fn set_compl_startpos_here(col: ColNr) {
 ///
 /// Sets `compl_col`, `compl_length` and `compl_pattern`; reads
 /// `compl_cont_status` and `ctrl_x_mode`.
-///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_normal_compl_info(
-    line: *mut c_char,
-    mut startcol: c_int,
-    curs_col: ColNr,
-) -> Result<(), Failed> {
+pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
+    // The cursor line, taken here rather than handed in: the `'complete'`
+    // functions called at the bottom run user code, and every caller of the
+    // `get_*_compl_info` family used to re-fetch the line afterwards for
+    // exactly that reason.
+    let mut lines = Lines::current();
+    let line = lines
+        .line_cstr(Win::current().w_cursor.lnum, 0)
+        .as_ptr()
+        .cast_mut();
     // The pattern under construction: `prefix`, then `quote_meta` of the
     // `len` bytes at `compl_col` — the size `quote_meta` answers for a
     // null destination is exactly the room the second call needs.
@@ -69,9 +72,7 @@ pub(crate) unsafe fn get_normal_compl_info(
             compl_col.set(compl_col.get() + startcol);
             compl_length.set(curs_col - startcol);
         }
-        // SAFETY: `compl_col`/`compl_length` were just set to a range of
-        // `line`.
-        compl_pattern().set(unsafe { compl_pattern_from_line(line) });
+        compl_pattern().set(compl_pattern_from_line());
     } else if compl_status_adding() {
         // We need up to 2 extra chars for the prefix.
         let word_start = unsafe { line.offset(compl_col.get() as isize) };
@@ -149,35 +150,26 @@ pub(crate) unsafe fn get_normal_compl_info(
 
 /// The pattern, column and length for whole-line completion, and for the
 /// `complete()` function.
-///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_wholeline_compl_info(
-    line: *mut c_char,
-    curs_col: ColNr,
-) -> Result<(), Failed> {
-    compl_col.set(unsafe { getwhitecols(line) } as ColNr);
+pub(crate) fn get_wholeline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
+    let mut lines = Lines::current();
+    let line = lines.line(Win::current().w_cursor.lnum);
+    compl_col.set(ColNr::try_from(skip::white(line)).unwrap_or(0));
     compl_length.set(curs_col - compl_col.get());
     if compl_length.get() < 0 {
         // Cursor in indent: empty pattern.
         compl_length.set(0);
     }
-    // SAFETY: `compl_col`/`compl_length` were just set to a range of `line`.
-    compl_pattern().set(unsafe { compl_pattern_from_line(line) });
+    compl_pattern().set(compl_pattern_from_line());
     Ok(())
 }
 
 /// The pattern, column and length for filename completion.
-///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_filename_compl_info(
-    line: *mut c_char,
-    mut startcol: c_int,
-    curs_col: ColNr,
-) -> Result<(), Failed> {
+pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
+    let mut lines = Lines::current();
+    let line = lines
+        .line_cstr(Win::current().w_cursor.lnum, 0)
+        .as_ptr()
+        .cast_mut();
     // Go back to just before the first filename character.
     if startcol > 0 {
         // C's MB_PTR_BACK: step back over one whole character.
@@ -211,18 +203,17 @@ pub(crate) unsafe fn get_filename_compl_info(
 }
 
 /// The pattern, column and length for command-line completion.
-///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn get_cmdline_compl_info(
-    line: *mut c_char,
-    curs_col: ColNr,
-) -> Result<(), Failed> {
+pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     // The expansion context outlives no call here, but `set_cmd_context`
     // and `nlua_expand_pat` both want it by pointer, so it is taken once.
     let expand = compl_xp.ptr();
-    compl_pattern().set(unsafe { cbuf_to_string(line, curs_col as size_t) });
+    let pattern = {
+        let mut lines = Lines::current();
+        let line = lines.line(Win::current().w_cursor.lnum);
+        let to = usize::try_from(curs_col).unwrap_or(0).min(line.len());
+        String_0::from_bytes(&line[..to])
+    };
+    compl_pattern().set(pattern);
     unsafe {
         set_cmd_context(
             expand,
@@ -264,13 +255,12 @@ pub(crate) fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_cpt_com
         if startcol < 0 || startcol > curs_col {
             startcol = curs_col;
         }
-        // Re-obtain the line in case it has changed.
-        let line = ml_get(Win::current().w_cursor.lnum);
         let len = curs_col - startcol;
-        compl_pattern()
-            .set(unsafe { cbuf_to_string(line.offset(startcol as isize), len as size_t) });
         compl_col.set(startcol);
         compl_length.set(len);
+        // The line is read afresh inside: the user function that got here may
+        // have changed it.
+        compl_pattern().set(compl_text_from_line());
     }
 }
 
@@ -374,58 +364,46 @@ pub(crate) fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(
         spell_expand_check_cap(compl_col.get());
         compl_length.set(curs_col - compl_col.get());
     }
-    // Need to obtain "line" again, it may have become invalid.
-    let line = ml_get(Win::current().w_cursor.lnum);
-    // SAFETY: `compl_col`/`compl_length` describe a range of `line`.
-    compl_pattern().set(unsafe { compl_text_from_line(line) });
+    // The line is read afresh inside: `spell_expand_check_cap` above may
+    // have moved it.
+    compl_pattern().set(compl_text_from_line());
     Ok(())
 }
 
 /// The completion pattern, column and length for whichever CTRL-X mode is
-/// running; `line_invalid` is set when the current line may have become
-/// invalid and needs fetching again.
+/// running.
 ///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string, unaliased for the call.
-/// `line_invalid` must point at a writable `bool` the caller owns.
-pub(crate) unsafe fn compl_get_info(
-    line: *mut c_char,
-    startcol: c_int,
-    curs_col: ColNr,
-    line_invalid: *mut bool,
-) -> Result<(), Failed> {
+/// Upstream handed the cursor line down here and reported back, through a
+/// `line_invalid` out-parameter, which of the branches might have moved it.
+/// Each of them reads the line for itself now, so there is nothing to
+/// report and nothing to re-fetch.
+pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     if ctrl_x_mode_normal()
         || ctrl_x_mode_register()
         || (ctrl_x_mode.get() & CTRL_X_WANT_IDENT != 0
             && !thesaurus_func_complete(ctrl_x_mode.get()))
     {
-        unsafe { get_normal_compl_info(line, startcol, curs_col) }?;
-        unsafe { *line_invalid = true }; // 'cpt' func may have invalidated "line"
+        get_normal_compl_info(startcol, curs_col)
     } else if ctrl_x_mode_line_or_eval() {
-        return unsafe { get_wholeline_compl_info(line, curs_col) };
+        get_wholeline_compl_info(curs_col)
     } else if ctrl_x_mode_files() {
-        return unsafe { get_filename_compl_info(line, startcol, curs_col) };
+        get_filename_compl_info(startcol, curs_col)
     } else if ctrl_x_mode.get() == CTRL_X_CMDLINE {
-        return unsafe { get_cmdline_compl_info(line, curs_col) };
+        get_cmdline_compl_info(curs_col)
     } else if ctrl_x_mode_function()
         || ctrl_x_mode_omni()
         || thesaurus_func_complete(ctrl_x_mode.get())
     {
-        if unsafe { get_userdefined_compl_info(curs_col, ptr::null_mut(), ptr::null_mut()) }
-            .is_err()
-        {
-            return Err(Failed);
-        }
-        unsafe { *line_invalid = true }; // "line" may have become invalid
+        // SAFETY: a null callback is "no 'complete' function asked for this"
+        // and a null slot is "the column is not wanted".
+        unsafe { get_userdefined_compl_info(curs_col, ptr::null_mut(), ptr::null_mut()) }
     } else if ctrl_x_mode_spell() {
-        get_spell_compl_info(startcol, curs_col)?;
-        unsafe { *line_invalid = true }; // "line" may have become invalid
+        get_spell_compl_info(startcol, curs_col)
     } else {
+        // SAFETY: a static NUL-terminated name.
         unsafe { internal_error(c"ins_complete()".as_ptr()) };
-        return Err(Failed);
+        Err(Failed)
     }
-    Ok(())
 }
 
 /// Continue an interrupted completion-mode search in `line`.
@@ -437,10 +415,7 @@ pub(crate) unsafe fn compl_get_info(
 /// was longer than 'tw'). With SOL set, the previous pattern is skipped: a
 /// word at the start of the line was inserted and that is what we look for.
 ///
-/// # Safety
-///
-/// `line` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
+pub(crate) fn ins_compl_continue_search() {
     // It is a continued search.
     compl_cont_status.set(compl_cont_status.get() & !CONT_INTRPT); // remove INTRPT
     if ctrl_x_mode_normal() || ctrl_x_mode_path_patterns() || ctrl_x_mode_path_defines() {
@@ -449,7 +424,9 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
             // non-blank in the line. If that is not a word character we
             // include it to get a better pattern, but then we don't want
             // the "\\<" prefix — checked below.
-            compl_col.set(unsafe { getwhitecols(line) } as ColNr);
+            let mut lines = Lines::current();
+            let line = lines.line(Win::current().w_cursor.lnum);
+            compl_col.set(ColNr::try_from(skip::white(line)).unwrap_or(0));
             set_compl_startpos_here(compl_col.get());
             compl_cont_status.set(compl_cont_status.get() & !CONT_SOL); // clear SOL if present
         } else {
@@ -458,10 +435,12 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
             // mode, but first we need to redefine compl_startpos.
             if compl_cont_status.get() & CONT_S_IPOS != 0 {
                 compl_cont_status.set(compl_cont_status.get() | CONT_SOL);
-                let skip = (compl_length.get() + compl_startpos.get().col) as isize;
-                // SAFETY: `line` is the cursor line and `skip` is inside it;
-                // `skipwhite` answers a pointer into the same line.
-                let col = unsafe { skipwhite(line.offset(skip)).offset_from(line) } as ColNr;
+                let skip =
+                    usize::try_from(compl_length.get() + compl_startpos.get().col).unwrap_or(0);
+                let mut lines = Lines::current();
+                let line = lines.line(Win::current().w_cursor.lnum);
+                let from = skip.min(line.len());
+                let col = ColNr::try_from(from + skip::white(&line[from..])).unwrap_or(0);
                 compl_startpos.set(compl_startpos.get().with_col(col));
             }
             compl_col.set(compl_startpos.get().col);
@@ -498,7 +477,6 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    let mut line = ml_get(Win::current().w_cursor.lnum);
     let curs_col = Win::current().w_cursor.col;
     compl_pending.set(0);
     compl_lnum.set(Win::current().w_cursor.lnum);
@@ -508,7 +486,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     {
         // This same ctrl-x mode was interrupted previously: continue the
         // completion.
-        unsafe { ins_compl_continue_search(line) };
+        ins_compl_continue_search();
     } else {
         compl_cont_status.set(compl_cont_status.get() & CONT_LOCAL);
     }
@@ -528,8 +506,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     }
 
     // Work out the completion pattern and original text -- webb.
-    let mut line_invalid = false;
-    if unsafe { compl_get_info(line, startcol, curs_col, &raw mut line_invalid) }.is_err() {
+    if compl_get_info(startcol, curs_col).is_err() {
         if ctrl_x_mode_function()
             || ctrl_x_mode_omni()
             || thesaurus_func_complete(ctrl_x_mode.get())
@@ -538,10 +515,6 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
             did_ai.set(save_did_ai);
         }
         return Err(Failed);
-    }
-    // If "line" was changed while getting the completion info, get it again.
-    if line_invalid {
-        line = ml_get(Win::current().w_cursor.lnum);
     }
 
     if compl_status_adding() {
@@ -578,8 +551,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     // Always add a completion for the original text.
     compl_orig_text().clear();
     compl_orig_extmarks().clear();
-    // SAFETY: `compl_col`/`compl_length` describe a range of `line`.
-    compl_orig_text().set(unsafe { compl_text_from_line(line) });
+    compl_orig_text().set(compl_text_from_line());
     unsafe { compl_orig_extmarks().save() };
     let mut flags = CP_ORIGINAL_TEXT;
     if p_ic() {
@@ -593,9 +565,9 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    // showmode() might reset the internal line pointers, so it must be
-    // called before line = ml_get(), or when this address is no longer
-    // needed. -- Acevedo.
+    // Upstream held the line here and warned that showmode() resets the
+    // memline's pointers, so this had to come after the last use of it
+    // (-- Acevedo). Nothing holds a line across it now.
     if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
         edit_submode_extra.set(gettext(c"-- Searching...").as_ptr().cast_mut());
         edit_submode_highl.set(HLF_COUNT);
@@ -739,32 +711,41 @@ pub(crate) fn spell_back_to_badword() {
     }
 }
 
-/// The `compl_length` bytes of `line` at `compl_col`, case-folded when
-/// `'ignorecase'` is on: what every caller here wants for `compl_pattern`.
-///
-/// # Safety
-/// `compl_col .. compl_col + compl_length` is a range of `line`.
-pub(crate) unsafe fn compl_pattern_from_line(line: *mut c_char) -> String_0 {
-    let (at, len) = (compl_col.get(), compl_length.get());
-    // SAFETY: the caller's promise, and `str_foldcase` with a null arena
-    // answers a fresh NUL-terminated allocation.
-    unsafe {
-        let start = line.offset(at as isize);
-        if p_ic() {
-            cstr_to_string(str_foldcase(start, len, ptr::null_mut(), 0))
-        } else {
-            cbuf_to_string(start, len as size_t)
+/// The `compl_length` bytes of the cursor line at `compl_col`, case-folded
+/// when `'ignorecase'` is on: what every caller here wants for
+/// `compl_pattern`.
+pub(crate) fn compl_pattern_from_line() -> String_0 {
+    let mut lines = Lines::current();
+    let text = compl_range(lines.line(Win::current().w_cursor.lnum));
+    if p_ic() {
+        let len = c_int::try_from(text.len()).unwrap_or(0);
+        // SAFETY: the bytes just named, and `str_foldcase` with a null arena
+        // answers a fresh NUL-terminated allocation.
+        unsafe {
+            cstr_to_string(str_foldcase(
+                text.as_ptr().cast::<c_char>().cast_mut(),
+                len,
+                ptr::null_mut(),
+                0,
+            ))
         }
+    } else {
+        String_0::from_bytes(text)
     }
 }
 
 /// The same bytes, copied verbatim -- what `compl_orig_text` and the
 /// command-line pattern want.
-///
-/// # Safety
-/// As [`compl_pattern_from_line`].
-pub(crate) unsafe fn compl_text_from_line(line: *mut c_char) -> String_0 {
-    let (at, len) = (compl_col.get(), compl_length.get());
-    // SAFETY: the caller's promise.
-    unsafe { cbuf_to_string(line.offset(at as isize), len as size_t) }
+pub(crate) fn compl_text_from_line() -> String_0 {
+    let mut lines = Lines::current();
+    String_0::from_bytes(compl_range(lines.line(Win::current().w_cursor.lnum)))
+}
+
+/// `compl_col .. compl_col + compl_length` of `line`, clamped to it.
+fn compl_range(line: &[u8]) -> &[u8] {
+    let at = usize::try_from(compl_col.get())
+        .unwrap_or(0)
+        .min(line.len());
+    let len = usize::try_from(compl_length.get()).unwrap_or(0);
+    &line[at..at.saturating_add(len).min(line.len())]
 }

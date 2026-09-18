@@ -30,11 +30,11 @@ use core::ffi::{c_char, c_int, c_long};
 use ::libc::__errno_location;
 
 use super::{Bytes, ERANGE, is_bdigit, is_digit, is_white, is_xdigit, skip};
-use crate::cursor::get_cursor_line_ptr;
 use crate::keycodes::Ctrl_V;
 use crate::memory::xstrchrnul;
 use crate::os::cshim::strtoimax;
 use crate::types::{int32_t, intmax_t, intptr_t, size_t, uint8_t};
+use crate::winlayer::Win;
 
 /// The first byte of `p` that is not a space or tab.
 ///
@@ -56,15 +56,9 @@ pub(crate) unsafe fn skipwhite_len(p: *const c_char, len: size_t) -> *mut c_char
 
 /// The indent of the cursor's line, in bytes.
 pub(crate) fn getwhitecols_curline() -> intptr_t {
-    unsafe { getwhitecols(get_cursor_line_ptr()) }
-}
-
-/// How many leading bytes of `p` are white space.
-///
-/// # Safety
-/// `p` must be a NUL-terminated string.
-pub(crate) unsafe fn getwhitecols(p: *const c_char) -> intptr_t {
-    (unsafe { skipwhite(p) }.addr() - p.addr()).cast_signed()
+    let win = Win::current();
+    let mut lines = win.buffer().lines();
+    intptr_t::try_from(skip::white(lines.line(win.w_cursor.lnum))).unwrap_or(0)
 }
 
 /// The first byte of `q` that is not a decimal digit.

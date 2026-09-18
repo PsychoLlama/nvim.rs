@@ -20,8 +20,8 @@ use crate::change::{
     deleted_lines_mark, ins_bytes_len, ins_char, ins_char_bytes, ins_str, open_line,
 };
 use crate::charset::{
-    getwhitecols, ptr2cells, skipwhite, str_foldcase, vim_is_ident_char, vim_isfilec, vim_isprintc,
-    vim_iswordc, vim_iswordp, vim_strsize,
+    ptr2cells, skipwhite, str_foldcase, vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordc,
+    vim_iswordp, vim_strsize,
 };
 use crate::cmdexpand::{addstar, expand_cmdline, set_cmd_context};
 use crate::cursor::{
@@ -66,7 +66,7 @@ use crate::mbyte::{
     utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab,
     utfc_ptr2len,
 };
-use crate::memline::{dec, ml_delete, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
+use crate::memline::{dec, ml_delete, ml_get_buf, ml_get_buf_len};
 use crate::memory::{
     MergeSortCompareFunc, MergeSortGetFunc, MergeSortSetFunc, mergesort_list, strequal, xcalloc,
     xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy,

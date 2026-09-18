@@ -265,7 +265,10 @@ unsafe fn include_uses_zs(inc_opt: *mut c_char) -> bool {
 /// `lnum` must be a line of the current buffer and `buf` must hold
 /// `LSIZE` bytes.
 unsafe fn get_line_and_copy(lnum: LineNr, buf: *mut c_char) -> *mut c_char {
-    unsafe { xstrlcpy(buf, ml_get(lnum), LSIZE as size_t) };
+    let mut lines = Lines::current();
+    let line = lines.line_cstr(lnum, 0);
+    // SAFETY: the caller's `LSIZE` buffer, and a line of the buffer.
+    unsafe { xstrlcpy(buf, line.as_ptr(), LSIZE as size_t) };
     buf
 }
 

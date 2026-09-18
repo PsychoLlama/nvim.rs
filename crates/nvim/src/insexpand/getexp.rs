@@ -216,7 +216,10 @@ pub(crate) unsafe fn process_next_cpt_value(
                 // Move to after the last character in the buffer, so that
                 // a word at the start of it is found correctly.
                 unsafe { (*st).first_match_pos.lnum = (*(*st).ins_buf).b_ml.ml_line_count };
-                unsafe { (*st).first_match_pos.col = ml_get_len((*st).first_match_pos.lnum) };
+                unsafe {
+                    (*st).first_match_pos.col =
+                        Buf::current().lines().line_len((*st).first_match_pos.lnum)
+                };
             }
             unsafe { (*st).last_match_pos = (*st).first_match_pos };
             compl_type = 0;
