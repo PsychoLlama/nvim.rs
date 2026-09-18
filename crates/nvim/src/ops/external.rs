@@ -50,7 +50,7 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
     let op = unsafe { Op::new(op) };
     stuff_readbuf_char(':' as c_int);
     if op.is_visual {
-        unsafe { stuff_readbuf(c"'<,'>".as_ptr()) };
+        stuff_readbuf(c"'<,'>");
     } else {
         // Make the range look nice, so it can be repeated.
         if op.start.lnum == Win::current().w_cursor.lnum {
@@ -74,7 +74,7 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
                 // folded lines twice.
                 && !Win::current().fold_span(op.end.lnum).0
             {
-                unsafe { stuff_readbuf(c".+".as_ptr()) };
+                stuff_readbuf(c".+");
                 stuff_readbuf_number(op.line_count as c_int - 1);
             } else {
                 stuff_readbuf_number(op.end.lnum as c_int);
@@ -82,22 +82,22 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
         }
     }
     if op.op_type != OpType::Colon {
-        unsafe { stuff_readbuf(c"!".as_ptr()) };
+        stuff_readbuf(c"!");
     }
     if op.op_type == OpType::Indent {
-        unsafe { stuff_readbuf(get_equalprg().as_ptr().cast_mut()) };
-        unsafe { stuff_readbuf(c"\n".as_ptr()) };
+        stuff_readbuf(get_equalprg().as_cstr());
+        stuff_readbuf(c"\n");
     } else if op.op_type == OpType::Format {
         if c_int::from(Buf::current().b_p_fp.first_byte()) != NUL {
-            unsafe { stuff_readbuf(Buf::current().b_p_fp.value_ptr()) };
+            stuff_readbuf(Buf::current().b_p_fp.cstr());
         } else if P_FP.first_byte() != 0 {
-            p_fp(|value| unsafe { stuff_readbuf(value.as_ptr().cast_mut()) });
+            p_fp(stuff_readbuf);
         } else {
-            unsafe { stuff_readbuf(c"fmt".as_ptr()) };
+            stuff_readbuf(c"fmt");
         }
         // The trailing `']` puts the cursor back at the end of the range
         // once the filter has replaced it.
-        unsafe { stuff_readbuf(c"\n']".as_ptr()) };
+        stuff_readbuf(c"\n']");
     }
 }
 

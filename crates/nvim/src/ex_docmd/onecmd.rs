@@ -497,8 +497,10 @@ fn read_command_args(
         && (c_int::from(excmd.line.byte_at(excmd.line.arg)) != '|' as c_int
             || !excmd.argt.has(ExArgt::TRLBAR))
     {
-        // SAFETY: the argument is a tail of the command line.
-        *errormsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), excmd.arg_ptr()) });
+        *errormsg = Some(ex_errmsg(
+            e_trailing_arg,
+            excmd.line.cstr_from(excmd.line.arg),
+        ));
         return Err(Refused);
     }
     if !ni && excmd.argt.has(ExArgt::NEEDARG) && excmd.line.byte_at(excmd.line.arg) == 0 {

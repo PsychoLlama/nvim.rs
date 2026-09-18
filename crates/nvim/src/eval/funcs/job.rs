@@ -633,7 +633,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         let fmt = c"term://%s//%d:%s".as_ptr();
         let dir = shortened.as_ptr();
         unsafe { snprintf(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
-        let _ = unsafe { setfname(buf, name.as_mut_ptr(), ptr::null_mut(), true) };
+        let _ = setfname(buf, Some(cstr::in_chars(&name)), None, true);
         unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, Some(buf)) };
 
         if unsafe { terminal_live(chan) } {

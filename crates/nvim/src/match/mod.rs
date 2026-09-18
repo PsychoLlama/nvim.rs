@@ -433,7 +433,8 @@ pub(crate) fn ex_match(excmd: &mut ExArg) {
                 && ends_excmd(unsafe { *skipwhite(end.offset(1)) } as c_int) == 0
             {
                 unsafe { xfree(g.cast()) };
-                unsafe { excmd.errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), end)) };
+                // SAFETY: `end` is a tail of the command line.
+                excmd.errmsg = Some(ex_errmsg(e_trailing_arg, unsafe { cstr::at(end) }));
                 return;
             }
             if unsafe { *end } != unsafe { *p } {

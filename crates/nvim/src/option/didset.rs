@@ -625,11 +625,10 @@ pub(crate) fn did_set_undofile(args: &mut OptSet) -> Result<(), OptError> {
         // `:setglobal` reach all of them.
         let reaches = bp == f.buf || f.flags.has(OptionSetFlags::GLOBAL) || f.flags.is_empty();
         if reaches && !buf_is_changed(bp) && !bp.b_ml.ml_mfp.is_null() {
-            let (hash, fname) = (hash.as_mut_ptr(), bp.name.shown_ptr());
-            // SAFETY: `hash` is 32 bytes, which is what both want, and
-            // `b_fname` is the buffer's own name.
+            let hash = hash.as_mut_ptr();
+            // SAFETY: `hash` is 32 bytes, which is what both want.
             unsafe { u_compute_hash(bp, hash) };
-            unsafe { u_read_undo(ptr::null_mut(), hash, fname) };
+            unsafe { u_read_undo(None, hash, bp.name.shown()) };
         }
     }
     Ok(())

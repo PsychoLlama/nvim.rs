@@ -118,7 +118,14 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
     // wants the name the buffer had. `saved` owns it until this returns.
     let saved = core::mem::take(&mut Buf::current().name);
     // SAFETY: caller's contract; the name is handed back on failure.
-    if unsafe { setfname(Buf::current(), new_fname, ptr::null_mut(), true) }.is_err() {
+    if setfname(
+        Buf::current(),
+        unsafe { cstr::at_opt(new_fname) },
+        None,
+        true,
+    )
+    .is_err()
+    {
         Buf::current().name = saved;
         return Err(Failed);
     }
@@ -266,7 +273,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         // both lookups hand back a live buffer or NULL.
         alt_buf = unsafe {
             if cpo_has(CpoFlag::ALTWRITE) || args.cmdidx == CmdIdx::saveas {
-                setaltfname(ffname, fname, 1)
+                setaltfname(cstr::at_opt(ffname), cstr::at_opt(fname), 1)
             } else {
                 buflist_findname(ffname)
             }

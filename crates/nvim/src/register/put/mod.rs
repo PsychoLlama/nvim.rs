@@ -89,22 +89,18 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
         // nothing in it to put.
         unsafe { do_put('_' as c_int, nothing, dir, 1, PUT_LINE as c_int) };
 
-        // SAFETY: stuffing keys into the read buffer, from NUL-terminated
-        // literals; `stuff_inserted` replays the last insert.
-        unsafe {
-            stuff_readbuf_char(command_start_char);
-            while count > 0 {
-                let _ = stuff_inserted(NUL, 1, (count != 1) as c_int);
-                if count != 1 {
-                    // `<CR>` then CTRL-U, to take off the indent 'autoindent'
-                    // would add. CTRL-U on its own would go back to the
-                    // previous line under 'nobackspace'-`eol`, so it is given
-                    // a space to consume.
-                    stuff_readbuf(c"\n ".as_ptr());
-                    stuff_readbuf_char(Ctrl_U);
-                }
-                count -= 1;
+        stuff_readbuf_char(command_start_char);
+        while count > 0 {
+            let _ = stuff_inserted(NUL, 1, (count != 1) as c_int);
+            if count != 1 {
+                // `<CR>` then CTRL-U, to take off the indent 'autoindent'
+                // would add. CTRL-U on its own would go back to the
+                // previous line under 'nobackspace'-`eol`, so it is given
+                // a space to consume.
+                stuff_readbuf(c"\n ");
+                stuff_readbuf_char(Ctrl_U);
             }
+            count -= 1;
         }
     } else {
         let _ = stuff_inserted(command_start_char, count, false as c_int);
@@ -114,8 +110,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
     // motion commands stuffed after the insert do it instead.
     if flags & PUT_CURSEND as c_int != 0 {
         if flags & PUT_LINE as c_int != 0 {
-            // SAFETY: a NUL-terminated literal.
-            unsafe { stuff_readbuf(c"j0".as_ptr()) };
+            stuff_readbuf(c"j0");
         } else {
             // Stuffing `l` would ring the bell at the end of a line, so
             // only do it when the cursor can actually move right:
@@ -142,8 +137,7 @@ fn put_last_insert(dir: c_int, mut count: c_int, flags: c_int, ve_flags: c_uint)
             }
         }
     } else if flags & PUT_LINE as c_int != 0 {
-        // SAFETY: a NUL-terminated literal.
-        unsafe { stuff_readbuf(c"g'[".as_ptr()) };
+        stuff_readbuf(c"g'[");
     }
 
     // Save the cursor position now (though no text), so that `u` after

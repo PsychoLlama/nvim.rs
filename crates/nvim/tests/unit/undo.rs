@@ -224,12 +224,10 @@ mod write {
         /// `u_write_undo(name, forceit, buf, hash)`.
         fn write(&mut self, name: Option<&std::path::Path>, forceit: bool) {
             let name = name.map(|p| CString::new(p.to_str().unwrap()).unwrap());
-            let ptr = name.as_ref().map_or(std::ptr::null(), |n| n.as_ptr());
-            // SAFETY: the buffer and hash are the fixture's, and `ptr` is
-            // either NULL or a NUL-terminated name alive for the call.
+            // SAFETY: the buffer and hash are the fixture's.
             unsafe {
                 u_write_undo(
-                    ptr,
+                    name.as_deref(),
                     forceit,
                     Buf::new(&raw mut *self.buf),
                     self.hash.as_mut_ptr(),

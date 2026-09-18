@@ -248,7 +248,7 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
     let n = len(arg);
     if !get_findfunc().is_empty() {
         // SAFETY: a NUL-terminated argument.
-        return unsafe { findfunc_find_file(arg, n, count) };
+        return findfunc_find_file(unsafe { cstr::slice_at(arg, n) }, count);
     }
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
@@ -353,9 +353,7 @@ fn tabnext(excmd: &mut ExArg) {
             || byte(p) != NUL
             || tab_number == 0
         {
-            let (msg, arg) = (e_invarg2.as_ptr(), excmd.arg_ptr());
-            // SAFETY: a message with one `%s`, and the argument for it.
-            excmd.errmsg = Some(unsafe { ex_errmsg(msg, arg) });
+            excmd.errmsg = Some(ex_errmsg(e_invarg2, excmd.line.cstr_from(excmd.line.arg)));
             return;
         }
     } else if excmd.addr_count == 0 {

@@ -3,6 +3,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 use crate::cstr;
+use crate::ex_docmd::source::ex_errmsg;
 use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
 use crate::window::tab_index;
@@ -338,7 +339,10 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
     let last_tab = || current_tab_nr(None);
     let invarg2 = |command: &mut ExArg| {
         // SAFETY: the argument is a tail of the command line.
-        command.errmsg = Some(ex_errmsg(e_invarg2.as_ptr(), command.arg_ptr()));
+        command.errmsg = Some(ex_errmsg(
+            e_invarg2,
+            command.line.cstr_from(command.line.arg),
+        ));
     };
 
     'theend: {
@@ -365,7 +369,8 @@ pub(crate) fn get_tabpage_arg(excmd: &mut ExArg) -> c_int {
                     tab_number = last_tab();
                 } else if equals(p, b"#") {
                     if last_used_tab().is_none() {
-                        excmd.errmsg = Some(ex_errmsg(e_invargval.as_ptr(), excmd.arg_ptr()));
+                        excmd.errmsg =
+                            Some(ex_errmsg(e_invargval, excmd.line.cstr_from(excmd.line.arg)));
                         tab_number = 0;
                         break 'theend;
                     }
@@ -578,12 +583,6 @@ fn prefix_eq(a: *const c_char, b: *const c_char, n: usize) -> bool {
 fn starts_with(p: *const c_char, prefix: &[u8]) -> bool {
     // SAFETY: a NUL-terminated string; the scan stops at its terminator.
     unsafe { cstr::starts_with(p, prefix) }
-}
-
-/// `ex_errmsg()` as checked code.
-fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> CString {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::source::ex_errmsg(msg_0, arg) }
 }
 
 /// `ex_msg()` as checked code.

@@ -19,6 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::semsg;
@@ -177,8 +178,8 @@ fn find_by_pattern(pattern: *mut c_char, end: *mut c_char, unlisted: bool) -> c_
     unsafe { buflist_findpat(pattern, end, unlisted, false, false) }
 }
 fn trailing_arg_error(arg: *mut c_char) -> Option<CString> {
-    // SAFETY: the message static and the caller's NUL-terminated argument.
-    Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), arg) })
+    // SAFETY: the caller's NUL-terminated argument.
+    Some(ex_errmsg(e_trailing_arg, unsafe { cstr::at(arg) }))
 }
 fn jop_clean() -> bool {
     jop_flags.get() & kOptJopFlagClean as c_int as ::core::ffi::c_uint != 0

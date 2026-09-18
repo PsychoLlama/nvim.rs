@@ -395,7 +395,7 @@ pub(crate) fn nv_optrans(cmd_arg: &mut CmdArg) {
         }
         for (key, keys) in TRANSLATIONS {
             if key == cmd_arg.cmdchar {
-                unsafe { stuff_readbuf(keys.as_ptr()) };
+                stuff_readbuf(keys);
                 break;
             }
         }

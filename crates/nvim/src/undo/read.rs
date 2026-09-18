@@ -20,6 +20,8 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
 use crate::winlayer::Buf;
+use core::ffi::CStr;
+use core::ptr;
 use std::collections::HashSet;
 
 use super::file::*;
@@ -35,11 +37,15 @@ use super::*;
 /// file whose hash disagrees describes text this buffer no longer holds and
 /// is refused rather than applied.
 ///
+/// `None` for `name` is "pick the name out of 'undodir'".
+///
 /// # Safety
 ///
-/// A live current buffer; `name` and `orig_name` are NULL or NUL-terminated,
-/// and `hash` points at [`UNDO_HASH_SIZE`] readable bytes.
-pub unsafe fn u_read_undo(name: *mut c_char, hash: *const uint8_t, orig_name: *const c_char) {
+/// A live current buffer, and `hash` points at [`UNDO_HASH_SIZE`] readable
+/// bytes.
+pub unsafe fn u_read_undo(name: Option<&CStr>, hash: *const uint8_t, orig_name: Option<&CStr>) {
+    let name = name.map_or(ptr::null_mut(), |name| name.as_ptr().cast_mut());
+    let orig_name = orig_name.map_or(ptr::null(), CStr::as_ptr);
     // SAFETY: a live current buffer and NUL-terminated names, by the above.
     let file_name: *mut c_char = if name.is_null() {
         let picked = unsafe { u_get_undo_file_name(Buf::current().name.full_ptr(), true) };

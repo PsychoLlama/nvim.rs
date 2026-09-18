@@ -844,7 +844,7 @@ pub unsafe fn buf_write(
     // Writing the whole file with 'undofile' set writes the undo file too.
     if retval.is_ok() && write_undo_file {
         let mut hash = sha_ctx.finish();
-        unsafe { u_write_undo(core::ptr::null(), false, b, hash.as_mut_ptr()) };
+        unsafe { u_write_undo(None, false, b, hash.as_mut_ptr()) };
     }
 
     if !should_abort_err(retval) {

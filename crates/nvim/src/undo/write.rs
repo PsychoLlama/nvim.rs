@@ -19,6 +19,8 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
 use crate::winlayer::Buf;
+use core::ffi::CStr;
+use core::ptr;
 
 /// Writes `buffer`'s undo tree to `name`, or to the file `'undodir'` picks for
 /// it when `name` is NULL.
@@ -26,11 +28,14 @@ use crate::winlayer::Buf;
 /// `forceit` is `:wundo!`: overwrite whatever is there without checking that
 /// it looks like an undo file first.
 ///
+/// `None` is "pick the name out of 'undodir'", which is what `:wundo` with
+/// no argument means.
+///
 /// # Safety
 ///
-/// `name` is NULL or a NUL-terminated path, and `hash` points at
-/// [`UNDO_HASH_SIZE`] readable bytes.
-pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buffer: Buf, hash: *mut uint8_t) {
+/// `hash` points at [`UNDO_HASH_SIZE`] readable bytes.
+pub unsafe fn u_write_undo(name: Option<&CStr>, forceit: bool, buffer: Buf, hash: *mut uint8_t) {
+    let name = name.map_or(ptr::null(), CStr::as_ptr);
     let file_name: *mut c_char = if name.is_null() {
         // SAFETY: `b_ffname` is the buffer's own name or NULL.
         let picked = unsafe { u_get_undo_file_name(buffer.name.full_ptr(), false) };
@@ -57,7 +62,7 @@ pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buffer: Buf, hash
 
 /// "no directory in 'undodir' will take it", the one message a write can
 /// give before it has a path at all.
-const NO_UNDODIR: &core::ffi::CStr = c"Cannot write undo file in any directory in 'undodir'";
+const NO_UNDODIR: &CStr = c"Cannot write undo file in any directory in 'undodir'";
 
 /// The write itself, once the target path is known.
 ///

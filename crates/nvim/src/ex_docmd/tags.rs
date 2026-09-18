@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
@@ -73,7 +74,8 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
             unsafe { *p = NUL as c_char };
             p = unsafe { skipwhite(p.add(1)) };
             if ends_excmd(byte(p)) == 0 {
-                excmd.errmsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), p) });
+                // SAFETY: `p` is a tail of the command line.
+                excmd.errmsg = Some(ex_errmsg(e_trailing_arg, unsafe { cstr::at(p) }));
             } else {
                 excmd.set_nextcmd_ptr(unsafe { check_nextcmd(p) });
             }

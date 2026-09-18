@@ -456,8 +456,7 @@ fn middle_button_insert(op: Option<Op>, mut regname: c_int, fixindent: bool) -> 
         if visual_active() {
             if visual_select() {
                 stuff_char(Ctrl_G);
-                // SAFETY: a NUL-terminated literal.
-                unsafe { stuff_readbuf(c"\"+p".as_ptr()) };
+                stuff_readbuf(c"\"+p");
             } else {
                 stuff_char('y' as c_int);
                 stuff_char(Key::Middlemouse.code());

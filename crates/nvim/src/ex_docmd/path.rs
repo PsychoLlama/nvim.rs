@@ -156,20 +156,15 @@ pub unsafe fn expand_findfunc(
 
 /// Resolve the `count`'th name 'findfunc' answers for `findarg`.
 ///
-/// `findarg` is not NUL-terminated at `findarg_len`; the byte there is
-/// saved, overwritten and put back, because the caller owns a longer line.
-///
-/// # Safety
-///
-/// `findarg` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn findfunc_find_file(
-    findarg: *mut c_char,
-    findarg_len: size_t,
-    count: c_int,
-) -> *mut c_char {
+/// Upstream is handed a pointer into a longer line with the argument's
+/// length beside it, and NUL-terminates the argument in place for the call,
+/// putting the byte back afterwards. A slice says how long the argument is
+/// without borrowing the line's terminator, so the copy here replaces that
+/// whole dance.
+pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> *mut c_char {
     let mut ret_fname: *mut c_char = ptr::null_mut();
-    let saved = unsafe { *findarg.add(findarg_len) };
-    unsafe { *findarg.add(findarg_len) = NUL as c_char };
+    let findarg = cstr::owned(findarg);
+    let findarg = findarg.as_ptr().cast_mut();
 
     let mut held = call_findfunc(findarg, kBoolVarFalse);
     let fname_count = list_len(held.as_deref());
@@ -188,7 +183,6 @@ pub(crate) unsafe fn findfunc_find_file(
         }
     }
     drop(held);
-    unsafe { *findarg.add(findarg_len) = saved };
     ret_fname
 }
 

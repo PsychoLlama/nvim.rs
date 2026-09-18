@@ -185,7 +185,7 @@ pub fn getout(mut exitval: c_int) -> ! {
 
     if P_SHADA.first_byte() != 0 {
         // The registers, history, marks and the rest.
-        unsafe { shada_write_file(ptr::null(), false) };
+        shada_write_file(None, false);
     }
 
     if v_dying.get() <= 1 {

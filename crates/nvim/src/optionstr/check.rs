@@ -245,6 +245,11 @@ pub(crate) trait LocalOptStr {
     /// The value's bytes, without the terminator.
     fn bytes(&self) -> &[u8];
 
+    /// The value as a borrowed C string, which is the shared empty one when
+    /// the field owns nothing -- [`value_ptr`](Self::value_ptr) with the
+    /// terminator's whereabouts written into the type.
+    fn cstr(&self) -> &CStr;
+
     /// The value's first byte, which is 0 for a field that owns nothing --
     /// upstream's `*p` on a variable that is never null.
     fn first_byte(&self) -> u8;
@@ -263,6 +268,10 @@ impl LocalOptStr for Option<XString> {
 
     fn bytes(&self) -> &[u8] {
         self.as_deref().unwrap_or_default()
+    }
+
+    fn cstr(&self) -> &CStr {
+        self.as_ref().map_or(c"", |value| value.as_cstr())
     }
 
     fn first_byte(&self) -> u8 {

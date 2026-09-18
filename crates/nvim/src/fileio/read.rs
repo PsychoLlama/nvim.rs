@@ -912,7 +912,8 @@ pub(crate) unsafe fn readfile(
         // When opening a new file, locate the undo info and read it.
         if read_undo_file {
             let mut hash = sha_ctx.finish();
-            unsafe { u_read_undo(ptr::null_mut(), hash.as_mut_ptr(), fname) };
+            // SAFETY: the caller's NUL-terminated name; `hash` is 32 bytes.
+            unsafe { u_read_undo(None, hash.as_mut_ptr(), cstr::at_opt(fname)) };
         }
 
         // SAFETY: the name the read used, and the caller's command.

@@ -416,7 +416,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     if P_SHADA.first_byte() != 0 {
-        let _ = unsafe { shada_read_everything(ptr::null(), false, true) };
+        let _ = shada_read_everything(None, false, true);
         time_msg_at(c"reading ShaDa");
     }
     if get_vim_var_list(Vv::Oldfiles).is_null() {

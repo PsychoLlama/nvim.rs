@@ -158,20 +158,20 @@ pub unsafe fn buflist_name_nr(
 /// Fails, with `message`, when another *loaded* buffer already has the name;
 /// an unloaded one is wiped to make room.
 ///
-/// # Safety
-///
-/// `ffname_arg` must point at a NUL-terminated string, unaliased for the
-/// call. `sfname_arg` must point at a NUL-terminated string, unaliased for
-/// the call.
-pub unsafe fn setfname(
+/// `None` for either name is upstream's NULL: no name at all, which is not
+/// the same as the empty one.
+pub fn setfname(
     buffer: Buf,
-    ffname_arg: *mut c_char,
-    sfname_arg: *mut c_char,
+    ffname_arg: Option<&CStr>,
+    sfname_arg: Option<&CStr>,
     message: bool,
 ) -> Result<(), Failed> {
     let mut b = buffer;
-    let mut ffname = ffname_arg;
-    let mut sfname = sfname_arg;
+    // The names below this point are locals `fname_expand` replaces with
+    // allocations of its own, which the buffer then adopts; the caller's
+    // bytes are only read, so the `cast_mut` is the C signature's.
+    let mut ffname = ffname_arg.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    let mut sfname = sfname_arg.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
     let mut file_id = FileID {
         inode: 0,
         device_id: 0,
@@ -275,14 +275,13 @@ pub fn buf_name_changed(b: Buf) {
 
 /// Set the alternate file name for the current window.
 ///
-/// # Safety
-///
-/// `ffname` must point at a NUL-terminated string, unaliased for the call.
-/// `sfname` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: LineNr) -> Option<Buf> {
+/// `None` for either name is upstream's NULL.
+pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -> Option<Buf> {
     // Create a buffer; 'buflisted' is not set if it is a new one.
     // SAFETY: two names to hand over, either of which may be null; the
     // answer is a live buffer or null.
+    let ffname = ffname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
     let buf = unsafe { buflist_new(ffname, sfname, lnum, 0) };
     if let Some(buf) = buf
         && !cmdmod_has(CmdModFlags::KEEPALT)

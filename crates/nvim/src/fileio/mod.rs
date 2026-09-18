@@ -293,7 +293,9 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
         return Err(Failed);
     }
 
-    if unsafe { setfname(Buf::current(), fname, sfname, false) }.is_ok() {
+    // SAFETY: the caller's NUL-terminated names.
+    let (name, short) = unsafe { (cstr::at_opt(fname), cstr::at_opt(sfname)) };
+    if setfname(Buf::current(), name, short, false).is_ok() {
         Buf::current().b_flags |= BufFlags::NOTEDITED;
     }
 

@@ -74,30 +74,25 @@ use crate::winlayer::{Buf, Win};
 /// A buffer whose file could not be stat'ed is compared by its *short*
 /// name, because the full name may have been resolved against a directory
 /// that no longer exists.
-///
-/// # Safety
-///
-/// `ffname` must point at a NUL-terminated string, unaliased for the call.
-pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
+pub(crate) fn is_other_file(fnum: c_int, ffname: Option<&CStr>) -> bool {
     if fnum != 0 {
         return fnum != Buf::current().handle;
     }
-    if ffname.is_null() {
+    let Some(ffname) = ffname else {
         return true;
-    }
+    };
     // An empty name means "this buffer", not "no buffer".
-    if byte(ffname) == NUL {
+    if ffname.is_empty() {
         return false;
     }
     if !Buf::current().file_id_valid
-        && !Buf::current().name.short().is_none()
-        && byte(Buf::current().name.short_ptr()) != NUL
+        && let Some(short) = Buf::current().name.short()
+        && !short.is_empty()
     {
-        return unsafe {
-            path_fnamecmp(cstr::at(ffname), cstr::at(Buf::current().name.short_ptr()))
-        } != 0;
+        return path_fnamecmp(ffname, short) != 0;
     }
-    unsafe { otherfile(ffname) }
+    // SAFETY: a NUL-terminated name; `otherfile` only reads it.
+    unsafe { otherfile(ffname.as_ptr().cast_mut()) }
 }
 
 /// `:buffer`.
@@ -109,8 +104,11 @@ pub(crate) fn ex_buffer(excmd: &mut ExArg) {
 pub(crate) fn do_exbuffer(excmd: &mut ExArg) {
     // The buffer was already resolved from the argument by
     // `execute_cmd0`'s `ExArgt::BUFNAME` handling, so anything left is junk.
-    if unsafe { *excmd.arg_ptr() } != 0 {
-        excmd.errmsg = Some(unsafe { ex_errmsg(e_trailing_arg.as_ptr(), excmd.arg_ptr()) });
+    if excmd.line.byte_at(excmd.line.arg) != 0 {
+        excmd.errmsg = Some(ex_errmsg(
+            e_trailing_arg,
+            excmd.line.cstr_from(excmd.line.arg),
+        ));
         return;
     }
     if excmd.addr_count == 0 {
@@ -204,7 +202,13 @@ pub(crate) fn ex_recover(excmd: &mut ExArg) {
     );
     if !unsaved
         && (excmd.line.byte_at(excmd.line.arg) == 0
-            || unsafe { setfname(Buf::current(), excmd.arg_ptr(), ptr::null_mut(), true) }.is_ok())
+            || setfname(
+                Buf::current(),
+                Some(excmd.line.cstr_from(excmd.line.arg)),
+                None,
+                true,
+            )
+            .is_ok())
     {
         ml_recover(true);
     }
@@ -222,15 +226,13 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
         1
     };
     let fname = if !get_findfunc().is_empty() {
-        unsafe {
-            findfunc_find_file(
-                excmd.line.ptr_at(excmd.line.arg),
-                excmd.line.arg().len(),
-                count,
-            )
-        }
+        findfunc_find_file(excmd.line.arg(), count)
     } else {
-        unsafe { find_nth_on_path(excmd.arg_ptr(), excmd.addr_count, excmd.line2) }
+        find_nth_on_path(
+            excmd.line.cstr_from(excmd.line.arg),
+            excmd.addr_count,
+            excmd.line2,
+        )
     };
     if fname.is_null() {
         return;
@@ -247,16 +249,13 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
 /// each `find_file_in_path(NULL, …)` resumes the walk the first one
 /// started.
 ///
-/// # Safety
-///
-/// `pat` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -> *mut c_char {
+fn find_nth_on_path(pat: &CStr, addr_count: c_int, count: LineNr) -> *mut c_char {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
-    let pat_len = unsafe { cstr::bytes_at(pat) }.len();
+    let pat_len = pat.count_bytes();
     let mut fname = {
         find_file_in_path(
-            pat,
+            pat.as_ptr().cast_mut(),
             pat_len,
             FileNameOpts::MESS,
             true,
@@ -290,16 +289,12 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -
 
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
 pub(crate) fn ex_edit(excmd: &mut ExArg) {
-    let ffname = if excmd.cmdidx == CmdIdx::enew {
-        ptr::null_mut()
-    } else {
-        excmd.arg_ptr()
-    };
+    let ffname = (excmd.cmdidx != CmdIdx::enew).then(|| excmd.line.cstr_from(excmd.line.arg));
     // `:badd` and `:balt` only add to the buffer list; they never leave
     // the current buffer, so they are not asked about it.
     if excmd.cmdidx != CmdIdx::badd
         && excmd.cmdidx != CmdIdx::balt
-        && unsafe { is_other_file(0, ffname) }
+        && is_other_file(0, ffname)
         && !check_can_set_curbuf_forceit(c_int::from(excmd.forceit))
     {
         return;
@@ -332,9 +327,9 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             // Inside `:global`, normal mode is entered for the rest of
             // the line and Ex mode resumes afterwards.
             if global_busy.get() != 0 {
-                if !excmd.line.next.is_none() {
-                    unsafe { stuff_readbuf(excmd.nextcmd_ptr()) };
-                    excmd.set_nextcmd_ptr(ptr::null_mut());
+                if let Some(next) = excmd.line.next {
+                    stuff_readbuf(excmd.line.cstr_from(next));
+                    excmd.line.next = None;
                 }
                 let _redraw = Allow::redraw();
                 let _prompt = Allow::wait_return();
@@ -362,8 +357,8 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
         setpcmark();
         let _ = do_ecmd(
             0,
-            ptr::null_mut(),
-            ptr::null_mut(),
+            None,
+            None,
             excmd,
             newlnum::ONE as LineNr,
             EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(excmd.forceit),
@@ -385,14 +380,16 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
             setpcmark();
         }
 
+        // A copy: `do_ecmd` is handed the command as well as its argument,
+        // and the two cannot be borrowed out of the same `ExArg` at once.
+        // Upstream lends it a pointer into a line `do_ecmd`'s own
+        // autocommands may reallocate, which is the same hazard written
+        // down.
+        let name = (idx != CmdIdx::enew).then(|| excmd.line.cstr_from(excmd.line.arg).to_owned());
         let opened = do_ecmd(
             0,
-            if idx == CmdIdx::enew {
-                ptr::null_mut()
-            } else {
-                excmd.arg_ptr()
-            },
-            ptr::null_mut(),
+            name.as_deref(),
+            None,
             excmd,
             excmd.do_ecmd_lnum,
             EcmdFlags::HIDE.when(buf_hide(Buf::current()))
@@ -467,9 +464,13 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         if check_fname().is_err() {
             return;
         }
+        // Copies: `readfile` takes the command as well, and the buffer's
+        // own name is not borrowable across it.
+        let full = Buf::current().name.full().map(CStr::to_owned);
+        let shown = Buf::current().name.shown().map(CStr::to_owned);
         readfile(
-            Buf::current().name.full_ptr(),
-            Buf::current().name.shown_ptr(),
+            full.as_deref(),
+            shown.as_deref(),
             excmd.line2,
             0,
             MAXLNUM,
@@ -480,18 +481,12 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
     } else {
         // 'cpoptions' `a` makes `:read file` set the alternate file.
         if cpo_has(CpoFlag::ALTREAD) {
-            unsafe { setaltfname(excmd.arg_ptr(), excmd.arg_ptr(), 1) };
+            let name = excmd.line.cstr_from(excmd.line.arg);
+            setaltfname(Some(name), Some(name), 1);
         }
-        readfile(
-            excmd.arg_ptr(),
-            ptr::null_mut(),
-            excmd.line2,
-            0,
-            MAXLNUM,
-            excmd,
-            0,
-            false,
-        )
+        // A copy, as `ex_edit`'s: `readfile` takes the command too.
+        let name = excmd.line.cstr_from(excmd.line.arg).to_owned();
+        readfile(Some(&name), None, excmd.line2, 0, MAXLNUM, excmd, 0, false)
     };
 
     if read.is_err() {
@@ -534,14 +529,18 @@ pub(crate) fn ex_wundo(excmd: &mut ExArg) {
     u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
     let buffer = Buf::current();
     let hash = hash.as_mut_ptr();
-    unsafe { u_write_undo(excmd.arg_ptr(), excmd.forceit, buffer, hash) };
+    let name = excmd.line.cstr_from(excmd.line.arg);
+    // SAFETY: `hash` is the 32-byte local above.
+    unsafe { u_write_undo(Some(name), excmd.forceit, buffer, hash) };
 }
 
 /// `:rundo`.
 pub(crate) fn ex_rundo(excmd: &mut ExArg) {
     let mut hash: [uint8_t; 32] = [0; 32];
     u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
-    unsafe { u_read_undo(excmd.arg_ptr(), &raw mut hash as *mut uint8_t, ptr::null()) };
+    let name = excmd.line.cstr_from(excmd.line.arg);
+    // SAFETY: `hash` is the 32-byte local above.
+    unsafe { u_read_undo(Some(name), &raw mut hash as *mut uint8_t, None) };
 }
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
@@ -575,9 +574,13 @@ pub(crate) fn ex_shada(excmd: &mut ExArg) {
     let save_shada =
         p_shada(CStr::is_empty).then(|| P_SHADA.swap(Some(XString::from_cstr(c"'100"))));
     if excmd.cmdidx == CmdIdx::rviminfo || excmd.cmdidx == CmdIdx::rshada {
-        let _ = unsafe { shada_read_everything(excmd.arg_ptr(), excmd.forceit, false) };
+        let _ = shada_read_everything(
+            Some(excmd.line.cstr_from(excmd.line.arg)),
+            excmd.forceit,
+            false,
+        );
     } else {
-        unsafe { shada_write_file(excmd.arg_ptr(), excmd.forceit) };
+        shada_write_file(Some(excmd.line.cstr_from(excmd.line.arg)), excmd.forceit);
     }
     if let Some(saved) = save_shada {
         P_SHADA.restore(saved);
@@ -603,14 +606,17 @@ fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, do_o
 #[allow(clippy::too_many_arguments)]
 fn do_ecmd(
     fnum: c_int,
-    ffname: *mut c_char,
-    sfname: *mut c_char,
+    ffname: Option<&CStr>,
+    sfname: Option<&CStr>,
     excmd: &mut ExArg,
     newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: Option<WinId>,
 ) -> Result<(), Failed> {
-    // SAFETY: the pointers are the command line's own, and live for the call.
+    // SAFETY: two NUL-terminated names, or none; `do_ecmd` replaces the
+    // locals holding them rather than writing through either.
+    let ffname = ffname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
     unsafe { crate::ex_cmds::do_ecmd(fnum, ffname, sfname, Some(excmd), newlnum, flags, oldwin) }
 }
 
@@ -666,8 +672,8 @@ fn msg(s: *const c_char, hl_id: c_int) -> bool {
 /// `readfile()` as checked code.
 #[allow(clippy::too_many_arguments)]
 fn readfile(
-    fname: *mut c_char,
-    sfname: *mut c_char,
+    fname: Option<&CStr>,
+    sfname: Option<&CStr>,
     from: LineNr,
     lines_to_skip: LineNr,
     lines_to_read: LineNr,
@@ -675,7 +681,9 @@ fn readfile(
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
-    // SAFETY: the pointers are the command line's own, and live for the call.
+    // SAFETY: two NUL-terminated names, or none.
+    let fname = fname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
+    let sfname = sfname.map_or(ptr::null_mut(), |n| n.as_ptr().cast_mut());
     unsafe {
         crate::fileio::readfile(
             fname,

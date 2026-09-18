@@ -90,7 +90,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
         // A count in front of `:` becomes a range: `3:` is `:.,.+2`.
         stuff_readbuf_char('.' as c_int);
         if cmd_arg.count0 > 1 {
-            unsafe { stuff_readbuf(c",.+".as_ptr()) };
+            stuff_readbuf(c",.+");
             stuff_readbuf_number(cmd_arg.count0 - 1);
         }
     }

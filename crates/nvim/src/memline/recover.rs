@@ -206,8 +206,7 @@ pub fn ml_recover(checkext: bool) {
         // from what the swap file says it belongs to.
         if directly {
             unsafe { expand_env((*b0p).b0_fname.as_mut_ptr(), path.as_mut_ptr(), MAXPATHL) };
-            let (buf, none) = (Buf::current(), core::ptr::null_mut());
-            if unsafe { setfname(buf, path.as_mut_ptr(), none, true) }.is_err() {
+            if setfname(Buf::current(), Some(cstr::in_chars(&path)), None, true).is_err() {
                 break 'theend;
             }
         }

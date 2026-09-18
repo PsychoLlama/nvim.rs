@@ -100,7 +100,8 @@ pub(crate) unsafe fn load_dummy_buffer(
         unsafe { aucmd_prepbuf(&raw mut aco, newbuf) };
 
         // Need to set the filename for autocommands.
-        let _ = unsafe { setfname(Buf::current(), fname, ptr::null_mut(), false) };
+        // SAFETY: the caller's NUL-terminated name.
+        let _ = setfname(Buf::current(), unsafe { cstr::at_opt(fname) }, None, false);
 
         // Create swap file now to avoid the ATTENTION message.
         check_need_swap(true);

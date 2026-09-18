@@ -34,6 +34,7 @@ use super::*;
 use crate::cstr;
 use crate::keycodes::{Ctrl_O, Ctrl_V, key_escape};
 use crate::types::{MB_MAXBYTES, NUL};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_uint};
 use core::mem::offset_of;
 use core::ptr;
@@ -629,14 +630,10 @@ pub fn beep_flush() {
     }
 }
 
-/// Stuff a NUL-terminated string into `readbuf1`, to be read back as keys.
-///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn stuff_readbuf(s: *const c_char) {
-    // SAFETY (this body): the caller's promise -- a NUL-terminated string,
-    // which `add` copies.
-    unsafe { readbuf1().add(s, -1) };
+/// Stuff a string into `readbuf1`, to be read back as keys.
+pub fn stuff_readbuf(s: &CStr) {
+    // SAFETY: a NUL-terminated string, which `add` copies.
+    unsafe { readbuf1().add(s.as_ptr(), -1) };
 }
 
 /// Stuff a NUL-terminated string into the redo read buffer.

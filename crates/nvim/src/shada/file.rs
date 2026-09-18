@@ -24,6 +24,7 @@ use crate::smsg;
 use crate::tr_c;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ptr;
 use std::ffi::CString;
 
 use super::*;
@@ -112,7 +113,7 @@ fn shada_get_default_file() -> *const c_char {
     // stays where it is for as long as the editor runs.
     default_shada_file.with(|file| match file {
         Some(file) => file.as_ptr(),
-        None => core::ptr::null(),
+        None => ptr::null(),
     })
 }
 
@@ -219,7 +220,7 @@ unsafe fn shada_read_file(file: *const c_char, flags: c_int) -> Result<(), Faile
 
 /// Read the marks out of the default ShaDa file.
 pub fn shada_read_marks() -> Result<(), Failed> {
-    unsafe { shada_read_file(core::ptr::null(), kShaDaWantMarks as c_int) }
+    unsafe { shada_read_file(ptr::null(), kShaDaWantMarks as c_int) }
 }
 
 /// Read everything out of a ShaDa file.
@@ -227,11 +228,10 @@ pub fn shada_read_marks() -> Result<(), Failed> {
 /// `forceit` lets the file's contents win over the running editor's state;
 /// `missing_ok` keeps quiet about a file that is not there.
 ///
-/// # Safety
-///
-/// `fname` must point at a NUL-terminated string.
-pub unsafe fn shada_read_everything(
-    fname: *const c_char,
+/// `None` is "the file 'shada' names", which is what `:rshada` with no
+/// argument means.
+pub fn shada_read_everything(
+    fname: Option<&CStr>,
     forceit: bool,
     missing_ok: bool,
 ) -> Result<(), Failed> {
@@ -246,7 +246,8 @@ pub unsafe fn shada_read_everything(
     if forceit {
         flags |= kShaDaForceit as c_int;
     }
-    unsafe { shada_read_file(fname, flags) }
+    // SAFETY: a NUL-terminated name, or none.
+    unsafe { shada_read_file(fname.map_or(ptr::null(), CStr::as_ptr), flags) }
 }
 
 /// The temporary file a merged ShaDa file is built in, opened.
@@ -321,9 +322,9 @@ unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Re
         let tail_save = unsafe { *tail };
         unsafe { *tail = NUL as c_char };
         let missing = !unsafe { os_isdir(fname) };
-        let mut failed_dir = core::ptr::null_mut::<c_char>();
+        let mut failed_dir = ptr::null_mut::<c_char>();
         let ret = if missing {
-            unsafe { os_mkdir_recurse(fname, 0o700, &raw mut failed_dir, core::ptr::null_mut()) }
+            unsafe { os_mkdir_recurse(fname, 0o700, &raw mut failed_dir, ptr::null_mut()) }
         } else {
             0
         };
@@ -364,11 +365,10 @@ unsafe fn open_direct_writer(sd_writer: *mut FileDescriptor, fname: &CStr) -> Re
 /// is read and merged in first. Falling back to `nomerge` is normal — it is
 /// what happens when there is no file yet.
 ///
-/// # Safety
-///
-/// `file` must point at a NUL-terminated string.
-pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
-    let Some(fname) = (unsafe { shada_filename(file) }) else {
+/// `None` is "the file 'shada' names".
+pub fn shada_write_file(file: Option<&CStr>, nomerge: bool) -> c_int {
+    // SAFETY: a NUL-terminated name, or none.
+    let Some(fname) = (unsafe { shada_filename(file.map_or(ptr::null(), CStr::as_ptr)) }) else {
         return FAIL;
     };
     let mut sd_writer: FileDescriptor = unsafe { core::mem::zeroed() };
@@ -415,7 +415,7 @@ pub unsafe fn shada_write_file(file: *const c_char, nomerge: bool) -> c_int {
             Ok(false) => return FAIL,
             Ok(true) => {}
         }
-        core::ptr::null_mut()
+        ptr::null_mut()
     };
 
     if p_verbose() > 1 {

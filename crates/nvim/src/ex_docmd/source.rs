@@ -453,16 +453,13 @@ pub(crate) unsafe fn ex_msg(msg: *const c_char) -> CString {
 }
 
 /// [`ex_msg`] for a message with one `%s` in it.
-///
-/// # Safety
-///
-/// `msg_0` must be a NUL-terminated format taking one `%s`, and `arg` a
-/// NUL-terminated string.
-pub(crate) unsafe fn ex_errmsg(msg_0: *const c_char, arg: *const c_char) -> CString {
+pub(crate) fn ex_errmsg(msg: &CStr, arg: &CStr) -> CString {
     let mut buf = [0 as c_char; MSG_BUF_LEN as usize];
     let size = MSG_BUF_LEN as size_t;
-    // SAFETY: the caller's format and argument, and the whole of `buf`.
-    unsafe { vim_snprintf(buf.as_mut_ptr(), size, gettext(msg_0), arg) };
+    // SAFETY: a format holding one `%s`, its argument, and the whole of
+    // `buf` to write into. Both pointers are spelled out rather than left
+    // to a variadic's coercion.
+    unsafe { vim_snprintf(buf.as_mut_ptr(), size, gettext(msg.as_ptr()), arg.as_ptr()) };
     cstr::in_chars(&buf).to_owned()
 }
 

@@ -548,8 +548,13 @@ pub unsafe fn buf_open_scratch(bufnr: Handle, bufname: *mut c_char) -> Result<()
     edit_file(bufnr, none, none, None, one, hide, Win::current())?;
     if !bufname.is_null() {
         fire(AutoEvent::BufFilePre, Buf::current());
-        // SAFETY: the current buffer, and the caller's NUL-terminated name.
-        let _ = unsafe { setfname(Buf::current(), bufname, ptr::null_mut(), true) };
+        // SAFETY: the caller's NUL-terminated name.
+        let _ = setfname(
+            Buf::current(),
+            Some(unsafe { cstr::at(bufname) }),
+            None,
+            true,
+        );
         fire(AutoEvent::BufFilePost, Buf::current());
     }
     set_option_string(kOptBufhidden, c"hide");

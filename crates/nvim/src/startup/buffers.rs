@@ -332,8 +332,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
                 // The window cannot be closed here without disturbing
                 // what comes next: clear the name and mark the argument
                 // index so it is deleted later.
-                let _ =
-                    unsafe { setfname(Buf::current(), ptr::null_mut(), ptr::null_mut(), false) };
+                let _ = setfname(Buf::current(), None, None, false);
                 Win::current().w_arg_idx = -1;
                 swap_exists_action.set(SEA_NONE);
             } else {

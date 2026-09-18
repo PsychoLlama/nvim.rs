@@ -30,6 +30,7 @@ use super::{
     READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
 };
 use crate::arglist::check_arg_idx;
+use crate::cstr;
 use crate::ex_cmds::say;
 use crate::types::AutoEvent;
 use crate::winlayer::WinId;
@@ -328,7 +329,8 @@ pub(crate) unsafe fn do_ecmd(
             if fnum == 0 && other_file && !ffname.is_null() {
                 let lnum = state.newlnum.max(0);
                 // SAFETY: the names are live.
-                unsafe { setaltfname(ffname, sfname, lnum) };
+                let (ff, sf) = unsafe { (cstr::at_opt(ffname), cstr::at_opt(sfname)) };
+                setaltfname(ff, sf, lnum);
             }
             break 'theend;
         }

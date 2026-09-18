@@ -21,7 +21,6 @@
 
 use neovim::winlayer::Win;
 use std::ffi::{CStr, c_char, c_int};
-use std::ptr;
 
 use neovim::buffer::setfname;
 use neovim::grid::schar_from_str;
@@ -98,14 +97,8 @@ impl Statusline {
     /// Name `curbuf`, or clear its name when `file` is empty.
     fn name(&self, file: &str) {
         let name = cstr(file);
-        let ptr = if file.is_empty() {
-            ptr::null_mut()
-        } else {
-            name.as_ptr().cast_mut()
-        };
-        // SAFETY: `curbuf` is the editor's own buffer under the editor
-        // lock, and `name` outlives the call, which copies what it keeps.
-        let _ = unsafe { setfname(Buf::current(), ptr, ptr::null_mut(), true) };
+        let name = (!file.is_empty()).then_some(name.as_c_str());
+        let _ = setfname(Buf::current(), name, None, true);
     }
 
     /// Render one row and check both halves of the answer: the bytes
