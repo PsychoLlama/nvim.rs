@@ -3,7 +3,7 @@ count	callee	no_raw	defs	def
 739	.add	0	3	
 454	.offset	0	0	
 452	bytes_at	0	1	crates/nvim/src/cstr.rs
-401	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
+399	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 282	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
 228	at	0	3	
@@ -548,7 +548,6 @@ count	callee	no_raw	defs	def
 5	.quoted	0	2	
 5	.run	0	4	
 5	.save_str	0	1	crates/nvim/src/spellfile/wordtree.rs
-5	.set_nextcmd_ptr	0	0	
 5	COwned::new	0	1	crates/nvim/src/mapping/table.rs
 5	Chan::new	0	1	crates/nvim/src/msgpack_rpc/channel/mod.rs
 5	Chars::new	0	1	crates/nvim/src/charset/display.rs
@@ -905,6 +904,7 @@ count	callee	no_raw	defs	def
 3	.line	0	1	crates/nvim/src/search/find.rs
 3	.position	1	1	crates/nvim/src/strings/printf/emit.rs
 3	.set_message	0	1	crates/nvim/src/quickfix/parse.rs
+3	.set_nextcmd_ptr	0	0	
 3	.since	0	1	crates/nvim/src/eval/expr/literal.rs
 3	.stash	0	1	crates/nvim/src/fileio/convert.rs
 3	.take	0	1	crates/nvim/src/change/leader.rs
@@ -2073,7 +2073,6 @@ count	callee	no_raw	defs	def
 2	skip_all	0	1	crates/nvim/src/autocmd/events.rs
 2	skip_anyof	0	1	crates/nvim/src/regexp/parse.rs
 2	skip_cmd_arg	0	1	crates/nvim/src/ex_docmd/scan.rs
-2	skip_regexp_err	0	1	crates/nvim/src/regexp/parse.rs
 2	skip_tab	0	1	crates/nvim/src/tag/jump.rs
 2	skip_to_end_or_colon	0	1	crates/nvim/src/ops/join.rs
 2	skip_var_one	0	1	crates/nvim/src/eval/vars/assign.rs
@@ -3255,7 +3254,6 @@ count	callee	no_raw	defs	def
 1	path_guess_exepath	0	1	crates/nvim/src/path/mod.rs
 1	path_to_absolute	0	1	crates/nvim/src/path/mod.rs
 1	pattern_admitted	1	1	crates/nvim/src/syntax/attr.rs
-1	pattern_catches	0	1	crates/nvim/src/ex_eval/trycmd.rs
 1	pattern_to_search	0	1	crates/nvim/src/search/command.rs
 1	pbyte	0	0	
 1	pending_events	0	1	crates/nvim/src/os/input.rs
@@ -3565,6 +3563,7 @@ count	callee	no_raw	defs	def
 1	sign_unplace_from_dict	0	1	crates/nvim/src/sign/vimscript.rs
 1	signal_event	0	1	crates/nvim/src/event/signal.rs
 1	skip_colon_white	0	1	crates/nvim/src/ex_docmd/scan.rs
+1	skip_regexp_err	0	1	crates/nvim/src/regexp/parse.rs
 1	skip_to_arg	0	1	crates/nvim/src/strings/printf/spec.rs
 1	skip_to_newline	0	1	crates/nvim/src/charset/walk.rs
 1	skiphex	0	1	crates/nvim/src/charset/walk.rs

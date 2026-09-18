@@ -14,7 +14,7 @@
 
 use crate::cstr;
 use crate::guard::Depth;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_bytes};
 use crate::semsg;
 use core::ffi::{c_char, c_int};
 
@@ -157,6 +157,28 @@ pub unsafe fn skip_regexp_err(startp: *mut c_char, delim: c_int, magic: c_int) -
         return core::ptr::null_mut();
     }
     p
+}
+
+/// [`skip_regexp_err`] as an offset walk: how many bytes of `text` the
+/// pattern takes, or `None` when the closing delimiter is missing (which
+/// reports E654).
+///
+/// # Panics
+/// If `text` holds no NUL at all.
+pub(crate) fn skip_regexp_err_at(text: &[u8], delim: c_int, magic: c_int) -> Option<usize> {
+    let end = skip_regexp_at(text, delim, magic);
+    if c_int::from(cstr::byte_at(text, end)) != delim {
+        // The whole string, as the pointer form's `c_str(startp)` showed
+        // it -- not just the part the skip consumed.
+        let shown = text
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(text.len());
+        let startp = msg_bytes(&text[..shown]);
+        semsg!("E654: Missing delimiter after search pattern: {startp}");
+        return None;
+    }
+    Some(end)
 }
 
 /// The full skip. Beyond [`skip_regexp`]'s job it can rewrite the pattern:

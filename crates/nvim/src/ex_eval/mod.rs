@@ -382,8 +382,8 @@ pub(crate) fn ex_else(excmd: &mut ExArg) {
     // is wrong -- perhaps it should have been ":else". A double quote
     // here starts a string, it is not a comment.
     if skip
-        && unsafe { *excmd.arg_ptr() } != b'"' as c_char
-        && ends_excmd(unsafe { *excmd.arg_ptr() } as c_int) != 0
+        && excmd.line.byte_at(excmd.line.arg) != b'"'
+        && ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.arg))) != 0
     {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg = msg_bytes(excmd.line.arg());

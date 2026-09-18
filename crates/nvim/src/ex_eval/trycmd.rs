@@ -49,11 +49,11 @@ use super::{
     aborting, check_skip, cleanup_conditionals, discard_pending_return, ex_break, ex_continue,
     get_end_emsg, message, rewind_conditionals,
 };
-use crate::charset::skipwhite;
+use crate::cstr;
 use crate::debugger::dbg_check_skipped;
 use crate::eval::eval_to_string_skip;
 use crate::eval::userfunc::do_return;
-use crate::ex_docmd::{ends_excmd, find_nextcmd};
+use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::state::{current_exception, did_throw, force_abort, msg_list, need_rethrow};
 use crate::getchar::state::got_int;
 use crate::guard::Suppress;
@@ -61,26 +61,24 @@ use crate::memory::{xfree, xmalloc};
 use crate::message::e_argreq;
 use crate::message::state::{did_emsg, emsg_silent};
 use crate::message::{emsg_ptr, internal_error};
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 
 use crate::regexp::{
-    RE_MAGIC, RE_STRING, skip_regexp_err, vim_regcomp, vim_regexec_nl, vim_regfree,
+    RE_MAGIC, RE_STRING, skip_regexp_err_at, vim_regcomp, vim_regexec_nl, vim_regfree,
 };
 use crate::runtime::do_finish;
 use crate::semsg;
-use crate::types::{Cleanup, CondStack, EsList, ExArg, NUL, RegMatch};
+use crate::types::{Cleanup, CondStack, EsList, ExArg, RegMatch};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 /// `:throw {expr}`
 pub(crate) fn ex_throw(excmd: &mut ExArg) {
     // SAFETY: module contract.
-    let arg = excmd.arg_ptr();
-    let value = if unsafe { *arg } != NUL as c_char
-        && unsafe { *arg } != b'|' as c_char
-        && unsafe { *arg } != b'\n' as c_char
-    {
+    let value = if !matches!(excmd.line.byte_at(excmd.line.arg), 0 | b'|' | b'\n') {
+        // `eval_to_string_skip` still walks a `char *`; p32-8's.
+        let arg = excmd.arg_ptr();
         unsafe { eval_to_string_skip(arg, excmd, excmd.skip) }
     } else {
         unsafe { emsg_ptr(message(e_argreq)) };
@@ -205,19 +203,18 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
         }
     }
 
-    let pat;
-    let end;
-    if ends_excmd(unsafe { *excmd.arg_ptr() } as c_int) != 0 {
+    // Where the pattern starts and ends in the line. `None` is the
+    // implicit `.*` of a bare `:catch`, which is not in the line at all.
+    let mut span = None;
+    if ends_excmd(c_int::from(excmd.line.byte_at(excmd.line.arg))) != 0 {
         // No argument: catch everything.
-        pat = c".*".as_ptr().cast_mut();
-        end = ptr::null_mut();
-        let arg = excmd.arg_ptr();
-        unsafe { excmd.set_nextcmd_ptr(find_nextcmd(arg)) };
+        excmd.line.next = excmd.line.find_next(excmd.line.arg);
     } else {
-        pat = unsafe { excmd.arg_ptr().add(1) };
-        end = unsafe { skip_regexp_err(pat, *excmd.arg_ptr() as c_int, true as c_int) };
-        if end.is_null() {
-            give_up = true;
+        let delim = c_int::from(excmd.line.byte_at(excmd.line.arg));
+        let start = excmd.line.arg + 1;
+        match skip_regexp_err_at(excmd.line.tail(start), delim, true as c_int) {
+            Some(len) => span = Some((start, start + len)),
+            None => give_up = true,
         }
     }
 
@@ -238,13 +235,14 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
             && unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::THROWN)
             && !unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::CAUGHT)
         {
-            if !end.is_null()
-                && unsafe { *end } != NUL as c_char
-                && ends_excmd(unsafe { *skipwhite(end.add(1)) } as c_int) == 0
+            if let Some((_, end)) = span
+                && excmd.line.byte_at(end) != 0
+                && ends_excmd(c_int::from(
+                    excmd.line.byte_at(excmd.line.skip_white(end + 1)),
+                )) == 0
             {
-                // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let end = unsafe { c_str(end) };
-                semsg!("E488: Trailing characters: {end}");
+                let trailing = msg_bytes(excmd.line.rest_of(end));
+                semsg!("E488: Trailing characters: {trailing}");
                 return;
             }
             // When debugging, show the prompt before matching: a helpful
@@ -252,7 +250,11 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
             // counts as an interrupt before the ":catch", which replaces
             // the exception and so is not caught by this block.
             if !dbg_check_skipped(excmd) || !unsafe { do_intthrow(cstack) } {
-                caught = unsafe { pattern_catches(pat, end) };
+                let pat = match span {
+                    Some((start, end)) => excmd.line.slice_at(start, end - start),
+                    None => b".*",
+                };
+                caught = pattern_catches(pat);
             }
         }
 
@@ -287,41 +289,30 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
         }
     }
 
-    if !end.is_null() {
-        unsafe { excmd.set_nextcmd_ptr(find_nextcmd(end)) };
+    if let Some((_, end)) = span {
+        excmd.line.next = excmd.line.find_next(end);
     }
 }
 
-/// Whether the pattern between `pat` and `end` matches the exception being
-/// thrown. `end` is null for the implicit `.*` of a bare `:catch`.
-///
-/// # Safety
-/// Module contract; an exception is current, and `pat`/`end` delimit a
-/// pattern inside the command line.
-unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
-    // SAFETY: caller contract.
-    // Terminate the pattern, and keep the 'l' flag in 'cpoptions' out of
-    // the way while compiling it.
-    let mut save_char = 0;
-    if !end.is_null() {
-        save_char = unsafe { *end };
-        unsafe { *end = NUL as c_char };
-    }
+/// Whether `pat` matches the exception being thrown. There is one: only
+/// `ex_catch` calls this, and only inside its `THROWN` test.
+fn pattern_catches(pat: &[u8]) -> bool {
+    // Keep the 'l' flag in 'cpoptions' out of the way while compiling.
+    // The compiler still takes a NUL-terminated `char *`, so the pattern
+    // is copied rather than terminated in place; p32-8 gives it the slice.
+    let owned = cstr::owned(pat);
     let _cpo = SavedCpo::empty();
     // Errors here would invalidate the current exception.
     // Disable error messages: one here would invalidate the exception.
     let no_emsg = Suppress::emsg();
     let mut regmatch = RegMatch {
-        regprog: unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) },
+        // SAFETY: the owned NUL-terminated copy above.
+        regprog: unsafe { vim_regcomp(owned.as_ptr().cast_mut(), RE_MAGIC + RE_STRING) },
         ..RegMatch::default()
     };
     drop(no_emsg);
-    if !end.is_null() {
-        unsafe { *end = save_char };
-    }
     if regmatch.regprog.is_null() {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let pat = unsafe { c_str(pat) };
+        let pat = msg_bytes(pat);
         semsg!("E475: Invalid argument: {pat}");
         return false;
     }
