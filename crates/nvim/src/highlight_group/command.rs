@@ -123,9 +123,10 @@ fn is_prefix(word: &[u8], full: &[u8]) -> bool {
 ///
 /// # Safety
 /// Runs messages, autocommands and redraws; main thread only.
-pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool) {
-    // SAFETY: the caller's NUL-terminated command line, live for the parse.
-    let mut line = unsafe { Line::new(line) };
+pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
+    // SAFETY: a NUL-terminated command line, live for the parse -- `Line`
+    // takes a pointer until p32-8 gives the highlight parse a slice.
+    let mut line = unsafe { Line::new(text.as_ptr()) };
 
     // No argument: list all highlighting.
     if !init && line.at_end() {

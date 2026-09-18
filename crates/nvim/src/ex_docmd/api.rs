@@ -148,10 +148,8 @@ pub unsafe fn parse_cmdline(
 
         if excmd.cmdidx == CmdIdx::SIZE {
             // The modifiers parsed, so the error is in what follows them.
-            let cmdname = excmd.line.ptr_at(after_modifier);
             let msg = ex_msg(e_not_an_editor_command.as_ptr());
-            // SAFETY: `cmdname` is inside the command line.
-            *errormsg = Some(unsafe { append_command(&msg, cmdname) });
+            *errormsg = Some(append_command(&msg, excmd.line.rest_of(after_modifier)));
             break 'end;
         }
 

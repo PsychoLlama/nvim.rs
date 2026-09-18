@@ -7,7 +7,6 @@ use crate::ex_docmd::xfree;
 use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab, kRetNilBool};
 use crate::highlight_group::HLF_E;
@@ -72,7 +71,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
     debug_assert!(len < CMD_LEN);
 
     if excmd.line.byte_at(excmd.line.arg) != 0 {
-        let name = vim_strsave_escaped(excmd.arg_ptr(), c"\"\\".as_ptr());
+        let name = vim_strsave_escaped(excmd.line.ptr_at(excmd.line.arg), c"\"\\".as_ptr());
         unsafe {
             snprintf(
                 (&raw mut ex_cmd as *mut c_char).add(len as usize),
@@ -130,10 +129,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
 
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.
 pub(crate) fn ex_lsp(excmd: &mut ExArg) {
-    // SAFETY: the command line's own NUL-terminated argument.
-    let excmd = Array::from(vec![Object::string(unsafe {
-        cstr_to_string(excmd.arg_ptr())
-    })]);
+    let excmd = Array::from(vec![Object::string(String_0::from_bytes(excmd.line.arg()))]);
     const CHUNK: &CStr = c"require'vim._core.ex_cmd'.ex_lsp(...)";
     let ran = unsafe {
         nlua_exec(

@@ -290,14 +290,12 @@ fn locate_command(
     if excmd.cmdidx == CmdIdx::SIZE {
         if !excmd.skip {
             // The modifiers parsed, so the error is in what follows them.
-            let cmdname = excmd.line.ptr_at(after_modifier);
             let msg = ex_msg(e_not_an_editor_command.as_ptr());
             *errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
                 // The whole line is appended by `do_one_cmd` instead.
                 msg
             } else {
-                // SAFETY: `cmdname` is inside the command line.
-                unsafe { append_command(&msg, cmdname) }
+                append_command(&msg, excmd.line.rest_of(after_modifier))
             });
             did_emsg_syntax.set(true);
             verify_command(excmd.line.rest_of(after_modifier));
@@ -513,19 +511,17 @@ fn read_command_args(
 /// A shell command ends at a newline rather than at a `|`, and one
 /// backslash before that newline is removed.
 fn separate_at_newline(excmd: &mut ExArg) {
-    // SAFETY (throughout): `s` walks the command's own NUL-terminated
-    // argument, which is writable.
-    let mut s = excmd.arg_ptr();
-    while unsafe { *s } != 0 {
-        if byte(s) == '\\' as c_int && byte_at(s, 1) == '\n' as c_int {
-            let into = s.cast::<u8>();
-            unsafe { into.copy_from(s.add(1).cast(), len_of(s.add(1)) + 1) };
-        } else if byte(s) == '\n' as c_int {
-            excmd.set_nextcmd_ptr(unsafe { s.add(1) });
-            unsafe { *s = NUL as c_char };
+    let mut at = excmd.line.arg;
+    while excmd.line.byte_at(at) != 0 {
+        if excmd.line.byte_at(at) == b'\\' && excmd.line.byte_at(at + 1) == b'\n' {
+            // Drop the backslash, pulling the rest of the string over it.
+            excmd.line.drop_byte(at);
+        } else if excmd.line.byte_at(at) == b'\n' {
+            excmd.line.next = Some(at + 1);
+            excmd.line.terminate_at(at);
             break;
         }
-        s = unsafe { s.add(1) };
+        at += 1;
     }
 }
 
@@ -643,9 +639,7 @@ pub(crate) unsafe fn do_one_cmd(
         && did_emsg.get() == 0
     {
         let msg = if flags.has(DoCmdOpts::VERBOSE) {
-            let line = excmd.line_ptr();
-            // SAFETY: the command line the command was parsed out of.
-            unsafe { append_command(&msg, line) }
+            append_command(&msg, excmd.line.line())
         } else {
             msg
         };
@@ -818,7 +812,11 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
 /// # Safety
 ///
 /// `cmd` must point at a NUL-terminated string.
-pub(crate) unsafe fn append_command(msg: &CStr, cmd: *const c_char) -> CString {
+pub(crate) fn append_command(msg: &CStr, cmd: &[u8]) -> CString {
+    // The walk below still steps a `char *`, one character at a time; the
+    // slice bounds it, and a NUL inside it ends it as the pointer form's
+    // terminator did.
+    let cmd = cmd.as_ptr().cast::<c_char>();
     let mut buf = [0 as c_char; IOSIZE as usize];
     let iobuff = buf.as_mut_ptr();
     unsafe { xstrlcpy(iobuff, msg.as_ptr(), IOSIZE as size_t) };
@@ -902,12 +900,6 @@ fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
 fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
     unsafe { *p as c_int }
-}
-
-/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
-fn byte_at(p: *const c_char, i: isize) -> c_int {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as c_int }
 }
 
 /// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.

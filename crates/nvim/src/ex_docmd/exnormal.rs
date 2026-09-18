@@ -109,7 +109,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
         return;
     }
 
-    let arg = unsafe { escape_k_special(excmd.arg_ptr()) };
+    let arg = unsafe { escape_k_special(excmd.line.ptr_at(excmd.line.arg)) };
     let busy = Depth::of(&ex_normal_busy);
     let mut save_state = SaveState::default();
     if unsafe { save_current_state(&raw mut save_state) } {
@@ -124,7 +124,11 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
             }
             unsafe {
                 exec_normal_cmd(
-                    if arg.is_null() { excmd.arg_ptr() } else { arg },
+                    if arg.is_null() {
+                        excmd.line.ptr_at(excmd.line.arg)
+                    } else {
+                        arg
+                    },
                     if excmd.forceit {
                         REMAP_NONE as c_int
                     } else {

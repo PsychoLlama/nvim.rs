@@ -35,7 +35,7 @@ pub use line::remote_ui_raw_line;
 pub use packer::remote_ui_flush_pending_data;
 pub use redraw::{remote_ui_event, remote_ui_hl_attr_define};
 
-use crate::api::private::helpers::{api_typename, cstr_to_string, string_to_cstr};
+use crate::api::private::helpers::{api_typename, string_to_cstr};
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};
 use crate::api_error;
 use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
@@ -60,7 +60,7 @@ use crate::ui::{
     ui_refresh, ui_set_ext_option,
 };
 use crate::winlayer::Live;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 
 /// One attached UI, with checked field access.
 ///
@@ -326,12 +326,10 @@ pub fn nvim_ui_detach(channel_id: u64) -> Result<(), Error> {
 /// # Safety
 ///
 /// `server_addr` a valid C string.
-pub unsafe fn remote_ui_connect(channel_id: u64, server_addr: *mut c_char) -> Result<(), Error> {
+pub fn remote_ui_connect(channel_id: u64, server_addr: &CStr) -> Result<(), Error> {
     let ui = get_ui_or_err(channel_id)?;
     let mut args = ArrayBuf::<1>::new();
-    // SAFETY: the caller's promise -- `server_addr` is a C string, and the
-    // borrowed view of it does not outlive this call.
-    args.push(Object::string(unsafe { cstr_to_string(server_addr) }));
+    args.push(Object::string(String_0::from_bytes(server_addr.to_bytes())));
     // SAFETY: `ui` is in the attach table, so it is live.
     unsafe { packer::push_call(ui, c"connect", args.array()) };
     Ok(())

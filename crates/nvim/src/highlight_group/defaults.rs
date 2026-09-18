@@ -15,10 +15,11 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::cstr;
 use crate::option::vars::P_BG;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 use crate::autocmd::apply_autocmds;
 use crate::eval::vars::get_var_value;
@@ -508,7 +509,7 @@ static HIGHLIGHT_INIT_CMDLINE: [&CStr; 140] = [
 pub(crate) fn syn_init_cmdline_highlight(reset: bool, init: bool) {
     for line in &HIGHLIGHT_INIT_CMDLINE {
         // SAFETY: the caller's obligation; the strings are static.
-        unsafe { do_highlight(line.as_ptr(), reset, init) };
+        do_highlight(line, reset, init);
     }
 }
 
@@ -529,7 +530,8 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
     if !name.is_null() {
         // `load_colors` can free the variable, and with it `name`.
         let copy = unsafe { xstrdup(name) };
-        let okay = unsafe { load_colors(copy) }.is_ok();
+        // SAFETY: `copy` is the owned NUL-terminated name.
+        let okay = load_colors(unsafe { cstr::at(copy) }).is_ok();
         unsafe { xfree(copy.cast()) };
         if okay {
             return;
@@ -539,7 +541,7 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
     if both {
         HAD_BOTH.set(true);
         for line in &HIGHLIGHT_INIT_BOTH {
-            unsafe { do_highlight(line.as_ptr(), reset, true) };
+            do_highlight(line, reset, true);
         }
     } else if !HAD_BOTH.get() {
         return;
@@ -551,7 +553,7 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
         &HIGHLIGHT_INIT_DARK
     };
     for line in table {
-        unsafe { do_highlight(line.as_ptr(), reset, true) };
+        do_highlight(line, reset, true);
     }
 
     syn_init_cmdline_highlight(false, false);
@@ -565,7 +567,8 @@ pub(crate) fn init_highlight(both: bool, reset: bool) {
 ///
 /// # Safety
 /// Sources a script and fires autocommands; main thread only.
-pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
+pub(crate) fn load_colors(name: &CStr) -> Result<(), Failed> {
+    let name = name.as_ptr().cast_mut();
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: `name` is the caller's NUL-terminated scheme name.

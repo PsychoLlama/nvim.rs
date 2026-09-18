@@ -200,7 +200,10 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
                 let opt_items = [
                     entry(c"once", obj_bool(true)),
                     entry(c"nested", obj_bool(true)),
-                    entry(c"command", obj_str(excmd.arg_ptr())),
+                    entry(
+                        c"command",
+                        Object::string(String_0::from_bytes(excmd.line.arg())),
+                    ),
                 ];
                 let autocmd_items = [
                     obj_str(c"UIEnter".as_ptr()),
@@ -372,7 +375,8 @@ fn detach_ui() {
 /// really moves rather than being left running.
 pub(crate) fn ex_connect(excmd: &mut ExArg) {
     let stop_server = excmd.forceit && ui_active() == 1;
-    if let Err(e) = unsafe { remote_ui_connect(current_ui.get(), excmd.arg_ptr()) } {
+    let addr = excmd.line.cstr_from(excmd.line.arg);
+    if let Err(e) = remote_ui_connect(current_ui.get(), addr) {
         emsg(e.message_or_empty().as_ptr());
         return;
     }

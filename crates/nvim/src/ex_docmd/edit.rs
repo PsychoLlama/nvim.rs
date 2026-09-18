@@ -11,8 +11,7 @@ use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::ascii::ascii_isdigit;
-use crate::charset::getdigits_int;
+use crate::charset::getdigits_int_at;
 use crate::cursor::{check_cursor, check_cursor_col};
 
 use crate::drawscreen::{UPD_VALID, redraw_later, setcursor_mayforce};
@@ -22,7 +21,7 @@ use crate::ex_cmds::{do_move, ex_copy, ex_substitute, ex_substitute_preview, glo
 
 use crate::ex_docmd::address::get_address;
 use crate::ex_docmd::cmdline::do_cmdline;
-use crate::ex_docmd::scan::{find_nextcmd, get_flags};
+use crate::ex_docmd::scan::get_flags;
 use crate::ex_docmd::{
     DoCmdOpts, EXFLAG_LIST, EXFLAG_NR, OPTION_MAGIC_OFF, OPTION_MAGIC_ON, REMAP_NONE, kMTLineWise,
 };
@@ -158,8 +157,7 @@ pub(crate) fn ex_equal(excmd: &mut ExArg) {
     {
         ex_lua(excmd);
     } else {
-        let arg_start = excmd.arg_ptr();
-        excmd.set_nextcmd_ptr(unsafe { find_nextcmd(arg_start) });
+        excmd.line.next = excmd.line.find_next(excmd.line.arg);
         smsg!(0, "{}", excmd.line2 as int64_t);
     }
 }
@@ -503,14 +501,16 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
     let mut count = 0;
     let mut sec = false;
     let mut file = false;
-    let mut p = excmd.arg_ptr();
-    if byte(p) == NUL {
+    let mut at = excmd.line.arg;
+    if excmd.line.byte_at(at) == 0 {
         count = 1;
-    } else if ascii_isdigit(ubyte(p) as c_int) {
-        count = unsafe { getdigits_int(&raw mut p, false, 0) };
-        match ubyte(p) {
+    } else if excmd.line.byte_at(at).is_ascii_digit() {
+        let (n, past) = getdigits_int_at(excmd.line.buffer_mut(), at, false, 0);
+        count = n;
+        at = past;
+        match excmd.line.byte_at(at) {
             b's' => {
-                p = unsafe { p.add(1) };
+                at += 1;
                 sec = true;
             }
             // The three multiplications are `int` arithmetic on a
@@ -518,28 +518,28 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
             // 100000000d` is nine orders of magnitude past `INT_MAX`.
             // `undo_time` clamps whatever comes out.
             b'm' => {
-                p = unsafe { p.add(1) };
+                at += 1;
                 sec = true;
                 count = count.wrapping_mul(60);
             }
             b'h' => {
-                p = unsafe { p.add(1) };
+                at += 1;
                 sec = true;
                 count = count.wrapping_mul(60 * 60);
             }
             b'd' => {
-                p = unsafe { p.add(1) };
+                at += 1;
                 sec = true;
                 count = count.wrapping_mul(24 * 60 * 60);
             }
             b'f' => {
-                p = unsafe { p.add(1) };
+                at += 1;
                 file = true;
             }
             _ => {}
         }
     }
-    if byte(p) != NUL {
+    if excmd.line.byte_at(at) != 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg = msg_bytes(excmd.line.arg());
         semsg!("E475: Invalid argument: {arg}");
@@ -563,7 +563,7 @@ pub(crate) fn ex_mark(excmd: &mut ExArg) {
         emsg(gettext(e_argreq.as_ptr()));
         return;
     }
-    if byte_at(excmd.arg_ptr(), 1) != NUL {
+    if excmd.line.byte_at(excmd.line.arg + 1) != 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg = msg_bytes(excmd.line.arg());
         semsg!("E488: Trailing characters: {arg}");
@@ -640,7 +640,7 @@ pub(crate) fn ex_folddo(excmd: &mut ExArg) {
         }
         lnum += 1;
     }
-    unsafe { global_exe(excmd.arg_ptr()) };
+    global_exe(excmd.line.cstr_from(excmd.line.arg));
     ml_clearmarked();
 }
 
@@ -704,16 +704,4 @@ pub(super) fn utfc_ptr2len(p: *const c_char) -> c_int {
 pub(super) fn byte(p: *const c_char) -> c_int {
     // SAFETY: a NUL-terminated string the command line owns.
     unsafe { *p as c_int }
-}
-
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
-}
-
-/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
-fn byte_at(p: *const c_char, i: isize) -> c_int {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as c_int }
 }

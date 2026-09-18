@@ -38,6 +38,7 @@ use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg;
 use crate::types::{ColNr, ExArg, LineNr, NUL, RegMMatch, size_t};
 use crate::winlayer::{Buf, Win};
+use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -282,7 +283,8 @@ pub fn ex_global(excmd: &mut ExArg) {
             }
         } else {
             // SAFETY: `parsed.cmd` is a live C string.
-            unsafe { global_exe(parsed.cmd) };
+            // SAFETY: `parsed.cmd` is the NUL-terminated command to run.
+            global_exe(unsafe { cstr::at(parsed.cmd) });
         }
         ml_clearmarked(); // clear rest of the marks
     }
@@ -292,10 +294,10 @@ pub fn ex_global(excmd: &mut ExArg) {
 
 /// Execute `cmd` on the lines marked with `ml_setmarked`.
 ///
-/// # Safety
-/// Main thread; `cmd` must be a live C string.  Every iteration re-enters
-/// `do_cmdline`, so nothing may be cached across the loop.
-pub unsafe fn global_exe(cmd: *mut c_char) {
+/// Every iteration re-enters `do_cmdline`, so nothing may be cached across
+/// the loop.
+pub fn global_exe(cmd: &CStr) {
+    let cmd = cmd.as_ptr().cast_mut();
     // Remember what buffer we started in.
     let old_buf = Buf::current_raw();
 

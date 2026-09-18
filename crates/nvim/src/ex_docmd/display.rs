@@ -42,15 +42,15 @@ use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
-use crate::types::{ExArg, FILE, Failed, NUL, VarNumber, Vv, ssize_t};
+use crate::types::{ExArg, FILE, Failed, VarNumber, Vv, ssize_t};
 
 use crate::winlayer::Win;
-use ::libc::{fclose, strcasecmp};
+use ::libc::fclose;
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) != 0 {
-        if unsafe { load_colors(excmd.arg_ptr()) }.is_err() {
+        if load_colors(excmd.line.cstr_from(excmd.line.arg)).is_err() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E185: Cannot find color scheme '{arg}'");
@@ -76,10 +76,10 @@ pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
 pub(crate) fn ex_highlight(excmd: &mut ExArg) {
-    if excmd.line.byte_at(excmd.line.arg) == 0 && byte_at(excmd.cmd_ptr(), 2) == '!' as c_int {
+    if excmd.line.byte_at(excmd.line.arg) == 0 && excmd.line.byte_at(excmd.line.cmd + 2) == b'!' {
         msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
-    unsafe { do_highlight(excmd.arg_ptr(), excmd.forceit, false) };
+    do_highlight(excmd.line.cstr_from(excmd.line.arg), excmd.forceit, false);
 }
 
 /// `:redir` — send message output to a file, a register or a variable
@@ -88,60 +88,64 @@ pub(crate) fn ex_highlight(excmd: &mut ExArg) {
 /// Only one destination at a time: every form closes whatever was open
 /// first.
 pub(crate) fn ex_redir(excmd: &mut ExArg) {
-    let mut arg = excmd.arg_ptr();
-    if unsafe { strcasecmp(excmd.arg_ptr(), c"END".as_ptr() as *mut c_char) } == 0 {
+    let mut at = excmd.line.arg;
+    if excmd.line.arg().eq_ignore_ascii_case(b"END") {
         close_redir();
-    } else if byte(arg) == '>' as c_int {
+    } else if excmd.line.byte_at(at) == b'>' {
         // `:redir > file` truncates, `:redir >> file` appends.
-        arg = unsafe { arg.add(1) };
-        let mode = if byte(arg) == '>' as c_int {
-            arg = unsafe { arg.add(1) };
+        at += 1;
+        let mode = if excmd.line.byte_at(at) == b'>' {
+            at += 1;
             c"a".as_ptr() as *mut c_char
         } else {
             c"w".as_ptr() as *mut c_char
         };
-        arg = skipwhite(arg);
+        at = excmd.line.skip_white(at);
         close_redir();
-        let fname = unsafe { expand_env_save(arg) };
+        // SAFETY: the rest of the command's own NUL-terminated line.
+        let fname = unsafe { expand_env_save(excmd.line.ptr_at(at)) };
         if fname.is_null() {
             return;
         }
         redir_fd.set(unsafe { open_exfile(fname, c_int::from(excmd.forceit), mode) });
         xfree(fname as *mut c_void);
-    } else if byte(arg) == '@' as c_int {
+    } else if excmd.line.byte_at(at) == b'@' {
         close_redir();
-        arg = unsafe { arg.add(1) };
-        if unsafe { valid_yank_reg(*arg as c_int, true) } && byte(arg) != '_' as c_int {
-            redir_reg.set(ubyte(arg) as c_int);
-            arg = unsafe { arg.add(1) };
-            if byte(arg) == '>' as c_int && byte_at(arg, 1) == '>' as c_int {
+        at += 1;
+        let name = excmd.line.byte_at(at);
+        if valid_yank_reg(c_int::from(name), true) && name != b'_' {
+            redir_reg.set(c_int::from(name));
+            at += 1;
+            if excmd.line.byte_at(at) == b'>' && excmd.line.byte_at(at + 1) == b'>' {
                 // `:redir @a>>` appends.
-                arg = unsafe { arg.add(2) };
+                at += 2;
             } else {
-                if byte(arg) == '>' as c_int {
-                    arg = unsafe { arg.add(1) };
+                if excmd.line.byte_at(at) == b'>' {
+                    at += 1;
                 }
                 // A lower-case register name overwrites, so empty it
                 // now; an upper-case one always appends.
-                if byte(arg) == NUL && !(redir_reg.get() as u8).is_ascii_uppercase() {
+                if excmd.line.byte_at(at) == 0 && !(redir_reg.get() as u8).is_ascii_uppercase() {
                     unsafe { write_reg_contents(redir_reg.get(), c"".as_ptr(), 0 as ssize_t, 0) };
                 }
             }
         }
-        if byte(arg) != NUL {
+        if excmd.line.byte_at(at) != 0 {
             redir_reg.set(0);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
         }
-    } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
+    } else if excmd.line.byte_at(at) == b'=' && excmd.line.byte_at(at + 1) == b'>' {
         close_redir();
-        arg = unsafe { arg.add(2) };
-        let append = byte(arg) == '>' as c_int;
+        at += 2;
+        let append = excmd.line.byte_at(at) == b'>';
         if append {
-            arg = unsafe { arg.add(1) };
+            at += 1;
         }
-        if unsafe { var_redir_start(skipwhite(arg), append) }.is_ok() {
+        let name = excmd.line.ptr_at(excmd.line.skip_white(at));
+        // SAFETY: the variable name, inside the command's own line.
+        if unsafe { var_redir_start(name, append) }.is_ok() {
             redir_vname.set(true);
         }
     } else {
@@ -253,7 +257,7 @@ pub(crate) fn close_redir() {
 /// `:digraphs` — define digraphs, or list them.
 pub(crate) fn ex_digraphs(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) != 0 {
-        putdigraph(unsafe { core::ffi::CStr::from_ptr(excmd.arg_ptr()) }.to_bytes());
+        putdigraph(excmd.line.arg());
     } else {
         listdigraphs(excmd.forceit);
     }
@@ -298,12 +302,6 @@ fn redraw_all_later(redr_type: c_int) {
     crate::drawscreen::redraw_all_later(redr_type)
 }
 
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
-}
-
 /// `ui_flush()` as checked code.
 fn ui_flush() {
     crate::ui::ui_flush()
@@ -312,22 +310,4 @@ fn ui_flush() {
 /// `update_screen()` as checked code.
 fn update_screen() -> Result<(), Failed> {
     crate::drawscreen::update_screen()
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
-}
-
-/// The byte `p` points at, unsigned, as the C's `(uint8_t)*p` reads it.
-fn ubyte(p: *const c_char) -> u8 {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as u8 }
-}
-
-/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
-fn byte_at(p: *const c_char, i: isize) -> c_int {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as c_int }
 }
