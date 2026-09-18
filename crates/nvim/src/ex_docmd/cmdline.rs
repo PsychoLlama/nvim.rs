@@ -542,14 +542,12 @@ impl Run {
     /// replayed and the command gets a getter that stores and replays too,
     /// which is what lets a `:function` be defined inside a `:while`.
     fn command_source(&mut self, source: &Source) {
-        let line = self
+        let pending = self
             .pending
             .as_mut()
-            .expect("`take_line` leaves a line to run")
-            .ptr_at(0);
-        // SAFETY: `line` is the NUL-terminated line this pass is about to
-        // run, and `lines` is this run's own store.
-        self.looping = self.cstack.cs_looplevel > 0 || unsafe { has_loop_cmd(line) };
+            .expect("`take_line` leaves a line to run");
+        self.looping = self.cstack.cs_looplevel > 0 || has_loop_cmd(pending.tail(0));
+        let line = pending.ptr_at(0);
         self.line_before = 0;
         if !self.looping {
             return;

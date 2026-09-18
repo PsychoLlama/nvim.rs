@@ -13,8 +13,6 @@ use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::ascii::ascii_isdigit;
-
 use crate::eval::typval::NumBuf;
 use crate::ex_docmd::address::skip_range;
 use crate::ex_docmd::modifier::{CMDMODS, shared_prefix};
@@ -259,25 +257,25 @@ fn start_index(word: &[u8]) -> usize {
 ///
 /// `name` must point at a NUL-terminated string.
 pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
+    // SAFETY: the caller's promise -- a NUL-terminated name.
+    let bytes = unsafe { cstr::bytes_at(name) };
     // A modifier is a command as far as `exists()` is concerned.
     for md in &CMDMODS {
-        let j = unsafe { shared_prefix(name, md.name) };
-        if byte_at(name, j as isize) == NUL && j >= md.minlen {
+        let j = shared_prefix(bytes, md.name);
+        if j == bytes.len() && j >= md.minlen {
             return if md.name.to_bytes().len() == j { 2 } else { 1 };
         }
     }
-    // `:2match`/`:3match` carry their count in the name.
     let mut ea = blank_exarg();
-    // SAFETY: the caller's promise -- a NUL-terminated name.
-    ea.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(name) });
+    ea.line = CmdLine::from_bytes(bytes);
     // `:2match`/`:3match` carry their count in the name.
-    ea.line.cmd = usize::from(byte(name) == '2' as c_int || byte(name) == '3' as c_int);
+    ea.line.cmd = usize::from(matches!(bytes.first(), Some(b'2' | b'3')));
     let mut full = false;
     let Some(at) = find_ex_command(&mut ea, Some(&mut full)) else {
         return 3;
     };
     // A leading digit is a range for every command but `:match`.
-    if ascii_isdigit(byte(name)) && ea.cmdidx != CmdIdx::r#match {
+    if bytes.first().is_some_and(u8::is_ascii_digit) && ea.cmdidx != CmdIdx::r#match {
         return 0;
     }
     if ea.line.byte_at(ea.line.skip_white(at)) != 0 {

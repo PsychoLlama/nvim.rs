@@ -1,18 +1,18 @@
 count	callee	no_raw	defs	def
 871	xfree	0	1	crates/nvim/src/memory/mod.rs
-757	.add	0	3	
-456	.offset	0	0	
+756	.add	0	3	
+455	.offset	0	0	
 454	bytes_at	0	1	crates/nvim/src/cstr.rs
 416	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 282	CStr::from_ptr	0	2	
-239	.offset_from	0	0	
+238	.offset_from	0	0	
 224	at	0	3	
 186	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 164	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 155	from_raw_parts	0	0	
-150	skipwhite	0	1	crates/nvim/src/charset/walk.rs
+148	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 121	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 109	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
@@ -2076,7 +2076,6 @@ count	callee	no_raw	defs	def
 2	shada_read_file	0	1	crates/nvim/src/shada/file.rs
 2	shada_read_next_item	0	1	crates/nvim/src/shada/unpack.rs
 2	shada_write_file	0	1	crates/nvim/src/shada/file.rs
-2	shared_prefix	0	1	crates/nvim/src/ex_docmd/modifier.rs
 2	shell_build_argv	0	1	crates/nvim/src/os/shell/mod.rs
 2	shorten_buf_fname	0	1	crates/nvim/src/fileio/names.rs
 2	shorten_dir_len	0	1	crates/nvim/src/path/unique.rs
@@ -2901,7 +2900,6 @@ count	callee	no_raw	defs	def
 1	handle_mapping	0	1	crates/nvim/src/getchar/mapmatch.rs
 1	handle_quickfix	0	1	crates/nvim/src/startup/buffers.rs
 1	handle_tag	0	1	crates/nvim/src/startup/buffers.rs
-1	has_loop_cmd	0	1	crates/nvim/src/ex_eval/mod.rs
 1	has_nvim_version	0	1	crates/nvim/src/version/mod.rs
 1	has_patch	0	1	crates/nvim/src/eval/funcs/runtime.rs
 1	has_special_wildchar	0	1	crates/nvim/src/path/glob.rs
@@ -3112,7 +3110,6 @@ count	callee	no_raw	defs	def
 1	ml_split_data_block	0	1	crates/nvim/src/memline/edit.rs
 1	ml_split_pointer_block	0	1	crates/nvim/src/memline/edit.rs
 1	ml_store_line	0	1	crates/nvim/src/memline/tree.rs
-1	modifier_len	0	1	crates/nvim/src/ex_docmd/modifier.rs
 1	move_prompt_down	0	1	crates/nvim/src/change/open_line/mod.rs
 1	movecursor	0	1	crates/nvim/src/vterm/screen/callbacks.rs
 1	moverect	0	0	

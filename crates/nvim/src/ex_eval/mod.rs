@@ -802,29 +802,23 @@ pub(crate) fn ex_endfunction(_excmd: &mut ExArg) {
     semsg!("E193: {} not inside a function", ":endfunction");
 }
 
-/// Whether `p` looks like a `:while` or `:for` command.
+/// Whether `line` looks like a `:while` or `:for` command.
 ///
-/// # Safety
-/// `p` is NUL-terminated.
-pub(crate) unsafe fn has_loop_cmd(p: *mut c_char) -> bool {
-    // SAFETY: caller contract; `modifier_len` stops at the NUL, as does the
-    // whitespace skip, so neither walk leaves the string.
-    let mut p = p;
+/// `line` may be a command line's cheap tail: `modifier_len` stops at the
+/// NUL, as does the white-space skip, so neither walk leaves the string.
+pub(crate) fn has_loop_cmd(line: &[u8]) -> bool {
+    let mut at = 0;
+    let byte = |at: usize| line.get(at).copied().unwrap_or(0);
     loop {
-        while unsafe { *p } == b' ' as c_char
-            || unsafe { *p } == b'\t' as c_char
-            || unsafe { *p } == b':' as c_char
-        {
-            p = unsafe { p.add(1) };
+        while matches!(byte(at), b' ' | b'\t' | b':') {
+            at += 1;
         }
-        let len = unsafe { modifier_len(p) };
+        let len = modifier_len(&line[at.min(line.len())..]);
         if len == 0 {
             break;
         }
-        p = unsafe { p.offset(len as isize) };
+        at += len;
     }
-    (unsafe { *p } == b'w' as c_char && unsafe { *p.add(1) } == b'h' as c_char)
-        || (unsafe { *p } == b'f' as c_char
-            && unsafe { *p.add(1) } == b'o' as c_char
-            && unsafe { *p.add(2) } == b'r' as c_char)
+    (byte(at) == b'w' && byte(at + 1) == b'h')
+        || (byte(at) == b'f' && byte(at + 1) == b'o' && byte(at + 2) == b'r')
 }

@@ -24,7 +24,7 @@ use std::ffi::CString;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 
 use crate::buffer::BufFlags;
-use crate::charset::skipdigits;
+use crate::charset::skip;
 
 use crate::ex_docmd::address::{get_address, skip_range};
 
@@ -51,9 +51,7 @@ use crate::optionstr::free_string_option;
 
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{
-    CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags,
-};
+use crate::types::{CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, OptInt, OptVal, OptionSetFlags};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
 use ::libc::atoi;
 
@@ -736,42 +734,38 @@ impl Drop for CmdModScope {
 /// How many bytes of `cmd` are a command modifier, or 0 if none are.
 ///
 /// Used by the command-line completion to decide what the word after a
-/// modifier should complete as.
-///
-/// # Safety
-///
-/// `cmd` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn modifier_len(cmd: *mut c_char) -> c_int {
+/// modifier should complete as. `cmd` may be a command line's cheap tail:
+/// every walk here stops at the NUL, not at the end of the slice.
+pub fn modifier_len(cmd: &[u8]) -> usize {
+    let byte = |at: usize| cmd.get(at).copied().unwrap_or(0);
     // A count may precede a modifier, and only the two that accept one
     // match when it does.
-    let p = if ascii_isdigit(byte(cmd)) {
-        unsafe { skipwhite(skipdigits(cmd.add(1))) }
+    let start = if byte(0).is_ascii_digit() {
+        let digits = 1 + skip::digits(&cmd[1.min(cmd.len())..]);
+        digits + skip::white(&cmd[digits.min(cmd.len())..])
     } else {
-        cmd
+        0
     };
     for md in &CMDMODS {
-        let j = unsafe { shared_prefix(p, md.name) };
-        let after = ubyte_at(p, j as isize);
-        if j >= md.minlen && !after.is_ascii_alphabetic() && (p == cmd || md.has_count) {
-            return j as c_int + unsafe { p.offset_from(cmd) } as c_int;
+        let j = shared_prefix(&cmd[start.min(cmd.len())..], md.name);
+        if j >= md.minlen && !byte(start + j).is_ascii_alphabetic() && (start == 0 || md.has_count)
+        {
+            return start + j;
         }
     }
     0
 }
 
-/// How many bytes of the NUL-terminated `p` match the start of `name`.
+/// How many bytes of `p` match the start of `name`.
 ///
 /// The walk is over `p`, not over `name`: it stops at the end of the
 /// *typed* word, so a full name and an abbreviation both come back with
-/// the length that was typed.
-///
-/// # Safety
-///
-/// `p` must point at a NUL-terminated string.
-pub(crate) unsafe fn shared_prefix(p: *const c_char, name: &CStr) -> usize {
+/// the length that was typed. It stops at a NUL as well, so `p` may be a
+/// command line's cheap tail rather than one measured string.
+pub(crate) fn shared_prefix(p: &[u8], name: &CStr) -> usize {
     let name = name.to_bytes_with_nul();
     let mut j = 0usize;
-    while byte_at(p, j as isize) != NUL && ubyte_at(p, j as isize) == name[j] {
+    while p.get(j).is_some_and(|byte| *byte != 0 && *byte == name[j]) {
         j += 1;
     }
     j
@@ -831,32 +825,8 @@ fn skip_vimgrep_pat(
     unsafe { crate::ex_cmds::skip_vimgrep_pat(p, s, flags) }
 }
 
-/// `skipwhite()` as checked code.
-fn skipwhite(p: *const c_char) -> *mut c_char {
-    // SAFETY: a NUL-terminated string.
-    unsafe { crate::charset::skipwhite(p) }
-}
-
 /// `xstrdup()` as checked code.
 fn xstrdup(str: *const c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated string.
     unsafe { crate::memory::xstrdup(str) }
-}
-
-/// The byte `p` points at, as the C's `*p` reads it.
-fn byte(p: *const c_char) -> c_int {
-    // SAFETY: a NUL-terminated string the command line owns.
-    unsafe { *p as c_int }
-}
-
-/// The byte at `p[i]`, as the C's `*(p + i)` reads it.
-fn byte_at(p: *const c_char, i: isize) -> c_int {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as c_int }
-}
-
-/// The byte at `p[i]`, unsigned, as the C's `(uint8_t)*(p + i)` reads it.
-fn ubyte_at(p: *const c_char, i: isize) -> u8 {
-    // SAFETY: an offset within the NUL-terminated string `p` points into.
-    unsafe { *p.offset(i) as u8 }
 }
