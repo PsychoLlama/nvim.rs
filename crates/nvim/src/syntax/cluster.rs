@@ -11,7 +11,7 @@
 use crate::cstr;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use super::*;
@@ -107,9 +107,8 @@ pub(crate) fn syn_scl_namen2id(name: &[u8]) -> c_int {
 /// # Safety
 ///
 /// `name` must point at `len` readable bytes.
-pub(crate) unsafe fn syn_check_cluster(name: *const c_char, len: c_int) -> c_int {
-    // SAFETY: the caller's promise -- `len` readable bytes.
-    let name = unsafe { name_at(name, len as usize) };
+pub(crate) fn syn_check_cluster(name: &[u8]) -> c_int {
+    let name = name_in(name);
     match scl_name2id(&name) {
         0 => syn_add_cluster(name),
         id => id,
@@ -178,20 +177,17 @@ fn cluster_op(rest: &[u8]) -> Option<(usize, c_int)> {
 
 /// `:syntax cluster {name} [contains=..] [add=..] [remove=..]`.
 pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
-    let arg = args.arg_ptr();
     let mut got_clstr = false;
 
-    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg) });
+    args.line.next = args.line.find_next(args.line.arg);
     if args.skip {
         return;
     }
 
-    // SAFETY: the rest of the command line, which nothing below writes to.
-    let line = unsafe { cstr::bytes_at(arg) }.to_vec();
+    let line = args.line.arg().to_vec();
     let mut end: Option<usize> = None;
     if let Some(name) = split_group_name(&line) {
-        // SAFETY: the cluster name at the head of the command line.
-        let scl_id = unsafe { syn_check_cluster(arg, name.len as c_int) };
+        let scl_id = syn_check_cluster(&line[..name.len]);
         if scl_id == 0 {
             return;
         }

@@ -17,14 +17,12 @@ use super::*;
 
 /// `:syntime {on,off,clear,report}`.
 pub(crate) fn ex_syntime(excmd: &mut ExArg) {
-    let arg = unsafe { CStr::from_ptr(excmd.arg_ptr()) };
-    match arg.to_bytes() {
+    match excmd.line.arg() {
         b"on" => syn_time_on.set(true),
         b"off" => syn_time_on.set(false),
         b"clear" => syntime_clear(),
         b"report" => syntime_report(),
         _ => {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = msg_bytes(excmd.line.arg());
             semsg!("E475: Invalid argument: {arg}");
         }

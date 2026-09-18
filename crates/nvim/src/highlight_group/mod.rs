@@ -13,7 +13,7 @@ use crate::highlight::state::{
 };
 use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
 use crate::message::msg_grid_ref;
-use crate::types::{Integer, size_t};
+use crate::types::Integer;
 use crate::ui::ui_call_hl_group_set;
 mod hlf;
 
@@ -162,7 +162,8 @@ pub(crate) fn highlight_changed() {
     let mut id_snc = 0;
     for hlf in 1..HLF_COUNT {
         let name = hlf_names[hlf as usize];
-        let id = unsafe { syn_check_group(name, CStr::from_ptr(name).count_bytes() as size_t) };
+        // SAFETY: a builtin group name, NUL-terminated.
+        let id = syn_check_group(unsafe { CStr::from_ptr(name) }.to_bytes());
         assert!(id != 0, "builtin highlight group {hlf} could not be added");
 
         let mut ns_id = -1;

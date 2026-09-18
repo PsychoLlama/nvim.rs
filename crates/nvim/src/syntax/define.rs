@@ -39,30 +39,26 @@ pub(crate) fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
 
 /// `:syntax include [@{cluster}] {file}`.
 pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
-    let mut arg = args.arg_ptr();
     let mut sgl_id = 1;
 
-    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg) });
+    args.line.next = args.line.find_next(args.line.arg);
     if args.skip {
         return;
     }
 
-    if unsafe { *arg } as c_int == '@' as c_int {
-        arg = unsafe { arg.add(1) };
-        // SAFETY: the rest of the command line after the `@`.
-        let line = unsafe { cstr::bytes_at(arg) };
+    if args.line.byte_at(args.line.arg) == b'@' {
+        let at = args.line.arg + 1;
+        let line = args.line.rest_of(at);
         let Some(name) = split_group_name(line) else {
             emsg(gettext(c"E397: Filename required"));
             return;
         };
-        // SAFETY: the cluster name at the head of that line.
-        sgl_id = unsafe { syn_check_cluster(arg, name.len as c_int) };
+        sgl_id = syn_check_cluster(&line[..name.len]);
         if sgl_id == 0 {
             return;
         }
         // `separate_nextcmd` and `expand_filename` depend on this.
-        // SAFETY: an offset `split_group_name` answered from within the line.
-        args.set_arg_ptr(unsafe { arg.add(name.rest) });
+        args.line.arg = at + name.rest;
     }
 
     // Everything left, up to the next command, is the file to include.
@@ -71,9 +67,8 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
 
     // An absolute path, "$VIM/.." or "<sfile>.." is `:source`d, which needs
     // the name expanded first; everything else goes through `:runtime!`.
-    let source = unsafe { *args.arg_ptr() } as c_int == '<' as c_int
-        || unsafe { *args.arg_ptr() } as c_int == '$' as c_int
-        || unsafe { path_is_absolute(cstr::at(args.arg_ptr())) };
+    let source = matches!(args.line.byte_at(args.line.arg), b'<' | b'$')
+        || path_is_absolute(args.line.cstr_from(args.line.arg));
     if source {
         let mut errormsg = None;
         if expand_filename(args, &mut errormsg).is_err() {
@@ -97,16 +92,16 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     let prev_toplvl_grp = cur_syn_block().b_syn_topgrp;
     cur_syn_block().b_syn_topgrp = sgl_id;
 
-    // SAFETY: the caller's command.
-    let arg = args.arg_ptr();
+    let arg = args.line.cstr_from(args.line.arg);
+    let none = ::core::ptr::null_mut();
     let failed = if source {
         // SAFETY: sourcing the file the user named.
-        unsafe { do_source(arg, false, DOSO_NONE as c_int, ::core::ptr::null_mut()) == FAIL }
+        unsafe { do_source(arg.as_ptr().cast_mut(), false, DOSO_NONE as c_int, none) == FAIL }
     } else {
-        unsafe { source_runtime(args.arg_ptr(), RuntimeOpts::ALL) }.is_err()
+        // SAFETY: as above -- the name is NUL-terminated and only read.
+        unsafe { source_runtime(arg.as_ptr().cast_mut(), RuntimeOpts::ALL) }.is_err()
     };
     if failed {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg = msg_bytes(args.line.arg());
         semsg!("E484: Can't open file {arg}");
     }
@@ -136,9 +131,7 @@ fn item_opt(takes_sync_idx: bool) -> SynOptArg {
 /// `:syntax match {group} [{options}] {pattern} [{options}]`, and
 /// `:syntax sync match {group} [[grouphere|groupthere] {group}] ..`.
 pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
-    let arg = args.arg_ptr();
-    // SAFETY: the rest of the command line, which nothing below writes to.
-    let line = unsafe { cstr::bytes_at(arg) }.to_vec();
+    let line = args.line.arg().to_vec();
     let mut conceal_char: c_int = NUL;
     let mut opt = item_opt(syncing != 0);
     let mut item = EMPTY_SYNPAT;
@@ -158,15 +151,12 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     let mut stored = false;
     if let Some(at) = end {
         // Check for a trailing command and illegal trailing arguments.
-        // SAFETY: `at` is an offset `line` answered, so it is within the
-        // command line the caller still owns.
-        args.set_nextcmd_ptr(unsafe { check_nextcmd(arg.add(at)) });
+        args.line.next = args.line.check_next(args.line.arg + at);
         if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip {
             end = None;
         } else {
             let name_len = name.as_ref().map_or(0, |name| name.len);
-            // SAFETY: the group name at the head of the command line.
-            let syn_id = unsafe { syn_check_group(arg, name_len as size_t) };
+            let syn_id = syn_check_group(&line[..name_len]);
             if syn_id != 0 {
                 syn_incl_toplevel(syn_id, &mut opt.flags);
                 // Store the pattern in the item list; the three id lists are
@@ -300,10 +290,7 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
             if &line[at..name_end] == b"NONE" || args.skip {
                 matchgroup_id = 0;
             } else {
-                let name = cstr::owned(&line[at..name_end]);
-                // SAFETY: an owned NUL-terminated copy of the group name.
-                matchgroup_id =
-                    unsafe { syn_check_group(name.as_ptr(), (name_end - at) as size_t) };
+                matchgroup_id = syn_check_group(&line[at..name_end]);
                 if matchgroup_id == 0 {
                     illegal = true;
                     break;
@@ -339,9 +326,7 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
 /// `:syntax region {group} [matchgroup={group}] start={pat} .. [skip={pat}]
 /// end={pat} .. [{options}]`.
 pub(crate) fn syn_cmd_region(args: &mut ExArg, syncing: c_int) {
-    let arg = args.arg_ptr();
-    // SAFETY: the rest of the command line, which nothing below writes to.
-    let line = unsafe { cstr::bytes_at(arg) }.to_vec();
+    let line = args.line.arg().to_vec();
 
     // Isolate the group name, check for validity.
     let name = split_group_name(&line);
@@ -360,14 +345,12 @@ pub(crate) fn syn_cmd_region(args: &mut ExArg, syncing: c_int) {
 
     if let Some(at) = end {
         // Check for trailing garbage or a command; if OK, add the item.
-        // SAFETY: `at` is an offset within the command line the caller owns.
-        args.set_nextcmd_ptr(unsafe { check_nextcmd(arg.add(at)) });
+        args.line.next = args.line.check_next(args.line.arg + at);
         if ends_excmd(c_int::from(cstr::byte_at(&line, at))) == 0 || args.skip {
             end = None;
         } else {
             let name_len = name.as_ref().map_or(0, |name| name.len);
-            // SAFETY: the group name at the head of the command line.
-            let syn_id = unsafe { syn_check_group(arg, name_len as size_t) };
+            let syn_id = syn_check_group(&line[..name_len]);
             if syn_id != 0 {
                 syn_incl_toplevel(syn_id, &mut parsed.opt.flags);
                 store_region(parsed, syn_id, syncing != 0);

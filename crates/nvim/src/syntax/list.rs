@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -22,9 +22,9 @@ const LIST_HL: c_int = HLF_D;
 /// `:syntax [list] [{group}|@{cluster}] ..` and `:syntax sync` with no
 /// argument.
 pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
-    let mut arg = args.arg_ptr();
+    let mut at = args.line.arg;
 
-    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg) });
+    args.line.next = args.line.find_next(at);
     if args.skip {
         return;
     }
@@ -41,7 +41,7 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
     }
 
     msg_title(gettext(c"\n--- Syntax items ---"));
-    if ends_excmd(unsafe { *arg } as c_int) != 0 {
+    if ends_excmd(c_int::from(args.line.byte_at(at))) != 0 {
         // No argument: list every group id, then every cluster.
         let mut id = 1;
         while id <= highlight_num_groups() && !got_int.get() {
@@ -55,32 +55,29 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
         }
     } else {
         // List the groups and clusters the argument names.
-        while ends_excmd(unsafe { *arg } as c_int) == 0 && !got_int.get() {
-            // SAFETY: the caller's command line.
-            let (word, arg_end) = unsafe { word_at(arg) };
+        while ends_excmd(c_int::from(args.line.byte_at(at))) == 0 && !got_int.get() {
+            let (word, word_len) = word_at(args.line.tail(at));
             if word.first() == Some(&b'@') {
                 let id = syn_scl_namen2id(&word[1..]);
                 if id == 0 {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let arg = unsafe { c_str(arg) };
+                    let arg = msg_bytes(args.line.rest_of(at));
                     semsg!("E392: No such syntax cluster: {arg}");
                 } else {
                     syn_list_cluster(id - SYNID_CLUSTER);
                 }
             } else {
-                let id = unsafe { syn_name2id_len(arg, word.len()) };
+                let id = syn_name2id_bytes(word);
                 if id == 0 {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let arg = unsafe { c_str(arg) };
+                    let arg = msg_bytes(args.line.rest_of(at));
                     semsg!("E28: No such highlight group name: {arg}");
                 } else {
                     syn_list_one(id, false, true);
                 }
             }
-            arg = unsafe { skipwhite(arg_end) };
+            at = args.line.skip_white(at + word_len);
         }
     }
-    args.set_nextcmd_ptr(unsafe { check_nextcmd(arg) });
+    args.line.next = args.line.check_next(at);
 }
 
 /// The `:syntax sync` half of the listing: how this buffer synchronises.

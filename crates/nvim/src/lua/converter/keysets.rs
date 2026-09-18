@@ -137,7 +137,10 @@ pub unsafe fn nlua_pop_keydict(
                             let name = lua_tolstring(lstate, -1, &raw mut name_len);
                             lua_pop(lstate, 1);
                             let id = if name_len > 0 {
-                                syn_check_group(name, name_len) as Integer
+                                syn_check_group(::core::slice::from_raw_parts(
+                                    name.cast::<u8>(),
+                                    name_len,
+                                )) as Integer
                             } else {
                                 0
                             };

@@ -282,12 +282,11 @@ pub(crate) unsafe fn sign_define_by_name(
             continue;
         }
         // SAFETY: the caller's highlight group name, NUL-terminated.
-        let hl = unsafe {
-            if *arg != 0 {
-                syn_check_group(arg, cstr::bytes_at(arg).len())
-            } else {
-                0
-            }
+        let name = unsafe { cstr::bytes_at(arg) };
+        let hl = if name.is_empty() {
+            0
+        } else {
+            syn_check_group(name)
         };
         match which {
             0 => def.sn_line_hl = hl,

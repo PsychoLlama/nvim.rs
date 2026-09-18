@@ -419,7 +419,6 @@ fn parse_id_name(
     name.push(b'^');
     name.extend_from_slice(&line[start..end]);
     name.push(0);
-    let plain = unsafe { name.as_ptr().add(1) } as *const c_char;
     let text = &name[1..1 + text_len];
 
     if text == b"ALLBUT" || text == b"ALL" || text == b"TOP" || text == b"CONTAINED" {
@@ -447,9 +446,7 @@ fn parse_id_name(
         if skip {
             return Ok(None);
         }
-        // SAFETY: `name`'s own NUL-terminated copy of the text, one byte in
-        // past the `^` and one more past the `@`.
-        let id = unsafe { syn_check_cluster(plain.add(1), text_len as c_int - 1) };
+        let id = syn_check_cluster(&text[1..]);
         return if id == 0 {
             let shown = msg_bytes(&line[start..]);
             semsg!("E409: Unknown group name: {shown}");
@@ -460,8 +457,7 @@ fn parse_id_name(
     }
 
     if !text.iter().any(|b| b"\\.*^$~[".contains(b)) {
-        // SAFETY: `name`'s own NUL-terminated copy of the text.
-        let id = unsafe { syn_check_group(plain, text_len as size_t) };
+        let id = syn_check_group(text);
         return if id == 0 {
             let shown = msg_bytes(&line[start..]);
             semsg!("E409: Unknown group name: {shown}");

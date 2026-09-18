@@ -270,7 +270,7 @@ pub(crate) unsafe fn object_to_hl_id(obj: &Object, what: *const c_char) -> Resul
             return Ok(0);
         }
         // SAFETY: `str` names its own bytes.
-        return Ok(unsafe { syn_check_group(str.data(), str.len()) });
+        return Ok(syn_check_group(str.as_bytes()));
     }
     if let Some(number) = obj.as_integer() {
         let known = highlight_num_groups();

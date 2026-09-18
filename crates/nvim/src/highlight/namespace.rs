@@ -486,7 +486,8 @@ pub fn update_ns_hl(ns_id: c_int) {
     let table = NS_HL_ATTR.with_mut(|tables| tables.entry(ns_id).or_default().as_ptr());
     for hlf in 1..HLF_COUNT {
         let name = hlf_names[hlf as usize];
-        let id = unsafe { syn_check_group(name, cstr::bytes_at(name).len()) };
+        // SAFETY: a builtin group name, NUL-terminated.
+        let id = syn_check_group(unsafe { cstr::bytes_at(name) });
         // These two are the groups where "undefined" is meaningful.
         let optional = hlf == HLF_INACTIVE || hlf == HLF_NFLOAT;
         unsafe { *table.add(hlf as usize) = hl_get_ui_attr(ns_id, hlf, id, optional) };
@@ -496,7 +497,7 @@ pub fn update_ns_hl(ns_id: c_int) {
     // syntax group! It needs at least 10 layers of special casing! Noooooo!
     //
     // haha, tema engine go brrr
-    let normality = unsafe { syn_check_group(c"Normal".as_ptr(), 6) };
+    let normality = syn_check_group(b"Normal");
     unsafe { *table.add(HLF_NONE as usize) = hl_get_ui_attr(ns_id, -1, normality, true) };
 
     // hl_get_ui_attr might have invalidated the decor provider.

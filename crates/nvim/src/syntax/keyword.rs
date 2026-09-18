@@ -261,9 +261,7 @@ unsafe fn add_keyword_variants(mut kw: *mut c_char, def: &KeywordDef) -> Option<
 
 /// `:syntax keyword {group} [{options}] {keyword} ..`.
 pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
-    let arg = args.arg_ptr();
-    // SAFETY: the rest of the command line, which nothing below writes to.
-    let line = unsafe { cstr::bytes_at(arg) }.to_vec();
+    let line = args.line.arg().to_vec();
     let mut conceal_char: c_int = NUL;
 
     let name = split_group_name(&line);
@@ -272,8 +270,7 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
         let syn_id = if args.skip {
             -1
         } else {
-            // SAFETY: the group name at the head of the command line.
-            unsafe { syn_check_group(arg, name.len as size_t) }
+            syn_check_group(&line[..name.len])
         };
         if syn_id != 0 {
             // A buffer for the keywords with their backslashes removed;
@@ -352,7 +349,7 @@ pub(crate) fn syn_cmd_keyword(args: &mut ExArg, _syncing: c_int) {
             semsg!("E475: Invalid argument: {shown}");
         }
         // SAFETY: an offset within the command line the caller still owns.
-        Some(at) => args.set_nextcmd_ptr(unsafe { check_nextcmd(arg.add(at)) }),
+        Some(at) => args.line.next = args.line.check_next(args.line.arg + at),
     }
 
     redraw_curbuf_later(UPD_SOME_VALID);

@@ -116,7 +116,7 @@ pub fn nvim_buf_add_highlight(
         return ns_id.reported(error);
     }
     // SAFETY: `hl_group` names its own bytes.
-    let hl_id = unsafe { syn_check_group(hl_group.data(), hl_group.len()) };
+    let hl_id = syn_check_group(hl_group.as_bytes());
 
     // A highlight that runs to the end of the line is one that ends at
     // column zero of the next.

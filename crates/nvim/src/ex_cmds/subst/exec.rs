@@ -660,7 +660,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     }
     if pre_hl_id.get() == 0 as c_int {
         // SAFETY: a literal group name and its length.
-        pre_hl_id.set(unsafe { syn_check_group(c"Substitute".as_ptr(), 10 as size_t) });
+        pre_hl_id.set(syn_check_group(b"Substitute"));
     }
     show_sub(
         args.range,

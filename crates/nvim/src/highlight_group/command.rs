@@ -42,7 +42,7 @@ use super::{
     e_group_has_settings_highlight_link_ignored, group, highlight_attr_set_all, highlight_clear,
     highlight_list_one, highlight_num_groups, hl_has_settings, init_highlight, kColorIdxNone,
     lookup_color, name_to_color, restore_cterm_colors, set_hl_attr, syn_check_group,
-    syn_name2id_len, with_group,
+    syn_name2id_bytes, with_group,
 };
 use crate::highlight_group::highlight_changed;
 
@@ -151,7 +151,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
 
     // ":highlight {group-name}": list highlighting for one group.
     if !doclear && !dolink && line.at_end() {
-        let id = unsafe { syn_name2id_len(name.as_ptr().cast(), name.len()) };
+        let id = syn_name2id_bytes(name);
         if id == 0 {
             let shown = msg_bytes(name);
             semsg!("E411: Highlight group not found: {shown}");
@@ -184,7 +184,7 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
     }
 
     // Find the group name in the table. If it does not exist yet, add it.
-    let id = unsafe { syn_check_group(name.as_ptr().cast(), name.len()) };
+    let id = syn_check_group(name);
     if id == 0 {
         return; // Failed.
     }
@@ -284,11 +284,11 @@ fn highlight_link(line: &mut Line, forceit: bool, init: bool, dodefault: bool) {
         return;
     }
 
-    let from_id = unsafe { syn_check_group(from.as_ptr().cast(), from.len()) };
+    let from_id = syn_check_group(from);
     let to_id = if to.starts_with(b"NONE") {
         0
     } else {
-        unsafe { syn_check_group(to.as_ptr().cast(), to.len()) }
+        syn_check_group(to)
     };
 
     if from_id <= 0 {

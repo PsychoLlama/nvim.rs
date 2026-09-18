@@ -48,9 +48,7 @@ use crate::cstr;
 use crate::drawscreen::state::display_tick;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_curbuf_later, redraw_later};
 use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var};
-use crate::ex_docmd::{
-    check_nextcmd, do_cmdline_cmd, ends_excmd, expand_filename, find_nextcmd, separate_nextcmd,
-};
+use crate::ex_docmd::{do_cmdline_cmd, ends_excmd, expand_filename, separate_nextcmd};
 use crate::fold::{fold_update_all, foldmethod_is_syntax};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
@@ -61,7 +59,7 @@ use crate::hashtab::{
 use crate::highlight::state::{include_default, include_link, include_none};
 use crate::highlight_group::{
     HLF_D, highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight,
-    syn_check_group, syn_id2attr, syn_list_header, syn_name2id, syn_name2id_len,
+    syn_check_group, syn_id2attr, syn_list_header, syn_name2id, syn_name2id_bytes,
 };
 use crate::indent_c::find_start_comment;
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utfc_ptr2len};
@@ -73,7 +71,7 @@ use crate::message::{
     msg_putchar, msg_str, msg_str_hl, msg_title,
 };
 
-use crate::os::cshim::{gettext, strncasecmp};
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_is_absolute;
 use crate::pos::MAXLNUM;
@@ -449,37 +447,29 @@ static keepend_level: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1);
 /// list.
 pub(crate) const MSG_NO_ITEMS: &::core::ffi::CStr = c"No Syntax items defined for this buffer";
 
-/// The `len` bytes at `p`, copied out as an owned name.
+/// `bytes`, copied out as an owned name.
 ///
 /// Upstream's `vim_strnsave`, which made an `xmalloc`ed copy the caller then
 /// treated as a C string: the copy stops at a NUL inside the bytes, because
 /// every reader of that string would have stopped there anyway.
-///
-/// # Safety
-/// `p` must point at `len` readable bytes.
-pub(crate) unsafe fn name_at(p: *const ::core::ffi::c_char, len: usize) -> ::std::ffi::CString {
-    // SAFETY: the caller's promise.
-    let bytes = unsafe { cstr::slice_at(p, len) };
+pub(crate) fn name_in(bytes: &[u8]) -> ::std::ffi::CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     cstr::owned(&bytes[..end])
 }
 
-/// The white-space-delimited word `arg` starts with, and where it ends.
+/// The white-space-delimited word `text` starts with, and how many bytes
+/// come before the byte after it.
 ///
 /// The shape every `:syntax` mode command reads its argument in, and the
-/// step of the argument walks in [`clear`] and [`list`].
-///
-/// # Safety
-/// `arg` must be a NUL-terminated string.
-pub(crate) unsafe fn word_at(
-    arg: *mut ::core::ffi::c_char,
-) -> (&'static [u8], *mut ::core::ffi::c_char) {
-    // SAFETY: the caller's promise.
-    let end = unsafe { skiptowhite(arg) };
-    // SAFETY: both pointers are into that string, `arg` first, so the bytes
-    // between them are readable and live as long as the command line is.
-    let word = unsafe { cstr::slice_at(arg, end.offset_from(arg) as usize) };
-    (word, end)
+/// step of the argument walks in [`clear`] and [`list`]. `text` is a
+/// command line's tail, so the word also ends at the NUL.
+pub(crate) fn word_at(text: &[u8]) -> (&[u8], usize) {
+    let end = skip::to_white(text);
+    let end = text[..end]
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(end);
+    (&text[..end], end)
 }
 
 /// The syntax block being *configured* — `curwin`'s, which during a `:syntax`

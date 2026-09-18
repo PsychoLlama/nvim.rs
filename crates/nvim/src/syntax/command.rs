@@ -10,7 +10,7 @@
 
 use crate::cstr;
 use crate::guard::Suppress;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
@@ -19,7 +19,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::memory::XString;
 use crate::optionstr::LocalOptStr;
-use crate::types::{CmdLine, NUL};
+use crate::types::CmdLine;
 
 /// Which of `names` the argument word is, ignoring case.
 ///
@@ -34,9 +34,7 @@ fn word_index(word: &[u8], names: &[&CStr]) -> Option<usize> {
 
 /// Common prologue: record the next command, and answer whether to go on.
 fn mode_cmd_start(args: &mut ExArg) -> bool {
-    // SAFETY: `arg` is the caller's command line, a NUL-terminated string.
-    let arg_start = args.arg_ptr();
-    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg_start) });
+    args.line.next = args.line.find_next(args.line.arg);
     !args.skip
 }
 
@@ -45,9 +43,7 @@ pub(crate) fn syn_cmd_conceal(args: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(args) {
         return;
     }
-    let arg = args.arg_ptr();
-    // SAFETY: the caller's command line.
-    let (word, _) = unsafe { word_at(arg) };
+    let (word, _) = word_at(args.line.arg());
     if word.is_empty() {
         let state = if cur_syn_block().b_syn_conceal != 0 {
             c"syntax conceal on"
@@ -58,8 +54,7 @@ pub(crate) fn syn_cmd_conceal(args: &mut ExArg, _syncing: c_int) {
     } else if let Some(i) = word_index(word, &[c"on", c"off"]) {
         cur_syn_block().b_syn_conceal = if i == 0 { 1 } else { 0 };
     } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
+        let arg = msg_bytes(args.line.arg());
         semsg!("E390: Illegal argument: {arg}");
     }
 }
@@ -69,9 +64,7 @@ pub(crate) fn syn_cmd_case(args: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(args) {
         return;
     }
-    let arg = args.arg_ptr();
-    // SAFETY: the caller's command line.
-    let (word, _) = unsafe { word_at(arg) };
+    let (word, _) = word_at(args.line.arg());
     if word.is_empty() {
         let state = if cur_syn_block().b_syn_ic != 0 {
             c"syntax case ignore"
@@ -82,8 +75,7 @@ pub(crate) fn syn_cmd_case(args: &mut ExArg, _syncing: c_int) {
     } else if let Some(i) = word_index(word, &[c"match", c"ignore"]) {
         cur_syn_block().b_syn_ic = if i == 0 { 0 } else { 1 };
     } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
+        let arg = msg_bytes(args.line.arg());
         semsg!("E390: Illegal argument: {arg}");
     }
 }
@@ -93,9 +85,7 @@ pub(crate) fn syn_cmd_foldlevel(args: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(args) {
         return;
     }
-    let arg = args.arg_ptr();
-    // SAFETY: the caller's command line.
-    let (word, arg_end) = unsafe { word_at(arg) };
+    let (word, arg_end) = word_at(args.line.arg());
     if word.is_empty() {
         // A block whose foldlevel is neither of the two reports nothing.
         if cur_syn_block().b_syn_foldlevel == SYNFLD_START {
@@ -110,18 +100,16 @@ pub(crate) fn syn_cmd_foldlevel(args: &mut ExArg, _syncing: c_int) {
         Some(0) => cur_syn_block().b_syn_foldlevel = SYNFLD_START,
         Some(_) => cur_syn_block().b_syn_foldlevel = SYNFLD_MINIMUM,
         None => {
-            // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(arg) };
+            let arg = msg_bytes(args.line.arg());
             semsg!("E390: Illegal argument: {arg}");
             return;
         }
     }
 
     // Unlike the other mode commands, this one diagnoses trailing text.
-    let arg = unsafe { skipwhite(arg_end) };
-    if unsafe { *arg } as c_int != NUL {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
+    let at = args.line.skip_white(args.line.arg + arg_end);
+    if args.line.byte_at(at) != 0 {
+        let arg = msg_bytes(args.line.rest_of(at));
         semsg!("E390: Illegal argument: {arg}");
     }
 }
@@ -131,9 +119,7 @@ pub(crate) fn syn_cmd_spell(args: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(args) {
         return;
     }
-    let arg = args.arg_ptr();
-    // SAFETY: the caller's command line.
-    let (word, _) = unsafe { word_at(arg) };
+    let (word, _) = word_at(args.line.arg());
     if word.is_empty() {
         let state = match cur_syn_block().b_syn_spell {
             SYNSPL_TOP => c"syntax spell toplevel",
@@ -148,8 +134,7 @@ pub(crate) fn syn_cmd_spell(args: &mut ExArg, _syncing: c_int) {
             _ => SYNSPL_DEFAULT,
         };
     } else {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(arg) };
+        let arg = msg_bytes(args.line.arg());
         semsg!("E390: Illegal argument: {arg}");
         return;
     }
@@ -167,8 +152,8 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
     if args.skip {
         return;
     }
-    let arg = unsafe { skipwhite(args.arg_ptr()) };
-    if unsafe { *arg } as c_int == NUL {
+    let at = args.line.skip_white(args.line.arg);
+    if args.line.byte_at(at) == 0 {
         msg_str(c"\n");
         if !cur_syn_block().b_syn_isk.is_unset() {
             msg_str(c"syntax iskeyword ");
@@ -177,7 +162,7 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
         } else {
             msg_display(gettext(c"syntax iskeyword not set"), 0, false);
         }
-    } else if unsafe { strncasecmp(arg, c"clear".as_ptr(), 5) } == 0 {
+    } else if args.line.slice_at(at, 5).eq_ignore_ascii_case(b"clear") {
         cur_syn_block().b_syn_chartab = buf_chartab();
         cur_syn_block().b_syn_isk = None;
     } else {
@@ -186,8 +171,7 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
         // option and table back afterwards. The parsed value then *moves*
         // from the buffer's option into the syntax block's own copy.
         let saved = buf_chartab();
-        // SAFETY: the command's argument is NUL-terminated.
-        let value = XString::from_cstr(unsafe { cstr::at(arg) });
+        let value = XString::from_cstr(args.line.cstr_from(at));
         let save_isk = Buf::current().b_p_isk.replace(value);
 
         buf_init_chartab(Buf::current(), false);
@@ -220,8 +204,7 @@ pub(crate) fn syn_cmd_on(args: &mut ExArg, _syncing: c_int) {
 
 /// `:syntax reset`. It actually resets highlighting, not syntax.
 pub(crate) fn syn_cmd_reset(args: &mut ExArg, _syncing: c_int) {
-    let arg_start = args.arg_ptr();
-    args.set_nextcmd_ptr(unsafe { check_nextcmd(arg_start) });
+    args.line.next = args.line.check_next(args.line.arg);
     if !args.skip {
         init_highlight(true, true);
     }
@@ -240,8 +223,7 @@ pub(crate) fn syn_cmd_off(args: &mut ExArg, _syncing: c_int) {
 /// Source `$VIMRUNTIME/syntax/{name}.vim`, which is what all four of the
 /// on/off commands amount to.
 fn syn_cmd_onoff(args: &mut ExArg, name: &CStr) {
-    let arg_start = args.arg_ptr();
-    args.set_nextcmd_ptr(unsafe { check_nextcmd(arg_start) });
+    args.line.next = args.line.check_next(args.line.arg);
     if args.skip {
         return;
     }
@@ -319,27 +301,25 @@ pub(crate) static SUBCOMMANDS: [SubCommand; 19] = [
 
 /// `:syntax`. Finds the subcommand name in [`SUBCOMMANDS`] and calls it.
 pub(crate) fn ex_syntax(excmd: &mut ExArg) {
-    // SAFETY: the command table's promise -- the argument block of the
-    let arg = excmd.arg_ptr();
-
     // Isolate the subcommand name.
-    let mut subcmd_end = arg;
-    while (unsafe { *subcmd_end } as u8).is_ascii_alphabetic() {
-        subcmd_end = unsafe { subcmd_end.add(1) };
-    }
-    // SAFETY: both pointers are into the command line, `arg` first.
-    let subcmd_name = unsafe { name_at(arg, subcmd_end.offset_from(arg) as usize) };
+    let arg = excmd.line.arg();
+    let len = arg
+        .iter()
+        .position(|byte| !byte.is_ascii_alphabetic())
+        .unwrap_or(arg.len());
 
     // Skip the error messages of every subcommand too.
     let _skipping = (excmd.skip).then(Suppress::emsg_skip);
-    match SUBCOMMANDS.iter().find(|sub| *sub.name == *subcmd_name) {
+    match SUBCOMMANDS
+        .iter()
+        .position(|sub| sub.name.to_bytes() == &arg[..len])
+    {
         Some(sub) => {
-            excmd.set_arg_ptr(unsafe { skipwhite(subcmd_end) });
-            (sub.func)(excmd, 0);
+            excmd.line.arg = excmd.line.skip_white(excmd.line.arg + len);
+            (SUBCOMMANDS[sub].func)(excmd, 0);
         }
         None => {
-            // SAFETY: `subcmd_name` is live for the whole message.
-            let subcmd_name = unsafe { c_str(subcmd_name.as_ptr()) };
+            let subcmd_name = msg_bytes(&arg[..len]);
             semsg!("E410: Invalid :syntax subcommand: {subcmd_name}");
         }
     }
@@ -370,7 +350,7 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buffer = Buf::current();
-    let (fname, arg) = (buffer.name.shown_ptr(), excmd.arg_ptr());
+    let (fname, arg) = (buffer.name.shown_ptr(), excmd.line.ptr_at(excmd.line.arg));
     // SAFETY: a live buffer, and the command's own NUL-terminated argument.
     unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, Some(buffer)) };
 

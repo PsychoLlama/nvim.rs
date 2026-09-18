@@ -37,7 +37,9 @@ use crate::drawscreen::state::ru_col;
 use crate::global_cell::GlobalCell;
 use crate::grid::{default_grid_ref, schar_from_ascii, schar_get};
 use crate::highlight::state::{highlight_stlnc, highlight_user};
-use crate::highlight_group::{HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_len};
+use crate::highlight_group::{
+    HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_bytes,
+};
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::message::state::{msg_col, msg_row};
@@ -402,7 +404,7 @@ fn run_highlight(
     let mut name = *b"User\0";
     name[4] = run.userhl as u8 + b'0';
     // SAFETY: five bytes of a local array.
-    let group = unsafe { syn_name2id_len(name.as_mut_ptr().cast(), 5) };
+    let group = syn_name2id_bytes(&name[..5]);
     (attr, group)
 }
 

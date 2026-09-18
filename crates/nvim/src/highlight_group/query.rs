@@ -25,7 +25,7 @@ use crate::ui::ui_rgb_attached;
 
 use super::{
     HexBuf, coloridx_to_name, group, highlight_num_groups, syn_check_group, syn_get_final_id,
-    syn_name2id_len,
+    syn_name2id_bytes,
 };
 
 /// The empty dict every "nothing to say" path answers.
@@ -99,11 +99,11 @@ pub(crate) unsafe fn ns_get_hl_defs(
     let mut id = -1;
     if let Some(name) = unsafe { (*opts).name.as_ref() } {
         let create = unsafe { (*opts).create }.unwrap_or(true);
-        let (name, len) = (name.data(), name.len());
+        let name = name.as_bytes();
         id = if create {
-            unsafe { syn_check_group(name, len) }
+            syn_check_group(name)
         } else {
-            unsafe { syn_name2id_len(name, len) }
+            syn_name2id_bytes(name)
         };
         if id == 0 && !create {
             return Ok(NO_DICT);

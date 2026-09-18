@@ -384,7 +384,8 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
 
         // An empty target means "no highlight at all", spelled -1.
         let hl_id = if to_len != 0 {
-            unsafe { syn_check_group(to, to_len) }
+            // SAFETY: `to_len` bytes of the option's own string.
+            syn_check_group(unsafe { crate::cstr::slice_at(to, to_len) })
         } else {
             -1
         };
@@ -392,7 +393,8 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: Option<Win>) 
             return false;
         }
         let hl_id_link = if from_len != 0 {
-            unsafe { syn_check_group(p, from_len) }
+            // SAFETY: as above.
+            syn_check_group(unsafe { crate::cstr::slice_at(p, from_len) })
         } else {
             0
         };

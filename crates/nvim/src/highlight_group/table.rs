@@ -32,7 +32,7 @@ use crate::highlight::{HLATTRS_INIT, HlAttrFlags, hl_get_syn_attr, ns_get_hl};
 use crate::message::{e_highlight_group_name_invalid_char, e_highlight_group_name_too_long};
 use crate::message::{emsg, msg_source};
 use crate::os::cshim::gettext;
-use crate::types::{HlAttrs, NS, RgbValue, ScriptCtx, int16_t, size_t};
+use crate::types::{HlAttrs, NS, RgbValue, ScriptCtx, int16_t};
 use crate::ui::ui_mode_info_set;
 
 use super::{HLF_W, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, kColorIdxNone};
@@ -330,19 +330,14 @@ pub(crate) unsafe fn syn_name2id(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated name.
     let bytes = unsafe { CStr::from_ptr(name) }.to_bytes();
     if bytes.first() == Some(&b'@') {
-        // SAFETY: as above.
-        return unsafe { syn_check_group(name, bytes.len() as size_t) };
+        return syn_check_group(bytes);
     }
     lookup(bytes)
 }
 
-/// The id of the group named by the first `len` bytes of `name`, or 0.
-///
-/// # Safety
-/// `name` points to at least `len` readable bytes; main thread only.
-pub(crate) unsafe fn syn_name2id_len(name: *const c_char, len: size_t) -> c_int {
-    // SAFETY: the caller's buffer, `len` bytes of it.
-    lookup(unsafe { core::slice::from_raw_parts(name.cast::<u8>(), len) })
+/// The id of the group `name` spells, or 0.
+pub(crate) fn syn_name2id_bytes(name: &[u8]) -> c_int {
+    lookup(name)
 }
 
 /// The shared body of the two lookups. An over-long name cannot have been
@@ -389,21 +384,15 @@ pub(crate) fn syn_id2name(id: c_int) -> *mut c_char {
     })
 }
 
-/// The id of the group named by the first `len` bytes of `name`, adding it if
-/// it does not exist yet. 0 on failure.
-///
-/// # Safety
-/// `name` points to at least `len` readable bytes; may run `emsg`; main
-/// thread only.
-pub(crate) unsafe fn syn_check_group(name: *const c_char, len: size_t) -> c_int {
-    if len > MAX_SYN_NAME as size_t {
+/// The id of the group `name` spells, adding it if it does not exist yet.
+/// 0 on failure.
+pub(crate) fn syn_check_group(name: &[u8]) -> c_int {
+    if name.len() > MAX_SYN_NAME as usize {
         emsg(gettext(e_highlight_group_name_too_long));
         return 0;
     }
-    // SAFETY: the caller's buffer, `len` bytes of it.
-    let bytes = unsafe { core::slice::from_raw_parts(name.cast::<u8>(), len) };
-    match lookup(bytes) {
-        0 => syn_add_group(bytes),
+    match lookup(name) {
+        0 => syn_add_group(name),
         id => id,
     }
 }
@@ -438,8 +427,7 @@ fn syn_add_group(name: &[u8]) -> c_int {
     {
         // Recursive, and it can add a group of its own, so it happens before
         // this one is appended.
-        // SAFETY: `name` is a live slice.
-        scoped_parent = unsafe { syn_check_group(name.as_ptr().cast(), at as size_t) };
+        scoped_parent = syn_check_group(&name[..at]);
     }
 
     if highlight_num_groups() >= MAX_HL_ID as c_int {

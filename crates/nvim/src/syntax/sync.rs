@@ -10,9 +10,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
+use crate::regexp::skip_regexp_at;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -404,8 +404,8 @@ const SYNC_COUNTS: [(&CStr, SyncCount); 4] = [
 /// `:syntax sync {settings}`, `:syntax sync match|region|clear ..`, and with no
 /// argument the sync listing.
 pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
-    let mut arg_start = args.arg_ptr();
-    if ends_excmd(unsafe { *arg_start } as c_int) != 0 {
+    let mut arg_start = args.line.arg;
+    if ends_excmd(c_int::from(args.line.byte_at(arg_start))) != 0 {
         syn_cmd_list(args, 1);
         return;
     }
@@ -416,14 +416,11 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
     let mut illegal = false;
     let mut finished = false;
 
-    while ends_excmd(unsafe { *arg_start } as c_int) == 0 {
-        let mut arg_end = unsafe { skiptowhite(arg_start) };
-        let mut next_arg = unsafe { skipwhite(arg_end) };
+    while ends_excmd(c_int::from(args.line.byte_at(arg_start))) == 0 {
+        let mut arg_end = args.line.skip_to_white(arg_start);
+        let mut next_arg = args.line.skip_white(arg_end);
         key.clear();
-        // SAFETY: both pointers are into the command line, `arg_start` first.
-        key.extend_from_slice(unsafe {
-            cstr::slice_at(arg_start, arg_end.offset_from(arg_start) as usize)
-        });
+        key.extend_from_slice(args.line.slice_at(arg_start, arg_end - arg_start));
         key.make_ascii_uppercase();
         key.push(0);
         let word = &key[..key.len() - 1];
@@ -432,16 +429,13 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
             if !args.skip {
                 cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
             }
-            if ends_excmd(unsafe { *next_arg } as c_int) == 0 {
-                arg_end = unsafe { skiptowhite(next_arg) };
+            if ends_excmd(c_int::from(args.line.byte_at(next_arg))) == 0 {
+                arg_end = args.line.skip_to_white(next_arg);
                 if !args.skip {
-                    unsafe {
-                        cur_syn_block().b_syn_sync_id =
-                            syn_check_group(next_arg, arg_end.offset_from(next_arg) as size_t)
-                                as int16_t
-                    };
+                    let name = args.line.slice_at(next_arg, arg_end - next_arg);
+                    cur_syn_block().b_syn_sync_id = syn_check_group(name) as int16_t;
                 }
-                next_arg = unsafe { skipwhite(arg_end) };
+                next_arg = args.line.skip_white(arg_end);
             } else if !args.skip {
                 unsafe {
                     cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t
@@ -471,7 +465,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
         } else if word == b"LINECONT" {
-            match unsafe { sync_linecont(args, next_arg) } {
+            match sync_linecont(args, next_arg) {
                 Err(LineContError::Illegal) => {
                     illegal = true;
                     break;
@@ -485,7 +479,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
         } else {
             // Everything else is a subcommand of its own, run in syncing
             // mode; it consumes the rest of the line either way.
-            args.set_arg_ptr(next_arg);
+            args.line.arg = next_arg;
             if word == b"MATCH" {
                 syn_cmd_match(args, 1);
             } else if word == b"REGION" {
@@ -502,11 +496,10 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
     }
 
     if illegal {
-        // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg_start = unsafe { c_str(arg_start) };
+        let arg_start = msg_bytes(args.line.rest_of(arg_start));
         semsg!("E404: Illegal arguments: {arg_start}");
     } else if !finished {
-        args.set_nextcmd_ptr(unsafe { check_nextcmd(arg_start) });
+        args.line.next = args.line.check_next(arg_start);
         redraw_curbuf_later(UPD_SOME_VALID);
         syn_stack_free_all(cur_syn_block()); // Need to recompute all syntax.
     }
@@ -531,13 +524,10 @@ enum LineContError {
 /// `:syntax sync linecont /{pattern}/` — the pattern whose match on a line
 /// means the next one continues it.
 ///
-/// Answers what follows the pattern.
-///
-/// # Safety
-///
-/// `next_arg` must point at a NUL-terminated string, unaliased for the call.
-unsafe fn sync_linecont(args: &ExArg, next_arg: *mut c_char) -> Result<*mut c_char, LineContError> {
-    if unsafe { *next_arg } as c_int == NUL {
+/// Answers where the pattern ends.
+fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, LineContError> {
+    let delim = args.line.byte_at(next_arg);
+    if delim == 0 {
         return Err(LineContError::Illegal); // missing pattern
     }
     if cur_syn_block().b_syn_linecont_pat.is_some() {
@@ -546,8 +536,9 @@ unsafe fn sync_linecont(args: &ExArg, next_arg: *mut c_char) -> Result<*mut c_ch
         ));
         return Err(LineContError::Reported);
     }
-    let arg_end = unsafe { skip_regexp(next_arg.add(1), *next_arg as c_int, 1) };
-    if unsafe { *arg_end } as c_int != unsafe { *next_arg } as c_int {
+    let arg_end =
+        next_arg + 1 + skip_regexp_at(args.line.tail(next_arg + 1), c_int::from(delim), 1);
+    if args.line.byte_at(arg_end) != delim {
         return Err(LineContError::Illegal); // end delimiter not found
     }
 
@@ -555,8 +546,7 @@ unsafe fn sync_linecont(args: &ExArg, next_arg: *mut c_char) -> Result<*mut c_ch
         let mut block = cur_syn_block();
         // Store the pattern and its compiled program. 'cpoptions' is
         // emptied first, to avoid the 'l' flag.
-        // SAFETY: both pointers are into the command line, `next_arg` first.
-        let pat = unsafe { name_at(next_arg.add(1), arg_end.offset_from(next_arg) as usize - 1) };
+        let pat = name_in(args.line.slice_at(next_arg + 1, arg_end - next_arg - 1));
         block.b_syn_linecont_ic = block.b_syn_ic;
         let _cpo = SavedCpo::empty();
         // SAFETY: `pat` is live across the call, which only reads it.
@@ -568,5 +558,5 @@ unsafe fn sync_linecont(args: &ExArg, next_arg: *mut c_char) -> Result<*mut c_ch
         }
         block.b_syn_linecont_pat = Some(pat);
     }
-    Ok(unsafe { skipwhite(arg_end.add(1)) })
+    Ok(args.line.skip_white(arg_end + 1))
 }

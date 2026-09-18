@@ -455,6 +455,25 @@ impl CmdLine {
         matches!(self.byte_at(at), b'|' | b'\n').then_some(at + 1)
     }
 
+    /// The command after the next `|` or newline at or after `at`, if there
+    /// is one. `find_nextcmd` upstream.
+    ///
+    /// [`check_next`](CmdLine::check_next) asks whether `at` *is* the
+    /// separator; this looks for one. Neither skips a `|` inside a string
+    /// or after a backslash -- the commands that call this take an
+    /// argument no `|` can appear in.
+    pub fn find_next(&self, at: usize) -> Option<usize> {
+        let tail = self.tail(at);
+        let end = tail
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(tail.len());
+        tail[..end]
+            .iter()
+            .position(|byte| matches!(byte, b'|' | b'\n'))
+            .map(|found| at + found + 1)
+    }
+
     /// Write `byte` at `at`.
     pub fn set_byte(&mut self, at: usize, byte: u8) {
         self.text[at] = byte;

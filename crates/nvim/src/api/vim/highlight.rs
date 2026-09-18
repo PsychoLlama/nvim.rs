@@ -14,7 +14,7 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 
 pub fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
-    unsafe { syn_check_group(name.data(), name.len()) as Integer }
+    syn_check_group(name.as_bytes()) as Integer
 }
 
 /// # Safety
@@ -40,7 +40,7 @@ pub unsafe fn nvim_set_hl(
     name: String_0,
     val: *mut KeyDict_highlight,
 ) -> Result<(), Error> {
-    let hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
+    let hl_id: ::core::ffi::c_int = syn_check_group(name.as_bytes());
     if !(hl_id != 0 as ::core::ffi::c_int) {
         return Err(err_bad_value(c"highlight name", name.as_cstr()));
     }

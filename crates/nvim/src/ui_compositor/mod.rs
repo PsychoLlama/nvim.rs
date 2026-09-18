@@ -151,7 +151,7 @@ pub fn ui_comp_syn_init() {
 /// The id of a highlight group, defining it if it is new.
 fn syn_group(name: &'static CStr) -> c_int {
     // SAFETY: a literal name with its own length, C's `S_LEN`.
-    unsafe { syn_check_group(name.as_ptr(), name.count_bytes()) }
+    syn_check_group(name.to_bytes())
 }
 
 /// # Safety

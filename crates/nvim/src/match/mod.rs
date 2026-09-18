@@ -126,7 +126,8 @@ unsafe fn match_add(
         }
     }
 
-    let hlg_id = unsafe { syn_check_group(grp, cstr::bytes_at(grp).len()) };
+    // SAFETY: the caller's NUL-terminated group name.
+    let hlg_id = syn_check_group(unsafe { cstr::bytes_at(grp) });
     if hlg_id == 0 {
         return -1;
     }

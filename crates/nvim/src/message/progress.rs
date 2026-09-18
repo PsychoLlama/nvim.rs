@@ -44,7 +44,7 @@ unsafe fn status_hl_id(status: *const c_char) -> c_int {
     } else {
         return 0;
     };
-    unsafe { syn_check_group(group.as_ptr(), group.count_bytes()) }
+    syn_check_group(group.to_bytes())
 }
 
 /// Prefix `hl_msg` with the "title: percent% " a progress message displays as.
@@ -85,7 +85,7 @@ pub(crate) unsafe fn format_progress_message(
         let warning = c"WarningMsg";
         let chunk = HlMessageChunk {
             text: unsafe { cstr_to_string(percent_buf.as_ptr()) },
-            hl_id: unsafe { syn_check_group(warning.as_ptr(), warning.count_bytes()) },
+            hl_id: syn_check_group(warning.to_bytes()),
         };
         unsafe { hl_msg_push(&mut updated, chunk) };
     }

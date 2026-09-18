@@ -301,8 +301,8 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
     // and below instead, in two dedicated highlight groups.
     if p_pumborder(|value| unsafe { strequal(value.as_ptr().cast_mut(), BORDER_SHADOW.as_ptr()) }) {
         config.shadow = true;
-        let blend = unsafe { syn_check_group(c"PmenuShadow".as_ptr(), 11) };
-        let through = unsafe { syn_check_group(c"PmenuShadowThrough".as_ptr(), 18) };
+        let blend = syn_check_group(b"PmenuShadow");
+        let through = syn_check_group(b"PmenuShadowThrough");
         config.border_hl_ids[2] = through;
         config.border_hl_ids[3] = blend;
         config.border_hl_ids[4] = blend;

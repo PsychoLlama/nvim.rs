@@ -65,7 +65,7 @@ use crate::eval::eval_to_string_safe;
 use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_var};
 use crate::getchar::state::KeyTyped;
 use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
-use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_len};
+use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_bytes};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
@@ -457,7 +457,7 @@ pub(super) fn in_insert_mode() -> bool {
 /// The syntax group `name` names, for `%#name#` and `%$name$`.
 pub(super) fn syntax_id(name: &[u8]) -> c_int {
     // SAFETY: the name is a run of the format string, with its own length.
-    unsafe { syn_name2id_len(name.as_ptr().cast::<c_char>(), name.len() as size_t) }
+    syn_name2id_bytes(name)
 }
 
 /// A translated message, as bytes.

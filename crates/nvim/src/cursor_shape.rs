@@ -461,16 +461,13 @@ unsafe fn parse_parts(
                         // "group/langmap_group": the first name is the
                         // langmap one, and note it is looked up in *both*
                         // rounds, so validation defines it too.
-                        let len = (slash - p) as size_t;
-                        // SAFETY: `p` indexes inside `opt`'s string.
-                        first = unsafe { syn_check_group(opt.add(p), len) };
+                        first = syn_check_group(&bytes[p..slash]);
                         p = slash + 1;
                     }
                     if apply {
-                        let len = (endp - p) as size_t;
-                        // SAFETY: as above. An empty name is upstream's too
-                        // — "block-Cursor/" looks one up with length zero.
-                        let id = unsafe { syn_check_group(opt.add(p), len) };
+                        // An empty name is upstream's too -- "block-Cursor/"
+                        // looks one up with length zero.
+                        let id = syn_check_group(&bytes[p..endp]);
                         update_shape_entry(idx as ShapeIdx, |e| {
                             e.id = if slashp.is_some() { first } else { id };
                             e.id_lm = id;

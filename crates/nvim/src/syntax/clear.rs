@@ -16,7 +16,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -143,8 +143,8 @@ pub(crate) fn syn_remove_pattern(mut block: SynBlockRef, idx: usize) {
 
 /// `:syntax clear [{group}|@{cluster}] ..` and `:syntax sync clear ..`.
 pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
-    let mut arg = args.arg_ptr();
-    args.set_nextcmd_ptr(unsafe { find_nextcmd(arg) });
+    let mut at = args.line.arg;
+    args.line.next = args.line.find_next(at);
     if args.skip {
         return;
     }
@@ -156,7 +156,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
         return;
     }
 
-    if ends_excmd(c_int::from(unsafe { *arg })) != 0 {
+    if ends_excmd(c_int::from(args.line.byte_at(at))) != 0 {
         // No argument: clear all syntax items.
         if syncing != 0 {
             syntax_sync_clear();
@@ -169,14 +169,12 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
         }
     } else {
         // Clear the groups and clusters the argument names.
-        while ends_excmd(c_int::from(unsafe { *arg })) == 0 {
-            // SAFETY: the caller's command line.
-            let (word, arg_end) = unsafe { word_at(arg) };
+        while ends_excmd(c_int::from(args.line.byte_at(at))) == 0 {
+            let (word, word_len) = word_at(args.line.tail(at));
             if word.first() == Some(&b'@') {
                 let id = syn_scl_namen2id(&word[1..]);
                 if id == 0 {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let arg = unsafe { c_str(arg) };
+                    let arg = msg_bytes(args.line.rest_of(at));
                     semsg!("E391: No such syntax cluster: {arg}");
                     break;
                 }
@@ -186,16 +184,15 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
                     .expect("a non-zero cluster id is at least `SYNID_CLUSTER`");
                 cur_syn_block().clusters_mut()[at].scl_list = IdList::NONE;
             } else {
-                let id = unsafe { syn_name2id_len(arg, word.len()) };
+                let id = syn_name2id_bytes(word);
                 if id == 0 {
-                    // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                    let arg = unsafe { c_str(arg) };
+                    let arg = msg_bytes(args.line.rest_of(at));
                     semsg!("E28: No such highlight group name: {arg}");
                     break;
                 }
                 syn_clear_one(id, syncing != 0);
             }
-            arg = unsafe { skipwhite(arg_end) };
+            at = args.line.skip_white(at + word_len);
         }
     }
     redraw_curbuf_later(UPD_SOME_VALID);

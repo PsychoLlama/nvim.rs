@@ -168,9 +168,9 @@ fn style_slots(style: &BorderStyle) -> Slots {
     if style.shadow {
         let (shadow, deep) = (c"FloatShadow", c"FloatShadowThrough");
         // SAFETY: two static group names, and the editor's highlight tables.
-        let blend = unsafe { syn_check_group(shadow.as_ptr(), shadow.count_bytes()) };
+        let blend = syn_check_group(shadow.to_bytes());
         // SAFETY: as above.
-        let through = unsafe { syn_check_group(deep.as_ptr(), deep.count_bytes()) };
+        let through = syn_check_group(deep.to_bytes());
         // The two cells the window's own corner shows through take the
         // "through" group; the four entirely outside it take "blend".
         hl_ids = [0, 0, through, blend, blend, blend, through, 0];
