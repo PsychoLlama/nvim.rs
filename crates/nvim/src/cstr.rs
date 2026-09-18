@@ -336,11 +336,6 @@ pub(crate) unsafe fn slice_at<'a>(p: *const c_char, n: usize) -> &'a [u8] {
     unsafe { slice::from_raw_parts(p.cast::<u8>(), n) }
 }
 
-/// The string `buf` starts with.
-///
-/// A buffer holding no terminator answers `c""`: every caller is reading a
-/// buffer some writer was supposed to terminate, and the empty string is
-/// the answer that keeps a formatting bug from becoming a panic.
 /// The string `s` from byte `at` on.
 ///
 /// Safe, and free: a terminated string stays terminated however much of its
@@ -358,6 +353,11 @@ pub(crate) fn suffix(s: &CStr, at: usize) -> &CStr {
     unsafe { CStr::from_bytes_with_nul_unchecked(&bytes[at..]) }
 }
 
+/// The string `buf` starts with.
+///
+/// A buffer holding no terminator answers `c""`: every caller is reading a
+/// buffer some writer was supposed to terminate, and the empty string is
+/// the answer that keeps a formatting bug from becoming a panic.
 pub(crate) fn in_bytes(buf: &[u8]) -> &CStr {
     CStr::from_bytes_until_nul(buf).unwrap_or(c"")
 }

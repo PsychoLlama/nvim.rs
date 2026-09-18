@@ -13,6 +13,9 @@ and this project adheres to [CalVer](https://calver.org/).
   value says so. No option changed what it accepts or what it does.
 - Rewrote who owns an Ex command line and how a command finds its way around
   it. No command changed what it accepts or what it does.
+- Rewrote how a pattern match reports where it matched: a match carries byte
+  offsets into the text it ran over rather than pointers into it. No pattern
+  changed what it matches.
 
 ## [2026.09.16-b12dec0bc2]
 
