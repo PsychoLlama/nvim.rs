@@ -1648,3 +1648,86 @@ fn substitute_remembers_its_last_replacement_for_tilde_and_evaluates_a_backslash
 
     put("silent! keepjumps keepmarks %delete _");
 }
+
+/// A match records **offsets** into the line it ran over, and the line has
+/// to come back to read them. These pin the three things that says: a group
+/// the pattern never filled, a match that failed, and the bytes a group
+/// covers.
+#[test]
+fn a_match_reports_spans_that_are_read_back_against_the_line() {
+    let _sandbox = Sandbox::globals();
+    let subject = cstr("foobar");
+    let pattern = cstr(r"foo\(bar\)\|\(xxx\)");
+    let prog = vim_regcomp(&pattern, RE_MAGIC | RE_STRING);
+    assert!(!prog.is_null(), "the pattern compiles");
+    let mut rm = RegMatch::new(prog, false);
+
+    assert!(vim_regexec(&mut rm, &subject, 0));
+    assert_eq!(rm.group(0), Some(0..6));
+    assert_eq!(rm.group(1), Some(3..6));
+    // The alternative never ran, so its group is unset rather than empty.
+    assert_eq!(rm.group(2), None);
+    assert_eq!(rm.group_bytes(1, subject.to_bytes()), Some(&b"bar"[..]));
+    assert_eq!(rm.group_bytes(2, subject.to_bytes()), None);
+
+    // A miss leaves nothing behind: upstream left the last attempt's
+    // pointers in the structure, which is only ever read by mistake.
+    let other = cstr("nothing here");
+    assert!(!vim_regexec(&mut rm, &other, 0));
+    assert_eq!(rm.group(0), None);
+    assert_eq!(rm.group(1), None);
+
+    // SAFETY: `regprog` is what the last match left behind.
+    unsafe { vim_regfree(rm.regprog) };
+}
+
+/// `substitute()` is the string half of the substitution: it runs
+/// `vim_regexec` over a string it owns and expands the replacement against
+/// the spans that come back, which is the path `&`, `\1` and `submatch()`
+/// all read through.
+#[test]
+fn a_string_substitution_expands_captures_and_submatches() {
+    let _sandbox = Sandbox::globals();
+    let read = |expr: &str| {
+        let text = cstr(expr);
+        // SAFETY: NUL-terminated, and outlives the call; the answer is an
+        // allocation this takes over.
+        let got = unsafe { eval_to_string(text.as_ptr().cast_mut(), false, false) };
+        assert!(!got.is_null(), "{expr} evaluated to nothing");
+        // SAFETY: `eval_to_string` answers an `xmalloc`ed C string.
+        unsafe { crate::support::internalize(got) }
+    };
+
+    // `&` is the whole match and `\1` the first group -- both resolved
+    // against the string the match ran over.
+    assert_eq!(read(r#"substitute('abc', 'b', '[&]', '')"#), "a[b]c");
+    assert_eq!(
+        read(r#"substitute('one two', '\(\w\+\) \(\w\+\)', '\2 \1', '')"#),
+        "two one"
+    );
+    // A group that did not participate contributes nothing.
+    assert_eq!(read(r#"substitute('ab', 'a\(x\)\?b', '<\1>', '')"#), "<>");
+    // `submatch()` inside a `\=` reads the same spans through the snapshot,
+    // which has to carry the line as well as the match.
+    assert_eq!(
+        read(r#"substitute('hello', 'l\+', '\=toupper(submatch(0))', '')"#),
+        "heLLo"
+    );
+    assert_eq!(
+        read(r#"substitute('a1b2', '\(\a\)\(\d\)', '\=submatch(2) . submatch(1)', 'g')"#),
+        "1a2b"
+    );
+    // ... and so does the list form.
+    assert_eq!(
+        read(r#"substitute('xy', '\(x\)\(y\)', '\=join(submatch(1, 1), "") . submatch(2)', '')"#),
+        "xy"
+    );
+    // A `g` flag with a zero-width match still advances one character.
+    assert_eq!(read(r#"substitute('abc', 'x*', '-', 'g')"#), "-a-b-c-");
+    // The replacement expression may start a substitution of its own; the
+    // outer `submatch()` must go on answering about the outer match.
+    assert_eq!(
+        read(r#"substitute('ab', 'a', '\=substitute("q", "q", "Q", "") . submatch(0)', '')"#),
+        "Qab"
+    );
+}
