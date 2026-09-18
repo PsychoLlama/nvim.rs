@@ -756,7 +756,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
     // Expanding wildcards may leave the argument list empty, e.g. when
     // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error
     // message was already given for that.
-    if unsafe { (*Win::current().w_alist).al_ga.len() as c_int } == 0 {
+    if crate::arglist::argcount() == 0 {
         return;
     }
 

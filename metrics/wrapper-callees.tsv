@@ -4,7 +4,7 @@ count	callee	no_raw	defs	def
 456	.offset	0	0	
 454	bytes_at	0	1	crates/nvim/src/cstr.rs
 416	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-283	CStr::from_ptr	0	2	
+282	CStr::from_ptr	0	2	
 239	.offset_from	0	0	
 224	at	0	3	
 186	xstrdup	0	1	crates/nvim/src/memory/mod.rs
@@ -3858,7 +3858,6 @@ count	callee	no_raw	defs	def
 1	var_redir_start	0	1	crates/nvim/src/eval/vars/redir.rs
 1	var_set_global	0	1	crates/nvim/src/eval/echo.rs
 1	vcol2col	0	1	crates/nvim/src/mouse/find.rs
-1	verify_command	0	1	crates/nvim/src/ex_docmd/verify.rs
 1	version_msg	0	0	
 1	vim_chdir	0	1	crates/nvim/src/file_search/chdir.rs
 1	vim_dialog_yesnoallcancel	0	1	crates/nvim/src/message/dialog.rs

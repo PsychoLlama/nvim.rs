@@ -300,8 +300,7 @@ fn locate_command(
                 unsafe { append_command(&msg, cmdname) }
             });
             did_emsg_syntax.set(true);
-            // SAFETY: as above.
-            unsafe { verify_command(cmdname) };
+            verify_command(excmd.line.rest_of(after_modifier));
         }
         return Err(Refused);
     }

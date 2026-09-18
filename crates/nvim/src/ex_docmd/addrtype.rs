@@ -4,8 +4,7 @@
 //! `:wincmd` decides its own from the window command it was given;
 //! every other command declares one in the command table. What the
 //! rest of `address` reads is the `addr_type` these leave behind.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use super::address::{head, qf_get_cur_idx, qf_get_cur_valid_idx, qf_get_valid_size, tail};
 
@@ -158,7 +157,7 @@ pub fn set_cmd_dflall_range(excmd: &mut ExArg) {
 
 /// How many files are in the current window's argument list.
 pub(super) fn arglist_len() -> c_int {
-    unsafe { (*Win::current().w_alist).al_ga.len() as c_int }
+    crate::arglist::argcount()
 }
 
 /// The handles of the first and last *loaded* buffers.

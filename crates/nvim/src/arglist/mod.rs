@@ -149,7 +149,7 @@ fn warg(window: Win, n: c_int) -> *mut ArgEntry {
     alist_arg(win_alist(window), n)
 }
 
-fn wargcount(window: Win) -> c_int {
+pub(crate) fn wargcount(window: Win) -> c_int {
     alist_count(win_alist(window))
 }
 
@@ -158,7 +158,8 @@ fn arg(n: c_int) -> *mut ArgEntry {
     warg(Win::current(), n)
 }
 
-fn argcount() -> c_int {
+/// How many files the current window's argument list holds.
+pub(crate) fn argcount() -> c_int {
     wargcount(Win::current())
 }
 

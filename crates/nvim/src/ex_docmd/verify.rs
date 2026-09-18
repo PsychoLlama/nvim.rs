@@ -3,8 +3,7 @@
 //! The one command whose implementation is not reached through the command
 //! table: `do_one_cmd` calls `verify_command` on every name it failed to
 //! resolve, so that the joke works without occupying a row.
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -13,7 +12,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 use crate::highlight_group::HLF_E;
 use crate::message::msg;
@@ -170,11 +169,8 @@ const SMILE: &[&CStr] = &[
 /// Every command name `find_ex_command` failed to resolve reaches here, so
 /// the name test comes first and is exact.
 ///
-/// # Safety
-///
-/// `cmd` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn verify_command(cmd: *mut c_char) {
-    if unsafe { CStr::from_ptr(cmd) } != c"smile" {
+pub fn verify_command(cmd: &[u8]) {
+    if cmd != b"smile" {
         return;
     }
     for line in SMILE {

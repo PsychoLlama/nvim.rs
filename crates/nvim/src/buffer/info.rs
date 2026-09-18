@@ -798,7 +798,7 @@ pub unsafe fn append_arg_number(window: Win, buf: *mut c_char, buflen: size_t) -
     // Upstream asks the CURRENT window for the argument list even when
     // reporting on another one.
     // SAFETY: the current window's argument list is live.
-    let argcount = unsafe { (*current_win().w_alist).al_ga.len() as c_int };
+    let argcount = crate::arglist::wargcount(current_win());
     if argcount <= 1 {
         // Nothing to do.
         return 0;

@@ -85,7 +85,7 @@ pub(crate) fn put_view(
     // when it still points at something: arguments may have been deleted.
     let mut did_next = false;
     if window.w_arg_idx != current_arg_idx
-        && window.w_arg_idx < unsafe { (*window.w_alist).al_ga.len() as c_int }
+        && window.w_arg_idx < crate::arglist::wargcount(window)
         && opts.is_session()
     {
         if !out.write(format_args!("{}argu\n", window.w_arg_idx as int64_t + 1)) {
