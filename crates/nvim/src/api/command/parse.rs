@@ -62,12 +62,10 @@ unsafe fn parse_map_cmd(arg_str: *const c_char) -> Array {
 /// As [`parse_map_cmd`]; `arena` must be the dispatcher's.
 unsafe fn parse_args(excmd: &mut ExArg, arena: *mut Arena) -> Array {
     // SAFETY: caller contract.
-    let (length, empty) = unsafe {
-        (
-            cstr::bytes_at(excmd.arg_ptr()).len(),
-            *excmd.arg_ptr() == NUL as c_char,
-        )
-    };
+    let (length, empty) = (
+        excmd.line.arg().len(),
+        excmd.line.byte_at(excmd.line.arg) == 0,
+    );
 
     // `is_map_cmd` indexes the command table by `cmdidx`, so the `CmdIdx::SIZE`
     // guard has to stay in front of it rather than be hoisted alongside.

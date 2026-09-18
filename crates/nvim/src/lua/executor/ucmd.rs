@@ -148,7 +148,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
         lua_setfield(lstate, -4, c"args".as_ptr());
         if (*cmd).uc_argt.has(ExArgt::NOSPC) {
             // At most one argument: `fargs` is the whole of it, or empty.
-            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || !cstr::bytes_at(excmd.arg_ptr()).is_empty() {
+            if (*cmd).uc_argt.has(ExArgt::NEEDARG) || !excmd.line.arg().is_empty() {
                 lua_rawseti(lstate, -2, 1);
             } else {
                 lua_pop(lstate, 1);
@@ -157,7 +157,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, excmd: &mut ExArg, preview: bool) 
             lua_pop(lstate, 1);
             // Not pre-split (`:command` rather than `nvim_cmd`): split here,
             // honouring backslash escapes.
-            let length = cstr::bytes_at(excmd.arg_ptr()).len();
+            let length = excmd.line.arg().len();
             let mut end: size_t = 0;
             let mut len: size_t = 0;
             let mut i: c_int = 1;

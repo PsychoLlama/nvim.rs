@@ -525,7 +525,8 @@ pub(crate) unsafe fn set_one_cmd_context(
     let context_field = expand.field_ptr(core::mem::offset_of!(Expand, xp_context));
     // SAFETY: `cmd` is inside the command line and `context` is the live
     // context's own field.
-    cmd = unsafe { skip_range(cmd, context_field) };
+    // SAFETY: `cmd` is NUL-terminated and `context_field` is the caller's.
+    cmd = unsafe { cmd.add(skip_range(cstr::bytes_at(cmd), context_field)) };
     expand.xp_pattern = cmd as *mut c_char;
     if unsafe { *cmd } as c_int == NUL {
         return ptr::null();

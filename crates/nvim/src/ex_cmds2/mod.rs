@@ -52,7 +52,6 @@ use crate::buffer::{
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::unchanged;
 use crate::channel::channel_job_running;
-use crate::cstr;
 use crate::drawscreen::state::cmdline_row;
 use crate::eval::eval_call_provider;
 use crate::eval::typval::tv_list_alloc;
@@ -693,9 +692,9 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     );
     let _ = unsafe { do_unlet(name, len, true) };
 
-    let mut pattern = Vec::with_capacity(unsafe { cstr::bytes_at(excmd.arg_ptr()) }.len() + 12);
+    let mut pattern = Vec::with_capacity(excmd.line.arg().len() + 12);
     pattern.extend_from_slice(b"compiler/");
-    pattern.extend_from_slice(unsafe { CStr::from_ptr(excmd.arg_ptr()) }.to_bytes());
+    pattern.extend_from_slice(excmd.line.arg());
     pattern.extend_from_slice(b".*\0");
     if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) }.is_err() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.

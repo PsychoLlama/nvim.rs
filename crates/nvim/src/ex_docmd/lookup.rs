@@ -304,7 +304,8 @@ pub fn f_fullcommand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     while byte(name) == ':' as c_int {
         name = unsafe { name.add(1) };
     }
-    name = unsafe { skip_range(name, ptr::null_mut()) };
+    // SAFETY: `name` is NUL-terminated; a null context is "not completing".
+    name = unsafe { name.add(skip_range(cstr::bytes_at(name), ptr::null_mut())) };
     let mut ea = blank_exarg();
     // SAFETY: `name` walks the NUL-terminated argument.
     ea.line = CmdLine::from_bytes(unsafe { cstr::bytes_at(name) });

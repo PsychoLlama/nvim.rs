@@ -1,10 +1,10 @@
 count	callee	no_raw	defs	def
 871	xfree	0	1	crates/nvim/src/memory/mod.rs
-768	.add	0	3	
+761	.add	0	3	
 457	.offset	0	0	
-456	bytes_at	0	1	crates/nvim/src/cstr.rs
+455	bytes_at	0	1	crates/nvim/src/cstr.rs
 436	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-284	CStr::from_ptr	0	2	
+283	CStr::from_ptr	0	2	
 239	.offset_from	0	0	
 224	at	0	3	
 186	xstrdup	0	1	crates/nvim/src/memory/mod.rs
@@ -12,7 +12,7 @@ count	callee	no_raw	defs	def
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 164	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 155	from_raw_parts	0	0	
-153	skipwhite	0	1	crates/nvim/src/charset/walk.rs
+152	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 121	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 121	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 109	vim_snprintf	0	1	crates/nvim/src/strings/printf/mod.rs
@@ -38,8 +38,8 @@ count	callee	no_raw	defs	def
 51	vim_regfree	0	1	crates/nvim/src/regexp/api.rs
 50	Xp::new	0	68	
 50	msg_ext_set_kind	0	1	crates/nvim/src/message/ext.rs
-49	.sub	0	0	
 49	eq	0	1	crates/nvim/src/cstr.rs
+47	.sub	0	0	
 46	copy_nonoverlapping	0	0	
 46	do_cmdline_cmd	0	1	crates/nvim/src/ex_docmd/cmdline.rs
 46	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
@@ -526,7 +526,6 @@ count	callee	no_raw	defs	def
 6	set_context	0	1	crates/nvim/src/usercmd/complete.rs
 6	set_internal_string_var	0	1	crates/nvim/src/eval/vars/lifecycle.rs
 6	set_option_varp	1	1	crates/nvim/src/option/value.rs
-6	skip_range	0	1	crates/nvim/src/ex_docmd/address.rs
 6	skip_regexp_ex	0	1	crates/nvim/src/regexp/parse.rs
 6	skipdigits	0	1	crates/nvim/src/charset/walk.rs
 6	spell_check	0	1	crates/nvim/src/spell/check.rs
@@ -1250,6 +1249,7 @@ count	callee	no_raw	defs	def
 3	sign_find	0	1	crates/nvim/src/sign/store.rs
 3	skip_comment	0	1	crates/nvim/src/ops/join.rs
 3	skip_luafunc_name	0	1	crates/nvim/src/eval/name.rs
+3	skip_range	0	1	crates/nvim/src/ex_docmd/address.rs
 3	skip_to_option_part	0	1	crates/nvim/src/option/query.rs
 3	skip_var_list	0	1	crates/nvim/src/eval/vars/assign.rs
 3	slang_clear	0	1	crates/nvim/src/spell/slang.rs
@@ -2094,7 +2094,6 @@ count	callee	no_raw	defs	def
 2	skip_all	0	1	crates/nvim/src/autocmd/events.rs
 2	skip_anyof	0	1	crates/nvim/src/regexp/parse.rs
 2	skip_cmd_arg	0	1	crates/nvim/src/ex_docmd/scan.rs
-2	skip_colon_white	0	1	crates/nvim/src/ex_docmd/scan.rs
 2	skip_regexp_err	0	1	crates/nvim/src/regexp/parse.rs
 2	skip_tab	0	1	crates/nvim/src/tag/jump.rs
 2	skip_to_end_or_colon	0	1	crates/nvim/src/ops/join.rs
@@ -3595,6 +3594,7 @@ count	callee	no_raw	defs	def
 1	sign_unplace_cmd	0	1	crates/nvim/src/sign/command.rs
 1	sign_unplace_from_dict	0	1	crates/nvim/src/sign/vimscript.rs
 1	signal_event	0	1	crates/nvim/src/event/signal.rs
+1	skip_colon_white	0	1	crates/nvim/src/ex_docmd/scan.rs
 1	skip_to_arg	0	1	crates/nvim/src/strings/printf/spec.rs
 1	skip_to_newline	0	1	crates/nvim/src/charset/walk.rs
 1	skiphex	0	1	crates/nvim/src/charset/walk.rs

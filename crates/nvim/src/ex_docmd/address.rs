@@ -32,7 +32,6 @@ use crate::charset::{getdigits, getdigits_int32};
 use crate::cursor::{check_cursor, check_cursor_col};
 
 use crate::ex_docmd::lookup::find_ex_command;
-use crate::ex_docmd::scan::skip_colon_white;
 use crate::ex_docmd::window::{current_tab_nr, current_win_nr};
 use crate::ex_docmd::{
     INT32_MAX, e_backslash, e_invrange, e_line_number_out_of_range, e_no_errors, e_norange,
@@ -110,8 +109,8 @@ pub(super) fn tail() -> Buf {
 pub(crate) fn find_excmd_after_range(excmd: &mut ExArg) -> Option<usize> {
     let cmd = excmd.line.cmd;
     // SAFETY: `cmd` walks the command's own NUL-terminated line.
-    let skipped = unsafe { skip_range(excmd.line.ptr_at(cmd), ptr::null_mut()) };
-    excmd.line.cmd = excmd.line.offset_of(skipped);
+    // SAFETY: a null context is "not completing".
+    excmd.line.cmd = cmd + unsafe { skip_range(excmd.line.tail(cmd), ptr::null_mut()) };
     let end = find_ex_command(excmd, None);
     excmd.line.cmd = cmd;
     end
@@ -136,8 +135,7 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
         loop {
             excmd.line1 = excmd.line2;
             excmd.line2 = get_cmd_default_range(excmd);
-            let cmd_start = excmd.cmd_ptr();
-            excmd.set_cmd_ptr(skipwhite(cmd_start));
+            excmd.line.cmd = excmd.line.skip_white(excmd.line.cmd);
             // The scan advances a cursor of its own: the command is lent to
             // it for the quickfix addresses, so its `cmd` cannot be lent as
             // well.
@@ -166,23 +164,21 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
             address_count += 1;
             if lnum != MAXLNUM {
                 excmd.line2 = lnum;
-            } else if byte(excmd.cmd_ptr()) == '%' as c_int {
+            } else if excmd.line.byte_at(excmd.line.cmd) == b'%' {
                 // `%` is not an address, it is a whole range, so it is
                 // only recognised where an address was expected and
                 // none was found.
-                let cmd_start = excmd.cmd_ptr();
-                excmd.set_cmd_ptr(unsafe { cmd_start.add(1) });
+                excmd.line.cmd += 1;
                 if !whole_range(excmd, errormsg) {
                     break 'theend;
                 }
                 excmd.addr_count += 1;
-            } else if byte(excmd.cmd_ptr()) == '*' as c_int {
+            } else if excmd.line.byte_at(excmd.line.cmd) == b'*' {
                 if excmd.addr_type != CmdAddr::Lines {
                     *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                     break 'theend;
                 }
-                let cmd_start = excmd.cmd_ptr();
-                excmd.set_cmd_ptr(unsafe { cmd_start.add(1) });
+                excmd.line.cmd += 1;
                 if !excmd.skip {
                     let fm = mark_get_visual(Buf::current(), &raw mut first, '<' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
@@ -200,7 +196,7 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                 }
             }
             excmd.addr_count += 1;
-            if byte(excmd.cmd_ptr()) == ';' as c_int {
+            if excmd.line.byte_at(excmd.line.cmd) == b';' {
                 if !excmd.skip {
                     Win::current().w_cursor.lnum = excmd.line2;
                     // A zero line number is not a position, so only the
@@ -212,11 +208,10 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                     }
                     need_check_cursor = true;
                 }
-            } else if byte(excmd.cmd_ptr()) != ',' as c_int {
+            } else if excmd.line.byte_at(excmd.line.cmd) != b',' {
                 break;
             }
-            let cmd_start = excmd.cmd_ptr();
-            excmd.set_cmd_ptr(unsafe { cmd_start.add(1) });
+            excmd.line.cmd += 1;
         }
         if excmd.addr_count == 1 {
             excmd.line1 = excmd.line2;
@@ -297,54 +292,66 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
     true
 }
 
-/// Step over a range without resolving it. Used wherever the command word
-/// has to be found before the range can mean anything — the modifier scan,
-/// completion, and `find_excmd_after_range`.
+/// Step over a range without resolving it, answering how many bytes of
+/// `text` it took. Used wherever the command word has to be found before
+/// the range can mean anything — the modifier scan, completion, and
+/// [`find_excmd_after_range`].
+///
+/// The walk stops at the first NUL, so `text` may be a command line's cheap
+/// tail rather than one measured string.
 ///
 /// # Safety
 ///
-/// `cmd` must point at a NUL-terminated string. `ctx` must point at a live
-/// `ExpandContext`, unaliased for the call.
-pub unsafe fn skip_range(cmd: *const c_char, ctx: *mut ExpandContext) -> *mut c_char {
-    let mut cmd = cmd;
-    while has_char(c" \t0123456789.$%'/?-+,;\\", unsafe { *cmd } as u8 as c_int) {
-        if byte(cmd) == '\\' as c_int {
+/// `ctx` must be null or point at a live `ExpandContext`, unaliased for the
+/// call.
+pub unsafe fn skip_range(text: &[u8], ctx: *mut ExpandContext) -> usize {
+    let byte = |at: usize| text.get(at).copied().unwrap_or(0);
+    let nothing = || {
+        if !ctx.is_null() {
+            // SAFETY: the caller's promise.
+            unsafe { *ctx = ExpandContext::Nothing };
+        }
+    };
+    let mut at = 0;
+    while has_char(c" \t0123456789.$%'/?-+,;\\", c_int::from(byte(at))) {
+        if byte(at) == b'\\' {
             // Only `\/`, `\?` and `\&` are addresses; any other
             // backslash ends the range.
-            let next = byte(unsafe { cmd.add(1) });
-            if next != '?' as c_int && next != '/' as c_int && next != '&' as c_int {
+            if !matches!(byte(at + 1), b'?' | b'/' | b'&') {
                 break;
             }
-            cmd = unsafe { cmd.add(1) };
-        } else if byte(cmd) == '\'' as c_int {
-            cmd = unsafe { cmd.add(1) };
-            if byte(cmd) == NUL && !ctx.is_null() {
-                unsafe { *ctx = ExpandContext::Nothing };
+            at += 1;
+        } else if byte(at) == b'\'' {
+            at += 1;
+            if byte(at) == 0 {
+                nothing();
             }
-        } else if byte(cmd) == '/' as c_int || byte(cmd) == '?' as c_int {
-            let delim = unsafe { *cmd };
-            cmd = unsafe { cmd.add(1) };
-            while byte(cmd) != NUL && unsafe { *cmd } != delim {
-                let at = cmd;
-                cmd = unsafe { cmd.add(1) };
-                if byte(at) == '\\' as c_int && byte(cmd) != NUL {
-                    cmd = unsafe { cmd.add(1) };
+        } else if byte(at) == b'/' || byte(at) == b'?' {
+            let delim = byte(at);
+            at += 1;
+            while byte(at) != 0 && byte(at) != delim {
+                let escape = byte(at) == b'\\';
+                at += 1;
+                if escape && byte(at) != 0 {
+                    at += 1;
                 }
             }
-            if byte(cmd) == NUL && !ctx.is_null() {
-                unsafe { *ctx = ExpandContext::Nothing };
+            if byte(at) == 0 {
+                nothing();
             }
         }
-        if byte(cmd) != NUL {
-            cmd = unsafe { cmd.add(1) };
+        if byte(at) != 0 {
+            at += 1;
         }
     }
-    cmd = unsafe { skip_colon_white(cmd, false) };
-    // `:*` is the "last Visual area" range, spelled after the colons.
-    if byte(cmd) == '*' as c_int {
-        cmd = unsafe { skipwhite(cmd.add(1)) };
+    while byte(at) == b':' {
+        at += 1 + crate::charset::skip::white(&text[(at + 1).min(text.len())..]);
     }
-    cmd as *mut c_char
+    // `:*` is the "last Visual area" range, spelled after the colons.
+    if byte(at) == b'*' {
+        at += 1 + crate::charset::skip::white(&text[(at + 1).min(text.len())..]);
+    }
+    at
 }
 
 /// E493 or E481, depending on whether the command takes a range at all.

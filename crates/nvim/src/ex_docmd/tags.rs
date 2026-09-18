@@ -8,7 +8,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
@@ -84,9 +83,9 @@ pub(crate) fn ex_findpat(excmd: &mut ExArg) {
     if !excmd.skip {
         unsafe {
             find_pattern_in_path(
-                excmd.arg_ptr(),
+                excmd.line.ptr_at(excmd.line.arg),
                 kDirectionNotSet,
-                cstr::bytes_at(excmd.arg_ptr()).len(),
+                excmd.line.arg().len(),
                 whole,
                 !excmd.forceit,
                 if *excmd.cmd_ptr() as c_int == 'd' as c_int {

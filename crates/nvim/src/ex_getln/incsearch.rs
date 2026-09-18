@@ -153,7 +153,15 @@ pub unsafe fn parse_pattern_and_range(
     let _ = parse_command_modifiers(&mut ea, &mut dummy, &mut dummy_cmdmod, true);
 
     // Skip over the range to find the command.
-    let cmd = unsafe { skip_range(ea.cmd_ptr(), ::core::ptr::null_mut::<ExpandContext>()) };
+    // SAFETY: a null context is "not completing".
+    let at_cmd = ea.line.cmd
+        + unsafe {
+            skip_range(
+                ea.line.tail(ea.line.cmd),
+                ::core::ptr::null_mut::<ExpandContext>(),
+            )
+        };
+    let cmd = ea.line.ptr_at(at_cmd);
     if !has_char(c"sgvlu", at(cmd) as uint8_t as ::core::ffi::c_int) {
         return false;
     }

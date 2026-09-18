@@ -221,8 +221,8 @@ pub(crate) fn ex_find(excmd: &mut ExArg) {
     let fname = if !get_findfunc().is_empty() {
         unsafe {
             findfunc_find_file(
-                excmd.arg_ptr(),
-                cstr::bytes_at(excmd.arg_ptr()).len(),
+                excmd.line.ptr_at(excmd.line.arg),
+                excmd.line.arg().len(),
                 count,
             )
         }

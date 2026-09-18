@@ -10,7 +10,6 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext_ptr;
@@ -136,11 +135,11 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         // The argument names the other buffer, by number or by pattern.
         // SAFETY: the command's own NUL-terminated argument; `p` walks back
         // over its own bytes and stops at its start.
-        let mut p = unsafe { excmd.arg_ptr().add(cstr::bytes_at(excmd.arg_ptr()).len()) };
-        // SAFETY: as above.
-        while p > excmd.arg_ptr() && ascii_iswhite(unsafe { *p.sub(1) } as c_int) {
-            p = p.wrapping_sub(1);
+        let mut at = excmd.line.end_of(excmd.line.arg);
+        while at > excmd.line.arg && ascii_iswhite(c_int::from(excmd.line.byte_at(at - 1))) {
+            at -= 1;
         }
+        let p = excmd.line.ptr_at(at);
         let mut digits = 0;
         // SAFETY: the walk stops at `p`, which is inside the argument.
         while unsafe {

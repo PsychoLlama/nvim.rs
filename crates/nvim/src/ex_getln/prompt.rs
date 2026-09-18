@@ -40,7 +40,7 @@ pub unsafe fn script_get(excmd: &mut ExArg, lenp: *mut size_t) -> *mut ::core::f
         || unsafe { *cmd.offset(1) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
         || excmd.ea_getline.is_none()
     {
-        unsafe { *lenp = cstr::bytes_at(excmd.arg_ptr()).len() };
+        unsafe { *lenp = excmd.line.arg().len() };
         if excmd.skip {
             return ::core::ptr::null_mut();
         }

@@ -17,7 +17,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -274,11 +273,12 @@ pub(crate) unsafe fn execute_cmd0(
             {
                 unsafe { skiptowhite_esc(excmd.arg_ptr()) }
             } else {
-                let mut p = unsafe { excmd.arg_ptr().add(cstr::bytes_at(excmd.arg_ptr()).len()) };
-                while p > excmd.arg_ptr() && ascii_iswhite(byte(unsafe { p.sub(1) })) {
-                    p = unsafe { p.sub(1) };
+                let mut at = excmd.line.end_of(excmd.line.arg);
+                while at > excmd.line.arg && ascii_iswhite(c_int::from(excmd.line.byte_at(at - 1)))
+                {
+                    at -= 1;
                 }
-                p
+                excmd.line.ptr_at(at)
             };
             excmd.line2 = buflist_findpat(
                 excmd.arg_ptr(),

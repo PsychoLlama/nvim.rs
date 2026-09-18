@@ -190,10 +190,8 @@ pub(crate) fn parse_command_modifiers(
         // A modifier may follow a range (`:1,2 silent print`), so the
         // name is looked for past one — but `args.cmd` only moves for
         // the modifiers that accept that.
-        // SAFETY: the command's own NUL-terminated line, and a null context
-        // is "not completing".
-        let skipped = unsafe { skip_range(excmd.line.ptr_at(cmd), ptr::null_mut()) };
-        let mut at = excmd.line.offset_of(skipped);
+        // SAFETY: a null context is "not completing".
+        let mut at = cmd + unsafe { skip_range(excmd.line.tail(cmd), ptr::null_mut()) };
         match excmd.line.byte_at(at) {
             b'a' => {
                 if !takes(excmd, b"aboveleft", 3) {

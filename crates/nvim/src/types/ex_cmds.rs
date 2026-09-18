@@ -397,7 +397,7 @@ impl CmdLine {
     /// the difference between a `skipwhite` and a `strlen` at every step of
     /// the parse, and a bench said so: `evalbench` +2.5 % when these three
     /// and `check_for_word` went through `rest_of`.
-    fn tail(&self, at: usize) -> &[u8] {
+    pub fn tail(&self, at: usize) -> &[u8] {
         &self.text[at.min(self.text.len())..]
     }
 
