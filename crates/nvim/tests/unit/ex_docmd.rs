@@ -729,6 +729,50 @@ fn separate_nextcmd_cuts_the_argument_at_the_bar_that_ends_it() {
     );
 }
 
+/// `CmdLine::find_next` is upstream's `find_nextcmd`, which every `:syntax`
+/// subcommand calls before it looks at its argument at all. It is the
+/// *search* for a separator, where `check_next` asks whether one is already
+/// under the cursor -- and unlike `separate_nextcmd` it recognises neither an
+/// escape nor a comment, because the commands that use it take an argument
+/// no bar can appear in.
+#[test]
+fn find_next_looks_for_the_separator_that_check_next_only_tests_for() {
+    #[track_caller]
+    fn find(line: &str, at: usize) -> Option<String> {
+        let cmdline = CmdLine::from_bytes(line.as_bytes());
+        cmdline
+            .find_next(at)
+            .map(|next| text(cmdline.rest_of(next)))
+    }
+    #[track_caller]
+    fn check(line: &str, at: usize) -> Option<String> {
+        let cmdline = CmdLine::from_bytes(line.as_bytes());
+        cmdline
+            .check_next(at)
+            .map(|next| text(cmdline.rest_of(next)))
+    }
+
+    // The answer is what follows the separator, terminator included.
+    assert_eq!(find("on | echo 1", 0), Some(" echo 1".to_string()));
+    assert_eq!(find("on \n echo 1", 0), Some(" echo 1".to_string()));
+    // No separator at all, and a separator before the offset, both answer
+    // nothing: the search starts at `at`.
+    assert_eq!(find("on", 0), None);
+    assert_eq!(find("on | echo 1", 5), None);
+    // A backslash does not escape it here, where `separate_nextcmd` would
+    // have taken the bar into the argument.
+    assert_eq!(find(r"on \| echo 1", 0), Some(" echo 1".to_string()));
+    // The search stops at the line's own NUL, so a bar in a *later* string
+    // in the same buffer is not found.
+    assert_eq!(find("on", 3), None);
+
+    // `check_next` is the other question: it skips white space and then
+    // demands the separator be right there.
+    assert_eq!(check("  | echo 1", 0), Some(" echo 1".to_string()));
+    assert_eq!(check("on | echo 1", 0), None);
+    assert_eq!(check("on | echo 1", 2), Some(" echo 1".to_string()));
+}
+
 #[test]
 fn parse_cmd_reports_a_user_commands_name_and_every_argument() {
     let editor = editor_lock();
