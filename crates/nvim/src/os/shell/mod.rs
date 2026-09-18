@@ -264,7 +264,7 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
         }
 
         if emsg_silent.get() == 0 && exitcode != 0 && !opts.has(ShellOpts::SILENT) {
-            msg_ext_set_kind(c"shell_ret".as_ptr());
+            msg_ext_set_kind(c"shell_ret");
             if !ui_has(kUIMessages) {
                 msg_putchar(NL);
             }

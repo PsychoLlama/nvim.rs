@@ -80,7 +80,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
     // and buffer.
     let mut items: Vec<OptIndex> = Vec::with_capacity(kOptCount as usize);
 
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     let title = if opt_flags.has(OptionSetFlags::GLOBAL) {
         c"\n--- Global option values ---"
     } else if opt_flags.has(OptionSetFlags::LOCAL) {

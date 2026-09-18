@@ -58,7 +58,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
     }
     let (win, buf) = (Win::current(), Buf::current());
     // SAFETY: a `'static` C string.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
 
     // `'<` is whichever end of the Visual range comes FIRST, so a selection
     // made backwards still lists in order.

@@ -182,7 +182,7 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
             // Echo the command; it is not remembered in the message history.
             say::start();
             // SAFETY: main thread, message state; `cmd` is a live string.
-            unsafe { msg_ext_set_kind(c"shell_cmd".as_ptr()) };
+            msg_ext_set_kind(c"shell_cmd");
             say::putchar(':' as c_int);
             say::putchar('!' as c_int);
             msg_display(unsafe { cstr::at(cmd) }, 0, false);
@@ -831,7 +831,7 @@ pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
     info_message.set(true); // use stdout, not stderr
     if (global_busy.get() == 0 || global_need_msg_kind.get()) && first {
         say::start();
-        unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+        msg_ext_set_kind(c"list_cmd");
         global_need_msg_kind.set(false);
     } else if !save_silent {
         // don't want trailing newline with regular messaging

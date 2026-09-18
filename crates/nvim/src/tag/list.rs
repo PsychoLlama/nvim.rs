@@ -71,7 +71,7 @@ pub(crate) unsafe fn print_tag_list(
         // Overwrite the previous message.
         msg_didout.set(false);
     }
-    unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
+    msg_ext_set_kind(c"confirm");
     msg_start();
     msg_str_hl(gettext(c"  # pri kind tag"), HLF_T, false);
     msg_clr_eos();

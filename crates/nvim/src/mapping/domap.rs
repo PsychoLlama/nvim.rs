@@ -195,7 +195,7 @@ pub(crate) fn buf_do_map(
     let do_print = !has_lhs || (!is_unmap && !has_rhs);
     if do_print {
         // SAFETY: a static NUL-terminated kind name.
-        unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+        msg_ext_set_kind(c"list_cmd");
     }
 
     'theend: {

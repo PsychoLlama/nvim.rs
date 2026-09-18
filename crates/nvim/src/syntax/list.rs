@@ -29,7 +29,7 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
         return;
     }
 
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     if !syntax_present(Win::current()) {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;

@@ -139,7 +139,7 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     unsafe { spell_find_suggest(badword, badlen, su, limit, true, need_cap, true) };
 
     let mut selected = count;
-    unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
+    msg_ext_set_kind(c"confirm");
     if sug.su_ga.len() as c_int <= 0 {
         msg(gettext(c"No suggestions"), 0);
     } else if count > 0 {

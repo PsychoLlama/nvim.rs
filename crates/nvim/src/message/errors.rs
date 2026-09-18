@@ -160,10 +160,10 @@ pub(crate) fn emsg_not_now() -> bool {
 /// rather than escaping them.
 ///
 /// # Safety
-/// `s` must be a valid C string; `kind` may be null.
+/// `s` must be a valid C string.
 pub unsafe fn emsg_multiline(
     s: *const c_char,
-    kind: *const c_char,
+    kind: Option<&CStr>,
     hl_id: c_int,
     multiline: bool,
 ) -> bool {
@@ -284,7 +284,7 @@ pub unsafe fn emsg_multiline(
     if msg_scrolled.get() != 0 {
         need_wait_return.set(true); // needed in case emsg() is called after wait_return() has cleared it
     }
-    unsafe { msg_ext_set_kind(kind) };
+    msg_ext_set_kind_opt(kind);
     msg_scroll.set(1); // don't overwrite a previous message
 
     // Skip the flush until the whole message has been written, so that the
@@ -301,7 +301,7 @@ pub unsafe fn emsg_multiline(
 /// Show an error message.
 pub fn emsg(s: &CStr) -> bool {
     // SAFETY: a `CStr` is a valid C string, which is the whole contract.
-    unsafe { emsg_multiline(s.as_ptr(), c"emsg".as_ptr(), HLF_E, false) }
+    unsafe { emsg_multiline(s.as_ptr(), Some(c"emsg"), HLF_E, false) }
 }
 
 /// [`emsg`] for a message still held as a raw pointer.
@@ -310,7 +310,7 @@ pub fn emsg(s: &CStr) -> bool {
 /// `s` must be a valid C string.
 pub(crate) unsafe fn emsg_ptr(s: *const c_char) -> bool {
     // SAFETY: the caller's contract.
-    unsafe { emsg_multiline(s, c"emsg".as_ptr(), HLF_E, false) }
+    unsafe { emsg_multiline(s, Some(c"emsg"), HLF_E, false) }
 }
 
 /// "E354: Invalid register name" for register `name`.
@@ -363,7 +363,7 @@ pub unsafe fn internal_error(where_0: *const c_char) {
 #[doc(hidden)]
 pub(crate) fn emsg_multiline_text(text: &CStr, kind: &CStr) -> bool {
     // SAFETY: both are valid C strings, which is the whole contract.
-    unsafe { emsg_multiline(text.as_ptr(), kind.as_ptr(), HLF_E, true) }
+    unsafe { emsg_multiline(text.as_ptr(), Some(kind), HLF_E, true) }
 }
 
 /// Show `text` as a warning. [`swmsg!`](crate::swmsg)'s tail.
@@ -407,7 +407,7 @@ pub(crate) unsafe extern "C" fn msg_semsg_event(argv: *mut *mut c_void) {
 /// As [`msg_semsg_event`].
 pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void) {
     let s: *mut c_char = unsafe { (*argv).cast() };
-    unsafe { emsg_multiline(s, c"emsg".as_ptr(), HLF_E, true) };
+    unsafe { emsg_multiline(s, Some(c"emsg"), HLF_E, true) };
     unsafe { xfree(s.cast()) };
 }
 
@@ -431,7 +431,7 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
     keep_msg_hl_id.set(if hl { HLF_W } else { 0 });
 
     if msg_ext_kind.with(String_0::is_null) {
-        unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
+        msg_ext_set_kind(c"wmsg");
     }
     if unsafe { msg_ptr(message, keep_msg_hl_id.get()) } && msg_scrolled.get() == 0 {
         unsafe { set_keep_msg(message, keep_msg_hl_id.get()) };

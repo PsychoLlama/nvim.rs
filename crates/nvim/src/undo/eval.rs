@@ -71,7 +71,7 @@ pub fn ex_undolist(_excmd: &mut ExArg) {
         .collect();
 
     // SAFETY: a NUL-terminated literal.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     if rows.is_empty() {
         msg(gettext(c"Nothing to undo"), 0);
         return;

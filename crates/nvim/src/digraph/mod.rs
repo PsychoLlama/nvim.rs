@@ -360,7 +360,7 @@ fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
 /// them under Unicode block headers.
 pub fn listdigraphs(use_headers: bool) {
     // SAFETY: static string argument, message state only.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     newline();
     let mut previous: c_int = 0;
     for dp in tables::DEFAULT_DIGRAPHS.iter() {

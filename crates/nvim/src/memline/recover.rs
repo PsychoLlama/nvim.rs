@@ -123,7 +123,7 @@ pub fn ml_recover(checkext: bool) {
         unsafe { (*mfp).mf_page_size = MIN_SWAP_PAGE_SIZE };
 
         let hl_id = HLF_E;
-        unsafe { msg_ext_set_kind(c"emsg".as_ptr()) };
+        msg_ext_set_kind(c"emsg");
         hp = unsafe { mf_get(mfp, 0, 1) };
         if hp.is_null() {
             msg_start();
@@ -211,7 +211,7 @@ pub fn ml_recover(checkext: bool) {
             }
         }
 
-        unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
+        msg_ext_set_kind(c"wmsg");
         msg_ext_skip_flush.set(true);
         let (out, room) = (path.as_mut_ptr(), MAXPATHL as size_t);
         unsafe { home_replace(None, mf_fname(mfp), out, room, true) };
@@ -686,7 +686,7 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
     }
     if error != 0 {
         let no_prompt = Suppress::wait_return();
-        unsafe { msg_ext_set_kind(c"emsg".as_ptr()) };
+        msg_ext_set_kind(c"emsg");
         msg(c">>>>>>>>>>>>>\n", 0);
         unsafe {
             emsg_ptr(tr(
@@ -700,7 +700,7 @@ unsafe fn report_recovery(error: c_int, b0p: *const ZeroBlock, fname_used: *cons
         return;
     }
 
-    unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
+    msg_ext_set_kind(c"wmsg");
     if Buf::current().b_changed != 0 {
         tell(
             c"Recovery completed. You should check if everything is OK.",

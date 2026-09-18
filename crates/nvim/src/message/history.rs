@@ -116,15 +116,9 @@ pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data:
         unsafe { xmalloc(::core::mem::size_of::<MessageHistoryEntry>()) }.cast();
     unsafe { (*entry).msg = msg };
     unsafe { (*entry).temp = temp };
-    let kind = msg_ext_kind.with(|kind| {
-        if kind.is_null() {
-            ptr::null_mut()
-        } else {
-            // SAFETY: a non-null kind is NUL-terminated.
-            unsafe { xstrdup(kind.data()) }
-        }
-    });
-    unsafe { (*entry).kind = kind };
+    // `entry` is `xmalloc`ed, so the slot holds garbage: an owning field has
+    // to be *written*, never assigned, or the assignment drops the garbage.
+    unsafe { (&raw mut (*entry).kind).write(msg_ext_kind.with(String_0::clone)) };
     unsafe { (*entry).prev = msg_hist_last.get() };
     unsafe { (*entry).next = ptr::null_mut() };
     // NOTE: this does not encode whether the message was actually appended
@@ -169,7 +163,9 @@ unsafe fn msg_hist_free_msg(entry: *mut MessageHistoryEntry) {
         msg_hist_temp.set(unsafe { (*entry).next });
     }
     unsafe { hl_msg_free((*entry).msg.clone()) };
-    unsafe { xfree((*entry).kind.cast()) };
+    // The entry's block goes to `xfree`, which runs no destructor, so the
+    // owning field is read out and dropped by hand first.
+    drop(unsafe { (&raw const (*entry).kind).read() });
     unsafe { xfree(entry.cast()) };
 }
 
@@ -295,8 +291,7 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
         content.push(Object::array(content_entry));
     }
 
-    // SAFETY: the caller's entry; its kind is null or NUL-terminated.
-    out.push(Object::string(unsafe { cstr_to_string((*entry).kind) }));
+    out.push(Object::string(unsafe { (*entry).kind.clone() }));
     out.push(Object::array(content));
     out.push(Object::boolean(unsafe { (*entry).append }));
     Object::array(out)
@@ -355,10 +350,13 @@ pub fn ex_messages(excmd: &mut ExArg) {
                 msg_silent.set(msg_silent.get() + c_int::from(ui_has(kUIMessages)));
                 let mut needs_clear = false;
                 let text = unsafe { (*p).msg.clone() };
-                let kind = unsafe { (*p).kind };
+                // Copied, not borrowed: `msg_multihl` pumps the event loop,
+                // which can trim the history out from under `p`.
+                let kind = unsafe { (*p).kind.clone() };
                 let no_id = ptr::null_mut();
                 let clear = &raw mut needs_clear;
                 let nil = Object::Nil;
+                let kind = (!kind.is_null()).then(|| kind.as_cstr());
                 unsafe { msg_multihl(nil, text, kind, false, false, no_id, clear) };
                 msg_silent.set(msg_silent.get() - c_int::from(ui_has(kUIMessages)));
             }

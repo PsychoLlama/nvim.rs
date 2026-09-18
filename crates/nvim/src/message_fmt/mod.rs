@@ -146,6 +146,13 @@ pub(crate) fn msg_cstr(text: &CStr) -> CDisplay<'_> {
     CDisplay(Some(text))
 }
 
+/// An optional `&CStr` as a message argument: `None` renders `[NULL]`, which
+/// is what [`c_str`] writes for a null pointer -- so a call site that has
+/// replaced its pointer with an `Option<&CStr>` keeps its bytes.
+pub(crate) fn msg_cstr_opt(text: Option<&CStr>) -> CDisplay<'_> {
+    CDisplay(text)
+}
+
 /// A pointer [`c_str`] takes: the two spellings of a C string the tree holds.
 pub(crate) trait CPtr {
     /// The pointer, read-only.

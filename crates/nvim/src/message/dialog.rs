@@ -317,7 +317,7 @@ pub(crate) fn display_confirm_msg() {
     // Avoid that 'q' at the more prompt truncates the message here.
     let _in_use = Suppress::counter(&confirm_msg_used);
     if !confirm_msg.get().is_null() {
-        unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
+        msg_ext_set_kind(c"confirm");
         msg_str_hl(unsafe { cstr::at(confirm_msg.get()) }, HLF_M, false);
     }
 }

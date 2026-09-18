@@ -165,9 +165,9 @@ unsafe extern "C" fn out_data_event(argv: *mut *mut c_void) {
         let is_stderr = fd == STDERR_FILENO;
         let hl = if is_stderr { HLF_SE } else { HLF_SO } as c_int;
         msg_ext_set_kind(if is_stderr {
-            c"shell_err".as_ptr()
+            c"shell_err"
         } else {
-            c"shell_out".as_ptr()
+            c"shell_out"
         });
         msg_ext_set_append(true);
         let mut need_clear = true;

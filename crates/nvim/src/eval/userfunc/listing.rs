@@ -28,7 +28,7 @@ pub(crate) fn list_functions(mut pattern: Option<&mut RegMatch>) {
     let mut todo = func_table().used();
     let mut idx = 0;
 
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     while todo > 0 && !got_int.get() {
         let hi = func_table().slot(idx);
         if hi.is_kept() {
@@ -121,7 +121,7 @@ pub(crate) unsafe fn list_one_function(
     // Check no function was added or removed from a callback, and
     // therefore that `fp` is still the function this started on.
     let prev_ht_changed = func_table().changed();
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     if unsafe { list_func_head(fp, !excmd.forceit, excmd.forceit) }.is_err() {
         return fp;
     }

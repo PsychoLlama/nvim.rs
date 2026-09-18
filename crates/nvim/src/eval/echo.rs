@@ -104,7 +104,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
                 atstart = false;
                 msg_ext_set_append(excmd.cmdidx == CmdIdx::echon);
                 // SAFETY: the kind is a NUL-terminated literal.
-                unsafe { msg_ext_set_kind(c"echo".as_ptr()) };
+                msg_ext_set_kind(c"echo");
                 if excmd.cmdidx == CmdIdx::echo {
                     if !msg_didout.get() {
                         msg_sb_eol();
@@ -220,7 +220,7 @@ pub fn ex_execute(excmd: &mut ExArg) {
         let line = text.as_mut_ptr().cast::<c_char>();
         if excmd.cmdidx == CmdIdx::echomsg {
             // SAFETY: the kind is a NUL-terminated literal.
-            unsafe { msg_ext_set_kind(c"echomsg".as_ptr()) };
+            msg_ext_set_kind(c"echomsg");
             // SAFETY: `line` is the NUL-terminated message built above.
             unsafe { msg_ptr(line, echo_hl_id.get()) };
         } else if excmd.cmdidx == CmdIdx::echoerr {
@@ -229,7 +229,7 @@ pub fn ex_execute(excmd: &mut ExArg) {
             let save_did_emsg = did_emsg.get();
             // SAFETY: `line` is the NUL-terminated message built above, and
             // the kind is a literal.
-            unsafe { emsg_multiline(line, c"echoerr".as_ptr(), HLF_E, true) };
+            unsafe { emsg_multiline(line, Some(c"echoerr"), HLF_E, true) };
             if !force_abort.get() {
                 did_emsg.set(save_did_emsg);
             }

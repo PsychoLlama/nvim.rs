@@ -279,7 +279,7 @@ unsafe fn list_one_var_a(
     // bytes or NULL. Every callee below writes to the message area.
     let is_first = unsafe { *first } != 0;
     if is_first {
-        unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+        msg_ext_set_kind(c"list_cmd");
         msg_start();
     } else {
         msg_putchar(b'\n' as c_int);

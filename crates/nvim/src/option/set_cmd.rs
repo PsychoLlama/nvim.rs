@@ -556,7 +556,7 @@ unsafe fn show_one(
     if *did_show {
         msg_putchar('\n' as c_int);
     } else {
-        unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+        msg_ext_set_kind(c"list_cmd");
         gotocmdline(true);
         *did_show = true;
     }

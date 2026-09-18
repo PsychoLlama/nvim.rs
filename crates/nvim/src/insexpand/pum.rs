@@ -750,7 +750,7 @@ pub(crate) fn ins_compl_show_statusmsg() {
         // SAFETY: a static kind name, and `extra` is a NUL-terminated
         // message set above or by the caller.
         unsafe {
-            msg_ext_set_kind(c"completion".as_ptr());
+            msg_ext_set_kind(c"completion");
             msg_ptr(extra, attr);
         }
         msg_hist_off.set(false);

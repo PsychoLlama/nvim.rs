@@ -306,7 +306,7 @@ pub(crate) fn list_lua_version() {
 /// (or `:verbose version`) adds the build and path details.
 pub(crate) fn list_version() {
     // SAFETY: the caller's obligation.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     msg_str(LONG_VERSION);
     msg_putchar(b'\n' as c_int);
     // The Nvim release this port tracks -- the version every

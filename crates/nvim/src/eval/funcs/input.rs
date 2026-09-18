@@ -173,7 +173,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     // Start at the bottom of the screen so the whole list is visible.
-    unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
+    msg_ext_set_kind(c"confirm");
     msg_start();
     msg_row.set(Rows.get() - 1);
     lines_left.set(Rows.get());

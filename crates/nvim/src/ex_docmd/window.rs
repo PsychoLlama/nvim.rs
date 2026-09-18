@@ -362,7 +362,7 @@ fn tabmove(excmd: &mut ExArg) {
 /// `:tabs` — every tab page, with its windows.
 pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
     // SAFETY: writes the message area.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     msg_start();
     msg_scroll.set(1);
 

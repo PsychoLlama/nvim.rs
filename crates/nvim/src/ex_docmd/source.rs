@@ -313,7 +313,7 @@ pub fn handle_did_throw() {
         let mut m = messages;
         while !m.is_null() {
             let next = unsafe { (*m).next };
-            unsafe { emsg_multiline((*m).msg, c"emsg".as_ptr(), HLF_E, (*m).multiline) };
+            unsafe { emsg_multiline((*m).msg, Some(c"emsg"), HLF_E, (*m).multiline) };
             unsafe { xfree((*m).msg as *mut c_void) };
             unsafe { xfree((*m).sfile as *mut c_void) };
             xfree(m as *mut c_void);

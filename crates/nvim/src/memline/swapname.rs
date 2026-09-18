@@ -532,7 +532,7 @@ unsafe fn ask_about_swapfile(buffer: Buf, fname: *mut c_char) -> SwapExistsChoic
         msg_reset_scroll();
     } else {
         let mut need_clear = false;
-        unsafe { msg_ext_set_kind(c"wmsg".as_ptr()) };
+        msg_ext_set_kind(c"wmsg");
         let text = String_0::from_bytes(&msg);
         let clear = &raw mut need_clear;
         unsafe { msg_multiline(text, 0, false, false, clear) };
@@ -725,7 +725,7 @@ pub unsafe fn recover_names(
     msg_ext_skip_flush.set(true);
     if do_list {
         // Use msg() to start the scrolling properly.
-        unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+        msg_ext_set_kind(c"list_cmd");
         tell(c"Swap files found:", 0);
         msg_putchar('\n' as c_int);
     }

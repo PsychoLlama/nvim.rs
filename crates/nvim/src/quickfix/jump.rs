@@ -323,7 +323,7 @@ unsafe fn qf_jump_print_msg(
     {
         msg_scroll.set(false as c_int);
     }
-    unsafe { msg_ext_set_kind(c"quickfix".as_ptr()) };
+    msg_ext_set_kind(c"quickfix");
     unsafe { msg_keep(text.as_ptr().cast(), 0, true, false) };
     msg_scroll.set(old_msg_scroll);
     release_scratch();

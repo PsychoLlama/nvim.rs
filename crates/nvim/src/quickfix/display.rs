@@ -241,7 +241,7 @@ pub fn qf_list(excmd: &mut ExArg) {
     // Without "!" only recognised entries are listed — unless none of
     // them is recognised, when they all are.
     let all = excmd.forceit || qfl.qf_nonevalid;
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     let mut i: c_int = 1;
     let mut qfp = qfl.qf_start;
     while !got_int.get() && i <= qfl.qf_count && !qfp.is_null() {

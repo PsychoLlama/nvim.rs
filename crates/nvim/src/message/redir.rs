@@ -172,7 +172,7 @@ pub fn verbose_enter() {
         if msg_ext_kind.with(|kind| kind.as_bytes() != VERBOSE_KIND.to_bytes()) {
             pre_verbose_kind.set(msg_ext_kind.with(String_0::clone));
         }
-        unsafe { msg_ext_set_kind(VERBOSE_KIND.as_ptr()) };
+        msg_ext_set_kind(VERBOSE_KIND);
     }
     msg_ext_skip_verbose.set(false);
 }
@@ -188,8 +188,7 @@ pub fn verbose_leave() {
     }
     let previous = pre_verbose_kind.take();
     if !previous.is_null() {
-        // SAFETY: an owned, NUL-terminated kind.
-        unsafe { msg_ext_set_kind(previous.data()) };
+        msg_ext_set_kind(previous.as_cstr());
     }
 }
 

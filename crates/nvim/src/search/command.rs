@@ -296,7 +296,7 @@ unsafe fn echo_search_cmd(
 
     // Compute msg_row early.
     msg_start();
-    unsafe { msg_ext_set_kind(c"search_cmd".as_ptr()) };
+    msg_ext_set_kind(c"search_cmd");
 
     let mut off_buf: [c_char; 40] = [0; 40];
     let off_len = if cmd_silent.get() {

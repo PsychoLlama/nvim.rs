@@ -143,7 +143,7 @@ pub(crate) fn ex_lsp(excmd: &mut ExArg) {
     if let Err(e) = ran {
         // SAFETY: the refusal owns its message.
         let why = e.message_or_empty().as_ptr();
-        unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
+        unsafe { emsg_multiline(why, Some(c"lua_error"), HLF_E, true) };
     }
 }
 

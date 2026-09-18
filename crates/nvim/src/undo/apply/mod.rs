@@ -119,7 +119,7 @@ pub(crate) fn u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
     let empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
     u_oldcount.set(if empty { -1 } else { 0 });
     // SAFETY: a NUL-terminated literal.
-    unsafe { msg_ext_set_kind(c"undo".as_ptr()) };
+    msg_ext_set_kind(c"undo");
 
     let mut count = startcount;
     let mut first = true;

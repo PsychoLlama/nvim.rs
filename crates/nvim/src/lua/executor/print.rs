@@ -75,7 +75,7 @@ unsafe extern "C" fn nlua_print_event(argv: *mut *mut c_void) {
         msg_multihl(
             Object::Nil,
             msg,
-            LUA_PRINT_KIND.as_ptr(),
+            Some(LUA_PRINT_KIND),
             true,
             false,
             ptr::null_mut::<MessageData>(),

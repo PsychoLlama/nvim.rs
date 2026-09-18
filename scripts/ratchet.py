@@ -1318,12 +1318,12 @@ INSTRUMENTS = {
     # Upstream's `msg_puts`/`msg_outtrans` family is gone: what took their
     # place is `msg_str`/`msg_bytes`/`msg_display*`, which take `&CStr` and
     # `&[u8]`. Spelling the old names kept the number at a flattering zero
-    # while eight pointer forms were still in the tree, so the needle names
-    # the ones that *exist* -- every message entry point whose text (or, for
-    # `msg_multihl`, whose kind) still arrives as a raw C string.
+    # while the pointer forms below were still in the tree, so the needle
+    # names the ones that *exist* -- every message entry point whose text
+    # still arrives as a raw C string. A name leaves this list when its
+    # signature stops taking one, which is what makes the number fall.
     "msg_raw": re.compile(
-        r"\bmsg_(?:ptr|keep|trunc|may_trunc|strtrunc|prt_line|progress"
-        r"|multihl|ext_set_kind)\("
+        r"\bmsg_(?:ptr|keep|trunc|may_trunc|strtrunc|prt_line|progress)\("
     ),
     "bytes_at": re.compile(r"\bbytes_at\("),
     "vval_raw": re.compile(r"\.vval\."),
@@ -4160,7 +4160,7 @@ SELF_TEST_INSTRUMENTS = [
             "    ml_get(lnum);\n    ml_get_buf_len(buf, lnum);\n"
             "    buf.line_raw(lnum);\n    buf.line_len_raw(lnum);\n"
             "    get_cursor_pos_ptr();\n    buf.lines().line(lnum);\n"
-            "    msg_keep(s, hl, false, false);\n    msg_ext_set_kind(k);\n"
+            "    msg_keep(s, hl, false, false);\n    msg_ptr(s, hl);\n"
             "    msg_str(s);\n    msg_bytes(b, hl, false);\n"
             "}\n",
         },

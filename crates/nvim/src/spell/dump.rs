@@ -78,7 +78,7 @@ pub fn ex_spellinfo(_excmd: &mut ExArg) {
         return;
     }
 
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     msg_start();
     // SAFETY: the current window and its syntax block are live.
     let langp = unsafe { &(*Win::current().w_s).b_langp };

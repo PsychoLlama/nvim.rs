@@ -129,7 +129,7 @@ pub fn buflist_list(excmd: &mut ExArg) {
     // SAFETY: as above.
     let forceit = excmd.forceit;
     // SAFETY: a NUL-terminated literal naming the message kind.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
 
     // With "t", the list is shown most-recently-used first.
     let sorted = has_flag(arg, b't').then(sorted_by_last_used);

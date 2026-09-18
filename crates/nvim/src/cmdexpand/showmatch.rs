@@ -202,7 +202,7 @@ pub unsafe fn showmatches(
         ui_flush();
         cmdline_row.set(msg_row.get());
         msg_didany.set(false); // lines_left will be set again
-        unsafe { msg_ext_set_kind(c"wildlist".as_ptr()) };
+        msg_ext_set_kind(c"wildlist");
         msg_start(); // prepare for paging
     }
 

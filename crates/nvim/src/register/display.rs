@@ -184,7 +184,7 @@ pub fn ex_display(excmd: &mut ExArg) {
     let hl_id = HLF_8;
 
     // SAFETY (both): main thread, printing NUL-terminated literals.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     msg_ext_skip_flush.set(true);
     msg_title(gettext(c"\nType Name Content"));
 

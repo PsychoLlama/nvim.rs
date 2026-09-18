@@ -205,7 +205,10 @@ pub struct MsgHist {
     pub next: *mut MsgHist,
     pub prev: *mut MsgHist,
     pub msg: HlMessage,
-    pub kind: *mut ::core::ffi::c_char,
+    /// The `ext_messages` kind this message was shown under, owned by the
+    /// entry. [`String_0::NULL`] is "no kind", which is not the empty kind:
+    /// a UI reading the history sees the difference.
+    pub kind: String_0,
     pub temp: bool,
     pub append: bool,
 }
@@ -417,12 +420,11 @@ pub(crate) static is_multihl: GlobalCell<c_int> = GlobalCell::new(0);
 /// allocated one when it is nil.
 ///
 /// # Safety
-/// `hl_msg` must be a valid message, `kind` null or a valid C string, and
-/// `needs_msg_clear` a writable `bool`.
+/// `hl_msg` must be a valid message and `needs_msg_clear` a writable `bool`.
 pub unsafe fn msg_multihl(
     id: Object,
     hl_msg: HlMessage,
-    kind: *const c_char,
+    kind: Option<&CStr>,
     history: bool,
     err: bool,
     msg_data: *mut MessageData,
@@ -446,7 +448,7 @@ pub unsafe fn msg_multihl(
         id
     };
 
-    let is_progress = unsafe { strequal(kind, c"progress".as_ptr()) };
+    let is_progress = kind == Some(c"progress");
     // Don't display a progress message on the command line when the
     // target does not include it.
     if is_progress && progress_msg_target.get() & PROGRESS_TARGET_CMD == 0 {
@@ -459,8 +461,8 @@ pub unsafe fn msg_multihl(
     msg_clr_eos();
     let mut need_clear = false;
     let mut hl_msg_updated = false;
-    if !kind.is_null() {
-        unsafe { msg_ext_set_kind(kind) };
+    if kind.is_some() {
+        msg_ext_set_kind_opt(kind);
     }
     msg_ext_skip_flush.set(true);
     msg_ext_id.set(id.clone());
@@ -485,9 +487,7 @@ pub unsafe fn msg_multihl(
         }
         debug_assert!(
             !ui_has(kUIMessages)
-                || kind.is_null()
-                // SAFETY: `kind` is the caller's NUL-terminated string.
-                || msg_ext_kind.with(|held| held.as_bytes() == unsafe { cstr::bytes_at(kind) })
+                || kind.is_none_or(|kind| msg_ext_kind.with(|held| held.as_bytes() == kind.to_bytes()))
         );
     }
 

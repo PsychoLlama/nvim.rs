@@ -21,9 +21,9 @@ use crate::api::private::validate::{err_expected, err_out_of_range, err_required
 use crate::api_error;
 use crate::guard::Suppress;
 use crate::message::EMPTY_HL_MESSAGE;
-use crate::message_fmt::c_str;
+use crate::message_fmt::msg_cstr_opt;
 use crate::winlayer::Live;
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 
 /// The decoded `nvim_echo` keyset, whose caller has promised it outlives the
 /// value.
@@ -72,21 +72,21 @@ pub unsafe fn nvim_echo(
         return Err(e);
     }
 
-    let mut kind: *mut c_char = opts.kind.as_ref().unwrap_or(&no_string).data();
+    let given_kind = opts.kind.as_ref().unwrap_or(&no_string);
     if verbose {
         verbose_enter();
-    } else if kind.is_null() {
-        kind = if err {
-            c"echoerr".as_ptr().cast_mut()
-        } else if history {
-            c"echomsg".as_ptr().cast_mut()
-        } else {
-            c"echo".as_ptr().cast_mut()
-        };
     }
-    // SAFETY: `kind` is a literal above, or the keyset's NUL-terminated
-    // string.
-    let is_progress = unsafe { strequal(kind, c"progress".as_ptr()) };
+    // `:verbose` keeps whatever kind it was given, the empty one included:
+    // `verbose_enter` has already set its own, and the defaults below would
+    // overwrite it.
+    let kind: Option<&CStr> = match () {
+        _ if !given_kind.is_null() => Some(given_kind.as_cstr()),
+        _ if verbose => None,
+        _ if err => Some(c"echoerr"),
+        _ if history => Some(c"echomsg"),
+        _ => Some(c"echo"),
+    };
+    let is_progress = kind == Some(c"progress");
     let mut needs_clear = !history;
 
     // The progress keys belong to `kind='progress'` and to nothing else, and
@@ -101,7 +101,7 @@ pub unsafe fn nvim_echo(
     // frame's own slot.
     let rejected = unsafe {
         if !is_progress && has_progress_keys {
-            let kind = c_str(kind);
+            let kind = msg_cstr_opt(kind);
             error = api_error!(
                 kErrorTypeValidation,
                 "Conflict: title/source/status/percent/data not allowed with kind='{kind}'"

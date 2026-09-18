@@ -25,15 +25,21 @@ use core::ptr;
 ///
 /// The kind is **copied**: it is read again when the message is flushed or
 /// enters the history, which can be long after the caller's string is gone.
+pub fn msg_ext_set_kind(msg_kind: &CStr) {
+    msg_ext_set_kind_opt(Some(msg_kind));
+}
+
+/// [`msg_ext_set_kind`] for the two callers that may have no kind at all.
 ///
-/// # Safety
-/// `msg_kind` must be null or a valid C string.
-pub unsafe fn msg_ext_set_kind(msg_kind: *const c_char) {
+/// "No kind" is [`String_0::NULL`], which is a *different* state from the
+/// empty kind: `emsg_core` asks `msg_ext_kind.is_null()` to decide whether to
+/// stamp a message as a warning, so the absence has to survive the round
+/// trip.
+pub(crate) fn msg_ext_set_kind_opt(msg_kind: Option<&CStr>) {
     // Flush before setting the kind, so the previous message is emitted
     // under the kind it was written with.
     msg_ext_ui_flush();
-    // SAFETY: the caller's promise.
-    msg_ext_kind.set(unsafe { cstr_to_string(msg_kind) });
+    msg_ext_kind.set(msg_kind.map_or(String_0::NULL, String_0::from_cstr));
     // An appended message continues the previous one's column run.
     if !msg_ext_append.get() {
         redir_col.set(0);

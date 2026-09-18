@@ -104,7 +104,7 @@ impl core::fmt::Write for Cols<'_> {
 /// Module contract; `name` must have `name_len` readable bytes.
 pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
     // SAFETY: module contract.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     // SAFETY: module contract.
     let wanted = unsafe { core::slice::from_raw_parts(name.cast::<u8>(), name_len) };
     let mut found = false;

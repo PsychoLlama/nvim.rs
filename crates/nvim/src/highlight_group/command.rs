@@ -130,7 +130,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
 
     // No argument: list all highlighting.
     if !init && line.at_end() {
-        unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+        msg_ext_set_kind(c"list_cmd");
         let mut id = 1;
         while id <= highlight_num_groups() && !got_int.get() {
             // TODO(brammool): only call when the group has attributes set
@@ -157,7 +157,7 @@ pub(crate) fn do_highlight(text: &CStr, forceit: bool, init: bool) {
             let shown = msg_bytes(name);
             semsg!("E411: Highlight group not found: {shown}");
         } else {
-            unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+            msg_ext_set_kind(c"list_cmd");
             highlight_list_one(id);
         }
         return;

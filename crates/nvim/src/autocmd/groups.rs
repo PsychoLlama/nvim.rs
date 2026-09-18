@@ -276,7 +276,7 @@ pub fn do_augroup(arg: &CStr, del_group: bool) {
     } else {
         msg_start();
         // SAFETY: a static literal names the message kind.
-        unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+        msg_ext_set_kind(c"list_cmd");
         // The listing is the table's own order, which is creation order.
         // `msg_str` writes to the message buffers and reads nothing here,
         // so the borrow across it is a leaf.

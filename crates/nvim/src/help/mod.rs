@@ -536,7 +536,7 @@ pub(crate) unsafe fn find_help_tags(
     // SAFETY: `err` is our slot and `res` the chunk's answer.
     if err.is_set() {
         let why = err.message_or_empty().as_ptr();
-        unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
+        unsafe { emsg_multiline(why, Some(c"lua_error"), HLF_E, true) };
         err.clear();
         return Err(Failed);
     }
@@ -689,7 +689,7 @@ pub(crate) fn get_local_additions() {
     };
     if err.is_set() {
         let why = err.message_or_empty().as_ptr();
-        unsafe { emsg_multiline(why, c"lua_error".as_ptr(), HLF_E, true) };
+        unsafe { emsg_multiline(why, Some(c"lua_error"), HLF_E, true) };
     }
     drop(res);
     err.clear();

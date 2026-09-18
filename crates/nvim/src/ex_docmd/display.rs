@@ -65,7 +65,7 @@ pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
     drop(no_emsg);
     xfree(expr as *mut c_void);
 
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     if name.is_null() {
         msg(c"default".as_ptr(), 0);
     } else {

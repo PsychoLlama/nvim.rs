@@ -117,7 +117,7 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
     }
 
     // SAFETY: `msg_ext_set_kind` copies the literal.
-    unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
+    msg_ext_set_kind(c"list_cmd");
     // The listing pauses for the user, which can run anything; both buffers
     // are this frame's rather than the shared scratch upstream reuses.
     let mut shortname = [0 as c_char; MAXPATHL as usize];
