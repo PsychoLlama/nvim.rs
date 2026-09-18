@@ -116,6 +116,15 @@ impl OptStr {
         OptStr::from_raw_parts(value.cast_mut(), len)
     }
 
+    /// [`borrowing`](OptStr::borrowing) for a caller that already has the
+    /// bytes, which is the whole of what that one measures.
+    ///
+    /// The borrow's lifetime is the caller's obligation just as it is
+    /// there, but nothing here has to be told where the string ends.
+    pub(crate) fn borrowing_bytes(value: &[u8]) -> Self {
+        OptStr::from_raw_parts(value.as_ptr().cast::<c_char>().cast_mut(), value.len())
+    }
+
     /// An owned copy of the bytes, for the API layer.
     ///
     /// # Safety

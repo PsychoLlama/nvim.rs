@@ -225,15 +225,15 @@ pub fn qf_list(excmd: &mut ExArg) {
     shorten_fnames(false as c_int);
 
     // The highlighting comes from the qf.vim syntax file.
-    qfFile_hl_id.set(unsafe { syn_name2id(c"qfFileName".as_ptr()) });
+    qfFile_hl_id.set(syn_name2id(c"qfFileName"));
     if qfFile_hl_id.get() == 0 {
         qfFile_hl_id.set(HLF_D);
     }
-    qfSep_hl_id.set(unsafe { syn_name2id(c"qfSeparator".as_ptr()) });
+    qfSep_hl_id.set(syn_name2id(c"qfSeparator"));
     if qfSep_hl_id.get() == 0 {
         qfSep_hl_id.set(HLF_D);
     }
-    qfLine_hl_id.set(unsafe { syn_name2id(c"qfLineNr".as_ptr()) });
+    qfLine_hl_id.set(syn_name2id(c"qfLineNr"));
     if qfLine_hl_id.get() == 0 {
         qfLine_hl_id.set(HLF_N);
     }

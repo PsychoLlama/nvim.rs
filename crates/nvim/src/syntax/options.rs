@@ -263,7 +263,7 @@ fn read_sync_group(line: &[u8], at: usize, opt: &mut SynOptArg) -> Option<usize>
         // an index into the pattern array, not an id.
         let owned = cstr::owned(name);
         // SAFETY: an owned NUL-terminated copy of the name.
-        let syn_id = unsafe { syn_name2id(owned.as_ptr()) };
+        let syn_id = syn_name2id(&owned);
         let block = cur_syn_block();
         let found = block.patterns().iter().rposition(|spp| {
             spp.sp_syn.id as c_int == syn_id && spp.sp_type as c_int == SPTYPE_START

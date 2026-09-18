@@ -15,7 +15,6 @@
 #![allow(non_upper_case_globals)]
 
 use super::*;
-use crate::cstr;
 use crate::option::vars::P_MOPT;
 use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
@@ -305,7 +304,7 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
 
 /// `:messages`.
 pub fn ex_messages(excmd: &mut ExArg) {
-    if unsafe { cstr::eq_bytes(excmd.arg_ptr(), b"clear") } {
+    if excmd.line.arg() == b"clear" {
         let keep = if excmd.addr_count != 0 {
             excmd.line2 as c_int
         } else {

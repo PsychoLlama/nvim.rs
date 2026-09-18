@@ -98,7 +98,8 @@ pub(crate) unsafe fn color_expr_cmdline(
         let coloured = CmdlineColorChunk {
             start: chunk.start.col as ::core::ffi::c_int,
             end: chunk.end_col as ::core::ffi::c_int,
-            hl_id: unsafe { syn_name2id(chunk.group) },
+            // SAFETY: the chunk's NUL-terminated group name.
+            hl_id: syn_name2id(unsafe { cstr::at(chunk.group) }),
         };
         // SAFETY: the command line's own chunk list, taken above.
         unsafe { (*ret_ccline_colors).push(coloured) };
@@ -349,7 +350,8 @@ msg_putchar('\n' as ::core::ffi::c_int);
             let coloured = CmdlineColorChunk {
                 start: start as ::core::ffi::c_int,
                 end: end as ::core::ffi::c_int,
-                hl_id: unsafe { syn_name2id(group) },
+                // SAFETY: a NUL-terminated group name.
+                hl_id: syn_name2id(unsafe { cstr::at(group) }),
             };
             // SAFETY: the command line's own chunk list, taken above.
             unsafe { (*ccline_colors).push(coloured) };

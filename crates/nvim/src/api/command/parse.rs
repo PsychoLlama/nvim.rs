@@ -326,8 +326,8 @@ pub unsafe fn nvim_parse_cmd(
     let nargs = String_0::from_cstr(nargs);
     result.nargs = Some(Object::string(nargs));
     result.addr = Some(String_0::from_cstr(addr_type_name(excmd.addr_type)));
-    // SAFETY: `excmd.nextcmd` points into the arena copy of the command line.
-    result.nextcmd = Some(unsafe { cstr_to_string(excmd.nextcmd_ptr()) });
+    let next = excmd.line.next_cmd().unwrap_or_default();
+    result.nextcmd = Some(String_0::from_bytes(next));
     // SAFETY: `cmdinfo.cmdmod` is what `parse_cmdline` filled in.
     result.mods = Some(parse_mods(&cmdinfo.cmdmod));
     result.magic = Some(dict_of([

@@ -63,9 +63,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
     if c_int::from(excmd.line.byte_at(excmd.line.arg)) != NUL {
         set_option_direct(
             kOptErrorfile,
-            // SAFETY: the command line's own NUL-terminated argument,
-            // which the option layer copies.
-            OptVal::String(unsafe { OptStr::borrowing(excmd.arg_ptr()) }),
+            OptVal::String(OptStr::borrowing_bytes(excmd.line.arg())),
             OptionSetFlags::NONE,
             0 as ScriptId,
         );
@@ -141,8 +139,15 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
     // SAFETY: forwarded from the caller.
     let buf = if c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL {
         Buf::current_raw()
-    } else if c_int::from(unsafe { *skipwhite(skipdigits(excmd.arg_ptr())) }) == NUL {
-        find_buf(unsafe { atoi(excmd.arg_ptr()) }).map_or(ptr::null_mut(), |b| b.raw())
+    } else if excmd.line.byte_at(
+        excmd
+            .line
+            .skip_white(excmd.line.skip_digits(excmd.line.arg)),
+    ) == 0
+    {
+        let at = excmd.line.arg;
+        let (number, _) = getdigits_int_at(excmd.line.buffer_mut(), at, false, 0);
+        find_buf(number).map_or(ptr::null_mut(), |b| b.raw())
     } else {
         ptr::null_mut()
     };

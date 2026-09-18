@@ -155,7 +155,7 @@ pub fn ex_echo(excmd: &mut ExArg) {
 /// `:echohl`.
 pub fn ex_echohl(excmd: &mut ExArg) {
     // SAFETY: the caller's promise -- the argument is NUL-terminated.
-    echo_hl_id.set(unsafe { syn_name2id(excmd.arg_ptr()) });
+    echo_hl_id.set(syn_name2id(excmd.line.cstr_from(excmd.line.arg)));
 }
 
 /// The highlight group `:echohl` last named.

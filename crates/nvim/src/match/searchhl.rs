@@ -539,7 +539,7 @@ pub(crate) unsafe fn update_search_hl(
                 // once rather than once per cell.
                 if !cur.is_null()
                     && shl != search_hl
-                    && unsafe { syn_name2id(c"Conceal".as_ptr()) } == unsafe { (*cur).mit_hlg_id }
+                    && syn_name2id(c"Conceal") == unsafe { (*cur).mit_hlg_id }
                 {
                     unsafe { *has_match_conc = if col == shl.startcol { 2 } else { 1 } };
                     unsafe { *match_conc = (*cur).mit_conceal_char };

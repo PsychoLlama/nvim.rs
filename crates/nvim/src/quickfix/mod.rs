@@ -30,7 +30,7 @@ use crate::buffer::{
     wipe_buffer,
 };
 use crate::change::changed_lines;
-use crate::charset::{skipdigits, skipwhite, vim_isprintc};
+use crate::charset::{getdigits_int_at, skipwhite, vim_isprintc};
 use crate::cursor::{check_cursor, coladvance};
 use crate::drawscreen::state::{cmdline_row, must_redraw};
 use crate::drawscreen::{
@@ -128,7 +128,7 @@ use crate::window::{
     win_setheight, win_split, win_valid,
 };
 use crate::winlayer::graph::{firstwin, lastwin, prevwin};
-use ::libc::{__errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, time};
+use ::libc::{__errno_location, abort, abs, atol, fclose, fdopen, ferror, fgets, time};
 use core::ffi::{CStr, c_int, c_uint};
 
 // The carve of the transpiled module; see each child's docs.

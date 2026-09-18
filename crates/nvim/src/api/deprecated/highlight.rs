@@ -33,7 +33,7 @@ pub unsafe fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict,
 pub fn nvim_get_hl_by_name(name: String_0, rgb: Boolean) -> Result<ApiDict, Error> {
     let error;
     // SAFETY: `name` is the caller's NUL-terminated group name.
-    let id = unsafe { syn_name2id(name.data()) };
+    let id = syn_name2id(name.as_cstr());
     if id == 0 {
         error = err_bad_value(c"highlight name", name.as_cstr());
         return ApiDict::EMPTY.reported(error);

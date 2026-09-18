@@ -437,9 +437,7 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
                 }
                 next_arg = args.line.skip_white(arg_end);
             } else if !args.skip {
-                unsafe {
-                    cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t
-                };
+                cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment") as int16_t;
             }
         } else if let Some(count) = sync_count_key(word) {
             if word.get(count.digits_at - 1) != Some(&b'=')

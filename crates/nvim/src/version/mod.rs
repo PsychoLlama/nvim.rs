@@ -478,7 +478,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     grid_line_start(grid, row);
     let byte_at = |at: usize| unsafe { mesg.as_ptr().add(at) };
 
-    let attr_of = |group: &CStr| unsafe { syn_id2attr(syn_name2id(group.as_ptr())) };
+    let attr_of = |group: &CStr| syn_id2attr(syn_name2id(group));
 
     if is_logo {
         // The logo's leading strokes are the frame, everything from the

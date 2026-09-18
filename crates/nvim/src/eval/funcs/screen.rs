@@ -6,6 +6,7 @@
 use super::wrappers::{
     arg_lnum, arg_number, arg_number_chk, arg_string, list_alloc_ret, list_set_ret,
 };
+use crate::cstr;
 use crate::winlayer::{Buf, Win};
 
 use crate::eval::typval::NumBuf;
@@ -155,7 +156,9 @@ pub fn f_screenstring(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 pub fn f_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the frame is live.
-    result.write_number(unsafe { syn_name2id(arg_string(&mut numbuf, &args[0])) } as VarNumber);
+    // SAFETY: the argument's NUL-terminated string.
+    let name = unsafe { cstr::at(arg_string(&mut numbuf, &args[0])) };
+    result.write_number(syn_name2id(name) as VarNumber);
 }
 
 /// `hlexists({name})` — whether the group is defined.

@@ -326,13 +326,12 @@ fn upper_key(name: &[u8]) -> CString {
 ///
 /// # Safety
 /// `name` is NUL-terminated; may add a group; main thread only.
-pub(crate) unsafe fn syn_name2id(name: *const c_char) -> c_int {
-    // SAFETY: the caller's NUL-terminated name.
-    let bytes = unsafe { CStr::from_ptr(name) }.to_bytes();
-    if bytes.first() == Some(&b'@') {
-        return syn_check_group(bytes);
+pub(crate) fn syn_name2id(name: &CStr) -> c_int {
+    let name = name.to_bytes();
+    if name.first() == Some(&b'@') {
+        return syn_check_group(name);
     }
-    lookup(bytes)
+    lookup(name)
 }
 
 /// The id of the group `name` spells, or 0.
@@ -356,7 +355,7 @@ fn lookup(name: &[u8]) -> c_int {
 /// See [`syn_name2id`].
 pub(crate) unsafe fn syn_name2attr(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated name.
-    match unsafe { syn_name2id(name) } {
+    match syn_name2id(unsafe { CStr::from_ptr(name) }) {
         0 => 0,
         id => syn_id2attr(id),
     }
@@ -368,7 +367,7 @@ pub(crate) unsafe fn syn_name2attr(name: *const c_char) -> c_int {
 /// See [`syn_name2id`].
 pub(crate) unsafe fn highlight_exists(name: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated name.
-    c_int::from(unsafe { syn_name2id(name) } > 0)
+    c_int::from(syn_name2id(unsafe { CStr::from_ptr(name) }) > 0)
 }
 
 /// The name of the group with id `id`, or `""` for an id that names none.

@@ -3,6 +3,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::cstr;
 use core::ffi::{CStr, c_int, c_uint};
 
 use crate::api::private::helpers::cstr_to_string;
@@ -198,8 +199,8 @@ pub(crate) fn highlight_changed() {
         id_s = hlcnt + 10;
     }
     for i in 0..9 {
-        let userhl = format!("User{}\0", i + 1);
-        let id = unsafe { syn_name2id(userhl.as_ptr().cast()) };
+        let userhl = cstr::owned(format!("User{}", i + 1).as_bytes());
+        let id = syn_name2id(&userhl);
         let (user, stlnc) = if id == 0 {
             (0, 0)
         } else {
