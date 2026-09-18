@@ -163,7 +163,7 @@ unsafe fn swapchars(op_type: OpType, pos: *mut Pos, length: c_int) -> c_int {
 pub unsafe fn swapchar(op_type: OpType, pos: *mut Pos) -> bool {
     // SAFETY: the caller's promise -- `pos` names a position of the current
     // buffer, so the cursor may be put on it and the character rebuilt there.
-    let c = unsafe { gchar_pos(pos) };
+    let c = gchar_pos(unsafe { &*pos });
 
     // Only rot13 ASCII.
     if c >= 0x80 && op_type == OpType::Rot13 {

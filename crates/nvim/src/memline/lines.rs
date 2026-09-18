@@ -24,6 +24,35 @@
 //! the borrow cannot express. In one sentence: the slice lives exactly as
 //! long as the `&mut Lines` it came from, so the next line, any `ml_*`
 //! mutation and any re-entry into the editor all need it dropped first.
+//!
+//! # The pointer forms that stay
+//!
+//! Four of upstream's `ml_get*` spellings are left, and the ratchet's
+//! `ml_get_raw` needle counts every call to one. This is what each is for;
+//! anything not on this list has been deleted (`ml_get_pos`,
+//! `ml_get_pos_len`, and `ml_get_cursor`, which never had a caller here).
+//!
+//! | form | why it stays |
+//! | --- | --- |
+//! | [`ml_get_buf`] | **the floor.** It is what unpacks a line, and
+//!   [`Lines::line`] is written on top of it. Nothing under it can answer a
+//!   slice, because the length is not known until the block is locked. |
+//! | [`ml_get_buf_mut`] | the same read, marking the line dirty.
+//!   [`Lines::line_mut`] and [`Buf::line_mut`] are written on top of it, and
+//!   the read also books the old text as deleted — so a caller that wants
+//!   only the bytes must *not* reach for it. |
+//! | [`ml_get_buf_len`] | a line's length without a slice to measure. It
+//!   dispatches through `ml_get_buf` and then reads the cache's own length,
+//!   which is why a caller that is about to read the line should take
+//!   [`Lines::line`] and ask the slice instead of paying two dispatches. |
+//! | [`ml_get`], [`ml_get_len`] | the current buffer's spelling of the two
+//!   above. They exist for the callers that still hold a line as a pointer,
+//!   and they go when those do. |
+//!
+//! The count that is *not* the floor is the call sites outside this module.
+//! Those are the pointer walks that have not been rewritten yet; the ones
+//! left are listed in the phase's handoff, and each is a walk whose *callee*
+//! still takes a `*mut c_char`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
@@ -41,6 +70,8 @@ use core::ffi::CStr;
 /// from startup to exit, and `ml_get_buf_impl` clamps `lnum` into the
 /// buffer itself. The answer is a raw pointer, so *reading* through it is
 /// still the caller's business.
+///
+/// Prefer [`Lines::line`]: see [the module's floor](self#the-pointer-forms-that-stay).
 pub fn ml_get(lnum: LineNr) -> *mut ::core::ffi::c_char {
     unsafe { ml_get_buf_impl(Buf::current(), lnum, false) }
 }
@@ -271,28 +302,12 @@ unsafe fn cached_line_len(buffer: Buf, text: *const u8) -> usize {
     usize::try_from(buffer.b_ml.cached_len() - 1).unwrap_or(0)
 }
 
-/// A pointer to position `pos` of the current buffer.
-///
-/// # Safety
-/// `pos` must be a valid position in the current buffer.
-pub unsafe fn ml_get_pos(pos: *const Pos) -> *mut ::core::ffi::c_char {
-    unsafe { ml_get_buf(Buf::current(), (*pos).lnum).offset((*pos).col as isize) }
-}
-
 /// Length of line `lnum` of the current buffer, excluding the NUL.
 ///
 /// Safe: as [`ml_get`] -- the editor exists, and the line number is
 /// clamped.
 pub fn ml_get_len(lnum: LineNr) -> ColNr {
     ml_get_buf_len(Buf::current(), lnum)
-}
-
-/// Length of the text after position `pos`, excluding the NUL.
-///
-/// # Safety
-/// `pos` must be a valid position in the current buffer.
-pub unsafe fn ml_get_pos_len(pos: *mut Pos) -> ColNr {
-    unsafe { ml_get_buf_len(Buf::current(), (*pos).lnum) - (*pos).col }
 }
 
 /// Length of line `lnum` of `buffer`, excluding the NUL.
@@ -310,16 +325,20 @@ pub fn ml_get_buf_len(buffer: Buf, lnum: LineNr) -> ColNr {
 /// The codepoint at `pos`, which must either be valid or have `col` set to
 /// `MAXCOL`.
 ///
-/// # Safety
-/// Must run on the main thread, with a current buffer.
-pub unsafe fn gchar_pos(pos: *mut Pos) -> ::core::ffi::c_int {
+/// NUL past the end of the line, which is what the searches that park a
+/// column at `MAXCOL` are asking about.
+pub fn gchar_pos(pos: &Pos) -> ::core::ffi::c_int {
     // While searching, the column is sometimes put at the end of a line.
-    if unsafe { (*pos).col } == MAXCOL as ::core::ffi::c_int
-        || unsafe { (*pos).col } > ml_get_len(unsafe { (*pos).lnum })
-    {
+    if pos.col == MAXCOL as ::core::ffi::c_int {
         return NUL;
     }
-    unsafe { utf_ptr2char(ml_get_pos(pos)) }
+    let mut lines = Lines::current();
+    let line = lines.line(pos.lnum);
+    let at = usize::try_from(pos.col).unwrap_or(0);
+    if at >= line.len() {
+        return NUL;
+    }
+    char_at(&line[at..])
 }
 
 /// Whether the line last handed out by `ml_get` is in allocated memory.
@@ -689,17 +708,15 @@ pub unsafe fn ml_flush_deleted_bytes(
 pub fn inc(pos: &mut Pos) -> ::core::ffi::c_int {
     // While searching, the position may be set to the end of a line.
     if pos.col != MAXCOL as ::core::ffi::c_int {
-        let p = unsafe { ml_get_pos(pos) };
-        if unsafe { *p } != NUL as ::core::ffi::c_char {
+        let mut lines = Lines::current();
+        let line = lines.line(pos.lnum);
+        let at = usize::try_from(pos.col).unwrap_or(0);
+        if at < line.len() {
             // Still within the line; move to the next char, which may be
-            // the NUL.
-            let l = unsafe { utfc_ptr2len(p) };
-            pos.col += l;
-            return if unsafe { *p.offset(l as isize) } != NUL as ::core::ffi::c_char {
-                0
-            } else {
-                2
-            };
+            // the one past the end.
+            let l = cluster_len(&line[at..]);
+            pos.col += ColNr::try_from(l).unwrap_or(0);
+            return if at + l < line.len() { 0 } else { 2 };
         }
     }
     if pos.lnum != Buf::current().b_ml.ml_line_count {
@@ -727,26 +744,33 @@ pub fn incl(pos: &mut Pos) -> ::core::ffi::c_int {
 /// and 0 otherwise.
 pub fn dec(pos: &mut Pos) -> ::core::ffi::c_int {
     pos.coladd = 0;
+    // Step `pos.col` back off a trail byte, and -- when `to_end` is set --
+    // onto the last character of the line first. One read of the line does
+    // both, where upstream paid `ml_get` and `ml_get_len` separately.
+    let snap = |pos: &mut Pos, to_end: bool| {
+        let mut lines = Lines::current();
+        let line = lines.line(pos.lnum);
+        if to_end {
+            pos.col = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
+        }
+        let at = usize::try_from(pos.col).unwrap_or(0);
+        pos.col -= ColNr::try_from(head_off(line, at)).unwrap_or(0);
+    };
     if pos.col == MAXCOL as ::core::ffi::c_int {
         // Past the end of the line.
-        let p = ml_get(pos.lnum);
-        pos.col = ml_get_len(pos.lnum);
-        pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };
+        snap(pos, true);
         return 0;
     }
     if pos.col > 0 {
         // Still within the line.
         pos.col -= 1;
-        let p = ml_get(pos.lnum);
-        pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };
+        snap(pos, false);
         return 0;
     }
     if pos.lnum > 1 {
         // There is a previous line.
         pos.lnum -= 1;
-        let p = ml_get(pos.lnum);
-        pos.col = ml_get_len(pos.lnum);
-        pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };
+        snap(pos, true);
         return 1;
     }
     -1 // at the start of the file

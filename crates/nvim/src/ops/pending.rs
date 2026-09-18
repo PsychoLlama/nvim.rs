@@ -145,8 +145,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     // and only when the operator is a yank -- the chain is left as it is so
     // that it stays as conditional as upstream wrote it.
     op.empty = op.motion_type != kMTLineWise
-        && (!op.inclusive
-            || (op.op_type == OpType::Yank && unsafe { gchar_pos(op.end().raw()) } == NUL))
+        && (!op.inclusive || (op.op_type == OpType::Yank && gchar_pos(&op.end()) == NUL))
         && equalpos(op.start, op.end)
         && !(op_virtual() && op.start.coladd != op.end.coladd);
     // For delete, change and yank it is an error to operate on an empty

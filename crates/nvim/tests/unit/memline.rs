@@ -450,3 +450,65 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
     };
     assert_eq!(through_pointer, LINES[LINES.len() - 1].to_uppercase());
 }
+
+/// What the line handle answers for a line that is not there, and for the
+/// two shapes that carry the terminator with them.
+///
+/// `ml_get_buf` cannot fail — every failure path hands back the `???`
+/// placeholder instead, and the cache is set to describe it — which is why
+/// `Lines::line` has no error case either. That placeholder used to be a
+/// `static mut` buffer rewritten on every call; this pins that it still
+/// reads as three bytes and that asking for it does not disturb the line
+/// that was cached before.
+#[test]
+fn an_out_of_range_line_reads_as_the_placeholder() {
+    let swapped = Swapped::new("lines-placeholder");
+    // SAFETY: the fixture's buffer is live and has a memline.
+    let mut lines = unsafe { Lines::in_buffer(Buf::new(swapped.buf)) };
+
+    let past_the_end = LINES.len() as LineNr + 1;
+    assert_eq!(lines.line(past_the_end), b"???");
+    assert_eq!(lines.line_len(past_the_end), 3);
+    // Reading it twice answers the same thing -- it is not a buffer that
+    // one read empties.
+    assert_eq!(lines.line(past_the_end), b"???");
+    // And a real line still reads as itself afterwards.
+    assert_eq!(lines.line(1), LINES[0].as_bytes());
+}
+
+/// The terminated views of a line: `line_cstr` borrows the cache and
+/// `line_copy` owns a copy, and both carry the NUL the memline keeps after
+/// every line.
+///
+/// The NUL is the whole point (`LineCopy`'s own documentation says so): the
+/// walks that step one past the last character read it, and a bare `Vec` of
+/// the line's bytes has uninitialised capacity there. A suffix of a
+/// terminated string is terminated, so `line_cstr` at a non-zero column is
+/// the one shape a "pointer into a line" can take without a promise.
+#[test]
+fn the_terminated_views_carry_the_line_s_own_nul() {
+    let swapped = Swapped::new("lines-terminated");
+    // SAFETY: the fixture's buffer is live and has a memline.
+    let mut lines = unsafe { Lines::in_buffer(Buf::new(swapped.buf)) };
+
+    let last = LINES.len() as LineNr;
+    let text = LINES[LINES.len() - 1];
+
+    assert_eq!(lines.line_cstr(last, 0).to_bytes(), text.as_bytes());
+    // From a column on: the tail, still terminated.
+    let at = text.len() - 4;
+    assert_eq!(lines.line_cstr(last, at).to_bytes(), &text.as_bytes()[at..]);
+    // The end of the line is the empty string, not a panic.
+    assert_eq!(lines.line_cstr(last, text.len()).to_bytes(), b"");
+
+    // The copy derefs to the bytes without the terminator, and its `as_cstr`
+    // puts it back.
+    let copy = lines.line_copy(last);
+    assert_eq!(&*copy, text.as_bytes());
+    assert_eq!(copy.as_cstr().to_bytes(), text.as_bytes());
+
+    // A copy survives a read of another line, which is what it is for.
+    let other = lines.line_copy(1);
+    assert_eq!(lines.line(last), text.as_bytes());
+    assert_eq!(&*other, LINES[0].as_bytes());
+}

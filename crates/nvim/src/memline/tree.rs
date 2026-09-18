@@ -108,23 +108,21 @@ impl PointerBlock {
     }
 }
 
-/// The placeholder `ml_get` hands back when it cannot read the line: an
-/// invalid line number, or a tree walk that found no block.
-///
-/// It is a mutable static rather than a literal because callers are handed a
-/// `*mut c_char` and upstream rewrites the buffer on every call.
-static questions: GlobalCell<[c_char; 4]> = GlobalCell::new([0; 4]);
-
 /// Suppresses a second complaint from a redraw triggered by the first.
 static ml_get_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 
-/// # Safety
-/// `buffer` must point at a buffer.
-unsafe fn ml_get_placeholder(mut b: Buf, lnum: LineNr) -> *mut c_char {
-    questions.set([b'?' as c_char, b'?' as c_char, b'?' as c_char, 0]);
+/// The placeholder `ml_get` hands back when it cannot read the line: an
+/// invalid line number, or a tree walk that found no block.
+///
+/// A literal, as upstream's `errorret` is. It used to be a `static mut`
+/// buffer rewritten on every call, on the theory that a caller handed a
+/// `*mut c_char` might write through it; none does, and the only way in is
+/// `ml_get_buf_mut`, which no caller reaches with a line number the tree
+/// cannot find.
+fn ml_get_placeholder(mut b: Buf, lnum: LineNr) -> *mut c_char {
     b.b_ml.set_cached_len(4);
     b.b_ml.set_cached_lnum(lnum);
-    questions.ptr().cast::<c_char>()
+    c"???".as_ptr().cast_mut()
 }
 
 /// Read line `lnum` of `buffer`, as a NUL-terminated pointer into the data
@@ -158,7 +156,7 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
             ml_get_recursive.set(0);
         }
         ml_flush_line(buffer, false);
-        return unsafe { ml_get_placeholder(buffer, lnum) };
+        return ml_get_placeholder(buffer, lnum);
     }
 
     // Pretend line 0 is line 1.
@@ -188,7 +186,7 @@ pub(crate) unsafe fn ml_get_buf_impl(buffer: Buf, lnum: LineNr, will_change: boo
                 );
                 ml_get_recursive.set(0);
             }
-            return unsafe { ml_get_placeholder(buffer, lnum) };
+            return ml_get_placeholder(buffer, lnum);
         }
 
         let dp = unsafe { Db::new((*hp).bh_data.cast()) };

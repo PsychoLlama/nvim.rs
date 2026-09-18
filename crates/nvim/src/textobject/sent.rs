@@ -64,10 +64,10 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             // SAFETY, for every walk below: `pos` starts at the cursor and
             // only ever moves by `incl`/`decl`/`inc`, so it stays a position
             // of the current buffer the caller guarantees.
-            if unsafe { gchar_pos(&raw mut pos) } == NUL {
+            if gchar_pos(&pos) == NUL {
                 // On an empty line: skip up to a non-empty one.
                 while unsafe { step(&mut pos) } != -1 {
-                    if unsafe { gchar_pos(&raw mut pos) } != NUL {
+                    if gchar_pos(&pos) != NUL {
                         break;
                     }
                 }
@@ -93,7 +93,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             let mut found_dot = false;
             loop {
                 // SAFETY: as above.
-                let c = unsafe { gchar_pos(&raw mut pos) };
+                let c = gchar_pos(&pos);
                 if !(ascii_iswhite(c) || has_char(c".!?)]\"'", c)) {
                     break;
                 }
@@ -112,7 +112,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                 }
                 if has_char(c")]\"'", c)
                     // SAFETY: `tpos` is a position of the current buffer.
-                    && !has_char(c".!?)]\"'", unsafe { gchar_pos(&raw mut tpos) })
+                    && !has_char(c".!?)]\"'", gchar_pos(&tpos))
                 {
                     break;
                 }
@@ -127,7 +127,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
             loop {
                 // Find the end of the sentence.
                 // SAFETY: as above.
-                let mut c = unsafe { gchar_pos(&raw mut pos) };
+                let mut c = gchar_pos(&pos);
                 // SAFETY: `pos.lnum` is a line of the current buffer.
                 if c == NUL || (pos.col == 0 && starts_para(pos.lnum, NUL, false)) {
                     if dir as c_int == BACKWARD as c_int && pos.lnum != startlnum {
@@ -143,7 +143,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                             break;
                         }
                         // SAFETY: as above; the literal is NUL-terminated.
-                        c = unsafe { gchar_pos(&raw mut tpos) };
+                        c = gchar_pos(&tpos);
                         if !has_char(c")]\"'", c) {
                             break;
                         }
@@ -154,16 +154,14 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
                     if c == -1
                         || (!cpo_j && (c == ' ' as c_int || c == '\t' as c_int))
                         || c == NUL
-                        || unsafe {
-                            cpo_j
-                                && c == ' ' as c_int
-                                && inc(&mut tpos) >= 0
-                                && gchar_pos(&raw mut tpos) == ' ' as c_int
-                        }
+                        || (cpo_j
+                            && c == ' ' as c_int
+                            && inc(&mut tpos) >= 0
+                            && gchar_pos(&tpos) == ' ' as c_int)
                     {
                         pos = tpos;
                         // SAFETY: as above.
-                        if unsafe { gchar_pos(&raw mut pos) } == NUL {
+                        if gchar_pos(&pos) == NUL {
                             inc(&mut pos); // skip the NUL at end of line
                         }
                         break;
@@ -183,7 +181,7 @@ pub fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
         // Skip the white space in front of the sentence.
         while !noskip && {
             // SAFETY: as above.
-            let c = unsafe { gchar_pos(&raw mut pos) };
+            let c = gchar_pos(&pos);
             c == ' ' as c_int || c == '\t' as c_int
         } {
             if incl(&mut pos) == -1 {
@@ -220,7 +218,7 @@ pub(crate) unsafe fn find_first_blank(posp: *mut Pos) {
     // buffer, and `decl`/`incl` leave it as one.
     while unsafe { decl(&mut *posp) } != -1 {
         // SAFETY: as above.
-        let c = unsafe { gchar_pos(posp) };
+        let c = gchar_pos(unsafe { &*posp });
         if !ascii_iswhite(c) {
             // SAFETY: as above.
             unsafe { incl(&mut *posp) };
@@ -265,7 +263,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         let mut at_start_sent = true;
         decl(&mut pos);
         while lt(pos, Win::current().w_cursor) {
-            if !ascii_iswhite(unsafe { gchar_pos(&raw mut pos) }) {
+            if !ascii_iswhite(gchar_pos(&pos)) {
                 at_start_sent = false;
                 break;
             }
@@ -308,7 +306,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
             // Not just before a sentence.
             at_start_sent = false;
             while lt(pos, Win::current().w_cursor) {
-                if !ascii_iswhite(unsafe { gchar_pos(&raw mut pos) }) {
+                if !ascii_iswhite(gchar_pos(&pos)) {
                     at_start_sent = true;
                     break;
                 }
@@ -349,7 +347,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
 
     // The cursor started on a blank: is it just before the start of the
     // next sentence?
-    while ascii_iswhite(unsafe { gchar_pos(&raw mut pos) }) {
+    while ascii_iswhite(gchar_pos(&pos)) {
         incl(&mut pos);
     }
     let start_blank = equalpos(pos, Win::current().w_cursor);
@@ -379,7 +377,7 @@ pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Resul
         // are none, take the leading blanks instead.
         if start_blank {
             unsafe { find_first_blank(Win::current().cursor().raw()) };
-            if ascii_iswhite(unsafe { gchar_pos(Win::current().cursor().raw()) }) {
+            if ascii_iswhite(gchar_pos(&Win::current().cursor())) {
                 decl(&mut Win::current().cursor());
             }
         } else if !ascii_iswhite(gchar_cursor()) {

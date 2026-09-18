@@ -890,7 +890,7 @@ fn stuff_char(c: c_int) {
 /// The character at `pos`, or NUL past the end of the line.
 fn char_at(pos: PosRef) -> c_int {
     // SAFETY: a live position in the current buffer.
-    unsafe { gchar_pos(pos.raw()) }
+    gchar_pos(&pos)
 }
 
 /// Step `pos` one character forward, over a line break if need be.

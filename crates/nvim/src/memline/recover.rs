@@ -313,17 +313,18 @@ pub fn ml_recover(checkext: bool) {
         {
             // Recovering an empty file gives two lines of which the first
             // is empty; that is not a modification.
-            if !(Buf::current().b_ml.ml_line_count == 2 && unsafe { *ml_get(1) } as c_int == NUL) {
+            if !(Buf::current().b_ml.ml_line_count == 2
+                && Buf::current().lines().line(1).is_empty())
+            {
                 changed_internal(Buf::current());
                 buf_inc_changedtick(Buf::current());
             }
         } else {
             for idx in 1..=lnum {
                 // One of the two lines has to be copied: fetching the
-                // other may flush it.
-                let p = unsafe { xstrnsave(ml_get(idx), ml_get_len(idx) as size_t) };
-                let same = unsafe { cstr::eq(p, ml_get(idx + lnum)) };
-                unsafe { xfree(p.cast()) };
+                // other flushes the cache the first came out of.
+                let recovered = Buf::current().lines().line_copy(idx);
+                let same = *recovered == *Buf::current().lines().line(idx + lnum);
                 if !same {
                     changed_internal(Buf::current());
                     buf_inc_changedtick(Buf::current());

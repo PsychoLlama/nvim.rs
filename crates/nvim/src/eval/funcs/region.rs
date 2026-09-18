@@ -8,13 +8,14 @@ use super::{kMTBlockWise, kMTCharWise, kMTLineWise};
 use crate::api::private::helpers::cbuf_to_string;
 use crate::buffer::find_buf;
 use crate::charset::getdigits_int;
+use crate::cstr;
 use crate::eval::list2fpos;
 use crate::eval::typval::{
     NumBuf, dict_get_bool, tv_check_for_list_arg, tv_check_for_opt_dict_arg, tv_list_alloc,
 };
 use crate::keycodes::Ctrl_V;
-use crate::mbyte::{mb_prevptr, utfc_ptr2len};
-use crate::memline::{ml_get, ml_get_buf_len, ml_get_len, ml_get_pos};
+use crate::mbyte::{cluster_len, mb_prevptr};
+use crate::memline::{ml_get, ml_get_buf_len, ml_get_len};
 use crate::memory::xmalloc;
 use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
@@ -208,10 +209,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
         }
         // An inclusive selection ending on the line terminator does not
         // actually cover a character, unless 'virtualedit' is on.
-        if inclusive
-            && virtual_op.get() == Some(false)
-            && unsafe { *ml_get_pos(&raw mut p2) } == NUL as c_char
-        {
+        if inclusive && virtual_op.get() == Some(false) && byte_at(p2) == NUL as u8 {
             inclusive = false;
         }
     } else if region_type == kMTBlockWise {
@@ -219,7 +217,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     }
 
     // Extend the far corner over the rest of a multibyte character.
-    let l = unsafe { utfc_ptr2len(ml_get_pos(&raw mut p2)) };
+    let l = cluster_at(p2);
     if l > 1 {
         p2.col += l - 1;
     }
@@ -230,6 +228,24 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
         region_type,
         op,
     })
+}
+
+/// The byte at `pos` of the current buffer, NUL at the end of its line.
+fn byte_at(pos: Pos) -> u8 {
+    let mut lines = Buf::current().lines();
+    cstr::byte_at(lines.line(pos.lnum), usize::try_from(pos.col).unwrap_or(0))
+}
+
+/// How many bytes the grapheme cluster at `pos` takes, 0 at the end of the
+/// line -- which is what `utfc_ptr2len` answered for the terminator.
+fn cluster_at(pos: Pos) -> ColNr {
+    let mut lines = Buf::current().lines();
+    let line = lines.line(pos.lnum);
+    let at = usize::try_from(pos.col).unwrap_or(0);
+    if at >= line.len() {
+        return 0;
+    }
+    ColNr::try_from(cluster_len(&line[at..])).unwrap_or(0)
 }
 
 /// The `type` option: "v", "V", or CTRL-V optionally followed by a width.

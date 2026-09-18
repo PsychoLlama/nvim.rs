@@ -313,7 +313,7 @@ impl LineSetup {
                             ::core::ptr::null_mut(),
                         )
                     };
-                    if unsafe { gchar_pos(&raw mut top) } == NUL {
+                    if gchar_pos(&top) == NUL {
                         // Empty line: invert the one cell past its end.
                         wlv.tocol = wlv.fromcol + 1;
                     }

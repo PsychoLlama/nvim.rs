@@ -236,7 +236,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
                 // Reset `tpos`: the loop above may have invalidated it.
                 tpos = Win::current().w_cursor;
                 tpos.col += 1;
-                if cc != NUL && unsafe { gchar_pos(&raw mut tpos) } == NUL {
+                if cc != NUL && gchar_pos(&tpos) == NUL {
                     Win::current().w_cursor.col += 1; // put the cursor back on the NUL
                 }
             }

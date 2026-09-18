@@ -38,7 +38,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::mark::setpcmark;
-use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};
+use crate::mbyte::{char_at, cluster_len, head_off, mb_adjust_cursor, mb_utflen};
 use crate::memfile::{
     MfDirty, mf_close, mf_close_file, mf_find, mf_fname, mf_free, mf_free_fnames, mf_get,
     mf_need_trans, mf_new, mf_new_page_size, mf_open, mf_open_file, mf_put, mf_set_dirty,

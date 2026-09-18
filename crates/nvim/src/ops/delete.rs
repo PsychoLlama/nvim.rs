@@ -366,7 +366,7 @@ fn delete_chars(op: Op) -> Result<(), UndoFailed> {
 fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
     // SAFETY: both ends name positions of the current buffer, and the cursor
     // is put on one of them before each column is measured.
-    if unsafe { gchar_pos(op.start().raw()) } == '\t' as c_int {
+    if gchar_pos(&op.start()) == '\t' as c_int {
         // Save the first line for undo.
         u_save_cursor()?;
         // Breaking the start TAB moves the end too, so remember where the
@@ -387,7 +387,7 @@ fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
     }
 
     // Break the end TAB only when it is inside the region.
-    if unsafe { gchar_pos(op.end().raw()) } == '\t' as c_int && op.end.coladd == 0 && op.inclusive {
+    if gchar_pos(&op.end()) == '\t' as c_int && op.end.coladd == 0 && op.inclusive {
         // Save the last line for undo.
         u_save(op.end.lnum - 1, op.end.lnum + 1)?;
         Win::current().w_cursor = op.end;
