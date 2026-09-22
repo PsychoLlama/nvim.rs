@@ -7,6 +7,8 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+## [2026.09.22-76388a7c41]
+
 ### Changed
 
 - Rewrote where every option's value is kept and how an option that refuses a
@@ -804,7 +806,8 @@ made to build and pass the functional, old, and unit suites, with the CalVer
 release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe`
 Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.16-b12dec0bc2...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.22-76388a7c41...HEAD
+[2026.09.22-76388a7c41]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.16-b12dec0bc2...2026.09.22-76388a7c41
 [2026.09.16-b12dec0bc2]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.12-3ebebe0c9b...2026.09.16-b12dec0bc2
 [2026.09.12-3ebebe0c9b]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.07-26d0ee304e...2026.09.12-3ebebe0c9b
 [2026.09.07-26d0ee304e]: https://github.com/PsychoLlama/nvim.rs/compare/2026.09.06-4cef5c0a5c...2026.09.07-26d0ee304e
