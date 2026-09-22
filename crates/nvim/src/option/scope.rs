@@ -269,18 +269,28 @@ impl BoolVar {
         }
     }
 
-    /// Overwrite the variable with a tri-state word. A global value has no
-    /// third state: -1 there would read back as true.
+    /// Overwrite the variable with a tri-state word.
+    ///
+    /// A global value has no third state, and **-1 reaches here**: upstream's
+    /// `TRISTATE_FROM_INT` turns any negative number into `kNone`, so
+    /// `:let &ignorecase = -3` arrives as -1 even though 'ignorecase' has no
+    /// scope to be unset in. Upstream stores that -1 in the option's `int`
+    /// and every test of the option then reads it as true; a `bool` cannot
+    /// hold it, so the word is coerced the same way round. The one
+    /// observable difference is the number `:echo &ignorecase` prints back:
+    /// 1 where upstream prints -1. Restoring the exact word means a
+    /// tri-state global boolean, which is a change to what apigen emits.
+    ///
+    /// This used to be a `debug_assert!` that the word was 0 or 1. It was
+    /// wrong, and only a debug build could see it: `:let &ignorecase = -3`
+    /// aborted the editor where a release build coerced and carried on.
     ///
     /// # Safety
     ///
     /// As [`get`](Self::get).
     pub(crate) unsafe fn set(self, word: c_int) {
         match self {
-            BoolVar::Global(field) => {
-                debug_assert!(word == 0 || word == 1, "a global boolean is not tri-state");
-                field.set(word != 0);
-            }
+            BoolVar::Global(field) => field.set(word != 0),
             BoolVar::OwnDefault(idx) => {
                 store_option_default(idx, OptVal::Boolean(super::tristate(word)));
             }
