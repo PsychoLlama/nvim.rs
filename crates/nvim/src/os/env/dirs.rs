@@ -202,7 +202,9 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
         // '$'), then from the executable's own path.
         let mut exe_name: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         if vim_path.is_null() {
-            let from_helpfile = !p_hf(|hf| has_char(hf, '$' as c_int));
+            // Unset (as it is this early in startup) is not the same as empty:
+            // it rules 'helpfile' out, and the exe-relative path decides.
+            let from_helpfile = !P_HF.is_unset() && !p_hf(|hf| has_char(hf, '$' as c_int));
             if from_helpfile {
                 vim_path = P_HF.value_ptr();
             } else {
