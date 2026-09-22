@@ -272,9 +272,13 @@ fn main() {
 
     // Bake the compiled-in default paths (neovim's generated `pathdef.c`) so
     // the dev binary finds its runtime and bundled tree-sitter parsers with no
-    // env vars. Both are `os_isdir`-guarded at resolution time, so an installed
-    // binary falls through to the exe-relative layout unless the baked dir
-    // exists. Override each var for a prod build to point at the install prefix.
+    // env vars. They are consulted differently. The lib dir comes *first* and
+    // is `os_isdir`-guarded: `get_lib_dir` takes it when it exists and falls
+    // back to `<exe prefix>/lib/nvim` otherwise. The runtime dir comes *last*
+    // and is not guarded: `vim_getenv("VIMRUNTIME")` tries $VIM, 'helpfile' and
+    // `<exe prefix>/share/nvim/runtime` (each checked with `os_isdir`) and only
+    // then takes the baked path as-is, whether or not it exists. Override each
+    // var for a prod build to point at the install prefix.
     for (var, default) in [
         ("NVIM_DEFAULT_VIMRUNTIME_DIR", repo_root.join("runtime")),
         ("NVIM_DEFAULT_LIB_DIR", prefix.join("lib/nvim")),
