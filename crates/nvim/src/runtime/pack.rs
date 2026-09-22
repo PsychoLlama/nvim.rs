@@ -466,11 +466,11 @@ unsafe fn add_pack_dir_to_rtp(fname: *mut c_char, is_pack: bool) -> Result<(), F
     retval
 }
 
-/// `"%s/plugin/**/*"` — every plugin file a package holds.
-const PLUGIN_PATTERN: &CStr = c"%s/plugin/**/*";
+/// Every plugin file a package holds, under the package's directory.
+const PLUGIN_GLOB: &[u8] = b"/plugin/**/*";
 
-/// `"%s/ftdetect/*"` — an opt package's filetype detection.
-const FTDETECT_PATTERN: &CStr = c"%s/ftdetect/*";
+/// An opt package's filetype detection, under the same.
+const FTDETECT_GLOB: &[u8] = b"/ftdetect/*";
 
 /// Source the scripts in a package's `plugin` directory.
 ///
@@ -480,32 +480,38 @@ const FTDETECT_PATTERN: &CStr = c"%s/ftdetect/*";
 /// # Safety
 /// `fname` must be a NUL-terminated path.
 unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> {
-    // SAFETY: `fname` is the caller's path; `ffname` and `pat` are owned and
-    // freed below.
+    // SAFETY: `fname` is the caller's path; `ffname` is owned and freed
+    // below.
     let ffname = unsafe { fix_fname(fname) };
-    let len = unsafe { cstr::bytes_at(ffname) }.len() + PLUGIN_PATTERN.count_bytes() + 1;
-    let mut pat = unsafe { xmallocz(len) }.cast::<c_char>();
+    // SAFETY: `fix_fname` answers a NUL-terminated path.
+    let dir = unsafe { cstr::bytes_at(ffname) }.to_vec();
     let visitor = Visitor {
         callback: Some(source_callback_vim_lua as DoInRuntimepathCBFn),
         cookie: ptr::null_mut(),
     };
+    // The expansion reads the pattern array and never writes it, so the
+    // one entry can point into a string this frame owns.
+    let glob = |suffix: &[u8]| cstr::owned(&[&dir[..], suffix].concat());
 
-    unsafe { vim_snprintf(pat, len, PLUGIN_PATTERN.as_ptr(), ffname) };
+    let pat = glob(PLUGIN_GLOB);
+    let mut at = pat.as_ptr().cast_mut();
+    // SAFETY: an array of one live pattern.
     let _ =
-        unsafe { gen_expand_wildcards_and_cb(1, &raw mut pat, ExpandFlags::FILE, true, visitor) };
+        unsafe { gen_expand_wildcards_and_cb(1, &raw mut at, ExpandFlags::FILE, true, visitor) };
 
     // When runtime/filetype.lua has not been loaded yet, these scripts
     // are found when it is.
     let cmd = unsafe { xstrdup(c"g:did_load_filetypes".as_ptr()) };
     if opt && unsafe { eval_to_number(cmd, false) } > 0 {
         let _ = do_cmdline_cmd(c"augroup filetypedetect");
-        unsafe { vim_snprintf(pat, len, FTDETECT_PATTERN.as_ptr(), ffname) };
-        let patp = &raw mut pat;
+        let pat = glob(FTDETECT_GLOB);
+        let mut at = pat.as_ptr().cast_mut();
+        let patp = &raw mut at;
+        // SAFETY: as above.
         let _ = unsafe { gen_expand_wildcards_and_cb(1, patp, ExpandFlags::FILE, true, visitor) };
         let _ = do_cmdline_cmd(c"augroup END");
     }
     unsafe { xfree(cmd.cast()) };
-    unsafe { xfree(pat.cast()) };
     unsafe { xfree(ffname.cast()) };
     Ok(())
 }
@@ -770,15 +776,13 @@ fn time_msg_now(msg: &CStr) {
     unsafe { time_msg(msg.as_ptr(), ptr::null()) };
 }
 
-/// `pack/*/{start,opt}/{name}` — where `:packadd` looks.
-const PACKADD_PATTERN: &CStr = c"pack/*/%s/%s";
-
 /// `:packadd[!] {name}`.
 pub fn ex_packadd(excmd: &mut ExArg) {
-    // SAFETY: `excmd` is the live command; `pat` is owned and freed below.
+    // SAFETY: `excmd` is the live command.
     let arg = excmd.arg_ptr();
-    let len = PACKADD_PATTERN.count_bytes() + 1 + unsafe { cstr::bytes_at(arg) }.len() + 5;
-    let pat = unsafe { xmallocz(len) }.cast::<c_char>();
+    // `pack/*/{start,opt}/{name}` — where `:packadd` looks.
+    let name = unsafe { cstr::bytes_at(arg) }.to_vec();
+    let under = |which: &[u8]| cstr::owned(&[b"pack/*/", which, b"/", &name[..]].concat());
     let cookie = if excmd.forceit {
         PackWork::AddDir
     } else {
@@ -789,13 +793,13 @@ pub fn ex_packadd(excmd: &mut ExArg) {
     // Only look under "start" when loading packages was not done yet.
     let mut res = OK;
     if !did_source_packages.get() {
-        unsafe { vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"start".as_ptr(), arg) };
+        let pat = under(b"start");
         res = unsafe {
             do_in_path(
                 P_PP.get(),
                 c"packpath",
                 c"".as_ptr(),
-                pat,
+                pat.as_ptr().cast_mut(),
                 RuntimeOpts::ALL | RuntimeOpts::DIR,
                 Some(add_start_pack_plugins as DoInRuntimepathCBFn),
                 cookie,
@@ -804,13 +808,13 @@ pub fn ex_packadd(excmd: &mut ExArg) {
     }
 
     // Give a "not found" error when nothing was found in 'start' or 'opt'.
-    unsafe { vim_snprintf(pat, len, PACKADD_PATTERN.as_ptr(), c"opt".as_ptr(), arg) };
+    let pat = under(b"opt");
     unsafe {
         do_in_path(
             P_PP.get(),
             c"packpath",
             c"".as_ptr(),
-            pat,
+            pat.as_ptr().cast_mut(),
             RuntimeOpts::ALL | RuntimeOpts::DIR | RuntimeOpts::ERR.when(res == FAIL),
             Some(add_opt_pack_plugins as DoInRuntimepathCBFn),
             cookie,
@@ -818,5 +822,4 @@ pub fn ex_packadd(excmd: &mut ExArg) {
     };
 
     update_runtime_search_path_thread(false);
-    unsafe { xfree(pat.cast()) };
 }
