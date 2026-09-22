@@ -16,6 +16,14 @@ and this project adheres to [CalVer](https://calver.org/).
 - Rewrote how a pattern match reports where it matched: a match carries byte
   offsets into the text it ran over rather than pointers into it. No pattern
   changed what it matches.
+- Rewrote how the editor owns the text it allocates: a string is a value that
+  releases itself rather than a block somebody has to remember to free. It
+  reaches the buffer and window names, the struct fields that carry a file
+  name, a pattern, a tag or a spell language, and the message and formatting
+  entry points that print them. No message changed its wording, and the one
+  behaviour change is a read that was out of bounds: `'smartindent'` after a
+  preprocessor line no longer indents by whatever byte happened to lie in
+  front of an empty line.
 
 ## [2026.09.16-b12dec0bc2]
 
