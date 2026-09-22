@@ -49,7 +49,7 @@
 
 use crate::message::{
     MSG_IOBUFF_LEN, SEMSG_ERRBUF_LEN, SEMSG_MULTILINE_ERRBUF_LEN, emsg, emsg_multiline_text,
-    emsg_not_now, msg, msg_keep_text, msg_schedule_semsg_text, swmsg_text,
+    emsg_not_now, msg, msg_keep_text, msg_schedule_semsg_text, msg_str, swmsg_text,
 };
 use crate::os::cshim::{gettext, gettext_template};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
@@ -432,6 +432,17 @@ pub(crate) fn report_msg(hl_id: c_int, message: impl FnOnce() -> String) -> bool
 #[doc(hidden)]
 pub(crate) fn report_msg_keep(hl_id: c_int, message: impl FnOnce() -> String) -> bool {
     msg_keep_text(&to_message(message(), MSG_IOBUFF_LEN), hl_id)
+}
+
+/// `msg_puts()` over a formatted message: show the text where the last one
+/// left off rather than as a message of its own.
+///
+/// [`tr!`]'s tail for a caller that draws one displayed line out of several
+/// pieces -- `z=`'s suggestion list, which numbers, quotes and scores each
+/// entry in turn. Truncation is [`report_msg`]'s, because upstream formatted
+/// every one of those pieces into the same `IObuff`.
+pub(crate) fn msg_text(text: String) {
+    msg_str(&to_message(text, MSG_IOBUFF_LEN));
 }
 
 /// `swmsg()`: show a formatted warning, `hl` selecting `'warningmsg'`

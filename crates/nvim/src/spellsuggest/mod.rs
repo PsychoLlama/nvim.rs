@@ -286,6 +286,14 @@ impl Suggest {
     pub(crate) fn word(&self) -> *mut c_char {
         self.st_word.as_ptr().cast::<c_char>().cast_mut()
     }
+
+    /// The suggested word, without the NUL kept below it.
+    ///
+    /// `st_word` is always `st_wordlen` bytes and that terminator, so this
+    /// is the whole word and no measuring is needed to say so.
+    pub(crate) fn word_bytes(&self) -> &[u8] {
+        &self.st_word[..self.st_wordlen as usize]
+    }
 }
 
 /// How long the trie walk may run for, in milliseconds; `timeout:` in

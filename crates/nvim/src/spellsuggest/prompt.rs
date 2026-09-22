@@ -31,7 +31,6 @@
 #![allow(unsafe_code)]
 
 use crate::change::inserted_bytes;
-use crate::charset::rl_mirror_ascii;
 use crate::cstr;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::drawscreen::state::cmdline_row;
@@ -42,12 +41,13 @@ use crate::getchar::{
 use crate::input::prompt_for_input;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
-use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup, xstrlcpy};
+use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::e_no_spell;
 use crate::message::state::{cmdmsg_rl, lines_left, msg_col, msg_row, msg_scroll};
 use crate::message::{
-    emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start, msg_str,
+    emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_start,
 };
+use crate::message_fmt::{msg_bytes, msg_text};
 use crate::mouse::state::mouse_row;
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::option::vars::p_verbose;
@@ -55,7 +55,6 @@ use crate::options::kOptBoFlagSpell;
 use crate::optionstr::LocalOptStr;
 use crate::os::cshim::gettext;
 use crate::search::FORWARD;
-use crate::smsg;
 use crate::spell::{
     SMT_ALL, check_need_cap, parse_spelllang, repl_from, repl_to, spell_iswordp_nmw, spell_move_to,
 };
@@ -63,13 +62,14 @@ use crate::spellsuggest::{
     MAXWLEN, SPS_BEST, SPS_DOUBLE, Sug, SugInfo, Suggest, spell_find_cleanup, spell_find_suggest,
     spell_suggest_timeout, sps_flags, sps_limit,
 };
-use crate::strings::{vim_snprintf, xstrnsave};
+use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{ColNr, IOSIZE, NUL, Pos, int64_t};
 use crate::ui::state::Rows;
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
+use crate::{smsg, tr};
 use ::libc::{strcat, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -225,12 +225,6 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
 /// `sug` must have been filled by `spell_find_suggest` and its bad word
 /// must still point into a live line.
 unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_int {
-    // Each message gets a buffer of its own; upstream shares `IObuff`,
-    // which the message machinery writes as it shows one.
-    let mut line = [0 as c_char; IOSIZE as usize];
-    let out = line.as_mut_ptr();
-    // SAFETY: the caller guarantees `sug`; every message is formatted into
-    // `IObuff` with its own size.
     // With 'rightleft' the list is drawn right to left.
     cmdmsg_rl.set(Win::current().w_onebuf_opt.wo_rl != 0);
 
@@ -238,15 +232,20 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
     msg_row.set(Rows.get() - 1); // for when 'cmdheight' > 1
     lines_left.set(Rows.get()); // avoid the more-prompt
 
-    let mut fmt = gettext(c"Change \"%.*s\" to:");
-    if cmdmsg_rl.get() && unsafe { cstr::starts_with(fmt.as_ptr(), b"Change") } {
+    // SAFETY: the caller guarantees that the bad word still points into a
+    // live line, of which it is `su_badlen` bytes.
+    let bad = msg_bytes(unsafe { cstr::prefix_at(sug.su_badptr, sug.su_badlen as usize) });
+    let asked = tr!("Change \"{bad}\" to:");
+    let asked = if cmdmsg_rl.get() && asked.starts_with("Change") {
         // And now the rabbit from the high hat: avoid showing the
-        // untranslated message right-to-left.
-        fmt = c":ot \"%.*s\" egnahC";
-    }
-    let fmt = fmt.as_ptr();
-    unsafe { vim_snprintf(out, IOSIZE as usize, fmt, sug.su_badlen, sug.su_badptr) };
-    msg_str(unsafe { cstr::at(out) });
+        // untranslated message right-to-left. Upstream tests the
+        // *template* for that prefix; the rendering carries it just as
+        // faithfully, since the bad word never starts the message.
+        format!(":ot \"{bad}\" egnahC")
+    } else {
+        asked
+    };
+    msg_text(asked);
     msg_clr_eos();
     msg_putchar('\n' as c_int);
 
@@ -284,42 +283,36 @@ unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_i
 /// `stp` must be a live suggestion and `badptr` must point into a live
 /// line.
 unsafe fn show_suggestion(i: c_int, stp: &Suggest, badlen: c_int, badptr: *mut c_char) {
-    // Each message gets a buffer of its own; upstream shares `IObuff`,
-    // which the message machinery writes as it shows one.
-    let mut line = [0 as c_char; IOSIZE as usize];
-    let out = line.as_mut_ptr();
-    // SAFETY: the caller guarantees the suggestion and the line; `wcopy`
-    // has room for the longest word plus what is appended to it.
     // The suggestion may replace only part of the bad word; show the
     // rest of it too, as long as that does not get too long.
-    let mut wcopy = [0 as c_char; MAXWLEN + 2];
-    let wcopyp = wcopy.as_mut_ptr();
-    unsafe { xstrlcpy(wcopyp, stp.word(), MAXWLEN + 1) };
+    let mut word = stp.word_bytes().to_vec();
+    word.truncate(MAXWLEN);
     let extra = badlen - stp.st_orglen;
     if extra > 0 && stp.st_wordlen + extra <= MAXWLEN as c_int {
         debug_assert!(!badptr.is_null());
-        // SAFETY: the test above leaves `st_wordlen + extra` under
-        // `MAXWLEN`, so the copy fits in `wcopy`, and `extra` bytes of the
-        // bad word really do follow what the suggestion replaces.
-        let tail = unsafe { wcopyp.offset(stp.st_wordlen as isize) };
-        let rest = unsafe { badptr.offset(stp.st_orglen as isize) };
-        unsafe { xmemcpyz(tail as *mut c_void, rest as *const c_void, extra as usize) };
+        debug_assert_eq!(word.len(), stp.st_wordlen as usize);
+        // SAFETY: the caller guarantees the line, and `badlen` exceeding
+        // `st_orglen` by `extra` says those bytes of the bad word follow
+        // what the suggestion replaces.
+        let rest = unsafe { cstr::slice_at(badptr.add(stp.st_orglen as usize), extra as usize) };
+        word.extend_from_slice(rest);
     }
 
-    unsafe { vim_snprintf(out, IOSIZE as usize, c"%2d".as_ptr(), i + 1) };
+    let mut number = format!("{:2}", i + 1);
     if cmdmsg_rl.get() {
-        unsafe { rl_mirror_ascii(out, ptr::null_mut()) };
+        // Mirrored for 'rightleft'. The number is generated ASCII, so
+        // reversing its characters is reversing its bytes.
+        number = number.chars().rev().collect();
     }
-    msg_str(unsafe { cstr::at(out) });
+    msg_text(number);
 
-    unsafe { vim_snprintf(out, IOSIZE as usize, c" \"%s\"".as_ptr(), wcopyp) };
-    msg_str(unsafe { cstr::at(out) });
+    msg_text(format!(" \"{}\"", msg_bytes(&word)));
 
     // The word may replace more than the bad word does.
     if badlen < stp.st_orglen {
-        let fmt = gettext(c" < \"%.*s\"");
-        unsafe { vim_snprintf(out, IOSIZE as usize, fmt.as_ptr(), stp.st_orglen, badptr) };
-        msg_str(unsafe { cstr::at(out) });
+        // SAFETY: as above, for the bytes the suggestion replaces.
+        let replaced = msg_bytes(unsafe { cstr::prefix_at(badptr, stp.st_orglen as usize) });
+        msg_text(tr!(" < \"{replaced}\""));
     }
 
     if p_verbose() > 0 {
@@ -329,30 +322,21 @@ unsafe fn show_suggestion(i: c_int, stp: &Suggest, badlen: c_int, badptr: *mut c
 
 /// Append a suggestion's score, which `'verbose'` asks for.
 fn show_score(stp: &Suggest) {
-    // Each message gets a buffer of its own; upstream shares `IObuff`,
-    // which the message machinery writes as it shows one.
-    let mut line = [0 as c_char; IOSIZE as usize];
-    let out = line.as_mut_ptr();
-    // SAFETY: the caller guarantees the suggestion; the format strings and
-    // `IObuff`'s size match.
-    if sps_flags.get() & (SPS_DOUBLE | SPS_BEST) != 0 {
-        let salscore = if stp.st_salscore {
-            c"s ".as_ptr()
-        } else {
-            c"".as_ptr()
-        };
-        let fmt = c" (%s%d - %d)".as_ptr();
-        let (score, altscore) = (stp.st_score, stp.st_altscore);
-        unsafe { vim_snprintf(out, IOSIZE as usize, fmt, salscore, score, altscore) };
+    let mut shown = if sps_flags.get() & (SPS_DOUBLE | SPS_BEST) != 0 {
+        let salscore = if stp.st_salscore { "s " } else { "" };
+        format!(" ({}{} - {})", salscore, stp.st_score, stp.st_altscore)
     } else {
-        unsafe { vim_snprintf(out, IOSIZE as usize, c" (%d)".as_ptr(), stp.st_score) };
-    }
+        format!(" ({})", stp.st_score)
+    };
     if cmdmsg_rl.get() {
-        // Mirror the numbers, but keep the leading space.
-        unsafe { rl_mirror_ascii(out.add(1), ptr::null_mut()) };
+        // Mirror the numbers, but keep the leading space. All of it is
+        // generated ASCII, so reversing characters reverses bytes.
+        let mirrored: String = shown[1..].chars().rev().collect();
+        shown.truncate(1);
+        shown.push_str(&mirrored);
     }
     msg_advance(30);
-    msg_str(unsafe { cstr::at(out) });
+    msg_text(shown);
 }
 
 /// Put the chosen suggestion into the line, and record it for
@@ -364,9 +348,6 @@ fn show_score(stp: &Suggest) {
 /// cursor line that `sug`'s bad word points into, and the undo state must
 /// already have been saved.
 unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
-    // The replacement text gets a buffer of its own; upstream shares
-    // `IObuff`, which the message machinery writes as it shows a message.
-    let mut repl = [0 as c_char; IOSIZE as usize];
     // SAFETY: the caller guarantees the pointers; the new line is sized
     // from the three pieces written into it and is handed to `ml_replace`,
     // which takes it over.
@@ -382,12 +363,18 @@ unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
         repl_from.set(unsafe { xstrnsave(sug.su_badptr, sug.su_badlen as usize) });
         // SAFETY: `su_badptr` points into the line and the suggestion
         // replaces `st_orglen` of its bytes, so what is left of the bad
-        // word starts there; `repl` is `IOSIZE`, which is the bound given.
-        let rest = unsafe { sug.su_badptr.offset(stp.st_orglen as isize) };
-        let restlen = sug.su_badlen - stp.st_orglen;
-        let fmt = c"%s%.*s".as_ptr();
-        let out = repl.as_mut_ptr();
-        unsafe { vim_snprintf(out, IOSIZE as usize, fmt, stp.word(), restlen, rest) };
+        // word starts there.
+        let rest = unsafe {
+            cstr::prefix_at(
+                sug.su_badptr.add(stp.st_orglen as usize),
+                (sug.su_badlen - stp.st_orglen) as usize,
+            )
+        };
+        let mut repl = stp.word_bytes().to_vec();
+        repl.extend_from_slice(rest);
+        // `IOSIZE` was upstream's scratch buffer, and it truncated there.
+        repl.truncate(IOSIZE as usize - 1);
+        let repl = cstr::owned(&repl);
         repl_to.set(unsafe { xstrdup(repl.as_ptr()) });
     } else {
         // Replacing the whole bad word, or more of the line than it
