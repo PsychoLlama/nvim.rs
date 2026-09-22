@@ -274,7 +274,6 @@ pub unsafe fn gen_expand_wildcards(
         }
     }
 
-    let path_option = buffer_path();
     RECURSIVE.set(true);
     let mut ga = GArray::default();
     unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 30) };
@@ -359,6 +358,11 @@ pub unsafe fn gen_expand_wildcards(
 
         if did_expand_in_path && ga.ga_len > 0 && flags.has(SEARCH_LIST) {
             RECURSIVE.set(false);
+            // Upstream takes 'path' once, up front, whether or not it will
+            // be used -- which during `set_init_1` (expanding a `~` in
+            // $CDPATH) is before 'path' has a value. Taken here, it is read
+            // only where a 'path' search has already happened.
+            let path_option = buffer_path();
             unsafe { uniquefy_paths(&raw mut ga, p, path_option) };
             RECURSIVE.set(true);
         }
