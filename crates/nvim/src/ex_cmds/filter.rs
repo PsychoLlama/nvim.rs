@@ -46,11 +46,11 @@ use crate::memline::ml_get;
 use crate::memory::xfree;
 use crate::message::state::{info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent};
 use crate::message::{
-    MSG_BUF_LEN, emsg, message_filtered, msg_display, msg_ext_set_kind, msg_prt_line, msg_ptr,
-    msg_str_hl, set_keep_msg, wait_return,
+    MSG_BUF_LEN, emsg, message_filtered, msg, msg_bytes, msg_display, msg_ext_set_kind,
+    msg_prt_line, set_keep_msg, wait_return,
 };
 use crate::message::{e_noprev, e_notmp};
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, to_message};
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::option::cpo_has;
 use crate::option::vars::{P_SHQ, p_report, p_sh, p_srr, p_stmp, p_warn};
@@ -63,6 +63,7 @@ use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::silent_mode;
 use crate::strings::{vim_snprintf, vim_strsave_escaped};
+use crate::tr;
 use crate::types::ui::kUIMessages;
 use crate::types::{CmdModFlags, CpoFlag, ExArg, LineNr, NUL, OptInt};
 use crate::ui::state::Rows;
@@ -559,22 +560,14 @@ unsafe fn do_filter(
 /// `:range!cmd`'s "N lines filtered". `set_keep_msg` takes a copy, so it
 /// survives the redraw without a buffer outliving this call.
 fn report_filtered(linecount: LineNr) {
-    let mut scratch = [0 as c_char; MSG_BUF_LEN as usize];
-    let buf = scratch.as_mut_ptr();
-    // SAFETY: `scratch` is `MSG_BUF_LEN` bytes and outlives the call; one
-    // `%ld` for one `int64_t`.  `msg` and `set_keep_msg` copy what they are
-    // given.
-    unsafe {
-        vim_snprintf(
-            buf,
-            MSG_BUF_LEN as usize,
-            gettext(c"%ld lines filtered").as_ptr(),
-            linecount as i64,
-        )
-    };
-    if unsafe { msg_ptr(buf, 0) } && msg_scroll.get() == 0 {
+    let count = linecount as i64;
+    // `MSG_BUF_LEN` is where upstream's scratch buffer truncated this.
+    let shown = to_message(tr!("{count} lines filtered"), MSG_BUF_LEN as usize);
+    if msg(&shown, 0) && msg_scroll.get() == 0 {
         // save message to display it after redraw
-        unsafe { set_keep_msg(buf, 0) };
+        // SAFETY: a `CStr` is a valid C string, and `set_keep_msg` copies
+        // what it is given.
+        unsafe { set_keep_msg(shown.as_ptr(), 0) };
     }
 }
 
@@ -797,19 +790,9 @@ fn has_percent_s(opt: &[u8]) -> bool {
 pub fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
     // SAFETY: `curwin` is the live current window.
     if Win::current().w_onebuf_opt.wo_nu != 0 || use_number {
-        let mut numbuf: [c_char; 30] = [0; 30];
-        // SAFETY: a `%*d` for the width and the line number, into a buffer of
-        // its own size.  Highlight line nrs.
-        unsafe {
-            vim_snprintf(
-                numbuf.as_mut_ptr(),
-                numbuf.len(),
-                c"%*d ".as_ptr(),
-                number_width(Win::current()),
-                lnum,
-            )
-        };
-        msg_str_hl(cstr::in_chars(&numbuf), HLF_N + 1, false);
+        // Highlight line nrs, right-aligned in 'numberwidth' columns.
+        let width = number_width(Win::current()).max(0) as usize;
+        msg_bytes(format!("{lnum:>width$} ").as_bytes(), HLF_N + 1, false);
     }
     // The message path re-enters the editor (`msg_putchar` can reach the
     // hit-enter prompt), so the line is copied rather than lent out of the
