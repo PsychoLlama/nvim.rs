@@ -4,7 +4,9 @@
 #![allow(unsafe_code)]
 
 use crate::memline::MlFlags;
+use crate::message::emsg;
 use crate::message_fmt::msg_bytes;
+use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
@@ -69,7 +71,7 @@ use crate::winlayer::{Buf, Win, windows};
 /// `:print`, `:number` and `:list`.
 pub(crate) fn ex_print(excmd: &mut ExArg) {
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        emsg(gettext(e_empty_buffer.as_ptr()));
+        emsg(gettext(e_empty_buffer));
     } else {
         let idx = excmd.cmdidx;
         let numbered =
@@ -310,7 +312,7 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
     // `get_address` answers no offset when the address was malformed.
     let Some(at) = at else {
         if let Some(msg) = &errormsg {
-            emsg(msg.as_ptr());
+            emsg(msg);
         }
         excmd.line.next = None;
         return;
@@ -320,7 +322,7 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
     if n == MAXLNUM || n < 0 || n > Buf::current().b_ml.ml_line_count {
-        emsg(gettext(e_invrange.as_ptr()));
+        emsg(gettext(e_invrange));
         return;
     }
 
@@ -462,7 +464,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     }
 
     if step >= Buf::current().b_u_seq_cur as LineNr {
-        emsg(gettext(e_undobang_cannot_redo_or_move_branch.as_ptr()));
+        emsg(gettext(e_undobang_cannot_redo_or_move_branch));
         return;
     }
     // Count how many states back `step` is along this branch.
@@ -484,7 +486,7 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
     // branch. Sequence 0 is the state before any change and is always
     // reachable.
     if step != 0 && (uhp.is_null() || (unsafe { (*uhp).uh_seq } as LineNr) < step) {
-        emsg(gettext(e_undobang_cannot_redo_or_move_branch.as_ptr()));
+        emsg(gettext(e_undobang_cannot_redo_or_move_branch));
         return;
     }
     u_undo_and_forget(count, true);
@@ -560,7 +562,7 @@ pub(crate) fn ex_later(excmd: &mut ExArg) {
 /// `:mark` and `:k`.
 pub(crate) fn ex_mark(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) == 0 {
-        emsg(gettext(e_argreq.as_ptr()));
+        emsg(gettext(e_argreq));
         return;
     }
     if excmd.line.byte_at(excmd.line.arg + 1) != 0 {
@@ -576,7 +578,7 @@ pub(crate) fn ex_mark(excmd: &mut ExArg) {
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     if setmark(c_int::from(excmd.line.byte_at(excmd.line.arg))).is_err() {
         emsg(gettext(
-            c"E191: Argument must be a letter or forward/backward quote".as_ptr(),
+            c"E191: Argument must be a letter or forward/backward quote",
         ));
     }
     Win::current().w_cursor = pos;
@@ -648,18 +650,6 @@ pub(crate) fn ex_folddo(excmd: &mut ExArg) {
 pub(super) fn clear_oparg(op: *mut OpArg) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ops::clear_oparg(op) }
-}
-
-/// `emsg()` as checked code.
-pub(super) fn emsg(s: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg_ptr(s) }
-}
-
-/// `gettext()` as checked code.
-pub(super) fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `ins_typebuf()` as checked code.

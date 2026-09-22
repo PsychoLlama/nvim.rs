@@ -168,7 +168,7 @@ pub(crate) fn parse_count(
         }
     }
     if n <= 0 && !excmd.argt.has(ExArgt::ZEROR) {
-        *errormsg = Some(unsafe { ex_msg(e_zerocount.as_ptr()) });
+        *errormsg = Some(ex_msg(e_zerocount));
         return Err(Failed);
     }
     set_cmd_count(excmd, n, validate);

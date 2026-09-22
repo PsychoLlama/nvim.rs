@@ -5,11 +5,12 @@
 #![allow(unsafe_code)]
 
 use super::edit::{
-    byte, clear_oparg, emsg, gettext, ins_typebuf, ui_cursor_shape, update_topline_cursor,
-    utfc_ptr2len,
+    byte, clear_oparg, ins_typebuf, ui_cursor_shape, update_topline_cursor, utfc_ptr2len,
 };
 use crate::cstr;
 use crate::guard::Depth;
+use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -97,15 +98,15 @@ pub unsafe fn restore_current_state(sst: *mut SaveState) {
 /// `:normal` — run the argument as normal-mode keys.
 pub(crate) fn ex_normal(excmd: &mut ExArg) {
     if !Buf::current().terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
-        emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
+        emsg(c"Can't re-enter normal mode from terminal mode");
         return;
     }
     if expr_map_locked() {
-        emsg(gettext(e_secure.as_ptr()));
+        emsg(gettext(e_secure));
         return;
     }
     if ex_normal_busy.get() as crate::types::OptInt >= p_mmd() {
-        emsg(gettext(c"E192: Recursive use of :normal too deep".as_ptr()));
+        emsg(gettext(c"E192: Recursive use of :normal too deep"));
         return;
     }
 

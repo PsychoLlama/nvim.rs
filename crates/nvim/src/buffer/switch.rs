@@ -153,9 +153,8 @@ fn report_count(one: &'static CStr, many: &'static CStr, n: c_int) {
 }
 
 /// A translated message, as the owned error this family answers with.
-fn owned_err(msg: &CStr) -> Option<CString> {
-    // SAFETY: a NUL-terminated message.
-    Some(unsafe { ex_msg(msg.as_ptr()) })
+fn owned_err(msg: &'static CStr) -> Option<CString> {
+    Some(ex_msg(msg))
 }
 fn skip_white(arg: *mut c_char) -> *mut c_char {
     // SAFETY: a NUL-terminated argument.

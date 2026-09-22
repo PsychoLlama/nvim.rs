@@ -11,6 +11,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::window::tab_index;
@@ -320,7 +322,7 @@ pub(crate) fn ex_pclose(excmd: &mut ExArg) {
 pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     let w = win;
     if is_aucmd_win(win) {
-        emsg(gettext(e_autocmd_close.as_ptr()));
+        emsg(gettext(e_autocmd_close));
         return;
     }
     // A floating window is not part of the layout, so a locked layout
@@ -370,7 +372,7 @@ pub(crate) fn ex_tabclose(excmd: &mut ExArg) {
         return;
     }
     if only_tab() {
-        emsg(gettext(c"E784: Cannot close last tab page".as_ptr()));
+        emsg(gettext(c"E784: Cannot close last tab page"));
         return;
     }
     if window_layout_locked(CmdIdx::tabclose) {
@@ -399,7 +401,7 @@ pub(crate) fn ex_tabonly(excmd: &mut ExArg) {
         return;
     }
     if only_tab() {
-        unsafe { msg_ptr(gettext(c"Already only one tab page".as_ptr()), 0) };
+        unsafe { msg_ptr(gettext(c"Already only one tab page").as_ptr(), 0) };
         return;
     }
     if window_layout_locked(CmdIdx::tabonly) {
@@ -640,21 +642,9 @@ fn curbuf_locked() -> bool {
     crate::ex_getln::curbuf_locked()
 }
 
-/// `emsg()` as checked code.
-fn emsg(s: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg_ptr(s) }
-}
-
 /// `getout()` as checked code.
 fn getout(exitval: c_int) -> ! {
     crate::startup::getout(exitval)
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `not_exiting()` as checked code.

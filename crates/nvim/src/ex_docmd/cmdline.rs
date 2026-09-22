@@ -16,6 +16,8 @@
 
 use crate::cstr;
 use crate::ex_getln::ui_ext_cmdline_block_append;
+use crate::message::emsg;
+use crate::os::cshim::gettext;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -360,13 +362,13 @@ fn unwind_conditionals(source: &Source, cstack: &mut CondStack, initial_trylevel
     {
         let flags_here = cstack.cs_flags[cstack.cs_idx as usize];
         let missing = if flags_here.has(CsFlags::TRY) {
-            e_endtry.as_ptr()
+            e_endtry
         } else if flags_here.has(CsFlags::WHILE) {
-            e_endwhile.as_ptr()
+            e_endwhile
         } else if flags_here.has(CsFlags::FOR) {
-            e_endfor.as_ptr()
+            e_endfor
         } else {
-            e_endif.as_ptr()
+            e_endif
         };
         emsg(gettext(missing));
     }
@@ -417,12 +419,12 @@ fn leave_nesting(source: &Source) {
     if (source.is_script() || source.is_func()) && ex_nesting_level.get() < debug_break_level.get()
     {
         let what = if source.is_script() {
-            c"End of sourced file".as_ptr()
+            c"End of sourced file"
         } else {
-            c"End of function".as_ptr()
+            c"End of function"
         };
         // SAFETY: a static NUL-terminated message.
-        unsafe { do_debug(gettext(what)) };
+        unsafe { do_debug(gettext(what).as_ptr().cast_mut()) };
     }
 }
 
@@ -845,7 +847,7 @@ pub unsafe fn do_cmdline(
     msg_list.set(&raw mut private_msg_list);
 
     if do_cmdline_start().is_err() {
-        emsg(gettext(e_command_too_recursive.as_ptr()));
+        emsg(gettext(e_command_too_recursive));
         // No command name: this is not an error of any one command.
         let mut none = empty_cstack();
         do_errthrow(&mut none, None);
@@ -935,12 +937,6 @@ fn do_errthrow(cstack: &mut CondStack, cmdname: Option<&CStr>) {
     unsafe { crate::ex_eval::do_errthrow(&raw mut *cstack, name) }
 }
 
-/// `emsg()`, checked.
-fn emsg(s: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg_ptr(s) }
-}
-
 /// `func_has_abort()` as checked code.
 fn func_has_abort(cookie: *mut c_void) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
@@ -963,12 +959,6 @@ fn func_level(cookie: *mut c_void) -> c_int {
 fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_docmd::source::getline_equal(fgetline, cookie, func) }
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `rewind_conditionals()` as checked code.

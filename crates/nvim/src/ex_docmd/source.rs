@@ -4,6 +4,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 use crate::buffer::buf_get_changedtick;
+use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
 
 use crate::getchar::typeahead;
@@ -149,7 +151,7 @@ pub fn do_exmode() {
     let no_prompt = Suppress::wait_return();
     unsafe {
         msg_ptr(
-            gettext(c"Entering Ex mode.  Type \"visual\" to go to Normal mode.".as_ptr()),
+            gettext(c"Entering Ex mode.  Type \"visual\" to go to Normal mode.").as_ptr(),
             0,
         )
     };
@@ -179,7 +181,7 @@ pub fn do_exmode() {
             || changedtick != buf_get_changedtick(Buf::current());
         if moved && !ex_no_reprint.get() {
             if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                emsg(gettext(e_empty_buffer.as_ptr()));
+                emsg(gettext(e_empty_buffer));
             } else {
                 // A bare Return already scrolled; print over that line
                 // rather than under it.
@@ -197,9 +199,9 @@ pub fn do_exmode() {
         } else if ex_pressedreturn.get() && !ex_no_reprint.get() {
             // Return on the last line: there is nothing to print.
             if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-                emsg(gettext(e_empty_buffer.as_ptr()));
+                emsg(gettext(e_empty_buffer));
             } else {
-                emsg(gettext(c"E501: At end-of-file".as_ptr()));
+                emsg(gettext(c"E501: At end-of-file"));
             }
         }
     }
@@ -281,7 +283,7 @@ pub fn handle_did_throw() {
                 vim_snprintf(
                     buf.as_mut_ptr(),
                     IOSIZE as size_t,
-                    gettext(c"E605: Exception not caught: %s".as_ptr()),
+                    gettext(c"E605: Exception not caught: %s").as_ptr(),
                     exception.value,
                 )
             };
@@ -320,7 +322,8 @@ pub fn handle_did_throw() {
             m = next;
         }
     } else if !reported.is_null() {
-        emsg(reported);
+        // SAFETY: the message `do_cmdline` left behind, NUL-terminated.
+        emsg(unsafe { cstr::at(reported) });
         xfree(reported as *mut c_void);
     }
 
@@ -446,20 +449,18 @@ fn unwrap_loop_getter(fgetline: LineGetter, cookie: *mut c_void) -> (LineGetter,
 /// # Safety
 ///
 /// `msg` must be NUL-terminated.
-pub(crate) unsafe fn ex_msg(msg: *const c_char) -> CString {
-    // SAFETY: the caller's NUL-terminated message; `gettext` answers it or
-    // a translation of it, equally NUL-terminated.
-    unsafe { CStr::from_ptr(gettext(msg)) }.to_owned()
+pub(crate) fn ex_msg(msg: &'static CStr) -> CString {
+    gettext(msg).to_owned()
 }
 
 /// [`ex_msg`] for a message with one `%s` in it.
-pub(crate) fn ex_errmsg(msg: &CStr, arg: &CStr) -> CString {
+pub(crate) fn ex_errmsg(msg: &'static CStr, arg: &CStr) -> CString {
     let mut buf = [0 as c_char; MSG_BUF_LEN as usize];
     let size = MSG_BUF_LEN as size_t;
     // SAFETY: a format holding one `%s`, its argument, and the whole of
     // `buf` to write into. Both pointers are spelled out rather than left
     // to a variadic's coercion.
-    unsafe { vim_snprintf(buf.as_mut_ptr(), size, gettext(msg.as_ptr()), arg.as_ptr()) };
+    unsafe { vim_snprintf(buf.as_mut_ptr(), size, gettext(msg).as_ptr(), arg.as_ptr()) };
     cstr::in_chars(&buf).to_owned()
 }
 
@@ -467,18 +468,6 @@ pub(crate) fn ex_errmsg(msg: &CStr, arg: &CStr) -> CString {
 pub fn not_exiting(save_exiting: bool) {
     exiting.set(save_exiting);
     unsafe { set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t) };
-}
-
-/// `emsg()` as checked code.
-fn emsg(s: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg_ptr(s) }
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `v_exception()` as checked code.

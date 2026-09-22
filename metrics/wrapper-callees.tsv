@@ -4,8 +4,8 @@ count	callee	no_raw	defs	def
 450	.offset	0	0	
 449	bytes_at	0	1	crates/nvim/src/cstr.rs
 341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-321	at	0	3	
-280	CStr::from_ptr	0	2	
+323	at	0	3	
+279	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
 183	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
@@ -122,7 +122,6 @@ count	callee	no_raw	defs	def
 19	convert_setup	0	1	crates/nvim/src/mbyte/convert.rs
 19	dict_set_var	0	1	crates/nvim/src/api/private/helpers/vimdict.rs
 19	emsg_funcname	0	1	crates/nvim/src/eval/userfunc/name.rs
-19	emsg_ptr	0	1	crates/nvim/src/message/errors.rs
 19	msg_ptr	0	1	crates/nvim/src/message/mod.rs
 19	path_fnamecmp	0	0	
 18	Db::new	0	67	
@@ -214,8 +213,8 @@ count	callee	no_raw	defs	def
 11	call_func	0	1	crates/nvim/src/eval/userfunc/dispatch.rs
 11	dispatch_fast	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
 11	do_ecmd	0	1	crates/nvim/src/ex_cmds/ecmd/mod.rs
+11	emsg_ptr	0	1	crates/nvim/src/message/errors.rs
 11	encode_tv2string	0	1	crates/nvim/src/eval/encode/mod.rs
-11	ex_msg	0	1	crates/nvim/src/ex_docmd/source.rs
 11	fix_fname	0	1	crates/nvim/src/path/mod.rs
 11	free_fmark	1	1	crates/nvim/src/mark/mod.rs
 11	hash_find	0	1	crates/nvim/src/hashtab.rs

@@ -16,6 +16,7 @@
 
 use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;
+use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::is_user_cmd;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
@@ -173,7 +174,7 @@ pub fn parse_cmd_address(excmd: &mut ExArg, errormsg: &mut Option<CString>, sile
                 excmd.addr_count += 1;
             } else if excmd.line.byte_at(excmd.line.cmd) == b'*' {
                 if excmd.addr_type != CmdAddr::Lines {
-                    *errormsg = Some(ex_msg(e_invrange.as_ptr()));
+                    *errormsg = Some(ex_msg(e_invrange));
                     break 'theend;
                 }
                 excmd.line.cmd += 1;
@@ -250,7 +251,7 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
             // Only a *user* command may say `%` over windows or tab
             // pages; a builtin one would not know what to do with it.
             if !is_user_cmd(excmd.cmdidx) {
-                *errormsg = Some(ex_msg(e_invrange.as_ptr()));
+                *errormsg = Some(ex_msg(e_invrange));
                 return false;
             }
             excmd.line1 = 1;
@@ -261,7 +262,7 @@ fn whole_range(excmd: &mut ExArg, errormsg: &mut Option<CString>) -> bool {
             };
         }
         CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
-            *errormsg = Some(ex_msg(e_invrange.as_ptr()));
+            *errormsg = Some(ex_msg(e_invrange));
             return false;
         }
         CmdAddr::Arguments => {
@@ -355,9 +356,9 @@ pub unsafe fn skip_range(text: &[u8], ctx: *mut ExpandContext) -> usize {
 /// E493 or E481, depending on whether the command takes a range at all.
 pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
     if addr_type == CmdAddr::NoRange {
-        ex_msg(e_norange.as_ptr())
+        ex_msg(e_norange)
     } else {
-        ex_msg(e_invrange.as_ptr())
+        ex_msg(e_invrange)
     }
 }
 
@@ -547,7 +548,7 @@ pub fn get_address(
                     b'&' => RE_SUBST as c_int,
                     b'?' | b'/' => RE_SEARCH as c_int,
                     _ => {
-                        *errormsg = Some(ex_msg(e_backslash.as_ptr()));
+                        *errormsg = Some(ex_msg(e_backslash));
                         failed = true;
                         break;
                     }
@@ -625,14 +626,14 @@ pub fn get_address(
                 let (n, past) = getdigits_int_at(text, cmd, false, MAXLNUM);
                 cmd = past;
                 if n == MAXLNUM {
-                    *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
+                    *errormsg = Some(ex_msg(e_line_number_out_of_range));
                     failed = true;
                     break 'error;
                 }
                 n
             };
             if addr_type == CmdAddr::TabsRelative {
-                *errormsg = Some(ex_msg(e_invrange.as_ptr()));
+                *errormsg = Some(ex_msg(e_invrange));
                 failed = true;
                 break 'error;
             } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
@@ -649,7 +650,7 @@ pub fn get_address(
                 if sign == b'-' {
                     lnum -= n;
                 } else if lnum >= 0 && n >= INT32_MAX as LineNr - lnum {
-                    *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
+                    *errormsg = Some(ex_msg(e_line_number_out_of_range));
                     failed = true;
                     break 'error;
                 } else {
@@ -740,7 +741,7 @@ fn offset_base(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
 /// Is the range this command was given out of bounds? Answers the message
 /// to report, or null.
 pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
-    let invrange = || Some(ex_msg(e_invrange.as_ptr()));
+    let invrange = || Some(ex_msg(e_invrange));
     if excmd.line1 < 0 || excmd.line2 < 0 || excmd.line1 > excmd.line2 {
         return invrange();
     }
@@ -808,7 +809,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Option<CString> {
                 // "no errors" reads better than "invalid range" when
                 // the user did not ask for a particular entry.
                 if excmd.addr_count == 0 {
-                    return Some(ex_msg(e_no_errors.as_ptr()));
+                    return Some(ex_msg(e_no_errors));
                 }
                 return invrange();
             }
@@ -836,12 +837,6 @@ pub(crate) fn correct_range(excmd: &mut ExArg) {
     if excmd.line2 == 0 {
         excmd.line2 = 1;
     }
-}
-
-/// `ex_msg()` as checked code.
-fn ex_msg(msg: *const c_char) -> CString {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::ex_msg(msg) }
 }
 
 /// `mark_get_visual()` as checked code.

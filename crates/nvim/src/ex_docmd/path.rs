@@ -10,6 +10,8 @@
 use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::guard::Lock;
+use crate::message::emsg;
+use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::smsg;
 use crate::types::CmdIdx;
@@ -111,7 +113,7 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> Opti
                 )
             };
         } else {
-            emsg(gettext(e_invalid_return_type_from_findfunc.as_ptr()));
+            emsg(gettext(e_invalid_return_type_from_findfunc));
         }
         tv_clear(&mut rettv);
     }
@@ -298,7 +300,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     if unsafe { cstr::eq_bytes(new_dir, b"-") } {
         let pdir = get_prevdir(scope);
         if pdir.is_null() {
-            emsg(gettext(c"E186: No previous directory".as_ptr()));
+            emsg(gettext(c"E186: No previous directory"));
             return false;
         }
         new_dir = pdir;
@@ -320,7 +322,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
     if dir_differs {
         do_autocmd_dirchanged(new_dir, scope, kCdCauseManual, true);
         if unsafe { vim_chdir(new_dir) } != 0 {
-            emsg(gettext(e_failed.as_ptr()));
+            emsg(gettext(e_failed));
             xfree(pdir as *mut c_void);
             return false;
         }
@@ -382,7 +384,7 @@ pub(crate) fn ex_pwd(_excmd: &mut ExArg) {
 fn report_working_dir() {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_err() {
-        emsg(gettext(c"E187: Unknown".as_ptr()));
+        emsg(gettext(c"E187: Unknown"));
         return;
     }
     if p_verbose() > 0 as OptInt {
@@ -407,18 +409,6 @@ fn report_working_dir() {
 fn do_autocmd_dirchanged(new_dir: *mut c_char, scope: CdScope, cause: CdCause, pre: bool) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::file_search::do_autocmd_dirchanged(new_dir, scope, cause, pre) }
-}
-
-/// `emsg()` as checked code.
-fn emsg(s: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg_ptr(s) }
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }
 
 /// `option_set_callback_func()` as checked code.

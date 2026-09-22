@@ -4,6 +4,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::types::{Channel, Proc};
 
@@ -173,7 +174,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
 
     'fail_1: {
         if channel.is_null() {
-            emsg(c"cannot create a channel job".as_ptr());
+            emsg(c"cannot create a channel job");
             break 'fail_1;
         }
         let id = unsafe { (*channel).id };
@@ -238,7 +239,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
             };
             let servername = result.into_string().filter(|s| !s.is_empty());
             let Some(servername) = servername else {
-                emsg(c"restart failed: could not get listen address from new server".as_ptr());
+                emsg(c"restart failed: could not get listen address from new server");
                 break 'fail_2;
             };
             arena_mem_free(result_mem);
@@ -265,10 +266,10 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
             xfree(quit_cmd_copy as *mut c_void);
 
             if err.is_set() {
-                emsg(err.message_or_empty().as_ptr());
+                emsg(err.message_or_empty());
                 err.clear();
             } else if !exiting.get() {
-                emsg(c"restart failed: +cmd did not quit the server".as_ptr());
+                emsg(c"restart failed: +cmd did not quit the server");
             }
         }
 
@@ -276,7 +277,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
         // the last thing that runs — and on every failure.
         set_vim_var_string(Vv::Exitreason, ptr::null(), -1 as ptrdiff_t);
         if err.is_set() {
-            emsg(err.message_or_empty().as_ptr());
+            emsg(err.message_or_empty());
             err.clear();
         }
         arena_mem_free(result_mem);
@@ -295,7 +296,7 @@ pub(crate) fn ex_restart(excmd: &mut ExArg) {
 
         unsafe { proc_stop(channel_proc(channel)) };
         if unsafe { proc_wait(channel_proc(channel), -1, ptr::null_mut()) } < 0 {
-            emsg(c"killing new nvim server failed".as_ptr());
+            emsg(c"killing new nvim server failed");
         }
     }
 
@@ -323,7 +324,7 @@ fn blank_callback() -> Callback {
 /// `:detach` — let the UI go, and keep running headless.
 pub(crate) fn ex_detach(excmd: &mut ExArg) {
     if excmd.forceit {
-        emsg(c"bang (!) not supported yet".as_ptr());
+        emsg(c"bang (!) not supported yet");
         return;
     }
     detach_ui();
@@ -335,12 +336,12 @@ pub(crate) fn ex_detach(excmd: &mut ExArg) {
 /// somewhere else, and has no bang of its own to answer for.
 fn detach_ui() {
     if current_ui.get() == 0 {
-        emsg(c"UI not attached".as_ptr());
+        emsg(c"UI not attached");
         return;
     }
     let chan = find_channel(current_ui.get());
     if chan.is_null() {
-        emsg(e_invchan.as_ptr());
+        emsg(e_invchan);
         return;
     }
 
@@ -352,7 +353,7 @@ fn detach_ui() {
     }
 
     if let Err(e) = unsafe { remote_ui_disconnect((*chan).id, true) } {
-        emsg(e.message_or_empty().as_ptr());
+        emsg(e.message_or_empty());
         return;
     }
 
@@ -360,7 +361,8 @@ fn detach_ui() {
     if !unsafe { channel_close((*chan).id, kChannelPartAll, &raw mut close_err) }
         && !close_err.is_null()
     {
-        emsg(close_err);
+        // SAFETY: `channel_close` left a NUL-terminated reason behind.
+        emsg(unsafe { cstr::at(close_err) });
         return;
     }
     // SAFETY: the channel this command just closed is still live.
@@ -377,7 +379,7 @@ pub(crate) fn ex_connect(excmd: &mut ExArg) {
     let stop_server = excmd.forceit && ui_active() == 1;
     let addr = excmd.line.cstr_from(excmd.line.arg);
     if let Err(e) = remote_ui_connect(current_ui.get(), addr) {
-        emsg(e.message_or_empty().as_ptr());
+        emsg(e.message_or_empty());
         return;
     }
     detach_ui();
@@ -403,12 +405,6 @@ fn channel_proc(chan: *mut Channel) -> *mut Proc {
 fn cstr_to_string(str: *const c_char) -> String_0 {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::api::private::helpers::cstr_to_string(str) }
-}
-
-/// `emsg()` as checked code.
-fn emsg(s: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg_ptr(s) }
 }
 
 /// `rpc_send_call()` as checked code.

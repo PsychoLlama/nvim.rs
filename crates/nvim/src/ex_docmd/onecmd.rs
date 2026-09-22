@@ -13,6 +13,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::ex_docmd::ex_msg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -282,7 +283,7 @@ fn locate_command(
 
     let Some(p) = p else {
         if !excmd.skip {
-            *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
+            *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command));
         }
         return Err(Refused);
     };
@@ -290,7 +291,7 @@ fn locate_command(
     if excmd.cmdidx == CmdIdx::SIZE {
         if !excmd.skip {
             // The modifiers parsed, so the error is in what follows them.
-            let msg = ex_msg(e_not_an_editor_command.as_ptr());
+            let msg = ex_msg(e_not_an_editor_command);
             *errormsg = Some(if flags.has(DoCmdOpts::VERBOSE) {
                 // The whole line is appended by `do_one_cmd` instead.
                 msg
@@ -335,13 +336,13 @@ fn check_may_run(
             return Err(Refused);
         }
         if !ni && !excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
-            *errormsg = Some(ex_msg(e_norange.as_ptr()));
+            *errormsg = Some(ex_msg(e_norange));
             return Err(Refused);
         }
     }
 
     if !ni && !excmd.argt.has(ExArgt::BANG) && excmd.forceit {
-        *errormsg = Some(ex_msg(e_nobang.as_ptr()));
+        *errormsg = Some(ex_msg(e_nobang));
         return Err(Refused);
     }
 
@@ -354,7 +355,7 @@ fn check_may_run(
         if global_busy.get() == 0 && excmd.line1 > excmd.line2 {
             if msg_silent.get() == 0 {
                 if flags.has(DoCmdOpts::VERBOSE) || exmode_active.get() {
-                    *errormsg = Some(ex_msg(c"E493: Backwards range given".as_ptr()));
+                    *errormsg = Some(ex_msg(c"E493: Backwards range given"));
                     return Err(Refused);
                 }
                 // SAFETY: a static NUL-terminated prompt.
@@ -420,7 +421,7 @@ fn read_command_args(
             && excmd.line.byte_at(excmd.line.arg + 1) == b'+'
         {
             if getargopt(excmd).is_err() && !ni {
-                *errormsg = Some(ex_msg(e_invarg.as_ptr()));
+                *errormsg = Some(ex_msg(e_invarg));
                 return Err(Refused);
             }
         }
@@ -430,7 +431,7 @@ fn read_command_args(
         if excmd.line.byte_at(excmd.line.arg) == b'>' {
             excmd.line.arg += 1;
             if excmd.line.byte_at(excmd.line.arg) != b'>' {
-                *errormsg = Some(ex_msg(c"E494: Use w or w>>".as_ptr()));
+                *errormsg = Some(ex_msg(c"E494: Use w or w>>"));
                 return Err(Refused);
             }
             excmd.line.arg = excmd.line.skip_white(excmd.line.arg + 1);
@@ -502,7 +503,7 @@ fn read_command_args(
         return Err(Refused);
     }
     if !ni && excmd.argt.has(ExArgt::NEEDARG) && excmd.line.byte_at(excmd.line.arg) == 0 {
-        *errormsg = Some(ex_msg(e_argreq.as_ptr()));
+        *errormsg = Some(ex_msg(e_argreq));
         return Err(Refused);
     }
     Ok(())
@@ -745,7 +746,7 @@ pub(crate) unsafe fn profile_cmd(
 /// Answers the message to report, or `None` when the command may run.
 fn refuses_here(excmd: &ExArg) -> Option<CString> {
     if sandbox.get() != 0 && !excmd.argt.has(ExArgt::SBOXOK) {
-        return Some(ex_msg(e_sandbox.as_ptr()));
+        return Some(ex_msg(e_sandbox));
     }
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
     if Buf::current().b_p_ma == 0
@@ -753,14 +754,14 @@ fn refuses_here(excmd: &ExArg) -> Option<CString> {
         && !(!Buf::current().terminal.is_null()
             && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
     {
-        return Some(ex_msg(e_modifiable.as_ptr()));
+        return Some(ex_msg(e_modifiable));
     }
     if !is_user_cmd(excmd.cmdidx) {
         if cmdwin_type.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
-            return Some(ex_msg(e_cmdwin.as_ptr()));
+            return Some(ex_msg(e_cmdwin));
         }
         if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {
-            return Some(ex_msg(get_text_locked_msg().as_ptr()));
+            return Some(ex_msg(get_text_locked_msg()));
         }
     }
     None
@@ -789,7 +790,7 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Option<CString> {
     } else if excmd.addr_count != 0 {
         excmd.line2 = excmd.line2.min(Buf::current().b_ml.ml_line_count);
         if excmd.line2 < 0 {
-            errormsg = Some(ex_msg(e_invrange.as_ptr()));
+            errormsg = Some(ex_msg(e_invrange));
         } else {
             // Line 0 is not a position; the cursor goes to line 1.
             Win::current().w_cursor.lnum = if excmd.line2 == 0 { 1 } else { excmd.line2 };
@@ -857,7 +858,7 @@ const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this 
 /// `is_cmd_ni` recognises a command by comparing against its address.
 pub fn ex_ni(excmd: &mut ExArg) {
     if !excmd.skip {
-        excmd.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
+        excmd.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD));
     }
 }
 
@@ -876,12 +877,6 @@ pub(crate) fn ex_script_ni(excmd: &mut ExArg) {
 /// `curbuf_locked()` as checked code.
 fn curbuf_locked() -> bool {
     crate::ex_getln::curbuf_locked()
-}
-
-/// `ex_msg()` as checked code.
-fn ex_msg(msg: *const c_char) -> CString {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::ex_msg(msg) }
 }
 
 /// `getline_equal()` as checked code.

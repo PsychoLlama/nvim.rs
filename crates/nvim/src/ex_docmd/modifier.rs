@@ -360,7 +360,7 @@ pub(crate) fn parse_command_modifiers(
                             cm.cmod_tab = tab_index(TabPage::current()) + 1;
                         } else {
                             if tabnr < 0 || tabnr > current_tab_nr(None) {
-                                *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });
+                                *errormsg = Some(ex_msg(e_invrange));
                                 return Err(Failed);
                             }
                             cm.cmod_tab = tabnr + 1;

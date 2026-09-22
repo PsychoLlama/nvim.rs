@@ -11,7 +11,9 @@
 )]
 
 use crate::cstr;
+use crate::message::emsg;
 use crate::message_fmt::{c_str, msg_bytes};
+use crate::os::cshim::gettext;
 use crate::runtime::source_runtime;
 use crate::semsg;
 use crate::semsg_multiline;
@@ -54,7 +56,7 @@ pub(crate) fn ex_autocmd(excmd: &mut ExArg) {
     if secure.get() != 0 {
         // 2 means "an error was already reported for this".
         secure.set(2);
-        excmd.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
+        excmd.errmsg = Some(ex_msg(e_curdir));
     } else if excmd.cmdidx == CmdIdx::autocmd {
         let (arg, forceit) = (excmd.arg_ptr(), c_int::from(excmd.forceit));
         unsafe { do_autocmd(excmd, arg, forceit) };
@@ -254,7 +256,7 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
     // runtime files are not where the editor thinks.
     let vimruntime = unsafe { os_getenv_into(c"VIMRUNTIME".as_ptr(), &mut env) };
     if vimruntime.is_null() {
-        emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset".as_ptr()));
+        emsg(gettext(c"E5009: $VIMRUNTIME is empty or unset"));
     } else if p_rtp(|value| unsafe {
         has_bytes(
             cstr::at(value.as_ptr().cast_mut()),
@@ -268,7 +270,7 @@ pub(crate) fn ex_checkhealth(excmd: &mut ExArg) {
         let vimruntime = unsafe { c_str(vimruntime) };
         semsg!("E5009: Invalid $VIMRUNTIME: {vimruntime}");
     } else {
-        emsg(gettext(c"E5009: Invalid 'runtimepath'".as_ptr()));
+        emsg(gettext(c"E5009: Invalid 'runtimepath'"));
     }
     // SAFETY: the refusal's own NUL-terminated message.
     let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
@@ -284,16 +286,4 @@ fn lua_chunk(src: &'static CStr) -> String_0 {
 fn do_doautocmd(arg_start: &CStr, do_msg: bool, did_something: *mut bool) -> Result<(), Failed> {
     // SAFETY: `did_something` is the caller's own slot, or null.
     unsafe { crate::autocmd::do_doautocmd(arg_start, do_msg, did_something) }
-}
-
-/// `emsg()` as checked code.
-fn emsg(s: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg_ptr(s) }
-}
-
-/// `gettext()` as checked code.
-fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
-    // SAFETY: a NUL-terminated message; `gettext` answers one too.
-    unsafe { crate::os::cshim::gettext_ptr(__msgid).as_ptr().cast_mut() }
 }

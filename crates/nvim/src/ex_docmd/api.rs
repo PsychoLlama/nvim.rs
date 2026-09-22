@@ -17,6 +17,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ex_docmd::ex_msg;
+use crate::message::emsg;
 use crate::types::CmdIdx;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -114,7 +116,7 @@ pub unsafe fn parse_cmdline(
 
         // The command name says what kind of address the range counts in.
         let Some(mut p) = find_excmd_after_range(excmd) else {
-            *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command.as_ptr()));
+            *errormsg = Some(ex_msg(e_ambiguous_use_of_user_defined_command));
             break 'end;
         };
 
@@ -148,7 +150,7 @@ pub unsafe fn parse_cmdline(
 
         if excmd.cmdidx == CmdIdx::SIZE {
             // The modifiers parsed, so the error is in what follows them.
-            let msg = ex_msg(e_not_an_editor_command.as_ptr());
+            let msg = ex_msg(e_not_an_editor_command);
             *errormsg = Some(append_command(&msg, excmd.line.rest_of(after_modifier)));
             break 'end;
         }
@@ -194,11 +196,11 @@ pub unsafe fn parse_cmdline(
         }
 
         if !excmd.argt.has(ExArgt::BANG) && excmd.forceit {
-            *errormsg = Some(ex_msg(e_nobang.as_ptr()));
+            *errormsg = Some(ex_msg(e_nobang));
             break 'end;
         }
         if !excmd.argt.has(ExArgt::RANGE) && excmd.addr_count > 0 {
-            *errormsg = Some(ex_msg(e_norange.as_ptr()));
+            *errormsg = Some(ex_msg(e_norange));
             break 'end;
         }
         if excmd.argt.has(ExArgt::DFLALL) && excmd.addr_count == 0 {
@@ -354,7 +356,7 @@ pub(crate) unsafe fn execute_cmd0(
 pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
     let mut retv: c_int = 0;
     if do_cmdline_start().is_err() {
-        emsg(gettext(e_command_too_recursive).as_ptr());
+        emsg(gettext(e_command_too_recursive));
         return retv;
     }
 
@@ -372,16 +374,16 @@ pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview
             && !(!Buf::current().terminal.is_null()
                 && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
         {
-            errormsg = Some(ex_msg(e_modifiable.as_ptr()));
+            errormsg = Some(ex_msg(e_modifiable));
             break 'end;
         }
         if !is_user_cmd(excmd.cmdidx) {
             if cmdwin_type.get() != 0 && !excmd.argt.has(ExArgt::CMDWIN) {
-                errormsg = Some(ex_msg(e_cmdwin.as_ptr()));
+                errormsg = Some(ex_msg(e_cmdwin));
                 break 'end;
             }
             if text_locked() && !excmd.argt.has(ExArgt::LOCK_OK) {
-                errormsg = Some(ex_msg(get_text_locked_msg().as_ptr()));
+                errormsg = Some(ex_msg(get_text_locked_msg()));
                 break 'end;
             }
         }
@@ -430,7 +432,7 @@ pub unsafe fn execute_cmd(excmd: &mut ExArg, cmdinfo: *mut CmdParseInfo, preview
     if let Some(msg) = &errormsg
         && !msg.is_empty()
     {
-        emsg(msg.as_ptr());
+        emsg(msg);
     }
     drop(mods);
     do_cmdline_end();
@@ -447,18 +449,6 @@ fn buflist_findpat(
 ) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::buffer::buflist_findpat(pattern, pattern_end, unlisted, diffmode, curtab_only) }
-}
-
-/// `emsg()` as checked code.
-fn emsg(s: *const c_char) -> bool {
-    // SAFETY: a NUL-terminated message.
-    unsafe { crate::message::emsg_ptr(s) }
-}
-
-/// `ex_msg()` as checked code.
-fn ex_msg(msg: *const c_char) -> CString {
-    // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::ex_msg(msg) }
 }
 
 /// `skip_colon_white()` as checked code.
