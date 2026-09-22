@@ -210,7 +210,7 @@ unsafe fn build_keywordprg_cmd(
         out.push_num(c".,.+%ld", (count0 - 1) as int64_t);
     }
     // SAFETY: a NUL-terminated literal command.
-    let _ = unsafe { do_cmdline_cmd(c"tabnew".as_ptr()) };
+    let _ = do_cmdline_cmd(c"tabnew");
     out.push(c"terminal ");
     if count0 == 0 && isman_s {
         // `man -s` with no section is just `man`.
@@ -477,7 +477,8 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         // `taglist()` and friends need to know the tag came from under
         // the cursor rather than from a command line.
         g_tag_at_cursor.set(true);
-        let _ = unsafe { do_cmdline_cmd(out.as_ptr()) };
+        // SAFETY: `CmdBuf` keeps its bytes NUL-terminated.
+        let _ = do_cmdline_cmd(unsafe { cstr::at(out.as_ptr()) });
         g_tag_at_cursor.set(false);
         if cmdchar == 'K' as c_int && !kp_ex && !kp_help {
             // The terminal 'keywordprg' opened above: let <Esc> close it.

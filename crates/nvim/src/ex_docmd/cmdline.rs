@@ -97,13 +97,12 @@ unsafe fn clear_loop_lines(gap: *mut GArray) {
 }
 
 /// Run one Ex command line, as if the user had typed it.
-///
-/// # Safety
-/// `cmd` must point at a NUL-terminated string.
-pub unsafe fn do_cmdline_cmd(cmd: *const c_char) -> Result<(), Failed> {
+pub fn do_cmdline_cmd(cmd: &CStr) -> Result<(), Failed> {
+    // SAFETY: a `CStr` is NUL-terminated, which is the whole contract;
+    // `do_cmdline` reads the line and does not write through the pointer.
     unsafe {
         do_cmdline(
-            cmd as *mut c_char,
+            cmd.as_ptr().cast_mut(),
             None,
             ptr::null_mut(),
             DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED,

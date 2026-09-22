@@ -111,7 +111,7 @@ pub fn ex_spelldump(excmd: &mut ExArg) {
     }
     let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
 
-    let _ = unsafe { do_cmdline_cmd(c"new".as_ptr()) };
+    let _ = do_cmdline_cmd(c"new");
 
     // Spell checking has to be on in the new window for the dump to
     // mean anything.

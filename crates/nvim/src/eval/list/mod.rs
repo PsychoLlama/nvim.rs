@@ -894,7 +894,7 @@ pub(crate) fn eval_expr(expr: &TypVal, argv: &CallFrame<2>, newtv: &mut TypVal) 
 #[inline(always)]
 pub(crate) fn run_cmd(cmd: *const c_char) {
     // SAFETY: `cmd` is the NUL-terminated string of a `VAR_STRING` typval.
-    let _ = unsafe { do_cmdline_cmd(cmd) };
+    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
 }
 
 /// The length in bytes of the character `s` starts with, combining

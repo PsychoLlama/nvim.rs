@@ -616,7 +616,7 @@ pub fn keymap_init() -> Result<(), OptError> {
         // Stop any active keymap and clear the b:keymap_name variable.
         keymap_unload();
         // SAFETY: a static command string, run like any other ex command.
-        let _ = unsafe { do_cmdline_cmd(c"unlet! b:keymap_name".as_ptr()) };
+        let _ = do_cmdline_cmd(c"unlet! b:keymap_name");
         return Ok(());
     }
     // Source the keymap file, first for this encoding and then without it.

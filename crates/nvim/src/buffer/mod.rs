@@ -507,7 +507,7 @@ fn layout_unlock() {
 
 fn run_cmdline(cmd: &CStr) {
     // SAFETY: a NUL-terminated command line.
-    let _ = unsafe { do_cmdline_cmd(cmd.as_ptr()) };
+    let _ = do_cmdline_cmd(cmd);
 }
 
 /// `buf_free_count++`: one more buffer has been freed, so every [`BufRef`]

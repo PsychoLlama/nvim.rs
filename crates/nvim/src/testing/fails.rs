@@ -298,7 +298,9 @@ pub(crate) fn f_assert_fails(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     let no_prompt = Suppress::wait_return();
 
     let cmd = numbuf.string_ptr_chk(&args[0]);
-    let _ = unsafe { do_cmdline_cmd(cmd) };
+    // SAFETY: the argument's own NUL-terminated string, or the number
+    // formatted into `numbuf`.
+    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
 
     // Reset here for any errors reported below.
     trylevel.set(save_trylevel);

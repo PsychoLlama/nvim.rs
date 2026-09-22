@@ -663,8 +663,8 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     // SAFETY: module contract; `args.arg` is NUL-terminated.
     if excmd.line.byte_at(excmd.line.arg) == 0 {
         // List all compiler scripts.
-        let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr()) };
-        let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr()) };
+        let _ = do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')");
+        let _ = do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')");
         return;
     }
 
@@ -675,15 +675,15 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
     let mut old_cur_comp = ptr::null_mut();
     if excmd.forceit {
         // ":compiler! {name}" sets global options.
-        let cmd = c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr();
-        let _ = unsafe { do_cmdline_cmd(cmd) };
+        let cmd = c"command -nargs=* -keepscript CompilerSet set <args>";
+        let _ = do_cmdline_cmd(cmd);
     } else {
         old_cur_comp = unsafe { get_var_value(CURRENT_COMPILER.as_ptr(), &mut numbuf) };
         if !old_cur_comp.is_null() {
             old_cur_comp = unsafe { xstrdup(old_cur_comp) };
         }
-        let cmd = c"command -nargs=* -keepscript CompilerSet setlocal <args>".as_ptr();
-        let _ = unsafe { do_cmdline_cmd(cmd) };
+        let cmd = c"command -nargs=* -keepscript CompilerSet setlocal <args>";
+        let _ = do_cmdline_cmd(cmd);
     }
     let (name, len) = (CURRENT_COMPILER.as_ptr(), CURRENT_COMPILER.count_bytes());
     let _ = unsafe { do_unlet(name, len, true) };
@@ -703,7 +703,7 @@ pub(crate) fn ex_compiler(excmd: &mut ExArg) {
         semsg!("E666: Compiler not supported: {arg}");
     }
 
-    let _ = unsafe { do_cmdline_cmd(c":delcommand CompilerSet".as_ptr()) };
+    let _ = do_cmdline_cmd(c":delcommand CompilerSet");
 
     // Set "b:current_compiler" from "current_compiler".
     let p = unsafe { get_var_value(CURRENT_COMPILER.as_ptr(), &mut numbuf) };

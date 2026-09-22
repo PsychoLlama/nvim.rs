@@ -2,6 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::xfree;
 use core::ffi::{CStr, c_char, c_void};
@@ -124,7 +125,8 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
             )
         };
     }
-    let _ = unsafe { do_cmdline_cmd(&raw mut ex_cmd as *mut c_char) };
+    // SAFETY: `ex_cmd` is the buffer the formatting above terminated.
+    let _ = do_cmdline_cmd(unsafe { cstr::at(&raw const ex_cmd as *const c_char) });
 }
 
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.

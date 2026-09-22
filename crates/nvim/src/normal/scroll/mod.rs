@@ -205,5 +205,5 @@ pub(crate) fn nv_exit_command(cmd_arg: &mut CmdArg) {
             return;
         }
     };
-    let _ = unsafe { do_cmdline_cmd(cmd.as_ptr()) };
+    let _ = do_cmdline_cmd(cmd);
 }

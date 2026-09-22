@@ -211,7 +211,7 @@ pub(crate) fn nv_suspend(cmd_arg: &mut CmdArg) {
     if visual_active() {
         end_visual_mode();
     }
-    let _ = unsafe { do_cmdline_cmd(c"st".as_ptr()) };
+    let _ = do_cmdline_cmd(c"st");
 }
 
 /// `CTRL-\`: only `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` exist, and both mean

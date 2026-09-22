@@ -11,6 +11,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::guard::Suppress;
@@ -165,7 +166,8 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
     swap_exists_did_quit.set(false);
     let into = cmd.as_mut_ptr();
     unsafe { vim_snprintf(into, IOSIZE as size_t, c"ta %s".as_ptr(), tagname) };
-    let _ = unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
+    // SAFETY: `vim_snprintf` terminated the buffer above.
+    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.as_ptr()) });
     time_msg_at(c"jumping to tag");
     if swap_exists_did_quit.get() {
         quit_on_swap_exists(false);
@@ -208,19 +210,21 @@ pub(crate) fn read_stdin() {
         let (into, size) = (cmd.as_mut_ptr(), size_of::<[c_char; 100]>());
         let fmt = c"silent! buffer %d".as_ptr();
         unsafe { vim_snprintf(into, size, fmt, initial_buf_handle) };
-        let _ = unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
+        // SAFETY: `vim_snprintf` terminated the buffer above.
+        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.as_ptr()) });
         if stdin_buf_empty {
             let (into, size) = (cmd.as_mut_ptr(), size_of::<[c_char; 100]>());
             let fmt = c"silent! bwipeout! %d".as_ptr();
             unsafe { vim_snprintf(into, size, fmt, stdin_buf_handle) };
-            let _ = unsafe { do_cmdline_cmd(cmd.as_mut_ptr()) };
+            // SAFETY: `vim_snprintf` terminated the buffer above.
+            let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.as_ptr()) });
         }
     } else {
         set_buflisted(1);
         let _ = open_buffer(true, None, 0);
         if buf_is_empty(Buf::current()) && Buf::current().b_next.is_some() {
-            let _ = unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
-            let _ = unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
+            let _ = do_cmdline_cmd(c"silent! bnext");
+            let _ = do_cmdline_cmd(c"silent! bwipeout 1");
         }
     }
 

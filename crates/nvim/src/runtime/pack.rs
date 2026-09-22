@@ -498,11 +498,11 @@ unsafe fn load_pack_plugin(opt: bool, fname: *mut c_char) -> Result<(), Failed> 
     // are found when it is.
     let cmd = unsafe { xstrdup(c"g:did_load_filetypes".as_ptr()) };
     if opt && unsafe { eval_to_number(cmd, false) } > 0 {
-        let _ = unsafe { do_cmdline_cmd(c"augroup filetypedetect".as_ptr()) };
+        let _ = do_cmdline_cmd(c"augroup filetypedetect");
         unsafe { vim_snprintf(pat, len, FTDETECT_PATTERN.as_ptr(), ffname) };
         let patp = &raw mut pat;
         let _ = unsafe { gen_expand_wildcards_and_cb(1, patp, ExpandFlags::FILE, true, visitor) };
-        let _ = unsafe { do_cmdline_cmd(c"augroup END".as_ptr()) };
+        let _ = do_cmdline_cmd(c"augroup END");
     }
     unsafe { xfree(cmd.cast()) };
     unsafe { xfree(pat.cast()) };

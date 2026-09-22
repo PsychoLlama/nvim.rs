@@ -178,7 +178,8 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             let fmt = c"autocmd VimEnter * call v:lua.require'nvim.spellfile'.get('%s')|set spell"
                 .as_ptr();
             unsafe { snprintf(buf, room, fmt, lang) };
-            let _ = unsafe { do_cmdline_cmd(autocmd_buf.as_ptr()) };
+            // SAFETY: `snprintf` terminated the buffer above.
+            let _ = do_cmdline_cmd(unsafe { cstr::at(autocmd_buf.as_ptr()) });
         } else {
             // SAFETY: the language name and the encoding are NUL-terminated.
             let encoding = spell_enc();

@@ -1553,7 +1553,7 @@ fn a_multi_line_match_spans_the_lines_it_reads_out_of_the_buffer() {
     let put = |line: &str| {
         let text = cstr(line);
         // SAFETY: NUL-terminated, and outlives the call.
-        let _ = unsafe { do_cmdline_cmd(text.as_ptr()) };
+        let _ = do_cmdline_cmd(&text);
     };
     put("silent! keepjumps keepmarks %delete _");
     put("call setline(1, ['alpha', 'beta', 'gamma', 'delta'])");
@@ -1615,7 +1615,7 @@ fn substitute_remembers_its_last_replacement_for_tilde_and_evaluates_a_backslash
     let put = |line: &str| {
         let text = cstr(line);
         // SAFETY: NUL-terminated, and outlives the call.
-        let _ = unsafe { do_cmdline_cmd(text.as_ptr()) };
+        let _ = do_cmdline_cmd(&text);
     };
     let read = |expr: &str| {
         let text = cstr(expr);

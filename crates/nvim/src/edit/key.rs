@@ -495,9 +495,9 @@ fn key_eol(s: &mut InsertState) -> Next {
     // In a quickfix or location-list window, `<CR>` jumps to the entry.
     if buf_is_quickfix(current_buf()) && s.c == CAR {
         if Win::current().w_llist_ref.is_null() {
-            let _ = unsafe { do_cmdline_cmd(c".cc".as_ptr()) };
+            let _ = do_cmdline_cmd(c".cc");
         } else {
-            let _ = unsafe { do_cmdline_cmd(c".ll".as_ptr()) };
+            let _ = do_cmdline_cmd(c".ll");
         }
         return Next::Continue;
     }

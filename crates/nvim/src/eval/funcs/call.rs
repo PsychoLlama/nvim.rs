@@ -261,7 +261,10 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
         .get(cmd_idx)
         .is_some_and(|arg| arg.v_type() == VAR_LIST)
     {
-        let _ = unsafe { do_cmdline_cmd(arg_string(&mut numbuf, &args[cmd_idx])) };
+        let cmd = arg_string(&mut numbuf, &args[cmd_idx]);
+        // SAFETY: the argument's own NUL-terminated string, or the number
+        // formatted into `numbuf`.
+        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
     } else if !args[cmd_idx].list_or_null().is_null() {
         let list = args[cmd_idx].list_or_null();
         // The List is held across the run: a command may drop the

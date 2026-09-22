@@ -172,8 +172,7 @@ pub fn ex_diffpatch(excmd: &mut ExArg) {
                         // the command line are static strings.
                         ex_file(excmd);
                         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
-                            let _ =
-                                unsafe { do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr()) };
+                            let _ = do_cmdline_cmd(c":doau filetypedetect BufRead");
                         }
                     }
                 }
@@ -337,7 +336,7 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
     fold_update_all(window);
     changed_window_setting(window);
     if !p_sbo(|value| has_char(value, 'h' as c_int)) {
-        let _ = unsafe { do_cmdline_cmd(c"set sbo+=hor".as_ptr()) };
+        let _ = do_cmdline_cmd(c"set sbo+=hor");
     }
     window.w_onebuf_opt.wo_diff_saved = 1;
     set_diff_option(window, true);
@@ -417,7 +416,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
     // SAFETY: `p_sbo` is the `'scrollopt'` option string.
     if !diffwin && p_sbo(|value| has_char(value, 'h' as c_int)) {
         // SAFETY: a static command line.
-        let _ = unsafe { do_cmdline_cmd(c"set sbo-=hor".as_ptr()) };
+        let _ = do_cmdline_cmd(c"set sbo-=hor");
     }
 }
 

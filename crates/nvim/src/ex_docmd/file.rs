@@ -130,7 +130,7 @@ fn run_ecmd_cmd(excmd: &mut ExArg) {
         let cmd = excmd.do_ecmd_cmd.ptr(&excmd.line);
         // SAFETY: a NUL-terminated command, either the line's own or the
         // shared `$`.
-        let _ = unsafe { do_cmdline_cmd(cmd) };
+        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
     }
 }
 

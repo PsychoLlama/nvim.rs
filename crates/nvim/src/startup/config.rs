@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::winlayer::{Live, Win};
@@ -68,7 +69,8 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
     );
     current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as ScriptId));
     for i in 0..count {
-        let _ = unsafe { do_cmdline_cmd(*cmds.offset(i as isize)) };
+        // SAFETY: the caller's array of `count` NUL-terminated commands.
+        let _ = do_cmdline_cmd(unsafe { cstr::at(*cmds.offset(i as isize)) });
     }
     estack_pop();
     current_sctx.set(current_sctx.get().with_sid(0));
@@ -101,7 +103,8 @@ pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
     );
     for i in 0..parm.n_commands {
         let cmd = parm.commands[i as usize];
-        let _ = unsafe { do_cmdline_cmd(cmd) };
+        // SAFETY: a NUL-terminated command out of the argument vector.
+        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
         if parm.cmds_tofree[i as usize] != 0 {
             unsafe { xfree(cmd as *mut c_void) };
         }

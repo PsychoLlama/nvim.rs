@@ -726,7 +726,7 @@ fn dispatch_action(a: Action, win: Win) {
             c".ll"
         };
         // SAFETY: a NUL-terminated literal.
-        let _ = unsafe { do_cmdline_cmd(cmd.as_ptr()) };
+        let _ = do_cmdline_cmd(cmd);
         got_click.set(false); // ignore drag&release now
         return;
     }

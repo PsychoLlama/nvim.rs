@@ -409,13 +409,13 @@ pub(crate) fn ex_helpclose(excmd: &mut ExArg) {
 /// `:exusage`.
 pub(crate) fn ex_exusage(_excmd: &mut ExArg) {
     // SAFETY: a static command line.
-    let _ = unsafe { do_cmdline_cmd(c"help ex-cmd-index".as_ptr()) };
+    let _ = do_cmdline_cmd(c"help ex-cmd-index");
 }
 
 /// `:viusage`.
 pub(crate) fn ex_viusage(_excmd: &mut ExArg) {
     // SAFETY: a static command line.
-    let _ = unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
+    let _ = do_cmdline_cmd(c"help normal-index");
 }
 
 // -- Finding a subject -----------------------------------------------------

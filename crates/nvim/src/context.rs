@@ -19,6 +19,7 @@
 
 use crate::api::private::helpers::{cstr_to_string, string_to_array};
 use crate::api::vimscript::exec_impl;
+use crate::cstr;
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::typval::tv_clear;
 use crate::eval::userfunc::func_tbl_get;
@@ -250,7 +251,7 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
             continue;
         };
         // SAFETY: the caller's contract -- the entry is NUL-terminated.
-        let _ = unsafe { do_cmdline_cmd(cmd.data()) };
+        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.data()) });
     }
 }
 

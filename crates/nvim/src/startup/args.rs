@@ -826,7 +826,8 @@ pub(crate) unsafe fn execute_env(env: *mut c_char) -> Result<(), Failed> {
     estack_push(ETYPE_ENV, env, 0 as LineNr);
     let sctx = env_script();
 
-    let _ = unsafe { do_cmdline_cmd(initstr) };
+    // SAFETY: the environment variable's own NUL-terminated value.
+    let _ = do_cmdline_cmd(unsafe { cstr::at(initstr) });
 
     estack_pop();
     drop(sctx);

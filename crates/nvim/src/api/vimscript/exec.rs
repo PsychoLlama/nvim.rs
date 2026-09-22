@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::api::private::helpers::api_try;
+use crate::cstr;
 use crate::guard::Suppress;
 use core::ffi::c_char;
 
@@ -129,7 +130,7 @@ pub unsafe fn exec_impl(
 pub fn nvim_command(cmd: String_0) -> Result<(), Error> {
     api_try(|| {
         // SAFETY: `cmd` is the caller's NUL-terminated command line.
-        let _ = unsafe { do_cmdline_cmd(cmd.data()) };
+        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.data()) });
     })?;
     Ok(())
 }

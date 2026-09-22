@@ -108,7 +108,7 @@ fn flag(got: Result<Object, Error>) -> bool {
 fn run(_editor: &Editor, line: &str) {
     let text = cstr(line);
     // SAFETY: `text` is NUL-terminated and outlives the call.
-    let _ = unsafe { do_cmdline_cmd(text.as_ptr()) };
+    let _ = do_cmdline_cmd(&text);
 }
 
 /// The options a case wrote, put back when it ends.

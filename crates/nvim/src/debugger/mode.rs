@@ -500,8 +500,7 @@ unsafe fn do_showbacktrace(cmd: *mut c_char) {
 /// `:debug {cmd}`: run one command with the debugger stopping at everything.
 pub fn ex_debug(excmd: &mut ExArg) {
     let outer_level = debug_break_level.replace(9999);
-    // SAFETY: caller contract; `args.arg` is the NUL-terminated argument.
-    let _ = unsafe { do_cmdline_cmd(excmd.arg_ptr()) };
+    let _ = do_cmdline_cmd(excmd.line.cstr_from(excmd.line.arg));
     debug_break_level.set(outer_level);
 }
 

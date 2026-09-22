@@ -54,7 +54,7 @@ impl Drop for Restore {
     fn drop(&mut self) {
         let empty = cstr("silent! keepjumps keepmarks %delete _");
         // SAFETY: `empty` is NUL-terminated and outlives the call.
-        let _ = unsafe { do_cmdline_cmd(empty.as_ptr()) };
+        let _ = do_cmdline_cmd(&empty);
         Win::current().w_cursor = self.cursor;
     }
 }
@@ -143,7 +143,7 @@ fn parse_mods(_editor: &Editor, line: &str) -> (CmdModFlags, c_int) {
 fn run(_editor: &Editor, line: &str) {
     let text = cstr(line);
     // SAFETY: `text` is NUL-terminated and outlives the call.
-    let _ = unsafe { do_cmdline_cmd(text.as_ptr()) };
+    let _ = do_cmdline_cmd(&text);
 }
 
 /// Evaluate an expression for its number.

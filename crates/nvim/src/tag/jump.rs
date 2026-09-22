@@ -804,7 +804,8 @@ impl Pattern {
             col: 0,
             coladd: 0,
         };
-        let _ = unsafe { do_cmdline_cmd(self.buf.as_mut_ptr()) };
+        // SAFETY: the buffer the tag search command was formatted into.
+        let _ = do_cmdline_cmd(unsafe { cstr::at(self.buf.as_ptr()) });
 
         // When the command did something that is not allowed, make
         // sure the error message can be seen.

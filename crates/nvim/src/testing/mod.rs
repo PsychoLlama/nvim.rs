@@ -187,7 +187,7 @@ unsafe fn assert_beeps(args: &[TypVal], no_beep: bool) -> c_int {
     called_vim_beep.set(false);
     suppress_errthrow.set(true);
     emsg_silent.set(0);
-    let _ = unsafe { do_cmdline_cmd(cmd) };
+    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
 
     let mut ret = 0;
     if called_vim_beep.get() == no_beep {

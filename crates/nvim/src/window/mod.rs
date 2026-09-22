@@ -473,7 +473,7 @@ fn resize_terminal(buffer: Buf) {
 /// Run one Ex command line, as if the user had typed it.
 fn run_cmd(cmd: *const ::core::ffi::c_char) {
     // SAFETY: a NUL-terminated command line.
-    let _ = unsafe { do_cmdline_cmd(cmd) };
+    let _ = do_cmdline_cmd(unsafe { cstr::at(cmd) });
 }
 
 /// Drop `win`'s external grid, which the compositor still holds.

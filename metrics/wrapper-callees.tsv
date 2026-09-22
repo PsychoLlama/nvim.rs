@@ -4,7 +4,7 @@ count	callee	no_raw	defs	def
 450	.offset	0	0	
 449	bytes_at	0	1	crates/nvim/src/cstr.rs
 341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-302	at	0	3	
+321	at	0	3	
 281	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
 184	xstrdup	0	1	crates/nvim/src/memory/mod.rs
@@ -39,7 +39,6 @@ count	callee	no_raw	defs	def
 50	Xp::new	0	67	
 47	.sub	0	0	
 46	copy_nonoverlapping	0	0	
-46	do_cmdline_cmd	0	1	crates/nvim/src/ex_docmd/cmdline.rs
 45	eq	0	1	crates/nvim/src/cstr.rs
 45	fprintf	0	0	
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs

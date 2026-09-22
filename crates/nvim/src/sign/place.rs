@@ -449,7 +449,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: Buf) -> 
                 int64_t::from(lnum),
                 buffer.name.shown_ptr(),
             );
-            let _ = do_cmdline_cmd(cmd.as_mut_ptr());
+            let _ = do_cmdline_cmd(cstr::at(cmd.as_ptr()));
         };
     }
 

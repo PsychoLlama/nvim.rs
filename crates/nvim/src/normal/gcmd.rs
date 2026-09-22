@@ -324,7 +324,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         // `g&`: repeat the last `:substitute` over the whole file, keeping
         // the flags.
         Ok(b'&') => {
-            let _ = unsafe { do_cmdline_cmd(c"%s//~/&".as_ptr()) };
+            let _ = do_cmdline_cmd(c"%s//~/&");
         }
         // `gv`: reselect the previous selection.
         Ok(b'v') => nv_gv_cmd(cmd_arg),

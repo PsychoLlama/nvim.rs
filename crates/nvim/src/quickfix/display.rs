@@ -485,14 +485,8 @@ pub fn qf_view_result(split: bool) {
     }
     if split {
         unsafe { qf_jump_newwin(qi.raw(), 0, Win::current().w_cursor.lnum as c_int, 0, true) };
-        let _ = unsafe { do_cmdline_cmd(c"clearjumps".as_ptr()) };
+        let _ = do_cmdline_cmd(c"clearjumps");
         return;
     }
-    let _ = unsafe {
-        do_cmdline_cmd(if in_ll_window {
-            c".ll".as_ptr()
-        } else {
-            c".cc".as_ptr()
-        })
-    };
+    let _ = { do_cmdline_cmd(if in_ll_window { c".ll" } else { c".cc" }) };
 }
