@@ -7,6 +7,18 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- An installed build lost its runtime: `$VIMRUNTIME` resolved to the
+  directory the binary was compiled in rather than the `share/nvim/runtime`
+  beside it, so `vim.lsp` and `syntax.vim` were missing unless the build tree
+  still existed. A buffer created from inside a `searchpair()` skip
+  expression, a `substitute()` `\=` expression or `:helpgrep` also started
+  with no options at all. Both came from the option rewrite in the previous
+  release, which stopped telling an option that has no value _yet_ from one
+  emptied on purpose. A debug build now panics on the former, so the next
+  such read fails in the test suites rather than in a release.
+
 ## [2026.09.22-76388a7c41]
 
 ### Changed
