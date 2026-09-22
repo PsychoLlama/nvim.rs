@@ -18,7 +18,6 @@ use crate::guard::Suppress;
 use crate::semsg;
 use crate::types::OptStr;
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::size_of;
 use core::ptr;
 
 use crate::arglist::alist_name;
@@ -44,7 +43,6 @@ use crate::message::msg_putchar;
 use crate::message::state::{did_emsg, msg_didany, msg_scroll, no_wait_return};
 use crate::option::vars::{P_EF, P_EFM, P_MENC, p_ef, p_fdls, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
-use crate::os::cshim::snprintf;
 use crate::os::input::os_breakcheck;
 use crate::path::vim_full_name;
 use crate::profile::time_msg_at;
@@ -118,9 +116,7 @@ pub(crate) fn get_fname(_parmp: *mut MainParams) -> *mut c_char {
 ///
 /// `paramp` must point at the startup parameters.
 pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
-    let mut title = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `paramp` is the caller's live parameter block, and `title`
-    // outlives the `qf_init` that reads it.
+    // SAFETY: `paramp` is the caller's live parameter block.
     let parm = unsafe { Mp::new(paramp) };
     if parm.edit_type != EDIT_QF as c_int {
         return;
@@ -135,9 +131,9 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
         );
     }
     // The title of the list is the command that would have made it.
-    let into = title.as_mut_ptr();
-    let fmt = c"cfile %s".as_ptr();
-    p_ef(|value| unsafe { vim_snprintf(into, IOSIZE as size_t, fmt, value.as_ptr().cast_mut()) });
+    let mut title = b"cfile ".to_vec();
+    p_ef(|value| title.extend_from_slice(value.to_bytes()));
+    let title = cstr::owned(&title);
     // Copies: `qf_init` reads a file and fires autocommands.
     let (ef, efm, enc) = (P_EF.get(), P_EFM.get(), P_MENC.get());
     let (ef, efm, enc) = (
@@ -145,7 +141,7 @@ pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
         efm.as_ptr().cast_mut(),
         enc.as_ptr().cast_mut(),
     );
-    if unsafe { qf_init(None, ef, efm, true, 1, title.as_mut_ptr(), enc) } < 0 {
+    if unsafe { qf_init(None, ef, efm, true, 1, title.as_ptr().cast_mut(), enc) } < 0 {
         msg_putchar('\n' as c_int);
         os_exit(3);
     }
@@ -206,18 +202,11 @@ pub(crate) fn read_stdin() {
 
         // Done as commands rather than calls so the autocommands and the
         // window bookkeeping happen as they would for the user.
-        let mut cmd: [c_char; 100] = [0; 100];
-        let (into, size) = (cmd.as_mut_ptr(), size_of::<[c_char; 100]>());
-        let fmt = c"silent! buffer %d".as_ptr();
-        unsafe { vim_snprintf(into, size, fmt, initial_buf_handle) };
-        // SAFETY: `vim_snprintf` terminated the buffer above.
-        let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.as_ptr()) });
+        let cmd = format!("silent! buffer {initial_buf_handle}");
+        let _ = do_cmdline_cmd(&cstr::owned(cmd.as_bytes()));
         if stdin_buf_empty {
-            let (into, size) = (cmd.as_mut_ptr(), size_of::<[c_char; 100]>());
-            let fmt = c"silent! bwipeout! %d".as_ptr();
-            unsafe { vim_snprintf(into, size, fmt, stdin_buf_handle) };
-            // SAFETY: `vim_snprintf` terminated the buffer above.
-            let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.as_ptr()) });
+            let cmd = format!("silent! bwipeout! {stdin_buf_handle}");
+            let _ = do_cmdline_cmd(&cstr::owned(cmd.as_bytes()));
         }
     } else {
         set_buflisted(1);
@@ -404,12 +393,12 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
                 goto_tabpage(0);
                 if i == 1 {
                     p_shm_save = p_shm(|value| unsafe { xstrdup(value.as_ptr().cast_mut()) });
-                    let mut shm: [c_char; 100] = [0; 100];
-                    let (into, size) = (shm.as_mut_ptr(), size_of::<[c_char; 100]>());
-                    p_shm(|value| unsafe {
-                        snprintf(into, size, c"F%s".as_ptr(), value.as_ptr().cast_mut())
-                    });
-                    unsafe { set_shortmess(shm.as_mut_ptr()) };
+                    let mut shm = b"F".to_vec();
+                    p_shm(|value| shm.extend_from_slice(value.to_bytes()));
+                    let shm = cstr::owned(&shm);
+                    // SAFETY: a NUL-terminated string that outlives the
+                    // call, which copies it.
+                    unsafe { set_shortmess(shm.as_ptr().cast_mut()) };
                 }
             } else {
                 let Some(next) = Win::current().next() else {
