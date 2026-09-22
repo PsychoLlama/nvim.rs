@@ -824,9 +824,7 @@ pub unsafe fn handle_nvim_get_hl_by_id(
     let Some(arg_2) = as_boolean(args[1].take()) else {
         return Err(wrong_type(2, c"nvim_get_hl_by_id", c"Boolean"));
     };
-    // SAFETY: each argument was checked against the type the signature declares,
-    // and `arena` is the dispatcher's own.
-    let rv = unsafe { nvim_get_hl_by_id(arg_1, arg_2) }?;
+    let rv = nvim_get_hl_by_id(arg_1, arg_2)?;
     Ok(Object::dict(rv))
 }
 

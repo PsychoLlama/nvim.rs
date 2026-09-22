@@ -1,6 +1,6 @@
-//! Removing marks -- `extmark_del()` and `extmark_clear()`.
+//! Removing marks -- `del()` and `extmark_clear()`.
 //!
-//! [`extmark_del_id`] and [`extmark_del`] remove one mark (and its paired end
+//! [`extmark_del_id`] and [`del`] remove one mark (and its paired end
 //! key, if it has one), releasing the decoration it carried and dropping it
 //! from the namespace's id map.  [`extmark_clear`] is the range form used by
 //! `nvim_buf_clear_namespace()`: walk the marktree between two positions,
@@ -10,7 +10,7 @@
 //! Original: `src/nvim/extmark.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -47,19 +47,6 @@ pub(crate) fn del_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
 }
 
 /// Remove the (possibly paired) extmark `key` that `itr` is on.
-///
-/// # Safety
-///
-/// `itr` must point at a live `MarkTreeIter`, unaliased for the call. `key`
-/// must be an initialized `MTKey` whose pointer fields point at live data for
-/// the call.
-pub unsafe fn extmark_del(buffer: Buf, itr: *mut MarkTreeIter, key: MTKey, restore: bool) {
-    // SAFETY: the caller's promise -- a live buffer and an iterator
-    // positioned in its marktree, both of which outlive the call.
-    del(buffer, unsafe { &mut *itr }, key, restore);
-}
-
-/// [`extmark_del`] for the callers that already hold the two.
 pub(crate) fn del(mut buffer: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore: bool) {
     debug_assert!(key.pos.row >= 0, "key.pos.row >= 0");
 

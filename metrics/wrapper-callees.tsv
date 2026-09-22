@@ -1119,7 +1119,6 @@ count	callee	no_raw	defs	def
 3	nvim_buf_get_commands	0	1	crates/nvim/src/api/command/user.rs
 3	nvim_echo	0	1	crates/nvim/src/api/vim/echo.rs
 3	nvim_exec_lua	0	1	crates/nvim/src/api/vim/runtime.rs
-3	nvim_get_hl_by_id	1	1	crates/nvim/src/api/deprecated/highlight.rs
 3	nvim_get_runtime_file	0	1	crates/nvim/src/api/vim/runtime.rs
 3	nvim_paste	0	1	crates/nvim/src/api/vim/paste.rs
 3	onecap_copy	0	1	crates/nvim/src/spell/chartab.rs
@@ -2676,7 +2675,6 @@ count	callee	no_raw	defs	def
 1	expand_user_lua	0	1	crates/nvim/src/cmdexpand/userfunc.rs
 1	expand_wildcards_eval	0	1	crates/nvim/src/path/expand.rs
 1	extend_item	0	1	crates/nvim/src/eval/encode/mod.rs
-1	extmark_del	0	1	crates/nvim/src/extmark/del.rs
 1	extmark_splice_delete	0	1	crates/nvim/src/extmark/undo.rs
 1	extmatch_equal	0	1	crates/nvim/src/syntax/stack.rs
 1	extract_hunk	0	1	crates/nvim/src/diff/hunk.rs

@@ -242,7 +242,7 @@ unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum:
     let row = if atlnum > 0 { atlnum - 1 } else { 0 };
     let mut signs: Vec<MTKey> = Vec::new();
 
-    // The walk continues below as a bare iterator: `extmark_del` steps it
+    // The walk continues below as a bare iterator: `extmark::del` steps it
     // itself, which a `Cursor` cannot express.
     {
         let mut walk = Cursor::in_buffer(buffer, &mut itr);
@@ -271,9 +271,9 @@ unsafe fn buf_delete_signs(buffer: Buf, group: *const c_char, id: c_int, atlnum:
         }
         let wanted = wanted_sign(mark, ns) && (id == 0 || mark.id.cast_signed() == id);
         if wanted && atlnum <= 0 {
-            // `extmark_del` advances the iterator itself.
+            // `extmark::del` advances the iterator itself.
             // SAFETY: as above, plus a live buffer.
-            unsafe { extmark_del(buffer, &raw mut itr, mark, true) };
+            extmark::del(buffer, &mut itr, mark, true);
             continue;
         }
         if wanted {

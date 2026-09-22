@@ -54,7 +54,7 @@ use crate::eval::typval::{
     tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::extmark::{extmark_del, extmark_del_id, extmark_set};
+use crate::extmark::{self, extmark_del_id, extmark_set};
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;

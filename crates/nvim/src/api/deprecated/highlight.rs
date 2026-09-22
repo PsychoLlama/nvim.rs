@@ -4,7 +4,7 @@
 //! result rendered in the old `rgb`/`cterm` shape.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,10 +18,7 @@ use crate::api::private::helpers::Reported;
 use crate::api::private::validate::{err_bad_number, err_bad_value};
 use crate::narrow::number_as_int;
 
-/// # Safety
-/// The answer's storage is the api's own: the caller frees whatever this hands
-/// back.
-pub unsafe fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
+pub fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict, Error> {
     let known = syn_get_final_id(number_as_int(hl_id)) != 0;
     if !known {
         return Err(err_bad_number(c"highlight id", hl_id));
@@ -32,12 +29,10 @@ pub unsafe fn nvim_get_hl_by_id(hl_id: Integer, rgb: Boolean) -> Result<ApiDict,
 
 pub fn nvim_get_hl_by_name(name: String_0, rgb: Boolean) -> Result<ApiDict, Error> {
     let error;
-    // SAFETY: `name` is the caller's NUL-terminated group name.
     let id = syn_name2id(name.as_cstr());
     if id == 0 {
         error = err_bad_value(c"highlight name", name.as_cstr());
         return ApiDict::EMPTY.reported(error);
     }
-    // SAFETY: `arena` is the caller's.
-    unsafe { nvim_get_hl_by_id(Integer::from(id), rgb) }
+    nvim_get_hl_by_id(Integer::from(id), rgb)
 }
