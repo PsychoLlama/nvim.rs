@@ -32,7 +32,6 @@ count	callee	no_raw	defs	def
 56	Live::new	0	1	crates/nvim/src/winlayer/live.rs
 54	vim_strchr	0	1	crates/nvim/src/strings/mod.rs
 53	copy	0	1	crates/nvim/src/strings/printf/emit.rs
-53	strequal	0	1	crates/nvim/src/memory/mod.rs
 52	abort	0	0	
 52	utf_char2bytes	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 51	vim_regfree	0	1	crates/nvim/src/regexp/api.rs
@@ -74,6 +73,7 @@ count	callee	no_raw	defs	def
 29	multiqueue_put_event	0	1	crates/nvim/src/event/multiqueue.rs
 29	os_fileinfo	0	1	crates/nvim/src/os/fs/meta.rs
 28	os_fopen	0	1	crates/nvim/src/os/fs/mod.rs
+28	strequal	0	1	crates/nvim/src/memory/mod.rs
 28	vim_strsize	0	1	crates/nvim/src/charset/display.rs
 27	Frame::read	0	1	crates/nvim/src/option/didset.rs
 27	add_nr	0	2	

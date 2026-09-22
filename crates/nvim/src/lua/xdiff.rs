@@ -28,7 +28,6 @@ use crate::lua::ffi::{
     lua_rawseti, lua_settop, lua_tolstring, lua_tonumber, lua_type, luaL_argerror, luaL_buffinit,
     luaL_error, luaL_prepbuffer, luaL_pushresult, luaL_where,
 };
-use crate::memory::strequal;
 use crate::types::{
     Arena, Error, KeyDict_xdl_diff, LineNr, Object, int64_t, kErrorTypeException, lua_Integer,
     lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, size_t, xdemitcb_t, xdemitconf_t, xpparam_t,
@@ -382,12 +381,10 @@ unsafe fn apply_opts(
     linematch: &mut int64_t,
 ) -> (Mode, Option<Error>) {
     let mut had_result_type_indices = false;
-    // SAFETY: `result_type`/`algorithm` are NUL-terminated or null, which is
-    // what `strequal` takes.
     if let Some(result_type) = opts.result_type.as_ref()
-        && !unsafe { strequal(c"unified".as_ptr(), result_type.data()) }
+        && result_type.as_cstr() != c"unified"
     {
-        if unsafe { strequal(c"indices".as_ptr(), result_type.data()) } {
+        if result_type.as_cstr() == c"indices" {
             had_result_type_indices = true;
         } else {
             let why = Error::validation(c"not a valid result_type");
@@ -395,20 +392,16 @@ unsafe fn apply_opts(
         }
     }
 
-    // SAFETY: as above.
     if let Some(named) = opts.algorithm.as_ref()
-        && !unsafe { strequal(c"myers".as_ptr(), named.data()) }
+        && named.as_cstr() != c"myers"
     {
-        // SAFETY: as above.
-        let algorithm = unsafe {
-            [
-                (c"minimal", XDF_NEED_MINIMAL),
-                (c"patience", XDF_PATIENCE_DIFF),
-                (c"histogram", XDF_HISTOGRAM_DIFF),
-            ]
-            .into_iter()
-            .find(|(name, _)| strequal(name.as_ptr(), named.data()))
-        };
+        let algorithm = [
+            (c"minimal", XDF_NEED_MINIMAL),
+            (c"patience", XDF_PATIENCE_DIFF),
+            (c"histogram", XDF_HISTOGRAM_DIFF),
+        ]
+        .into_iter()
+        .find(|(name, _)| *name == named.as_cstr());
         match algorithm {
             Some((_, flag)) => params.flags |= flag,
             None => {

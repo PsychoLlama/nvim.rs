@@ -134,7 +134,7 @@ unsafe fn shada_filename(file: *const c_char) -> Option<CString> {
         return Some(unsafe { CStr::from_ptr(file) }.to_owned());
     }
     if P_SHADAFILE.first_byte() != 0 {
-        if p_shadafile(|value| unsafe { strequal(value.as_ptr().cast_mut(), c"NONE".as_ptr()) }) {
+        if p_shadafile(|value| value == c"NONE") {
             return None; // "-i NONE" or "--clean"
         }
         return Some(p_shadafile(CStr::to_owned));

@@ -115,41 +115,39 @@ pub fn nvim_input_mouse(
     may_trigger_vim_suspend_resume(false);
     '_error: {
         if !(button.data().is_null() || action.data().is_null()) {
-            if unsafe { strequal(button.data(), c"left".as_ptr()) } {
+            if button.as_cstr() == c"left" {
                 code = KE_LEFTMOUSE as ::core::ffi::c_int;
-            } else if unsafe { strequal(button.data(), c"middle".as_ptr()) } {
+            } else if button.as_cstr() == c"middle" {
                 code = KE_MIDDLEMOUSE as ::core::ffi::c_int;
-            } else if unsafe { strequal(button.data(), c"right".as_ptr()) } {
+            } else if button.as_cstr() == c"right" {
                 code = KE_RIGHTMOUSE as ::core::ffi::c_int;
-            } else if unsafe { strequal(button.data(), c"wheel".as_ptr()) } {
+            } else if button.as_cstr() == c"wheel" {
                 code = KE_MOUSEDOWN as ::core::ffi::c_int;
-            } else if unsafe { strequal(button.data(), c"x1".as_ptr()) } {
+            } else if button.as_cstr() == c"x1" {
                 code = KE_X1MOUSE as ::core::ffi::c_int;
-            } else if unsafe { strequal(button.data(), c"x2".as_ptr()) } {
+            } else if button.as_cstr() == c"x2" {
                 code = KE_X2MOUSE as ::core::ffi::c_int;
-            } else if unsafe { strequal(button.data(), c"move".as_ptr()) } {
+            } else if button.as_cstr() == c"move" {
                 code = KE_MOUSEMOVE as ::core::ffi::c_int;
             } else {
                 break '_error;
             }
             if code == KE_MOUSEDOWN as ::core::ffi::c_int {
-                if unsafe { strequal(action.data(), c"down".as_ptr()) } {
+                if action.as_cstr() == c"down" {
                     code = KE_MOUSEUP as ::core::ffi::c_int;
-                } else if !unsafe { strequal(action.data(), c"up".as_ptr()) } {
-                    if unsafe { strequal(action.data(), c"left".as_ptr()) } {
+                } else if action.as_cstr() != c"up" {
+                    if action.as_cstr() == c"left" {
                         code = KE_MOUSERIGHT as ::core::ffi::c_int;
-                    } else if unsafe { strequal(action.data(), c"right".as_ptr()) } {
+                    } else if action.as_cstr() == c"right" {
                         code = KE_MOUSELEFT as ::core::ffi::c_int;
                     } else {
                         break '_error;
                     }
                 }
-            } else if code != KE_MOUSEMOVE as ::core::ffi::c_int
-                && !unsafe { strequal(action.data(), c"press".as_ptr()) }
-            {
-                if unsafe { strequal(action.data(), c"drag".as_ptr()) } {
+            } else if code != KE_MOUSEMOVE as ::core::ffi::c_int && action.as_cstr() != c"press" {
+                if action.as_cstr() == c"drag" {
                     code += KE_LEFTDRAG as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int;
-                } else if unsafe { strequal(action.data(), c"release".as_ptr()) } {
+                } else if action.as_cstr() == c"release" {
                     code +=
                         KE_LEFTRELEASE as ::core::ffi::c_int - KE_LEFTMOUSE as ::core::ffi::c_int;
                 } else {

@@ -27,7 +27,7 @@ use crate::mark::{
     mark_jumplist_iter, mark_set_global, mark_set_local, set_last_cursor, setpcmark,
 };
 use crate::mbyte::mb_strnicmp;
-use crate::memory::{strequal, xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup};
+use crate::memory::{xcalloc, xfree, xmalloc, xmemdup, xmemdupz, xrealloc, xstrdup};
 use crate::message::{verbose_enter, verbose_leave};
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_bin, mpack_bool, mpack_check_buffer, mpack_integer, mpack_map, mpack_raw,

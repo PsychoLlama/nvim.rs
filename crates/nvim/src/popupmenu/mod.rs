@@ -40,7 +40,7 @@ use crate::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
-use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree};
+use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree};
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
 use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::emsg;

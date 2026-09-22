@@ -150,10 +150,7 @@ pub(crate) unsafe fn nlua_init_packages(lstate: *mut lua_State, is_standalone: b
             lua_pushinteger(lstate, i as lua_Integer);
             lua_pushcclosure(lstate, Some(nlua_module_preloader), 1);
             lua_setfield(lstate, -2, def.name.as_ptr());
-            if nlua_disable_preload.get()
-                && !is_standalone
-                && strequal(def.name.as_ptr(), FIRST_DEV_MODULE.as_ptr())
-            {
+            if nlua_disable_preload.get() && !is_standalone && def.name == FIRST_DEV_MODULE {
                 break;
             }
         }

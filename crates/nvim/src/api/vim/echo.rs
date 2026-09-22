@@ -183,8 +183,5 @@ pub unsafe fn nvim_echo(
 /// Whether `status` is one of the four a progress message may carry. The
 /// empty string is not one of them.
 fn status_named(status: String_0) -> bool {
-    PROGRESS_STATUS
-        .iter()
-        // SAFETY: the caller's promise.
-        .any(|name| unsafe { strequal(status.data(), name.as_ptr()) })
+    PROGRESS_STATUS.iter().any(|name| status.as_cstr() == *name)
 }

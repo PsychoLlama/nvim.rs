@@ -570,8 +570,7 @@ fn profile_script_stop(wait_start: ProfTime) {
 /// Whether the current buffer is Lua by 'filetype' or by file name.
 fn curbuf_is_lua() -> bool {
     let buf = Buf::current();
-    // SAFETY: the caller's contract.
-    let ft_is_lua = unsafe { strequal(buf.b_p_ft.value_ptr(), c"lua".as_ptr()) };
+    let ft_is_lua = buf.b_p_ft.cstr() == c"lua";
     ft_is_lua
         || (!buf.name.is_unnamed()
             && unsafe { path_with_extension(cstr::at(buf.name.shown_ptr()), c"lua") })

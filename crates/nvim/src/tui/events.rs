@@ -21,7 +21,6 @@
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memory::strequal;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::startup::{stdin_isatty, ui_client_channel_id};
@@ -262,7 +261,7 @@ pub fn tui_set_icon(_tui: &mut TUIData, _icon: String_0) {}
 /// option's name implies.
 pub unsafe fn tui_option_set(tui: &mut TUIData, name: String_0, value: Object) {
     // SAFETY: the caller guarantees `name`.
-    let is = |option: &core::ffi::CStr| unsafe { strequal(name.data(), option.as_ptr()) };
+    let is = |option: &core::ffi::CStr| name.as_cstr() == option;
     // The caller also promises the value's kind. A value that arrives as
     // something else leaves the option alone rather than reinterpreting its
     // bytes, which is what the transpiled union read did.

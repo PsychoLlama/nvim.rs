@@ -377,10 +377,9 @@ unsafe fn ui_set_option(
     // hands out a borrow only for the length of one field access, so the
     // calls below never run with one outstanding.
     let mut ui = unsafe { Ui::new(ui) };
-    // `name.data` can be null, which `strequal` treats as no match; a
-    // `CStr` conversion here would not survive it.
-    // SAFETY: `name` is the caller's, and `strequal` accepts a null.
-    let named = |want: &CStr| unsafe { strequal(name.data(), want.as_ptr()) };
+    // `name.data` can be null, which `as_cstr` answers as `c""` -- no
+    // match, since every `want` below has bytes.
+    let named = |want: &CStr| name.as_cstr() == want;
 
     if named(c"override") {
         let on = want_boolean(c"override", value)?;

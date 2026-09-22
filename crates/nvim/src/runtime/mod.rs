@@ -53,7 +53,7 @@ use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
-use crate::memory::{strequal, try_malloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy};
+use crate::memory::{try_malloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy};
 use crate::message::state::msg_col;
 use crate::message::{e_argreq, e_interr, e_invarg, e_norange};
 use crate::message::{

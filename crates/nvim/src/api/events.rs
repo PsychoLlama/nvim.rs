@@ -17,7 +17,6 @@ use crate::api::private::validate::err_expected;
 use crate::autocmd::do_termresponse_autocmd;
 use crate::eval::vars::set_vim_var_string;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::memory::strequal;
 use crate::message_fmt::c_str;
 use crate::types::{Error, Integer, Object, String_0, Vv, kObjectTypeString, uint64_t};
 
@@ -50,9 +49,7 @@ pub fn nvim_ui_term_event(
     value: Object,
 ) -> Result<(), Error> {
     let mut err = Error::none();
-    // SAFETY: `event` is the caller's and NUL-terminated, as the RPC decoder
-    // leaves every string it builds.
-    if !unsafe { strequal(c"termresponse".as_ptr(), event.data()) } {
+    if event.as_cstr() != c"termresponse" {
         return Ok(());
     }
     let Some(termresponse) = value.as_string() else {
