@@ -19,13 +19,13 @@ use crate::cstr;
 use crate::file_search::Name;
 use crate::highlight_group::HLF_W;
 use crate::memory::XString;
-use crate::message::msg_ptr;
-use crate::message_fmt::{c_str, msg_cstr};
+use crate::message::{MSG_IOBUFF_LEN, msg};
+use crate::message_fmt::{c_str, msg_cstr, to_message};
 use crate::pos::MAXCOL;
 use crate::semsg;
-use crate::smsg;
 use crate::types::{IOSIZE, Vv};
 use crate::winlayer::{Buf, Win};
+use crate::{smsg, tr};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -767,6 +767,8 @@ impl DoTag {
     unsafe fn jump(&mut self, name: *mut c_char) -> bool {
         // `v:swapcommand` is read by a SwapExists autocommand, which can
         // format anything it likes; the text is this frame's.
+        // `v:swapcommand` is read by a SwapExists autocommand, which can
+        // format anything it likes; the text is this frame's.
         let mut swapcmd = [0 as c_char; IOSIZE as usize];
         // SAFETY: the caller's promise.
         // Only when about to try the next match: otherwise E429 below
@@ -830,7 +832,6 @@ impl DoTag {
 
     /// Say which of how many matches this is, when that is worth saying.
     fn report_count(&self, ignored_case: bool) {
-        let mut report = [0 as c_char; IOSIZE as usize];
         let found = num_matches.get();
         if self.selecting()
             || self.kind == DT_TAG as c_int
@@ -839,29 +840,25 @@ impl DoTag {
         {
             return;
         }
-        // SAFETY: the caller's promise; `report` is `IOSIZE` bytes and
-        // both writes are bounded by it.
-        let buf = report.as_mut_ptr();
-        let maxlen = IOSIZE as size_t;
-        let format2 = gettext(c"tag %d of %d%s");
-        let args = self.cur_match + 1;
-        let arg6 = if max_num_matches.get() != MAXCOL as c_int {
-            gettext(c" or more").as_ptr()
+        let more = if max_num_matches.get() != MAXCOL as c_int {
+            tr!(" or more")
         } else {
-            c"".as_ptr()
+            String::new()
         };
-        unsafe { snprintf(buf, maxlen, format2.as_ptr(), args, found, arg6) };
+        let mut text = tr!("tag {} of {}{}", self.cur_match + 1, found, more);
         if ignored_case {
-            let src = gettext(c" Using tag with different case!");
-            let dsize = IOSIZE as size_t;
-            unsafe { xstrlcat(buf, src.as_ptr(), dsize) };
+            text.push_str(&tr!(" Using tag with different case!"));
         }
+        // `IObuff` is where upstream assembled this, and it truncated there.
+        let report = to_message(text, MSG_IOBUFF_LEN);
         if (found > self.prev_num_matches || self.new_tag) && found > 1 {
-            unsafe { msg_ptr(buf, if ignored_case { HLF_W } else { 0 }) };
+            msg(&report, if ignored_case { HLF_W } else { 0 });
             // Don't overwrite this message.
             msg_scroll.set(1);
         } else {
-            unsafe { give_warning(buf, ignored_case, true) };
+            // SAFETY: a `CStr` is a valid C string, which is the whole
+            // contract.
+            unsafe { give_warning(report.as_ptr(), ignored_case, true) };
         }
         if ignored_case && msg_scrolled.get() == 0 && msg_silent.get() == 0 {
             msg_delay(1007, true);
