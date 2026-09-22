@@ -64,6 +64,24 @@
 //! short by decoding it out of the bytes that follow, so it is a different
 //! function from [`cells_at`] rather than a pointer spelling of it, and
 //! [`utf_head_off`] still walks backwards through a pointer.
+//!
+//! # The pointer forms that stay, and what they cost
+//!
+//! **The floor is 33 calls, every one of them inside `mbyte/`**: `utf8/mod.rs`
+//! 17, `cells.rs` 6, `walk.rs` 4, this file 3, `convert.rs` 2, `class.rs` 1.
+//! They are the decode itself -- the bodies each slice form above is written
+//! on top of -- and four are exported by name, so the number does not go to
+//! zero.
+//!
+//! What the ratchet's `mbyte_raw` counts beyond those 33 is a *caller* whose
+//! own cursor is still a pointer, and two things hold them there. `regexp/`'s
+//! 63 are the two engines' `regparse` and `rex.input`; they move when `Rex`
+//! carries a length, so that `reg_nextline`/`reg_getline` can answer a slice.
+//! The rest -- `spell/`, `insexpand/`, `spellsuggest/`, `search/` -- wait on
+//! [`utf_ptr2char`] and [`utfc_ptr2len`] growing slice siblings, and that is a
+//! measured job rather than a sweep: the two hottest readers in the tree
+//! (`drawline`, `regexp`) go through both, and `utfc_ptr2schar` below is what
+//! happens when one of them stops being inlined.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]

@@ -43,6 +43,16 @@ costs about 50x the wall-clock run.
 It does not need both orders — there is no ordering effect in an instruction
 count.
 
+**It is deterministic to a few parts per million for four of the five benches,
+and not for `evalbench`.** Measured: three runs of one binary, minutes apart,
+spread 15 ppm on `mlbench` and 11 ppm on `spellbench` — and **3,626 ppm
+(0.36 %) on `evalbench`**. Disabling ASLR (`setarch -R`) narrows that to
+0.126 % without closing it. There is a cross-session component as well: an
+`evalbench` floor recorded in one session came back 0.163 % different from the
+same binary weeks later, where `mlbench`'s reproduced to 2 ppm. So: **measure
+both sides in one sitting**, never against a stored number, and treat an
+`evalbench` difference under about 0.4 % as no difference at all.
+
 **It does need `codegen-units = 1` on both sides.** The default release
 profile splits the crate into sixteen units, and which unit a function lands
 in decides what gets inlined into it; adding a function to a module, or

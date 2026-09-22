@@ -57,6 +57,15 @@
 //! Those are the pointer walks that have not been rewritten yet; the ones
 //! left are listed in the phase's handoff, and each is a walk whose *callee*
 //! still takes a `*mut c_char`.
+//!
+//! **The floor is 25 calls.** Eight are in this file -- the four forms above,
+//! written in terms of `ml_get_buf_impl` -- and seventeen are in
+//! `cursor/mod.rs`, where the `get_cursor_{line,pos}_{ptr,len}` accessors
+//! spell the same read for the line the cursor is on. Nothing under those can
+//! answer a slice, so the number does not go to zero; everything the needle
+//! counts beyond 25 is a call site elsewhere, and each one retires when the
+//! callee it feeds stops taking a pointer. `ml_replace` and `ml_append` are
+//! the two that most of them are walking toward.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
