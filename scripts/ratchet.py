@@ -1322,8 +1322,14 @@ INSTRUMENTS = {
     # names the ones that *exist* -- every message entry point whose text
     # still arrives as a raw C string. A name leaves this list when its
     # signature stops taking one, which is what makes the number fall.
+    #
+    # `emsg_ptr` is one of them and was missed when the list was drawn up:
+    # it is `emsg` for a caller still holding a pointer, the error channel's
+    # exact counterpart to `msg_ptr`, and leaving it out read the *error*
+    # half of the family as done. `msg_prt_line` left in the commit that
+    # gave it a `&CStr`.
     "msg_raw": re.compile(
-        r"\bmsg_(?:ptr|keep|trunc|may_trunc|strtrunc|prt_line|progress)\("
+        r"\b(?:e?msg_ptr|msg_(?:keep|trunc|may_trunc|strtrunc|progress))\("
     ),
     "bytes_at": re.compile(r"\bbytes_at\("),
     "vval_raw": re.compile(r"\.vval\."),

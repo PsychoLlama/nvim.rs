@@ -4,7 +4,7 @@ count	callee	no_raw	defs	def
 450	.offset	0	0	
 449	bytes_at	0	1	crates/nvim/src/cstr.rs
 341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-323	at	0	3	
+325	at	0	3	
 279	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
 183	xstrdup	0	1	crates/nvim/src/memory/mod.rs
@@ -796,7 +796,6 @@ count	callee	no_raw	defs	def
 4	ml_replace_len	0	1	crates/nvim/src/memline/lines.rs
 4	mpack_parser_init	0	1	crates/nvim/src/mpack/object.rs
 4	msg_progress	0	1	crates/nvim/src/message/progress.rs
-4	msg_prt_line	0	1	crates/nvim/src/message/prtline.rs
 4	multiqueue_new_child	0	1	crates/nvim/src/event/multiqueue.rs
 4	name_of	0	1	crates/nvim/src/file_search/init.rs
 4	next_virt_text_chunk	0	1	crates/nvim/src/decoration/query.rs

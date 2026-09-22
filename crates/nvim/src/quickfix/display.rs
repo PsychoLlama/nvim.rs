@@ -173,10 +173,9 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
     } else {
         qfp.qf_text
     };
-    let line = build_line(|out| unsafe { qf_fmt_text(out, text) })
-        .as_ptr()
-        .cast();
-    unsafe { msg_prt_line(line, false) };
+    let line = build_line(|out| unsafe { qf_fmt_text(out, text) });
+    let line = CStr::from_bytes_with_nul(line).expect("build_line terminates its answer");
+    msg_prt_line(line, false);
 }
 
 /// `:clist`/`:llist`: print the entries of the current list.

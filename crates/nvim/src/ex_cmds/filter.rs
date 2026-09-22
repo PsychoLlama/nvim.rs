@@ -18,6 +18,7 @@
 
 use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
+use crate::memline::Lines;
 use crate::types::AutoEvent;
 use crate::winlayer::{Buf, Win};
 
@@ -810,8 +811,11 @@ pub fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
         };
         msg_str_hl(cstr::in_chars(&numbuf), HLF_N + 1, false);
     }
-    // SAFETY: caller's contract.
-    unsafe { msg_prt_line(ml_get(lnum), list) };
+    // The message path re-enters the editor (`msg_putchar` can reach the
+    // hit-enter prompt), so the line is copied rather than lent out of the
+    // memline cache.
+    let line = Lines::current().line_copy(lnum);
+    msg_prt_line(line.as_cstr(), list);
 }
 
 /// Start a new message only once during `:global`.

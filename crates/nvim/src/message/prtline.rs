@@ -24,10 +24,12 @@ const MAX_SCHAR_SIZE: usize = 32;
 /// columns (a tab, a `<xx>` escape) leaves the rest of them queued in
 /// `extra_*` for the following turns of the loop.
 ///
-/// # Safety
-/// `s` must point at a NUL-terminated string.
-pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
-    let mut s = s;
+/// The **body** is still a pointer walk: it looks one byte past what it has
+/// consumed in several places, reads `'listchars'` runs out of the window
+/// and hands `s` to the `utf*_ptr2*` family. What the caller sees is the
+/// line, terminated, and nothing here writes through it.
+pub fn msg_prt_line(line: &CStr, list: bool) {
+    let mut s = line.as_ptr();
     // `'list'` on the window forces the listing form whatever the caller
     // asked for.
     let list = list || Win::current().w_onebuf_opt.wo_list != 0;

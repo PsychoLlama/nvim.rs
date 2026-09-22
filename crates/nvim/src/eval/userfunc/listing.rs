@@ -149,7 +149,7 @@ pub(crate) unsafe fn list_one_function(
                 break;
             }
         }
-        unsafe { msg_prt_line(line, false) };
+        msg_prt_line(unsafe { cstr::at(line) }, false);
         line_breakcheck();
     }
     if !got_int.get() {

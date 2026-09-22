@@ -195,7 +195,7 @@ pub(crate) unsafe fn show_pat_in_path(
             msg_str_hl(unsafe { cstr::at(iobuff) }, HLF_N, false); // highlight the line number
             msg_str(c" ");
         }
-        unsafe { msg_prt_line(line, false) };
+        msg_prt_line(unsafe { cstr::at(line) }, false);
 
         // A definition continues until a line that does not end in a
         // backslash.
