@@ -106,9 +106,14 @@ pub(super) struct AffState {
     pub syllable: *mut c_char,
     pub sofofrom: *mut c_char,
     pub sofoto: *mut c_char,
-    pub low: *mut c_char,
-    pub fol: *mut c_char,
-    pub upp: *mut c_char,
+    /// Whether this file carried a `LOW`, `FOL` or `UPP` line. The tables
+    /// themselves are **not** kept: upstream copies each one and frees it
+    /// again without ever reading it (its own `TODO: also use FOL and UPP`),
+    /// so all the parse takes from them is that one of the three was seen,
+    /// which is what rebuilds the word-character table.
+    pub low: bool,
+    pub fol: bool,
+    pub upp: bool,
 
     /// Only the first `.aff` file of a run contributes these tables.
     pub do_rep: bool,
@@ -312,9 +317,9 @@ pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: &CStr) -> *mut 
         syllable: core::ptr::null_mut(),
         sofofrom: core::ptr::null_mut(),
         sofoto: core::ptr::null_mut(),
-        low: core::ptr::null_mut(),
-        fol: core::ptr::null_mut(),
-        upp: core::ptr::null_mut(),
+        low: false,
+        fol: false,
+        upp: false,
         // Only take these from the first file that has them.
         do_rep: spin.si_rep.is_empty(),
         do_repsal: spin.si_repsal.is_empty(),
@@ -675,10 +680,10 @@ fn handle_line(
             CaseTable::Low => &mut st.low,
             CaseTable::Upp => &mut st.upp,
         };
-        if !slot.is_null() {
+        if *slot {
             break;
         }
-        *slot = unsafe { xstrdup(item_ptr(items[1])) };
+        *slot = true;
         return true;
     }
 
@@ -809,17 +814,11 @@ fn handle_flag_type(aff: &mut AffFile, items: &[&CStr], fname: &CStr, lnum: c_in
 ///
 /// `spin`, `aff` and the state must be live.
 fn finish_aff(spin: &mut SpellInfo, aff: &mut AffFile, st: &mut AffState, fname: &CStr) {
-    // SAFETY: the caller promises the structures.
-    // The case tables are only used to decide whether the word
-    // characters need rebuilding; their contents are not kept.
-    if !st.fol.is_null() || !st.low.is_null() || !st.upp.is_null() {
-        if spin.si_clear_chartab != 0 {
-            init_spell_chartab();
-            spin.si_clear_chartab = 0;
-        }
-        unsafe { xfree(st.fol.cast()) };
-        unsafe { xfree(st.low.cast()) };
-        unsafe { xfree(st.upp.cast()) };
+    // The case tables are only used to decide whether the word characters
+    // need rebuilding; their contents are not kept.
+    if (st.fol || st.low || st.upp) && spin.si_clear_chartab != 0 {
+        init_spell_chartab();
+        spin.si_clear_chartab = 0;
     }
 
     if st.compmax != 0 {
