@@ -242,7 +242,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         _path: &ConvPath,
     ) -> Flow {
         if fun.is_null() {
-            unsafe { internal_error(NULL_FUNC_NAME.as_ptr()) };
+            internal_error(NULL_FUNC_NAME);
             self.gap.extend_from_slice(b"function(NULL");
             return Flow::Go;
         }

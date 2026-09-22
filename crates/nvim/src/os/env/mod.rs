@@ -458,7 +458,7 @@ pub unsafe fn os_setenv_append_path(fname: *const c_char) -> bool {
     // assertion below is what keeps the directory inside it.
     unsafe {
         if !path_is_absolute(cstr::at(fname)) {
-            internal_error(c"os_setenv_append_path()".as_ptr());
+            internal_error(c"os_setenv_append_path()");
             return false;
         }
         let tail = path_tail_with_sep(fname.cast_mut());

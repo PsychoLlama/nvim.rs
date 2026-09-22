@@ -446,7 +446,7 @@ pub unsafe fn func_unref(name: *mut c_char) {
     let fp = unsafe { find_func(name) };
     if fp.is_null() && unsafe { *name as u8 }.is_ascii_digit() {
         // Only give an error for a numbered function.
-        unsafe { internal_error(c"func_unref()".as_ptr()) };
+        internal_error(c"func_unref()");
         unsafe { abort() };
     }
     unsafe { func_ptr_unref(fp) };
@@ -485,7 +485,7 @@ pub unsafe fn func_ref(name: *mut c_char) {
     } else if unsafe { *name as u8 }.is_ascii_digit() {
         // Only give an error for a numbered function; fail silently when
         // a named or lambda function isn't found.
-        unsafe { internal_error(c"func_ref()".as_ptr()) };
+        internal_error(c"func_ref()");
     }
 }
 

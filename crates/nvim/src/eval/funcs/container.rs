@@ -81,7 +81,7 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // "empty" default, as upstream's switch does.
         VAR_BOOL => tv.as_bool() != Some(kBoolVarTrue),
         VAR_UNKNOWN => {
-            unsafe { internal_error(c"f_empty(UNKNOWN)".as_ptr()) };
+            internal_error(c"f_empty(UNKNOWN)");
             true
         }
         _ => true,
@@ -617,7 +617,7 @@ pub fn f_type(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_BLOB => VAR_TYPE_BLOB as c_int,
         VAR_UNKNOWN => {
             // SAFETY: a literal message.
-            unsafe { internal_error(c"f_type(UNKNOWN)".as_ptr()) };
+            internal_error(c"f_type(UNKNOWN)");
             -1
         }
         _ => -1,

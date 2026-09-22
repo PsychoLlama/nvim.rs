@@ -470,7 +470,7 @@ fn redo_down_to(dest: &UndoDest) -> bool {
         {
             // More to redo, but the marked path has come apart.
             // SAFETY: a NUL-terminated literal.
-            unsafe { internal_error(c"undo_time()".as_ptr()) };
+            internal_error(c"undo_time()");
             break;
         }
     }

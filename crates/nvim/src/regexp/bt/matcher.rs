@@ -300,7 +300,7 @@ fn push_frame(
                 brace.count = 0;
                 RA_CONT
             } else {
-                unsafe { internal_error(c"BRACE_LIMITS".as_ptr()) };
+                internal_error(c"BRACE_LIMITS");
                 RA_FAIL
             }
         }

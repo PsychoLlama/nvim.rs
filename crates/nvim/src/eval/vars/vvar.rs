@@ -115,7 +115,7 @@ pub fn restore_vimvar(idx: Vv, save_tv: &mut TypVal) {
     if hi.is_kept() {
         unsafe { hash_remove(get_vimvar_ht(), hi) };
     } else {
-        unsafe { internal_error(c"restore_vimvar()".as_ptr()) };
+        internal_error(c"restore_vimvar()");
     }
 }
 

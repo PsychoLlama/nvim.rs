@@ -14,7 +14,7 @@
 //! written to it, and the row order *is* the [`OpType`] numbering.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -130,7 +130,7 @@ pub fn get_op_type(char1: c_int, char2: c_int) -> OpType {
         }
     }
     // SAFETY: a literal C string.
-    unsafe { internal_error(c"get_op_type()".as_ptr()) };
+    internal_error(c"get_op_type()");
     OpType::ALL[OPCHARS.len() - 1]
 }
 

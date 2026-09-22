@@ -552,7 +552,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: 
             } else {
                 let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(tabpage.id())) else {
                     // SAFETY: a static message naming the caller.
-                    unsafe { internal_error(c"win_close_othertab()".as_ptr()) };
+                    internal_error(c"win_close_othertab()");
                     return false;
                 };
                 ptp.tp_next = tabpage.tp_next;

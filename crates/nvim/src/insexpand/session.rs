@@ -401,7 +401,7 @@ pub(crate) fn compl_get_info(startcol: c_int, curs_col: ColNr) -> Result<(), Fai
         get_spell_compl_info(startcol, curs_col)
     } else {
         // SAFETY: a static NUL-terminated name.
-        unsafe { internal_error(c"ins_complete()".as_ptr()) };
+        internal_error(c"ins_complete()");
         Err(Failed)
     }
 }

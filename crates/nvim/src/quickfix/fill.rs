@@ -316,7 +316,7 @@ fn clear_qf_buffer() -> bool {
     // autocommand could invalidate it.
     while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         if ml_delete(1).is_err() {
-            unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
+            internal_error(c"qf_fill_buffer()");
             return false;
         }
     }
@@ -401,7 +401,7 @@ pub(crate) unsafe fn qf_fill_buffer(
     let rewriting = old_last.is_null();
     if rewriting {
         if buffer.raw() != Buf::current_raw() {
-            unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
+            internal_error(c"qf_fill_buffer()");
             return;
         }
         if !clear_qf_buffer() {

@@ -26,7 +26,7 @@ use super::*;
 use crate::cstr;
 use crate::guard::Suppress;
 use crate::log::logmsg;
-use crate::message_fmt::c_str;
+use crate::message_fmt::{c_str, msg_cstr};
 use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
@@ -336,12 +336,9 @@ pub fn iemsg(s: &CStr) {
     emsg(s);
 }
 
-/// "E5555: API call: <where>", for a reached-the-unreachable case.
-///
-/// # Safety
-/// `where_0` must be a valid C string.
-pub unsafe fn internal_error(where_0: *const c_char) {
-    unsafe { crate::siemsg!("E685: Internal error: {}", c_str(where_0)) };
+/// "E685: Internal error: <where>", for a reached-the-unreachable case.
+pub fn internal_error(where_0: &CStr) {
+    crate::siemsg!("E685: Internal error: {}", msg_cstr(where_0));
 }
 
 /// Report `text` as a multiline error of `ext_messages` kind `kind`, keeping

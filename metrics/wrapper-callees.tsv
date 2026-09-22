@@ -84,7 +84,6 @@ count	callee	no_raw	defs	def
 26	Node::new	0	1	crates/nvim/src/marktree/node.rs
 26	nlua_pop_boolean	0	1	crates/nvim/src/lua/converter/pop.rs
 26	xmemcpyz	0	1	crates/nvim/src/memory/mod.rs
-25	internal_error	0	1	crates/nvim/src/message/errors.rs
 24	Walk::new	0	2	
 24	at_opt	0	2	
 24	nlua_push_array	0	1	crates/nvim/src/lua/converter/push_object.rs

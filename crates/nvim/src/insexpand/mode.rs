@@ -239,7 +239,7 @@ pub fn vim_is_ctrl_x_key(c: c_int) -> bool {
         CTRL_X_BUFNAMES => c == Ctrl_P || c == Ctrl_N,
         CTRL_X_REGISTER => c == Ctrl_R || c == Ctrl_P || c == Ctrl_N,
         _ => {
-            unsafe { internal_error(c"vim_is_ctrl_x_key()".as_ptr()) };
+            internal_error(c"vim_is_ctrl_x_key()");
             false
         }
     }

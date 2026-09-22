@@ -288,7 +288,7 @@ pub unsafe fn ex_let_vars(
             }
             break;
         } else if sep != b',' && sep != b']' {
-            unsafe { internal_error(c"ex_let_vars()".as_ptr()) };
+            internal_error(c"ex_let_vars()");
             return Err(Failed);
         }
     }

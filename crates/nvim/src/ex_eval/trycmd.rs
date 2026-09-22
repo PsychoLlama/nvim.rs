@@ -274,7 +274,7 @@ pub(crate) fn ex_catch(excmd: &mut ExArg) {
             if unsafe { (*cstack).pending_exception((*cstack).cs_idx as usize) }
                 != current_exception.get()
             {
-                unsafe { internal_error(c"ex_catch()".as_ptr()) };
+                internal_error(c"ex_catch()");
             }
         } else {
             // A preceding catch clause that caught the exception is
@@ -417,7 +417,7 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
         // detected here, the exception will be discarded.
         if did_throw.get() && unsafe { (*cstack).pending_exception(top) } != current_exception.get()
         {
-            unsafe { internal_error(c"ex_finally()".as_ptr()) };
+            internal_error(c"ex_finally()");
         }
     }
 

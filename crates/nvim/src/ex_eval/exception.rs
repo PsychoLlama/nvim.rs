@@ -502,7 +502,7 @@ pub(super) unsafe fn discard_exception(excp: *mut Exception, was_finished: bool)
     }
     if excp.is_null() {
         // SAFETY: module contract.
-        unsafe { internal_error(c"discard_exception()".as_ptr()) };
+        internal_error(c"discard_exception()");
         return;
     }
 
@@ -607,7 +607,7 @@ pub(super) unsafe fn catch_exception(excp: *mut Exception) {
 pub(super) unsafe fn finish_exception(excp: *mut Exception) {
     // SAFETY: caller contract.
     if excp != caught_stack.get() {
-        unsafe { internal_error(c"finish_exception()".as_ptr()) };
+        internal_error(c"finish_exception()");
     }
     caught_stack.set(unsafe { (*caught_stack.get()).caught });
     unsafe { set_exception_vars(caught_stack.get()) };

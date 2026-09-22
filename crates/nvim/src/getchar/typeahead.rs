@@ -717,11 +717,11 @@ pub(crate) unsafe fn free_typebuf() {
     });
     if buf_static {
         // SAFETY: a static string.
-        unsafe { internal_error(c"Free typebuf 1".as_ptr()) };
+        internal_error(c"Free typebuf 1");
     }
     if noremap_static {
         // SAFETY: a static string.
-        unsafe { internal_error(c"Free typebuf 2".as_ptr()) };
+        internal_error(c"Free typebuf 2");
     }
 }
 

@@ -252,7 +252,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
                 d = unsafe { (*di).di_tv.dict_or_null() };
             }
             if d.is_null() {
-                unsafe { internal_error(c"do_unlet()".as_ptr()) };
+                internal_error(c"do_unlet()");
                 return Err(Failed);
             }
         }

@@ -236,7 +236,7 @@ pub(super) unsafe fn add_sound_suggest(
     let sfwordnr = unsafe { soundfold_find(slang, goodword) };
     if sfwordnr < 0 {
         // SAFETY: the message is a NUL-terminated literal.
-        unsafe { internal_error(c"add_sound_suggest()".as_ptr()) };
+        internal_error(c"add_sound_suggest()");
         return;
     }
 

@@ -321,7 +321,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
             }
         }
         VAR_UNKNOWN => {
-            unsafe { internal_error(S::CONVERT_FN_NAME.as_ptr()) };
+            internal_error(S::CONVERT_FN_NAME);
             return Err(Refused);
         }
         _ => {}
