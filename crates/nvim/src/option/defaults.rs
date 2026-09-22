@@ -36,7 +36,7 @@ use crate::mbyte::enc_locale;
 use crate::memory::{XString, xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
 use crate::message_fmt::c_str;
 use crate::option::vars::{P_CH, P_HLG, P_ICON, P_TITLE, P_WINDOW, fenc_default};
-use crate::option::vars::{p_enc, p_rtp, p_sh};
+use crate::option::vars::{mark_option_defaults_set, p_enc, p_rtp, p_sh};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
     kOptFileformats, kOptHelplang, kOptIcon, kOptInvalid, kOptModeline, kOptPackpath,
@@ -308,6 +308,8 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     }
 
     set_options_default(OptionSetFlags::NONE);
+    // From here no string option is upstream's NULL.
+    mark_option_defaults_set();
 
     Buf::current().b_p_initialized = true;
     // The four global-local options the first buffer starts unset.

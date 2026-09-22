@@ -352,7 +352,9 @@ pub(crate) fn buf_copy_options(buffer: Buf, flags: c_int) {
 
     // Before the defaults exist there is nothing to copy: `main` makes
     // the first buffer that early.
-    if P_CPO.is_unset() {
+    // Upstream's `p_cpo != NULL`: an emptied 'cpoptions' (`SavedCpo` while
+    // user code runs) is not this.
+    if P_CPO.is_uninit() {
         check_buf_options(buffer);
         return;
     }

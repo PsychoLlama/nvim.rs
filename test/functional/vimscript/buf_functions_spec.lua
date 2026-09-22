@@ -320,3 +320,33 @@ describe('setbufvar() function', function()
     eq('Vim:E928: String required', pcall_err(fn.setbufvar, '', '&errorformat', true))
   end)
 end)
+
+describe('bufadd() function', function()
+  -- searchpair()'s skip expression and substitute()'s \= expression run with
+  -- 'cpoptions' emptied. A buffer made there must still take its options
+  -- from the globals, not be left with none.
+  local function options_of(name)
+    return {
+      fn.getbufvar(name, '&tabstop'),
+      fn.getbufvar(name, '&shiftwidth'),
+      fn.getbufvar(name, '&fileformat'),
+      fn.getbufvar(name, '&undolevels'),
+    }
+  end
+
+  before_each(function()
+    command('set tabstop=5 shiftwidth=3 fileformat=unix undolevels=77')
+  end)
+
+  it('gives a buffer made under searchpair() the global options', function()
+    api.nvim_buf_set_lines(0, 0, -1, true, { 'a', 'b' })
+    fn.cursor(1, 1)
+    command([[call searchpair('a', '', 'b', 'W', 'bufadd("Xbufadd-skip") * 0')]])
+    eq({ 5, 3, 'unix', 77 }, options_of('Xbufadd-skip'))
+  end)
+
+  it('gives a buffer made under substitute() \\= the global options', function()
+    command([[call substitute('x', 'x', '\=bufadd("Xbufadd-sub")', '')]])
+    eq({ 5, 3, 'unix', 77 }, options_of('Xbufadd-sub'))
+  end)
+end)

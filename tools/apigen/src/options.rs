@@ -782,6 +782,7 @@ use core::mem::offset_of;
 
 use crate::global_cell::GlobalCell;
 use crate::memory::XString;
+use crate::option::vars::option_defaults_set;
 use crate::optionstr::empty_option;
 use crate::types::OptInt;
 
@@ -844,6 +845,19 @@ selector!(
     "A string option's global value: the string the option owns, if it owns one."
 );
 
+/// A global string option that owns nothing is one of two upstream states,
+/// and which one depends on *when* it is asked.
+///
+/// Upstream's `char *p_xx` is `NULL` until `set_init_1` installs the
+/// defaults, and after that it is either a string of its own or the shared
+/// `empty_string_option` an explicit clear leaves behind (`substitute()`'s
+/// quiet 'cpoptions', `:cc`'s spent 'switchbuf'). Both are `None` here; the
+/// table-wide `crate::option::vars::option_defaults_set` tells them apart.
+/// [`StrOpt::is_uninit`] is the `p_xx == NULL` test and
+/// [`StrOpt::is_unset`] the `p_xx == empty_string_option` one.
+///
+/// Reading the value of a `NULL` option crashed upstream, so it panics in a
+/// debug build here: code that runs that early asks `is_uninit` first.
 impl StrOpt {
     /// The value as the `char *` the option protocol still speaks, which is
     /// the shared empty string when the option owns nothing.
@@ -856,22 +870,53 @@ impl StrOpt {
     /// `local_or_global_raw`). Deliberately **not** spelled `as_raw`: that
     /// is `GlobalCell`'s escape hatch, and the ratchet counts it by name.
     pub fn value_ptr(self) -> *mut c_char {
-        OPTIONS.with_field(self.project, |value| {
-            value
-                .as_ref()
-                .map_or_else(empty_option, |s| s.as_ptr().cast_mut())
+        OPTIONS.with_field(self.project, |value| match value {
+            Some(s) => s.as_ptr().cast_mut(),
+            None => {
+                self.read_nothing();
+                empty_option()
+            }
         })
     }
 
-    /// Whether the option owns no string of its own.
+    /// Whether the option has no value at all yet — upstream's `p_xx ==
+    /// NULL`, which is true of every option but 'verbosefile' until
+    /// `set_init_1` installs the defaults, and of none after.
     ///
-    /// This is upstream's `is_empty_option` for a global value, and it is
-    /// **not** "the value is empty": an option explicitly set to `""` owns
-    /// an empty string and answers false. The save-and-restore idioms
+    /// The probe for code that runs early enough to find the table empty
+    /// (`buf_copy_options` for the first buffer, `vim_getenv` for
+    /// `$VIMRUNTIME`), and the only question such code may ask.
+    pub fn is_uninit(self) -> bool {
+        OPTIONS.with_field(self.project, Option::is_none) && self.before_defaults()
+    }
+
+    /// Whether the option has been left owning no string of its own —
+    /// upstream's `p_xx == empty_string_option` (its `is_empty_option` for a
+    /// global value).
+    ///
+    /// It is **not** "the value is empty": an option explicitly set to `""`
+    /// owns an empty string and answers false. The save-and-restore idioms
     /// (`substitute()`'s quiet 'cpoptions', `:vimgrep`'s 'switchbuf') lean
-    /// on exactly that difference.
+    /// on exactly that difference. Nor is it
+    /// [`is_uninit`](Self::is_uninit): before the defaults exist an option
+    /// is `NULL`, not empty, and this answers false.
     pub fn is_unset(self) -> bool {
-        OPTIONS.with_field(self.project, Option::is_none)
+        OPTIONS.with_field(self.project, Option::is_none) && !self.before_defaults()
+    }
+
+    /// Whether owning nothing means upstream's `NULL`: the defaults are not
+    /// in yet, and upstream does not start this option out empty.
+    fn before_defaults(self) -> bool {
+        !option_defaults_set() && !EMPTY_BEFORE_DEFAULTS.contains(&self)
+    }
+
+    /// The `None` arm of every read that hands out a value: `""` stands in
+    /// for `empty_string_option`, never for `NULL`. Only that arm checks.
+    #[inline]
+    fn read_nothing(self) {
+        if cfg!(debug_assertions) && self.before_defaults() {
+            read_before_defaults(self.at);
+        }
     }
 
     /// The value's first byte, which is its NUL when the option holds
@@ -888,8 +933,12 @@ impl StrOpt {
     /// option that owns nothing from one explicitly set to `""`; upstream's
     /// `*p_xx == NUL` does not either.
     pub fn first_byte(self) -> u8 {
-        OPTIONS.with_field(self.project, |value| {
-            value.as_deref().and_then(<[u8]>::first).copied().unwrap_or(0)
+        OPTIONS.with_field(self.project, |value| match value.as_deref() {
+            Some(bytes) => bytes.first().copied().unwrap_or(0),
+            None => {
+                self.read_nothing();
+                0
+            }
         })
     }
 
@@ -904,16 +953,24 @@ impl StrOpt {
     /// per screen line by `Win::col_off2`. Measured at 45 M instructions
     /// on `scrbench`.
     pub fn has_byte(self, byte: u8) -> bool {
-        OPTIONS.with_field(self.project, |value| {
-            value.as_deref().is_some_and(|bytes| bytes.contains(&byte))
+        OPTIONS.with_field(self.project, |value| match value.as_deref() {
+            Some(bytes) => bytes.contains(&byte),
+            None => {
+                self.read_nothing();
+                false
+            }
         })
     }
 
     /// A copy of the value, for a caller that needs it to outlive the
     /// borrow.
     pub fn get(self) -> XString {
-        OPTIONS.with_field(self.project, |value| {
-            value.clone().unwrap_or_else(XString::new)
+        OPTIONS.with_field(self.project, |value| match value {
+            Some(s) => s.clone(),
+            None => {
+                self.read_nothing();
+                XString::new()
+            }
         })
     }
 
@@ -939,6 +996,18 @@ impl StrOpt {
     pub fn restore(self, value: Option<XString>) {
         drop(self.swap(value));
     }
+}
+
+/// Report a read of an option upstream still had as `NULL`, naming the
+/// field. Out of line: it is the panic, and only a debug build reaches it.
+#[cold]
+#[inline(never)]
+fn read_before_defaults(at: usize) -> ! {
+    panic!(
+        "`{}` read before `set_init_1` installed the option defaults (upstream's NULL); \
+         ask `is_uninit()` first",
+        field_name(at)
+    )
 }
 
 /// The table of fields: one line per option that has a global value.
@@ -976,10 +1045,22 @@ macro_rules! options {
 
         /// The one cell. Seeded with each field's zero — a string option
         /// owns nothing until startup installs the table's defaults through
-        /// `crate::option::set_init_1`, and reads as `""` until then.
+        /// `crate::option::set_init_1`, and may not be read until then (see
+        /// [`StrOpt`]).
         static OPTIONS: GlobalCell<$record> = GlobalCell::new($record {
             $($field: $init,)*
         });
+
+        /// The field at offset `at`, by name, for [`read_before_defaults`].
+        #[cold]
+        fn field_name(at: usize) -> &'static str {
+            $(
+                if at == offset_of!($record, $field) {
+                    return stringify!($field);
+                }
+            )*
+            "?"
+        }
 
         $(
             $(#[$doc])*
@@ -994,7 +1075,7 @@ macro_rules! options {
 
             reader! {
                 $(#[$doc])*
-                $kind, $field, $ty
+                $kind, $sel, $field, $ty
             }
         )*
     };
@@ -1003,7 +1084,7 @@ macro_rules! options {
 /// The reader for one field, whose shape follows the field's type: a number
 /// or a boolean is answered, a string is projected into a closure.
 macro_rules! reader {
-    ($(#[$doc:meta])* StrOpt, $field:ident, $ty:ty) => {
+    ($(#[$doc:meta])* StrOpt, $sel:ident, $field:ident, $ty:ty) => {
         $(#[$doc])*
         ///
         /// The projecting accessor: `f` sees the value and the borrow ends
@@ -1019,11 +1100,17 @@ macro_rules! reader {
         #[inline(always)]
         pub fn $field<R>(f: impl FnOnce(&CStr) -> R) -> R {
             OPTIONS.with_field(|o| &mut o.$field, |value| {
-                f(value.as_ref().map_or(c"", XString::as_cstr))
+                f(match value {
+                    Some(s) => s.as_cstr(),
+                    None => {
+                        $sel.read_nothing();
+                        c""
+                    }
+                })
             })
         }
     };
-    ($(#[$doc:meta])* $kind:ident, $field:ident, $ty:ty) => {
+    ($(#[$doc:meta])* $kind:ident, $sel:ident, $field:ident, $ty:ty) => {
         $(#[$doc])*
         ///
         /// The cheap accessor: one load, no selector in the way. `pub`
@@ -1055,11 +1142,9 @@ fn emit_vars(out: &mut String, opts: &[Opt]) {
         if !seen.insert(var) {
             continue;
         }
-        // A string option owns nothing until startup gives it a value, and
-        // reads as `""` until then -- which is what upstream's shared
-        // `empty_string_option` was for, including 'verbosefile', whose
-        // `option_vars.h` declaration says it is "used before options are
-        // initialized".
+        // A string option owns nothing until startup gives it a value: it is
+        // upstream's NULL until then, and `StrOpt` panics on a read of it
+        // (see `EMPTY_BEFORE_DEFAULTS` for the exception).
         let (kind, ty, init) = match o.ty.as_str() {
             "boolean" => ("BoolOpt", "bool", "false"),
             "number" => ("NumOpt", "OptInt", "0"),
@@ -1074,6 +1159,42 @@ fn emit_vars(out: &mut String, opts: &[Opt]) {
         .unwrap();
     }
     out.push_str("    }\n}\n");
+    emit_empty_before_defaults(out, opts);
+}
+
+/// The options upstream declares as `empty_string_option` rather than
+/// leaving `NULL` until `set_init_1`, because something reads them first.
+/// 'verbosefile' is the one: its `option_vars.h` declaration says it is
+/// "used before options are initialized".
+const EMPTY_BEFORE_DEFAULTS: &[&str] = &["verbosefile"];
+
+/// The generated half of [`EMPTY_BEFORE_DEFAULTS`]: the same list as
+/// selectors, which `StrOpt` exempts from its read-before-defaults check.
+fn emit_empty_before_defaults(out: &mut String, opts: &[Opt]) {
+    let sels: Vec<String> = EMPTY_BEFORE_DEFAULTS
+        .iter()
+        .map(|name| {
+            let o = opts
+                .iter()
+                .find(|o| o.full_name == *name)
+                .unwrap_or_else(|| panic!("no option '{name}'"));
+            o.varname
+                .as_deref()
+                .unwrap_or_else(|| panic!("'{name}' has no global variable"))
+                .to_uppercase()
+        })
+        .collect();
+    out.push_str(
+        "\n/// The string options upstream starts out empty rather than `NULL`,\n\
+         /// because something reads them before the defaults are in.\n",
+    );
+    writeln!(
+        out,
+        "const EMPTY_BEFORE_DEFAULTS: [StrOpt; {}] = [{}];",
+        sels.len(),
+        sels.join(", ")
+    )
+    .unwrap();
 }
 
 /// One row of the table, as a struct literal that fills in only what differs

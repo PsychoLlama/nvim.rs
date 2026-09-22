@@ -174,7 +174,7 @@ pub(crate) fn ui_refresh_options() {
     }
     // 'mouse' is not a UI option, but the UI has to be told about it
     // all the same.
-    if !P_MOUSE.is_unset() {
+    if !P_MOUSE.is_uninit() {
         setmouse();
     }
 }

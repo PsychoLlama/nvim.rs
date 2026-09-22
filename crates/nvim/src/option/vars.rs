@@ -60,3 +60,23 @@ pub(crate) static tc_flags: GlobalCell<c_uint> = GlobalCell::new(0);
 pub(crate) static vop_flags: GlobalCell<c_uint> = GlobalCell::new(0);
 pub(crate) static ve_flags: GlobalCell<c_uint> = GlobalCell::new(0);
 pub(crate) static wop_flags: GlobalCell<c_uint> = GlobalCell::new(0);
+
+/// Whether `set_init_1` has installed the option defaults — the point from
+/// which upstream's global string options are never `NULL` again.
+///
+/// Table-wide, and hand-kept rather than generated: it is a fact about
+/// startup, not about any one row. [`crate::options::vars::StrOpt`] is what
+/// reads it, to tell an option that owns nothing *yet* (upstream's `NULL`)
+/// from one explicitly left owning nothing (its `empty_string_option`).
+static OPTION_DEFAULTS_SET: GlobalCell<bool> = GlobalCell::new(false);
+
+/// Whether the option defaults are in; see [`OPTION_DEFAULTS_SET`].
+pub(crate) fn option_defaults_set() -> bool {
+    OPTION_DEFAULTS_SET.get()
+}
+
+/// Record that the option defaults are in. `set_init_1` calls it once, right
+/// after `set_options_default`.
+pub(crate) fn mark_option_defaults_set() {
+    OPTION_DEFAULTS_SET.set(true);
+}

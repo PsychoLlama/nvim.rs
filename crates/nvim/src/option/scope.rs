@@ -166,6 +166,12 @@ impl StrVar {
             // reads it and must not free it. Writing the variable is what
             // ends the pointer's life, and the option protocol's
             // `free_oldval` is where that is decided.
+            //
+            // Installing the defaults reads each option's old value before
+            // it has one -- upstream reads its `NULL` there -- and that is
+            // the protocol's own business, so it answers the empty string
+            // rather than tripping `StrOpt`'s read-before-defaults check.
+            StrVar::Global(field) if field.is_uninit() => empty_option(),
             StrVar::Global(field) => field.value_ptr(),
             StrVar::OwnDefault(idx) => option_default(idx)
                 .as_string()
