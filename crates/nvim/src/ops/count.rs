@@ -18,15 +18,16 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::memline::MlFlags;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 use super::*;
-use crate::message::msg_ptr;
+use crate::message::MSG_IOBUFF_LEN;
+use crate::message_fmt::to_message;
 use crate::normal::{VisualMode, VisualSelection, sel_exclusive, visual_selection};
-use crate::types::{IOSIZE, NUL};
+use crate::tr;
+use crate::types::NUL;
 
 /// Bytes, words and characters in one line, up to `limit` bytes.
 ///
@@ -132,14 +133,12 @@ struct Selection {
 /// `dict`, when not null, must point to a live dictionary.
 pub unsafe fn cursor_pos_info(dict: *mut Dict) {
     // The report is assembled across two functions and shown at the end, so
-    // it is passed down as a sink rather than left in the shared `IObuff`.
-    let mut report = [0 as c_char; IOSIZE as usize];
+    // it is owned here rather than left in the shared `IObuff`.
+    let mut report = String::new();
     let visual = visual_selection();
     let mut counts = PosCounts::default();
     let mut bom_count: VarNumber = 0;
 
-    // SAFETY: `report` is `IOSIZE` bytes and every write to it is bounded by
-    // that; the message strings are the editor's own.
     if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
         if dict.is_null() {
             msg(gettext(no_lines_msg), 0);
@@ -154,15 +153,12 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
         }
 
         if dict.is_null() {
-            report_counts(&mut report, &counts, selection.as_ref());
+            report = report_counts(&counts, selection.as_ref());
         }
 
         bom_count = VarNumber::from(bomb_size());
         if dict.is_null() && bom_count > 0 {
-            let len = unsafe { cstr::bytes_at(report.as_ptr()) }.len();
-            let at = unsafe { report.as_mut_ptr().add(len) };
-            let fmt = gettext(c"(+%ld for BOM)");
-            unsafe { vim_snprintf(at, IOSIZE as size_t - len, fmt.as_ptr(), bom_count) };
+            report.push_str(&tr!("(+{bom_count} for BOM)"));
         }
 
         if dict.is_null() {
@@ -172,7 +168,9 @@ pub unsafe fn cursor_pos_info(dict: *mut Dict) {
                 msg_start();
                 msg_scroll.set(1);
             }
-            unsafe { msg_ptr(report.as_mut_ptr(), 0) };
+            // `IObuff` is where upstream assembled this, and it truncated
+            // there.
+            msg(&to_message(report, MSG_IOBUFF_LEN), 0);
             P_SHM.restore(saved_shm);
         }
     }
@@ -347,18 +345,14 @@ fn count_selected_line(
     }
 }
 
-/// Build the message into `out`.
+/// The message the counts describe.
 ///
 /// Four spellings: with or without a selection, and with or without a
 /// character count -- which is left out when it would equal the byte count,
 /// so that an ASCII buffer reports the shorter message.
 ///
 /// `selection`, when given, must describe the current selection.
-fn report_counts(
-    out: &mut [c_char; IOSIZE as usize],
-    counts: &PosCounts,
-    selection: Option<&Selection>,
-) {
+fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
     let &PosCounts {
         bytes,
         chars,
@@ -368,20 +362,9 @@ fn report_counts(
         words_cursor: wc,
     } = counts;
     let same_as_bytes = cc == bc && chars == bytes;
-    let mut buf1: [c_char; 50] = [0; 50];
-    let (n1, b1) = (buf1.len(), buf1.as_mut_ptr());
-    let n = IOSIZE as size_t;
-    let out = out.as_mut_ptr();
     let lines = Buf::current().line_count() as int64_t;
 
-    // SAFETY: `out` is `IOSIZE` bytes and `buf1`/`buf2` are sized beside the
-    // calls that fill them; the formats are this file's own literals, whose
-    // conversions match the arguments handed after them. The cursor is on a
-    // line of the current buffer, which is what `col_print`'s two measures
-    // and `linetabsize_str` ask for.
     let Some(sel) = selection else {
-        let mut buf2: [c_char; 40] = [0; 40];
-        let (n2, b2) = (buf2.len(), buf2.as_mut_ptr());
         let lnum = Win::current().w_cursor.lnum as int64_t;
         let (col, virtcol) = (
             Win::current().w_cursor.col + 1,
@@ -389,59 +372,46 @@ fn report_counts(
         );
         let p = get_cursor_line_ptr();
         validate_virtcol(Win::current());
-        unsafe { col_print(b1, n1, col, virtcol) };
-        unsafe { col_print(b2, n2, get_cursor_line_len(), linetabsize_str(p)) };
-        if same_as_bytes {
-            let f = c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Byte %ld of %ld";
-            let f = gettext(f).as_ptr();
-            unsafe { vim_snprintf(out, n, f, b1, b2, lnum, lines, wc, words, bc, bytes) };
+        let at = col_text(col, virtcol);
+        // SAFETY: the cursor is on a line of the current buffer, which is
+        // what `linetabsize_str` asks of the pointer taken above.
+        let of = col_text(get_cursor_line_len(), unsafe { linetabsize_str(p) });
+        return if same_as_bytes {
+            tr!(
+                "Col {at} of {of}; Line {lnum} of {lines}; Word {wc} of {words}; Byte {bc} of {bytes}"
+            )
         } else {
-            let f =
-                c"Col %s of %s; Line %ld of %ld; Word %ld of %ld; Char %ld of %ld; Byte %ld of %ld";
-            let f = gettext(f).as_ptr();
-            unsafe {
-                vim_snprintf(
-                    out, n, f, b1, b2, lnum, lines, wc, words, cc, chars, bc, bytes,
-                )
-            };
-        }
-        return;
+            tr!(
+                "Col {at} of {of}; Line {lnum} of {lines}; Word {wc} of {words}; Char {cc} of {chars}; Byte {bc} of {bytes}"
+            )
+        };
     };
 
     // A blockwise selection with a right edge also reports its width.
-    if sel.mode.is_block() && Win::current().w_curswant < MAXCOL {
+    let width = if sel.mode.is_block() && Win::current().w_curswant < MAXCOL {
         let mut min = sel.min;
         let mut max = sel.max;
         // Both vcols are `c_int`, so the difference cannot overflow an
         // `int64_t` (upstream computes it under STRICT_SUB and aborts).
         let cols = int64_t::from(sel.oparg.end_vcol) + 1 - int64_t::from(sel.oparg.start_vcol);
         let (minc, maxc) = (&raw mut min.col, &raw mut max.col);
+        // SAFETY: the two positions are this frame's own, and so are the
+        // columns written back into them.
         unsafe { getvcols(Win::current(), &raw mut min, &raw mut max, minc, maxc) };
-        let cols_fmt = gettext(c"%ld Cols; ").as_ptr();
-        unsafe { vim_snprintf(b1, n1, cols_fmt, cols) };
+        tr!("{cols} Cols; ")
     } else {
-        // `b1` aliases `buf1`, so `vim_snprintf` below reads this write;
-        // `unused_assignments` only sees direct uses of the local.
-        #[allow(unused_assignments)]
-        {
-            buf1[0] = NUL as c_char;
-        }
-    }
+        String::new()
+    };
 
     let sel_lines = int64_t::from(sel.line_count);
     if same_as_bytes {
-        let f = c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Bytes";
-        let f = gettext(f).as_ptr();
-        unsafe { vim_snprintf(out, n, f, b1, sel_lines, lines, wc, words, bc, bytes) };
+        tr!(
+            "Selected {width}{sel_lines} of {lines} Lines; {wc} of {words} Words; {bc} of {bytes} Bytes"
+        )
     } else {
-        let f =
-            c"Selected %s%ld of %ld Lines; %ld of %ld Words; %ld of %ld Chars; %ld of %ld Bytes";
-        let f = gettext(f).as_ptr();
-        unsafe {
-            vim_snprintf(
-                out, n, f, b1, sel_lines, lines, wc, words, cc, chars, bc, bytes,
-            )
-        };
+        tr!(
+            "Selected {width}{sel_lines} of {lines} Lines; {wc} of {words} Words; {cc} of {chars} Chars; {bc} of {bytes} Bytes"
+        )
     }
 }
 

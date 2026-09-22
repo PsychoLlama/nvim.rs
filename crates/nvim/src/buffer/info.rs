@@ -582,17 +582,31 @@ impl Msg {
 
 /// The column indicator: `col` alone when the virtual column agrees with it,
 /// `col-vcol` when it does not.
+pub(crate) fn col_text(col: c_int, vcol: c_int) -> String {
+    if col == vcol {
+        format!("{col}")
+    } else {
+        format!("{col}-{vcol}")
+    }
+}
+
+/// [`col_text`] written into a caller's buffer, for the two callers that
+/// still assemble their report in one. Answers what was written, which is
+/// the indicator truncated to `buflen`.
 ///
 /// # Safety
 ///
-/// `buf` must point at a NUL-terminated string, unaliased for the call.
+/// `buf` must point at a writable buffer of `buflen` bytes, unaliased for
+/// the call, and `buflen` must not be zero.
 pub unsafe fn col_print(buf: *mut c_char, buflen: size_t, col: c_int, vcol: c_int) -> c_int {
-    if col == vcol {
-        // SAFETY: the caller's buffer, and a format taking one number.
-        return unsafe { vim_snprintf_safelen(buf, buflen, c"%d".as_ptr(), col) } as c_int;
+    let text = col_text(col, vcol);
+    let len = text.len().min(buflen - 1);
+    // SAFETY: the caller's buffer holds `buflen` bytes, and `len` is one
+    // less than that at most, so the terminator lands inside it too.
+    unsafe {
+        ptr::copy_nonoverlapping(text.as_ptr(), buf.cast::<u8>(), len);
+        *buf.add(len) = 0;
     }
-    // SAFETY: the caller's buffer, and a format taking two numbers.
-    let len = unsafe { vim_snprintf_safelen(buf, buflen, c"%d-%d".as_ptr(), col, vcol) };
     len as c_int
 }
 

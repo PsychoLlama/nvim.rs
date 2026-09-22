@@ -17,7 +17,7 @@
 use crate::ascii::{
     ascii_isalpha, ascii_isbdigit, ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_isxdigit,
 };
-use crate::buffer::{buf_get_changedtick, col_print};
+use crate::buffer::{buf_get_changedtick, col_text};
 use crate::change::{
     appended_lines_mark, changed_bytes, changed_lines, del_bytes, del_char, del_lines,
     get_last_leader_offset, get_leader_len, ins_char, ins_str, truncate_line,
