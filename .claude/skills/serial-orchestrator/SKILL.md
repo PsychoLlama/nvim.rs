@@ -13,8 +13,13 @@ arguments:
 ## Steps
 
 - Read $migration_plan to understand your slice of work.
-- Don't implement changes yourself; delegate work to subagents (model=opus, not your default).
+- Don't implement changes yourself; delegate work to subagents.
+
+## Subagents
+
 - Don't try to multi-task subagents - one at a time, all on the current branch.
+- Use `model=opus` when launching subagents. Your default is expensive.
+  - Exception: for your own agents doing pure investigation (no changes), leave `model` unset.
 
 ## Scratchpad
 
