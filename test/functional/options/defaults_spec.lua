@@ -7,6 +7,7 @@
 local t = require('test.testutil')
 local n = require('test.functional.testnvim')()
 local Screen = require('test.functional.ui.screen')
+local ProcStream = require('test.client.uv_stream').ProcStream
 
 local assert_alive = n.assert_alive
 local assert_log = t.assert_log
@@ -33,6 +34,52 @@ describe('startup defaults', function()
   it("NVIM_NOTTYFAST=1 unsets 'ttyfast'", function()
     clear { env = { NVIM_NOTTYFAST = '1' } }
     eq(0, n.eval('&ttyfast'))
+  end)
+
+  describe('$VIMRUNTIME', function()
+    -- A binary installed as <prefix>/bin/nvim finds <prefix>/share/nvim/runtime
+    -- before the directory baked in at build time. 'helpfile' is still unset
+    -- when $VIMRUNTIME is first resolved, and must not be taken for an empty
+    -- value that rules the exe-relative path out.
+    local prefix = n.nvim_dir .. '/../Xtest-exe-relative'
+
+    after_each(function()
+      rmdir(prefix)
+    end)
+
+    it('is found relative to the executable when unset', function()
+      t.skip(is_os('win'), 'hard link and symlink setup is POSIX-only')
+      mkdir(prefix)
+      mkdir(prefix .. '/bin')
+      mkdir(prefix .. '/share')
+      mkdir(prefix .. '/share/nvim')
+      -- A hard link, not a symlink: v:progpath is the resolved executable.
+      assert(vim.uv.fs_link(n.nvim_prog, prefix .. '/bin/nvim'))
+      local runtime = assert(vim.uv.fs_realpath('runtime'))
+      assert(vim.uv.fs_symlink(runtime, prefix .. '/share/nvim/runtime'))
+
+      local env = {} --- @type string[]
+      for k, v in pairs(vim.uv.os_environ()) do
+        if k ~= 'VIMRUNTIME' and k ~= 'VIM' then
+          env[#env + 1] = k .. '=' .. v
+        end
+      end
+      local proc = ProcStream.spawn({
+        prefix .. '/bin/nvim',
+        '--clean',
+        '--headless',
+        '-c',
+        [[lua io.stdout:write(vim.fn.expand('$VIMRUNTIME'))]],
+        '-c',
+        'qa!',
+      }, env)
+      proc.collect_text = true
+      proc:read_start()
+      proc:wait()
+      proc:close()
+      eq(0, proc.status, proc.stderr)
+      eq(assert(vim.uv.fs_realpath(prefix)) .. '/share/nvim/runtime', proc.stdout)
+    end)
   end)
 
   describe(':filetype', function()
