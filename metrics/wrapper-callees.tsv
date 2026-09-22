@@ -5,7 +5,7 @@ count	callee	no_raw	defs	def
 449	bytes_at	0	1	crates/nvim/src/cstr.rs
 341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 321	at	0	3	
-281	CStr::from_ptr	0	2	
+280	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
 183	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
@@ -60,7 +60,6 @@ count	callee	no_raw	defs	def
 32	os_path_exists	0	1	crates/nvim/src/os/fs/dir.rs
 32	ptr2cells	0	1	crates/nvim/src/charset/display.rs
 31	.copy_from_nonoverlapping	0	0	
-31	emsg_ptr	0	1	crates/nvim/src/message/errors.rs
 31	f	0	0	
 31	ga_grow	0	1	crates/nvim/src/garray.rs
 31	getdigits_int	0	1	crates/nvim/src/charset/walk.rs
@@ -123,6 +122,7 @@ count	callee	no_raw	defs	def
 19	convert_setup	0	1	crates/nvim/src/mbyte/convert.rs
 19	dict_set_var	0	1	crates/nvim/src/api/private/helpers/vimdict.rs
 19	emsg_funcname	0	1	crates/nvim/src/eval/userfunc/name.rs
+19	emsg_ptr	0	1	crates/nvim/src/message/errors.rs
 19	msg_ptr	0	1	crates/nvim/src/message/mod.rs
 19	path_fnamecmp	0	0	
 18	Db::new	0	67	

@@ -405,8 +405,7 @@ const NEWS_TEMPLATE: &CStr = c"type  :help news<Enter>     for v%s.%s notes ";
 /// `gettext` answers with a pointer into the loaded message catalogue, which
 /// nvim never unloads, so the result outlives every caller here.
 fn translate(msg: &'static CStr) -> &'static CStr {
-    // SAFETY: `msg` is NUL-terminated, and so is anything gettext returns.
-    unsafe { CStr::from_ptr(gettext(msg).as_ptr()) }
+    gettext(msg)
 }
 
 /// [`NEWS_TEMPLATE`], translated and filled in.

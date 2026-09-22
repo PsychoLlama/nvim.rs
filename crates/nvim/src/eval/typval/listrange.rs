@@ -12,7 +12,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::semsg;
 use crate::types::Failed;
 use crate::types::NUL;
@@ -162,8 +162,8 @@ pub unsafe fn list_assign_range(
     }
 
     if i < srclen {
-        let msg = tr(c"E710: List value has more items than target");
-        unsafe { emsg_ptr(msg) };
+        let msg = gettext(c"E710: List value has more items than target");
+        emsg(msg);
         return Err(Failed);
     }
     let short = if empty_idx2 {

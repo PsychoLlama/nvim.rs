@@ -37,7 +37,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
 use crate::memory::XString;
 use crate::message::e_cmdwin;
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::mouse::{MousePos, find_win_inner};
 use crate::r#move::textpos2screenpos;
 use crate::option::vars::{p_ch, p_ls};
@@ -253,7 +253,7 @@ fn make_error_str(s: *const c_char) -> Error {
 }
 fn report_error(err: &Error) {
     // SAFETY: a set error's message is a string the API allocated.
-    unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
+    emsg(err.message_or_empty());
 }
 fn suppress_autocmds() {
     block_autocmds();

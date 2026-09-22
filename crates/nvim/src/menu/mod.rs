@@ -46,7 +46,7 @@ use crate::guard::Lock;
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::e_cannot_change_menus_while_listing;
-use crate::message::{emsg_ptr, str2special_save};
+use crate::message::{emsg, str2special_save};
 use crate::normal::{visual_active, visual_select};
 use crate::os::cshim::gettext;
 use crate::popupmenu::pum_show_popupmenu;
@@ -137,25 +137,23 @@ pub(crate) static E_NOTSUBMENU: &CStr = c"E327: Part of menu-item path is not su
 /// The translated text of one of the shared `e_*` message constants. The
 /// `_c` message macros want a `printf` format string, which a
 /// `format_args!` literal cannot be.
-pub(crate) fn message(msg: &'static CStr) -> *const c_char {
-    gettext(msg).as_ptr()
+pub(crate) fn message(msg: &'static CStr) -> &'static CStr {
+    gettext(msg)
 }
 
 /// [`message`] for a message this module owns.
-pub(crate) fn message_str(msg: &'static CStr) -> *const c_char {
-    gettext(msg).as_ptr()
+pub(crate) fn message_str(msg: &'static CStr) -> &'static CStr {
+    gettext(msg)
 }
 
 /// `emsg(_(msg))`.
 pub(crate) fn emsg_c(msg: &'static CStr) {
-    // SAFETY: a `'static` NUL-terminated string; emsg copies what it keeps.
-    unsafe { emsg_ptr(message_str(msg)) };
+    emsg(message_str(msg));
 }
 
 /// `emsg(_(msg))` for one of the shared `e_*` constants.
 pub(crate) fn emsg_shared(msg: &'static CStr) {
-    // SAFETY: as [`emsg_c`].
-    unsafe { emsg_ptr(message(msg)) };
+    emsg(message(msg));
 }
 
 /// `semsg(fmt, arg)` for the five messages that interpolate a menu name.

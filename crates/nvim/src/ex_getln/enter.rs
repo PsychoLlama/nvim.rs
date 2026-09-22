@@ -17,7 +17,7 @@ use crate::cstr;
 use crate::getchar::typeahead;
 use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
 use crate::optionstr::LocalOptStr;
 use crate::types::OptStr;
@@ -474,7 +474,7 @@ pub(crate) fn command_line_enter(
             if !ui_has(kUIMessages) {
                 msg_putchar('\n' as ::core::ffi::c_int);
             }
-            unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
+            emsg(err.message_or_empty());
             did_emsg.set(0);
             err.clear();
         }

@@ -10,7 +10,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::semsg;
 use crate::types::Failed;
 use ::core::ptr::NonNull;
@@ -500,9 +500,8 @@ pub unsafe fn blob_set_range(
     // SAFETY: the value's own blob.
     let from = unsafe { at.as_ref() };
     if n2 - n1 + 1 != VarNumber::from(blob_len(from)) {
-        let msg = tr(c"E972: Blob value does not have the right number of bytes");
-        // SAFETY: a NUL-terminated message from the translation table.
-        unsafe { emsg_ptr(msg) };
+        let msg = gettext(c"E972: Blob value does not have the right number of bytes");
+        emsg(msg);
         return Err(Failed);
     }
     if ::core::ptr::eq(at, dest) {

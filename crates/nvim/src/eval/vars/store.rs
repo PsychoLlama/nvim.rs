@@ -25,7 +25,7 @@ use core::ptr;
 
 use super::*;
 use crate::eval::typval::{DictEntry, tv_dict_item_free};
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len, emsg_text};
 use crate::os::cshim::gettext_ptr;
 use crate::types::NUL;
@@ -44,14 +44,13 @@ use crate::types::NUL;
 /// Safe by construction: a `CStr` carries its terminator in the type, and
 /// what `gettext` answers is either that `static` or one of its own -- both
 /// of which outlive the report it is passed to.
-pub(crate) fn translate(msg: &'static CStr) -> *const c_char {
-    gettext(msg).as_ptr()
+pub(crate) fn translate(msg: &'static CStr) -> &'static CStr {
+    gettext(msg)
 }
 
 /// Report one of the editor's `static` messages, translated.
 pub(crate) fn emsg_static(msg: &'static CStr) {
-    // SAFETY: [`translate`]'s answer is a live NUL-terminated string.
-    unsafe { emsg_ptr(translate(msg)) };
+    emsg(translate(msg));
 }
 
 /// Clear a value this frame owns, freeing whatever it holds.

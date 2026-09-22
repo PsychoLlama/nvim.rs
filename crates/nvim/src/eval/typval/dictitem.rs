@@ -36,7 +36,7 @@
 use super::*;
 use crate::cstr;
 use crate::hashtab::removed_sentinel;
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::semsg;
 use crate::types::NUL;
 use crate::types::{DictKey, Failed, HashTab, SlotEntry};
@@ -475,9 +475,8 @@ pub fn dict_get_callback(d: Option<&mut Dict>, key: &[u8], result: &mut Callback
     match d.find(key) {
         None => return true,
         Some(di) if !di.di_tv.is_func() && di.di_tv.v_type() != VAR_STRING => {
-            let msg = tr(c"E6000: Argument is not a function or function name");
-            // SAFETY: a NUL-terminated message from the translation table.
-            unsafe { emsg_ptr(msg) };
+            let msg = gettext(c"E6000: Argument is not a function or function name");
+            emsg(msg);
             return false;
         }
         Some(di) => tv_copy(&di.di_tv, &mut tv),

@@ -60,7 +60,7 @@ use crate::guard::Suppress;
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_argreq;
 use crate::message::state::{did_emsg, emsg_silent};
-use crate::message::{emsg_ptr, internal_error};
+use crate::message::{emsg, internal_error};
 use crate::message_fmt::msg_bytes;
 use crate::option::SavedCpo;
 
@@ -81,7 +81,7 @@ pub(crate) fn ex_throw(excmd: &mut ExArg) {
         let arg = excmd.arg_ptr();
         unsafe { eval_to_string_skip(arg, excmd, excmd.skip) }
     } else {
-        unsafe { emsg_ptr(message(e_argreq)) };
+        emsg(message(e_argreq));
         ptr::null_mut()
     };
 

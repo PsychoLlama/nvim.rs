@@ -18,7 +18,7 @@
 use super::*;
 use crate::cstr;
 use crate::grid::linebuf;
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::types::kFloatRelativeEditor;
 use crate::winlayer::Win;
 
@@ -292,7 +292,7 @@ fn resolve_border(config: &mut WinConfig) -> Option<PumBorder> {
         Ok(false) => return None,
         Err(e) => {
             // SAFETY: the refusal owns its message.
-            unsafe { emsg_ptr(e.message_or_empty().as_ptr()) };
+            emsg(e.message_or_empty());
             return None;
         }
     }

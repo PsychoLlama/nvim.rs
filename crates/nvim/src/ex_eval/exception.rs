@@ -59,7 +59,7 @@ use crate::memory::XString;
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
 use crate::message::{e_interr, e_outofmem};
-use crate::message::{emsg, emsg_ptr, internal_error, msg_str, verbose_enter, verbose_leave};
+use crate::message::{emsg, internal_error, msg_str, verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::vars::p_verbose;
 use crate::option::vars::p_vfile;
@@ -121,7 +121,7 @@ pub(crate) unsafe fn cause_errthrow(
     // interrupt exception stays catchable by the innermost one instead of
     // being replaced by an error exception carrying its text. The identity
     // test is upstream's: only *this* message is meant.
-    if mesg == message(e_interr) {
+    if ::core::ptr::eq(mesg, message(e_interr).as_ptr()) {
         // SAFETY: caller contract.
         unsafe { *ignore = true };
         return true;
@@ -425,7 +425,7 @@ pub(super) unsafe fn throw_exception(
     if unsafe { (*excp).value }.is_null() && should_free {
         unsafe { xfree(excp.cast()) };
         suppress_errthrow.set(true);
-        unsafe { emsg_ptr(message(e_outofmem)) };
+        emsg(message(e_outofmem));
         current_exception.set(ptr::null_mut());
         return Err(Failed);
     }

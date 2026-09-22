@@ -17,7 +17,7 @@ use super::*;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::guard::{Allow, Suppress};
-use crate::message::emsg_ptr;
+use crate::message::emsg;
 use crate::option::boolean_optval;
 use crate::optionstr::LocalOptStr;
 use crate::os::cshim::strchr;
@@ -122,7 +122,7 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
     };
     drop(unlocked);
     if let Err(mut err) = set {
-        unsafe { emsg_ptr(err.message_or_empty().as_ptr()) };
+        emsg(err.message_or_empty());
         err.clear();
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };

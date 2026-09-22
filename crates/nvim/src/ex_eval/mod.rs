@@ -175,8 +175,8 @@ static cause_abort: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The address of a message constant, for the identity test in
 /// [`cause_errthrow`](exception::cause_errthrow).
-fn message(msg: &'static CStr) -> *mut c_char {
-    msg.as_ptr().cast_mut()
+fn message(msg: &'static CStr) -> &'static CStr {
+    msg
 }
 
 /// A message constant as an owned `eap->errmsg`.
