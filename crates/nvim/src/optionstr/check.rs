@@ -128,6 +128,29 @@ pub(crate) fn illegal_char_after_chr(c: c_int) -> OptError {
 ///
 /// `at` must point at a freshly allocated buffer whose string options have
 /// not been read, written or dropped.
+///
+/// # Why the parameter is a raw pointer
+///
+/// This is the tree's **only** `*mut Buffer` in a signature outside
+/// `winlayer/` -- the whole of the ratchet's `raw_win_buf_sigs`, which is 1
+/// rather than 0 because of this one function -- so it owes an explanation.
+///
+/// A `&mut Buffer` asserts that the whole buffer is a valid `Buffer`, and at
+/// this point it is not: `buflist_new` is part-way through writing the fields
+/// a zeroed block cannot stand in for, and this call sits among seven sibling
+/// `(&raw mut (*at).field).write(..)` lines that have the same problem for the
+/// same reason. Taking a reference here would be the precise kind of claim
+/// that `Option<XString>`'s niche punishes -- a zeroed one reads as `Some`
+/// over a null pointer -- so the reference would be unsound *before* the
+/// function that fixes it had run.
+///
+/// A `&mut MaybeUninit<Buffer>` would satisfy the needle and would be a
+/// different lie: the buffer is *partly* initialised by the time this runs,
+/// not wholly uninitialised, and singling out one step of an eight-step
+/// sequence to speak a different language than its neighbours makes the
+/// sequence harder to read, not easier. The floor retires when buffer
+/// allocation stops handing out a half-built block at all -- when a `Buffer`
+/// is built as a value and moved into place -- and not before.
 pub unsafe fn init_buf_string_options(at: *mut Buffer) {
     // SAFETY: the caller's promise -- each address is one of the buffer's
     // own fields, and `write` does not drop what was there.

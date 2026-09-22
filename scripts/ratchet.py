@@ -1223,6 +1223,17 @@ T_SUFFIX_DECL = re.compile(
 # identity -- reading one is the use-after-free); and `win_col_off` is a C ABI
 # the functional suite calls through `ffi.cdef`. Every one of them is the
 # *reason* the rest of the tree has none.
+#
+# One row sits *outside* the home and is counted: `optionstr::
+# init_buf_string_options(at: *mut Buffer)`, which is why this number is 1 and
+# not 0. It writes a freshly allocated buffer's string options before anything
+# may read or drop them -- a zeroed `Option<XString>` is `Some` over a null
+# pointer, because the niche is the vector's capacity -- so its argument is a
+# block that is not yet a valid `Buffer` and a `&mut` would assert what is not
+# true yet. Its doc comment carries the full argument, including why
+# `&mut MaybeUninit<Buffer>` is not an improvement. The row retires when a
+# buffer is built as a value and moved into place rather than allocated zeroed
+# and patched up.
 RAW_WIN_BUF = re.compile(r"\*(?:mut|const)\s+(?:Window|Buffer|Tabpage)\b")
 # The graph objects behind an exclusive Rust borrow, same spans. `&mut` is
 # `noalias`, and `curwin`/`curbuf` alias every window and buffer the editor
