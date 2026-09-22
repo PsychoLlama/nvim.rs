@@ -156,35 +156,41 @@ pub(crate) unsafe fn cmdline_search_stat(
     // it still reads "current of total" on screen.
     let reversed = Win::current().w_onebuf_opt.wo_rl != 0
         && Win::current().w_onebuf_opt.wo_rlc.first_byte() as c_int == 's' as c_int;
-    let mut t = [0 as c_char; STAT_BUF_LEN];
-    let at = t.as_mut_ptr();
-    let room = STAT_BUF_LEN as size_t;
-    let mut len = if stat.incomplete == 1 {
-        unsafe { vim_snprintf(at, room, c"[?/??]".as_ptr()) }
+    // Four digits is the most `'maxsearchcount'` allows on either side of
+    // the slash, so the longest of these is `[>9999/>9999]` -- thirteen
+    // bytes, and upstream's `STAT_BUF_LEN` scratch buffer never truncated
+    // one.
+    let mut count = if stat.incomplete == 1 {
+        "[?/??]".to_string()
     } else if stat.cnt > maxcount && stat.cur > maxcount {
-        unsafe { vim_snprintf(at, room, c"[>%d/>%d]".as_ptr(), maxcount, maxcount) }
+        format!("[>{maxcount}/>{maxcount}]")
     } else if stat.cnt > maxcount {
         if reversed {
-            unsafe { vim_snprintf(at, room, c"[>%d/%d]".as_ptr(), maxcount, stat.cur) }
+            format!("[>{}/{}]", maxcount, stat.cur)
         } else {
-            unsafe { vim_snprintf(at, room, c"[%d/>%d]".as_ptr(), stat.cur, maxcount) }
+            format!("[{}/>{}]", stat.cur, maxcount)
         }
     } else if reversed {
-        unsafe { vim_snprintf(at, room, c"[%d/%d]".as_ptr(), stat.cnt, stat.cur) }
+        format!("[{}/{}]", stat.cnt, stat.cur)
     } else {
-        unsafe { vim_snprintf(at, room, c"[%d/%d]".as_ptr(), stat.cur, stat.cnt) }
-    } as usize;
+        format!("[{}/{}]", stat.cur, stat.cnt)
+    };
 
     // "W " marks a search that wrapped around.
-    if show_top_bot_msg && len + 2 < STAT_BUF_LEN {
-        t.copy_within(0..len, 2);
-        t[0] = b'W' as c_char;
-        t[1] = b' ' as c_char;
-        len += 2;
+    if show_top_bot_msg && count.len() + 2 < STAT_BUF_LEN {
+        count.insert_str(0, "W ");
     }
 
-    len = len.min(msgbuflen);
-    unsafe { ptr::copy(t.as_ptr(), msgbuf.add(msgbuflen - len), len) };
+    let len = count.len().min(msgbuflen);
+    // SAFETY: the caller guarantees `msgbuf` holds `msgbuflen` bytes, and
+    // the count is written into the last `len` of them.
+    unsafe {
+        ptr::copy(
+            count.as_ptr(),
+            msgbuf.add(msgbuflen - len).cast::<u8>(),
+            len,
+        )
+    };
 
     // (Upstream clears `stat.cur` for a backward search that landed on
     // `maxcount + 1` here. Nothing reads it afterwards.)
