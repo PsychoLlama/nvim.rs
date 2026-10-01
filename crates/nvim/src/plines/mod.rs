@@ -771,8 +771,14 @@ pub(crate) fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: ColNr
     let mut vcol = vcol_arg as int64_t;
 
     // Nothing the loop below calls can close a window, so the handle `csarg`
-    // took is good for all of it.
-    let wp = csarg.win;
+    // took is good for all of it. It is rebuilt from its address rather than
+    // copied out of `csarg`, which reads the window's handle once more: with
+    // the copy, LLVM kept the handle's two halves live across the loop and
+    // spilled the width instead -- four more instructions per character,
+    // +0.85% on `scrbench` (p33-2, cachegrind). This is codegen, not
+    // semantics: the two values are equal.
+    // SAFETY: `csarg.win` is the live window `init_charsize_arg` was given.
+    let wp = unsafe { Win::new(csarg.win.raw()) };
     // SAFETY: `csarg` is initialised, so its line is NUL-terminated.
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are

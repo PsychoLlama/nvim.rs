@@ -430,6 +430,7 @@ count	callee	no_raw	defs	def
 6	String_0::from_raw_bytes	0	1	crates/nvim/src/api/private/helpers/text.rs
 6	Timer::new	0	1	crates/nvim/src/event/time.rs
 6	Tm::new	0	67	
+6	Win::new	0	1	crates/nvim/src/winlayer.rs
 6	Xfmark::new	0	1	crates/nvim/src/mark/store.rs
 6	apply_autocmds_exarg	0	1	crates/nvim/src/autocmd/fire.rs
 6	arena_alloc	0	1	crates/nvim/src/memory/arena.rs
@@ -550,7 +551,6 @@ count	callee	no_raw	defs	def
 5	ShlWalk::new	0	1	crates/nvim/src/match/searchhl.rs
 5	Si::new	0	67	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
-5	Win::new	0	1	crates/nvim/src/winlayer.rs
 5	add_scanned_word	0	1	crates/nvim/src/insexpand/sources.rs
 5	add_tag_field	0	1	crates/nvim/src/tag/query.rs
 5	api_dict_to_keydict	0	1	crates/nvim/src/api/private/helpers/keydict.rs
