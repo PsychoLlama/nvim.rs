@@ -536,7 +536,7 @@
     "crates/nvim/src/getchar/scriptin.rs": {"cell_ptr": 1, "pub_items": 4, "unsafe_stmts": 14},
     "crates/nvim/src/getchar/state.rs": {"no_mangle": 1, "pub_items": 1},
     "crates/nvim/src/getchar/typeahead.rs": {"cell_ptr": 2, "pub_items": 11, "unsafe_stmts": 58},
-    "crates/nvim/src/global_cell.rs": {"cell_ptr": 3, "pub_items": 4, "unsafe_stmts": 13},
+    "crates/nvim/src/global_cell.rs": {"cell_ptr": 3, "pub_items": 5, "unsafe_stmts": 13},
     "crates/nvim/src/grid/border.rs": {"pub_items": 1, "unsafe_stmts": 43},
     "crates/nvim/src/grid/line.rs": {"cell_ptr": 2, "pub_items": 16, "unsafe_stmts": 18},
     "crates/nvim/src/grid/mod.rs": {"cell_ptr": 1, "pub_items": 18, "unsafe_stmts": 23},

@@ -19,70 +19,48 @@ use super::*;
 use core::ffi::{CStr, c_char};
 use core::mem::offset_of;
 
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{Field, GlobalCell, field};
 use crate::memory::XString;
 use crate::option::vars::option_defaults_set;
 use crate::optionstr::empty_option;
 use crate::types::OptInt;
 
-/// Which field of [`Options`] one option's global value is.
-///
-/// A selector is a projection into the record plus the offset it projects
-/// to, which is its identity: two selectors are equal when they name the
-/// same field. The option table holds one per row, in place of the address
-/// its `var` used to be, and [`crate::option::scope`] is what turns it into
-/// a read or a write.
-macro_rules! selector {
-    ($name:ident, $ty:ty, $what:expr) => {
-        #[doc = $what]
-        ///
-        /// A field selector; see the module docs.
-        #[derive(Copy, Clone)]
-        pub struct $name {
-            /// The field's offset in [`Options`] — the selector's identity.
-            at: usize,
-            /// The field itself, typed, so a selector cannot name a field of
-            /// another type.
-            project: fn(&mut Options) -> &mut $ty,
-        }
+// Which field of [`Options`] one option's global value is: a [`Field`]
+// selector, the shape every one-cell record in the editor names its fields
+// with. The option table holds one per row, in place of the address its
+// `var` used to be, and `crate::option::scope` is what turns it into a read
+// or a write.
 
-        impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool {
-                self.at == other.at
-            }
-        }
+/// A boolean option's global value.
+pub(crate) type BoolOpt = Field<Options, bool>;
 
-        impl Eq for $name {}
-    };
-}
+/// A number option's global value.
+pub(crate) type NumOpt = Field<Options, OptInt>;
+
+/// A string option's global value: the string the option owns, if it owns
+/// one.
+pub(crate) type StrOpt = Field<Options, Option<XString>>;
 
 /// A selector over a field small enough to copy in and out: the numbers and
 /// the booleans.
 macro_rules! copy_selector {
-    ($name:ident, $ty:ty, $what:expr) => {
-        selector!($name, $ty, $what);
-
+    ($name:ident, $ty:ty) => {
         impl $name {
             /// What the field holds.
             pub fn get(self) -> $ty {
-                OPTIONS.get_field(self.project)
+                OPTIONS.get_at(self)
             }
 
             /// Overwrite the field.
             pub fn set(self, value: $ty) {
-                OPTIONS.set_field(self.project, value);
+                OPTIONS.set_at(self, value);
             }
         }
     };
 }
 
-copy_selector!(BoolOpt, bool, "A boolean option's global value.");
-copy_selector!(NumOpt, OptInt, "A number option's global value.");
-selector!(
-    StrOpt,
-    Option<XString>,
-    "A string option's global value: the string the option owns, if it owns one."
-);
+copy_selector!(BoolOpt, bool);
+copy_selector!(NumOpt, OptInt);
 
 /// A global string option that owns nothing is one of two upstream states,
 /// and which one depends on *when* it is asked.
@@ -109,7 +87,7 @@ impl StrOpt {
     /// `local_or_global_raw`). Deliberately **not** spelled `as_raw`: that
     /// is `GlobalCell`'s escape hatch, and the ratchet counts it by name.
     pub fn value_ptr(self) -> *mut c_char {
-        OPTIONS.with_field(self.project, |value| match value {
+        OPTIONS.with_at(self, |value| match value {
             Some(s) => s.as_ptr().cast_mut(),
             None => {
                 self.read_nothing();
@@ -126,7 +104,7 @@ impl StrOpt {
     /// (`buf_copy_options` for the first buffer, `vim_getenv` for
     /// `$VIMRUNTIME`), and the only question such code may ask.
     pub fn is_uninit(self) -> bool {
-        OPTIONS.with_field(self.project, Option::is_none) && self.before_defaults()
+        OPTIONS.with_at(self, Option::is_none) && self.before_defaults()
     }
 
     /// Whether the option has been left owning no string of its own —
@@ -140,7 +118,7 @@ impl StrOpt {
     /// [`is_uninit`](Self::is_uninit): before the defaults exist an option
     /// is `NULL`, not empty, and this answers false.
     pub fn is_unset(self) -> bool {
-        OPTIONS.with_field(self.project, Option::is_none) && !self.before_defaults()
+        OPTIONS.with_at(self, Option::is_none) && !self.before_defaults()
     }
 
     /// Whether owning nothing means upstream's `NULL`: the defaults are not
@@ -154,7 +132,7 @@ impl StrOpt {
     #[inline]
     fn read_nothing(self) {
         if cfg!(debug_assertions) && self.before_defaults() {
-            read_before_defaults(self.at);
+            read_before_defaults(self.field_offset());
         }
     }
 
@@ -172,7 +150,7 @@ impl StrOpt {
     /// option that owns nothing from one explicitly set to `""`; upstream's
     /// `*p_xx == NUL` does not either.
     pub fn first_byte(self) -> u8 {
-        OPTIONS.with_field(self.project, |value| match value.as_deref() {
+        OPTIONS.with_at(self, |value| match value.as_deref() {
             Some(bytes) => bytes.first().copied().unwrap_or(0),
             None => {
                 self.read_nothing();
@@ -192,7 +170,7 @@ impl StrOpt {
     /// per screen line by `Win::col_off2`. Measured at 45 M instructions
     /// on `scrbench`.
     pub fn has_byte(self, byte: u8) -> bool {
-        OPTIONS.with_field(self.project, |value| match value.as_deref() {
+        OPTIONS.with_at(self, |value| match value.as_deref() {
             Some(bytes) => bytes.contains(&byte),
             None => {
                 self.read_nothing();
@@ -204,7 +182,7 @@ impl StrOpt {
     /// A copy of the value, for a caller that needs it to outlive the
     /// borrow.
     pub fn get(self) -> XString {
-        OPTIONS.with_field(self.project, |value| match value {
+        OPTIONS.with_at(self, |value| match value {
             Some(s) => s.clone(),
             None => {
                 self.read_nothing();
@@ -217,7 +195,7 @@ impl StrOpt {
     /// The move out and the move in are one step, so neither side can free
     /// the other's string.
     pub fn swap(self, value: Option<XString>) -> Option<XString> {
-        OPTIONS.replace_field(self.project, value)
+        OPTIONS.replace_at(self, value)
     }
 
     /// Give the option a value of its own, releasing what it held.
@@ -307,10 +285,7 @@ macro_rules! options {
             /// The selector: what the option table's row holds, and how
             /// the option is written (`.set(value)`). `pub` because the
             /// unit suite sets a handful of options directly.
-            pub const $sel: $kind = $kind {
-                at: offset_of!($record, $field),
-                project: |o| &mut o.$field,
-            };
+            pub const $sel: $kind = field!($record, $field);
 
             reader! {
                 $(#[$doc])*

@@ -235,6 +235,113 @@ impl<T> GlobalCell<T> {
     }
 }
 
+/// One field of a record `S` that holds a `T`: a `const` selector.
+///
+/// A record that is one value — the editor's option table behind one
+/// [`GlobalCell`], a buffer's or a window's local option copies — is reached
+/// a field at a time, and the selector is how a caller *names* the field
+/// without holding a reference into the record. It is a projection plus the
+/// offset it projects to: the projection does the typed access, and the
+/// offset is the selector's identity, so two selectors are equal when they
+/// name the same field (comparing the function pointers would warn and mean
+/// nothing).
+///
+/// Nothing here reads the record. Whoever holds the record resolves the
+/// selector against it **per access** — [`GlobalCell::get_at`] and friends
+/// for a cell, a `&mut` borrowed for one statement for a handle — so no
+/// reference outlives the read or write that asked for it, and a callback
+/// that re-enters the editor cannot find one open.
+///
+/// Spell one with [`field!`](crate::global_cell::field).
+pub struct Field<S, T> {
+    /// The field's offset in `S` — the selector's identity.
+    at: usize,
+    /// The field itself, typed, so a selector cannot name a field of
+    /// another type.
+    project: fn(&mut S) -> &mut T,
+}
+
+// Hand-written rather than derived: `derive` would demand `S: Copy` and
+// `T: Copy`, and neither the record nor the field need be for a *selector*
+// to be.
+impl<S, T> Clone for Field<S, T> {
+    #[inline(always)]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S, T> Copy for Field<S, T> {}
+
+impl<S, T> PartialEq for Field<S, T> {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        self.at == other.at
+    }
+}
+
+impl<S, T> Eq for Field<S, T> {}
+
+impl<S, T> Field<S, T> {
+    /// The selector for the field `project` reaches, which sits `at` bytes
+    /// into `S`. [`field!`](crate::global_cell::field) writes both halves
+    /// from one field name, which is the only way they stay a pair.
+    pub const fn new(at: usize, project: fn(&mut S) -> &mut T) -> Self {
+        Self { at, project }
+    }
+
+    /// The field's offset in `S`, which is what identifies it.
+    #[inline(always)]
+    pub const fn field_offset(self) -> usize {
+        self.at
+    }
+
+    /// The field, in a record the caller has borrowed for exactly this one
+    /// access.
+    #[inline(always)]
+    pub fn of(self, record: &mut S) -> &mut T {
+        (self.project)(record)
+    }
+}
+
+/// A [`Field`] selector for `$record`'s field `$field` (a dotted path
+/// reaches into a nested struct), usable in a `const`.
+macro_rules! field {
+    ($record:ty, $($field:ident).+) => {
+        $crate::global_cell::Field::<$record, _>::new(
+            ::core::mem::offset_of!($record, $($field).+),
+            |record: &mut $record| &mut record.$($field).+,
+        )
+    };
+}
+pub(crate) use field;
+
+impl<T> GlobalCell<T> {
+    /// [`get_field`](Self::get_field) through a [`Field`] selector.
+    #[inline(always)]
+    pub fn get_at<F: Copy>(&self, field: Field<T, F>) -> F {
+        self.get_field(field.project)
+    }
+
+    /// [`set_field`](Self::set_field) through a [`Field`] selector.
+    #[inline(always)]
+    pub fn set_at<F>(&self, field: Field<T, F>, value: F) {
+        self.set_field(field.project, value);
+    }
+
+    /// [`with_field`](Self::with_field) through a [`Field`] selector.
+    #[inline(always)]
+    pub fn with_at<F, R>(&self, field: Field<T, F>, f: impl FnOnce(&F) -> R) -> R {
+        self.with_field(field.project, f)
+    }
+
+    /// [`replace_field`](Self::replace_field) through a [`Field`] selector.
+    #[inline(always)]
+    pub fn replace_at<F>(&self, field: Field<T, F>, value: F) -> F {
+        self.replace_field(field.project, value)
+    }
+}
+
 /// The rare global that worker threads touch by upstream design — the
 /// thread-local Lua states (`nlua_init_state` reads `in_script` /
 /// `main_thread`) and the helpers exposed to `vim.uv.new_thread` threads
