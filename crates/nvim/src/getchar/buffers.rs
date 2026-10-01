@@ -133,8 +133,12 @@ impl KeyBuffer {
     /// [`contents`](Self::contents) answers, without the terminator and with
     /// nothing for the caller to free.
     pub(crate) fn bytes(&self) -> Vec<u8> {
-        // Room for a typical redo up front: `save_redobuff` copies the redo
-        // buffer at every user function call.
+        // `save_redobuff` copies the redo buffer at every user function
+        // call, nearly always an empty one: that costs no allocation, and a
+        // full one gets room for a typical redo up front.
+        if self.first.is_null() {
+            return Vec::new();
+        }
         let mut out = Vec::with_capacity(64);
         let mut block = self.first;
         while !block.is_null() {
@@ -380,6 +384,9 @@ impl KeyBufferRef {
 
     /// Append `bytes`, which must already have `K_SPECIAL` escaped.
     pub(crate) fn add_bytes(self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return; // what `add` does too, without the borrow
+        }
         let len = ptrdiff_t::try_from(bytes.len()).expect("a key string fits a ptrdiff_t");
         // SAFETY: `bytes` is readable for its length.
         unsafe { self.add(bytes.as_ptr().cast(), len) };
