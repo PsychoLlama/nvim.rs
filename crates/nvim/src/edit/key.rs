@@ -575,7 +575,7 @@ fn check_pum(s: &mut InsertState) {
     if pum_want.get().active {
         if pum_visible() {
             // Null so that `ins_complete` updates the message.
-            edit_submode_extra.set(::core::ptr::null_mut());
+            edit_submode_extra.set(None);
             insert_do_complete(s);
             if pum_want.get().finish {
                 // Accept the item and stop completing.

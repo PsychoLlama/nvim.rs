@@ -15,8 +15,9 @@ use super::*;
 use crate::guard::{Allow, Lock};
 use crate::memline::Lines;
 use crate::memory::XString;
+use crate::message::msg;
 use crate::message::msg_ptr;
-use crate::os::cshim::gettext_ptr;
+use crate::tr;
 use crate::types::{IOSIZE, NUL, ShmFlag};
 use crate::vim_snprintf;
 use crate::winlayer::Buf;
@@ -227,32 +228,15 @@ pub(crate) fn trigger_complete_changed_event(cur: c_int) {
     unsafe { restore_v_event(v_event, &raw mut save_v_event) };
 }
 
-/// C's `"match %d of %d"` / `"match %d"`, formatted into the static buffer
-/// `showmode` reads back through `edit_submode_extra`.
-///
-/// The buffer outlives the call by design — the message is shown on a later
-/// redraw — so its address is taken once, here, and handed out as a
-/// `char *` the way upstream's `match_ref[81]` was. `total` of zero or less
-/// selects the short form.
-///
-/// # Safety
-/// Must run on the main thread; the returned pointer stays valid until the
-/// next call, which is the lifetime `edit_submode_extra` assumes.
-unsafe fn match_position_message(number: c_int, total: c_int) -> *mut c_char {
-    static match_ref: GlobalCell<[c_char; 81]> = GlobalCell::new([0; 81]);
-    let msg = match_ref.ptr().cast::<c_char>();
-    let size = size_of::<[c_char; 81]>();
-    // SAFETY: `msg` addresses all 81 bytes, and both formats take `int`s.
-    unsafe {
-        if total > 0 {
-            let fmt = gettext(c"match %d of %d");
-            vim_snprintf!(msg, size, fmt.as_ptr(), number, total);
-        } else {
-            let fmt = gettext(c"match %d");
-            vim_snprintf!(msg, size, fmt.as_ptr(), number);
-        }
-    }
-    msg
+/// C's `"match %d of %d"` / `"match %d"`, the line `showmode` shows under
+/// the menu. `total` of zero or less selects the short form.
+fn match_position_message(number: c_int, total: c_int) -> XString {
+    let text = if total > 0 {
+        tr!("match {number} of {total}")
+    } else {
+        tr!("match {number}")
+    };
+    XString::from(text.as_str())
 }
 
 /// Build `dest` by prepending the buffer text from `startcol` to `compl_col`
@@ -695,25 +679,24 @@ pub(crate) fn ins_compl_show_statusmsg() {
     let head = first_match().expect("a completion showing a message has matches");
     if is_first_match(head.cp_next) {
         let text = if compl_status_adding() && compl_length.get() > 1 {
-            E_HITEND.as_ptr()
+            E_HITEND
         } else {
-            e_patnotf.as_ptr()
+            e_patnotf
         };
-        // SAFETY: both are static NUL-terminated messages.
-        edit_submode_extra.set(unsafe { gettext_ptr(text).as_ptr().cast_mut() });
+        edit_submode_extra.set(Some(XString::from_cstr(gettext(text))));
         edit_submode_highl.set(HLF_E);
     }
 
-    if edit_submode_extra.get().is_null() {
+    if edit_submode_extra.with(Option::is_none) {
         let mut curr = curr_match().expect("a running completion has a current match");
         if curr.is_original() {
-            edit_submode_extra.set(gettext(c"Back at original").as_ptr().cast_mut());
+            edit_submode_extra.set(Some(XString::from_cstr(gettext(c"Back at original"))));
             edit_submode_highl.set(HLF_W);
         } else if compl_cont_status.get() & CONT_S_IPOS != 0 {
-            edit_submode_extra.set(gettext(c"Word from other line").as_ptr().cast_mut());
+            edit_submode_extra.set(Some(XString::from_cstr(gettext(c"Word from other line"))));
             edit_submode_highl.set(HLF_COUNT);
         } else if curr.cp_next == curr.cp_prev {
-            edit_submode_extra.set(gettext(c"The only match").as_ptr().cast_mut());
+            edit_submode_extra.set(Some(XString::from_cstr(gettext(c"The only match"))));
             edit_submode_highl.set(HLF_COUNT);
             curr.cp_number = 1;
         } else {
@@ -722,10 +705,8 @@ pub(crate) fn ins_compl_show_statusmsg() {
                 ins_compl_update_sequence_numbers();
             }
             if curr.cp_number != -1 {
-                // SAFETY: this thread owns the static message buffer, and
-                // the pointer stays valid until the next call.
-                let msg = unsafe { match_position_message(curr.cp_number, compl_matches.get()) };
-                edit_submode_extra.set(msg);
+                let msg = match_position_message(curr.cp_number, compl_matches.get());
+                edit_submode_extra.set(Some(msg));
                 edit_submode_highl.set(HLF_R);
                 if dollar_vcol.get() >= 0 {
                     curs_columns(Win::current(), 0);
@@ -738,23 +719,21 @@ pub(crate) fn ins_compl_show_statusmsg() {
     if shortmess(ShmFlag::COMPLETIONMENU) {
         return;
     }
-    if edit_submode_extra.get().is_null() {
-        msg_clr_cmdline();
-    } else if !p_smd() {
-        msg_hist_off.set(true);
-        let attr = if (edit_submode_highl.get() as c_uint) < HLF_COUNT as c_uint {
-            edit_submode_highl.get() as c_int + 1
-        } else {
-            0
-        };
-        let extra = edit_submode_extra.get();
-        // SAFETY: a static kind name, and `extra` is a NUL-terminated
-        // message set above or by the caller.
-        unsafe {
+    // A copy: showing it runs the message machinery.
+    match edit_submode_extra.with(Clone::clone) {
+        None => msg_clr_cmdline(),
+        Some(extra) if !p_smd() => {
+            msg_hist_off.set(true);
+            let attr = if (edit_submode_highl.get() as c_uint) < HLF_COUNT as c_uint {
+                edit_submode_highl.get() as c_int + 1
+            } else {
+                0
+            };
             msg_ext_set_kind(c"completion");
-            msg_ptr(extra, attr);
+            msg(extra.as_cstr(), attr);
+            msg_hist_off.set(false);
         }
-        msg_hist_off.set(false);
+        Some(_) => {}
     }
 }
 

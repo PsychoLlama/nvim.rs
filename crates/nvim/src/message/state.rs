@@ -22,15 +22,15 @@
 //!
 //! Upstream declares each of these as its own `EXTERN` in `globals.h` and
 //! `message.c`. They are one [`MsgState`] here, behind one cell, and every
-//! name below is a `const` [`Field`] selector into it rather than a cell of
-//! its own -- so a reader still writes `msg_col.get()` and `msg_scroll.set(1)`,
-//! and what changed is that nothing can take the address of one.
+//! name below is a `const` selector into it rather than a cell of its own --
+//! so a reader still writes `msg_col.get()` and `msg_scroll.set(1)`, and what
+//! changed is that nothing can take the address of one.
 //!
 //! The record is never borrowed whole. A number or a flag is copied in and
 //! out; a field that owns something is projected into a closure that may not
-//! call back into the editor, or moved out and back ([`Field::update`]). So
-//! no reference into the record is open across a call that can run user
-//! code -- an autocommand, a `:redir => var` assignment, a UI event, an
+//! call back into the editor, or moved out and back (`update`; see
+//! [`state_record`](crate::global_cell::state_record)). So no reference into
+//! the record is open across a call that can run user code -- an autocommand, a `:redir => var` assignment, a UI event, an
 //! `on_print` callback -- which is where every `msg_*` entry point can end
 //! up.
 
@@ -47,7 +47,7 @@
 // covers them, and upper-casing them is a per-module rewrite.
 
 use super::{PROGRESS_TARGET_CMD, SB_CLEAR_NONE, ScrollbackClear};
-use crate::global_cell::{Field, GlobalCell, field};
+use crate::global_cell::{GlobalCell, state_record};
 use crate::memory::XString;
 use crate::options::{
     OptMoptFlags, kOptMoptFlagHistory, kOptMoptFlagHitEnter, kOptMoptFlagProgress,
@@ -66,96 +66,11 @@ pub(crate) static no_lines_msg: &CStr = c"--No lines in buffer--";
 /// grid layer holds its address (`GridRef::of_cell`) across calls.
 pub(crate) static msg_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 
-/// A field of [`MsgState`].
-pub(crate) type MsgField<T> = Field<MsgState, T>;
+state_record! {
+    /// What the message machinery knows about the message area and the one
+    /// being built. See the [module docs](self).
+    pub(crate) struct MsgState in MSG as MsgField;
 
-/// Every field reads and writes through the one cell, a field at a time.
-///
-/// The rules are [`GlobalCell::get_at`]'s: untracked, and never a reference
-/// that outlives the access. That is what lets a counter be raised in one
-/// frame and read in a callback three frames down.
-impl<T> Field<MsgState, T> {
-    /// What the field holds.
-    #[inline(always)]
-    pub(crate) fn get(self) -> T
-    where
-        T: Copy,
-    {
-        MSG.get_at(self)
-    }
-
-    /// Overwrite the field.
-    #[inline(always)]
-    pub(crate) fn set(self, value: T) {
-        MSG.set_at(self, value);
-    }
-
-    /// Overwrite the field, answering what it held.
-    #[inline(always)]
-    pub(crate) fn replace(self, value: T) -> T {
-        MSG.replace_at(self, value)
-    }
-
-    /// Move the value out, leaving the type's empty value behind.
-    #[inline(always)]
-    pub(crate) fn take(self) -> T
-    where
-        T: Default,
-    {
-        MSG.replace_at(self, T::default())
-    }
-
-    /// Look at the field. `f` must not reach back into the editor: it is
-    /// for a test or a clone, never for a call that could write the field.
-    #[inline(always)]
-    pub(crate) fn with<R>(self, f: impl FnOnce(&T) -> R) -> R {
-        MSG.with_at(self, f)
-    }
-
-    /// Change the field in place.
-    ///
-    /// The value is moved out for the duration and put back after, so
-    /// there is no borrow of the record for `f` to outlive: anything `f`
-    /// reaches that reads the same field sees it empty, and anything that
-    /// writes it is overwritten. Meant for a push or a clear, not for a
-    /// call that can run user code.
-    #[inline(always)]
-    pub(crate) fn update<R>(self, f: impl FnOnce(&mut T) -> R) -> R
-    where
-        T: Default,
-    {
-        let mut value = self.take();
-        let answer = f(&mut value);
-        self.set(value);
-        answer
-    }
-}
-
-/// The record, the one cell, and a selector per field under the field's
-/// own name.
-macro_rules! msg_state {
-    ($(
-        $(#[$doc:meta])*
-        $vis:vis $field:ident: $ty:ty = $init:expr;
-    )*) => {
-        /// What the message machinery knows about the message area and the
-        /// one being built. See the [module docs](self).
-        pub(crate) struct MsgState {
-            $($field: $ty,)*
-        }
-
-        static MSG: GlobalCell<MsgState> = GlobalCell::new(MsgState {
-            $($field: $init,)*
-        });
-
-        $(
-            $(#[$doc])*
-            $vis const $field: MsgField<$ty> = field!(MsgState, $field);
-        )*
-    };
-}
-
-msg_state! {
     // -- ext_messages --
     /// Hold back the `msg_show` flush until the whole message is written.
     pub(crate) msg_ext_skip_flush: bool = false;

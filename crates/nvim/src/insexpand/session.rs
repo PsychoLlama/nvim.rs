@@ -333,7 +333,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
             return Err(Failed);
         }
         ctrl_x_mode.set(CTRL_X_NORMAL);
-        edit_submode.set(ptr::null_mut());
+        edit_submode.set(None);
         if !shortmess(ShmFlag::COMPLETIONMENU) {
             msg_clr_cmdline();
         }
@@ -519,7 +519,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
 
     if compl_status_adding() {
         if !shortmess(ShmFlag::COMPLETIONMENU) {
-            edit_submode_pre.set(gettext(c" Adding").as_ptr().cast_mut());
+            edit_submode_pre.set(Some(gettext(c" Adding")));
         }
         if ctrl_x_mode_line_or_eval() {
             // Insert a new line, keep indentation but ignore 'comments'.
@@ -532,7 +532,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
             compl_lnum.set(Win::current().w_cursor.lnum);
         }
     } else {
-        edit_submode_pre.set(ptr::null_mut());
+        edit_submode_pre.set(None);
         compl_startpos.set(compl_startpos.get().with_col(compl_col.get()));
     }
 
@@ -569,10 +569,10 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
     // memline's pointers, so this had to come after the last use of it
     // (-- Acevedo). Nothing holds a line across it now.
     if !shortmess(ShmFlag::COMPLETIONMENU) && !compl_autocomplete.get() {
-        edit_submode_extra.set(gettext(c"-- Searching...").as_ptr().cast_mut());
+        edit_submode_extra.set(Some(XString::from_cstr(gettext(c"-- Searching..."))));
         edit_submode_highl.set(HLF_COUNT);
         showmode();
-        edit_submode_extra.set(ptr::null_mut());
+        edit_submode_extra.set(None);
         ui_flush();
     }
 

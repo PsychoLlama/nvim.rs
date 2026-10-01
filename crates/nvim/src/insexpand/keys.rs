@@ -379,8 +379,8 @@ pub(crate) fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool) -> bo
     }
     ctrl_x_mode.set(CTRL_X_NORMAL);
     compl_enter_selects.set(false);
-    if !edit_submode.get().is_null() {
-        edit_submode.set(ptr::null_mut());
+    if edit_submode.get().is_some() {
+        edit_submode.set(None);
         redraw_mode.set(true);
     }
     compl_autocomplete.set(false);
@@ -422,7 +422,7 @@ pub fn ins_compl_prep(c: c_int) -> bool {
     // Forget any previous 'special' messages if this is actually a ^X mode
     // key — bar ^R, in which case we wait to see what it gives us.
     if c != Ctrl_R && vim_is_ctrl_x_key(c) {
-        edit_submode_extra.set(ptr::null_mut());
+        edit_submode_extra.set(None);
     }
 
     // Ignore end of Select mode mapping and mouse scroll/movement.
@@ -481,7 +481,7 @@ pub fn ins_compl_prep(c: c_int) -> bool {
             } else {
                 CTRL_X_FINISHED
             });
-            edit_submode.set(ptr::null_mut());
+            edit_submode.set(None);
         }
         redraw_mode.set(true);
     }

@@ -558,7 +558,7 @@ pub fn redraw_ruler() {
     }
     // Not while insert-completion is running: it might overwrite the (long)
     // mode message.
-    if win.w_status_height == 0 && !is_stl_global && !edit_submode.get().is_null() {
+    if win.w_status_height == 0 && !is_stl_global && edit_submode.get().is_some() {
         return;
     }
 

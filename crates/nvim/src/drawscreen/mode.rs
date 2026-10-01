@@ -101,7 +101,9 @@ pub fn showmode() -> c_int {
 
         if do_mode {
             put(c"--");
-            if !edit_submode.get().is_null() && !shortmess(ShmFlag::COMPLETIONMENU) {
+            if let Some(submode) = edit_submode.get()
+                && !shortmess(ShmFlag::COMPLETIONMENU)
+            {
                 // CTRL-X in Insert mode. These get long, so they are budgeted
                 // against the room left rather than allowed to wrap; an
                 // external message UI imposes no limit of its own.
@@ -111,27 +113,31 @@ pub fn showmode() -> c_int {
                 } else {
                     (Rows.get() - msg_row.get()) * Columns.get() - 3
                 };
-                if !edit_submode_extra.get().is_null() {
-                    length -= unsafe { vim_strsize(edit_submode_extra.get()) };
+                let pre = edit_submode_pre.get();
+                // A copy: drawing it runs the message machinery.
+                let extra = edit_submode_extra.with(Clone::clone);
+                // SAFETY (the three widths): NUL-terminated by their types.
+                if let Some(extra) = &extra {
+                    length -= unsafe { vim_strsize(extra.as_ptr()) };
                 }
                 if length > 0 {
-                    if !edit_submode_pre.get().is_null() {
-                        length -= unsafe { vim_strsize(edit_submode_pre.get()) };
+                    if let Some(pre) = pre {
+                        length -= unsafe { vim_strsize(pre.as_ptr()) };
                     }
-                    if length - unsafe { vim_strsize(edit_submode.get()) } > 0 {
-                        if !edit_submode_pre.get().is_null() {
-                            msg_str_hl(unsafe { cstr::at(edit_submode_pre.get()) }, hl_id, false);
+                    if length - unsafe { vim_strsize(submode.as_ptr()) } > 0 {
+                        if let Some(pre) = pre {
+                            msg_str_hl(pre, hl_id, false);
                         }
-                        msg_str_hl(unsafe { cstr::at(edit_submode.get()) }, hl_id, false);
+                        msg_str_hl(submode, hl_id, false);
                     }
-                    if !edit_submode_extra.get().is_null() {
+                    if let Some(extra) = &extra {
                         put(c" ");
                         let sub_id = if edit_submode_highl.get() < HLF_COUNT {
                             edit_submode_highl.get()
                         } else {
                             hl_id
                         };
-                        msg_str_hl(unsafe { cstr::at(edit_submode_extra.get()) }, sub_id, false);
+                        msg_str_hl(extra.as_cstr(), sub_id, false);
                     }
                 }
             } else {
@@ -215,7 +221,7 @@ pub fn showmode() -> c_int {
         }
 
         // The submode text already gets too long to share the line with it.
-        if reg_recording.get() != 0 && edit_submode.get().is_null() {
+        if reg_recording.get() != 0 && edit_submode.get().is_none() {
             recording_mode(hl_id);
             need_clear = true;
         }

@@ -316,6 +316,123 @@ macro_rules! field {
 }
 pub(crate) use field;
 
+/// One record of editor-wide state behind one cell, with a `const`
+/// [`Field`] selector per field **under the field's own name**.
+///
+/// ```ignore
+/// state_record! {
+///     /// What the record is.
+///     pub(crate) struct ModeState in MODE as ModeField;
+///     /// What the field is.
+///     pub(crate) State: c_int = MODE_NORMAL;
+/// }
+/// ```
+///
+/// writes the struct, `static MODE: GlobalCell<ModeState>`, the alias
+/// `ModeField<T> = Field<ModeState, T>`, a `const State: ModeField<c_int>`,
+/// and one generic inherent impl giving every selector `get`, `set`,
+/// `replace`, `take`, `with` and `update` -- so a reader still spells
+/// `State.get()`, and what changed is that nothing can take a field's
+/// address.
+///
+/// The record is never borrowed whole. Every method is one field access
+/// with [`GlobalCell::get_at`]'s rules: untracked, no reference outliving
+/// it. `update` moves the value out, changes it and puts it back, so a
+/// callee that re-enters the editor finds no borrow open, only the empty
+/// value.
+///
+/// Keep the record and its methods `pub(crate)`. The methods are generic,
+/// so a `pub` one would ship its body for cross-crate inlining, and every
+/// static a shipped body names is exported -- and an exported static is
+/// read through the GOT, one more load at every read in the editor.
+macro_rules! state_record {
+    (
+        $(#[$rdoc:meta])*
+        $rvis:vis struct $record:ident in $cell:ident as $alias:ident;
+        $(
+            $(#[$doc:meta])*
+            $vis:vis $field:ident: $ty:ty = $init:expr;
+        )*
+    ) => {
+        $(#[$rdoc])*
+        #[allow(non_snake_case, reason = "each field keeps its selector's (upstream) name")]
+        $rvis struct $record {
+            $($field: $ty,)*
+        }
+
+        static $cell: $crate::global_cell::GlobalCell<$record> =
+            $crate::global_cell::GlobalCell::new($record {
+                $($field: $init,)*
+            });
+
+        /// A field of the record.
+        $rvis type $alias<T> = $crate::global_cell::Field<$record, T>;
+
+        #[allow(dead_code, reason = "every record gets the whole set; not every one uses it")]
+        impl<T> $crate::global_cell::Field<$record, T> {
+            /// What the field holds.
+            #[inline(always)]
+            $rvis fn get(self) -> T
+            where
+                T: Copy,
+            {
+                $cell.get_at(self)
+            }
+
+            /// Overwrite the field.
+            #[inline(always)]
+            $rvis fn set(self, value: T) {
+                $cell.set_at(self, value);
+            }
+
+            /// Overwrite the field, answering what it held.
+            #[inline(always)]
+            $rvis fn replace(self, value: T) -> T {
+                $cell.replace_at(self, value)
+            }
+
+            /// Move the value out, leaving the type's empty value behind.
+            #[inline(always)]
+            $rvis fn take(self) -> T
+            where
+                T: Default,
+            {
+                $cell.replace_at(self, T::default())
+            }
+
+            /// Look at the field. `f` must not reach back into the editor:
+            /// it is for a test or a clone, never for a call that could
+            /// write the field.
+            #[inline(always)]
+            $rvis fn with<R>(self, f: impl FnOnce(&T) -> R) -> R {
+                $cell.with_at(self, f)
+            }
+
+            /// Change the field in place: moved out for the duration and
+            /// put back after, so anything `f` reaches that reads the field
+            /// sees it empty, and anything that writes it is overwritten.
+            /// Meant for a push or a clear, not for a call that can run
+            /// user code.
+            #[inline(always)]
+            $rvis fn update<R>(self, f: impl FnOnce(&mut T) -> R) -> R
+            where
+                T: Default,
+            {
+                let mut value = self.take();
+                let answer = f(&mut value);
+                self.set(value);
+                answer
+            }
+        }
+
+        $(
+            $(#[$doc])*
+            $vis const $field: $alias<$ty> = $crate::global_cell::field!($record, $field);
+        )*
+    };
+}
+pub(crate) use state_record;
+
 impl<T> GlobalCell<T> {
     /// [`get_field`](Self::get_field) through a [`Field`] selector.
     #[inline(always)]

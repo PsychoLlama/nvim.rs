@@ -41,7 +41,7 @@ pub fn ins_ctrl_x() {
         }
         ctrl_x_mode.set(CTRL_X_NOT_DEFINED_YET);
         edit_submode.set(ctrl_x_msg(ctrl_x_mode.get()));
-        edit_submode_pre.set(ptr::null_mut());
+        edit_submode_pre.set(None);
         redraw_mode.set(true);
     }
     may_trigger_modechanged();
@@ -172,7 +172,7 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
         return true;
     }
     ctrl_x_mode.set(CTRL_X_NORMAL);
-    edit_submode.set(ptr::null_mut());
+    edit_submode.set(None);
     let msg = if dict_opt {
         c"'dictionary' option is empty".as_ptr()
     } else {
@@ -464,15 +464,12 @@ pub(crate) fn set_ctrl_x_mode(c: c_int) -> bool {
             // Scroll the window one line up or down.
             Err(NotAKey(Ctrl_E | Ctrl_Y)) => {
                 ctrl_x_mode.set(CTRL_X_SCROLL);
-                let scroll = if State.get() & REPLACE_FLAG == 0 {
-                    c" (insert) Scroll (^E/^Y)".as_ptr()
+                edit_submode.set(Some(gettext(if State.get() & REPLACE_FLAG == 0 {
+                    c" (insert) Scroll (^E/^Y)"
                 } else {
-                    c" (replace) Scroll (^E/^Y)".as_ptr()
-                };
-                // SAFETY: a static NUL-terminated message.
-                let scroll = unsafe { gettext_ptr(scroll) };
-                edit_submode.set(scroll.as_ptr().cast_mut());
-                edit_submode_pre.set(ptr::null_mut());
+                    c" (replace) Scroll (^E/^Y)"
+                })));
+                edit_submode_pre.set(None);
                 redraw_mode.set(true);
                 break 'chord;
             }
@@ -545,7 +542,7 @@ pub(crate) fn set_ctrl_x_mode(c: c_int) -> bool {
             // Stop completion.
             Err(NotAKey(Ctrl_Z)) => {
                 ctrl_x_mode.set(CTRL_X_NORMAL);
-                edit_submode.set(ptr::null_mut());
+                edit_submode.set(None);
                 redraw_mode.set(true);
                 retval = true;
                 break 'chord;
@@ -583,7 +580,7 @@ pub(crate) fn set_ctrl_x_mode(c: c_int) -> bool {
             }
         }
         ctrl_x_mode.set(CTRL_X_NORMAL);
-        edit_submode.set(ptr::null_mut());
+        edit_submode.set(None);
         redraw_mode.set(true);
     }
     retval

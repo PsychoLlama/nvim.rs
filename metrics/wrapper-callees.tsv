@@ -4,7 +4,7 @@ count	callee	no_raw	defs	def
 447	.offset	0	0	
 444	bytes_at	0	1	crates/nvim/src/cstr.rs
 341	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
-320	at	0	3	
+317	at	0	3	
 279	CStr::from_ptr	0	2	
 238	.offset_from	0	0	
 180	xstrdup	0	1	crates/nvim/src/memory/mod.rs
@@ -323,7 +323,6 @@ count	callee	no_raw	defs	def
 8	expand_wildcards	0	1	crates/nvim/src/path/expand.rs
 8	find_var	0	1	crates/nvim/src/eval/vars/lookup.rs
 8	get_var_value	0	1	crates/nvim/src/eval/vars/lookup.rs
-8	gettext_ptr	0	1	crates/nvim/src/os/cshim.rs
 8	hash_add_item	0	1	crates/nvim/src/hashtab.rs
 8	hash_hash	0	1	crates/nvim/src/hashtab.rs
 8	hash_lock	0	1	crates/nvim/src/hashtab.rs
@@ -374,6 +373,7 @@ count	callee	no_raw	defs	def
 7	func_ref	0	1	crates/nvim/src/eval/userfunc/funccall.rs
 7	ga_concat_cstr	0	1	crates/nvim/src/testing/report.rs
 7	gen_expand_wildcards	0	1	crates/nvim/src/path/expand.rs
+7	gettext_ptr	0	1	crates/nvim/src/os/cshim.rs
 7	ignorecase	0	1	crates/nvim/src/search/pattern.rs
 7	in_id_list	0	1	crates/nvim/src/syntax/options.rs
 7	ins_char_bytes	0	1	crates/nvim/src/change/text.rs
@@ -2959,7 +2959,6 @@ count	callee	no_raw	defs	def
 1	match_group	0	1	crates/nvim/src/undo/write.rs
 1	match_is_code	0	1	crates/nvim/src/search/incline.rs
 1	match_on_line	0	1	crates/nvim/src/search/incline.rs
-1	match_position_message	0	1	crates/nvim/src/insexpand/pum.rs
 1	matchadd_dict_arg	0	1	crates/nvim/src/match/vimscript.rs
 1	matching_line_len	0	1	crates/nvim/src/tag/jump.rs
 1	may_advance_cpt_index	0	1	crates/nvim/src/insexpand/getexp.rs
