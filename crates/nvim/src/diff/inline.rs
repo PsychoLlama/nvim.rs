@@ -193,10 +193,12 @@ fn diff_find_change_simple(
     let tp = TabPage::current();
     let mut added = true;
     for i in 0..DB_COUNT as usize {
-        let buf = tp.diffbuf(i);
         // A line past the other buffer's count is a filler line there,
         // which says nothing about this one.
-        if buf.raw().is_null() || i as c_int == idx || off >= dp.df_count[i] {
+        let Some(buf) = tp.diffbuf(i) else {
+            continue;
+        };
+        if i as c_int == idx || off >= dp.df_count[i] {
             continue;
         }
         added = false;
@@ -317,7 +319,7 @@ pub unsafe fn diff_find_change(window: Win, lnum: LineNr, diffline: *mut DiffLin
     // entry is in bounds.
     let last = unsafe { Live::new(changes.add((len - 1) as usize)) };
     (0..DB_COUNT as usize).all(|i| {
-        i as c_int == idx || tp.tp_diffbuf[i].is_null() || last.dc_start_lnum_off[i] == c_int::MAX
+        i as c_int == idx || tp.tp_diffbuf[i].is_none() || last.dc_start_lnum_off[i] == c_int::MAX
     })
 }
 

@@ -56,7 +56,7 @@ use super::graph::{
     prevwin,
 };
 use super::{Buf, BufId, FrameId, FrameRef, TabId, TabPage, Win, WinId};
-use crate::types::{Buffer, Window};
+use crate::types::Window;
 
 // The one-step links each handle carries, which are what the walks below
 // are made of. Here rather than beside the constructors because a step is
@@ -202,20 +202,6 @@ pub(crate) fn windows_in_tab(tabpage: TabPage) -> impl Iterator<Item = Win> {
 pub(crate) fn window_at(raw: *const Window) -> Option<Win> {
     (!raw.is_null())
         .then(|| windows().find(|wp| wp.raw().cast_const() == raw))
-        .flatten()
-}
-
-/// The buffer at address `raw`, if it is still on the buffer list -- the C's
-/// `buf_valid()`.
-///
-/// The buffer twin of [`window_at`], and here for the same reason: a caller
-/// holding a `Buffer *` out of a window's `w_buffer`, a tab page's
-/// `tp_diffbuf` or a saved scan state is holding an address an autocommand
-/// may already have freed, so it can only be *compared*. A caller that still
-/// has its buffer live asks [`BufId::get`] instead.
-pub(crate) fn buffer_at(raw: *const Buffer) -> Option<Buf> {
-    (!raw.is_null())
-        .then(|| buffers_back().find(|buf| buf.raw().cast_const() == raw))
         .flatten()
 }
 

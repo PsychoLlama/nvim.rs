@@ -14,7 +14,7 @@ use crate::memory::XString;
 use crate::r#move::WinValid;
 use crate::registry::IdSet;
 use crate::types::Failed;
-use crate::winlayer::{Buf, FrameId, TabId, WinId};
+use crate::winlayer::{Buf, BufId, FrameId, TabId, WinId};
 
 pub struct SwitchWin {
     /// The window and tab page to go back to. Handles: `switch_win` runs
@@ -124,7 +124,12 @@ pub struct Tabpage {
     pub tp_ch_used: OptInt,
     pub tp_did_tabclosedpre: bool,
     pub tp_first_diff: *mut DiffBlock,
-    pub tp_diffbuf: [*mut Buffer; 8],
+    /// The buffers in this tab page's diff, by slot (`DB_COUNT` of them).
+    /// Ids: a slot is cleared when its buffer is unloaded, but the diff
+    /// code reads the slots after calls that run autocommands, and a stale
+    /// id answers `None` where a stale address was freed memory.
+    /// `TabPage::diffbuf` resolves one.
+    pub(crate) tp_diffbuf: [Option<BufId>; 8],
     pub tp_diff_invalid: ::core::ffi::c_int,
     pub tp_diff_update: ::core::ffi::c_int,
     pub(crate) tp_snapshot: [Option<FrameId>; 3],

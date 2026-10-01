@@ -85,8 +85,10 @@
 //! The other half of that hazard remains. A caller holding a bare
 //! `*mut Window` an autocommand may have freed still may not wrap it —
 //! [`Win::new`] is exactly the read a list walk exists to avoid — so
-//! [`window_at`] and [`buffer_at`] compare the address
-//! against the live lists instead. Shapes worth copying: `buffer::BufRef`
+//! [`window_at`] compares the address against the live list instead. (Its
+//! buffer twin went once a window's `w_buffer` and a tab page's diff slots
+//! carried the buffer's number: [`Win::surviving_buffer`] and
+//! `TabPage::diffbuf` look that up instead.) Shapes worth copying: `buffer::BufRef`
 //! (upstream's `BufferRef`), a saved `Handle` plus a registry lookup
 //! (`autocmd::aucmdwin`), a [`WinId`] in a struct (`terminal::mode`), and
 //! [`BufId::valid`].
@@ -148,9 +150,9 @@ pub(crate) use handles::{
 };
 
 pub(crate) use walk::{
-    buffer_at, buffers, buffers_back, cmdline_window, cmdwin_window, first_buffer, first_tab,
-    first_window, frames, frames_back, last_buffer, last_used_tab, last_window, prev_window,
-    tab_windows, tabs, window_at, windows, windows_back, windows_in_tab,
+    buffers, buffers_back, cmdline_window, cmdwin_window, first_buffer, first_tab, first_window,
+    frames, frames_back, last_buffer, last_used_tab, last_window, prev_window, tab_windows, tabs,
+    window_at, windows, windows_back, windows_in_tab,
 };
 
 use core::ffi::c_char;
@@ -590,17 +592,6 @@ impl Buf {
         }
     }
 
-    /// The buffer a window's `w_buffer` or a tab page's `tp_diffbuf` slot
-    /// names, or a null [`Buf`]. The window or tab page promised it, so
-    /// reading it is sound; a caller whose *own* object may already be gone
-    /// holds a bare address and asks [`buffer_at`] instead.
-    #[inline(always)]
-    fn at_field(raw: *mut Buffer) -> Self {
-        // SAFETY: a live window's `w_buffer`, or a live tab page's diff
-        // slot, is a live buffer or null.
-        unsafe { Self::new(raw) }
-    }
-
     /// The buffer the editor is working in. [`Win::current`].
     ///
     /// # Panics
@@ -818,22 +809,6 @@ impl TabPage {
     #[inline(always)]
     pub fn raw(self) -> *mut Tabpage {
         self.ptr
-    }
-
-    /// One of the up-to-eight buffers this tab page is diffing, or a null
-    /// [`Buf`] for an empty slot -- [`Win::buffer`]'s shape, and the same
-    /// caveat: only a caller that has already ruled the slot out may read
-    /// through it.
-    ///
-    /// Safe for the reason [`Win::buffer`] is: the slot is read out of a tab
-    /// page the handle already promised is live.
-    ///
-    /// # Panics
-    ///
-    /// When `idx` is not a diff slot.
-    #[inline(always)]
-    pub fn diffbuf(self, idx: usize) -> Buf {
-        Buf::at_field(self.tp_diffbuf[idx])
     }
 
     /// This tab page's id. [`Win::handle`] for a tab page — a field load.

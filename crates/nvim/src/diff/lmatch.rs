@@ -33,7 +33,7 @@ pub unsafe fn diff_linematch(dp: *mut DiffBlock) -> bool {
     }
     let mut total = 0;
     for i in 0..DB_COUNT as usize {
-        if TabPage::current().tp_diffbuf[i].is_null() {
+        if TabPage::current().tp_diffbuf[i].is_none() {
             continue;
         }
         if unsafe { (*dp).df_count[i] } < 0 {
@@ -60,7 +60,7 @@ unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
     let mut outputmap = [0usize; DB_COUNT as usize];
     let mut ndiffs = 0;
     for (i, lnum) in line_numbers.iter_mut().enumerate() {
-        if !tp.tp_diffbuf[i].is_null() {
+        if tp.tp_diffbuf[i].is_some() {
             *lnum = unsafe { (*dp).df_lnum[i] };
             unsafe { (*dp).df_count[i] = 0 };
             outputmap[ndiffs] = i;
@@ -73,7 +73,7 @@ unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
             cur = unsafe { diff_alloc_new(tp, cur, (*cur).df_next) };
             unsafe { (*cur).is_linematched = true };
             for (i, &lnum) in line_numbers.iter().enumerate() {
-                if !tp.tp_diffbuf[i].is_null() {
+                if tp.tp_diffbuf[i].is_some() {
                     unsafe { (*cur).df_lnum[i] = lnum };
                     unsafe { (*cur).df_count[i] = 0 };
                 }
@@ -104,13 +104,13 @@ pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
     let mut lengths = [0 as c_int; DB_COUNT as usize];
     let mut ndiffs = 0;
     for i in 0..DB_COUNT as usize {
-        if tp.tp_diffbuf[i].is_null() {
+        if tp.tp_diffbuf[i].is_none() {
             continue;
         }
         if unsafe { (*dp).df_count[i] } > 0 {
             let _ = unsafe {
                 diff_write_buffer(
-                    tp.diffbuf(i),
+                    tp.used_diffbuf(i),
                     &raw mut images[ndiffs],
                     (*dp).df_lnum[i],
                     (*dp).df_lnum[i] + (*dp).df_count[i] - 1,

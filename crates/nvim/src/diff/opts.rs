@@ -209,7 +209,7 @@ pub fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
         return result;
     }
     for mut tp in tabs() {
-        if !buflocal || tp.tp_diffbuf.contains(&Buf::current_raw()) {
+        if !buflocal || (0..DB_COUNT as usize).any(|i| tp.diff_slot_holds(i, Buf::current())) {
             tp.tp_diff_invalid = 1;
         }
     }

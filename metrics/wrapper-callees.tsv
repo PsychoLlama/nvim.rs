@@ -241,7 +241,6 @@ count	callee	no_raw	defs	def
 10	Queue::new	0	1	crates/nvim/src/event/multiqueue.rs
 10	Scan::new	0	4	
 10	Screen::at	0	1	crates/nvim/src/vterm/screen/mod.rs
-10	Self::new	0	67	
 10	Tk::of	0	1	crates/nvim/src/tui/termkey/termkey.rs
 10	apply_autocmds_group	0	1	crates/nvim/src/autocmd/fire.rs
 10	byte_at	0	1	crates/nvim/src/plines/mod.rs
@@ -281,6 +280,7 @@ count	callee	no_raw	defs	def
 9	DictRef::retained	0	1	crates/nvim/src/eval/typval/dict.rs
 9	GridRef::new	0	1	crates/nvim/src/grid/mod.rs
 9	Node::from_ptr	0	1	crates/nvim/src/marktree/node.rs
+9	Self::new	0	67	
 9	add_suggestion	0	1	crates/nvim/src/spellsuggest/collect.rs
 9	cbuf_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 9	channel_incref	0	1	crates/nvim/src/channel/mod.rs

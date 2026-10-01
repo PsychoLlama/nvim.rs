@@ -131,8 +131,8 @@ pub(crate) unsafe fn diff_equal_entry(dp: *mut DiffBlock, idx1: usize, idx2: usi
         return false;
     }
     let (mut b1, mut b2) = (
-        Lines::in_buffer(tp.diffbuf(idx1)),
-        Lines::in_buffer(tp.diffbuf(idx2)),
+        Lines::in_buffer(tp.used_diffbuf(idx1)),
+        Lines::in_buffer(tp.used_diffbuf(idx2)),
     );
     for i in 0..unsafe { (*dp).df_count[idx1] } {
         // Two handles, two buffers: `tp_diffbuf`'s entries are distinct

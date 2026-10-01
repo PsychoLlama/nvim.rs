@@ -104,8 +104,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         // and it is an error if there are two of them to choose from.
         let mut found_not_ma = false;
         while idx_other < DB_COUNT {
-            let buf = tp.diffbuf(idx_other as usize);
-            if buf.raw() != Buf::current_raw() && !buf.raw().is_null() {
+            if let Some(buf) = tp.diffbuf(idx_other as usize).filter(|b| !b.is_current()) {
                 if writable_target(buf, cmdidx) {
                     break;
                 }
@@ -122,9 +121,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             return;
         }
         for i in idx_other + 1..DB_COUNT {
-            let buf = tp.diffbuf(i as usize);
-            if buf.raw() != Buf::current_raw()
-                && !buf.raw().is_null()
+            if let Some(buf) = tp.diffbuf(i as usize).filter(|b| !b.is_current())
                 && writable_target(buf, cmdidx)
             {
                 let msg = c"E101: More than two buffers in diff mode, don't know which one to use";
@@ -206,7 +203,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     let put = cmdidx != CmdIdx::diffget;
     if put {
         // SAFETY: `aco` is a local, and `other` a live buffer of the diff.
-        unsafe { aucmd_prepbuf(&raw mut aco, tp.diffbuf(idx_other as usize)) };
+        unsafe { aucmd_prepbuf(&raw mut aco, tp.used_diffbuf(idx_other as usize)) };
     }
     let (idx_from, idx_to) = if put {
         (idx_cur, idx_other)
@@ -348,7 +345,7 @@ fn diffgetput(
             }
             let mut i = 0 as LineNr;
             while i < dp.df_count[idx_from] - start_skip - end_skip {
-                let src = tp.diffbuf(idx_from);
+                let src = tp.used_diffbuf(idx_from);
                 let nr = dp.df_lnum[idx_from] + start_skip + i;
                 if nr > src.b_ml.ml_line_count {
                     break;
@@ -376,7 +373,7 @@ fn diffgetput(
             // difference any more.
             if start_skip == 0 as LineNr && end_skip == 0 as LineNr {
                 let all_equal = (0..DB_COUNT as usize).all(|i| {
-                    tp.tp_diffbuf[i].is_null()
+                    tp.tp_diffbuf[i].is_none()
                         || i == idx_from
                         || i == idx_to
                         || dp.equal_entry(idx_from, i)

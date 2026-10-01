@@ -24,8 +24,43 @@
 use super::*;
 use crate::semsg;
 use crate::types::Failed;
-use crate::winlayer::{Buf, TabPage, Win, tabs, windows};
+use crate::winlayer::{Buf, BufId, TabPage, Win, tabs, windows};
 use core::ffi::c_int;
+
+impl TabPage {
+    /// The buffer in diff slot `idx`, `None` for an empty slot -- or for
+    /// one whose buffer has gone, which `diff_buf_delete` should have
+    /// emptied but which an id answers for safely either way.
+    ///
+    /// # Panics
+    ///
+    /// When `idx` is not a diff slot.
+    #[inline]
+    pub(crate) fn diffbuf(self, idx: usize) -> Option<Buf> {
+        self.tp_diffbuf[idx].and_then(BufId::get)
+    }
+
+    /// [`TabPage::diffbuf`] for a slot the caller has already found in
+    /// use.
+    ///
+    /// # Panics
+    ///
+    /// When the slot is empty.
+    #[inline]
+    pub(crate) fn used_diffbuf(self, idx: usize) -> Buf {
+        self.diffbuf(idx)
+            .expect("a diff slot the caller found in use")
+    }
+
+    /// Whether diff slot `idx` holds `buffer`. A buffer without a number
+    /// is in no slot.
+    #[inline]
+    pub(crate) fn diff_slot_holds(self, idx: usize, buffer: Buf) -> bool {
+        buffer
+            .try_id()
+            .is_some_and(|id| self.tp_diffbuf[idx] == Some(id))
+    }
+}
 
 /// Free one block, its cached inline changes included.
 ///
@@ -44,7 +79,7 @@ pub fn diff_buf_delete(buffer: Buf) {
         let i = diff_buf_idx(buffer, tp);
         if i != DB_COUNT {
             let i = usize::try_from(i).expect("a diff-buffer index is never negative");
-            tp.tp_diffbuf[i] = ::core::ptr::null_mut();
+            tp.tp_diffbuf[i] = None;
             tp.tp_diff_invalid = 1;
             if tp.is_current() {
                 need_diff_redraw.set(true);
@@ -70,7 +105,7 @@ pub fn diff_buf_adjust(win: Win) {
     let i = diff_buf_idx(win.buffer(), tp);
     if i != DB_COUNT {
         let i = usize::try_from(i).expect("a diff-buffer index is never negative");
-        tp.tp_diffbuf[i] = ::core::ptr::null_mut();
+        tp.tp_diffbuf[i] = None;
         tp.tp_diff_invalid = 1;
         diff_redraw(true);
     }
@@ -83,8 +118,8 @@ pub fn diff_buf_add(buffer: Buf) {
         return;
     }
     for i in 0..DB_COUNT as usize {
-        if tp.tp_diffbuf[i].is_null() {
-            tp.tp_diffbuf[i] = buffer.raw();
+        if tp.tp_diffbuf[i].is_none() {
+            tp.tp_diffbuf[i] = Some(buffer.id());
             tp.tp_diff_invalid = 1;
             diff_redraw(true);
             return;
@@ -97,8 +132,8 @@ pub fn diff_buf_add(buffer: Buf) {
 pub(crate) fn diff_buf_clear() {
     let mut tp = TabPage::current();
     for i in 0..DB_COUNT as usize {
-        if !tp.tp_diffbuf[i].is_null() {
-            tp.tp_diffbuf[i] = ::core::ptr::null_mut();
+        if tp.tp_diffbuf[i].is_some() {
+            tp.tp_diffbuf[i] = None;
             tp.tp_diff_invalid = 1;
             diff_redraw(true);
         }
@@ -110,7 +145,7 @@ pub(crate) fn diff_buf_idx(buffer: Buf, tabpage: TabPage) -> c_int {
     (0..DB_COUNT)
         .find(|&i| {
             let i = usize::try_from(i).expect("a diff-buffer index is never negative");
-            tabpage.tp_diffbuf[i] == buffer.raw()
+            tabpage.diff_slot_holds(i, buffer)
         })
         .unwrap_or(DB_COUNT)
 }
@@ -192,7 +227,7 @@ fn diff_mark_adjust_tp(
     // which is how a deletion in one buffer becomes a change in the rest.
     let adjust_others = |dp: *mut DiffBlock, off: LineNr, n: LineNr| {
         for i in 0..DB_COUNT as usize {
-            if tabpage.tp_diffbuf[i].is_null() || i == idx {
+            if tabpage.tp_diffbuf[i].is_none() || i == idx {
                 continue;
             }
             unsafe { (*dp).df_lnum[i] = ((*dp).df_lnum[i] - off).max(1) };
@@ -209,7 +244,7 @@ fn diff_mark_adjust_tp(
                 == unsafe { (*dp).df_lnum[idx] }
         {
             for i in 0..DB_COUNT as usize {
-                if !tabpage.tp_diffbuf[i].is_null() {
+                if tabpage.tp_diffbuf[i].is_some() {
                     unsafe { (*dprev).df_count[i] += (*dp).df_count[i] };
                 }
             }
@@ -237,7 +272,7 @@ fn diff_mark_adjust_tp(
             unsafe { (*dnext).df_lnum[idx] = line1 };
             unsafe { (*dnext).df_count[idx] = inserted };
             for i in 0..DB_COUNT as usize {
-                if tabpage.tp_diffbuf[i].is_null() || i == idx {
+                if tabpage.tp_diffbuf[i].is_none() || i == idx {
                     continue;
                 }
                 // The other buffers' line numbers carry the drift the
@@ -351,7 +386,7 @@ fn diff_mark_adjust_tp(
     let mut dp = tabpage.tp_first_diff;
     while !dp.is_null() {
         let empty = (0..DB_COUNT as usize)
-            .all(|i| tabpage.tp_diffbuf[i].is_null() || unsafe { (*dp).df_count[i] } == 0);
+            .all(|i| tabpage.tp_diffbuf[i].is_none() || unsafe { (*dp).df_count[i] } == 0);
         if empty {
             dp = unsafe { diff_free(tabpage, dprev, dp) };
         } else {
@@ -420,7 +455,7 @@ pub(crate) unsafe fn diff_free(
 ///
 /// `dp` must point at a live diff block, unaliased for the call.
 unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
-    let Some(i_org) = (0..DB_COUNT as usize).find(|&i| !tabpage.tp_diffbuf[i].is_null()) else {
+    let Some(i_org) = (0..DB_COUNT as usize).find(|&i| tabpage.tp_diffbuf[i].is_some()) else {
         return;
     };
     if unsafe { diff_check_sanity(tabpage, dp) }.is_err() {
@@ -436,11 +471,12 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
             // A copy: the loop below reads the other buffers, and one of
             // them may be this one again on a later turn.
             let line_org = unsafe {
-                Lines::in_buffer(tabpage.diffbuf(i_org)).line_copy((*dp).df_lnum[i_org] + off_org)
+                Lines::in_buffer(tabpage.used_diffbuf(i_org))
+                    .line_copy((*dp).df_lnum[i_org] + off_org)
             };
             let mut i_new = i_org + 1;
             while i_new < DB_COUNT as usize {
-                if !tabpage.tp_diffbuf[i_new].is_null() {
+                if tabpage.tp_diffbuf[i_new].is_some() {
                     let off_new = if dir == BACKWARD as c_int {
                         unsafe { (*dp).df_count[i_new] - 1 }
                     } else {
@@ -449,7 +485,7 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
                     if off_new < 0 || off_new >= unsafe { (*dp).df_count[i_new] } {
                         break;
                     }
-                    let mut other = Lines::in_buffer(tabpage.diffbuf(i_new));
+                    let mut other = Lines::in_buffer(tabpage.used_diffbuf(i_new));
                     let lnum = unsafe { (*dp).df_lnum[i_new] + off_new };
                     if !lines_equal(&line_org, other.line(lnum)) {
                         break;
@@ -461,7 +497,7 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
                 break; // some buffer differs here; the block starts (or ends) for real
             }
             for i in i_org..DB_COUNT as usize {
-                if !tabpage.tp_diffbuf[i].is_null() {
+                if tabpage.tp_diffbuf[i].is_some() {
                     if dir == FORWARD as c_int {
                         unsafe { (*dp).df_lnum[i] += 1 };
                     }
@@ -482,10 +518,9 @@ unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
 /// `dp` must point at a live diff block, unaliased for the call.
 pub(crate) unsafe fn diff_check_sanity(tabpage: TabPage, dp: *mut DiffBlock) -> Result<(), Failed> {
     for i in 0..DB_COUNT as usize {
-        let buf = tabpage.tp_diffbuf[i];
-        if !buf.is_null()
+        if let Some(buf) = tabpage.diffbuf(i)
             && unsafe { (*dp).df_lnum[i] } + unsafe { (*dp).df_count[i] } - 1
-                > unsafe { (*buf).b_ml.ml_line_count }
+                > buf.b_ml.ml_line_count
         {
             return Err(Failed);
         }
@@ -540,7 +575,7 @@ pub fn diff_clear(mut tabpage: TabPage) {
 /// `dp` must point at a live diff block.
 pub(crate) unsafe fn get_max_diff_length(dp: *const DiffBlock) -> c_int {
     (0..DB_COUNT as usize)
-        .filter(|&k| !TabPage::current().tp_diffbuf[k].is_null())
+        .filter(|&k| !TabPage::current().tp_diffbuf[k].is_none())
         .map(|k| unsafe { (*dp).df_count[k] })
         .max()
         .unwrap_or(0)

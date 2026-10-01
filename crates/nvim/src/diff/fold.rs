@@ -184,7 +184,7 @@ pub unsafe fn diff_check_with_linestatus(
     let mut zero = false;
     let mut cmp = false;
     for i in 0..DB_COUNT as usize {
-        if i == idx || tp.tp_diffbuf[i].is_null() {
+        if i == idx || tp.tp_diffbuf[i].is_none() {
             continue;
         }
         if dp.df_count[i] == 0 {
@@ -199,7 +199,7 @@ pub unsafe fn diff_check_with_linestatus(
     if cmp {
         for i in 0..DB_COUNT as usize {
             if i != idx
-                && !tp.tp_diffbuf[i].is_null()
+                && tp.tp_diffbuf[i].is_some()
                 && dp.df_count[i] != 0
                 && !dp.equal_entry(idx, i)
             {
@@ -240,9 +240,9 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
     let mut idx = None;
     let mut other = false;
     for i in 0..DB_COUNT as usize {
-        if tp.tp_diffbuf[i] == window.w_buffer.raw() {
+        if tp.diff_slot_holds(i, window.w_buffer) {
             idx = Some(i);
-        } else if !tp.tp_diffbuf[i].is_null() {
+        } else if tp.tp_diffbuf[i].is_some() {
             other = true;
         }
     }
@@ -287,7 +287,7 @@ pub(crate) fn diff_fold_update(
     let skip = usize::try_from(skip_idx).unwrap_or(usize::MAX);
     for wp in windows() {
         for i in 0..DB_COUNT as usize {
-            if tp.tp_diffbuf[i] == wp.w_buffer.raw() && i != skip {
+            if tp.diff_slot_holds(i, wp.w_buffer) && i != skip {
                 fold_update(wp, lnum[i], lnum[i] + count[i]);
             }
         }

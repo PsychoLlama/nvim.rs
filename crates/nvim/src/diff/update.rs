@@ -19,7 +19,7 @@ use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
 use crate::memline::MlFlags;
 use crate::os::cshim::gettext_ptr;
 use crate::types::{Failed, NUL};
-use crate::winlayer::{Buf, Live, TabPage, Win, buffer_at};
+use crate::winlayer::{Buf, Live, TabPage, Win};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -356,11 +356,10 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
         let forceit = excmd.as_deref().is_some_and(|command| command.forceit);
         if forceit {
             for idx in idx_orig..DB_COUNT as usize {
-                // A diff buffer may already have been wiped, so the slot is
-                // an address to compare, never one to read: `buffer_at` is
-                // the C's `buf_valid()`, and a valid buffer is what
-                // `buf_check_timestamp` wants.
-                if let Some(buf) = buffer_at(tp.tp_diffbuf[idx]) {
+                // A diff buffer may already have been wiped by an earlier
+                // turn's autocommands; the slot's id answers `None` for it,
+                // and a valid buffer is what `buf_check_timestamp` wants.
+                if let Some(buf) = tp.diffbuf(idx) {
                     unsafe { buf_check_timestamp(buf) };
                 }
             }
@@ -372,7 +371,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
         let mut num_anchors = c_int::MAX;
         if diff_flags.get() & DIFF_ANCHOR != 0 {
             for idx in 0..DB_COUNT as usize {
-                if tp.tp_diffbuf[idx].is_null() {
+                if tp.tp_diffbuf[idx].is_none() {
                     continue;
                 }
                 let mut buf_num_anchors = 0;
@@ -380,7 +379,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
                 let count = &raw mut buf_num_anchors;
                 // SAFETY: a live buffer, and two locals of this frame with
                 // room for `MAX_DIFF_ANCHORS` line numbers.
-                let ok = unsafe { parse_diffanchors(false, tp.diffbuf(idx), into, count) };
+                let ok = unsafe { parse_diffanchors(false, tp.used_diffbuf(idx), into, count) };
                 if ok.is_err() {
                     let msg = e_failed_to_find_all_diff_anchors.as_ptr();
                     // SAFETY: a static message string.
@@ -427,7 +426,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
 
             let (start, end) = segment(idx_orig);
             // SAFETY: a live buffer of the diff, and `dio`'s own input side.
-            let wrote = unsafe { diff_write(tp.diffbuf(idx_orig), orig_in, start, end) };
+            let wrote = unsafe { diff_write(tp.used_diffbuf(idx_orig), orig_in, start, end) };
             if wrote.is_err() {
                 if !orig_diff.is_null() {
                     tp.tp_first_diff = orig_diff;
@@ -437,10 +436,9 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, excmd: Option<&mut 
                 break 'theend;
             }
             for idx_new in idx_orig + 1..DB_COUNT as usize {
-                let buf = tp.diffbuf(idx_new);
-                if buf.raw().is_null() || buf.b_ml.ml_mfp.is_null() {
+                let Some(buf) = tp.diffbuf(idx_new).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
                     continue;
-                }
+                };
                 let (start, end) = segment(idx_new);
                 // SAFETY: a live buffer, and `dio`'s own sides.
                 if unsafe { diff_write(buf, new_in, start, end) }.is_ok()
@@ -520,8 +518,8 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
     // The first two buffers in the tabpage: everything is diffed against
     // the first, so there is nothing to do without a second.
     let first_two = (0..DB_COUNT)
-        .find(|&i| !tp.tp_diffbuf[i as usize].is_null())
-        .filter(|&idx_orig| (idx_orig + 1..DB_COUNT).any(|i| !tp.tp_diffbuf[i as usize].is_null()));
+        .find(|&i| tp.tp_diffbuf[i as usize].is_some())
+        .filter(|&idx_orig| (idx_orig + 1..DB_COUNT).any(|i| tp.tp_diffbuf[i as usize].is_some()));
     if let Some(idx_orig) = first_two {
         let internal = diff_internal();
         let mut diffio = DiffIo {

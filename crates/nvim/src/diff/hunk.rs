@@ -149,7 +149,7 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
         unsafe { (*dp).df_lnum[idx_new] = (*hunk).lnum_new };
         unsafe { (*dp).df_count[idx_new] = (*hunk).count_new };
         for i in idx_orig + 1..idx_new {
-            if !tp.tp_diffbuf[i].is_null() {
+            if tp.tp_diffbuf[i].is_some() {
                 unsafe { diff_copy_entry(walk.dprev, dp, idx_orig, i) };
             }
         }
@@ -172,7 +172,7 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
         // The hunk starts above the block: every buffer up to `idx_new`
         // grows upwards by the same amount.
         for i in idx_orig..idx_new {
-            if !tp.tp_diffbuf[i].is_null() {
+            if tp.tp_diffbuf[i].is_some() {
                 unsafe { (*dp).df_lnum[i] -= off };
                 unsafe { (*dp).df_count[i] += off };
             }
@@ -208,7 +208,7 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
         off = 0;
     }
     for i in idx_orig..idx_new {
-        if !tp.tp_diffbuf[i].is_null() {
+        if tp.tp_diffbuf[i].is_some() {
             unsafe {
                 (*dp).df_count[i] = (*dpl).df_lnum[i] + (*dpl).df_count[i] - (*dp).df_lnum[i] + off
             };

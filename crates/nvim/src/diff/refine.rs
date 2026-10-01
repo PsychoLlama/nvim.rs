@@ -169,7 +169,7 @@ unsafe fn refine_inline_word(
     idx1: usize,
     start_lnum: LineNr,
 ) {
-    let buf = TabPage::current().diffbuf(idx1);
+    let buf = TabPage::current().used_diffbuf(idx1);
     for _ in 0..4 {
         unsafe {
             merge_gaps(dp_orig, linemap, idx1, 2, |dp, entry1, entry2| {
@@ -198,7 +198,7 @@ unsafe fn refine_inline_word(
                 let next = (*dp).df_next;
                 let mut changed: i64 = 0;
                 for (i, map) in linemap.iter().enumerate() {
-                    if TabPage::current().tp_diffbuf[i].is_null() {
+                    if TabPage::current().tp_diffbuf[i].is_none() {
                         continue;
                     }
                     for block in [dp, next] {
@@ -437,14 +437,13 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     'done: {
         for (i, map) in linemap.iter_mut().enumerate() {
             dio.dio_diff.dout_ga.clear();
-            let buf = tp.diffbuf(i);
-            if buf.raw().is_null() || buf.b_ml.ml_mfp.is_null() {
+            let Some(buf) = tp.diffbuf(i).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
                 continue; // not loaded
-            }
+            };
             if unsafe { (*dp).df_count[i] } == 0 {
                 // A buffer with no text in this block must not be left in
                 // the table, or the whole block reads as modified in it.
-                tp.tp_diffbuf[i] = ::core::ptr::null_mut();
+                tp.tp_diffbuf[i] = None;
                 continue;
             }
             if file1_idx == usize::MAX {
@@ -455,7 +454,7 @@ pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
             out.clear();
             // Deliberately the *first* buffer's 'iskeyword', so that
             // every buffer is segmented the same way.
-            let chartab = unsafe { (*tp.tp_diffbuf[file1_idx]).b_chartab.as_ptr() };
+            let chartab = tp.used_diffbuf(file1_idx).b_chartab.as_ptr();
             let mut lines = buf.lines();
             for off in 0..unsafe { (*dp).df_count[i] } {
                 let line = lines.line(unsafe { (*dp).df_lnum[i] + off });
