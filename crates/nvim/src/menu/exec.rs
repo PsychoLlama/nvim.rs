@@ -165,7 +165,7 @@ fn select_range(line1: LineNr, line2: LineNr) {
 /// Run the rhs immediately, inside a saved editor state.
 fn run_now(menu: Menu, bit: usize) {
     let mut state = SaveState::default();
-    let _busy = Depth::of(&ex_normal_busy);
+    let _busy = Depth::of(ex_normal_busy);
     // SAFETY: `state` is a live local for the whole call, and the rhs is a
     // NUL-terminated string owned by a node that outlives the run.
     unsafe {

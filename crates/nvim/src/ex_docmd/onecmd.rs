@@ -576,7 +576,7 @@ pub(crate) unsafe fn do_one_cmd(
     let save_reg_executing = reg_executing.get();
     let save_pending_end_reg_executing = pending_end_reg_executing.get();
     let mut excmd = fresh_exarg();
-    let nesting = Depth::of(&ex_nesting_level);
+    let nesting = Depth::of(ex_nesting_level);
 
     // When the last file has not been edited `:q` has to be typed twice.
     // A `'statusline'` function call and an autocommand (QuitPre) both

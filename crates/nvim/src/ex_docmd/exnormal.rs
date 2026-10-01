@@ -111,7 +111,7 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
     }
 
     let arg = unsafe { escape_k_special(excmd.line.ptr_at(excmd.line.arg)) };
-    let busy = Depth::of(&ex_normal_busy);
+    let busy = Depth::of(ex_normal_busy);
     let mut save_state = SaveState::default();
     if unsafe { save_current_state(&raw mut save_state) } {
         loop {

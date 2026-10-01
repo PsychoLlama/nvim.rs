@@ -115,6 +115,7 @@
 
 use crate::autocmd::state::{autocmd_no_enter, autocmd_no_leave};
 use crate::drawscreen::state::RedrawingDisabled;
+use crate::ex_docmd::state::ExField;
 use crate::ex_getln::state::cmdline_star;
 use crate::extmark::curbuf_splice_pending;
 use crate::fileio::state::no_check_timestamps;
@@ -152,6 +153,8 @@ pub(crate) enum Counter {
     Msg(MsgField<c_int>),
     /// A field of [`GetcharState`](crate::getchar::state::GetcharState).
     Getchar(GetcharField<c_int>),
+    /// A field of [`ExState`](crate::ex_docmd::state::ExState).
+    Ex(ExField<c_int>),
 }
 
 impl Counter {
@@ -163,6 +166,7 @@ impl Counter {
             Counter::Cell(cell) => cell.get(),
             Counter::Msg(field) => field.get(),
             Counter::Getchar(field) => field.get(),
+            Counter::Ex(field) => field.get(),
         }
     }
 
@@ -172,6 +176,7 @@ impl Counter {
             Counter::Cell(cell) => cell.set(level),
             Counter::Msg(field) => field.set(level),
             Counter::Getchar(field) => field.set(level),
+            Counter::Ex(field) => field.set(level),
         }
     }
 }
@@ -191,6 +196,12 @@ impl From<MsgField<c_int>> for Counter {
 impl From<GetcharField<c_int>> for Counter {
     fn from(field: GetcharField<c_int>) -> Self {
         Counter::Getchar(field)
+    }
+}
+
+impl From<ExField<c_int>> for Counter {
+    fn from(field: ExField<c_int>) -> Self {
+        Counter::Ex(field)
     }
 }
 
