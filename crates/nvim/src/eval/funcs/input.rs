@@ -234,7 +234,7 @@ pub fn f_inputrestore(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 }
 
 /// `interrupt()` — raise the same flag CTRL-C does.
-pub fn f_interrupt(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_interrupt(_args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     got_int.set(true);
 }
 

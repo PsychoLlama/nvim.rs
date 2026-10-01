@@ -521,7 +521,7 @@ pub fn f_visualmode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// `wildmenumode()`
-pub fn f_wildmenumode(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_wildmenumode(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: `result` is the cleared return value.
     if wild_menu_showing.get() != 0 || (State.get() & MODE_CMDLINE != 0 && cmdline_pum_active()) {
         result.write_number(1);

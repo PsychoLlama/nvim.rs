@@ -260,7 +260,7 @@ pub fn state_handle_k_event() {
 }
 
 /// Whether the cursor may sit where there is no character, in `window`.
-pub fn virtual_active(window: Win) -> bool {
+pub(crate) fn virtual_active(window: Win) -> bool {
     // Inside an operator, the operator's own answer stands.
     if let Some(active) = virtual_op.get() {
         return active;
@@ -293,7 +293,7 @@ fn ve_flags_allow(
 
 /// `State`, with the visual and operator-pending distinctions `State` alone
 /// does not carry.
-pub fn get_real_state() -> c_int {
+pub(crate) fn get_real_state() -> c_int {
     real_state(
         State.get(),
         visual_active(),

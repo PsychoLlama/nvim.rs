@@ -1072,8 +1072,11 @@ macro_rules! reader {
         /// byte, or "does this option hold anything", wants
         /// [`StrOpt::first_byte`] or [`StrOpt::is_unset`] on the selector
         /// instead -- both constant time.
+        ///
+        /// `pub(crate)`, as every reader is: see the number reader below.
+        #[allow(dead_code, reason = "a table declares a reader per row")]
         #[inline(always)]
-        pub fn $field<R>(f: impl FnOnce(&CStr) -> R) -> R {
+        pub(crate) fn $field<R>(f: impl FnOnce(&CStr) -> R) -> R {
             OPTIONS.with_field(|o| &mut o.$field, |value| {
                 f(match value {
                     Some(s) => s.as_cstr(),
@@ -1088,12 +1091,19 @@ macro_rules! reader {
     ($(#[$doc:meta])* $kind:ident, $sel:ident, $field:ident, $ty:ty) => {
         $(#[$doc])*
         ///
-        /// The cheap accessor: one load, no selector in the way. `pub`
-        /// for the same reason the selector is, and because a table
-        /// declares a reader per row whether or not the tree has a
-        /// caller for that row today.
+        /// The cheap accessor: one load, no selector in the way.
+        ///
+        /// `pub(crate)`, and allowed to go unused because a table declares
+        /// a reader per row whether or not the tree has a caller for that
+        /// row today. Not `pub`: an `#[inline]` item reachable from outside
+        /// the crate exports every static its body names, and an exported
+        /// static is read through the GOT -- one more load at each of the
+        /// thousands of option reads. The unit suite writes options through
+        /// the selector, whose accessors go through [`Field`] and stay out
+        /// of that rule.
+        #[allow(dead_code, reason = "a table declares a reader per row")]
         #[inline(always)]
-        pub fn $field() -> $ty {
+        pub(crate) fn $field() -> $ty {
             OPTIONS.get_field(|o| &mut o.$field)
         }
     };

@@ -176,14 +176,20 @@ pub fn cells_at(bytes: &[u8]) -> c_int {
     }
     let cells = utf_char2cells(c);
     let rest = &bytes[usize::from(utf8len_tab[usize::from(first)])..];
-    if cells == 1
-        && p_emoji()
-        && prop_is_emojilike(utf8proc_get_property(c))
-        && char_at(rest) == VS16
-    {
+    if cells == 1 && emoji_widened_at(c, rest) {
         return 2;
     }
     cells
+}
+
+/// Whether `c`, followed by `rest`, is an emoji-like character that VS-16
+/// widens to two cells under 'emoji'.
+///
+/// Out of [`cells_at`]'s body on purpose: that one is `pub` and
+/// `#[inline]`, and an option read inlined into it would export the option
+/// record, whose every read in the editor then goes through the GOT.
+fn emoji_widened_at(c: c_int, rest: &[u8]) -> bool {
+    p_emoji() && prop_is_emojilike(utf8proc_get_property(c)) && char_at(rest) == VS16
 }
 
 /// The total width of `bytes`.

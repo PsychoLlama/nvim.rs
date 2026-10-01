@@ -33,7 +33,7 @@ use crate::winlayer::Win;
 /// Mark the title and icon for redraw if either of them uses statusline format.
 ///
 /// Answers whether either does.
-pub fn redraw_custom_title_later() -> bool {
+pub(crate) fn redraw_custom_title_later() -> bool {
     let custom = (p_icon() && stl_syntax.get().has(StlSyntax::ICON))
         || (p_title() && stl_syntax.get().has(StlSyntax::TITLE));
     if custom {

@@ -730,7 +730,7 @@ pub(crate) fn global_winbar_rows() -> c_int {
     (P_WBR.first_byte() != 0) as c_int
 }
 
-pub fn global_stl_height() -> c_int {
+pub(crate) fn global_stl_height() -> c_int {
     global_stl_rows()
 }
 

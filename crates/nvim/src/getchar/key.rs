@@ -360,7 +360,7 @@ pub fn char_avail() -> bool {
 ///
 /// A stuffed character comes back immediately; anything else waits until the
 /// stuff buffer is empty.
-pub fn vungetc(c: c_int) {
+pub(crate) fn vungetc(c: c_int) {
     old_char.set(c);
     old_mod_mask.set(mod_mask.get());
     old_mouse_grid.set(mouse_grid.get());

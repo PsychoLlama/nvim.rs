@@ -655,7 +655,7 @@ pub fn ungetchars(len: c_int) {
 ///
 /// Safe: callable at any time; it only reads the editor's own mode and
 /// script state, and `u_sync` is itself safe.
-pub fn may_sync_undo() {
+pub(crate) fn may_sync_undo() {
     if (State.get() & (MODE_INSERT | MODE_CMDLINE) == 0 || arrow_used.get()) && curscript.get() < 0
     {
         u_sync(false);

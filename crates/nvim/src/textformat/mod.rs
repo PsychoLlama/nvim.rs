@@ -68,7 +68,7 @@ pub const COM_FIRST: c_int = 'f' as c_int;
 /// Safe: the only promise is that the editor exists, which `cur_buf()`
 /// carries. The dereference stays behind the `&&`: with 'paste' set the
 /// left half is what keeps the right one from running.
-pub fn has_format_option(x: FoFlag) -> bool {
+pub(crate) fn has_format_option(x: FoFlag) -> bool {
     !p_paste() && x.is_among(Buf::current().b_p_fo.bytes())
 }
 

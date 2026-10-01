@@ -488,7 +488,7 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
 /// Finish putting a message on the screen, prompting if it did not fit.
 ///
 /// Answers false when [`wait_return`] was called.
-pub fn msg_end() -> bool {
+pub(crate) fn msg_end() -> bool {
     // A message larger than the window, or one that ran into the ruler,
     // means the window has to be redrawn -- but not while abandoning the
     // file or editing the command line.

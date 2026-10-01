@@ -284,7 +284,7 @@ pub fn os_char_avail() -> bool {
 /// [`line_breakcheck`] in a busy inner loop. The caller must at least check
 /// `got_int` before calling again, and often wants `input_available()` too,
 /// to throttle idle processing while there is user input waiting.
-pub fn os_breakcheck() {
+pub(crate) fn os_breakcheck() {
     if got_int.get() {
         return;
     }

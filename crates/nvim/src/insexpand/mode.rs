@@ -441,7 +441,7 @@ pub(crate) fn ins_compl_need_restart() -> bool {
 }
 
 /// `'autocomplete'`, buffer-local value first (`-1` means "unset").
-pub fn ins_compl_has_autocomplete() -> bool {
+pub(crate) fn ins_compl_has_autocomplete() -> bool {
     let local = Buf::current().b_p_ac;
     if local >= 0 { local != 0 } else { p_ac() }
 }

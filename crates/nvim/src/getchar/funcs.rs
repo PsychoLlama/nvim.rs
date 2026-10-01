@@ -257,7 +257,7 @@ pub fn f_getcharstr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// The `getcharmod()` Vimscript function: the modifiers of the last key.
-pub fn f_getcharmod(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
+pub(crate) fn f_getcharmod(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
     result.write_number(VarNumber::from(mod_mask.get().bits()));
 }
