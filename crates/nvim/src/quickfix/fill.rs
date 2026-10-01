@@ -321,7 +321,7 @@ fn clear_qf_buffer() -> bool {
         }
     }
     find_tab_win(|mut wp| {
-        if wp.w_buffer == Buf::current_raw() {
+        if wp.w_buffer.is_current() {
             wp.w_skipcol = 0;
         }
         false

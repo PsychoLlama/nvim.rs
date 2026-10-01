@@ -526,7 +526,7 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
     // SAFETY: `b_p_ts`/`b_p_vts_array` are the buffer's own tabstop
     // settings. Written as a closure inside the `unsafe`, so that the walk
     // below — which is the whole of this function — stays checked code.
-    let pad = |col: c_int| unsafe { tabstop_padding(col as ColNr, buf.b_p_ts, buf.b_p_vts_array) };
+    let pad = |col: c_int| buf.tab_padding(col as ColNr);
     // SAFETY: the caller's NUL-terminated source line.
     let expandtab = buf.b_p_et != 0;
     // SAFETY: the caller's NUL-terminated source line.

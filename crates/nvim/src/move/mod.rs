@@ -393,7 +393,7 @@ fn redraw_for_cursorcolumn(win: Win) {
         win.redraw_later(UPD_VALID);
     }
     // The current buffer's cursor moving in Visual mode changes the highlight.
-    if visual_active() && win.w_buffer == Buf::current_raw() {
+    if visual_active() && win.w_buffer.is_current() {
         redraw_buf_later(Buf::current(), UPD_INVERTED);
     }
 }

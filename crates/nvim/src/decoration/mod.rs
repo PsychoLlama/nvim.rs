@@ -640,7 +640,7 @@ pub fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: DecorSignHighl
         // TODO(luukvbaal): redraw only unconcealed lines, and scroll
         // lines below it up or down. Also when opening/closing a fold.
         for wp in winlayer::windows() {
-            if wp.w_buffer == buffer.raw() {
+            if wp.w_buffer == buffer {
                 changed_window_setting(wp);
             }
         }

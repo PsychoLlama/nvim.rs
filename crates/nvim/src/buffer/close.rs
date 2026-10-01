@@ -321,7 +321,7 @@ pub(crate) fn can_unload_buffer(buffer: Buf) -> bool {
     let mut can_unload = buffer.b_locked == 0;
 
     if can_unload && updating_screen.get() {
-        can_unload = !windows().any(|wp| wp.w_buffer == buffer.raw());
+        can_unload = !windows().any(|wp| wp.w_buffer == buffer);
     }
     // Don't unload the buffer while it's still being saved
     if can_unload && buffer.b_saving {
@@ -387,7 +387,7 @@ fn close_buffer_inner(
     ignore_abort: bool,
 ) -> bool {
     let mut how = Disposition::of(buffer, action);
-    let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
+    let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer);
     let the_curwin = Win::current().id();
     let the_curtab = TabPage::current();
     // Upstream's CHECK_CURBUF sits here; it is a no-op outside
@@ -493,7 +493,7 @@ fn close_buffer_inner(
     let clear_w_buf = win
         .map(Win::id)
         .and_then(valid_win)
-        .filter(|wp| wp.w_buffer == buf.raw());
+        .filter(|wp| wp.w_buffer == buf);
 
     // Autocommands may have opened or closed windows for this buffer.
     // Decrement the count for the close we do here.  Don't decrement
@@ -525,7 +525,7 @@ fn close_buffer_inner(
         }
         buf_clear_file(buf);
         if let Some(mut wp) = clear_w_buf {
-            wp.w_buffer = ptr::null_mut();
+            wp.w_buffer = Buf::NULL;
         }
         if how.del {
             buf.b_p_bl = 0;
@@ -597,7 +597,7 @@ fn restore_curwin(was_curwin: bool, the_curwin: WinId, tabpage: TabPage) {
 /// and free it.
 fn unlink_and_free(mut buffer: Buf, clear_w_buf: Option<Win>) {
     if let Some(mut wp) = clear_w_buf {
-        wp.w_buffer = ptr::null_mut();
+        wp.w_buffer = Buf::NULL;
     }
     let fnum = buffer.handle as c_int;
     for wp in tab_windows() {
@@ -660,7 +660,7 @@ pub fn buf_clear() {
 ///
 pub fn buf_freeall(buffer: Buf, flags: c_int) {
     let is_curbuf = buffer.raw() == Buf::current_raw();
-    let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
+    let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer);
     let the_curwin = Win::current().id();
     let the_curtab = TabPage::current();
 
@@ -690,13 +690,13 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
     diff_forget(buf); // Can't use 'diff' for unloaded buffer.
 
     // Remove any ownsyntax, unless exiting.
-    if let Some(wp) = current_win().filter(|wp| wp.w_buffer == buf.raw()) {
+    if let Some(wp) = current_win().filter(|wp| wp.w_buffer == buf) {
         reset_syntax(wp);
     }
 
     // No folds in an empty buffer.
     for win in tab_windows() {
-        if win.w_buffer == buf.raw() {
+        if win.w_buffer == buf {
             clear_window_folds(win);
         }
     }

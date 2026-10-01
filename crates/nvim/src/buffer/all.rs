@@ -311,7 +311,7 @@ fn open_window_for(
         (buffer.b_nwindows > 0).then(last_win)
     } else {
         // Check whether this buffer already has a window.
-        let wp = windows().find(|win| !win.w_floating && win.w_buffer == buffer.raw());
+        let wp = windows().find(|win| !win.w_floating && win.w_buffer == buffer);
         // If the buffer already has a window, move it.
         if let Some(win) = wp {
             move_win_after(win, current_win());

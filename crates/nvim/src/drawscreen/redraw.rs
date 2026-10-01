@@ -64,7 +64,7 @@ pub fn show_cursor_info_later(force: bool) {
         || wp.w_cursor != wp.w_stl_cursor
         || wp.w_virtcol != wp.w_stl_virtcol
         || wp.w_topline != wp.w_stl_topline
-        || unsafe { (*wp.w_buffer).b_ml.ml_line_count } != wp.w_stl_line_count
+        || wp.w_buffer.b_ml.ml_line_count != wp.w_stl_line_count
         || wp.w_topfill != wp.w_stl_topfill
         || empty_line != wp.w_stl_empty
         || reg_recording.get() != wp.w_stl_recording
@@ -88,7 +88,7 @@ pub fn show_cursor_info_later(force: bool) {
     wp.w_stl_virtcol = wp.w_virtcol;
     wp.w_stl_empty = empty_line;
     wp.w_stl_topline = wp.w_topline;
-    unsafe { wp.w_stl_line_count = (*wp.w_buffer).b_ml.ml_line_count };
+    wp.w_stl_line_count = wp.w_buffer.b_ml.ml_line_count;
     wp.w_stl_topfill = wp.w_topfill;
     wp.w_stl_recording = reg_recording.get();
     wp.w_stl_state = state;
@@ -161,7 +161,7 @@ pub fn redraw_curbuf_later(redr_type: c_int) {
 /// Mark every window showing `buffer`.
 pub fn redraw_buf_later(buffer: Buf, redr_type: c_int) {
     for wp in winlayer::windows() {
-        if wp.w_buffer == buffer.raw() {
+        if wp.w_buffer == buffer {
             redraw_later(wp, redr_type);
         }
     }
@@ -173,7 +173,7 @@ pub fn redraw_buf_later(buffer: Buf, redr_type: c_int) {
 /// deletion gets the rows it used to occupy redrawn.
 pub fn redraw_buf_line_later(buffer: Buf, line: LineNr, force: bool) {
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buffer.raw() {
+        if wp.w_buffer == buffer {
             redraw_win_line(wp, line.min(buffer.b_ml.ml_line_count));
             if force && line > buffer.b_ml.ml_line_count {
                 wp.w_redraw_bot = line;
@@ -209,7 +209,7 @@ pub fn redraw_win_line(window: Win, lnum: LineNr) {
 /// Mark lines `first..=last` of `buffer` in every window showing it.
 pub fn redraw_buf_range_later(buffer: Buf, first: LineNr, last: LineNr) {
     for wp in winlayer::windows() {
-        if wp.w_buffer == buffer.raw() {
+        if wp.w_buffer == buffer {
             redraw_win_range_later(wp, first, last);
         }
     }
@@ -218,7 +218,7 @@ pub fn redraw_buf_range_later(buffer: Buf, first: LineNr, last: LineNr) {
 /// Mark the status lines and window bars of every window showing `buffer`.
 pub fn redraw_buf_status_later(buffer: Buf) {
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buffer.raw()
+        if wp.w_buffer == buffer
             && (wp.w_status_height != 0
                 || (wp.is_current() && global_stl_height() != 0)
                 || wp.w_winbar_height != 0)
@@ -250,7 +250,7 @@ pub fn status_redraw_curbuf() {
 pub fn status_redraw_buf(buffer: Buf) {
     let is_stl_global = global_stl_height() != 0;
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buffer.raw()
+        if wp.w_buffer == buffer
             && ((!is_stl_global && wp.w_status_height != 0)
                 || (is_stl_global && wp.is_current())
                 || wp.w_winbar_height != 0)

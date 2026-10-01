@@ -239,7 +239,7 @@ unsafe fn rewrite_prompt_line(mut buffer: Buf, new_prompt: *const c_char, new_pr
         cursor_col = new_prompt_len;
     }
     let mut win = Win::current();
-    if win.w_buffer == buffer.raw() && win.w_cursor.lnum == prompt_lno {
+    if win.w_buffer == buffer && win.w_cursor.lnum == prompt_lno {
         win.w_cursor.col = cursor_col;
         check_cursor_col(win);
     }

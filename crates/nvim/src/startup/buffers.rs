@@ -411,7 +411,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
         // Only load a file into a window that is still showing the first
         // window's buffer, or an unnamed one.
-        if Buf::current_raw() == first_win().w_buffer || Buf::current().name.full().is_none() {
+        if first_win().w_buffer.is_current() || Buf::current().name.full().is_none() {
             Win::current().w_arg_idx = arg_idx;
             swap_exists_did_quit.set(false);
             let alist = global_arglist();

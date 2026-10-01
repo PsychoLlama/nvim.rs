@@ -183,9 +183,8 @@ pub fn setfname(
             buflist_findname_file_id(ffname, &file_id, file_id_valid)
         };
         if let Some(o) = obuf.filter(|&o| o != buffer) {
-            let obuf = o.raw();
             // During startup a window may use a buffer that is not loaded yet.
-            let in_use = tab_windows().any(|win| win.w_buffer == obuf);
+            let in_use = tab_windows().any(|win| win.w_buffer == o);
             if !o.b_ml.ml_mfp.is_null() || in_use {
                 // It is loaded or used in a window: fail.
                 if message {
@@ -194,9 +193,9 @@ pub fn setfname(
                 free(ffname);
                 return Err(Failed);
             }
-            // Delete it from the list.
-            // SAFETY: a live, unloaded buffer shown in no window.
-            unsafe { close_buffer(None, Buf::new(obuf), DOBUF_WIPE.cast_signed(), false, false) };
+            // Delete it from the list: a live, unloaded buffer shown in no
+            // window.
+            close_buffer(None, o, DOBUF_WIPE.cast_signed(), false, false);
         }
         // SAFETY: `ffname` is the block `fix_fname` just allocated and
         // `sfname` the copy taken here; the buffer takes over both, and
@@ -242,7 +241,7 @@ pub fn buf_name_changed(b: Buf) {
         ml_setname(b);
     }
     let cur = current_win();
-    if cur.w_buffer == b.raw() {
+    if cur.w_buffer == b {
         // Check the file name against the argument list.
         // SAFETY: a live window.
         check_arg_idx(cur);

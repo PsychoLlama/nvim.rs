@@ -699,7 +699,7 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
 pub fn did_set_spell_option() -> Result<(), OptError> {
     let mut errmsg = Ok(());
     for wp in windows() {
-        if wp.w_buffer == Buf::current_raw() && wp.w_onebuf_opt.wo_spell != 0 {
+        if wp.w_buffer.is_current() && wp.w_onebuf_opt.wo_spell != 0 {
             errmsg = parse_spelllang(wp);
             break;
         }

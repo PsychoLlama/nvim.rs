@@ -23,12 +23,11 @@
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use core::ffi::c_int;
-use core::ptr;
 
 use super::*;
 
 use crate::autocmd::state::autocmd_busy;
-use crate::buffer::{BufRef, buf_is_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
+use crate::buffer::{BufRef, buf_is_prompt, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::{clear_cmdline, mode_displayed};
 use crate::ex_cmds2::{can_abandon, dialog_changed};
@@ -40,7 +39,7 @@ use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
-use crate::types::{Buffer, CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
+use crate::types::{CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
 use crate::winlayer::graph::{
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
 };
@@ -116,7 +115,7 @@ pub(crate) fn init_empty(window: Win) {
     window.w_topfill = 0;
     window.w_botline = 2;
     window.w_valid = WinValid::NONE;
-    window.w_s = &raw mut window.buffer().b_s;
+    window.w_s = window.buffer().syntax_block();
 }
 
 /// Init the current window. Called when a new file is being edited.
@@ -141,7 +140,7 @@ fn close_all(buffer: Buf, keep_curwin: bool) {
             if !is_autocmd_window(Some(last_win())) && only_window(wp, None) {
                 break;
             }
-            if wp.w_buffer == buffer.raw() && (!keep_curwin || !wp.is_current()) && !locked(wp) {
+            if wp.w_buffer == buffer && (!keep_curwin || !wp.is_current()) && !locked(wp) {
                 if layout_locked(CmdIdx::SIZE) {
                     break 'theend; // Only give one error message.
                 }
@@ -164,7 +163,7 @@ fn close_all(buffer: Buf, keep_curwin: bool) {
                 // Start from `tp_lastwin` to close floating windows first.
                 let mut cur = tp.tp_lastwin.and_then(WinId::get);
                 while let Some(wp) = cur {
-                    if wp.w_buffer == buffer.raw() && !locked(wp) {
+                    if wp.w_buffer == buffer && !locked(wp) {
                         if layout_locked(CmdIdx::SIZE) {
                             break 'theend; // Only give one error message.
                         }
@@ -353,7 +352,7 @@ pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) 
     let Some(mut buf) = win.buffer_or_none() else {
         // The buffer was removed from the window: it has to be given one.
         let mut first = first_buffer().expect("a window means a buffer list");
-        win.w_buffer = first.raw();
+        win.w_buffer = first;
         first.b_nwindows += 1;
         if win.is_current() {
             first.make_current();
@@ -405,7 +404,7 @@ fn close_all_others(message: bool, forceit: bool) {
             }
             // autocommands messed this one up
             if !buf_is_valid(wp) && valid_win(wp.id()).is_some() {
-                wp.w_buffer = ptr::null_mut::<Buffer>();
+                wp.w_buffer = Buf::NULL;
                 close(wp, false, false);
                 break 'skip;
             }
@@ -444,9 +443,7 @@ fn close_all_others(message: bool, forceit: bool) {
 /// By identity, and `None` where the window has no buffer at all: `w_buffer`
 /// is null for the moment between losing one and being given another.
 fn buf_is_valid(window: Win) -> bool {
-    window
-        .buffer_or_none()
-        .is_some_and(|buf| buf_valid(buf.id()))
+    window.surviving_buffer().is_some()
 }
 
 /// Whether `buffer` may be abandoned, saying why it may not.

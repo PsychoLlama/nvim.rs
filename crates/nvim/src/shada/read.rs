@@ -84,7 +84,7 @@ struct Reading {
     oldfiles_set: IdSet<Box<[u8]>>,
     /// Buffers whose change list grew; the windows showing them are moved
     /// to the end of it once the whole file has been read.
-    cl_bufs: IdSet<*mut Buffer>,
+    cl_bufs: IdSet<BufId>,
     /// File name to the loaded buffer for it, if there is one. Memoises the
     /// walk of the buffer list; the keys are owned copies.
     fname_bufs: FnameBufs,
@@ -374,7 +374,7 @@ impl Reading {
                 return;
             }
         } else {
-            self.cl_bufs.insert(buffer.raw());
+            self.cl_bufs.insert(buffer.id());
             insert_change(buffer, fm);
         }
         // The mark took the extra data; only the file name is left.
@@ -397,8 +397,12 @@ impl Reading {
         // end of it, as if the changes had just been made.
         if !self.cl_bufs.is_empty() {
             for mut wp in tab_windows() {
-                if self.cl_bufs.contains(&wp.w_buffer) {
-                    wp.w_changelistidx = unsafe { (*wp.w_buffer).b_changelistlen };
+                if wp
+                    .w_buffer
+                    .try_id()
+                    .is_some_and(|id| self.cl_bufs.contains(&id))
+                {
+                    wp.w_changelistidx = wp.w_buffer.b_changelistlen;
                 }
             }
         }

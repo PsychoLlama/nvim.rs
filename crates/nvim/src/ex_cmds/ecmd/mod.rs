@@ -625,7 +625,7 @@ fn enter_new_buffer(
     // It's possible that all lines in the buffer changed.  Need to update
     // automatic folding for all windows where it's used.
     for win in tab_windows() {
-        if win.w_buffer == Buf::current_raw() {
+        if win.w_buffer.is_current() {
             // SAFETY: `win` is a live window.
             fold_update_all(win);
         }

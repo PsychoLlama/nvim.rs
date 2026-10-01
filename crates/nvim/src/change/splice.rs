@@ -121,7 +121,7 @@ pub fn changed_lines_invalidate_buf(
     xtra: LineNr,
 ) {
     for wp in tab_windows() {
-        if wp.w_buffer == buffer.raw() {
+        if wp.w_buffer == buffer {
             changed_lines_invalidate_win(wp, lnum, col, lnume, xtra);
         }
     }
@@ -142,7 +142,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         skipcol: 0,
     };
     let win = Win::current();
-    if win.w_buffer == buffer.raw() && lnum >= win.w_topline && lnum <= win.w_botline {
+    if win.w_buffer == buffer && lnum >= win.w_topline && lnum <= win.w_botline {
         let at = win.w_cursor;
         view = mark_view_make(win, at);
     }
@@ -203,14 +203,14 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
                 let into = head.cast::<u8>();
                 unsafe { into.copy_from(head.wrapping_byte_add(one).cast_const().cast(), bytes) };
                 for mut wp in tab_windows() {
-                    if wp.w_buffer == buffer.raw() && wp.w_changelistidx > 0 {
+                    if wp.w_buffer == buffer && wp.w_changelistidx > 0 {
                         wp.w_changelistidx -= 1;
                     }
                 }
             }
             // A window sitting at the end of the list stays at the end.
             for mut wp in tab_windows() {
-                if wp.w_buffer == buffer.raw() && wp.w_changelistidx == buffer.b_changelistlen {
+                if wp.w_buffer == buffer && wp.w_changelistidx == buffer.b_changelistlen {
                     wp.w_changelistidx += 1;
                 }
             }
@@ -224,7 +224,7 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     // The current window is always *after* the last change, so that `g,`
     // takes you back to it.
     let len = buffer.b_changelistlen;
-    if Win::current().w_buffer == buffer.raw() {
+    if Win::current().w_buffer == buffer {
         Win::current().w_changelistidx = len;
     }
 }
@@ -320,7 +320,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
 
     for win in windows() {
         let diffed =
-            win.w_buffer == buffer.raw() && win.w_onebuf_opt.wo_diff != 0 && diff_internal() != 0;
+            win.w_buffer == buffer && win.w_onebuf_opt.wo_diff != 0 && diff_internal() != 0;
         if diffed {
             TabPage::current().tp_diff_update = 1;
             diff_update_line(lnum);
@@ -331,12 +331,12 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
         record_change_mark(buffer, lnum, col);
     }
 
-    if Win::current().w_buffer == buffer.raw() && visual_active() {
+    if Win::current().w_buffer == buffer && visual_active() {
         check_visual_pos();
     }
 
     for wp in tab_windows() {
-        if wp.w_buffer == buffer.raw() {
+        if wp.w_buffer == buffer {
             redraw_win_for_change(wp, lnum, col, lnume, xtra);
         }
         if wp.is_current() && xtra != 0 && search_hl_has_cursor_lnum.get() >= lnum {
@@ -350,7 +350,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
     // A change on the cursor line always triggers CursorMoved.
     let win = Win::current();
     if last_cursormoved_win.get() == Some(win.id())
-        && win.w_buffer == buffer.raw()
+        && win.w_buffer == buffer
         && lnum <= win.w_cursor.lnum
         && lnume + xtra.abs() > win.w_cursor.lnum
     {
@@ -507,7 +507,7 @@ pub fn changed_lines(
 
     let diff_same_lines = xtra == 0
         && Win::current().w_onebuf_opt.wo_diff != 0
-        && Win::current().w_buffer == buffer.raw()
+        && Win::current().w_buffer == buffer
         && diff_internal() == 0;
     if diff_same_lines {
         // With the line count unchanged, mark_adjust() is never called, so

@@ -769,8 +769,8 @@ pub fn win_init(newp: Win, oldp: Win, flags: c_int) {
 fn init(newp: Win, oldp: Win, flags: c_int) {
     let (mut newp, oldp) = (newp, oldp);
     let mut buf = oldp.buffer();
-    newp.w_buffer = buf.raw();
-    newp.w_s = &raw mut buf.b_s;
+    newp.w_buffer = buf;
+    newp.w_s = buf.syntax_block();
     buf.b_nwindows += 1;
     newp.w_cursor = oldp.w_cursor;
     newp.w_valid = WinValid::NONE;

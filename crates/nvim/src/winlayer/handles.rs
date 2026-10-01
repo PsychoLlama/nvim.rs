@@ -256,7 +256,7 @@ pub(crate) fn free_deferred() {
 pub(crate) struct WinId(pub(super) NonZero<Handle>);
 
 /// A buffer's identity, taken from a live buffer: its number. [`WinId`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct BufId(pub(super) NonZero<Handle>);
 
 /// A tab page's identity, taken from a live tab page. [`WinId`].

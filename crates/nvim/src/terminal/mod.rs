@@ -490,9 +490,8 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
         }
     } else if !only_destroy {
         // The status line says "running"; it no longer is.
-        let shown = buf.map_or(::core::ptr::null_mut(), Buf::raw);
         for mut wp in windows() {
-            if wp.w_buffer == shown {
+            if Some(wp.w_buffer) == buf {
                 wp.w_redr_status = true;
             }
         }

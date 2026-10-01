@@ -201,7 +201,6 @@ count	callee	no_raw	defs	def
 12	path_full_compare	0	1	crates/nvim/src/path/compare.rs
 12	qsort	0	0	
 12	spell_iswordp_nmw	0	1	crates/nvim/src/spell/chartab.rs
-12	tabstop_padding	0	1	crates/nvim/src/indent/mod.rs
 12	unref_extmatch	0	1	crates/nvim/src/regexp/context.rs
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	Dt::new	0	67	
@@ -516,6 +515,7 @@ count	callee	no_raw	defs	def
 6	spell_move_to	0	1	crates/nvim/src/spell/navigate.rs
 6	strstr	0	1	crates/nvim/src/os/cshim.rs
 6	stuff_readbuf_len	0	1	crates/nvim/src/getchar/buffers.rs
+6	tabstop_padding	0	1	crates/nvim/src/indent/mod.rs
 6	tabstop_set	0	1	crates/nvim/src/indent/mod.rs
 6	trans_function_name	0	1	crates/nvim/src/eval/userfunc/name.rs
 6	tv_dict_item_alloc	0	1	crates/nvim/src/eval/typval/dictitem.rs
@@ -2468,7 +2468,6 @@ count	callee	no_raw	defs	def
 1	cleanup_help_tags	0	1	crates/nvim/src/help/mod.rs
 1	clear_float	0	0	
 1	clear_virtlines	0	1	crates/nvim/src/decoration/mod.rs
-1	close_buffer	0	0	
 1	close_internal	0	1	crates/nvim/src/channel/mod.rs
 1	close_job_parts	0	1	crates/nvim/src/channel/mod.rs
 1	close_stderr	0	1	crates/nvim/src/channel/mod.rs
@@ -3202,7 +3201,6 @@ count	callee	no_raw	defs	def
 1	plan_indent	0	1	crates/nvim/src/indent/mod.rs
 1	plan_leader	0	1	crates/nvim/src/change/open_line/comment.rs
 1	plan_start_or_middle	0	1	crates/nvim/src/change/open_line/comment.rs
-1	plines_m_win_fill	0	0	
 1	poll	0	0	
 1	pop	0	1	crates/nvim/src/mpack/object.rs
 1	positive_integer_to_special_typval	0	0	

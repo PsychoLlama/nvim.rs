@@ -477,8 +477,7 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
 /// scrolls off, whatever the option says.
 ///
 pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
-    // SAFETY: a window that is being scrolled has a buffer.
-    if State.get() & MODE_TERMINAL != 0 && !unsafe { (*window.w_buffer).terminal }.is_null() {
+    if State.get() & MODE_TERMINAL != 0 && !window.w_buffer.terminal.is_null() {
         return 0;
     }
     match window.w_onebuf_opt.wo_so {

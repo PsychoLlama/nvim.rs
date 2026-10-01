@@ -431,7 +431,7 @@ pub(crate) fn do_exedit(excmd: &mut ExArg, old_curwin: Option<WinId>) {
     if let Some(mut old) = old_curwin.and_then(valid_win)
         && excmd.line.byte_at(excmd.line.arg) != 0
         && !old.is_current()
-        && old.w_buffer != Buf::current_raw()
+        && !old.w_buffer.is_current()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
         old.w_alt_fnum = Buf::current().handle as c_int;

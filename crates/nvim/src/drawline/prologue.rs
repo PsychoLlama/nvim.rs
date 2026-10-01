@@ -58,7 +58,7 @@ pub(crate) unsafe fn prepare_line(
         s.check_decor_providers = true;
 
         // 'colorcolumn'; a terminal buffer never shows one.
-        wlv.color_cols = if unsafe { (*window.w_buffer).terminal }.is_null() {
+        wlv.color_cols = if window.w_buffer.terminal.is_null() {
             window.w_p_cc_cols
         } else {
             ::core::ptr::null_mut()
@@ -167,7 +167,7 @@ pub(crate) unsafe fn prepare_line(
 
     // The `:terminal` attributes themselves are filled in by the caller:
     // see [`LineSetup::has_terminal`].
-    if !unsafe { (*window.w_buffer).terminal }.is_null() {
+    if !window.w_buffer.terminal.is_null() {
         s.has_terminal = true;
         s.extra_check = true;
     }
@@ -195,8 +195,7 @@ impl LineSetup {
             is_wrapped: window.w_onebuf_opt.wo_wrap != 0 && !has_fold,
             // The line one past the end of the buffer exists only to carry
             // the filler lines below the last one.
-            draw_text: !concealed
-                && wlv.lnum != unsafe { (*window.w_buffer).b_ml.ml_line_count } + 1,
+            draw_text: !concealed && wlv.lnum != window.w_buffer.b_ml.ml_line_count + 1,
             start_vcol: 0,
             bg_attr: 0,
             may_have_inline_virt: false,
@@ -588,7 +587,7 @@ impl LineSetup {
         // Trick: `spell_cat_line` skips a few characters for C/shell/Vim
         // comment leaders.
         nextline[SPELL_LOOKAHEAD] = 0;
-        if lnum < unsafe { (*window.w_buffer).b_ml.ml_line_count } {
+        if lnum < window.w_buffer.b_ml.ml_line_count {
             let next = unsafe { ml_get_buf(window.buffer(), lnum + 1) };
             unsafe { spell_cat_line(nextline.as_mut_ptr().add(SPELL_LOOKAHEAD), next, SPWORDLEN) };
         }

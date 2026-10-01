@@ -156,7 +156,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             flush = redraw_status(wp, opts, flush);
         } else {
             for wp in windows() {
-                if buf.is_none_or(|b| wp.w_buffer == b.raw()) {
+                if buf.is_none_or(|b| wp.w_buffer == b) {
                     flush = redraw_status(wp, opts, flush);
                 }
             }

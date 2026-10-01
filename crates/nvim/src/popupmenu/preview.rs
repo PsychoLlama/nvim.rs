@@ -63,10 +63,8 @@ unsafe fn pum_selected_info() -> Option<*mut c_char> {
 /// `win` must be live and `info` NUL-terminated. `info` is written through
 /// and restored, so it must be writable — the callers own it.
 unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_int) {
-    // SAFETY: the buffer is `win`'s own and `nvim_buf_set_lines` copies out of
-    // `replacement` before it is freed.
-    let buf = win.w_buffer;
-    unsafe { (*buf).b_p_ma = 1 };
+    let mut buf = win.buffer();
+    buf.b_p_ma = 1;
 
     let mut lines: Vec<Object> = Vec::new();
     let mut max_width = 0;
@@ -112,7 +110,7 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
     let set = unsafe {
         nvim_buf_set_lines(
             0,
-            (*buf).handle as BufferHandle,
+            buf.handle() as BufferHandle,
             0,
             -1,
             false,
@@ -126,7 +124,7 @@ unsafe fn pum_preview_set_text(mut win: Win, info: *mut c_char) -> (LineNr, c_in
         err.clear();
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
-    unsafe { (*buf).b_p_ma = 0 };
+    buf.b_p_ma = 0;
 
     (lnum, max_width)
 }
@@ -169,7 +167,7 @@ fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
     }
 
     window.w_config.anchor = 0; // NW: align its top with the menu's top
-    let count = unsafe { (*window.w_buffer).b_ml.ml_line_count };
+    let count = window.w_buffer.b_ml.ml_line_count;
     window.w_view_width = window.w_config.width;
     window.w_config.height = plines_m_win(window, window.w_topline, count, Rows.get());
     window.w_config.row = f64::from(pum_row.get());

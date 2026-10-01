@@ -270,7 +270,7 @@ pub unsafe fn nvim_buf_set_lines(
                 true,
             );
             for win in tab_windows() {
-                if win.w_buffer == buffer.raw() {
+                if win.w_buffer == buffer {
                     let (lo, hi) = (start as LineNr, end as LineNr);
                     fix_cursor(win, lo, hi, extra as LineNr);
                 }

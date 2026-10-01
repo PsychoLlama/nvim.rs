@@ -113,8 +113,8 @@ pub(crate) fn set_buffer_lines(
             // Only the current window of the current buffer follows the
             // insertion; the others keep looking at the line they were on.
             for mut wp in tab_windows() {
-                if wp.w_buffer == buffer.map_or(ptr::null_mut(), Buf::raw)
-                    && (wp.w_buffer != Buf::current_raw() || wp.is_current())
+                if Some(wp.w_buffer) == buffer
+                    && (!wp.w_buffer.is_current() || wp.is_current())
                     && wp.w_cursor.lnum > append_lnum
                 {
                     wp.w_cursor.lnum += added;
@@ -299,7 +299,7 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         }
         // Pull every cursor that was inside or after the deleted range
         // back onto a line that still exists.
-        for mut wp in tab_windows().filter(|wp| wp.w_buffer == buf.raw()) {
+        for mut wp in tab_windows().filter(|wp| wp.w_buffer == buf) {
             if wp.w_cursor.lnum > last {
                 wp.w_cursor.lnum -= count;
             } else if wp.w_cursor.lnum > first {

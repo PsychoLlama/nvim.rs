@@ -110,8 +110,7 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
         vtopline = get_vtopline(Win::current()) as LineNr;
         for wp in windows() {
             if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
-                let limit = unsafe { plines_m_win_fill(wp, 1, (*wp.w_buffer).b_ml.ml_line_count) }
-                    as LineNr
+                let limit = plines_m_win_fill(wp, 1, wp.w_buffer.b_ml.ml_line_count) as LineNr
                     - get_scrolloff_value(Win::current()) as LineNr;
                 vtopline = vtopline.min(limit);
             }

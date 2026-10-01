@@ -151,8 +151,8 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
                 return Err(Failed);
             };
             buf.make_current();
-            win.w_buffer = buf.raw();
-            win.w_s = &raw mut buf.b_s;
+            win.w_buffer = buf;
+            win.w_s = buf.syntax_block();
             buf.b_nwindows = 1;
             win.w_alist = global_arglist();
             curwin_init();

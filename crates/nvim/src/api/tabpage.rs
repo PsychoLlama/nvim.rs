@@ -175,7 +175,7 @@ pub unsafe fn nvim_open_tabpage(
 
     let new_win = wp
         .and_then(|w| windows_in_tab(tp).find(|live| live.raw() == w.raw()))
-        .filter(|w| w.w_buffer != b.raw());
+        .filter(|w| w.w_buffer != b);
     if let Some(w) = new_win {
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the
         // user is in; a tab page opened without entering it must not.

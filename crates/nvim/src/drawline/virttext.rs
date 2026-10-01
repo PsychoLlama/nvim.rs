@@ -62,7 +62,7 @@ pub(crate) unsafe fn line_putchar(
 
     let is_tab = unsafe { *p } as ::core::ffi::c_int == TAB;
     if is_tab {
-        cells = unsafe { tabstop_padding(vcol, buffer.b_p_ts, buffer.b_p_vts_array) }.min(maxcells);
+        cells = buffer.tab_padding(vcol).min(maxcells);
     }
     // Overwriting the left half of a double-width character: clear its
     // orphaned right half.
@@ -280,7 +280,7 @@ pub(crate) unsafe fn draw_virt_text_item(
         while skip_cells > 0 && unsafe { *virt_str } as ::core::ffi::c_int != NUL {
             let c_len = unsafe { utfc_ptr2len(virt_str) };
             let cells = if unsafe { *virt_str } as ::core::ffi::c_int == TAB {
-                unsafe { tabstop_padding(vcol, buffer.b_p_ts, buffer.b_p_vts_array) }
+                buffer.tab_padding(vcol)
             } else {
                 unsafe { utf_ptr2cells(virt_str) }
             };

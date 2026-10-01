@@ -68,8 +68,7 @@ pub(crate) unsafe fn jump_to_help_window(
     } else {
         qf_find_help_win()
     };
-    // SAFETY: a live window's buffer is a live buffer.
-    if let Some(wp) = wp.filter(|wp| unsafe { (*wp.w_buffer).b_nwindows } > 0) {
+    if let Some(wp) = wp.filter(|wp| wp.w_buffer.b_nwindows > 0) {
         win_enter(wp, true);
         restart_edit.set(0);
         return Ok(());

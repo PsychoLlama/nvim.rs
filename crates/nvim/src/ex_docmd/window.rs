@@ -267,7 +267,7 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
     // The window left behind gets the new buffer as its alternate file.
     if Win::current_raw() != old_curwin.raw()
         && let Some(mut old) = valid_win(old_curwin.id())
-        && old.w_buffer != Buf::current_raw()
+        && !old.w_buffer.is_current()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
         old.w_alt_fnum = Buf::current().handle as c_int;

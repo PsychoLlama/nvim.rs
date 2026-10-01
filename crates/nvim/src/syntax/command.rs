@@ -332,7 +332,7 @@ pub(crate) fn ex_syntax(excmd: &mut ExArg) {
 /// Upstream marks this `@deprecated`.
 pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
     let mut numbuf = NumBuf::new();
-    if Win::current().w_s == unsafe { &raw mut (*Win::current().w_buffer).b_s } {
+    if Win::current().w_s == Win::current().buffer().syntax_block() {
         Win::current().w_s = Box::into_raw(empty_synblock());
         unsafe { hash_init::<*mut c_char>(syn_field!(cur_syn_block(), b_keywtab)) };
         unsafe { hash_init::<*mut c_char>(syn_field!(cur_syn_block(), b_keywtab_ic)) };

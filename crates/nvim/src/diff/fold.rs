@@ -18,7 +18,7 @@
 )]
 
 use super::*;
-use crate::winlayer::{TabPage, Win, buffer_at, windows};
+use crate::winlayer::{TabPage, Win, windows};
 use core::ffi::c_int;
 
 /// `linestatus`: the line is *changed* -- present in every buffer of the
@@ -44,7 +44,7 @@ pub fn diff_redraw(dofold: bool) {
     for mut wp in windows() {
         // The window is live but its buffer may already have been wiped, so
         // the pointer is compared, never read. The short circuit is upstream's.
-        if wp.w_onebuf_opt.wo_diff == 0 || buffer_at(wp.w_buffer).is_none() {
+        if wp.w_onebuf_opt.wo_diff == 0 || wp.surviving_buffer().is_none() {
             continue;
         }
         wp.redraw_later(UPD_SOME_VALID);
@@ -240,7 +240,7 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
     let mut idx = None;
     let mut other = false;
     for i in 0..DB_COUNT as usize {
-        if tp.tp_diffbuf[i] == window.w_buffer {
+        if tp.tp_diffbuf[i] == window.w_buffer.raw() {
             idx = Some(i);
         } else if !tp.tp_diffbuf[i].is_null() {
             other = true;
@@ -287,7 +287,7 @@ pub(crate) fn diff_fold_update(
     let skip = usize::try_from(skip_idx).unwrap_or(usize::MAX);
     for wp in windows() {
         for i in 0..DB_COUNT as usize {
-            if tp.tp_diffbuf[i] == wp.w_buffer && i != skip {
+            if tp.tp_diffbuf[i] == wp.w_buffer.raw() && i != skip {
                 fold_update(wp, lnum[i], lnum[i] + count[i]);
             }
         }

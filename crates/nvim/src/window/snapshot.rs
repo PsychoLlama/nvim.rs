@@ -47,7 +47,7 @@ fn check_lnums_both(do_curwin: bool, nested: bool) {
     let buf = Buf::current();
     let line_count = buf.line_count();
     for mut wp in tab_windows() {
-        if (!do_curwin && wp.is_current()) || wp.w_buffer != buf.raw() {
+        if (!do_curwin && wp.is_current()) || wp.w_buffer != buf {
             continue;
         }
         if !nested {
@@ -81,7 +81,7 @@ pub fn check_lnums_nested(do_curwin: bool) {
 
 pub fn reset_lnums() {
     for mut wp in tab_windows() {
-        if wp.w_buffer != Buf::current_raw() {
+        if !wp.w_buffer.is_current() {
             continue;
         }
         // Restore the value if it was changed by `check_lnums` and has not been

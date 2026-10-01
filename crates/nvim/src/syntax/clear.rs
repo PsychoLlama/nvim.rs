@@ -96,12 +96,12 @@ pub(crate) unsafe fn init_synblock(at: *mut SynBlock) {
 
 /// Get rid of `:ownsyntax` for window `window`.
 pub(crate) fn reset_synblock(mut window: Win) {
-    if window.w_s != unsafe { &raw mut (*window.w_buffer).b_s } {
+    if window.w_s != window.buffer().syntax_block() {
         unsafe { syntax_clear(window.w_s) };
         // SAFETY: an `:ownsyntax` block, which `ex_ownsyntax` boxed and
         // only this releases; a buffer's own block took the branch above.
         drop(unsafe { Box::from_raw(window.w_s) });
-        unsafe { window.w_s = &raw mut (*window.w_buffer).b_s };
+        window.w_s = window.buffer().syntax_block();
     }
 }
 
@@ -162,7 +162,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
             syntax_sync_clear();
         } else {
             unsafe { syntax_clear(cur_syn_block().raw()) };
-            if cur_syn_block().raw() == unsafe { &raw mut (*Win::current().w_buffer).b_s } {
+            if cur_syn_block().raw() == Win::current().buffer().syntax_block() {
                 let _ = unsafe { do_unlet(c"b:current_syntax".as_ptr(), 16, true) };
             }
             let _ = unsafe { do_unlet(c"w:current_syntax".as_ptr(), 16, true) };

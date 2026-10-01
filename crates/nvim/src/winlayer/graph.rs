@@ -64,10 +64,10 @@ pub(super) static curtab: GlobalCell<*mut Tabpage> =
 pub(crate) static lastused_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
 pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-/// The current buffer's address, mirroring [`CURRENT_BUF`]. Private: a
-/// buffer has no `is_current`, so nothing outside this module reads it, and
-/// [`switch_buffer`] is the one place that does.
-static curbuf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::<Buffer>());
+/// The current buffer's address, mirroring [`CURRENT_BUF`]. [`curtab`]'s
+/// shape: only `Buf::is_current` and [`switch_buffer`] read it.
+pub(super) static curbuf: GlobalCell<*mut Buffer> =
+    GlobalCell::new(::core::ptr::null_mut::<Buffer>());
 pub(crate) static cmdwin_type: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_result: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

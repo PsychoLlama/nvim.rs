@@ -81,7 +81,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
         // SAFETY: a live list.
         unsafe { (*into).push_number(VarNumber::from(handle)) };
     };
-    for wp in tab_windows().filter(|wp| wp.w_buffer == buffer.raw()) {
+    for wp in tab_windows().filter(|wp| wp.w_buffer == buffer) {
         append(wp.handle);
     }
     list(c"windows", Some(windows));

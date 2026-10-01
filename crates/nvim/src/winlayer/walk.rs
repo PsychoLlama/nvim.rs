@@ -55,8 +55,74 @@ use super::graph::{
     cmdline_win, cmdwin_win, first_tabpage, firstbuf, firstwin, lastbuf, lastused_tabpage, lastwin,
     prevwin,
 };
-use super::{Buf, BufId, FrameRef, TabId, TabPage, Win, WinId};
+use super::{Buf, BufId, FrameId, FrameRef, TabId, TabPage, Win, WinId};
 use crate::types::{Buffer, Window};
+
+// The one-step links each handle carries, which are what the walks below
+// are made of. Here rather than beside the constructors because a step is
+// safe code: a registry lookup by the id the link holds.
+
+impl Win {
+    /// The leaf frame this window sits in. Every window has one, floats
+    /// included — a float's frame is simply not linked into the layout tree.
+    #[inline(always)]
+    pub fn frame(self) -> FrameRef {
+        self.frame_or_none()
+            .expect("a live window has a frame: `win_alloc` gives it one")
+    }
+
+    /// The leaf frame this window sits in, `None` for a float whose frame
+    /// `win_float_split` has already given back.
+    #[inline(always)]
+    pub fn frame_or_none(self) -> Option<FrameRef> {
+        self.w_frame.and_then(FrameId::get)
+    }
+
+    /// The buffer this window shows, `None` once it is gone: for the
+    /// callers that ask after an autocommand may have wiped the buffer out
+    /// from under a window. The field holds the buffer's number beside its
+    /// address, so this is a registry lookup that reads nothing the wipe
+    /// freed -- the address compare against the buffer list it replaces
+    /// could be fooled by a new buffer at the old address.
+    #[inline]
+    pub(crate) fn surviving_buffer(self) -> Option<Buf> {
+        self.w_buffer.try_id().and_then(BufId::get)
+    }
+
+    /// The next window in this tab page's list, if any.
+    #[inline(always)]
+    pub fn next(self) -> Option<Self> {
+        self.w_next.and_then(WinId::get)
+    }
+
+    /// The window before this one in its tab page's list, if any.
+    #[inline(always)]
+    pub fn prev(self) -> Option<Self> {
+        self.w_prev.and_then(WinId::get)
+    }
+}
+
+impl Buf {
+    /// The next buffer in the editor's buffer list, if any.
+    #[inline(always)]
+    pub fn next(self) -> Option<Self> {
+        self.b_next.and_then(BufId::get)
+    }
+
+    /// The buffer before this one in the editor's buffer list, if any.
+    #[inline(always)]
+    pub fn prev(self) -> Option<Self> {
+        self.b_prev.and_then(BufId::get)
+    }
+}
+
+impl TabPage {
+    /// The next tab page in the editor's list, if any.
+    #[inline(always)]
+    pub fn next(self) -> Option<Self> {
+        self.tp_next.and_then(TabId::get)
+    }
+}
 
 /// `first` and every window after it in its tab page's list.
 pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {

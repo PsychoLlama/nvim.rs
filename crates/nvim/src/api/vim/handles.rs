@@ -88,7 +88,7 @@ pub fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
         return Ok(());
     };
     api_try(|| {
-        if w.w_buffer != Buf::current_raw() {
+        if !w.w_buffer.is_current() {
             reset_visual_and_resel();
         }
         let tab = win_find_tabpage(w.id()).expect("a live window is on a tab page");

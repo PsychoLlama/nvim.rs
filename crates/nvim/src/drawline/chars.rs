@@ -299,7 +299,7 @@ impl Cells {
             wlv.char_attr = hl_combine_attr(self.attr_base, self.attr_pri);
         }
 
-        if !unsafe { (*window.w_buffer).terminal }.is_null() {
+        if !window.w_buffer.terminal.is_null() {
             let term_attr = if wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int {
                 unsafe { *f.term_attrs.offset(wlv.vcol as isize) }
             } else {
@@ -516,13 +516,7 @@ impl Cells {
             self.search_attr = 0;
         }
         if self.char_code == TAB && wlv.extra_todo + wlv.col > self.view_width {
-            wlv.extra_todo = unsafe {
-                tabstop_padding(
-                    wlv.vcol,
-                    (*window.w_buffer).b_p_ts,
-                    (*window.w_buffer).b_p_vts_array,
-                )
-            } - 1;
+            wlv.extra_todo = window.w_buffer.tab_padding(wlv.vcol) - 1;
         }
         wlv.extra_fill = schar_from_ascii(if mb_off > 0 { MB_FILLER_CHAR } else { b' ' });
         wlv.extra_last = NUL as ScreenChar;

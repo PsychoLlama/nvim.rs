@@ -520,7 +520,7 @@ pub fn update_screen() -> Result<(), Failed> {
     // Reset `b_mod_set`. Going through the windows is probably faster than
     // going through every buffer.
     for mut wp in winlayer::windows() {
-        unsafe { (*wp.w_buffer).b_mod_set = false };
+        wp.w_buffer.b_mod_set = false;
     }
 
     updating_screen.set(false);
@@ -685,7 +685,7 @@ pub fn number_width(mut window: Win) -> c_int {
     let largest = if window.w_onebuf_opt.wo_rnu != 0 && window.w_onebuf_opt.wo_nu == 0 {
         window.w_view_height as LineNr
     } else {
-        unsafe { (*window.w_buffer).b_ml.ml_line_count }
+        window.w_buffer.b_ml.ml_line_count
     };
 
     if largest == window.w_nrwidth_line_count {

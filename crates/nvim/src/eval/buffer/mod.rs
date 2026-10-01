@@ -142,7 +142,7 @@ impl SavedBufferState {
         buffer.make_current();
         find_win_for_curbuf();
         let current = Win::current();
-        if current.w_buffer != buffer.raw() {
+        if current.w_buffer != buffer {
             // No existing window for this buffer. It is dangerous to have
             // `curwin->w_buffer` differ from `curbuf`, so use the autocmd
             // window.
@@ -182,7 +182,7 @@ fn find_win_for_curbuf() {
         let Some(win) = (unsafe { (*wip).wi_win }).and_then(WinId::get) else {
             continue;
         };
-        if win.w_buffer == Buf::current_raw() {
+        if win.w_buffer.is_current() {
             win.make_current();
             break;
         }

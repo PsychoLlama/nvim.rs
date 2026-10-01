@@ -164,6 +164,16 @@ pub unsafe fn tabstop_padding(col: ColNr, ts: OptInt, vts: *const ColNr) -> c_in
     }
 }
 
+impl Buf {
+    /// How many columns from `col` to this buffer's next tabstop, by its
+    /// `'tabstop'` and `'vartabstop'`.
+    #[inline]
+    pub fn tab_padding(self, col: ColNr) -> ColNr {
+        // SAFETY: the buffer's own 'vartabstop' array, or null.
+        unsafe { tabstop_padding(col, self.b_p_ts, self.b_p_vts_array) }
+    }
+}
+
 /// The width of the tabstop at `col`; with `left`, of the one a cursor
 /// moving back would cross.
 ///
@@ -453,8 +463,7 @@ struct IndentPlan {
 unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> IndentPlan {
     let buf = Buf::current_raw();
     let preserve = flags & SIN_INSERT as c_int == 0 && unsafe { (*buf).b_p_pi } != 0;
-    let pad =
-        |col: c_int| unsafe { tabstop_padding(col as ColNr, (*buf).b_p_ts, (*buf).b_p_vts_array) };
+    let pad = |col: c_int| Buf::current().tab_padding(col as ColNr);
     let mut plan = IndentPlan {
         doit: false,
         ind_len: 0,
@@ -543,8 +552,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
     let oldline = get_cursor_line_ptr();
     // The size of the line, including the NUL.
     let mut line_len = get_cursor_line_len() + 1;
-    let pad =
-        |col: c_int| unsafe { tabstop_padding(col as ColNr, (*buf).b_p_ts, (*buf).b_p_vts_array) };
+    let pad = |col: c_int| Buf::current().tab_padding(col as ColNr);
     // `STRICT_ADD`/`STRICT_SUB` (`macros.h`): the arithmetic sizing the
     // replacement line must not wrap, and upstream logs and aborts rather
     // than trusting a wrapped answer. `line` is the site in

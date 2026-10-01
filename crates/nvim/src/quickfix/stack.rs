@@ -400,12 +400,12 @@ unsafe fn wipe_qf_buffer(qi: *mut QfInfo) {
     // already released the current window's buffer.
     let buf_was_null = Win::current().w_buffer.is_null();
     if buf_was_null {
-        Win::current().w_buffer = Buf::current_raw();
+        Win::current().w_buffer = Buf::current_or_none().unwrap_or(Buf::NULL);
     }
     close_buffer(None, qfbuf, DOBUF_WIPE as c_int, false, false);
     qi.qf_bufnr = INVALID_QFBUFNR;
     if buf_was_null {
-        Win::current().w_buffer = ptr::null_mut();
+        Win::current().w_buffer = Buf::NULL;
     }
 }
 

@@ -308,7 +308,7 @@ pub fn mark_adjust_buf(
     // NOT under the `:lockmarks` guard above — upstream leaves them out, and
     // `:lockmarks` is documented as being about the *named* marks.
     let mut curwin_handle = Win::current();
-    if curwin_handle.w_buffer == buffer.raw() {
+    if curwin_handle.w_buffer == buffer {
         shift.line(&mut curwin_handle.w_pcmark.lnum);
         shift.line(&mut curwin_handle.w_prev_pcmark.lnum);
         let mut saved = saved_cursor.get();
@@ -324,7 +324,7 @@ pub fn mark_adjust_buf(
                 shift.mark_nodel_in(jump.fmark(), fnum);
             }
         }
-        if win.w_buffer != buffer.raw() {
+        if win.w_buffer != buffer {
             continue;
         }
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
@@ -475,7 +475,7 @@ pub fn mark_col_adjust(
         for jump in win.jumps() {
             shift.mark_in(jump.fmark(), fnum);
         }
-        if win.w_buffer != buf.raw() {
+        if win.w_buffer != buf {
             continue;
         }
         for tag in win.tag_marks() {

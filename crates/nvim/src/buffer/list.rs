@@ -874,7 +874,7 @@ fn match_pattern(
                 }
                 // Ignore the match when the buffer is not open in the
                 // current tab page.
-                if curtab_only && !windows().any(|win| win.w_buffer == b.raw()) {
+                if curtab_only && !windows().any(|win| win.w_buffer == b) {
                     continue;
                 }
                 if matched >= 0 {

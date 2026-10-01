@@ -208,7 +208,7 @@ pub(crate) fn decor_providers_invoke_spell(
         if p.state != kDecorProviderDisabled && p.spell_nav != LUA_NOREF {
             let mut args = ArrayBuf::<6>::new();
             args.push(Object::integer(window.handle.into()));
-            args.push(Object::integer(unsafe { (*window.w_buffer).handle }.into()));
+            args.push(Object::integer(window.w_buffer.handle().into()));
             args.push(Object::integer(start_row.into()));
             args.push(Object::integer(start_col.into()));
             args.push(Object::integer(end_row.into()));
@@ -223,14 +223,13 @@ pub(crate) fn decor_providers_invoke_spell(
 
 /// Ask every `_on_conceal_line` callback about `row`.
 pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bool {
-    // SAFETY: the caller's window; the callbacks re-enter the editor.
-    let keys = unsafe { (*window.w_buffer).b_marktree.n_keys };
+    let keys = window.buffer().b_marktree.n_keys;
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.conceal_line != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
             args.push(Object::integer(window.handle.into()));
-            args.push(Object::integer(unsafe { (*window.w_buffer).handle }.into()));
+            args.push(Object::integer(window.w_buffer.handle().into()));
             args.push(Object::integer(row.into()));
             let (name, cb, args) = (c"conceal_line".as_ptr(), p.conceal_line, args.array());
             // SAFETY: the provider is named by index, so the vector may
@@ -238,8 +237,7 @@ pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bo
             unsafe { decor_provider_invoke(idx, name, cb, args, true, None) };
         }
     }
-    // SAFETY: `window` is live, so its buffer and marktree are.
-    let now = unsafe { (*window.w_buffer).b_marktree.n_keys };
+    let now = window.buffer().b_marktree.n_keys;
     now > keys
 }
 
@@ -307,9 +305,7 @@ pub(crate) fn decor_providers_invoke_win(window: Win, state: DecorStateRef) {
     if provider_count() > 0 {
         validate_botline_win(window);
     }
-    let botline: LineNr = window
-        .w_botline
-        .min(unsafe { (*window.w_buffer).b_ml.ml_line_count });
+    let botline: LineNr = window.w_botline.min(window.w_buffer.b_ml.ml_line_count);
 
     for idx in 0..provider_count() {
         let p = with_provider(idx, |p| {
@@ -324,7 +320,7 @@ pub(crate) fn decor_providers_invoke_win(window: Win, state: DecorStateRef) {
         if p.state == kDecorProviderActive && p.redraw_win != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
             args.push(Object::window(window.handle));
-            args.push(Object::buffer(unsafe { (*window.w_buffer).handle }));
+            args.push(Object::buffer(window.w_buffer.handle()));
             // TODO(bfredl): we are not using this, but should be first drawn line?
             args.push(Object::integer((window.w_topline - 1).into()));
             args.push(Object::integer((botline - 1).into()));
@@ -348,7 +344,7 @@ pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
         if p.state == kDecorProviderActive && p.redraw_line != LUA_NOREF {
             let mut args = ArrayBuf::<3>::new();
             args.push(Object::window(window.handle));
-            args.push(Object::buffer(unsafe { (*window.w_buffer).handle }));
+            args.push(Object::buffer(window.w_buffer.handle()));
             args.push(Object::integer(row.into()));
             let (name, cb, args) = (c"line".as_ptr(), p.redraw_line, args.array());
             // SAFETY: as above.
@@ -386,7 +382,7 @@ pub(crate) fn decor_providers_invoke_range(
 
         let mut args = ArrayBuf::<6>::new();
         args.push(Object::window(window.handle));
-        args.push(Object::buffer(unsafe { (*window.w_buffer).handle }));
+        args.push(Object::buffer(window.w_buffer.handle()));
         args.push(Object::integer(start_row.into()));
         args.push(Object::integer(start_col.into()));
         args.push(Object::integer(end_row.into()));

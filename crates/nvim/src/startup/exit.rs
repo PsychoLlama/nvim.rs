@@ -48,7 +48,7 @@ use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, tcdrain};
 
-use crate::winlayer::{Buf, WinId, buffer_at, buffers, first_buffer, first_tab, first_window};
+use crate::winlayer::{Buf, WinId, buffers, first_buffer, first_tab, first_window};
 /// Shut the process down. Every exit path ends here, including the ones that
 /// skipped the autocommands.
 ///
@@ -144,8 +144,8 @@ pub fn getout(mut exitval: c_int) -> ! {
             };
             while let Some(wp) = win {
                 // An autocommand may already have closed the buffer, so the
-                // address is put back on the buffer list before it is read.
-                let live = buffer_at(wp.w_buffer);
+                // window's buffer is looked up by number before it is read.
+                let live = wp.surviving_buffer();
                 if let Some(buffer) = live.filter(|b| buf_get_changedtick(*b) != -1) {
                     let bufref = BufRef::of(buffer);
                     let fname = buffer.name.shown_ptr();

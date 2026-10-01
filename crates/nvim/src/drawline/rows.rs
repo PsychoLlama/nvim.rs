@@ -366,7 +366,7 @@ impl Cells {
             || wlv.line_attr_lowprio != 0
             || wlv.line_attr != 0
             || wlv.diff_hlf != HLF_NONE
-            || !unsafe { (*window.w_buffer).terminal }.is_null()
+            || !window.w_buffer.terminal.is_null()
         {
             self.fill_past_eol(wlv, window, f);
         }
@@ -426,8 +426,7 @@ impl Cells {
             0
         };
         let base_attr = hl_combine_attr(wlv.line_attr_lowprio, diff_attr);
-        if base_attr != 0 || wlv.line_attr != 0 || !unsafe { (*window.w_buffer).terminal }.is_null()
-        {
+        if base_attr != 0 || wlv.line_attr != 0 || !window.w_buffer.terminal.is_null() {
             // Something applies to the whole row, so there is no column to
             // stop at.
             rightmost_vcol = ::core::ffi::c_int::MAX;
@@ -446,7 +445,7 @@ impl Cells {
             } else if !wlv.color_cols.is_null() && wlv.hl_vcol() == unsafe { *wlv.color_cols } {
                 col_attr = hl_combine_attr(col_attr, mc_attr);
             }
-            if !unsafe { (*window.w_buffer).terminal }.is_null()
+            if !window.w_buffer.terminal.is_null()
                 && wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int
             {
                 col_attr =

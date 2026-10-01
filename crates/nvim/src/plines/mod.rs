@@ -609,12 +609,9 @@ unsafe fn charsize_fast_impl(
 ) -> CharSize {
     // A tab is expanded according to the column it starts at.
     if cur_char == TAB && use_tabstop {
-        // SAFETY: a live window's buffer is live, and its 'vartabstop' array
-        // is its own.
-        let width = unsafe {
-            let buf = window.w_buffer;
-            tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array)
-        };
+        let buf = window.buffer();
+        // SAFETY: the buffer's 'vartabstop' array is its own.
+        let width = buf.tab_padding(vcol);
         return CharSize { width, head: 0 };
     }
 

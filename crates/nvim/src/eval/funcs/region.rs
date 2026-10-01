@@ -123,7 +123,7 @@ impl Drop for BufferSwap {
     fn drop(&mut self) {
         self.buf.make_current();
         // `curwin` is live for the whole of a builtin call.
-        Win::current().w_buffer = self.buf.raw();
+        Win::current().w_buffer = self.buf;
         virtual_op.set(self.virtual_op);
     }
 }
@@ -191,7 +191,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     check_corner(findbuf, &mut p2)?;
 
     findbuf.make_current();
-    Win::current().w_buffer = findbuf.raw();
+    Win::current().w_buffer = findbuf;
     virtual_op.set(Some(virtual_active(Win::current())));
 
     // Columns are one-based on the way in and zero-based from here.

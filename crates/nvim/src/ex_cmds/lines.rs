@@ -211,7 +211,7 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 fn move_folds_in_windows(line1: LineNr, line2: LineNr, dest: LineNr) {
     for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
-        if unsafe { (*wp).w_buffer } == Buf::current_raw() {
+        if unsafe { (*wp).w_buffer }.is_current() {
             unsafe { fold_move_range(&raw mut (*wp).w_folds, line1, line2, dest) };
         }
     }

@@ -488,9 +488,9 @@ fn changed_check_order() -> Vec<c_int> {
     // SAFETY: caller contract; none of these walks runs editor code.
     let mut nrs = Vec::new();
     nrs.push(Buf::current().handle as c_int);
-    for wp in windows().map(Win::raw) {
-        if unsafe { (*wp).w_buffer } != Buf::current_raw() {
-            push_unique(&mut nrs, unsafe { (*(*wp).w_buffer).handle } as c_int);
+    for wp in windows() {
+        if !wp.w_buffer.is_current() {
+            push_unique(&mut nrs, wp.w_buffer.handle() as c_int);
         }
     }
     for (tp, wp) in tab_windows() {

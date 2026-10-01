@@ -243,7 +243,7 @@ pub(crate) fn u_saveline(mut buffer: Buf, lnum: LineNr) {
     }
     u_clearline(buffer);
     buffer.b_u_line_lnum = lnum;
-    if Win::current().w_buffer == buffer.raw() && Win::current().w_cursor.lnum == lnum {
+    if Win::current().w_buffer == buffer && Win::current().w_cursor.lnum == lnum {
         buffer.b_u_line_colnr = Win::current().w_cursor.col;
     } else {
         buffer.b_u_line_colnr = 0;

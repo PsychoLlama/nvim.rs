@@ -130,7 +130,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
     let win: Option<Win> = if same_buffer {
         Some(Win::current())
     } else {
-        windows().find(|wp| wp.w_buffer == buffer.raw())
+        windows().find(|wp| wp.w_buffer == buffer)
     };
 
     // Allocate an autocommand window when there is no window to use.
@@ -177,8 +177,8 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         // `buffer`, and a write through a handle would pop it.
         let auc = auc_win.expect("the slot was given a window above");
         let auc_win = auc.raw();
-        unsafe { (*auc_win).w_buffer = buffer.raw() };
-        unsafe { (*auc_win).w_s = &raw mut buffer.b_s };
+        unsafe { (*auc_win).w_buffer = buffer };
+        unsafe { (*auc_win).w_s = buffer.syntax_block() };
         buffer.b_nwindows += 1;
         win_init_empty(auc);
 
@@ -330,15 +330,15 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             let new_curbuf = BufRef::of_record(unsafe { (*aco).new_curbuf });
             if Win::current().handle == unsafe { (*aco).new_curwin_handle }
                 && !new_curbuf.is(Buf::current_or_none())
-                && let Some(mut new_curbuf) = new_curbuf.get()
+                && let Some(new_curbuf) = new_curbuf.get()
                 && !new_curbuf.b_ml.ml_mfp.is_null()
             {
-                if Win::current().w_s == unsafe { &raw mut (*Buf::current_raw()).b_s } {
-                    Win::current().w_s = &raw mut new_curbuf.b_s;
+                if Win::current().w_s == Buf::current().syntax_block() {
+                    Win::current().w_s = new_curbuf.syntax_block();
                 }
                 Buf::current().b_nwindows -= 1;
                 new_curbuf.make_current();
-                Win::current().w_buffer = new_curbuf.raw();
+                Win::current().w_buffer = new_curbuf;
                 Buf::current().b_nwindows += 1;
             }
 

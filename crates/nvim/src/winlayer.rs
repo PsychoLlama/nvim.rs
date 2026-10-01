@@ -164,8 +164,10 @@ use crate::drawscreen::redraw_later;
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
-use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, Tabpage, Window};
-use crate::winlayer::graph::{curtab, curwin};
+use crate::types::{
+    Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, SynBlock, Tabpage, Window,
+};
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -503,22 +505,7 @@ impl Win {
     /// hand an `Option<Buf>`, and the two names differ so the grep is easy.
     #[inline(always)]
     pub fn buffer(self) -> Buf {
-        Buf::at_field(self.w_buffer)
-    }
-
-    /// The leaf frame this window sits in. Every window has one, floats
-    /// included — a float's frame is simply not linked into the layout tree.
-    #[inline(always)]
-    pub fn frame(self) -> FrameRef {
-        self.frame_or_none()
-            .expect("a live window has a frame: `win_alloc` gives it one")
-    }
-
-    /// The leaf frame this window sits in, `None` for a float whose frame
-    /// `win_float_split` has already given back.
-    #[inline(always)]
-    pub fn frame_or_none(self) -> Option<FrameRef> {
-        self.w_frame.and_then(FrameId::get)
+        self.w_buffer
     }
 
     /// The window's cursor, which lives inside the window.
@@ -542,19 +529,7 @@ impl Win {
     pub fn buffer_or_none(self) -> Option<Buf> {
         // A live window's `w_buffer` is a live buffer or null.
         let buf = self.w_buffer;
-        (!buf.is_null()).then(|| Buf::at_field(buf))
-    }
-
-    /// The next window in this tab page's list, if any.
-    #[inline(always)]
-    pub fn next(self) -> Option<Self> {
-        self.w_next.and_then(WinId::get)
-    }
-
-    /// The window before this one in its tab page's list, if any.
-    #[inline(always)]
-    pub fn prev(self) -> Option<Self> {
-        self.w_prev.and_then(WinId::get)
+        (!buf.is_null()).then_some(buf)
     }
 
     #[inline(always)]
@@ -657,6 +632,31 @@ impl Buf {
         self.ptr
     }
 
+    /// The address of this buffer's own syntax block, `b_s`: what a window's
+    /// `w_s` points at unless `:ownsyntax` gave it one of its own. Computed
+    /// from the base as [`Win::cursor`] is, so saying where the block is
+    /// forms no borrow of the buffer -- `&raw mut buf.b_s` goes through
+    /// [`DerefMut`] and pops every pointer already taken into it.
+    #[inline(always)]
+    pub fn syntax_block(self) -> *mut SynBlock {
+        self.ptr.wrapping_byte_add(offset_of!(Buffer, b_s)).cast()
+    }
+
+    /// Whether this is the null buffer: a window between losing a buffer
+    /// and being given another. Reads nothing.
+    #[inline(always)]
+    pub fn is_null(self) -> bool {
+        self.ptr.is_null()
+    }
+
+    /// Whether this is the buffer the editor is working in. [`Win::is_current`]:
+    /// an address compare, so a null `Buf` against no current buffer answers
+    /// `true`, as the C's `wp->w_buffer == curbuf` did.
+    #[inline(always)]
+    pub fn is_current(self) -> bool {
+        self.ptr == curbuf.get()
+    }
+
     /// This buffer's number: the handle the API and `:ls` show, and what the
     /// registry finds it by. [`Win::handle`] for a buffer — a field load.
     #[inline(always)]
@@ -741,18 +741,6 @@ impl Buf {
     pub fn snap_to_char(self, pos: PosRef) {
         // SAFETY: a live buffer and a live position in it.
         unsafe { mark_mb_adjustpos(self, pos.0) };
-    }
-
-    /// The next buffer in the editor's buffer list, if any.
-    #[inline(always)]
-    pub fn next(self) -> Option<Self> {
-        self.b_next.and_then(BufId::get)
-    }
-
-    /// The buffer before this one in the editor's buffer list, if any.
-    #[inline(always)]
-    pub fn prev(self) -> Option<Self> {
-        self.b_prev.and_then(BufId::get)
     }
 }
 
@@ -885,12 +873,6 @@ impl TabPage {
     #[inline(always)]
     pub fn into_other(self) -> Option<Self> {
         (!self.is_current()).then_some(self)
-    }
-
-    /// The next tab page in the editor's list, if any.
-    #[inline(always)]
-    pub fn next(self) -> Option<Self> {
-        self.tp_next.and_then(TabId::get)
     }
 
     /// The root of this tab page's layout tree, `tp_topframe` verbatim.

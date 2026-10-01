@@ -124,7 +124,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         // Autocommands have closed all windows, quit now. Restore
         // `curwin->w_buffer`, or writing the ShaDa file may fail.
         if Win::current().buffer_or_none().is_none() {
-            Win::current().w_buffer = Buf::current_raw();
+            Win::current().w_buffer = Buf::current_or_none().unwrap_or(Buf::NULL);
         }
         quit_now();
     }
@@ -344,7 +344,7 @@ fn leave_closing_window(win: Win) -> Leave {
     // Be careful: if autocommands delete the window, or leave it the last one,
     // return now.
     let mut other_buffer = false;
-    if wp.w_buffer != Buf::current_raw() {
+    if !wp.w_buffer.is_current() {
         reset_visual_and_resel(); // stop Visual mode
         other_buffer = true;
         if valid_win(win.id()).is_none() {

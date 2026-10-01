@@ -323,7 +323,7 @@ fn wininfo_other_tab_diff(entry: Entry) -> bool {
 /// `skip_diff_buffer` skips windows whose `'diff'` is another tab page's.
 fn find_wininfo(buffer: &mut Buf, need_options: bool, skip_diff_buffer: bool) -> Option<Entry> {
     let cur = Some(current_win());
-    let raw_buf = buffer.raw();
+    let wanted = *buffer;
     let list = WinInfos::of(buffer);
     let found = list.entries().iter().find(|e| {
         e.window() == cur
@@ -347,7 +347,7 @@ fn find_wininfo(buffer: &mut Buf, need_options: bool, skip_diff_buffer: bool) ->
                     && (!need_options
                         || e.wi_optset
                         || !e.window().is_none()
-                            && e.window().is_some_and(|w| w.w_buffer == raw_buf))
+                            && e.window().is_some_and(|w| w.w_buffer == wanted))
             })
             .copied();
     }
@@ -369,9 +369,7 @@ pub fn get_winopts(mut buffer: Buf) {
         // The entry names another window still showing this buffer: copy
         // from the window itself, so that its current values are used.
         (Some(_), Some(mut wp))
-            if wp != cur
-                && wp.w_buffer == buffer.raw()
-                && wp.w_config.style != kWinStyleMinimal =>
+            if wp != cur && wp.w_buffer == buffer && wp.w_config.style != kWinStyleMinimal =>
         {
             copy_options(&raw mut wp.w_onebuf_opt, &raw mut cur.w_onebuf_opt);
             cur.w_fold_manual = wp.w_fold_manual;

@@ -146,9 +146,9 @@ pub(super) fn switch_to_other_buffer(
         // b_nwindows again.
         if oldwin.is_none()
             && !Win::current().w_buffer.is_null()
-            && unsafe { (*Win::current().w_buffer).b_nwindows } > 1
+            && Win::current().w_buffer.b_nwindows > 1
         {
-            unsafe { (*Win::current().w_buffer).b_nwindows -= 1 };
+            Win::current().w_buffer.b_nwindows -= 1;
         }
         emsg(gettext(e_cannot_switch_to_a_closing_buffer));
         return Switch::Abandon;
@@ -327,19 +327,19 @@ fn leave_for_buffer(
             && old.w_buffer.is_null()
             && let Some(buf) = was_curbuf.get()
         {
-            old.w_buffer = buf.raw();
+            old.w_buffer = buf;
         }
         state.auto_buf = true;
     } else {
         // <VN> We could instead free the synblock and re-attach to the
         // buffer, perhaps.
         if Win::current().w_buffer.is_null()
-            || Win::current().w_s == unsafe { &raw mut (*Win::current().w_buffer).b_s }
+            || Win::current().w_s == Win::current().buffer().syntax_block()
         {
-            Win::current().w_s = &raw mut buffer.b_s;
+            Win::current().w_s = buffer.syntax_block();
         }
 
-        Win::current().w_buffer = buffer.raw();
+        Win::current().w_buffer = buffer;
         buffer.make_current();
         Buf::current().b_nwindows += 1;
 

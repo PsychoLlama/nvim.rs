@@ -172,7 +172,7 @@ pub unsafe fn spell_move_to(
             }
             skip::white(line) == line.len()
         };
-        if lnum < unsafe { (*window.w_buffer).b_ml.ml_line_count } {
+        if lnum < window.w_buffer.b_ml.ml_line_count {
             let next = lines.line(lnum + 1);
             // SAFETY: `buf` has `MAXWLEN + 2` bytes spare after the line,
             // and `next` is a cached line, NUL-terminated where the cache
@@ -293,7 +293,7 @@ pub unsafe fn spell_move_to(
             } else {
                 // Wrap to the end. The starting line may be searched
                 // again, to accept its last match.
-                lnum = unsafe { (*window.w_buffer).b_ml.ml_line_count };
+                lnum = window.w_buffer.b_ml.ml_line_count;
                 wrapped = true;
                 if !shortmess(ShmFlag::SEARCH) {
                     unsafe { give_warning(gettext(top_bot_msg).as_ptr(), true, false) };
@@ -301,7 +301,7 @@ pub unsafe fn spell_move_to(
             }
             capcol = -1;
         } else {
-            if lnum < unsafe { (*window.w_buffer).b_ml.ml_line_count } {
+            if lnum < window.w_buffer.b_ml.ml_line_count {
                 lnum += 1;
             } else if !p_ws() {
                 break; // at the last line and 'nowrapscan'

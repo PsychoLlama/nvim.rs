@@ -121,7 +121,7 @@ pub(crate) unsafe fn parse_diffanchors(
     let bufwin = if check_only {
         None
     } else {
-        let shown = windows().find(|w| w.w_buffer == buffer.raw() && w.w_onebuf_opt.wo_diff != 0);
+        let shown = windows().find(|w| w.w_buffer == buffer && w.w_onebuf_opt.wo_diff != 0);
         if shown.is_none() && dia[at] != 0 {
             emsg(gettext(e_diff_anchors_with_hidden_windows));
             return Err(Failed);

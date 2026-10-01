@@ -155,11 +155,11 @@ fn clamp_entries(len: c_int) -> c_int {
 ///
 /// Called from `update_screen()` before the screen is updated, once for each
 /// displayed buffer.
-pub(crate) fn syn_stack_apply_changes(mut buffer: Buf) {
-    unsafe { syn_stack_apply_changes_block(SynBlockRef::new(&raw mut buffer.b_s), buffer) };
+pub(crate) fn syn_stack_apply_changes(buffer: Buf) {
+    unsafe { syn_stack_apply_changes_block(SynBlockRef::new(buffer.syntax_block()), buffer) };
 
     for wp in windows() {
-        if wp.w_buffer == buffer.raw() && wp.w_s != &raw mut buffer.b_s {
+        if wp.w_buffer == buffer && wp.w_s != buffer.syntax_block() {
             unsafe { syn_stack_apply_changes_block(SynBlockRef::new(wp.w_s), buffer) };
         }
     }

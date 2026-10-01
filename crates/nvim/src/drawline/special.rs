@@ -273,13 +273,7 @@ impl Cells {
         } else {
             wlv.vcol
         };
-        let mut tab_len = unsafe {
-            tabstop_padding(
-                vcol_adjusted,
-                (*window.w_buffer).b_p_ts,
-                (*window.w_buffer).b_p_vts_array,
-            )
-        } - 1;
+        let mut tab_len = window.w_buffer.tab_padding(vcol_adjusted) - 1;
 
         if window.w_onebuf_opt.wo_lbr == 0 || window.w_onebuf_opt.wo_list == 0 {
             wlv.extra_todo = tab_len;

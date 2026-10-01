@@ -581,10 +581,10 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         {
             // Open the memline.
             scratch.make_current();
-            Win::current().w_buffer = scratch.raw();
+            Win::current().w_buffer = scratch;
             saved = ml_open(Buf::current());
             buffer.make_current();
-            Win::current().w_buffer = buffer.raw();
+            Win::current().w_buffer = buffer;
         }
         if saved.is_err()
             || buffer.raw() != Buf::current_raw()

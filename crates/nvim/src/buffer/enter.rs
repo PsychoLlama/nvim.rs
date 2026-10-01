@@ -280,7 +280,7 @@ fn leave_prevbuf(
     let prevbuf = prevbufref
         .get()
         .expect("the caller has just revalidated the buffer");
-    if prevbuf.raw() == Win::current().w_buffer {
+    if prevbuf == Win::current().w_buffer {
         reset_syntax(Win::current());
     }
     if unload
@@ -308,7 +308,7 @@ fn leave_prevbuf(
         sync_undo();
     }
     // The window `prevbuf` is leaving, when it is the current one.
-    let window = Win::current_or_none().filter(|win| prevbuf.raw() == win.w_buffer);
+    let window = Win::current_or_none().filter(|win| prevbuf == win.w_buffer);
     let how = if unload {
         action
     } else if action == DOBUF_GOTO as c_int && !may_hide(prevbuf) && !is_changed(prevbuf) {
@@ -338,7 +338,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
 
     // Get the buffer in the current window.
     let mut win = Win::current();
-    win.w_buffer = buffer.raw();
+    win.w_buffer = buffer;
     buffer.make_current();
     buffer.b_nwindows += 1;
 
@@ -356,7 +356,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
         diff_add(Buf::current());
     }
 
-    win.w_s = &raw mut buffer.b_s;
+    win.w_s = buffer.syntax_block();
 
     // Cursor on first line by default.
     let mut cursor = win.cursor();

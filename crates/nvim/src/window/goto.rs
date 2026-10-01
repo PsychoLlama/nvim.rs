@@ -61,7 +61,7 @@ pub(crate) fn goto_win(window: Win) {
         return;
     }
 
-    if window.w_buffer != Buf::current_raw() {
+    if !window.w_buffer.is_current() {
         // careful: triggers ModeChanged autocommand
         reset_visual_and_resel();
     } else if visual_active() {
@@ -276,7 +276,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
     if !curwin_invalid && flags & WEE_TRIGGER_LEAVE_AUTOCMDS as c_int != 0 {
         // Be careful: if autocommands delete the window, return now.
-        if window.w_buffer != Buf::current_raw() {
+        if !window.w_buffer.is_current() {
             fire(AutoEvent::BufLeave, Buf::current());
             other_buffer = true;
             if valid_win(window.id()).is_none() {
@@ -294,7 +294,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
 
     // sync undo before leaving the current buffer
-    if flags & WEE_UNDO_SYNC as c_int != 0 && Buf::current_raw() != window.w_buffer {
+    if flags & WEE_UNDO_SYNC as c_int != 0 && !window.w_buffer.is_current() {
         // SAFETY: reads the current buffer's undo state.
         u_sync(false);
     }
@@ -304,7 +304,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         update_topline(Win::current());
     }
     // may have to copy the buffer options when 'cpo' contains 'S'
-    if window.w_buffer != Buf::current_raw() {
+    if !window.w_buffer.is_current() {
         let flags = BCO_ENTER as c_int | BCO_NOHELP as c_int;
         buf_copy_options(window.buffer(), flags);
     }
@@ -464,11 +464,11 @@ pub fn buf_jump_open_win(buffer: Buf) -> Option<Win> {
 /// Enter the first window of the current tab page showing `buffer`, if there is
 /// one.
 pub(crate) fn jump_open_win(buffer: Buf) -> Option<Win> {
-    if Win::current().w_buffer == buffer.raw() {
+    if Win::current().w_buffer == buffer {
         enter(Win::current(), false);
         return Some(Win::current());
     }
-    let wp = windows().find(|wp| wp.w_buffer == buffer.raw())?;
+    let wp = windows().find(|wp| wp.w_buffer == buffer)?;
     enter(wp, false);
     Some(wp)
 }
@@ -489,7 +489,7 @@ pub(crate) fn jump_open_tab(buffer: Buf) -> Option<Win> {
             continue;
         }
         for wp in windows_in_tab(tp) {
-            if wp.w_buffer == buffer.raw() {
+            if wp.w_buffer == buffer {
                 goto_tab_win(tp, wp);
                 // If the current window did not switch, something went wrong.
                 return wp.is_current().then_some(wp);

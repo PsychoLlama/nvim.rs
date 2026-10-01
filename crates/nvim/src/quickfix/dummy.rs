@@ -176,7 +176,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buffer: Buf, dirname_start: *const c_
         // closing it actually worked — otherwise this would spin.
         let mut did_one = false;
         if windows().nth(1).is_some()
-            && let Some(wp) = windows().find(|wp| ptr::eq(wp.w_buffer, buffer.raw()))
+            && let Some(wp) = windows().find(|wp| wp.w_buffer == buffer)
         {
             did_one = win_close(wp, false, false) == OK;
         }

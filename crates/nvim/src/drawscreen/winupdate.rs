@@ -160,7 +160,7 @@ pub(crate) fn win_update(window: Win) {
     // The sign column width is per buffer, so a change to it invalidates
     // every window showing that buffer -- including this one.
     for win in winlayer::windows() {
-        if win.w_buffer == buf.raw() && win_redraw_signcols(win) {
+        if win.w_buffer == buf && win_redraw_signcols(win) {
             changed_line_abv_curs_win(win);
             redraw_later(win, UPD_NOT_VALID);
         }

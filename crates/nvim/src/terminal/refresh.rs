@@ -269,7 +269,7 @@ fn clear_invalid(mut term: Term) {
 
 /// Every window showing `buffer`.
 fn windows_showing(buffer: Buf) -> impl Iterator<Item = Win> {
-    tab_windows().filter(move |wp| wp.w_buffer == buffer.raw())
+    tab_windows().filter(move |wp| wp.w_buffer == buffer)
 }
 
 /// Keep every window on `buffer` looking at the bottom of the terminal.

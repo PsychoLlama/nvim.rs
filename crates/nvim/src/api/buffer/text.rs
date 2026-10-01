@@ -306,7 +306,7 @@ impl Replacement {
             true,
         );
         for win in tab_windows() {
-            if win.w_buffer != b.raw() {
+            if win.w_buffer != b {
                 continue;
             }
             let cursor = win.w_cursor.lnum as Integer;

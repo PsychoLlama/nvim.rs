@@ -12,7 +12,6 @@
 
 #![forbid(unsafe_code)]
 
-use crate::winlayer::Buf;
 use core::ffi::c_int;
 
 use super::*;
@@ -153,7 +152,7 @@ pub(crate) fn exchange(prenum: c_int) {
     frame_fix_width(wp);
     comp_positions();
 
-    if wp.w_buffer != Buf::current_raw() {
+    if !wp.w_buffer.is_current() {
         reset_visual_and_resel();
     } else if visual_active() {
         wp.w_cursor = cur.w_cursor;

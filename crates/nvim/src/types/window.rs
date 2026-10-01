@@ -14,7 +14,7 @@ use crate::memory::XString;
 use crate::r#move::WinValid;
 use crate::registry::IdSet;
 use crate::types::Failed;
-use crate::winlayer::{FrameId, TabId, WinId};
+use crate::winlayer::{Buf, FrameId, TabId, WinId};
 
 pub struct SwitchWin {
     /// The window and tab page to go back to. Handles: `switch_win` runs
@@ -139,7 +139,11 @@ pub struct Tabpage {
 /// so.
 pub struct Window {
     pub handle: Handle,
-    pub w_buffer: *mut Buffer,
+    /// The buffer this window shows: a handle, set by whoever installs the
+    /// buffer while it is live and cleared to [`Buf::NULL`] before it is
+    /// released, so it is either a live buffer or null and never a stale
+    /// address. Read it through `Win::buffer`/`Win::buffer_or_none`.
+    pub w_buffer: Buf,
     pub w_s: *mut SynBlock,
     pub w_ns_hl: ::core::ffi::c_int,
     pub w_ns_hl_winhl: ::core::ffi::c_int,

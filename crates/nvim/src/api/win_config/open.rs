@@ -122,9 +122,7 @@ impl Opening {
     /// The window itself: a split of its parent, or a float.
     fn make(&mut self, keys: CfgKeys, raised: &mut Option<Error>) -> Result<Option<Win>, Error> {
         if !self.is_split {
-            // SAFETY: `curwin` is live for the editor's whole run, and so is
-            // the buffer it shows.
-            let locked = unsafe { (*Win::current().w_buffer).b_locked_split } != 0;
+            let locked = Win::current().buffer().b_locked_split != 0;
             if locked {
                 let why = c"E1159: Cannot open a float when closing the buffer";
                 return Err(Error::exception(why));

@@ -436,7 +436,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
         let can_close_all_others = !Win::current().w_floating
             || windows()
                 .take_while(|wp| !wp.w_floating)
-                .any(|wp| wp.w_buffer != Buf::current_raw());
+                .any(|wp| !wp.w_buffer.is_current());
         close_all_windows(buf, can_close_all_others);
     }
 

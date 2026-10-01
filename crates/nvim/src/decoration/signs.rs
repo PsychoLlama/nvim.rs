@@ -57,7 +57,7 @@ impl Sh {
 /// recomputed rather than reused.
 fn may_force_numberwidth_recompute(buffer: Buf, unplace: bool) {
     for mut wp in tab_windows() {
-        if wp.w_buffer == buffer.raw()
+        if wp.w_buffer == buffer
             && wp.w_minscwidth == SCL_NUM
             && (wp.w_onebuf_opt.wo_nu != 0 || wp.w_onebuf_opt.wo_rnu != 0)
             && (unplace || wp.w_nrwidth_width < 2)
