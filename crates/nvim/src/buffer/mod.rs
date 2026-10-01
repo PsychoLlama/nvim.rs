@@ -256,8 +256,7 @@ impl BufRef {
     /// pointer -- the shape p23-5 rules out.
     pub(crate) fn of_opt(buffer: Option<Buf>) -> Self {
         BufRef(BufferRef {
-            br_buf: buffer.map_or(ptr::null_mut(), Buf::raw),
-            br_fnum: buffer.map_or(0, |b| b.handle as c_int),
+            br_buf: buffer.unwrap_or(Buf::NULL),
             br_buf_free_count: buf_free_count.get(),
         })
     }
@@ -271,7 +270,7 @@ impl BufRef {
     /// was. Only walks the list when the free counter has moved.
     pub(crate) fn valid(self) -> bool {
         self.0.br_buf_free_count == buf_free_count.get()
-            || buffers_back().any(|b| b.raw() == self.0.br_buf && b.handle == self.0.br_fnum)
+            || buffers_back().any(|b| b == self.0.br_buf && b.handle == self.0.br_buf.handle())
     }
 
     /// The buffer, if it is still the one that was remembered.
@@ -279,10 +278,10 @@ impl BufRef {
     /// Null answers `None`, which `bufref_valid()` does not: the C's callers
     /// test the pointer separately wherever it can be null.
     pub(crate) fn get(self) -> Option<Buf> {
+        // `valid` found this buffer in the list, or the free counter has not
+        // moved since the handle was taken from a live one.
         let buf = self.0.br_buf;
-        // SAFETY: `valid` found this pointer in the buffer list, or the free
-        // counter has not moved since it was taken from a live one.
-        (!buf.is_null() && self.valid()).then(|| unsafe { Buf::new(buf) })
+        (!buf.is_null() && self.valid()).then_some(buf)
     }
 
     /// Whether this record was taken from `buffer` -- the comparison the C
@@ -290,7 +289,7 @@ impl BufRef {
     /// side. A record whose buffer has been wiped names no live buffer, so
     /// it answers `false` for every argument.
     pub(crate) fn is(self, buffer: Option<Buf>) -> bool {
-        !self.0.br_buf.is_null() && self.0.br_buf == buffer.map_or(ptr::null_mut(), Buf::raw)
+        !self.0.br_buf.is_null() && Some(self.0.br_buf) == buffer
     }
 
     /// The record itself, for the two places it has to live in a C struct:

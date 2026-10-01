@@ -19,19 +19,20 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_char;
 
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::types::{
-    AcoSave, Buffer, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin, Window,
+    AcoSave, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin,
 };
 use crate::window::win_find_tabpage;
 use crate::winlayer::graph::{switch_buffer, switch_to};
 use crate::winlayer::{Buf, Win};
 
 use super::{
-    get_option_value, kOptScopeBuf, kOptScopeWin, set_option_direct, set_option_value_handle_tty,
+    get_option_value, kOptScopeBuf, kOptScopeGlobal, kOptScopeWin, set_option_direct,
+    set_option_value_handle_tty,
 };
 
 /// Which window or buffer an option is written as, for
@@ -41,6 +42,7 @@ use super::{
 /// cast: the `OptScope` tag plus a `void *` this used to take could be
 /// mismatched at a call site and the mistake would only show as a window
 /// pointer being read as a buffer.
+#[derive(Clone, Copy)]
 pub(crate) enum OptionTarget {
     /// A window, whose buffer comes with it — the option code reads both.
     Win(Win),
@@ -70,130 +72,109 @@ pub(crate) fn set_option_direct_for(
     saved.restore();
 }
 
+impl OptionTarget {
+    /// The option scope this target is: what a `None` target (the global
+    /// scope) is to the option table.
+    pub(crate) fn scope_of(target: Option<Self>) -> OptScope {
+        match target {
+            None => kOptScopeGlobal,
+            Some(OptionTarget::Win(_)) => kOptScopeWin,
+            Some(OptionTarget::Buf(_)) => kOptScopeBuf,
+        }
+    }
+}
+
 /// Somewhere to stand while reading or writing another window's or buffer's
-/// options.
+/// options: the scratch space the switch back needs.
 ///
 /// The two scopes need different machinery: a window is switched to with
 /// `switch_win_noblock`, a buffer is borrowed through the autocommand window
-/// with `aucmd_prepbuf`. Holding the scratch space for both in one value is
-/// what keeps the callers from casting it through `void *`.
-pub(crate) enum OptionContext {
-    /// Nothing to switch: a global option is the same everywhere.
-    Global,
+/// with `aucmd_prepbuf`.
+enum OptionContext {
     Win(SwitchWin),
     Buf(AcoSave),
 }
 
 impl OptionContext {
-    /// Fresh scratch space for the given scope.
-    pub(crate) fn new(scope: OptScope) -> Self {
-        match scope {
-            kOptScopeWin => OptionContext::Win(SwitchWin {
-                sw_curwin: None,
-                sw_curtab: None,
-                sw_same_win: false,
-                sw_visual_active: false,
-            }),
-            kOptScopeBuf => OptionContext::Buf(AcoSave::default()),
-            _ => OptionContext::Global,
-        }
-    }
-
-    /// Make `from` current, answering whether anything was switched — which
-    /// is also whether [`OptionContext::leave`] has to be called.
+    /// Make `target` current, answering the context to [`leave`] -- `None`
+    /// when nothing had to be switched: the global scope, or a target that
+    /// is already current.
     ///
-    /// # Safety
-    ///
-    /// `from` must be the live window or buffer this context's scope names.
-    pub(crate) unsafe fn enter(&mut self, from: *mut c_void) -> Result<bool, Error> {
-        // SAFETY: the caller's `from` matches the scope.
-        match self {
-            OptionContext::Global => Ok(false),
-            OptionContext::Win(switchwin) => {
-                let win = from.cast::<Window>();
-                if win == Win::current_raw() {
-                    return Ok(false);
-                }
-                // SAFETY: `win` is the window this context named, still live.
-                let win = unsafe { Win::new(win) };
+    /// [`leave`]: OptionContext::leave
+    fn enter(target: Option<OptionTarget>) -> Result<Option<Self>, Error> {
+        match target {
+            None => Ok(None),
+            Some(OptionTarget::Win(win)) if win.is_current() => Ok(None),
+            Some(OptionTarget::Buf(buf)) if buf.is_current() => Ok(None),
+            Some(OptionTarget::Win(win)) => {
+                let mut switchwin = SwitchWin {
+                    sw_curwin: None,
+                    sw_curtab: None,
+                    sw_same_win: false,
+                    sw_visual_active: false,
+                };
                 let tab = win_find_tabpage(win.id());
-                if unsafe { switch_win_noblock(switchwin, win, tab, true) }.is_err() {
-                    unsafe { restore_win_noblock(switchwin, true) };
+                // SAFETY: `switchwin` is this frame's, and `win` live: the
+                // caller took it from the registry within this call.
+                if unsafe { switch_win_noblock(&raw mut switchwin, win, tab, true) }.is_err() {
+                    // SAFETY: as above.
+                    unsafe { restore_win_noblock(&raw mut switchwin, true) };
                     return Err(Error::exception(c"Problem while switching windows"));
                 }
-                Ok(true)
+                Ok(Some(OptionContext::Win(switchwin)))
             }
-            OptionContext::Buf(aco) => {
-                let buf = from.cast::<Buffer>();
-                if buf == Buf::current_raw() {
-                    return Ok(false);
-                }
-                unsafe { aucmd_prepbuf(aco, Buf::new(buf)) };
-                Ok(true)
+            Some(OptionTarget::Buf(buf)) => {
+                let mut aco = AcoSave::default();
+                // SAFETY: `aco` is this frame's, and `buf` live as above.
+                unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+                Ok(Some(OptionContext::Buf(aco)))
             }
         }
     }
 
-    /// Undo an [`OptionContext::enter`] that reported a switch.
-    ///
-    /// # Safety
-    ///
-    /// Only after `enter` returned true, and before anything else has moved
-    /// the current window or buffer.
-    pub(crate) unsafe fn leave(&mut self) {
-        // SAFETY: the caller has just entered this context.
-        match self {
-            OptionContext::Global => {}
+    /// Undo the switch [`OptionContext::enter`] made.
+    fn leave(mut self) {
+        match &mut self {
+            // SAFETY: the scratch space `enter` filled, and nothing else has
+            // moved the current window or buffer since.
             OptionContext::Win(switchwin) => unsafe { restore_win_noblock(switchwin, true) },
+            // SAFETY: as above.
             OptionContext::Buf(aco) => unsafe { aucmd_restbuf(aco) },
         }
     }
 }
 
-/// [`get_option_value`] as another window or buffer sees it.
-///
-/// # Safety
-///
-/// `from` must be the live window or buffer `scope` names.
-pub(crate) unsafe fn get_option_value_for(
+/// [`get_option_value`] as `target` sees it; `None` is the global scope.
+pub(crate) fn get_option_value_for(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    scope: OptScope,
-    from: *mut c_void,
+    target: Option<OptionTarget>,
 ) -> Result<OptVal, Error> {
-    let mut ctx = OptionContext::new(scope);
-    // SAFETY: the caller's `from` matches `scope`.
-    let switched = unsafe { ctx.enter(from) }?;
+    let ctx = OptionContext::enter(target)?;
     let value = get_option_value(opt_idx, opt_flags);
-    if switched {
-        // SAFETY: `enter` reported a switch and nothing has moved since.
-        unsafe { ctx.leave() };
+    if let Some(ctx) = ctx {
+        ctx.leave();
     }
     Ok(value)
 }
 
-/// [`set_option_value_handle_tty`] on another window or buffer.
+/// [`set_option_value_handle_tty`] on `target`; `None` is the global scope.
 ///
 /// # Safety
 ///
-/// `name` must be NUL-terminated, `from` the live window or buffer `scope`
-/// names.
+/// `name` must be NUL-terminated.
 pub(crate) unsafe fn set_option_value_for(
     name: *const c_char,
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
-    scope: OptScope,
-    from: *mut c_void,
+    target: Option<OptionTarget>,
 ) -> Result<(), Error> {
-    let mut ctx = OptionContext::new(scope);
-    // SAFETY: the caller's `from` matches `scope`.
-    let switched = unsafe { ctx.enter(from) }?;
+    let ctx = OptionContext::enter(target)?;
     // SAFETY: the caller's `name` is NUL-terminated.
     let errmsg = unsafe { set_option_value_handle_tty(name, opt_idx, value, opt_flags) };
-    if switched {
-        // SAFETY: `enter` reported a switch and nothing has moved since.
-        unsafe { ctx.leave() };
+    if let Some(ctx) = ctx {
+        ctx.leave();
     }
     errmsg.map_err(|errmsg| Error::exception(errmsg.as_cstr()))
 }

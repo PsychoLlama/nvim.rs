@@ -177,12 +177,11 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Option<Region> {
     let (region_type, block_width) = unsafe { parse_type(spec) }?;
 
     let findbuf = if fnum1 != 0 {
-        find_buf(fnum1).map_or(ptr::null_mut(), |b| b.raw())
+        find_buf(fnum1)
     } else {
-        Buf::current_raw()
+        Buf::current_or_none()
     };
-    // SAFETY: `find_buf` and `curbuf` are both a live buffer or null.
-    let loaded = (unsafe { Buf::from_raw(findbuf) }).filter(|b| !b.b_ml.ml_mfp.is_null());
+    let loaded = findbuf.filter(|b| !b.b_ml.ml_mfp.is_null());
     let Some(findbuf) = loaded else {
         emsg(gettext(e_buffer_is_not_loaded));
         return None;

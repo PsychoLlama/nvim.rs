@@ -20,7 +20,6 @@ use super::*;
 use crate::eval::typval::{DictRef, ListRef, NumBuf, list_items};
 use crate::narrow::number_as_int;
 use crate::types::{VAR_DICT, VAR_LIST, kListLenMayKnow};
-use core::ptr;
 
 /// The four highlight keys a sign definition carries, in the order every
 /// reader in this family reports them.
@@ -665,7 +664,7 @@ unsafe fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: *mut Dict) -> 
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's typval and dictionary.
     let mut id = 0;
-    let mut buf = ::core::ptr::null_mut();
+    let mut buf = None;
     let mut group = match group_tv {
         Some(tv) => numbuf.string_ptr(tv),
         None => numbuf2.dict_string(unsafe { dict.as_ref() }, b"group"),
@@ -676,8 +675,8 @@ unsafe fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: *mut Dict) -> 
 
     if !dict.is_null() {
         if let Some(tv) = unsafe { key(dict, "buffer") } {
-            buf = get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw);
-            if buf.is_null() {
+            buf = get_buf_arg(tv);
+            if buf.is_none() {
                 return -1;
             }
         }
@@ -690,7 +689,7 @@ unsafe fn sign_unplace_from_dict(group_tv: Option<&TypVal>, dict: *mut Dict) -> 
         }
     }
 
-    unsafe { sign_unplace(Buf::from_raw(buf), id, group, 0) - 1 }
+    unsafe { sign_unplace(buf, id, group, 0) - 1 }
 }
 
 /// `sign_unplace()`.

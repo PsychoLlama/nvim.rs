@@ -12,7 +12,6 @@
 use crate::cstr;
 use crate::winlayer::{self, Buf};
 use core::ffi::{c_char, c_int};
-use core::ptr;
 
 use super::{TRY_STATE_INIT, nlua_push_errstr};
 use crate::api::private::helpers::{try_enter, try_leave};
@@ -25,7 +24,7 @@ use crate::lua::ffi::{
 use crate::luaL_reg_table;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{Buffer, Error, Handle, LineNr, RegMatch, RegProg, lua_State, luaL_Reg};
+use crate::types::{Error, Handle, LineNr, RegMatch, RegProg, lua_State, luaL_Reg};
 
 /// The registry key the metatable is stored under, and the type name
 /// `luaL_checkudata` matches against.
@@ -89,6 +88,16 @@ unsafe extern "C-unwind" fn regex_match_str(lstate: *mut lua_State) -> c_int {
     }
 }
 
+/// The buffer `bufnr` names, `0` for the current one, if it is loaded.
+fn loaded_buffer(bufnr: Handle) -> Option<Buf> {
+    let buf = if bufnr != 0 {
+        winlayer::buffer(bufnr)
+    } else {
+        Buf::current_or_none()
+    };
+    buf.filter(|b| !b.b_ml.ml_mfp.is_null())
+}
+
 /// `regex:match_line(bufnr, rownr[, start[, end]])`.
 ///
 /// The line is matched in place, so an `end` shorter than the line is applied
@@ -120,21 +129,16 @@ unsafe extern "C-unwind" fn regex_match_line(lstate: *mut lua_State) -> c_int {
             }
         }
 
-        let buf: *mut Buffer = if bufnr != 0 {
-            winlayer::buffer(bufnr).map_or(ptr::null_mut(), Buf::raw)
-        } else {
-            Buf::current_raw()
-        };
-        if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
+        let Some(buf) = loaded_buffer(bufnr) else {
             return luaL_error(lstate, c"invalid buffer".as_ptr());
-        }
+        };
 
-        if rownr >= (*buf).b_ml.ml_line_count {
+        if rownr >= buf.b_ml.ml_line_count {
             return luaL_error(lstate, c"invalid row".as_ptr());
         }
 
-        let line = ml_get_buf(Buf::new(buf), rownr + 1);
-        let len = ml_get_buf_len(Buf::new(buf), rownr + 1);
+        let line = ml_get_buf(buf, rownr + 1);
+        let len = ml_get_buf_len(buf, rownr + 1);
 
         if start < 0 || start > len {
             return luaL_error(lstate, c"invalid start".as_ptr());

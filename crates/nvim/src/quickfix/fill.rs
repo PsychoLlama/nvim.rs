@@ -172,26 +172,26 @@ unsafe fn qf_buf_add_line(
             unsafe { push_cstr(out, qfp.qf_module) };
         } else {
             let errbuf = if qfp.qf_fnum != 0 {
-                find_buf(qfp.qf_fnum).map_or(ptr::null_mut(), |b| b.raw())
+                find_buf(qfp.qf_fnum)
             } else {
-                ptr::null_mut()
+                None
             };
-            if !errbuf.is_null() && !unsafe { (*errbuf).name.is_unnamed() } {
+            if let Some(errbuf) = errbuf.filter(|b| !b.name.is_unnamed()) {
                 if qfp.qf_type as c_int == 1 {
                     // :helpgrep entries name the help file only.
-                    unsafe { push_cstr(out, path_tail((*errbuf).name.shown_ptr())) };
+                    unsafe { push_cstr(out, path_tail(errbuf.name.shown_ptr())) };
                 } else {
                     // Shorten the file name if not done already. For
                     // speed, only for the first entry of each buffer.
                     if first_bufline
-                        && (unsafe { (*errbuf).name.short().is_none() }
-                            || unsafe { path_is_absolute(cstr::at((*errbuf).name.short_ptr())) })
+                        && (errbuf.name.short().is_none()
+                            || unsafe { path_is_absolute(cstr::at(errbuf.name.short_ptr())) })
                     {
                         // SAFETY: a live buffer and the current directory name.
-                        unsafe { shorten_buf_fname(Buf::new(errbuf), dir.get(), false as c_int) };
+                        unsafe { shorten_buf_fname(errbuf, dir.get(), false as c_int) };
                     }
                     let start_row = if qfp.qf_fname.is_null() {
-                        unsafe { (*errbuf).name.shown_ptr() }
+                        errbuf.name.shown_ptr()
                     } else {
                         qfp.qf_fname
                     };

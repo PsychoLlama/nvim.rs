@@ -181,9 +181,7 @@ impl Lines {
     /// hands back, and complain the same way; there is no failure case here
     /// that the pointer form does not have.
     pub fn line(&mut self, lnum: LineNr) -> &[u8] {
-        let buf = self.0.raw();
-        // SAFETY: a live buffer.
-        let buf = unsafe { Buf::new(buf) };
+        let buf = self.0;
         // SAFETY: a live buffer, and `ml_get_buf` never answers NULL. The
         // borrow of `self` is what keeps the next read from invalidating the
         // slice.
@@ -199,9 +197,7 @@ impl Lines {
     /// be rewritten and nothing else, which is what a slice of the line's own
     /// length says. Use `ml_replace` to change a line's length.
     pub fn line_mut(&mut self, lnum: LineNr) -> &mut [u8] {
-        let buf = self.0.raw();
-        // SAFETY: a live buffer.
-        let buf = unsafe { Buf::new(buf) };
+        let buf = self.0;
         // SAFETY: as [`Lines::line`], with the read marking the line dirty;
         // the borrow is exclusive, so no shared slice of the same cache can
         // be alive.

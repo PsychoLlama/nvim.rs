@@ -68,11 +68,7 @@ impl Default for AcoSave {
             save_curwin_handle: 0,
             new_curwin_handle: 0,
             save_prevwin_handle: 0,
-            new_curbuf: BufferRef {
-                br_buf: ::core::ptr::null_mut(),
-                br_fnum: 0,
-                br_buf_free_count: 0,
-            },
+            new_curbuf: BufferRef::new(),
             tp_localdir: ::core::ptr::null_mut(),
             globaldir: ::core::ptr::null_mut(),
             save_visual_active: false,

@@ -98,9 +98,8 @@ unsafe fn get_var_from(
                 }
             } else if lead == NUL as u8 {
                 // An empty name: the whole scope as a dictionary.
-                let scope = buffer.map(|b| b.raw());
                 let v: *const ScopeDictItem = match htname as u8 {
-                    b'b' => &raw mut unsafe { Buf::new(scope.expect("a `b:` scope")) }.b_bufvar,
+                    b'b' => &raw mut buffer.expect("a `b:` scope").b_bufvar,
                     b'w' => &raw mut w.w_winvar,
                     _ => &raw mut tp.tp_winvar,
                 };
@@ -312,18 +311,17 @@ fn setwinvar(args: &[TypVal], off: c_int) {
     } else {
         TabPage::current_or_none()
     };
-    let win = find_win_by_nr(&args[off as usize], tp).map_or(ptr::null_mut(), Win::raw);
+    let win = find_win_by_nr(&args[off as usize], tp);
     let varname = numbuf.string_ptr_chk(&args[off as usize + 1]);
     let varp = &args[off as usize + 2];
-    if win.is_null() || varname.is_null() {
+    let Some(w) = win.filter(|_| !varname.is_null()) else {
         return;
-    }
+    };
 
-    let need_switch_win = !(tp == TabPage::current_or_none() && win == Win::current_raw());
+    let need_switch_win = !(tp == TabPage::current_or_none() && w.is_current());
     let mut switchwin = SWITCHWIN_INITIAL_VALUE;
     // SAFETY: a live window; `tp` is `None` for "wherever it is", which is
     // what `switch_win` reads an absent tab page as.
-    let w = unsafe { Win::new(win) };
     if !need_switch_win || unsafe { switch_win(&raw mut switchwin, w, tp, true) }.is_ok() {
         if unsafe { *varname } == b'&' as c_char {
             unsafe { set_option_from_tv(varname.add(1), varp) };

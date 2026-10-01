@@ -26,7 +26,7 @@ use core::ptr;
 /// that it decayed to a pointer.
 pub(crate) type ExtmarkNs = IdMap<uint32_t, uint32_t>;
 use crate::undo::store::UndoStore;
-use crate::winlayer::BufId;
+use crate::winlayer::{Buf, BufId};
 
 pub type AlignTextPos = ::core::ffi::c_uint;
 pub type BorderTextType = ::core::ffi::c_uint;
@@ -99,14 +99,14 @@ pub type WinSplit = ::core::ffi::c_uint;
 pub type WinStyle = ::core::ffi::c_uint;
 pub type BfaFlags = ::core::ffi::c_uint;
 pub type BlnFlags = ::core::ffi::c_uint;
-/// `Copy`, and not an owner: the three fields together are a *weak* name for
-/// a buffer -- the address it had, the number it had, and the free count that
-/// says whether the address still means that buffer. Duplicating one
-/// duplicates no claim on anything.
+/// `Copy`, and not an owner: the two fields together are a *weak* name for
+/// a buffer -- a handle (the address it had and the number it had) and the
+/// free count that says whether the address still means that buffer. The
+/// handle is never dereferenced until `BufRef::get` has re-validated it.
+/// Duplicating one duplicates no claim on anything.
 #[derive(Copy, Clone)]
 pub struct BufferRef {
-    pub br_buf: *mut Buffer,
-    pub br_fnum: ::core::ffi::c_int,
+    pub br_buf: Buf,
     pub br_buf_free_count: ::core::ffi::c_int,
 }
 /// Not `Copy` and not `Clone`: a block is a node of the tab page's list and
@@ -815,8 +815,7 @@ impl BufferRef {
     /// statics.
     pub const fn new() -> Self {
         BufferRef {
-            br_buf: ::core::ptr::null_mut(),
-            br_fnum: 0,
+            br_buf: Buf::NULL,
             br_buf_free_count: 0,
         }
     }

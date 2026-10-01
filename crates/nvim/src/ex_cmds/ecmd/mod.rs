@@ -550,14 +550,14 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
         state.newlnum = Win::current().w_cursor.lnum;
         state.solcol = Win::current().w_cursor.col;
     }
-    let buf = Buf::current_raw();
-    // SAFETY: the buffer's own file name is NUL-terminated; see
-    // [`switch`]'s copy for why it is owned rather than borrowed.
-    let name = unsafe { (*buf).name.shown_ptr() };
+    let buf = Buf::current();
+    // The buffer's own file name, NUL-terminated; see [`switch`]'s copy for
+    // why it is owned rather than borrowed.
+    let name = buf.name.shown_ptr();
     // SAFETY: as above.
     let new_name: Option<CString> =
         (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.into());
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
+    let bufref = BufRef::of(buf);
 
     // If the buffer was used before, store the current contents so that
     // the reload can be undone.  Do not do this if the (empty) buffer is
@@ -599,7 +599,7 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // re-editing the file.  Should do the buf_clear_file(), but perhaps
     // the autocommands changed the buffer...  They may also abort script
     // processing.
-    if buf != Buf::current_raw() || aborting() {
+    if !buf.is_current() || aborting() {
         return false;
     }
     buf_clear_file(Buf::current());

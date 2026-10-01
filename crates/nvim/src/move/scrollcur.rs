@@ -419,15 +419,10 @@ impl Win {
     }
 }
 
-/// [`Win::scroll_cursor_halfway`], for the callers still holding a raw window.
-pub fn scroll_cursor_halfway(window: Win, atend: bool, prefer_above: bool) {
-    window.scroll_cursor_halfway(atend, prefer_above);
-}
-
 impl Win {
     /// Recompute `w_topline` to put the cursor halfway across the window.
     /// `atend` also puts it halfway to the end of the file.
-    pub(super) fn scroll_cursor_halfway(mut self, atend: bool, prefer_above: bool) {
+    pub(crate) fn scroll_cursor_halfway(mut self, atend: bool, prefer_above: bool) {
         let old_topline = self.w_topline;
         let (folded, first, last) = self.fold_span(self.w_cursor.lnum);
         let (mut loff, mut boff) = if folded {

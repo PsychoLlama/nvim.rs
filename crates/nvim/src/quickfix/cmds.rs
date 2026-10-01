@@ -139,7 +139,7 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
     // SAFETY: the caller's promise -- a live `ExArg`.
     // SAFETY: forwarded from the caller.
     let buf = if c_int::from(excmd.line.byte_at(excmd.line.arg)) == NUL {
-        Buf::current_raw()
+        Buf::current_or_none()
     } else if excmd.line.byte_at(
         excmd
             .line
@@ -148,13 +148,12 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
     {
         let at = excmd.line.arg;
         let (number, _) = getdigits_int_at(excmd.line.buffer_mut(), at, false, 0);
-        find_buf(number).map_or(ptr::null_mut(), |b| b.raw())
+        find_buf(number)
     } else {
-        ptr::null_mut()
+        None
     };
 
-    // SAFETY: `curbuf`/`find_buf` answer a live buffer or null.
-    let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
+    let Some(buf) = buf else {
         qf_emsg(e_invarg.as_ptr());
         return None;
     };

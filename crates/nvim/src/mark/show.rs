@@ -314,11 +314,9 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
                     // The event is announced against the mark's OWN buffer
                     // where it still exists, so an autocommand sees the file
                     // the mark was in.
-                    let owner =
-                        find_buf(slot.fmark().fnum()).map_or(buf.raw(), |owner| owner.raw());
-                    // SAFETY: `gone` is on this stack and `owner` is a live
-                    // buffer.
-                    unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, Buf::new(owner)) };
+                    let owner = find_buf(slot.fmark().fnum()).unwrap_or(buf);
+                    // SAFETY: `gone` is on this stack.
+                    unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, owner) };
                 }
                 slot.fmark().set_lnum(0);
                 slot.fmark().set_fnum(0);

@@ -152,14 +152,12 @@ pub fn f_undofile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_undotree(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
     tv_dict_alloc_ret(result);
-    let raw = match args.first() {
-        Some(tv) => get_buf_arg(tv).map_or(ptr::null_mut(), Buf::raw),
-        None => Buf::current_raw(),
+    let buf = match args.first() {
+        Some(tv) => get_buf_arg(tv),
+        None => Buf::current_or_none(),
     };
     // SAFETY: the return value the contract gives us.
     let dict = result.dict_or_null();
-    // SAFETY: `curbuf` and `get_buf_arg` both answer a live buffer or NULL.
-    let buf = unsafe { Buf::from_raw(raw) };
     let Some(buf) = buf else { return };
 
     dict_add_nr(dict, c"synced", VarNumber::from(buf.b_u_synced));

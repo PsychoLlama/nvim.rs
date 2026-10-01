@@ -392,10 +392,5 @@ pub fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> *mut c_cha
     } else {
         buf.name.shown_ptr()
     };
-    let tail_only = if helptail != 0 {
-        buf.raw()
-    } else {
-        ptr::null_mut()
-    };
-    home_replaced(unsafe { Buf::from_raw(tail_only) }, name)
+    home_replaced((helptail != 0).then_some(buf), name)
 }

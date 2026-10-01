@@ -359,13 +359,8 @@ pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c
 /// Whether `window` may be moved to tab page `tabpage`, answering why not.
 pub(crate) fn win_can_move_tp(window: Win, tabpage: TabPage) -> Result<(), Error> {
     let w = window;
-    let other_tab = if tabpage == TabPage::current() {
-        ::core::ptr::null_mut::<Tabpage>()
-    } else {
-        tabpage.raw()
-    };
-    // SAFETY: the caller's window and tab page.
-    if unsafe { one_window(w, TabPage::from_raw(other_tab)) } {
+    let other_tab = (!tabpage.is_current()).then_some(tabpage);
+    if one_window(w, other_tab) {
         return Err(Error::exception(c"Cannot move last non-floating window"));
     }
     if win_locked(w) != 0 {

@@ -99,16 +99,14 @@ use crate::window::{
 impl TabPage {
     /// The window that is current in this tab page.
     fn curwin(self) -> Win {
-        let wp = if self.is_current() {
-            Win::current_raw()
+        let found = if self.is_current() {
+            Win::current_or_none()
         } else {
-            self.tp_curwin
-                .and_then(WinId::get)
-                .map_or(ptr::null_mut(), Win::raw)
+            self.current_window()
         };
-        // SAFETY: a live tab page's current window is live, and `curwin` is
-        // set from startup to exit.
-        unsafe { Win::new(wp) }
+        // A live tab page has a current window, and `curwin` is set from
+        // startup to exit; the null window is what the C's NULL read as.
+        found.unwrap_or(Win::NULL)
     }
 
     /// The last window of this tab page.

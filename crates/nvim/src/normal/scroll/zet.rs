@@ -39,8 +39,7 @@ use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
 
 use crate::r#move::{
-    changed_window_setting, scroll_cursor_bot, scroll_cursor_halfway, scroll_cursor_top,
-    validate_botline_win,
+    changed_window_setting, scroll_cursor_bot, scroll_cursor_top, validate_botline_win,
 };
 use crate::search::{BACKWARD, FORWARD};
 
@@ -546,7 +545,7 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
         }
         match place {
             Place::Top => scroll_cursor_top(win, 0, 1),
-            Place::Middle => scroll_cursor_halfway(win, true, false),
+            Place::Middle => win.scroll_cursor_halfway(true, false),
             Place::Bottom => scroll_cursor_bot(win, 0, true),
         }
         redraw_later(win, UPD_VALID);

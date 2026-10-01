@@ -46,7 +46,6 @@ use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_
 use crate::winlayer::{Buf, Win};
 use ::libc::atol;
 use core::ffi::c_int;
-use core::ptr;
 
 /// What the "edit another file" stage decided.
 pub(super) enum Switch {
@@ -86,7 +85,7 @@ pub(super) fn switch_to_other_buffer(
 
     let buf;
     if fnum != 0 {
-        buf = find_buf(fnum).map_or(ptr::null_mut(), |b| b.raw());
+        buf = find_buf(fnum);
     } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         // Default the line number to zero to avoid that a wininfo item is
         // added for the current window.  Add BLN_NOCURWIN for the same reason.
@@ -124,7 +123,6 @@ pub(super) fn switch_to_other_buffer(
                         BLN_LISTED as c_int
                     }),
             )
-            .map_or(ptr::null_mut(), Buf::raw)
         };
         // Autocmds may change curwin and curbuf.
         if oldwin.is_some() {
@@ -133,15 +131,13 @@ pub(super) fn switch_to_other_buffer(
         *old_curbuf = BufRef::of_opt(current_buf());
     }
 
-    if buf.is_null() {
+    // `buflist_new` answers `None` for a buffer its own autocommands wiped.
+    let Some(buffer) = buf else {
         return Switch::Abandon;
-    }
-    // SAFETY: not null, and the guard above is what says so.
-    let buffer = unsafe { Buf::new(buf) };
+    };
     // Autocommands try to edit a closing buffer, which -- like splitting --
     // can result in more windows displaying it; abort.
     if buffer.b_locked_split != 0 {
-        // SAFETY: as above.
         // The window was split, but is not editing the new buffer; reset
         // b_nwindows again.
         if oldwin.is_none()
@@ -377,7 +373,7 @@ pub(super) fn delbuf_msg(name: Option<&CStr>) {
     let arg0 = msg_cstr(name.unwrap_or(c""));
     semsg!("E143: Autocommands unexpectedly deleted new buffer {arg0}");
     au_new_curbuf.with_mut(|r| {
-        r.br_buf = ptr::null_mut();
+        r.br_buf = Buf::NULL;
         r.br_buf_free_count = 0;
     });
 }

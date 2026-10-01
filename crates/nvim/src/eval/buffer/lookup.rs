@@ -109,8 +109,8 @@ pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_number(-1);
-    let mut buf: *mut Buffer = if args.is_empty() {
-        Buf::current_raw()
+    let mut buf = if args.is_empty() {
+        Buf::current_or_none()
     } else {
         if !tv_check_str_or_nr(&args[0]) {
             return;
@@ -118,21 +118,18 @@ pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // The lookup itself must not report "no such buffer": a second
         // argument asks for the buffer to be created instead.
         let _no_emsg = Suppress::emsg();
-        arg_buf(args, 0, 0).map_or(ptr::null_mut(), Buf::raw)
+        arg_buf(args, 0, 0)
     };
-    if buf.is_null()
+    if buf.is_none()
         && args.len() > 1
         && tv_get_number_chk(&args[1]).is_ok_and(|create| create != 0)
     {
         let name = numbuf.string_ptr_chk(&args[0]);
         if !name.is_null() {
-            buf = unsafe {
-                buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0)
-                    .map_or(ptr::null_mut(), Buf::raw)
-            };
+            buf = unsafe { buflist_new(name as *mut c_char, ptr::null_mut(), 1, 0) };
         }
     }
-    if let Some(buf) = unsafe { Buf::from_raw(buf) } {
+    if let Some(buf) = buf {
         result.write_number(VarNumber::from(buf.handle));
     }
 }

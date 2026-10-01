@@ -209,10 +209,11 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> Option<Win> {
     redraw_later(wp, UPD_NOT_VALID);
 
     // `unblock_autocmds` has to run whichever way the placement went, so
-    // the answer is settled before it rather than after.
-    let placed = pum_adjust_info_position(wp, max_info_width).then(|| wp.raw());
+    // the answer is settled before it rather than after -- as an id, since
+    // the autocommands it lets through may close the window.
+    let placed = pum_adjust_info_position(wp, max_info_width).then(|| wp.id());
     unblock_autocmds();
-    unsafe { Win::from_raw(placed.unwrap_or(::core::ptr::null_mut())) }
+    placed.and_then(WinId::get)
 }
 
 /// Scroll the menu so that `pum_selected` is visible, with context around it.

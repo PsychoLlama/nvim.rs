@@ -40,7 +40,7 @@ use crate::message::{
     e_job_still_running, e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
     e_no_write_since_last_change_add_bang_to_override,
 };
-use crate::r#move::{WinValid, scroll_cursor_halfway};
+use crate::r#move::WinValid;
 use crate::normal::visual_active;
 use crate::option::buf_copy_options;
 use crate::option::vars::p_acd;
@@ -136,7 +136,7 @@ fn rebuild_title() {
 /// Scroll so that the cursor line sits in the middle of the window.
 fn scroll_halfway(win: Win) {
     // SAFETY: a live window.
-    scroll_cursor_halfway(win, false, false);
+    win.scroll_cursor_halfway(false, false);
 }
 
 /// Load the keymap `'keymap'` names.

@@ -461,9 +461,9 @@ struct IndentPlan {
 /// # Safety
 /// `oldline` must be the current line, NUL-terminated.
 unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> IndentPlan {
-    let buf = Buf::current_raw();
-    let preserve = flags & SIN_INSERT as c_int == 0 && unsafe { (*buf).b_p_pi } != 0;
-    let pad = |col: c_int| Buf::current().tab_padding(col as ColNr);
+    let buf = Buf::current();
+    let preserve = flags & SIN_INSERT as c_int == 0 && buf.b_p_pi != 0;
+    let pad = |col: c_int| buf.tab_padding(col as ColNr);
     let mut plan = IndentPlan {
         doit: false,
         ind_len: 0,
@@ -473,7 +473,7 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
     };
     let mut todo = size;
 
-    if unsafe { (*buf).b_p_et } == 0 || preserve {
+    if buf.b_p_et == 0 || preserve {
         let mut ind_col = 0;
         if preserve {
             // Reuse as much of the existing indent's structure as fits.
@@ -499,7 +499,7 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
             ind_col = plan.ind_done;
             // The initial run of characters to copy when the indent is
             // preserved under 'expandtab'.
-            if unsafe { (*buf).b_p_et } != 0 {
+            if buf.b_p_et != 0 {
                 plan.orig_char_len = plan.ind_len;
             }
             // Fill to the next tabstop with a tab, if possible.
@@ -548,11 +548,11 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
 ///
 /// Answers whether the line was changed.
 pub fn set_indent(size: c_int, flags: c_int) -> bool {
-    let buf = Buf::current_raw();
+    let buf = Buf::current();
     let oldline = get_cursor_line_ptr();
     // The size of the line, including the NUL.
     let mut line_len = get_cursor_line_len() + 1;
-    let pad = |col: c_int| Buf::current().tab_padding(col as ColNr);
+    let pad = |col: c_int| buf.tab_padding(col as ColNr);
     // `STRICT_ADD`/`STRICT_SUB` (`macros.h`): the arithmetic sizing the
     // replacement line must not wrap, and upstream logs and aborts rather
     // than trusting a wrapped answer. `line` is the site in
@@ -633,8 +633,8 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
     }
 
     // Put the characters in the new line; without 'expandtab', use tabs.
-    if unsafe { (*buf).b_p_et } == 0 {
-        if flags & SIN_INSERT as c_int == 0 && unsafe { (*buf).b_p_pi } != 0 {
+    if buf.b_p_et == 0 {
+        if flags & SIN_INSERT as c_int == 0 && buf.b_p_pi != 0 {
             // Reuse as much of the existing indent's structure as fits.
             p = oldline;
             ind_done = 0;
@@ -694,8 +694,6 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
         // This may free `newline`.
         let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, newline, false) };
         if flags & SIN_NOMARK as c_int == 0 {
-            // SAFETY: a live buffer.
-            let buf = unsafe { Buf::new(buf) };
             extmark_splice_cols(
                 buf,
                 Win::current().w_cursor.lnum as c_int - 1,

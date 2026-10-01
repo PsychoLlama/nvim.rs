@@ -99,8 +99,8 @@ unsafe extern "C-unwind" fn parser_tostring(L: *mut lua_State) -> ::core::ffi::c
 
 /// # Safety
 ///
-/// `payload` must point at the `Buffer` this parse reads its lines from, live
-/// for the whole parse, and `bytes_read` at a writable `uint32_t` the caller
+/// `payload` must point at the [`Buf`] this parse reads its lines from, the
+/// handle and the buffer both live for the whole parse, and `bytes_read` at a writable `uint32_t` the caller
 /// owns; tree-sitter's `TSInput` contract.
 unsafe extern "C" fn input_cb(
     payload: *mut ::core::ffi::c_void,
@@ -109,15 +109,15 @@ unsafe extern "C" fn input_cb(
     bytes_read: *mut uint32_t,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        let bp: *mut Buffer = payload as *mut Buffer;
+        let bp = payload.cast::<Buf>().read();
         static buf: GlobalCell<[::core::ffi::c_char; 256]> = GlobalCell::new([0; 256]);
-        if position.row as LineNr >= (*bp).b_ml.ml_line_count {
+        if position.row as LineNr >= bp.b_ml.ml_line_count {
             *bytes_read = 0 as uint32_t;
             return c"".as_ptr();
         }
         let lnum: LineNr = position.row as LineNr + 1 as LineNr;
-        let line: *mut ::core::ffi::c_char = ml_get_buf(Buf::new(bp), lnum);
-        let len: size_t = ml_get_buf_len(Buf::new(bp), lnum) as size_t;
+        let line: *mut ::core::ffi::c_char = ml_get_buf(bp, lnum);
+        let len: size_t = ml_get_buf_len(bp, lnum) as size_t;
         if position.column as size_t > len {
             *bytes_read = 0 as uint32_t;
             return c"".as_ptr();
@@ -138,9 +138,9 @@ unsafe extern "C" fn input_cb(
         );
         *bytes_read = tocopy as uint32_t;
         if tocopy < BUFSIZE as size_t
-            && (lnum != (*bp).b_ml.ml_line_count
-                || (*bp).b_p_bin == 0 && (*bp).b_p_fixeol != 0
-                || lnum != (*bp).b_no_eol_lnum && (*bp).b_p_eol != 0)
+            && (lnum != bp.b_ml.ml_line_count
+                || bp.b_p_bin == 0 && bp.b_p_fixeol != 0
+                || lnum != bp.b_no_eol_lnum && bp.b_p_eol != 0)
         {
             (*buf.ptr())[tocopy as usize] = '\n' as ::core::ffi::c_char;
             *bytes_read = (*bytes_read).wrapping_add(1);
@@ -184,7 +184,6 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
         let mut len: size_t = 0;
         let str: *const ::core::ffi::c_char;
         let bufnr: Handle;
-        let buf: *mut Buffer;
         let input: TSInput;
         match lua_type(L, 3 as ::core::ffi::c_int) {
             LUA_TSTRING => {
@@ -193,9 +192,10 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
             }
             LUA_TNUMBER => {
                 bufnr = lua_tointeger(L, 3 as ::core::ffi::c_int) as Handle;
-                buf = winlayer::buffer(bufnr as ::core::ffi::c_int)
-                    .map_or(::core::ptr::null_mut(), Buf::raw);
-                if buf.is_null() {
+                // The handle is this frame's, and `input_cb` reads it back
+                // through the payload: the parse runs no editor code, so the
+                // buffer the registry answered stays live for all of it.
+                let Some(mut buf) = winlayer::buffer(bufnr as ::core::ffi::c_int) else {
                     let mut ebuf: [::core::ffi::c_char; 256] = [0; 256];
                     vim_snprintf(
                         &raw mut ebuf as *mut ::core::ffi::c_char,
@@ -208,9 +208,9 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
                         3 as ::core::ffi::c_int,
                         &raw mut ebuf as *mut ::core::ffi::c_char,
                     );
-                }
+                };
                 input = TSInput {
-                    payload: buf as *mut ::core::ffi::c_void,
+                    payload: (&raw mut buf).cast::<::core::ffi::c_void>(),
                     read: Some(
                         input_cb
                             as unsafe extern "C" fn(

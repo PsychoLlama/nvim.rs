@@ -56,9 +56,9 @@ pub fn ml_recover(checkext: bool) {
     recoverymode.set(true);
     let called_from_main = Buf::current().b_ml.ml_mfp.is_null();
 
-    let buf: *mut Buffer;
-    // Who owns what `buf` points at. The recovery buffer is not in the
-    // registry, so this frame is its owner; `buf` is only the address the
+    let mut buf: Buf;
+    // Who owns what `buf` names. The recovery buffer is not in the
+    // registry, so this frame is its owner; `buf` is only the handle the
     // memline code below works through.
     let mut owned_buf: Option<Owned<Buffer>> = None;
     let mut mfp: *mut MemFile = core::ptr::null_mut();
@@ -97,11 +97,11 @@ pub fn ml_recover(checkext: bool) {
         // A buffer structure for the swap file being recovered. Only the
         // memline in it is really used, and it is never registered or
         // put on the buffer list -- see `alloc_unregistered_buffer`.
-        buf = owned_buf.insert(alloc_unregistered_buffer()).address();
-        unsafe { (*buf).b_ml.stack_clear() }; // nothing in the stack
-        unsafe { (*buf).b_ml.clear_cache() }; // no cached line
-        unsafe { (*buf).b_ml.ml_locked = None }; // no locked block
-        unsafe { (*buf).b_ml.ml_flags = MlFlags::NONE };
+        buf = Buf::owned_by(owned_buf.insert(alloc_unregistered_buffer()));
+        buf.b_ml.stack_clear(); // nothing in the stack
+        buf.b_ml.clear_cache(); // no cached line
+        buf.b_ml.ml_locked = None; // no locked block
+        buf.b_ml.ml_flags = MlFlags::NONE;
 
         // Open the memfile on the old swap file. `mf_open` consumes the
         // name, so keep a copy of it for the messages.
@@ -114,7 +114,7 @@ pub fn ml_recover(checkext: bool) {
             semsg!("E306: Cannot open {fname_used}");
             break 'theend;
         }
-        unsafe { (*buf).b_ml.ml_mfp = mfp };
+        buf.b_ml.ml_mfp = mfp;
 
         // The page size `mf_open` picked need not be the one the swap
         // file was written with; the real one is in block zero. Reading
@@ -301,7 +301,7 @@ pub fn ml_recover(checkext: bool) {
         unchanged(Buf::current(), true, true);
 
         serious_error = false;
-        let Ok((lnum, error)) = (unsafe { recover_lines(Buf::new(buf), mfp, &mut hp) }) else {
+        let Ok((lnum, error)) = (unsafe { recover_lines(buf, mfp, &mut hp) }) else {
             break 'theend;
         };
 
@@ -364,12 +364,13 @@ pub fn ml_recover(checkext: bool) {
     if serious_error && called_from_main {
         ml_close(Buf::current(), 1);
     } else {
-        let (name, buf) = (Buf::current().name.shown_ptr(), Buf::current_raw());
-        let none = core::ptr::null_mut();
-        let __hoisted_0 = unsafe { Buf::from_raw(buf) };
-        unsafe { apply_autocmds(AutoEvent::BufReadPost, none, name, false, __hoisted_0) };
-        let __hoisted_1 = unsafe { Buf::from_raw(buf) };
-        unsafe { apply_autocmds(AutoEvent::BufWinEnter, none, name, false, __hoisted_1) };
+        // `curbuf` and its name are read afresh for each event: the
+        // first one's autocommands may have changed either.
+        for event in [AutoEvent::BufReadPost, AutoEvent::BufWinEnter] {
+            let current = Buf::current();
+            let (none, name) = (core::ptr::null_mut(), current.name.shown_ptr());
+            unsafe { apply_autocmds(event, none, name, false, Some(current)) };
+        }
     }
 }
 

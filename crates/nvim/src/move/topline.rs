@@ -41,7 +41,6 @@ impl Win {
 }
 
 fn update_topline_win(mut win: Win) {
-    let wp = win.raw();
     let mut check_botline = false;
     let so = ScrollOff::of(win, ScrollMargin::Lines);
     let save_so = so.get();
@@ -100,7 +99,7 @@ fn update_topline_win(mut win: Win) {
         // Far out to begin with: put the cursor in the middle of the window.
         // Close: put it near the top.
         if n >= halfheight as int64_t {
-            scroll_cursor_halfway(win, false, false);
+            win.scroll_cursor_halfway(false, false);
         } else {
             scroll_cursor_top(win, arith::scrolljump_lines(p_sj(), win.w_view_height), 0);
             check_botline = true;
@@ -136,8 +135,7 @@ fn update_topline_win(mut win: Win) {
                         false,
                     );
                 } else {
-                    // SAFETY: a live window.
-                    unsafe { scroll_cursor_halfway(Win::new(wp), false, false) };
+                    win.scroll_cursor_halfway(false, false);
                 }
             }
         }

@@ -50,7 +50,7 @@ use crate::state::virtual_active;
 use crate::statusline::state::tab_page_click_defs;
 use crate::statusline::stl_connected;
 use crate::types::{
-    CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, StlClickDefinition, Tabpage, TypVal,
+    CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, StlClickDefinition, TypVal,
     VarNumber,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
@@ -418,18 +418,19 @@ fn move_tab_to_mouse(defs: ClickDefs) {
 
 /// Close tab page `c1`, or the current one when it is 999.
 fn mouse_tab_close(c1: c_int) {
-    let tp: *mut Tabpage = if c1 == 999 {
-        TabPage::current_raw()
+    let tp = if c1 == 999 {
+        TabPage::current_or_none()
     } else {
-        find_tabpage(c1).map_or(ptr::null_mut(), TabPage::raw)
+        find_tabpage(c1)
     };
-    if tp == TabPage::current_raw() {
-        if first_tab().is_some_and(|tp| tp.next().is_some()) {
-            tabpage_close(false as c_int);
+    match tp {
+        Some(tp) if tp.is_current() => {
+            if first_tab().is_some_and(|tp| tp.next().is_some()) {
+                tabpage_close(false as c_int);
+            }
         }
-    } else if !tp.is_null() {
-        // SAFETY: as above.
-        unsafe { tabpage_close_other(TabPage::new(tp), false as c_int) };
+        Some(tp) => tabpage_close_other(tp, false as c_int),
+        None => {}
     }
 }
 

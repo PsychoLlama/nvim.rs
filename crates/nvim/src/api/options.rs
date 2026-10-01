@@ -3,7 +3,7 @@
 //! Every entry point here takes the same `opts` dictionary -- `scope`, `buf`,
 //! `win`, `filetype` -- and the first thing each does is turn it into the
 //! three things the option layer actually wants: which option, at what scope,
-//! and on which buffer or window. That is [`OptionTarget`], and
+//! and on which buffer or window. That is [`OptionRequest`], and
 //! [`option_target`] is the one place the dictionary's rules are enforced.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -28,7 +28,7 @@ use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use crate::types::AutoEvent;
 use crate::winlayer::Win;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::api_error;
@@ -36,8 +36,9 @@ use crate::memline::ml_open;
 use crate::memory::XString;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::{
-    find_option, get_all_vimoptions, get_option_value_for, get_vimoption, object_as_optval,
-    option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
+    OptionTarget, find_option, get_all_vimoptions, get_option_value_for, get_vimoption,
+    object_as_optval, option_has_scope, optval_as_object, optval_free, set_option_direct,
+    set_option_value_for,
 };
 use crate::types::{
     AcoSave, ApiDict, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
@@ -60,7 +61,7 @@ const SID_NONE: c_int = -6;
 
 /// What an `opts` dictionary resolved to: the option itself, the scope to
 /// read or write it at, and the buffer or window that scope names.
-struct OptionTarget {
+struct OptionRequest {
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     scope: OptScope,
@@ -83,7 +84,7 @@ struct OptionTarget {
 unsafe fn option_target(
     opts: *mut KeyDict_option,
     name: *mut c_char,
-) -> Result<OptionTarget, Error> {
+) -> Result<OptionRequest, Error> {
     // SAFETY: `opts` is the caller's, per this function's contract.
     let (given_scope, given_win, given_buf, given_filetype) = unsafe {
         (
@@ -165,7 +166,7 @@ unsafe fn option_target(
 
     // The key borrows `opts`' own bytes.
     let filetype = given_filetype.map_or(ptr::null_mut(), |ft| ft.data());
-    Ok(OptionTarget {
+    Ok(OptionRequest {
         opt_idx,
         opt_flags,
         scope,
@@ -175,15 +176,13 @@ unsafe fn option_target(
     })
 }
 
-impl OptionTarget {
-    /// The object the scope names, untyped as `get_option_value_for` and
-    /// `set_option_value_for` take it (they read `scope` to know which it
-    /// is), or null for the global scope.
-    fn from(&self) -> *mut c_void {
+impl OptionRequest {
+    /// The window or buffer the scope names, `None` for the global scope.
+    fn target(&self) -> Option<OptionTarget> {
         match (self.win, self.buf) {
-            (_, Some(buf)) => buf.raw().cast(),
-            (Some(win), None) => win.raw().cast(),
-            (None, None) => ptr::null_mut(),
+            (_, Some(buf)) => Some(OptionTarget::Buf(buf)),
+            (Some(win), None) => Some(OptionTarget::Win(win)),
+            (None, None) => None,
         }
     }
 }
@@ -321,18 +320,16 @@ pub unsafe fn nvim_get_option_value(
         return Err(e);
     }
 
-    // A filetype cannot be combined with `buf` or `win`, so `from` is null
-    // wherever the scratch buffer exists.
+    // A filetype cannot be combined with `buf` or `win`, so the request
+    // names nothing wherever the scratch buffer exists.
     let from = match ftbuf {
-        None => target.from(),
+        None => target.target(),
         Some(ftbuf) => {
-            debug_assert!(target.from().is_null(), "!from");
-            ftbuf.raw().cast::<c_void>()
+            debug_assert!(target.target().is_none(), "!from");
+            Some(OptionTarget::Buf(ftbuf))
         }
     };
-    let (idx, flags, scope) = (target.opt_idx, target.opt_flags, target.scope);
-    // SAFETY: `from` is null or the live object `scope` names.
-    let read = unsafe { get_option_value_for(idx, flags, scope, from) };
+    let read = get_option_value_for(target.opt_idx, target.opt_flags, from);
     if ftbuf.is_some() {
         leave_ft_buf(ftbuf);
     }
@@ -375,10 +372,8 @@ pub unsafe fn nvim_set_option_value(
     // them rather than whatever ran last.
     let _sctx = api_set_sctx(channel_id);
     let (key, idx) = (name.data(), target.opt_idx);
-    let (scope, from) = (target.scope, target.from());
-    // SAFETY: `name` is the caller's, and `target.from()` is null or the live
-    // object `scope` names.
-    unsafe { set_option_value_for(key, idx, optval, opt_flags, scope, from) }
+    // SAFETY: `name` is the caller's NUL-terminated string.
+    unsafe { set_option_value_for(key, idx, optval, opt_flags, target.target()) }
 }
 
 /// Every option's metadata, keyed by name.
