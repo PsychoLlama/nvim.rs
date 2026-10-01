@@ -26,9 +26,10 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Buffer, ColNr, LPos, LineNr, Magic, MarkGet, ProfTime, RegEngine, RegMMatch, RegMatch, Window,
-    int16_t, int64_t, size_t, uint8_t,
+    ColNr, LPos, LineNr, Magic, MarkGet, ProfTime, RegEngine, RegMMatch, RegMatch, int16_t,
+    int64_t, size_t, uint8_t,
 };
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
 pub const RE_SEARCH: ::core::ffi::c_int = 0;
@@ -96,8 +97,10 @@ pub struct RegExec {
     pub str_end: [*mut uint8_t; NSUBEXP as usize],
     pub reg_startpos: *mut LPos,
     pub reg_endpos: *mut LPos,
-    pub reg_win: *mut Window,
-    pub reg_buf: *mut Buffer,
+    /// The window and buffer the match runs in, taken live by the caller
+    /// that sets the match up and only read until it returns.
+    pub reg_win: Option<Win>,
+    pub reg_buf: Buf,
     pub reg_firstlnum: LineNr,
     pub reg_maxline: LineNr,
     pub reg_line_lbr: bool,
@@ -338,8 +341,8 @@ static rex: GlobalCell<RegExec> = GlobalCell::new(RegExec {
     str_end: [core::ptr::null_mut::<uint8_t>(); NSUBEXP as usize],
     reg_startpos: core::ptr::null_mut::<LPos>(),
     reg_endpos: core::ptr::null_mut::<LPos>(),
-    reg_win: core::ptr::null_mut::<Window>(),
-    reg_buf: core::ptr::null_mut::<Buffer>(),
+    reg_win: None,
+    reg_buf: Buf::NULL,
     reg_firstlnum: 0,
     reg_maxline: 0,
     reg_line_lbr: false,

@@ -159,6 +159,7 @@ use core::num::NonZero;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
+use crate::allocator::Owned;
 use crate::drawscreen::redraw_later;
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
@@ -589,6 +590,19 @@ impl Buf {
         (!raw.is_null()).then(|| unsafe { Self::new(raw) })
     }
 
+    /// The buffer `owner` holds -- one not yet given to the registry, or one
+    /// that never will be. The owner keeps it live, so reading its number is
+    /// sound; the handle is good for as long as the owner is kept.
+    #[inline]
+    pub(crate) fn owned_by(owner: &Owned<Buffer>) -> Self {
+        // SAFETY: an `Owned` holds a live allocation until it is dropped.
+        unsafe { Self::new(owner.address()) }
+    }
+
+    /// The null buffer: the initial value of a context field that a caller
+    /// fills in before anything reads it.
+    pub(crate) const NULL: Self = Self::at(ptr::null_mut(), 0);
+
     /// [`Win::at`] for a buffer.
     #[inline(always)]
     pub(super) const fn at(raw: *mut Buffer, handle: Handle) -> Self {
@@ -754,6 +768,13 @@ impl TabPage {
             unsafe { (*raw).handle }
         };
         Self { ptr: raw, id }
+    }
+
+    /// [`Buf::owned_by`] for a tab page.
+    #[inline]
+    pub(crate) fn owned_by(owner: &Owned<Tabpage>) -> Self {
+        // SAFETY: an `Owned` holds a live allocation until it is dropped.
+        unsafe { Self::new(owner.address()) }
     }
 
     /// [`Win::at`] for a tab page.

@@ -195,7 +195,7 @@ impl Rex {
     /// current one.
     #[inline(always)]
     pub(crate) fn iswordp(self) -> bool {
-        unsafe { vim_iswordp_buf(self.input_str(), Buf::new((*self.0).reg_buf)) }
+        unsafe { vim_iswordp_buf(self.input_str(), self.reg_buf()) }
     }
 
     // --------------------------------------------- what is being matched
@@ -205,25 +205,25 @@ impl Rex {
     #[inline(always)]
     pub(crate) fn reg_buf(self) -> Buf {
         // SAFETY: the type's invariant -- a live buffer, always set.
-        unsafe { Buf::new((*self.0).reg_buf) }
+        unsafe { (*self.0).reg_buf }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_buf(self, buffer: Buf) {
-        unsafe { (*self.0).reg_buf = buffer.raw() }
+        unsafe { (*self.0).reg_buf = buffer }
     }
 
     /// The window the match runs in, if there is one: `\%#` and `\%V` need
     /// one, and a string match has none.
     #[inline(always)]
     pub(crate) fn reg_win(self) -> Option<Win> {
-        // SAFETY: the type's invariant -- a live window or null.
-        unsafe { Win::from_raw((*self.0).reg_win) }
+        // SAFETY: the type's invariant -- a live window or none.
+        unsafe { (*self.0).reg_win }
     }
 
     #[inline(always)]
     pub(crate) fn set_reg_win(self, win: Option<Win>) {
-        unsafe { (*self.0).reg_win = win.map_or(core::ptr::null_mut(), Win::raw) }
+        unsafe { (*self.0).reg_win = win }
     }
 
     /// The buffer line `lnum` 0 of the match sits on.

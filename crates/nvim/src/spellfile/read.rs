@@ -36,7 +36,6 @@ use crate::semsg;
 use crate::smsg;
 use crate::spell::{WordFlags, WordTree};
 use crate::strings::has_bytes;
-use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use std::ffi::OsStr;
@@ -470,7 +469,7 @@ unsafe fn load_sug(spl: &mut Spl, slang: &mut SpellLang) {
 fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     spell_read_tree(spl, &mut slang.sl_sound_tree, false, 0)?;
 
-    slang.sl_sugbuf = open_spellbuf().map_or(core::ptr::null_mut(), Buf::raw);
+    let sugbuf = slang.sl_sugbuf.insert(open_spellbuf()).buf();
     let wcount = spl.get4c()?;
     if wcount < 0 {
         return Err(SpellReadError::Format);
@@ -480,9 +479,6 @@ fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     // numbers. They go into a scratch buffer so the suggestion search
     // can index them by line.
     let mut line: Vec<u8> = Vec::with_capacity(100);
-    // SAFETY: `open_spellbuf` above returned it, and nothing in the loop
-    // closes it. Built once: `Buf::new` reads the buffer's number out of it.
-    let sugbuf = unsafe { Buf::new(slang.sl_sugbuf) };
     for wordnr in 0..wcount {
         line.clear();
         loop {

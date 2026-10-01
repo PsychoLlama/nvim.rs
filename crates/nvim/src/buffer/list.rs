@@ -234,10 +234,10 @@ pub unsafe fn buflist_new(
     let mut buf = match reusable.filter(|_| reused_curbuf) {
         Some(buf) => buf,
         None => {
+            // `fresh` keeps it alive until the registry takes it over a few
+            // lines below.
             let owned = new_buffer();
-            // SAFETY: the allocation just made, which `fresh` keeps alive
-            // until the registry takes it over a few lines below.
-            let buf = unsafe { Buf::new(owned.address()) };
+            let buf = Buf::owned_by(&owned);
             fresh = Some(owned);
             buf
         }
@@ -348,8 +348,7 @@ fn new_buffer() -> Owned<Buffer> {
     // A zeroed `Buffer` is what upstream starts one from; `append_to_list`
     // gives it its number and puts it in the registry.
     let owned = alloc_unregistered_buffer();
-    // SAFETY: the allocation just made, which `owned` keeps alive.
-    let mut buf = unsafe { Buf::new(owned.address()) };
+    let mut buf = Buf::owned_by(&owned);
     // Init the b: variables.
     // SAFETY: a fresh dictionary for the buffer's own `b:` scope.
     // The buffer's storage owns it: `init_var_dict` seeds it with

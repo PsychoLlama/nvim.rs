@@ -92,9 +92,9 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     // hands a fresh tab page, and every field of `tabpage_S` that owns an
     // allocation is null when zeroed.
     let owned = Owned::new(unsafe { Box::<Tabpage>::new_zeroed().assume_init() });
-    // SAFETY: the allocation just made, which `owned` keeps alive until the
-    // registry takes it over two lines below.
-    let mut tp = unsafe { TabPage::new(owned.address()) };
+    // `owned` keeps it alive until the registry takes it over two lines
+    // below.
+    let mut tp = TabPage::owned_by(&owned);
     LAST_TP_HANDLE.set(LAST_TP_HANDLE.get() + 1);
     tp.set_handle(LAST_TP_HANDLE.get() as Handle);
     let mut tp = register_tabpage(tp.handle(), owned);

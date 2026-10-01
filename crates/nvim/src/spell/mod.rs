@@ -55,7 +55,7 @@ use crate::os::cshim::gettext;
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
     ColNr, ExArg, FileComparison, LangP, LineNr, OpArg, Pos, SearchItArg, SpellLang, SpellMoveType,
-    SpellTab, Window, size_t, uint8_t,
+    SpellTab, size_t, uint8_t,
 };
 use crate::undo::u_save_cursor;
 
@@ -87,7 +87,7 @@ pub use lookup::{can_compound, match_checkcompoundpattern, match_compoundrule, v
 pub use navigate::{spell_cat_line, spell_move_to};
 use slang::count_syllables;
 pub use slang::{
-    close_spellbuf, count_common_word, init_syl_tab, open_spellbuf, slang_alloc, slang_clear,
+    SpellBuf, count_common_word, init_syl_tab, open_spellbuf, slang_alloc, slang_clear,
     slang_clear_sug, slang_free,
 };
 pub use soundfold::{eval_soundfold, spell_soundfold};
@@ -249,7 +249,9 @@ pub(crate) struct MatchInf {
     /// The best result so far, and the capitalisation it assumed.
     pub mi_result: SpellResult,
     pub mi_capflags: WordFlags,
-    pub mi_win: *mut Window,
+    /// The window the lookup is for, taken live by [`MatchInf::new`]; the
+    /// state lives no longer than the lookup that built it.
+    pub mi_win: Win,
     /// For NOBREAK: the best result reached *without* a good word
     /// following, kept as a fall-back.
     pub mi_result2: SpellResult,
@@ -276,7 +278,7 @@ impl MatchInf {
         mi.mi_word = word;
         mi.mi_end = word;
         mi.mi_fend = word;
-        mi.mi_win = win.raw();
+        mi.mi_win = win;
         mi
     }
 }

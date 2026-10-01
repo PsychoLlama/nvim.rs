@@ -10,7 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
-use crate::spell::{SylItem, WordTree};
+use crate::spell::{SpellBuf, SylItem, WordTree};
 
 /// `int_wordlist`'s compiled name, as a `vim_snprintf` template.
 pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
@@ -101,7 +101,8 @@ pub struct SpellLang {
     pub sl_sugtime: time_t,
     /// Sound-folded forms, from the `.sug` file.
     pub sl_sound_tree: WordTree,
-    pub sl_sugbuf: *mut Buffer,
+    /// The `.sug` file's word-number lines, one per sound-folded word end.
+    pub sl_sugbuf: Option<SpellBuf>,
     pub sl_sugloaded: bool,
     pub sl_has_map: bool,
     pub sl_map_hash: HashTab,

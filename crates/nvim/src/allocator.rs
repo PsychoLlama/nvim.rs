@@ -192,34 +192,12 @@ impl<T> Owned<T> {
     pub(crate) fn address(&self) -> *mut T {
         self.addr
     }
-
-    /// Give up ownership, answering the address.
-    ///
-    /// For the objects whose ownership travels as a bare pointer through
-    /// transpiled code — `open_spellbuf`'s buffer lives in a `SpellLang` field
-    /// — and which are taken back with [`Owned::from_raw`] at their free
-    /// point. Prefer holding the `Owned` where the shape allows it.
-    pub(crate) fn into_raw(self) -> *mut T {
-        let addr = self.addr;
-        core::mem::forget(self);
-        addr
-    }
-
-    /// Take ownership of `addr` back.
-    ///
-    /// # Safety
-    /// `addr` must have come from [`Owned::into_raw`] and not have been
-    /// taken back already.
-    pub(crate) const unsafe fn from_raw(addr: *mut T) -> Self {
-        Owned { addr }
-    }
 }
 
 impl<T> Drop for Owned<T> {
     fn drop(&mut self) {
         // SAFETY: `addr` came from `Box::into_raw` in `new`, is never
-        // reassigned, and reaches here once -- `Owned` is not `Copy` and
-        // `into_raw` forgets the value it consumes.
+        // reassigned, and reaches here once -- `Owned` is not `Copy`.
         drop(unsafe { Box::from_raw(self.addr) });
     }
 }
@@ -309,17 +287,5 @@ mod tests {
         assert_eq!(drops.get(), 1);
         drop(table);
         assert_eq!(drops.get(), 2);
-    }
-
-    /// The shape the objects whose ownership travels as a bare pointer use:
-    /// `open_spellbuf` gives the address up, `close_spellbuf` takes it back.
-    #[test]
-    fn into_raw_and_from_raw_hand_ownership_across() {
-        let drops = Cell::new(0);
-        let address = Owned::new(Box::new(Tracked(&drops))).into_raw();
-        assert_eq!(drops.get(), 0, "into_raw does not free");
-        // SAFETY: the address `into_raw` just gave up, taken back once.
-        drop(unsafe { Owned::from_raw(address) });
-        assert_eq!(drops.get(), 1);
     }
 }

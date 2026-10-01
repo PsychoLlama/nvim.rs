@@ -19,16 +19,18 @@ use crate::os::cshim::gettext;
 use crate::os::fs::{os_isdir, os_path_exists};
 use crate::path::{free_wild, path_tail};
 use crate::semsg;
+use crate::spell::SpellBuf;
 use crate::spell::{did_set_spelltab, spell_enc, spelltab};
 use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    Buffer, CONV_NONE, EStackType, ExArg, FAIL, Failed, FileComparison, HashTab, MAXPATHL, NUL, OK,
-    OptInt, RegProg, RepItem, SpellAddType, SpellTab, VimConv, XDGVarType, time_t,
+    CONV_NONE, EStackType, ExArg, FAIL, Failed, FileComparison, HashTab, MAXPATHL, NUL, OK, OptInt,
+    RegProg, RepItem, SpellAddType, SpellTab, VimConv, XDGVarType, time_t,
 };
 use crate::ui::ui_flush;
+use crate::winlayer::Buf;
 use core::ffi::CStr;
 mod add;
 mod aff;
@@ -117,7 +119,7 @@ pub struct SpellInfo {
     pub si_compress_cnt: ::core::ffi::c_int,
     pub si_first_free: *mut WordNode,
     pub si_free_count: ::core::ffi::c_int,
-    pub si_spellbuf: *mut Buffer,
+    pub si_spellbuf: Option<SpellBuf>,
     pub si_ascii: ::core::ffi::c_int,
     pub si_add: ::core::ffi::c_int,
     pub si_clear_chartab: ::core::ffi::c_int,
@@ -295,6 +297,18 @@ pub const CONDIT_CFIX: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CONDIT_SUF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const CONDIT_AFF: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
 impl SpellInfo {
+    /// The `.sug` scratch buffer `sug_maketable` opened.
+    ///
+    /// # Panics
+    ///
+    /// Before `sug_maketable` has run.
+    pub(super) fn spellbuf(&self) -> Buf {
+        self.si_spellbuf
+            .as_ref()
+            .expect("sug_maketable opens the scratch buffer first")
+            .buf()
+    }
+
     /// A spell file under construction, with nothing read yet.
     ///
     /// The C listed an initialiser and then `memset` the whole struct to
@@ -316,7 +330,7 @@ impl SpellInfo {
             si_compress_cnt: 0,
             si_first_free: ::core::ptr::null_mut(),
             si_free_count: 0,
-            si_spellbuf: ::core::ptr::null_mut(),
+            si_spellbuf: None,
             si_ascii: 0,
             si_add: 0,
             si_clear_chartab: 0,

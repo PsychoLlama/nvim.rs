@@ -45,7 +45,6 @@
 
 use crate::cstr;
 use crate::spell::WordFlags;
-use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::mbyte::{mb_charlen_len, utf_char2bytes, utf_head_off, utfc_ptr2len};
@@ -200,12 +199,7 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
     }
 
     // Now try the endings, longest first.
-    //
-    // `mi_win` is written once, by `MatchInf::new`, so the handle is built
-    // once here rather than per ending: `Win::new` reads the window's handle
-    // out of the object.
-    // SAFETY: `mip`'s promise -- `mi_win` is the window the match is for.
-    let win = unsafe { Win::new(mip.mi_win) };
+    let win = mip.mi_win;
     while endidxcnt > 0 {
         endidxcnt -= 1;
         arridx = endidx[endidxcnt] as usize;
@@ -350,8 +344,8 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
 
                     // For NOBREAK every language has to be tried, if only to
                     // reach the ".add" files.
-                    let langp_data = unsafe { (*(*mip.mi_win).w_s).b_langp.ga_data } as *mut LangP;
-                    let langp_len = unsafe { (*(*mip.mi_win).w_s).b_langp.ga_len };
+                    let langp_data = unsafe { (*mip.mi_win.w_s).b_langp.ga_data } as *mut LangP;
+                    let langp_len = unsafe { (*mip.mi_win.w_s).b_langp.ga_len };
                     for lpi in 0..langp_len {
                         if unsafe { (*slang).sl_nobreak } {
                             unsafe { mip.mi_lp = langp_data.offset(lpi as isize) };
@@ -539,7 +533,7 @@ unsafe fn compound_part_allowed(
             // no-caps part is accepted even where the dictionary word
             // says ONECAP.
             p = unsafe { p.offset(-(utf_head_off(mip.mi_word, p.offset(-1)) as isize + 1)) };
-            let reject = if unsafe { spell_iswordp_nmw(p, Win::new(mip.mi_win)) } {
+            let reject = if unsafe { spell_iswordp_nmw(p, mip.mi_win) } {
                 capflags == WordFlags::ONECAP
             } else {
                 flags.has(WordFlags::ONECAP) && capflags != WordFlags::ONECAP
@@ -561,9 +555,8 @@ unsafe fn compound_part_allowed(
         if unsafe { (*slang).sl_compsylmax } < MAXWLEN as c_int {
             // Only syllable counting needs the word itself.
             if word == mip.mi_word {
-                let win = mip.mi_win;
                 let out = fword.as_mut_ptr();
-                let _ = unsafe { spell_casefold(Win::new(win), word, wlen, out, MAXWLEN as c_int) };
+                let _ = unsafe { spell_casefold(mip.mi_win, word, wlen, out, MAXWLEN as c_int) };
             } else {
                 let to = fword.as_mut_ptr() as *mut ::core::ffi::c_void;
                 let from = word as *const ::core::ffi::c_void;
@@ -867,10 +860,7 @@ pub(super) unsafe fn find_prefix(mip: &mut MatchInf, mode: c_int) {
 /// that field is the one the constructor cannot fill in.
 unsafe fn fold_more(mip: &mut MatchInf) -> c_int {
     let p = mip.mi_fend;
-    // Once, not once per character: `Win::new` reads the handle out of the
-    // window, and `mi_win` is written only by `MatchInf::new`.
-    // SAFETY: `mip`'s promise -- `mi_win` is the window the match is for.
-    let win = unsafe { Win::new(mip.mi_win) };
+    let win = mip.mi_win;
     loop {
         mb_ptr_adv!(mip.mi_fend);
         if unsafe { *mip.mi_fend } == 0 || !unsafe { spell_iswordp(mip.mi_fend, win) } {
@@ -885,10 +875,9 @@ unsafe fn fold_more(mip: &mut MatchInf) -> c_int {
 
     let fwordlen = mip.mi_fwordlen;
     let tail = unsafe { (&raw mut mip.mi_fword as *mut c_char).offset(fwordlen as isize) };
-    let win = mip.mi_win;
     let taken = unsafe { mip.mi_fend.offset_from(p) } as c_int;
     let room = MAXWLEN as c_int - fwordlen;
-    let _ = unsafe { spell_casefold(Win::new(win), p, taken, tail, room) };
+    let _ = unsafe { spell_casefold(win, p, taken, tail, room) };
     let flen = unsafe { cstr::bytes_at(tail) }.len() as c_int;
     mip.mi_fwordlen += flen;
     flen

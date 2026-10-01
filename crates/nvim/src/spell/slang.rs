@@ -22,6 +22,7 @@
 
 use crate::cstr;
 use crate::strings::has_char;
+use crate::types::Buffer;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_void};
 
@@ -75,6 +76,7 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut SpellLang {
         core::ptr::write(&raw mut (*lp).sl_repsal, Vec::new());
         core::ptr::write(&raw mut (*lp).sl_comppat, Vec::new());
         core::ptr::write(&raw mut (*lp).sl_syl_items, Vec::new());
+        core::ptr::write(&raw mut (*lp).sl_sugbuf, None);
     }
 
     if !lang.is_null() {
@@ -172,8 +174,7 @@ pub unsafe fn slang_clear(slang: *mut SpellLang) {
 pub unsafe fn slang_clear_sug(slang: *mut SpellLang) {
     // SAFETY: the caller's language. Assigning drops the old tree.
     unsafe { (*slang).sl_sound_tree = WordTree::default() };
-    unsafe { close_spellbuf(Buf::from_raw((*slang).sl_sugbuf)) };
-    unsafe { (*slang).sl_sugbuf = core::ptr::null_mut() };
+    unsafe { (*slang).sl_sugbuf = None };
     unsafe { (*slang).sl_sugloaded = false };
     unsafe { (*slang).sl_sugtime = 0 };
 }
@@ -333,18 +334,37 @@ pub(super) unsafe fn count_syllables(slang: *mut SpellLang, word: *const c_char)
     cnt
 }
 
-/// Open a nameless, unlisted buffer holding nothing but text lines, backed
-/// by a swap file so that a big `.sug` word list need not stay in memory.
+/// A nameless, unlisted buffer holding nothing but text lines, backed by a
+/// swap file so that a big `.sug` word list need not stay in memory. Made by
+/// [`open_spellbuf`].
+///
+/// Never registered and never on the buffer list -- see
+/// `alloc_unregistered_buffer` -- so it has no number and nothing can find
+/// it: this value is its only owner. Dropping it closes the memline
+/// (deleting the swap file) and frees the buffer.
+pub struct SpellBuf(Owned<Buffer>);
+
+impl SpellBuf {
+    /// The buffer, to read and append lines through. Live while `self` is.
+    pub(crate) fn buf(&self) -> Buf {
+        Buf::owned_by(&self.0)
+    }
+}
+
+impl Drop for SpellBuf {
+    fn drop(&mut self) {
+        ml_close(self.buf(), 1);
+        // The `Owned` frees the buffer once this returns.
+    }
+}
+
+/// Open a [`SpellBuf`].
 ///
 /// Most of its fields are invalid: string options are null and there is no
 /// undo information.
-pub fn open_spellbuf() -> Option<Buf> {
-    // Never registered and never on the buffer list -- see
-    // `alloc_unregistered_buffer`.
-    // The allocation travels as a bare address: it is stored in a
-    // `SpellLang`'s `sl_sugbuf`, and `close_spellbuf` takes it back.
-    // SAFETY: the allocation just made, live until `close_spellbuf`.
-    let mut buf = unsafe { Buf::new(alloc_unregistered_buffer().into_raw()) };
+pub fn open_spellbuf() -> SpellBuf {
+    let owner = SpellBuf(alloc_unregistered_buffer());
+    let mut buf = owner.buf();
 
     buf.b_spell = true;
     buf.b_p_swf = 1;
@@ -358,18 +378,5 @@ pub fn open_spellbuf() -> Option<Buf> {
     }
     ml_open_file(buf); // create the swap file now
 
-    Some(buf)
-}
-
-/// Close a buffer from [`open_spellbuf`].
-pub fn close_spellbuf(buffer: Option<Buf>) {
-    let Some(buffer) = buffer else {
-        return;
-    };
-    ml_close(buffer, 1);
-    // The free: `Buffer`'s destructor runs and the memory goes back.
-    // SAFETY: `open_spellbuf` gave up this address and nothing else
-    // takes it back -- `sl_sugbuf`/`si_spellbuf` are cleared right after
-    // this call.
-    drop(unsafe { Owned::from_raw(buffer.raw()) });
+    owner
 }

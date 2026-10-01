@@ -35,7 +35,6 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
-use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use std::ffi::OsStr;
 use std::fs::File;
@@ -52,7 +51,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
-use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
+use crate::spell::{first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::types::{ColNr, Failed, GArray, LineNr, NUL, SpellIdx, SpellLang, int16_t, uint16_t};
 
 use super::wordtree::{WordNode, tree_add_word, wordtree_alloc, wordtree_compress};
@@ -105,7 +104,7 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
 
     spell_message(spin, c"Performing soundfolding...");
     if unsafe { sug_filltree(spin, slang) }.is_ok() && sug_maketable(spin) != FAIL {
-        let done = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count } as i64;
+        let done = spin.spellbuf().line_count() as i64;
         smsg!(0, "Number of words after soundfolding: {}", done);
         spell_message(spin, super::wordtree::MSG_COMPRESSING);
         let foldroot = spin.si_foldroot;
@@ -125,7 +124,7 @@ pub(super) fn spell_make_sugfile(spin: &mut SpellInfo, wfname: &CStr) {
         unsafe { slang_free(slang) };
     }
     spin.si_arena.clear();
-    unsafe { close_spellbuf(Buf::from_raw(spin.si_spellbuf)) };
+    spin.si_spellbuf = None;
 }
 
 /// Walk the loaded `.spl`'s case-folded tree and add every word's
@@ -225,7 +224,7 @@ unsafe fn sug_filltree(spin: &mut SpellInfo, slang: *mut SpellLang) -> Result<()
 
 /// Collect each word end's word numbers into one line of a scratch buffer.
 fn sug_maketable(spin: &mut SpellInfo) -> c_int {
-    spin.si_spellbuf = open_spellbuf().map_or(core::ptr::null_mut(), Buf::raw);
+    spin.si_spellbuf = Some(open_spellbuf());
 
     let mut ga: GArray = unsafe { core::mem::zeroed() };
     unsafe { ga_init(&raw mut ga, 1, 100) };
@@ -262,9 +261,7 @@ unsafe fn sug_filltable(
     // covers the at-most-five bytes each iteration appends.
     let mut wordnr = startwordnr;
     let mut p = node;
-    // SAFETY: `si_spellbuf` is the scratch buffer `spell_make_sugfile` opened
-    // and nothing here closes it. Built once: `Buf::new` reads its number.
-    let spellbuf = unsafe { Buf::new(spin.si_spellbuf) };
+    let spellbuf = spin.spellbuf();
     while !p.is_null() {
         if unsafe { (*p).wn_byte } as c_int != NUL {
             wordnr = unsafe { sug_filltable(spin, (*p).wn_child, wordnr, gap) };
@@ -393,11 +390,9 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
     // SAFETY: as above.
     unsafe { put_node(Some(&mut w), tree, 0, 0, false) };
 
-    // SAFETY: `si_spellbuf` is the scratch buffer opened above; the loop
-    // below only reads lines out of it, so one handle serves all of them.
-    let spellbuf = unsafe { Buf::new(spin.si_spellbuf) };
-    // SAFETY: the scratch buffer holds one line per word end.
-    let wcount = unsafe { (*spin.si_spellbuf).b_ml.ml_line_count };
+    let spellbuf = spin.spellbuf();
+    // The scratch buffer holds one line per word end.
+    let wcount = spellbuf.line_count();
     debug_assert!(wcount >= 0);
     w.u32(wcount as usize);
 
