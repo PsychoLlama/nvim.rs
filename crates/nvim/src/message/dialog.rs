@@ -25,10 +25,6 @@ const HAS_HOTKEY_LEN: usize = 30;
 /// Bytes reserved per hotkey, which may be a multibyte character.
 const HOTK_LEN: c_int = MB_MAXBYTES as c_int;
 
-/// Nonzero while the confirm message is being written, so `q` at the more
-/// prompt cannot truncate it away.
-pub(crate) static confirm_msg_used: GlobalCell<c_int> = GlobalCell::new(0);
-
 /// The dialog's message text, as [`display_confirm_msg`] prints it.
 pub(crate) static confirm_msg: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
@@ -322,7 +318,7 @@ unsafe fn copy_confirm_hotkeys(
 /// Display the `:confirm` message. Also called when the screen is resized.
 pub(crate) fn display_confirm_msg() {
     // Avoid that 'q' at the more prompt truncates the message here.
-    let _in_use = Suppress::counter(&confirm_msg_used);
+    let _in_use = Suppress::counter(confirm_msg_used);
     if !confirm_msg.get().is_null() {
         msg_ext_set_kind(c"confirm");
         msg_str_hl(unsafe { cstr::at(confirm_msg.get()) }, HLF_M, false);

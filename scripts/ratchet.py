@@ -1002,7 +1002,8 @@ CELL_COPY_OWNER = (
     # `cache_lua_answer` frees the old answer with `replace` -- and is listed
     # so a `get` on it would be counted rather than discovered later.
     "METADATA",  # the API description; its arena is leaked, the tree shared
-    "msg_ext_id",  # an Object that is always an Integer; both writers agree
+    # `msg_ext_id` left in phase 33: it is a field of the message state's
+    # record now, whose `get` needs `Copy`, which `Object` is not.
     "names",  # the two cached Lua completion answers in cmdexpand/generate
 )
 # Whitespace *is* tolerated here, unlike CELL_PTR_ALLOW_RE: this count is

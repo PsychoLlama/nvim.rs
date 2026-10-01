@@ -46,8 +46,15 @@
 // read them did not change; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use super::{PROGRESS_TARGET_CMD, SB_CLEAR_NONE, ScrollbackClear};
 use crate::global_cell::{Field, GlobalCell, field};
-use crate::types::{Callback, FILE, GArray, ScreenGrid};
+use crate::memory::XString;
+use crate::options::{
+    OptMoptFlags, kOptMoptFlagHistory, kOptMoptFlagHitEnter, kOptMoptFlagProgress,
+};
+use crate::types::{
+    Array, Callback, FILE, GArray, Object, ScreenAttr, ScreenGrid, String_0, int64_t,
+};
 use core::ffi::{CStr, c_char, c_int, c_long};
 
 pub(crate) static on_print: GlobalCell<Callback> = GlobalCell::new(Callback::None);
@@ -256,4 +263,73 @@ msg_state! {
     /// `:redir => var` is active.
     pub(crate) redir_vname: bool = false;
     pub(crate) capture_ga: *mut GArray = core::ptr::null_mut();
+
+    // -- message/ internals: what the module's own files share --
+    /// Nonzero while the confirm message is being written, so `q` at the more
+    /// prompt cannot truncate it away.
+    pub(super) confirm_msg_used: c_int = 0;
+    /// Drop the temporary history entries before adding the next message.
+    pub(super) do_clear_hist_temp: bool = true;
+    /// `'messagesopt'`'s flag set.
+    pub(super) msg_flags: OptMoptFlags =
+        kOptMoptFlagHitEnter | kOptMoptFlagHistory | kOptMoptFlagProgress;
+    /// `'messagesopt'`'s `wait:` delay, in milliseconds.
+    pub(super) msg_wait: c_int = 0;
+    /// Where `'messagesopt'`'s `progress:` sends progress messages.
+    pub(super) progress_msg_target: c_int = PROGRESS_TARGET_CMD;
+    /// Whether, and how much of, the scrollback to drop before the next
+    /// message.
+    pub(super) do_clear_sb_text: ScrollbackClear = SB_CLEAR_NONE;
+    /// The kept message is a `msgmore` report, which the next one may
+    /// replace.
+    pub(super) keep_msg_more: bool = false;
+    /// Nonzero while `msg_multihl` is emitting a chunk, so `msg_keep` knows
+    /// not to start or end a message of its own.
+    pub(super) is_multihl: c_int = 0;
+    /// How deep `msg_keep` is in itself: a message whose display raises
+    /// another stops at three.
+    pub(super) msg_keep_depth: c_int = 0;
+    /// `msg_source` is running, and must not report its own source.
+    pub(super) msg_source_busy: bool = false;
+    /// The more prompt is up: a timer's message must not raise another.
+    pub(super) more_prompt_busy: bool = false;
+    /// The showmode text went away, and the UI is owed one empty event.
+    pub(super) showmode_clear_pending: bool = false;
+    /// The script/function the last error was reported from.
+    pub(super) last_sourcing_name: Option<XString> = None;
+    /// The line the last error was reported from.
+    pub(super) last_sourcing_lnum: c_int = 0;
+    /// The message kind in force when the current verbose section started.
+    pub(super) pre_verbose_kind: String_0 = String_0::NULL;
+    /// Whether opening `'verbosefile'` has been attempted, so the failure
+    /// is reported once rather than on every message.
+    pub(super) verbose_did_open: bool = false;
+    /// The column `redir_write` has written up to, tracked separately from
+    /// `msg_col` because the redirection sees no screen.
+    pub(super) redir_col: c_int = 0;
+
+    // -- the message being built for an ext_messages UI --
+    /// The kind the message being composed carries, **owned**.
+    ///
+    /// The kind outlives the call that set it -- it is read again when the
+    /// message is flushed to the UI or copied into the history -- so this
+    /// keeps its own copy rather than the caller's pointer. `nvim_echo`'s
+    /// `kind` lives in a keyset that dies with the call, which is how a
+    /// borrowed kind became a use-after-free.
+    pub(super) msg_ext_kind: String_0 = String_0::NULL;
+    /// What caused the message being built, for a UI that groups by it.
+    /// Both callers name a compiled-in kind, so the field holds the literal
+    /// rather than a pointer whose lifetime it would have to answer for.
+    pub(super) msg_ext_trigger: Option<&'static CStr> = None;
+    pub(super) msg_ext_id: Object = Object::Integer(1);
+    pub(super) msg_ext_chunks: Option<Array> = None;
+    /// The text written under the current highlight, waiting to be closed
+    /// off into a `msg_show` chunk by `msg_ext_emit_chunk`.
+    pub(super) msg_ext_last_chunk: Vec<u8> = Vec::new();
+    pub(super) msg_ext_last_attr: ScreenAttr = -1;
+    pub(super) msg_ext_last_hl_id: c_int = 0;
+    pub(super) msg_ext_history: bool = false;
+    pub(super) msg_ext_append: bool = false;
+    pub(super) msg_grid_pos_at_flush: c_int = 0;
+    pub(super) msg_id_next: int64_t = 1;
 }

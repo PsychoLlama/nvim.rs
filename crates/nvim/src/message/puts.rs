@@ -215,7 +215,7 @@ fn msg_bytes_to_ui(bytes: &[u8], hl_id: c_int, attr: c_int) {
         msg_ext_last_attr.set(attr as ScreenAttr);
         msg_ext_last_hl_id.set(hl_id);
     }
-    msg_ext_last_chunk.with_mut(|chunk| chunk.extend_from_slice(bytes));
+    msg_ext_last_chunk.update(|chunk| chunk.extend_from_slice(bytes));
 
     // The message column is whatever follows the last newline.
     let tail = match bytes.iter().rposition(|&byte| byte == b'\n') {

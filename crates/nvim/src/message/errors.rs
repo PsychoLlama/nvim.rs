@@ -32,13 +32,6 @@ use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 
-/// The script/function the last error was reported from. Owned: the cell
-/// releases it when the source changes.
-static last_sourcing_name: GlobalCell<Option<XString>> = GlobalCell::new(None);
-
-/// The line the last error was reported from.
-static last_sourcing_lnum: GlobalCell<c_int> = GlobalCell::new(0);
-
 /// Forget where the last error came from, so the next one names its source
 /// again.
 pub fn reset_last_sourcing() {
@@ -109,11 +102,10 @@ unsafe fn get_emsg_lnum() -> *mut c_char {
 
 /// Display the source of an error message, if it has not been shown already.
 pub fn msg_source(hl_id: c_int) {
-    static recursive: GlobalCell<bool> = GlobalCell::new(false);
-    if recursive.get() {
+    if msg_source_busy.get() {
         return;
     }
-    recursive.set(true);
+    msg_source_busy.set(true);
 
     let no_prompt = Suppress::wait_return();
     let p = unsafe { get_emsg_source() };
@@ -143,7 +135,7 @@ pub fn msg_source(hl_id: c_int) {
         }
     }
     drop(no_prompt);
-    recursive.set(false);
+    msg_source_busy.set(false);
 }
 
 /// Is this a bad time to show an error?

@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::option::vars::P_MOPT;
+use crate::options::OptMoptFlags;
 use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -34,20 +35,6 @@ static msg_hist_len: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// `'messagesopt'`'s `history:` count.
 static msg_hist_max: GlobalCell<c_int> = GlobalCell::new(500);
-
-/// Drop the temporary entries before adding the next message.
-pub(crate) static do_clear_hist_temp: GlobalCell<bool> = GlobalCell::new(true);
-
-/// `'messagesopt'`'s flag set.
-pub(crate) static msg_flags: GlobalCell<c_int> = GlobalCell::new(
-    kOptMoptFlagHitEnter as c_int | kOptMoptFlagHistory as c_int | kOptMoptFlagProgress as c_int,
-);
-
-/// `'messagesopt'`'s `wait:` delay, in milliseconds.
-pub(crate) static msg_wait: GlobalCell<c_int> = GlobalCell::new(0);
-
-/// Where `'messagesopt'`'s `progress:` sends progress messages.
-pub(crate) static progress_msg_target: GlobalCell<c_int> = GlobalCell::new(PROGRESS_TARGET_CMD);
 
 /// The `'messagesopt'` items, spelled as [`messagesopt_changed`] matches them.
 const OPT_HIT_ENTER: &CStr = c"hit-enter";
@@ -204,7 +191,7 @@ unsafe fn at_opt(p: *const c_char, word: &CStr, digit: bool) -> bool {
 ///
 /// Answers `Err` without changing anything if the value is not usable.
 pub fn messagesopt_changed() -> Result<(), Failed> {
-    let mut flags = 0;
+    let mut flags: OptMoptFlags = 0;
     let mut wait = 0;
     let mut history = 0;
     let mut progress_target = 0;
@@ -215,18 +202,18 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
     while unsafe { *p } != 0 {
         if unsafe { at_opt(p, OPT_HIT_ENTER, false) } {
             p = unsafe { p.add(OPT_HIT_ENTER.count_bytes()) };
-            flags |= kOptMoptFlagHitEnter as c_int;
+            flags |= kOptMoptFlagHitEnter;
         } else if unsafe { at_opt(p, OPT_WAIT, true) } {
             p = unsafe { p.add(OPT_WAIT.count_bytes()) };
             wait = unsafe { getdigits_int(&raw mut p, false, INT_MAX) };
-            flags |= kOptMoptFlagWait as c_int;
+            flags |= kOptMoptFlagWait;
         } else if unsafe { at_opt(p, OPT_HISTORY, true) } {
             p = unsafe { p.add(OPT_HISTORY.count_bytes()) };
             history = unsafe { getdigits_int(&raw mut p, false, INT_MAX) };
-            flags |= kOptMoptFlagHistory as c_int;
+            flags |= kOptMoptFlagHistory;
         } else if unsafe { at_opt(p, OPT_PROGRESS, false) } {
             p = unsafe { p.add(OPT_PROGRESS.count_bytes()) };
-            flags |= kOptMoptFlagProgress as c_int;
+            flags |= kOptMoptFlagProgress;
             if unsafe { *p } == b'c' as c_char {
                 progress_target |= PROGRESS_TARGET_CMD;
                 p = unsafe { p.add(1) };
@@ -242,11 +229,11 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
     }
 
     // Either "wait" or "hit-enter" is required.
-    if flags & (kOptMoptFlagHitEnter as c_int | kOptMoptFlagWait as c_int) == 0 {
+    if flags & (kOptMoptFlagHitEnter | kOptMoptFlagWait) == 0 {
         return Err(Failed);
     }
     // "history" must be set, and both counts must be <= 10000.
-    if flags & kOptMoptFlagHistory as c_int == 0 {
+    if flags & kOptMoptFlagHistory == 0 {
         return Err(Failed);
     }
     debug_assert!(history >= 0);

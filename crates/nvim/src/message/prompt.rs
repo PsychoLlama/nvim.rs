@@ -134,7 +134,7 @@ pub fn wait_return(redraw: c_int) {
             cmdline_row.set(Rows.get() - 1);
         }
 
-        if msg_flags.get() & kOptMoptFlagHitEnter.cast_signed() != 0 {
+        if msg_flags.get() & kOptMoptFlagHitEnter != 0 {
             hit_return_msg(true);
             loop {
                 // Remember "got_int": if it is set vgetc() probably
@@ -309,7 +309,6 @@ pub(crate) fn hit_return_msg(newline_sb: bool) {
 /// Answers true when the user answered a `:confirm` dialog rather than
 /// scrolling.
 pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
-    static entered: GlobalCell<bool> = GlobalCell::new(false);
     let mut used_typed_char = typed_char;
     let old_state = State.get();
     let mut retval = false;
@@ -320,10 +319,11 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
     // In that case don't show another prompt. Also don't take over a
     // hit-return prompt nobody asked us to.
     let no_need_more = headless_mode.get() && !embedded_mode.get() && ui_active() == 0;
-    if no_need_more || entered.get() || (State.get() == MODE_HITRETURN && typed_char == 0) {
+    if no_need_more || more_prompt_busy.get() || (State.get() == MODE_HITRETURN && typed_char == 0)
+    {
         return false;
     }
-    entered.set(true);
+    more_prompt_busy.set(true);
 
     if typed_char == KEY_UPPER_G {
         // "g<" -- find the first line on the last page.
@@ -519,7 +519,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
         msg_col.set(0);
     }
 
-    entered.set(false);
+    more_prompt_busy.set(false);
     retval
 }
 

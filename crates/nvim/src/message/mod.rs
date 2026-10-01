@@ -115,15 +115,20 @@ use crate::memory::{
     arena_alloc, strequal, strnequal, xfree, xmalloc, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::message::state::{
-    called_emsg, capture_ga, cmd_silent, cmdmsg_rl, did_emsg, did_wait_return,
-    emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir,
-    emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, in_assert_fails, info_message,
-    keep_msg, keep_msg_hl_id, lines_left, msg_col, msg_did_scroll, msg_didany, msg_didout,
-    msg_ext_overwrite, msg_ext_skip_flush, msg_ext_skip_verbose, msg_grid, msg_grid_pos,
-    msg_grid_scroll_discount, msg_hist_off, msg_no_more, msg_nowait, msg_row, msg_scroll,
-    msg_scrolled, msg_scrolled_at_flush, msg_scrolled_ign, msg_silent, need_clr_eos, need_fileinfo,
-    need_wait_return, no_wait_return, on_print, quit_more, redir_fd, redir_off, redir_reg,
-    redir_vname,
+    called_emsg, capture_ga, cmd_silent, cmdmsg_rl, confirm_msg_used, did_emsg, did_wait_return,
+    do_clear_hist_temp, do_clear_sb_text, emsg_assert_fails_context, emsg_assert_fails_lnum,
+    emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display, emsg_severe, emsg_silent,
+    emsg_skip, in_assert_fails, info_message, is_multihl, keep_msg, keep_msg_hl_id, keep_msg_more,
+    last_sourcing_lnum, last_sourcing_name, lines_left, more_prompt_busy, msg_col, msg_did_scroll,
+    msg_didany, msg_didout, msg_ext_append, msg_ext_chunks, msg_ext_history, msg_ext_id,
+    msg_ext_kind, msg_ext_last_attr, msg_ext_last_chunk, msg_ext_last_hl_id, msg_ext_overwrite,
+    msg_ext_skip_flush, msg_ext_skip_verbose, msg_ext_trigger, msg_flags, msg_grid, msg_grid_pos,
+    msg_grid_pos_at_flush, msg_grid_scroll_discount, msg_hist_off, msg_id_next, msg_keep_depth,
+    msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled, msg_scrolled_at_flush,
+    msg_scrolled_ign, msg_silent, msg_source_busy, msg_wait, need_clr_eos, need_fileinfo,
+    need_wait_return, no_wait_return, on_print, pre_verbose_kind, progress_msg_target, quit_more,
+    redir_col, redir_fd, redir_off, redir_reg, redir_vname, showmode_clear_pending,
+    verbose_did_open,
 };
 use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
 use crate::option::shortmess;
@@ -244,31 +249,6 @@ pub const DLG_HOTKEY_CHAR: c_uint = 38;
 pub const DLG_BUTTON_SEP: c_uint = 10;
 pub const BELL: ::core::ffi::c_int = '\u{7}' as ::core::ffi::c_int;
 pub const PROGRESS_TARGET_CMD: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
-static keep_msg_more: GlobalCell<bool> = GlobalCell::new(false);
-/// The kind the message being composed carries, **owned**.
-///
-/// The kind outlives the call that set it -- it is read again when the
-/// message is flushed to the UI or copied into the history -- so this keeps
-/// its own copy rather than the caller's pointer. `nvim_echo`'s `kind` lives
-/// in a keyset that dies with the call, which is how a borrowed kind became
-/// a use-after-free.
-static msg_ext_kind: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-/// What caused the message being built, for a UI that groups by it. Both
-/// callers name a compiled-in kind, so the cell holds the literal rather
-/// than a pointer whose lifetime it would have to answer for.
-static msg_ext_trigger: GlobalCell<Option<&'static ::core::ffi::CStr>> = GlobalCell::new(None);
-static msg_ext_id: GlobalCell<Object> = GlobalCell::new(Object::Integer(1 as Integer));
-static msg_ext_chunks: GlobalCell<Option<Array>> = GlobalCell::new(None);
-/// The text written under the current highlight, waiting to be closed off
-/// into a `msg_show` chunk by [`ext::msg_ext_emit_chunk`].
-static msg_ext_last_chunk: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
-static msg_ext_last_attr: GlobalCell<ScreenAttr> = GlobalCell::new(-1 as ScreenAttr);
-static msg_ext_last_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static msg_ext_history: GlobalCell<bool> = GlobalCell::new(false);
-static msg_ext_append: GlobalCell<bool> = GlobalCell::new(false);
-static msg_grid_pos_at_flush: GlobalCell<::core::ffi::c_int> =
-    GlobalCell::new(0 as ::core::ffi::c_int);
-static msg_id_next: GlobalCell<int64_t> = GlobalCell::new(1 as int64_t);
 
 pub const MSG_BUF_LEN: ::core::ffi::c_int = 480 as ::core::ffi::c_int;
 pub const KS_ZERO: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
@@ -410,10 +390,6 @@ pub unsafe fn msg_multiline(
     }
 }
 
-/// Nonzero while [`msg_multihl`] is emitting a chunk, so [`msg_keep`] knows
-/// not to start or end a message of its own.
-pub(crate) static is_multihl: GlobalCell<c_int> = GlobalCell::new(0);
-
 /// Show a message made of chunks, each with its own highlight id.
 ///
 /// Answers the message's id: `id` itself when it names one, and a freshly
@@ -517,8 +493,6 @@ pub unsafe fn msg_multihl(
 /// # Safety
 /// `s` must be a valid C string.
 pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bool) -> bool {
-    static entered: GlobalCell<c_int> = GlobalCell::new(0);
-
     if keep && multiline {
         // Not implemented. 'multiline' is only used by nvim-added
         // messages, which should avoid 'keep' behaviour -- they should
@@ -539,10 +513,10 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     // Displaying a message can cause a problem (e.g. when redrawing the
     // window), which causes another message, and so on. Break the loop by
     // limiting the recursion to three levels.
-    if entered.get() >= 3 {
+    if msg_keep_depth.get() >= 3 {
         return true;
     }
-    let _entered = Depth::of(&entered);
+    let _entered = Depth::of(msg_keep_depth);
 
     // Add the message to the history unless it is a multihl, or a repeat
     // of the kept message, or a truncated one.

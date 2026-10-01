@@ -25,9 +25,6 @@ use core::{mem, ptr};
 /// The most recently displayed chunk of message text.
 pub(crate) static last_msgchunk: GlobalCell<*mut MsgChunk> = GlobalCell::new(ptr::null_mut());
 
-/// Whether, and how much of, the scrollback to drop before the next message.
-static do_clear_sb_text: GlobalCell<ScrollbackClear> = GlobalCell::new(SB_CLEAR_NONE);
-
 /// A chunk's text lives in the same allocation, right after the header.
 ///
 /// # Safety

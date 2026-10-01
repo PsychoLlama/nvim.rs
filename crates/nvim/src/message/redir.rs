@@ -23,19 +23,8 @@ use core::ptr;
 /// verbose section it is already inside.
 const VERBOSE_KIND: &CStr = c"verbose";
 
-/// The message kind in force when the current verbose section started.
-static pre_verbose_kind: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
-
 /// The `'verbosefile'` handle, opened lazily by [`verbose_open`].
 static verbose_fd: GlobalCell<*mut FILE> = GlobalCell::new(ptr::null_mut());
-
-/// Whether opening `'verbosefile'` has been attempted, so the failure is
-/// reported once rather than on every message.
-static verbose_did_open: GlobalCell<bool> = GlobalCell::new(false);
-
-/// The column [`redir_write`] has written up to, tracked separately from
-/// `msg_col` because the redirection sees no screen.
-pub(crate) static redir_col: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Is `'verbosefile'` set to anything?
 fn verbosefile_set() -> bool {

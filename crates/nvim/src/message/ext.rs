@@ -81,7 +81,7 @@ pub(crate) fn msg_ext_emit_chunk() {
     let text = unsafe { cbuf_to_string(accumulated.as_ptr().cast::<c_char>(), accumulated.len()) };
     chunk.push(Object::string(text));
     chunk.push(Object::integer(msg_ext_last_hl_id.get().into()));
-    msg_ext_chunks.with_mut(|chunks| {
+    msg_ext_chunks.update(|chunks| {
         chunks
             .as_mut()
             .expect("the check above installed an array")
@@ -97,7 +97,7 @@ pub(crate) fn msg_ext_emit_chunk() {
 pub(crate) fn msg_ext_init_chunks() -> Array {
     msg_col.set(0);
     msg_ext_chunks
-        .with_mut(|chunks| chunks.replace(Array::EMPTY))
+        .replace(Some(Array::EMPTY))
         .unwrap_or(Array::EMPTY)
 }
 
@@ -187,10 +187,9 @@ pub fn msg_ext_ui_flush() {
 pub fn msg_ext_flush_showmode() {
     // One trailing empty event after the mode text goes away, so the UI
     // knows to clear what it drew.
-    static clear: GlobalCell<bool> = GlobalCell::new(false);
     let pending = msg_ext_last_attr.get() != -1;
-    if ui_has(kUIMessages) && (pending || clear.get()) {
-        clear.set(pending);
+    if ui_has(kUIMessages) && (pending || showmode_clear_pending.get()) {
+        showmode_clear_pending.set(pending);
         msg_ext_emit_chunk();
         ui_call_msg_showmode(msg_ext_init_chunks());
     }
