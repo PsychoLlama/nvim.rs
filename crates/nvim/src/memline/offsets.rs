@@ -2,7 +2,7 @@
 //! character count.
 //!
 //! The tree does not store byte offsets, so `ml_find_line_or_offset` walks it
-//! adding up block sizes. `ml_updatechunk` maintains the `b_ml.ml_chunks`
+//! adding up block sizes. `Buf::update_line_chunks` (upstream's `ml_updatechunk`) maintains the `b_ml.ml_chunks`
 //! accelerator that keeps that walk from being O(lines) on every call: a run
 //! of between `MLCS_MINL` and `MLCS_MAXL` consecutive lines, with their total
 //! byte size, so the walk can skip whole runs and only visit blocks inside
@@ -21,7 +21,7 @@ use super::*;
 use crate::pos::MAXCOL;
 use crate::winlayer::Win;
 
-/// Where `ml_updatechunk` last left off. Appending runs down the buffer in
+/// Where `Buf::update_line_chunks` last left off. Appending runs down the buffer in
 /// order, so the next call almost always wants the same chunk or the next
 /// one, and the search from chunk zero can be skipped.
 ///
@@ -33,77 +33,81 @@ static ml_upd_lastline: GlobalCell<LineNr> = GlobalCell::new(0);
 static ml_upd_lastcurline: GlobalCell<LineNr> = GlobalCell::new(0);
 static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
 
-/// Keep the chunk table up to date for a line that was added, removed or
-/// resized.
-///
-/// `updtype` is [`ML_CHNK_ADDLINE`] (add `len` to the chunk, splitting it if
-/// it got too long — careful, this can call `ml_find_line`),
-/// [`ML_CHNK_DELLINE`] (subtract `len`, possibly merging the chunk away) or
-/// [`ML_CHNK_UPDLINE`] (add `len` as a signed quantity).
-pub(crate) fn ml_updatechunk(buffer: Buf, line: LineNr, len_arg: c_int, updtype: c_int) {
-    // SAFETY: the caller's buffer, reached through a handle that
-    // borrows it for the one access that asked and no longer.
-    let mut b = buffer;
-    let mut curline = ml_upd_lastcurline.get();
-    let mut curix = ml_upd_lastcurix.get();
+impl Buf {
+    /// Keep the chunk table up to date for a line that was added, removed or
+    /// resized.
+    ///
+    /// `updtype` is [`ML_CHNK_ADDLINE`] (add `len` to the chunk, splitting it if
+    /// it got too long — careful, this can call `ml_find_line`),
+    /// [`ML_CHNK_DELLINE`] (subtract `len`, possibly merging the chunk away) or
+    /// [`ML_CHNK_UPDLINE`] (add `len` as a signed quantity).
+    pub(crate) fn update_line_chunks(self, line: LineNr, len_arg: c_int, updtype: c_int) {
+        // SAFETY: the caller's buffer, reached through a handle that
+        // borrows it for the one access that asked and no longer.
+        let mut b = self;
+        let mut curline = ml_upd_lastcurline.get();
+        let mut curix = ml_upd_lastcurix.get();
 
-    if b.b_ml.ml_chunks.is_off() || len_arg == 0 {
-        return;
-    }
-    if !b.b_ml.ml_chunks.is_built() {
-        b.b_ml.ml_chunks.build();
-    }
+        if b.b_ml.ml_chunks.is_off() || len_arg == 0 {
+            return;
+        }
+        if !b.b_ml.ml_chunks.is_built() {
+            b.b_ml.ml_chunks.build();
+        }
 
-    if updtype == ML_CHNK_UPDLINE && b.b_ml.ml_line_count == 1 {
-        // First line in an empty buffer, from ml_flush_line: reset.
-        let textlen = b.b_ml.cached_len();
-        b.b_ml.ml_chunks.reset_to_one(textlen);
-        return;
-    }
+        if updtype == ML_CHNK_UPDLINE && b.b_ml.ml_line_count == 1 {
+            // First line in an empty buffer, from ml_flush_line: reset.
+            let textlen = b.b_ml.cached_len();
+            b.b_ml.ml_chunks.reset_to_one(textlen);
+            return;
+        }
 
-    // Find the chunk the line belongs to; `curline` ends up at the start
-    // of it.
-    let key = buffer.try_id();
-    if key.is_none()
-        || ml_upd_lastbuf.get() != key
-        || line != ml_upd_lastline.get() + 1
-        || updtype != ML_CHNK_ADDLINE
-    {
-        curline = 1;
-        curix = 0;
-        while curix + 1 < b.b_ml.ml_chunks.len() && line >= curline + b.b_ml.ml_chunks.lines(curix)
+        // Find the chunk the line belongs to; `curline` ends up at the start
+        // of it.
+        let key = self.try_id();
+        if key.is_none()
+            || ml_upd_lastbuf.get() != key
+            || line != ml_upd_lastline.get() + 1
+            || updtype != ML_CHNK_ADDLINE
         {
+            curline = 1;
+            curix = 0;
+            while curix + 1 < b.b_ml.ml_chunks.len()
+                && line >= curline + b.b_ml.ml_chunks.lines(curix)
+            {
+                curline += b.b_ml.ml_chunks.lines(curix);
+                curix += 1;
+            }
+        } else if curix + 1 < b.b_ml.ml_chunks.len()
+            && line >= curline + b.b_ml.ml_chunks.lines(curix)
+        {
+            // The cached position is one chunk stale; step it on.
             curline += b.b_ml.ml_chunks.lines(curix);
             curix += 1;
         }
-    } else if curix + 1 < b.b_ml.ml_chunks.len() && line >= curline + b.b_ml.ml_chunks.lines(curix)
-    {
-        // The cached position is one chunk stale; step it on.
-        curline += b.b_ml.ml_chunks.lines(curix);
-        curix += 1;
-    }
 
-    let len = if updtype == ML_CHNK_DELLINE {
-        -len_arg
-    } else {
-        len_arg
-    };
-    b.b_ml.ml_chunks.add_size(curix, len);
+        let len = if updtype == ML_CHNK_DELLINE {
+            -len_arg
+        } else {
+            len_arg
+        };
+        b.b_ml.ml_chunks.add_size(curix, len);
 
-    if updtype == ML_CHNK_ADDLINE {
-        if !unsafe { ml_chunk_addline(buffer, line, curline, curix) } {
+        if updtype == ML_CHNK_ADDLINE {
+            if !unsafe { ml_chunk_addline(self, line, curline, curix) } {
+                return;
+            }
+        } else if updtype == ML_CHNK_DELLINE {
+            ml_upd_lastbuf.set(None); // force a recalc
+            b.b_ml.ml_chunks.delete_line(curix, MLCS_MINL);
             return;
         }
-    } else if updtype == ML_CHNK_DELLINE {
-        ml_upd_lastbuf.set(None); // force a recalc
-        b.b_ml.ml_chunks.delete_line(curix, MLCS_MINL);
-        return;
-    }
 
-    ml_upd_lastbuf.set(key);
-    ml_upd_lastline.set(line);
-    ml_upd_lastcurline.set(curline);
-    ml_upd_lastcurix.set(curix);
+        ml_upd_lastbuf.set(key);
+        ml_upd_lastline.set(line);
+        ml_upd_lastcurline.set(curline);
+        ml_upd_lastcurix.set(curix);
+    }
 }
 
 /// A line was added to chunk `curix`. Returns false if the caller must return

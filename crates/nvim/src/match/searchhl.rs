@@ -59,7 +59,7 @@ enum Order {
 
 impl ShlWalk {
     /// # Safety
-    /// `window` and `search_hl` must be live.
+    /// `search_hl` must be live.
     #[inline(always)]
     unsafe fn new(window: Win, search_hl: *mut MatchState, order: Order) -> Self {
         Self {
@@ -102,39 +102,41 @@ impl ShlWalk {
     }
 }
 
-/// Resets every pattern's search state for a fresh window redraw.
-///
-/// Each match gets a private copy of its compiled regexp (`mit_hl.rm`) so
-/// that the per-line search can advance it, and a fresh `'redrawtime'`
-/// budget.
-///
-/// # Safety
-/// `window` and `search_hl` must be live.
-pub(crate) unsafe fn init_search_hl(window: Win, search_hl: *mut MatchState) {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut search_hl = unsafe { Shl::new(search_hl) };
-    let mut cur = window.w_match_head;
-    while !cur.is_null() {
-        // The highlight state borrows the item's program; the
-        // item keeps owning it, which is why this is a shallow
-        // clone and not a compile of its own.
-        unsafe { (*cur).mit_hl.rm = (*cur).mit_match.clone() };
-        unsafe {
-            (*cur).mit_hl.attr = if (*cur).mit_hlg_id == 0 {
-                0
-            } else {
-                syn_id2attr((*cur).mit_hlg_id)
-            }
-        };
-        unsafe { (*cur).mit_hl.lnum = 0 };
-        unsafe { (*cur).mit_hl.first_lnum = 0 };
-        unsafe { (*cur).mit_hl.tm = profile_setlimit(p_rdt()) };
-        cur = unsafe { (*cur).mit_next };
+impl Win {
+    /// Resets every pattern's search state for a fresh window redraw.
+    ///
+    /// Each match gets a private copy of its compiled regexp (`mit_hl.rm`) so
+    /// that the per-line search can advance it, and a fresh `'redrawtime'`
+    /// budget.
+    ///
+    /// # Safety
+    /// `search_hl` must be live.
+    pub(crate) unsafe fn init_search_hl(self, search_hl: *mut MatchState) {
+        // SAFETY: the caller's promise -- see this function's `# Safety`.
+        let mut search_hl = unsafe { Shl::new(search_hl) };
+        let mut cur = self.w_match_head;
+        while !cur.is_null() {
+            // The highlight state borrows the item's program; the
+            // item keeps owning it, which is why this is a shallow
+            // clone and not a compile of its own.
+            unsafe { (*cur).mit_hl.rm = (*cur).mit_match.clone() };
+            unsafe {
+                (*cur).mit_hl.attr = if (*cur).mit_hlg_id == 0 {
+                    0
+                } else {
+                    syn_id2attr((*cur).mit_hlg_id)
+                }
+            };
+            unsafe { (*cur).mit_hl.lnum = 0 };
+            unsafe { (*cur).mit_hl.first_lnum = 0 };
+            unsafe { (*cur).mit_hl.tm = profile_setlimit(p_rdt()) };
+            cur = unsafe { (*cur).mit_next };
+        }
+        search_hl.lnum = 0;
+        search_hl.first_lnum = 0;
+        search_hl.attr = win_hl_attr(self, HLF_L);
+        // The time limit is set at the top level, for every window at once.
     }
-    search_hl.lnum = 0;
-    search_hl.first_lnum = 0;
-    search_hl.attr = win_hl_attr(window, HLF_L);
-    // The time limit is set at the top level, for every window at once.
 }
 
 /// Finds the next `matchaddpos()` position on `lnum` at or after `mincol`.
@@ -213,124 +215,127 @@ unsafe fn next_search_hl_pos(
     1
 }
 
-/// Advances `shl` to its next match on `lnum` at or past `mincol`.
-///
-/// A previous match is assumed to be before `lnum` unless `shl->lnum` is
-/// zero. `cur` is the match item when `shl` belongs to one (so that
-/// `matchaddpos()` positions can be read), null for `'hlsearch'`.
-///
-/// Any buffer-line pointer the caller holds is invalidated: a multi-line
-/// regexp can force the line to be re-fetched.
-///
-/// # Safety
-/// `win`, `search_hl` and `shl` must be live; `cur` must be null or live.
-unsafe fn next_search_hl(
-    win: Win,
-    search_hl: *mut MatchState,
-    shl: *mut MatchState,
-    lnum: LineNr,
-    mincol: ColNr,
-    cur: *mut MatchItem,
-) {
-    // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let search_hl = unsafe { Shl::new(search_hl) };
-    // SAFETY: as `search_hl`.
-    let mut shl = unsafe { Shl::new(shl) };
-    let called_emsg_before = called_emsg.get();
+impl Win {
+    /// Advances `shl` to its next match on `lnum` at or past `mincol`.
+    ///
+    /// A previous match is assumed to be before `lnum` unless `shl->lnum` is
+    /// zero. `cur` is the match item when `shl` belongs to one (so that
+    /// `matchaddpos()` positions can be read), null for `'hlsearch'`.
+    ///
+    /// Any buffer-line pointer the caller holds is invalidated: a multi-line
+    /// regexp can force the line to be re-fetched.
+    ///
+    /// # Safety
+    /// `search_hl` and `shl` must be live; `cur` must be null or live.
+    unsafe fn next_search_hl(
+        self,
+        search_hl: *mut MatchState,
+        shl: *mut MatchState,
+        lnum: LineNr,
+        mincol: ColNr,
+        cur: *mut MatchItem,
+    ) {
+        // SAFETY: the caller's promise -- see this function's `# Safety`.
+        let search_hl = unsafe { Shl::new(search_hl) };
+        // SAFETY: as `search_hl`.
+        let mut shl = unsafe { Shl::new(shl) };
+        let called_emsg_before = called_emsg.get();
 
-    // `:{range}s/pat` only highlights inside the range.
-    if (lnum < search_first_line.get() || lnum > search_last_line.get()) && cur.is_null() {
-        shl.lnum = 0;
-        return;
-    }
-
-    if shl.lnum != 0 {
-        // Three cases: `lnum` is below the previous match, so start
-        // again; the previous match already includes `mincol`, so keep
-        // it; otherwise continue after it.
-        let l = shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
-        if lnum > l {
+        // `:{range}s/pat` only highlights inside the range.
+        if (lnum < search_first_line.get() || lnum > search_last_line.get()) && cur.is_null() {
             shl.lnum = 0;
-        } else if lnum < l || shl.rm.endpos[0].col > mincol {
             return;
         }
-    }
 
-    // Search until a match that includes `mincol` turns up, or none does.
-    loop {
-        if profile_passed_limit(shl.tm) {
-            shl.lnum = 0; // no match found in time
-            break;
+        if shl.lnum != 0 {
+            // Three cases: `lnum` is below the previous match, so start
+            // again; the previous match already includes `mincol`, so keep
+            // it; otherwise continue after it.
+            let l = shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
+            if lnum > l {
+                shl.lnum = 0;
+            } else if lnum < l || shl.rm.endpos[0].col > mincol {
+                return;
+            }
         }
 
-        let matchcol: ColNr = if shl.lnum == 0 {
-            // No useful previous match: search from the line's start.
-            0
-        } else if !cpo_has(CpoFlag::SEARCH)
-            || (shl.rm.endpos[0].lnum == 0 && shl.rm.endpos[0].col <= shl.rm.startpos[0].col)
-        {
-            // Not Vi-compatible, or an empty match: continue at the next
-            // character, and stop if that is past the end of the line.
-            let at = shl.rm.startpos[0].col;
-            let ml = unsafe { ml_get_buf(win.buffer(), lnum).offset(at as isize) };
-            if unsafe { *ml } == 0 {
-                shl.lnum = 0;
+        // Search until a match that includes `mincol` turns up, or none does.
+        loop {
+            if profile_passed_limit(shl.tm) {
+                shl.lnum = 0; // no match found in time
                 break;
             }
-            at + unsafe { utfc_ptr2len(ml) }
-        } else {
-            // Vi-compatible: continue at the end of the previous match.
-            shl.rm.endpos[0].col
-        };
 
-        shl.lnum = lnum;
-        let mut nmatched = 0;
-        if !shl.rm.regprog.is_null() {
-            // Whether `shl->rm` shares `cur`'s compiled regexp, which
-            // `vim_regexec_multi` may free and recompile under us.
-            let regprog_is_copy = shl != search_hl
-                && !cur.is_null()
-                && shl.raw() == unsafe { &raw mut (*cur).mit_hl }
-                && unsafe { (*cur).mit_match.regprog } == unsafe { (*cur).mit_hl.rm.regprog };
-            let mut timed_out: c_int = 0;
-
-            // SAFETY: the caller's match state, whose own `rm` and `tm` these
-            // are; two addresses off the pointer rather than off a borrow.
-            let (rm, tm) = unsafe { (&raw mut (*shl.raw()).rm, &raw mut (*shl.raw()).tm) };
-            let buf = win.buffer();
-            // SAFETY: the caller's window and its buffer.
-            let out = &raw mut timed_out;
-            nmatched = unsafe { vim_regexec_multi(rm, Some(win), buf, lnum, matchcol, tm, out) };
-            if regprog_is_copy {
-                unsafe { (*cur).mit_match.regprog = (*cur).mit_hl.rm.regprog };
-            }
-            if called_emsg.get() > called_emsg_before || got_int.get() || timed_out != 0 {
-                // Something went wrong in the regexp: stop using it.
-                if shl == search_hl {
-                    // A match's regprog is a copy and must not be freed.
-                    unsafe { vim_regfree(shl.rm.regprog) };
-                    set_no_hlsearch(true);
+            let matchcol: ColNr = if shl.lnum == 0 {
+                // No useful previous match: search from the line's start.
+                0
+            } else if !cpo_has(CpoFlag::SEARCH)
+                || (shl.rm.endpos[0].lnum == 0 && shl.rm.endpos[0].col <= shl.rm.startpos[0].col)
+            {
+                // Not Vi-compatible, or an empty match: continue at the next
+                // character, and stop if that is past the end of the line.
+                let at = shl.rm.startpos[0].col;
+                let ml = unsafe { ml_get_buf(self.buffer(), lnum).offset(at as isize) };
+                if unsafe { *ml } == 0 {
+                    shl.lnum = 0;
+                    break;
                 }
-                shl.rm.regprog = ::core::ptr::null_mut();
+                at + unsafe { utfc_ptr2len(ml) }
+            } else {
+                // Vi-compatible: continue at the end of the previous match.
+                shl.rm.endpos[0].col
+            };
+
+            shl.lnum = lnum;
+            let mut nmatched = 0;
+            if !shl.rm.regprog.is_null() {
+                // Whether `shl->rm` shares `cur`'s compiled regexp, which
+                // `vim_regexec_multi` may free and recompile under us.
+                let regprog_is_copy = shl != search_hl
+                    && !cur.is_null()
+                    && shl.raw() == unsafe { &raw mut (*cur).mit_hl }
+                    && unsafe { (*cur).mit_match.regprog } == unsafe { (*cur).mit_hl.rm.regprog };
+                let mut timed_out: c_int = 0;
+
+                // SAFETY: the caller's match state, whose own `rm` and `tm` these
+                // are; two addresses off the pointer rather than off a borrow.
+                let (rm, tm) = unsafe { (&raw mut (*shl.raw()).rm, &raw mut (*shl.raw()).tm) };
+                let buf = self.buffer();
+                // SAFETY: the caller's window and its buffer.
+                let out = &raw mut timed_out;
+                nmatched =
+                    unsafe { vim_regexec_multi(rm, Some(self), buf, lnum, matchcol, tm, out) };
+                if regprog_is_copy {
+                    unsafe { (*cur).mit_match.regprog = (*cur).mit_hl.rm.regprog };
+                }
+                if called_emsg.get() > called_emsg_before || got_int.get() || timed_out != 0 {
+                    // Something went wrong in the regexp: stop using it.
+                    if shl == search_hl {
+                        // A match's regprog is a copy and must not be freed.
+                        unsafe { vim_regfree(shl.rm.regprog) };
+                        set_no_hlsearch(true);
+                    }
+                    shl.rm.regprog = ::core::ptr::null_mut();
+                    shl.lnum = 0;
+                    got_int.set(false); // avoid the "Type :quit to exit Vim" message
+                    break;
+                }
+            } else if !cur.is_null() {
+                nmatched = unsafe { next_search_hl_pos(shl.raw(), lnum, cur, matchcol) };
+            }
+
+            if nmatched == 0 {
                 shl.lnum = 0;
-                got_int.set(false); // avoid the "Type :quit to exit Vim" message
                 break;
             }
-        } else if !cur.is_null() {
-            nmatched = unsafe { next_search_hl_pos(shl.raw(), lnum, cur, matchcol) };
-        }
-
-        if nmatched == 0 {
-            shl.lnum = 0;
-            break;
-        }
-        if shl.rm.startpos[0].lnum > 0
-            || shl.rm.startpos[0].col >= mincol
-            || nmatched > 1
-            || shl.rm.endpos[0].col > mincol
-        {
-            shl.lnum += shl.rm.startpos[0].lnum;
-            break; // useful match found
+            if shl.rm.startpos[0].lnum > 0
+                || shl.rm.startpos[0].col >= mincol
+                || nmatched > 1
+                || shl.rm.endpos[0].col > mincol
+            {
+                shl.lnum += shl.rm.startpos[0].lnum;
+                break; // useful match found
+            }
         }
     }
 }
@@ -373,7 +378,7 @@ pub(crate) unsafe fn prepare_search_hl(window: Win, search_hl: *mut MatchState, 
         while shl.first_lnum < lnum
             && (!shl.rm.regprog.is_null() || (!cur.is_null() && pos_inprogress))
         {
-            unsafe { next_search_hl(window, search_hl.raw(), shl.raw(), shl.first_lnum, n, cur) };
+            unsafe { window.next_search_hl(search_hl.raw(), shl.raw(), shl.first_lnum, n, cur) };
             pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
             if shl.lnum != 0 {
                 shl.first_lnum = shl.lnum + shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
@@ -436,7 +441,7 @@ pub(crate) unsafe fn prepare_search_hl_line(
         if !cur.is_null() {
             unsafe { (*cur).mit_pos_cur = 0 };
         }
-        unsafe { next_search_hl(window, search_hl.raw(), shl.raw(), lnum, mincol, cur) };
+        unsafe { window.next_search_hl(search_hl.raw(), shl.raw(), lnum, mincol, cur) };
 
         // Re-read the line: a multi-line regexp may have invalidated it.
         unsafe { *line = ml_get_buf(window.buffer(), lnum) };
@@ -551,7 +556,7 @@ pub(crate) unsafe fn update_search_hl(
 
             // Just past the end: look for the next match on this line.
             shl.attr_cur = 0;
-            unsafe { next_search_hl(window, search_hl.raw(), shl.raw(), lnum, col, cur) };
+            unsafe { window.next_search_hl(search_hl.raw(), shl.raw(), lnum, col, cur) };
             pos_inprogress = !cur.is_null() && unsafe { (*cur).mit_pos_cur } != 0;
 
             // Re-read the line: a multi-line regexp may have invalidated it.

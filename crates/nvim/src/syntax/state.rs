@@ -24,110 +24,112 @@ use core::ffi::c_int;
 use super::*;
 use crate::types::NUL;
 
-/// Start syntax recognition for a line.
-///
-/// Normally called from the screen update, once per displayed line. The window
-/// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
-/// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
-/// are likely to point somewhere else entirely.
-pub(crate) fn syntax_start(window: Win, lnum: LineNr) {
-    // The last change id we parsed at. A change may have invalidated the
-    // current state, so this is checked as if it were part of the identity
-    // of the buffer.
-    static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
+impl Win {
+    /// Start syntax recognition for a line.
+    ///
+    /// Normally called from the screen update, once per displayed line. The window
+    /// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
+    /// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
+    /// are likely to point somewhere else entirely.
+    pub(crate) fn syntax_start(self, lnum: LineNr) {
+        // The last change id we parsed at. A change may have invalidated the
+        // current state, so this is checked as if it were part of the identity
+        // of the buffer.
+        static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
 
-    current_sub_char.set(NUL);
-    if syn_block().raw() != window.w_s
-        || syn_buf.get() != window.buffer().try_id()
-        || changedtick.get() != buf_get_changedtick(syn_buffer())
-    {
-        invalidate_current_state();
-        syn_buf.set(window.buffer().try_id());
-        parsed_block.set(window.w_s);
-    }
-    changedtick.set(buf_get_changedtick(syn_buffer()));
-    syn_win.set(Some(window.id()));
-
-    syn_stack_alloc();
-    if syn_block().b_sst_array.is_null() {
-        return; // out of memory
-    }
-    syn_block().b_sst_lasttick = display_tick.get();
-
-    // If the state at the end of the previous line is useful, store it.
-    if current_state_valid()
-        && current_lnum.get() < lnum
-        && current_lnum.get() < syn_buffer().line_count()
-    {
-        syn_finish_line(false);
-        if !current_state_stored.get() {
-            current_lnum.set(current_lnum.get() + 1);
-            store_current_state();
+        current_sub_char.set(NUL);
+        if syn_block().raw() != self.w_s
+            || syn_buf.get() != self.buffer().try_id()
+            || changedtick.get() != buf_get_changedtick(syn_buffer())
+        {
+            invalidate_current_state();
+            syn_buf.set(self.buffer().try_id());
+            parsed_block.set(self.w_s);
         }
-        // If current_lnum is now "lnum", keep the current state -- which
-        // happens very often. Otherwise work it out below.
-        if current_lnum.get() != lnum {
+        changedtick.set(buf_get_changedtick(syn_buffer()));
+        syn_win.set(Some(self.id()));
+
+        syn_stack_alloc();
+        if syn_block().b_sst_array.is_null() {
+            return; // out of memory
+        }
+        syn_block().b_sst_lasttick = display_tick.get();
+
+        // If the state at the end of the previous line is useful, store it.
+        if current_state_valid()
+            && current_lnum.get() < lnum
+            && current_lnum.get() < syn_buffer().line_count()
+        {
+            syn_finish_line(false);
+            if !current_state_stored.get() {
+                current_lnum.set(current_lnum.get() + 1);
+                store_current_state();
+            }
+            // If current_lnum is now "lnum", keep the current state -- which
+            // happens very often. Otherwise work it out below.
+            if current_lnum.get() != lnum {
+                invalidate_current_state();
+            }
+        } else {
             invalidate_current_state();
         }
-    } else {
-        invalidate_current_state();
-    }
 
-    // Try to synchronise from a saved state, but only if "lnum" is neither
-    // before one nor too far beyond one.
-    let mut last_valid = ::core::ptr::null_mut::<SynState>();
-    if !current_state_valid() {
-        let mut last_min_valid = ::core::ptr::null_mut::<SynState>();
-        let mut p = syn_block().b_sst_first;
-        while !p.is_null() && unsafe { (*p).sst_lnum } <= lnum {
-            if unsafe { (*p).sst_change_lnum } == 0 {
-                last_valid = p;
-                if unsafe { (*p).sst_lnum } >= lnum - syn_block().b_syn_sync_minlines {
-                    last_min_valid = p;
+        // Try to synchronise from a saved state, but only if "lnum" is neither
+        // before one nor too far beyond one.
+        let mut last_valid = ::core::ptr::null_mut::<SynState>();
+        if !current_state_valid() {
+            let mut last_min_valid = ::core::ptr::null_mut::<SynState>();
+            let mut p = syn_block().b_sst_first;
+            while !p.is_null() && unsafe { (*p).sst_lnum } <= lnum {
+                if unsafe { (*p).sst_change_lnum } == 0 {
+                    last_valid = p;
+                    if unsafe { (*p).sst_lnum } >= lnum - syn_block().b_syn_sync_minlines {
+                        last_min_valid = p;
+                    }
                 }
+                p = unsafe { (*p).sst_next };
             }
-            p = unsafe { (*p).sst_next };
+            if !last_min_valid.is_null() {
+                unsafe { load_current_state(last_min_valid) };
+            }
         }
-        if !last_min_valid.is_null() {
-            unsafe { load_current_state(last_min_valid) };
-        }
-    }
 
-    // Still nothing: re-synchronise.
-    let first_stored = if !current_state_valid() {
-        unsafe { syn_sync(window, lnum, last_valid) };
-        if current_lnum.get() == 1 {
-            1 // the first line is always valid, whatever "minlines" says
+        // Still nothing: re-synchronise.
+        let first_stored = if !current_state_valid() {
+            unsafe { syn_sync(self, lnum, last_valid) };
+            if current_lnum.get() == 1 {
+                1 // the first line is always valid, whatever "minlines" says
+            } else {
+                // "minlines" lines have to be parsed before a state can be
+                // considered valid enough to store.
+                current_lnum.get() + syn_block().b_syn_sync_minlines
+            }
         } else {
-            // "minlines" lines have to be parsed before a state can be
-            // considered valid enough to store.
-            current_lnum.get() + syn_block().b_syn_sync_minlines
-        }
-    } else {
-        current_lnum.get()
-    };
+            current_lnum.get()
+        };
 
-    // Advance from the sync point or the saved state to the wanted line,
-    // saving some entries along the way to sync with later on.
-    let dist = store_distance();
-    let mut prev = ::core::ptr::null_mut::<SynState>();
-    while current_lnum.get() < lnum {
+        // Advance from the sync point or the saved state to the wanted line,
+        // saving some entries along the way to sync with later on.
+        let dist = store_distance();
+        let mut prev = ::core::ptr::null_mut::<SynState>();
+        while current_lnum.get() < lnum {
+            syn_start_line();
+            syn_finish_line(false);
+            current_lnum.set(current_lnum.get() + 1);
+            if current_lnum.get() >= first_stored {
+                prev = unsafe { record_line(prev, lnum, dist) };
+            }
+
+            // This can take a long time: stop when CTRL-C is pressed. The
+            // current state is then wrong.
+            line_breakcheck();
+            if got_int.get() {
+                current_lnum.set(lnum);
+                break;
+            }
+        }
         syn_start_line();
-        syn_finish_line(false);
-        current_lnum.set(current_lnum.get() + 1);
-        if current_lnum.get() >= first_stored {
-            prev = unsafe { record_line(prev, lnum, dist) };
-        }
-
-        // This can take a long time: stop when CTRL-C is pressed. The
-        // current state is then wrong.
-        line_breakcheck();
-        if got_int.get() {
-            current_lnum.set(lnum);
-            break;
-        }
     }
-    syn_start_line();
 }
 
 /// Is the current state valid, i.e. does it describe a real position?

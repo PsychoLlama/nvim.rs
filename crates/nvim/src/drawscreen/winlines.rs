@@ -630,7 +630,7 @@ fn restart_for_statuscol(mut window: Win, decor: DecorStateRef) {
     window.w_redr_statuscol = false;
     window.w_lines_valid = 0;
     window.w_valid.clear(WinValid::WCOL);
-    decor_redraw_reset(window, decor);
+    window.decor_redraw_reset(decor);
     decor_providers_invoke_win(window, decor);
 }
 

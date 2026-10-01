@@ -843,7 +843,6 @@ count	callee	no_raw	defs	def
 4	stdpaths_user_state_subpath	0	1	crates/nvim/src/os/stdpaths.rs
 4	str2special	0	1	crates/nvim/src/message/outtrans.rs
 4	strrchr	0	0	
-4	syn_get_id	0	1	crates/nvim/src/syntax/query.rs
 4	tabstops	0	1	crates/nvim/src/indent/mod.rs
 4	tagstack_clear_entry	0	0	
 4	take_bracketed	0	1	crates/nvim/src/regexp/chars.rs
@@ -880,6 +879,7 @@ count	callee	no_raw	defs	def
 3	.conv_func_before_self	0	0	
 3	.copy	0	1	crates/nvim/src/strings/printf/emit.rs
 3	.leave	1	2	
+3	.next_search_hl	0	1	crates/nvim/src/match/searchhl.rs
 3	.position	1	1	crates/nvim/src/strings/printf/emit.rs
 3	.set_message	0	1	crates/nvim/src/quickfix/parse.rs
 3	.set_nextcmd_ptr	0	0	
@@ -1105,7 +1105,6 @@ count	callee	no_raw	defs	def
 3	msg_trunc	0	1	crates/nvim/src/message/mod.rs
 3	name_object	0	1	crates/nvim/src/highlight/mod.rs
 3	nested_list	0	1	crates/nvim/src/eval/funcs/regexp.rs
-3	next_search_hl	0	1	crates/nvim/src/match/searchhl.rs
 3	nlua_call_ref_ctx	0	1	crates/nvim/src/lua/executor/exec.rs
 3	nlua_exec_file	0	1	crates/nvim/src/lua/executor/excmds.rs
 3	nlua_funcref_str	0	1	crates/nvim/src/lua/executor/callable.rs
@@ -2227,6 +2226,7 @@ count	callee	no_raw	defs	def
 1	.handle_inline_virtual_text	0	0	
 1	.help_match	1	1	crates/nvim/src/tag/collect.rs
 1	.holds	1	1	crates/nvim/src/option/scope.rs
+1	.init_search_hl	0	1	crates/nvim/src/match/searchhl.rs
 1	.insert	0	2	
 1	.join_compound	0	1	crates/nvim/src/spellsuggest/walk/node.rs
 1	.jump	0	1	crates/nvim/src/tag/command.rs
@@ -2272,6 +2272,7 @@ count	callee	no_raw	defs	def
 1	.stage_bom	0	1	crates/nvim/src/bufwrite/convert.rs
 1	.store	0	1	crates/nvim/src/highlight_group/command.rs
 1	.strip_parent	1	1	crates/nvim/src/path/mod.rs
+1	.syntax_id	0	1	crates/nvim/src/syntax/query.rs
 1	.take_conversion	0	1	crates/nvim/src/quickfix/parse.rs
 1	.take_file	0	1	crates/nvim/src/quickfix/parse.rs
 1	.take_match	0	1	crates/nvim/src/quickfix/parse.rs
@@ -2853,7 +2854,6 @@ count	callee	no_raw	defs	def
 1	init_histories	0	1	crates/nvim/src/shada/write.rs
 1	init_params	0	1	crates/nvim/src/startup/args.rs
 1	init_path	0	1	crates/nvim/src/startup/args.rs
-1	init_search_hl	0	1	crates/nvim/src/match/searchhl.rs
 1	init_startuptime	0	1	crates/nvim/src/startup/args.rs
 1	init_syl_tab	0	1	crates/nvim/src/spell/slang.rs
 1	init_winopt_strings	0	1	crates/nvim/src/option/copy.rs

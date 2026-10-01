@@ -14,8 +14,8 @@ use crate::buffer::{buf_meta_total, maketitle};
 use crate::charset::{vim_isprintc, vim_strsize};
 use crate::cmdexpand::cmdline_pum_display;
 use crate::decoration::{
-    SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt,
-    decor_redraw_reset, decor_virt_lines, kMTMetaSignText, win_lines_concealed,
+    SCL_NUM, buf_signcols_count_range, decor_conceal_line, decor_range_add_virt, decor_virt_lines,
+    kMTMetaSignText, win_lines_concealed,
 };
 use crate::decoration_provider::{
     decor_providers_invoke_buf, decor_providers_invoke_end, decor_providers_invoke_win,
@@ -53,7 +53,7 @@ use crate::highlight_group::{
     HLF_AT, HLF_C, HLF_CM, HLF_COUNT, HLF_EOB, HLF_FC, HLF_MSG, HLF_N, HLF_SC, highlight_changed,
 };
 use crate::insexpand::ins_compl_show_pum;
-use crate::r#match::{init_search_hl, prepare_search_hl};
+use crate::r#match::prepare_search_hl;
 use crate::mbyte::{utf_ptr2cells, utf_ptr2char};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::message::state::{

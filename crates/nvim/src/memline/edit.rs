@@ -157,7 +157,7 @@ pub(crate) unsafe fn ml_append_int(
     }
 
     // The line was inserted below `lnum`.
-    ml_updatechunk(buffer, lnum + 1, len, ML_CHNK_ADDLINE);
+    buffer.update_line_chunks(lnum + 1, len, ML_CHNK_ADDLINE);
     Ok(())
 }
 
@@ -754,7 +754,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
         b.b_ml.locked_has_moved();
     }
 
-    ml_updatechunk(buffer, lnum, line_size, ML_CHNK_DELLINE);
+    buffer.update_line_chunks(lnum, line_size, ML_CHNK_DELLINE);
     Ok(())
 }
 

@@ -53,7 +53,7 @@ use core::ptr;
 use crate::buffer_updates::buf_updates_send_splice;
 use crate::decoration::{
     SignCountHalf, buf_decor_remove, buf_put_decor, buf_signcols_count_range, decor_free,
-    decor_redraw, decor_state_invalidate, decor_type_flags,
+    decor_redraw, decor_type_flags,
 };
 use crate::global_cell::GlobalCell;
 use crate::marktree::{
@@ -271,7 +271,7 @@ fn type_flags(decor: DecorInline) -> uint16_t {
 }
 
 fn invalidate_decor_state(buffer: Buf) {
-    decor_state_invalidate(buffer)
+    buffer.invalidate_decor_state()
 }
 
 fn signcols_count_range(buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {

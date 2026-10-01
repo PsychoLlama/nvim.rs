@@ -19,7 +19,7 @@
 //!   inside a `GlobalCell` that other code reaches through the same cell;
 //! * the walks here run decoration providers, which is Lua, which can place
 //!   and delete marks. Upstream keeps walking afterwards (and
-//!   `decor_state_invalidate` is the machinery that copes), so a `&mut
+//!   `Buf::invalidate_decor_state` is the machinery that copes), so a `&mut
 //!   MarkTree` spanning the callback would be a borrow the editor really does
 //!   invalidate underneath itself, not a theoretical one.
 //!

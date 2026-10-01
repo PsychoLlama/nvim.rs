@@ -164,42 +164,44 @@ pub(crate) unsafe fn get_syntax_name(expand: *mut Expand, idx: c_int) -> *mut c_
     }
 }
 
-/// The syntax id at a buffer position, for expression evaluation.
-///
-/// `trans` removes transparency; `spellp` answers whether spell checking
-/// applies there; `keep_state` keeps the state of the character at `col` so
-/// that [`syn_get_stack_item`] can be asked about it afterwards.
-///
-/// # Safety
-///
-/// `spellp` must point at a writable `bool` the caller owns.
-pub(crate) unsafe fn syn_get_id(
-    window: Win,
-    lnum: LineNr,
-    col: ColNr,
-    trans: c_int,
-    spellp: *mut bool,
-    keep_state: c_int,
-) -> c_int {
-    // Parsing has to restart unless this position is at or after the
-    // current one, in the same line of the same window and buffer.
-    if syn_win.get() != Some(window.id())
-        || syn_buf.get() != window.buffer().try_id()
-        || lnum != current_lnum.get()
-        || col < current_col.get()
-    {
-        syntax_start(window, lnum);
-    } else if col > current_col.get() {
-        // `next_match` may be wrong when moving around, e.g. with the
-        // "skip" expression of `searchpair()`.
-        next_match_idx.set(-1);
-    }
+impl Win {
+    /// The syntax id at a buffer position, for expression evaluation.
+    ///
+    /// `trans` removes transparency; `spellp` answers whether spell checking
+    /// applies there; `keep_state` keeps the state of the character at `col` so
+    /// that [`syn_get_stack_item`] can be asked about it afterwards.
+    ///
+    /// # Safety
+    ///
+    /// `spellp` must point at a writable `bool` the caller owns.
+    pub(crate) unsafe fn syntax_id(
+        self,
+        lnum: LineNr,
+        col: ColNr,
+        trans: c_int,
+        spellp: *mut bool,
+        keep_state: c_int,
+    ) -> c_int {
+        // Parsing has to restart unless this position is at or after the
+        // current one, in the same line of the same window and buffer.
+        if syn_win.get() != Some(self.id())
+            || syn_buf.get() != self.buffer().try_id()
+            || lnum != current_lnum.get()
+            || col < current_col.get()
+        {
+            self.syntax_start(lnum);
+        } else if col > current_col.get() {
+            // `next_match` may be wrong when moving around, e.g. with the
+            // "skip" expression of `searchpair()`.
+            next_match_idx.set(-1);
+        }
 
-    unsafe { get_syntax_attr(window.buffer(), col, spellp, keep_state != 0) };
-    if trans != 0 {
-        current_trans_id.get()
-    } else {
-        current_id.get()
+        unsafe { get_syntax_attr(self.buffer(), col, spellp, keep_state != 0) };
+        if trans != 0 {
+            current_trans_id.get()
+        } else {
+            current_id.get()
+        }
     }
 }
 
@@ -222,7 +224,7 @@ pub(crate) fn syn_get_sub_char() -> c_int {
 /// The syntax id at position `i` of the current state stack, or -1 when `i` is
 /// out of range.
 ///
-/// The caller must have called [`syn_get_id`] first, to fill the stack.
+/// The caller must have called [`Win::syntax_id`] first, to fill the stack.
 pub(crate) fn syn_get_stack_item(i: c_int) -> c_int {
     if i >= state_len() {
         // The state was not properly finished for the last character
@@ -254,7 +256,7 @@ pub(crate) fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
         && !unsafe { (*window.w_s).b_syn_error }
         && !unsafe { (*window.w_s).b_syn_slow }
     {
-        syntax_start(window, lnum);
+        window.syntax_start(lnum);
 
         // Start with the fold level at the start of the line.
         level = syn_cur_foldlevel();

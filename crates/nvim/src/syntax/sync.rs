@@ -296,28 +296,32 @@ fn scan_for_sync_point(from: LineNr, end_lnum: LineNr, start_lnum: LineNr) -> Op
     found.filter(|f| f.flags != SynFlags::NONE)
 }
 
-/// Save `syn_buf`'s character table and install the one `syntax iskeyword` set.
-///
-/// A no-op when the syntax has no `iskeyword` of its own, in which case
-/// [`restore_chartab`] is a no-op too and the saved buffer is never read.
-pub(crate) fn save_chartab(mut buffer: Buf, chartab: &mut [uint64_t; 4]) {
-    if syn_block().b_syn_isk.is_unset() {
-        return;
+impl Buf {
+    /// Save `syn_buf`'s character table and install the one `syntax iskeyword` set.
+    ///
+    /// A no-op when the syntax has no `iskeyword` of its own, in which case
+    /// [`Buf::restore_chartab`] is a no-op too and the saved buffer is never read.
+    pub(crate) fn install_syntax_chartab(mut self, chartab: &mut [uint64_t; 4]) {
+        if syn_block().b_syn_isk.is_unset() {
+            return;
+        }
+        // The two tables are the same 32 bytes, one typed as four `uint64_t`
+        // and one as `uint8_t[32]`.
+        let installed: [uint8_t; 32] = syn_block().b_syn_chartab;
+        let buf_chartab = &mut self.b_chartab;
+        *chartab = *buf_chartab;
+        *buf_chartab = ::core::array::from_fn(|i| {
+            uint64_t::from_ne_bytes(installed[i * 8..i * 8 + 8].try_into().unwrap())
+        });
     }
-    // The two tables are the same 32 bytes, one typed as four `uint64_t`
-    // and one as `uint8_t[32]`.
-    let installed: [uint8_t; 32] = syn_block().b_syn_chartab;
-    let buf_chartab = &mut buffer.b_chartab;
-    *chartab = *buf_chartab;
-    *buf_chartab = ::core::array::from_fn(|i| {
-        uint64_t::from_ne_bytes(installed[i * 8..i * 8 + 8].try_into().unwrap())
-    });
 }
 
-/// Put back what [`save_chartab`] saved.
-pub(crate) fn restore_chartab(mut buffer: Buf, chartab: &[uint64_t; 4]) {
-    if !syn_block().b_syn_isk.is_unset() {
-        buffer.b_chartab = *chartab;
+impl Buf {
+    /// Put back what [`Buf::install_syntax_chartab`] saved.
+    pub(crate) fn restore_chartab(mut self, chartab: &[uint64_t; 4]) {
+        if !syn_block().b_syn_isk.is_unset() {
+            self.b_chartab = *chartab;
+        }
     }
 }
 
@@ -329,7 +333,7 @@ pub(crate) fn syn_match_linecont(lnum: LineNr) -> bool {
     }
     let buf = syn_buffer();
     let mut buf_chartab = [0u64; 4];
-    save_chartab(buf, &mut buf_chartab);
+    buf.install_syntax_chartab(&mut buf_chartab);
 
     let mut regmatch = RegMMatch {
         regprog: syn_block().b_syn_linecont_prog,
@@ -344,7 +348,7 @@ pub(crate) fn syn_match_linecont(lnum: LineNr) -> bool {
     let r = unsafe { syn_regexec(&raw mut regmatch, lnum, 0, time) };
     syn_block().b_syn_linecont_prog = regmatch.regprog;
 
-    restore_chartab(buf, &buf_chartab);
+    buf.restore_chartab(&buf_chartab);
     r
 }
 

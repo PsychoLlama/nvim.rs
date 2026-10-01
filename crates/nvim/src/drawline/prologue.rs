@@ -265,7 +265,7 @@ impl LineSetup {
         }
         let save_did_emsg = did_emsg.get();
         did_emsg.set(0);
-        syntax_start(window, lnum);
+        window.syntax_start(lnum);
         if did_emsg.get() != 0 {
             unsafe { (*window.w_s).b_syn_error = true };
         } else {
@@ -492,7 +492,7 @@ impl LineSetup {
         if self.cul_screenline {
             // Only the cursor's own screen row is highlighted, so the loop
             // needs that row's margins.
-            (self.left_curline_col, self.right_curline_col) = margin_columns_win(window);
+            (self.left_curline_col, self.right_curline_col) = window.cursorline_margins();
         } else {
             wlv.apply_cursorline_highlight(window);
         }
@@ -826,7 +826,7 @@ impl LineSetup {
 
         // Syntax highlighting has to be restarted for this line.
         if self.has_syntax {
-            syntax_start(window, lnum);
+            window.syntax_start(lnum);
         }
     }
 

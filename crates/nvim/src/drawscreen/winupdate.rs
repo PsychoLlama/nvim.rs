@@ -152,7 +152,7 @@ pub(crate) fn win_update(window: Win) {
     // ephemeral extmark comes back through `nvim_buf_set_extmark`, which
     // reaches the same state from the API side.
     let decor = unsafe { DecorStateRef::current() };
-    decor_redraw_reset(window, decor);
+    window.decor_redraw_reset(decor);
     decor_providers_invoke_win(window, decor);
 
     add_suspended_terminal_note(buf, decor);
@@ -172,7 +172,7 @@ pub(crate) fn win_update(window: Win) {
     validate_virtcol(win);
     rg.redr_type = win.w_redr_type;
 
-    unsafe { init_search_hl(window, SearchHl::current().raw()) };
+    unsafe { window.init_search_hl(SearchHl::current().raw()) };
 
     clamp_skipcol(window);
 

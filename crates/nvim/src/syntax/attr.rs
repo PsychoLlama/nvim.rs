@@ -148,7 +148,7 @@ pub(crate) unsafe fn syn_current_attr(
 
     // Use the `syntax iskeyword` option while matching.
     let mut buf_chartab = [0u64; 4];
-    save_chartab(buffer, &mut buf_chartab);
+    buffer.install_syntax_chartab(&mut buf_chartab);
 
     let mut cur_extmatch: *mut RegExtMatch = ::core::ptr::null_mut();
     let mut zero_width_next_list = false;
@@ -245,7 +245,7 @@ pub(crate) unsafe fn syn_current_attr(
         }
     }
 
-    restore_chartab(buffer, &buf_chartab);
+    buffer.restore_chartab(&buf_chartab);
 
     let sip = pick_current_attr(cur_si);
     if !can_spell.is_null() {

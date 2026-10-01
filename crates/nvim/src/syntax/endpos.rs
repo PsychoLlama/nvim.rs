@@ -130,13 +130,13 @@ pub(crate) unsafe fn find_endpos(
 
     let buf = syn_buffer();
     let mut buf_chartab = [0u64; 4];
-    save_chartab(buf, &mut buf_chartab);
+    buf.install_syntax_chartab(&mut buf_chartab);
 
     let start_idx = idx;
     let mut matchcol = startpos.col;
     let answer = find_endpos_scan(start_idx, skip_idx, startpos, &mut matchcol);
 
-    restore_chartab(buf, &buf_chartab);
+    buf.restore_chartab(&buf_chartab);
     unsafe { unref_extmatch(re_extmatch_in.get()) };
     re_extmatch_in.set(::core::ptr::null_mut());
     answer

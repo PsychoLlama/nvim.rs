@@ -331,7 +331,7 @@ unsafe fn ml_store_line(buffer: Buf, hp: *mut BlockHdr, lnum: LineNr, new_line: 
     b.b_ml.locked_has_moved();
     // The `extra == 0` case is already covered by the insert and delete.
     if extra != 0 {
-        ml_updatechunk(buffer, lnum, extra, ML_CHNK_UPDLINE);
+        buffer.update_line_chunks(lnum, extra, ML_CHNK_UPDLINE);
     }
 }
 

@@ -37,9 +37,7 @@ use core::mem;
 use crate::charset::skip;
 use crate::charset::skipwhite;
 use crate::decoration::decor_state;
-use crate::decoration::{
-    DecorStateRef, decor_redraw_col, decor_redraw_line, decor_redraw_reset, decor_state_free,
-};
+use crate::decoration::{DecorStateRef, decor_redraw_col, decor_redraw_line, decor_state_free};
 use crate::decoration_provider::decor_providers_invoke_spell;
 use crate::getchar::state::got_int;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
@@ -52,7 +50,7 @@ use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
-use crate::syntax::{syn_get_id, syntax_present};
+use crate::syntax::syntax_present;
 use crate::types::{ColNr, Hlf, LineNr, NUL, Pos, ShmFlag, SpellMoveType, size_t, uint8_t};
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
@@ -70,7 +68,7 @@ fn decor_spell_nav_col(
     state: DecorStateRef,
 ) -> Option<bool> {
     if *decor_lnum != lnum {
-        decor_redraw_reset(window, state);
+        window.decor_redraw_reset(state);
         decor_providers_invoke_spell(window, lnum as c_int - 1, col, lnum as c_int - 1, -1);
         decor_redraw_line(window, lnum as c_int - 1, state);
         *decor_lnum = lnum;
@@ -83,7 +81,7 @@ fn decor_spell_nav_col(
 #[inline]
 fn can_syn_spell(window: Win, lnum: LineNr, col: c_int) -> bool {
     let mut can_spell = false;
-    unsafe { syn_get_id(window, lnum, col as ColNr, 0, &raw mut can_spell, 0) };
+    unsafe { window.syntax_id(lnum, col as ColNr, 0, &raw mut can_spell, 0) };
     can_spell
 }
 

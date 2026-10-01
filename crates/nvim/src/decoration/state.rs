@@ -222,52 +222,56 @@ pub fn decor_range_at(state: DecorStateRef, i: c_int) -> *mut DecorRange {
     state.range_at(i).raw()
 }
 
-/// Called whenever a public API function adds or deletes marks, in case that
-/// happened in a callback the drawing code is inside: the marktree iterator
-/// `state` is holding cannot be trusted across a structural change.
-pub fn decor_state_invalidate(buffer: Buf) {
-    decor_state.with_mut(|state| {
-        // The provider that called in may have closed the window.
-        if let Some(win) = state.win.and_then(WinId::get) {
-            state.itr_valid &= win.buffer() != buffer;
-        }
-    });
+impl Buf {
+    /// Called whenever a public API function adds or deletes marks, in case that
+    /// happened in a callback the drawing code is inside: the marktree iterator
+    /// `state` is holding cannot be trusted across a structural change.
+    pub fn invalidate_decor_state(self) {
+        decor_state.with_mut(|state| {
+            // The provider that called in may have closed the window.
+            if let Some(win) = state.win.and_then(WinId::get) {
+                state.itr_valid &= win.buffer() != self;
+            }
+        });
+    }
 }
 
 /// Releases the two vectors. The ranges themselves are not owned here — see
-/// [`decor_redraw_reset`], which is what frees the ephemeral ones.
+/// [`Win::decor_redraw_reset`], which is what frees the ephemeral ones.
 ///
 pub fn decor_state_free(mut state: DecorStateRef) {
     state.slots = Vec::new();
     state.ranges_i = Vec::new();
 }
 
-/// Starts a fresh window: empties both lists, freeing the ephemeral virtual
-/// texts a decoration provider left behind.
-///
-/// Answers whether the buffer has any marks at all, which is the caller's cue
-/// to bother with the rest of the machinery.
-pub fn decor_redraw_reset(window: Win, mut state: DecorStateRef) -> bool {
-    state.row = -1;
-    state.win = Some(window.id());
+impl Win {
+    /// Starts a fresh window: empties both lists, freeing the ephemeral virtual
+    /// texts a decoration provider left behind.
+    ///
+    /// Answers whether the buffer has any marks at all, which is the caller's cue
+    /// to bother with the rest of the machinery.
+    pub fn decor_redraw_reset(self, mut state: DecorStateRef) -> bool {
+        state.row = -1;
+        state.win = Some(self.id());
 
-    for i in state.list_spans() {
-        // Only the ephemeral virtual texts: an owned URL belongs to a range
-        // the column loop is still holding, and is freed there.
-        let r = state.range_at(i);
-        if r.kind == kDecorKindVirtText {
-            r.free_owned();
+        for i in state.list_spans() {
+            // Only the ephemeral virtual texts: an owned URL belongs to a range
+            // the column loop is still holding, and is freed there.
+            let r = state.range_at(i);
+            if r.kind == kDecorKindVirtText {
+                r.free_owned();
+            }
         }
+
+        state.slots.clear();
+        state.ranges_i.clear();
+        state.free_slot_i = -1;
+        state.current_end = 0;
+        state.future_begin = 0;
+        state.new_range_ordering = 0;
+
+        self.buffer().b_marktree.n_keys != 0
     }
-
-    state.slots.clear();
-    state.ranges_i.clear();
-    state.free_slot_i = -1;
-    state.current_end = 0;
-    state.future_begin = 0;
-    state.new_range_ordering = 0;
-
-    window.buffer().b_marktree.n_keys != 0
 }
 
 /// Whether `decor` occupies a position of its own rather than colouring the

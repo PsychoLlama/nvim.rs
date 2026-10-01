@@ -413,49 +413,51 @@ pub(crate) unsafe fn get_rightmost_vcol(
     ret
 }
 
-/// The screen columns `'cursorlineopt'` "screenline" highlights between.
-///
-/// Answers `(left, right)` as virtual columns of the cursor's own screen row:
-/// the cursor line is highlighted only over the row the cursor is on, so the
-/// margins are the first and last virtual column of that row.
-///
-/// Memoised on `w_virtcol` and the two widths, because `win_line` asks once
-/// per cell of the cursor line.
-pub(crate) fn margin_columns_win(window: Win) -> (::core::ffi::c_int, ::core::ffi::c_int) {
-    static SAVED_W_VIRTCOL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    static PREV_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-    static PREV_WIDTH1: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    static PREV_WIDTH2: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    static PREV_LEFT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    static PREV_RIGHT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+impl Win {
+    /// The screen columns `'cursorlineopt'` "screenline" highlights between.
+    ///
+    /// Answers `(left, right)` as virtual columns of the cursor's own screen row:
+    /// the cursor line is highlighted only over the row the cursor is on, so the
+    /// margins are the first and last virtual column of that row.
+    ///
+    /// Memoised on `w_virtcol` and the two widths, because `win_line` asks once
+    /// per cell of the cursor line.
+    pub(crate) fn cursorline_margins(self) -> (::core::ffi::c_int, ::core::ffi::c_int) {
+        static SAVED_W_VIRTCOL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+        static PREV_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+        static PREV_WIDTH1: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+        static PREV_WIDTH2: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+        static PREV_LEFT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
+        static PREV_RIGHT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-    let width1 = window.w_view_width - window.col_off();
-    let width2 = width1 + win_col_off2(window);
-    if SAVED_W_VIRTCOL.get() == window.w_virtcol
-        && PREV_WIN.get() == Some(window.id())
-        && PREV_WIDTH1.get() == width1
-        && PREV_WIDTH2.get() == width2
-    {
-        return (PREV_LEFT_COL.get(), PREV_RIGHT_COL.get());
+        let width1 = self.w_view_width - self.col_off();
+        let width2 = width1 + win_col_off2(self);
+        if SAVED_W_VIRTCOL.get() == self.w_virtcol
+            && PREV_WIN.get() == Some(self.id())
+            && PREV_WIDTH1.get() == width1
+            && PREV_WIDTH2.get() == width2
+        {
+            return (PREV_LEFT_COL.get(), PREV_RIGHT_COL.get());
+        }
+
+        let (left_col, right_col) = if self.w_virtcol >= width1 && width2 > 0 {
+            let past = self.w_virtcol - width1;
+            (
+                past / width2 * width2 + width1,
+                width1 + (past / width2 + 1) * width2,
+            )
+        } else {
+            (0, width1)
+        };
+
+        PREV_LEFT_COL.set(left_col);
+        PREV_RIGHT_COL.set(right_col);
+        PREV_WIN.set(Some(self.id()));
+        PREV_WIDTH1.set(width1);
+        PREV_WIDTH2.set(width2);
+        SAVED_W_VIRTCOL.set(self.w_virtcol);
+        (left_col, right_col)
     }
-
-    let (left_col, right_col) = if window.w_virtcol >= width1 && width2 > 0 {
-        let past = window.w_virtcol - width1;
-        (
-            past / width2 * width2 + width1,
-            width1 + (past / width2 + 1) * width2,
-        )
-    } else {
-        (0, width1)
-    };
-
-    PREV_LEFT_COL.set(left_col);
-    PREV_RIGHT_COL.set(right_col);
-    PREV_WIN.set(Some(window.id()));
-    PREV_WIDTH1.set(width1);
-    PREV_WIDTH2.set(width2);
-    SAVED_W_VIRTCOL.set(window.w_virtcol);
-    (left_col, right_col)
 }
 
 // ---------------------------------------------------------------------------

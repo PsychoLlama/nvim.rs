@@ -23,7 +23,7 @@ use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memline::ml_get_len;
 use crate::memory::xstrdup;
 use crate::message::msg_scroll_flush;
-use crate::syntax::{SynFlags, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char};
+use crate::syntax::{SynFlags, get_syntax_info, syn_get_stack_item, syn_get_sub_char};
 use crate::types::{ColNr, EvalFuncData, NUL, ScreenChar, TypVal, VarNumber, kListLenMayKnow};
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
@@ -282,7 +282,7 @@ pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         && col >= 0
         && col < ml_get_len(lnum)
     {
-        id = unsafe { syn_get_id(Win::current(), lnum, col, trans, ptr::null_mut(), 0) };
+        id = unsafe { (Win::current()).syntax_id(lnum, col, trans, ptr::null_mut(), 0) };
     }
     result.write_number(id as VarNumber);
 }
@@ -318,7 +318,7 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     {
         // Run the syntax engine for its side effect: `get_syntax_info`
         // reports on the position it last looked at.
-        unsafe { syn_get_id(Win::current(), lnum, col, 0, ptr::null_mut(), 0) };
+        unsafe { (Win::current()).syntax_id(lnum, col, 0, ptr::null_mut(), 0) };
         syntax_flags = unsafe { get_syntax_info(&raw mut matchid) };
         if syntax_flags.has(SynFlags::CONCEAL) && Win::current().w_onebuf_opt.wo_cole < 3 {
             let mut cchar = schar_from_char(syn_get_sub_char());
@@ -359,7 +359,7 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     {
         let list = list_alloc_ret(result, kListLenMayKnow as isize);
         // Run the syntax engine, keeping the stack this time.
-        unsafe { syn_get_id(Win::current(), lnum, col, 0, ptr::null_mut(), 1) };
+        unsafe { (Win::current()).syntax_id(lnum, col, 0, ptr::null_mut(), 1) };
         for i in 0.. {
             let id = syn_get_stack_item(i);
             if id < 0 {
