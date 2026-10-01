@@ -45,6 +45,7 @@ pub const RE_LAST: ::core::ffi::c_int = 2;
 mod api;
 mod bt;
 mod chars;
+mod compiler;
 mod context;
 mod equi_class;
 mod mbyte;
@@ -58,6 +59,7 @@ mod substitute;
 pub use self::api::*;
 pub use self::bt::*;
 pub use self::chars::*;
+pub(crate) use self::compiler::*;
 pub use self::context::*;
 pub(crate) use self::mbyte::*;
 pub(crate) use self::nfa::*;
@@ -397,26 +399,12 @@ pub const RF_NOICASE: c_int = 2;
 pub const RF_HASNL: c_int = 4;
 pub const RF_ICOMBINE: c_int = 8;
 pub const RF_LOOKBH: c_int = 16;
-static regparse: GlobalCell<*mut c_char> = GlobalCell::new(core::ptr::null_mut::<c_char>());
-static regnpar: GlobalCell<c_int> = GlobalCell::new(0);
-static regnzpar: GlobalCell<c_int> = GlobalCell::new(0);
-static re_has_z: GlobalCell<c_int> = GlobalCell::new(0);
-static regflags: GlobalCell<c_uint> = GlobalCell::new(0);
-static had_eol: GlobalCell<c_int> = GlobalCell::new(0);
-static reg_magic: GlobalCell<Magic> = GlobalCell::new(0);
-static reg_string: GlobalCell<c_int> = GlobalCell::new(0);
-static reg_strict: GlobalCell<c_int> = GlobalCell::new(0);
-static curchr: GlobalCell<c_int> = GlobalCell::new(0);
-static prevchr: GlobalCell<c_int> = GlobalCell::new(0);
-static prevprevchr: GlobalCell<c_int> = GlobalCell::new(0);
-static nextchr: GlobalCell<c_int> = GlobalCell::new(0);
+/// The pattern ended in a `\n` (see [`vim_regcomp_had_eol`]).
+pub(crate) const RF_HAD_EOL: c_uint = 32;
 pub const REG_NOPAREN: c_int = 0;
 pub const REG_PAREN: c_int = 1;
 pub const REG_ZPAREN: c_int = 2;
 pub const REG_NPAREN: c_int = 3;
-static reg_cpo_lit: GlobalCell<c_int> = GlobalCell::new(0);
-static at_start: GlobalCell<c_int> = GlobalCell::new(0);
-static prev_at_start: GlobalCell<c_int> = GlobalCell::new(0);
 static rex: GlobalCell<RegExec> = GlobalCell::new(RegExec {
     reg_match: core::ptr::null_mut::<RegMatch>(),
     reg_mmatch: core::ptr::null_mut::<RegMMatch>(),
@@ -468,21 +456,9 @@ pub const SPSTART: c_int = 0x4 as c_int;
 pub const HASNL: c_int = 0x8 as c_int;
 pub const HASLOOKBH: c_int = 0x10 as c_int;
 pub const WORST: c_int = 0;
-static prevchr_len: GlobalCell<c_int> = GlobalCell::new(0);
-static num_complex_braces: GlobalCell<c_int> = GlobalCell::new(0);
-static regcode: GlobalCell<*mut uint8_t> = GlobalCell::new(core::ptr::null_mut::<uint8_t>());
-static regsize: GlobalCell<int64_t> = GlobalCell::new(0);
-static reg_toolong: GlobalCell<c_int> = GlobalCell::new(0);
-static had_endbrace: GlobalCell<[uint8_t; 10]> = GlobalCell::new([0; 10]);
-static one_exactly: GlobalCell<c_int> = GlobalCell::new(0);
 pub const JUST_CALC_SIZE: *mut uint8_t = -1i64 as *mut uint8_t;
 pub const REGSTACK_INITIAL: c_int = 2048;
 pub const BACKPOS_INITIAL: c_int = 64;
-static nfa_re_flags: GlobalCell<c_int> = GlobalCell::new(0);
-static wants_nfa: GlobalCell<bool> = GlobalCell::new(false);
-static nstate: GlobalCell<c_int> = GlobalCell::new(0);
-static istate: GlobalCell<c_int> = GlobalCell::new(0);
-static state_ptr: GlobalCell<*mut NfaState> = GlobalCell::new(core::ptr::null_mut::<NfaState>());
 /// How far a postponed lookaround has got -- upstream's `NFA_PIM_*`, which
 /// share the `NFA_` prefix with the opcodes and are a different family.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -498,18 +474,15 @@ pub enum PimResult {
 }
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;
 static bt_regengine: RegEngine = RegEngine {
-    regcomp: Some(bt_regcomp),
     regfree: Some(bt_regfree),
     regexec_nl: Some(bt_regexec_nl),
     regexec_multi: Some(bt_regexec_multi),
 };
 static nfa_regengine: RegEngine = RegEngine {
-    regcomp: Some(nfa_regcomp),
     regfree: Some(nfa_regfree),
     regexec_nl: Some(nfa_regexec_nl),
     regexec_multi: Some(nfa_regexec_multi),
 };
-static regexp_engine: GlobalCell<c_int> = GlobalCell::new(0);
 pub const GRAPHEME_STATE_INIT: c_int = 0;
 pub const INT_MAX: c_int = __INT_MAX__;
 pub const RE_MAGIC: ::core::ffi::c_int = 1;

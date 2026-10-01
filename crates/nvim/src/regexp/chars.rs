@@ -5,14 +5,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::regexp::RegCompiler;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 
-use super::{ByteClass, MAGIC_ALL, RF_HASNL, reg_cpo_lit, reg_magic};
+use super::{ByteClass, MAGIC_ALL, RF_HASNL};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
-use crate::option::cpo_has;
-use crate::types::{CpoFlag, RegProg};
+use crate::types::RegProg;
 
 /// A magic metacharacter is held as its byte minus 256, so that the parser
 /// can tell `*` (a repeat) from `\*` (a literal star) by sign alone. These
@@ -34,12 +34,8 @@ pub(crate) const fn magic(c: u8) -> c_int {
 /// The backslash an error message has to print in front of a metacharacter
 /// for the message to echo what the user typed: none under `\v`, where
 /// every metacharacter is bare, one otherwise.
-pub(crate) fn magic_prefix() -> &'static str {
-    if reg_magic.get() == MAGIC_ALL {
-        ""
-    } else {
-        "\\"
-    }
+pub(crate) fn magic_prefix(rc: &mut RegCompiler) -> &'static str {
+    if rc.magic == MAGIC_ALL { "" } else { "\\" }
 }
 
 /// The control character a `\r`/`\t`/`\e`/`\b` abbreviation stands for.
@@ -222,12 +218,4 @@ pub(crate) unsafe fn take_bracketed(cursor: &mut *mut c_char, delim: u8) -> c_in
     }
     *cursor = unsafe { p.add(len + 4) };
     unsafe { utf_ptr2char(p.add(2)) }
-}
-
-/// Cache whether 'cpoptions' contains `l`, which makes `\r`, `\t` and
-/// friends literal inside a `[]` collection. Read once per compile rather
-/// than per character.
-pub(crate) fn refresh_cpo_flags() {
-    let literal = cpo_has(CpoFlag::LITERAL);
-    reg_cpo_lit.set(literal as c_int);
 }

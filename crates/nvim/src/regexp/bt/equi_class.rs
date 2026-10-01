@@ -9,6 +9,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
 use super::compile::regmbc;
@@ -19,13 +20,13 @@ use crate::regexp::equi_class;
 /// A character in no class stands for itself. The table lives in the shared
 /// [`equi_class`] module; upstream kept a copy of it here and another in the
 /// NFA compiler.
-pub(crate) fn reg_equi_class(c: c_int) {
+pub(crate) fn reg_equi_class(rc: &mut RegCompiler, c: c_int) {
     match equi_class::backtracking_class_of(c) {
         Some(class) => {
             for member in class.backtracking_members() {
-                regmbc(member);
+                regmbc(rc, member);
             }
         }
-        None => regmbc(c),
+        None => regmbc(rc, c),
     }
 }

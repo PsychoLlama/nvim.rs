@@ -937,7 +937,6 @@ CELL_PTR_ALLOW_RE = re.compile(
 # as `cell_ptr_keepers`. Without this list each would trip the accessor cap;
 # see "the cell_ptr partition" in the doc block for why the cap is kept.
 CELL_PTR_KEEPERS = {
-    "POSTFIX": "the NFA postfix program; phase 22's S10 ruled the address is the program",
     "cell": "not one cell — a local bound from an option slot (S3) or a grid (S13)",
     "buf": "F-P22-49: `TSInput.read`'s contract needs a buffer surviving the return",
     "CELL": "`GlobalCell`'s own tests of `ptr`/`as_raw`; they must call them",
@@ -3676,7 +3675,7 @@ SELF_TEST_CELL_PTR_ALLOW = [
 # `cell_ptr`'s substring needles counted -- no more, and no fewer than the
 # ones a by-name cap can police.
 SELF_TEST_CELL_PTR_SITE = [
-    ("fn f() {\n    POSTFIX.ptr();\n}\n", {"POSTFIX": 1}),
+    ("fn f() {\n    BT_STATE.ptr();\n}\n", {"BT_STATE": 1}),
     ("fn f() {\n    MUTEX.as_raw();\n}\n", {"MUTEX": 1}),
     # Two receivers, counted apart.
     ("fn f() {\n    a.ptr();\n    b.ptr();\n    a.ptr();\n}\n", {"a": 2, "b": 1}),
@@ -3690,7 +3689,7 @@ SELF_TEST_CELL_PTR_SITE = [
     # Spacing rustfmt never writes stays out, as it does for the allowlist.
     ("fn f() {\n    a . ptr();\n}\n", {}),
     # Prose about one costs nothing.
-    ("// POSTFIX.ptr()\nfn f() {}\n", {}),
+    ("// BT_STATE.ptr()\nfn f() {}\n", {}),
 ]
 # (tree, expected partition). The boundary is subtracted, the keeper register
 # is counted, and everything left is the accessor class -- including the site
@@ -3699,7 +3698,7 @@ SELF_TEST_CELL_PTR_PARTITION = [
     (
         {
             "a.rs": "fn f() {\n    main_loop.ptr();\n    curwin.ptr();\n}\n",
-            "b.rs": "fn g() {\n    POSTFIX.ptr();\n    POSTFIX.ptr();\n"
+            "b.rs": "fn g() {\n    BT_STATE.ptr();\n    BT_STATE.ptr();\n"
             "    curbuf.ptr();\n    self.0.ptr();\n}\n",
         },
         {"cell_ptr_keepers": 2, "cell_ptr_accessors": 3},
@@ -3721,7 +3720,7 @@ SELF_TEST_CELL_PTR_CHECK = [
     ),
     # A listed name may hold as many as its ruling allows.
     ({"a.rs": "fn f() {\n    main_loop.ptr();\n    main_loop.ptr();\n}\n"}, False),
-    ({"a.rs": "fn f() {\n    POSTFIX.ptr();\n    POSTFIX.ptr();\n}\n"}, False),
+    ({"a.rs": "fn f() {\n    BT_STATE.ptr();\n    BT_STATE.ptr();\n}\n"}, False),
 ]
 # (source, expected cell_copy_owner)
 SELF_TEST_CELL_COPY_OWNER = [

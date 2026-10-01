@@ -6,40 +6,41 @@
 #![allow(unsafe_code)]
 
 use crate::regexp::NfaOp;
+use crate::regexp::RegCompiler;
 use core::ffi::c_int;
 
 use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
-use super::{Parsed, Rejected, postfix};
+use super::{Parsed, Rejected};
 use crate::ascii::ascii_isdigit;
 use crate::plines::getvvcol;
 use crate::regexp::state::{rc_did_emsg, reg_do_extmatch};
 use crate::regexp::{
-    INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, at_start, getchr, getdecchrs,
-    gethexchrs, getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, unmagic,
+    INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, getchr, getdecchrs, gethexchrs,
+    getoctchrs, magic_prefix, pat_byte, peekchr, re_mult_next, unmagic,
 };
 use crate::semsg;
 use crate::types::{ColNr, MB_MAXBYTES, NUL};
 
 use crate::winlayer::Win;
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
-pub(crate) fn z_atom(rex: Rex) -> Parsed {
-    let c = unmagic(getchr());
+pub(crate) fn z_atom(rc: &mut RegCompiler) -> Parsed {
+    let c = unmagic(getchr(rc));
     // `u8::try_from` rather than `as u8`: a multibyte character after `\z`
     // must reach the default arm rather than alias one of these bytes.
     match u8::try_from(c) {
         Ok(b's') => {
-            postfix::emit_op(NfaOp::Zstart);
-            if !re_mult_next("\\zs") {
+            rc.post.emit_op(NfaOp::Zstart);
+            if !re_mult_next(rc, "\\zs") {
                 return Err(Rejected);
             }
         }
         Ok(b'e') => {
-            postfix::emit_op(NfaOp::Zend);
+            rc.post.emit_op(NfaOp::Zend);
             // The match end moves, so the matcher has to keep group 0's
             // end position rather than take it from where it stopped.
-            rex.set_nfa_has_zend(1);
-            if !re_mult_next("\\ze") {
+            rc.has_zend = 1;
+            if !re_mult_next(rc, "\\ze") {
                 return Err(Rejected);
             }
         }
@@ -51,8 +52,8 @@ pub(crate) fn z_atom(rex: Rex) -> Parsed {
                 rc_did_emsg.set(true);
                 return Err(Rejected);
             }
-            postfix::emit_op(NfaOp::zref(c - b'0' as c_int));
-            re_has_z.set(REX_USE);
+            rc.post.emit_op(NfaOp::zref(c - b'0' as c_int));
+            rc.has_z = REX_USE;
         }
         Ok(b'(') => {
             // And `\z(` only in the item that defines them.
@@ -61,8 +62,8 @@ pub(crate) fn z_atom(rex: Rex) -> Parsed {
                 rc_did_emsg.set(true);
                 return Err(Rejected);
             }
-            nfa_reg(rex, REG_ZPAREN)?;
-            re_has_z.set(REX_SET);
+            nfa_reg(rc, REG_ZPAREN)?;
+            rc.has_z = REX_SET;
         }
         _ => {
             let c = unmagic(c) as u8 as char;
@@ -79,55 +80,55 @@ pub(crate) fn z_atom(rex: Rex) -> Parsed {
 /// `save_prev_at_start` is the "still at the start of the pattern" flag from
 /// before this atom was read; `\%23l` restores it, because a position
 /// assertion consumes nothing and so does not move the start.
-pub(crate) fn percent_atom(rex: Rex, save_prev_at_start: c_int) -> Parsed {
-    let c = unmagic(getchr());
+pub(crate) fn percent_atom(rc: &mut RegCompiler, save_prev_at_start: c_int) -> Parsed {
+    let c = unmagic(getchr(rc));
     // `u8::try_from` rather than `as u8`: see `z_atom`.
     match u8::try_from(c) {
         Ok(b'(') => {
-            nfa_reg(rex, REG_NPAREN)?;
-            postfix::emit_op(NfaOp::Nopen);
+            nfa_reg(rc, REG_NPAREN)?;
+            rc.post.emit_op(NfaOp::Nopen);
         }
-        Ok(escape @ (b'd' | b'o' | b'x' | b'u' | b'U')) => return character_escape(escape),
-        Ok(b'^') => postfix::emit_op(NfaOp::Bof),
-        Ok(b'$') => postfix::emit_op(NfaOp::Eof),
+        Ok(escape @ (b'd' | b'o' | b'x' | b'u' | b'U')) => return character_escape(rc, escape),
+        Ok(b'^') => rc.post.emit_op(NfaOp::Bof),
+        Ok(b'$') => rc.post.emit_op(NfaOp::Eof),
         Ok(b'#') => {
             // `\%#=1` selects an engine and is only legal at the very start
             // of the pattern, where `vim_regcomp` strips it; getting here
             // means it was somewhere else.
-            if pat_byte(0) == b'=' && matches!(pat_byte(1), b'0'..=b'2') {
-                let which = pat_byte(1) as char;
+            if pat_byte(rc, 0) == b'=' && matches!(pat_byte(rc, 1), b'0'..=b'2') {
+                let which = pat_byte(rc, 1) as char;
                 semsg!("E1281: Atom '\\%#={which}' must be at the start of the pattern");
                 return Err(Rejected);
             }
-            postfix::emit_op(NfaOp::Cursor);
+            rc.post.emit_op(NfaOp::Cursor);
         }
-        Ok(b'V') => postfix::emit_op(NfaOp::Visual),
-        Ok(b'C') => postfix::emit_op(NfaOp::AnyComposing),
-        Ok(b'[') => return optional_sequence(rex),
-        _ => return position_atom(c, save_prev_at_start),
+        Ok(b'V') => rc.post.emit_op(NfaOp::Visual),
+        Ok(b'C') => rc.post.emit_op(NfaOp::AnyComposing),
+        Ok(b'[') => return optional_sequence(rc),
+        _ => return position_atom(rc, c, save_prev_at_start),
     }
     Ok(())
 }
 
 /// `\%d123`, `\%o17`, `\%x2a`, `\%u20ac`, `\%U0001f600`: a character by its
 /// code point.
-fn character_escape(escape: u8) -> Parsed {
+fn character_escape(rc: &mut RegCompiler, escape: u8) -> Parsed {
     let nr = match escape {
-        b'd' => getdecchrs(),
-        b'o' => getoctchrs(),
-        b'x' => gethexchrs(2),
-        b'u' => gethexchrs(4),
-        _ => gethexchrs(8),
+        b'd' => getdecchrs(rc),
+        b'o' => getoctchrs(rc),
+        b'x' => gethexchrs(rc, 2),
+        b'u' => gethexchrs(rc, 4),
+        _ => gethexchrs(rc, 8),
     };
     if !(0..=INT32_MAX as i64).contains(&nr) {
-        let prefix = magic_prefix();
+        let prefix = magic_prefix(rc);
         semsg!("E678: Invalid character after {prefix}%[dxouU]");
         rc_did_emsg.set(true);
         return Err(Rejected);
     }
     // A NUL cannot be matched as itself; in a pattern it stands for a line
     // break, as it does everywhere else in the engine.
-    postfix::emit(if nr == 0 { 0xa } else { nr as c_int });
+    rc.post.emit(if nr == 0 { 0xa } else { nr as c_int });
     Ok(())
 }
 
@@ -135,32 +136,32 @@ fn character_escape(escape: u8) -> Parsed {
 ///
 /// Each member is one atom, and `NFA_OPT_CHARS` carries how many of them
 /// there were.
-fn optional_sequence(rex: Rex) -> Parsed {
+fn optional_sequence(rc: &mut RegCompiler) -> Parsed {
     let mut n = 0;
     loop {
-        let c = peekchr();
+        let c = peekchr(rc);
         if c == b']' as c_int {
             break;
         }
         if c == NUL {
-            let prefix = magic_prefix();
+            let prefix = magic_prefix(rc);
             semsg!("E69: Missing ] after {prefix}%[");
             rc_did_emsg.set(true);
             return Err(Rejected);
         }
-        nfa_regatom(rex)?;
+        nfa_regatom(rc)?;
         n += 1;
     }
-    getchr();
+    getchr(rc);
     if n == 0 {
-        let prefix = magic_prefix();
+        let prefix = magic_prefix(rc);
         semsg!("E70: Empty {prefix}%[]");
         rc_did_emsg.set(true);
         return Err(Rejected);
     }
-    postfix::emit_op(NfaOp::OptChars);
-    postfix::emit(n);
-    postfix::emit_op(NfaOp::Nopen);
+    rc.post.emit_op(NfaOp::OptChars);
+    rc.post.emit(n);
+    rc.post.emit_op(NfaOp::Nopen);
     Ok(())
 }
 
@@ -178,14 +179,14 @@ fn compare(cmp: c_int, lt: c_int, gt: c_int, at: c_int) -> c_int {
 /// The `\%23l`, `\%23c`, `\%23v` and `\%'m` assertions, in their bare,
 /// `\%<` and `\%>` forms, and with `.` standing for the cursor's own line,
 /// column or virtual column.
-fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
+fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) -> Parsed {
     let mut c = cmp;
     if c == b'<' as c_int || c == b'>' as c_int {
-        c = getchr();
+        c = getchr(rc);
     }
     let cur = unmagic(c) == b'.' as c_int;
     if cur {
-        c = getchr();
+        c = getchr(rc);
     }
 
     let mut n: i64 = 0;
@@ -201,7 +202,7 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
             return Err(Rejected);
         }
         n = n * 10 + (c - b'0' as c_int) as i64;
-        c = getchr();
+        c = getchr(rc);
         got_digit = true;
     }
 
@@ -217,7 +218,7 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
                 if cur {
                     n = cursor_lnum();
                 }
-                postfix::emit(compare(
+                rc.post.emit(compare(
                     cmp,
                     NfaOp::LnumLt.code(),
                     NfaOp::LnumGt.code(),
@@ -226,14 +227,14 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
                 // A line assertion matches nothing, so a `^` after it is
                 // still at the start of the pattern.
                 if save_prev_at_start != 0 {
-                    at_start.set(1);
+                    rc.at_start = 1;
                 }
             }
             b'c' => {
                 if cur {
                     n = cursor_col() + 1;
                 }
-                postfix::emit(compare(
+                rc.post.emit(compare(
                     cmp,
                     NfaOp::ColLt.code(),
                     NfaOp::ColGt.code(),
@@ -244,7 +245,7 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
                 if cur {
                     n = cursor_vcol() + 1;
                 }
-                postfix::emit(compare(
+                rc.post.emit(compare(
                     cmp,
                     NfaOp::VcolLt.code(),
                     NfaOp::VcolGt.code(),
@@ -259,18 +260,19 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
             semsg!("E951: \\% value too large");
             return Err(Rejected);
         }
-        postfix::emit(n as c_int);
+        rc.post.emit(n as c_int);
         return Ok(());
     }
 
     if unmagic(c) == b'\'' as c_int && n == 0 {
-        postfix::emit(compare(
+        rc.post.emit(compare(
             cmp,
             NfaOp::MarkLt.code(),
             NfaOp::MarkGt.code(),
             NfaOp::Mark.code(),
         ));
-        postfix::emit(getchr());
+        let c = getchr(rc);
+        rc.post.emit(c);
         return Ok(());
     }
 

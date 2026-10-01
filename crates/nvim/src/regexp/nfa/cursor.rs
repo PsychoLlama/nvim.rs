@@ -17,36 +17,35 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::regexp::RegCompiler;
 use core::ffi::{c_char, c_int};
 
 use super::compile::nfa_recognize_char_class;
 use crate::mbyte::{utf_head_off, utf_iscomposing_legacy, utf_ptr2char, utfc_ptr2len};
-use crate::regexp::{
-    CharClass, NfaOp, pat_seek, regparse, skip_anyof, take_bracketed, take_char_class,
-};
+use crate::regexp::{CharClass, NfaOp, pat_seek, skip_anyof, take_bracketed, take_char_class};
 
 /// The cursor, to hand back to the functions here as a saved position.
-pub(crate) fn here() -> *mut c_char {
-    regparse.get()
+pub(crate) fn here(rc: &mut RegCompiler) -> *mut c_char {
+    rc.cursor
 }
 
 /// Put the cursor at a position [`here`] returned, or at the end of a
 /// collection.
-pub(crate) fn seek_to(p: *mut c_char) {
-    regparse.set(p);
+pub(crate) fn seek_to(rc: &mut RegCompiler, p: *mut c_char) {
+    rc.cursor = p;
 }
 
 /// Is the cursor still before `end`?
-pub(crate) fn before(end: *mut c_char) -> bool {
-    regparse.get() < end
+pub(crate) fn before(rc: &mut RegCompiler, end: *mut c_char) -> bool {
+    rc.cursor < end
 }
 
 /// Where the collection at the cursor ends: its closing `]`, or the
 /// pattern's NUL if it has none.
-pub(crate) fn collection_end() -> *mut c_char {
+pub(crate) fn collection_end(rc: &mut RegCompiler) -> *mut c_char {
     // SAFETY: the cursor points into the NUL-terminated pattern and
     // `skip_anyof` stops at the terminator.
-    unsafe { skip_anyof(regparse.get()) }
+    unsafe { skip_anyof(rc.cursor, rc.cpo_lit) }
 }
 
 /// The byte at `p`.
@@ -70,13 +69,13 @@ pub(crate) fn char_at(p: *mut c_char, off: c_int) -> c_int {
 
 /// Step the cursor back over the character in front of it. `anchor` bounds
 /// how far the search for that character's first byte may go.
-pub(crate) fn step_back(anchor: *mut c_char) {
+pub(crate) fn step_back(rc: &mut RegCompiler, anchor: *mut c_char) {
     // SAFETY: the cursor is past `anchor`, which is where this atom began,
     // and `utf_head_off` walks back no further than `anchor`.
-    let cursor = regparse.get();
+    let cursor = rc.cursor;
     let back = unsafe { utf_head_off(anchor, cursor.sub(1)) };
     let back = usize::try_from(back).expect("a head offset is never negative") + 1;
-    regparse.set(unsafe { cursor.sub(back) });
+    rc.cursor = unsafe { cursor.sub(back) };
 }
 
 /// Is `c` a combining character?
@@ -85,31 +84,33 @@ pub(crate) fn is_composing(c: c_int) -> bool {
 }
 
 /// Move the cursor past the whole character it is on.
-pub(crate) fn advance_grapheme() {
-    pat_seek(grapheme_len(here()) as isize);
+pub(crate) fn advance_grapheme(rc: &mut RegCompiler) {
+    let arg = here(rc);
+    pat_seek(rc, grapheme_len(arg) as isize);
 }
 
 /// [`take_char_class`] against the cursor: a `[:alpha:]` at it, consumed.
-pub(crate) fn take_cursor_char_class() -> Option<CharClass> {
+pub(crate) fn take_cursor_char_class(rc: &mut RegCompiler) -> Option<CharClass> {
     // SAFETY: the cursor points into the NUL-terminated pattern, and
     // `take_char_class` only ever advances it -- it walks bytes and calls
     // nothing, so it cannot re-enter the cell it is handed.
-    regparse.with_mut(|pp| unsafe { take_char_class(pp) })
+    unsafe { take_char_class(&mut rc.cursor) }
 }
 
 /// [`take_bracketed`] against the cursor: a `[=a=]` or `[.a.]` at it.
-pub(crate) fn take_cursor_bracketed(delim: u8) -> c_int {
+pub(crate) fn take_cursor_bracketed(rc: &mut RegCompiler, delim: u8) -> c_int {
     // SAFETY: as `take_cursor_char_class`.
-    regparse.with_mut(|pp| unsafe { take_bracketed(pp, delim) })
+    unsafe { take_bracketed(&mut rc.cursor, delim) }
 }
 
 /// Is the collection between the cursor and `end` one of the character
 /// classes? See [`nfa_recognize_char_class`].
 pub(crate) fn recognize_char_class(
+    rc: &mut RegCompiler,
     end: *mut c_char,
     accepts_newline: bool,
 ) -> Option<(NfaOp, bool)> {
     // SAFETY: `end` is this collection's closing `]`, found by
     // `collection_end` from the cursor.
-    unsafe { nfa_recognize_char_class(here().cast(), end.cast(), accepts_newline) }
+    unsafe { nfa_recognize_char_class(here(rc).cast(), end.cast(), accepts_newline) }
 }

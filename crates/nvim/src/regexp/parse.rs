@@ -13,20 +13,20 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
-use crate::guard::Depth;
 use crate::message_fmt::{c_str, msg_bytes};
+use crate::option::cpo_has;
+use crate::regexp::RegCompiler;
 use crate::semsg;
+use crate::types::CpoFlag;
 use core::ffi::{c_char, c_int};
 
 use super::{
     MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, Magic, NOT_MULTI,
-    ParseState, REGEXP_ABBR, REGEXP_INRANGE, at_start, backslash_abbr, curchr, nextchr,
-    prev_at_start, prevchr, prevchr_len, prevprevchr, refresh_cpo_flags, reg_cpo_lit, reg_magic,
-    regnpar, regparse, take_bracketed, take_char_class, toggle_magic, unmagic,
+    ParseState, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, take_bracketed, take_char_class,
+    toggle_magic, unmagic,
 };
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{getdigits_int, hex2nr};
-use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::regexp::state::rc_did_emsg;
 use crate::strings::xstrnsave;
@@ -62,7 +62,7 @@ fn is_inrange(c: u8) -> bool {
 /// # Safety
 ///
 /// `p` must point into a NUL-terminated pattern.
-pub(crate) unsafe fn skip_anyof(mut p: *mut c_char) -> *mut c_char {
+pub(crate) unsafe fn skip_anyof(mut p: *mut c_char, cpo_lit: bool) -> *mut c_char {
     // A leading `^` negates; a `]` or `-` immediately after that is
     // literal rather than the close or a range.
     if unsafe { *p } as u8 == b'^' {
@@ -82,7 +82,7 @@ pub(crate) unsafe fn skip_anyof(mut p: *mut c_char) -> *mut c_char {
             }
         } else if unsafe { *p } as u8 == b'\\'
             && (is_inrange(unsafe { *p.add(1) } as u8)
-                || (reg_cpo_lit.get() == 0 && is_abbr(unsafe { *p.add(1) } as u8)))
+                || (!cpo_lit && is_abbr(unsafe { *p.add(1) } as u8)))
         {
             p = unsafe { p.add(2) };
         } else if unsafe { *p } as u8 == b'[' {
@@ -202,7 +202,7 @@ pub unsafe fn skip_regexp_ex(
     let mut mymagic = if magic != 0 { MAGIC_ON } else { MAGIC_OFF };
     let mut p = startp;
     let mut startplen: usize = 0;
-    refresh_cpo_flags();
+    let cpo_lit = cpo_has(CpoFlag::LITERAL);
     while unsafe { *p } as u8 != 0 {
         if unsafe { *p } as c_int == dirc {
             break;
@@ -212,7 +212,7 @@ pub unsafe fn skip_regexp_ex(
                 && unsafe { *p.add(1) } as u8 == b'['
                 && mymagic <= MAGIC_OFF)
         {
-            p = unsafe { skip_anyof(p.add(1)) };
+            p = unsafe { skip_anyof(p.add(1), cpo_lit) };
             if unsafe { *p } as u8 == 0 {
                 break;
             }
@@ -254,73 +254,57 @@ pub unsafe fn skip_regexp_ex(
 }
 
 /// The byte `off` bytes past the cursor.
-pub(crate) fn pat_byte(off: usize) -> u8 {
+pub(crate) fn pat_byte(rc: &mut RegCompiler, off: usize) -> u8 {
     // SAFETY: the cursor points into the pattern `initchr` was given, and
     // every caller here has already established that `off` is at or before
     // its NUL.
-    unsafe { *regparse.get().add(off) as u8 }
+    unsafe { *rc.cursor.add(off) as u8 }
 }
 
 /// The character `off` bytes past the cursor.
-pub(crate) fn pat_char(off: usize) -> c_int {
+pub(crate) fn pat_char(rc: &mut RegCompiler, off: usize) -> c_int {
     // SAFETY: as `pat_byte`.
-    unsafe { utf_ptr2char(regparse.get().add(off)) }
+    unsafe { utf_ptr2char(rc.cursor.add(off)) }
 }
 
 /// The encoded length of the character `off` bytes past the cursor.
-pub(crate) fn pat_charlen(off: usize) -> c_int {
+pub(crate) fn pat_charlen(rc: &mut RegCompiler, off: usize) -> c_int {
     // SAFETY: as `pat_byte`.
-    unsafe { utf_ptr2len(regparse.get().add(off)) }
+    unsafe { utf_ptr2len(rc.cursor.add(off)) }
 }
 
 /// Move the cursor. Wrapping arithmetic because [`peekchr`] and
 /// [`ungetchr`] step it back over a character they have already read,
 /// which the compiler cannot see is in bounds.
-pub(crate) fn pat_seek(delta: isize) {
-    regparse.set(regparse.get().wrapping_offset(delta));
-}
-
-/// Point the parse cursor at `pattern` and clear the lookahead.
-///
-/// # Safety
-///
-/// `pattern` must be NUL-terminated and outlive the parse.
-pub(crate) unsafe fn initchr(pattern: *mut c_char) {
-    regparse.set(pattern);
-    prevchr_len.set(0);
-    nextchr.set(-1);
-    prevchr.set(-1);
-    prevprevchr.set(-1);
-    curchr.set(-1);
-    at_start.set(1);
-    prev_at_start.set(0);
+pub(crate) fn pat_seek(rc: &mut RegCompiler, delta: isize) {
+    rc.cursor = rc.cursor.wrapping_offset(delta);
 }
 
 /// Snapshot the cursor so a speculative parse can be rewound. The NFA
 /// compiler parses parts of a pattern twice.
-pub(crate) fn save_parse_state(ps: &mut ParseState) {
-    ps.regparse = regparse.get();
-    ps.prevchr_len = prevchr_len.get();
-    ps.curchr = curchr.get();
-    ps.prevchr = prevchr.get();
-    ps.prevprevchr = prevprevchr.get();
-    ps.nextchr = nextchr.get();
-    ps.at_start = at_start.get();
-    ps.prev_at_start = prev_at_start.get();
-    ps.regnpar = regnpar.get();
+pub(crate) fn save_parse_state(rc: &mut RegCompiler, ps: &mut ParseState) {
+    ps.regparse = rc.cursor;
+    ps.prevchr_len = rc.prev_token_len;
+    ps.curchr = rc.token;
+    ps.prevchr = rc.prev_token;
+    ps.prevprevchr = rc.prev2_token;
+    ps.nextchr = rc.next_token;
+    ps.at_start = rc.at_start;
+    ps.prev_at_start = rc.prev_at_start;
+    ps.regnpar = rc.next_group;
 }
 
 /// Rewind to a [`save_parse_state`] snapshot.
-pub(crate) fn restore_parse_state(ps: &ParseState) {
-    regparse.set(ps.regparse);
-    prevchr_len.set(ps.prevchr_len);
-    curchr.set(ps.curchr);
-    prevchr.set(ps.prevchr);
-    prevprevchr.set(ps.prevprevchr);
-    nextchr.set(ps.nextchr);
-    at_start.set(ps.at_start);
-    prev_at_start.set(ps.prev_at_start);
-    regnpar.set(ps.regnpar);
+pub(crate) fn restore_parse_state(rc: &mut RegCompiler, ps: &ParseState) {
+    rc.cursor = ps.regparse;
+    rc.prev_token_len = ps.prevchr_len;
+    rc.token = ps.curchr;
+    rc.prev_token = ps.prevchr;
+    rc.prev2_token = ps.prevprevchr;
+    rc.next_token = ps.nextchr;
+    rc.at_start = ps.at_start;
+    rc.prev_at_start = ps.prev_at_start;
+    rc.next_group = ps.regnpar;
 }
 
 /// The characters `\` gives a special meaning to. [`peekchr`] reparses the
@@ -341,27 +325,23 @@ const fn build_is_meta() -> [bool; 127] {
 
 /// The token at the cursor, without consuming it. A metacharacter comes
 /// back as its byte minus 256; anything else as itself.
-pub(crate) fn peekchr() -> c_int {
-    // Depth of the `\`-escape reparse below, so that `\*` right after
-    // `\(` still counts as a repeat.
-    static AFTER_SLASH: GlobalCell<c_int> = GlobalCell::new(0);
-
-    if curchr.get() != -1 {
-        return curchr.get();
+pub(crate) fn peekchr(rc: &mut RegCompiler) -> c_int {
+    if rc.token != -1 {
+        return rc.token;
     }
-    curchr.set(pat_byte(0) as c_int);
-    match curchr.get() as u8 {
+    rc.token = pat_byte(rc, 0) as c_int;
+    match rc.token as u8 {
         b'.' | b'[' | b'~' => {
             // Magic as soon as 'magic' is on.
-            if reg_magic.get() >= MAGIC_ON {
-                curchr.set(curchr.get() - 256);
+            if rc.magic >= MAGIC_ON {
+                rc.token = rc.token - 256;
             }
         }
         b'(' | b')' | b'{' | b'%' | b'+' | b'=' | b'?' | b'@' | b'!' | b'&' | b'|' | b'<'
         | b'>' | b'#' | b'"' | b'\'' | b',' | b'-' | b':' | b';' | b'`' | b'/' => {
             // Magic only under `\v`.
-            if reg_magic.get() == MAGIC_ALL {
-                curchr.set(curchr.get() - 256);
+            if rc.magic == MAGIC_ALL {
+                rc.token = rc.token - 256;
             }
         }
         b'*' => {
@@ -369,173 +349,184 @@ pub(crate) fn peekchr() -> c_int {
             // pattern, right after a `^` that was itself at the start, or
             // right after `\(`, `\&` or `\|` — unless we are inside the
             // escape reparse, where the preceding token was consumed.
-            if reg_magic.get() >= MAGIC_ON
-                && at_start.get() == 0
-                && !(prev_at_start.get() != 0 && prevchr.get() == b'^' as c_int - 256)
-                && (AFTER_SLASH.get() != 0
-                    || (prevchr.get() != b'(' as c_int - 256
-                        && prevchr.get() != b'&' as c_int - 256
-                        && prevchr.get() != b'|' as c_int - 256))
+            if rc.magic >= MAGIC_ON
+                && rc.at_start == 0
+                && !(rc.prev_at_start != 0 && rc.prev_token == b'^' as c_int - 256)
+                && (rc.escape_depth != 0
+                    || (rc.prev_token != b'(' as c_int - 256
+                        && rc.prev_token != b'&' as c_int - 256
+                        && rc.prev_token != b'|' as c_int - 256))
             {
-                curchr.set(b'*' as c_int - 256);
+                rc.token = b'*' as c_int - 256;
             }
         }
         b'^' => {
             // Only anchoring where a branch can start.
-            if reg_magic.get() >= MAGIC_OFF
-                && (at_start.get() != 0
-                    || reg_magic.get() == MAGIC_ALL
-                    || prevchr.get() == b'(' as c_int - 256
-                    || prevchr.get() == b'|' as c_int - 256
-                    || prevchr.get() == b'&' as c_int - 256
-                    || prevchr.get() == b'n' as c_int - 256
-                    || (unmagic(prevchr.get()) == b'(' as c_int
-                        && prevprevchr.get() == b'%' as c_int - 256))
+            if rc.magic >= MAGIC_OFF
+                && (rc.at_start != 0
+                    || rc.magic == MAGIC_ALL
+                    || rc.prev_token == b'(' as c_int - 256
+                    || rc.prev_token == b'|' as c_int - 256
+                    || rc.prev_token == b'&' as c_int - 256
+                    || rc.prev_token == b'n' as c_int - 256
+                    || (unmagic(rc.prev_token) == b'(' as c_int
+                        && rc.prev2_token == b'%' as c_int - 256))
             {
-                curchr.set(b'^' as c_int - 256);
-                at_start.set(1);
-                prev_at_start.set(0);
+                rc.token = b'^' as c_int - 256;
+                rc.at_start = 1;
+                rc.prev_at_start = 0;
             }
         }
         b'$' => {
             // Only anchoring where a branch can end. Look past any
             // `\c`-style flags, which don't consume input, tracking the
             // `\v`/`\V` among them because they change what follows.
-            if reg_magic.get() >= MAGIC_OFF {
+            if rc.magic >= MAGIC_OFF {
                 let mut i = 1;
-                let mut is_magic_all = reg_magic.get() == MAGIC_ALL;
-                while pat_byte(i) == b'\\'
+                let mut is_magic_all = rc.magic == MAGIC_ALL;
+                while pat_byte(rc, i) == b'\\'
                     && matches!(
-                        pat_byte(i + 1),
+                        pat_byte(rc, i + 1),
                         b'c' | b'C' | b'm' | b'M' | b'v' | b'V' | b'Z'
                     )
                 {
-                    match pat_byte(i + 1) {
+                    match pat_byte(rc, i + 1) {
                         b'v' => is_magic_all = true,
                         b'm' | b'M' | b'V' => is_magic_all = false,
                         _ => {}
                     }
                     i += 2;
                 }
-                if pat_byte(i) == 0
-                    || (pat_byte(i) == b'\\'
-                        && matches!(pat_byte(i + 1), b'|' | b'&' | b')' | b'n'))
-                    || (is_magic_all && matches!(pat_byte(i), b'|' | b'&' | b')'))
-                    || reg_magic.get() == MAGIC_ALL
+                if pat_byte(rc, i) == 0
+                    || (pat_byte(rc, i) == b'\\'
+                        && matches!(pat_byte(rc, i + 1), b'|' | b'&' | b')' | b'n'))
+                    || (is_magic_all && matches!(pat_byte(rc, i), b'|' | b'&' | b')'))
+                    || rc.magic == MAGIC_ALL
                 {
-                    curchr.set(b'$' as c_int - 256);
+                    rc.token = b'$' as c_int - 256;
                 }
             }
         }
         b'\\' => {
-            let c = pat_byte(1);
+            let c = pat_byte(rc, 1);
             if c == 0 {
                 // A trailing backslash is a literal backslash.
-                curchr.set(b'\\' as c_int);
+                rc.token = b'\\' as c_int;
             } else if c <= b'~' && IS_META[c as usize] {
                 // `\x` means whatever a bare `x` would not: reparse the
                 // escaped byte and flip its magic marker.
-                curchr.set(-1);
-                prev_at_start.set(at_start.get());
-                at_start.set(0);
-                pat_seek(1);
-                {
-                    let _after_slash = Depth::of(&AFTER_SLASH);
-                    peekchr();
-                }
-                pat_seek(-1);
-                curchr.set(toggle_magic(curchr.get()));
+                rc.token = -1;
+                rc.prev_at_start = rc.at_start;
+                rc.at_start = 0;
+                pat_seek(rc, 1);
+                // The depth is what lets `\*` right after `\(` still count
+                // as a repeat.
+                rc.escape_depth += 1;
+                peekchr(rc);
+                rc.escape_depth -= 1;
+                pat_seek(rc, -1);
+                rc.token = toggle_magic(rc.token);
             } else if is_abbr(c) {
-                curchr.set(backslash_abbr(c as c_int));
-            } else if reg_magic.get() == MAGIC_NONE && matches!(c, b'$' | b'^') {
-                curchr.set(toggle_magic(c as c_int));
+                rc.token = backslash_abbr(c as c_int);
+            } else if rc.magic == MAGIC_NONE && matches!(c, b'$' | b'^') {
+                rc.token = toggle_magic(c as c_int);
             } else {
-                curchr.set(pat_char(1));
+                rc.token = pat_char(rc, 1);
             }
         }
         _ => {
-            curchr.set(pat_char(0));
+            rc.token = pat_char(rc, 0);
         }
     }
-    curchr.get()
+    rc.token
 }
 
 /// Consume the token [`peekchr`] returned, sliding the lookbehind along.
-pub(crate) fn skipchr() {
+pub(crate) fn skipchr(rc: &mut RegCompiler) {
     // A `\` and the byte after it are one token, so skip both.
-    prevchr_len.set(if pat_byte(0) == b'\\' { 1 } else { 0 });
-    if pat_byte(prevchr_len.get() as usize) != 0 {
-        prevchr_len.set(prevchr_len.get() + pat_charlen(prevchr_len.get() as usize));
+    rc.prev_token_len = if pat_byte(rc, 0) == b'\\' { 1 } else { 0 };
+    if pat_byte(rc, rc.prev_token_len as usize) != 0 {
+        rc.prev_token_len = rc.prev_token_len + pat_charlen(rc, rc.prev_token_len as usize);
     }
-    pat_seek(prevchr_len.get() as isize);
-    prev_at_start.set(at_start.get());
-    at_start.set(0);
-    prevprevchr.set(prevchr.get());
-    prevchr.set(curchr.get());
-    curchr.set(nextchr.get());
-    nextchr.set(-1);
+    pat_seek(rc, rc.prev_token_len as isize);
+    rc.prev_at_start = rc.at_start;
+    rc.at_start = 0;
+    rc.prev2_token = rc.prev_token;
+    rc.prev_token = rc.token;
+    rc.token = rc.next_token;
+    rc.next_token = -1;
 }
 
 /// [`skipchr`] without disturbing `at_start` and the lookbehind — for
 /// tokens that are not really part of the pattern, like a `\c` flag.
-pub(crate) fn skipchr_keepstart() {
-    let start = prev_at_start.get();
-    let prev = prevchr.get();
-    let prevprev = prevprevchr.get();
-    skipchr();
-    at_start.set(start);
-    prevchr.set(prev);
-    prevprevchr.set(prevprev);
+pub(crate) fn skipchr_keepstart(rc: &mut RegCompiler) {
+    let start = rc.prev_at_start;
+    let prev = rc.prev_token;
+    let prevprev = rc.prev2_token;
+    skipchr(rc);
+    rc.at_start = start;
+    rc.prev_token = prev;
+    rc.prev2_token = prevprev;
+}
+
+/// Switch 'magic' to `level` for the rest of the pattern: a `\v`, `\m`,
+/// `\M` or `\V`, which is not a token itself.
+pub(crate) fn set_magic(rc: &mut RegCompiler, level: Magic) {
+    rc.magic = level;
+    skipchr_keepstart(rc);
+    // The switch changes what the next byte means, so the lookahead taken
+    // before it has to be dropped.
+    rc.token = -1;
 }
 
 /// Take the next token.
-pub(crate) fn getchr() -> c_int {
-    let chr = peekchr();
-    skipchr();
+pub(crate) fn getchr(rc: &mut RegCompiler) -> c_int {
+    let chr = peekchr(rc);
+    skipchr(rc);
     chr
 }
 
 /// Put the last token back. Only one step of pushback is available.
-pub(crate) fn ungetchr() {
-    nextchr.set(curchr.get());
-    curchr.set(prevchr.get());
-    prevchr.set(prevprevchr.get());
-    at_start.set(prev_at_start.get());
-    prev_at_start.set(0);
-    pat_seek(-(prevchr_len.get() as isize));
+pub(crate) fn ungetchr(rc: &mut RegCompiler) {
+    rc.next_token = rc.token;
+    rc.token = rc.prev_token;
+    rc.prev_token = rc.prev2_token;
+    rc.at_start = rc.prev_at_start;
+    rc.prev_at_start = 0;
+    pat_seek(rc, -(rc.prev_token_len as isize));
 }
 
 /// Read up to `maxinputlen` hex digits at the cursor, or -1 if there are
 /// none. Backs `\%xff` and friends.
-pub(crate) fn gethexchrs(maxinputlen: c_int) -> i64 {
+pub(crate) fn gethexchrs(rc: &mut RegCompiler, maxinputlen: c_int) -> i64 {
     let mut nr: i64 = 0;
     let mut i = 0;
     while i < maxinputlen {
-        let c = pat_byte(0) as c_int;
+        let c = pat_byte(rc, 0) as c_int;
         if !ascii_isxdigit(c) {
             break;
         }
         nr = (nr << 4) | hex2nr(c) as i64;
-        pat_seek(1);
+        pat_seek(rc, 1);
         i += 1;
     }
     if i == 0 { -1 } else { nr }
 }
 
 /// Read decimal digits at the cursor, or -1 if there are none.
-pub(crate) fn getdecchrs() -> i64 {
+pub(crate) fn getdecchrs(rc: &mut RegCompiler) -> i64 {
     let mut nr: i64 = 0;
     let mut i = 0;
     loop {
-        let c = pat_byte(0);
+        let c = pat_byte(rc, 0);
         if !c.is_ascii_digit() {
             break;
         }
         nr = nr * 10 + (c - b'0') as i64;
-        pat_seek(1);
+        pat_seek(rc, 1);
         // Unlike the hex and octal readers this drops the lookahead, so
         // that what follows `\%d123` is peeked afresh.
-        curchr.set(-1);
+        rc.token = -1;
         i += 1;
     }
     if i == 0 { -1 } else { nr }
@@ -543,46 +534,49 @@ pub(crate) fn getdecchrs() -> i64 {
 
 /// Read up to three octal digits at the cursor, or -1 if there are none.
 /// Stops early once the value can no longer fit in a byte.
-pub(crate) fn getoctchrs() -> i64 {
+pub(crate) fn getoctchrs(rc: &mut RegCompiler) -> i64 {
     let mut nr: i64 = 0;
     let mut i = 0;
     while i < 3 && nr < 0o40 {
-        let c = pat_byte(0);
+        let c = pat_byte(rc, 0);
         if !(b'0'..=b'7').contains(&c) {
             break;
         }
         nr = (nr << 3) | hex2nr(c as c_int) as i64;
-        pat_seek(1);
+        pat_seek(rc, 1);
         i += 1;
     }
     if i == 0 { -1 } else { nr }
 }
 
 /// Read a number at the cursor, advancing it past the digits.
-fn take_digits(default: c_int) -> c_int {
-    // SAFETY: `regparse` points into the NUL-terminated pattern, and
-    // `getdigits_int` advances it no further than the terminator -- it reads
-    // digits and calls nothing, so it cannot re-enter the cell.
-    regparse.with_mut(|pp| unsafe { getdigits_int(pp, false, default) })
+fn take_digits(rc: &mut RegCompiler, default: c_int) -> c_int {
+    // SAFETY: the cursor points into the NUL-terminated pattern, and
+    // `getdigits_int` advances it no further than the terminator.
+    unsafe { getdigits_int(&mut rc.cursor, false, default) }
 }
 
 /// Parse the `{n,m}` bound at the cursor into `minval`/`maxval`, leaving
 /// the cursor past the closing brace. Answers `Err` after reporting a
 /// syntax error.
-pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> Result<(), Failed> {
+pub(crate) fn read_limits(
+    rc: &mut RegCompiler,
+    minval: &mut c_int,
+    maxval: &mut c_int,
+) -> Result<(), Failed> {
     // `{-n,m}` asks for the shortest match, which the caller reads back
     // out of the min/max order rather than from a flag.
     let mut reverse = false;
-    if pat_byte(0) == b'-' {
-        pat_seek(1);
+    if pat_byte(rc, 0) == b'-' {
+        pat_seek(rc, 1);
         reverse = true;
     }
-    let first_byte = pat_byte(0);
-    *minval = take_digits(0);
-    if pat_byte(0) == b',' {
-        pat_seek(1);
-        *maxval = if ascii_isdigit(pat_byte(0) as c_int) {
-            take_digits(MAX_LIMIT)
+    let first_byte = pat_byte(rc, 0);
+    *minval = take_digits(rc, 0);
+    if pat_byte(rc, 0) == b',' {
+        pat_seek(rc, 1);
+        *maxval = if ascii_isdigit(pat_byte(rc, 0) as c_int) {
+            take_digits(rc, MAX_LIMIT)
         } else {
             MAX_LIMIT
         };
@@ -592,15 +586,11 @@ pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> Result<(), 
     } else {
         *maxval = MAX_LIMIT;
     }
-    if pat_byte(0) == b'\\' {
-        pat_seek(1);
+    if pat_byte(rc, 0) == b'\\' {
+        pat_seek(rc, 1);
     }
-    if pat_byte(0) != b'}' {
-        let prefix = if reg_magic.get() == MAGIC_ALL {
-            ""
-        } else {
-            "\\"
-        };
+    if pat_byte(rc, 0) != b'}' {
+        let prefix = if rc.magic == MAGIC_ALL { "" } else { "\\" };
         semsg!("E554: Syntax error in {prefix}{{...}}");
         rc_did_emsg.set(true);
         return Err(Failed);
@@ -608,6 +598,6 @@ pub(crate) fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> Result<(), 
     if (!reverse && *minval > *maxval) || (reverse && *minval < *maxval) {
         core::mem::swap(minval, maxval);
     }
-    skipchr();
+    skipchr(rc);
     Ok(())
 }

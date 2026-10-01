@@ -10,15 +10,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::cstr;
+use crate::regexp::RF_HAD_EOL;
+use crate::regexp::RegCompiler;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use super::build::{Pass, nfa_postprocess, post2nfa};
-use super::compile::{nfa_get_match_text, nfa_get_reganch, nfa_get_regstart, nfa_regcomp_start};
+use super::compile::{nfa_get_match_text, nfa_get_reganch, nfa_get_regstart};
 use super::matcher::nfa_regmatch;
 use super::parse::re2post;
-use super::postfix;
 use super::run::{find_match_text, skip_to_start};
 use super::sub::{clear_sub, slots};
 use crate::memory::{xfree, xmalloc, xstrdup};
@@ -29,8 +31,7 @@ use crate::regexp::state::re_extmatch_out;
 use crate::regexp::{
     NFA_TOO_EXPENSIVE, NSUBEXP, NfaRegProg, NfaState, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
     RegSubs, Rex, TimeBudget, cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi,
-    make_extmatch, nfa_re_flags, nfa_regengine, nstate, re_has_z, reg_getline, regflags, regnpar,
-    state_ptr, unref_extmatch,
+    make_extmatch, nfa_regengine, reg_getline, unref_extmatch,
 };
 use crate::strings::xstrnsave;
 use crate::types::{
@@ -303,7 +304,6 @@ fn try_match(
     }
 
     // Every state starts out on no list.
-    nstate.set(0);
     let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
     for i in 0..unsafe { (*prog).nstate } {
         let s = unsafe { states.offset(i as isize) };
@@ -313,54 +313,52 @@ fn try_match(
     Attempt::Ran(nfa_regtry(rex, prog, *col, tm, timed_out))
 }
 
-/// Compile `expr` into a program, or null after reporting why not.
-///
-/// # Safety
-///
-/// `expr` must be null or a NUL-terminated pattern.
-pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut RegProg {
-    if expr.is_null() {
-        return core::ptr::null_mut();
-    }
-    nfa_re_flags.set(re_flags);
-    // The compiler records what it found about the pattern (`\ze`, a
-    // back-reference) in the same context a match later reads it from.
-    // SAFETY: compiling, so no match is reading the context; only the
-    // `nfa_*` fields are touched and they need no line set up.
-    let rex = unsafe { Rex::acquire() };
-    unsafe { nfa_regcomp_start(rex, expr, re_flags) };
+/// Compile `rc`'s pattern into a program, or answer null after reporting why
+/// not -- or, under 'regexpengine' 0, having declined it quietly.
+pub(crate) fn nfa_regcomp(rc: &mut RegCompiler) -> *mut RegProg {
+    rc.nfa.count = 0;
+    rc.nfa.built = 0;
+    // SAFETY: the compiler's pattern is NUL-terminated.
+    rc.post.start(unsafe { cstr::bytes_at(rc.pattern) }.len());
+    rc.wants_nfa = false;
+    rc.has_zend = 0;
+    rc.has_backref = 0;
+    rc.restart();
 
     let mut prog: *mut NfaRegProg = core::ptr::null_mut();
-    if re2post(rex).is_ok() {
+    if re2post(rc).is_ok() {
         // The first pass counts the states, because the program is one
         // block with them inline.
-        postfix::with_items(|items| post2nfa(items, Pass::Count));
-        let size = 80 + size_of::<NfaState>() * nstate.get() as usize;
+        post2nfa(&mut rc.nfa, rc.post.items(), Pass::Count);
+        let size = 80 + size_of::<NfaState>() * rc.nfa.count as usize;
+        // SAFETY: `xmalloc` answers a block of `size` bytes, room for the
+        // head and `count` states; everything below writes inside it.
         prog = unsafe { xmalloc(size) } as *mut NfaRegProg;
-        state_ptr.set(unsafe { &raw mut (*prog).state } as *mut NfaState);
+        rc.nfa.base = unsafe { &raw mut (*prog).state } as *mut NfaState;
         unsafe { (*prog).re_in_use = false };
-        unsafe { (*prog).start = postfix::with_items(|items| post2nfa(items, Pass::Build)) };
+        unsafe { (*prog).start = post2nfa(&mut rc.nfa, rc.post.items(), Pass::Build) };
         if unsafe { (*prog).start.is_null() } {
             unsafe { xfree(prog.cast()) };
             prog = core::ptr::null_mut();
         } else {
-            unsafe { (*prog).regflags = regflags.get() };
+            let mut flags = rc.flags;
+            if rc.had_eol != 0 {
+                flags |= RF_HAD_EOL;
+            }
+            unsafe { (*prog).regflags = flags };
             unsafe { (*prog).engine = (&raw const nfa_regengine).cast_mut() };
-            unsafe { (*prog).nstate = nstate.get() };
-            unsafe { (*prog).has_zend = rex.nfa_has_zend() };
-            unsafe { (*prog).has_backref = rex.nfa_has_backref() };
-            unsafe { (*prog).nsubexp = regnpar.get() };
+            unsafe { (*prog).nstate = rc.nfa.count };
+            unsafe { (*prog).has_zend = rc.has_zend };
+            unsafe { (*prog).has_backref = rc.has_backref };
+            unsafe { (*prog).nsubexp = rc.next_group };
             nfa_postprocess(prog);
             unsafe { (*prog).reganch = c_int::from(nfa_get_reganch((*prog).start, 0)) };
             unsafe { (*prog).regstart = nfa_get_regstart((*prog).start, 0) };
             unsafe { (*prog).match_text = nfa_get_match_text((*prog).start) };
-            unsafe { (*prog).reghasz = re_has_z.get() };
-            unsafe { (*prog).pattern = xstrdup(expr as *mut c_char) };
+            unsafe { (*prog).reghasz = rc.has_z };
+            unsafe { (*prog).pattern = xstrdup(rc.pattern) };
         }
     }
-
-    postfix::finish();
-    state_ptr.set(core::ptr::null_mut::<NfaState>());
     prog.cast()
 }
 

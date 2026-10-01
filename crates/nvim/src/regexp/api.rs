@@ -14,13 +14,16 @@
 
 use crate::cstr;
 use crate::memory::XString;
+use crate::regexp::RegCompiler;
+use crate::regexp::bt_regcomp;
+use crate::regexp::nfa_regcomp;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
 use super::{
     AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg,
-    REX_ALL, Rex, bt_regengine, nfa_regengine, regexp_engine, rex_in_use,
+    REX_ALL, Rex, rex_in_use,
 };
 use crate::message::state::called_emsg;
 use crate::message::{emsg, msg_str, verbose_enter, verbose_leave};
@@ -55,7 +58,7 @@ pub(crate) fn with_rex<R>(run: impl FnOnce() -> R) -> R {
 /// otherwise the caller owns the program and frees it with [`vim_regfree`].
 pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
     let mut expr = expr_arg;
-    regexp_engine.set(p_re() as c_int);
+    let mut engine = p_re() as c_int;
     if expr.to_bytes().starts_with(b"\\%#=") {
         // The prefix may be the whole pattern, and then the byte after it
         // is the terminator -- which is not a digit, so the error below is
@@ -65,45 +68,37 @@ pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
             || chosen == BACKTRACKING_ENGINE as c_int
             || chosen == NFA_ENGINE as c_int
         {
-            regexp_engine.set(chosen);
+            engine = chosen;
             expr = cstr::suffix(expr, 5);
         } else {
             emsg(gettext(
                 c"E864: \\%#= can only be followed by 0, 1, or 2. The automatic engine will be used ",
             ));
-            regexp_engine.set(AUTOMATIC_ENGINE as c_int);
+            engine = AUTOMATIC_ENGINE as c_int;
         }
     }
     // The pattern can name a buffer-local thing (`\k`, say) while it is
-    // being compiled, so point the context at a buffer.
-    // SAFETY: nothing is matching, so nothing else holds the context;
-    // only `reg_buf` is touched, which needs no line set up.
-    unsafe { Rex::acquire() }.set_reg_buf(Buf::current());
+    // being compiled, so the compiler reads the current buffer's.
+    let buf = Buf::current();
 
     let called_emsg_before = called_emsg.get();
-    let text = expr.as_ptr().cast::<uint8_t>().cast_mut();
-    // SAFETY (every call below): the engine table's entries are set at
-    // compile time, and each engine's `regcomp` reads the NUL-terminated
-    // pattern without writing to it.
-    let mut prog = if regexp_engine.get() != BACKTRACKING_ENGINE as c_int {
-        let auto = if regexp_engine.get() == AUTOMATIC_ENGINE as c_int {
+    let mut prog = if engine != BACKTRACKING_ENGINE as c_int {
+        let auto = if engine == AUTOMATIC_ENGINE as c_int {
             RE_AUTO
         } else {
             0
         };
-        let regcomp = nfa_regengine.regcomp.expect("non-null function pointer");
-        unsafe { regcomp(text, re_flags + auto) }
+        nfa_regcomp(&mut RegCompiler::new(expr, re_flags + auto, buf))
     } else {
-        let regcomp = bt_regengine.regcomp.expect("non-null function pointer");
-        unsafe { regcomp(text, re_flags) }
+        bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf))
     };
     // Only retry when the NFA engine declined quietly: an error means the
     // pattern is bad, not merely too much for that engine.
     if prog.is_null()
-        && regexp_engine.get() == AUTOMATIC_ENGINE as c_int
+        && engine == AUTOMATIC_ENGINE as c_int
         && called_emsg.get() == called_emsg_before
     {
-        regexp_engine.set(BACKTRACKING_ENGINE as c_int);
+        engine = BACKTRACKING_ENGINE as c_int;
         if p_verbose() > 0 as OptInt {
             verbose_enter();
             msg_str(gettext(
@@ -112,11 +107,11 @@ pub fn vim_regcomp(expr_arg: &CStr, re_flags: c_int) -> *mut RegProg {
             msg_str(expr);
             verbose_leave();
         }
-        let regcomp = bt_regengine.regcomp.expect("non-null function pointer");
-        prog = unsafe { regcomp(text, re_flags) };
+        prog = bt_regcomp(&mut RegCompiler::new(expr, re_flags, buf));
     }
     if !prog.is_null() {
-        unsafe { (*prog).re_engine = regexp_engine.get() as u32 };
+        // SAFETY: a program one of the engines just built.
+        unsafe { (*prog).re_engine = engine as u32 };
         unsafe { (*prog).re_flags = re_flags as u32 };
     }
     prog

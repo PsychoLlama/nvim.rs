@@ -22,13 +22,14 @@
 
 use super::list::{op, out_of, out1_of};
 use crate::regexp::NfaOp;
+use crate::regexp::NfaStates;
 use core::ffi::c_int;
 
 use super::run::failure_chance;
 use super::sub::match_follows;
 use crate::mbyte::utf_char2len;
 use crate::regexp::state::rc_did_emsg;
-use crate::regexp::{NfaRegProg, NfaState, istate, nstate, state_ptr};
+use crate::regexp::{NfaRegProg, NfaState};
 use crate::semsg;
 use crate::types::MB_MAXBYTES;
 
@@ -76,19 +77,24 @@ struct Frag {
 ///
 /// `None` once the counting pass's estimate is used up, which the callers
 /// treat as "give up on this pattern" — silently, as upstream does.
-fn state(c: c_int, out: *mut NfaState, out1: *mut NfaState) -> Option<*mut NfaState> {
-    if istate.get() >= nstate.get() {
+fn state(
+    states: &mut NfaStates,
+    c: c_int,
+    out: *mut NfaState,
+    out1: *mut NfaState,
+) -> Option<*mut NfaState> {
+    if states.built >= states.count {
         return None;
     }
-    // SAFETY: `state_ptr` is the program's state array and `istate` is
-    // below `nstate`, its length.
-    let s = unsafe { state_ptr.get().offset(istate.get() as isize) };
-    istate.set(istate.get() + 1);
+    // SAFETY: `base` is the program's state array and `built` is below
+    // `count`, its length.
+    let s = unsafe { states.base.offset(states.built as isize) };
+    states.built += 1;
     unsafe { (*s).c = c };
     unsafe { (*s).out = out };
     unsafe { (*s).out1 = out1 };
     unsafe { (*s).val = 0 };
-    unsafe { (*s).id = istate.get() };
+    unsafe { (*s).id = states.built };
     unsafe { (*s).lastlist = [0, 0] };
     Some(s)
 }
@@ -280,12 +286,12 @@ fn nfa_max_width(startstate: *mut NfaState, depth: c_int) -> c_int {
 ///
 /// [`Pass::Count`] only adds up `nstate` and returns null; [`Pass::Build`]
 /// returns the machine's entry state, or null once it has said why not.
-pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
+pub(crate) fn post2nfa(states: &mut NfaStates, items: &[c_int], pass: Pass) -> *mut NfaState {
     let counting = pass == Pass::Count;
     let cap = if counting {
         0
     } else {
-        usize::try_from(nstate.get()).expect("the state count is never negative") + 1
+        usize::try_from(states.count).expect("the state count is never negative") + 1
     };
     let mut stack = Stack {
         frags: Vec::with_capacity(cap),
@@ -305,7 +311,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
         };
 
         if counting {
-            nstate.set(nstate.get() + count_for(item, operand));
+            states.count = states.count + count_for(item, operand);
             i += 1;
             continue;
         }
@@ -325,7 +331,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
                 let (Some(e2), Some(e1)) = (stack.pop(), stack.pop()) else {
                     return core::ptr::null_mut();
                 };
-                let Some(s) = state(NfaOp::Split.code(), e1.start, e2.start) else {
+                let Some(s) = state(states, NfaOp::Split.code(), e1.start, e2.start) else {
                     return core::ptr::null_mut();
                 };
                 stack.push(s, append(e1.out, e2.out));
@@ -346,7 +352,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
                 } else {
                     (core::ptr::null_mut(), e.start)
                 };
-                let Some(s) = state(NfaOp::Split.code(), out, out1) else {
+                let Some(s) = state(states, NfaOp::Split.code(), out, out1) else {
                     return core::ptr::null_mut();
                 };
                 let exit = list1(if greedy { out1_edge(s) } else { out_edge(s) });
@@ -366,6 +372,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
                     return core::ptr::null_mut();
                 };
                 let Some(s) = state(
+                    states,
                     NfaOp::EndColl.code(),
                     core::ptr::null_mut(),
                     core::ptr::null_mut(),
@@ -404,7 +411,8 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
                     let Some(e) = stack.pop() else {
                         return core::ptr::null_mut();
                     };
-                    let Some(new) = state(NfaOp::Split.code(), e.start, core::ptr::null_mut())
+                    let Some(new) =
+                        state(states, NfaOp::Split.code(), e.start, core::ptr::null_mut())
                     else {
                         return core::ptr::null_mut();
                     };
@@ -438,26 +446,29 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
                     return core::ptr::null_mut();
                 };
                 let Some(end) = state(
+                    states,
                     end_state.code(),
                     core::ptr::null_mut(),
                     core::ptr::null_mut(),
                 ) else {
                     return core::ptr::null_mut();
                 };
-                let Some(s) = state(start_state.code(), e.start, end) else {
+                let Some(s) = state(states, start_state.code(), e.start, end) else {
                     return core::ptr::null_mut();
                 };
                 if pattern {
                     // `\@>` keeps what it matched, so the sub-match's end is
                     // recorded and the outer match resumes past it.
                     let Some(skip) = state(
+                        states,
                         NfaOp::Skip.code(),
                         core::ptr::null_mut(),
                         core::ptr::null_mut(),
                     ) else {
                         return core::ptr::null_mut();
                     };
-                    let Some(zend) = state(NfaOp::Zend.code(), end, core::ptr::null_mut()) else {
+                    let Some(zend) = state(states, NfaOp::Zend.code(), end, core::ptr::null_mut())
+                    else {
                         return core::ptr::null_mut();
                     };
                     // SAFETY: `end` is a state allocated just above.
@@ -496,11 +507,15 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
                     }
                 };
                 let start = inner.map_or(core::ptr::null_mut(), |e| e.start);
-                let Some(s) = state(item, start, core::ptr::null_mut()) else {
+                let Some(s) = state(states, item, start, core::ptr::null_mut()) else {
                     return core::ptr::null_mut();
                 };
-                let Some(s1) = state(mclose.code(), core::ptr::null_mut(), core::ptr::null_mut())
-                else {
+                let Some(s1) = state(
+                    states,
+                    mclose.code(),
+                    core::ptr::null_mut(),
+                    core::ptr::null_mut(),
+                ) else {
                     return core::ptr::null_mut();
                 };
                 match inner {
@@ -519,10 +534,12 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
             // A back-reference matches a run whose length is only known at
             // match time, so an `NFA_SKIP` follows it to consume the rest.
             Ok(reference) if reference.is_reference() => {
-                let Some(s) = state(item, core::ptr::null_mut(), core::ptr::null_mut()) else {
+                let Some(s) = state(states, item, core::ptr::null_mut(), core::ptr::null_mut())
+                else {
                     return core::ptr::null_mut();
                 };
                 let Some(s1) = state(
+                    states,
                     NfaOp::Skip.code(),
                     core::ptr::null_mut(),
                     core::ptr::null_mut(),
@@ -536,7 +553,8 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
             // position assertion — is one state that stands alone. The
             // assertions keep their operand in `val`.
             _ => {
-                let Some(s) = state(item, core::ptr::null_mut(), core::ptr::null_mut()) else {
+                let Some(s) = state(states, item, core::ptr::null_mut(), core::ptr::null_mut())
+                else {
                     return core::ptr::null_mut();
                 };
                 if operand != 0 {
@@ -551,7 +569,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
 
     if counting {
         // One more for the accepting state added below.
-        nstate.set(nstate.get() + 1);
+        states.count = states.count + 1;
         return core::ptr::null_mut();
     }
 
@@ -565,7 +583,7 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
         rc_did_emsg.set(true);
         return core::ptr::null_mut();
     }
-    if istate.get() >= nstate.get() {
+    if states.built >= states.count {
         semsg!("E876: (NFA regexp) Not enough space to store the whole NFA ");
         rc_did_emsg.set(true);
         return core::ptr::null_mut();
@@ -573,8 +591,8 @@ pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
     // The accepting state, taken by hand rather than through `state`: it
     // must have id 0, which is how the matcher recognises it.
     // SAFETY: `istate` is below `nstate`, checked just above.
-    let matchstate = unsafe { state_ptr.get().offset(istate.get() as isize) };
-    istate.set(istate.get() + 1);
+    let matchstate = unsafe { states.base.offset(states.built as isize) };
+    states.built += 1;
     unsafe { (*matchstate).c = NfaOp::Match.code() };
     unsafe { (*matchstate).out = core::ptr::null_mut() };
     unsafe { (*matchstate).out1 = core::ptr::null_mut() };

@@ -31,7 +31,7 @@ use crate::regexp::state::re_extmatch_out;
 use crate::regexp::{
     MatchPos, NSUBEXP, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN, Rex,
     cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec, init_regexec_multi,
-    make_extmatch, prog_magic_wrong, reg_getline, reg_toolong, trim_line_copy, unref_extmatch,
+    make_extmatch, prog_magic_wrong, reg_getline, trim_line_copy, unref_extmatch,
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
@@ -209,7 +209,6 @@ fn bt_regexec_both(
                 if prog.regmust().is_null() || has_regmust(rex, prog, line, col) {
                     rex.set_line(line);
                     rex.set_lnum(0);
-                    reg_toolong.set(0);
                     retval = if prog.is_anchored() {
                         try_anchored(rex, prog, col, tm, timed_out)
                     } else {

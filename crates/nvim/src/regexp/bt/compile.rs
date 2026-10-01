@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::regexp::RegCompiler;
 use core::ffi::{c_int, c_uint};
 use core::mem::offset_of;
 
@@ -24,12 +25,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::state::rc_did_emsg;
-use crate::regexp::{
-    BtRegProg, JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, RE_MAGIC, RE_STRICT, RE_STRING,
-    REX_SET, Rex, had_endbrace, had_eol, initchr, num_complex_braces, peekchr, re_has_z,
-    re_multi_type, refresh_cpo_flags, reg_magic, reg_strict, reg_string, reg_toolong, regcode,
-    regflags, regnpar, regnzpar, regparse, regsize,
-};
+use crate::regexp::{BtRegProg, JUST_CALC_SIZE, NOT_MULTI, REX_SET, Rex, peekchr, re_multi_type};
 use crate::types::{NUL, RegEngine, RegProg, int64_t, uint8_t, uint32_t};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
@@ -199,37 +195,13 @@ impl BtProg {
 }
 
 /// Is this the sizing pass rather than the writing one?
-fn sizing() -> bool {
-    regcode.get() == JUST_CALC_SIZE
+fn sizing(rc: &mut RegCompiler) -> bool {
+    rc.code.code == JUST_CALC_SIZE
 }
 
 /// Charge `n` bytes to the size the sizing pass is accumulating.
-fn charge(n: usize) {
-    regsize.set(regsize.get() + n as int64_t);
-}
-
-/// Reset the compiler's per-pattern state. Called once per pass.
-pub(crate) fn regcomp_start(expr: *mut uint8_t, re_flags: c_int) {
-    // SAFETY: `expr` is the caller's NUL-terminated pattern.
-    unsafe { initchr(expr.cast()) };
-    reg_magic.set(if re_flags & RE_MAGIC != 0 {
-        MAGIC_ON
-    } else {
-        MAGIC_OFF
-    });
-    reg_string.set(re_flags & RE_STRING);
-    reg_strict.set(re_flags & RE_STRICT);
-    refresh_cpo_flags();
-
-    num_complex_braces.set(0);
-    regnpar.set(1);
-    had_endbrace.set([0; 10]);
-    regnzpar.set(1);
-    re_has_z.set(0);
-    regsize.set(0);
-    reg_toolong.set(0);
-    regflags.set(0);
-    had_eol.set(0);
+fn charge(rc: &mut RegCompiler, n: usize) {
+    rc.code.size = rc.code.size + n as int64_t;
 }
 
 /// Should `c` be emitted as a `MULTIBYTECODE` node rather than as bytes?
@@ -237,51 +209,51 @@ pub(crate) fn regcomp_start(expr: *mut uint8_t, re_flags: c_int) {
 /// Only when a multi follows it or it can carry combining characters —
 /// otherwise the multibyte character is just its bytes, and matching it
 /// byte-wise is faster.
-pub(crate) fn use_multibytecode(c: c_int) -> bool {
-    utf_char2len(c) > 1 && (re_multi_type(peekchr()) != NOT_MULTI || utf_iscomposing_legacy(c))
+pub(crate) fn use_multibytecode(rc: &mut RegCompiler, c: c_int) -> bool {
+    utf_char2len(c) > 1 && (re_multi_type(peekchr(rc)) != NOT_MULTI || utf_iscomposing_legacy(c))
 }
 
 /// Emit one byte of program.
-pub(crate) fn regc(b: c_int) {
-    if sizing() {
-        charge(1);
+pub(crate) fn regc(rc: &mut RegCompiler, b: c_int) {
+    if sizing(rc) {
+        charge(rc, 1);
         return;
     }
     // SAFETY: the writing pass sized the block with the same call sequence,
     // so there is room for this byte.
-    let at = regcode.get();
-    regcode.set(unsafe { at.add(1) });
+    let at = rc.code.code;
+    rc.code.code = unsafe { at.add(1) };
     unsafe { *at = b as uint8_t };
 }
 
 /// Emit one character of program, as its UTF-8 bytes.
-pub(crate) fn regmbc(c: c_int) {
-    if sizing() {
-        charge(utf_char2len(c) as usize);
+pub(crate) fn regmbc(rc: &mut RegCompiler, c: c_int) {
+    if sizing(rc) {
+        charge(rc, utf_char2len(c) as usize);
         return;
     }
     // SAFETY: as `regc`; `utf_char2bytes` writes at most `utf_char2len(c)`
     // bytes, which is what the sizing pass charged.
-    let at = regcode.get();
-    regcode.set(unsafe { at.add(utf_char2bytes(c, at.cast()) as usize) });
+    let at = rc.code.code;
+    rc.code.code = unsafe { at.add(utf_char2bytes(c, at.cast()) as usize) };
 }
 
 /// Emit a node with opcode `op` and an unset next-offset, and hand back a
 /// handle to it — or [`JUST_CALC_SIZE`] during the sizing pass.
-pub(crate) fn regnode(op: BtOp) -> *mut uint8_t {
-    regnode_nl(op, false)
+pub(crate) fn regnode(rc: &mut RegCompiler, op: BtOp) -> *mut uint8_t {
+    regnode_nl(rc, op, false)
 }
 
 /// [`regnode`], for the class opcodes that have a `\_x` form: with
 /// `crosses_lines` the node also matches a line break.
-pub(crate) fn regnode_nl(op: BtOp, crosses_lines: bool) -> *mut uint8_t {
-    let node = regcode.get();
-    if sizing() {
-        charge(NODE_HDR);
+pub(crate) fn regnode_nl(rc: &mut RegCompiler, op: BtOp, crosses_lines: bool) -> *mut uint8_t {
+    let node = rc.code.code;
+    if sizing(rc) {
+        charge(rc, NODE_HDR);
         return node;
     }
     // SAFETY: as `regc`, three bytes' worth.
-    regcode.set(unsafe { node.add(NODE_HDR) });
+    rc.code.code = unsafe { node.add(NODE_HDR) };
     unsafe { *node = op.encode(crosses_lines) };
     unsafe { *node.add(1) = NUL as uint8_t };
     unsafe { *node.add(2) = NUL as uint8_t };
@@ -304,19 +276,18 @@ pub(crate) fn set_opcode(node: *mut uint8_t, op: BtOp, crosses_lines: bool) {
 }
 
 /// Emit a node's 32-bit operand, big-endian.
-pub(crate) fn regnr(val: uint32_t) {
-    if sizing() {
-        charge(4);
+pub(crate) fn regnr(rc: &mut RegCompiler, val: uint32_t) {
+    if sizing(rc) {
+        charge(rc, 4);
         return;
     }
-    regcode.set(put_uint32(regcode.get(), val));
+    rc.code.code = put_uint32(rc.code.code, val);
 }
 
-/// The node `p` points at, or null if it is the last one.
+/// The node after `p` in its chain, or null if `p` is the last one.
+///
+/// `p` must be a node of a finished program, or of the one being written.
 pub(crate) fn regnext(p: *mut uint8_t) -> *mut uint8_t {
-    if p == JUST_CALC_SIZE || reg_toolong.get() != 0 {
-        return core::ptr::null_mut();
-    }
     // SAFETY: `p` is a node in the program, so its two offset bytes are
     // readable.
     let offset = usize::from(u16::from_be_bytes([unsafe { *p.add(1) }, unsafe {
@@ -331,17 +302,27 @@ pub(crate) fn regnext(p: *mut uint8_t) -> *mut uint8_t {
     }
 }
 
+/// [`regnext`] while the program is being written: nothing during the sizing
+/// pass, and nothing once an offset has overflowed, since the chain can no
+/// longer be trusted.
+pub(crate) fn chain_next(rc: &mut RegCompiler, p: *mut uint8_t) -> *mut uint8_t {
+    if p == JUST_CALC_SIZE || rc.code.too_long != 0 {
+        return core::ptr::null_mut();
+    }
+    regnext(p)
+}
+
 /// Point the last node of the chain starting at `p` at `val`.
 ///
 /// A `BACK` node's offset counts backwards, which is how the compiler builds
 /// the loop in a non-simple `*`.
-pub(crate) fn regtail(p: *mut uint8_t, val: *const uint8_t) {
+pub(crate) fn regtail(rc: &mut RegCompiler, p: *mut uint8_t, val: *const uint8_t) {
     if p == JUST_CALC_SIZE {
         return;
     }
     let mut scan = p;
     loop {
-        let next = regnext(scan);
+        let next = chain_next(rc, scan);
         if next.is_null() {
             break;
         }
@@ -357,7 +338,7 @@ pub(crate) fn regtail(p: *mut uint8_t, val: *const uint8_t) {
     // A 16-bit offset cannot reach: the pattern is too long. The caller
     // notices via `reg_toolong` and gives up on the whole program.
     if offset > 0xffff {
-        reg_toolong.set(1);
+        rc.code.too_long = 1;
     } else {
         let bytes = (offset as u16).to_be_bytes();
         unsafe { *scan.add(1) = bytes[0] };
@@ -367,7 +348,7 @@ pub(crate) fn regtail(p: *mut uint8_t, val: *const uint8_t) {
 
 /// [`regtail`] on the *operand* of `p`, for the node kinds whose operand is
 /// itself a chain: a `BRANCH` and the ten `BRACE_COMPLEX` slots.
-pub(crate) fn regoptail(p: *mut uint8_t, val: *mut uint8_t) {
+pub(crate) fn regoptail(rc: &mut RegCompiler, p: *mut uint8_t, val: *mut uint8_t) {
     if p.is_null() || p == JUST_CALC_SIZE {
         return;
     }
@@ -379,7 +360,7 @@ pub(crate) fn regoptail(p: *mut uint8_t, val: *mut uint8_t) {
     if op != BtOp::Branch && !op.is_complex_brace() {
         return;
     }
-    regtail(unsafe { p.add(NODE_HDR) }, val);
+    regtail(rc, unsafe { p.add(NODE_HDR) }, val);
 }
 
 /// Open `len` bytes in front of `opnd`, sliding everything written since it
@@ -387,13 +368,13 @@ pub(crate) fn regoptail(p: *mut uint8_t, val: *mut uint8_t) {
 ///
 /// Returns the first byte after the header, which is where the caller writes
 /// the new node's operand.
-fn open_before(op: BtOp, opnd: *mut uint8_t, len: usize) -> *mut uint8_t {
+fn open_before(rc: &mut RegCompiler, op: BtOp, opnd: *mut uint8_t, len: usize) -> *mut uint8_t {
     // SAFETY: `opnd` is a node in the program and everything from it to
     // `regcode` was written by this pass; the sizing pass charged `len` extra
     // bytes for this call, so the destination is in the same allocation.
-    let mut src = regcode.get();
-    regcode.set(unsafe { src.add(len) });
-    let mut dst = regcode.get();
+    let mut src = rc.code.code;
+    rc.code.code = unsafe { src.add(len) };
+    let mut dst = rc.code.code;
     while src > opnd {
         src = unsafe { src.sub(1) };
         dst = unsafe { dst.sub(1) };
@@ -406,21 +387,21 @@ fn open_before(op: BtOp, opnd: *mut uint8_t, len: usize) -> *mut uint8_t {
 }
 
 /// Insert an operand-less node in front of `opnd`.
-pub(crate) fn reginsert(op: BtOp, opnd: *mut uint8_t) {
-    if sizing() {
-        charge(NODE_HDR);
+pub(crate) fn reginsert(rc: &mut RegCompiler, op: BtOp, opnd: *mut uint8_t) {
+    if sizing(rc) {
+        charge(rc, NODE_HDR);
         return;
     }
-    open_before(op, opnd, NODE_HDR);
+    open_before(rc, op, opnd, NODE_HDR);
 }
 
 /// Insert a node carrying one 32-bit number in front of `opnd`.
-pub(crate) fn reginsert_nr(op: BtOp, val: int64_t, opnd: *mut uint8_t) {
-    if sizing() {
-        charge(NODE_HDR + 4);
+pub(crate) fn reginsert_nr(rc: &mut RegCompiler, op: BtOp, val: int64_t, opnd: *mut uint8_t) {
+    if sizing(rc) {
+        charge(rc, NODE_HDR + 4);
         return;
     }
-    let place = open_before(op, opnd, NODE_HDR + 4);
+    let place = open_before(rc, op, opnd, NODE_HDR + 4);
     debug_assert!((0..=uint32_t::MAX as int64_t).contains(&val));
     put_uint32(place, val as uint32_t);
 }
@@ -428,17 +409,23 @@ pub(crate) fn reginsert_nr(op: BtOp, val: int64_t, opnd: *mut uint8_t) {
 /// Insert a `BRACE_LIMITS`-shaped node — two 32-bit numbers — in front of
 /// `opnd`, and point it at the end of itself so the matcher can find the
 /// braced atom.
-pub(crate) fn reginsert_limits(op: BtOp, minval: int64_t, maxval: int64_t, opnd: *mut uint8_t) {
-    if sizing() {
-        charge(NODE_HDR + 8);
+pub(crate) fn reginsert_limits(
+    rc: &mut RegCompiler,
+    op: BtOp,
+    minval: int64_t,
+    maxval: int64_t,
+    opnd: *mut uint8_t,
+) {
+    if sizing(rc) {
+        charge(rc, NODE_HDR + 8);
         return;
     }
-    let mut place = open_before(op, opnd, NODE_HDR + 8);
+    let mut place = open_before(rc, op, opnd, NODE_HDR + 8);
     debug_assert!((0..=uint32_t::MAX as int64_t).contains(&minval));
     debug_assert!((0..=uint32_t::MAX as int64_t).contains(&maxval));
     place = put_uint32(place, minval as uint32_t);
     place = put_uint32(place, maxval as uint32_t);
-    regtail(opnd, place);
+    regtail(rc, opnd, place);
 }
 
 /// Is a `\1`..`\9` back-reference to group `refnum` legal here?
@@ -447,13 +434,13 @@ pub(crate) fn reginsert_limits(op: BtOp, minval: int64_t, maxval: int64_t, opnd:
 /// look-behind: `\(...\)\@<=` runs the group after the reference in the
 /// program, so a reference forward into one is fine as long as some `\@<=`
 /// or `\@<!` is still to come in the pattern.
-pub(crate) fn seen_endbrace(refnum: c_int) -> bool {
-    if had_endbrace.get()[refnum as usize] != 0 {
+pub(crate) fn seen_endbrace(rc: &mut RegCompiler, refnum: c_int) -> bool {
+    if rc.closed_groups[refnum as usize] != 0 {
         return true;
     }
     // SAFETY: `regparse` points into the NUL-terminated pattern, so the walk
     // stops at its end; the message is a static NUL-terminated string.
-    let mut p = regparse.get().cast::<uint8_t>();
+    let mut p = rc.cursor.cast::<uint8_t>();
     while unsafe { *p } as c_int != NUL {
         if unsafe { *p } as c_int == '@' as c_int
             && unsafe { *p.add(1) } as c_int == '<' as c_int

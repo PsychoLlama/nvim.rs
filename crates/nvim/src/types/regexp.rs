@@ -22,8 +22,6 @@ pub struct RegProg {
     pub re_flags: ::core::ffi::c_uint,
     pub re_in_use: bool,
 }
-/// Compile a pattern, or null if it does not parse.
-pub type RegComp = Option<unsafe fn(*mut uint8_t, ::core::ffi::c_int) -> *mut RegProg>;
 /// Release a compiled pattern.
 pub type RegFree = Option<unsafe fn(*mut RegProg) -> ()>;
 /// Match within one line.
@@ -41,9 +39,9 @@ pub type RegExecMulti = Option<
         *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int,
 >;
-/// The vtable of a regexp engine (backtracking or NFA).
+/// The vtable of a regexp engine (backtracking or NFA). Compiling is not
+/// in it: `vim_regcomp` picks the engine and calls its compiler directly.
 pub struct RegEngine {
-    pub regcomp: RegComp,
     pub regfree: RegFree,
     pub regexec_nl: RegExecNl,
     pub regexec_multi: RegExecMulti,

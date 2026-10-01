@@ -16,15 +16,16 @@
 )]
 
 use crate::regexp::NfaOp;
+use crate::regexp::RegCompiler;
 use core::ffi::{c_char, c_int};
 
+use super::cursor;
 use super::equi_class::nfa_emit_equi_class;
-use super::{cursor, postfix};
 use crate::mbyte::utf_char2len;
 use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     CharClass, INT_MAX, MAGIC_OFF, NL, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, coll_get_char,
-    pat_byte, pat_char, pat_charlen, reg_cpo_lit, reg_magic, reg_strict, reg_string, wants_nfa,
+    pat_byte, pat_char, pat_charlen,
 };
 use crate::semsg;
 
@@ -74,17 +75,17 @@ pub(crate) enum Collection {
 ///
 /// `atom_start` is where the atom began, which bounds the one step back the
 /// parser takes at the end.
-pub(crate) fn collection(mut accepts_newline: bool, atom_start: *mut c_char) -> Collection {
-    let end = cursor::collection_end();
+pub(crate) fn collection(
+    rc: &mut RegCompiler,
+    mut accepts_newline: bool,
+    atom_start: *mut c_char,
+) -> Collection {
+    let end = cursor::collection_end(rc);
     if byte_at(end) != b']' {
-        if reg_strict.get() != 0 {
+        if rc.strict != 0 {
             // Not `magic_prefix`: this wants the backslash whenever `[` is
             // not magic, which is one 'magic' level lower.
-            let prefix = if reg_magic.get() > MAGIC_OFF {
-                ""
-            } else {
-                "\\"
-            };
+            let prefix = if rc.magic > MAGIC_OFF { "" } else { "\\" };
             semsg!("E769: Missing ] after {prefix}[");
             rc_did_emsg.set(true);
             return Collection::Failed;
@@ -94,72 +95,72 @@ pub(crate) fn collection(mut accepts_newline: bool, atom_start: *mut c_char) -> 
 
     // `[0-9]` and its kin are really `\d` and can be one state instead of
     // ten.
-    if let Some((class, with_newline)) = recognize_char_class(end, accepts_newline) {
-        postfix::emit(class.code());
+    if let Some((class, with_newline)) = recognize_char_class(rc, end, accepts_newline) {
+        rc.post.emit(class.code());
         if with_newline {
             // The class in its line-break-accepting form: emit the plain
             // class and the line break as alternatives.
-            postfix::emit_op(NfaOp::Newl);
-            postfix::emit_op(NfaOp::Or);
+            rc.post.emit_op(NfaOp::Newl);
+            rc.post.emit_op(NfaOp::Or);
         }
-        skip_past(end);
+        skip_past(rc, end);
         return Collection::Done;
     }
 
-    let negated = pat_byte(0) == b'^';
+    let negated = pat_byte(rc, 0) == b'^';
     if negated {
-        advance_grapheme();
-        postfix::emit_op(NfaOp::StartNegColl);
+        advance_grapheme(rc);
+        rc.post.emit_op(NfaOp::StartNegColl);
     } else {
-        postfix::emit_op(NfaOp::StartColl);
+        rc.post.emit_op(NfaOp::StartColl);
     }
 
     // A `-` in the very first position is that character, not a range.
     let mut startc = -1;
-    if pat_byte(0) == b'-' {
+    if pat_byte(rc, 0) == b'-' {
         startc = c_int::from(b'-');
-        postfix::emit_concat(startc);
-        advance_grapheme();
+        rc.post.emit_concat(startc);
+        advance_grapheme(rc);
     }
 
     let mut emit_range = false;
-    while cursor::before(end) {
+    while cursor::before(rc, end) {
         let oldstartc = startc;
         let mut range_endpoint = false;
         startc = -1;
         let mut got_coll_char = false;
 
-        if pat_byte(0) == b'[' {
-            match bracketed_item() {
+        if pat_byte(rc, 0) == b'[' {
+            match bracketed_item(rc) {
                 Bracketed::Emitted => continue,
                 Bracketed::Collated(c) => startc = c,
                 Bracketed::Literal => {}
             }
         }
 
-        if pat_byte(0) == b'-' && oldstartc != -1 {
+        if pat_byte(rc, 0) == b'-' && oldstartc != -1 {
             // The `-` of a range: what follows is its upper bound.
             emit_range = true;
             startc = oldstartc;
-            advance_grapheme();
+            advance_grapheme(rc);
             continue;
         }
 
-        if escapes_here(end) {
-            advance_grapheme();
-            match pat_byte(0) {
+        if escapes_here(rc, end) {
+            advance_grapheme(rc);
+            match pat_byte(rc, 0) {
                 b'n' => {
                     // Inside a range, and in a string match where there are
                     // no lines, `\n` is the byte; otherwise it widens the
                     // collection to accept a line break.
-                    startc = if reg_string.get() != 0 || emit_range || pat_byte(1) == b'-' {
+                    startc = if rc.string_match != 0 || emit_range || pat_byte(rc, 1) == b'-' {
                         NL
                     } else {
                         NfaOp::Newl.code()
                     };
                 }
                 b'd' | b'o' | b'x' | b'u' | b'U' => {
-                    startc = coll_get_char();
+                    startc = coll_get_char(rc);
                     if startc == INT_MAX {
                         semsg!("E1541: Value too large, max Unicode codepoint is U+10FFFF");
                         rc_did_emsg.set(true);
@@ -168,13 +169,13 @@ pub(crate) fn collection(mut accepts_newline: bool, atom_start: *mut c_char) -> 
                     got_coll_char = true;
                     // `coll_get_char` left the cursor past the escape; the
                     // loop tail advances again, so step back one character.
-                    cursor::step_back(atom_start);
+                    cursor::step_back(rc, atom_start);
                 }
                 c => startc = backslash_abbr(c_int::from(c)),
             }
         }
         if startc == -1 {
-            startc = pat_char(0);
+            startc = pat_char(rc, 0);
         }
 
         if emit_range {
@@ -186,7 +187,7 @@ pub(crate) fn collection(mut accepts_newline: bool, atom_start: *mut c_char) -> 
                 rc_did_emsg.set(true);
                 return Collection::Failed;
             }
-            emit_span(startc, endc);
+            emit_span(rc, startc, endc);
             emit_range = false;
             startc = -1;
         } else if startc == NfaOp::Newl.code() {
@@ -198,53 +199,53 @@ pub(crate) fn collection(mut accepts_newline: bool, atom_start: *mut c_char) -> 
             }
         } else if got_coll_char && startc == 0 {
             // A `\x00` in the pattern stands for a newline.
-            postfix::emit_concat(0xa);
+            rc.post.emit_concat(0xa);
         } else {
-            postfix::emit(startc);
+            rc.post.emit(startc);
             // A character carrying combining marks is joined by the
             // `NFA_COMPOSING` group below instead.
-            if pat_charlen(0) == grapheme_len(cursor::here()) {
-                postfix::emit_op(NfaOp::Concat);
+            if pat_charlen(rc, 0) == grapheme_len(cursor::here(rc)) {
+                rc.post.emit_op(NfaOp::Concat);
             }
         }
 
         // A range endpoint cannot carry combining marks; anything else can,
         // and the whole grapheme becomes one member.
         if !range_endpoint {
-            emit_combining_marks();
+            emit_combining_marks(rc);
         }
-        advance_grapheme();
+        advance_grapheme(rc);
     }
 
     // Back up over the last character read so that a trailing `-` — which
     // the loop above consumed as an ordinary member's neighbour — can be
     // seen.
-    cursor::step_back(atom_start);
-    if pat_byte(0) == b'-' {
-        postfix::emit_concat(c_int::from(b'-'));
+    cursor::step_back(rc, atom_start);
+    if pat_byte(rc, 0) == b'-' {
+        rc.post.emit_concat(c_int::from(b'-'));
     }
-    skip_past(end);
+    skip_past(rc, end);
 
-    postfix::emit(if negated {
+    rc.post.emit(if negated {
         NfaOp::EndNegColl.code()
     } else {
         NfaOp::EndColl.code()
     });
     if accepts_newline {
-        postfix::emit(if reg_string.get() != 0 {
+        rc.post.emit(if rc.string_match != 0 {
             NL
         } else {
             NfaOp::Newl.code()
         });
-        postfix::emit_op(NfaOp::Or);
+        rc.post.emit_op(NfaOp::Or);
     }
     Collection::Done
 }
 
 /// Put the cursor past the collection's closing `]`.
-fn skip_past(end: *mut c_char) {
-    cursor::seek_to(end);
-    advance_grapheme();
+fn skip_past(rc: &mut RegCompiler, end: *mut c_char) {
+    cursor::seek_to(rc, end);
+    advance_grapheme(rc);
 }
 
 /// What a `[` inside the collection turned out to be.
@@ -257,26 +258,26 @@ enum Bracketed {
     Literal,
 }
 
-fn bracketed_item() -> Bracketed {
-    if let Some(class) = take_cursor_char_class() {
+fn bracketed_item(rc: &mut RegCompiler) -> Bracketed {
+    if let Some(class) = take_cursor_char_class(rc) {
         // `[[:lower:]]` and `[[:upper:]]` follow the locale, which the
         // backtracking engine expands at compile time and so gets wrong;
         // asking for this engine keeps the test at match time.
         if matches!(class, CharClass::Lower | CharClass::Upper) {
-            wants_nfa.set(true);
+            rc.wants_nfa = true;
         }
         if let Some(&op) = CLASS_OPCODES.get(class as usize) {
-            postfix::emit(op);
+            rc.post.emit(op);
         }
-        postfix::emit_op(NfaOp::Concat);
+        rc.post.emit_op(NfaOp::Concat);
         return Bracketed::Emitted;
     }
-    let equi = take_cursor_bracketed(b'=');
+    let equi = take_cursor_bracketed(rc, b'=');
     if equi != 0 {
-        nfa_emit_equi_class(equi);
+        nfa_emit_equi_class(rc, equi);
         return Bracketed::Emitted;
     }
-    match take_cursor_bracketed(b'.') {
+    match take_cursor_bracketed(rc, b'.') {
         0 => Bracketed::Literal,
         coll => Bracketed::Collated(coll),
     }
@@ -286,58 +287,58 @@ fn bracketed_item() -> Bracketed {
 /// the `\r`/`\t` abbreviations only when 'cpoptions' does not contain `l`.
 ///
 /// `end` bounds it: a backslash as the collection's last byte is literal.
-fn escapes_here(end: *mut c_char) -> bool {
-    if pat_byte(0) != b'\\' || cursor::here().wrapping_add(1) > end {
+fn escapes_here(rc: &mut RegCompiler, end: *mut c_char) -> bool {
+    if pat_byte(rc, 0) != b'\\' || cursor::here(rc).wrapping_add(1) > end {
         return false;
     }
-    let next = pat_byte(1);
+    let next = pat_byte(rc, 1);
     REGEXP_INRANGE.to_bytes().contains(&next)
-        || (reg_cpo_lit.get() == 0 && REGEXP_ABBR.to_bytes().contains(&next))
+        || (!rc.cpo_lit && REGEXP_ABBR.to_bytes().contains(&next))
 }
 
 /// Emit `startc`..`endc` as an `NFA_RANGE`, or as its individual members
 /// when there are only a couple of them.
-fn emit_span(startc: c_int, endc: c_int) {
+fn emit_span(rc: &mut RegCompiler, startc: c_int, endc: c_int) {
     if endc > startc + 2 {
         if startc == 0 {
             // `\x00` was emitted as `\x0a` above, so it stays a member of
             // its own and the range starts at 1.
-            postfix::emit(1);
+            rc.post.emit(1);
         } else {
             // Reclaim the `NFA_CONCAT` the start character was emitted
             // with: `NFA_RANGE` needs both endpoints on the stack.
-            postfix::drop_last();
+            rc.post.drop_last();
         }
-        postfix::emit(endc);
-        postfix::emit_op(NfaOp::Range);
-        postfix::emit_op(NfaOp::Concat);
+        rc.post.emit(endc);
+        rc.post.emit_op(NfaOp::Range);
+        rc.post.emit_op(NfaOp::Concat);
         return;
     }
     // Upstream splits this in two — one loop for a range whose endpoints are
     // multibyte and one for the rest — with identical bodies.
     for c in startc + 1..=endc {
-        postfix::emit_concat(c);
+        rc.post.emit_concat(c);
     }
 }
 
 /// Emit the combining marks on the character at the cursor, wrapped in an
 /// `NFA_COMPOSING` group so the whole grapheme is one member.
-fn emit_combining_marks() {
-    let plen = grapheme_len(cursor::here());
-    let mut i = pat_charlen(0);
+fn emit_combining_marks(rc: &mut RegCompiler) {
+    let plen = grapheme_len(cursor::here(rc));
+    let mut i = pat_charlen(rc, 0);
     if i == plen {
         return;
     }
-    let here = cursor::here();
+    let here = cursor::here(rc);
     loop {
         let c = char_at(here, i);
         // A NUL in the pattern cannot be emitted as itself.
-        postfix::emit_concat(if c == 0 { 1 } else { c });
+        rc.post.emit_concat(if c == 0 { 1 } else { c });
         i += utf_char2len(c);
         if i >= plen {
             break;
         }
     }
-    postfix::emit_op(NfaOp::Composing);
-    postfix::emit_op(NfaOp::Concat);
+    rc.post.emit_op(NfaOp::Composing);
+    rc.post.emit_op(NfaOp::Concat);
 }

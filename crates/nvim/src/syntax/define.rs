@@ -142,7 +142,7 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     let mut end = name.as_ref().and_then(|name| {
         let at = read_item_options(&line, name.rest, &mut opt, &mut conceal_char, args.skip)?;
         let at = read_pattern(&line, at, &mut item)?;
-        if vim_regcomp_had_eol() != 0 && !opt.flags.has(SynFlags::EXCLUDENL) {
+        if vim_regcomp_had_eol(item.sp_prog) && !opt.flags.has(SynFlags::EXCLUDENL) {
             opt.flags |= SynFlags::HAS_EOL;
         }
         read_item_options(&line, at, &mut opt, &mut conceal_char, args.skip)
@@ -306,7 +306,9 @@ fn parse_region_args(args: &mut ExArg, line: &[u8], at: Option<usize>) -> Region
         let mut pat = EMPTY_SYNPAT;
         cursor = read_pattern(line, at, &mut pat);
         reg_do_extmatch.set(0);
-        if item == ITEM_END && vim_regcomp_had_eol() != 0 && !out.opt.flags.has(SynFlags::EXCLUDENL)
+        if item == ITEM_END
+            && vim_regcomp_had_eol(pat.sp_prog)
+            && !out.opt.flags.has(SynFlags::EXCLUDENL)
         {
             pat.sp_flags |= SynFlags::HAS_EOL;
         }

@@ -20,6 +20,7 @@
 
 use crate::cstr;
 use crate::option::vars::P_SEL;
+use crate::regexp::RegCompiler;
 use core::ffi::{c_char, c_int};
 
 use super::submatch::Rsm;
@@ -456,8 +457,8 @@ pub(crate) fn trim_line_copy() {
 }
 
 /// Reject a repeat applied to `what`, a zero-width atom such as `\zs`.
-pub(crate) fn re_mult_next(what: &str) -> bool {
-    if re_multi_type(peekchr()) == MULTI_MULT {
+pub(crate) fn re_mult_next(rc: &mut RegCompiler, what: &str) -> bool {
+    if re_multi_type(peekchr(rc)) == MULTI_MULT {
         semsg!("E888: (NFA regexp) cannot repeat {what}");
         rc_did_emsg.set(true);
         return false;

@@ -17,31 +17,13 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::cstr;
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
-use super::postfix;
 use crate::mbyte::{utf_char2bytes, utf_char2len};
 use crate::memory::xmalloc;
-use crate::regexp::{NfaState, Rex, istate, nstate, regcomp_start, wants_nfa};
+use crate::regexp::NfaState;
 use crate::types::uint8_t;
-
-/// Reset the compile-time state and reserve the postfix program.
-///
-/// # Safety
-///
-/// `expr` must be the NUL-terminated pattern about to be parsed.
-pub(crate) unsafe fn nfa_regcomp_start(rex: Rex, expr: *mut uint8_t, re_flags: c_int) {
-    nstate.set(0);
-    istate.set(0);
-    // SAFETY: the caller's NUL-terminated pattern.
-    postfix::start(unsafe { cstr::bytes_at(expr.cast()) }.len());
-    wants_nfa.set(false);
-    rex.set_nfa_has_zend(0);
-    rex.set_nfa_has_backref(0);
-    regcomp_start(expr, re_flags);
-}
 
 /// How far the walks below follow a `NFA_SPLIT` before giving up.
 const MAX_DEPTH: c_int = 4;

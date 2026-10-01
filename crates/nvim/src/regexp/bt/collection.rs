@@ -9,6 +9,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::charset::vim_iswordc_buf;
+use crate::regexp::RegCompiler;
 use core::ffi::{c_int, c_uint};
 
 use super::compile::{regc, regmbc, regnode_nl, set_opcode};
@@ -22,9 +24,8 @@ use crate::os::cshim::__ctype_b_loc;
 use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, CharClass, ESC, HASNL, HASWIDTH, INT_MAX,
-    JUST_CALC_SIZE, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE, backslash_abbr, pat_byte,
-    pat_char, pat_charlen, pat_seek, prevchr_len, reg_cpo_lit, reg_iswordc, reg_magic, reg_strict,
-    regparse, skip_anyof, skipchr, take_bracketed, take_char_class,
+    JUST_CALC_SIZE, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, SIMPLE, backslash_abbr, pat_byte,
+    pat_char, pat_charlen, pat_seek, skip_anyof, skipchr, take_bracketed, take_char_class,
 };
 use crate::semsg;
 use crate::types::{NUL, uint8_t};
@@ -39,16 +40,16 @@ pub(crate) enum Collection {
 }
 
 /// Parse a collection whose `[` has already been consumed.
-pub(crate) fn collection(rex: Rex, flagp: &mut c_int, crosses_lines: bool) -> Collection {
-    if !collection_closes() {
-        if reg_strict.get() != 0 {
+pub(crate) fn collection(
+    rc: &mut RegCompiler,
+    flagp: &mut c_int,
+    crosses_lines: bool,
+) -> Collection {
+    if !collection_closes(rc) {
+        if rc.strict != 0 {
             // Not `magic_prefix`: this one wants the backslash whenever `[`
             // is not magic, which is one 'magic' level lower.
-            let prefix = if reg_magic.get() > MAGIC_OFF {
-                ""
-            } else {
-                "\\"
-            };
+            let prefix = if rc.magic > MAGIC_OFF { "" } else { "\\" };
             semsg!("E769: Missing ] after {prefix}[");
             rc_did_emsg.set(true);
             return Collection::Failed;
@@ -56,11 +57,12 @@ pub(crate) fn collection(rex: Rex, flagp: &mut c_int, crosses_lines: bool) -> Co
         return Collection::Literal;
     }
 
-    let negated = pat_byte(0) == b'^';
+    let negated = pat_byte(rc, 0) == b'^';
     if negated {
-        pat_seek(1);
+        pat_seek(rc, 1);
     }
     let ret = regnode_nl(
+        rc,
         if negated { BtOp::Anybut } else { BtOp::Anyof },
         crosses_lines,
     );
@@ -71,92 +73,94 @@ pub(crate) fn collection(rex: Rex, flagp: &mut c_int, crosses_lines: bool) -> Co
     // A `]` or `-` in the very first position is that character, not the
     // close and not a range.
     let mut startc = -1;
-    if matches!(pat_byte(0), b']' | b'-') {
-        startc = pat_byte(0) as c_int;
-        regc(startc);
-        pat_seek(1);
+    if matches!(pat_byte(rc, 0), b']' | b'-') {
+        startc = pat_byte(rc, 0) as c_int;
+        regc(rc, startc);
+        pat_seek(rc, 1);
     }
 
-    while !matches!(pat_byte(0), 0 | b']') {
-        match pat_byte(0) {
+    while !matches!(pat_byte(rc, 0), 0 | b']') {
+        match pat_byte(rc, 0) {
             b'-' => {
-                pat_seek(1);
-                if let Some(failed) = range(&mut startc) {
+                pat_seek(rc, 1);
+                if let Some(failed) = range(rc, &mut startc) {
                     return failed;
                 }
             }
-            b'\\' if escaped_here() => {
-                pat_seek(1);
-                if let Some(failed) = escaped(flagp, &mut startc, ret, widens_on_nl) {
+            b'\\' if escaped_here(rc) => {
+                pat_seek(rc, 1);
+                if let Some(failed) = escaped(rc, flagp, &mut startc, ret, widens_on_nl) {
                     return failed;
                 }
             }
-            b'[' => bracketed_item(rex, &mut startc),
+            b'[' => bracketed_item(rc, &mut startc),
             _ => {
                 // An ordinary character, plus any combining marks: they are
                 // emitted as-is so that the set holds the whole grapheme.
-                startc = pat_char(0);
-                let len = pat_charlen(0);
+                startc = pat_char(rc, 0);
+                let len = pat_charlen(rc, 0);
                 // A grapheme longer than its base character cannot be a
                 // range endpoint.
                 if utf_char2len(startc) != len {
                     startc = -1;
                 }
                 for _ in 0..len {
-                    regc(pat_byte(0) as c_int);
-                    pat_seek(1);
+                    let byte = pat_byte(rc, 0);
+                    regc(rc, byte as c_int);
+                    pat_seek(rc, 1);
                 }
             }
         }
     }
 
-    regc(NUL);
+    regc(rc, NUL);
     // The collection was consumed byte by byte rather than through the
     // character reader, so the reader's idea of how far back one character is
     // has to be reset before `skipchr` steps over the `]`.
-    prevchr_len.set(1);
-    if pat_byte(0) != b']' {
+    rc.prev_token_len = 1;
+    if pat_byte(rc, 0) != b']' {
         // `e_toomsbra`'s text, inlined: `semsg!` needs a literal.
         semsg!("E76: Too many [");
         rc_did_emsg.set(true);
         return Collection::Failed;
     }
-    skipchr();
+    skipchr(rc);
     *flagp |= HASWIDTH | SIMPLE;
     Collection::Node(ret)
 }
 
 /// Does the collection at the cursor have a closing `]`?
-fn collection_closes() -> bool {
+fn collection_closes(rc: &mut RegCompiler) -> bool {
     // SAFETY: `regparse` points into the NUL-terminated pattern, and
     // `skip_anyof` stops at its NUL.
-    unsafe { *skip_anyof(regparse.get()) as u8 == b']' }
+    unsafe { *skip_anyof(rc.cursor, rc.cpo_lit) as u8 == b']' }
 }
 
 /// A `-` inside the collection: either a range from `startc`, or a literal
 /// dash. Returns `Some` only on error.
-fn range(startc: &mut c_int) -> Option<Collection> {
+fn range(rc: &mut RegCompiler, startc: &mut c_int) -> Option<Collection> {
     // A dash is literal at the end, with nothing in front of it, or before a
     // `\n` — which is a line break rather than a character.
-    if matches!(pat_byte(0), b']' | 0)
+    if matches!(pat_byte(rc, 0), b']' | 0)
         || *startc == -1
-        || (pat_byte(0) == b'\\' && pat_byte(1) == b'n')
+        || (pat_byte(rc, 0) == b'\\' && pat_byte(rc, 1) == b'n')
     {
-        regc(b'-' as c_int);
+        regc(rc, b'-' as c_int);
         *startc = b'-' as c_int;
         return None;
     }
 
     let mut endc = 0;
-    if pat_byte(0) == b'[' {
-        endc = take_cursor_bracketed(b'.');
+    if pat_byte(rc, 0) == b'[' {
+        endc = take_cursor_bracketed(rc, b'.');
     }
     if endc == 0 {
-        endc = pat_char(0);
-        pat_seek(pat_charlen(0) as isize);
+        endc = pat_char(rc, 0);
+        let len = pat_charlen(rc, 0);
+        pat_seek(rc, len as isize);
     }
-    if endc == b'\\' as c_int && reg_cpo_lit.get() == 0 {
-        endc = coll_get_char();
+    if endc == b'\\' as c_int && !rc.cpo_lit {
+        endc = coll_get_char(rc);
     }
     if *startc > endc {
         semsg!("E944: Reverse range in character class");
@@ -173,11 +177,11 @@ fn range(startc: &mut c_int) -> Option<Collection> {
             return Some(Collection::Failed);
         }
         for c in *startc + 1..=endc {
-            regmbc(c);
+            regmbc(rc, c);
         }
     } else {
         for c in *startc + 1..=endc {
-            regc(c);
+            regc(rc, c);
         }
     }
     *startc = -1;
@@ -187,21 +191,22 @@ fn range(startc: &mut c_int) -> Option<Collection> {
 /// Does the backslash at the cursor escape something, or is it a literal
 /// backslash? `[]^-n\` always escape; the `\r`/`\t` abbreviations only when
 /// 'cpoptions' does not contain `l`.
-fn escaped_here() -> bool {
-    let next = pat_byte(1);
+fn escaped_here(rc: &mut RegCompiler) -> bool {
+    let next = pat_byte(rc, 1);
     REGEXP_INRANGE.to_bytes().contains(&next)
-        || (reg_cpo_lit.get() == 0 && REGEXP_ABBR.to_bytes().contains(&next))
+        || (!rc.cpo_lit && REGEXP_ABBR.to_bytes().contains(&next))
 }
 
 /// The character after a backslash inside the collection, with the cursor
 /// already past the backslash. Returns `Some` only on error.
 fn escaped(
+    rc: &mut RegCompiler,
     flagp: &mut c_int,
     startc: &mut c_int,
     ret: *mut uint8_t,
     widens_on_nl: bool,
 ) -> Option<Collection> {
-    match pat_byte(0) {
+    match pat_byte(rc, 0) {
         b'n' => {
             // A line break is not a member of the set but a widening of the
             // node itself.
@@ -209,12 +214,12 @@ fn escaped(
                 set_opcode(ret, BtOp::Anyof, true);
                 *flagp |= HASNL;
             }
-            pat_seek(1);
+            pat_seek(rc, 1);
             *startc = -1;
             None
         }
         b'd' | b'o' | b'x' | b'u' | b'U' => {
-            *startc = coll_get_char();
+            *startc = coll_get_char(rc);
             if *startc == INT_MAX {
                 semsg!("E1541: Value too large, max Unicode codepoint is U+10FFFF");
                 rc_did_emsg.set(true);
@@ -222,16 +227,16 @@ fn escaped(
             }
             // As elsewhere, a NUL in the pattern stands for a newline.
             if *startc == 0 {
-                regc(0xa);
+                regc(rc, 0xa);
             } else {
-                regmbc(*startc);
+                regmbc(rc, *startc);
             }
             None
         }
         c => {
-            pat_seek(1);
+            pat_seek(rc, 1);
             *startc = backslash_abbr(c as c_int);
-            regc(*startc);
+            regc(rc, *startc);
             None
         }
     }
@@ -239,40 +244,40 @@ fn escaped(
 
 /// A `[` inside the collection: a `[:alpha:]` class, a `[=a=]` equivalence
 /// class, a `[.a.]` collation element, or a literal `[`.
-fn bracketed_item(rex: Rex, startc: &mut c_int) {
-    let class = take_cursor_char_class();
+fn bracketed_item(rc: &mut RegCompiler, startc: &mut c_int) {
+    let class = take_cursor_char_class(rc);
     *startc = -1;
     if let Some(class) = class {
-        emit_char_class(rex, class);
+        emit_char_class(rc, class);
         return;
     }
-    let equi = take_cursor_bracketed(b'=');
+    let equi = take_cursor_bracketed(rc, b'=');
     if equi != 0 {
-        reg_equi_class(equi);
+        reg_equi_class(rc, equi);
         return;
     }
-    let coll = take_cursor_bracketed(b'.');
+    let coll = take_cursor_bracketed(rc, b'.');
     if coll != 0 {
-        regmbc(coll);
+        regmbc(rc, coll);
         return;
     }
-    *startc = pat_byte(0) as c_int;
-    regc(*startc);
-    pat_seek(1);
+    *startc = pat_byte(rc, 0) as c_int;
+    regc(rc, *startc);
+    pat_seek(rc, 1);
 }
 
 /// [`take_char_class`] against the parse cursor.
-fn take_cursor_char_class() -> Option<CharClass> {
+fn take_cursor_char_class(rc: &mut RegCompiler) -> Option<CharClass> {
     // SAFETY: the cursor points into the NUL-terminated pattern, and
     // `take_char_class` only ever advances it -- it walks bytes and calls
     // nothing, so it cannot re-enter the cell it is handed.
-    regparse.with_mut(|pp| unsafe { take_char_class(pp) })
+    unsafe { take_char_class(&mut rc.cursor) }
 }
 
 /// [`take_bracketed`] against the parse cursor.
-fn take_cursor_bracketed(delim: u8) -> c_int {
+fn take_cursor_bracketed(rc: &mut RegCompiler, delim: u8) -> c_int {
     // SAFETY: as `take_cursor_char_class`.
-    regparse.with_mut(|pp| unsafe { take_bracketed(pp, delim) })
+    unsafe { take_bracketed(&mut rc.cursor, delim) }
 }
 
 /// Upstream's per-class predicates.
@@ -289,7 +294,7 @@ fn class_ceiling(class: CharClass) -> Option<c_int> {
 }
 
 /// Is `c` a member of `class`?
-fn in_class(rex: Rex, class: CharClass, c: c_int) -> bool {
+fn in_class(rc: &mut RegCompiler, class: CharClass, c: c_int) -> bool {
     // SAFETY: every predicate here is a pure test on a code point, reading
     // only locale or option state; the ctype table is indexable over the
     // range `class_ceiling` allows.
@@ -310,18 +315,18 @@ fn in_class(rex: Rex, class: CharClass, c: c_int) -> bool {
         Upper => mb_isupper(c),
         Xdigit => ascii_isxdigit(c),
         Ident => vim_is_ident_char(c),
-        Keyword => reg_iswordc(rex, c),
+        Keyword => vim_iswordc_buf(c, rc.buf),
         Fname => vim_isfilec(c),
         _ => false,
     }
 }
 
 /// Write out every character of a `[:name:]` class.
-fn emit_char_class(rex: Rex, class: CharClass) {
+fn emit_char_class(rc: &mut RegCompiler, class: CharClass) {
     if let Some(hi) = class_ceiling(class) {
         for c in 1..=hi {
-            if in_class(rex, class, c) {
-                regmbc(c);
+            if in_class(rc, class, c) {
+                regmbc(rc, c);
             }
         }
         return;
@@ -329,19 +334,19 @@ fn emit_char_class(rex: Rex, class: CharClass) {
     // The rest are short literal sets.
     match class {
         CharClass::Blank => {
-            regc(b' ' as c_int);
-            regc(b'\t' as c_int);
+            regc(rc, b' ' as c_int);
+            regc(rc, b'\t' as c_int);
         }
         CharClass::Space => {
             for c in 9..=13 {
-                regc(c);
+                regc(rc, c);
             }
-            regc(b' ' as c_int);
+            regc(rc, b' ' as c_int);
         }
-        CharClass::Tab => regc(b'\t' as c_int),
-        CharClass::Return => regc(b'\r' as c_int),
-        CharClass::Backspace => regc(0x08),
-        CharClass::Escape => regc(ESC),
+        CharClass::Tab => regc(rc, b'\t' as c_int),
+        CharClass::Return => regc(rc, b'\r' as c_int),
+        CharClass::Backspace => regc(rc, 0x08),
+        CharClass::Escape => regc(rc, ESC),
         _ => {}
     }
 }
