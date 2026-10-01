@@ -50,7 +50,7 @@ use crate::options::{
     kOptFdoFlagTag, kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagUseopen, kOptSwbFlagUsetab,
     kOptSwbFlagVsplit,
 };
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::fs::{os_fopen, os_path_exists};
 use crate::os::input::{fast_breakcheck, line_breakcheck, os_breakcheck};
 use crate::path::{
@@ -66,7 +66,6 @@ use crate::search::{do_search, ignorecase, ignorecase_opt};
 use crate::startup::vim_ignored;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
-use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::tag::state::{
     g_do_tagpreview, g_tag_at_cursor, keep_help_flag, postponed_split, postponed_split_flags,
 };

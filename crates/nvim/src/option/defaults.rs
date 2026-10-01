@@ -16,8 +16,10 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::snprintf;
 use crate::strings::has_char;
 use crate::types::OptStr;
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -44,7 +46,7 @@ use crate::options::{
     kOptTtyfast, kOptUndodir, kOptViewdir, kOptWindow,
 };
 use crate::optionstr::check_buf_options;
-use crate::os::cshim::{bind_textdomain_codeset, gettext_ptr, snprintf, strncasecmp};
+use crate::os::cshim::{bind_textdomain_codeset, gettext_ptr, strncasecmp};
 use crate::os::env::{os_env_exists, os_getenv, vim_getenv};
 use crate::os::lang::{get_mess_lang, lang_init};
 use crate::os::stdpaths::stdpaths_user_state_subpath;
@@ -52,7 +54,6 @@ use crate::path::{after_pathsep, invocation_path_tail, path_fnamecmp, vim_ispath
 use crate::runtime::runtimepath_default;
 use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
-use crate::strings::vim_snprintf;
 use crate::types::{
     GArray, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, size_t, uint32_t,
 };
@@ -118,7 +119,7 @@ fn set_init_default_shell() {
     } else {
         let len = unsafe { cstr::bytes_at(shell) }.len().wrapping_add(3);
         let quoted = unsafe { xmalloc(len) }.cast::<c_char>();
-        unsafe { snprintf(quoted, len, c"\"%s\"".as_ptr(), shell) };
+        unsafe { snprintf!(quoted, len, c"\"%s\"".as_ptr(), shell) };
         unsafe { set_string_default(kOptShell, quoted, true) };
     }
     unsafe { xfree(shell.cast::<c_void>()) };
@@ -162,7 +163,7 @@ fn set_init_default_backupskip() {
                 PATHSEPSTR.as_ptr()
             };
             let itemlen =
-                unsafe { vim_snprintf(item, itemsize, c"%s%s*".as_ptr(), dir, sep) } as size_t;
+                unsafe { vim_snprintf!(item, itemsize, c"%s%s*".as_ptr(), dir, sep) } as size_t;
 
             if unsafe { find_dup_item(ga.ga_data.cast::<c_char>(), item, itemlen, flags) }.is_null()
             {
@@ -171,7 +172,7 @@ fn set_init_default_backupskip() {
                 let comma = if seplen > 0 { c"," } else { c"" };
                 let at = unsafe { ga.ga_data.cast::<c_char>().offset(ga.ga_len as isize) };
                 let (room, sep) = (seplen + itemlen + 1, comma.as_ptr());
-                ga.ga_len += unsafe { vim_snprintf(at, room, c"%s%s".as_ptr(), sep, item) };
+                ga.ga_len += unsafe { vim_snprintf!(at, room, c"%s%s".as_ptr(), sep, item) };
             }
             unsafe { xfree(item.cast::<c_void>()) };
         }

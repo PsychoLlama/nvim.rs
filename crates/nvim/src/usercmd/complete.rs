@@ -30,7 +30,7 @@ use crate::mapping::set_context_in_map_cmd;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xmalloc, xstrdup};
 use crate::menu::set_context_in_menu_cmd;
-use crate::os::cshim::snprintf;
+use crate::snprintf;
 use crate::types::CmdIdx;
 use crate::types::{ExArgt, Expand, ExpandContext, NUL};
 use core::ffi::{CStr, c_char, c_int};
@@ -325,7 +325,7 @@ pub(crate) unsafe fn cmdcomplete_type_to_str(
     // SAFETY: caller contract.
     let buflen = name.count_bytes() + unsafe { cstr::bytes_at(compl_arg) }.len() + 2;
     let buffer = unsafe { xmalloc(buflen) }.cast::<c_char>();
-    unsafe { snprintf(buffer, buflen, c"%s,%s".as_ptr(), name.as_ptr(), compl_arg) };
+    unsafe { snprintf!(buffer, buflen, c"%s,%s".as_ptr(), name.as_ptr(), compl_arg) };
     buffer
 }
 

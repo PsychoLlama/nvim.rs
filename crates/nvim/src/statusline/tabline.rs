@@ -19,6 +19,7 @@
 #![allow(unsafe_code)]
 
 use crate::option::vars::{P_SLOC, P_TAL, p_sc};
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
@@ -32,7 +33,6 @@ use crate::mbyte::utfc_ptr2len;
 use crate::normal::showcmd_buf;
 use crate::path::shorten_dir;
 use crate::statusline::state::{tab_page_click_defs, tab_page_click_defs_size};
-use crate::strings::vim_snprintf;
 use crate::types::ui::kUITabline;
 use crate::types::{
     BufferHandle, MAXPATHL, Object, StlClickDefinition_type_0, String_0, TabpageHandle,
@@ -261,7 +261,7 @@ fn paint_wincount(col: c_int, wincount: c_int, attr: c_int, cwp: Win) -> Option<
     let (out, room, fmt) = (name.as_mut_ptr(), MAXPATHL as size_t, c"%d".as_ptr());
     // SAFETY: `name` is `MAXPATHL` bytes and the format takes exactly the
     // one integer.
-    let len = unsafe { vim_snprintf(out, room, fmt, wincount) };
+    let len = unsafe { vim_snprintf!(out, room, fmt, wincount) };
     if col + len >= Columns.get() - 3 {
         return None;
     }

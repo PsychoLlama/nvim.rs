@@ -12,6 +12,7 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -234,7 +235,7 @@ fn syn_cmd_onoff(args: &mut ExArg, name: &CStr) {
     buf[2] = b' ' as c_char;
     let (at, room) = (unsafe { buf.as_mut_ptr().add(3) }, buf.len() - 3);
     // SAFETY: `at` is three bytes into a buffer with `room` left.
-    unsafe { vim_snprintf(at, room, SYNTAX_FNAME.as_ptr(), name.as_ptr()) };
+    unsafe { vim_snprintf!(at, room, SYNTAX_FNAME.as_ptr(), name.as_ptr()) };
     // SAFETY: `vim_snprintf` terminated the buffer above.
     let _ = do_cmdline_cmd(unsafe { cstr::at(buf.as_ptr()) });
 }

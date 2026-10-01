@@ -28,6 +28,7 @@
 use crate::cstr;
 use crate::message_fmt::{c_str, msg_addr};
 use crate::os::uv_error::UV_EPIPE;
+use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ops::{Deref, DerefMut};
 use core::{ptr, slice};
@@ -549,7 +550,7 @@ unsafe fn channel_write(chan: Chan, buffer: *mut WBuffer) -> bool {
         let (into, cap) = (buf.as_mut_ptr(), buf.len());
         let fmt = c"ch %lu: stream write failed: %s. RPC canceled; closing channel".as_ptr();
         let why = unsafe { uv_strerror(err) };
-        unsafe { crate::os::cshim::snprintf(into, cap, fmt, chan.id, why) };
+        unsafe { snprintf!(into, cap, fmt, chan.id, why) };
         let level = if err == UV_EPIPE {
             LOGLVL_INF
         } else {

@@ -26,13 +26,14 @@ use crate::r#move::update_topline;
 use crate::option::set_option_direct;
 use crate::option::vars::{P_ICM, p_rdt, p_report, p_shm};
 use crate::options::kOptShortmess;
-use crate::os::cshim::{gettext, ngettext, snprintf};
+use crate::os::cshim::{gettext, ngettext};
 use crate::profile::{profile_setlimit, profile_zero};
-use crate::strings::vim_snprintf_add;
+use crate::snprintf;
 use crate::types::OptStr;
 use crate::types::{
     ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptVal, OptionSetFlags, Pos, int64_t, size_t,
 };
+use crate::vim_snprintf_add;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use ::libc::strcpy;
@@ -101,7 +102,7 @@ pub fn do_sub_msg(count_only: bool) -> bool {
         let single = ngettext(forms[0][0], forms[0][1], nsubs as c_ulong);
         let plural = ngettext(forms[1][0], forms[1][1], nsubs as c_ulong);
         unsafe {
-            vim_snprintf_add(
+            vim_snprintf_add!(
                 buf,
                 MSG_BUF_LEN as size_t,
                 ngettext(single, plural, nlines as c_ulong).as_ptr(),
@@ -203,7 +204,7 @@ impl PreviewBuf {
         // the write; the format takes an `int` width, a line number and a
         // string.
         unsafe {
-            snprintf(
+            snprintf!(
                 self.str,
                 self.line_size as size_t,
                 c"|%*d| %s".as_ptr(),

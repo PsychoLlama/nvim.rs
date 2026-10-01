@@ -14,6 +14,7 @@ use crate::cstr;
 use crate::guard::{Allow, Suppress};
 use crate::keycodes::Ctrl_C;
 use crate::keycodes::ModMask;
+use crate::snprintf;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -210,7 +211,7 @@ unsafe fn console_dialog_alloc(
     };
     let out = confirm_msg.get();
     let cap = msg_len as size_t;
-    unsafe { snprintf(out, cap, fmt, message) };
+    unsafe { snprintf!(out, cap, fmt, message) };
 
     unsafe { xfree(confirm_buttons.get().cast()) };
     confirm_buttons.set(unsafe { xmalloc(button_len as size_t) }.cast());

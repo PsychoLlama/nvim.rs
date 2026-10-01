@@ -12,6 +12,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::vim_snprintf;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -285,7 +286,7 @@ pub(crate) unsafe fn uniquefy_paths(
             let short_name = unsafe { path_shorten_fname(path, curdir.as_mut_ptr()) };
             if !short_name.is_null() && short_name > unsafe { path.add(1) } {
                 unsafe {
-                    vim_snprintf(
+                    vim_snprintf!(
                         path,
                         MAXPATHL as size_t,
                         c".%s%s".as_ptr(),
@@ -321,7 +322,7 @@ pub(crate) unsafe fn uniquefy_paths(
         let size = 2 + unsafe { CStr::from_ptr(short_name) }.to_bytes().len() + 1;
         let rel_path: *mut c_char = unsafe { xmalloc(size) }.cast();
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 rel_path,
                 size,
                 c".%s%s".as_ptr(),

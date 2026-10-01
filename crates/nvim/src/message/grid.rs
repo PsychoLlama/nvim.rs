@@ -12,6 +12,7 @@
 use super::*;
 use crate::cstr;
 use crate::grid::{default_grid_ref, default_gridview};
+use crate::vim_snprintf_safelen;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -310,7 +311,8 @@ pub(crate) fn inc_msg_scrolled() {
             let fmt = gettext(c"%s line %ld");
             let name = p.data();
             let lnum = sourcing_top().es_lnum as int64_t;
-            let len = unsafe { vim_snprintf_safelen(tofree, tofreesize, fmt.as_ptr(), name, lnum) };
+            let len =
+                unsafe { vim_snprintf_safelen!(tofree, tofreesize, fmt.as_ptr(), name, lnum) };
             // The formatted text replaces the name, and the buffer it was
             // formatted into becomes the string's own.
             // SAFETY: `tofree` is `len` bytes plus the terminator

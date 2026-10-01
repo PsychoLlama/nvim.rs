@@ -14,6 +14,7 @@
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::vim_snprintf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -31,7 +32,6 @@ use crate::message::{e_autocmd_close, e_floatonly};
 use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::startup::getout;
-use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{FAIL, Integer, OK, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
@@ -608,7 +608,7 @@ fn event_wanted(event: AutoEvent) -> bool {
 fn number_into(buf: &mut [c_char; NUMBUFLEN as usize], fmt: *const c_char, n: c_int) {
     let (dst, len) = (buf.as_mut_ptr(), buf.len() as size_t);
     // SAFETY: a buffer of its own length, and a format taking one `int`.
-    unsafe { vim_snprintf(dst, len, fmt, n) };
+    unsafe { vim_snprintf!(dst, len, fmt, n) };
 }
 
 /// Exit the editor: every window is gone.

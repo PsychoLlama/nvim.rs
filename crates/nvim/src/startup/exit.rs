@@ -12,6 +12,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::fprintf;
 use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -45,7 +46,7 @@ use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{NUL, VAR_NUMBER, VarNumber, Vv};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
-use ::libc::{exit, fprintf, tcdrain};
+use ::libc::{exit, tcdrain};
 
 use crate::winlayer::{Buf, WinId, buffer_at, buffers, first_buffer, first_tab, first_window};
 /// Shut the process down. Every exit path ends here, including the ones that
@@ -275,7 +276,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
         } else {
             c"%s\n".as_ptr()
         };
-        unsafe { fprintf(stderr, fmt, errmsg) };
+        unsafe { fprintf!(stderr, fmt, errmsg) };
     }
 
     if ui_client_channel_id.get() != 0 {
@@ -289,7 +290,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
         let memfile = buf.b_ml.ml_mfp;
         if !memfile.is_null() && !unsafe { mf_fname(memfile) }.is_null() {
             if !errmsg.is_null() {
-                unsafe { fprintf(stderr, c"Nvim: preserving files...\n".as_ptr()) };
+                unsafe { fprintf!(stderr, c"Nvim: preserving files...\n".as_ptr()) };
             }
             // One sync writes every swap file, so stop at the first
             // buffer that has one.
@@ -302,7 +303,7 @@ pub unsafe fn preserve_exit(errmsg: *const c_char) -> ! {
     ml_close_all(false);
 
     if !errmsg.is_null() {
-        unsafe { fprintf(stderr, c"Nvim: Finished.\n".as_ptr()) };
+        unsafe { fprintf!(stderr, c"Nvim: Finished.\n".as_ptr()) };
     }
 
     getout(1);

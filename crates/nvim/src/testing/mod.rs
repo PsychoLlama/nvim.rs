@@ -19,6 +19,8 @@
 
 use crate::cstr;
 use crate::strings::has_bytes;
+use crate::vim_snprintf;
+use crate::vim_snprintf_safelen;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -37,7 +39,6 @@ use crate::message::emsg;
 use crate::message::state::{emsg_on_display, emsg_silent};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
-use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
     BoolVarValue, EStackArg, EvalFuncData, FILE, Float, IOSIZE, READBIN, TypVal, VAR_FLOAT,
     VAR_NUMBER, VarNumber, Vv, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
@@ -247,7 +248,7 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
     let fd1: *mut FILE = unsafe { os_fopen(fname1, READBIN.as_ptr()) };
     if fd1.is_null() {
         diff.verdict_len = unsafe {
-            vim_snprintf_safelen(
+            vim_snprintf_safelen!(
                 diff.verdict.as_mut_ptr(),
                 IOSIZE as usize,
                 cant_read,
@@ -260,7 +261,7 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
     if fd2.is_null() {
         unsafe { fclose(fd1) };
         diff.verdict_len = unsafe {
-            vim_snprintf_safelen(
+            vim_snprintf_safelen!(
                 diff.verdict.as_mut_ptr(),
                 IOSIZE as usize,
                 cant_read,
@@ -302,7 +303,7 @@ unsafe fn compare_files(fname1: *const c_char, fname2: *const c_char) -> FileDif
         diff.lineidx += 1;
         if c1 != c2 {
             diff.verdict_len = unsafe {
-                vim_snprintf_safelen(
+                vim_snprintf_safelen!(
                     diff.verdict.as_mut_ptr(),
                     IOSIZE as usize,
                     c"difference at byte %ld, line %ld".as_ptr(),
@@ -393,7 +394,7 @@ unsafe fn assert_inrange(args: &[TypVal]) -> c_int {
             return 0;
         }
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 expected.as_mut_ptr(),
                 expected.len(),
                 c"range %g - %g,".as_ptr(),
@@ -416,7 +417,7 @@ unsafe fn assert_inrange(args: &[TypVal]) -> c_int {
             return 0;
         }
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 expected.as_mut_ptr(),
                 expected.len(),
                 c"range %ld - %ld,".as_ptr(),

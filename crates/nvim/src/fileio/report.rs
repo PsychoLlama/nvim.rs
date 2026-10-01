@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
@@ -39,14 +40,14 @@ fn note_text(io: *mut c_char, buflen: c_int, text: *const c_char) -> c_int {
     // SAFETY: `io` is the caller's `IOSIZE`-byte report with `buflen` bytes
     // already in it, and `text` is a NUL-terminated message.
     let at = unsafe { io.offset(buflen as isize) };
-    unsafe { snprintf(at, (IOSIZE - buflen) as size_t, text) }
+    unsafe { snprintf!(at, (IOSIZE - buflen) as size_t, text) }
 }
 
 /// [`note_text`] for a note carrying one `%ld`.
 fn note_num(io: *mut c_char, buflen: c_int, fmt: *const c_char, n: int64_t) {
     // SAFETY: as [`note_text`]; the one conversion matches the one argument.
     let at = unsafe { io.offset(buflen as isize) };
-    unsafe { snprintf(at, (IOSIZE - buflen) as size_t, fmt, n) };
+    unsafe { snprintf!(at, (IOSIZE - buflen) as size_t, fmt, n) };
 }
 
 /// Report what was read.

@@ -51,7 +51,7 @@
   "failed_uses": 1252,
   "labeled_blocks": 126,
   "lua_raw_stack": 837,
-  "raw_variadic_calls": 400,
+  "raw_variadic_calls": 123,
   "long_fns": 69,
   "dup_consts": 1246,
   "types_files": 115,

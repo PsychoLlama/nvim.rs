@@ -18,6 +18,7 @@ use crate::eval::typval::ListRef;
 use crate::eval::typval::PartialRef;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::snprintf;
 use core::ffi::{c_char, c_int};
 use core::mem::{ManuallyDrop, offset_of};
 use core::ptr;
@@ -387,7 +388,7 @@ pub unsafe fn set_cmdarg(excmd: Option<&mut ExArg>, oldarg: *mut c_char) -> *mut
             ($($arg:tt)*) => {{
                 // SAFETY: `newval_len - xlen` bytes are left at `newval + xlen`,
                 // and every format below names exactly the arguments it takes.
-                let rc = unsafe { snprintf(newval.add(xlen), newval_len - xlen, $($arg)*) };
+                let rc = unsafe { snprintf!(newval.add(xlen), newval_len - xlen, $($arg)*) };
                 if rc < 0 {
                     break 'error;
                 }

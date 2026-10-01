@@ -18,6 +18,7 @@
 //! handler, a waiting call frame or a closed channel.
 
 use crate::cstr;
+use crate::snprintf;
 use core::ffi::{c_char, c_void};
 use core::{mem, ptr};
 
@@ -96,7 +97,7 @@ pub(super) unsafe fn receive_msgpack(
         // match, and the result is NUL-terminated.
         let (into, cap) = (buf.as_mut_ptr(), buf.len());
         let fmt = c"ch %lu was closed by the peer".as_ptr();
-        unsafe { crate::os::cshim::snprintf(into, cap, fmt, id) };
+        unsafe { snprintf!(into, cap, fmt, id) };
         unsafe { chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_INF) };
     }
     // SAFETY: the reference taken above.
@@ -175,7 +176,7 @@ fn complete_call(chan: Chan, p: &mut Unpacker) -> bool {
             .as_ptr();
         let kind = chan.rpc.client_type.cast_unsigned();
         let want = p.request_id;
-        unsafe { crate::os::cshim::snprintf(into, cap, fmt, chan.id, kind, want) };
+        unsafe { snprintf!(into, cap, fmt, chan.id, kind, want) };
         unsafe { chan_close_on_err(chan, buf.as_mut_ptr(), LOGLVL_ERR) };
         return false;
     };

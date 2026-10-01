@@ -24,6 +24,7 @@ use crate::regexp::RE_MAGIC;
 use crate::smsg;
 use crate::strings::has_bytes;
 use crate::types::{FAIL, IOSIZE, NUL, OK, ShmFlag};
+use crate::vim_snprintf;
 use crate::window::valid_win;
 use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
@@ -452,7 +453,7 @@ unsafe fn handle_include(
         // `IOSIZE` bytes, whose size is passed with it.
         unsafe {
             let fmt = gettext(c"Scanning included file: %s");
-            vim_snprintf(out, room, fmt.as_ptr(), name)
+            vim_snprintf!(out, room, fmt.as_ptr(), name)
         };
         unsafe { msg_trunc(progress.as_mut_ptr(), true, HLF_R) };
     } else if p_verbose() >= 5 {

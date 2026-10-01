@@ -27,6 +27,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -45,7 +46,6 @@ use crate::options::{
     kOptWildoptions, opt_scl_values,
 };
 use crate::os::cshim::gettext;
-use crate::strings::vim_snprintf;
 use crate::types::{Buffer, Failed, NUL, OptError, StlOpt, size_t, uint32_t};
 
 use super::{
@@ -88,7 +88,7 @@ pub fn illegal_char(c: c_int) -> OptError {
     // SAFETY: `message` is the buffer the formatter is told the size of,
     // and `transchar` answers a C string.
     OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             buf,
             OptError::ROOM as size_t,
             fmt.as_ptr(),
@@ -104,7 +104,7 @@ pub(crate) fn illegal_char_after_chr(c: c_int) -> OptError {
     // SAFETY: `message` is the buffer the formatter is told the size of,
     // and the format takes one `int`.
     OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
-        vim_snprintf(buf, OptError::ROOM as size_t, fmt.as_ptr(), c);
+        vim_snprintf!(buf, OptError::ROOM as size_t, fmt.as_ptr(), c);
     }))
 }
 

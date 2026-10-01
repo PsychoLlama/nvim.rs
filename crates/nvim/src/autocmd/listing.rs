@@ -14,6 +14,7 @@ use super::*;
 use crate::cstr;
 use crate::memory::XString;
 use crate::os::cshim::strchr;
+use crate::snprintf;
 use crate::types::ExpandContext;
 use crate::winlayer::Buf;
 
@@ -200,9 +201,9 @@ pub(crate) unsafe fn au_show_for_event(
                 let msg = unsafe { xmallocz(msglen) }.cast::<::core::ffi::c_char>();
                 if unsafe { (*ac).handler_cmd.is_null() } {
                     msg_str_hl(unsafe { cstr::at(handler_str) }, HLF_8, false);
-                    unsafe { snprintf(msg, msglen, c" [%s]".as_ptr(), (*ac).desc) };
+                    unsafe { snprintf!(msg, msglen, c" [%s]".as_ptr(), (*ac).desc) };
                 } else {
-                    unsafe { snprintf(msg, msglen, c"%s [%s]".as_ptr(), handler_str, (*ac).desc) };
+                    unsafe { snprintf!(msg, msglen, c"%s [%s]".as_ptr(), handler_str, (*ac).desc) };
                 }
                 msg_display(unsafe { cstr::at(msg) }, 0, false);
                 unsafe { xfree(msg.cast::<::core::ffi::c_void>()) };

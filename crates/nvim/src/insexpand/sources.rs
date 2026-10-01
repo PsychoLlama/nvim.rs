@@ -17,6 +17,7 @@ use crate::guard::Suppress;
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, PosRef, Win, first_buffer, first_window};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
@@ -67,7 +68,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
             let pat_esc = unsafe { vim_strsave_escaped(pat, c"\\".as_ptr()) };
             let len = unsafe { cstr::bytes_at(pat_esc) }.len() + 10;
             let ptr = unsafe { xmalloc(len) }.cast::<c_char>();
-            unsafe { vim_snprintf(ptr, len, c"^\\s*\\zs\\V%s".as_ptr(), pat_esc) };
+            unsafe { vim_snprintf!(ptr, len, c"^\\s*\\zs\\V%s".as_ptr(), pat_esc) };
             regmatch.regprog = vim_regcomp(unsafe { cstr::at(ptr) }, RE_MAGIC);
             unsafe { xfree(pat_esc.cast::<c_void>()) };
             unsafe { xfree(ptr.cast::<c_void>()) };
@@ -253,7 +254,7 @@ pub(crate) unsafe fn ins_compl_files(
             let (out, size) = (progress.as_mut_ptr(), IOSIZE as size_t);
             // SAFETY: `out` addresses all `size` bytes and `file` is a
             // NUL-terminated name.
-            unsafe { vim_snprintf(out, size, fmt.as_ptr(), file) };
+            unsafe { vim_snprintf!(out, size, fmt.as_ptr(), file) };
             // SAFETY: `vim_snprintf` NUL-terminated `out`.
             unsafe { scan_progress(out) };
         }

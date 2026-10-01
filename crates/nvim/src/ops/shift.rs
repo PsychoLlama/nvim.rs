@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -104,7 +105,7 @@ pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
         let fmt = ngettext(single, plural, lines);
         let out = report.as_mut_ptr();
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 out,
                 IOSIZE as size_t,
                 fmt.as_ptr(),

@@ -16,6 +16,7 @@ use crate::eval::Parsed;
 use crate::eval::typval::PartialRef;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::snprintf;
 use crate::strings::has_bytes;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -57,7 +58,7 @@ fn get_lambda_name(into: &mut [c_char; LAMBDA_NAME_LEN]) -> String_0 {
     let buf = into.as_mut_ptr();
     let nr = lambda_no.get();
     // SAFETY: `buf` is the caller's array of `LAMBDA_NAME_LEN` bytes.
-    let n = unsafe { snprintf(buf, LAMBDA_NAME_LEN, c"<lambda>%d".as_ptr(), nr) };
+    let n = unsafe { snprintf!(buf, LAMBDA_NAME_LEN, c"<lambda>%d".as_ptr(), nr) };
     let len = if n < 1 {
         0
     } else {
@@ -89,7 +90,7 @@ pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut U
         let into = unsafe { xmalloc(len) } as *mut c_char;
         unsafe { (*fp).uf_name_exp = into };
         let tail = unsafe { uf_name_ptr(fp).add(3) };
-        unsafe { snprintf(into, len, c"<SNR>%s".as_ptr(), tail) };
+        unsafe { snprintf!(into, len, c"<SNR>%s".as_ptr(), tail) };
     }
     fp
 }

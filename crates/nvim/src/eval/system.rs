@@ -13,6 +13,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
+use crate::snprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr::{null, null_mut};
@@ -33,7 +34,6 @@ use crate::message::e_invarg;
 use crate::message::{msg_str, verbose_enter_scroll, verbose_leave_scroll};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_verbose;
-use crate::os::cshim::snprintf;
 use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::do_profiling;
@@ -104,7 +104,7 @@ pub unsafe fn tv_to_argv(
             let fmt = c"'%s' is not executable".as_ptr();
             // SAFETY: `buf` is this frame's and `size` is its length; the
             // format takes the one NUL-terminated string `arg0`.
-            unsafe { snprintf(buf.as_mut_ptr(), size, fmt, arg0) };
+            unsafe { snprintf!(buf.as_mut_ptr(), size, fmt, arg0) };
             let (what, text) = (c"cmd".as_ptr(), buf.as_mut_ptr());
             // SAFETY: the format takes two NUL-terminated strings.
             let (what, text) = unsafe { (c_str(what), c_str(text)) };

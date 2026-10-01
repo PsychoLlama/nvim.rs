@@ -101,7 +101,6 @@ use crate::statusline::{
     draw_tabline, redraw_ruler, stl_alloc_click_defs, stl_clear_click_defs, win_redr_status,
     win_redr_winbar,
 };
-use crate::strings::vim_snprintf;
 use crate::syntax::{
     syn_set_timeout, syn_stack_apply_changes, syntax_check_changed, syntax_end_parsing,
     syntax_present,

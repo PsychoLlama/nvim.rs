@@ -16,8 +16,10 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::fprintf;
 use crate::keycodes::ModMask;
 use crate::option::vars::P_MOUSE;
+use crate::snprintf;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
@@ -39,7 +41,7 @@ use crate::options::{
     kOptFoldlevel, kOptFoldmarker, kOptFoldmethod, kOptFoldminlines, kOptFoldnestmax, kOptPackpath,
     kOptRuntimepath, kOptSyntax, kOptWildchar, kOptWildcharm,
 };
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::startup::silent_mode;
@@ -49,7 +51,7 @@ use crate::types::{
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
-use ::libc::{fprintf, fputs};
+use ::libc::fputs;
 
 use super::{
     OptSlot, copy_option_part, get_option, get_option_unset_value, get_varp, get_varp_scope,
@@ -308,7 +310,7 @@ pub(crate) unsafe fn makeset(
                 let guarded = opt_idx == kOptSyntax || opt_idx == kOptFiletype;
                 let (guard, name) = (c"if &%s != '%s'".as_ptr(), get_option(opt_idx).fullname);
                 if guarded
-                    && (unsafe { fprintf(fd, guard, name, varp.string_var().get()) } < 0
+                    && (unsafe { fprintf!(fd, guard, name, varp.string_var().get()) } < 0
                         || !unsafe { put_eol_unchecked(fd) })
                 {
                     return Err(Failed);
@@ -407,12 +409,12 @@ pub(crate) unsafe fn put_set(
             } else {
                 c"no".as_ptr()
             };
-            if unsafe { fprintf(fd, c"%s %s%s".as_ptr(), cmd, prefix, name) } < 0 {
+            if unsafe { fprintf!(fd, c"%s %s%s".as_ptr(), cmd, prefix, name) } < 0 {
                 return Err(Failed);
             }
         }
         OptVal::Number(number) => {
-            if unsafe { fprintf(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
+            if unsafe { fprintf!(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
                 return Err(Failed);
             }
             // 'wildchar' and 'wildcharm' hold a key, which reads back
@@ -423,12 +425,12 @@ pub(crate) unsafe fn put_set(
                 if unsafe { fputs(name.as_ptr(), fd) } < 0 {
                     return Err(Failed);
                 }
-            } else if unsafe { fprintf(fd, c"%ld".as_ptr(), number) } < 0 {
+            } else if unsafe { fprintf!(fd, c"%ld".as_ptr(), number) } < 0 {
                 return Err(Failed);
             }
         }
         OptVal::String(string) => {
-            if unsafe { fprintf(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
+            if unsafe { fprintf!(fd, c"%s %s=".as_ptr(), cmd, name) } < 0 {
                 return Err(Failed);
             }
             let value_str = string.data();
@@ -515,7 +517,7 @@ unsafe fn put_string_value(
     } else {
         let mut p = buf;
         while unsafe { *p } != NUL as c_char {
-            if unsafe { fprintf(fd, c"%s %s+=".as_ptr(), cmd, name) } < 0 {
+            if unsafe { fprintf!(fd, c"%s %s+=".as_ptr(), cmd, name) } < 0 {
                 result = Written::Failed;
                 break;
             }
@@ -555,7 +557,7 @@ pub(crate) fn option_value2string(
             // character rather than as its code.
             unsafe { xstrlcpy(buf, transchar(wc as c_int).as_ptr(), cap) };
         } else {
-            unsafe { snprintf(buf, cap, c"%ld".as_ptr(), varp.number_var().get()) };
+            unsafe { snprintf!(buf, cap, c"%ld".as_ptr(), varp.number_var().get()) };
         }
         return;
     }

@@ -53,6 +53,7 @@ use crate::ex_docmd::{open_exfile, vim_mkdir_emsg};
 use crate::ex_getln::vim_strsave_fnameescape;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::shorten_fnames;
+use crate::fprintf;
 use crate::global_cell::GlobalCell;
 use crate::mapping::makemap;
 use crate::mbyte::utfc_ptr2len;
@@ -83,7 +84,7 @@ use crate::types::{
 };
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
-use ::libc::{fclose, fprintf, fputs};
+use ::libc::{fclose, fputs};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{fmt, ptr};
 
@@ -254,7 +255,7 @@ pub(crate) unsafe fn put_eol_unchecked(fd: *mut FILE) -> bool {
 /// `fd` is open for writing and `s` NUL-terminated.
 pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Failed> {
     // SAFETY: caller contract.
-    if unsafe { fprintf(fd, c"%s\n".as_ptr(), s) } < 0 {
+    if unsafe { fprintf!(fd, c"%s\n".as_ptr(), s) } < 0 {
         return Err(Failed);
     }
     Ok(())

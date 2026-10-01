@@ -16,8 +16,11 @@ use super::*;
 use crate::highlight_group::{HLF_D, HLF_N, HLF_QFL};
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::snprintf;
 use crate::types::CmdIdx;
 use crate::types::IOSIZE;
+use crate::vim_snprintf;
+use crate::vim_snprintf_safelen;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
@@ -86,7 +89,7 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
         let heading = heading.as_mut_ptr();
         let size = IOSIZE as size_t;
         let fmt = c"%2d %s".as_ptr();
-        unsafe { vim_snprintf(heading, size, fmt, qf_idx, module) };
+        unsafe { vim_snprintf!(heading, size, fmt, qf_idx, module) };
     } else {
         let buf = if qfp.qf_fnum != 0 {
             find_buf(qfp.qf_fnum).map_or(ptr::null_mut(), |b| b.raw())
@@ -108,12 +111,12 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
             let heading = heading.as_mut_ptr();
             let size = IOSIZE as size_t;
             let fmt = c"%2d".as_ptr();
-            unsafe { snprintf(heading, size, fmt, qf_idx) };
+            unsafe { snprintf!(heading, size, fmt, qf_idx) };
         } else {
             let heading = heading.as_mut_ptr();
             let size = IOSIZE as size_t;
             let fmt = c"%2d %s".as_ptr();
-            unsafe { vim_snprintf(heading, size, fmt, qf_idx, fname) };
+            unsafe { vim_snprintf!(heading, size, fmt, qf_idx, fname) };
         }
     }
 
@@ -296,26 +299,26 @@ pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const QfLine) {
     let size = IOSIZE as size_t;
     let fmt = c"%d".as_ptr();
     let lnum = qfp.qf_lnum;
-    let mut len = unsafe { vim_snprintf_safelen(buf, size, fmt, lnum) };
+    let mut len = unsafe { vim_snprintf_safelen!(buf, size, fmt, lnum) };
     if qfp.qf_end_lnum > 0 && qfp.qf_lnum != qfp.qf_end_lnum {
         let at = unsafe { buf.add(len) };
         let room = IOSIZE as size_t - len;
         let fmt = c"-%d".as_ptr();
         let end_lnum = qfp.qf_end_lnum;
-        len += unsafe { vim_snprintf_safelen(at, room, fmt, end_lnum) };
+        len += unsafe { vim_snprintf_safelen!(at, room, fmt, end_lnum) };
     }
     if qfp.qf_col > 0 {
         let at = unsafe { buf.add(len) };
         let room = IOSIZE as size_t - len;
         let fmt = c" col %d".as_ptr();
         let col = qfp.qf_col;
-        len += unsafe { vim_snprintf_safelen(at, room, fmt, col) };
+        len += unsafe { vim_snprintf_safelen!(at, room, fmt, col) };
         if qfp.qf_end_col > 0 && qfp.qf_col != qfp.qf_end_col {
             let at = unsafe { buf.add(len) };
             let room = IOSIZE as size_t - len;
             let fmt = c"-%d".as_ptr();
             let end_col = qfp.qf_end_col;
-            len += unsafe { vim_snprintf_safelen(at, room, fmt, end_col) };
+            len += unsafe { vim_snprintf_safelen!(at, room, fmt, end_col) };
         }
     }
     out.extend_from_slice(unsafe { slice::from_raw_parts(buf.cast::<u8>(), len) });
@@ -337,7 +340,7 @@ unsafe fn qf_msg(qi: *mut QfInfo, which: c_int, lead: *const c_char) {
     let listcount = qi.qf_listcount;
     let count = qfl.qf_count;
     let len = unsafe {
-        vim_snprintf_safelen(
+        vim_snprintf_safelen!(
             buf.as_mut_ptr(),
             size,
             fmt.as_ptr(),

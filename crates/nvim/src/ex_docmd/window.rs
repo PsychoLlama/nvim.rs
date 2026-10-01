@@ -15,6 +15,7 @@ use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::vim_snprintf;
 use crate::winlayer::WinId;
 use crate::winlayer::last_used_tab;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -50,7 +51,6 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
-use crate::strings::vim_snprintf;
 use crate::tag::state::{g_do_tagpreview, postponed_split_flags, postponed_split_tab};
 use crate::types::{CmdLine, CmdModFlags, ExArg, IOSIZE, NUL, size_t};
 use crate::ui::state::{Columns, Rows};
@@ -379,7 +379,7 @@ pub(crate) fn ex_tabs(_excmd: &mut ExArg) {
         }
         let (fmt, nr) = (tr(c"Tab page %d".as_ptr()).as_ptr(), tabcount as c_int + 1);
         // SAFETY: a message with one `%d`, into this frame's own buffer.
-        unsafe { vim_snprintf(line.as_mut_ptr(), IOSIZE as size_t, fmt, nr) };
+        unsafe { vim_snprintf!(line.as_mut_ptr(), IOSIZE as size_t, fmt, nr) };
         msg_line(&line, HLF_T);
         os_breakcheck();
         list_tab_windows(tp, lastused_win, &mut line);

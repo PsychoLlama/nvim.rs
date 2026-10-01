@@ -84,7 +84,6 @@ use crate::regexp::{
     vim_regexec_multi, vim_regfree,
 };
 use crate::runtime::{do_source, source_runtime};
-use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
     BufState, Buffer, ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegExtMatch,

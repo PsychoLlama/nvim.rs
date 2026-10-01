@@ -24,6 +24,7 @@ use crate::search::{
     SEARCH_OPT, SEARCH_PEEK, SEARCH_REV, SEARCH_START, SEARCH_STAT_BUF_LEN,
     SEARCH_STAT_DEF_TIMEOUT,
 };
+use crate::snprintf;
 use crate::types::{CmdModFlags, CpoFlag, FAIL, NUL, ShmFlag};
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
@@ -214,7 +215,7 @@ fn write_offset(buf: &mut [c_char; 40], dirc: c_int, off: SearchOffset) -> size_
         // SAFETY: writing into the tail of a 40-byte stack buffer, with
         // the remaining size passed; `%+ld` of an int64 fits in 21.
         let (tail, room) = (buf.as_mut_ptr(), buf.len() - len);
-        let written = unsafe { snprintf(tail.add(len), room, c"%+ld".as_ptr(), off.off) };
+        let written = unsafe { snprintf!(tail.add(len), room, c"%+ld".as_ptr(), off.off) };
         len += written as usize;
     }
     len

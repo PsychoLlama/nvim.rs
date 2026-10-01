@@ -83,7 +83,7 @@ use crate::ops::{adjust_cursor_eol, block_prep, charwise_block_prep, get_op_char
 use crate::option::get_ve_flags;
 use crate::option::vars::{p_ch, p_report};
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
-use crate::os::cshim::{gettext, ngettext, snprintf};
+use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::os_breakcheck;
 use crate::os::time::os_time;
 use crate::plines::{getvcol, init_charsize_arg, win_charsize};
@@ -92,7 +92,7 @@ use crate::regexp::RE_SEARCH;
 use crate::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::state::REPLACE_FLAG;
 use crate::state::mode::{State, restart_edit};
-use crate::strings::{vim_snprintf, vim_strsave_escaped_ext};
+use crate::strings::vim_strsave_escaped_ext;
 use crate::terminal::terminal_paste;
 use crate::types::AutoEvent;
 use crate::types::CAR;

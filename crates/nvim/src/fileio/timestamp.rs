@@ -17,6 +17,7 @@ use crate::guard::{Lock, Suppress};
 use crate::memory::XString;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::snprintf;
 use crate::undo::UNDO_HASH_SIZE;
 use crate::winlayer::graph::switch_buffer;
 use crate::winlayer::{Buf, Win, first_buffer, tab_windows};
@@ -284,7 +285,7 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
     // +2 for either '\n' or "; " and +1 for NUL.
     let size = unsafe { cstr::bytes_at(path) }.len() + mesg.count_bytes() + mesg2.count_bytes() + 3;
     let mut tbuf = vec![0 as c_char; size];
-    let at = unsafe { snprintf(tbuf.as_mut_ptr(), size, mesg.as_ptr(), path) } as usize;
+    let at = unsafe { snprintf!(tbuf.as_mut_ptr(), size, mesg.as_ptr(), path) } as usize;
     unsafe { xfree(path.cast()) };
     // Set v:warningmsg here, before the unimportant and output-specific
     // `mesg2` has been appended.
@@ -293,7 +294,7 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
         if !mesg2.is_empty() {
             let into = tbuf.as_mut_ptr();
             // SAFETY: `tbuf` holds `size` bytes and `at` of them are used.
-            unsafe { snprintf(into.add(at), size - at, sep.as_ptr(), mesg2.as_ptr()) };
+            unsafe { snprintf!(into.add(at), size - at, sep.as_ptr(), mesg2.as_ptr()) };
         }
     };
 

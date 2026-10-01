@@ -23,6 +23,7 @@
 
 use crate::memline::MlFlags;
 use crate::option::local_or_global;
+use crate::vim_snprintf;
 use core::ffi::{c_char, c_int};
 use core::slice;
 
@@ -50,7 +51,6 @@ use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
 use crate::statusline::state::{tab_page_click_defs, tab_page_click_defs_size};
-use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
@@ -634,7 +634,7 @@ pub fn redraw_ruler() {
         );
         // SAFETY: `room` bytes of `buffer` and a NUL-terminated `rel_pos`.
         bufferlen +=
-            unsafe { vim_snprintf(at.as_mut_ptr(), room, c"%s".as_ptr(), rel_pos.as_ptr()) };
+            unsafe { vim_snprintf!(at.as_mut_ptr(), room, c"%s".as_ptr(), rel_pos.as_ptr()) };
     }
     let _ = bufferlen;
 
@@ -674,7 +674,7 @@ fn ruler_position(win: Win, virtcol: ColNr, buffer: &mut [c_char]) -> c_int {
     let (out, room) = (buffer.as_mut_ptr(), RULER_BUF_LEN as size_t);
     // SAFETY: `buffer` is `RULER_BUF_LEN` bytes of the caller's frame, and
     // the format takes exactly the one integer.
-    let mut len = unsafe { vim_snprintf(out, room, fmt.as_ptr(), lnum) };
+    let mut len = unsafe { vim_snprintf!(out, room, fmt.as_ptr(), lnum) };
     let (at, room) = (
         &mut buffer[len as usize..],
         (RULER_BUF_LEN as size_t).wrapping_sub(len as size_t),

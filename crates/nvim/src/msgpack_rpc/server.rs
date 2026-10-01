@@ -12,6 +12,7 @@
 //! `serverstart()` and `$NVIM_LISTEN_ADDRESS` open, and the channels that
 //! come out of them.
 
+use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::channel::channel_from_connection;
@@ -23,7 +24,6 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
 use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message_fmt::{c_str, msg_bytes};
-use crate::os::cshim::snprintf;
 use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::fix_fname;
@@ -129,7 +129,7 @@ pub unsafe fn server_init(
             c"?".as_ptr()
         };
         let out = reason.as_mut_ptr();
-        unsafe { snprintf(out, IOSIZE as usize, fmt.as_ptr(), text, listen_addr) };
+        unsafe { snprintf!(out, IOSIZE as usize, fmt.as_ptr(), text, listen_addr) };
         ok = false;
     }
 
@@ -201,7 +201,7 @@ pub unsafe fn server_address_new(name: *const c_char) -> *mut c_char {
         } else {
             name
         };
-        let written = snprintf(
+        let written = snprintf!(
             address.as_mut_ptr(),
             SOCKET_ADDR_LEN,
             c"%s/%s.%lu.%u".as_ptr(),

@@ -22,8 +22,9 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::state::{keep_msg, keep_msg_hl_id, msg_row, msg_scrolled, need_wait_return};
 use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::input::input_get;
+use crate::snprintf;
 use crate::state::mode::State;
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ExpandContext, IOSIZE, MultiQueue, NUL};
@@ -52,7 +53,7 @@ pub(crate) unsafe fn ask_yesno(str: *const c_char) -> c_int {
     // `%s` the format takes.
     let prompt = unsafe {
         let fmt = gettext(c"%s (y/n)?");
-        snprintf(buf.as_mut_ptr(), IOSIZE as usize, fmt.as_ptr(), str);
+        snprintf!(buf.as_mut_ptr(), IOSIZE as usize, fmt.as_ptr(), str);
         xstrdup(buf.as_ptr())
     };
 

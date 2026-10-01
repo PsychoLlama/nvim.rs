@@ -20,6 +20,7 @@ use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use crate::memline::Lines;
 use crate::types::AutoEvent;
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 
 use crate::autocmd::state::autocmd_busy;
@@ -62,7 +63,7 @@ use crate::path::invocation_path_tail;
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::silent_mode;
-use crate::strings::{vim_snprintf, vim_strsave_escaped};
+use crate::strings::vim_strsave_escaped;
 use crate::tr;
 use crate::types::ui::kUIMessages;
 use crate::types::{CmdModFlags, CpoFlag, ExArg, LineNr, NUL, OptInt};
@@ -748,7 +749,7 @@ pub(crate) fn append_redir(buf: &mut Vec<u8>, opt: &CStr, fname: &CStr) {
 fn push_formatted(buf: &mut Vec<u8>, format: &CStr, fname: &CStr) {
     // SAFETY: a zero-length destination writes nothing and only measures; the
     // format is the caller's and `fname` is the one string its `%s` names.
-    let needed = unsafe { vim_snprintf(ptr::null_mut(), 0, format.as_ptr(), fname.as_ptr()) };
+    let needed = unsafe { vim_snprintf!(ptr::null_mut(), 0, format.as_ptr(), fname.as_ptr()) };
     let Ok(needed) = usize::try_from(needed) else {
         return; // a format `vim_snprintf` could not render at all
     };
@@ -757,7 +758,7 @@ fn push_formatted(buf: &mut Vec<u8>, format: &CStr, fname: &CStr) {
     // SAFETY: `needed + 1` writable bytes at `at`, which is what the
     // measuring call above asked for.
     unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             buf.as_mut_ptr().add(at).cast(),
             needed + 1,
             format.as_ptr(),

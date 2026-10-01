@@ -18,6 +18,7 @@
 use super::*;
 use crate::cstr;
 use crate::types::builders::{ArrayBuf, DictBuf};
+use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int, c_long};
 use core::ptr;
 
@@ -81,7 +82,7 @@ pub(crate) unsafe fn format_progress_message(
         let out = percent_buf.as_mut_ptr();
         let cap = percent_buf.len();
         let percent = unsafe { (*msg_data).percent } as c_long;
-        unsafe { vim_snprintf(out, cap, c"%3ld%% ".as_ptr(), percent) };
+        unsafe { vim_snprintf!(out, cap, c"%3ld%% ".as_ptr(), percent) };
         let warning = c"WarningMsg";
         let chunk = HlMessageChunk {
             text: unsafe { cstr_to_string(percent_buf.as_ptr()) },

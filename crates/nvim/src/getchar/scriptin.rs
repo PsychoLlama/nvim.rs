@@ -18,6 +18,7 @@
 )]
 
 use super::*;
+use crate::fprintf;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::MAXPATHL;
@@ -149,7 +150,7 @@ pub unsafe fn open_scriptin(scriptin_name: *mut c_char) -> bool {
     };
     if error != 0 {
         unsafe {
-            fprintf(
+            fprintf!(
                 stderr,
                 gettext(c"Cannot open for reading: \"%s\": %s\n").as_ptr(),
                 scriptin_name,

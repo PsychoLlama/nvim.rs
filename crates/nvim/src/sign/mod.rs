@@ -67,8 +67,7 @@ use crate::mbyte::{MAX_SCHAR_SIZE, utf_ptr2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{e_argreq, e_dictreq, e_invarg, e_listreq};
 use crate::message::{emsg, msg_display, msg_putchar, msg_str, msg_str_hl, msg_title};
-use crate::os::cshim::{gettext, snprintf};
-use crate::strings::vim_snprintf;
+use crate::os::cshim::gettext;
 use crate::types::{
     Buffer, DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight,
     DecorVirtText, Dict, EvalFuncData, ExArg, Expand, FAIL, Integer, LineNr, List, MTKey,

@@ -96,7 +96,7 @@ use crate::options::{
     kOptBufhidden, kOptBuftype, kOptErrorfile, kOptFdoFlagQuickfix, kOptFiletype, kOptFoldmethod,
     kOptSwapfile, kOptSwbFlagUselast, kOptSwbFlagUsetab,
 };
-use crate::os::cshim::{gettext, snprintf, strncasecmp};
+use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env, os_get_pid};
 use crate::os::fs::{
     os_dirname, os_fileinfo_link, os_fopen, os_isdir, os_open_stdin_fd, os_path_exists, os_remove,
@@ -110,7 +110,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE, do_search, last_search_pat};
 use crate::state::mode::restart_edit;
-use crate::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen};
+use crate::strings::has_non_ascii;
 use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::{

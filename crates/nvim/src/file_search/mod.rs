@@ -47,11 +47,12 @@ use crate::path::{
     path_fnamencmp, path_has_drive_letter, path_is_url, path_shorten_fname, path_tail,
     path_tail_with_sep, path_with_url, pathcmp, simplify_filename, vim_is_abs_name, vim_ispathsep,
 };
-use crate::strings::{vim_snprintf, xstrnsave};
+use crate::strings::xstrnsave;
 use crate::types::AutoEvent;
 use crate::types::{
     BoolVarValue, CdCause, CdScope, FileID, LineNr, MAXPATHL, SaveVEvent, ptrdiff_t, size_t,
 };
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use ::libc::{abort, strcpy};
 use core::ffi::{c_char, c_int, c_void};
@@ -302,7 +303,7 @@ impl Candidate {
     unsafe fn write_at(&mut self, at: usize, parts: [*const c_char; 3]) -> usize {
         // SAFETY: the caller's promise; `MAXPATHL - at` is the room left.
         at + unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 self.as_mut_ptr().add(at),
                 MAXPATHL as usize - at,
                 c"%s%s%s".as_ptr(),

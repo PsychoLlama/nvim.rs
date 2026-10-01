@@ -24,6 +24,7 @@ use crate::keycodes::{Key, find_special_key};
 use crate::strings::has_char;
 use crate::types::CmdIdx;
 use crate::types::OptStr;
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -47,7 +48,6 @@ use crate::options::{
 };
 use crate::os::cshim::gettext_ptr;
 use crate::startup::silent_mode;
-use crate::strings::vim_snprintf;
 use crate::types::{
     ExArg, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber,
     size_t, uint8_t, uint32_t,
@@ -668,7 +668,7 @@ unsafe fn report(errmsg: *const c_char, start: *mut c_char, end: *mut c_char) {
     // its terminator.
     // SAFETY: `errmsg` is the caller's NUL-terminated message.
     let n = IOSIZE as size_t;
-    let at = unsafe { vim_snprintf(buf, n, c"%s".as_ptr(), gettext_ptr(errmsg).as_ptr()) } + 2;
+    let at = unsafe { vim_snprintf!(buf, n, c"%s".as_ptr(), gettext_ptr(errmsg).as_ptr()) } + 2;
     debug_assert!(end >= start);
     let arglen = unsafe { end.offset_from(start) };
     if at as isize + arglen < IOSIZE as isize {

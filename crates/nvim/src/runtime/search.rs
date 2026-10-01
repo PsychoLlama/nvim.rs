@@ -27,6 +27,7 @@ use crate::option::vars::P_RTP;
 use crate::path::ExpandFlags;
 use crate::semsg;
 use crate::smsg;
+use crate::snprintf;
 
 use crate::types::{ExpandContext, FAIL, Failed, MAXPATHL, OK};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -549,7 +550,7 @@ unsafe fn dir_has_lua(item: *mut SearchPathItem, buf: &mut [c_char]) -> bool {
     // SAFETY: the caller's live entry; `snprintf` NUL-terminates within `buf`.
     if unsafe { (*item).has_lua }.is_none() {
         let size = unsafe {
-            snprintf(
+            snprintf!(
                 buf.as_mut_ptr(),
                 buf.len(),
                 c"%s/lua/".as_ptr(),
@@ -583,7 +584,7 @@ fn runtime_get_named_common(
             };
             // SAFETY: `buf` is NUL-terminated by `snprintf` within its length.
             let size = unsafe {
-                snprintf(
+                snprintf!(
                     buf.as_mut_ptr(),
                     buf.len(),
                     c"%s/%s".as_ptr(),

@@ -42,6 +42,7 @@ use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::guard::Suppress;
 use crate::message_fmt::{c_str, msg_bytes, msg_cstr};
+use crate::snprintf;
 use crate::types::CmdIdx;
 use crate::types::{CmdLine, ExArgt, FieldHashfn, NUL};
 use core::ffi::{CStr, c_char, c_int};
@@ -317,7 +318,7 @@ fn collect_args(given: &Array, excmd: &mut ExArg, args: &mut Array) -> Result<bo
                 // verb matches the argument.
                 let rendered = unsafe {
                     let (room, fmt) = (NUMBUFLEN as size_t, c"%ld".as_ptr());
-                    snprintf(buf.as_mut_ptr(), room, fmt, *n);
+                    snprintf!(buf.as_mut_ptr(), room, fmt, *n);
                     cstr::bytes_at(buf.as_ptr())
                 };
                 args.push(Object::string(String_0::from_bytes(rendered)));

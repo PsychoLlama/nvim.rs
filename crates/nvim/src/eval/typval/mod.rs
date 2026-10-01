@@ -32,9 +32,8 @@ use crate::message::{
     e_cannot_change_value, e_cannot_change_value_of_str, e_invarg, e_invrange, e_listreq,
     e_value_is_locked, e_value_is_locked_str,
 };
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::input::{fast_breakcheck, line_breakcheck};
-use crate::strings::vim_snprintf;
 use crate::types::{
     __compar_fn_t, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData, Float,
     FuncExe, GArray, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue,

@@ -36,6 +36,7 @@
 )]
 
 use crate::cstr;
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
@@ -52,7 +53,6 @@ use crate::option::option_var;
 use crate::option::vars::{P_FCS, P_LCS, p_fcs, p_lcs};
 use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
-use crate::strings::vim_snprintf;
 use crate::types::{
     CharsOption, Expand, FcsChars, LcsChars, NUL, OptError, OptSet, OptionSetFlags, ScreenChar,
     int64_t, size_t,
@@ -354,7 +354,7 @@ unsafe fn field_value_err(fmt: *const c_char, field: &CStr) -> OptError {
     // SAFETY: `message` is the buffer the formatter is told the size of,
     // and the caller's format takes the one argument it is given.
     OptError::Owned(XString::filled(OptError::ROOM, |buf| unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             buf,
             OptError::ROOM as size_t,
             gettext_ptr(fmt).as_ptr(),

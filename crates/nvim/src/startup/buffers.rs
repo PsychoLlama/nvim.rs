@@ -17,6 +17,7 @@ use crate::ex_cmds::newlnum;
 use crate::guard::Suppress;
 use crate::semsg;
 use crate::types::OptStr;
+use crate::vim_snprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -52,7 +53,6 @@ use crate::startup::exit::getout;
 use crate::startup::{
     EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
 };
-use crate::strings::vim_snprintf;
 use crate::types::{
     ExArg, Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
     kListLenMayKnow, ptrdiff_t, size_t, ssize_t,
@@ -161,7 +161,7 @@ pub(crate) unsafe fn handle_tag(tagname: *mut c_char) {
     }
     swap_exists_did_quit.set(false);
     let into = cmd.as_mut_ptr();
-    unsafe { vim_snprintf(into, IOSIZE as size_t, c"ta %s".as_ptr(), tagname) };
+    unsafe { vim_snprintf!(into, IOSIZE as size_t, c"ta %s".as_ptr(), tagname) };
     // SAFETY: `vim_snprintf` terminated the buffer above.
     let _ = do_cmdline_cmd(unsafe { cstr::at(cmd.as_ptr()) });
     time_msg_at(c"jumping to tag");

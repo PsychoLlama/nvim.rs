@@ -15,6 +15,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
+use crate::snprintf;
 use crate::strings::has_char;
 use crate::strings::vim_strchr;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -516,7 +517,7 @@ impl Definition<'_> {
         func_nr.set(func_nr.get() + 1);
         let (into, cap) = (numbuf.as_mut_ptr(), size_of_val(&numbuf));
         // SAFETY: `numbuf` is this frame's own, and `cap` its size.
-        let namelen = unsafe { snprintf(into, cap, c"%d".as_ptr(), func_nr.get()) } as size_t;
+        let namelen = unsafe { snprintf!(into, cap, c"%d".as_ptr(), func_nr.get()) } as size_t;
         // SAFETY: the copy is of what was just rendered into `numbuf`.
         let owned = unsafe { xmemdupz(numbuf.as_ptr() as *const c_void, namelen) };
         self.name = owned as *mut c_char;

@@ -18,6 +18,7 @@ use crate::memory::XString;
 use crate::message::msg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::types::{IOSIZE, NUL, ShmFlag};
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::slice;
@@ -245,10 +246,10 @@ unsafe fn match_position_message(number: c_int, total: c_int) -> *mut c_char {
     unsafe {
         if total > 0 {
             let fmt = gettext(c"match %d of %d");
-            vim_snprintf(msg, size, fmt.as_ptr(), number, total);
+            vim_snprintf!(msg, size, fmt.as_ptr(), number, total);
         } else {
             let fmt = gettext(c"match %d");
-            vim_snprintf(msg, size, fmt.as_ptr(), number);
+            vim_snprintf!(msg, size, fmt.as_ptr(), number);
         }
     }
     msg
@@ -654,7 +655,7 @@ pub(crate) fn ins_compl_show_filename() {
     // SAFETY: `buf` addresses all `IOSIZE` bytes and the three `%s` are
     // NUL-terminated strings.
     unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             buf,
             IOSIZE as size_t,
             c"%s %s%s".as_ptr(),

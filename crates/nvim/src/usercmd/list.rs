@@ -33,7 +33,7 @@ use crate::message::{
 use crate::option::vars::p_verbose;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::line_breakcheck;
-use crate::strings::printf_string;
+use crate::printf_string;
 use crate::types::String_0;
 use crate::types::{ApiDict, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t};
 use crate::ui::state::Columns;
@@ -302,7 +302,7 @@ fn describe(cmd: &UserCmd) -> ApiDict {
     let count = (a.has(ExArgt::COUNT)).then(|| {
         if cmd.uc_def >= 0 {
             // SAFETY: the format and its one argument match.
-            Object::string(unsafe { printf_string(c"%ld".as_ptr(), cmd.uc_def) })
+            Object::string(unsafe { printf_string!(c"%ld".as_ptr(), cmd.uc_def) })
         } else {
             Object::string(String_0::from_cstr(c"0"))
         }
@@ -312,7 +312,7 @@ fn describe(cmd: &UserCmd) -> ApiDict {
             Object::string(String_0::from_cstr(c"%"))
         } else if cmd.uc_def >= 0 {
             // SAFETY: the format and its one argument match.
-            Object::string(unsafe { printf_string(c"%ld".as_ptr(), cmd.uc_def) })
+            Object::string(unsafe { printf_string!(c"%ld".as_ptr(), cmd.uc_def) })
         } else {
             Object::string(String_0::from_cstr(c"."))
         }

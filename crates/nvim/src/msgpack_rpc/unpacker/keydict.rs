@@ -17,12 +17,12 @@
 //! every entry it reads — but they live beside [`super`] because they share
 //! its token reader and its keyset layout.
 
+use crate::printf_string;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::memory::{xrealloc, xstrdup};
 use crate::mpack::mpack_core::mpack_rtoken;
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
-use crate::strings::printf_string;
 use crate::types::{
     AdditionalData, AdditionalDataBuilder, Boolean, FieldHashfn, Integer, KeySetLink, String_0,
     StringArray, mpack_parser_t, mpack_token_t, mpack_walk_cb, size_t, ssize_t, uint32_t,
@@ -367,5 +367,5 @@ unsafe fn fail(message: &core::ffi::CStr, key: String_0) -> *mut c_char {
     let fmt = message.as_ptr();
     let (precision, bytes) = (crate::narrow::len_as_int(key.len()), key.data());
     // The caller frees the message.
-    unsafe { printf_string(fmt, precision, bytes) }.into_raw()
+    unsafe { printf_string!(fmt, precision, bytes) }.into_raw()
 }

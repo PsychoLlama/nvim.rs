@@ -19,6 +19,7 @@
 use crate::cstr;
 use crate::keycodes::{Ctrl_C, Key};
 use crate::types::AutoEvent;
+use crate::vim_snprintf;
 use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
@@ -62,7 +63,6 @@ use crate::quickfix::{ll_resize_stack, qf_resize_stack};
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::spell::parse_spelllang;
 use crate::startup::{full_screen, readonlymode, starting};
-use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
     Buffer, ColNr, LineNr, OptError, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, Vv,
@@ -791,7 +791,7 @@ pub(crate) fn do_spelllang_source(win: Win) {
     // SAFETY: `fname` is the buffer the formatter is told the size of, and
     // the format's two arguments are a length and the bytes it measures.
     unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             fname.as_mut_ptr(),
             size_of::<[c_char; 200]>(),
             c"spell/%.*s.*".as_ptr(),

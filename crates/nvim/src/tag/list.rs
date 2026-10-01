@@ -13,7 +13,9 @@ use crate::cstr;
 use crate::file_search::Name;
 use crate::highlight_group::{HLF_CM, HLF_D, HLF_T};
 use crate::pos::MAXCOL;
+use crate::snprintf;
 use crate::types::{Failed, IOSIZE, MAXPATHL};
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -151,7 +153,7 @@ unsafe fn print_entry_head(
     let buf = head.as_mut_ptr();
     unsafe { *buf = if current { b'>' } else { b' ' } as c_char };
     unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             buf.add(1),
             (IOSIZE - 1) as size_t,
             c"%2d %s ".as_ptr(),
@@ -397,7 +399,7 @@ pub(crate) unsafe fn add_llist_tags(
     }
 
     unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             title.as_mut_ptr(),
             IOSIZE as size_t,
             c"ltag %s".as_ptr(),
@@ -459,7 +461,7 @@ unsafe fn search_pattern(tagp: &TagParts) -> Name {
 
     let text_len = (unsafe { end.offset_from(start) } as c_int + 1).min(CMDBUFFSIZE as c_int - 5);
     unsafe {
-        snprintf(
+        snprintf!(
             cmd.as_mut_ptr().add(len),
             (CMDBUFFSIZE + 1 - len) as size_t,
             c"%.*s".as_ptr(),

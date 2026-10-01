@@ -22,7 +22,9 @@ use crate::guard::Lock;
 use crate::memory::XString;
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::vars::P_SEL;
+use crate::snprintf;
 use crate::tr_plural;
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -199,7 +201,7 @@ unsafe fn report_yank(op: *mut OpArg, yank_type: MotionType, yanklines: size_t) 
         let fmt = gettext(c" into \"%c");
         // SAFETY: `namebuf` is writable for the length given, and the format
         // takes exactly the one `%c` argument handed over.
-        unsafe { vim_snprintf(namebuf.as_mut_ptr(), namebuf.len(), fmt.as_ptr(), regname) };
+        unsafe { vim_snprintf!(namebuf.as_mut_ptr(), namebuf.len(), fmt.as_ptr(), regname) };
     }
 
     // The message may be the first thing that scrolls, so make sure the
@@ -411,7 +413,7 @@ pub unsafe fn format_reg_type(
         kMTBlockWise => {
             // SAFETY: `buf` holds the `buf_len` bytes `snprintf` is told
             // about, and the format takes the single `%d` given.
-            unsafe { snprintf(buf, buf_len, c"\x16%d".as_ptr(), reg_width + 1) };
+            unsafe { snprintf!(buf, buf_len, c"\x16%d".as_ptr(), reg_width + 1) };
             return;
         }
         _ => return,

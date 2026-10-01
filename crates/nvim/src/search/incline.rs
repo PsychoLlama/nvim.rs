@@ -15,6 +15,7 @@
 use super::*;
 use crate::cstr;
 use crate::highlight_group::HLF_N;
+use crate::snprintf;
 use crate::types::{IOSIZE, NUL};
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
@@ -189,9 +190,9 @@ pub(crate) unsafe fn show_pat_in_path(
         }
         if action == ACTION_SHOW_ALL {
             let iobuff = num.as_mut_ptr();
-            unsafe { snprintf(iobuff, IOSIZE as size_t, c"%3d: ".as_ptr(), count) }; // match nr
+            unsafe { snprintf!(iobuff, IOSIZE as size_t, c"%3d: ".as_ptr(), count) }; // match nr
             msg_str(unsafe { cstr::at(iobuff) });
-            unsafe { snprintf(iobuff, IOSIZE as size_t, c"%4ld".as_ptr(), *lnum as int64_t) };
+            unsafe { snprintf!(iobuff, IOSIZE as size_t, c"%4ld".as_ptr(), *lnum as int64_t) };
             msg_str_hl(unsafe { cstr::at(iobuff) }, HLF_N, false); // highlight the line number
             msg_str(c" ");
         }

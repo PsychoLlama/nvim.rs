@@ -5,8 +5,8 @@
 use crate::cstr;
 use crate::ex_docmd::ex_msg;
 use crate::ex_docmd::source::ex_errmsg;
-use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
+use crate::vim_snprintf;
 use crate::window::tab_index;
 use crate::winlayer::TabPage;
 use crate::winlayer::last_used_tab;
@@ -481,7 +481,7 @@ pub(crate) fn check_more(message: bool, forceit: bool) -> c_int {
         )
         .as_ptr();
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 &raw mut buff as *mut c_char,
                 DIALOG_MSG_SIZE as size_t,
                 fmt,
@@ -568,7 +568,7 @@ pub unsafe fn dialog_msg(buff: *mut c_char, format: *mut c_char, fname: *mut c_c
     } else {
         fname
     };
-    unsafe { vim_snprintf(buff, DIALOG_MSG_SIZE as size_t, format, fname) };
+    unsafe { vim_snprintf!(buff, DIALOG_MSG_SIZE as size_t, format, fname) };
 }
 
 /// Whether two NUL-terminated strings agree over their first `n` bytes --

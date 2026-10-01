@@ -38,6 +38,7 @@ use crate::cstr;
 use crate::hashtab::removed_sentinel;
 use crate::message::emsg;
 use crate::semsg;
+use crate::snprintf;
 use crate::types::NUL;
 use crate::types::{DictKey, Failed, HashTab, SlotEntry};
 
@@ -404,7 +405,7 @@ pub fn dict_to_env(denv: &Dict) -> *mut *mut ::core::ffi::c_char {
         // NUL-terminated strings into `len` writable bytes.
         unsafe {
             *env.add(i) = xmalloc(len) as *mut ::core::ffi::c_char;
-            snprintf(*env.add(i), len, c"%s=%s".as_ptr(), key.as_ptr(), str);
+            snprintf!(*env.add(i), len, c"%s=%s".as_ptr(), key.as_ptr(), str);
         }
     }
 

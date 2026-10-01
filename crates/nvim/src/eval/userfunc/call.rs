@@ -19,6 +19,7 @@ use crate::guard::{Depth, Lock, Suppress};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
+use crate::snprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of_val;
 use core::ptr;
@@ -217,7 +218,7 @@ pub unsafe fn call_user_func(
             }
             // An extra argument: a:1, a:2, ...
             let (into, cap) = (numbuf.as_mut_ptr(), size_of_val(&numbuf));
-            namelen = unsafe { snprintf(into, cap, c"%d".as_ptr(), ai + 1) } as size_t;
+            namelen = unsafe { snprintf!(into, cap, c"%d".as_ptr(), ai + 1) } as size_t;
             name = numbuf.as_mut_ptr();
         }
 

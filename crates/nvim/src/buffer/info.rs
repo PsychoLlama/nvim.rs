@@ -21,6 +21,8 @@
 use crate::cstr;
 use crate::memline::MlFlags;
 use crate::strings::has_char;
+use crate::vim_snprintf;
+use crate::vim_snprintf_safelen;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -48,7 +50,6 @@ use crate::plines::win_get_fill;
 use crate::state::mode::restart_edit;
 use crate::statusline::state::stl_syntax;
 use crate::statusline::{FmtSource, StlSinks, build_stl_str_hl};
-use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::terminal::terminal_running;
 use crate::types::String_0;
 use crate::types::ui::kUIMessages;
@@ -326,7 +327,7 @@ fn format_head(
     let name = name.as_ptr();
     // SAFETY: `IOSIZE - 20` writable bytes, a format taking a number, five
     // characters and a string, and `name` holding that string.
-    let len = unsafe { vim_snprintf_safelen(dst, cap, fmt, handle, bl, cur, st, ro, ch, name) };
+    let len = unsafe { vim_snprintf_safelen!(dst, cap, fmt, handle, bl, cur, st, ro, ch, name) };
     (len as c_int).min(IOSIZE - 20)
 }
 
@@ -362,7 +363,7 @@ fn format_lnum(io: &mut [c_char; IOSIZE as usize], len: c_int, lnum: LineNr) {
     );
     let fmt = tr(c"line %ld");
     // SAFETY: the rest of the line, and a format taking one number.
-    unsafe { vim_snprintf(dst, cap, fmt, lnum as int64_t) };
+    unsafe { vim_snprintf!(dst, cap, fmt, lnum as int64_t) };
 }
 
 // ---------------------------------------------------------------------------
@@ -523,13 +524,13 @@ impl Msg {
     fn put_int(&mut self, fmt: &CStr, n: c_int) {
         let (dst, room) = self.tail();
         // SAFETY: the buffer's own tail, and a format taking one number.
-        self.len += unsafe { vim_snprintf_safelen(dst, room, fmt.as_ptr(), n) };
+        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt.as_ptr(), n) };
     }
 
     fn put_str(&mut self, fmt: &CStr, s: *const c_char) {
         let (dst, room) = self.tail();
         // SAFETY: the buffer's own tail, and a format taking one string.
-        self.len += unsafe { vim_snprintf_safelen(dst, room, fmt.as_ptr(), s) };
+        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt.as_ptr(), s) };
     }
 
     /// The six-part flag string, `"%s%s%s%s%s%s`.
@@ -538,7 +539,7 @@ impl Msg {
         let fmt = c"\"%s%s%s%s%s%s".as_ptr();
         let [a, b, c, d, e, f] = parts;
         // SAFETY: the buffer's own tail, and a format taking six strings.
-        self.len += unsafe { vim_snprintf_safelen(dst, room, fmt, a, b, c, d, e, f) };
+        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt, a, b, c, d, e, f) };
     }
 
     fn put_lines(&mut self, fmt: *const c_char, lines: LineNr, percent: c_int) {
@@ -546,7 +547,7 @@ impl Msg {
         let lines = lines as int64_t;
         // SAFETY: the buffer's own tail, and a format taking a number and a
         // percentage.
-        self.len += unsafe { vim_snprintf_safelen(dst, room, fmt, lines, percent) };
+        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt, lines, percent) };
     }
 
     fn put_position(&mut self, fmt: *const c_char, at: LineNr, of: LineNr, percent: c_int) {
@@ -554,7 +555,7 @@ impl Msg {
         let (at, of) = (at as int64_t, of as int64_t);
         // SAFETY: the buffer's own tail, and a format taking two numbers and
         // a percentage.
-        self.len += unsafe { vim_snprintf_safelen(dst, room, fmt, at, of, percent) };
+        self.len += unsafe { vim_snprintf_safelen!(dst, room, fmt, at, of, percent) };
     }
 
     fn put_column(&mut self, col: c_int, vcol: c_int) {
@@ -782,12 +783,12 @@ pub unsafe fn get_rel_pos(window: Win, buf: *mut c_char, buflen: c_int) -> c_int
     if below <= 0 {
         let all_or_bot = if above == 0 { tr(c"All") } else { tr(c"Bot") };
         // SAFETY: the caller's buffer, and a format taking one string.
-        return unsafe { vim_snprintf_safelen(buf, room, c"%s".as_ptr(), all_or_bot) } as c_int;
+        return unsafe { vim_snprintf_safelen!(buf, room, c"%s".as_ptr(), all_or_bot) } as c_int;
     }
     if above <= 0 {
         let top = tr(c"Top");
         // SAFETY: as above.
-        return unsafe { vim_snprintf_safelen(buf, room, c"%s".as_ptr(), top) } as c_int;
+        return unsafe { vim_snprintf_safelen!(buf, room, c"%s".as_ptr(), top) } as c_int;
     }
 
     let perc = percentage(above, above + below);
@@ -795,11 +796,11 @@ pub unsafe fn get_rel_pos(window: Win, buf: *mut c_char, buflen: c_int) -> c_int
     let mut tmp: [c_char; 8] = [0; 8];
     let (dst, cap, fmt) = (tmp.as_mut_ptr(), tmp.len(), tr(c"%d%%"));
     // SAFETY: an eight-byte local, and a format taking one number.
-    unsafe { vim_snprintf(dst, cap, fmt, perc) };
+    unsafe { vim_snprintf!(dst, cap, fmt, perc) };
     let fmt = tr(c"%3s");
     // SAFETY: the caller's buffer, a format taking one string, and the local
     // just filled.
-    unsafe { vim_snprintf_safelen(buf, room, fmt, tmp.as_ptr()) as c_int }
+    unsafe { vim_snprintf_safelen!(buf, room, fmt, tmp.as_ptr()) as c_int }
 }
 
 /// Append "(2 of 8)" to `buf`, when more than one file is being edited.
@@ -825,5 +826,5 @@ pub unsafe fn append_arg_number(window: Win, buf: *mut c_char, buflen: size_t) -
     };
     let idx = win.w_arg_idx + 1;
     // SAFETY: the caller's buffer, and a format taking two numbers.
-    unsafe { vim_snprintf_safelen(buf, buflen, fmt, idx, argcount) as c_int }
+    unsafe { vim_snprintf_safelen!(buf, buflen, fmt, idx, argcount) as c_int }
 }

@@ -16,6 +16,7 @@
 
 use crate::cstr;
 use crate::strings::has_char;
+use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::ascii::ascii_isdigit;
@@ -31,7 +32,6 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::statusline::state::stl_syntax;
-use crate::strings::vim_snprintf;
 use crate::types::{LineNr, NUL, OptError, OptSet, OptionSetFlags, StlSyntax, size_t};
 use crate::winfloat::win_config_float;
 
@@ -246,7 +246,7 @@ pub fn did_set_shada(_args: &mut OptSet) -> Result<(), OptError> {
                 // SAFETY: `formatted` hands the closure a buffer of the
                 // size it passes on, and the format takes one string.
                 return formatted(|buf| unsafe {
-                    vim_snprintf(
+                    vim_snprintf!(
                         buf,
                         OptError::ROOM as size_t,
                         fmt.as_ptr(),

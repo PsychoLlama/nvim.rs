@@ -17,6 +17,7 @@ use super::*;
 use crate::message_fmt::c_str_len;
 use crate::option::vars::P_LANGMAP;
 use crate::optionstr::frame::formatted;
+use crate::snprintf;
 use crate::swmsg;
 use crate::types::{NUL, OptError};
 use core::ffi::{c_char, c_int};
@@ -109,7 +110,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
         // SAFETY: `formatted` hands the closure a buffer of the size it
         // passes on, and the format's one conversion is `arg`.
         formatted(|buf| unsafe {
-            snprintf(buf, OptError::ROOM, gettext(fmt).as_ptr(), arg);
+            snprintf!(buf, OptError::ROOM, gettext(fmt).as_ptr(), arg);
         })
     };
 

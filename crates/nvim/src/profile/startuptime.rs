@@ -19,13 +19,14 @@
 
 use super::{profile_start, profile_sub};
 use crate::event::libuv::uv_err_name;
+use crate::fprintf;
 use crate::global_cell::GlobalCell;
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_notopen;
 use crate::os::cshim::{gettext, stderr};
 use crate::profile::time_fd;
 use crate::types::ProfTime;
-use ::libc::{fclose, fopen, fprintf, setvbuf};
+use ::libc::{fclose, fopen, setvbuf};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
@@ -70,7 +71,7 @@ fn write_startup(bytes: &[u8]) {
     if let Ok(line) = CString::new(bytes) {
         // SAFETY: fd is the open startuptime stream; "%s" consumes the one
         // string argument.
-        unsafe { fprintf(fd, c"%s".as_ptr(), line.as_ptr()) };
+        unsafe { fprintf!(fd, c"%s".as_ptr(), line.as_ptr()) };
     }
 }
 
@@ -136,7 +137,7 @@ pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
     time_fd.set(unsafe { fopen(fname, c"a".as_ptr()) });
     if time_fd.get().is_null() {
         // SAFETY: the message is a NUL-terminated global with one %s.
-        unsafe { fprintf(stderr, gettext(e_notopen).as_ptr(), fname) };
+        unsafe { fprintf!(stderr, gettext(e_notopen).as_ptr(), fname) };
         return;
     }
     // SAFETY: `xmalloc` returns `BUFSIZE + 1` owned bytes, which is exactly
@@ -155,7 +156,7 @@ pub unsafe fn time_init(fname: *const c_char, proc_name: *const c_char) {
         time_fd.set(core::ptr::null_mut());
         let fmt = c"time_init: setvbuf failed: %d %s".as_ptr();
         let why = unsafe { uv_err_name(r) };
-        unsafe { fprintf(stderr, fmt, r, why) };
+        unsafe { fprintf!(stderr, fmt, r, why) };
         return;
     }
     let mut header = b"--- Startup times for process: ".to_vec();

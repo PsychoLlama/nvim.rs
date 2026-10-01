@@ -11,6 +11,7 @@
 // `#[unsafe(no_mangle)]` is itself an unsafe attribute.
 #![allow(unsafe_code)]
 
+use crate::fprintf;
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint};
@@ -98,7 +99,7 @@ use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
 use crate::window::{win_alloc_first, win_init_size, win_new_screensize};
 use crate::winlayer::{Win, first_window, windows};
-use ::libc::{abort, exit, fprintf, setbuf, strcasecmp};
+use ::libc::{abort, exit, setbuf, strcasecmp};
 
 /// Bring up the event loop and everything that hangs off it.
 ///
@@ -204,7 +205,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     argv0.set(unsafe { *argv });
     if !appname_is_valid() {
         let msg = c"$NVIM_APPNAME must be a name or relative path.\n".as_ptr();
-        unsafe { fprintf(stderr, msg) };
+        unsafe { fprintf!(stderr, msg) };
         unsafe { exit(1) };
     }
 
@@ -278,7 +279,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         let progpath = get_vim_var_str(Vv::Progpath);
         let chan = unsafe { ui_client_start_server(progpath, params.argc as usize, params.argv) };
         if chan == 0 {
-            unsafe { fprintf(stderr, c"Failed to start Nvim server!\n".as_ptr()) };
+            unsafe { fprintf!(stderr, c"Failed to start Nvim server!\n".as_ptr()) };
             os_exit(1);
         }
         ui_client_channel_id.set(chan);
@@ -368,8 +369,8 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         scriptout.set(unsafe { os_fopen(params.scriptout, mode) });
         if scriptout.get().is_null() {
             let fmt = gettext(c"Cannot open for script output: \"");
-            unsafe { fprintf(stderr, fmt.as_ptr()) };
-            unsafe { fprintf(stderr, c"%s\"\n".as_ptr(), params.scriptout) };
+            unsafe { fprintf!(stderr, fmt.as_ptr()) };
+            unsafe { fprintf!(stderr, c"%s\"\n".as_ptr(), params.scriptout) };
             os_exit(2);
         }
     }

@@ -30,6 +30,7 @@ use crate::option::vars::P_MENC;
 use crate::types::CmdIdx;
 use crate::types::OptStr;
 use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_LIST};
+use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -203,7 +204,7 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
         let efile = IOSIZE as size_t;
         let fmt = c"%s (%s)".as_ptr();
         let sfname = buf.name.short_ptr();
-        unsafe { vim_snprintf(title.as_mut_ptr(), efile, fmt, qf_title.as_ptr(), sfname) };
+        unsafe { vim_snprintf!(title.as_mut_ptr(), efile, fmt, qf_title.as_ptr(), sfname) };
         qf_title[..IOSIZE as usize].copy_from_slice(&title);
     }
 

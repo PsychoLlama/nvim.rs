@@ -35,9 +35,10 @@ use crate::r#move::{
 };
 use crate::option::cpo_has;
 use crate::option::vars::{P_LZ, p_lz};
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
+use crate::snprintf;
 use crate::state::mode::{State, exmode_active};
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
@@ -211,7 +212,7 @@ fn prompt_visual(st: &Sub) -> c_int {
     let mut ask = [0 as c_char; IOSIZE as usize];
     // SAFETY: `ask` is `IOSIZE` bytes and the format takes one string.
     let prompt = unsafe {
-        snprintf(
+        snprintf!(
             ask.as_mut_ptr(),
             IOSIZE as size_t,
             gettext(c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)")

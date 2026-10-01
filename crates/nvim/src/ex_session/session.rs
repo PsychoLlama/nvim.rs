@@ -36,6 +36,7 @@ use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
+use crate::fprintf;
 use crate::memory::xfree;
 use crate::option::vars::{p_shm, p_stal, p_wh, p_wiw};
 use crate::options::{
@@ -55,7 +56,6 @@ use crate::winlayer::graph::firstwin;
 use crate::winlayer::{
     FrameRef, TabPage, Win, WinId, buffers, current_topframe, first_tab, tabs, windows_in_tab,
 };
-use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -565,7 +565,7 @@ fn store_session_globals(out: SessionFile) -> bool {
             let f = item.di_tv.float_or_zero();
             let sign = if f < 0.0 { b'-' } else { b' ' } as c_int;
             if unsafe {
-                fprintf(
+                fprintf!(
                     out.raw(),
                     c"let %s = %c%f".as_ptr(),
                     key,

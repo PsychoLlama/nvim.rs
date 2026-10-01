@@ -17,6 +17,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -330,7 +331,7 @@ fn highlight_dicts(
             );
             // SAFETY: a local buffer with room for the widest `%d`, and an
             // arena copy of it that outlives the reply.
-            unsafe { snprintf(out, room, fmt, run.userhl) };
+            unsafe { snprintf!(out, room, fmt, run.userhl) };
             unsafe { arena_strdup(arena, out) }
         };
         // The sign column's own group combines with the sign's highlight,

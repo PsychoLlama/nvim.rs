@@ -18,6 +18,7 @@ use crate::option::vars::P_SHQ;
 use crate::option::vars::P_SP;
 use crate::option::vars::{P_EFM, P_MEF};
 use crate::os::shell::ShellOpts;
+use crate::snprintf;
 use crate::types::CmdIdx;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
@@ -220,7 +221,7 @@ unsafe fn get_mef_name() -> *mut c_char {
         let s2 = digits.as_mut_ptr().cast();
         let fmt = c"%d%d".as_ptr();
         let qf_title = OFF.get();
-        let written = unsafe { snprintf(s2, digits.len(), fmt, START.get(), qf_title) };
+        let written = unsafe { snprintf!(s2, digits.len(), fmt, START.get(), qf_title) };
         debug_assert!(written > 0 && (written as usize) < digits.len());
         // Upstream writes the digits into the copy of 'makeef' with
         // `strlen(name)` as the bound, i.e. the length of 'makeef'

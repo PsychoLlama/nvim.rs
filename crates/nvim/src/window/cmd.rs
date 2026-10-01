@@ -22,6 +22,7 @@ use crate::keycodes::{
     Ctrl_X, Ctrl_Z, Key, NotAKey,
 };
 use crate::types::AutoEvent;
+use crate::vim_snprintf;
 use crate::winlayer::prev_window;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -51,7 +52,6 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;
 use crate::search::find_pattern_in_path;
-use crate::strings::vim_snprintf;
 use crate::tag::state::{g_do_tagpreview, postponed_split};
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
@@ -814,7 +814,7 @@ fn append_str(buf: &mut CmdBuf, s: &CStr) {
 fn write_count(buf: &mut CmdBuf, n: int64_t) {
     let (dst, room) = (buf.as_mut_ptr(), buf.len() as size_t - 5);
     // SAFETY: a buffer of at least `room` bytes, and a format taking a number.
-    unsafe { vim_snprintf(dst, room, c"%ld".as_ptr(), n) };
+    unsafe { vim_snprintf!(dst, room, c"%ld".as_ptr(), n) };
 }
 
 /// Print `n` `at` bytes into `buf`, which [`run_with_count`] has filled to
@@ -823,5 +823,5 @@ fn write_count_at(buf: &mut CmdBuf, at: size_t, n: int64_t) {
     let room = buf.len() as size_t - at;
     let dst = &raw mut buf[at];
     // SAFETY: `at` is within the buffer, which has `room` bytes left.
-    unsafe { vim_snprintf(dst, room, c"%ld".as_ptr(), n) };
+    unsafe { vim_snprintf!(dst, room, c"%ld".as_ptr(), n) };
 }

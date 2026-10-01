@@ -11,6 +11,7 @@ const CLASS_PUNCT: c_int = 1;
 const CLASS_WORD: c_int = 2;
 
 use crate::ops::Op;
+use crate::snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
 
@@ -31,7 +32,7 @@ use crate::normal::{FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, clear_op_bee
 use crate::option::shortmess;
 use crate::option::vars::{P_SCS, P_WS, fdo_flags, p_scs, p_ws};
 use crate::options::kOptFdoFlagSearch;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::pos::clearpos;
 use crate::regexp::RE_LAST;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
@@ -380,7 +381,7 @@ pub(crate) unsafe fn find_decl(
     } else {
         c"\\V%.*s".as_ptr()
     };
-    let patlen = unsafe { snprintf(pat, patsize, fmt, len as c_int, word) } as size_t;
+    let patlen = unsafe { snprintf!(pat, patsize, fmt, len as c_int, word) } as size_t;
 
     let old_pos = Win::current().w_cursor;
     let save_p_ws = p_ws();

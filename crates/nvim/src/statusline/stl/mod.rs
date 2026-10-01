@@ -48,6 +48,7 @@
 #![allow(unsafe_code)]
 
 use crate::normal::{set_visual_active, showcmd_buf, visual_active};
+use crate::vim_snprintf_safelen;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
@@ -83,7 +84,6 @@ use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;
-use crate::strings::vim_snprintf_safelen;
 use crate::types::{
     ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StatusCol, StlClickRecord, TypVal, VarNumber,
     Vv, int64_t, size_t, stl_hlrec_t,
@@ -596,11 +596,11 @@ fn put_number(out: &mut [u8], at: usize, plan: &parse::NumPlan) -> usize {
     // [`parse::NumPlan`] built it to take exactly the two arguments below.
     let len = match plan.exp {
         Some(exp) => unsafe {
-            vim_snprintf_safelen(dst, room as size_t, template.as_ptr(), 0, plan.num, exp)
+            vim_snprintf_safelen!(dst, room as size_t, template.as_ptr(), 0, plan.num, exp)
         },
         // SAFETY: as above.
         None => unsafe {
-            vim_snprintf_safelen(dst, room as size_t, template.as_ptr(), plan.width, plan.num)
+            vim_snprintf_safelen!(dst, room as size_t, template.as_ptr(), plan.width, plan.num)
         },
     };
     at + len

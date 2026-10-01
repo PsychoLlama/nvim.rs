@@ -16,6 +16,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::types::AutoEvent;
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::mem::size_of;
@@ -33,7 +34,6 @@ use crate::option::option_was_set;
 use crate::option::vars::{P_WINDOW, p_ch, p_window};
 use crate::options::kOptWindow;
 use crate::optionstr::LocalOptStr;
-use crate::strings::vim_snprintf;
 use crate::types::{Dict, LineNr, List, OptInt, SaveVEvent, TypVal, VarNumber, ptrdiff_t, size_t};
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::skip_win_fix_scroll;
@@ -250,7 +250,7 @@ fn scan_windows(what: &mut Scan) {
         let name = (&raw mut winid).cast::<c_char>();
         // SAFETY: `winid` is 65 bytes, which holds any window handle.
         let key_len =
-            unsafe { vim_snprintf(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), wp.handle) };
+            unsafe { vim_snprintf!(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), wp.handle) };
         // SAFETY: a live dictionary, and a live dictionary to add to it.
         if unsafe { (**v_event).add_dict(cstr::slice_at(name, key_len as size_t), Some(d)) }
             .is_err()
@@ -283,7 +283,7 @@ impl Subject {
         };
         let name = (&raw mut subject.winid).cast::<c_char>();
         // SAFETY: a 65-byte buffer, which holds any window handle.
-        unsafe { vim_snprintf(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), win.handle) };
+        unsafe { vim_snprintf!(name, size_of::<[c_char; 65]>(), c"%d".as_ptr(), win.handle) };
         subject
     }
 

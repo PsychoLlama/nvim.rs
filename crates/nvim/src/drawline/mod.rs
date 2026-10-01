@@ -57,7 +57,6 @@ use crate::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
     kOptSpoFlagNoplainbuffer,
 };
-use crate::os::cshim::snprintf;
 use crate::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::pos::{MAXCOL, ltoreq};
 use crate::quickfix::{is_qf_buffer, qf_current_entry};

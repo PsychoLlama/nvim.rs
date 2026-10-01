@@ -20,13 +20,13 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::cstr;
 use crate::memory::{xmalloc, xstrdup};
 use crate::optionstr::{free_string_option, is_empty_option};
-use crate::os::cshim::snprintf;
 use crate::types::{
     Object, OptIndex, OptStr, OptVal, OptValType, String_0, kObjectTypeBoolean, kObjectTypeInteger,
     kObjectTypeNil, kObjectTypeString, size_t,
@@ -284,14 +284,14 @@ pub(crate) fn optval_to_cstr(value: &OptVal) -> *mut c_char {
         OptVal::Number(n) => {
             let len = NUMBUFLEN as size_t;
             let buf = unsafe { xmalloc(len) }.cast::<c_char>();
-            unsafe { snprintf(buf, len, c"%ld".as_ptr(), *n) };
+            unsafe { snprintf!(buf, len, c"%ld".as_ptr(), *n) };
             buf
         }
         OptVal::String(s) => {
             // Two quotes and the terminator.
             let len = s.len().wrapping_add(3);
             let buf = unsafe { xmalloc(len) }.cast::<c_char>();
-            unsafe { snprintf(buf, len, c"\"%s\"".as_ptr(), s.data()) };
+            unsafe { snprintf!(buf, len, c"\"%s\"".as_ptr(), s.data()) };
             buf
         }
     }

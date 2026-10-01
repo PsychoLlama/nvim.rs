@@ -29,7 +29,9 @@
 
 use crate::cstr;
 use crate::memory::xstrlcat;
+use crate::snprintf;
 use crate::spell::WordFlags;
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -46,10 +48,8 @@ use crate::message::{msg_end, msg_ext_set_kind, msg_putchar, msg_start, msg_str}
 use crate::option::vars::p_ic;
 use crate::option::{boolean_optval, get_option_value, optval_free, set_option_value_give_err};
 use crate::options::{kOptSpell, kOptSpelllang};
-use crate::os::cshim::snprintf;
 use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
-use crate::strings::vim_snprintf;
 use crate::types::{
     Direction, ExArg, IOSIZE, LangP, LineNr, NUL, OK, OptVal, OptionSetFlags, SpellLang, WordCount,
     size_t,
@@ -196,7 +196,7 @@ pub unsafe fn spell_dump_compl(
     if do_region && !region_names.is_null() && pat.is_null() {
         let (buf, size) = (header.as_mut_ptr(), IOSIZE as size_t);
         let fmt = c"/regions=%s".as_ptr();
-        unsafe { vim_snprintf(buf, size, fmt, region_names) };
+        unsafe { vim_snprintf!(buf, size, fmt, region_names) };
         let _ = unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
         lnum += 1;
     } else {
@@ -214,7 +214,7 @@ pub unsafe fn spell_dump_compl(
             let (buf, size) = (header.as_mut_ptr(), IOSIZE as size_t);
             let fmt = c"# file: %s".as_ptr();
             let fname = unsafe { (*slang).sl_fname };
-            unsafe { vim_snprintf(buf, size, fmt, fname) };
+            unsafe { vim_snprintf!(buf, size, fmt, fname) };
             let _ = unsafe { ml_append(lnum, header.as_mut_ptr(), 0, false) };
             lnum += 1;
         }
@@ -384,7 +384,7 @@ unsafe fn dump_word(
                         let badword_len = unsafe { cstr::bytes_at(badword.as_ptr()) }.len();
                         let room = badword.len() - badword_len;
                         let at = unsafe { badword.as_mut_ptr().add(badword_len) };
-                        unsafe { snprintf(at, room, c"%d".as_ptr(), i + 1) };
+                        unsafe { snprintf!(at, room, c"%d".as_ptr(), i + 1) };
                     }
                 }
             }
@@ -399,7 +399,7 @@ unsafe fn dump_word(
                 let (buf, size) = (counted.as_mut_ptr(), IOSIZE as size_t);
                 let fmt = c"%s\t%d".as_ptr();
                 let count = unsafe { (*wc).wc_count } as c_int;
-                unsafe { vim_snprintf(buf, size, fmt, tw, count) };
+                unsafe { vim_snprintf!(buf, size, fmt, tw, count) };
                 p = counted.as_mut_ptr();
             }
         }

@@ -9,6 +9,7 @@ use crate::cstr;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::option::vars::P_KP;
+use crate::snprintf;
 use crate::strings::has_char;
 use crate::winlayer::{Buf, Win};
 use core::ptr;
@@ -37,7 +38,7 @@ use crate::normal::{
 use crate::ops::clear_oparg;
 use crate::option::{local_or_global, magic_isset};
 use crate::optionstr::LocalOptStr;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::restart_edit;
@@ -114,13 +115,13 @@ impl CmdBuf {
     fn push_str(&mut self, fmt: &CStr, arg: *const c_char) {
         // SAFETY: the tail has the `size - len` bytes `snprintf` is told of,
         // and `arg` matches the one `%s` in `fmt`.
-        let wrote = unsafe { snprintf(self.tail(), self.size - self.len, fmt.as_ptr(), arg) };
+        let wrote = unsafe { snprintf!(self.tail(), self.size - self.len, fmt.as_ptr(), arg) };
         self.len += wrote as size_t;
     }
     /// Append `fmt` filled with one number.
     fn push_num(&mut self, fmt: &CStr, arg: int64_t) {
         // SAFETY: as `push_str`; `arg` matches the one `%ld` in `fmt`.
-        let wrote = unsafe { snprintf(self.tail(), self.size - self.len, fmt.as_ptr(), arg) };
+        let wrote = unsafe { snprintf!(self.tail(), self.size - self.len, fmt.as_ptr(), arg) };
         self.len += wrote as size_t;
     }
     /// Resize around what is in the buffer plus `n` more bytes, and append

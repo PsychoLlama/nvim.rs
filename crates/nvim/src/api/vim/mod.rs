@@ -78,7 +78,6 @@ use crate::option::vars::{P_LZ, p_cpo, p_lz};
 use crate::option::{OptionTarget, buf_copy_options, set_option_direct_for};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptCotFlagPopup, kOptInvalid};
 use crate::optionstr::check_stl_option;
-use crate::os::cshim::snprintf;
 use crate::os::input::{input_blocking, input_enqueue, input_enqueue_mouse, input_enqueue_raw};
 use crate::os::proc::os_proc_children;
 use crate::popupmenu::{pum_ext_select_item, pum_set_info};

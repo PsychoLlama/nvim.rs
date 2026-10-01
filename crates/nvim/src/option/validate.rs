@@ -17,6 +17,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::snprintf;
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_void};
 
@@ -24,9 +26,8 @@ use crate::memory::{XString, xfree};
 use crate::message::{e_invarg, e_positive, e_scroll, e_winheight, e_winwidth};
 use crate::option::vars::{p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::*;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::startup::full_screen;
-use crate::strings::vim_snprintf;
 use crate::types::{MAX_MCO, OptError, OptIndex, OptInt, OptVal, OptionSetFlags, size_t};
 use crate::ui::state::Rows;
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
@@ -95,7 +96,7 @@ pub(crate) fn check_num_option_bounds(
             if *newval < least as OptInt && full_screen.get() {
                 let fmt = gettext(c"E593: Need at least %d lines");
                 let message = XString::filled(OptError::ROOM, |buf| unsafe {
-                    vim_snprintf(buf, OptError::ROOM as size_t, fmt.as_ptr(), least);
+                    vim_snprintf!(buf, OptError::ROOM as size_t, fmt.as_ptr(), least);
                 });
                 errmsg = Err(message.into());
                 *newval = least as OptInt;
@@ -106,7 +107,7 @@ pub(crate) fn check_num_option_bounds(
             if *newval < MIN_COLUMNS as OptInt && full_screen.get() {
                 let fmt = gettext(c"E594: Need at least %d columns");
                 let message = XString::filled(OptError::ROOM, |buf| unsafe {
-                    vim_snprintf(
+                    vim_snprintf!(
                         buf,
                         OptError::ROOM as size_t,
                         fmt.as_ptr(),
@@ -247,7 +248,7 @@ pub(crate) fn validate_option_value(
         // SAFETY: `message` is the buffer the formatter is told the size
         // of, and every argument is a NUL-terminated string.
         let message = XString::filled(OptError::ROOM, |buf| unsafe {
-            snprintf(
+            snprintf!(
                 buf,
                 OptError::ROOM as size_t,
                 fmt.as_ptr(),

@@ -27,6 +27,7 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::log::logmsg;
 use crate::message_fmt::{c_str, msg_cstr};
+use crate::snprintf;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
@@ -80,7 +81,7 @@ unsafe fn get_emsg_source() -> *mut c_char {
     let p = gettext(c"Error in %s:");
     let buf_len = unsafe { cstr::bytes_at(sname) }.len() + p.count_bytes() + 1;
     let buf: *mut c_char = unsafe { xmalloc(buf_len) }.cast();
-    unsafe { snprintf(buf, buf_len, p.as_ptr(), sname) };
+    unsafe { snprintf!(buf, buf_len, p.as_ptr(), sname) };
     unsafe { xfree(tofree.cast()) };
     buf
 }
@@ -102,7 +103,7 @@ unsafe fn get_emsg_lnum() -> *mut c_char {
     let p = gettext(c"line %4d:");
     let buf_len = 20 + p.count_bytes();
     let buf: *mut c_char = unsafe { xmalloc(buf_len) }.cast();
-    unsafe { snprintf(buf, buf_len, p.as_ptr(), sourcing_top().es_lnum) };
+    unsafe { snprintf!(buf, buf_len, p.as_ptr(), sourcing_top().es_lnum) };
     buf
 }
 

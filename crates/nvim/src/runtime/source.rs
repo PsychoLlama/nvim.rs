@@ -19,7 +19,9 @@ use crate::cstr;
 use crate::message_fmt::{c_str, report_msg};
 use crate::semsg;
 use crate::smsg;
+use crate::snprintf;
 use crate::tr_c;
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 
 use crate::ex_docmd::DoCmdOpts;
@@ -237,7 +239,7 @@ unsafe fn do_source_buffer_init(
             c":source buffer=%d"
         };
         // SAFETY: `snprintf` NUL-terminates within `name`.
-        unsafe { snprintf(name.as_mut_ptr(), IOSIZE as size_t, fmt.as_ptr(), handle) };
+        unsafe { snprintf!(name.as_mut_ptr(), IOSIZE as size_t, fmt.as_ptr(), handle) };
         unsafe { xstrdup(name.as_ptr()) }
     } else {
         // SAFETY: the buffer's own file name.
@@ -299,7 +301,7 @@ pub unsafe fn do_source_str(str: *const c_char, mut traceback_name: *mut c_char)
         // SAFETY: `traceback_name` and `name` are NUL-terminated, and
         // `sname_buf` outlives the call below.
         unsafe {
-            snprintf(
+            snprintf!(
                 sname_buf.as_mut_ptr(),
                 sname_buf.len(),
                 fmt,
@@ -827,7 +829,7 @@ unsafe fn source_bracket(
         let mut label = [0 as c_char; IOSIZE as usize];
         let buf = label.as_mut_ptr();
         // SAFETY: `label` outlives all three calls.
-        unsafe { vim_snprintf(buf, IOSIZE as size_t, c"sourcing %s".as_ptr(), req.fname) };
+        unsafe { vim_snprintf!(buf, IOSIZE as size_t, c"sourcing %s".as_ptr(), req.fname) };
         unsafe { time_msg(buf, &raw mut start_time) };
         time_pop(rel_time);
     }

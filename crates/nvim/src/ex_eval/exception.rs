@@ -65,12 +65,14 @@ use crate::option::vars::p_verbose;
 use crate::option::vars::p_vfile;
 use crate::os::cshim::gettext_ptr;
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
-use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen};
+use crate::strings::concat_str;
 use crate::tr_plural;
 use crate::types::{
     CondStack, ExceptType, Exception, ExceptionState, Failed, IOSIZE, MsgList, NUL, Vv, int64_t,
     ptrdiff_t,
 };
+use crate::vim_snprintf;
+use crate::vim_snprintf_safelen;
 use ::libc::strcat;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -572,10 +574,10 @@ unsafe fn set_exception_vars(excp: *mut Exception) {
     }
     let point = throwpoint.as_mut_ptr();
     let len = if unsafe { (*excp).throw_lnum } == 0 {
-        unsafe { vim_snprintf_safelen(point, IOSIZE as usize, c"%s".as_ptr(), (*excp).throw_name) }
+        unsafe { vim_snprintf_safelen!(point, IOSIZE as usize, c"%s".as_ptr(), (*excp).throw_name) }
     } else {
         unsafe {
-            vim_snprintf_safelen(
+            vim_snprintf_safelen!(
                 point,
                 IOSIZE as usize,
                 c"%s, line %ld".as_ptr(),
@@ -700,7 +702,7 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
         _ if pending & CSTP_THROW != 0 => {
             // "%s made pending" becomes "Exception made pending: %s".
             let out = pending_msg.as_mut_ptr();
-            unsafe { vim_snprintf(out, IOSIZE as usize, mesg, c"Exception".as_ptr()) };
+            unsafe { vim_snprintf!(out, IOSIZE as usize, mesg, c"Exception".as_ptr()) };
             mesg = unsafe { concat_str(out, c": %s".as_ptr()) };
             unsafe { (*value.cast::<Exception>()).value }
         }

@@ -19,6 +19,7 @@
 mod ring;
 
 use crate::cstr;
+use crate::snprintf;
 use ring::{EMPTY_RING, to_cstring};
 pub use ring::{HistEntry, Ring};
 
@@ -34,7 +35,7 @@ use crate::message::{
     message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_title, trunc_string,
 };
 use crate::option::vars::p_hi;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
@@ -555,7 +556,7 @@ fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
         msg_putchar('\n' as c_int);
         let buf = row.as_mut_ptr();
         let marker = if newest { '>' } else { ' ' } as c_int;
-        let len = snprintf(buf, IOSIZE as size_t, c"%c%6d  ".as_ptr(), marker, num);
+        let len = snprintf!(buf, IOSIZE as size_t, c"%c%6d  ".as_ptr(), marker, num);
         let text = buf.offset(len as isize);
         if vim_strsize(entry.text) > Columns.get() - 10 {
             trunc_string(entry.text, text, Columns.get() - 10, IOSIZE - len);

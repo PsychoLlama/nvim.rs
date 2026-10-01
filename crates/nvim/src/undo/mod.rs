@@ -64,9 +64,9 @@ use crate::pos::clearpos;
 use crate::sha256::{SHA256_SUM_SIZE, Sha256};
 use crate::spell::spell_check_window;
 use crate::state::virtual_active;
-use crate::strings::vim_snprintf;
 use crate::types::Failed;
 use crate::types::*;
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use ::libc::{close, fclose, fdopen, fflush, fread, fwrite, getuid, strftime, time};
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
@@ -586,7 +586,7 @@ pub unsafe fn undo_fmt_time(buf: *mut c_char, buflen: size_t, tt: time_t) {
     if age < 100 {
         let seconds = int64_t::from(age);
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 buf,
                 buflen,
                 ngettext(

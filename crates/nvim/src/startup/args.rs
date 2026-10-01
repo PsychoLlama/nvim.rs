@@ -15,9 +15,12 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::fprintf;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::snprintf;
 use crate::types::OptStr;
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{size_of, size_of_val};
@@ -36,7 +39,7 @@ use crate::lua::state::nlua_disable_preload;
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::option::vars::{P_LPL, P_UC, P_VERBOSE, P_WRITE, p_shadafile};
 use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
-use crate::os::cshim::{gettext, snprintf, stderr, strncasecmp};
+use crate::os::cshim::{gettext, stderr, strncasecmp};
 use crate::os::env::os_getenv;
 use crate::os::fs::{os_exepath, os_isdir, os_write};
 use crate::os::input::os_isatty;
@@ -55,14 +58,13 @@ use crate::startup::{
     stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
 };
 use crate::state::mode::exmode_active;
-use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
     Failed, IOSIZE, LineNr, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, Vv,
     ptrdiff_t, size_t,
 };
 use crate::winlayer::Live;
-use ::libc::{atoi, fprintf, strcasecmp};
+use ::libc::{atoi, strcasecmp};
 
 /// A bare `-V` is "a little bit verbose".
 const DEFAULT_VERBOSE: c_int = 10;
@@ -267,8 +269,8 @@ impl Scan {
         let fmt = gettext(c"Attempt to open script file again: \"%s %s\"\n");
         let option = unsafe { *self.argv.offset(-1) };
         let word = unsafe { *self.argv };
-        unsafe { vim_snprintf(into, IOSIZE as size_t, fmt.as_ptr(), option, word) };
-        unsafe { fprintf(stderr, c"%s".as_ptr(), complaint.as_ptr()) };
+        unsafe { vim_snprintf!(into, IOSIZE as size_t, fmt.as_ptr(), option, word) };
+        unsafe { fprintf!(stderr, c"%s".as_ptr(), complaint.as_ptr()) };
         os_exit(2)
     }
 
@@ -523,7 +525,7 @@ impl Scan {
                     // "so " + the name + the NUL, with room to spare.
                     let size = unsafe { cstr::bytes_at(file) }.len() + 9;
                     let cmd = unsafe { xmalloc(size) } as *mut c_char;
-                    unsafe { snprintf(cmd, size, c"so %s".as_ptr(), file) };
+                    unsafe { snprintf!(cmd, size, c"so %s".as_ptr(), file) };
                     self.push_command(cmd, true);
                 } else {
                     let cmd = self.arg();
@@ -689,7 +691,7 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut MainParams) {
     if unsafe { (*parmp).n_commands } > 0 {
         let len = unsafe { cstr::bytes_at((*parmp).commands[0]) }.len() + 2;
         let swcmd = unsafe { xmalloc(len + 1) } as *mut c_char;
-        unsafe { snprintf(swcmd, len + 1, c":%s\r".as_ptr(), (*parmp).commands[0]) };
+        unsafe { snprintf!(swcmd, len + 1, c":%s\r".as_ptr(), (*parmp).commands[0]) };
         unsafe { set_vim_var_string(Vv::Swapcommand, swcmd, len as ptrdiff_t) };
         unsafe { xfree(swcmd as *mut c_void) };
     }

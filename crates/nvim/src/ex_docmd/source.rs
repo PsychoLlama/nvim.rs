@@ -6,7 +6,7 @@
 use crate::buffer::buf_get_changedtick;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::strings::vim_snprintf;
+use crate::vim_snprintf;
 
 use crate::getchar::typeahead;
 use crate::guard::Suppress;
@@ -280,7 +280,7 @@ pub fn handle_did_throw() {
             // ET_USER
             let mut buf = [0 as c_char; IOSIZE as usize];
             unsafe {
-                vim_snprintf(
+                vim_snprintf!(
                     buf.as_mut_ptr(),
                     IOSIZE as size_t,
                     gettext(c"E605: Exception not caught: %s").as_ptr(),
@@ -460,7 +460,7 @@ pub(crate) fn ex_errmsg(msg: &'static CStr, arg: &CStr) -> CString {
     // SAFETY: a format holding one `%s`, its argument, and the whole of
     // `buf` to write into. Both pointers are spelled out rather than left
     // to a variadic's coercion.
-    unsafe { vim_snprintf(buf.as_mut_ptr(), size, gettext(msg).as_ptr(), arg.as_ptr()) };
+    unsafe { vim_snprintf!(buf.as_mut_ptr(), size, gettext(msg).as_ptr(), arg.as_ptr()) };
     cstr::in_chars(&buf).to_owned()
 }
 

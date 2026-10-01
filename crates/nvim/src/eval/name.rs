@@ -12,6 +12,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::strings::has_char;
+use crate::vim_snprintf;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::ascii::ascii_isdigit;
@@ -25,7 +26,6 @@ use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::option::find_option_end;
-use crate::strings::vim_snprintf;
 use crate::types::{
     NUL, OptIndex, OptionSetFlags, Partial, TypVal, VAR_PARTIAL, Vv, size_t, uint8_t,
 };
@@ -390,7 +390,7 @@ pub(crate) unsafe fn make_expanded_name(
         let tail = unsafe { expr_end.add(1) };
         let fmt = c"%s%s%s".as_ptr();
         // SAFETY: three NUL-terminated pieces into a buffer sized for them.
-        unsafe { vim_snprintf(retval, retvalsize, fmt, in_start, temp_result, tail) };
+        unsafe { vim_snprintf!(retval, retvalsize, fmt, in_start, temp_result, tail) };
     }
     // SAFETY: the expression's result is an owned string, and null is fine.
     unsafe { xfree(temp_result as *mut c_void) };

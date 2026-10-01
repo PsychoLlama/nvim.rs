@@ -19,6 +19,7 @@ use crate::cstr;
 use crate::option::vars::{P_BDIR, P_BEX};
 use crate::os::uv_error::UV_ENOTSUP;
 use crate::semsg;
+use crate::snprintf;
 use core::ffi::{c_char, c_int, c_uint};
 
 use super::*;
@@ -279,7 +280,7 @@ unsafe fn want_backup_copy(
     loop {
         let at = unsafe { tmp_fname.as_mut_ptr().add(dirlen) };
         let room = tmp_fname.len() - dirlen;
-        unsafe { snprintf(at, room, c"%d".as_ptr(), i) };
+        unsafe { snprintf!(at, room, c"%d".as_ptr(), i) };
         if !unsafe { os_fileinfo_link(tmp_fname.as_mut_ptr(), &raw mut file_info) } {
             break;
         }

@@ -63,7 +63,7 @@ use crate::message::{
 use crate::option::vars::{p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose};
 use crate::option::{copy_option_part, set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
-use crate::os::cshim::{gettext, snprintf, strncasecmp};
+use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{
     default_lib_dir, expand_env, expand_env_save, home_replace, home_replace_save, os_setenv,
     vim_get_prefix_from_exepath, vim_getenv,
@@ -85,7 +85,6 @@ use crate::profile::{
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::runtime::state::{current_sctx, did_source_packages};
-use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, EStack,

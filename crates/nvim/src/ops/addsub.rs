@@ -33,6 +33,7 @@ use crate::guard::Suppress;
 use crate::message_fmt::report_msg;
 use crate::strings::has_char;
 use crate::tr_plural;
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_ulong, c_void};
 
@@ -711,7 +712,7 @@ fn render_number(
             c"%lx"
         };
         let out = &raw mut digits as *mut c_char;
-        unsafe { vim_snprintf(out, digits.len(), format.as_ptr(), n) }
+        unsafe { vim_snprintf!(out, digits.len(), format.as_ptr(), n) }
     };
     length -= digits_len;
 

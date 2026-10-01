@@ -22,6 +22,7 @@
 
 use crate::charset::Str2NrBases;
 use crate::cstr;
+use crate::snprintf;
 use crate::strings::has_char;
 use crate::types::BS;
 use crate::types::DEL;
@@ -39,7 +40,7 @@ use crate::mbyte::{
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_usingsid};
-use crate::os::cshim::{gettext, snprintf, strncasecmp};
+use crate::os::cshim::{gettext, strncasecmp};
 use crate::runtime::state::current_sctx;
 use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, NUL, ScriptId, UVarNumber, VarNumber, size_t};
 
@@ -721,7 +722,7 @@ pub unsafe fn replace_termcodes(
                     let (at, room) = (result.wrapping_add(dlen), buf_len - dlen);
                     // SAFETY: `at` has `room` writable bytes, and the format
                     // takes exactly the one `c_int` argument given.
-                    unsafe { snprintf(at, room, c"%d".as_ptr(), sid) };
+                    unsafe { snprintf!(at, room, c"%d".as_ptr(), sid) };
                     // SAFETY: `snprintf` NUL-terminated what it wrote.
                     dlen += unsafe { cstr::bytes_at(at) }.len();
                     // SAFETY: as above -- one byte, still inside `buf_len`.

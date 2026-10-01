@@ -15,6 +15,7 @@ use crate::highlight_group::HLF_D;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::types::{Failed, IOSIZE, VAR_DICT, VAR_LIST};
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Live, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -247,7 +248,7 @@ pub fn do_tags(_excmd: &mut ExArg) {
         let tagname2 = item.tagname;
         let lnum2 = item.fmark.mark.lnum;
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 row.as_mut_ptr(),
                 str_m,
                 fmt,

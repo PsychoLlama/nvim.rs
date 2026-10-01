@@ -9,6 +9,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::fprintf;
+use crate::printf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -25,7 +27,6 @@ use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
 use crate::types::{
     ApiDict, Arena, Array, CallbackReader, Error, Integer, Object, String_0, size_t, uint64_t,
 };
-use ::libc::{fprintf, printf};
 
 /// How long to wait for the server to answer the connection, in ms.
 const CONNECT_TIMEOUT_MS: c_int = 500;
@@ -73,7 +74,7 @@ pub(crate) unsafe fn server_connect(
 fn bad_reply_type(key: &CStr) -> ! {
     // SAFETY: writes one message to stderr and does not return.
     let fmt = c"vim._cs_remote returned an unexpected type for '%s'\n".as_ptr();
-    unsafe { fprintf(stderr, fmt, key.as_ptr()) };
+    unsafe { fprintf!(stderr, fmt, key.as_ptr()) };
     os_exit(2)
 }
 
@@ -122,15 +123,15 @@ pub(crate) unsafe fn remote_request(
     if is_ui {
         if chan == 0 {
             let fmt = c"Remote ui failed to start: %s\n".as_ptr();
-            unsafe { fprintf(stderr, fmt, connect_error) };
+            unsafe { fprintf!(stderr, fmt, connect_error) };
             os_exit(1);
         } else if unsafe { strequal(server_addr, os_getenv_into(c"NVIM".as_ptr(), &mut env)) } {
             // $NVIM in a `:terminal` child names its own parent, and a UI
             // attached to that is a loop.
             let why = c"Cannot attach UI of :terminal child to its parent. ".as_ptr();
-            unsafe { fprintf(stderr, c"%s".as_ptr(), why) };
+            unsafe { fprintf!(stderr, c"%s".as_ptr(), why) };
             let hint = c"(Unset $NVIM to skip this check)".as_ptr();
-            unsafe { fprintf(stderr, c"%s\n".as_ptr(), hint) };
+            unsafe { fprintf!(stderr, c"%s\n".as_ptr(), hint) };
             os_exit(1);
         }
         ui_client_channel_id.set(chan);
@@ -167,12 +168,12 @@ pub(crate) unsafe fn remote_request(
     };
 
     if err.is_set() {
-        unsafe { fprintf(stderr, c"%s\n".as_ptr(), err.message_or_empty().as_ptr()) };
+        unsafe { fprintf!(stderr, c"%s\n".as_ptr(), err.message_or_empty().as_ptr()) };
         os_exit(2);
     }
     let Some(dict) = reply.as_dict() else {
         let msg = c"vim._cs_remote returned unexpected value\n".as_ptr();
-        unsafe { fprintf(stderr, msg) };
+        unsafe { fprintf!(stderr, msg) };
         os_exit(2);
     };
 
@@ -187,14 +188,14 @@ pub(crate) unsafe fn remote_request(
                 let Some(text) = value.as_string() else {
                     bad_reply_type(c"errmsg");
                 };
-                unsafe { fprintf(stderr, c"%s\n".as_ptr(), text.data()) };
+                unsafe { fprintf!(stderr, c"%s\n".as_ptr(), text.data()) };
                 os_exit(2);
             }
             b"result" => {
                 let Some(text) = value.as_string() else {
                     bad_reply_type(c"result");
                 };
-                unsafe { printf(c"%s".as_ptr(), text.data()) };
+                unsafe { printf!(c"%s".as_ptr(), text.data()) };
             }
             b"tabbed" => {
                 let Some(flag) = value.as_boolean() else {
@@ -215,7 +216,7 @@ pub(crate) unsafe fn remote_request(
     if should_exit.is_none() || tabbed.is_none() {
         let msg =
             c"vim._cs_remote didn't return a value for should_exit or tabbed, bailing\n".as_ptr();
-        unsafe { fprintf(stderr, msg) };
+        unsafe { fprintf!(stderr, msg) };
         os_exit(2);
     }
 

@@ -13,6 +13,7 @@
 
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::snprintf;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::window::tab_index;
@@ -44,8 +45,6 @@ use crate::startup::exiting;
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type, firstwin, lastwin, topframe};
 
 use crate::message::msg_ptr;
-
-use crate::os::cshim::snprintf;
 
 use crate::types::{CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, NUL, OK, Vv, ptrdiff_t};
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
@@ -483,7 +482,7 @@ pub fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
         // Written for its side effect on `prev_idx`, which upstream
         // keeps for a message it no longer prints.
         unsafe {
-            snprintf(
+            snprintf!(
                 &raw mut prev_idx as *mut c_char,
                 size_of::<[c_char; 65]>(),
                 c"%i".as_ptr(),

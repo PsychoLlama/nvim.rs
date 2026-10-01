@@ -25,6 +25,7 @@ use crate::grid::linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
 use crate::optionstr::LocalOptStr;
+use crate::snprintf;
 use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
 use crate::winlayer::Win;
 
@@ -360,7 +361,7 @@ fn line_number_str(window: Win, lnum: LineNr, buf: &mut [::core::ffi::c_char; 32
         }
     };
     unsafe {
-        snprintf(
+        snprintf!(
             buf.as_mut_ptr(),
             buf.len() as size_t,
             fmt.as_ptr(),

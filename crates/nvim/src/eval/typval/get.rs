@@ -13,7 +13,9 @@ use super::*;
 use crate::charset::Str2NrBases;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
+use crate::snprintf;
 use crate::types::NUL;
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use ::core::ffi::CStr;
@@ -200,13 +202,13 @@ impl NumBuf {
                 let size = NUMBUFLEN as size_t;
                 // SAFETY: `buf` is this buffer's own `NUMBUFLEN` bytes, and
                 // the format string takes exactly the one argument given.
-                unsafe { snprintf(buf, size, c"%ld".as_ptr(), n) };
+                unsafe { snprintf!(buf, size, c"%ld".as_ptr(), n) };
                 buf
             }
             VAR_FLOAT => {
                 let f = tv.float_or_zero();
                 // SAFETY: as above.
-                unsafe { vim_snprintf(buf, NUMBUFLEN as size_t, c"%g".as_ptr(), f) };
+                unsafe { vim_snprintf!(buf, NUMBUFLEN as size_t, c"%g".as_ptr(), f) };
                 buf
             }
             VAR_STRING => {

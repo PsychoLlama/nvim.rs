@@ -11,6 +11,7 @@
 #![allow(non_upper_case_globals)]
 use crate::api::extmark::parse_virt_text;
 use crate::cstr;
+use crate::vim_snprintf;
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{ptr2cells, skipwhite, transstr, vim_isprintc};
@@ -23,7 +24,6 @@ use crate::memory::xfree;
 use crate::message::state::did_emsg;
 use crate::os::cshim::{ngettext, strstr};
 use crate::runtime::state::current_sctx;
-use crate::strings::vim_snprintf;
 use crate::types::Vv;
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win};
@@ -162,7 +162,7 @@ pub unsafe fn get_foldtext(
             let one = c"+--%3d line folded";
             let many = c"+--%3d lines folded ";
             let fmt = ngettext(one, many, count as c_ulong);
-            vim_snprintf(buf, FOLD_TEXT_LEN as size_t, fmt.as_ptr(), count)
+            vim_snprintf!(buf, FOLD_TEXT_LEN as size_t, fmt.as_ptr(), count)
         };
         text = buf;
     }

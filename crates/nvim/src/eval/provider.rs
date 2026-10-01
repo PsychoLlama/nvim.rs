@@ -11,6 +11,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
@@ -37,7 +38,6 @@ use crate::memline::{ml_append, ml_get_buf};
 use crate::memory::{strchrsub, strequal, xfree, xstrdup};
 use crate::message::{e_invarg, e_invchan, e_invchanjob};
 use crate::option::vars::p_lpl;
-use crate::os::cshim::snprintf;
 use crate::runtime::script_autoload;
 use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
@@ -225,7 +225,7 @@ pub unsafe fn eval_call_provider(
     let fmt = c"provider#%s#Call".as_ptr();
     // SAFETY: `func` is this frame's and `size` is its length; the format
     // takes the one NUL-terminated string `provider`.
-    let name_len = unsafe { snprintf(func.as_mut_ptr(), size, fmt, provider) };
+    let name_len = unsafe { snprintf!(func.as_mut_ptr(), size, fmt, provider) };
 
     let saved_provider_caller_scope = provider_caller_scope.get();
     let funccalp = get_current_funccal() as *mut c_void;
@@ -286,7 +286,7 @@ pub unsafe fn eval_call_provider(
 unsafe fn loaded_var(buf: *mut c_char, name: *mut c_char) -> c_int {
     let fmt = c"g:loaded_%s_provider".as_ptr();
     // SAFETY: the caller's promise about both buffers.
-    unsafe { snprintf(buf, size_of::<[c_char; NAMEBUF]>(), fmt, name) }
+    unsafe { snprintf!(buf, size_of::<[c_char; NAMEBUF]>(), fmt, name) }
 }
 
 /// `provider#<name>#<what>`, into `buf`.
@@ -296,7 +296,7 @@ unsafe fn loaded_var(buf: *mut c_char, name: *mut c_char) -> c_int {
 unsafe fn provider_fn(buf: *mut c_char, name: *mut c_char, what: &CStr) -> c_int {
     // SAFETY: the caller's promise about both buffers; `what` is a
     // NUL-terminated literal.
-    unsafe { snprintf(buf, size_of::<[c_char; NAMEBUF]>(), what.as_ptr(), name) }
+    unsafe { snprintf!(buf, size_of::<[c_char; NAMEBUF]>(), what.as_ptr(), name) }
 }
 
 /// Is this provider both known and usable? Loads its autoload script if it
@@ -334,7 +334,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
     let size = size_of::<[c_char; 32]>();
     // SAFETY: `name` is this frame's and `size` its length; the format
     // takes the one NUL-terminated string `feat`.
-    unsafe { snprintf(name.as_mut_ptr(), size, c"%s".as_ptr(), feat) };
+    unsafe { snprintf!(name.as_mut_ptr(), size, c"%s".as_ptr(), feat) };
     // SAFETY: `name` now holds a NUL-terminated copy of `feat`.
     unsafe { strchrsub(name.as_mut_ptr(), b'_' as c_char, NUL as c_char) };
 
@@ -390,10 +390,10 @@ pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
     let top = top_estack();
     if top.es_name.is_null() {
         // SAFETY: the caller's promise about `buf` and `bufsize`.
-        unsafe { snprintf(buf, bufsize, c"?".as_ptr()) };
+        unsafe { snprintf!(buf, bufsize, c"?".as_ptr()) };
     } else {
         // SAFETY: as above; the entry's name is NUL-terminated.
-        unsafe { snprintf(buf, bufsize, c"%s:%d".as_ptr(), top.es_name, top.es_lnum) };
+        unsafe { snprintf!(buf, bufsize, c"%s:%d".as_ptr(), top.es_name, top.es_lnum) };
     }
 }
 

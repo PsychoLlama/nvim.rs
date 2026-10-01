@@ -31,9 +31,10 @@ use crate::message::{
     message_filtered, msg_display, msg_ext_set_kind, msg_putchar, msg_str, msg_title,
 };
 use crate::option::vars::jop_flags;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::input::os_breakcheck;
 use crate::pos::equalpos;
+use crate::snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -367,7 +368,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
                 }
                 let here = Buf::current().handle;
                 unsafe {
-                    snprintf(
+                    snprintf!(
                         row.as_mut_ptr(),
                         IOSIZE as size_t,
                         c"%c %2d %5d %4d ".as_ptr(),
@@ -427,7 +428,7 @@ pub fn ex_changes(_excmd: &mut ExArg) {
             // SAFETY: `row` is `IOSIZE` bytes of live storage and the
             // format string matches the four arguments.
             unsafe {
-                snprintf(
+                snprintf!(
                     row.as_mut_ptr(),
                     IOSIZE as size_t,
                     c"%c %3d %5d %4d ".as_ptr(),

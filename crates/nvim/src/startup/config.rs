@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::fprintf;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::winlayer::{Live, Win};
@@ -40,7 +41,6 @@ use crate::startup::args::execute_env;
 use crate::startup::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
 use crate::state::mode::exmode_active;
 use crate::types::{FAIL, OK, QfInfo, ScriptId, lua_State, size_t};
-use ::libc::fprintf;
 
 /// The parameter block `main` filled in, which outlives every call here.
 type Mp = Live<MainParams>;
@@ -327,7 +327,7 @@ pub(crate) fn do_exrc_initialization() {
     unsafe { lua_pushstring(lstate, c"vim._core.exrc".as_ptr()) };
     if unsafe { nlua_pcall(lstate, 1, 0) } != 0 {
         let msg = unsafe { lua_tolstring(lstate, -1, ptr::null_mut::<size_t>()) };
-        unsafe { fprintf(stderr, c"%s\n".as_ptr(), msg) };
+        unsafe { fprintf!(stderr, c"%s\n".as_ptr(), msg) };
     }
 }
 

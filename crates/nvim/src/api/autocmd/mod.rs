@@ -18,7 +18,6 @@ use crate::eval::typval::{callback_free, callback_to_string};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
 use crate::memory::{strequal, xfree};
-use crate::strings::printf_string;
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, Array, AutoCmd, AutoCmdVec, AutoPat, BufferHandle, Callback, Error, Exception,

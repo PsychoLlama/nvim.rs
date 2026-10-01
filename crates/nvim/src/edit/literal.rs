@@ -23,6 +23,7 @@
 use crate::cstr;
 use crate::keycodes::Key;
 use crate::keycodes::ModMask;
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 
@@ -220,7 +221,7 @@ pub(crate) fn redo_literal(c: c_int) {
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     if ascii_isdigit(c) {
         let mut buf: [c_char; 10] = [0; 10];
-        unsafe { vim_snprintf(buf.as_mut_ptr(), buf.len(), c"%03d".as_ptr(), c) };
+        unsafe { vim_snprintf!(buf.as_mut_ptr(), buf.len(), c"%03d".as_ptr(), c) };
         unsafe { append_to_redobuff(buf.as_mut_ptr()) };
     } else {
         append_to_redobuff_char(c);

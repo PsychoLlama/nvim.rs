@@ -9,6 +9,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -157,7 +158,7 @@ pub(crate) unsafe fn get_syntax_name(expand: *mut Expand, idx: c_int) -> *mut c_
             let block = cur_syn_block();
             let name = block.cluster(idx).scl_name.as_ptr();
             // SAFETY: the buffer is `EXPAND_BUF_LEN` bytes.
-            unsafe { vim_snprintf(buf, EXPAND_BUF_LEN as size_t, c"@%s".as_ptr(), name) };
+            unsafe { vim_snprintf!(buf, EXPAND_BUF_LEN as size_t, c"@%s".as_ptr(), name) };
             unsafe { &raw mut (*expand).xp_buf as *mut c_char }
         }
     }

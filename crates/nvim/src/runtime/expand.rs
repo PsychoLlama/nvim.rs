@@ -18,6 +18,7 @@
 use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::snprintf;
 
 use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
@@ -50,7 +51,7 @@ unsafe fn build_pattern(
         (c"".as_ptr(), c"".as_ptr())
     };
     unsafe {
-        snprintf(
+        snprintf!(
             buf,
             buf_len,
             c"%s%s%s%s%s".as_ptr(),
@@ -112,7 +113,7 @@ unsafe fn glob_rounds(
         if unsafe { *dir } != 0 || expand_dirs {
             return;
         }
-        unsafe { snprintf(buf, buf_len, c"%s*".as_ptr(), pat) };
+        unsafe { snprintf!(buf, buf_len, c"%s*".as_ptr(), pat) };
         glob_flags = WildOpts::ADD_SLASH;
         expand_dirs = true;
     }
@@ -342,7 +343,7 @@ pub unsafe fn expand_packadd_dir(
     let buflen = unsafe { cstr::bytes_at(pat) }.len() + 26;
     let s = unsafe { xmalloc(buflen) }.cast::<c_char>();
     for fmt in [c"pack/*/opt/%s*", c"opt/%s*"] {
-        unsafe { snprintf(s, buflen, fmt.as_ptr(), pat) };
+        unsafe { snprintf!(s, buflen, fmt.as_ptr(), pat) };
         p_pp(|value| unsafe {
             globpath(
                 value.as_ptr().cast_mut(),

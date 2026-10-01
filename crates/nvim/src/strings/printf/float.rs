@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::snprintf;
 use core::ffi::{c_char, c_int};
 
 use super::emit::{Args, Body, Conversion, TMP};
@@ -15,7 +16,6 @@ use super::{TMP_LEN, infinity_str};
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
 use crate::memory::xstrlcpy;
-use crate::os::cshim::snprintf;
 use crate::strings::vim_strchr;
 use crate::types::size_t;
 
@@ -98,14 +98,14 @@ pub(super) unsafe fn render_float(
         let out = unsafe { format.as_mut_ptr().add(l) };
         let room = format.len() - l;
         let prec = c.precision as c_int;
-        l += unsafe { snprintf(out, room, c".%d".as_ptr(), prec) as size_t };
+        l += unsafe { snprintf!(out, room, c".%d".as_ptr(), prec) as size_t };
     }
     debug_assert!(l + 1 < format.len());
     // libc has no `%F`; it prints the same digits as `%f`.
     format[l] = if c.fmt_spec == b'F' { b'f' } else { c.fmt_spec } as c_char;
     format[l + 1] = 0;
 
-    let mut str_arg_l = unsafe { snprintf(tmp.as_mut_ptr(), TMP, format.as_ptr(), f) as size_t };
+    let mut str_arg_l = unsafe { snprintf!(tmp.as_mut_ptr(), TMP, format.as_ptr(), f) as size_t };
     debug_assert!(str_arg_l < TMP);
 
     if remove_trailing_zeroes {

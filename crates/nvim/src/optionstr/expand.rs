@@ -28,6 +28,7 @@
 )]
 
 use crate::cstr;
+use crate::snprintf;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -41,7 +42,6 @@ use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{
     kOptEventignore, kOptListchars, opt_dip_algorithm_values, opt_dip_inline_values, opt_ff_values,
 };
-use crate::os::cshim::snprintf;
 use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{CompleteListItemGetter, Expand, Failed, NUL, OptExpand, size_t};
 
@@ -464,7 +464,7 @@ pub(crate) unsafe fn get_eventignore_name(expand: *mut Expand, idx: c_int) -> *m
     let buffer = unsafe { (*expand).xp_buf.as_mut_ptr() };
     let dash = if subtract { c"-" } else { c"" };
     unsafe {
-        snprintf(
+        snprintf!(
             buffer,
             EXPAND_BUF_LEN as size_t,
             c"%s%s".as_ptr(),

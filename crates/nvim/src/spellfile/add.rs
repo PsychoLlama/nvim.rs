@@ -29,11 +29,13 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::fprintf;
 use crate::semsg;
 use crate::smsg;
 use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::types::OptStr;
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 
@@ -53,13 +55,12 @@ use crate::os::fs::{os_fopen, os_mkdir, os_mkdir_recurse};
 use crate::os::stdpaths::get_xdg_home;
 use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispathsep};
 use crate::spell::{int_wordlist, spell_enc};
-use crate::strings::vim_snprintf;
 use crate::types::{
     FILE, LangP, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, size_t, uint8_t,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::Buf;
-use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror};
+use ::libc::{__errno_location, fclose, fputc, fseek, ftell, strerror};
 
 use super::wordtree::valid_spell_word;
 use super::{
@@ -192,7 +193,7 @@ pub unsafe fn spell_add_word(
             } else {
                 c"%.*s\n".as_ptr()
             };
-            unsafe { fprintf(fd, format, len, word) };
+            unsafe { fprintf!(fd, format, len, word) };
             unsafe { fclose(fd) };
 
             let out = shown.as_mut_ptr();
@@ -349,7 +350,7 @@ fn init_spellfile() {
     let used = unsafe { cstr::bytes_at(buf) }.len();
     let at = unsafe { buf.add(used) };
     let taken = unsafe { lend.offset_from(lstart) } as c_int;
-    unsafe { vim_snprintf(at, buf_len - used, c"/%.*s".as_ptr(), taken, lstart) };
+    unsafe { vim_snprintf!(at, buf_len - used, c"/%.*s".as_ptr(), taken, lstart) };
 
     // The suffix has to match the file actually loaded, which may be
     // the ASCII build of the language rather than the current encoding.
@@ -364,7 +365,7 @@ fn init_spellfile() {
         };
     let used = unsafe { cstr::bytes_at(buf) }.len();
     let at = unsafe { buf.add(used) };
-    unsafe { vim_snprintf(at, buf_len - used, c".%s.add".as_ptr(), enc_suffix) };
+    unsafe { vim_snprintf!(at, buf_len - used, c".%s.add".as_ptr(), enc_suffix) };
 
     set_option_value_give_err(
         kOptSpellfile,

@@ -13,6 +13,7 @@ use super::*;
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
 use crate::path::ExpandFlags;
+use crate::snprintf;
 use crate::types::{ExpandContext, Failed};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::size_of;
@@ -188,7 +189,7 @@ pub(crate) unsafe fn expand_from_context(
     if context == ExpandContext::UserFunc && unsafe { cstr::starts_with(pat, b"^s:") } {
         let len = unsafe { cstr::bytes_at(pat) }.len() + 20;
         tofree = unsafe { xmalloc(len) } as *mut c_char;
-        unsafe { snprintf(tofree, len, c"^<SNR>\\d\\+_%s".as_ptr(), pat.add(3)) };
+        unsafe { snprintf!(tofree, len, c"^<SNR>\\d\\+_%s".as_ptr(), pat.add(3)) };
         pat = tofree;
     }
 

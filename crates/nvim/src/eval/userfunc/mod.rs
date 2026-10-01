@@ -73,7 +73,7 @@ use crate::message::{
     verbose_leave_scroll,
 };
 use crate::option::vars::{p_ic, p_mfd, p_verbose};
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::path::path_fnamecmp;
 use crate::profile::do_profiling;

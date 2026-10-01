@@ -22,6 +22,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::snprintf;
 use core::ffi::{
     CStr, VaList, c_char, c_double, c_int, c_long, c_longlong, c_uint, c_ulong, c_ulonglong, c_void,
 };
@@ -37,7 +38,7 @@ use crate::eval::typval::NumBuf;
 use crate::mbyte::{cells_at, cluster_len};
 use crate::memory::{xfree, xmemscan, xstrchrnul};
 use crate::message::emsg;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::types::{TypVal, int16_t, intmax_t, ptrdiff_t, size_t, uint16_t, uintmax_t};
 
 const E_TOO_MANY_ARGS: &CStr = c"E767: Too many arguments to printf()";
@@ -654,12 +655,12 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
             b'p' => {
                 let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
                 let room = TMP - str_arg_l;
-                str_arg_l += unsafe { snprintf(out, room, c"%p".as_ptr(), ptr_arg) as size_t };
+                str_arg_l += unsafe { snprintf!(out, room, c"%p".as_ptr(), ptr_arg) as size_t };
             }
             b'd' => {
                 let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
                 let room = TMP - str_arg_l;
-                str_arg_l += unsafe { snprintf(out, room, c"%ld".as_ptr(), arg) as size_t };
+                str_arg_l += unsafe { snprintf!(out, room, c"%ld".as_ptr(), arg) as size_t };
             }
             b'b' | b'B' => {
                 // Binary has no libc conversion: skip the leading
@@ -682,7 +683,7 @@ unsafe fn render_integer(c: &mut Conversion, args: &mut Args, tmp: &mut [c_char;
                 let out = unsafe { tmp.as_mut_ptr().add(str_arg_l) };
                 let room = TMP - str_arg_l;
                 str_arg_l +=
-                    unsafe { snprintf(out, room, f.as_ptr().cast::<c_char>(), uarg) as size_t };
+                    unsafe { snprintf!(out, room, f.as_ptr().cast::<c_char>(), uarg) as size_t };
             }
         }
         debug_assert!(str_arg_l < TMP);

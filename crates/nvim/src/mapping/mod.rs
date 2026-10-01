@@ -73,13 +73,13 @@ use crate::message::{
     msg_ext_set_kind, msg_putchar, msg_start, msg_str, msg_str_hl, str2special_arena,
     str2special_save,
 };
-use crate::os::cshim::{gettext, putc, snprintf};
+use crate::os::cshim::{gettext, putc};
 use crate::regexp::vim_regexec;
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_OP_PENDING, MODE_SELECT,
     MODE_TERMINAL, MODE_VISUAL,
 };
-use crate::strings::{sort_strings, vim_snprintf};
+use crate::strings::sort_strings;
 use crate::types::{
     ApiDict, Array, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand, FILE, FuzMatchStr,
     Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs, MapStr,
@@ -87,7 +87,7 @@ use crate::types::{
     size_t, uint64_t,
 };
 use crate::winlayer::Live;
-use ::libc::{abort, fprintf, fputc, fputs, strcasecmp};
+use ::libc::{abort, fputc, fputs, strcasecmp};
 use std::rc::Rc;
 
 // The carve of the transpiled module; see each child's docs.

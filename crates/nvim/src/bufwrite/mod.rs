@@ -9,6 +9,7 @@ use crate::semsg;
 use crate::tr_plural;
 use crate::types::CAR;
 use crate::types::NL;
+use crate::vim_snprintf;
 use core::ffi::CStr;
 use std::borrow::Cow;
 use std::ffi::CString;
@@ -44,7 +45,7 @@ use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
 };
 use crate::optionstr::LocalOptStr;
-use crate::os::cshim::{gettext, gettext_ptr, snprintf};
+use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{
     os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,
     os_fileinfo, os_fileinfo_hardlinks, os_fileinfo_id_equal, os_fileinfo_link, os_free_acl,
@@ -55,7 +56,6 @@ use crate::os::input::os_breakcheck;
 use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::startup::exiting;
-use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
     AcoSave, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr,
     MAXPATHL, Pos, ShmFlag, VimAcl, iconv_t, int64_t, size_t, uint64_t, uv_gid_t, uv_uid_t,
@@ -195,7 +195,7 @@ pub(crate) fn conversion_failed(lnum: LineNr) -> WriteError {
         c"E513: Write error, conversion failed in line %d (make 'fenc' empty to override)",
     )
     .as_ptr();
-    unsafe { vim_snprintf(into, size, fmt, lnum) };
+    unsafe { vim_snprintf!(into, size, fmt, lnum) };
     WriteError::formatted(unsafe { CStr::from_ptr(msg.as_ptr()) }.to_owned())
 }
 

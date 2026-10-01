@@ -18,6 +18,7 @@ use crate::memory::XString;
 use crate::option::cpo_has;
 use crate::os::cshim::strstr;
 use crate::search::SEARCH_KEEP;
+use crate::snprintf;
 use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, FAIL, Failed, OK};
 use crate::window::WSP_VERT;
@@ -774,7 +775,7 @@ impl Pattern {
         // SAFETY: the caller's promise; `snprintf` never writes past
         // `LSIZE`. Its answer is the length it *would* have needed, which
         // is what upstream hands to `do_search` — kept as it is.
-        self.len = unsafe { snprintf(self.buf.as_mut_ptr(), LSIZE as size_t, fmt.as_ptr(), name) }
+        self.len = unsafe { snprintf!(self.buf.as_mut_ptr(), LSIZE as size_t, fmt.as_ptr(), name) }
             as usize;
         let slash = '/' as c_int;
         let pat = self.buf.as_mut_ptr();

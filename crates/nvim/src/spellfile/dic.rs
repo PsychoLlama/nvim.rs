@@ -37,6 +37,7 @@ use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use crate::spell::WordFlags;
+use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::ascii::ascii_isdigit;
@@ -54,7 +55,7 @@ use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
-use crate::strings::{has_non_ascii, vim_snprintf};
+use crate::strings::has_non_ascii;
 use crate::types::{CONV_NONE, Failed, HashTab, HashValue, NUL, Timestamp, size_t, uint8_t};
 use crate::ui::ui_flush;
 use ::libc::fclose;
@@ -182,7 +183,7 @@ pub(super) fn spell_read_dic(
                 let (buf, room) = (message.as_mut_ptr(), size_of_val(&message));
                 let fmt = gettext(c"line %6d, word %6d - %s");
                 let count = spin.si_foldwcount + spin.si_keepwcount;
-                unsafe { vim_snprintf(buf, room, fmt.as_ptr(), lnum, count, w) };
+                unsafe { vim_snprintf!(buf, room, fmt.as_ptr(), lnum, count, w) };
                 msg_start();
                 msg_display_elided(unsafe { cstr::at(message.as_mut_ptr()) }, 0);
                 msg_clr_eos();

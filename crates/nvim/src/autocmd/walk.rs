@@ -21,6 +21,7 @@ use super::*;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::message_fmt::c_str;
 use crate::smsg;
+use crate::snprintf;
 use crate::types::EstackInfo;
 
 /// Advance `apc` to the next autocommand whose pattern matches, updating
@@ -97,7 +98,7 @@ pub(crate) unsafe fn aucmd_next(apc: *mut AutoPatCmd) {
             };
             let namep = unsafe { xmalloc(sourcing_name_len) }.cast::<::core::ffi::c_char>();
             unsafe {
-                snprintf(
+                snprintf!(
                     namep,
                     sourcing_name_len,
                     s.as_ptr(),

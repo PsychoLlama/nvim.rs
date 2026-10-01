@@ -20,6 +20,7 @@ use crate::optionstr::LocalOptStr;
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, buffer_at, buffers};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
@@ -275,7 +276,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                 let (out, size) = (scratch.as_mut_ptr(), IOSIZE as size_t);
                 // SAFETY: `out` addresses all `size` bytes and `%s` takes a
                 // NUL-terminated string, which `name` is.
-                unsafe { vim_snprintf(out, size, fmt.as_ptr(), name) };
+                unsafe { vim_snprintf!(out, size, fmt.as_ptr(), name) };
                 // SAFETY: `vim_snprintf` NUL-terminated `out`.
                 unsafe { scan_progress(out) };
             }
@@ -323,7 +324,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                         let text = gettext(c"Scanning tags.");
                         let (out, size) = (scratch.as_mut_ptr(), IOSIZE as size_t);
                         // SAFETY: `out` addresses all `size` bytes.
-                        unsafe { vim_snprintf(out, size, c"%s".as_ptr(), text.as_ptr()) };
+                        unsafe { vim_snprintf!(out, size, c"%s".as_ptr(), text.as_ptr()) };
                         // SAFETY: `vim_snprintf` NUL-terminated `out`.
                         unsafe { scan_progress(out) };
                     }

@@ -27,6 +27,7 @@ use crate::charset::skipwhite;
 use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
 use crate::cstr;
 use crate::fileio::vim_fgets;
+use crate::fprintf;
 use crate::getchar::state::got_int;
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::e_fnametoolong;
@@ -34,16 +35,18 @@ use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_RTP;
-use crate::os::cshim::{gettext, putc, snprintf, strchr};
+use crate::os::cshim::{gettext, putc, strchr};
 use crate::os::fs::{os_fopen, os_isdir};
 use crate::os::input::line_breakcheck;
 use crate::path::{ExpandFlags, add_pathsep, free_wild, gen_expand_wildcards, path_full_compare};
 use crate::runtime::{RuntimeOpts, do_in_path};
 use crate::semsg;
+use crate::snprintf;
 use crate::strings::has_char;
-use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
+use crate::strings::{sort_strings, vim_strchr};
 use crate::types::{ExArg, Expand, ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, size_t, uint8_t};
-use ::libc::{fclose, fprintf, fputs, strcasecmp};
+use crate::vim_snprintf;
+use ::libc::{fclose, fputs, strcasecmp};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -329,7 +332,7 @@ unsafe fn helptags_one(
     {
         let len = 18 + unsafe { cstr::bytes_at(tagfname) }.len();
         let entry = unsafe { xmalloc(len) }.cast::<c_char>();
-        unsafe { snprintf(entry, len, c"help-tags\t%s\t1\n".as_ptr(), tagfname) };
+        unsafe { snprintf!(entry, len, c"help-tags\t%s\t1\n".as_ptr(), tagfname) };
         tags.push(entry);
     }
 
@@ -424,7 +427,7 @@ unsafe fn scan_help_file(fd: *mut FILE, fname: *const c_char, tags: &mut Vec<*mu
                         + 2;
                     let entry = unsafe { xmalloc(len) }.cast::<c_char>();
                     tags.push(entry);
-                    unsafe { snprintf(entry, len, c"%s\t%s".as_ptr(), p1, fname) };
+                    unsafe { snprintf!(entry, len, c"%s\t%s".as_ptr(), p1, fname) };
                     // Find the next '*'.
                     p2 = unsafe { vim_strchr(p2.offset(1), b'*' as c_int) };
                 }
@@ -482,7 +485,7 @@ unsafe fn report_duplicates(tags: &[*mut c_char], dir: *const c_char) {
             let fmt = c"E154: Duplicate tag \"%s\" in file %s/%s".as_ptr();
             let (tag, rest) = (pair[1], unsafe { p2.offset(1) });
             let cap = MAXPATHL as size_t;
-            unsafe { vim_snprintf(namebuff, cap, fmt, tag, dir, rest) };
+            unsafe { vim_snprintf!(namebuff, cap, fmt, tag, dir, rest) };
             unsafe { emsg_ptr(namebuff) };
             unsafe { *p2 = b'\t' as c_char };
             break;
@@ -504,7 +507,7 @@ unsafe fn write_tags(fd: *mut FILE, tags: &[*mut c_char]) {
             unsafe { fputs(entry, fd) };
             continue;
         }
-        unsafe { fprintf(fd, c"%s\t/*".as_ptr(), entry) };
+        unsafe { fprintf!(fd, c"%s\t/*".as_ptr(), entry) };
         let mut p = entry;
         while unsafe { *p } != b'\t' as c_char {
             if unsafe { *p } == b'\\' as c_char || unsafe { *p } == b'/' as c_char {
@@ -513,6 +516,6 @@ unsafe fn write_tags(fd: *mut FILE, tags: &[*mut c_char]) {
             unsafe { putc(*p as c_int, fd) };
             p = unsafe { p.offset(1) };
         }
-        unsafe { fprintf(fd, c"*\n".as_ptr()) };
+        unsafe { fprintf!(fd, c"*\n".as_ptr()) };
     }
 }

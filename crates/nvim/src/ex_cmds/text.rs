@@ -29,10 +29,10 @@ use crate::message::{msg, msg_multiline, msg_sb_eol};
 use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_str;
-use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
 use crate::types::{ExArg, IOSIZE, NUL};
 use crate::undo::u_save;
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use ::libc::atoi;
@@ -118,7 +118,7 @@ fn describe_byte(
         let mut raw: [c_char; 7] = [0; 7];
         unsafe { transchar_nonprint(Buf::current_or_none(), raw.as_mut_ptr(), c) };
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 nonprint.as_mut_ptr(),
                 nonprint.len(),
                 c"  <%s>".as_ptr(),
@@ -142,7 +142,7 @@ fn describe_byte(
     // the length it is given; `transchar` returns a static NUL-terminated
     // string.
     unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             line.as_mut_ptr(),
             IOSIZE as usize,
             gettext(fmt).as_ptr(),
@@ -201,7 +201,7 @@ fn describe_char(
     // SAFETY: `used` bytes of `line` are written and `vim_snprintf` bounds
     // itself by the room reported left.
     unsafe {
-        vim_snprintf(
+        vim_snprintf!(
             line.as_mut_ptr().add(used),
             IOSIZE as usize - used,
             gettext(fmt).as_ptr(),

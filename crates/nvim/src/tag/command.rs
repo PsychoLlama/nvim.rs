@@ -24,6 +24,7 @@ use crate::message_fmt::{c_str, msg_cstr, to_message};
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::types::{IOSIZE, Vv};
+use crate::vim_snprintf_safelen;
 use crate::winlayer::{Buf, Win};
 use crate::{smsg, tr};
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -789,7 +790,7 @@ impl DoTag {
         // Let the SwapExists event know what tag is being jumped to.
         let str_m = IOSIZE as size_t;
         let fmt = c":ta %s\r".as_ptr();
-        let len = unsafe { vim_snprintf_safelen(swapcmd.as_mut_ptr(), str_m, fmt, name) };
+        let len = unsafe { vim_snprintf_safelen!(swapcmd.as_mut_ptr(), str_m, fmt, name) };
         unsafe { set_vim_var_string(Vv::Swapcommand, swapcmd.as_ptr(), len as ptrdiff_t) };
         let result = unsafe { jumpto_tag(entry, self.forceit, true) };
         unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1) };

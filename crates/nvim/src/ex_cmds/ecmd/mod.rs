@@ -33,6 +33,7 @@ use crate::arglist::check_arg_idx;
 use crate::cstr;
 use crate::ex_cmds::say;
 use crate::types::AutoEvent;
+use crate::vim_snprintf_safelen;
 use crate::winlayer::WinId;
 use core::ffi::CStr;
 use std::ffi::CString;
@@ -72,7 +73,6 @@ use crate::pos::equalpos;
 use crate::spell::parse_spelllang;
 use crate::startup::exiting;
 use crate::state::mode::exmode_active;
-use crate::strings::vim_snprintf_safelen;
 use crate::tag::state::keep_help_flag;
 use crate::terminal::terminal_check_size;
 use crate::types::{
@@ -112,9 +112,9 @@ pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: LineNr) -> bool {
     // `xfree` releases.
     let val = unsafe { xmalloc(valsize) }.cast::<c_char>();
     let len = if command.is_null() {
-        unsafe { vim_snprintf_safelen(val, valsize, c"%ldG".as_ptr(), newlnum as i64) }
+        unsafe { vim_snprintf_safelen!(val, valsize, c"%ldG".as_ptr(), newlnum as i64) }
     } else {
-        unsafe { vim_snprintf_safelen(val, valsize, c":%s\r".as_ptr(), command) }
+        unsafe { vim_snprintf_safelen!(val, valsize, c":%s\r".as_ptr(), command) }
     };
     unsafe { set_vim_var_string(Vv::Swapcommand, val, len as ptrdiff_t) };
     unsafe { xfree(val.cast()) };

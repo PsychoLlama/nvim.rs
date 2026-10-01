@@ -21,6 +21,7 @@ use super::*;
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::smsg;
+use crate::snprintf;
 use crate::winlayer::Buf;
 
 /// Mark one autocommand deleted: free everything it owns and null its
@@ -238,7 +239,7 @@ pub unsafe fn aupat_normalize_buflocal_pat(
         buflocal_nr = Buf::current().handle;
     }
     unsafe {
-        snprintf(
+        snprintf!(
             dest,
             BUFLOCAL_PAT_LEN as size_t,
             c"<buffer=%d>".as_ptr(),

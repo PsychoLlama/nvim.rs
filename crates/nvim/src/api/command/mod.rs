@@ -24,7 +24,6 @@ use crate::lua::executor::{api_free_luaref, api_new_luaref};
 use crate::mbyte::mb_islower;
 use crate::memory::{arena_alloc, xfree};
 use crate::message::state::{capture_ga, msg_col, redir_off};
-use crate::os::cshim::snprintf;
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::register::valid_yank_reg;
 use crate::types::{

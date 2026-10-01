@@ -24,11 +24,11 @@ use crate::register::{
     get_yank_register, op_reg_set_previous, write_reg_contents_ex, write_reg_contents_lst,
 };
 use crate::semsg;
-use crate::strings::vim_snprintf;
 use crate::types::{
     BoolVarValue, ColNr, Dict, EvalFuncData, Failed, List, MotionType, NUL, TypVal, VAR_DICT,
     VAR_LIST, Vv, kBoolVarFalse, kBoolVarTrue,
 };
+use crate::vim_snprintf;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -131,7 +131,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let fmt = c"%c%d".as_ptr();
             // SAFETY: `buf` is the caller's, `cap` bytes long, and the two
             // operands match the two conversions.
-            unsafe { vim_snprintf(out, cap, fmt, Ctrl_V, reglen + 1) };
+            unsafe { vim_snprintf!(out, cap, fmt, Ctrl_V, reglen + 1) };
         }
         // `kMTUnknown` cannot come back for a register that has
         // contents, which the null check above established.

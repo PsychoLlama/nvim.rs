@@ -31,6 +31,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::slice;
@@ -44,7 +45,6 @@ use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc};
 use crate::message_fmt::{c_str, emsg_text, msg_bytes, msg_cstr};
 use crate::os::cshim::{gettext, gettext_ptr};
-use crate::strings::vim_snprintf;
 use crate::tr_c;
 use crate::tr_plural;
 use crate::types::{
@@ -251,7 +251,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
             // SAFETY: `iobuff` is the shared `IOSIZE`-byte scratch and the
             // format strings here are this function's own literals.
             unsafe {
-                vim_snprintf(iobuff, IOSIZE as size_t, $fmt $(, $arg)*);
+                vim_snprintf!(iobuff, IOSIZE as size_t, $fmt $(, $arg)*);
                 msg_ga.extend_from_slice(cstr::bytes_at(iobuff));
             }
         };

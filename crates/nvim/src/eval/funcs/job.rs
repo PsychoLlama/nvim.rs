@@ -31,7 +31,7 @@ use crate::message::{e_channotpty, e_invarg};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::option::vars::p_tgc;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::env::{home_replace, os_getenv};
 use crate::os::fs::os_isdir;
 use crate::os::pty_proc_unix::pty_proc_resize;
@@ -39,6 +39,7 @@ use crate::os::shell::shell_free_argv;
 use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
 use crate::semsg;
+use crate::snprintf;
 use crate::startup::main_loop;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::AutoEvent;
@@ -632,7 +633,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
         let out = name.as_mut_ptr();
         let fmt = c"term://%s//%d:%s".as_ptr();
         let dir = shortened.as_ptr();
-        unsafe { snprintf(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
+        unsafe { snprintf!(out, MAXPATHL as usize, fmt, dir, pid, cmd) };
         let _ = setfname(buf, Some(cstr::in_chars(&name)), None, true);
         unsafe { apply_autocmds(AutoEvent::BufFilePost, noname, noname, false, Some(buf)) };
 

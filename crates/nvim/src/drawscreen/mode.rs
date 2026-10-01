@@ -21,6 +21,7 @@
 
 use crate::cstr;
 use crate::option::vars::P_SLOC;
+use crate::vim_snprintf;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
@@ -168,7 +169,7 @@ pub fn showmode() -> c_int {
                     } else if let Some(keymap_name) = keymap_str(Win::current()) {
                         let buf = keymap.as_mut_ptr();
                         let plen = unsafe {
-                            vim_snprintf(
+                            vim_snprintf!(
                                 buf,
                                 MAXPATHL as size_t,
                                 c" (%s)".as_ptr(),

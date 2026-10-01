@@ -24,6 +24,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
 use crate::types::FAIL;
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use core::ptr;
 
@@ -44,7 +45,7 @@ macro_rules! msg_buf {
         // SAFETY: the buffer is exactly the length passed, and the format
         // string and arguments are the caller's. Every expansion is inside
         // the caller's own `unsafe` block, so this carries none of its own.
-        unsafe { vim_snprintf(buf.as_mut_ptr(), MSG_BUF_LEN as size_t, gettext($fmt).as_ptr() $(, $arg)*) };
+        unsafe { vim_snprintf!(buf.as_mut_ptr(), MSG_BUF_LEN as size_t, gettext($fmt).as_ptr() $(, $arg)*) };
         buf
     }};
 }

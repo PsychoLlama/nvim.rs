@@ -14,8 +14,10 @@ use crate::cstr;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::ex_docmd::cmdmod_filters_out;
+use crate::fprintf;
 use crate::grid::default_grid_ref;
 use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
+use crate::printf;
 use crate::types::{Callback, NUL};
 use core::ffi::{c_int, c_uint};
 use core::ptr;
@@ -465,10 +467,10 @@ pub(crate) fn msg_bytes_to_stdio(bytes: &[u8]) {
             let text = cstr::in_bytes(&buf);
             if info_message.get() {
                 // SAFETY: a `%s` format and one NUL-terminated string.
-                unsafe { printf(c"%s".as_ptr(), text.as_ptr()) };
+                unsafe { printf!(c"%s".as_ptr(), text.as_ptr()) };
             } else {
                 // SAFETY: as above.
-                unsafe { fprintf(stderr, c"%s".as_ptr(), text.as_ptr()) };
+                unsafe { fprintf!(stderr, c"%s".as_ptr(), text.as_ptr()) };
             }
         }
 

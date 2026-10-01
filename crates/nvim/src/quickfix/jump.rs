@@ -21,6 +21,7 @@ use crate::ex_cmds::EcmdFlags;
 use crate::ex_docmd::cmdmod_tab;
 use crate::search::SEARCH_KEEP;
 use crate::types::{IOSIZE, ShmFlag};
+use crate::vim_snprintf_safelen;
 use crate::winlayer::Win;
 use crate::winlayer::prev_window;
 use core::ffi::{c_char, c_int, c_uint};
@@ -297,7 +298,7 @@ unsafe fn qf_jump_print_msg(
     let types = qf_types(qf_ptr.qf_type as c_int, qf_ptr.qf_nr);
     let options = types.as_ptr();
     let len = unsafe {
-        vim_snprintf_safelen(
+        vim_snprintf_safelen!(
             head.as_mut_ptr(),
             dirc,
             search_delim.as_ptr(),

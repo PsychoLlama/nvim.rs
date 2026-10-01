@@ -5,6 +5,7 @@
 use crate::cstr;
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::xfree;
+use crate::snprintf;
 use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
@@ -17,7 +18,7 @@ use crate::message::e_shellempty;
 use crate::option::vars::p_sh;
 
 use crate::message::{emsg, emsg_multiline};
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 
 use crate::os::shell::{shell_build_argv, shell_free_argv};
 
@@ -45,7 +46,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
         });
         debug_assert!(len < CMD_LEN);
         let written = unsafe {
-            snprintf(
+            snprintf!(
                 (&raw mut ex_cmd as *mut c_char).add(len as usize),
                 CMD_LEN - len as usize,
                 c" new".as_ptr(),
@@ -55,7 +56,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
         len += written as size_t;
     } else {
         let written = unsafe {
-            snprintf(
+            snprintf!(
                 &raw mut ex_cmd as *mut c_char,
                 CMD_LEN,
                 c"enew%s".as_ptr(),
@@ -74,7 +75,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
     if excmd.line.byte_at(excmd.line.arg) != 0 {
         let name = vim_strsave_escaped(excmd.line.ptr_at(excmd.line.arg), c"\"\\".as_ptr());
         unsafe {
-            snprintf(
+            snprintf!(
                 (&raw mut ex_cmd as *mut c_char).add(len as usize),
                 CMD_LEN - len as usize,
                 c" | call jobstart(\"%s\",{'term':v:true})".as_ptr(),
@@ -96,7 +97,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
             let escaped = unsafe { vim_strsave_escaped(*p, c"\"\\".as_ptr()) };
             let mut one: [c_char; 512] = [0; 512];
             unsafe {
-                snprintf(
+                snprintf!(
                     &raw mut one as *mut c_char,
                     512,
                     c",\"%s\"".as_ptr(),
@@ -117,7 +118,7 @@ pub(crate) fn ex_terminal(excmd: &mut ExArg) {
         // Every element was written with a leading comma, so the list
         // starts one byte in.
         unsafe {
-            snprintf(
+            snprintf!(
                 (&raw mut ex_cmd as *mut c_char).add(len as usize),
                 CMD_LEN - len as usize,
                 c" | call jobstart([%s], {'term':v:true})".as_ptr(),

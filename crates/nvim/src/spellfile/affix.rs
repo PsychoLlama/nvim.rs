@@ -24,12 +24,12 @@
 use crate::cstr;
 use crate::message_fmt::msg_cstr;
 use crate::smsg;
+use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::hashtab::{hash_add, hash_find};
 use crate::mbyte::{mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xstrlcpy;
-use crate::os::cshim::snprintf;
 use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{has_non_ascii, vim_strchr};
 use crate::types::{HashTab, NUL, size_t};
@@ -217,7 +217,7 @@ pub(super) fn handle_affix_entry(
         // A prefix condition anchors at the start, a suffix at the end.
         let pattern = if is_prefix { c"^%s" } else { c"%s$" };
         let (out, room) = (buf.as_mut_ptr(), size_of_val(&buf));
-        unsafe { snprintf(out, room, pattern.as_ptr(), item_ptr(items[4])) };
+        unsafe { snprintf!(out, room, pattern.as_ptr(), item_ptr(items[4])) };
         unsafe {
             (*entry).ae_prog =
                 vim_regcomp(cstr::at(buf.as_mut_ptr()), RE_MAGIC + RE_STRING + RE_STRICT)
@@ -284,7 +284,7 @@ pub(super) fn postpone_prefix(
                     if !unsafe { (*entry).ae_cond }.is_null() {
                         let out = buf.as_mut_ptr();
                         let cond = unsafe { (*entry).ae_cond };
-                        unsafe { snprintf(out, MAXLINELEN as size_t, c"^%s".as_ptr(), cond) };
+                        unsafe { snprintf!(out, MAXLINELEN as size_t, c"^%s".as_ptr(), cond) };
                         unsafe { vim_regfree((*entry).ae_prog) };
                         unsafe {
                             (*entry).ae_prog =

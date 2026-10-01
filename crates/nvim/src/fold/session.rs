@@ -15,8 +15,8 @@
 )]
 
 use crate::ex_session::{put_eol, put_line};
+use crate::fprintf;
 use crate::types::Failed;
-use ::libc::fprintf;
 use core::ffi::{c_char, c_int};
 
 use super::*;
@@ -61,7 +61,7 @@ pub(super) unsafe fn put_folds_recurse(
         // SAFETY: the caller's promise; the format string matches the two
         // `int64_t` arguments.
         let wrote = unsafe {
-            fprintf(
+            fprintf!(
                 fd,
                 c"sil! %ld,%ldfold".as_ptr(),
                 int64_t::from(fold.top() + off),
@@ -96,7 +96,7 @@ pub(super) unsafe fn put_foldopen_recurse(
         if !fold.nested().is_empty() {
             // Open it first, so the nested commands can reach inside.
             // SAFETY: the caller's promise; the format matches its argument.
-            let wrote = unsafe { fprintf(fd, c"%ld".as_ptr(), int64_t::from(fold.top() + off)) };
+            let wrote = unsafe { fprintf!(fd, c"%ld".as_ptr(), int64_t::from(fold.top() + off)) };
             // SAFETY: the caller's promise.
             if wrote < 0
                 || unsafe { put_eol(fd) }.is_err()
@@ -141,10 +141,10 @@ pub(super) unsafe fn put_fold_open_close(
     off: LineNr,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise; both formats match their arguments.
-    if unsafe { fprintf(fd, c"%d".as_ptr(), fold.top() + off) } < 0
+    if unsafe { fprintf!(fd, c"%d".as_ptr(), fold.top() + off) } < 0
         || unsafe { put_eol(fd) }.is_err()
         || unsafe {
-            fprintf(
+            fprintf!(
                 fd,
                 c"sil! normal! z%c".as_ptr(),
                 if fold.is(FD_CLOSED) {

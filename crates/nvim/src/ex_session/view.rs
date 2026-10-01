@@ -27,6 +27,7 @@ use super::{
 use crate::arglist::global_arglist;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_normal, buf_is_terminal, find_buf};
 use crate::fold::put_folds;
+use crate::fprintf;
 use crate::mapping::makemap;
 use crate::memory::xfree;
 use crate::option::vars::ssop_flags;
@@ -39,7 +40,6 @@ use crate::pos::MAXCOL;
 use crate::types::{NUL, OptionSetFlags, int64_t};
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{TabPage, Win};
-use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 
 /// Write the commands that restore `window`'s view.
@@ -160,7 +160,7 @@ fn put_edit(out: SessionFile, window: Win, opts: SessionOpts) -> Option<bool> {
         // `:buffer` it instead, because `:edit` resets the folds of
         // other buffers.
         let ok = unsafe {
-            fprintf(
+            fprintf!(
             out.raw(),
             c"if bufexists(fnamemodify(\"%s\", \":p\")) | buffer %s | else | edit %s | endif\nif &buftype ==# 'terminal'\n  silent file %s\nendif\n"
                 .as_ptr(),

@@ -10,7 +10,7 @@
 use crate::cstr;
 use crate::ex_cmds::newlnum;
 use crate::option::local_or_global;
-use crate::os::cshim::snprintf;
+use crate::snprintf;
 use crate::types::CmdIdx;
 use crate::types::EcmdCmd;
 
@@ -546,7 +546,7 @@ pub unsafe fn eval_vars(
                     return ptr::null_mut();
                 }
                 unsafe {
-                    snprintf(
+                    snprintf!(
                         &raw mut strbuf as *mut c_char,
                         size_of::<[c_char; 30]>(),
                         c"%d".as_ptr(),
@@ -594,7 +594,7 @@ pub unsafe fn eval_vars(
                     return ptr::null_mut();
                 }
                 unsafe {
-                    snprintf(
+                    snprintf!(
                         &raw mut strbuf as *mut c_char,
                         size_of::<[c_char; 30]>(),
                         c"%d".as_ptr(),
@@ -612,7 +612,7 @@ pub unsafe fn eval_vars(
                     return ptr::null_mut();
                 }
                 unsafe {
-                    snprintf(
+                    snprintf!(
                         &raw mut strbuf as *mut c_char,
                         size_of::<[c_char; 30]>(),
                         c"%d".as_ptr(),
@@ -627,7 +627,7 @@ pub unsafe fn eval_vars(
                     return ptr::null_mut();
                 }
                 unsafe {
-                    snprintf(
+                    snprintf!(
                         &raw mut strbuf as *mut c_char,
                         size_of::<[c_char; 30]>(),
                         c"<SNR>%d_".as_ptr(),

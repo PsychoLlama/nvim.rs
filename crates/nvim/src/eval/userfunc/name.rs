@@ -13,6 +13,7 @@
 use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::semsg;
+use crate::snprintf;
 use crate::tr_plural;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::{offset_of, size_of_val};
@@ -152,7 +153,7 @@ pub(crate) unsafe fn fname_trans_sid(
         let into = unsafe { fname_buf.add(fname_buflen) };
         let left = (FLEN_FIXED as size_t + 1).wrapping_sub(fname_buflen);
         let sid = current_sctx.get().sc_sid;
-        fname_buflen += unsafe { snprintf(into, left, c"%d_".as_ptr(), sid) } as size_t;
+        fname_buflen += unsafe { snprintf!(into, left, c"%d_".as_ptr(), sid) } as size_t;
     }
     let fnamelen = fname_buflen + unsafe { cstr::bytes_at(script_name) }.len();
     if fnamelen < FLEN_FIXED as size_t {
@@ -164,7 +165,7 @@ pub(crate) unsafe fn fname_trans_sid(
         // SAFETY: `fname` has `fnamelen + 1` bytes and both parts are
         // NUL-terminated.
         let (cap, both) = (fnamelen + 1, c"%s%s".as_ptr());
-        unsafe { snprintf(fname, cap, both, fname_buf, script_name) };
+        unsafe { snprintf!(fname, cap, both, fname_buf, script_name) };
         fname
     }
 }
@@ -208,9 +209,9 @@ pub(crate) unsafe fn cat_func_name(
     debug_assert!(uflen > 0);
     let name = unsafe { &raw const (*func).uf_name } as *const c_char;
     let len = if !unsafe { func_is_global(func) } && uflen > 3 {
-        unsafe { snprintf(buf, bufsize, c"<SNR>%s".as_ptr(), name.add(3)) }
+        unsafe { snprintf!(buf, bufsize, c"<SNR>%s".as_ptr(), name.add(3)) }
     } else {
-        unsafe { snprintf(buf, bufsize, c"%s".as_ptr(), name) }
+        unsafe { snprintf!(buf, bufsize, c"%s".as_ptr(), name) }
     };
     debug_assert!(len > 0);
     len.min(bufsize as c_int - 1)
@@ -331,7 +332,7 @@ unsafe fn mangle_function_name(
             }
             let (into, cap) = (sid_buf.as_mut_ptr(), size_of_val(&sid_buf));
             let sid = current_sctx.get().sc_sid;
-            sid_buflen = unsafe { snprintf(into, cap, c"%d_".as_ptr(), sid) } as size_t;
+            sid_buflen = unsafe { snprintf!(into, cap, c"%d_".as_ptr(), sid) } as size_t;
             lead += sid_buflen as c_int;
         }
     } else if flags & TFN_INT == 0
@@ -577,7 +578,7 @@ pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
     let mut sid_buf: [c_char; 25] = [0; 25];
     let (into, cap) = (sid_buf.as_mut_ptr(), size_of_val(&sid_buf));
     // SAFETY: `sid_buf` is this frame's own, of `cap` bytes.
-    let sid_buflen = unsafe { snprintf(into, cap, c"<SNR>%d_".as_ptr(), sid) } as size_t;
+    let sid_buflen = unsafe { snprintf!(into, cap, c"<SNR>%d_".as_ptr(), sid) } as size_t;
     let off = if unsafe { *funcname } == b's' as c_char {
         2
     } else {
@@ -588,7 +589,7 @@ pub unsafe fn get_scriptlocal_funcname(funcname: *mut c_char) -> *mut c_char {
     // SAFETY: `newname` has `newnamesize` bytes, `sid_buf` is this frame's
     // own and `funcname + off` is inside the caller's name.
     let (sid, tail) = (sid_buf.as_ptr(), unsafe { funcname.add(off) });
-    unsafe { snprintf(newname, newnamesize, c"%s%s".as_ptr(), sid, tail) };
+    unsafe { snprintf!(newname, newnamesize, c"%s%s".as_ptr(), sid, tail) };
     newname
 }
 

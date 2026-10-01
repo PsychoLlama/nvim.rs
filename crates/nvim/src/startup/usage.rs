@@ -11,6 +11,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::fprintf;
+use crate::printf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -23,7 +25,6 @@ use crate::path::path_tail;
 use crate::startup::argv0;
 use crate::startup::exit::os_exit;
 use crate::version::list_version;
-use ::libc::{fprintf, printf};
 
 /// The `--help` text, one line per entry.
 ///
@@ -70,9 +71,9 @@ pub(crate) fn usage() {
     signal_stop();
     for line in USAGE {
         if line.is_empty() {
-            unsafe { printf(c"\n".as_ptr()) };
+            unsafe { printf!(c"\n".as_ptr()) };
         } else {
-            unsafe { printf(gettext(line).as_ptr()) };
+            unsafe { printf!(gettext(line).as_ptr()) };
         }
     }
 }
@@ -106,15 +107,15 @@ pub(crate) unsafe fn print_mainerr(msg1: *const c_char, msg2: *const c_char, msg
     // Nothing beyond this point should be interrupted by a handler that
     // expects a running editor.
     signal_stop();
-    unsafe { fprintf(stderr, c"%s: %s".as_ptr(), prgname, text) };
+    unsafe { fprintf!(stderr, c"%s: %s".as_ptr(), prgname, text) };
     if !msg2.is_null() {
-        unsafe { fprintf(stderr, c": \"%s\"".as_ptr(), msg2) };
+        unsafe { fprintf!(stderr, c": \"%s\"".as_ptr(), msg2) };
     }
     if !msg3.is_null() {
-        unsafe { fprintf(stderr, c": \"%s\"".as_ptr(), msg3) };
+        unsafe { fprintf!(stderr, c": \"%s\"".as_ptr(), msg3) };
     }
-    unsafe { fprintf(stderr, gettext(c"\nMore info with \"").as_ptr()) };
-    unsafe { fprintf(stderr, c"%s -h\"\n".as_ptr(), prgname) };
+    unsafe { fprintf!(stderr, gettext(c"\nMore info with \"").as_ptr()) };
+    unsafe { fprintf!(stderr, c"%s -h\"\n".as_ptr(), prgname) };
 }
 
 /// [`print_mainerr`] and then exit 1. Every argument error takes this path.

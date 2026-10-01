@@ -34,7 +34,9 @@ use crate::cstr;
 use crate::memory::XString;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::smsg;
+use crate::snprintf;
 use crate::types::AutoEvent;
+use crate::vim_snprintf;
 use crate::winlayer::Win;
 use ::libc::strcasecmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -51,13 +53,12 @@ use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrlcpy};
 use crate::message::e_invarg;
 use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{copy_option_part, valid_name};
-use crate::os::cshim::snprintf;
 use crate::os::fs::os_remove;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
-use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
+use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::{
     Failed, GArray, LangP, MAXPATHL, NUL, OptError, RegProg, SPL_FNAME_TMPL, SpellLang, SynBlock,
     size_t,
@@ -102,10 +103,7 @@ pub fn spell_enc() -> XString {
 unsafe fn int_wordlist_spl(fname: *mut c_char) {
     let fmt = SPL_FNAME_TMPL.as_ptr();
     let (list, enc) = (int_wordlist.get(), spell_enc());
-    // `enc` is an `XString`: the formatter's `%s` wants the *bytes*, and a
-    // variadic argument is not type-checked, so the pointer has to be
-    // spelled out. See `spell_load_lang`.
-    unsafe { vim_snprintf(fname, MAXPATHL as size_t, fmt, list, enc.as_ptr()) };
+    unsafe { vim_snprintf!(fname, MAXPATHL as size_t, fmt, list, enc.as_ptr()) };
 }
 
 /// Load every spell file for language `lang` (a name without a region)
@@ -138,21 +136,14 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
         let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
         let fmt = c"spell/%s.%s.spl".as_ptr();
         let enc = spell_enc();
-        // **`enc.as_ptr()`, not `enc`.** A variadic argument is not
-        // type-checked: handing the formatter the `XString` itself lowers a
-        // three-word value into the argument area and `%s` reads whichever
-        // word the ABI happens to put first. It survived a debug build --
-        // that word was the vector's data pointer -- and produced a garbage
-        // file name in a release one, so `:set spelllang=en` could not find
-        // `spell/en.utf-8.spl` and offered to download it instead.
-        unsafe { vim_snprintf(buf, room, fmt, lang, enc.as_ptr()) };
+        unsafe { vim_snprintf!(buf, room, fmt, lang, enc.as_ptr()) };
         r = unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl) };
 
         if r.is_err() && sl.sl_lang[0] != 0 {
             // Fall back on the ASCII version.
             let (buf, room) = (fname_enc.as_mut_ptr(), fname_enc.len() as size_t - 5);
             let fmt = c"spell/%s.ascii.spl".as_ptr();
-            unsafe { vim_snprintf(buf, room, fmt, lang) };
+            unsafe { vim_snprintf!(buf, room, fmt, lang) };
             r = unsafe {
                 do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::NONE, &raw mut sl)
             };
@@ -177,7 +168,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             let (buf, room) = (autocmd_buf.as_mut_ptr(), autocmd_buf.len());
             let fmt = c"autocmd VimEnter * call v:lua.require'nvim.spellfile'.get('%s')|set spell"
                 .as_ptr();
-            unsafe { snprintf(buf, room, fmt, lang) };
+            unsafe { snprintf!(buf, room, fmt, lang) };
             // SAFETY: `snprintf` terminated the buffer above.
             let _ = do_cmdline_cmd(unsafe { cstr::at(autocmd_buf.as_ptr()) });
         } else {

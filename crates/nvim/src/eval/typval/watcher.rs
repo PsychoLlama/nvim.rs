@@ -22,6 +22,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::snprintf;
 use ::core::ffi::CStr;
 
 use super::*;
@@ -241,11 +242,11 @@ pub unsafe fn callback_to_string(callback: &Callback) -> *mut ::core::ffi::c_cha
     // NUL-terminated string the callback owns.
     match callback {
         Callback::Funcref(name) => unsafe {
-            snprintf(msg, msglen, c"<vim function: %s>".as_ptr(), *name);
+            snprintf!(msg, msglen, c"<vim function: %s>".as_ptr(), *name);
         },
         Callback::Partial(partial) => unsafe {
             let name = (**partial).pt_name;
-            snprintf(msg, msglen, c"<vim partial: %s>".as_ptr(), name);
+            snprintf!(msg, msglen, c"<vim partial: %s>".as_ptr(), name);
         },
         // Anything else leaves the message an empty string.
         _ => unsafe { *msg = 0 },

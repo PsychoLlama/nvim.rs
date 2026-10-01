@@ -20,6 +20,7 @@ use super::*;
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::snprintf;
 use crate::types::Failed;
 
 /// The `"*"` group's first byte: the "all groups" filter.
@@ -442,7 +443,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: Buf) -> 
         let mut cmd = vec![0 as c_char; cmdlen + 1];
         // SAFETY: as above; `cmd` has room for `cmdlen` bytes plus the NUL.
         unsafe {
-            snprintf(
+            snprintf!(
                 cmd.as_mut_ptr(),
                 cmdlen,
                 c"e +%ld %s".as_ptr(),

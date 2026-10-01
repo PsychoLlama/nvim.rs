@@ -26,6 +26,7 @@ use crate::optionstr::LocalOptStr;
 use crate::path::buffer_path;
 use crate::tr_c;
 use crate::types::MAXPATHL;
+use crate::vim_snprintf;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
@@ -278,7 +279,7 @@ unsafe fn find_without_path(
     for run in 1..=2 {
         let len = if run == 1 && relative {
             let written = unsafe {
-                vim_snprintf(
+                vim_snprintf!(
                     name_buff,
                     MAXPATHL as usize,
                     c"%.*s%s".as_ptr(),

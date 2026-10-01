@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::fprintf;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_V, KE_SNR, key_unescape};
 use crate::types::MB_MAXCHAR;
@@ -112,7 +113,7 @@ impl Out {
     fn printf(self, s: &CStr) -> bool {
         // SAFETY: as [`Out::puts`]; every caller passes a literal with no
         // conversion in it, so there are no arguments to check.
-        unsafe { fprintf(self.0, s.as_ptr()) >= 0 }
+        unsafe { fprintf!(self.0, s.as_ptr()) >= 0 }
     }
 
     /// Write one byte through `putc`.

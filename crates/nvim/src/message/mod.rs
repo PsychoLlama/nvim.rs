@@ -135,7 +135,7 @@ use crate::options::{
     kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,
     kOptMoptFlagProgress, kOptMoptFlagWait, kOptRdbFlagNothrottle,
 };
-use crate::os::cshim::{gettext, ngettext, putc, snprintf, stderr};
+use crate::os::cshim::{gettext, ngettext, putc, stderr};
 use crate::os::env::home_replace_save;
 use crate::os::fs::os_fopen;
 use crate::os::input::{input_available, os_breakcheck};
@@ -148,7 +148,6 @@ use crate::startup::{
 };
 use crate::state::mode::{State, exmode_active};
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
-use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::AutoEvent;
 use crate::types::BS;
 use crate::types::CAR;
@@ -168,7 +167,8 @@ use crate::ui::{
     ui_cursor_goto, ui_flush, ui_grid_cursor_goto, ui_has, ui_line, ui_refresh, vim_beep,
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
-use ::libc::{abort, abs, fclose, fprintf, fputs, printf};
+use crate::vim_snprintf;
+use ::libc::{abort, abs, fclose, fputs};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 
@@ -853,7 +853,7 @@ pub fn msgmore(n: c_int) {
     let plural = pn as ::core::ffi::c_ulong;
     let fmt = ngettext(one, many, plural);
     let cap = MSG_BUF_LEN as size_t;
-    unsafe { vim_snprintf(text, cap, fmt.as_ptr(), pn) };
+    unsafe { vim_snprintf!(text, cap, fmt.as_ptr(), pn) };
     if got_int.get() {
         let note = gettext(c" (Interrupted)");
         unsafe { xstrlcat(text, note.as_ptr(), MSG_BUF_LEN as size_t) };

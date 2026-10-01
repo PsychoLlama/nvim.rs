@@ -5,6 +5,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::snprintf;
 use core::ffi::CStr;
 use core::ptr;
 
@@ -35,7 +36,7 @@ use crate::ops::shift_line;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_paste, p_report};
 use crate::optionstr::LocalOptStr;
-use crate::os::cshim::{gettext, ngettext, snprintf};
+use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::line_breakcheck;
 use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
 use crate::pos::MAXCOL;
@@ -71,7 +72,7 @@ unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
     let mut line = [0 as c_char; IOSIZE as usize];
     // SAFETY: `line` is `IOSIZE` bytes, which is what bounds the format, and
     // the two labels are NUL-terminated constants.
-    unsafe { snprintf(line.as_mut_ptr(), IOSIZE as size_t, fmt, n) };
+    unsafe { snprintf!(line.as_mut_ptr(), IOSIZE as size_t, fmt, n) };
     unsafe {
         msg_progress(
             line.as_mut_ptr(),

@@ -13,6 +13,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::vim_snprintf_add;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -208,7 +209,7 @@ pub(crate) unsafe fn report_written(
         if notes.conv_error_lnum != 0 {
             let fmt = translate(c" in line %ld;").as_ptr();
             let lnum = notes.conv_error_lnum as int64_t;
-            unsafe { vim_snprintf_add(iobuff, IOSIZE as size_t, fmt, lnum) };
+            unsafe { vim_snprintf_add!(iobuff, IOSIZE as size_t, fmt, lnum) };
         }
     } else if notes.notconverted {
         note(c"[NOT converted]");

@@ -15,6 +15,7 @@ use crate::cstr;
 use crate::keycodes::{Ctrl_V, KE_LUA};
 use crate::option::cpo_has;
 use crate::types::CpoFlag;
+use crate::vim_snprintf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -176,7 +177,7 @@ pub(crate) unsafe fn set_maparg_rhs(
         // the answer is NUL-terminated.
         let str = unsafe {
             let ke_lua = KE_LUA as c_int;
-            vim_snprintf(at, cap, fmt, K_SPECIAL, KS_EXTRA, ke_lua, rhs_lua);
+            vim_snprintf!(at, cap, fmt, K_SPECIAL, KS_EXTRA, ke_lua, rhs_lua);
             MapStr::new(cstr::bytes_at(at))
         };
         args.rhs = Some(MapRhs {

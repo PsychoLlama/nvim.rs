@@ -21,6 +21,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::snprintf;
 use crate::tr;
 use crate::types::AutoEvent;
 use crate::types::OptStr;
@@ -54,7 +55,7 @@ use crate::options::{
     kOptUndolevels, kOptWinbar, options,
 };
 use crate::optionstr::check_illegal_path_names;
-use crate::os::cshim::{gettext, gettext_owned, snprintf};
+use crate::os::cshim::{gettext, gettext_owned};
 use crate::types::{
     NUL, OptError, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0,
     VimOption, Vv, ptrdiff_t, size_t, uint32_t,
@@ -214,7 +215,7 @@ pub(crate) fn get_tty_option(name: &CStr) -> OptVal {
                 xstrdup(c"".as_ptr())
             } else {
                 let buf = xmalloc(NUMBUFLEN as size_t).cast::<c_char>();
-                snprintf(buf, NUMBUFLEN as size_t, c"%d".as_ptr(), t_colors.get());
+                snprintf!(buf, NUMBUFLEN as size_t, c"%d".as_ptr(), t_colors.get());
                 buf
             }
         } else if name == c"term" {

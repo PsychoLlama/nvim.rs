@@ -10,6 +10,7 @@
 #![allow(unsafe_code)]
 
 use crate::normal::{VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor};
+use crate::snprintf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -29,7 +30,6 @@ use crate::memline::{Lines, decl, inc, incl};
 use crate::memory::{xfree, xmalloc};
 use crate::option::vars::{P_SEL, P_WS, p_ws};
 use crate::option::{SavedCpo, cpo_has};
-use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
 use crate::types::{ColNr, CpoFlag, FAIL, Failed, NUL, OK, OpArg, Pos, size_t};
@@ -431,8 +431,8 @@ pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) 
         // SAFETY: each buffer is `*_len` bytes long, the formats are
         // NUL-terminated constants, and `%.*s` is given the matching
         // `c_int` length and a pointer to that many bytes of the line.
-        unsafe { snprintf(spat, spat_len, NAMED_START_TAG.as_ptr(), len, p) };
-        unsafe { snprintf(epat, epat_len, NAMED_END_TAG.as_ptr(), len, p) };
+        unsafe { snprintf!(spat, spat_len, NAMED_START_TAG.as_ptr(), len, p) };
+        unsafe { snprintf!(epat, epat_len, NAMED_END_TAG.as_ptr(), len, p) };
         // SAFETY: `snprintf` NUL-terminated both patterns above.
         let r = unsafe { search_tag_pair(spat, epat, FORWARD) };
         // SAFETY: both came from `xmalloc` above and are dead from here on.

@@ -31,10 +31,11 @@ use crate::message::{
     emsg, message_filtered, msg, msg_display, msg_ext_set_kind, msg_putchar, msg_title,
 };
 use crate::message_fmt::c_str;
-use crate::os::cshim::{gettext, snprintf};
+use crate::os::cshim::gettext;
 use crate::os::time::os_time;
 use crate::pos::lt;
 use crate::semsg;
+use crate::snprintf;
 use crate::strings::has_char;
 use crate::strings::xstrnsave;
 use crate::ui::state::Columns;
@@ -185,7 +186,7 @@ pub(super) unsafe fn show_one_mark(
         msg_putchar('\n' as c_int);
         if !got_int.get() {
             unsafe {
-                snprintf(
+                snprintf!(
                     prefix.as_mut_ptr(),
                     IOSIZE as size_t,
                     c" %c %6d %4d ".as_ptr(),

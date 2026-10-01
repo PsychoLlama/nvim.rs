@@ -20,6 +20,8 @@ use super::*;
 use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::snprintf;
+use crate::vim_snprintf;
 
 use crate::cstr;
 use crate::eval::typval::NumBuf;
@@ -138,7 +140,7 @@ pub fn ex_scriptnames(excmd: &mut ExArg) {
         unsafe { home_replace(None, name, namebuff, MAXPATHL as size_t, true) };
         let iobuff = row.as_mut_ptr();
         unsafe {
-            vim_snprintf(
+            vim_snprintf!(
                 iobuff,
                 IOSIZE as size_t,
                 c"%3d: %s".as_ptr(),
@@ -206,7 +208,7 @@ pub(crate) fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString 
         SID_API_CLIENT => {
             // SAFETY: `named` is `IOSIZE` writable bytes.
             unsafe {
-                snprintf(
+                snprintf!(
                     named.as_mut_ptr(),
                     IOSIZE as size_t,
                     gettext(c"API client (channel id %lu)").as_ptr(),
@@ -221,7 +223,7 @@ pub(crate) fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString 
             if sname.is_null() {
                 // SAFETY: `named` is `IOSIZE` writable bytes.
                 unsafe {
-                    snprintf(
+                    snprintf!(
                         named.as_mut_ptr(),
                         IOSIZE as size_t,
                         gettext(c"anonymous :source (script id %d)").as_ptr(),
