@@ -252,7 +252,7 @@ impl<T> GlobalCell<T> {
 /// reference outlives the read or write that asked for it, and a callback
 /// that re-enters the editor cannot find one open.
 ///
-/// Spell one with [`field!`](crate::global_cell::field).
+/// Spell one with the crate's `field!` macro.
 pub struct Field<S, T> {
     /// The field's offset in `S` — the selector's identity.
     at: usize,
@@ -284,7 +284,7 @@ impl<S, T> Eq for Field<S, T> {}
 
 impl<S, T> Field<S, T> {
     /// The selector for the field `project` reaches, which sits `at` bytes
-    /// into `S`. [`field!`](crate::global_cell::field) writes both halves
+    /// into `S`. `field!` writes both halves
     /// from one field name, which is the only way they stay a pair.
     pub const fn new(at: usize, project: fn(&mut S) -> &mut T) -> Self {
         Self { at, project }
