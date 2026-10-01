@@ -33,6 +33,7 @@
 use super::*;
 use crate::cstr;
 use crate::keycodes::{Ctrl_O, Ctrl_V, key_escape};
+use crate::memory::XString;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::CStr;
 use core::ffi::{c_char, c_int, c_uint};
@@ -54,10 +55,10 @@ const MINIMAL_SIZE: usize = 20;
 /// guarantees declaration order here; [`KeyBuffer::add`] carries the matching
 /// compile-time assertion.
 #[repr(C)]
-pub(crate) struct KeyBlock {
-    pub(crate) next: *mut KeyBlock,
-    pub(crate) len: usize,
-    pub(crate) bytes: [c_char; 1],
+struct KeyBlock {
+    next: *mut KeyBlock,
+    len: usize,
+    bytes: [c_char; 1],
 }
 
 /// Where a [`KeyBuffer`] puts the bytes it is given next.
@@ -116,21 +117,31 @@ impl Default for KeyBuffer {
 ///
 /// # Safety
 /// `block` must point at a live block allocated by [`KeyBuffer::add`].
-pub(crate) unsafe fn block_str(block: *mut KeyBlock) -> *mut c_char {
+unsafe fn block_str(block: *mut KeyBlock) -> *mut c_char {
     // SAFETY (this body): the caller's promise -- a live block, whose `bytes`
     // is the flexible array member the allocation was sized for.
     unsafe { (&raw mut (*block).bytes).cast::<c_char>() }
 }
 
 impl KeyBuffer {
-    /// The first block, for the redo walk. Null when the buffer is empty.
-    fn head(&self) -> *mut KeyBlock {
-        self.first
-    }
-
     /// Whether the buffer holds nothing.
     fn is_empty(&self) -> bool {
         self.first.is_null()
+    }
+
+    /// The contents as owned bytes, `K_SPECIAL` still escaped: what
+    /// [`contents`](Self::contents) answers, without the terminator and with
+    /// nothing for the caller to free.
+    pub(crate) fn bytes(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut block = self.first;
+        while !block.is_null() {
+            // SAFETY: every block on the chain is live and NUL-terminated.
+            // Up to the terminator rather than `len`, as `contents` reads.
+            out.extend_from_slice(unsafe { CStr::from_ptr(block_str(block)) }.to_bytes());
+            block = unsafe { (*block).next };
+        }
+        out
     }
 
     /// Free every block and leave the buffer with no insertion point.
@@ -155,42 +166,13 @@ impl KeyBuffer {
     /// length. `K_SPECIAL` in the answer is still escaped.
     ///
     /// Answers a null pointer when the buffer is empty and `dozero` is false.
-    ///
-    /// # Safety
-    /// The answer must be freed with `xfree`.
-    pub(crate) unsafe fn contents(&self, dozero: bool) -> (*mut c_char, usize) {
-        let mut count = 0;
-        let mut block = self.first;
-        while !block.is_null() {
-            // SAFETY (this body): every block on the chain is live and its
-            // bytes are NUL-terminated, so the walk stops inside each one;
-            // `xmalloc` never returns null and `count + 1` is the total of
-            // every block's length plus the terminator.
-            count += unsafe { (*block).len };
-            block = unsafe { (*block).next };
-        }
-        if count == 0 && !dozero {
+    /// The caller owns the answer and frees it with `xfree`.
+    fn contents(&self, dozero: bool) -> (*mut c_char, usize) {
+        let bytes = self.bytes();
+        if bytes.is_empty() && !dozero {
             return (ptr::null_mut(), 0);
         }
-
-        let out = unsafe { xmalloc(count + 1) }.cast::<c_char>();
-        let mut at = 0;
-        let mut block = self.first;
-        while !block.is_null() {
-            // Copy up to the block's own terminator rather than up to
-            // `len`: `delete_tail` shortens a block by moving the NUL,
-            // and upstream reads the NUL here too.
-            let str = unsafe { block_str(block) };
-            let mut i = 0;
-            while unsafe { *str.add(i) } != 0 {
-                unsafe { *out.add(at) = *str.add(i) };
-                at += 1;
-                i += 1;
-            }
-            block = unsafe { (*block).next };
-        }
-        unsafe { *out.add(at) = 0 };
-        (out, at)
+        (XString::from_bytes(&bytes).into_raw(), bytes.len())
     }
 
     /// Append `s` at the insertion point.
@@ -394,27 +376,28 @@ impl KeyBufferRef {
         }
     }
 
+    /// Append `bytes`, which must already have `K_SPECIAL` escaped.
+    pub(crate) fn add_bytes(self, bytes: &[u8]) {
+        let len = ptrdiff_t::try_from(bytes.len()).expect("a key string fits a ptrdiff_t");
+        // SAFETY: `bytes` is readable for its length.
+        unsafe { self.add(bytes.as_ptr().cast(), len) };
+    }
+
     /// Append the decimal spelling of `n`.
     pub(crate) fn add_num(self, n: c_int) {
         let mut number = [0u8; 32];
         let len = write_int(&mut number, n);
-        // SAFETY: `number[..len]` is what `write_int` just filled in.
-        unsafe { self.add(number.as_ptr().cast(), len as ptrdiff_t) };
+        self.add_bytes(&number[..len]);
     }
 
     /// Append byte or special key `c`, escaping special keys, NUL and
     /// `K_SPECIAL`.
     pub(crate) fn add_byte(self, c: c_int) {
-        let mut temp = [0u8; 4];
-        let templen = if c < 0 || c == K_SPECIAL || c == NUL {
-            temp[..3].copy_from_slice(&key_escape(c));
-            3
+        if c < 0 || c == K_SPECIAL || c == NUL {
+            self.add_bytes(&key_escape(c));
         } else {
-            temp[0] = c as u8;
-            1
-        };
-        // SAFETY: `temp[..templen]` was just filled in.
-        unsafe { self.add(temp.as_ptr().cast(), templen) };
+            self.add_bytes(&[c.to_le_bytes()[0]]);
+        }
     }
 
     /// Append character `c`, escaping special keys, NUL and `K_SPECIAL` and
@@ -447,13 +430,10 @@ impl KeyBufferRef {
         self.0.with_mut(|buf| unsafe { buf.free() });
     }
 
-    /// The contents as one `xmalloc`ed string; see [`KeyBuffer::contents`].
-    ///
-    /// # Safety
-    /// The answer must be freed with `xfree`.
-    pub(crate) unsafe fn contents(self, dozero: bool) -> (*mut c_char, usize) {
-        // SAFETY: the caller's obligation, forwarded.
-        self.0.with(|buf| unsafe { buf.contents(dozero) })
+    /// The contents as one `xmalloc`ed string, which the caller owns; see
+    /// [`KeyBuffer::contents`].
+    pub(crate) fn contents(self, dozero: bool) -> (*mut c_char, usize) {
+        self.0.with(|buf| buf.contents(dozero))
     }
 
     /// One byte from the front; see [`KeyBuffer::read`].
@@ -475,9 +455,9 @@ impl KeyBufferRef {
         self.0.with(KeyBuffer::is_empty)
     }
 
-    /// The first block, for the redo walk.
-    pub(crate) fn head(self) -> *mut KeyBlock {
-        self.0.with(KeyBuffer::head)
+    /// The contents as owned bytes; see [`KeyBuffer::bytes`].
+    pub(crate) fn bytes(self) -> Vec<u8> {
+        self.0.with(KeyBuffer::bytes)
     }
 
     /// Move the buffer out of its cell, leaving an empty one behind.
@@ -501,7 +481,7 @@ impl KeyBufferRef {
 pub unsafe fn get_recorded() -> *mut c_char {
     // SAFETY (this body): `contents` answers an `xmalloc`ed string of `len`
     // bytes plus a NUL, which this frame owns and hands to the caller.
-    let (recorded, mut len) = unsafe { recordbuff().contents(true) };
+    let (recorded, mut len) = recordbuff().contents(true);
     if recorded.is_null() {
         return ptr::null_mut();
     }
@@ -531,7 +511,7 @@ pub unsafe fn get_recorded() -> *mut c_char {
 /// [`String_0`] — and the caller has to free it.
 pub unsafe fn get_inserted() -> String_0 {
     // SAFETY (this body): as [`get_recorded`] -- the answer owns its bytes.
-    let (data, size) = unsafe { redobuff().contents(false) };
+    let (data, size) = redobuff().contents(false);
     // SAFETY: `contents` answers its own `xmalloc`ed NUL-terminated block.
     unsafe { String_0::from_owned_parts(data, size) }
 }

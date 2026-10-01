@@ -18,18 +18,12 @@
 
 use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
+use crate::mbyte::char_at;
 use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
 use crate::strings::has_char;
-use crate::types::{FAIL, Failed, MB_MAXBYTES, NUL, OK};
+use crate::types::{Failed, MB_MAXBYTES, NL, NUL};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
-use core::ptr;
-
-/// Where [`read_redo`] is up to: the block it is reading, and the byte within
-/// it. A pair of walk cursors rather than an index, because the blocks are
-/// separately allocated and the walk crosses from one to the next mid-key.
-static REDO_BLOCK: GlobalCell<*mut KeyBlock> = GlobalCell::new(ptr::null_mut());
-static REDO_AT: GlobalCell<*const u8> = GlobalCell::new(ptr::null());
 
 /// Move the current redo buffer to `old_redobuff` and start a fresh one.
 ///
@@ -72,14 +66,8 @@ pub unsafe fn save_redobuff(save_redo: *mut SaveRedo) {
     unsafe { (*save_redo).sr_redobuff = redobuff().take() };
     unsafe { (*save_redo).sr_old_redobuff = old_redobuff().take() };
 
-    // SAFETY: as above — the caller's own `SaveRedo`; the copy the
-    // contents are read into is freed below.
-    let (copy, len) = unsafe { (*save_redo).sr_redobuff.contents(false) };
-    if copy.is_null() {
-        return;
-    }
-    unsafe { redobuff().add(copy, len.cast_signed()) };
-    unsafe { xfree(copy.cast()) };
+    // SAFETY: as above — the caller's own `SaveRedo`.
+    redobuff().add_bytes(&unsafe { (*save_redo).sr_redobuff.bytes() });
 }
 
 /// Put back what [`save_redobuff`] moved aside.
@@ -217,84 +205,99 @@ pub fn append_to_redobuff_number(n: c_int) {
     }
 }
 
-/// Read one character from the redo buffer, undoing `KeyBufferRef::add_char`'s
-/// escaping. The buffer itself is left alone.
+/// A walk over one of the redo buffers, a character at a time, undoing
+/// `KeyBufferRef::add_char`'s escaping. The buffer itself is left alone.
 ///
-/// With `init` set this only positions the cursor and answers `OK`, or `FAIL`
-/// when there is nothing to redo. Otherwise it answers the character, or
-/// `NUL` at the end. With `old_redo` set it walks `old_redobuff` instead.
-///
-/// # Safety
-/// A call without `init` must follow a call with it that answered `OK`, and
-/// the buffer must not have been freed in between.
-pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
-    if init {
-        let head = if old_redo {
-            old_redobuff().head()
-        } else {
-            redobuff().head()
-        };
-        if head.is_null() {
-            return FAIL;
+/// Upstream walks the buffer's block chain in place, with a block pointer
+/// and a byte pointer in two file statics. The walk reads a *copy* of the
+/// bytes here, and its position is an index into that copy: the position
+/// means nothing without the bytes it came from, so the two are one value,
+/// and nothing a caller does to the redo buffers between two reads can
+/// leave it pointing into a freed block.
+struct RedoReader {
+    bytes: Vec<u8>,
+    at: usize,
+}
+
+impl RedoReader {
+    /// Start a walk over the redo buffer, or over `old_redobuff` when
+    /// `old_redo` is set. `None` when there is nothing to redo.
+    fn start(old_redo: bool) -> Option<Self> {
+        let buffer = if old_redo { old_redobuff() } else { redobuff() };
+        if buffer.is_empty() {
+            return None;
         }
-        REDO_BLOCK.set(head);
-        // SAFETY (this body): `REDO_BLOCK` and `REDO_AT` name a live block of
-        // the redo buffer and a byte inside it; the walk crosses to `next`
-        // only at that block's NUL.
-        REDO_AT.set(unsafe { block_str(head) }.cast());
-        return OK;
+        Some(RedoReader {
+            bytes: buffer.bytes(),
+            at: 0,
+        })
     }
 
-    let mut c = c_int::from(unsafe { *REDO_AT.get() });
-    if c == NUL {
-        return c;
+    /// The byte `ahead` past the cursor, or `NUL` past the end -- where the
+    /// chain's terminator was.
+    fn byte(&self, ahead: usize) -> u8 {
+        self.bytes.get(self.at + ahead).copied().unwrap_or(0)
     }
 
-    // How many bytes this character occupies. An escaped K_SPECIAL is
-    // three bytes that stand for one, so only a byte that is *not* the
-    // start of an escape can begin a multibyte sequence.
-    let n = if c != K_SPECIAL || c_int::from(unsafe { *REDO_AT.get().add(1) }) == KS_SPECIAL {
-        mb_byte2len_check(c)
-    } else {
-        1
-    };
-
-    let mut buf = [0u8; MB_MAXBYTES + 1];
-    let mut i = 0;
-    loop {
-        if c == K_SPECIAL {
-            // Special key or escaped K_SPECIAL: three bytes, one key.
-            c = key_unescape(unsafe { *REDO_AT.get().add(1) }, unsafe {
-                *REDO_AT.get().add(2)
-            });
-            REDO_AT.set(unsafe { REDO_AT.get().add(2) });
-        }
-        REDO_AT.set(unsafe { REDO_AT.get().add(1) });
-        if c_int::from(unsafe { *REDO_AT.get() }) == NUL
-            && !unsafe { (*REDO_BLOCK.get()).next }.is_null()
-        {
-            let next = unsafe { (*REDO_BLOCK.get()).next };
-            REDO_BLOCK.set(next);
-            REDO_AT.set(unsafe { block_str(next) }.cast());
-        }
-
-        // Upstream's `(uint8_t)c`: a key code wider than a byte truncates
-        // here, and the bytes are read back as one character below.
-        buf[i] = c.to_le_bytes()[0];
-        if i == n - 1 {
-            // Last byte of the character.
-            if n != 1 {
-                c = unsafe { utf_ptr2char(buf.as_ptr().cast()) };
-            }
-            break;
-        }
-        c = c_int::from(unsafe { *REDO_AT.get() });
+    /// The next character, or `NUL` at the end.
+    fn next_char(&mut self) -> c_int {
+        let mut c = c_int::from(self.byte(0));
         if c == NUL {
-            break; // cannot happen?
+            return c;
         }
-        i += 1;
+
+        // How many bytes this character occupies. An escaped K_SPECIAL is
+        // three bytes that stand for one, so only a byte that is *not* the
+        // start of an escape can begin a multibyte sequence.
+        let n = if c != K_SPECIAL || c_int::from(self.byte(1)) == KS_SPECIAL {
+            mb_byte2len_check(c)
+        } else {
+            1
+        };
+
+        let mut buf = [0u8; MB_MAXBYTES + 1];
+        let mut i = 0;
+        loop {
+            if c == K_SPECIAL {
+                // Special key or escaped K_SPECIAL: three bytes, one key.
+                c = key_unescape(self.byte(1), self.byte(2));
+                self.at += 2;
+            }
+            self.at += 1;
+
+            // Upstream's `(uint8_t)c`: a key code wider than a byte truncates
+            // here, and the bytes are read back as one character below.
+            buf[i] = c.to_le_bytes()[0];
+            if i == n - 1 {
+                // Last byte of the character.
+                if n != 1 {
+                    c = char_at(&buf);
+                }
+                break;
+            }
+            c = c_int::from(self.byte(0));
+            if c == NUL {
+                break; // cannot happen?
+            }
+            i += 1;
+        }
+        c
     }
-    c
+
+    /// Copy the rest of the walk into `readbuf2`, one character at a time.
+    ///
+    /// The escaped `K_SPECIAL` is copied without translation:
+    /// [`next_char`](Self::next_char) decodes it and
+    /// `KeyBufferRef::add_char` re-encodes it identically.
+    fn copy_rest(&mut self) {
+        loop {
+            let c = self.next_char();
+            if c == NUL {
+                break;
+            }
+            readbuf2().add_char(c);
+        }
+    }
 }
 
 /// C's `MB_BYTE2LEN_CHECK`: how many bytes a UTF-8 sequence starting with `b`
@@ -308,43 +311,20 @@ pub(crate) fn mb_byte2len_check(b: c_int) -> usize {
     }
 }
 
-/// Copy the rest of the redo buffer into `readbuf2`, one character at a time.
-///
-/// The escaped `K_SPECIAL` is copied without translation: [`read_redo`]
-/// decodes it and `KeyBufferRef::add_char` re-encodes it identically.
-///
-/// # Safety
-/// As [`read_redo`] without `init`.
-unsafe fn copy_redo(old_redo: bool) {
-    loop {
-        // SAFETY (this body): as [`read_redo`] -- the walk cursors are inside
-        // the redo buffer.
-        let c = unsafe { read_redo(false, old_redo) };
-        if c == NUL {
-            break;
-        }
-        readbuf2().add_char(c);
-    }
-}
-
 /// Stuff the redo buffer into `readbuf2`, replacing its count with `count`.
 ///
 /// With `old_redo` set the last command but one is repeated instead of the
 /// last one, which is what `CTRL-O .` in Insert mode wants. Answers `Err`
 /// when there is nothing to redo.
 pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
-    // Position the cursor; give up if there is nothing to redo.
-    // SAFETY (this body): the redo buffer's chain is live for the whole of
-    // this body, and `buf` is this frame's own array.
-    if unsafe { read_redo(true, old_redo) } == FAIL {
-        return Err(Failed);
-    }
-    let mut c = unsafe { read_redo(false, old_redo) };
+    // Give up if there is nothing to redo.
+    let mut redo = RedoReader::start(old_redo).ok_or(Failed)?;
+    let mut c = redo.next_char();
 
     // Copy the register name, if there is one.
-    if c == '"' as c_int {
-        unsafe { readbuf2().add(c"\"".as_ptr(), 1) };
-        c = unsafe { read_redo(false, old_redo) };
+    if c == c_int::from(b'"') {
+        readbuf2().add_byte(c_int::from(b'"'));
+        c = redo.next_char();
 
         // A numbered register shifts up: the redo of `"1p` is `"2p`.
         if c >= '1' as c_int && c < '9' as c_int {
@@ -359,7 +339,7 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
             cmd_silent.set(true);
         }
 
-        c = unsafe { read_redo(false, old_redo) };
+        c = redo.next_char();
     }
 
     if c == 'v' as c_int {
@@ -369,13 +349,13 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
         set_visual_select(false);
         VIsual_reselect.set(1);
         redo_VIsual_busy.set(true);
-        c = unsafe { read_redo(false, old_redo) };
+        c = redo.next_char();
     }
 
     // Enter the new count in place of the old one.
     if count != 0 {
         while ascii_isdigit(c) {
-            c = unsafe { read_redo(false, old_redo) };
+            c = redo.next_char();
         }
         readbuf2().add_num(count);
     }
@@ -383,7 +363,7 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
     // Then the rest of the redo buffer, from the character the count
     // scan stopped on.
     readbuf2().add_char(c);
-    unsafe { copy_redo(old_redo) };
+    redo.copy_rest();
     Ok(())
 }
 
@@ -391,15 +371,12 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
 /// the redo buffer into `readbuf2`. Answers `Err` when there is nothing to
 /// repeat.
 pub fn start_redo_ins() -> Result<(), Failed> {
-    // SAFETY (this body): as [`start_redo`].
-    if unsafe { read_redo(true, false) } == FAIL {
-        return Err(Failed);
-    }
+    let mut redo = RedoReader::start(false).ok_or(Failed)?;
     start_stuff();
 
     // Skip the count and the command character.
     loop {
-        let c = unsafe { read_redo(false, false) };
+        let c = redo.next_char();
         if c == NUL {
             break;
         }
@@ -407,14 +384,14 @@ pub fn start_redo_ins() -> Result<(), Failed> {
             if c == 'O' as c_int || c == 'o' as c_int {
                 // `o`/`O` opened the line; repeating the insert alone
                 // needs the newline put back.
-                unsafe { readbuf2().add(c"\n".as_ptr(), -1) };
+                readbuf2().add_byte(NL);
             }
             break;
         }
     }
 
     // Then the text that was typed.
-    unsafe { copy_redo(false) };
+    redo.copy_rest();
     block_redo.set(true);
     Ok(())
 }
