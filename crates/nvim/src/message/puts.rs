@@ -20,7 +20,6 @@ use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
 use crate::printf;
 use crate::types::{Callback, NUL};
 use core::ffi::{c_int, c_uint};
-use core::ptr;
 
 /// The `on_print` callback an RPC client installed.
 ///
@@ -44,8 +43,7 @@ pub fn msg_start() {
 
     if msg_silent.get() == 0 {
         // Don't display the old message now.
-        unsafe { xfree(keep_msg.get().cast()) };
-        keep_msg.set(ptr::null_mut());
+        keep_msg.set(None);
         need_fileinfo.set(false);
     }
     if need_highlight_changed.get() {

@@ -118,8 +118,7 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
     }
     unsafe { msg_add_lines(&mut report, noted as c_int, out.linecnt, out.filesize) };
 
-    unsafe { xfree(keep_msg.get().cast()) };
-    keep_msg.set(ptr::null_mut());
+    keep_msg.set(None);
     let mut shown: *mut c_char = ptr::null_mut();
     msg_scrolled_ign.set(true);
 
@@ -139,7 +138,8 @@ pub(crate) unsafe fn report_read(sfname: *mut c_char, how: How, out: &Outcome) {
         || restart_edit.get() != 0
         || (msg_scrolled.get() != 0 && !need_wait_return.get())
     {
-        unsafe { set_keep_msg(shown, 0) };
+        // SAFETY: null, or the NUL-terminated message `msg_trunc` showed.
+        set_keep_msg((!shown.is_null()).then(|| unsafe { cstr::at(shown) }), 0);
     }
     msg_scrolled_ign.set(false);
 }

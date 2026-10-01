@@ -652,8 +652,7 @@ pub(crate) fn goto_tab(
         return;
     }
     // Don't repeat a message in another tab page.
-    // SAFETY: a null message clears the kept one.
-    unsafe { set_keep_msg(ptr::null(), 0) };
+    set_keep_msg(None, 0);
 
     skip_win_fix_scroll.set(true);
     let new_curbuf = tabpage.current_window().and_then(Win::buffer_or_none);

@@ -198,7 +198,8 @@ pub(crate) unsafe fn cmdline_search_stat(
     // Keep the message even after a redraw, but not in the history.
     msg_ext_overwrite.set(true);
     msg_ext_set_kind(c"search_count");
-    unsafe { give_warning(msgbuf, false, false) };
+    // SAFETY: the caller's NUL-terminated buffer, just written.
+    give_warning(unsafe { cstr::at(msgbuf) }, false, false);
 }
 
 /// Count the matches of the last used pattern, reusing the remembered

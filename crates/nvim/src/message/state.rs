@@ -188,7 +188,8 @@ msg_state! {
     pub(crate) msg_did_scroll: bool = false;
 
     // -- the message kept across a redraw --
-    pub(crate) keep_msg: *mut c_char = core::ptr::null_mut();
+    /// The message to show again after the next redraw.
+    pub(crate) keep_msg: Option<XString> = None;
     pub(crate) keep_msg_hl_id: c_int = 0;
     /// Show the file info when the redraw is done.
     pub(crate) need_fileinfo: bool = false;

@@ -262,13 +262,14 @@ pub fn wait_return(redraw: c_int) {
     emsg_on_display.set(false); // can delete error message now
     lines_left.set(-1); // reset lines_left at next msg_start()
     reset_last_sourcing();
-    if !keep_msg.get().is_null()
-        && unsafe { vim_strsize(keep_msg.get()) }
-            >= (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get()
-    {
+    let room = (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get();
+    // SAFETY: an owned, NUL-terminated string.
+    if keep_msg.with(|kept| {
+        kept.as_ref()
+            .is_some_and(|kept| unsafe { vim_strsize(kept.as_ptr()) } >= room)
+    }) {
         // Don't redisplay the message, it's too long.
-        unsafe { xfree(keep_msg.get().cast()) };
-        keep_msg.set(ptr::null_mut());
+        keep_msg.set(None);
     }
 
     if tmp_state == MODE_SETWSIZE {

@@ -345,8 +345,7 @@ pub(crate) fn emsg_multiline_text(text: &CStr, kind: &CStr) -> bool {
 /// Show `text` as a warning. [`swmsg!`](crate::swmsg)'s tail.
 #[doc(hidden)]
 pub(crate) fn swmsg_text(text: &CStr, hl: bool) {
-    // SAFETY: a `CStr` is a valid C string, which is the whole contract.
-    unsafe { give_warning(text.as_ptr(), hl, true) }
+    give_warning(text, hl, true);
 }
 
 /// Hand `text` to the main loop as an error, `multiline` keeping its embedded
@@ -389,10 +388,7 @@ pub(crate) unsafe extern "C" fn msg_semsg_multiline_event(argv: *mut *mut c_void
 
 /// Show a warning, which `'warningmsg'` highlighting and `v:warningmsg` pick
 /// up. Repeated after a redraw, unlike an error.
-///
-/// # Safety
-/// `message` must be a valid C string.
-pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
+pub fn give_warning(message: &CStr, hl: bool, hist: bool) {
     // Don't do this for ":silent".
     if msg_silent.get() != 0 {
         return;
@@ -401,16 +397,16 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
     msg_hist_off.set(!hist);
 
     let no_prompt = Suppress::wait_return();
-    unsafe { set_vim_var_string(Vv::Warningmsg, message, -1) };
-    unsafe { xfree(keep_msg.get().cast()) };
-    keep_msg.set(ptr::null_mut());
+    // SAFETY: a `CStr` is a valid C string.
+    unsafe { set_vim_var_string(Vv::Warningmsg, message.as_ptr(), -1) };
+    keep_msg.set(None);
     keep_msg_hl_id.set(if hl { HLF_W } else { 0 });
 
     if msg_ext_kind.with(String_0::is_null) {
         msg_ext_set_kind(c"wmsg");
     }
-    if unsafe { msg_ptr(message, keep_msg_hl_id.get()) } && msg_scrolled.get() == 0 {
-        unsafe { set_keep_msg(message, keep_msg_hl_id.get()) };
+    if msg(message, keep_msg_hl_id.get()) && msg_scrolled.get() == 0 {
+        set_keep_msg(Some(message), keep_msg_hl_id.get());
     }
     msg_didout.set(false); // overwrite this message
     msg_nowait.set(true); // don't wait for this message

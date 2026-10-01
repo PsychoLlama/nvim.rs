@@ -248,5 +248,6 @@ pub(crate) unsafe fn report_written(
         c"success".as_ptr().cast_mut(),
     );
     let shown = unsafe { msg_progress(iobuff, tag, state, 0, true, true) };
-    unsafe { set_keep_msg(shown, 0) };
+    // SAFETY: null, or the NUL-terminated message `msg_progress` showed.
+    set_keep_msg((!shown.is_null()).then(|| unsafe { cstr::at(shown) }), 0);
 }

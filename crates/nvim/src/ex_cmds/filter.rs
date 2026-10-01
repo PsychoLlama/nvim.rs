@@ -566,9 +566,7 @@ fn report_filtered(linecount: LineNr) {
     let shown = to_message(tr!("{count} lines filtered"), MSG_BUF_LEN as usize);
     if msg(&shown, 0) && msg_scroll.get() == 0 {
         // save message to display it after redraw
-        // SAFETY: a `CStr` is a valid C string, and `set_keep_msg` copies
-        // what it is given.
-        unsafe { set_keep_msg(shown.as_ptr(), 0) };
+        set_keep_msg(Some(&shown), 0);
     }
 }
 

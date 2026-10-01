@@ -158,8 +158,7 @@ pub unsafe fn augroup_del(name: *mut ::core::ffi::c_char, stupid_legacy_mode: bo
             if !ap.is_null() && unsafe { (*ap).group } == group {
                 if stupid_legacy_mode {
                     let warning = gettext(c"W19: Deleting augroup that is still in use");
-                    // SAFETY: `warning` is the catalogue's own string.
-                    unsafe { give_warning(warning.as_ptr(), true, true) };
+                    give_warning(warning, true, true);
                     // Re-point the *name* at the deleted-group id and
                     // give up the old id, leaving the autocommands on it.
                     // The name keeps its place in the listing, which is what

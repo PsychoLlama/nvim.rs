@@ -160,7 +160,7 @@ unsafe fn read_undo_file(
     {
         verbosely(automatic, || {
             let mesg = gettext(c"File contents changed, cannot use undo info");
-            unsafe { give_warning(mesg.as_ptr(), true, true) };
+            give_warning(mesg, true, true);
         });
         return;
     }

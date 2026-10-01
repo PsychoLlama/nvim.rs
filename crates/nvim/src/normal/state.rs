@@ -14,9 +14,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
-use crate::cstr;
 use crate::keycodes::ModMask;
-use crate::memory::XString;
 use crate::ops::Op;
 use crate::types::AutoEvent;
 use crate::winlayer::TabPage;
@@ -53,7 +51,7 @@ use crate::message::state::{
     keep_msg_hl_id, msg_didany, msg_didout, msg_hist_off, msg_nowait, msg_scroll, msg_silent,
     need_fileinfo, need_wait_return, quit_more,
 };
-use crate::message::{may_clear_sb_text, msg_delay, msg_ptr, wait_return};
+use crate::message::{has_keep_msg, may_clear_sb_text, msg, msg_delay, wait_return};
 use crate::normal::{
     NormalState, NvFlags, check_scrollbind, clear_op, clear_op_beep, current_oap, end_visual_mode,
     find_command, normal_execute, nv_cmds, unshift_special, visual_active,
@@ -381,20 +379,17 @@ pub(crate) fn normal_redraw_mode_message() {
     if restart_edit.get() != 0 {
         State.set(MODE_INSERT);
     }
-    // SAFETY: `keep_msg` is null or an owned string; the copy is what makes
-    // it safe to pass to `msg`, which may free the global.
-    if must_redraw.get() != 0 && !keep_msg.get().is_null() && !emsg_on_display.get() {
+    if must_redraw.get() != 0 && has_keep_msg() && !emsg_on_display.get() {
         // The redraw must not print the kept message itself, so it is
-        // taken out of the global for the duration and put back after.
-        let kmsg = keep_msg.get();
-        keep_msg.set(ptr::null_mut());
+        // taken out for the duration and put back after.
+        let kmsg = keep_msg.take();
         setcursor();
         let _ = update_screen();
         keep_msg.set(kmsg);
-        // SAFETY: `keep_msg` is a NUL-terminated owned string, tested
-        // non-null above; the copy outlives the call that may free it.
-        let mut copy = XString::from_cstr(unsafe { cstr::at(keep_msg.get()) });
-        unsafe { msg_ptr(copy.as_mut_ptr(), keep_msg_hl_id.get()) };
+        // A copy: `msg` replaces the kept message.
+        if let Some(copy) = keep_msg.with(Clone::clone) {
+            msg(copy.as_cstr(), keep_msg_hl_id.get());
+        }
     }
     setcursor();
     ui_cursor_shape();
@@ -522,13 +517,11 @@ fn normal_redraw() {
         }
     }
     Buf::current().b_last_used = unsafe { time(ptr::null_mut()) };
-    if !keep_msg.get().is_null() {
-        // `msg` may free the global, so it is handed a copy -- and the
-        // message is not added to the history a second time.
-        // SAFETY: as above.
-        let mut copy = XString::from_cstr(unsafe { cstr::at(keep_msg.get()) });
+    // `msg` replaces the kept message, so it is handed a copy -- and the
+    // message is not added to the history a second time.
+    if let Some(copy) = keep_msg.with(Clone::clone) {
         msg_hist_off.set(true);
-        unsafe { msg_ptr(copy.as_mut_ptr(), keep_msg_hl_id.get()) };
+        msg(copy.as_cstr(), keep_msg_hl_id.get());
         msg_hist_off.set(false);
     }
     if need_fileinfo.get() && !shortmess(ShmFlag::FILEINFO) {

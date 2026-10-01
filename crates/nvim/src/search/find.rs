@@ -617,7 +617,7 @@ pub unsafe fn searchit(
                 } else {
                     bot_top_msg
                 };
-                unsafe { give_warning(gettext(msg).as_ptr(), true, false) };
+                give_warning(gettext(msg), true, false);
             }
             if !extra_arg.is_null() {
                 unsafe { (*extra_arg).sa_wrapped = true as c_int };
@@ -713,7 +713,7 @@ pub unsafe fn search_for_exact_line(
             }
             unsafe { (*pos).lnum = buffer.b_ml.ml_line_count };
             if !shortmess(ShmFlag::SEARCH) {
-                unsafe { give_warning(gettext(top_bot_msg).as_ptr(), true, false) };
+                give_warning(gettext(top_bot_msg), true, false);
             }
         } else if unsafe { (*pos).lnum } > buffer.b_ml.ml_line_count {
             unsafe { (*pos).lnum = 1 };
@@ -721,7 +721,7 @@ pub unsafe fn search_for_exact_line(
                 break;
             }
             if !shortmess(ShmFlag::SEARCH) {
-                unsafe { give_warning(gettext(bot_top_msg).as_ptr(), true, false) };
+                give_warning(gettext(bot_top_msg), true, false);
             }
         }
         if unsafe { (*pos).lnum } == start {

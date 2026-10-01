@@ -518,14 +518,15 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
     }
     let _entered = Depth::of(msg_keep_depth);
 
-    // Add the message to the history unless it is a multihl, or a repeat
-    // of the kept message, or a truncated one.
-    if is_multihl.get() == 0
-        && (s != keep_msg.get().cast_const()
-            || (unsafe { *s as u8 } != b'<'
-                && !msg_hist_last.get().is_null()
-                && !unsafe { cstr::eq(s, (*(*msg_hist_last.get()).msg.items).text.data()) }))
-    {
+    // Add the message to the history unless it is a multihl.
+    //
+    // Upstream also skipped a message whose *pointer* was `keep_msg`'s --
+    // the kept message redisplayed, unless it differed from the newest
+    // entry. Every redisplay hands this a copy (`keep_msg` owns its string
+    // and the display may replace it), so that test could never be true
+    // here, and the redisplay sites that must not add to the history say
+    // so with `msg_hist_off`.
+    if is_multihl.get() == 0 {
         // SAFETY: the caller's message is NUL-terminated.
         msg_hist_add(unsafe { cstr::bytes_at(s) }, hl_id);
     }
@@ -558,7 +559,7 @@ pub unsafe fn msg_keep(s: *const c_char, hl_id: c_int, keep: bool, multiline: bo
         && unsafe { vim_strsize(s) }
             < (Rows.get() - cmdline_row.get() - 1) * Columns.get() + sc_col.get()
     {
-        unsafe { set_keep_msg(s, 0) };
+        set_keep_msg(Some(unsafe { cstr::at(s) }), 0);
     }
 
     need_fileinfo.set(false);
@@ -773,24 +774,24 @@ pub unsafe fn msg_may_trunc(force: bool, s: *mut c_char) -> *mut c_char {
     s
 }
 
-/// Set `keep_msg` to `s`, freeing the old value.
+/// Keep a copy of `s` to show again after the next redraw, or with `None`
+/// forget the kept message.
 ///
-/// # Safety
-/// `s` must be null or a valid C string.
-pub unsafe fn set_keep_msg(s: *const c_char, hl_id: c_int) {
+/// Nothing is kept under `:silent`.
+pub fn set_keep_msg(s: Option<&CStr>, hl_id: c_int) {
     // The kept message is not cleared and re-emitted with ext_messages:
     // neovim/neovim#20416.
     if ui_has(kUIMessages) {
         return;
     }
-    unsafe { xfree(keep_msg.get().cast()) };
-    keep_msg.set(if !s.is_null() && msg_silent.get() == 0 {
-        unsafe { xstrdup(s) }
-    } else {
-        ptr::null_mut()
-    });
+    keep_msg.set(s.filter(|_| msg_silent.get() == 0).map(XString::from_cstr));
     keep_msg_more.set(false);
     keep_msg_hl_id.set(hl_id);
+}
+
+/// Is there a message to show again after the next redraw?
+pub(crate) fn has_keep_msg() -> bool {
+    keep_msg.with(Option::is_some)
 }
 
 /// Would a message be seen if it were shown now?
@@ -811,7 +812,7 @@ pub fn msgmore(n: c_int) {
         return;
     }
     // Keep the message from a previous msgmore(), but not another one.
-    if !keep_msg.get().is_null() && !keep_msg_more.get() {
+    if has_keep_msg() && !keep_msg_more.get() {
         return;
     }
 
@@ -833,7 +834,7 @@ pub fn msgmore(n: c_int) {
         unsafe { xstrlcat(text, note.as_ptr(), MSG_BUF_LEN as size_t) };
     }
     if unsafe { msg_ptr(text, 0) } {
-        unsafe { set_keep_msg(text, 0) };
+        set_keep_msg(Some(unsafe { cstr::at(text) }), 0);
         keep_msg_more.set(true);
     }
 }

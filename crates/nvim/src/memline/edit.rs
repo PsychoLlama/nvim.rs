@@ -669,7 +669,7 @@ pub(crate) fn ml_delete_int(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Resu
     // If the file becomes empty the last line is replaced by an empty one.
     if b.b_ml.ml_line_count == 1 {
         if flags & ML_DEL_MESSAGE != 0 {
-            unsafe { set_keep_msg(gettext(no_lines_msg).as_ptr(), 0) };
+            set_keep_msg(Some(gettext(no_lines_msg)), 0);
         }
         let i = unsafe { ml_replace_buf(buffer, 1, c"".as_ptr().cast_mut(), true, false) };
         buffer.b_ml.ml_flags |= MlFlags::EMPTY;

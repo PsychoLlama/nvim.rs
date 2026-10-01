@@ -857,9 +857,7 @@ impl DoTag {
             // Don't overwrite this message.
             msg_scroll.set(1);
         } else {
-            // SAFETY: a `CStr` is a valid C string, which is the whole
-            // contract.
-            unsafe { give_warning(report.as_ptr(), ignored_case, true) };
+            give_warning(&report, ignored_case, true);
         }
         if ignored_case && msg_scrolled.get() == 0 && msg_silent.get() == 0 {
             msg_delay(1007, true);

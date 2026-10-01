@@ -211,16 +211,8 @@ pub(crate) unsafe fn prompt_for_input(
     mouse_used: *mut bool,
 ) -> c_int {
     let mut ret = if one_key { ESC } else { 0 };
-    // SAFETY: `keep_msg` is the editor's kept message, NUL-terminated while
-    // non-null; the copy is owned here.
-    let kmsg = unsafe {
-        let kept = keep_msg.get();
-        if kept.is_null() {
-            core::ptr::null_mut()
-        } else {
-            xstrdup(kept)
-        }
-    };
+    // A copy: the prompt's own messages replace the kept one.
+    let kmsg = keep_msg.with(Clone::clone);
 
     let prompt = match prompt {
         Some(prompt) => prompt,
@@ -258,12 +250,8 @@ pub(crate) unsafe fn prompt_for_input(
             xfree(resp as *mut c_void);
         }
     }
-    if !kmsg.is_null() {
-        // SAFETY: the copy taken above; `set_keep_msg` copies it again.
-        unsafe {
-            set_keep_msg(kmsg, keep_msg_hl_id.get());
-            xfree(kmsg as *mut c_void);
-        }
+    if let Some(kmsg) = kmsg {
+        set_keep_msg(Some(kmsg.as_cstr()), keep_msg_hl_id.get());
     }
     ret
 }

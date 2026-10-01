@@ -112,7 +112,8 @@ pub fn do_sub_msg(count_only: bool) -> bool {
         };
         if unsafe { msg_ptr(buf, 0 as c_int) } {
             // Save the message to display it after a redraw.
-            unsafe { set_keep_msg(buf, 0 as c_int) };
+            // SAFETY: the message just formatted into `scratch`.
+            set_keep_msg(Some(unsafe { crate::cstr::at(buf) }), 0);
         }
         return true;
     }

@@ -471,8 +471,8 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         // (otherwise there is a delay before redrawing), or when the screen
         // scrolled but there is no wait-return prompt.
         if restart_edit.get() != 0 || msg_scrolled.get() != 0 && !need_wait_return.get() {
-            // SAFETY: the message `msg_trunc` kept.
-            unsafe { set_keep_msg(p, 0) };
+            // SAFETY: null, or the NUL-terminated message `msg_trunc` showed.
+            set_keep_msg((!p.is_null()).then(|| unsafe { cstr::at(p) }), 0);
         }
     }
 }
