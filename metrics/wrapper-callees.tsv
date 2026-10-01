@@ -204,7 +204,6 @@ count	callee	no_raw	defs	def
 12	spell_iswordp_nmw	0	1	crates/nvim/src/spell/chartab.rs
 12	tabstop_padding	0	1	crates/nvim/src/indent/mod.rs
 12	unref_extmatch	0	1	crates/nvim/src/regexp/context.rs
-11	Buf::new	0	1	crates/nvim/src/winlayer.rs
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	Dt::new	0	67	
 11	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
@@ -235,6 +234,7 @@ count	callee	no_raw	defs	def
 11	write	0	0	
 10	.replace	0	4	
 10	.write_bytes	0	0	
+10	Buf::new	0	1	crates/nvim/src/winlayer.rs
 10	Fc::new	0	67	
 10	ListRef::retained	0	1	crates/nvim/src/eval/typval/list.rs
 10	OptStr::borrowing	0	1	crates/nvim/src/option/value.rs
@@ -1974,7 +1974,6 @@ count	callee	no_raw	defs	def
 2	save_function_name	0	1	crates/nvim/src/eval/userfunc/name.rs
 2	save_redobuff	0	1	crates/nvim/src/getchar/redo.rs
 2	save_tv_as_string	0	1	crates/nvim/src/eval/system.rs
-2	scan_buf_valid	0	1	crates/nvim/src/insexpand/getexp.rs
 2	schar_cache_clear	1	1	crates/nvim/src/grid/schar.rs
 2	schar_cache_clear_if_full	1	1	crates/nvim/src/grid/schar.rs
 2	schar_from_buf_first	0	1	crates/nvim/src/mbyte/utf8/mod.rs

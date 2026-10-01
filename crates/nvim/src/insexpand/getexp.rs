@@ -21,7 +21,8 @@ use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::vim_snprintf;
-use crate::winlayer::{Buf, buffer_at, buffers};
+use crate::winlayer::BufId;
+use crate::winlayer::{Buf, buffers};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.
@@ -135,15 +136,6 @@ impl CptScan {
 
 /// Thesaurus completion goes through a function rather than a word list:
 /// `'thesaurusfunc'` is set.
-/// Whether the scan's buffer is still on the buffer list.
-///
-/// # Safety
-/// `st` must be the live scan state.
-unsafe fn scan_buf_valid(st: *mut InsComplNextState) -> bool {
-    // SAFETY: the caller's state. Its buffer is live or wiped, which is the
-    // question this asks, so the address is compared and never read.
-    buffer_at(unsafe { (*st).ins_buf }).is_some()
-}
 
 pub(crate) fn thesaurus_func_complete(type_0: c_int) -> bool {
     type_0 == CTRL_X_THESAURUS
@@ -206,7 +198,7 @@ pub(crate) unsafe fn process_next_cpt_value(
             && !skip_source
             && !compl_time_slice_expired.get()
         {
-            unsafe { (*st).ins_buf = Buf::current_raw() };
+            unsafe { (*st).ins_buf = Some(Buf::current().id()) };
             unsafe { (*st).first_match_pos = *start_match_pos };
             // Move the cursor back one character so that CTRL-N can match
             // the word immediately after the cursor.
@@ -216,7 +208,7 @@ pub(crate) unsafe fn process_next_cpt_value(
             {
                 // Move to after the last character in the buffer, so that
                 // a word at the start of it is found correctly.
-                unsafe { (*st).first_match_pos.lnum = (*(*st).ins_buf).b_ml.ml_line_count };
+                unsafe { (*st).first_match_pos.lnum = Buf::current().line_count() };
                 unsafe {
                     (*st).first_match_pos.col =
                         Buf::current().lines().line_len((*st).first_match_pos.lnum)
@@ -233,38 +225,42 @@ pub(crate) unsafe fn process_next_cpt_value(
             && {
                 // The scan's buffer outlives every autocommand and user
                 // function a pass through this loop runs, so it may have been
-                // wiped since it was stored; `buffer_at` answers that from the
-                // buffer list without reading the address. Restarting the walk
-                // at the current buffer is what `ins_compl_get_exp` does for
-                // the same case one level up.
-                let from = buffer_at(unsafe { (*st).ins_buf }).unwrap_or_else(Buf::current);
-                unsafe { (*st).ins_buf = ins_compl_next_buf(from, (*st).cpt.at() as c_int).raw() };
-                unsafe { (*st).ins_buf != Buf::current_raw() }
+                // wiped since it was stored. Restarting the walk at the
+                // current buffer is what `ins_compl_get_exp` does for the
+                // same case one level up.
+                let from = unsafe { (*st).ins_buf }
+                    .and_then(BufId::get)
+                    .unwrap_or_else(Buf::current);
+                let next = ins_compl_next_buf(from, unsafe { (*st).cpt.at() } as c_int);
+                unsafe { (*st).ins_buf = Some(next.id()) };
+                next != Buf::current()
             }
         {
-            // Scan a buffer, but not the current one.
-            if !unsafe { (*(*st).ins_buf).b_ml.ml_mfp }.is_null() {
+            // Scan a buffer, but not the current one: the one just picked,
+            // which nothing since has had a chance to wipe.
+            let buf = unsafe { (*st).ins_buf }
+                .and_then(BufId::get)
+                .expect("ins_compl_next_buf answered a live buffer");
+            if !buf.b_ml.ml_mfp.is_null() {
                 // Loaded buffer.
                 compl_started.set(true);
                 unsafe { (*st).first_match_pos.col = 0 };
                 unsafe { (*st).last_match_pos.col = 0 };
-                unsafe { (*st).first_match_pos.lnum = (*(*st).ins_buf).b_ml.ml_line_count + 1 };
+                unsafe { (*st).first_match_pos.lnum = buf.line_count() + 1 };
                 unsafe { (*st).last_match_pos.lnum = 0 };
                 compl_type = 0;
             } else {
                 // Unloaded buffer: scan it like a dictionary.
                 unsafe { (*st).found_all = true };
-                if unsafe { (*(*st).ins_buf).name.shown_ptr() }.is_null() {
+                if buf.name.shown_ptr().is_null() {
                     status = INS_COMPL_CPT_CONT;
                     break 'done;
                 }
                 compl_type = CTRL_X_DICTIONARY;
-                unsafe { (*st).dict = (*(*st).ins_buf).name.shown_ptr() };
+                unsafe { (*st).dict = buf.name.shown_ptr() };
                 unsafe { (*st).dict_f = DICT_EXACT };
             }
             if !shortmess(ShmFlag::COMPLETIONSCAN) && !compl_autocomplete.get() {
-                // SAFETY: `ins_buf` is the buffer being scanned.
-                let buf = unsafe { Buf::new((*st).ins_buf) };
                 let name = if buf.name.is_unnamed() {
                     buf_spname(buf)
                 } else if buf.name.short().is_none() {
@@ -633,7 +629,7 @@ pub(crate) unsafe fn get_next_completion_match(
         // Normal CTRL-P/CTRL-N and CTRL-X CTRL-L.
         _ => {
             found_new_match = unsafe { get_next_default_completion(st, ini) };
-            if found_new_match.is_err() && unsafe { (*st).ins_buf } == Buf::current_raw() {
+            if found_new_match.is_err() && unsafe { (*st).ins_buf } == Some(Buf::current().id()) {
                 unsafe { (*st).found_all = true };
             }
         }
@@ -687,7 +683,7 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
             st_cleared.set(true);
         }
         unsafe { (*st).found_all = false };
-        unsafe { (*st).ins_buf = Buf::current_raw() };
+        unsafe { (*st).ins_buf = Some(Buf::current().id()) };
         // Copy 'complete', in case the buffer is wiped out.
         let option = if compl_cont_status.get() & CONT_LOCAL != 0 {
             c".".as_ptr()
@@ -704,11 +700,11 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
         }
         unsafe { (*st).first_match_pos = start_pos };
         unsafe { (*st).last_match_pos = start_pos };
-    } else if unsafe { (*st).ins_buf } != Buf::current_raw() && !unsafe { scan_buf_valid(st) } {
+    } else if unsafe { (*st).ins_buf }.and_then(BufId::get).is_none() {
         // In case the buffer was wiped out.
-        unsafe { (*st).ins_buf = Buf::current_raw() };
+        unsafe { (*st).ins_buf = Some(Buf::current().id()) };
     }
-    debug_assert!(!unsafe { (*st).ins_buf }.is_null());
+    debug_assert!(unsafe { (*st).ins_buf }.is_some());
 
     // Remember the last current match.
     compl_old_match.set(compl_curr_match.get());
@@ -828,9 +824,10 @@ pub(crate) fn ins_compl_get_exp(ini: Pos) -> c_int {
             compl_started.set(!compl_time_slice_expired.get());
         } else {
             // Mark a buffer scanned when it has been scanned completely.
-            if unsafe { scan_buf_valid(st) } && (type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS) {
-                debug_assert!(!unsafe { (*st).ins_buf }.is_null());
-                unsafe { (*(*st).ins_buf).b_scanned = true };
+            if type_0 == 0 || type_0 == CTRL_X_PATH_PATTERNS {
+                if let Some(mut buf) = unsafe { (*st).ins_buf }.and_then(BufId::get) {
+                    buf.b_scanned = true;
+                }
             }
             compl_started.set(false);
         }

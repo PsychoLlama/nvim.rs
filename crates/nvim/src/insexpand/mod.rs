@@ -117,7 +117,7 @@ use crate::tag::find_tags;
 use crate::tag::state::g_tag_at_cursor;
 use crate::textformat::auto_format;
 use crate::types::{
-    BackslashEscape, BoolVarValue, Buffer, Callback, ColNr, Dict, Direction, EvalFuncData, Expand,
+    BackslashEscape, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData, Expand,
     ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet, Pos,
     PumItem, RegMatch, SaveVEvent, ScriptCtx, String_0, TypVal, VarNumber, Vv, XpPrefix,
     extmark_undo_vec_t, ptrdiff_t, size_t, uint8_t, uint64_t,
@@ -225,11 +225,11 @@ pub struct InsComplNextState {
     /// The copy of `'complete'` being walked, and where the walk is up to.
     /// Owning, which is why this struct is no longer `Copy`.
     pub(crate) cpt: CptScan,
-    /// The buffer being scanned. Deliberately raw: it outlives the user
-    /// functions and Lua a completion runs, which is exactly the liveness a
-    /// [`crate::winlayer::Buf`] would be promising. Each use builds one where
-    /// the buffer is known live and drops it again.
-    pub ins_buf: *mut Buffer,
+    /// The buffer being scanned. An identity: it outlives the user functions
+    /// and Lua a completion runs, which is exactly the liveness a
+    /// [`crate::winlayer::Buf`] would be promising. Each use resolves it
+    /// where it needs the buffer, and copes with it having been wiped.
+    pub ins_buf: Option<BufId>,
     pub cur_match_pos: *mut Pos,
     pub prev_match_pos: Pos,
     pub set_match_pos: bool,
@@ -267,7 +267,7 @@ pub(crate) const GARRAY_T_INIT: GArray = GArray {
 /// A zeroed `InsComplNextState`: C's `CLEAR_FIELD(st)`.
 pub(crate) const INS_COMPL_NEXT_STATE_INIT: InsComplNextState = InsComplNextState {
     cpt: CptScan::EMPTY,
-    ins_buf: ptr::null_mut(),
+    ins_buf: None,
     cur_match_pos: ptr::null_mut(),
     prev_match_pos: POS_T_INIT,
     set_match_pos: false,

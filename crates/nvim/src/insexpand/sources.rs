@@ -18,6 +18,7 @@ use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
 use crate::vim_snprintf;
+use crate::winlayer::BufId;
 use crate::winlayer::{Buf, PosRef, Win, first_buffer, first_window};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
@@ -536,21 +537,27 @@ pub(crate) unsafe fn get_next_default_completion(
     let in_fuzzy_collect = !compl_status_adding() && cot_fuzzy() && compl_length.get() > 0;
     let leader = ins_compl_leader();
     let mut score = FUZZY_SCORE_NONE;
-    // SAFETY: `st` is the caller's live scan state; `ins_buf` is the buffer
-    // it is scanning and `cur_match_pos` addresses one of the state's own two
-    // position fields. Neither changes while this scan runs.
+    // SAFETY: `st` is the caller's live scan state; `cur_match_pos`
+    // addresses one of the state's own two position fields. Neither changes
+    // while this scan runs.
     let (ins_buf, match_pos, start) = unsafe {
         (
-            Buf::new((*st).ins_buf),
+            (*st).ins_buf,
             PosRef::new((*st).cur_match_pos),
             PosRef::new(start_pos),
         )
     };
-    let in_curbuf = ins_buf.raw() == Buf::current_raw();
+    // The scan's buffer survives the timers and RPC that
+    // `ins_compl_check_keys` lets run between two passes only if nothing
+    // wiped it. A wiped one has nothing more to give: the caller then marks
+    // this source done and moves on to the next in 'complete'.
+    let Some(ins_buf) = ins_buf.and_then(BufId::get) else {
+        return Err(Failed);
+    };
+    let in_curbuf = Some(ins_buf) == Buf::current_or_none();
 
     // If 'infercase' is set, don't use 'smartcase' here.
     let save_p_scs = p_scs();
-    debug_assert!(!ins_buf.raw().is_null());
     if ins_buf.b_p_inf != 0 {
         P_SCS.set(false);
     }
