@@ -67,3 +67,4 @@ Tests only run local, not in CI. Any failure, even out of scope, is your respons
   hundreds of sites that drop a value. Worth ~0.5 % on four of the five
   benches, and neither the source nor the suites show it. Run it whenever a
   value type gains a field.
+- `just state-exports [binary]` — fails if a state record's cell (`state_record!`, `OPTIONS`) is an exported `D`/`B` symbol in a **release** binary, i.e. read through the GOT; run it after changing a record's or its accessors' visibility.

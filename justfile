@@ -105,6 +105,14 @@ benchmark *args: build
 drop-glue binary='target/release/nvim':
   scripts/drop-glue.py {{ binary }}
 
+# Fail if a state record's cell (`state_record!`, the option table) is an
+# exported (`D`/`B`) symbol. An exported static is read through the GOT, one
+# more load on every access; a `pub` inlinable body that names the record is
+# enough to export it, and nothing in the source shows it (the option table's
+# cost spellbench 0.7 %). Wants a `--release` binary, like `drop-glue`.
+state-exports binary='target/release/nvim':
+  scripts/state-exports.py {{ binary }}
+
 # A/B two nvim binaries on one whole-binary bench, e.g.
 # `just bench-ab scrbench /tmp/a/nvim /tmp/b/nvim`. The bench is a name from
 # test/benchmark/ab (evalbench, inbench, mlbench, scrbench, spellbench);
