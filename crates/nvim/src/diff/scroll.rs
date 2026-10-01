@@ -127,7 +127,7 @@ fn calculate_topfill_and_topline(
 pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     let tp = TabPage::current();
     let frombuf = fromwin.buffer();
-    let fromidx = diff_slot(frombuf, tp);
+    let fromidx = tp.diff_index(frombuf);
     if fromidx == DB_COUNT {
         return;
     }
@@ -150,7 +150,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
             towin.w_topline = tobuf.b_ml.ml_line_count - (frombuf.b_ml.ml_line_count - lnum);
         }
         Some(dp) => {
-            let toidx = diff_slot(tobuf, tp);
+            let toidx = tp.diff_index(tobuf);
             if toidx == DB_COUNT {
                 return;
             }
@@ -191,7 +191,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
 pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     let tp = TabPage::current();
     let mut lnum = Win::current().w_cursor.lnum;
-    let idx = diff_slot(Buf::current(), tp);
+    let idx = tp.diff_index(Buf::current());
     if idx == DB_COUNT || tp.tp_first_diff.is_null() {
         return Err(Failed);
     }
@@ -240,8 +240,8 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
 /// blocks passed so far, which is the answer for any line outside a block.
 fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
     let tp = TabPage::current();
-    let idx1 = diff_slot(buf1, tp);
-    let idx2 = diff_slot(Buf::current(), tp);
+    let idx1 = tp.diff_index(buf1);
+    let idx2 = tp.diff_index(Buf::current());
     if idx1 == DB_COUNT || idx2 == DB_COUNT || tp.tp_first_diff.is_null() {
         return lnum1;
     }
@@ -295,7 +295,7 @@ pub fn diff_get_corresponding_line(buf1: Buf, lnum1: LineNr) -> LineNr {
 /// Safe: a [`Win`] carries the whole of the promise this needs.
 pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     let tp = TabPage::current();
-    let idx = diff_slot(Buf::current(), tp);
+    let idx = tp.diff_index(Buf::current());
     if idx == DB_COUNT {
         return 0;
     }
@@ -310,7 +310,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     let Some(dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) else {
         return buf.b_ml.ml_line_count - (Buf::current().b_ml.ml_line_count - lnum);
     };
-    let i = diff_slot(buf, tp);
+    let i = tp.diff_index(buf);
     if i == DB_COUNT {
         return 0;
     }

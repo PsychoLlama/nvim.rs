@@ -91,7 +91,7 @@ pub fn nv_diffgetput(put: bool, count: size_t) {
 /// destination is modifiable.
 pub fn ex_diffgetput(excmd: &mut ExArg) {
     let tp = TabPage::current();
-    let idx_cur = diff_slot(Buf::current(), tp);
+    let idx_cur = tp.diff_index(Buf::current());
     if idx_cur == DB_COUNT {
         emsg_gettext(c"E99: Current buffer is not in diff mode".as_ptr());
         return;
@@ -166,7 +166,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         if buf.raw() == Buf::current_raw() {
             return;
         }
-        idx_other = diff_slot(buf, tp);
+        idx_other = tp.diff_index(buf);
         if idx_other == DB_COUNT {
             // SAFETY: as above.
             let arg = msg_bytes(excmd.line.arg());
@@ -215,7 +215,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
             // SAFETY: the current buffer is live.
             unsafe { change_warning(Buf::current(), 0) };
             // The warning can run autocommands, which can move us.
-            if diff_slot(Buf::current(), tp) != idx_to {
+            if tp.diff_index(Buf::current()) != idx_to {
                 emsg_gettext(c"E787: Buffer changed unexpectedly".as_ptr());
                 break '_theend;
             }

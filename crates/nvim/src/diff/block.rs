@@ -2,7 +2,7 @@
 //!
 //! A tabpage owns a linked list of `DiffBlock` blocks, each naming a line range
 //! in every one of the (up to eight) buffers `tp_diffbuf` holds.  This file
-//! owns both halves: [`diff_buf_add`]/[`diff_buf_delete`]/[`diff_buf_idx`]
+//! owns both halves: [`diff_buf_add`]/[`diff_buf_delete`]/[`TabPage::diff_index`]
 //! are the registry, and [`diff_alloc_new`]/[`diff_free`]/
 //! [`diff_check_sanity`] the list.
 //!
@@ -52,6 +52,18 @@ impl TabPage {
             .expect("a diff slot the caller found in use")
     }
 
+    /// `buffer`'s slot in this tab page's diff, or `DB_COUNT` if it has
+    /// none. Compares ids only, so it is safe to ask about a buffer the
+    /// caller is not otherwise sure of.
+    pub(crate) fn diff_index(self, buffer: Buf) -> c_int {
+        (0..DB_COUNT)
+            .find(|&i| {
+                let i = usize::try_from(i).expect("a diff-buffer index is never negative");
+                self.diff_slot_holds(i, buffer)
+            })
+            .unwrap_or(DB_COUNT)
+    }
+
     /// Whether diff slot `idx` holds `buffer`. A buffer without a number
     /// is in no slot.
     #[inline]
@@ -76,7 +88,7 @@ pub(crate) unsafe fn clear_diffblock(dp: *mut DiffBlock) {
 /// Take `buffer` out of every tabpage's diff.
 pub fn diff_buf_delete(buffer: Buf) {
     for mut tp in tabs() {
-        let i = diff_buf_idx(buffer, tp);
+        let i = tp.diff_index(buffer);
         if i != DB_COUNT {
             let i = usize::try_from(i).expect("a diff-buffer index is never negative");
             tp.tp_diffbuf[i] = None;
@@ -102,7 +114,7 @@ pub fn diff_buf_adjust(win: Win) {
         return;
     }
     let mut tp = TabPage::current();
-    let i = diff_buf_idx(win.buffer(), tp);
+    let i = tp.diff_index(win.buffer());
     if i != DB_COUNT {
         let i = usize::try_from(i).expect("a diff-buffer index is never negative");
         tp.tp_diffbuf[i] = None;
@@ -114,7 +126,7 @@ pub fn diff_buf_adjust(win: Win) {
 /// Put `buffer` in the current tabpage's diff, if there is a slot free.
 pub fn diff_buf_add(buffer: Buf) {
     let mut tp = TabPage::current();
-    if diff_buf_idx(buffer, tp) != DB_COUNT {
+    if tp.diff_index(buffer) != DB_COUNT {
         return;
     }
     for i in 0..DB_COUNT as usize {
@@ -140,20 +152,10 @@ pub(crate) fn diff_buf_clear() {
     }
 }
 
-/// `buffer`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
-pub(crate) fn diff_buf_idx(buffer: Buf, tabpage: TabPage) -> c_int {
-    (0..DB_COUNT)
-        .find(|&i| {
-            let i = usize::try_from(i).expect("a diff-buffer index is never negative");
-            tabpage.diff_slot_holds(i, buffer)
-        })
-        .unwrap_or(DB_COUNT)
-}
-
 /// Mark every tabpage `buffer` is diffed in as needing a recompute.
 pub fn diff_invalidate(buffer: Buf) {
     for mut tp in tabs() {
-        if diff_buf_idx(buffer, tp) != DB_COUNT {
+        if tp.diff_index(buffer) != DB_COUNT {
             tp.tp_diff_invalid = 1;
             if tp.is_current() {
                 diff_redraw(true);
@@ -174,7 +176,7 @@ pub fn diff_mark_adjust(
     amount_after: LineNr,
 ) {
     for tp in tabs() {
-        let idx = diff_buf_idx(buffer, tp);
+        let idx = tp.diff_index(buffer);
         if idx != DB_COUNT {
             diff_mark_adjust_tp(tp, idx, line1, line2, amount, amount_after);
         }
@@ -602,5 +604,5 @@ pub(crate) unsafe fn valid_diff(diff: *mut DiffBlock) -> bool {
 
 /// Whether `buffer` is in any tabpage's diff.
 pub fn diff_mode_buf(buffer: Buf) -> bool {
-    tabs().any(|tp| diff_buf_idx(buffer, tp) != DB_COUNT)
+    tabs().any(|tp| tp.diff_index(buffer) != DB_COUNT)
 }

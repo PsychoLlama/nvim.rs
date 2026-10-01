@@ -102,17 +102,6 @@ pub(crate) fn diff_blocks(tabpage: TabPage) -> impl Iterator<Item = Df> {
     core::iter::successors(Df::first(tabpage), |dp| dp.next())
 }
 
-/// `buffer`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
-///
-/// [`diff_buf_idx`] with its promise discharged: it only compares `buffer`
-/// against the tab page's eight `tp_diffbuf` slots and never dereferences it,
-/// so a live tab page is the whole precondition -- which is what a [`TabPage`]
-/// argument says. That matters because half the callers ask about a buffer
-/// they are not otherwise sure of.
-pub(crate) fn diff_slot(buffer: Buf, tabpage: TabPage) -> c_int {
-    diff_buf_idx(buffer, tabpage)
-}
-
 /// Whether `dp` is still in the current tab page's block list.
 ///
 /// [`valid_diff`], likewise safe: the walk compares `dp` against the live

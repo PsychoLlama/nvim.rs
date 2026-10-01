@@ -403,7 +403,7 @@ fn close_all_others(message: bool, forceit: bool) {
                 break 'skip; // don't close the current window
             }
             // autocommands messed this one up
-            if !buf_is_valid(wp) && valid_win(wp.id()).is_some() {
+            if wp.surviving_buffer().is_none() && valid_win(wp.id()).is_some() {
                 wp.w_buffer = Buf::NULL;
                 close(wp, false, false);
                 break 'skip;
@@ -436,14 +436,6 @@ fn close_all_others(message: bool, forceit: bool) {
     if message && firstwin.get() != lastwin.get() {
         err(c"E445: Other window contains changes");
     }
-}
-
-/// Whether the window still shows a buffer that is on the buffer list.
-///
-/// By identity, and `None` where the window has no buffer at all: `w_buffer`
-/// is null for the moment between losing one and being given another.
-fn buf_is_valid(window: Win) -> bool {
-    window.surviving_buffer().is_some()
 }
 
 /// Whether `buffer` may be abandoned, saying why it may not.

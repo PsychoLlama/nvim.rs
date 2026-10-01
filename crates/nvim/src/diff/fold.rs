@@ -126,8 +126,7 @@ pub unsafe fn diff_check_with_linestatus(
     if lnum < 1 || lnum > buf.b_ml.ml_line_count + 1 {
         return 0;
     }
-    // SAFETY: a live buffer and a live tab page.
-    let idx = diff_buf_idx(buf, tp);
+    let idx = tp.diff_index(buf);
     if idx == DB_COUNT {
         return 0;
     }

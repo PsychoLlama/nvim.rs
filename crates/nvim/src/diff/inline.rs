@@ -27,7 +27,7 @@ pub fn diff_update_line(lnum: LineNr) {
         return;
     }
     let tp = TabPage::current();
-    let idx = diff_slot(Buf::current(), tp);
+    let idx = tp.diff_index(Buf::current());
     if idx == DB_COUNT {
         return;
     }
@@ -231,7 +231,7 @@ fn diff_find_change_simple(
 /// `diffline` must be a writable `DiffLine`.
 pub unsafe fn diff_find_change(window: Win, lnum: LineNr, diffline: *mut DiffLine) -> bool {
     let tp = TabPage::current();
-    let idx = diff_slot(window.buffer(), tp);
+    let idx = tp.diff_index(window.buffer());
     if idx == DB_COUNT {
         return false;
     }

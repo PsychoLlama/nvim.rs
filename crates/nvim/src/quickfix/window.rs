@@ -15,7 +15,7 @@
 #![allow(unsafe_code)]
 
 use super::*;
-use crate::buffer::{buf_valid, find_buf};
+use crate::buffer::find_buf;
 use crate::cursor::check_cursor;
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
@@ -69,17 +69,6 @@ impl Qfl {
 /// An option value holding a string constant.
 pub(crate) const fn string_optval(text: &'static CStr) -> OptVal {
     OptVal::static_string(text)
-}
-
-/// `buf_valid()`: whether the window still shows a buffer on the buffer list.
-///
-/// By identity — the question is asked about a buffer an autocommand may
-/// already have freed, and a number that names nothing answers `false` where
-/// an address might have been reused.
-fn buf_is_valid(window: Win) -> bool {
-    window
-        .buffer_or_none()
-        .is_some_and(|buf| buf_valid(buf.id()))
 }
 
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
@@ -136,7 +125,7 @@ pub(crate) fn find_tab_win(mut wanted: impl FnMut(Win) -> bool) -> Option<Win> {
 /// A window showing the quickfix buffer has no `w_llist_ref`; one showing a
 /// location list buffer points at the list it shows.
 fn is_qf_win(win: Win, qi: Qi) -> bool {
-    buf_is_valid(win)
+    win.surviving_buffer().is_some()
         && is_qf_buffer(win)
         && (qi.is_quickfix_stack() && win.w_llist_ref.is_null()
             || qi.qfl_type == QFLT_LOCATION && ptr::eq(win.w_llist_ref, qi.raw()))

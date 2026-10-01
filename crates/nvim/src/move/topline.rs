@@ -10,8 +10,7 @@
 //!
 //! Original: `src/nvim/move.c`, Vim/Neovim, Vim license.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 
 use core::ffi::c_int;
 
@@ -75,8 +74,7 @@ fn update_topline_win(mut win: Win) {
     let old_topline = win.w_topline;
     let old_topfill = win.w_topfill;
 
-    // SAFETY: a live buffer.
-    if unsafe { buf_is_empty(Buf::new(win.buffer().raw())) } {
+    if buf_is_empty(win.buffer()) {
         // Special case: an empty file always starts at line 1.
         if win.w_topline != 1 {
             win.redraw_later(UPD_NOT_VALID);

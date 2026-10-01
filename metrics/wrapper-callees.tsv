@@ -2402,7 +2402,6 @@ count	callee	no_raw	defs	def
 1	buf_delete_signs	0	1	crates/nvim/src/sign/place.rs
 1	buf_findsign	0	1	crates/nvim/src/sign/place.rs
 1	buf_init_chartab	0	0	
-1	buf_is_empty	0	0	
 1	buf_open_scratch	0	1	crates/nvim/src/buffer/open.rs
 1	buf_put_decor_sh	0	1	crates/nvim/src/decoration/signs.rs
 1	buf_remove_decor_sh	0	1	crates/nvim/src/decoration/signs.rs
