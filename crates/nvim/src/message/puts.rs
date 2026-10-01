@@ -20,6 +20,7 @@ use crate::mbyte::{cells_at, char_at, char_len, cluster_len, string_cells};
 use crate::printf;
 use crate::types::{Callback, NUL};
 use core::ffi::{c_int, c_uint};
+use std::borrow::Cow;
 
 /// The `on_print` callback an RPC client installed.
 ///
@@ -255,7 +256,7 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
 
     // The text being shown, which is not always the caller's: the pager can
     // jump ahead to a dialog's buttons, and those are a string of their own.
-    let mut text = bytes;
+    let mut text = Cow::Borrowed(bytes);
     let mut at = 0;
     // The scrollback copy runs one chunk behind the cursor: `stored` is how
     // much of `text` has been captured, `sb_col` the column the run it holds
@@ -317,9 +318,9 @@ pub(crate) fn msg_bytes_to_grid(bytes: &[u8], hl_id: c_int, recurse: bool) {
                         // The pager jumped ahead to the dialog buttons, so
                         // the rest of the caller's text is not shown and
                         // nothing of it is left to store.
-                        // SAFETY: the prompt only answers true while a
-                        // dialog is up, and a dialog owns its button string.
-                        text = unsafe { cstr::bytes_at(confirm_buttons.get()) };
+                        // A copy: the rest of the loop can redraw.
+                        let buttons = confirm_buttons.with(Clone::clone).unwrap_or_default();
+                        text = Cow::Owned(buttons.as_cstr().to_bytes().to_vec());
                         at = 0;
                         stored = 0;
                     }

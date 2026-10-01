@@ -486,33 +486,32 @@ pub(crate) fn check_emsg_bytes<R>(
     f: impl FnOnce() -> R,
     msg: Option<&[u8]>,
 ) -> R {
-    use neovim::message::msg_hist_last;
+    use neovim::message::last_message;
 
-    let before = msg_hist_last.get();
+    let before = last_message().map(|(seq, _)| seq);
     let ret = f();
-    let after = msg_hist_last.get();
+    let after = last_message();
     match msg {
         Some(expected) => {
-            assert!(
-                !after.is_null(),
-                "expected the message {:?}, got none",
-                String::from_utf8_lossy(expected)
-            );
+            let Some((seq, text)) = after else {
+                panic!(
+                    "expected the message {:?}, got none",
+                    String::from_utf8_lossy(expected)
+                );
+            };
             assert_ne!(
                 before,
-                after,
+                Some(seq),
                 "expected a new message: {:?}",
                 String::from_utf8_lossy(expected)
             );
-            let chunk = unsafe { (*(*after).msg.items).clone() };
-            let text = unsafe { CStr::from_ptr(chunk.text.data()) };
             assert_eq!(
-                String::from_utf8_lossy(text.to_bytes()),
+                String::from_utf8_lossy(&text),
                 String::from_utf8_lossy(expected)
             );
-            assert_eq!(text.to_bytes(), expected);
+            assert_eq!(text, expected);
         }
-        None => assert_eq!(before, after, "unexpected message"),
+        None => assert_eq!(before, after.map(|(seq, _)| seq), "unexpected message"),
     }
     ret
 }

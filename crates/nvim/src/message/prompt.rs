@@ -314,7 +314,9 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
     let old_state = State.get();
     let mut retval = false;
     let mut to_redraw = false;
-    let mut mp_last: *mut MsgChunk = ptr::null_mut();
+    // The chunk that starts the line below the screen's last, once the
+    // pager has scrolled back; `None` while it shows the newest text.
+    let mut mp_last: Option<SbPos> = None;
 
     // We get called recursively when a timer callback outputs a message.
     // In that case don't show another prompt. Also don't take over a
@@ -328,10 +330,12 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
 
     if typed_char == KEY_UPPER_G {
         // "g<" -- find the first line on the last page.
-        mp_last = unsafe { msg_sb_start(last_msgchunk.get()) };
+        mp_last = msg_sb_start(sb_last());
         let mut i = 0;
-        while i < Rows.get() - 2 && !mp_last.is_null() && !unsafe { (*mp_last).sb_prev }.is_null() {
-            mp_last = unsafe { msg_sb_start((*mp_last).sb_prev) };
+        while i < Rows.get() - 2
+            && let Some(prev) = mp_last.and_then(sb_prev)
+        {
+            mp_last = msg_sb_start(Some(prev));
             i += 1;
         }
     }
@@ -430,31 +434,31 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
         if toscroll < 0 || to_redraw {
             // Find the line at the top of the screen, and the one
             // `toscroll` lines above it.
-            let mut mp = if mp_last.is_null() {
-                unsafe { msg_sb_start(last_msgchunk.get()) }
-            } else if !unsafe { (*mp_last).sb_prev }.is_null() {
-                unsafe { msg_sb_start((*mp_last).sb_prev) }
-            } else {
-                ptr::null_mut()
+            let mut mp = match mp_last {
+                None => msg_sb_start(sb_last()),
+                Some(last) => msg_sb_start(sb_prev(last)),
             };
             let mut i = 0;
-            while i < Rows.get() - 2 && !mp.is_null() && !unsafe { (*mp).sb_prev }.is_null() {
-                mp = unsafe { msg_sb_start((*mp).sb_prev) };
+            while i < Rows.get() - 2
+                && let Some(prev) = mp.and_then(sb_prev)
+            {
+                mp = msg_sb_start(Some(prev));
                 i += 1;
             }
 
-            if !mp.is_null() && (!unsafe { (*mp).sb_prev }.is_null() || to_redraw) {
+            if let Some(top) = mp
+                && (sb_prev(top).is_some() || to_redraw)
+            {
                 // Scroll back to the previous message.
                 let mut i = 0;
                 while i > toscroll {
-                    if mp.is_null() || unsafe { (*mp).sb_prev }.is_null() {
+                    let Some(prev) = mp.and_then(sb_prev) else {
                         break;
-                    }
-                    mp = unsafe { msg_sb_start((*mp).sb_prev) };
-                    mp_last = if mp_last.is_null() {
-                        unsafe { msg_sb_start(last_msgchunk.get()) }
-                    } else {
-                        unsafe { msg_sb_start((*mp_last).sb_prev) }
+                    };
+                    mp = msg_sb_start(Some(prev));
+                    mp_last = match mp_last {
+                        None => msg_sb_start(sb_last()),
+                        Some(last) => msg_sb_start(sb_prev(last)),
                     };
                     i -= 1;
                 }
@@ -463,13 +467,17 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                     // Display a line at the top, scrolling the rest down.
                     grid_ins_lines(msg_grid_ref(), 0, 1, Rows.get(), 0, Columns.get());
                     clear_msg_area(0, 1, 0, Columns.get());
-                    unsafe { disp_sb_line(0, mp) };
+                    if let Some(top) = mp {
+                        disp_sb_line(0, top);
+                    }
                 } else {
                     // Redisplay the whole screen.
                     clear_msg_area(0, Rows.get(), 0, Columns.get());
                     let mut i = 0;
-                    while !mp.is_null() && i < Rows.get() - 1 {
-                        mp = unsafe { disp_sb_line(i, mp) };
+                    while let Some(line) = mp
+                        && i < Rows.get() - 1
+                    {
+                        mp = disp_sb_line(i, line);
                         msg_scrolled.set(msg_scrolled.get() + 1);
                         i += 1;
                     }
@@ -483,7 +491,9 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 msg_scroll_up(true, false);
                 msg_scrolled.set(msg_scrolled.get() + 1);
             }
-            while toscroll > 0 && !mp_last.is_null() {
+            while toscroll > 0
+                && let Some(line) = mp_last
+            {
                 // A throttled scroll here would be undone by the flush, so
                 // discount it instead.
                 if msg_do_throttle() && !msg_grid_ref().throttled {
@@ -493,7 +503,7 @@ pub(crate) fn do_more_prompt(typed_char: c_int) -> bool {
                 msg_scroll_up(true, false);
                 inc_msg_scrolled();
                 clear_msg_area(Rows.get() - 2, Rows.get() - 1, 0, Columns.get());
-                mp_last = unsafe { disp_sb_line(Rows.get() - 2, mp_last) };
+                mp_last = disp_sb_line(Rows.get() - 2, line);
                 toscroll -= 1;
             }
         }
@@ -546,7 +556,7 @@ pub fn repeat_message() {
     if State.get() == MODE_ASKMORE {
         msg_moremsg(true); // display --MORE-- message again
         msg_row.set(Rows.get() - 1);
-    } else if State.get() & MODE_CMDLINE != 0 && !confirm_msg.get().is_null() {
+    } else if State.get() & MODE_CMDLINE != 0 && confirm_msg.with(Option::is_some) {
         display_confirm_msg(); // display ":confirm" message again
         msg_row.set(Rows.get() - 1);
     } else if State.get() == MODE_EXTERNCMD {

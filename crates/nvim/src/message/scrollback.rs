@@ -1,13 +1,16 @@
 //! The message scrollback, which `g<` and the pager page through.
 //!
 //! Every line [`crate::message::msg_bytes_to_grid`] emits is also
-//! copied into a linked list of [`MsgChunk`] chunks ([`store_sb_text`]), so
-//! that the pager can scroll backwards past what the screen still holds.
+//! copied into a queue of [`Chunk`]s ([`store_sb_text`]), so that the pager
+//! can scroll backwards past what the screen still holds.
+//!
+//! Upstream's chunks were a doubly-linked list the pager held raw pointers
+//! into across `get_keystroke` -- which runs timers, which can print, which
+//! can clear the list. Here a chunk is named by its [`SbPos`], a number that
+//! stays put as chunks are added at the back and dropped at the front; a
+//! position whose chunk has gone simply finds nothing.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -17,24 +20,77 @@
 )]
 
 use super::*;
-use crate::cstr;
 use crate::types::CmdLine;
-use core::ffi::{c_char, c_int, c_uint};
-use core::{mem, ptr};
+use core::ffi::{c_int, c_uint};
+use std::collections::VecDeque;
 
-/// The most recently displayed chunk of message text.
-pub(crate) static last_msgchunk: GlobalCell<*mut MsgChunk> = GlobalCell::new(ptr::null_mut());
-
-/// A chunk's text lives in the same allocation, right after the header.
-///
-/// # Safety
-/// `mp` must point at a chunk allocated by [`store_sb_text`].
-unsafe fn sb_text(mp: *mut MsgChunk) -> *mut c_char {
-    // Not `(*mp).sb_text.as_mut_ptr()`: the field is a zero-length array, so
-    // the autoref covers no bytes and the pointer carries no provenance for
-    // the text that follows it.
-    unsafe { (&raw mut (*mp).sb_text).cast() }
+/// One run of displayed message text.
+struct Chunk {
+    text: Box<[u8]>,
+    /// The run ends its screen line.
+    eol: bool,
+    /// The column the run started at.
+    msg_col: c_int,
+    hl_id: c_int,
 }
+
+/// Where a chunk is in the scrollback. Stable while chunks are added at
+/// the back and dropped at the front.
+pub(crate) type SbPos = usize;
+
+/// The scrollback: `chunks[0]` is at position `first`.
+struct Scrollback {
+    chunks: VecDeque<Chunk>,
+    first: SbPos,
+}
+
+impl Scrollback {
+    fn get(&self, pos: SbPos) -> Option<&Chunk> {
+        self.chunks.get(pos.checked_sub(self.first)?)
+    }
+
+    fn last(&self) -> Option<SbPos> {
+        (!self.chunks.is_empty()).then(|| self.first + self.chunks.len() - 1)
+    }
+
+    /// The chunk before `pos`, if there is one.
+    fn prev(&self, pos: SbPos) -> Option<SbPos> {
+        let prev = pos.checked_sub(1)?;
+        self.get(prev).map(|_| prev)
+    }
+
+    /// The chunk that starts the screen line `pos` is part of.
+    fn line_start(&self, pos: SbPos) -> Option<SbPos> {
+        self.get(pos)?;
+        let mut at = pos;
+        while let Some(prev) = self.prev(at) {
+            if self.chunks[prev - self.first].eol {
+                break;
+            }
+            at = prev;
+        }
+        Some(at)
+    }
+
+    /// Drop the chunks before `pos`.
+    fn drop_before(&mut self, pos: SbPos) {
+        let n = pos.saturating_sub(self.first).min(self.chunks.len());
+        self.chunks.drain(..n);
+        self.first += n;
+    }
+
+    /// Mark the last chunk as finishing its screen line.
+    fn end_line(&mut self) {
+        if let Some(last) = self.chunks.back_mut() {
+            last.eol = true;
+        }
+    }
+}
+
+static SCROLLBACK: GlobalCell<Scrollback> = GlobalCell::new(Scrollback {
+    chunks: VecDeque::new(),
+    first: 0,
+});
 
 /// Remember `run` for scrolling back over later.
 ///
@@ -44,42 +100,28 @@ unsafe fn sb_text(mp: *mut MsgChunk) -> *mut c_char {
 /// after this one.
 pub(crate) fn store_sb_text(run: &[u8], hl_id: c_int, sb_col: &mut c_int, finish: bool) {
     let mut run = run;
-    if do_clear_sb_text.get() == SB_CLEAR_ALL || do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE {
-        clear_sb_text(do_clear_sb_text.get() == SB_CLEAR_ALL);
+    let clear = do_clear_sb_text.get();
+    if clear == SB_CLEAR_ALL || clear == SB_CLEAR_CMDLINE_DONE {
+        clear_sb_text(clear == SB_CLEAR_ALL);
         msg_sb_eol(); // prevent messages from overlapping
-        if do_clear_sb_text.get() == SB_CLEAR_CMDLINE_DONE && run.first() == Some(&b'\n') {
+        if clear == SB_CLEAR_CMDLINE_DONE && run.first() == Some(&b'\n') {
             run = &run[1..];
         }
         do_clear_sb_text.set(SB_CLEAR_NONE);
     }
 
-    if !run.is_empty() {
-        let len = run.len();
-        // SAFETY: the chunk's text lives in the same allocation, right after
-        // the header, which is why the size is asked for that way.
-        let mp: *mut MsgChunk =
-            unsafe { xmalloc(mem::offset_of!(MsgChunk, sb_text) + len + 1) }.cast();
-        // SAFETY: the allocation is live and holds a header and `len + 1`
-        // bytes of text.
-        unsafe {
-            (*mp).sb_eol = c_char::from(finish);
-            (*mp).sb_msg_col = *sb_col;
-            (*mp).sb_hl_id = hl_id;
-            ptr::copy_nonoverlapping(run.as_ptr().cast::<c_char>(), sb_text(mp), len);
-            *sb_text(mp).add(len) = 0;
-
-            (*mp).sb_prev = last_msgchunk.get();
-            (*mp).sb_next = ptr::null_mut();
+    SCROLLBACK.with_mut(|sb| {
+        if !run.is_empty() {
+            sb.chunks.push_back(Chunk {
+                text: run.into(),
+                eol: finish,
+                msg_col: *sb_col,
+                hl_id,
+            });
+        } else if finish {
+            sb.end_line();
         }
-        if !last_msgchunk.get().is_null() {
-            // SAFETY: the list's tail is a live chunk.
-            unsafe { (*last_msgchunk.get()).sb_next = mp };
-        }
-        last_msgchunk.set(mp);
-    } else if finish && !last_msgchunk.get().is_null() {
-        // SAFETY: as above.
-        unsafe { (*last_msgchunk.get()).sb_eol = 1 };
-    }
+    });
 
     *sb_col = 0;
 }
@@ -107,21 +149,14 @@ pub fn sb_text_start_cmdline() {
 pub fn sb_text_restart_cmdline() {
     // Needed when returning from a nested command line.
     do_clear_sb_text.set(SB_CLEAR_CMDLINE_BUSY);
-    if last_msgchunk.get().is_null() || unsafe { (*last_msgchunk.get()).sb_eol } != 0 {
+    SCROLLBACK.with_mut(|sb| {
         // No unfinished line: don't clear anything.
-        return;
-    }
-
-    let mut tofree = unsafe { msg_sb_start(last_msgchunk.get()) };
-    last_msgchunk.set(unsafe { (*tofree).sb_prev });
-    if !last_msgchunk.get().is_null() {
-        unsafe { (*last_msgchunk.get()).sb_next = ptr::null_mut() };
-    }
-    while !tofree.is_null() {
-        let next = unsafe { (*tofree).sb_next };
-        unsafe { xfree(tofree.cast()) };
-        tofree = next;
-    }
+        let Some(last) = sb.last().filter(|&last| !sb.chunks[last - sb.first].eol) else {
+            return;
+        };
+        let start = sb.line_start(last).unwrap_or(last);
+        sb.chunks.truncate(start - sb.first);
+    });
 }
 
 /// Finished editing the command line: clear the old lines, but the last one
@@ -132,21 +167,16 @@ pub fn sb_text_end_cmdline() {
 
 /// Forget the remembered text. With `all` false the last screen line is kept.
 pub fn clear_sb_text(all: bool) {
-    // The slot holding the newest chunk to drop: either the list head, or
-    // the `sb_prev` of the line that is being kept.
-    let lastp = if all {
-        last_msgchunk.ptr()
-    } else {
-        if last_msgchunk.get().is_null() {
-            return;
+    SCROLLBACK.with_mut(|sb| {
+        let keep_from = if all {
+            sb.last().map(|last| last + 1)
+        } else {
+            sb.last().and_then(|last| sb.line_start(last))
+        };
+        if let Some(keep_from) = keep_from {
+            sb.drop_before(keep_from);
         }
-        unsafe { &raw mut (*msg_sb_start(last_msgchunk.get())).sb_prev }
-    };
-    while !unsafe { (*lastp).is_null() } {
-        let prev = unsafe { (**lastp).sb_prev };
-        unsafe { xfree((*lastp).cast()) };
-        unsafe { *lastp = prev };
-    }
+    });
 }
 
 /// The `g<` command.
@@ -162,8 +192,8 @@ pub fn show_sb_text() {
     }
     // Only show something when there is more than one line: a command
     // with no output would otherwise leave one line looking odd.
-    let mp = unsafe { msg_sb_start(last_msgchunk.get()) };
-    if mp.is_null() || unsafe { (*mp).sb_prev }.is_null() {
+    let first_of_last = msg_sb_start(sb_last());
+    if first_of_last.and_then(sb_prev).is_none() {
         vim_beep(kOptBoFlagMess as c_uint);
     } else {
         do_more_prompt(c_int::from(b'G'));
@@ -171,49 +201,46 @@ pub fn show_sb_text() {
     }
 }
 
-/// Walk back to the chunk that starts the screen line `mps` is part of.
-///
-/// # Safety
-///
-/// `mps` must point at a live `MsgChunk`, unaliased for the call.
-pub(crate) unsafe fn msg_sb_start(mps: *mut MsgChunk) -> *mut MsgChunk {
-    let mut mp = mps;
-    while !mp.is_null()
-        && !unsafe { (*mp).sb_prev }.is_null()
-        && unsafe { (*(*mp).sb_prev).sb_eol } == 0
-    {
-        mp = unsafe { (*mp).sb_prev };
-    }
-    mp
+/// The newest chunk.
+pub(crate) fn sb_last() -> Option<SbPos> {
+    SCROLLBACK.with(Scrollback::last)
+}
+
+/// The chunk before `pos`.
+pub(crate) fn sb_prev(pos: SbPos) -> Option<SbPos> {
+    SCROLLBACK.with(|sb| sb.prev(pos))
+}
+
+/// The chunk that starts the screen line `pos` is part of.
+pub(crate) fn msg_sb_start(pos: Option<SbPos>) -> Option<SbPos> {
+    SCROLLBACK.with(|sb| sb.line_start(pos?))
 }
 
 /// Mark the last chunk as finishing its screen line.
 pub fn msg_sb_eol() {
-    if !last_msgchunk.get().is_null() {
-        unsafe { (*last_msgchunk.get()).sb_eol = 1 };
-    }
+    SCROLLBACK.with_mut(Scrollback::end_line);
 }
 
-/// Redisplay one remembered screen line at `row`, answering the chunk the
-/// next line starts at (null at the end of the list).
+/// Redisplay one remembered screen line at `row`, starting at `pos`;
+/// answers the chunk the next line starts at.
 ///
-/// # Safety
-///
-/// `smp` must point at a live `MsgChunk`, unaliased for the call.
-pub(crate) unsafe fn disp_sb_line(row: c_int, smp: *mut MsgChunk) -> *mut MsgChunk {
-    let mut mp = smp;
+/// Each chunk is copied out before it is drawn: drawing can redraw, and
+/// the scrollback must not be borrowed when it does.
+pub(crate) fn disp_sb_line(row: c_int, pos: SbPos) -> Option<SbPos> {
+    let mut at = pos;
     loop {
+        let (text, col, hl_id, eol) = SCROLLBACK.with(|sb| {
+            sb.get(at)
+                .map(|chunk| (chunk.text.clone(), chunk.msg_col, chunk.hl_id, chunk.eol))
+        })?;
         msg_row.set(row);
-        msg_col.set(unsafe { (*mp).sb_msg_col });
-        msg_bytes_to_grid(
-            unsafe { cstr::bytes_at(sb_text(mp)) },
-            unsafe { (*mp).sb_hl_id },
-            true,
-        );
-        if unsafe { (*mp).sb_eol } != 0 || unsafe { (*mp).sb_next }.is_null() {
-            break;
+        msg_col.set(col);
+        msg_bytes_to_grid(&text, hl_id, true);
+        let next = at + 1;
+        let has_next = SCROLLBACK.with(|sb| sb.get(next).is_some());
+        if eol || !has_next {
+            return has_next.then_some(next);
         }
-        mp = unsafe { (*mp).sb_next };
+        at = next;
     }
-    unsafe { (*mp).sb_next }
 }

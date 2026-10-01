@@ -2634,7 +2634,6 @@ static const int HLF_W = 26;
 static const int HLF_WBR = 65;
 static const int HLF_WBRNC = 66;
 static const int HLF_WM = 27;
-static const int HOTK_LEN = 21;
 static const int HTAB = 9;
 static const int HT_INIT_SIZE = 16;
 static const int HlAttrFlags_ALTFONT = 256;

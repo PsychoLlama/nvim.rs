@@ -277,6 +277,10 @@ msg_state! {
     /// Nonzero while the confirm message is being written, so `q` at the more
     /// prompt cannot truncate it away.
     pub(super) confirm_msg_used: c_int = 0;
+    /// The dialog's message text, as `display_confirm_msg` prints it.
+    pub(super) confirm_msg: Option<XString> = None;
+    /// The rendered button list, used as the command-line prompt.
+    pub(super) confirm_buttons: Option<XString> = None;
     /// Drop the temporary history entries before adding the next message.
     pub(super) do_clear_hist_temp: bool = true;
     /// `'messagesopt'`'s flag set.

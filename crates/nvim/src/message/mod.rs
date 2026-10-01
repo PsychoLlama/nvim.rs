@@ -114,20 +114,21 @@ use crate::memory::{
     arena_alloc, strequal, strnequal, xfree, xmalloc, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::message::state::{
-    called_emsg, cmd_silent, cmdmsg_rl, confirm_msg_used, did_emsg, did_wait_return,
-    do_clear_hist_temp, do_clear_sb_text, emsg_assert_fails_context, emsg_assert_fails_lnum,
-    emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display, emsg_severe, emsg_silent,
-    emsg_skip, in_assert_fails, info_message, is_multihl, keep_msg, keep_msg_hl_id, keep_msg_more,
-    last_sourcing_lnum, last_sourcing_name, lines_left, more_prompt_busy, msg_capture, msg_col,
-    msg_did_scroll, msg_didany, msg_didout, msg_ext_append, msg_ext_chunks, msg_ext_history,
-    msg_ext_id, msg_ext_kind, msg_ext_last_attr, msg_ext_last_chunk, msg_ext_last_hl_id,
-    msg_ext_overwrite, msg_ext_skip_flush, msg_ext_skip_verbose, msg_ext_trigger, msg_flags,
-    msg_grid, msg_grid_pos, msg_grid_pos_at_flush, msg_grid_scroll_discount, msg_hist_off,
-    msg_id_next, msg_keep_depth, msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled,
-    msg_scrolled_at_flush, msg_scrolled_ign, msg_silent, msg_source_busy, msg_wait, need_clr_eos,
-    need_fileinfo, need_wait_return, no_wait_return, on_print, pre_verbose_kind,
-    progress_msg_target, quit_more, redir_col, redir_fd, redir_off, redir_reg, redir_vname,
-    showmode_clear_pending, verbose_did_open, verbose_fd,
+    called_emsg, cmd_silent, cmdmsg_rl, confirm_buttons, confirm_msg, confirm_msg_used, did_emsg,
+    did_wait_return, do_clear_hist_temp, do_clear_sb_text, emsg_assert_fails_context,
+    emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display,
+    emsg_severe, emsg_silent, emsg_skip, in_assert_fails, info_message, is_multihl, keep_msg,
+    keep_msg_hl_id, keep_msg_more, last_sourcing_lnum, last_sourcing_name, lines_left,
+    more_prompt_busy, msg_capture, msg_col, msg_did_scroll, msg_didany, msg_didout, msg_ext_append,
+    msg_ext_chunks, msg_ext_history, msg_ext_id, msg_ext_kind, msg_ext_last_attr,
+    msg_ext_last_chunk, msg_ext_last_hl_id, msg_ext_overwrite, msg_ext_skip_flush,
+    msg_ext_skip_verbose, msg_ext_trigger, msg_flags, msg_grid, msg_grid_pos,
+    msg_grid_pos_at_flush, msg_grid_scroll_discount, msg_hist_off, msg_id_next, msg_keep_depth,
+    msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled, msg_scrolled_at_flush,
+    msg_scrolled_ign, msg_silent, msg_source_busy, msg_wait, need_clr_eos, need_fileinfo,
+    need_wait_return, no_wait_return, on_print, pre_verbose_kind, progress_msg_target, quit_more,
+    redir_col, redir_fd, redir_off, redir_reg, redir_vname, showmode_clear_pending,
+    verbose_did_open, verbose_fd,
 };
 use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
 use crate::option::shortmess;
@@ -202,37 +203,12 @@ mod errors;
 pub use self::errors::*;
 /// The compositor layer messages float on.
 pub const kZIndexMessages: c_uint = 200;
-/// One entry of the message history. See [`self::history`].
-#[derive(Clone)]
-pub struct MsgHist {
-    pub next: *mut MsgHist,
-    pub prev: *mut MsgHist,
-    pub msg: HlMessage,
-    /// The `ext_messages` kind this message was shown under, owned by the
-    /// entry. [`String_0::NULL`] is "no kind", which is not the empty kind:
-    /// a UI reading the history sees the difference.
-    pub kind: String_0,
-    pub temp: bool,
-    pub append: bool,
-}
-pub type MessageHistoryEntry = MsgHist;
 /// [`do_dialog`] answers, as `confirm()` reports them.
 pub const VIM_DISCARDALL: c_uint = 6;
 pub const VIM_ALL: c_uint = 5;
 pub const VIM_CANCEL: c_uint = 4;
 pub const VIM_NO: c_uint = 3;
 pub const VIM_YES: c_uint = 2;
-/// One run of displayed message text, for scrolling back over. See
-/// [`self::scrollback`].
-#[repr(C)]
-pub struct MsgChunk {
-    pub sb_next: *mut MsgChunk,
-    pub sb_prev: *mut MsgChunk,
-    pub sb_eol: ::core::ffi::c_char,
-    pub sb_msg_col: ::core::ffi::c_int,
-    pub sb_hl_id: ::core::ffi::c_int,
-    pub sb_text: [::core::ffi::c_char; 0],
-}
 /// How much of the scrollback the next message should drop.
 pub type ScrollbackClear = ::core::ffi::c_uint;
 pub const SB_CLEAR_CMDLINE_DONE: ScrollbackClear = 3;

@@ -1,35 +1,24 @@
 //! `confirm()`, and the console dialog it falls back to.
 //!
 //! [`do_dialog`] renders the message plus the button list, works out the
-//! hotkey letters ([`copy_confirm_hotkeys`]) and reads a keystroke until one
-//! of them matches.
+//! hotkey letters ([`render_buttons`]) and reads a keystroke until one of
+//! them matches.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cstr;
 use crate::guard::{Allow, Suppress};
 use crate::keycodes::Ctrl_C;
 use crate::keycodes::ModMask;
-use crate::snprintf;
-use crate::types::{MB_MAXBYTES, NUL};
+use crate::mbyte::{char_at, cluster_len};
+use crate::types::NUL;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
 /// How many buttons can carry a hotkey. Buttons past this share the default.
 const HAS_HOTKEY_LEN: usize = 30;
-
-/// Bytes reserved per hotkey, which may be a multibyte character.
-const HOTK_LEN: c_int = MB_MAXBYTES as c_int;
-
-/// The dialog's message text, as [`display_confirm_msg`] prints it.
-pub(crate) static confirm_msg: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-
-/// The rendered button list, used as the command-line prompt.
-pub(crate) static confirm_buttons: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
 /// Ask the user to pick one of `buttons`, answering its 1-based index.
 ///
@@ -60,8 +49,10 @@ pub unsafe fn do_dialog(
     // We wait for a keypress, so don't make the user press RETURN as well.
     let no_prompt = Suppress::wait_return();
 
-    let hotkeys = unsafe { msg_show_console_dialog(message, buttons, dfltbutton) };
-    let mut retval;
+    // SAFETY: the caller's NUL-terminated strings.
+    let (message, buttons) = unsafe { (cstr::at(message), cstr::at(buttons)) };
+    let hotkeys = msg_show_console_dialog(message.to_bytes(), buttons.to_bytes(), dfltbutton);
+    let retval;
     loop {
         // Without a UI Nvim waits for input forever.
         if ui_active() == 0 && input_available() == 0 {
@@ -69,15 +60,12 @@ pub unsafe fn do_dialog(
             break;
         }
 
-        // Get a typed character directly from the user.
-        let mut c = unsafe {
-            prompt_for_input(
-                Some(cstr::at(confirm_buttons.get())),
-                HLF_M,
-                true,
-                ptr::null_mut(),
-            )
-        };
+        // Get a typed character directly from the user. The prompt is a
+        // copy: a dialog the typing reaches renders its own buttons.
+        let prompt = confirm_buttons.with(Clone::clone).unwrap_or_default();
+        // SAFETY: a main-thread prompt, with no mouse flag.
+        let mut c =
+            unsafe { prompt_for_input(Some(prompt.as_cstr()), HLF_M, true, ptr::null_mut()) };
         match c {
             CAR | NUL => {
                 // User accepts the default option.
@@ -101,18 +89,13 @@ pub unsafe fn do_dialog(
             }
             _ => {
                 // Could be a hotkey. Lowercase it, as the ones in
-                // "hotkeys" are, and count how many buttons precede it.
+                // "hotkeys" are, and count how many buttons precede it. A
+                // NUL hotkey (a button list ending in a separator) ends the
+                // list, as the terminator of upstream's string did.
                 c = mb_tolower(c);
-                retval = 1;
-                let mut i = 0;
-                while unsafe { *hotkeys.add(i) } != 0 {
-                    if unsafe { utf_ptr2char(hotkeys.add(i)) } == c {
-                        break;
-                    }
-                    i += unsafe { utfc_ptr2len(hotkeys.add(i)) as usize };
-                    retval += 1;
-                }
-                if unsafe { *hotkeys.add(i) } != 0 {
+                let listed = hotkeys.iter().take_while(|&&hotkey| hotkey != 0);
+                if let Some(at) = listed.clone().position(|&hotkey| hotkey == c) {
+                    retval = c_int::try_from(at).map_or(c_int::MAX, |at| at + 1);
                     break;
                 }
                 // No hotkey match, so keep waiting.
@@ -122,9 +105,7 @@ pub unsafe fn do_dialog(
         }
     }
 
-    unsafe { xfree(hotkeys.cast()) };
-    unsafe { xfree(confirm_msg.get().cast()) };
-    confirm_msg.set(ptr::null_mut());
+    confirm_msg.set(None);
 
     drop(loud);
     State.set(old_state);
@@ -135,144 +116,60 @@ pub unsafe fn do_dialog(
     retval
 }
 
-/// Copy one (possibly multibyte) character from `from` to `to`, answering its
-/// length in bytes.
-///
-/// # Safety
-/// `from` must be a valid C string and `to` must have room for the character.
-unsafe fn copy_char(from: *const c_char, to: *mut c_char, lowercase: bool) -> c_int {
-    if lowercase {
-        return unsafe { utf_char2bytes(mb_tolower(utf_ptr2char(from)), to) };
-    }
-    let len = unsafe { utfc_ptr2len(from) };
-    unsafe { ptr::copy(from, to, len as usize) };
-    len
-}
-
-/// Size and allocate the dialog's three buffers, and record which buttons
-/// name their own hotkey.
-///
-/// Answers the hotkey buffer; the message and button buffers go into
-/// [`confirm_msg`] and [`confirm_buttons`].
-///
-/// # Safety
-/// `message` and `buttons` must be valid C strings.
-unsafe fn console_dialog_alloc(
-    message: *const c_char,
-    buttons: *const c_char,
-    has_hotkey: &mut [bool; HAS_HOTKEY_LEN],
-) -> *mut c_char {
-    let mut lenhotkey = HOTK_LEN; // count first button
-    has_hotkey[0] = false;
-
-    // Compute the size of memory to allocate.
-    let mut msg_len = 0;
-    let mut button_len = 0;
+/// Which buttons name their own hotkey, for the first [`HAS_HOTKEY_LEN`].
+fn buttons_with_hotkeys(buttons: &[u8]) -> [bool; HAS_HOTKEY_LEN] {
+    let mut has_hotkey = [false; HAS_HOTKEY_LEN];
     let mut idx = 0;
-    let mut r = buttons;
-    while unsafe { *r } != 0 {
-        if unsafe { *r } == DLG_BUTTON_SEP as c_char {
-            button_len += 3; // '\n' -> ', '; 'x' -> '(x)'
-            lenhotkey += HOTK_LEN; // each button needs a hotkey
+    let mut at = 0;
+    while at < buttons.len() {
+        if u32::from(buttons[at]) == DLG_BUTTON_SEP {
             if idx < HAS_HOTKEY_LEN - 1 {
                 idx += 1;
                 has_hotkey[idx] = false;
             }
-        } else if unsafe { *r } == DLG_HOTKEY_CHAR as c_char {
-            r = unsafe { r.add(1) };
-            button_len += 1; // '&a' -> '[a]'
+        } else if u32::from(buttons[at]) == DLG_HOTKEY_CHAR {
+            // The character after the `&` is skipped along with it.
+            at += 1;
             if idx < HAS_HOTKEY_LEN - 1 {
                 has_hotkey[idx] = true;
             }
         }
-        r = unsafe { r.add(utfc_ptr2len(r) as usize) };
+        at += cluster_len(&buttons[at.min(buttons.len())..]).max(1);
     }
-
-    msg_len += unsafe { cstr::bytes_at(message).len() as c_int } + 3; // for the NLs and NUL
-    button_len += unsafe { cstr::bytes_at(buttons).len() as c_int } + 3; // for the ": " and NUL
-    lenhotkey += 1; // for the NUL
-
-    // If no hotkey is specified, the first char is used.
-    if !has_hotkey[0] {
-        button_len += 2; // "x" -> "[x]"
-    }
-
-    confirm_msg.set(unsafe { xmalloc(msg_len as size_t) }.cast());
-    // With `ext_messages` the UI puts the message where it likes, so the
-    // blank lines that separate it from the buttons are left out.
-    let fmt = if ui_has(kUIMessages) {
-        c"%s".as_ptr()
-    } else {
-        c"\n%s\n".as_ptr()
-    };
-    let out = confirm_msg.get();
-    let cap = msg_len as size_t;
-    unsafe { snprintf!(out, cap, fmt, message) };
-
-    unsafe { xfree(confirm_buttons.get().cast()) };
-    confirm_buttons.set(unsafe { xmalloc(button_len as size_t) }.cast());
-
-    unsafe { xmalloc(lenhotkey as size_t) }.cast()
+    has_hotkey
 }
 
-/// Format the dialog and display it, answering the allocated hotkey string.
-///
-/// A button with no `&` takes the first character of its name as its hotkey.
-///
-/// # Safety
-/// `message` and `buttons` must be valid C strings.
-unsafe fn msg_show_console_dialog(
-    message: *const c_char,
-    buttons: *const c_char,
-    dfltbutton: c_int,
-) -> *mut c_char {
-    let mut has_hotkey = [false; HAS_HOTKEY_LEN];
-    let hotk = unsafe { console_dialog_alloc(message, buttons, &mut has_hotkey) };
-    unsafe { copy_confirm_hotkeys(buttons, dfltbutton, &has_hotkey, hotk) };
-    display_confirm_msg();
-    hotk
+/// The character at the start of `bytes`, lowercased: a hotkey.
+fn hotkey_at(bytes: &[u8]) -> c_int {
+    mb_tolower(char_at(bytes))
 }
 
-/// Render the button list into [`confirm_buttons`] and the hotkey letters,
-/// in order, into `hotkeys_ptr`.
+/// Render the button list as the command-line prompt shows it, and the
+/// hotkey of each button, in order.
 ///
-/// # Safety
-/// `buttons` must be a valid C string, and `hotkeys_ptr` must point at a
-/// buffer [`console_dialog_alloc`] sized for it.
-unsafe fn copy_confirm_hotkeys(
-    buttons: *const c_char,
-    mut default_button_idx: c_int,
-    has_hotkey: &[bool; HAS_HOTKEY_LEN],
-    hotkeys_ptr: *mut c_char,
-) {
-    let mut hotkeys_ptr = hotkeys_ptr;
-    // Define the first default hotkey. The hotkey string is kept NUL
-    // terminated throughout, to avoid reading past the end.
-    unsafe { *hotkeys_ptr.add(copy_char(buttons, hotkeys_ptr, true) as usize) = 0 };
+/// `&x` makes `x` the button's hotkey and shows it as `(x)`, or `[x]` on the
+/// default button; `&&` is a literal `&`. A button with no `&` takes its
+/// first character. Buttons are separated by `, ` and the line ends `: `.
+fn render_buttons(buttons: &[u8], dfltbutton: c_int) -> (Vec<u8>, Vec<c_int>) {
+    let has_hotkey = buttons_with_hotkeys(buttons);
+    let mut shown = Vec::with_capacity(buttons.len() + 8);
+    // The first button's default hotkey.
+    let mut hotkeys = vec![hotkey_at(buttons)];
+    let mut default_button_idx = dfltbutton;
 
     // Is the first char of the button a hotkey? It is when the button
     // does not name one itself.
     let mut first_hotkey = !has_hotkey[0];
 
-    // Remember where the choices start; sent as the cmdline prompt.
-    let mut msgp = confirm_buttons.get();
-    // Takes the cursor by reference rather than capturing it: a closure
-    // capturing `msgp` would hold the borrow for the whole loop.
-    let push = |msgp: &mut *mut c_char, c: u8| {
-        unsafe { **msgp = c as c_char };
-        *msgp = unsafe { msgp.add(1) };
-    };
-
     let mut idx = 0;
-    let mut r = buttons;
-    while unsafe { *r } != 0 {
-        if unsafe { *r } == DLG_BUTTON_SEP as c_char {
-            push(&mut msgp, b','); // '\n' -> ', '
-            push(&mut msgp, b' ');
+    let mut at = 0;
+    while at < buttons.len() {
+        let byte = u32::from(buttons[at]);
+        if byte == DLG_BUTTON_SEP {
+            shown.extend_from_slice(b", "); // '\n' -> ', '
 
             // Advance to the next hotkey and set the default one.
-            hotkeys_ptr = unsafe { hotkeys_ptr.add(cstr::bytes_at(hotkeys_ptr).len()) };
-            unsafe { *hotkeys_ptr.add(copy_char(r.add(1), hotkeys_ptr, true) as usize) = 0 };
+            hotkeys.push(hotkey_at(&buttons[at + 1..]));
 
             if default_button_idx != 0 {
                 default_button_idx -= 1;
@@ -286,42 +183,70 @@ unsafe fn copy_confirm_hotkeys(
             } {
                 first_hotkey = true;
             }
-        } else if unsafe { *r } == DLG_HOTKEY_CHAR as c_char || first_hotkey {
-            if unsafe { *r } == DLG_HOTKEY_CHAR as c_char {
-                r = unsafe { r.add(1) };
+        } else if byte == DLG_HOTKEY_CHAR || first_hotkey {
+            if byte == DLG_HOTKEY_CHAR {
+                at += 1;
             }
             first_hotkey = false;
-            if unsafe { *r } == DLG_HOTKEY_CHAR as c_char {
-                push(&mut msgp, unsafe { *r as u8 }); // '&&a' -> '&a'
+            let rest = &buttons[at.min(buttons.len())..];
+            if rest
+                .first()
+                .is_some_and(|&b| u32::from(b) == DLG_HOTKEY_CHAR)
+            {
+                shown.push(rest[0]); // '&&a' -> '&a'
             } else {
                 // '&a' -> '[a]', or '(a)' when it is not the default.
                 let default = default_button_idx == 1;
-                push(&mut msgp, if default { b'[' } else { b'(' });
-                msgp = unsafe { msgp.add(copy_char(r, msgp, false) as usize) };
-                push(&mut msgp, if default { b']' } else { b')' });
+                shown.push(if default { b'[' } else { b'(' });
+                shown.extend_from_slice(&rest[..cluster_len(rest)]);
+                shown.push(if default { b']' } else { b')' });
 
                 // Redefine the hotkey.
-                unsafe { *hotkeys_ptr.add(copy_char(r, hotkeys_ptr, true) as usize) = 0 };
+                if let Some(last) = hotkeys.last_mut() {
+                    *last = hotkey_at(rest);
+                }
             }
         } else {
             // Everything else is copied literally.
-            msgp = unsafe { msgp.add(copy_char(r, msgp, false) as usize) };
+            let rest = &buttons[at..];
+            shown.extend_from_slice(&rest[..cluster_len(rest)]);
         }
-        r = unsafe { r.add(utfc_ptr2len(r) as usize) };
+        at += cluster_len(&buttons[at.min(buttons.len())..]);
     }
 
-    push(&mut msgp, b':');
-    push(&mut msgp, b' ');
-    unsafe { *msgp = 0 };
+    shown.extend_from_slice(b": ");
+    (shown, hotkeys)
+}
+
+/// Format the dialog and display it, answering each button's hotkey.
+fn msg_show_console_dialog(message: &[u8], buttons: &[u8], dfltbutton: c_int) -> Vec<c_int> {
+    // With `ext_messages` the UI puts the message where it likes, so the
+    // blank lines that separate it from the buttons are left out.
+    let mut text = Vec::with_capacity(message.len() + 2);
+    let framed = !ui_has(kUIMessages);
+    if framed {
+        text.push(b'\n');
+    }
+    text.extend_from_slice(message);
+    if framed {
+        text.push(b'\n');
+    }
+    confirm_msg.set(Some(XString::from_bytes(&text)));
+
+    let (shown, hotkeys) = render_buttons(buttons, dfltbutton);
+    confirm_buttons.set(Some(XString::from_bytes(&shown)));
+    display_confirm_msg();
+    hotkeys
 }
 
 /// Display the `:confirm` message. Also called when the screen is resized.
 pub(crate) fn display_confirm_msg() {
     // Avoid that 'q' at the more prompt truncates the message here.
     let _in_use = Suppress::counter(confirm_msg_used);
-    if !confirm_msg.get().is_null() {
+    // A copy: showing it can redraw, and a redraw can show it again.
+    if let Some(text) = confirm_msg.with(Clone::clone) {
         msg_ext_set_kind(c"confirm");
-        msg_str_hl(unsafe { cstr::at(confirm_msg.get()) }, HLF_M, false);
+        msg_str_hl(text.as_cstr(), HLF_M, false);
     }
 }
 

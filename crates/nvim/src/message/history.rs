@@ -1,18 +1,20 @@
 //! The message history behind `:messages` and `'messagesopt'`.
 //!
-//! A doubly-linked list of [`MessageHistoryEntry`] capped at
-//! `'messagesopt'`'s `history:` count. [`msg_hist_add`] appends and evicts,
-//! [`ex_messages`] prints (or, under `ext_messages`, emits) the tail of it.
+//! A queue of [`Entry`]s capped at `'messagesopt'`'s `history:` count.
+//! [`msg_hist_add`] appends and evicts, [`ex_messages`] prints (or, under
+//! `ext_messages`, emits) the tail of it.
 //!
-//! The list stays a raw `repr(C)` chain rather than becoming a `Vec`: every
-//! entry is addressed by pointer from three cursors at once (first, last and
-//! the `g<` mark), and [`ex_messages`] holds one across [`msg_multihl`],
-//! which can run autocommands that add to the history.
+//! Upstream's list was doubly linked and addressed by pointer from three
+//! cursors (first, last, and the `g<` mark), and `:messages` held one of
+//! them across `msg_multihl`, which can pump the event loop and run
+//! autocommands that add to the history and evict from it. Here every entry
+//! has a sequence number instead, the `g<` mark is a sequence number, and
+//! `:messages` walks by number: it copies one entry out, shows it with the
+//! history unborrowed, and asks for the next number after it -- so an
+//! eviction under its feet skips what is gone rather than reading it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::option::vars::P_MOPT;
@@ -20,21 +22,87 @@ use crate::options::OptMoptFlags;
 use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
+use std::collections::VecDeque;
 
-/// Oldest entry in the history.
-static msg_hist_first: GlobalCell<*mut MessageHistoryEntry> = GlobalCell::new(ptr::null_mut());
+/// One message in the history. Owns its chunks.
+pub(crate) struct Entry {
+    /// Where the entry is in the order of every message ever added.
+    seq: u64,
+    msg: HlMessage,
+    /// The `ext_messages` kind this message was shown under.
+    /// [`String_0::NULL`] is "no kind", which is not the empty kind: a UI
+    /// reading the history sees the difference.
+    kind: String_0,
+    /// Only `g<` shows it; the next real message displaces it.
+    temp: bool,
+    append: bool,
+}
 
-/// Newest entry in the history. Exported for the unit specs.
-pub static msg_hist_last: GlobalCell<*mut MessageHistoryEntry> = GlobalCell::new(ptr::null_mut());
+impl Drop for Entry {
+    fn drop(&mut self) {
+        let msg = core::mem::replace(&mut self.msg, EMPTY_HL_MESSAGE);
+        // SAFETY: the entry owns its chunks, and nothing else holds them.
+        unsafe { hl_msg_free(msg) };
+    }
+}
 
-/// Oldest entry `g<` may still show: the temporary entries start here.
-static msg_hist_temp: GlobalCell<*mut MessageHistoryEntry> = GlobalCell::new(ptr::null_mut());
+/// The history itself.
+pub(crate) struct History {
+    entries: VecDeque<Entry>,
+    /// The sequence number the next entry gets.
+    next_seq: u64,
+    /// The oldest entry `g<` may still show: the first one added since the
+    /// temporary entries were last dropped. `None` until one is.
+    temp_from: Option<u64>,
+    /// Number of non-temporary entries, which is what `history:` caps.
+    len: c_int,
+    /// `'messagesopt'`'s `history:` count.
+    max: c_int,
+}
 
-/// Number of non-temporary entries, which is what `history:` caps.
-static msg_hist_len: GlobalCell<c_int> = GlobalCell::new(0);
+static HISTORY: GlobalCell<History> = GlobalCell::new(History {
+    entries: VecDeque::new(),
+    next_seq: 0,
+    temp_from: None,
+    len: 0,
+    max: 500,
+});
 
-/// `'messagesopt'`'s `history:` count.
-static msg_hist_max: GlobalCell<c_int> = GlobalCell::new(500);
+impl History {
+    /// Delete the oldest messages until `keep` non-temporary ones remain.
+    /// `keep` of zero empties the list, temporary entries included.
+    fn clear(&mut self, keep: c_int) {
+        while self.len > keep || (keep == 0 && !self.entries.is_empty()) {
+            let Some(oldest) = self.entries.pop_front() else {
+                break;
+            };
+            self.len -= c_int::from(!oldest.temp);
+        }
+    }
+
+    /// Drop every temporary (`g<`-only) entry.
+    fn clear_temp(&mut self) {
+        if let Some(from) = self.temp_from.take() {
+            self.entries.retain(|entry| entry.seq < from || !entry.temp);
+        }
+    }
+}
+
+/// The newest message in the history, for the unit specs: its sequence
+/// number and the text of its first chunk.
+pub fn last_message() -> Option<(u64, Vec<u8>)> {
+    HISTORY.with(|history| {
+        history.entries.back().map(|entry| {
+            let text = if entry.msg.size == 0 {
+                Vec::new()
+            } else {
+                // SAFETY: the entry owns `size` live chunks.
+                unsafe { (*entry.msg.items).text.as_bytes().to_vec() }
+            };
+            (entry.seq, text)
+        })
+    })
+}
 
 /// The `'messagesopt'` items, spelled as [`messagesopt_changed`] matches them.
 const OPT_HIT_ENTER: &CStr = c"hit-enter";
@@ -53,11 +121,7 @@ pub unsafe fn hl_msg_free(hl_msg: HlMessage) {
     unsafe { xfree(hl_msg.items.cast()) };
 }
 
-/// Add `s` (of `len` bytes, or -1 for the whole string) to the history.
-///
-/// # Safety
-/// `s` must be a valid C string, readable for `len` bytes when that is not
-/// negative.
+/// Add `bytes` to the history, as one chunk in highlight `hl_id`.
 pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
     // Remove leading and trailing newlines.
     let text = bytes
@@ -90,7 +154,7 @@ pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
 /// `msg` must own its chunks.
 pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data: *mut MessageData) {
     if do_clear_hist_temp.get() {
-        msg_hist_clear_temp();
+        HISTORY.with_mut(History::clear_temp);
         do_clear_hist_temp.set(false);
     }
 
@@ -99,83 +163,34 @@ pub(crate) unsafe fn msg_hist_add_multihl(msg: HlMessage, temp: bool, _msg_data:
         return;
     }
 
-    let entry: *mut MessageHistoryEntry =
-        unsafe { xmalloc(::core::mem::size_of::<MessageHistoryEntry>()) }.cast();
-    unsafe { (*entry).msg = msg };
-    unsafe { (*entry).temp = temp };
-    // `entry` is `xmalloc`ed, so the slot holds garbage: an owning field has
-    // to be *written*, never assigned, or the assignment drops the garbage.
-    unsafe { (&raw mut (*entry).kind).write(msg_ext_kind.with(String_0::clone)) };
-    unsafe { (*entry).prev = msg_hist_last.get() };
-    unsafe { (*entry).next = ptr::null_mut() };
+    let kind = msg_ext_kind.with(String_0::clone);
     // NOTE: this does not encode whether the message was actually appended
     // to the previous history entry. `append` is currently only true for
     // `:echon`, which is stored as a temporary entry for `g<`, where it is
     // guaranteed to follow the entry it was appended to.
-    unsafe { (*entry).append = msg_ext_append.get() };
-
-    if msg_hist_first.get().is_null() {
-        msg_hist_first.set(entry);
-    }
-    if !msg_hist_last.get().is_null() {
-        unsafe { (*msg_hist_last.get()).next = entry };
-    }
-    if msg_hist_temp.get().is_null() {
-        msg_hist_temp.set(entry);
-    }
-
-    msg_hist_len.set(msg_hist_len.get() + c_int::from(!temp));
-    msg_hist_last.set(entry);
+    let append = msg_ext_append.get();
+    HISTORY.with_mut(|history| {
+        let seq = history.next_seq;
+        history.next_seq += 1;
+        history.entries.push_back(Entry {
+            seq,
+            msg,
+            kind,
+            temp,
+            append,
+        });
+        history.temp_from.get_or_insert(seq);
+        history.len += c_int::from(!temp);
+        history.clear(history.max);
+    });
     msg_ext_history.set(true);
-
-    msg_hist_clear(msg_hist_max.get());
-}
-
-/// Unlink `entry` from the list and free it.
-///
-/// # Safety
-/// `entry` must be in the history list.
-unsafe fn msg_hist_free_msg(entry: *mut MessageHistoryEntry) {
-    if unsafe { (*entry).next }.is_null() {
-        msg_hist_last.set(unsafe { (*entry).prev });
-    } else {
-        unsafe { (*(*entry).next).prev = (*entry).prev };
-    }
-    if unsafe { (*entry).prev }.is_null() {
-        msg_hist_first.set(unsafe { (*entry).next });
-    } else {
-        unsafe { (*(*entry).prev).next = (*entry).next };
-    }
-    if entry == msg_hist_temp.get() {
-        msg_hist_temp.set(unsafe { (*entry).next });
-    }
-    unsafe { hl_msg_free((*entry).msg.clone()) };
-    // The entry's block goes to `xfree`, which runs no destructor, so the
-    // owning field is read out and dropped by hand first.
-    drop(unsafe { (&raw const (*entry).kind).read() });
-    unsafe { xfree(entry.cast()) };
 }
 
 /// Delete the oldest messages until `keep` non-temporary ones remain.
 ///
 /// `keep` of zero empties the list, temporary entries included.
 fn msg_hist_clear(keep: c_int) {
-    while msg_hist_len.get() > keep || (keep == 0 && !msg_hist_first.get().is_null()) {
-        msg_hist_len
-            .set(msg_hist_len.get() - c_int::from(!unsafe { (*msg_hist_first.get()).temp }));
-        unsafe { msg_hist_free_msg(msg_hist_first.get()) };
-    }
-}
-
-/// Drop every temporary (`g<`-only) entry.
-fn msg_hist_clear_temp() {
-    while !msg_hist_temp.get().is_null() {
-        let next = unsafe { (*msg_hist_temp.get()).next };
-        if unsafe { (*msg_hist_temp.get()).temp } {
-            unsafe { msg_hist_free_msg(msg_hist_temp.get()) };
-        }
-        msg_hist_temp.set(next);
-    }
+    HISTORY.with_mut(|history| history.clear(keep));
 }
 
 /// Does `p` start with `word`, and with a digit after it if `digit` is set?
@@ -249,22 +264,48 @@ pub fn messagesopt_changed() -> Result<(), Failed> {
     msg_wait.set(wait);
     progress_msg_target.set(progress_target);
 
-    msg_hist_max.set(history);
-    msg_hist_clear(msg_hist_max.get());
+    HISTORY.with_mut(|entries| {
+        entries.max = history;
+        entries.clear(history);
+    });
 
     Ok(())
 }
 
+/// One history entry, copied out so it can be shown with the history
+/// unborrowed.
+struct Shown {
+    seq: u64,
+    /// Deep: the chunks' strings are the copy's own.
+    chunks: Vec<HlMessageChunk>,
+    kind: String_0,
+    temp: bool,
+    append: bool,
+}
+
+/// The first entry numbered `seq` or later, copied.
+fn entry_from(seq: u64) -> Option<Shown> {
+    HISTORY.with(|history| {
+        let at = history.entries.partition_point(|entry| entry.seq < seq);
+        history.entries.get(at).map(|entry| Shown {
+            seq: entry.seq,
+            // SAFETY: the entry owns `size` live chunks.
+            chunks: (0..entry.msg.size)
+                .map(|i| unsafe { (*entry.msg.items.add(i)).clone() })
+                .collect(),
+            kind: entry.kind.clone(),
+            temp: entry.temp,
+            append: entry.append,
+        })
+    })
+}
+
 /// One history entry as the `msg_history_show` UI event carries it:
 /// `[kind, [[attr, text, hl_id], ..], append]`.
-///
-/// # Safety
-/// `entry` must be in the history list.
-unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
+fn entry_to_event(entry: &Shown) -> Object {
     let mut content = EMPTY_ARRAY;
     let mut out = EMPTY_ARRAY;
-    for i in 0..unsafe { (*entry).msg.size } {
-        let chunk = unsafe { (*(*entry).msg.items.add(i)).clone() };
+    for chunk in &entry.chunks {
         let attr = if chunk.hl_id != 0 {
             syn_id2attr(chunk.hl_id)
         } else {
@@ -272,15 +313,14 @@ unsafe fn entry_to_event(entry: *mut MessageHistoryEntry) -> Object {
         };
         let mut content_entry = EMPTY_ARRAY;
         content_entry.push(Object::integer(attr.into()));
-        let text = chunk.text.clone();
-        content_entry.push(Object::string(text));
+        content_entry.push(Object::string(chunk.text.clone()));
         content_entry.push(Object::integer(chunk.hl_id.into()));
         content.push(Object::array(content_entry));
     }
 
-    out.push(Object::string(unsafe { (*entry).kind.clone() }));
+    out.push(Object::string(entry.kind.clone()));
     out.push(Object::array(content));
-    out.push(Object::boolean(unsafe { (*entry).append }));
+    out.push(Object::boolean(entry.append));
     Object::array(out)
 }
 
@@ -301,54 +341,68 @@ pub fn ex_messages(excmd: &mut ExArg) {
     }
 
     let mut entries = EMPTY_ARRAY;
-    let mut p = if excmd.skip {
-        msg_hist_temp.get()
+    // `g<` starts at its mark, which may be unset; `:messages` at the start.
+    let mut next = if excmd.skip {
+        HISTORY.with(|history| history.temp_from)
     } else {
-        msg_hist_first.get()
+        Some(0)
     };
     let mut skip = if excmd.addr_count != 0 {
-        msg_hist_len.get() - excmd.line2 as c_int
+        HISTORY.with(|history| history.len) - excmd.line2 as c_int
     } else {
         0
     };
 
-    while !p.is_null() {
+    while let Some(entry) = next.and_then(entry_from) {
+        next = Some(entry.seq + 1);
         // Skip over count or temporary "g<" messages. The decrement sits
         // inside the short circuit: a temporary entry does not consume one
         // of the counted lines.
-        let temporary = unsafe { (*p).temp } && !excmd.skip;
+        let temporary = entry.temp && !excmd.skip;
         let counted_out = !temporary && {
             let remaining = skip;
             skip -= 1;
             remaining > 0
         };
-        if !temporary && !counted_out {
-            if ui_has(kUIMessages) && msg_silent.get() == 0 {
-                // SAFETY: `p` is a live history entry.
-                entries.push(unsafe { entry_to_event(p) });
-            }
-            if redirecting() || !ui_has(kUIMessages) {
-                // Under ext_messages the text has already gone to the UI
-                // above; this pass exists only to feed the redirection, so
-                // silence the display half of it.  `ui_has` is asked twice,
-                // as upstream does, and deliberately not hoisted into a
-                // local: `msg_multihl` can reach `wait_return`, which pumps
-                // the event loop, which can service a UI attach or detach.
-                msg_silent.set(msg_silent.get() + c_int::from(ui_has(kUIMessages)));
-                let mut needs_clear = false;
-                let text = unsafe { (*p).msg.clone() };
-                // Copied, not borrowed: `msg_multihl` pumps the event loop,
-                // which can trim the history out from under `p`.
-                let kind = unsafe { (*p).kind.clone() };
-                let no_id = ptr::null_mut();
-                let clear = &raw mut needs_clear;
-                let nil = Object::Nil;
-                let kind = (!kind.is_null()).then(|| kind.as_cstr());
-                unsafe { msg_multihl(nil, text, kind, false, false, no_id, clear) };
-                msg_silent.set(msg_silent.get() - c_int::from(ui_has(kUIMessages)));
-            }
+        if temporary || counted_out {
+            continue;
         }
-        p = unsafe { (*p).next };
+        if ui_has(kUIMessages) && msg_silent.get() == 0 {
+            entries.push(entry_to_event(&entry));
+        }
+        if redirecting() || !ui_has(kUIMessages) {
+            // Under ext_messages the text has already gone to the UI
+            // above; this pass exists only to feed the redirection, so
+            // silence the display half of it.  `ui_has` is asked twice,
+            // as upstream does, and deliberately not hoisted into a
+            // local: `msg_multihl` can reach `wait_return`, which pumps
+            // the event loop, which can service a UI attach or detach.
+            msg_silent.set(msg_silent.get() + c_int::from(ui_has(kUIMessages)));
+            let mut needs_clear = false;
+            let mut text = EMPTY_HL_MESSAGE;
+            for chunk in entry.chunks {
+                // SAFETY: `text` started empty and is only pushed to here.
+                unsafe { hl_msg_push(&mut text, chunk) };
+            }
+            let clear = &raw mut needs_clear;
+            let kind = (!entry.kind.is_null()).then(|| entry.kind.as_cstr());
+            // SAFETY: `text` is this frame's own copy, and `clear` a live
+            // `bool`.
+            unsafe {
+                msg_multihl(
+                    Object::Nil,
+                    text.clone(),
+                    kind,
+                    false,
+                    false,
+                    ptr::null_mut(),
+                    clear,
+                )
+            };
+            // SAFETY: not kept (`history` is false), so still this frame's.
+            unsafe { hl_msg_free(text) };
+            msg_silent.set(msg_silent.get() - c_int::from(ui_has(kUIMessages)));
+        }
     }
 
     if !entries.is_empty() {
