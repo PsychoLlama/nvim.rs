@@ -195,7 +195,7 @@ pub(crate) unsafe fn syn_get_id(
         next_match_idx.set(-1);
     }
 
-    unsafe { get_syntax_attr(col, spellp, keep_state != 0) };
+    unsafe { get_syntax_attr(window.buffer(), col, spellp, keep_state != 0) };
     if trans != 0 {
         current_trans_id.get()
     } else {
@@ -263,7 +263,9 @@ pub(crate) fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
             // Find the lowest fold level that is followed by a higher one.
             let mut low_level = level;
             while !current_finished.get() {
-                unsafe { syn_current_attr(false, false, ::core::ptr::null_mut(), false) };
+                unsafe {
+                    syn_current_attr(syn_buffer(), false, false, ::core::ptr::null_mut(), false)
+                };
                 let cur_level = syn_cur_foldlevel();
                 if cur_level < low_level {
                     low_level = cur_level;

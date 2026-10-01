@@ -128,14 +128,15 @@ pub(crate) unsafe fn find_endpos(
     unsafe { unref_extmatch(re_extmatch_in.get()) };
     re_extmatch_in.set(unsafe { ref_extmatch(start_ext) });
 
+    let buf = syn_buffer();
     let mut buf_chartab = [0u64; 4];
-    save_chartab(&mut buf_chartab);
+    save_chartab(buf, &mut buf_chartab);
 
     let start_idx = idx;
     let mut matchcol = startpos.col;
     let answer = find_endpos_scan(start_idx, skip_idx, startpos, &mut matchcol);
 
-    restore_chartab(&buf_chartab);
+    restore_chartab(buf, &buf_chartab);
     unsafe { unref_extmatch(re_extmatch_in.get()) };
     re_extmatch_in.set(::core::ptr::null_mut());
     answer
@@ -418,10 +419,13 @@ fn walk_chars(lnum: LineNr, col: ColNr, off: c_int) -> ColNr {
 /// match -- the regexp engine may reach `ml_get_buf` for another line and
 /// evict this one. Reading them is the caller's unsafe step; asking for the
 /// pointer is not.
-pub(crate) fn syn_getcurline() -> *mut c_char {
-    // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at,
+///
+/// `buffer` is [`syn_buffer`], which the per-column path resolves once and
+/// passes down rather than asking the registry per character.
+pub(crate) fn syn_getcurline(buffer: Buf) -> *mut c_char {
+    // SAFETY: `buffer` is the buffer `syntax_start` pointed the parser at,
     // and `current_lnum` a line of it.
-    unsafe { ml_get_buf(syn_buffer(), current_lnum.get()) }
+    unsafe { ml_get_buf(buffer, current_lnum.get()) }
 }
 
 /// Length of the current line of the syntax buffer.
@@ -433,10 +437,11 @@ pub(crate) fn syn_getcurline_len() -> ColNr {
 ///
 /// Every caller is testing for the NUL that ends the line, so `col` is at
 /// most its length and the read stays inside what `ml_get_buf` answered.
-pub(crate) fn syn_curline_byte(col: ColNr) -> u8 {
+/// `buffer` is [`syn_buffer`], as for [`syn_getcurline`].
+pub(crate) fn syn_curline_byte(buffer: Buf, col: ColNr) -> u8 {
     debug_assert!(col <= syn_getcurline_len());
     // SAFETY: `col` is within the line, its terminator included.
-    unsafe { *syn_getcurline().offset(col as isize) as u8 }
+    unsafe { *syn_getcurline(buffer).offset(col as isize) as u8 }
 }
 
 /// Number of lines in the buffer being parsed.
@@ -531,8 +536,10 @@ pub(crate) struct KeywordMatch {
 /// `startcol` — the caller has already established that a keyword can start
 /// there, and the scan for its end reads forwards from it. `cur_si`, when it
 /// is `Some`, must still be live: nothing may have pushed to, popped from or
-/// cleared the syntax state stack since it was taken.
+/// cleared the syntax state stack since it was taken. `line` is a line of
+/// `buffer`, whose 'iskeyword' says where the keyword ends.
 pub(crate) unsafe fn check_keyword_id(
+    buffer: Buf,
     line: *mut c_char,
     startcol: c_int,
     cur_si: Option<Item>,
@@ -543,7 +550,7 @@ pub(crate) unsafe fn check_keyword_id(
     let mut kwlen: c_int = 0;
     loop {
         kwlen += unsafe { utfc_ptr2len(kwp.offset(kwlen as isize)) };
-        if !unsafe { vim_iswordp_buf(kwp.offset(kwlen as isize), syn_buffer()) } {
+        if !unsafe { vim_iswordp_buf(kwp.offset(kwlen as isize), buffer) } {
             break;
         }
     }

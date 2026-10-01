@@ -182,7 +182,7 @@ pub(crate) fn check_state_ends() {
         if !current_next_flags
             .get()
             .has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
-            && syn_curline_byte(current_col.get()) as c_int == NUL
+            && syn_curline_byte(syn_buffer(), current_col.get()) as c_int == NUL
         {
             current_next_list.set(::core::ptr::null_mut());
         }
@@ -217,7 +217,7 @@ pub(crate) fn check_state_ends() {
             check_keepend();
             if current_next_flags.get().has(SynFlags::HAS_EOL)
                 && keepend_level.get() < 0
-                && syn_curline_byte(current_col.get()) as c_int == NUL
+                && syn_curline_byte(syn_buffer(), current_col.get()) as c_int == NUL
             {
                 return;
             }

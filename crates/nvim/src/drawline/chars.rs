@@ -330,6 +330,7 @@ impl Cells {
 
         self.decor_attr = unsafe {
             get_syntax_attr(
+                window.buffer(),
                 at - 1,
                 if (*f.spv).spv_has_spell {
                     can_spell as *mut bool

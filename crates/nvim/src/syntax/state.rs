@@ -406,7 +406,7 @@ pub(crate) fn syntax_check_changed(lnum: LineNr) -> bool {
 /// While syncing, answers whether a sync point was found.
 pub(crate) fn syn_finish_line(syncing: bool) -> bool {
     while !current_finished.get() {
-        unsafe { syn_current_attr(syncing, false, ::core::ptr::null_mut(), false) };
+        unsafe { syn_current_attr(syn_buffer(), syncing, false, ::core::ptr::null_mut(), false) };
 
         if syncing && state_len() != 0 {
             // Check for a match with a sync item.
@@ -423,7 +423,7 @@ pub(crate) fn syn_finish_line(syncing: bool) -> bool {
             // syn_current_attr() skipped the check for an item that ends
             // here; do it now. Be careful not to go past the NUL.
             let prev_col = current_col.get();
-            if c_int::from(syn_curline_byte(current_col.get())) != NUL {
+            if c_int::from(syn_curline_byte(syn_buffer(), current_col.get())) != NUL {
                 current_col.set(current_col.get() + 1);
             }
             check_state_ends();

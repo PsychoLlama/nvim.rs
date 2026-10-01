@@ -31,10 +31,22 @@ use crate::types::NUL;
 /// `keep_state` keeps the state stack as it stands at `col` rather than closing
 /// the items that end there, which is what `synstack()` needs.
 ///
+/// `buffer` is the buffer of the window `syntax_start` was given: the caller has
+/// it in hand, and passing it spares a registry lookup per column.
+///
 /// # Safety
 ///
 /// `can_spell` must point at a writable `bool` the caller owns.
-pub(crate) unsafe fn get_syntax_attr(col: ColNr, can_spell: *mut bool, keep_state: bool) -> c_int {
+pub(crate) unsafe fn get_syntax_attr(
+    buffer: Buf,
+    col: ColNr,
+    can_spell: *mut bool,
+    keep_state: bool,
+) -> c_int {
+    debug_assert!(
+        syn_buf.get() == buffer.try_id(),
+        "`buffer` is the buffer being parsed"
+    );
     if !can_spell.is_null() {
         unsafe { *can_spell = default_can_spell() };
     }
@@ -43,7 +55,7 @@ pub(crate) unsafe fn get_syntax_attr(col: ColNr, can_spell: *mut bool, keep_stat
     }
 
     // After 'synmaxcol' the attribute is always zero.
-    let synmaxcol = syn_buffer().b_p_smc;
+    let synmaxcol = buffer.b_p_smc;
     if synmaxcol > 0 && col >= synmaxcol as ColNr {
         clear_current_state();
         current_id.set(0);
@@ -60,7 +72,7 @@ pub(crate) unsafe fn get_syntax_attr(col: ColNr, can_spell: *mut bool, keep_stat
     let mut attr = 0;
     while current_col.get() <= col {
         let last = current_col.get() == col;
-        attr = unsafe { syn_current_attr(false, true, can_spell, last && keep_state) };
+        attr = unsafe { syn_current_attr(buffer, false, true, can_spell, last && keep_state) };
         current_col.set(current_col.get() + 1);
     }
     attr
@@ -88,6 +100,7 @@ fn default_can_spell() -> bool {
 ///
 /// `can_spell` must point at a writable `bool` the caller owns.
 pub(crate) unsafe fn syn_current_attr(
+    buffer: Buf,
     syncing: bool,
     displaying: bool,
     can_spell: *mut bool,
@@ -99,7 +112,7 @@ pub(crate) unsafe fn syn_current_attr(
 
     // No character, no attributes -- past end of line? Do try matching an
     // empty line, which could be the start of a region.
-    let line = syn_getcurline();
+    let line = syn_getcurline(buffer);
     if unsafe { *line.offset(current_col.get() as isize) } as c_int == NUL && current_col.get() != 0
     {
         // If we found a match after the last column, use it.
@@ -135,7 +148,7 @@ pub(crate) unsafe fn syn_current_attr(
 
     // Use the `syntax iskeyword` option while matching.
     let mut buf_chartab = [0u64; 4];
-    save_chartab(&mut buf_chartab);
+    save_chartab(buffer, &mut buf_chartab);
 
     let mut cur_extmatch: *mut RegExtMatch = ::core::ptr::null_mut();
     let mut zero_width_next_list = false;
@@ -161,7 +174,7 @@ pub(crate) unsafe fn syn_current_attr(
         {
             // 2. A keyword, if we are on a keyword character after a
             //    non-keyword one. Never while syncing.
-            if do_keywords && let Some(si) = try_keyword(cur_si) {
+            if do_keywords && let Some(si) = try_keyword(buffer, cur_si) {
                 cur_si = Some(si);
                 found_keyword = true;
             }
@@ -208,7 +221,7 @@ pub(crate) unsafe fn syn_current_attr(
             // is an empty line and "skipempty" was given, or we are on
             // white space and "skipwhite" was given.
             if !found_match {
-                let line = syn_getcurline();
+                let line = syn_getcurline(buffer);
                 let white = current_next_flags.get().has(SynFlags::SKIPWHITE)
                     && ascii_iswhite(unsafe { *line.offset(current_col.get() as isize) } as c_int);
                 let empty = current_next_flags.get().has(SynFlags::SKIPEMPTY)
@@ -232,7 +245,7 @@ pub(crate) unsafe fn syn_current_attr(
         }
     }
 
-    restore_chartab(&buf_chartab);
+    restore_chartab(buffer, &buf_chartab);
 
     let sip = pick_current_attr(cur_si);
     if !can_spell.is_null() {
@@ -250,7 +263,7 @@ pub(crate) unsafe fn syn_current_attr(
         // item here may be an empty match, and a containing item might end
         // in this column too.
         check_state_ends();
-        if state_len() > 0 && syn_curline_byte(current_col.get()) as c_int != NUL {
+        if state_len() > 0 && syn_curline_byte(buffer, current_col.get()) as c_int != NUL {
             current_col.set(current_col.get() + 1);
             check_state_ends();
             current_col.set(current_col.get() - 1);
@@ -263,7 +276,7 @@ pub(crate) unsafe fn syn_current_attr(
             .get()
             .has(SynFlags::SKIPNL | SynFlags::SKIPEMPTY)
     {
-        let line = syn_getcurline();
+        let line = syn_getcurline(buffer);
         if unsafe { *line.offset(current_col.get() as isize) } as c_int != NUL
             && unsafe { *line.offset(current_col.get() as isize + 1) } as c_int == NUL
         {
@@ -283,11 +296,11 @@ pub(crate) unsafe fn syn_current_attr(
 ///
 /// Answers the pushed item, or `None` when the column does not start a keyword
 /// or no keyword matches there.
-fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
+fn try_keyword(buffer: Buf, cur_si: Option<Item>) -> Option<Item> {
     // Only on a keyword character that follows a non-keyword one.
-    let line = syn_getcurline();
+    let line = syn_getcurline(buffer);
     let cur_pos = unsafe { line.offset(current_col.get() as isize) };
-    if !unsafe { vim_iswordp_buf(cur_pos, syn_buffer()) } {
+    if !unsafe { vim_iswordp_buf(cur_pos, buffer) } {
         return None;
     }
     if current_col.get() != 0 {
@@ -295,11 +308,11 @@ fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
         // SAFETY: `prev` is inside the line the parser is on.
         let head = unsafe { prev.offset(-(utf_head_off(line, prev) as isize)) };
         // SAFETY: the buffer the parser was started for.
-        if unsafe { vim_iswordp_buf(head, syn_buffer()) } {
+        if unsafe { vim_iswordp_buf(head, buffer) } {
             return None;
         }
     }
-    let kw = unsafe { check_keyword_id(line, current_col.get(), cur_si) }?;
+    let kw = unsafe { check_keyword_id(buffer, line, current_col.get(), cur_si) }?;
 
     push_current_state(KEYWORD_IDX);
     let mut si = unsafe { state_top() };
