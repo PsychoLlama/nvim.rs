@@ -661,22 +661,9 @@ unsafe fn run_cmd(
     cmdinfo: &mut CmdParseInfo,
     capture: bool,
 ) -> Result<String_0, Error> {
-    let mut capture_local = GArray {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
     let save_redir_off = redir_off.get();
-    let save_capture_ga = capture_ga.get();
     let save_msg_col = msg_col.get();
-    if capture {
-        // SAFETY: `capture_local` outlives `execute_cmd`, which is the only
-        // thing that can reach `capture_ga`.
-        unsafe { ga_init(&raw mut capture_local, 1, 80) };
-        capture_ga.set(&raw mut capture_local);
-    }
+    let outer_capture = capture.then(capture_start);
 
     let mut tstate = TryState {
         current_exception: ptr::null_mut(),
@@ -703,8 +690,8 @@ unsafe fn run_cmd(
     drop(sctx);
 
     drop(silenced);
+    let captured = outer_capture.map(capture_finish);
     if capture {
-        capture_ga.set(save_capture_ga);
         redir_off.set(save_redir_off);
         msg_col.set(save_msg_col);
     }
@@ -712,21 +699,12 @@ unsafe fn run_cmd(
     let caught = unsafe { try_leave(&raw mut tstate) };
 
     let mut retv = String_0::NULL;
-    if caught.is_ok() && capture && capture_local.ga_len > 1 {
-        // SAFETY: the garray holds `ga_len` bytes of message text.
-        let captured = unsafe {
-            core::slice::from_raw_parts(
-                capture_local.ga_data.cast::<u8>(),
-                capture_local.ga_len as size_t,
-            )
-        };
+    if let Some(captured) = captured.filter(|captured| captured.len() > 1)
+        && caught.is_ok()
+    {
         // Messages open with a newline the caller did not ask for.
         let skip = usize::from(captured[0] == b'\n');
         retv = String_0::from_bytes(&captured[skip..]);
-    }
-    if capture {
-        // SAFETY: initialised above under the same condition.
-        unsafe { ga_clear(&raw mut capture_local) };
     }
     caught.map(|()| retv)
 }

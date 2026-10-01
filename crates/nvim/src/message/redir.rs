@@ -12,19 +12,16 @@
 use super::*;
 use crate::message_fmt::c_str;
 use crate::option::vars::P_VFILE;
+use crate::os::fs::CFile;
 use crate::semsg;
 use crate::types::Failed;
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 /// The `msg_ext` kind a verbose message carries.
 ///
 /// [`verbose_enter`] compares `msg_ext_kind` against this to recognise a
 /// verbose section it is already inside.
 const VERBOSE_KIND: &CStr = c"verbose";
-
-/// The `'verbosefile'` handle, opened lazily by [`verbose_open`].
-static verbose_fd: GlobalCell<*mut FILE> = GlobalCell::new(ptr::null_mut());
 
 /// Is `'verbosefile'` set to anything?
 fn verbosefile_set() -> bool {
@@ -58,7 +55,7 @@ pub(crate) fn redir_write(bytes: &[u8]) {
     }
     // If 'verbosefile' is set prepare for writing in that file.
     // SAFETY: `p_vfile` holds a valid option string.
-    if verbosefile_set() && verbose_fd.get().is_null() {
+    if verbosefile_set() && verbose_fd.with(Option::is_none) {
         let _ = verbose_open();
     }
     // SAFETY: as above.
@@ -68,24 +65,17 @@ pub(crate) fn redir_write(bytes: &[u8]) {
 
     // One space to every sink this message is going to.
     let pad = || {
-        if !capture_ga.get().is_null() {
-            // SAFETY: the cell holds a live growable array.
-            unsafe { ga_concat_len(capture_ga.get(), c" ".as_ptr(), 1) };
-        }
+        capture_bytes(b" ");
         if redir_reg.get() != 0 {
             // SAFETY: a one-byte literal.
             unsafe { write_reg_contents(redir_reg.get(), c" ".as_ptr(), 1, 1) };
         } else if redir_vname.get() {
             // SAFETY: as above.
             unsafe { var_redir_str(c" ".as_ptr(), -1) };
-        } else if !redir_fd.get().is_null() {
-            // SAFETY: the cell holds an open stream.
-            unsafe { fputs(c" ".as_ptr(), redir_fd.get()) };
+        } else {
+            redir_fd.with(|file| file.as_ref().map(|file| file.putc(b' ')));
         }
-        if !verbose_fd.get().is_null() {
-            // SAFETY: as above.
-            unsafe { fputs(c" ".as_ptr(), verbose_fd.get()) };
-        }
+        verbose_fd.with(|file| file.as_ref().map(|file| file.putc(b' ')));
     };
 
     // If the string doesn't start with CR or NL, go to msg_col.
@@ -98,11 +88,7 @@ pub(crate) fn redir_write(bytes: &[u8]) {
 
     let text = bytes.as_ptr().cast::<c_char>();
     let len = bytes.len();
-    if !capture_ga.get().is_null() {
-        // SAFETY: the cell holds a live growable array, and `len` bytes
-        // follow `text`.
-        unsafe { ga_concat_len(capture_ga.get(), text, len) };
-    }
+    capture_bytes(bytes);
     if redir_reg.get() != 0 {
         // SAFETY: as above.
         unsafe { write_reg_contents(redir_reg.get(), text, len as ssize_t, 1) };
@@ -114,19 +100,13 @@ pub(crate) fn redir_write(bytes: &[u8]) {
 
     // Write and adjust the current column. The file sinks are fed byte by
     // byte because the column has to be tracked byte by byte anyway.
+    let to_redir_fd =
+        redir_reg.get() == 0 && !redir_vname.get() && msg_capture.with(Option::is_none);
     for &byte in bytes {
-        if redir_reg.get() == 0
-            && !redir_vname.get()
-            && capture_ga.get().is_null()
-            && !redir_fd.get().is_null()
-        {
-            // SAFETY: the cell holds an open stream.
-            unsafe { putc(c_int::from(byte), redir_fd.get()) };
+        if to_redir_fd {
+            redir_fd.with(|file| file.as_ref().map(|file| file.putc(byte)));
         }
-        if !verbose_fd.get().is_null() {
-            // SAFETY: as above.
-            unsafe { putc(c_int::from(byte), verbose_fd.get()) };
-        }
+        verbose_fd.with(|file| file.as_ref().map(|file| file.putc(byte)));
         match byte {
             b'\r' | b'\n' => redir_col.set(0),
             b'\t' => redir_col.set(redir_col.get() + 8 - redir_col.get() % 8),
@@ -142,11 +122,35 @@ pub(crate) fn redir_write(bytes: &[u8]) {
 
 /// Is anything teeing the message stream?
 pub fn redirecting() -> bool {
-    !redir_fd.get().is_null()
+    redir_fd.with(Option::is_some)
         || verbosefile_set()
         || redir_reg.get() != 0
         || redir_vname.get()
-        || !capture_ga.get().is_null()
+        || msg_capture.with(Option::is_some)
+}
+
+/// Append `bytes` to the capture, if one is running.
+fn capture_bytes(bytes: &[u8]) {
+    msg_capture.update(|buffer| {
+        if let Some(buffer) = buffer {
+            buffer.extend_from_slice(bytes);
+        }
+    });
+}
+
+/// Start capturing message output, answering the capture this one
+/// interrupts -- which [`capture_finish`] puts back.
+///
+/// A capture nested inside another collects only its own output, as
+/// upstream's: the outer one sees nothing of it.
+pub(crate) fn capture_start() -> Option<Vec<u8>> {
+    msg_capture.replace(Some(Vec::new()))
+}
+
+/// Stop capturing, put back the capture [`capture_start`] interrupted, and
+/// answer what was collected.
+pub(crate) fn capture_finish(outer: Option<Vec<u8>>) -> Vec<u8> {
+    msg_capture.replace(outer).unwrap_or_default()
 }
 
 /// Before giving a verbose message. Must always be paired with
@@ -201,22 +205,17 @@ pub fn verbose_leave_scroll() {
 
 /// `'verbosefile'` changed: stop writing to the old one.
 pub fn verbose_stop() {
-    if !verbose_fd.get().is_null() {
-        unsafe { fclose(verbose_fd.get()) };
-        verbose_fd.set(ptr::null_mut());
-    }
+    verbose_fd.set(None);
     verbose_did_open.set(false);
 }
 
 /// Open `'verbosefile'` for appending, once.
 pub fn verbose_open() -> Result<(), Failed> {
-    if verbose_fd.get().is_null() && !verbose_did_open.get() {
+    if verbose_fd.with(Option::is_none) && !verbose_did_open.get() {
         // Only give the error message once.
         verbose_did_open.set(true);
-        verbose_fd.set(p_vfile(|value| unsafe {
-            os_fopen(value.as_ptr().cast_mut(), c"a".as_ptr())
-        }));
-        if verbose_fd.get().is_null() {
+        verbose_fd.set(p_vfile(|value| CFile::open(value, c"a")));
+        if verbose_fd.with(Option::is_none) {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = p_vfile(|value| unsafe { c_str(value.as_ptr().cast_mut()) });
             semsg!("E484: Can't open file {arg0}");

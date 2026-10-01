@@ -38,6 +38,7 @@
 use crate::cstr;
 use crate::os::uv_error::{UV_EAGAIN, UV_EINTR, UV_EINVAL, UV_UNKNOWN};
 use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ptr::NonNull;
 use core::{ptr, slice};
 
 use crate::event::libuv::{
@@ -478,6 +479,59 @@ pub unsafe fn os_fopen(path: *const c_char, flags: *const c_char) -> *mut FILE {
             return ptr::null_mut();
         }
         fdopen(fd, flags)
+    }
+}
+
+/// An open C stream, closed when dropped: the owner `fopen` hands back.
+///
+/// For the handful of editor sinks that stay a `FILE *` because the tree
+/// writes them byte by byte (`:redir > file`, `'verbosefile'`). Writing
+/// takes `&self`: the stream's buffer is C's, behind the pointer, and no
+/// Rust reference reaches it.
+pub struct CFile(NonNull<FILE>);
+
+impl CFile {
+    /// [`os_fopen`] `path` with `mode`, or `None` when it cannot be opened.
+    pub fn open(path: &CStr, mode: &CStr) -> Option<Self> {
+        // SAFETY: two NUL-terminated strings; a stream `os_fopen` opened is
+        // this value's alone.
+        NonNull::new(unsafe { os_fopen(path.as_ptr(), mode.as_ptr()) }).map(CFile)
+    }
+
+    /// The stream, for a writer that still takes a `FILE *`. It stays open
+    /// for as long as `self` lives.
+    pub fn as_ptr(&self) -> *mut FILE {
+        self.0.as_ptr()
+    }
+
+    /// Close the stream now, answering whether the close succeeded -- a
+    /// write error the buffering hid shows up here, and dropping cannot
+    /// say so.
+    pub fn close(self) -> bool {
+        let stream = core::mem::ManuallyDrop::new(self);
+        // SAFETY: an open stream this value owns; `ManuallyDrop` keeps
+        // `drop` from closing it a second time.
+        unsafe { ::libc::fclose(stream.0.as_ptr()) == 0 }
+    }
+
+    /// Write one byte.
+    pub fn putc(&self, byte: u8) {
+        // SAFETY: an open stream this value owns.
+        unsafe { ::libc::fputc(c_int::from(byte), self.0.as_ptr()) };
+    }
+
+    /// Write `bytes`, NULs and all.
+    pub fn write(&self, bytes: &[u8]) {
+        // SAFETY: an open stream this value owns, and `bytes` is readable
+        // for its length.
+        unsafe { ::libc::fwrite(bytes.as_ptr().cast(), 1, bytes.len(), self.0.as_ptr()) };
+    }
+}
+
+impl Drop for CFile {
+    fn drop(&mut self) {
+        // SAFETY: an open stream this value owns, closed exactly once.
+        unsafe { ::libc::fclose(self.0.as_ptr()) };
     }
 }
 

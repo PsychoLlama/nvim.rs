@@ -7,7 +7,6 @@ use crate::guard::{Allow, Saved, Suppress};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
 
 use crate::buffer::maketitle;
 
@@ -42,10 +41,9 @@ use crate::os::env::expand_env_save;
 use crate::register::{valid_yank_reg, write_reg_contents};
 use crate::state::MODE_CMDLINE;
 use crate::statusline::draw_tabline;
-use crate::types::{ExArg, FILE, Failed, VarNumber, Vv, ssize_t};
+use crate::types::{ExArg, Failed, VarNumber, Vv, ssize_t};
 
 use crate::winlayer::Win;
-use ::libc::fclose;
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) fn ex_colorscheme(excmd: &mut ExArg) {
@@ -96,9 +94,9 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         at += 1;
         let mode = if excmd.line.byte_at(at) == b'>' {
             at += 1;
-            c"a".as_ptr() as *mut c_char
+            c"a"
         } else {
-            c"w".as_ptr() as *mut c_char
+            c"w"
         };
         at = excmd.line.skip_white(at);
         close_redir();
@@ -107,6 +105,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         if fname.is_null() {
             return;
         }
+        // SAFETY: `fname` is the NUL-terminated expansion just made.
         redir_fd.set(unsafe { open_exfile(fname, c_int::from(excmd.forceit), mode) });
         xfree(fname as *mut c_void);
     } else if excmd.line.byte_at(at) == b'@' {
@@ -154,7 +153,7 @@ pub(crate) fn ex_redir(excmd: &mut ExArg) {
         semsg!("E475: Invalid argument: {arg}");
     }
     // Whichever form succeeded, output is being captured again.
-    if !redir_fd.get().is_null() || redir_reg.get() != 0 || redir_vname.get() {
+    if redir_fd.with(Option::is_some) || redir_reg.get() != 0 || redir_vname.get() {
         redir_off.set(false);
     }
 }
@@ -243,10 +242,7 @@ fn suspend_lazyredraw() -> LazyRedrawOff {
 
 /// Stop capturing message output, whichever destination is open.
 pub(crate) fn close_redir() {
-    if !redir_fd.get().is_null() {
-        unsafe { fclose(redir_fd.get()) };
-        redir_fd.set(ptr::null_mut::<FILE>());
-    }
+    redir_fd.set(None);
     redir_reg.set(0);
     if redir_vname.get() {
         var_redir_stop();

@@ -62,17 +62,8 @@ pub unsafe fn exec_impl(
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let capture = unsafe { (*opts).output }.unwrap_or(false);
     let save_redir_off = redir_off.get();
-    let save_capture_ga = capture_ga.get();
     let save_msg_col = msg_col.get();
-    // SAFETY: a `GArray` is two counts, an item size and a pointer, so
-    // all-zero is a valid value; `ga_init` fills it in before it is used.
-    let mut capture_local: GArray = unsafe { ::core::mem::zeroed() };
-    if capture {
-        // SAFETY: `capture_local` is this frame's, and outlives the source
-        // below -- the global is put back before this returns.
-        unsafe { ga_init(&raw mut capture_local, 1, 80) };
-        capture_ga.set(&raw mut capture_local);
-    }
+    let outer_capture = capture.then(capture_start);
     let mut tstate: TryState = TRY_STATE_INIT;
     // SAFETY: `tstate` is this frame's, live until the `try_leave` below.
     unsafe { try_enter(&raw mut tstate) };
@@ -86,8 +77,8 @@ pub unsafe fn exec_impl(
     // SAFETY: `src` names its own bytes and `name` is a static C string.
     unsafe { do_source_str(src.data(), name) };
     drop(silenced);
+    let captured = outer_capture.map(capture_finish);
     if capture {
-        capture_ga.set(save_capture_ga);
         redir_off.set(save_redir_off);
         msg_col.set(save_msg_col);
     }
@@ -99,30 +90,12 @@ pub unsafe fn exec_impl(
     // The capture always starts with the newline that separated the first
     // message from whatever was on screen; drop it. A one-byte capture is
     // that newline alone, i.e. nothing was printed.
-    if !caught && capture && capture_local.ga_len > 1 {
-        let captured =
-            usize::try_from(capture_local.ga_len).expect("a garray length is never negative");
-        // SAFETY: the capture holds `ga_len` bytes of message text.
-        let mut s: String_0 = String_0::from_bytes(unsafe {
-            core::slice::from_raw_parts(capture_local.ga_data.cast::<u8>(), captured)
-        });
+    if let Some(captured) = captured.filter(|captured| captured.len() > 1)
+        && !caught
+    {
         // Messages open with a newline the caller did not ask for.
-        if s.as_bytes().first() == Some(&b'\n') {
-            // SAFETY: the string is its own, and the shift leaves `len - 1`
-            // bytes with the terminator `truncate` writes after them.
-            unsafe {
-                s.data()
-                    .cast::<u8>()
-                    .copy_from(s.data().add(1).cast(), s.len() - 1);
-                s.truncate(s.len() - 1);
-            }
-        }
-        return Ok(s);
-    }
-    if capture {
-        // SAFETY: `capture_local` is this frame's, and nothing points at it
-        // any more.
-        unsafe { ga_clear(&raw mut capture_local) };
+        let skip = usize::from(captured[0] == b'\n');
+        return Ok(String_0::from_bytes(&captured[skip..]));
     }
     thrown.map(|()| String_0::NULL)
 }

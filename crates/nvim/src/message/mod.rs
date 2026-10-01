@@ -81,7 +81,6 @@ use crate::ex_eval::cause_errthrow;
 use crate::ex_getln::state::{cmdline_was_last_drawn, redrawing_cmdline};
 use crate::fileio::check_timestamps;
 use crate::fileio::state::need_check_timestamps;
-use crate::garray::ga_concat_len;
 use crate::getchar::state::{
     KeyTyped, got_int, reg_recording, scriptout, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
@@ -115,20 +114,20 @@ use crate::memory::{
     arena_alloc, strequal, strnequal, xfree, xmalloc, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::message::state::{
-    called_emsg, capture_ga, cmd_silent, cmdmsg_rl, confirm_msg_used, did_emsg, did_wait_return,
+    called_emsg, cmd_silent, cmdmsg_rl, confirm_msg_used, did_emsg, did_wait_return,
     do_clear_hist_temp, do_clear_sb_text, emsg_assert_fails_context, emsg_assert_fails_lnum,
     emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display, emsg_severe, emsg_silent,
     emsg_skip, in_assert_fails, info_message, is_multihl, keep_msg, keep_msg_hl_id, keep_msg_more,
-    last_sourcing_lnum, last_sourcing_name, lines_left, more_prompt_busy, msg_col, msg_did_scroll,
-    msg_didany, msg_didout, msg_ext_append, msg_ext_chunks, msg_ext_history, msg_ext_id,
-    msg_ext_kind, msg_ext_last_attr, msg_ext_last_chunk, msg_ext_last_hl_id, msg_ext_overwrite,
-    msg_ext_skip_flush, msg_ext_skip_verbose, msg_ext_trigger, msg_flags, msg_grid, msg_grid_pos,
-    msg_grid_pos_at_flush, msg_grid_scroll_discount, msg_hist_off, msg_id_next, msg_keep_depth,
-    msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled, msg_scrolled_at_flush,
-    msg_scrolled_ign, msg_silent, msg_source_busy, msg_wait, need_clr_eos, need_fileinfo,
-    need_wait_return, no_wait_return, on_print, pre_verbose_kind, progress_msg_target, quit_more,
-    redir_col, redir_fd, redir_off, redir_reg, redir_vname, showmode_clear_pending,
-    verbose_did_open,
+    last_sourcing_lnum, last_sourcing_name, lines_left, more_prompt_busy, msg_capture, msg_col,
+    msg_did_scroll, msg_didany, msg_didout, msg_ext_append, msg_ext_chunks, msg_ext_history,
+    msg_ext_id, msg_ext_kind, msg_ext_last_attr, msg_ext_last_chunk, msg_ext_last_hl_id,
+    msg_ext_overwrite, msg_ext_skip_flush, msg_ext_skip_verbose, msg_ext_trigger, msg_flags,
+    msg_grid, msg_grid_pos, msg_grid_pos_at_flush, msg_grid_scroll_discount, msg_hist_off,
+    msg_id_next, msg_keep_depth, msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled,
+    msg_scrolled_at_flush, msg_scrolled_ign, msg_silent, msg_source_busy, msg_wait, need_clr_eos,
+    need_fileinfo, need_wait_return, no_wait_return, on_print, pre_verbose_kind,
+    progress_msg_target, quit_more, redir_col, redir_fd, redir_off, redir_reg, redir_vname,
+    showmode_clear_pending, verbose_did_open, verbose_fd,
 };
 use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
 use crate::option::shortmess;
@@ -140,9 +139,8 @@ use crate::options::{
     kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,
     kOptMoptFlagProgress, kOptMoptFlagWait, kOptRdbFlagNothrottle,
 };
-use crate::os::cshim::{gettext, ngettext, putc, stderr};
+use crate::os::cshim::{gettext, ngettext, stderr};
 use crate::os::env::home_replace_save;
-use crate::os::fs::os_fopen;
 use crate::os::input::{input_available, os_breakcheck};
 use crate::os::time::os_delay;
 use crate::register::write_reg_contents;
@@ -161,7 +159,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Arena, Array, ColNr, EStack, EStackArg, Event, ExArg, FILE, FlushBuffers, GridView, HlMessage,
+    Arena, Array, ColNr, EStack, EStackArg, Event, ExArg, FlushBuffers, GridView, HlMessage,
     HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr,
     ScreenChar, ShmFlag, String_0, TypVal, Vv, int64_t, ptrdiff_t, size_t, ssize_t, uint64_t,
 };
@@ -173,7 +171,7 @@ use crate::ui::{
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
 use crate::vim_snprintf;
-use ::libc::{abort, abs, fclose, fputs};
+use ::libc::{abort, abs};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 

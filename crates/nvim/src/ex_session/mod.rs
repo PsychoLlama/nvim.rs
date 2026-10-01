@@ -84,7 +84,7 @@ use crate::types::{
 };
 use crate::winlayer::Win;
 use crate::winlayer::{Buf, TabPage};
-use ::libc::{fclose, fputs};
+use ::libc::fputs;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{fmt, ptr};
 
@@ -506,13 +506,12 @@ pub(crate) fn ex_mkrc(excmd: &mut ExArg) {
     let using_vdir = !view_file.is_null();
 
     // SAFETY: `fname` is NUL-terminated, and `fd` is used only while open.
-    let fd = unsafe { open_exfile(fname, c_int::from(excmd.forceit), c"wb".as_ptr().cast_mut()) };
-    if !fd.is_null() {
-        let out = unsafe { SessionFile::new(fd) };
+    if let Some(file) = unsafe { open_exfile(fname, c_int::from(excmd.forceit), c"wb") } {
+        let out = unsafe { SessionFile::new(file.as_ptr()) };
         let failed = unsafe { write_rc(out, excmd, fname, view_session, using_vdir) };
-        // `fclose` answers nonzero on a write error the buffering hid,
-        // and must run whether or not anything failed above.
-        let close_failed = unsafe { fclose(fd) } != 0;
+        // The close answers a write error the buffering hid, and must run
+        // whether or not anything failed above.
+        let close_failed = !file.close();
         if failed || close_failed {
             emsg(gettext(e_write));
         } else if cmdidx == CmdIdx::mksession {

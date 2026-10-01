@@ -42,12 +42,12 @@ use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
 
-use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
+use crate::os::fs::{CFile, os_isdir, os_mkdir, os_path_exists};
 
 use crate::types::regexp::RegMatch;
 use crate::types::{
-    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, FILE, Failed, NUL,
-    OK, int32_t, intmax_t, size_t,
+    CmdLine, CmdModFlags, CompleteListItemGetter, EcmdCmd, ExArg, Expand, FAIL, Failed, NUL, OK,
+    int32_t, intmax_t, size_t,
 };
 use crate::window::{only_one_window, tabpage_index};
 
@@ -533,26 +533,27 @@ pub unsafe fn vim_mkdir_emsg(name: *const c_char, prot: c_int) -> Result<(), Fai
 ///
 /// `fname` must point at a NUL-terminated string, unaliased for the call.
 /// `mode` must point at a NUL-terminated string, unaliased for the call.
-pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: *mut c_char) -> *mut FILE {
+pub unsafe fn open_exfile(fname: *mut c_char, forceit: c_int, mode: &CStr) -> Option<CFile> {
     if unsafe { os_isdir(fname) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E17: \"{fname}\" is a directory");
-        return ptr::null_mut();
+        return None;
     }
-    if forceit == 0 && byte(mode) != 'a' as c_int && unsafe { os_path_exists(fname) } {
+    if forceit == 0 && mode.to_bytes().first() != Some(&b'a') && unsafe { os_path_exists(fname) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E189: \"{fname}\" exists (add ! to override)");
-        return ptr::null_mut();
+        return None;
     }
-    let fd = unsafe { os_fopen(fname, mode) };
-    if fd.is_null() {
+    // SAFETY: the caller's NUL-terminated name.
+    let file = CFile::open(unsafe { cstr::at(fname) }, mode);
+    if file.is_none() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let fname = unsafe { c_str(fname) };
         semsg!("E190: Cannot open \"{fname}\" for writing");
     }
-    fd
+    file
 }
 
 /// Fill in a dialog message with the file name it is about, or `Untitled`.

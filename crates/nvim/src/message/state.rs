@@ -12,7 +12,7 @@
 //! (`emsg_off`, `emsg_silent`, `emsg_skip`), and the three cells
 //! `assert_fails()` uses to capture one instead of showing it.
 //!
-//! `redir_*` and `capture_ga` are here for the same reason: they are read on
+//! `redir_*` and `msg_capture` are here for the same reason: they are read on
 //! the way *out* of every message, by the tee in [`redir`] that `:redir` and
 //! `'verbosefile'` turn on.
 //!
@@ -52,9 +52,8 @@ use crate::memory::XString;
 use crate::options::{
     OptMoptFlags, kOptMoptFlagHistory, kOptMoptFlagHitEnter, kOptMoptFlagProgress,
 };
-use crate::types::{
-    Array, Callback, FILE, GArray, Object, ScreenAttr, ScreenGrid, String_0, int64_t,
-};
+use crate::os::fs::CFile;
+use crate::types::{Array, Callback, Object, ScreenAttr, ScreenGrid, String_0, int64_t};
 use core::ffi::{CStr, c_int, c_long};
 
 pub(crate) static on_print: GlobalCell<Callback> = GlobalCell::new(Callback::None);
@@ -261,12 +260,18 @@ msg_state! {
     // -- where messages go besides the screen --
     /// Don't redirect (prompts and the like).
     pub(crate) redir_off: bool = false;
-    pub(crate) redir_fd: *mut FILE = core::ptr::null_mut();
+    /// The file `:redir > file` writes to.
+    pub(crate) redir_fd: Option<CFile> = None;
+    /// `'verbosefile'`, opened on the first message that goes to it.
+    pub(super) verbose_fd: Option<CFile> = None;
     /// The register `:redir @x` writes to, or 0.
     pub(crate) redir_reg: c_int = 0;
     /// `:redir => var` is active.
     pub(crate) redir_vname: bool = false;
-    pub(crate) capture_ga: *mut GArray = core::ptr::null_mut();
+    /// What `execute()`, `nvim_exec2()` and `nvim_cmd()` are collecting,
+    /// while one of them is (upstream's `capture_ga`). Each saves the outer
+    /// capture and puts it back; see `capture_start`.
+    pub(crate) msg_capture: Option<Vec<u8>> = None;
 
     // -- message/ internals: what the module's own files share --
     /// Nonzero while the confirm message is being written, so `q` at the more

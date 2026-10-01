@@ -25,17 +25,15 @@ use crate::eval::{eval_option, eval1, partial_name, script_host_eval};
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{DoCmdOpts, cmd_exists, do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::aborting;
-use crate::garray::{ga_append, ga_init};
 use crate::guard::Suppress;
 use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
+use crate::memory::XString;
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
-use crate::message::state::{
-    capture_ga, emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off,
-};
-use crate::message::{e_toomanyarg, e_unknown_function_str};
+use crate::message::state::{emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off};
+use crate::message::{capture_finish, capture_start, e_toomanyarg, e_unknown_function_str};
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::os::dl::{LibcallArg, LibcallResult, LibcallReturn, os_libcall};
@@ -43,8 +41,8 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{
-    EvalFuncData, FuncDict, GArray, List, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, uint8_t,
+    EvalFuncData, FuncDict, List, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -209,13 +207,10 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     let save_emsg_silent = emsg_silent.get();
     let save_emsg_noredir = emsg_noredir.get();
     let save_redir_off = redir_off.get();
-    let save_capture_ga = capture_ga.get();
     let save_msg_col = msg_col.get();
     let mut echo_output = false;
     let mut silence = true;
 
-    // SAFETY throughout: the frame is live; `capture_local` outlives every command run
-    // below, and `result` adopts its allocation at the end.
     if check_secure() {
         return;
     }
@@ -243,15 +238,7 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     // and still resets what the commands below leave behind.
     let _silenced = Suppress::messages_saved_when(silence);
 
-    let mut capture_local = GArray {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    unsafe { ga_init(&raw mut capture_local, size_of::<c_char>() as c_int, 80) };
-    capture_ga.set(&raw mut capture_local);
+    let outer_capture = capture_start();
     redir_off.set(false);
     if !echo_output {
         msg_col.set(0);
@@ -287,12 +274,8 @@ pub fn execute_common(args: &[TypVal], result: &mut TypVal, arg_off: c_int) {
     redir_off.set(save_redir_off);
     msg_col.set(if echo_output { 0 } else { save_msg_col });
 
-    // Read `capture_ga` back rather than using `capture_local`: a
-    // nested `execute()` restores the pointer, and it is the current
-    // one that holds this run's output.
-    unsafe { ga_append(capture_ga.get(), NUL as uint8_t) };
-    unsafe { (*result).write_string((*capture_ga.get()).ga_data as *mut c_char) };
-    capture_ga.set(save_capture_ga);
+    let captured = capture_finish(outer_capture);
+    result.write_string(XString::from_bytes(&captured).into_raw());
 }
 
 /// `execute({command} [, {silent}])`
