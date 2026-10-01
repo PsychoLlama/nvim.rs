@@ -1321,6 +1321,22 @@ API_DIR = "crates/nvim/src/api/"
 # the doc block for what each counts and what retires it. Every one of them
 # decomposes per file, so `--dimension NAME` can list where the debt sits.
 
+# The C printf-family variadics: `raw_variadic_calls` counts a direct call to
+# one, and `variadic.rs` gives each a CArg-checked macro of the same name.
+VARIADIC_CALLEES = (
+    "vim_snprintf",
+    "vim_snprintf_add",
+    "vim_snprintf_safelen",
+    "snprintf",
+    "fprintf",
+    "printf",
+    "sscanf",
+    "printf_string",
+    "nlua_push_errstr",
+    "lua_pushfstring",
+    "luaL_error",
+)
+
 # Counted over every masked file, tree-wide.
 INSTRUMENTS = {
     # `ml_get_buf_len(` is the same needle as `ml_get_buf(` with the `_len`
@@ -1375,9 +1391,7 @@ INSTRUMENTS = {
     # of the `!`, `.name(` is somebody's method, `fn name(` is the declaration,
     # and `direct::name(` is the macros' own expansion.
     "raw_variadic_calls": re.compile(
-        r"(?<![\w.])(?<!fn )(?<!direct::)"
-        r"(?:vim_snprintf(?:_add|_safelen)?|snprintf|fprintf|printf|sscanf"
-        r"|printf_string|nlua_push_errstr|lua_pushfstring|luaL_error)\s*\("
+        r"(?<![\w.])(?<!fn )(?<!direct::)(?:" + "|".join(VARIADIC_CALLEES) + r")\s*\("
     ),
 }
 # Phase 33's typed `Stack` over the `lua_State`, which does not exist yet.
@@ -2312,6 +2326,11 @@ WRAPPER_CALL = re.compile(
     r"^([A-Za-z_][A-Za-z0-9_]*"
     r"(?:(?:::|\.)[A-Za-z_][A-Za-z0-9_]*|::<[^()]*>)*)\s*\($"
 )
+# The same for a variadic's checked macro (`vim_snprintf!(..)`), which is the
+# callee's call with its arguments bound: an `unsafe {}` around one alone is a
+# wrapper of that callee, and keying it by the macro would let the sweep onto
+# the macros book two hundred wrappers as retired.
+VARIADIC_MACRO_CALL = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*!\s*\($")
 # A path's generic arguments, stripped before the last segment is read.
 TURBOFISH = re.compile(r"::<.*$")
 PATH_SEPARATOR = re.compile(r"::(?!<)")
@@ -2407,7 +2426,12 @@ def wrapper_callee(body):
             depth -= 1
             if not depth:
                 head = WRAPPER_CALL.match(text[: i + 1])
-                return callee_key(head.group(1)) if head else None
+                if head:
+                    return callee_key(head.group(1))
+                head = VARIADIC_MACRO_CALL.match(text[: i + 1])
+                if head and head.group(1) in VARIADIC_CALLEES:
+                    return head.group(1)
+                return None
     return None
 
 
@@ -3719,6 +3743,9 @@ SELF_TEST_WRAPPERS = [
     # A method call is keyed by its name: the receiver's type is out of reach.
     ("fn f() {\n    unsafe { p.add(1) };\n}\n", [".add"]),
     ("fn f() {\n    unsafe { self.slots.at(i) };\n}\n", [".at"]),
+    # A variadic's checked macro is its callee's wrapper; any other macro is not.
+    ("fn f() {\n    unsafe { vim_snprintf!(b, n, f, a) };\n}\n", ["vim_snprintf"]),
+    ("fn f() {\n    unsafe { other!(p) };\n}\n", []),
     # The deref class, which is the caller's own obligation and no wrapper.
     ("fn f() {\n    let x = unsafe { *p };\n}\n", []),
     ("fn f() {\n    unsafe { (*p).field = 1 };\n}\n", []),
