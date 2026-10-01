@@ -32,8 +32,8 @@ use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_ty
 use crate::memory::xfree;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::strings::vim_snprintf_safelen;
 use crate::types::{Float, TypVal, int64_t, size_t};
+use crate::vim_snprintf_safelen;
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.
@@ -62,10 +62,10 @@ impl JsonSink<'_> {
     /// The three spellings the sink needs are `%ld`, `%lu` and `%g`, and only
     /// `%g` has no Rust equivalent that is guaranteed to agree byte for byte —
     /// so all three go through `vim_snprintf` and stay consistent.
-    fn concat_num<T: crate::message_fmt::CArg>(&mut self, fmt: &CStr, num: T) {
+    fn concat_num<T: crate::variadic::CArg>(&mut self, fmt: &CStr, num: T) {
         let mut numbuf = [0 as c_char; NUMBUFLEN];
         let formatted = unsafe {
-            let len = vim_snprintf_safelen(numbuf.as_mut_ptr(), NUMBUFLEN, fmt.as_ptr(), num);
+            let len = vim_snprintf_safelen!(numbuf.as_mut_ptr(), NUMBUFLEN, fmt.as_ptr(), num);
             ::core::slice::from_raw_parts(numbuf.as_ptr().cast::<u8>(), len)
         };
         self.gap.extend_from_slice(formatted);

@@ -182,9 +182,13 @@ doc *args:
 # Run the crate's Rust tests: the #[cfg(test)] modules (safe cores' pure
 # logic below the C-ABI shims) plus the integration tests under tests/
 # (ports of former test/unit specs; they call the same exported surface the
-# LuaJIT FFI harness did, minus the child process).
+# LuaJIT FFI harness did, minus the child process). The doctests come last and
+# are all `compile_fail`: each is a call the compiler must refuse (the variadic
+# gate in `variadic.rs`), which no `#[cfg(test)]` can express. Cargo will not
+# mix `--doc` with `--lib`/`--tests`, so it is a second run.
 cargo-test *args:
   cargo test --lib --tests {{ args }}
+  cargo test --doc -p neovim --quiet
 
 # Run the cargo-test lane under Miri: UB detection (aliasing, provenance,
 # uninitialized memory) on the pure-logic tests — the class of bug ASan

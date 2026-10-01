@@ -739,6 +739,19 @@ plus these whole-tree metrics, which are not per-file:
                         count is tree-wide today, which is the honest reading:
                         every site is outside a module that does not exist.
                         Phase 33.
+                      raw_variadic_calls  direct calls to the C printf-family
+                        variadics (`vim_snprintf*`, `snprintf`, `printf`,
+                        `fprintf`, `sscanf`, `printf_string`, `luaL_error`,
+                        `lua_pushfstring`, `nlua_push_errstr`). A variadic
+                        argument is not type-checked: a `&CStr` or an
+                        `XString` handed to `%s` compiles and reads garbage,
+                        which shipped twice. Each callee has a macro of the
+                        same name in `variadic.rs` that binds every argument
+                        through `CArg`, so `name!(` is checked and `name(` is
+                        not. The macros' own expansions go through
+                        `variadic::direct::` and do not count, and neither
+                        does a `fn name(` header. What is left is the
+                        perimeter's. Phase 33.
                       long_fns  functions whose item spans more than
                         LONG_FN_LINES lines, outside generated files — c2rust
                         translated each C function whole, so a 700-line body
@@ -1358,6 +1371,14 @@ INSTRUMENTS = {
     "labeled_blocks": re.compile(
         r"'[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?:\{|loop\b|while\b|for\b)"
     ),
+    # A call, not a mention: `name!(` (the checked macro) cannot match because
+    # of the `!`, `.name(` is somebody's method, `fn name(` is the declaration,
+    # and `direct::name(` is the macros' own expansion.
+    "raw_variadic_calls": re.compile(
+        r"(?<![\w.])(?<!fn )(?<!direct::)"
+        r"(?:vim_snprintf(?:_add|_safelen)?|snprintf|fprintf|printf|sscanf"
+        r"|printf_string|nlua_push_errstr|lua_pushfstring|luaL_error)\s*\("
+    ),
 }
 # Phase 33's typed `Stack` over the `lua_State`, which does not exist yet.
 # When it lands, its module goes in here and `lua_raw_stack` becomes "raw
@@ -1532,6 +1553,7 @@ INSTRUMENT_KEYS = (
     "failed_uses",
     "labeled_blocks",
     "lua_raw_stack",
+    "raw_variadic_calls",
     "long_fns",
     "dup_consts",
     "types_files",
@@ -3189,6 +3211,7 @@ WHOLE_TREE_LABEL = {
     "failed_uses": "`Failed`, the sentinel wearing a Rust type",
     "labeled_blocks": "labelled blocks and loops (the transpiled goto)",
     "lua_raw_stack": "raw lua_State stack calls outside the Stack module",
+    "raw_variadic_calls": "printf-family variadic calls outside the CArg-checked macros",
     "long_fns": f"functions over {LONG_FN_LINES} lines outside generated files",
     "dup_consts": "redundant copies of a constant declared in another file",
     "types_files": "files under types/",
@@ -4182,6 +4205,20 @@ SELF_TEST_INSTRUMENTS = [
             "}\n",
         },
         {"mbyte_raw": 2, "ml_get_raw": 5, "msg_raw": 2},
+    ),
+    # A direct variadic call counts; the checked macro, a method of the same
+    # name, the declaration and the macros' own expansion do not.
+    (
+        {
+            "crates/nvim/src/a.rs": 'unsafe extern "C" fn vim_snprintf(s: *mut c_char) {}\n'
+            "fn f() {\n"
+            "    vim_snprintf(buf, n, fmt, a);\n    libc::fprintf(f, fmt);\n"
+            "    vim_snprintf!(buf, n, fmt, a);\n    self.printf(s);\n"
+            "    $crate::variadic::direct::snprintf(buf, n, fmt);\n"
+            "    vim_snprintf_safelen(buf, n, fmt);\n"
+            "}\n",
+        },
+        {"raw_variadic_calls": 3},
     ),
     # A char-literal cast counts; the same text in a comment or a string does
     # not, and neither does an ordinary `as c_int` on a name.

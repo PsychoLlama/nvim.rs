@@ -130,6 +130,7 @@ pub mod ui_compositor;
 pub mod undo;
 pub(crate) mod usercmd;
 pub mod utf8proc;
+pub mod variadic;
 pub(crate) mod version;
 pub mod viml;
 pub mod vterm;

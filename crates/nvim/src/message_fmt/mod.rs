@@ -52,7 +52,7 @@ use crate::message::{
     emsg_not_now, msg, msg_keep_text, msg_schedule_semsg_text, msg_str, swmsg_text,
 };
 use crate::os::cshim::{gettext, gettext_template};
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
+use core::ffi::{CStr, c_char, c_int};
 use core::fmt;
 use core::fmt::Write as _;
 use std::ffi::CString;
@@ -643,31 +643,6 @@ macro_rules! smsg_keep {
         $crate::__message!(|message| $crate::message_fmt::report_msg_keep(hl_id, message), $($arg)*)
     }};
 }
-
-/// The argument types vim's `printf` can read through a C variadic call.
-///
-/// A variadic passes what it is handed, byte for byte, and the compiler
-/// checks nothing against the format string. `&CStr` is a *fat* pointer, so
-/// a `%s` reading one takes the length word for the rest of the string -- a
-/// segfault, and a silent one at the call site. This trait is the bound that
-/// keeps one out: it is implemented for the thin scalars and pointers vim's
-/// `printf` conversions actually consume, and deliberately not for `&CStr`,
-/// where the fix is `.as_ptr()`.
-///
-/// Nothing in the tree calls a variadic with a *message* any more. What is
-/// left is `encode`'s two `concat_num` helpers, which hand a number to
-/// `vim_snprintf` with a format of their own; the bound is what says the
-/// number is one a variadic can carry.
-pub(crate) trait CArg {}
-
-macro_rules! c_arg_scalars {
-    ($($t:ty),* $(,)?) => { $(impl CArg for $t {})* };
-}
-
-c_arg_scalars!(c_int, c_uint, c_long, c_ulong, usize, isize, f64);
-
-impl<T> CArg for *const T {}
-impl<T> CArg for *mut T {}
 
 /// [`tr_template`] with its arguments spelled inline.
 ///

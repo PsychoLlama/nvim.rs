@@ -37,8 +37,8 @@ use crate::eval::typval::DictSlot;
 use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_typval_read};
 use crate::message::{emsg, internal_error};
 use crate::os::cshim::gettext;
-use crate::strings::vim_snprintf_safelen;
 use crate::types::{Float, TypVal, int64_t, ptrdiff_t, size_t};
+use crate::vim_snprintf_safelen;
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.
@@ -70,10 +70,10 @@ impl<const ECHO: bool> TextSink<'_, ECHO> {
     ///
     /// `N` is the size of the stack buffer upstream declares at the site:
     /// `NUMBUFLEN` for a number, [`MARKERBUFLEN`] for a self-reference marker.
-    fn concat_num<const N: usize, T: crate::message_fmt::CArg>(&mut self, fmt: &CStr, num: T) {
+    fn concat_num<const N: usize, T: crate::variadic::CArg>(&mut self, fmt: &CStr, num: T) {
         let mut numbuf = [0 as c_char; N];
         let formatted = unsafe {
-            let len = vim_snprintf_safelen(numbuf.as_mut_ptr(), N, fmt.as_ptr(), num);
+            let len = vim_snprintf_safelen!(numbuf.as_mut_ptr(), N, fmt.as_ptr(), num);
             ::core::slice::from_raw_parts(numbuf.as_ptr().cast::<u8>(), len)
         };
         self.gap.extend_from_slice(formatted);
