@@ -55,7 +55,7 @@
 #![allow(non_upper_case_globals)]
 
 pub mod state;
-use crate::api::private::helpers::{cbuf_to_string, cstr_to_string};
+use crate::api::private::helpers::cstr_to_string;
 use crate::api::vim::nvim_echo;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{AUGROUP_ALL, apply_autocmds_group, has_event};

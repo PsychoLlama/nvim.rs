@@ -121,6 +121,16 @@ pub unsafe fn hl_msg_free(hl_msg: HlMessage) {
     unsafe { xfree(hl_msg.items.cast()) };
 }
 
+/// A message made of `chunks`, which it owns.
+pub(crate) fn hl_msg_from(chunks: impl IntoIterator<Item = HlMessageChunk>) -> HlMessage {
+    let mut msg = EMPTY_HL_MESSAGE;
+    for chunk in chunks {
+        // SAFETY: `msg` started empty and is only pushed to here.
+        unsafe { hl_msg_push(&mut msg, chunk) };
+    }
+    msg
+}
+
 /// Add `bytes` to the history, as one chunk in highlight `hl_id`.
 pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
     // Remove leading and trailing newlines.
@@ -139,11 +149,13 @@ pub(crate) fn msg_hist_add(bytes: &[u8], hl_id: c_int) {
     }
 
     let text = String_0::from_bytes(text);
-    let mut msg = EMPTY_HL_MESSAGE;
-    // SAFETY: `msg` is a live, empty message.
-    unsafe { hl_msg_push(&mut msg, HlMessageChunk { text, hl_id }) };
-    // SAFETY: `msg` owns its one chunk.
-    unsafe { msg_hist_add_multihl(msg, false, ptr::null_mut()) };
+    msg_hist_add_chunks([HlMessageChunk { text, hl_id }], false);
+}
+
+/// [`msg_hist_add_multihl`] for a message given as its chunks.
+pub(crate) fn msg_hist_add_chunks(chunks: impl IntoIterator<Item = HlMessageChunk>, temp: bool) {
+    // SAFETY: a message `hl_msg_from` just built owns its chunks.
+    unsafe { msg_hist_add_multihl(hl_msg_from(chunks), temp, ptr::null_mut()) };
 }
 
 /// Append an already-chunked message to the history, taking ownership of it.
@@ -379,11 +391,7 @@ pub fn ex_messages(excmd: &mut ExArg) {
             // the event loop, which can service a UI attach or detach.
             msg_silent.set(msg_silent.get() + c_int::from(ui_has(kUIMessages)));
             let mut needs_clear = false;
-            let mut text = EMPTY_HL_MESSAGE;
-            for chunk in entry.chunks {
-                // SAFETY: `text` started empty and is only pushed to here.
-                unsafe { hl_msg_push(&mut text, chunk) };
-            }
+            let text = hl_msg_from(entry.chunks);
             let clear = &raw mut needs_clear;
             let kind = (!entry.kind.is_null()).then(|| entry.kind.as_cstr());
             // SAFETY: `text` is this frame's own copy, and `clear` a live

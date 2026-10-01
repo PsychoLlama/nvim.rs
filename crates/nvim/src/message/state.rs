@@ -42,9 +42,9 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
-// The selectors here keep upstream's spelling, so the hundred-odd files that
-// read them did not change; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+// The selectors keep upstream's spelling, so the hundred-odd files that read
+// them did not change; `message/mod.rs`'s `non_upper_case_globals` allow
+// covers them, and upper-casing them is a per-module rewrite.
 
 use super::{PROGRESS_TARGET_CMD, SB_CLEAR_NONE, ScrollbackClear};
 use crate::global_cell::{Field, GlobalCell, field};

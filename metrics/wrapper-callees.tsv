@@ -277,7 +277,6 @@ count	callee	no_raw	defs	def
 9	Node::from_ptr	0	1	crates/nvim/src/marktree/node.rs
 9	Self::new	0	67	
 9	add_suggestion	0	1	crates/nvim/src/spellsuggest/collect.rs
-9	cbuf_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 9	channel_incref	0	1	crates/nvim/src/channel/mod.rs
 9	check_nextcmd	0	1	crates/nvim/src/ex_docmd/scan.rs
 9	cstrncmp	0	1	crates/nvim/src/regexp/mbyte.rs
@@ -310,6 +309,7 @@ count	callee	no_raw	defs	def
 8	Lv::new	0	67	
 8	alist_name	0	1	crates/nvim/src/arglist/mod.rs
 8	captype	0	1	crates/nvim/src/spell/chartab.rs
+8	cbuf_to_string	0	1	crates/nvim/src/api/private/helpers/text.rs
 8	clear_lval	0	1	crates/nvim/src/eval/lval.rs
 8	decor_provider_invoke	0	1	crates/nvim/src/decoration_provider.rs
 8	dict_add_nr	0	4	
@@ -374,7 +374,6 @@ count	callee	no_raw	defs	def
 7	func_ref	0	1	crates/nvim/src/eval/userfunc/funccall.rs
 7	ga_concat_cstr	0	1	crates/nvim/src/testing/report.rs
 7	gen_expand_wildcards	0	1	crates/nvim/src/path/expand.rs
-7	hl_msg_push	1	1	crates/nvim/src/message/mod.rs
 7	ignorecase	0	1	crates/nvim/src/search/pattern.rs
 7	in_id_list	0	1	crates/nvim/src/syntax/options.rs
 7	ins_char_bytes	0	1	crates/nvim/src/change/text.rs
@@ -586,6 +585,7 @@ count	callee	no_raw	defs	def
 5	group_get_ns	0	1	crates/nvim/src/sign/store.rs
 5	has_non_ascii	0	1	crates/nvim/src/strings/mod.rs
 5	hash_find_len	0	1	crates/nvim/src/hashtab.rs
+5	hl_msg_push	1	1	crates/nvim/src/message/mod.rs
 5	hlattrs2dict	1	1	crates/nvim/src/highlight/dict.rs
 5	iconv	0	0	
 5	input_get	0	1	crates/nvim/src/os/input.rs
@@ -1086,7 +1086,6 @@ count	callee	no_raw	defs	def
 3	modify_keymap	0	1	crates/nvim/src/mapping/mapset.rs
 3	mpack_parse	0	1	crates/nvim/src/mpack/object.rs
 3	mpack_read	0	1	crates/nvim/src/mpack/mpack_core.rs
-3	msg_hist_add_multihl	0	1	crates/nvim/src/message/history.rs
 3	msg_strtrunc	0	1	crates/nvim/src/message/mod.rs
 3	msg_trunc	0	1	crates/nvim/src/message/mod.rs
 3	name_object	0	1	crates/nvim/src/highlight/mod.rs
@@ -1731,6 +1730,7 @@ count	callee	no_raw	defs	def
 2	msg	0	0	
 2	msg_add_fileformat	1	1	crates/nvim/src/fileio/mod.rs
 2	msg_add_lines	1	1	crates/nvim/src/fileio/mod.rs
+2	msg_hist_add_multihl	0	1	crates/nvim/src/message/history.rs
 2	msg_may_trunc	0	1	crates/nvim/src/message/mod.rs
 2	msg_multihl	0	1	crates/nvim/src/message/mod.rs
 2	msgpack_rpc_get_handler_for	0	1	crates/nvim/src/api/private/dispatch/mod.rs

@@ -5,10 +5,7 @@
 //! handed to the UI as a `msg_show` event ([`msg_ext_ui_flush`]), which then
 //! decides where to put it.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
-// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![allow(non_upper_case_globals)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -18,8 +15,7 @@
 )]
 
 use super::*;
-use core::ffi::{c_char, c_int};
-use core::ptr;
+use core::ffi::c_int;
 
 /// Start a new message of kind `msg_kind`, flushing whatever preceded it.
 ///
@@ -77,8 +73,7 @@ pub(crate) fn msg_ext_emit_chunk() {
 
     chunk.push(Object::integer(msg_ext_last_attr.get().into()));
     msg_ext_last_attr.set(-1);
-    // SAFETY: `accumulated` is the chunk's own bytes.
-    let text = unsafe { cbuf_to_string(accumulated.as_ptr().cast::<c_char>(), accumulated.len()) };
+    let text = String_0::from_bytes(&accumulated);
     chunk.push(Object::string(text));
     chunk.push(Object::integer(msg_ext_last_hl_id.get().into()));
     msg_ext_chunks.update(|chunks| {
@@ -147,8 +142,7 @@ pub fn msg_ext_ui_flush() {
         // Not going to the UI's history, so keep it in ours -- as a
         // temporary entry, which the next message displaces.  The chunk
         // arrays are unwrapped rather than copied: the strings move.
-        let mut msg = EMPTY_HL_MESSAGE;
-        for entry in chunks {
+        let moved = chunks.into_iter().map(|entry| {
             let chunk = entry
                 .into_array()
                 .expect("a chunk this module emitted is an array");
@@ -157,18 +151,15 @@ pub fn msg_ext_ui_flush() {
                 .as_integer()
                 .expect("a chunk's third element is its highlight id");
             let mut chunk = chunk.into_vec();
-            let moved = HlMessageChunk {
+            HlMessageChunk {
                 text: chunk[1]
                     .take()
                     .into_string()
                     .expect("a chunk's second element is its text"),
                 hl_id: c_int::try_from(hl_id).expect("this module only emits c_int ids"),
-            };
-            // SAFETY: `msg` started empty and is only pushed to here.
-            unsafe { hl_msg_push(&mut msg, moved) };
-        }
-        // SAFETY: `msg` is this frame's, and the history takes it over.
-        unsafe { msg_hist_add_multihl(msg, true, ptr::null_mut()) };
+            }
+        });
+        msg_hist_add_chunks(moved, true);
     }
 
     msg_ext_overwrite.set(false);
