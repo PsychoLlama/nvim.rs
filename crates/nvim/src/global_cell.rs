@@ -710,6 +710,41 @@ mod tests {
     }
 
     #[test]
+    fn a_field_selector_reaches_one_field_per_access() {
+        struct Record {
+            count: i32,
+            name: Option<Vec<u8>>,
+        }
+        const COUNT: Field<Record, i32> = field!(Record, count);
+        const NAME: Field<Record, Option<Vec<u8>>> = field!(Record, name);
+        // A local cell: the accessors are the same, and the ratchet counts
+        // only `static` ones.
+        let cell = GlobalCell::new(Record {
+            count: 1,
+            name: None,
+        });
+
+        assert!(COUNT != Field::new(NAME.field_offset(), |r: &mut Record| &mut r.count));
+        assert_eq!(cell.get_at(COUNT), 1);
+        cell.set_at(COUNT, 2);
+        assert_eq!(cell.get_at(COUNT), 2);
+        assert_eq!(cell.replace_at(NAME, Some(b"x".to_vec())), None);
+        assert_eq!(
+            cell.with_at(NAME, |name| name.as_deref().map(<[u8]>::len)),
+            Some(1)
+        );
+        drop(cell.replace_at(NAME, None));
+
+        // Outside a cell, the selector projects a record the caller holds.
+        let mut record = Record {
+            count: 7,
+            name: None,
+        };
+        *COUNT.of(&mut record) += 1;
+        assert_eq!(record.count, 8);
+    }
+
+    #[test]
     fn the_editor_state_lock_nests_on_its_own_thread() {
         let outer = editor_state_lock();
         {
