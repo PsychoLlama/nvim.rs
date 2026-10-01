@@ -17,10 +17,9 @@ use neovim::eval::typval::{
     dict_get_string_buf_chk, list_unref, tv_clear, tv_dict_alloc, tv_dict_free,
     tv_dict_item_alloc_len, tv_dict_unref,
 };
-use neovim::guard::sandbox;
+use neovim::guard::{Suppress, sandbox};
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xmalloc, xstrdup};
-use neovim::message::state::emsg_skip;
 use neovim::types::{Callback, Dict, Failed, VarLock, VimConv};
 use std::ffi::c_int;
 
@@ -821,13 +820,13 @@ fn adding_a_typed_value_takes_the_key_by_length() {
             log.clear();
 
             // And with messages skipped, silently.
-            emsg_skip.set(emsg_skip.get() + 1);
+            let skipped = Suppress::emsg_skip();
             assert_eq!(
                 check_emsg(log.editor(), || add(d, 2), None),
                 Err(Failed),
                 "{name}"
             );
-            emsg_skip.set(emsg_skip.get() - 1);
+            drop(skipped);
             // Everything the failed add allocated it also released — except
             // the string `allocated_str` was handed, which it owns.
             if name == "allocated_str" {

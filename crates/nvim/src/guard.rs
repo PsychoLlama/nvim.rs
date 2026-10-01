@@ -123,7 +123,7 @@ use crate::getchar::state::{allow_keys, expr_map_lock, no_mapping, no_zero_mappi
 use crate::global_cell::GlobalCell;
 use crate::memline::inhibit_delete_count;
 use crate::message::state::{
-    emsg_off, emsg_silent, emsg_skip, msg_listdo_overwrite, msg_silent, no_wait_return,
+    MsgField, emsg_off, emsg_silent, emsg_skip, msg_listdo_overwrite, msg_silent, no_wait_return,
 };
 use crate::runtime::state::current_sctx;
 use crate::types::{ScriptCtx, ScriptId};
@@ -141,32 +141,75 @@ pub(crate) static textlock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static allbuf_lock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static sandbox: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
+/// Where a counter lives: a cell of its own, or a field of the message
+/// state's record (`msg_silent`, `emsg_off`, ...), which is one cell for
+/// fifty counters and flags.
+#[derive(Clone, Copy)]
+pub enum Counter {
+    /// A `static` of its own.
+    Cell(&'static GlobalCell<c_int>),
+    /// A field of [`MsgState`](crate::message::state::MsgState).
+    Msg(MsgField<c_int>),
+}
+
+impl Counter {
+    /// The counter's level. (A level, not a status code: the `-> c_int`
+    /// below is the type of the cells it reads.)
+    #[inline]
+    fn get(self) -> c_int {
+        match self {
+            Counter::Cell(cell) => cell.get(),
+            Counter::Msg(field) => field.get(),
+        }
+    }
+
+    #[inline]
+    fn set(self, level: c_int) {
+        match self {
+            Counter::Cell(cell) => cell.set(level),
+            Counter::Msg(field) => field.set(level),
+        }
+    }
+}
+
+impl From<&'static GlobalCell<c_int>> for Counter {
+    fn from(cell: &'static GlobalCell<c_int>) -> Self {
+        Counter::Cell(cell)
+    }
+}
+
+impl From<MsgField<c_int>> for Counter {
+    fn from(field: MsgField<c_int>) -> Self {
+        Counter::Msg(field)
+    }
+}
+
 /// A counter held one higher for the lifetime of the guard.
 ///
 /// Drop subtracts what the constructor added, so a `Bump` nests: the
 /// counter is only back at rest once the outermost one is gone.
 #[must_use = "the counter is released as soon as the guard is dropped"]
 pub struct Bump {
-    cell: &'static GlobalCell<c_int>,
+    counter: Counter,
     by: c_int,
 }
 
 impl Bump {
-    fn new(cell: &'static GlobalCell<c_int>) -> Self {
-        cell.set(cell.get() + 1);
-        Bump { cell, by: 1 }
+    fn new(counter: impl Into<Counter>) -> Self {
+        Self::by(counter, 1)
     }
 
     /// A bump of `by` rather than 1, for the two sites that add a boolean.
-    fn by(cell: &'static GlobalCell<c_int>, by: c_int) -> Self {
-        cell.set(cell.get() + by);
-        Bump { cell, by }
+    fn by(counter: impl Into<Counter>, by: c_int) -> Self {
+        let counter = counter.into();
+        counter.set(counter.get() + by);
+        Bump { counter, by }
     }
 }
 
 impl Drop for Bump {
     fn drop(&mut self) {
-        self.cell.set(self.cell.get() - self.by);
+        self.counter.set(self.counter.get() - self.by);
     }
 }
 
@@ -177,34 +220,32 @@ impl Drop for Bump {
 /// at these sites and why they are spelled differently.
 #[must_use = "the old value is restored as soon as the guard is dropped"]
 pub struct Saved {
-    cell: &'static GlobalCell<c_int>,
+    counter: Counter,
     saved: c_int,
 }
 
 impl Saved {
-    fn new(cell: &'static GlobalCell<c_int>, value: c_int) -> Self {
-        Saved {
-            cell,
-            saved: cell.replace(value),
-        }
+    fn new(counter: impl Into<Counter>, value: c_int) -> Self {
+        Self::when(true, counter, value)
     }
 
     /// Save unconditionally, overwrite only when `cond`.
     ///
     /// Not the same as `cond.then(…)`: the restore happens either way,
     /// which is what a scope that hands control to arbitrary Lua wants.
-    fn when(cond: bool, cell: &'static GlobalCell<c_int>, value: c_int) -> Self {
-        let saved = cell.get();
+    fn when(cond: bool, counter: impl Into<Counter>, value: c_int) -> Self {
+        let counter = counter.into();
+        let saved = counter.get();
         if cond {
-            cell.set(value);
+            counter.set(value);
         }
-        Saved { cell, saved }
+        Saved { counter, saved }
     }
 }
 
 impl Drop for Saved {
     fn drop(&mut self) {
-        self.cell.set(self.saved);
+        self.counter.set(self.saved);
     }
 }
 
@@ -269,19 +310,19 @@ impl Suppress {
     /// For the caller who evaluates something it expects to fail and does
     /// not want the user to hear about it.
     pub fn emsg() -> Bump {
-        Bump::new(&emsg_off)
+        Bump::new(emsg_off)
     }
 
     /// `emsg_skip` — errors from an expression that is only being parsed,
     /// not executed (a skipped `:if` branch, a `:for` over a bad list).
     pub fn emsg_skip() -> Bump {
-        Bump::new(&emsg_skip)
+        Bump::new(emsg_skip)
     }
 
     /// `msg_silent` — messages are computed but not shown, as under
     /// `:silent`.
     pub fn messages() -> Bump {
-        Bump::new(&msg_silent)
+        Bump::new(msg_silent)
     }
 
     /// [`Suppress::messages`] whose release *restores* the level it found
@@ -291,7 +332,7 @@ impl Suppress {
     /// put the whole message state back in one block afterwards, so a
     /// script that leaked a `:silent` cannot escape through them.
     pub fn messages_saved() -> Saved {
-        Saved::new(&msg_silent, msg_silent.get() + 1)
+        Saved::new(msg_silent, msg_silent.get() + 1)
     }
 
     /// [`Suppress::messages_saved`] that only raises the level when `cond`,
@@ -299,13 +340,13 @@ impl Suppress {
     /// an explicit empty value asks for output *and* still resets whatever
     /// the executed commands left behind.
     pub fn messages_saved_when(cond: bool) -> Saved {
-        Saved::when(cond, &msg_silent, msg_silent.get() + 1)
+        Saved::when(cond, msg_silent, msg_silent.get() + 1)
     }
 
     /// `no_wait_return` — a message shown in this scope does not stop for
     /// the hit-enter prompt.
     pub fn wait_return() -> Bump {
-        Bump::new(&no_wait_return)
+        Bump::new(no_wait_return)
     }
 
     /// `RedrawingDisabled` — the screen is not updated while this is held.
@@ -318,7 +359,7 @@ impl Suppress {
     /// way compiles a user's tag pattern, where an error raised by a
     /// *nested* evaluation must not survive the scope either.
     pub fn emsg_outright() -> Saved {
-        Saved::new(&emsg_off, 1)
+        Saved::new(emsg_off, 1)
     }
 
     /// [`Suppress::emsg`] + [`Suppress::messages`]: the recurring "compile
@@ -337,7 +378,7 @@ impl Suppress {
     /// at all: `:silent!`, `'debug'` and `assert_fails()` all read this
     /// counter rather than that one.
     pub fn emsg_silent() -> Bump {
-        Bump::new(&emsg_silent)
+        Bump::new(emsg_silent)
     }
 
     /// `no_u_sync` — undo does not start a new change while this is held.
@@ -380,7 +421,7 @@ impl Suppress {
     /// `:argdo` and its siblings hold this so that the per-file header
     /// stays on screen above the command's own output.
     pub fn message_overwrite() -> Bump {
-        Bump::new(&msg_listdo_overwrite)
+        Bump::new(msg_listdo_overwrite)
     }
 
     /// `cmdline_star` — the command line shows `*` for each character
@@ -432,8 +473,8 @@ impl Suppress {
     /// The constructors above exist so that a *global* counter's intended
     /// direction is greppable from one file; a `static` private to the
     /// module that reads it is already that, and does not earn a name here.
-    pub fn counter(cell: &'static GlobalCell<c_int>) -> Bump {
-        Bump::new(cell)
+    pub fn counter(counter: impl Into<Counter>) -> Bump {
+        Bump::new(counter)
     }
 }
 
@@ -453,8 +494,8 @@ pub struct Depth;
 
 impl Depth {
     /// Hold `cell` one higher until the guard is dropped.
-    pub fn of(cell: &'static GlobalCell<c_int>) -> Bump {
-        Bump::new(cell)
+    pub fn of(counter: impl Into<Counter>) -> Bump {
+        Bump::new(counter)
     }
 }
 
@@ -469,7 +510,7 @@ impl Allow {
     /// `msg_silent = 0` — this scope's messages reach the user even inside
     /// `:silent`.
     pub fn messages() -> Saved {
-        Saved::new(&msg_silent, 0)
+        Saved::new(msg_silent, 0)
     }
 
     /// `RedrawingDisabled = 0` — this scope redraws even inside an
@@ -481,7 +522,7 @@ impl Allow {
     /// `no_wait_return = 0` — the hit-enter prompt is armed again for this
     /// scope, whatever the caller had asked for.
     pub fn wait_return() -> Saved {
-        Saved::new(&no_wait_return, 0)
+        Saved::new(no_wait_return, 0)
     }
 
     /// `textlock = 0` — the callback about to run is allowed to change
@@ -594,8 +635,8 @@ impl Lock {
     /// A lock counter that belongs to one module rather than to the editor
     /// as a whole, named by its own `static` — [`Suppress::counter`]'s
     /// sibling, for a counter whose sense is "refuse this operation".
-    pub fn held(cell: &'static GlobalCell<c_int>) -> Bump {
-        Bump::new(cell)
+    pub fn held(counter: impl Into<Counter>) -> Bump {
+        Bump::new(counter)
     }
 }
 

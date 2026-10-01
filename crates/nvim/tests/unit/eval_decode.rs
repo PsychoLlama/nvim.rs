@@ -4,38 +4,15 @@
 
 #![cfg(not(miri))]
 
-use std::ffi::c_int;
-
 use neovim::eval::decode::json_decode_string;
 use neovim::eval::typval::tv_clear;
+use neovim::guard::Suppress;
 use neovim::memory::{xfree, xmemdup};
-use neovim::message::state::emsg_silent;
 use neovim::types::{Failed, TypVal, VAR_UNKNOWN};
 
 use crate::support::alloc::AllocLog;
 use crate::support::tv::{self, Tv};
 use crate::support::{check_emsg_bytes, cstr};
-
-/// `emsg_silent` raised for the caller's scope and put back on drop.
-///
-/// The Lua harness forked a child per case, so it could raise this and
-/// never lower it; here the next case would inherit a silent editor and its
-/// message assertions would all pass vacuously.
-struct Silent(c_int);
-
-impl Silent {
-    fn new() -> Silent {
-        let saved = emsg_silent.get();
-        emsg_silent.set(1);
-        Silent(saved)
-    }
-}
-
-impl Drop for Silent {
-    fn drop(&mut self) {
-        emsg_silent.set(self.0);
-    }
-}
 
 /// An unset `TypVal` for the decoder to write into.
 fn unset() -> TypVal {
@@ -51,7 +28,9 @@ fn unset() -> TypVal {
 #[test]
 fn decoding_reads_no_further_than_the_length_it_was_given() {
     let _log = AllocLog::start();
-    let _silent = Silent::new();
+    // Raised for the case and put back on drop: the Lua harness forked a
+    // child per case, so it never had to lower it.
+    let _silent = Suppress::emsg_silent();
     // SAFETY: every buffer outlives the call that reads it, and `rettv` is
     // this case's own.
     unsafe {
@@ -92,7 +71,9 @@ fn decoding_reads_no_further_than_the_length_it_was_given() {
 #[test]
 fn decoding_a_lone_byte_reads_only_that_byte() {
     let _log = AllocLog::start();
-    let _silent = Silent::new();
+    // Raised for the case and put back on drop: the Lua harness forked a
+    // child per case, so it never had to lower it.
+    let _silent = Suppress::emsg_silent();
     // SAFETY: `one` is a one-byte allocation, freed below; nothing reads
     // past it unless the decoder is wrong, which is the assertion.
     unsafe {
