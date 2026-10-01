@@ -16,7 +16,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
 use crate::message_fmt::c_str;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::regexp::RE_LAST;
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg;

@@ -37,7 +37,7 @@ use crate::message::{msg_advance, msg_display, msg_ext_set_kind, msg_putchar};
 use crate::normal::add_to_showcmd;
 use crate::option::SavedCpo;
 use crate::option::vars::{p_dg, p_enc};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};

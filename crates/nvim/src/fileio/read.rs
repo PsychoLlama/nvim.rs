@@ -31,7 +31,7 @@ use crate::types::{CmdModFlags, CpoFlag, Failed, OptStr, OptionSetFlags};
 mod tail;
 
 use self::tail::{report_and_place, run_read_autocmds};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 /// What the read is being asked to do, decoded from `readfile`'s `flags`.
 #[derive(Clone, Copy)]
 pub(crate) struct How {

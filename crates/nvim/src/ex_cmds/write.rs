@@ -48,7 +48,7 @@ use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::c_str;
 use crate::option::vars::{P_DIR, p_confirm, p_dir, p_wa, p_write};
 use crate::option::{copy_option_part, cpo_has, shortmess};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;

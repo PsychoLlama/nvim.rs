@@ -4,8 +4,6 @@
 #![allow(non_upper_case_globals)]
 
 pub mod state;
-use crate::cstr;
-use crate::strings::has_char;
 use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
 
@@ -138,7 +136,7 @@ mod winupdate;
 pub(crate) use self::winupdate::*;
 mod winlines;
 pub use self::winlines::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::regexp::re_multiline;
 /// How much of a window has to be redrawn, ordered by severity. Each value
 /// implies every lower one.
@@ -749,10 +747,7 @@ pub fn conceal_cursor_line(window: Win) -> bool {
     } else {
         return false;
     };
-    has_char(
-        unsafe { cstr::at(window.w_onebuf_opt.wo_cocu.value_ptr()) },
-        mode as c_int,
-    )
+    window.w_onebuf_opt.wo_cocu.has_byte(mode)
 }
 
 /// Whether the cursor line of window `window` is drawn differently from any other.

@@ -67,7 +67,7 @@ use super::{
     MAXWLEN, SEEK_SET, SPELL_ADD_BAD, SPELL_ADD_RARE, e_illegal_character_in_word, kXDGDataHome,
     mkspell,
 };
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 
 /// Add `word[..len]` to a spell file, or take it back out again.
 ///

@@ -20,6 +20,7 @@ use crate::fprintf;
 use crate::global_cell::field;
 use crate::keycodes::ModMask;
 use crate::option::vars::P_MOUSE;
+use crate::optionstr::OptString;
 use crate::snprintf;
 use crate::strings::has_char;
 use crate::winlayer::Win;
@@ -307,7 +308,7 @@ pub(crate) unsafe fn makeset(
                 let guarded = opt_idx == kOptSyntax || opt_idx == kOptFiletype;
                 let (guard, name) = (c"if &%s != '%s'".as_ptr(), get_option(opt_idx).fullname);
                 if guarded
-                    && (unsafe { fprintf!(fd, guard, name, varp.string_var().get()) } < 0
+                    && (unsafe { fprintf!(fd, guard, name, varp.string_var().value_ptr()) } < 0
                         || !unsafe { put_eol_unchecked(fd) })
                 {
                     return Err(Failed);
@@ -560,7 +561,7 @@ pub(crate) fn option_value2string(
         return;
     }
 
-    let value = varp.string_var().get();
+    let value = varp.string_var().value_ptr();
     if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
         unsafe { home_replace(None, value, buf, MAXPATHL as size_t, false) };
     } else {

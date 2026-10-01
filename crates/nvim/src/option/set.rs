@@ -21,6 +21,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::optionstr::OptString;
 use crate::snprintf;
 use crate::tr;
 use crate::types::AutoEvent;
@@ -410,7 +411,7 @@ pub(crate) unsafe fn did_set_option(
         errmsg = Err(e_secure.into());
     } else if new_value.as_string().is_some()
         && check_illegal_path_names(
-            unsafe { CStr::from_ptr(varp.string_var().get()) },
+            unsafe { CStr::from_ptr(varp.string_var().value_ptr()) },
             opt.flags,
         )
     {

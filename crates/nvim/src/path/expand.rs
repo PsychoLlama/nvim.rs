@@ -12,8 +12,8 @@
 
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
-use crate::option::local_or_global_raw;
 use crate::option::vars::{P_CDPATH, P_PATH, P_WIG};
+use crate::optionstr::{OptString, local_or_global};
 use crate::strings::has_char;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
@@ -180,11 +180,9 @@ pub(crate) unsafe fn expand_in_path(
 ///
 /// The option's own buffer, not a copy: `find_file_in_path_option` keeps its
 /// position in a static and resumes it on a later call. See
-/// [`crate::option::local_or_global_raw`].
+/// [`OptString::value_ptr`].
 pub(crate) fn buffer_path() -> *mut c_char {
-    // SAFETY: `curbuf` names the live current buffer, and its option values
-    // are NUL-terminated.
-    unsafe { local_or_global_raw(&Buf::current().b_p_path, P_PATH) }
+    local_or_global(&Buf::current().b_p_path, P_PATH).value_ptr()
 }
 
 /// Does `p` hold what looks like an environment variable? A backslash

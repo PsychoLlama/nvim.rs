@@ -24,7 +24,7 @@ use crate::r#move::win_col_off2;
 use crate::narrow::number_as_int;
 use crate::option::vars::dy_flags;
 use crate::option::{get_flp_value, get_showbreak_value};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::plines::win_chartabsize;
 use crate::regexp::{RE_AUTO, RE_MAGIC, RE_STRICT, RE_STRING};
 use crate::winlayer::Win;

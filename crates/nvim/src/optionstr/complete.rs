@@ -22,7 +22,7 @@ use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::types::{NUL, OptError, OptSet, OptionSetFlags};
 
-use super::LocalOptStr;
+use super::OptString;
 use super::frame::{invalid, varp, win};
 use super::{
     CPT_ABBR, CPT_KIND, CPT_MENU, LSIZE, free_string_option, illegal_char, illegal_char_after_chr,
@@ -45,7 +45,7 @@ const CPT_WITH_ARGUMENT: &CStr = c"ksF";
 /// which is upstream's behaviour and is preserved.
 pub fn did_set_complete(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value, walked to its terminator.
-    let mut p = varp(args).get();
+    let mut p = varp(args).value_ptr();
     while unsafe { *p } != 0 {
         let mut part = [0u8; LSIZE as usize];
         let mut into = 0;
@@ -244,7 +244,7 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's own variable; `get_scriptlocal_funcname` returns
     // a fresh allocation or null, and the old value is freed here.
     let varp = varp(args);
-    let resolved = unsafe { get_scriptlocal_funcname(varp.get()) };
+    let resolved = unsafe { get_scriptlocal_funcname(varp.value_ptr()) };
     if !resolved.is_null() {
         // Replace and *then* free: a global value's string is the option
         // record's, so freeing it before the write would release it twice.
@@ -261,7 +261,7 @@ pub fn did_set_spellcapcheck(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_spellfile(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value.
-    if !unsafe { valid_spellfile(varp(args).get()) } {
+    if !unsafe { valid_spellfile(varp(args).value_ptr()) } {
         return invalid();
     }
     did_set_spell_option()
@@ -269,7 +269,7 @@ pub fn did_set_spellfile(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_spelllang(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's C string value.
-    if !valid_spelllang(unsafe { CStr::from_ptr(varp(args).get()) }) {
+    if !valid_spelllang(unsafe { CStr::from_ptr(varp(args).value_ptr()) }) {
         return invalid();
     }
     did_set_spell_option()

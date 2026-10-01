@@ -56,7 +56,7 @@ pub mod tabstop;
 
 // Split out for size. The names below are what the rest of the tree calls,
 // and it calls them as `indent::*`.
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::state::MODE_INSERT;
 use crate::winlayer::Win;

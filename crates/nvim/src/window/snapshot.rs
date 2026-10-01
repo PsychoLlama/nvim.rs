@@ -25,7 +25,7 @@ use crate::memory::xmalloc;
 use crate::message::e_invarg;
 use crate::message::msg_ui_flush;
 use crate::r#move::WinValid;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;

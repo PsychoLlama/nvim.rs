@@ -40,7 +40,7 @@ use crate::r#move::changed_window_setting;
 use crate::option::vars::{P_BIN, P_ET, P_ML, P_TW, P_WM, p_et, p_ml, p_tw, p_wm};
 use crate::options::*;
 use crate::optionstr::{
-    LocalOptStr, derive_breakat_flags, didset_string_options, empty_option, set_chars_option,
+    OptString, derive_breakat_flags, didset_string_options, empty_option, set_chars_option,
 };
 use crate::os::cshim::strchr;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
@@ -194,7 +194,7 @@ pub(crate) fn check_options() {
     for opt_idx in kOptAleph..kOptCount {
         if option_has_type(opt_idx, kOptValTypeString) && get_option(opt_idx).var.has_global() {
             let var = get_varp(opt_idx).string_var();
-            if var.get().is_null() {
+            if var.value_ptr().is_null() {
                 // Nothing to release: the variable held null.
                 let _ = unsafe { var.replace(empty_option()) };
             }

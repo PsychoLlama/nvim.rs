@@ -25,7 +25,7 @@ use super::*;
 use crate::decoration::SignCountHalf;
 use crate::decoration::kMTMetaSignText;
 use crate::grid::default_gridview;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::winlayer::FrameRef;
 use crate::winlayer::Win;
 

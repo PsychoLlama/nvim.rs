@@ -17,9 +17,9 @@ use crate::file_search::FileNameOpts;
 use crate::highlight_group::{HLF_D, HLF_R};
 use crate::memory::XString;
 use crate::message_fmt::c_str;
-use crate::option::local_or_global;
 use crate::option::vars::P_DEF;
 use crate::option::vars::P_INC;
+use crate::optionstr::{OptString, local_or_global};
 use crate::regexp::RE_MAGIC;
 use crate::smsg;
 use crate::strings::has_bytes;
@@ -232,7 +232,7 @@ unsafe fn compile_patterns(
     }
 
     if kind == FIND_DEFINE {
-        let def = local_or_global(&Buf::current().b_p_def, P_DEF);
+        let def = local_or_global(&Buf::current().b_p_def, P_DEF).get();
         // Don't ignore case in the 'define' pattern.
         if !def.is_empty() && !unsafe { compile(&mut pats.def, def.as_ptr().cast_mut(), false) } {
             return None;
@@ -245,7 +245,7 @@ unsafe fn compile_patterns(
 /// The effective `'include'`: the buffer-local one, or the global one
 /// when it is empty.
 fn include_option() -> XString {
-    local_or_global(&Buf::current().b_p_inc, P_INC)
+    local_or_global(&Buf::current().b_p_inc, P_INC).get()
 }
 
 /// Whether the `'include'` pattern uses `\zs`, which moves the file name

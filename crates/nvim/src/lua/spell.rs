@@ -25,7 +25,7 @@ use crate::lua::ffi::{
 };
 use crate::message::e_no_spell;
 use crate::message::emsg;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
 use crate::types::{Hlf, lua_State, luaL_Reg, size_t};

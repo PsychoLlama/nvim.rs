@@ -57,7 +57,7 @@ use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::{
     AlignTextPos, ApiDict, Array, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
     OptionSetFlags, ScreenChar, StatusCol, StlClickDefinition, StlClickDefinition_type_0,

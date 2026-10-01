@@ -44,7 +44,7 @@ use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, se
 use crate::memline::ml_close;
 use crate::message::e_auabort;
 use crate::normal::visual_active;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::startup::exiting;

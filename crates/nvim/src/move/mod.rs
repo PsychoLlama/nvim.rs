@@ -62,7 +62,7 @@ use crate::fold::fold_adjust_cursor;
 use crate::normal::visual_active;
 use crate::option::{cpo_has, get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
 use crate::options::kOptCuloptFlagScreenline;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
     win_may_fill,

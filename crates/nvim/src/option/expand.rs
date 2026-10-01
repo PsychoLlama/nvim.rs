@@ -15,6 +15,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::optionstr::OptString;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
@@ -82,7 +83,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
         return None;
     }
     let val = if val.is_null() {
-        option_var(opt_idx).string_var().get()
+        option_var(opt_idx).string_var().value_ptr()
     } else {
         val
     };
@@ -682,7 +683,7 @@ pub(crate) unsafe fn expand_setting_subtract(
     }
     let (buf, win) = (Buf::current(), Win::current());
     let varp = get_varp_scope_from(opt_idx, FLAGS.get(), buf, win);
-    let value = varp.string_var().get();
+    let value = varp.string_var().value_ptr();
     let flags = get_option(opt_idx).flags;
 
     if flags & kOptFlagComma as uint32_t != 0 {

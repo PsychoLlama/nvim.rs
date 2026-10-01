@@ -22,7 +22,7 @@
 #![allow(unsafe_code)]
 
 use crate::memline::MlFlags;
-use crate::option::local_or_global;
+use crate::optionstr::{OptString, local_or_global};
 use crate::vim_snprintf;
 use core::ffi::{c_char, c_int};
 use core::slice;
@@ -46,7 +46,7 @@ use crate::message::state::{msg_col, msg_row};
 use crate::message::{msg_clr_eos, msg_grid_view};
 use crate::option::vars::{P_RUF, P_STL, P_WBR, p_ch, p_ru, p_ruf, p_tal};
 use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, edit_submode};
@@ -143,7 +143,7 @@ impl Target {
                 group,
                 attr: win_hl(win, group as c_int),
             };
-            let wbr = local_or_global(&win.w_onebuf_opt.wo_wbr, P_WBR);
+            let wbr = local_or_global(&win.w_onebuf_opt.wo_wbr, P_WBR).get();
             let source = Source {
                 // SAFETY: the copy is NUL-terminated.
                 fmt: unsafe { Fmt::copy_of(wbr.as_ptr().cast_mut()) },
@@ -200,7 +200,7 @@ impl Target {
             }
         } else {
             let local = !win.w_onebuf_opt.wo_stl.bytes().is_empty();
-            let stl = local_or_global(&win.w_onebuf_opt.wo_stl, P_STL);
+            let stl = local_or_global(&win.w_onebuf_opt.wo_stl, P_STL).get();
             Source {
                 // SAFETY: the copy is NUL-terminated.
                 fmt: unsafe { Fmt::copy_of(stl.as_ptr().cast_mut()) },

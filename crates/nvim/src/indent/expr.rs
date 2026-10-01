@@ -23,7 +23,7 @@ use crate::indent_c::{cindent_on, do_c_expr_indent};
 use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
 use crate::option::vars::{P_LISPWORDS, p_debug, p_paste};
 use crate::option::{copy_option_part, was_set_insecurely};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::pos::lt;
 use crate::runtime::state::current_sctx;

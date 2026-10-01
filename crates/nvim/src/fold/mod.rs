@@ -58,7 +58,7 @@ pub use text::get_foldtext;
 use crate::pos::MAXLNUM;
 use crate::state::MODE_INSERT;
 
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptStringRef;
 use level::fold_update_computed;
 use list::{FLine, FoldList, FoldRef};
 use open_close::check_closed;

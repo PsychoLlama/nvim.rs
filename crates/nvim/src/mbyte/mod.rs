@@ -111,7 +111,7 @@ use crate::message::{emsg, msg};
 use crate::r#move::changed_window_setting_all;
 use crate::option::vars::{cmp_flags, fenc_default, p_emoji, p_enc};
 use crate::options::{kOptCmpFlagInternal, kOptCmpFlagKeepascii};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::optionstr::check_chars_options;
 use crate::os::cshim::{__ctype_b_loc, gettext, strncasecmp};
 use crate::os::env::{env_buf, os_getenv_into};

@@ -17,7 +17,7 @@ use super::*;
 use crate::decoration::{DecorStateRef, SIGN_WIDTH};
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::CpoFlag;
 use crate::winlayer::Buf;
 use crate::winlayer::Win;

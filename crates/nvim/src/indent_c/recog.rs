@@ -37,7 +37,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 
 /// One part of a comma-separated option, appended to `part`, with the rest of
 /// the option answered back.

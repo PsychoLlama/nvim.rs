@@ -62,9 +62,9 @@ use crate::winlayer;
 
 use super::frame::win_local;
 use super::{
-    LocalOptStr, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
-    e_wrong_character_width_for_field_str, e_wrong_number_of_characters_for_field_str, kFillchars,
-    kListchars,
+    OptString, OptStringRef, e_conflicts_with_value_of_fillchars,
+    e_conflicts_with_value_of_listchars, e_wrong_character_width_for_field_str,
+    e_wrong_number_of_characters_for_field_str, kFillchars, kListchars,
 };
 
 /// A 'fillchars' struct with every field blank -- what the assignment round
@@ -726,11 +726,11 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
     };
     // Which variable it is, not what it says.
     if varp == option_var(idx).string_var() {
-        unsafe { did_set_global_chars_option(win, varp.get(), which, flags) }
+        unsafe { did_set_global_chars_option(win, varp.value_ptr(), which, flags) }
     } else if varp == win_local(win, field!(WinOpt, wo_lcs))
         || varp == win_local(win, field!(WinOpt, wo_fcs))
     {
-        unsafe { set_chars_option(win, varp.get(), which, true) }
+        unsafe { set_chars_option(win, varp.value_ptr(), which, true) }
     } else {
         Ok(())
     }

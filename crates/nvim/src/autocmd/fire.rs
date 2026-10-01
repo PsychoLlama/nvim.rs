@@ -35,7 +35,7 @@ use super::*;
 use crate::ex_docmd::DoCmdOpts;
 use crate::getchar::KeyBuffer;
 use crate::guard::{Depth, Script, Suppress};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
 

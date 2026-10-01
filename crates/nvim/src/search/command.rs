@@ -16,7 +16,7 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::option::{ScrollMargin, ScrollOff, cpo_has};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_LAST;
 use crate::search::{

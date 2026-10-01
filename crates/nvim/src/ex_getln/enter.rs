@@ -19,7 +19,7 @@ use crate::guard::{Allow, Depth};
 use crate::keycodes::Key;
 use crate::message::emsg;
 use crate::option::vars::{P_STL, P_TAL, P_WBR};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::OptStr;
 use crate::types::{
     BackslashEscape, ExpandContext, NUL, OptionSetFlags, kBoolVarFalse, kBoolVarTrue,

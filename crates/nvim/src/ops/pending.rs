@@ -41,7 +41,7 @@ use crate::normal::{
     visual_active, visual_anchor, visual_mode, visual_select,
 };
 use crate::option::cpo_has;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::{CpoFlag, FoFlag, NUL, Outcome};
 
 /// The Visual area a `.` replays: its mode and size, not its position.

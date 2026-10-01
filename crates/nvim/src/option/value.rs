@@ -20,6 +20,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::optionstr::OptString;
 use crate::snprintf;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -197,7 +198,7 @@ pub(crate) fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVal {
         OptSlot::Boolean(var) => boolean_optval(tristate(var.get())),
         OptSlot::Number(var) => OptVal::Number(var.get()),
         OptSlot::String(var) => {
-            let data = var.get();
+            let data = var.value_ptr();
             // SAFETY: an option variable answers its own NUL-terminated
             // buffer, or the shared empty string. Null is an immutable
             // option's default before startup has installed one.

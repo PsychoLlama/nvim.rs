@@ -16,7 +16,7 @@ use crate::charset::skip;
 use crate::cstr::byte_at;
 use crate::mbyte::char_at;
 use crate::option::cpo_has;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
 use crate::strings::has_char;
 use crate::types::{CpoFlag, NUL};

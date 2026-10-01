@@ -19,7 +19,7 @@ use crate::strings::has_char;
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::change::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};
 

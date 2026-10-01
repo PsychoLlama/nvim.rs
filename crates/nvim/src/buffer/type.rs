@@ -29,7 +29,7 @@ use crate::eval::typval::{dict_find, dict_is_watched, dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
 use crate::message::emsg;
 use crate::option::vars::p_hid;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::os::cshim::gettext;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;

@@ -24,7 +24,7 @@ use super::*;
 use crate::buffer::BufRef;
 use crate::guard::Depth;
 use crate::message_fmt::msg_bytes;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::smsg;
 use crate::types::TypVal;
 use crate::types::{Failed, OptionSetFlags};

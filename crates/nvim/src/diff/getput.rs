@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::message_fmt::msg_bytes;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::gettext_ptr;
 use crate::semsg;
 use crate::types::CmdIdx;

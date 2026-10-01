@@ -36,8 +36,8 @@ use crate::normal::{
     check_text_or_curbuf_locked, clear_op, get_visual_text, normal_search, visual_active,
 };
 use crate::ops::clear_oparg;
-use crate::option::{local_or_global, magic_isset};
-use crate::optionstr::LocalOptStr;
+use crate::option::magic_isset;
+use crate::optionstr::{OptString, local_or_global};
 use crate::os::cshim::gettext;
 use crate::search::state::no_smartcase;
 use crate::state::MODE_TERMINAL;
@@ -360,7 +360,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
     // 'keywordprg', which decides what `K` does. A copy, because it is
     // built into a command line further down.
     // SAFETY: `curbuf` is live and 'keywordprg' is NUL-terminated.
-    let keywordprg = local_or_global(&Buf::current().b_p_kp, P_KP);
+    let keywordprg = local_or_global(&Buf::current().b_p_kp, P_KP).get();
     let kp = keywordprg.as_ptr().cast_mut();
     let kp_helpbang = keywordprg == c":help!";
     let kp_help =

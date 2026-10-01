@@ -22,7 +22,7 @@ use crate::cstr;
 use crate::message_fmt::{c_str, emsg_text};
 use crate::narrow::len_as_int;
 use crate::option::vars::P_CDPATH;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::path::buffer_path;
 use crate::tr_c;
 use crate::types::MAXPATHL;

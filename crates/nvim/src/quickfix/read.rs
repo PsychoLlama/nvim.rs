@@ -19,7 +19,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::list_items;
 use crate::message_fmt::c_str;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{CONV_NONE, IOSIZE, VAR_LIST, VAR_STRING};

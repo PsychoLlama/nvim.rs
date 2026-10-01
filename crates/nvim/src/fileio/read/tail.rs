@@ -20,7 +20,7 @@
 )]
 
 use super::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 
 /// Report what was read, and leave the cursor and the `'[`/`']` marks on the
 /// new lines.

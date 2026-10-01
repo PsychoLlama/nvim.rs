@@ -15,7 +15,7 @@ use crate::cstr;
 use crate::guard::Script;
 use crate::message_fmt::c_str;
 use crate::normal::visual_active;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::semsg;
 use crate::strings::has_char;
 use crate::types::{OptionSetFlags, Vv};

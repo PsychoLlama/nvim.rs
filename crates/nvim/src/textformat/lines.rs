@@ -37,7 +37,7 @@ use crate::ops::{Op, do_join};
 use crate::option::vars::{P_SMD, p_smd};
 use crate::option::was_set_insecurely;
 use crate::options::kOptFormatexpr;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
 use crate::search::check_linecomment;

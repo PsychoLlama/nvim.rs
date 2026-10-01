@@ -28,7 +28,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::winlayer::Buf;
 /// Create a fold from line "start" to line "end" (inclusive) in window `window`
 /// by adding markers.

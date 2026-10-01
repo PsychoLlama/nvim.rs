@@ -16,6 +16,7 @@
 #![allow(unsafe_code)]
 
 use crate::cstr;
+use crate::optionstr::OptString;
 use crate::snprintf;
 use crate::strings::has_char;
 use crate::types::OptStr;
@@ -237,7 +238,7 @@ fn set_init_expand_env() {
         let translated = opt.flags & kOptFlagGettext as uint32_t != 0 && opt.var.has_global();
         let expansion = (!translated).then(|| unsafe { option_expand(opt_idx, ptr::null()) });
         let expanded = match &expansion {
-            None => unsafe { gettext_ptr(option_var(opt_idx).string_var().get()) }.as_ptr(),
+            None => unsafe { gettext_ptr(option_var(opt_idx).string_var().value_ptr()) }.as_ptr(),
             Some(Some(expanded)) => expanded.as_ptr(),
             Some(None) => continue,
         };

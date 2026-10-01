@@ -26,7 +26,7 @@ use crate::winlayer::Buf;
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::Script;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptStringRef;
 use crate::os::cshim::gettext;
 use crate::types::{FAIL, IOSIZE, NUL, OK, READBIN};
 use core::ffi::{CStr, c_char, c_int, c_void};

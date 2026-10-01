@@ -76,7 +76,7 @@ use crate::option::{
     find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,
 };
 use crate::options::kOptInvalid;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
 use crate::path::path_tail;

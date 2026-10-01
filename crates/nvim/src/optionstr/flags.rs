@@ -28,6 +28,7 @@
 )]
 
 use crate::cstr;
+use crate::optionstr::OptString;
 use crate::strings::has_char;
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
@@ -176,7 +177,7 @@ pub(crate) fn check_str_opt(
     let varp = varp.unwrap_or_else(|| option_var(idx).string_var());
     let list = opt.flags & (kOptFlagComma | kOptFlagOneComma) != 0;
     // SAFETY: an option variable answers its own NUL-terminated buffer.
-    let Some(mask) = (unsafe { opt_strings_mask(varp.get(), opt_values(idx), list) }) else {
+    let Some(mask) = (unsafe { opt_strings_mask(varp.value_ptr(), opt_values(idx), list) }) else {
         return Err(Failed);
     };
     // The table names the mask cell itself; an option with no mask has none.

@@ -20,7 +20,7 @@ use crate::option::vars::P_HLG;
 use crate::options::{
     kOptTcFlagFollowic, kOptTcFlagFollowscs, kOptTcFlagIgnore, kOptTcFlagMatch, kOptTcFlagSmart,
 };
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
 use crate::regexp::RE_MAGIC;
 use crate::semsg;

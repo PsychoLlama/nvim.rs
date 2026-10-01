@@ -9,6 +9,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unsafe_code)]
 
+use crate::optionstr::{OptString, local_or_global};
 use crate::strings::has_bytes;
 use crate::strings::has_char;
 use crate::winlayer::Buf;
@@ -27,7 +28,7 @@ use crate::option::vars::{
     P_BS, P_CPO, P_FFS, P_SHM, P_SISO, P_SO, bkc_flags, p_magic, p_sh, p_siso, p_so, ve_flags,
 };
 use crate::options::*;
-use crate::optionstr::{LocalOptStr, empty_option};
+use crate::optionstr::{OptStringRef, empty_option};
 use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::regexp::state::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON};
@@ -45,51 +46,14 @@ use super::{
 use crate::state::MODE_TERMINAL;
 use crate::winlayer::Win;
 
-/// A global-local string option's value in force: the buffer's or window's
-/// own copy where it set one, else the global value.
-///
-/// The answer is a **copy**, because the two halves cannot be one borrow:
-/// the local copy is a field of a buffer or a window and the global value a
-/// field of the option record, and every caller here walks the answer or
-/// hands it to a callee that can set an option.
-pub(crate) fn local_or_global(local: &Option<XString>, global: StrOpt) -> XString {
-    match local {
-        // An empty local copy is upstream's "not set here" whether the
-        // field owns the empty string or owns nothing at all.
-        Some(value) if !value.is_empty() => value.clone(),
-        _ => global.get(),
-    }
-}
-
-/// [`local_or_global`] as the raw pointer, for the readers a copy cannot
-/// serve.
-///
-/// The answer is the option's *own* buffer -- the global record's string or
-/// the buffer's or window's field -- and is live until that option is
-/// written, which is exactly upstream's contract. Three kinds of caller need
-/// it: the readers asked several times per screen line ('showbreak',
-/// 'formatlistpat'), and `'path'`, whose walk keeps its position in a static
-/// and resumes it on a *later* call, so a copy would be gone by then.
-///
-/// # Safety
-///
-/// The answer must not outlive a write to either half — which includes
-/// anything that can run user code, because that can `:set` the option.
-pub(crate) unsafe fn local_or_global_raw(local: &Option<XString>, global: StrOpt) -> *mut c_char {
-    match local {
-        Some(value) if !value.is_empty() => value.as_ptr().cast_mut(),
-        _ => global.value_ptr(),
-    }
-}
-
 /// 'equalprg', local where set.
 pub(crate) fn get_equalprg() -> XString {
-    local_or_global(&Buf::current().b_p_ep, P_EP)
+    local_or_global(&Buf::current().b_p_ep, P_EP).get()
 }
 
 /// 'findfunc', local where set.
 pub(crate) fn get_findfunc() -> XString {
-    local_or_global(&Buf::current().b_p_ffu, P_FFU)
+    local_or_global(&Buf::current().b_p_ffu, P_FFU).get()
 }
 
 /// Whether 'shortmess' asks for message `x` to be shortened. The `a` flag is
@@ -248,9 +212,9 @@ pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
 /// 'formatlistpat', local where set.
 ///
 pub(crate) fn get_flp_value(buffer: Buf) -> *mut c_char {
-    // SAFETY: the answer is the option's own buffer; the callers read it
-    // straight through `vim_regcomp`.
-    unsafe { local_or_global_raw(&buffer.b_p_flp, P_FLP) }
+    // The answer is the option's own buffer; the callers read it straight
+    // through `vim_regcomp`.
+    local_or_global(&buffer.b_p_flp, P_FLP).value_ptr()
 }
 
 /// 'virtualedit' as flags, local where set. The two "none" bits only exist
@@ -273,9 +237,9 @@ pub(crate) fn get_showbreak_value(win: Win) -> *mut c_char {
     if local.bytes() == b"NONE" {
         return empty_option();
     }
-    // SAFETY: the answer is the option's own buffer, and the draw path
-    // reads it before anything can set an option.
-    unsafe { local_or_global_raw(local, P_SBR) }
+    // The answer is the option's own buffer, and the draw path reads it
+    // before anything can set an option.
+    local_or_global(local, P_SBR).value_ptr()
 }
 
 /// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.

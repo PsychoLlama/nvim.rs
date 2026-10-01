@@ -23,7 +23,7 @@ use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
 use crate::buffer::BufFlags;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::os::cshim::gettext_ptr;
 use crate::winlayer::Buf;
 

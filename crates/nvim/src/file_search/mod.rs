@@ -37,7 +37,7 @@ use crate::normal::get_visual_text;
 use crate::option::vars::p_fic;
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::options::kOptIncludeexpr;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::os::env::expand_env_esc;
 use crate::os::fs::{os_chdir, os_dirname, os_fileid, os_fileid_equal, os_isdir, os_path_exists};

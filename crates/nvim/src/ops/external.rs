@@ -32,7 +32,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
 use crate::ex_docmd::cmdmod_has;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::types::{NUL, OptError};
 
 /// `:` for a Visual region, and the `!` filter `=` and `gq` fall back to.

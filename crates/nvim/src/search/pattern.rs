@@ -18,7 +18,7 @@ use super::*;
 use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::{RE_BOTH, RE_LAST, RE_MAGIC, RE_SEARCH, RE_SUBST};
 use crate::search::{SEARCH_HIS, SEARCH_KEEP, SEARCH_START};

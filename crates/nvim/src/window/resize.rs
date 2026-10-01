@@ -37,7 +37,7 @@ use crate::r#move::{
 use crate::option::get_scrolloff_value;
 use crate::option::vars::{P_CH, P_SPK, P_WBR, p_ch, p_ls, p_stal, p_wbr};
 use crate::options::kWinOptScroll;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::startup::{exiting, full_screen};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};

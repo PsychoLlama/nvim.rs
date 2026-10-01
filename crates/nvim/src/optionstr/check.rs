@@ -48,6 +48,7 @@ use crate::options::{
 use crate::os::cshim::gettext;
 use crate::types::{Buffer, Failed, NUL, OptError, StlOpt, size_t, uint32_t};
 
+use super::OptString;
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
     e_unclosed_expression_sequence, opt_strings_ok,
@@ -243,66 +244,6 @@ static EMPTY_OPTION: GlobalCell<[c_char; 1]> = GlobalCell::new([0]);
 /// The shared value to give a string option that has none of its own.
 pub(crate) const fn empty_option() -> *mut c_char {
     EMPTY_OPTION.as_raw().cast::<c_char>()
-}
-
-/// What a string option's *local* copy — a field of a window, a buffer or a
-/// syntax block — shows the readers that still want a `char *` or a `&CStr`.
-///
-/// The global values have [`crate::options::vars::StrOpt`]; this is the
-/// same four questions for a local one, whose storage is the field itself.
-/// `None` is upstream's shared empty string: the option owns nothing and
-/// holds no value of its own, so a global-local option falls back and a
-/// `:setlocal` reads as unset.
-pub(crate) trait LocalOptStr {
-    /// The value as the `char *` the option protocol and the C callees
-    /// still speak, which is the shared empty string when the field owns
-    /// nothing.
-    ///
-    /// **The pointer is the field's own buffer**, and lives until the field
-    /// is written — not until the end of the caller's statement. A reader
-    /// that keeps it across anything that can set an option is reading
-    /// freed bytes; take [`value`](Self::value) or a copy instead.
-    fn value_ptr(&self) -> *mut c_char;
-
-    /// The value's bytes, without the terminator.
-    fn bytes(&self) -> &[u8];
-
-    /// The value as a borrowed C string, which is the shared empty one when
-    /// the field owns nothing -- [`value_ptr`](Self::value_ptr) with the
-    /// terminator's whereabouts written into the type.
-    fn cstr(&self) -> &CStr;
-
-    /// The value's first byte, which is 0 for a field that owns nothing --
-    /// upstream's `*p` on a variable that is never null.
-    fn first_byte(&self) -> u8;
-
-    /// Whether the field owns no string of its own — upstream's
-    /// `is_empty_option` on a local copy. **Not** "the value is empty": a
-    /// local option explicitly set to `""` owns an empty string.
-    fn is_unset(&self) -> bool;
-}
-
-impl LocalOptStr for Option<XString> {
-    fn value_ptr(&self) -> *mut c_char {
-        self.as_ref()
-            .map_or_else(empty_option, |value| value.as_ptr().cast_mut())
-    }
-
-    fn bytes(&self) -> &[u8] {
-        self.as_deref().unwrap_or_default()
-    }
-
-    fn cstr(&self) -> &CStr {
-        self.as_ref().map_or(c"", |value| value.as_cstr())
-    }
-
-    fn first_byte(&self) -> u8 {
-        self.bytes().first().copied().unwrap_or(0)
-    }
-
-    fn is_unset(&self) -> bool {
-        self.is_none()
-    }
 }
 
 /// Whether a string option's value is that shared one, which answers two

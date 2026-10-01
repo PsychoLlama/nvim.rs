@@ -52,7 +52,7 @@ use super::{
     MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, count_common_word, spelltab_isu,
 };
 use crate::highlight_group::{HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 
 /// Whether `c` is upper case, by the spell table below 128 and the general
 /// rules above it.

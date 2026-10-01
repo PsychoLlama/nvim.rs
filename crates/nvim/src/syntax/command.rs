@@ -19,7 +19,7 @@ use core::ffi::{CStr, c_char, c_int};
 use super::*;
 use crate::eval::typval::NumBuf;
 use crate::memory::XString;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::CmdLine;
 
 /// Which of `names` the argument word is, ignoring case.

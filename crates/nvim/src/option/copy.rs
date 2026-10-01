@@ -48,7 +48,7 @@ use crate::options::{
     kBufOptSynmaxcol, kBufOptTabstop, kBufOptTagfunc, kBufOptTextwidth, kBufOptUndofile,
     kBufOptVarsofttabstop, kBufOptVartabstop, kBufOptWrapmargin, kOptModifiable,
 };
-use crate::optionstr::{LocalOptStr, check_buf_options, check_signcolumn};
+use crate::optionstr::{OptString, OptStringRef, check_buf_options, check_signcolumn};
 use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
 use crate::types::{Buffer, CmdModFlags, ColNr, CpoFlag, OptInt, WinOpt, Window, int16_t};

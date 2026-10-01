@@ -19,7 +19,7 @@ use crate::decoration::{DecorStateRef, kVPosWinCol};
 use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
 use crate::winlayer::Buf;
 use crate::winlayer::{self, Win};

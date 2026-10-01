@@ -26,7 +26,7 @@ use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
     with_visual_anchor,
 };
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::{equalpos, lt};
 use crate::types::{ColNr, NUL, OpArg};
 

@@ -44,7 +44,7 @@ use crate::r#move::WinValid;
 use crate::normal::visual_active;
 use crate::option::buf_copy_options;
 use crate::option::vars::p_acd;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::state::last_chdir_reason;
 use crate::spell::parse_spelllang;
 use crate::startup::starting;

@@ -10,13 +10,13 @@
 
 use super::*;
 use crate::cstr;
-use crate::option::local_or_global;
 use crate::option::vars::P_GEFM;
 use crate::option::vars::P_GP;
 use crate::option::vars::P_MENC;
 use crate::option::vars::P_SHQ;
 use crate::option::vars::P_SP;
 use crate::option::vars::{P_EFM, P_MEF};
+use crate::optionstr::{OptString, local_or_global};
 use crate::os::shell::ShellOpts;
 use crate::snprintf;
 use crate::types::CmdIdx;
@@ -33,7 +33,7 @@ pub fn grep_internal(cmdidx: CmdIdx) -> bool {
     ) {
         return false;
     }
-    local_or_global(&Buf::current().b_p_gp, P_GP) == c"internal"
+    local_or_global(&Buf::current().b_p_gp, P_GP).get() == c"internal"
 }
 
 /// The name the `QuickFixCmdPre`/`QuickFixCmdPost` autocommands are matched
@@ -99,7 +99,7 @@ pub fn ex_make(excmd: &mut ExArg) {
         return;
     }
 
-    let enc = local_or_global(&Buf::current().b_p_menc, P_MENC);
+    let enc = local_or_global(&Buf::current().b_p_menc, P_MENC).get();
 
     let au_name = make_get_auname(excmd.cmdidx);
     if let Some(name) = au_name {
@@ -129,7 +129,7 @@ pub fn ex_make(excmd: &mut ExArg) {
     let errorformat = if is_make {
         P_EFM.get()
     } else {
-        local_or_global(&Buf::current().b_p_gefm, P_GEFM)
+        local_or_global(&Buf::current().b_p_gefm, P_GEFM).get()
     };
     let newlist = !matches!(excmd.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
 

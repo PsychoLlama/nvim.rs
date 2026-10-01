@@ -30,7 +30,7 @@ use crate::strings::vim_strchr;
 use core::ffi::{c_char, c_int};
 
 use super::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::NUL;
 use crate::winlayer::Buf;
 

@@ -841,11 +841,11 @@ impl StrOpt {
     /// the shared empty string when the option owns nothing.
     ///
     /// The pointer is the option's own buffer and stays live until the
-    /// option is written. `crate::option::scope`'s `StrVar` is the seam
+    /// option is written. `crate::option::slot`'s `StrVar` is the seam
     /// where an owned string meets that protocol; the handful of other
     /// callers are the readers that are asked several times per screen line
-    /// and hand the value straight to a C callee (`crate::option::query`'s
-    /// `local_or_global_raw`). Deliberately **not** spelled `as_raw`: that
+    /// and hand the value straight to a C callee (`crate::optionstr`'s
+    /// `local_or_global`). Deliberately **not** spelled `as_raw`: that
     /// is `GlobalCell`'s escape hatch, and the ratchet counts it by name.
     pub fn value_ptr(self) -> *mut c_char {
         OPTIONS.with_at(self, |value| match value {

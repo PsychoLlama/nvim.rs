@@ -37,7 +37,7 @@ use crate::memory::xmalloc;
 use crate::option::skip_to_option_part;
 use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::path::path_has_wildcard;
 use crate::types::{Failed, NUL, UVarNumber, VarNumber, uint8_t, uint64_t};
 use ::libc::abort;

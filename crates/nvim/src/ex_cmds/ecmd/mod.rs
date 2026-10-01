@@ -66,7 +66,7 @@ use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_visual;
 use crate::option::vars::{p_awa, p_sol, p_ur, p_verbose};
 use crate::option::{ScrollMargin, ScrollOff, shortmess};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::path::fix_fname;
 use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;

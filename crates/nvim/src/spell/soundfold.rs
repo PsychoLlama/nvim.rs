@@ -33,7 +33,7 @@ use crate::types::{LangP, MB_MAXBYTES, NUL, SpellLang};
 
 use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 
 /// `soundfold()`: the sound-fold of `word` in the first of the window's
 /// languages that has a sound-folding table, or a copy of `word` itself

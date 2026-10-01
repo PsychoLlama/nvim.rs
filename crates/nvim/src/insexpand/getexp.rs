@@ -14,9 +14,8 @@ use super::*;
 use crate::cmdexpand::Expanded;
 use crate::cstr;
 use crate::memory::XString;
-use crate::option::local_or_global;
 use crate::option::vars::{P_DICT, P_TSR, P_TSRFU};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::{OptString, local_or_global};
 use crate::path::ExpandFlags;
 use crate::strings::has_char;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
@@ -383,9 +382,9 @@ pub(crate) unsafe fn get_next_dict_tsr_completion(
     let owned = if !dict.is_null() {
         XString::from_cstr(unsafe { cstr::at(dict) })
     } else if compl_type == CTRL_X_THESAURUS {
-        local_or_global(&Buf::current().b_p_tsr, P_TSR)
+        local_or_global(&Buf::current().b_p_tsr, P_TSR).get()
     } else {
-        local_or_global(&Buf::current().b_p_dict, P_DICT)
+        local_or_global(&Buf::current().b_p_dict, P_DICT).get()
     };
     let files = owned.as_ptr().cast_mut();
     let flags = if dict.is_null() { 0 } else { dict_f };

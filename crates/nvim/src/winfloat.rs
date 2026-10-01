@@ -43,7 +43,7 @@ use crate::r#move::textpos2screenpos;
 use crate::option::vars::{p_ch, p_ls};
 use crate::option::{OptionTarget, parse_winhl_opt, set_option_direct_for};
 use crate::options::kOptBufhidden;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptStringRef;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptVal,

@@ -40,7 +40,7 @@ use self::comment::{LeaderContext, build_leader, indent_after_comment_end, plan_
 use self::smart::smart_indent;
 use super::*;
 use crate::ex_docmd::{cmdmod_add_flags, cmdmod_flags, cmdmod_set_flags};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::{FoFlag, NUL};
 
 mod comment;

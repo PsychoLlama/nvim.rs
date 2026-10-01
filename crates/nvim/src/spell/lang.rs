@@ -70,7 +70,7 @@ use super::slang::slang_free;
 use super::{
     MAXWLEN, REGION_ALL, SpellLoad, first_lang, int_wordlist, kEqualFiles, repl_from, repl_to,
 };
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::runtime::RuntimeOpts;
 use crate::winlayer::{Buf, buffers, windows};
 

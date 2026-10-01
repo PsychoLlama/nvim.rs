@@ -17,7 +17,7 @@ use crate::semsg;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::regexp::RE_MAGIC;
 use crate::types::NUL;
 use crate::winlayer::graph::{switch_buffer, switch_window};

@@ -18,7 +18,7 @@ use crate::path::tail_index;
 use core::ffi::{CStr, c_char, c_double, c_int, c_long};
 
 use super::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::types::{MAXPATHL, NUL};
 

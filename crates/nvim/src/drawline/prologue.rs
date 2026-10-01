@@ -22,7 +22,7 @@ use super::*;
 use crate::decoration::kMTMetaInline;
 use crate::normal::{VisualSelection, visual_active, visual_selection};
 use crate::option::vars::P_SEL;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::MAXCOL;
 use crate::spell::SMT_ALL;
 use crate::types::NUL;

@@ -33,7 +33,7 @@ use crate::global_cell::GlobalCell;
 use crate::option::option_was_set;
 use crate::option::vars::{P_WINDOW, p_ch, p_window};
 use crate::options::kOptWindow;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::{Dict, LineNr, List, OptInt, SaveVEvent, TypVal, VarNumber, ptrdiff_t, size_t};
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::skip_win_fix_scroll;

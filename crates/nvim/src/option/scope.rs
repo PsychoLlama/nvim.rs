@@ -35,6 +35,7 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
 use crate::options::*;
+use crate::optionstr::OptString;
 use crate::types::{
     Buffer, OptIndex, OptInt, OptScope, OptValType, OptVar, OptionSetFlags, SynBlock, WinOpt,
     ssize_t,
@@ -104,7 +105,7 @@ impl Unset {
             (Unset::Never, _) | (_, OptSlot::None) => false,
             // An empty local copy is "not set here" whether the field owns
             // the empty string or owns nothing at all.
-            (Unset::Sentinel, OptSlot::String(var)) => var.is_empty(),
+            (Unset::Sentinel, OptSlot::String(var)) => var.first_byte() == 0,
             (Unset::Sentinel, OptSlot::Boolean(var)) => var.get() < 0,
             (Unset::Sentinel, OptSlot::Number(var)) => var.get() < 0,
             (Unset::NoLocalUndolevel, OptSlot::Number(var)) => {

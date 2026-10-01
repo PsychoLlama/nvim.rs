@@ -52,7 +52,7 @@ use crate::mouse::state::mouse_row;
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::option::vars::p_verbose;
 use crate::options::kOptBoFlagSpell;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::gettext;
 use crate::search::FORWARD;
 use crate::spell::{

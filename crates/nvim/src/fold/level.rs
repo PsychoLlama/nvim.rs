@@ -34,7 +34,7 @@ use core::ffi::c_int;
 use super::adjust::*;
 use super::marker::*;
 use super::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::MAXLNUM;
 
 // The fold-level strategy is dispatched by comparing function addresses, as

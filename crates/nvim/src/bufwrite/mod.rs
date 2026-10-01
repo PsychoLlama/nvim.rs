@@ -44,7 +44,7 @@ use crate::option::{copy_option_part, cpo_has, get_bkc_flags, get_fileformat_for
 use crate::options::{
     kOptBkcFlagAuto, kOptBkcFlagBreakhardlink, kOptBkcFlagBreaksymlink, kOptBkcFlagYes,
 };
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{
     os_chown, os_close, os_copy, os_copy_xattr, os_fchown, os_file_is_writable, os_file_settime,

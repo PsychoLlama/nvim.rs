@@ -41,9 +41,9 @@ use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cl
 use crate::fileio::readdir_core;
 use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::memory::xfree;
-use crate::option::local_or_global_raw;
-use crate::option::vars::{P_PATH, p_wic};
-use crate::optionstr::LocalOptStr;
+use crate::option::vars::p_wic;
+use crate::optionstr::OptString;
+use crate::path::buffer_path;
 use crate::types::{
     BackslashEscape, EvalFuncData, Expand, ExpandContext, GArray, Pos, ScriptCtx, TypVal, VAR_LIST,
     VAR_STRING, VarNumber, Vv, kListLenUnknown, ptrdiff_t, size_t,
@@ -200,18 +200,6 @@ fn free(p: *mut c_char) {
     unsafe { xfree(p.cast::<c_void>()) };
 }
 
-/// The 'path' a search walks: the buffer's own when it set one, else the
-/// global option.
-///
-/// The option's own buffer, not a copy: `find_file_in_path_option` keeps its
-/// position in a static and resumes it on a later call. See
-/// [`crate::option::local_or_global_raw`].
-fn search_path() -> *mut c_char {
-    // SAFETY: `curbuf` names the live current buffer, and its option values
-    // are NUL-terminated.
-    unsafe { local_or_global_raw(&Buf::current().b_p_path, P_PATH) }
-}
-
 /// The suffixes `findfile()` tries, and none for `finddir()`.
 fn suffixes(find_what: c_int) -> *mut c_char {
     if find_what == FINDFILE_DIR as c_int {
@@ -238,7 +226,7 @@ fn set_val(name: *const c_char) {
 fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
     let mut numbuf = NumBuf::new();
     let mut fresult: *mut c_char = ptr::null_mut();
-    let mut path = search_path();
+    let mut path = buffer_path();
     let mut count = 1;
     let mut error = false;
 

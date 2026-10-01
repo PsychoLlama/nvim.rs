@@ -50,7 +50,7 @@ use crate::message_fmt::c_str;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::gettext;
 use crate::os::fs::os_fopen;

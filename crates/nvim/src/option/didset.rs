@@ -55,7 +55,7 @@ use crate::option::vars::{
     p_window, p_wiw,
 };
 use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
-use crate::optionstr::{LocalOptStr, check_signcolumn};
+use crate::optionstr::{OptString, OptStringRef, check_signcolumn};
 use crate::os::cshim::gettext;
 use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::{ll_resize_stack, qf_resize_stack};

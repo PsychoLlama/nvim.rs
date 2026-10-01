@@ -38,7 +38,7 @@ use crate::memory::XString;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
 use crate::normal::do_check_scrollbind;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::pos::MAXLNUM;
 use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;

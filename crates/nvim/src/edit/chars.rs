@@ -32,7 +32,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::guard::Lock;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::{FoFlag, MB_MAXCHAR, NUL};
 
 /// Upstream's `ISSPECIAL`: a character that needs processing other than the

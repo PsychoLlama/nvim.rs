@@ -29,7 +29,7 @@ use crate::message::state::did_emsg;
 use crate::message::{emsg, str2special_save};
 use crate::option::SavedCpo;
 use crate::option::vars::p_enc;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::time::{os_localtime_r, os_strptime, tm_zeroed};
 use crate::regexp::{

@@ -61,7 +61,7 @@ use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
 use super::{Term, row_to_linenr, terminal_check_size, terminal_set_state};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptStringRef;
 use crate::search::FORWARD;
 
 const DOBUF_WIPE: c_int = 4;

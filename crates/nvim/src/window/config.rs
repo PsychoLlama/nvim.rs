@@ -61,7 +61,7 @@ const TRY_STATE: TryState = TryState {
     did_emsg: 0,
 };
 use crate::api_error;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptStringRef;
 
 pub fn win_set_buf(win: Win, buffer: Buf) -> Result<(), Error> {
     set_buf(win, buffer)

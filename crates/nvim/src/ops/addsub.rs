@@ -39,7 +39,7 @@ use core::ffi::{c_char, c_int, c_ulong, c_void};
 
 use super::*;
 use crate::normal::{visual_active, visual_mode};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::NUL;
 
 /// Case of the hex digits last seen, so that `0xAB` increments to `0xAC` and

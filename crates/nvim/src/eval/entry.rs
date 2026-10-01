@@ -44,7 +44,7 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::{called_emsg, did_emsg};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::runtime::sourcing_a_script;
 use crate::runtime::state::current_sctx;
 use crate::types::{

@@ -21,7 +21,7 @@ use crate::cstr;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::Name;
 use crate::message_fmt::c_str;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::regexp::RE_MAGIC;
 use crate::semsg;
 use crate::smsg;

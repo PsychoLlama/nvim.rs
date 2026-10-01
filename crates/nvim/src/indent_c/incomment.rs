@@ -19,7 +19,7 @@
 )]
 
 use super::*;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 

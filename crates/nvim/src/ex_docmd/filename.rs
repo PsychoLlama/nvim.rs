@@ -9,7 +9,7 @@
 #![allow(unsafe_code)]
 use crate::cstr;
 use crate::ex_cmds::newlnum;
-use crate::option::local_or_global;
+use crate::optionstr::{OptString, local_or_global};
 use crate::snprintf;
 use crate::types::CmdIdx;
 use crate::types::EcmdCmd;
@@ -92,7 +92,7 @@ pub fn replace_makeprg(excmd: &mut ExArg) -> bool {
     } else {
         (&buf.b_p_mp, P_MP)
     };
-    let program = local_or_global(local, global);
+    let program = local_or_global(local, global).get();
 
     excmd.line.arg = excmd.line.skip_white(excmd.line.arg);
     let arg = excmd.line.arg;

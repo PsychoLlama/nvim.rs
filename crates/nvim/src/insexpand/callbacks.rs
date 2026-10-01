@@ -11,11 +11,11 @@
 
 use super::*;
 use crate::eval::typval::CallFrame;
-use crate::option::local_or_global;
 use crate::option::vars::P_TSRFU;
+use crate::optionstr::{OptString, local_or_global};
 
 use crate::guard::Lock;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptStringRef;
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{Failed, IOSIZE, NUL, OptError, OptionSetFlags, VAR_DICT, VAR_LIST};
@@ -566,7 +566,7 @@ pub(crate) fn get_complete_funcname(type_0: c_int) -> XString {
         CTRL_X_FUNCTION => &buf.b_p_cfu,
         CTRL_X_OMNI => &buf.b_p_ofu,
         // The only one of the three with a global value to fall back to.
-        CTRL_X_THESAURUS => return local_or_global(&buf.b_p_tsrfu, P_TSRFU),
+        CTRL_X_THESAURUS => return local_or_global(&buf.b_p_tsrfu, P_TSRFU).get(),
         _ => return XString::new(),
     };
     local.clone().unwrap_or_default()

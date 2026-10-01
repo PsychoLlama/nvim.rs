@@ -34,7 +34,7 @@ use core::ptr;
 use super::marker::*;
 use super::*;
 use crate::options::kWinOptFoldtext;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 
 /// Generates text to display
 ///

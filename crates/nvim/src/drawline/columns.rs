@@ -24,7 +24,7 @@ use crate::decoration::{SCL_NUM, SIGN_WIDTH};
 use crate::grid::linebuf;
 use crate::r#move::WinValid;
 use crate::option::cpo_has;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::snprintf;
 use crate::types::{CpoFlag, MAXPATHL, NUL, StlOpt, Vv};
 use crate::winlayer::Win;

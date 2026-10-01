@@ -61,7 +61,7 @@ use crate::option::{
     set_option_direct, set_options_bin, shortmess,
 };
 use crate::options::kOptFileencoding;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::{getc, gettext, gettext_ptr, ngettext, putc};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_env_exists};
 use crate::os::fs::{

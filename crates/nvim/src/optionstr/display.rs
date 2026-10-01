@@ -43,7 +43,7 @@ use crate::types::{
 };
 use crate::window::check_colorcolumn;
 
-use super::LocalOptStr;
+use super::OptString;
 use super::frame::{invalid, local_window, old_value, varp, win};
 use super::{
     COCU_ALL, HIGHLIGHT_INIT, INT_MAX, MOUSESCROLL_HOR_DFLT, MOUSESCROLL_VERT_DFLT, WW_ALL,
@@ -136,7 +136,7 @@ pub fn did_set_breakindentopt(args: &mut OptSet) -> Result<(), OptError> {
     let local = field!(WinOpt, wo_briopt);
     let for_window = local_window(varp, wp, local);
     // SAFETY: the option's value is a C string.
-    if unsafe { briopt_check(varp.get(), for_window) } as c_int == FAIL {
+    if unsafe { briopt_check(varp.value_ptr(), for_window) } as c_int == FAIL {
         return invalid();
     }
     // A window whose 'breakindentopt' asks for list indenting affects how
@@ -150,12 +150,12 @@ pub fn did_set_breakindentopt(args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_colorcolumn(args: &mut OptSet) -> Result<(), OptError> {
     let (wp, varp) = (win(args), varp(args));
     let local = field!(WinOpt, wo_cc);
-    unsafe { check_colorcolumn(varp.get(), local_window(varp, wp, local)) }
+    unsafe { check_colorcolumn(varp.value_ptr(), local_window(varp, wp, local)) }
 }
 
 pub fn did_set_concealcursor(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's own C string value.
-    unsafe { did_set_option_listflag(varp(args).get(), COCU_ALL.as_ptr()) }
+    unsafe { did_set_option_listflag(varp(args).value_ptr(), COCU_ALL.as_ptr()) }
 }
 
 pub fn did_set_cursorlineopt(args: &mut OptSet) -> Result<(), OptError> {
@@ -164,8 +164,8 @@ pub fn did_set_cursorlineopt(args: &mut OptSet) -> Result<(), OptError> {
     // all.
     // SAFETY: the option's C string value, and the frame's window, which
     // `OptSet` names for exactly this call.
-    if unsafe { c_int::from(*varp.get()) } == NUL
-        || unsafe { fill_culopt_flags(Some(CStr::from_ptr(varp.get())), wp) }.is_err()
+    if unsafe { c_int::from(*varp.value_ptr()) } == NUL
+        || unsafe { fill_culopt_flags(Some(CStr::from_ptr(varp.value_ptr())), wp) }.is_err()
     {
         return invalid();
     }
@@ -194,7 +194,7 @@ pub fn did_set_guicursor(_args: &mut OptSet) -> Result<(), OptError> {
 /// implement: only its default value is accepted.
 pub fn did_set_highlight(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: both are C strings.
-    if !unsafe { cstr::eq(varp(args).get(), HIGHLIGHT_INIT.as_ptr()) } {
+    if !unsafe { cstr::eq(varp(args).value_ptr(), HIGHLIGHT_INIT.as_ptr()) } {
         return Err((e_unsupportedoption).into());
     }
     Ok(())
@@ -226,7 +226,7 @@ pub fn did_set_messagesopt(_args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_mouse(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's own C string value.
-    unsafe { did_set_option_listflag(varp(args).get(), super::MOUSE_ALL.as_ptr()) }
+    unsafe { did_set_option_listflag(varp(args).value_ptr(), super::MOUSE_ALL.as_ptr()) }
 }
 
 /// 'mousescroll' is `ver:<n>` and/or `hor:<n>`, each at most once. A
@@ -292,7 +292,7 @@ pub fn did_set_selection(args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_showbreak(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's value is a C string, and the walk steps by the
     // length of the character it just measured.
-    let mut s = varp(args).get();
+    let mut s = varp(args).value_ptr();
     while unsafe { *s } != 0 {
         if unsafe { ptr2cells(s) } != 1 {
             return Err((e_showbreak_contains_unprintable_or_wide_character).into());
@@ -314,7 +314,7 @@ pub fn did_set_showcmdloc(args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_signcolumn(args: &mut OptSet) -> Result<(), OptError> {
     let (mut wp, varp) = (win(args), varp(args));
     let local = field!(WinOpt, wo_scl);
-    if unsafe { check_signcolumn(varp.get(), local_window(varp, wp, local)) }.is_err() {
+    if unsafe { check_signcolumn(varp.value_ptr(), local_window(varp, wp, local)) }.is_err() {
         return invalid();
     }
     // "number" shares the sign column with the number column, so
@@ -373,7 +373,7 @@ pub fn did_set_whichwrap(args: &mut OptSet) -> Result<(), OptError> {
     const WW_AND_COMMA: &CStr = c"bshl<>[]~,";
     debug_assert!(WW_AND_COMMA.to_bytes().starts_with(WW_ALL.to_bytes()));
     // SAFETY: the frame's own C string value.
-    unsafe { did_set_option_listflag(varp(args).get(), WW_AND_COMMA.as_ptr()) }
+    unsafe { did_set_option_listflag(varp(args).value_ptr(), WW_AND_COMMA.as_ptr()) }
 }
 
 pub fn did_set_wildmode(_args: &mut OptSet) -> Result<(), OptError> {
@@ -463,7 +463,7 @@ pub fn did_set_pumborder(_args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_winhighlight(args: &mut OptSet) -> Result<(), OptError> {
     let (wp, varp) = (win(args), varp(args));
     let local = field!(WinOpt, wo_winhl);
-    if !unsafe { parse_winhl_opt(varp.get(), local_window(varp, wp, local)) } {
+    if !unsafe { parse_winhl_opt(varp.value_ptr(), local_window(varp, wp, local)) } {
         return invalid();
     }
     Ok(())

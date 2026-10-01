@@ -14,7 +14,7 @@ use super::*;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{CallFrame, DictRef, list_iter};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::TypVal;
 use crate::types::{
     FAIL, OK, OptError, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_STRING, VarLock, kSpecialVarNull,

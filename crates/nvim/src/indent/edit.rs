@@ -35,7 +35,7 @@ use crate::r#move::changed_cline_bef_curs;
 use crate::ops::shift_line;
 use crate::option::set_option_direct;
 use crate::option::vars::{p_paste, p_report};
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::{gettext, ngettext};
 use crate::os::input::line_breakcheck;
 use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};

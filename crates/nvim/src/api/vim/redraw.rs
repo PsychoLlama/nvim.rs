@@ -17,7 +17,7 @@
 
 use super::*;
 use crate::guard::Allow;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::NUL;
 use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win, first_window, windows};

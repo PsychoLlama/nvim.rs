@@ -20,7 +20,7 @@
 use super::*;
 use crate::option::vars::P_DIA;
 use crate::option::vars::P_DIP;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::semsg;
 use crate::types::Failed;
 use crate::winlayer::graph::{switch_buffer, switch_window};

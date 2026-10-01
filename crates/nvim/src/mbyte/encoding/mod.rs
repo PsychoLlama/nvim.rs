@@ -24,7 +24,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::os::cshim::strchr;
 use crate::strings::vim_strchr;
 use crate::winlayer::Buf;

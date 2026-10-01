@@ -13,7 +13,7 @@
 
 use super::*;
 use crate::cstr;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::{OptString, OptStringRef};
 use crate::strings::vim_strchr;
 use crate::types::NUL;
 use crate::winlayer::{Buf, Win};

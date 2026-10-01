@@ -23,10 +23,10 @@
 )]
 
 use super::*;
-use crate::option::local_or_global;
 use crate::option::vars::P_EF;
 use crate::option::vars::P_EFM;
 use crate::option::vars::P_MENC;
+use crate::optionstr::{OptString, local_or_global};
 use crate::types::CmdIdx;
 use crate::types::OptStr;
 use crate::types::{Failed, IOSIZE, NUL, OptionSetFlags, VAR_LIST};
@@ -70,7 +70,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         );
     }
 
-    let enc = local_or_global(&Buf::current().b_p_menc, P_MENC);
+    let enc = local_or_global(&Buf::current().b_p_menc, P_MENC).get();
 
     let wp = is_loclist_cmd(excmd.cmdidx).then(Win::current);
 

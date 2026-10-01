@@ -43,7 +43,7 @@ use crate::grid::grid_adjust;
 use crate::mbyte::{mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
 use crate::mouse::state::{mouse_col, mouse_row};
 use crate::normal::sel_exclusive;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::plines::{getvcols, win_chartabsize};
 use crate::search::BACKWARD;
 use crate::state::virtual_active;

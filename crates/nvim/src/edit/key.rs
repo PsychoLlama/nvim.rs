@@ -38,7 +38,7 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::NUL;
 
 /// `<Space>`, which is only a command when CTRL is held (`i_CTRL-@`'s

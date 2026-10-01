@@ -15,6 +15,7 @@
 )]
 
 use crate::cstr;
+use crate::optionstr::OptString;
 use crate::strings::has_char;
 use crate::vim_snprintf;
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -55,7 +56,7 @@ pub fn did_set_titlestring(args: &mut OptSet) -> Result<(), OptError> {
 /// shown literally, so a bad format is not an error here.
 pub(crate) fn did_set_titleiconstring(args: &OptSet, flagval: StlSyntax) -> Result<(), OptError> {
     // SAFETY: the frame's value is a C string.
-    let value = varp(args).get();
+    let value = varp(args).value_ptr();
     // SAFETY: as above; the checker walks it to its terminator.
     let formatted =
         unsafe { has_char(cstr::at(value), c_int::from(b'%')) && check_stl_option(value).is_ok() };
@@ -125,7 +126,7 @@ pub(crate) fn did_set_statustabline_rulerformat(
     }
 
     // SAFETY: the frame and its C string value.
-    let mut s = varp.get();
+    let mut s = varp.value_ptr();
     let (idx, flags) = (args.os_idx, args.os_flags);
     let is_stl = idx as c_int == kOptStatusline as c_int;
     let global = flags.has(OptionSetFlags::GLOBAL) || !flags.has(OptionSetFlags::LOCAL);
@@ -138,7 +139,7 @@ pub(crate) fn did_set_statustabline_rulerformat(
         // `crate::optionstr::did_set_optexpr`.
         let old = unsafe { varp.replace(xstrdup(default.data())) };
         unsafe { free_string_option(old) };
-        s = varp.get();
+        s = varp.value_ptr();
     }
     // A floating window's status line is part of its frame.
     if is_stl && wp.w_floating {
@@ -299,7 +300,7 @@ pub fn did_set_shellpipe_redir(args: &mut OptSet) -> Result<(), OptError> {
 
 pub fn did_set_shortmess(args: &mut OptSet) -> Result<(), OptError> {
     // SAFETY: the frame's own C string value.
-    unsafe { did_set_option_listflag(varp(args).get(), SHM_ALL.as_ptr()) }
+    unsafe { did_set_option_listflag(varp(args).value_ptr(), SHM_ALL.as_ptr()) }
 }
 
 pub fn did_set_verbosefile(_args: &mut OptSet) -> Result<(), OptError> {

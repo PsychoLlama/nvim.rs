@@ -49,7 +49,7 @@ use crate::optionstr::free_string_option;
 
 use crate::os::env::expand_env;
 
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::path::pathcmp;
 use crate::types::{
     BoolVarValue, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, MAXPATHL, NUL, OK, OptError,
@@ -208,7 +208,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
         return Err((e_invarg).into());
     }
     let varp = args.os_varp.string_var();
-    let name = unsafe { get_scriptlocal_funcname(varp.get()) };
+    let name = unsafe { get_scriptlocal_funcname(varp.value_ptr()) };
     if !name.is_null() {
         // Replace and *then* free; see `did_set_optexpr`.
         let old = unsafe { varp.replace(name) };

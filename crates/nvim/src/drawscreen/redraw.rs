@@ -24,7 +24,7 @@
 use super::*;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::option::vars::P_WBR;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptString;
 use crate::types::StlSyntax;
 use crate::winlayer::Buf;
 use crate::winlayer::FrameRef;

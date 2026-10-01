@@ -33,7 +33,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::default_gridview;
 use crate::highlight_group::HLF_C;
 use crate::memory::xstrlcpy;
-use crate::optionstr::LocalOptStr;
+use crate::optionstr::OptStringRef;
 use crate::os::env::home_replace;
 use crate::types::MAXPATHL;
 use crate::types::ui::kUIWildmenu;

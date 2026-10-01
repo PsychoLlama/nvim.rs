@@ -29,7 +29,7 @@ use core::ffi::{c_char, c_int};
 use crate::global_cell::{Field, field};
 use crate::memory::XString;
 use crate::options::vars::{BoolOpt, NumOpt, StrOpt};
-use crate::optionstr::{empty_option, is_empty_option};
+use crate::optionstr::{OptString, empty_option, is_empty_option};
 use crate::types::{Buffer, OptIndex, OptInt, OptStr, OptVal, SynBlock, WinOpt};
 use crate::winlayer::{Buf, Win};
 
@@ -182,7 +182,7 @@ impl NumVar {
 /// Both halves own their bytes: the global value is a field of the option
 /// record, a local copy an `Option<XString>` field of a window, a buffer or
 /// a syntax block, and `None` on either side is upstream's shared empty
-/// string -- the option holding no value of its own. [`get`](Self::get) and
+/// string -- the option holding no value of its own. [`OptString`] and
 /// [`replace`](Self::replace) are the seam where that owned storage meets
 /// the `char *` the option protocol and [`OptVal`] still speak.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -196,50 +196,76 @@ pub(crate) enum StrVar {
     OwnDefault(OptIndex),
 }
 
-impl StrVar {
-    /// The value's bytes, as the pointer the option protocol reads.
-    ///
-    /// A variable that owns nothing answers the shared empty string, which
-    /// is what upstream kept in the variable itself. **The pointer is the
-    /// variable's own buffer and lives until the variable is written** --
-    /// the promise [`StrOpt::value_ptr`] makes for a global, and the reason
-    /// a caller that keeps it across anything that can `:set` takes a copy.
-    pub(crate) fn get(self) -> *mut c_char {
-        match self {
+/// The questions any string value answers, asked of whichever variable this
+/// names. **[`value_ptr`](OptString::value_ptr) is the variable's own
+/// buffer and lives until the variable is written** -- the promise
+/// [`StrOpt::value_ptr`] makes for a global, and the reason a caller that
+/// keeps it across anything that can `:set` takes [`get`](OptString::get).
+impl OptString for StrVar {
+    fn value_ptr(&self) -> *mut c_char {
+        match *self {
             // Installing the defaults reads each option's old value before
             // it has one -- upstream reads its `NULL` there -- and that is
             // the protocol's own business, so it answers the empty string
             // rather than tripping `StrOpt`'s read-before-defaults check.
             StrVar::Global(field) if field.is_uninit() => empty_option(),
             StrVar::Global(field) => field.value_ptr(),
-            StrVar::OwnDefault(idx) => option_default(idx)
-                .as_string()
-                .expect("an immutable string option's default is a string")
-                .data(),
-            StrVar::Local(local) => local.with(|value| {
-                value
-                    .as_ref()
-                    .map_or_else(empty_option, |value| value.as_ptr().cast_mut())
-            }),
+            StrVar::OwnDefault(idx) => own_default(idx).data(),
+            StrVar::Local(local) => local.with(|value| value.value_ptr()),
         }
     }
 
-    /// Whether the value is empty — upstream's `*p == NUL`, which is also
-    /// what "not set here" looks like in a global-local option's local copy:
-    /// a field that owns nothing and one that owns `""` both answer true.
-    pub(crate) fn is_empty(self) -> bool {
-        match self {
-            StrVar::Global(field) => field.is_uninit() || field.first_byte() == 0,
-            StrVar::Local(local) => {
-                local.with(|value| value.as_deref().is_none_or(<[u8]>::is_empty))
-            }
-            StrVar::OwnDefault(idx) => option_default(idx)
-                .as_string()
-                .expect("an immutable string option's default is a string")
-                .is_empty(),
+    fn first_byte(&self) -> u8 {
+        match *self {
+            StrVar::Global(field) if field.is_uninit() => 0,
+            StrVar::Global(field) => field.first_byte(),
+            StrVar::OwnDefault(idx) => own_default_bytes(idx).first().copied().unwrap_or(0),
+            StrVar::Local(local) => local.with(|value| value.first_byte()),
         }
     }
 
+    fn has_byte(&self, byte: u8) -> bool {
+        match *self {
+            StrVar::Global(field) if field.is_uninit() => false,
+            StrVar::Global(field) => field.has_byte(byte),
+            StrVar::OwnDefault(idx) => own_default_bytes(idx).contains(&byte),
+            StrVar::Local(local) => local.with(|value| value.has_byte(byte)),
+        }
+    }
+
+    fn is_unset(&self) -> bool {
+        match *self {
+            StrVar::Global(field) => field.is_unset(),
+            StrVar::OwnDefault(idx) => is_empty_option(own_default(idx).data()),
+            StrVar::Local(local) => local.with(|value| value.is_unset()),
+        }
+    }
+
+    fn get(&self) -> XString {
+        match *self {
+            StrVar::Global(field) if field.is_uninit() => XString::new(),
+            StrVar::Global(field) => field.get(),
+            StrVar::OwnDefault(idx) => XString::from_bytes(own_default_bytes(idx)),
+            StrVar::Local(local) => local.with(|value| OptString::get(value)),
+        }
+    }
+}
+
+/// An immutable string option's own default, which is its value.
+fn own_default(idx: OptIndex) -> OptStr {
+    option_default(idx)
+        .as_string()
+        .expect("an immutable string option's default is a string")
+}
+
+/// [`own_default`]'s bytes.
+fn own_default_bytes(idx: OptIndex) -> &'static [u8] {
+    // SAFETY: an immutable option's default is never released: nothing can
+    // set the option, so `change_option_default` never replaces it.
+    unsafe { own_default(idx).as_bytes() }
+}
+
+impl StrVar {
     /// Give the variable a value of its own -- or none -- and answer what it
     /// held. The move out and the move in are one step.
     ///
@@ -264,10 +290,7 @@ impl StrVar {
         if let StrVar::OwnDefault(idx) = self {
             // SAFETY: an option value is NUL-terminated.
             let len = unsafe { crate::cstr::bytes_at(value) }.len();
-            let old = option_default(idx)
-                .as_string()
-                .expect("an immutable string option's default is a string")
-                .data();
+            let old = own_default(idx).data();
             store_option_default(idx, OptVal::String(OptStr::from_raw_parts(value, len)));
             return old;
         }
