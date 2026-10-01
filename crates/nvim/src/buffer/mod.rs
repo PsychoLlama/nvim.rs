@@ -161,7 +161,8 @@ pub const kBffInitChangedtick: ::core::ffi::c_uint = 2;
 pub const kBffClearWinInfo: ::core::ffi::c_uint = 1;
 pub const BCO_ALWAYS: ::core::ffi::c_uint = 2;
 pub struct BufMatch {
-    pub buf: *mut Buffer,
+    /// Matched and sorted within the one expansion call.
+    pub buf: Buf,
     pub match_0: *mut ::core::ffi::c_char,
 }
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;

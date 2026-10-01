@@ -140,7 +140,7 @@ pub fn f_gettagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // yields an empty dict rather than nothing.
     dict_alloc_ret(result);
     let found = if args.is_empty() {
-        unsafe { Win::from_raw(Win::current_raw()) }
+        Win::current_or_none()
     } else {
         find_win_by_nr_or_id(&args[0])
     };

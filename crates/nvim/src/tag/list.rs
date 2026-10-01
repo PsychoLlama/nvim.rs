@@ -409,7 +409,7 @@ pub(crate) unsafe fn add_llist_tags(
     // Answers `Ok` for a plain entry list; upstream discarded it too.
     let _ = unsafe {
         set_errorlist(
-            Win::from_raw(Win::current_raw()),
+            Win::current_or_none(),
             list,
             ' ' as c_int,
             title.as_mut_ptr(),

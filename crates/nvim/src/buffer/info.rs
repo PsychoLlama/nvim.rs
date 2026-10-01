@@ -168,9 +168,8 @@ fn sorted_by_last_used() -> Vec<Buf> {
         size_of::<Buf>(),
     );
     // SAFETY: `n` initialised elements of this function's own vector, and a
-    // comparison function over two of them. A `Buf` is one `Buffer *` wide,
-    // which is what `buf_time_compare` reads through the two addresses.
-    unsafe { qsort(base, n, width, Some(buf_time_compare)) };
+    // comparison function over two of them, read as the `Buf`s they are.
+    unsafe { qsort(base, n, width, Some(buf_time_compare::<Buf>)) };
     list
 }
 

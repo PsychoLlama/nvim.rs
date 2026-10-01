@@ -235,10 +235,7 @@ pub unsafe fn expand_buf_names(
                 };
                 set_at(fuzmatch, count, entry);
             } else if !matches.is_null() {
-                let entry = BufMatch {
-                    buf: buf.raw(),
-                    match_0: p,
-                };
+                let entry = BufMatch { buf, match_0: p };
                 set_at(matches, count, entry);
             } else {
                 set_at(*file, count, p);
@@ -284,6 +281,12 @@ pub unsafe fn expand_buf_names(
     if count == 0 { Err(Failed) } else { Ok(()) }
 }
 
+impl LastUsed for BufMatch {
+    fn last_used_buffer(&self) -> Buf {
+        self.buf
+    }
+}
+
 /// Sort `matches` by last-used time into `files`, putting the current buffer
 /// last when it would otherwise come first.
 ///
@@ -296,7 +299,7 @@ fn order_by_last_used(matches: *mut BufMatch, files: &mut [*mut c_char]) {
         let (base, width) = (matches.cast::<c_void>(), size_of::<BufMatch>());
         // SAFETY: `count` initialised elements of this function's own array,
         // and a comparison function over two of them.
-        unsafe { qsort(base, count, width, Some(buf_time_compare)) };
+        unsafe { qsort(base, count, width, Some(buf_time_compare::<BufMatch>)) };
     }
     if count == 0 {
         // Unreachable: round two walks the list round one counted, so a
@@ -306,7 +309,7 @@ fn order_by_last_used(matches: *mut BufMatch, files: &mut [*mut c_char]) {
     }
     // SAFETY: `count` initialised elements.
     let matches = unsafe { slice::from_raw_parts(matches, count) };
-    if matches[0].buf == Buf::current_raw() {
+    if Some(matches[0].buf) == Buf::current_or_none() {
         // The current buffer came first: place it at the end.
         for i in 1..count {
             files[i - 1] = matches[i].match_0;

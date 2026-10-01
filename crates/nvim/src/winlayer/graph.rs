@@ -37,6 +37,7 @@
 
 use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
 use crate::global_cell::GlobalCell;
+use crate::memory::xcalloc;
 use crate::types::{Buffer, Tabpage, Window};
 use core::ffi::c_int;
 
@@ -331,5 +332,20 @@ impl Saved {
             Displaced::Window(win) => win.make_current(),
             Displaced::Buffer(buf) => buf.make_current(),
         }
+    }
+}
+
+impl Win {
+    /// A window freshly allocated by `xcalloc`, before the allocator has
+    /// given it a handle -- so nothing is read and the handle is zero until
+    /// [`Win::set_handle`].
+    ///
+    /// `init` gets the bare address first, to write the fields all-zero bytes
+    /// are not a valid value for; it must leave a `Window` behind.
+    pub(crate) fn alloc_zeroed(init: impl FnOnce(*mut Window)) -> Self {
+        // SAFETY: `xcalloc` aborts rather than answering null.
+        let raw = unsafe { xcalloc(1, size_of::<Window>()) }.cast::<Window>();
+        init(raw);
+        Self::at(raw, 0)
     }
 }

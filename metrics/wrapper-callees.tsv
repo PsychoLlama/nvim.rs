@@ -1354,7 +1354,6 @@ count	callee	no_raw	defs	def
 2	Sug::new	0	67	
 2	Vec::from_raw_parts	0	0	
 2	Virt::chain	0	1	crates/nvim/src/decoration/handles.rs
-2	Win::from_raw	0	1	crates/nvim/src/winlayer.rs
 2	Wop::new	0	67	
 2	XString::from_cstr	0	0	
 2	add_b0_fenc	0	1	crates/nvim/src/memline/block0.rs
@@ -2332,6 +2331,7 @@ count	callee	no_raw	defs	def
 1	Virt::from_raw	0	1	crates/nvim/src/decoration/handles.rs
 1	Virt::new	0	1	crates/nvim/src/decoration/handles.rs
 1	Vvr::new	0	67	
+1	Win::from_raw	0	1	crates/nvim/src/winlayer.rs
 1	add_extra_fields	0	1	crates/nvim/src/tag/query.rs
 1	add_inline_virt_text	0	1	crates/nvim/src/plines/mod.rs
 1	add_keyword	0	1	crates/nvim/src/syntax/keyword.rs

@@ -907,30 +907,39 @@ fn match_pattern(
 // ---------------------------------------------------------------------------
 // Sorting by last-used time
 
-/// `qsort`'s comparison over two `Buffer *`, most recently used first. Two
+/// An element of an array `qsort` orders by its buffer's last use.
+pub(crate) trait LastUsed {
+    fn last_used_buffer(&self) -> Buf;
+}
+
+impl LastUsed for Buf {
+    fn last_used_buffer(&self) -> Buf {
+        *self
+    }
+}
+
+/// `qsort`'s comparison over two `T`s, most recently used buffer first. Two
 /// buffers entered in the same second tie, and the order of a tie is
-/// whatever `qsort` lands on -- which is why the sort stays `qsort`.
+/// whatever `qsort` lands on -- which is why the sorts stay `qsort`.
 ///
 /// # Safety
 ///
 /// As `qsort`'s comparator: `s1` and `s2` must each point at an element of
-/// the array being sorted, and the elements must be of the type this reads
-/// them at.
-pub(crate) unsafe extern "C" fn buf_time_compare(s1: *const c_void, s2: *const c_void) -> c_int {
-    // SAFETY: `qsort` hands back two elements of the array it was given,
-    // each holding a live buffer pointer.
+/// an array of `T`, each naming a live buffer.
+pub(crate) unsafe extern "C" fn buf_time_compare<T: LastUsed>(
+    s1: *const c_void,
+    s2: *const c_void,
+) -> c_int {
+    // SAFETY: `qsort` hands back two elements of the array it was given.
     let (buf1, buf2) = unsafe {
         (
-            Buf::new(*s1.cast::<*mut Buffer>()),
-            Buf::new(*s2.cast::<*mut Buffer>()),
+            (*s1.cast::<T>()).last_used_buffer(),
+            (*s2.cast::<T>()).last_used_buffer(),
         )
     };
-    if buf1.b_last_used == buf2.b_last_used {
-        return 0;
-    }
-    if buf1.b_last_used > buf2.b_last_used {
-        -1
-    } else {
-        1
+    match buf2.b_last_used.cmp(&buf1.b_last_used) {
+        core::cmp::Ordering::Less => -1,
+        core::cmp::Ordering::Equal => 0,
+        core::cmp::Ordering::Greater => 1,
     }
 }

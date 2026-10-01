@@ -14,7 +14,6 @@
 #![allow(unsafe_code)]
 
 use core::ffi::{c_char, c_int};
-use core::mem::size_of;
 use core::ptr;
 
 use super::*;
@@ -32,7 +31,6 @@ use crate::grid::grid_assign_handle;
 use crate::hashtab::hash_init;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
-use crate::memory::xcalloc;
 use crate::option::vars::p_ch;
 use crate::option::{clear_winopt, init_winopt_strings};
 use crate::quickfix::qf_free_all;
@@ -41,7 +39,6 @@ use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     Failed, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, WinOpt,
-    Window,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
@@ -56,13 +53,6 @@ use ::libc::abort;
 // ---------------------------------------------------------------------------
 // The neighbours only this file reaches
 
-/// `xcalloc(1, size_of::<T>())`, which never answers null.
-fn zeroed<T>() -> *mut T {
-    // SAFETY: `xcalloc` aborts rather than answering null, and a zeroed
-    // `Window`/`Frame` is what upstream starts one from.
-    unsafe { xcalloc(1, size_of::<T>()) }.cast::<T>()
-}
-
 /// A fresh window, zeroed but for the fields that own an allocation.
 ///
 /// All-zero bytes are not a valid `ScreenGrid` -- its cell buffers are
@@ -71,18 +61,16 @@ fn zeroed<T>() -> *mut T {
 /// for the reason `optionstr::init_buf_string_options` states. All four are
 /// written before anything can read or drop them.
 fn zeroed_window() -> Win {
-    let wp = zeroed::<Window>();
-    // SAFETY: a fresh allocation this thread alone holds; the zeroed grid,
-    // set and option strings are overwritten, never read. The window is
-    // live from here on, which is what `Win::new` asks -- `alloc` registers
-    // it a few lines down.
-    unsafe {
-        (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty());
-        (&raw mut (*wp).w_ns_set).write(id_set());
-        init_winopt_strings(&raw mut (*wp).w_onebuf_opt);
-        init_winopt_strings(&raw mut (*wp).w_allbuf_opt);
-        Win::new(wp)
-    }
+    Win::alloc_zeroed(|wp| {
+        // SAFETY: a fresh allocation this thread alone holds; the zeroed
+        // grid, set and option strings are overwritten, never read.
+        unsafe {
+            (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty());
+            (&raw mut (*wp).w_ns_set).write(id_set());
+            init_winopt_strings(&raw mut (*wp).w_onebuf_opt);
+            init_winopt_strings(&raw mut (*wp).w_allbuf_opt);
+        }
+    })
 }
 
 /// A registered window with nothing in it but zeroed fields: [`win_alloc`]'s
