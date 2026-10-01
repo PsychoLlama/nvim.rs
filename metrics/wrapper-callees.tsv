@@ -1326,6 +1326,7 @@ count	callee	no_raw	defs	def
 2	.write_raw	0	1	crates/nvim/src/eval/fs/write.rs
 2	Al::new	0	67	
 2	BlobRef::retained	0	1	crates/nvim/src/eval/typval/blob.rs
+2	Buf::new	0	1	crates/nvim/src/winlayer.rs
 2	CStr::from_bytes_with_nul_unchecked	0	0	
 2	Cc::new	0	67	
 2	CfgKeys::new	0	67	

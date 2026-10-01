@@ -55,13 +55,17 @@ impl TabPage {
     /// `buffer`'s slot in this tab page's diff, or `DB_COUNT` if it has
     /// none. Compares ids only, so it is safe to ask about a buffer the
     /// caller is not otherwise sure of.
+    ///
+    /// The id is taken once and the slots compared as plain words:
+    /// `mark_adjust` asks this of every tab page on every edit.
     pub(crate) fn diff_index(self, buffer: Buf) -> c_int {
-        (0..DB_COUNT)
-            .find(|&i| {
-                let i = usize::try_from(i).expect("a diff-buffer index is never negative");
-                self.diff_slot_holds(i, buffer)
-            })
-            .unwrap_or(DB_COUNT)
+        let Some(id) = buffer.try_id() else {
+            return DB_COUNT;
+        };
+        self.tp_diffbuf
+            .iter()
+            .position(|&slot| slot == Some(id))
+            .map_or(DB_COUNT, |i| c_int::try_from(i).expect("eight slots"))
     }
 
     /// Whether diff slot `idx` holds `buffer`. A buffer without a number
