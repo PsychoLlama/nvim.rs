@@ -239,10 +239,10 @@ pub(super) fn foldlevel_marker(line: FLine) {
     let flp = line.raw();
     // SAFETY: the caller's promise -- a live window, and `parse_marker` has
     // written the two markers and their lengths.
-    let (window, start_lvl) = unsafe { ((*flp).wp, (*flp).lvl) };
+    let (window, start_lvl) = unsafe { ((*flp).win, (*flp).lvl) };
     let startmarker = unsafe {
         cstr::slice_at(
-            (*window).w_onebuf_opt.wo_fmr.value_ptr(),
+            window.w_onebuf_opt.wo_fmr.value_ptr(),
             foldstartmarkerlen.get(),
         )
     };
@@ -250,8 +250,7 @@ pub(super) fn foldlevel_marker(line: FLine) {
     unsafe { (*flp).start = 0 };
     unsafe { (*flp).lvl_next = (*flp).lvl };
 
-    // SAFETY: the window's own buffer, and the line the caller named.
-    let buffer = unsafe { Buf::new((*window).w_buffer) };
+    let buffer = window.buffer();
     let lnum = unsafe { (*flp).lnum + (*flp).off };
     let mut lines = buffer.lines();
     let text = lines.line(lnum);

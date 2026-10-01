@@ -16,6 +16,7 @@ use crate::api::private::validate::{
 };
 use crate::decoration::DecorStateRef;
 use crate::kvec::Kvec;
+use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Live};
 
 /// The keyset this call was handed, with checked field access: the pointer the
@@ -550,8 +551,10 @@ fn set_extmark(
         let state = unsafe { DecorStateRef::current() };
         // A provider is running exactly when the redraw has a window, and it
         // has to be drawing this buffer.
-        // SAFETY: a non-null window of the state is a live one.
-        let drawing = !state.win.is_null() && unsafe { (*state.win).w_buffer } == b.raw();
+        let drawing = state
+            .win
+            .and_then(WinId::get)
+            .is_some_and(|win| win.buffer() == b);
         if !drawing {
             let why = c"cannot set emphemeral mark outside of a decoration provider";
             return Err(Error::exception(why));

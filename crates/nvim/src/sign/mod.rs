@@ -69,10 +69,9 @@ use crate::message::{e_argreq, e_dictreq, e_invarg, e_listreq};
 use crate::message::{emsg, msg_display, msg_putchar, msg_str, msg_str_hl, msg_title};
 use crate::os::cshim::gettext;
 use crate::types::{
-    Buffer, DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight,
-    DecorVirtText, Dict, EvalFuncData, ExArg, Expand, FAIL, Integer, LineNr, List, MTKey,
-    MarkTreeIter, OK, ScreenChar, Sign, SignItem, TypVal, VarNumber, int32_t, int64_t, ptrdiff_t,
-    size_t, uint32_t,
+    DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText, Dict,
+    EvalFuncData, ExArg, Expand, FAIL, Integer, LineNr, List, MTKey, MarkTreeIter, OK, ScreenChar,
+    Sign, SignItem, TypVal, VarNumber, int32_t, int64_t, ptrdiff_t, size_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};

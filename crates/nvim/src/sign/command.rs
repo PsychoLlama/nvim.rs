@@ -26,7 +26,6 @@ use crate::smsg;
 use crate::types::FAIL;
 use crate::vim_snprintf;
 use crate::winlayer::Win;
-use core::ptr;
 
 /// The `"*"` group's only byte, and the leading zero a sign name may carry.
 const STAR: c_char = b'*'.cast_signed();
@@ -370,7 +369,8 @@ struct SignCmdArgs {
     id: c_int,
     group: *const c_char,
     prio: c_int,
-    buf: *mut Buffer,
+    /// Found while parsing and used by the command straight after.
+    buf: Option<Buf>,
     lnum: LineNr,
 }
 
@@ -381,7 +381,7 @@ impl Default for SignCmdArgs {
             id: -1,
             group: ::core::ptr::null_mut(),
             prio: -1,
-            buf: ::core::ptr::null_mut(),
+            buf: None,
             lnum: -1,
         }
     }
@@ -461,13 +461,12 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
             arg = unsafe { skiptowhite(v) };
         } else if let Some(v) = after(c"file=") {
             filename = v;
-            out.buf = unsafe { buflist_findname_exp(v) }.map_or(ptr::null_mut(), Buf::raw);
+            out.buf = unsafe { buflist_findname_exp(v) };
             break;
         } else if let Some(v) = after(c"buffer=") {
             filename = v;
             let mut p = v;
-            out.buf = find_buf(unsafe { getdigits_int(&raw mut p, true, 0) })
-                .map_or(ptr::null_mut(), Buf::raw);
+            out.buf = find_buf(unsafe { getdigits_int(&raw mut p, true, 0) });
             // Diagnosed but not fatal, which is why this still breaks
             // out with whatever buffer it found.
             if unsafe { *skipwhite(p) } != 0 {
@@ -483,7 +482,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
         arg = unsafe { skipwhite(arg) };
     }
 
-    if !filename.is_null() && out.buf.is_null() {
+    if !filename.is_null() && out.buf.is_none() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let filename = unsafe { c_str(filename) };
         semsg!("E158: Invalid buffer name: {filename}");
@@ -493,7 +492,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
     // `:sign place line=N` and `:sign jump` default to the current
     // buffer; `:sign unplace` deliberately does not.
     if filename.is_null() && ((cmd == SIGNCMD_PLACE && lnum_arg) || cmd == SIGNCMD_JUMP) {
-        out.buf = Win::current().w_buffer;
+        out.buf = Win::current().buffer_or_none();
     }
     Some(out)
 }
@@ -521,14 +520,10 @@ pub(crate) fn ex_sign(excmd: &mut ExArg) {
         };
         match idx {
             SIGNCMD_PLACE => unsafe {
-                sign_place_cmd(Buf::from_raw(a.buf), a.lnum, a.name, a.id, a.group, a.prio)
+                sign_place_cmd(a.buf, a.lnum, a.name, a.id, a.group, a.prio)
             },
-            SIGNCMD_UNPLACE => unsafe {
-                sign_unplace_cmd(Buf::from_raw(a.buf), a.lnum, a.name, a.id, a.group)
-            },
-            SIGNCMD_JUMP => unsafe {
-                sign_jump_cmd(Buf::from_raw(a.buf), a.lnum, a.name, a.id, a.group)
-            },
+            SIGNCMD_UNPLACE => unsafe { sign_unplace_cmd(a.buf, a.lnum, a.name, a.id, a.group) },
+            SIGNCMD_JUMP => unsafe { sign_jump_cmd(a.buf, a.lnum, a.name, a.id, a.group) },
             _ => {}
         }
         return;

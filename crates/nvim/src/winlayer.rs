@@ -384,6 +384,9 @@ impl Win {
         (!raw.is_null()).then(|| unsafe { Self::new(raw) })
     }
 
+    /// The null window. [`Buf::NULL`].
+    pub(crate) const NULL: Self = Self::at(ptr::null_mut(), 0);
+
     /// The window at `raw` with `handle` already known — a registry entry —
     /// so **nothing is read**.
     #[inline(always)]

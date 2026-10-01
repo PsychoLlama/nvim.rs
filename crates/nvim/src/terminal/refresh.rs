@@ -30,7 +30,6 @@ use crate::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
 use crate::global_cell::GlobalCell;
-use crate::mbyte::mb_check_adjust_col;
 use crate::memline::{ml_append_buf, ml_replace_buf};
 use crate::r#move::{curs_columns, set_topline};
 use crate::startup::{exiting, main_loop};
@@ -295,7 +294,7 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buffer: Buf, added: c_int) {
         }
         // SAFETY: as above; the column is clamped against the line the
         // cursor was just moved to.
-        unsafe { mb_check_adjust_col(wp.raw() as *mut c_void) };
+        wp.snap_cursor_to_char();
     }
 
     // Windows are not the only things remembering a line: the buffer's own

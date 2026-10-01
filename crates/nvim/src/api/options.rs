@@ -40,7 +40,7 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    AcoSave, ApiDict, Buffer, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
+    AcoSave, ApiDict, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
     OptionSetFlags, String_0, kErrorTypeValidation, uint64_t,
 };
 use crate::window::close_windows;
@@ -64,10 +64,10 @@ struct OptionTarget {
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     scope: OptScope,
-    /// The `Buffer` or `Window` the scope names -- `get_option_value_for` and
-    /// `set_option_value_for` take it untyped and read `scope` to know which
-    /// it is -- or null for the global scope.
-    from: *mut c_void,
+    /// The window or buffer the scope names, `None` for the global scope.
+    /// Looked up from the caller's handle and used within the same call.
+    win: Option<Win>,
+    buf: Option<Buf>,
     /// `filetype`, when the caller asked for the option as a buffer of that
     /// type would see it. Null otherwise.
     filetype: *mut c_char,
@@ -105,11 +105,10 @@ unsafe fn option_target(
     }
 
     let mut scope = kOptScopeGlobal;
-    let mut from = ptr::null_mut::<c_void>();
+    let (mut win, mut buf) = (None, None);
     if let Some(handle) = given_win {
         scope = kOptScopeWin;
-        let win = find_window_by_handle(handle)?;
-        from = win.map_or(ptr::null_mut(), |w| w.raw().cast());
+        win = find_window_by_handle(handle)?;
     }
     if let Some(handle) = given_buf {
         if given_scope.is_some() && opt_flags == OptionSetFlags::GLOBAL {
@@ -118,8 +117,7 @@ unsafe fn option_target(
         }
         opt_flags = OptionSetFlags::LOCAL;
         scope = kOptScopeBuf;
-        let buf = find_buffer_by_handle(handle)?;
-        from = buf.map_or(ptr::null_mut(), |b| b.raw().cast());
+        buf = find_buffer_by_handle(handle)?;
     }
     if given_filetype.is_some()
         && (given_buf.is_some() || given_scope.is_some() || given_win.is_some())
@@ -171,9 +169,23 @@ unsafe fn option_target(
         opt_idx,
         opt_flags,
         scope,
-        from,
+        win,
+        buf,
         filetype,
     })
+}
+
+impl OptionTarget {
+    /// The object the scope names, untyped as `get_option_value_for` and
+    /// `set_option_value_for` take it (they read `scope` to know which it
+    /// is), or null for the global scope.
+    fn from(&self) -> *mut c_void {
+        match (self.win, self.buf) {
+            (_, Some(buf)) => buf.raw().cast(),
+            (Some(win), None) => win.raw().cast(),
+            (None, None) => ptr::null_mut(),
+        }
+    }
 }
 
 /// A scratch buffer of type `filetype`, with its `FileType` autocommands
@@ -312,9 +324,9 @@ pub unsafe fn nvim_get_option_value(
     // A filetype cannot be combined with `buf` or `win`, so `from` is null
     // wherever the scratch buffer exists.
     let from = match ftbuf {
-        None => target.from,
+        None => target.from(),
         Some(ftbuf) => {
-            debug_assert!(target.from.is_null(), "!from");
+            debug_assert!(target.from().is_null(), "!from");
             ftbuf.raw().cast::<c_void>()
         }
     };
@@ -363,8 +375,8 @@ pub unsafe fn nvim_set_option_value(
     // them rather than whatever ran last.
     let _sctx = api_set_sctx(channel_id);
     let (key, idx) = (name.data(), target.opt_idx);
-    let (scope, from) = (target.scope, target.from);
-    // SAFETY: `name` is the caller's, and `target.from` is null or the live
+    let (scope, from) = (target.scope, target.from());
+    // SAFETY: `name` is the caller's, and `target.from()` is null or the live
     // object `scope` names.
     unsafe { set_option_value_for(key, idx, optval, opt_flags, scope, from) }
 }
@@ -391,16 +403,7 @@ pub unsafe fn nvim_get_option_info2(
     let target = unsafe { option_target(opts, name.data()) }?;
     // The metadata is read off a buffer and a window whatever the scope, so
     // the two the caller did not name default to the current ones.
-    // SAFETY: `option_target` answers the live buffer or window the scope
-    // names, and `curbuf`/`curwin` stand in for the other.
-    let buf = match target.scope == kOptScopeBuf {
-        true => unsafe { Buf::new(target.from.cast::<Buffer>()) },
-        false => Buf::current(),
-    };
-    // SAFETY: as above.
-    let win = match target.scope == kOptScopeWin {
-        true => unsafe { Win::new(target.from.cast()) },
-        false => Win::current(),
-    };
+    let buf = target.buf.unwrap_or_else(Buf::current);
+    let win = target.win.unwrap_or_else(Win::current);
     get_vimoption(name, target.opt_flags, buf, win)
 }

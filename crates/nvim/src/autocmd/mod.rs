@@ -69,7 +69,7 @@ use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AcoSave, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, BufferHandle, Callback, EStackType, Error,
     Event, ExArg, Expand, FuncCallEntry, Integer, LuaRetMode, Object, OptVal, ProfTime, SaveRedo,
-    SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, Window, int64_t, size_t, uint64_t,
+    SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, int64_t, size_t, uint64_t,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

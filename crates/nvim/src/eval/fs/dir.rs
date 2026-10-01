@@ -46,8 +46,8 @@ use crate::os::state::globaldir;
 use crate::path::{full_name_save, path_tail, path_tail_with_sep};
 use crate::tr_c;
 use crate::types::{
-    CdScope, EvalFuncData, MAXPATHL, OK, Tabpage, TypVal, VAR_NUMBER, VAR_STRING, VarNumber,
-    Window, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, uint64_t,
+    CdScope, EvalFuncData, MAXPATHL, OK, TypVal, VAR_NUMBER, VAR_STRING, VarNumber, kCdScopeGlobal,
+    kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, uint64_t,
 };
 use crate::window::find_tabpage;
 use crate::winlayer::{TabPage, Win};
@@ -183,8 +183,10 @@ struct Scope {
     /// the scope and moves the answer one rung up, 0 means the current
     /// object, and a positive number names one.
     number: [c_int; 2],
-    tp: *mut Tabpage,
-    win: *mut Window,
+    /// The tab page and window the numbers name, found while reading the
+    /// arguments and used before anything else runs.
+    tp: Option<TabPage>,
+    win: Option<Win>,
 }
 
 impl Scope {
@@ -193,8 +195,8 @@ impl Scope {
         let mut s = Self {
             scope: kCdScopeInvalid,
             number: [0, 0],
-            tp: TabPage::current_raw(),
-            win: Win::current_raw(),
+            tp: TabPage::current_or_none(),
+            win: Win::current_or_none(),
         };
 
         // Preconditions and scope extraction together.
@@ -228,8 +230,8 @@ impl Scope {
 
         // Find the tabpage by number.
         if s.number[tab_i] > 0 {
-            s.tp = find_tab(s.number[tab_i]).map_or(ptr::null_mut(), TabPage::raw);
-            if s.tp.is_null() {
+            s.tp = find_tab(s.number[tab_i]);
+            if s.tp.is_none() {
                 err0(c"E5000: Cannot find tab number.".as_ptr());
                 return None;
             }
@@ -242,9 +244,8 @@ impl Scope {
                 return None;
             }
             if s.number[win_i] > 0 {
-                s.win = find_win(args, unsafe { TabPage::from_raw(s.tp) })
-                    .map_or(ptr::null_mut(), Win::raw);
-                if s.win.is_null() {
+                s.win = find_win(args, s.tp);
+                if s.win.is_none() {
                     err0(c"E5002: Cannot find window number.".as_ptr());
                     return None;
                 }
@@ -386,12 +387,10 @@ pub fn f_getcwd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // then its tabpage's, then the global one, and finally the OS's own.
     let mut from: *const c_char = ptr::null();
     if s.scope == kCdScopeWindow {
-        debug_assert!(!s.win.is_null(), "win");
-        from = win_localdir(unsafe { Win::new(s.win) });
+        from = win_localdir(s.win.expect("a window scope names a window"));
     }
     if from.is_null() && (kCdScopeWindow..=kCdScopeTabpage).contains(&s.scope) {
-        debug_assert!(!s.tp.is_null(), "tp");
-        from = tab_localdir(unsafe { TabPage::new(s.tp) });
+        from = tab_localdir(s.tp.expect("a tab page scope names a tab page"));
     }
     if from.is_null() && (kCdScopeWindow..=kCdScopeGlobal).contains(&s.scope) {
         // `globaldir` is not always set.
@@ -418,12 +417,12 @@ pub fn f_haslocaldir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
     result.write_number(match s.scope {
         kCdScopeWindow => {
-            debug_assert!(!s.win.is_null(), "win");
-            !win_localdir(unsafe { Win::new(s.win) }).is_null() as VarNumber
+            let win = s.win.expect("a window scope names a window");
+            !win_localdir(win).is_null() as VarNumber
         }
         kCdScopeTabpage => {
-            debug_assert!(!s.tp.is_null(), "tp");
-            !tab_localdir(unsafe { TabPage::new(s.tp) }).is_null() as VarNumber
+            let tp = s.tp.expect("a tab page scope names a tab page");
+            !tab_localdir(tp).is_null() as VarNumber
         }
         kCdScopeInvalid => {
             // We should never get here: the read above defaulted it.

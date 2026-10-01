@@ -27,9 +27,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::{
-    Buffer, ColNr, DispTick, LPos, LineNr, MatchState, RegMMatch, RegProg, WinExtmark,
-};
+use crate::types::{ColNr, DispTick, LPos, LineNr, MatchState, RegMMatch, RegProg, WinExtmark};
 use core::ffi::c_int;
 
 /// The `ui_watched` extmarks the redraw in progress has passed positions for.
@@ -50,7 +48,6 @@ pub(crate) static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(Mat
         rmm_ic: 0,
         rmm_maxcol: 0,
     },
-    buf: ::core::ptr::null_mut::<Buffer>(),
     lnum: 0,
     attr: 0,
     attr_cur: 0,

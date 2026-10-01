@@ -143,7 +143,7 @@ pub fn win_alloc_aucmd_win(idx: c_int) {
         .flatten()
         .expect("the autocommand window");
     // SAFETY: `aucmd_win_vec` has been sized for `idx`.
-    unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = win.raw() };
+    unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = Some(win) };
     win.buffer().b_nwindows -= 1;
     win.w_onebuf_opt.wo_scb = 0;
     win.w_onebuf_opt.wo_crb = 0;

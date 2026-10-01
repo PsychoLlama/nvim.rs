@@ -203,10 +203,9 @@ pub fn garbage_collect(testing: bool) -> bool {
     let wins = aucmd_wins();
     for i in 0..wins.len() {
         // SAFETY: `i` is inside the table, whose windows are live.
-        let win = unsafe { (*wins.slot(i)).auc_win };
-        if !win.is_null() {
+        if let Some(win) = unsafe { (*wins.slot(i)).auc_win } {
             // SAFETY: as above.
-            let win = unsafe { Live::<Window>::new(win) };
+            let win = unsafe { Live::<Window>::new(win.raw()) };
             let winvar =
                 win.field_ptr::<TypVal>(offset_of!(Window, w_winvar) + offset_of!(DictItem, di_tv));
             // SAFETY: `winvar` is that window's own variable dictionary.

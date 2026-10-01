@@ -23,7 +23,6 @@ use crate::option::cpo_has;
 use crate::pos::MAXCOL;
 use crate::search::SEARCH_HL_PRIORITY;
 use crate::types::CpoFlag;
-use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 /// Walks `search_hl` together with a window's match list.
@@ -127,13 +126,11 @@ pub(crate) unsafe fn init_search_hl(window: Win, search_hl: *mut MatchState) {
                 syn_id2attr((*cur).mit_hlg_id)
             }
         };
-        unsafe { (*cur).mit_hl.buf = window.w_buffer };
         unsafe { (*cur).mit_hl.lnum = 0 };
         unsafe { (*cur).mit_hl.first_lnum = 0 };
         unsafe { (*cur).mit_hl.tm = profile_setlimit(p_rdt()) };
         cur = unsafe { (*cur).mit_next };
     }
-    search_hl.buf = window.w_buffer;
     search_hl.lnum = 0;
     search_hl.first_lnum = 0;
     search_hl.attr = win_hl_attr(window, HLF_L);
@@ -275,7 +272,7 @@ unsafe fn next_search_hl(
             // Not Vi-compatible, or an empty match: continue at the next
             // character, and stop if that is past the end of the line.
             let at = shl.rm.startpos[0].col;
-            let ml = unsafe { ml_get_buf(Buf::new(shl.buf), lnum).offset(at as isize) };
+            let ml = unsafe { ml_get_buf(win.buffer(), lnum).offset(at as isize) };
             if unsafe { *ml } == 0 {
                 shl.lnum = 0;
                 break;
@@ -300,8 +297,8 @@ unsafe fn next_search_hl(
             // SAFETY: the caller's match state, whose own `rm` and `tm` these
             // are; two addresses off the pointer rather than off a borrow.
             let (rm, tm) = unsafe { (&raw mut (*shl.raw()).rm, &raw mut (*shl.raw()).tm) };
-            let buf = unsafe { Buf::new(shl.buf) };
-            // SAFETY: the caller's window and buffer.
+            let buf = win.buffer();
+            // SAFETY: the caller's window and its buffer.
             let out = &raw mut timed_out;
             nmatched = unsafe { vim_regexec_multi(rm, Some(win), buf, lnum, matchcol, tm, out) };
             if regprog_is_copy {

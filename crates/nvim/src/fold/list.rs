@@ -278,9 +278,8 @@ impl FLine {
 
     /// The window whose folds are being computed.
     pub(super) fn win(self) -> Win {
-        // SAFETY: `new`'s caller promised a live `FoldLine` naming a live
-        // window.
-        unsafe { Win::new((*self.flp).wp) }
+        // SAFETY: `new`'s caller promised a live `FoldLine`.
+        unsafe { (*self.flp).win }
     }
 
     /// Current line number, relative to the start of the enclosing fold.

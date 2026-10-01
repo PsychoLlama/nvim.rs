@@ -35,9 +35,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
-use crate::mbyte::{
-    mb_check_adjust_col, utf_char2bytes, utf_char2len, utf_iscomposing, utf8len_tab,
-};
+use crate::mbyte::{utf_char2bytes, utf_char2len, utf_iscomposing, utf8len_tab};
 use crate::memory::xfree;
 use crate::message::state::{msg_col, msg_didout, msg_nowait};
 use crate::normal::{
@@ -560,7 +558,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     }
     checkpcmark();
     unsafe { xfree(ns.ca.searchbuf.cast::<c_void>()) };
-    unsafe { mb_check_adjust_col(Win::current_raw().cast::<c_void>()) };
+    Win::current().snap_cursor_to_char();
 
     if Win::current().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
         validate_cursor(Win::current());

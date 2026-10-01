@@ -14,6 +14,7 @@ use crate::guard::{Allow, Suppress};
 use crate::option::vars::P_ICM;
 use crate::types::{CmdLine, CmdModFlags, ExArgt, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
+use crate::winlayer::{BufId, WinId};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
 pub fn cmdpreview_get_bufnr() -> Handle {
@@ -203,7 +204,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
         let seen = saved_bufs.contains(&buf.raw());
         if !seen {
             let mut cp_bufinfo = CP_BUF_INFO_INIT;
-            cp_bufinfo.buf = buf.raw();
+            cp_bufinfo.buf = Some(buf.id());
             cp_bufinfo.save_b_p_ma = buf.b_p_ma;
             cp_bufinfo.save_b_p_ul = buf.b_p_ul;
             cp_bufinfo.save_b_changed = buf.b_changed;
@@ -220,7 +221,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
         }
 
         let mut cp_wininfo = CP_WIN_INFO_INIT;
-        cp_wininfo.win = win.raw();
+        cp_wininfo.win = Some(win.id());
         // Save the window's cursor position and view state.
         cp_wininfo.save_w_cursor = win.w_cursor;
         cp_wininfo.save_viewstate = save_viewstate(win);
@@ -254,13 +255,14 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
 /// Put back everything [`cmdpreview_prepare`] saved, undoing the preview's
 /// changes to every buffer it touched.
 pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
-    let mut i: size_t = 0;
-    while i < cpinfo.buf_info.size {
+    for i in 0..cpinfo.buf_info.size {
         // SAFETY: `buf_info` holds `size` initialised entries.
         let cp_bufinfo: CpBufInfo = unsafe { *cpinfo.buf_info.items.add(i) };
-        // SAFETY: the buffer was live when `cmdpreview_prepare` recorded it,
-        // and autocommands were blocked throughout the preview.
-        let mut buf = unsafe { Buf::new(cp_bufinfo.buf) };
+        // Autocommands were blocked throughout the preview, but its Lua
+        // callback was not: a buffer it wiped has nothing to restore.
+        let Some(mut buf) = cp_bufinfo.buf.and_then(BufId::get) else {
+            continue;
+        };
 
         buf.b_changed = cp_bufinfo.save_b_changed;
 
@@ -305,22 +307,21 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
 
         buf.b_p_ul = cp_bufinfo.save_b_p_ul;
         buf.b_p_ma = cp_bufinfo.save_b_p_ma;
-        i += 1;
     }
 
-    let mut i: size_t = 0;
-    while i < cpinfo.win_info.size {
+    for i in 0..cpinfo.win_info.size {
         // SAFETY: `win_info` holds `size` initialised entries.
         let cp_wininfo: CpWinInfo = unsafe { *cpinfo.win_info.items.add(i) };
-        // SAFETY: as the buffers above -- recorded live, autocommands blocked.
-        let mut win = unsafe { Win::new(cp_wininfo.win) };
+        // As the buffers above: a window the callback closed is skipped.
+        let Some(mut win) = cp_wininfo.win.and_then(WinId::get) else {
+            continue;
+        };
 
         win.w_cursor = cp_wininfo.save_w_cursor;
         restore_viewstate(win, cp_wininfo.save_viewstate);
         win.w_onebuf_opt.wo_cul = cp_wininfo.save_w_p_cul;
         win.w_onebuf_opt.wo_cuc = cp_wininfo.save_w_p_cuc;
         update_topline(win);
-        i += 1;
     }
 
     cmdmod.set(cpinfo.save_cmdmod.clone());

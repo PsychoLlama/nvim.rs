@@ -68,6 +68,7 @@ use crate::types::{
     DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorVirtText, MTKey, MTPair, MTPos,
     VirtTextPos, uint32_t,
 };
+use crate::winlayer::WinId;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 use core::slice;
@@ -226,9 +227,9 @@ pub fn decor_range_at(state: DecorStateRef, i: c_int) -> *mut DecorRange {
 /// `state` is holding cannot be trusted across a structural change.
 pub fn decor_state_invalidate(buffer: Buf) {
     decor_state.with_mut(|state| {
-        // SAFETY: `state.win` is a live window while a redraw is running.
-        if let Some(win) = unsafe { Win::from_raw(state.win) } {
-            state.itr_valid &= win.w_buffer != buffer.raw();
+        // The provider that called in may have closed the window.
+        if let Some(win) = state.win.and_then(WinId::get) {
+            state.itr_valid &= win.buffer() != buffer;
         }
     });
 }
@@ -248,7 +249,7 @@ pub fn decor_state_free(mut state: DecorStateRef) {
 /// to bother with the rest of the machinery.
 pub fn decor_redraw_reset(window: Win, mut state: DecorStateRef) -> bool {
     state.row = -1;
-    state.win = window.raw();
+    state.win = Some(window.id());
 
     for i in state.list_spans() {
         // Only the ephemeral virtual texts: an owned URL belongs to a range

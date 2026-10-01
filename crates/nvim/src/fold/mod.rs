@@ -113,7 +113,9 @@ pub struct Fold {
 /// What the per-'foldmethod' level computations are handed, and what they
 /// answer in.
 pub struct FoldLine {
-    pub wp: *mut Window,
+    /// The window whose folds are being computed, taken live by
+    /// `fold_update`; the computation is one call.
+    pub win: Win,
     /// Current line number.
     pub lnum: LineNr,
     /// Offset between `lnum` and the real line number.

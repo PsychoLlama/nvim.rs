@@ -18,7 +18,7 @@
 use super::*;
 use crate::cstr;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 
 /// The most bytes a UTF-8 sequence can occupy in this port's decoders, which
 /// is how far back a byte's lead can possibly be.
@@ -425,40 +425,40 @@ pub fn mb_adjust_cursor() {
     unsafe { mark_mb_adjustpos(buffer, cursor) }
 }
 
-/// Pull `win`'s cursor back onto a character start, and clear a `coladd` that
-/// no longer means anything.
-///
-/// `coladd == 1` is `'virtualedit'` saying "one cell into the character".
-/// That is only meaningful for a character that is *drawn* more than one cell
-/// wide; a Tab has its own rules, and an unprintable character is drawn as an
-/// escape whose cells are not the character's.
-///
-/// # Safety
-///
-/// `win_` must be a live `Window`.
-pub unsafe fn mb_check_adjust_col(win_: *mut c_void) {
-    let win = win_ as *mut Window;
-    let oldcol = unsafe { (*win).w_cursor.col };
-    if oldcol == 0 {
-        return;
-    }
-    let p = unsafe { ml_get_buf(Buf::new((*win).w_buffer), (*win).w_cursor.lnum) };
-    let len = unsafe { cstr::bytes_at(p) }.len() as ColNr;
-    if len == 0 || oldcol < 0 {
-        unsafe { (*win).w_cursor.col = 0 };
-    } else {
-        if oldcol > len {
-            unsafe { (*win).w_cursor.col = len - 1 };
+impl Win {
+    /// Pull this window's cursor back onto a character start, and clear a
+    /// `coladd` that no longer means anything. Upstream's
+    /// `mb_check_adjust_col`.
+    ///
+    /// `coladd == 1` is `'virtualedit'` saying "one cell into the character".
+    /// That is only meaningful for a character that is *drawn* more than one
+    /// cell wide; a Tab has its own rules, and an unprintable character is
+    /// drawn as an escape whose cells are not the character's.
+    pub(crate) fn snap_cursor_to_char(mut self) {
+        let oldcol = self.w_cursor.col;
+        if oldcol == 0 {
+            return;
         }
-        unsafe { (*win).w_cursor.col -= utf_head_off(p, p.offset((*win).w_cursor.col as isize)) };
-    }
-    let at_cursor = unsafe { p.offset((*win).w_cursor.col as isize) };
-    if unsafe { (*win).w_cursor.coladd } == 1
-        && unsafe { *at_cursor } as c_int != TAB
-        && unsafe { vim_isprintc(utf_ptr2char(at_cursor)) }
-        && unsafe { ptr2cells(at_cursor) } > 1
-    {
-        unsafe { (*win).w_cursor.coladd = 0 };
+        // SAFETY: the window's own buffer and cursor line; the pointer is
+        // read before anything else touches the memline.
+        let p = unsafe { ml_get_buf(self.buffer(), self.w_cursor.lnum) };
+        let len = unsafe { cstr::bytes_at(p) }.len() as ColNr;
+        if len == 0 || oldcol < 0 {
+            self.w_cursor.col = 0;
+        } else {
+            if oldcol > len {
+                self.w_cursor.col = len - 1;
+            }
+            self.w_cursor.col -= unsafe { utf_head_off(p, p.offset(self.w_cursor.col as isize)) };
+        }
+        let at_cursor = unsafe { p.offset(self.w_cursor.col as isize) };
+        if self.w_cursor.coladd == 1
+            && unsafe { *at_cursor } as c_int != TAB
+            && unsafe { vim_isprintc(utf_ptr2char(at_cursor)) }
+            && unsafe { ptr2cells(at_cursor) } > 1
+        {
+            self.w_cursor.coladd = 0;
+        }
     }
 }
 

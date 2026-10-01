@@ -153,8 +153,7 @@ use crate::types::{
     HistoryType, Integer, LineNr, Magic, MotionType, MsgList, Object, OpArg, OptInt, OptMagic,
     OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState,
     Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg, String_0, TryState, TypVal,
-    UVarNumber, UndoLink, UndoObjectType, VarNumber, Window, XpPrefix, size_t, time_t, uint8_t,
-    uint32_t,
+    UVarNumber, UndoLink, UndoObjectType, VarNumber, XpPrefix, size_t, time_t, uint8_t, uint32_t,
 };
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{
@@ -172,11 +171,11 @@ use crate::window::{
     WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
-use crate::winlayer::BufId;
 use crate::winlayer::Cc;
 use crate::winlayer::graph::{
     cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win,
 };
+use crate::winlayer::{BufId, WinId};
 use ::libc::{abort, strcpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.
@@ -360,7 +359,9 @@ pub struct CpBufInfoVec {
 }
 #[derive(Copy, Clone)]
 pub struct CpBufInfo {
-    pub buf: *mut Buffer,
+    /// The buffer saved. An id: the preview runs the command's Lua
+    /// `preview` callback between the save and the restore.
+    pub(crate) buf: Option<BufId>,
     pub save_b_p_ul: OptInt,
     pub save_b_p_ma: ::core::ffi::c_int,
     pub save_b_changed: ::core::ffi::c_int,
@@ -393,7 +394,8 @@ pub struct CpWinInfoVec {
 }
 #[derive(Copy, Clone)]
 pub struct CpWinInfo {
-    pub win: *mut Window,
+    /// The window saved. [`CpBufInfo::buf`]'s reason.
+    pub(crate) win: Option<WinId>,
     pub save_w_cursor: Pos,
     pub save_viewstate: ViewState,
     pub save_w_p_cul: ::core::ffi::c_int,
@@ -588,7 +590,7 @@ pub(crate) const CP_UNDO_INFO_INIT: CpUndoInfo = CpUndoInfo {
 
 /// An all-zero [`CpBufInfo`]; every field is assigned before it is pushed.
 pub(crate) const CP_BUF_INFO_INIT: CpBufInfo = CpBufInfo {
-    buf: ::core::ptr::null_mut::<Buffer>(),
+    buf: None,
     save_b_p_ul: 0,
     save_b_p_ma: 0,
     save_b_changed: 0,
@@ -600,7 +602,7 @@ pub(crate) const CP_BUF_INFO_INIT: CpBufInfo = CpBufInfo {
 
 /// An all-zero [`CpWinInfo`]; every field is assigned before it is pushed.
 pub(crate) const CP_WIN_INFO_INIT: CpWinInfo = CpWinInfo {
-    win: ::core::ptr::null_mut::<Window>(),
+    win: None,
     save_w_cursor: POS_INIT,
     save_viewstate: VIEWSTATE_INIT,
     save_w_p_cul: 0,

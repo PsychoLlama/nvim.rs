@@ -72,7 +72,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     }
     top = top.min(win.buffer().b_ml.ml_line_count);
     let mut fline = FoldLine {
-        wp: win.raw(),
+        win,
         lnum: 0,
         off: 0,
         lnum_save: 0,

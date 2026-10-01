@@ -10,6 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::winlayer::Win;
 
 #[derive(Clone)]
 pub struct AutoCmd {
@@ -81,7 +82,10 @@ impl Default for AcoSave {
 }
 
 pub struct AucmdWin {
-    pub auc_win: *mut Window,
+    /// The slot's window, `None` until `win_alloc_aucmd_win` makes it. The
+    /// slot owns it -- it is unregistered while idle, so no id finds it --
+    /// and nothing closes it but the exit path, so the handle stays good.
+    pub auc_win: Option<Win>,
     pub auc_win_used: bool,
 }
 

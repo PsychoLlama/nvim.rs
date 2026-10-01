@@ -48,7 +48,7 @@ use crate::types::{
     ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorRangeKind,
     DecorSignHighlight, DecorState, DecorVirtText, HlMode, LPos, LineNr, MTKey, MTNode, MTPos,
     MarkTreeIter, MarkTreeIterLevel, MetaIndex, VirtLines, VirtText, VirtTextChunk, VirtTextPos,
-    Window, int32_t, uint8_t, uint16_t, uint32_t, virt_line,
+    int32_t, uint8_t, uint16_t, uint32_t, virt_line,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
@@ -86,7 +86,7 @@ pub(crate) static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorSta
     future_begin: 0,
     free_slot_i: 0,
     new_range_ordering: 0,
-    win: ::core::ptr::null_mut::<Window>(),
+    win: None,
     top_row: 0,
     row: 0,
     col_last: 0,
@@ -475,7 +475,7 @@ pub unsafe fn decor_check_to_be_deleted() {
     unsafe { decor_free_inner(TO_FREE_VIRT.get(), TO_FREE_SH.get()) };
     TO_FREE_VIRT.set(ptr::null_mut());
     TO_FREE_SH.set(DECOR_ID_INVALID);
-    state.win = ptr::null_mut();
+    state.win = None;
 }
 
 /// Frees the chunks of a virtual text and empties it.

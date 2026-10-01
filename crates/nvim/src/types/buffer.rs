@@ -688,7 +688,6 @@ pub struct LLPos {
 #[derive(Clone)]
 pub struct MatchState {
     pub rm: RegMMatch,
-    pub buf: *mut Buffer,
     pub lnum: LineNr,
     pub attr: ::core::ffi::c_int,
     pub attr_cur: ::core::ffi::c_int,

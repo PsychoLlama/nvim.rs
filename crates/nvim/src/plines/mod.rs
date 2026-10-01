@@ -98,14 +98,10 @@ impl Buf {
 }
 
 impl CharsizeArg {
-    /// The window this walk measures in.
-    ///
-    /// Safe here: a `CharsizeArg` only reaches these functions through
-    /// [`init_charsize_arg`], whose `# Safety` section is where the promise
-    /// that `win` is live was taken.
+    /// The window this walk measures in, taken live by
+    /// [`init_charsize_arg`].
     fn window(&self) -> Win {
-        // SAFETY: as above.
-        unsafe { Win::new(self.win) }
+        self.win
     }
 }
 
@@ -225,7 +221,7 @@ pub(crate) unsafe fn init_charsize_arg(
     lnum: LineNr,
     line: *mut c_char,
 ) -> CharsizeKind {
-    csarg.win = window.raw();
+    csarg.win = window;
     csarg.line = line;
     csarg.max_head_vcol = 0;
     csarg.cur_text_width_left = 0;
@@ -655,7 +651,7 @@ pub(crate) unsafe fn charsize_fast(
     cur_char: int32_t,
 ) -> CharSize {
     // SAFETY: `csarg` is initialised and `cur` points into its line.
-    unsafe { charsize_fast_impl(Win::new(csarg.win), cur, csarg.use_tabstop, vcol, cur_char) }
+    unsafe { charsize_fast_impl(csarg.win, cur, csarg.use_tabstop, vcol, cur_char) }
 }
 
 /// Dispatch to whichever charsize function `init_charsize_arg` chose.
@@ -774,13 +770,9 @@ pub(crate) fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: ColNr
     let line = csarg.line;
     let mut vcol = vcol_arg as int64_t;
 
-    // Built once: `Win::new` reads the window's handle out of the object, and
-    // the loop below runs it per *character* of the line. Nothing it calls can
-    // close a window, so the handle `csarg` promises is good for all of it --
-    // p28-16 measured the per-character build at 8.8% of `scrbench`.
-    //
-    // SAFETY: `csarg` is initialised, so `csarg.win` is a live window.
-    let wp = unsafe { Win::new(csarg.win) };
+    // Nothing the loop below calls can close a window, so the handle `csarg`
+    // took is good for all of it.
+    let wp = csarg.win;
     // SAFETY: `csarg` is initialised, so its line is NUL-terminated.
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     // SAFETY: `ci` walks that line, so both the length test and the step are

@@ -89,7 +89,7 @@ impl AucmdWins {
             };
         }
         let empty = AucmdWin {
-            auc_win: ::core::ptr::null_mut(),
+            auc_win: None,
             auc_win_used: false,
         };
         unsafe {
@@ -101,15 +101,15 @@ impl AucmdWins {
 
 /// Whether `win` is one of the autocommand windows currently in use.
 ///
-/// Safe, and it keeps the raw pointer on purpose: `win` is only ever
-/// *compared*, never dereferenced, so a caller may hand it an address an
-/// autocommand has already freed — exactly as `win_valid` is.
+/// Safe: `win` is only ever *compared*, never dereferenced, so a caller may
+/// hand it an address an autocommand has already freed — exactly as
+/// `win_valid` is.
 pub(crate) fn is_aucmd_win(win: Win) -> bool {
     let vec = aucmd_wins();
     (0..vec.len()).any(|i| {
         // SAFETY: `i` is below `len`, so the slot is initialised.
         let entry = unsafe { &*vec.slot(i) };
-        entry.auc_win_used && core::ptr::eq(entry.auc_win, win.raw())
+        entry.auc_win_used && entry.auc_win == Some(win)
     })
 }
 
@@ -135,7 +135,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
 
     // Allocate an autocommand window when there is no window to use.
     let mut need_append = true;
-    let mut auc_win: *mut Window = ::core::ptr::null_mut();
+    let mut auc_win: Option<Win> = None;
     let mut auc_idx = aucmd_wins().len();
     if win.is_none() {
         auc_idx = 0;
@@ -151,7 +151,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
 
         // The slot may have been pushed empty either just now or by an
         // earlier nesting level that has since given it back.
-        if unsafe { (*entry(auc_idx)).auc_win.is_null() } {
+        if unsafe { (*entry(auc_idx)).auc_win.is_none() } {
             win_alloc_aucmd_win(auc_idx as ::core::ffi::c_int);
             need_append = false;
         }
@@ -172,10 +172,11 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, mut buffer: Buf) {
         // No window shows "buf", so borrow the autocommand window and
         // put it in the current tab page.
         unsafe { (*aco).use_aucmd_win_idx = auc_idx as ::core::ffi::c_int };
-        // SAFETY: the slot's window, allocated or reused just above. The
-        // field writes below stay raw on purpose: `w_s` is handed a pointer
-        // *into* `buffer`, and a write through a handle would pop it.
-        let auc = unsafe { Win::new(auc_win) };
+        // The slot's window, allocated or reused just above. The field
+        // writes below stay raw on purpose: `w_s` is handed a pointer *into*
+        // `buffer`, and a write through a handle would pop it.
+        let auc = auc_win.expect("the slot was given a window above");
+        let auc_win = auc.raw();
         unsafe { (*auc_win).w_buffer = buffer.raw() };
         unsafe { (*auc_win).w_s = &raw mut buffer.b_s };
         buffer.b_nwindows += 1;
@@ -235,14 +236,15 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
     if unsafe { (*aco).use_aucmd_win_idx } >= 0 {
         let idx = unsafe { (*aco).use_aucmd_win_idx } as usize;
         let awp = unsafe { (*aucmd_wins().slot(idx)).auc_win };
+        let aw = awp.expect("a slot in use has its window");
 
         // Go to `awp`.  It cannot have been closed, but the autocommand
         // may have moved it to another tab page.
         block_autocmds();
-        if Win::current_raw() != awp {
+        if Win::current_or_none() != awp {
             'found: for tp in tabs() {
                 for wp in windows_in_tab(tp) {
-                    if wp.raw() == awp {
+                    if Some(wp) == awp {
                         if !tp.is_current() {
                             goto_tabpage_tp(tp, true, true);
                         }
@@ -296,12 +298,13 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         prevwin.set(win_find_by_handle(unsafe { (*aco).save_prevwin_handle }).map(Win::id));
         // Free the autocommand window's `w:` variables, keeping the
         // hashtab for the next borrower.
-        unsafe { vars_clear(&raw mut (*(*awp).w_vars).dv_hashtab) };
-        unsafe { hash_init(&raw mut (*(*awp).w_vars).dv_hashtab) };
+        let vars = aw.w_vars;
+        unsafe { vars_clear(&raw mut (*vars).dv_hashtab) };
+        unsafe { hash_init(&raw mut (*vars).dv_hashtab) };
 
         // A `:lcd` inside the autocommand window has to be undone
         // *before* `tp_localdir` and `globaldir` come back.
-        if !unsafe { (*awp).w_localdir.is_null() } {
+        if !aw.w_localdir.is_null() {
             win_fix_current_dir();
         }
         unsafe { xfree(TabPage::current().tp_localdir.cast::<::core::ffi::c_void>()) };

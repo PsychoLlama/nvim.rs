@@ -12,6 +12,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
+use crate::winlayer::WinId;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -169,7 +170,9 @@ pub struct DecorState {
     pub future_begin: ::core::ffi::c_int,
     pub free_slot_i: ::core::ffi::c_int,
     pub new_range_ordering: ::core::ffi::c_int,
-    pub win: *mut Window,
+    /// The window being drawn, between `decor_redraw_reset` and the end of
+    /// the redraw. An id: a decoration provider's Lua runs in between.
+    pub(crate) win: Option<WinId>,
     pub top_row: ::core::ffi::c_int,
     pub row: ::core::ffi::c_int,
     pub col_last: ::core::ffi::c_int,
