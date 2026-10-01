@@ -45,8 +45,8 @@ count	callee	no_raw	defs	def
 42	key_bytes	0	1	crates/nvim/src/api/private/dispatch/mod.rs
 40	copy_option_part	0	1	crates/nvim/src/option/query.rs
 40	strcpy	0	0	
-39	Tv::new	0	67	
 39	tv_copy	0	0	
+38	Tv::new	0	67	
 38	shada_free_shada_entry	0	1	crates/nvim/src/shada/read.rs
 37	utf_head_off	0	1	crates/nvim/src/mbyte/walk.rs
 35	fclose	0	0	

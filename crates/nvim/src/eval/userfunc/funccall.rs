@@ -944,8 +944,9 @@ pub fn set_ref_in_func_args(copy_id: c_int) -> bool {
     // borrow across the walk is sound.
     funcargs.with(|args| {
         args.iter().any(|&tv| {
-            // SAFETY: each entry points at a live caller's argument.
-            unsafe { set_ref_in_item(&mut *tv, copy_id, ptr::null_mut(), ptr::null_mut()) }
+            // SAFETY: each entry points at a live caller's argument, which
+            // the caller only reads while it is pushed.
+            unsafe { set_ref_in_item(&*tv, copy_id, ptr::null_mut(), ptr::null_mut()) }
         })
     })
 }

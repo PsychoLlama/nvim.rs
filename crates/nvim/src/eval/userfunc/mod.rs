@@ -208,8 +208,10 @@ static func_hashtab: GlobalCell<HashTab> = GlobalCell::new(HashTab::new());
 /// Only kept while `v:testing` is set: `test_garbagecollect_now()` marks
 /// through it so that a value living only in a caller's argument array is not
 /// collected. The entries are borrowed -- each points into a caller's own
-/// `argvars` -- which is why this is a `Vec` of pointers and not of values.
-static funcargs: GlobalCell<Vec<*mut TypVal>> = GlobalCell::new(Vec::new());
+/// `argvars` -- which is why this is a `Vec` of pointers and not of values,
+/// and they are `*const` because marking only reads them: the caller holds
+/// its arguments by shared borrow for the whole call.
+static funcargs: GlobalCell<Vec<*const TypVal>> = GlobalCell::new(Vec::new());
 static current_funccal: GlobalCell<*mut FuncCall> = GlobalCell::new(ptr::null_mut());
 static previous_funccal: GlobalCell<*mut FuncCall> = GlobalCell::new(ptr::null_mut());
 

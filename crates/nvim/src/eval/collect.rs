@@ -446,7 +446,7 @@ pub unsafe fn set_ref_in_ht(
                 let tv = unsafe { &raw mut (*hi2di(hi)).di_tv };
                 let stack = &raw mut ht_stack;
                 // SAFETY: as above.
-                abort = abort || unsafe { set_ref_in_item(&mut *tv, copy_id, stack, list_stack) };
+                abort = abort || unsafe { set_ref_in_item(&*tv, copy_id, stack, list_stack) };
             }
         }
         // The stack is drained even while aborting, so nothing leaks.
@@ -479,8 +479,7 @@ pub unsafe fn set_ref_in_list_items(
             if abort {
                 break;
             }
-            abort =
-                unsafe { set_ref_in_item(&mut li.li_tv, copy_id, ht_stack, &raw mut list_stack) };
+            abort = unsafe { set_ref_in_item(&li.li_tv, copy_id, ht_stack, &raw mut list_stack) };
         }
         if list_stack.is_null() {
             break;
@@ -585,8 +584,8 @@ pub(crate) unsafe fn set_ref_in_item_partial(
     if !unsafe { (*pt).pt_dict }.is_null() {
         // A borrowed view, not an owner: the partial keeps the reference,
         // so `dtv` releases nothing.
-        let mut dtv = ManuallyDrop::new(TypVal::dict(unsafe { DictRef::owning((*pt).pt_dict) }));
-        abort = abort || unsafe { set_ref_in_item(&mut dtv, copy_id, ht_stack, list_stack) };
+        let dtv = ManuallyDrop::new(TypVal::dict(unsafe { DictRef::owning((*pt).pt_dict) }));
+        abort = abort || unsafe { set_ref_in_item(&dtv, copy_id, ht_stack, list_stack) };
     }
     // SAFETY: `pt` is a live partial, so it holds `pt_argc` bound
     // arguments and `pt_argv` names them.
@@ -594,7 +593,7 @@ pub(crate) unsafe fn set_ref_in_item_partial(
         // SAFETY: as above -- `i` is one of them.
         let arg = unsafe { (*pt).pt_argv.offset(i as isize) };
         // SAFETY: as above; the stacks are the caller's.
-        abort = abort || unsafe { set_ref_in_item(&mut *arg, copy_id, ht_stack, list_stack) };
+        abort = abort || unsafe { set_ref_in_item(&*arg, copy_id, ht_stack, list_stack) };
     }
     abort
 }
@@ -602,21 +601,22 @@ pub(crate) unsafe fn set_ref_in_item_partial(
 /// Mark whatever a typval holds. The scalar types hold nothing
 /// collectable and fall through.
 ///
+/// Marking writes the containers' `copyID`s, never the typval, so a shared
+/// borrow is all it needs -- which is what lets a caller mark through a
+/// value it can only see.
+///
 /// # Safety
-/// `tv` must be valid; the stacks null or valid.
+/// The stacks null or valid.
 pub unsafe fn set_ref_in_item(
-    tv: &mut TypVal,
+    tv: &TypVal,
     copy_id: c_int,
     ht_stack: *mut *mut HtStack,
     list_stack: *mut *mut ListStack,
 ) -> bool {
-    // SAFETY: the caller's promise -- the typval outlives the call, and the
-    // union member each arm reads is the one its `v_type` names; the stacks
-    // are the caller's.
-    let tv = unsafe { Tv::new(tv) };
     let (ht, ls) = (ht_stack, list_stack);
+    // SAFETY: a container a live value holds is live; the stacks are the
+    // caller's.
     match tv.v_type() {
-        // SAFETY: as above.
         VAR_DICT => unsafe { set_ref_in_item_dict(tv.dict_or_null(), copy_id, ht, ls) },
         VAR_LIST => unsafe { set_ref_in_item_list(tv.list_or_null(), copy_id, ht, ls) },
         // A Funcref names a function, which may be a closure holding a

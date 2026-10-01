@@ -64,11 +64,7 @@ pub unsafe fn get_func_tv(
         // know which variables are used on the call stack.
         let pushed = if get_vim_var_nr(Vv::Testing) != 0 {
             funcargs.with_mut(|args| {
-                args.extend(
-                    argvars.args()[..argcount]
-                        .iter()
-                        .map(|tv| ptr::from_ref(tv).cast_mut()),
-                );
+                args.extend(argvars.args()[..argcount].iter().map(ptr::from_ref));
             });
             argcount
         } else {

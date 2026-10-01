@@ -216,9 +216,9 @@ pub unsafe fn set_ref_in_callback(
             // SAFETY: a made-up owner of the callback's reference, in a
             // `ManuallyDrop` so that nothing ever releases it.
             let held = unsafe { PartialRef::owning(*partial) };
-            let mut tv = ManuallyDrop::new(TypVal::partial(held));
+            let tv = ManuallyDrop::new(TypVal::partial(held));
             // SAFETY: `tv` is this frame's, and the stacks are the caller's.
-            unsafe { set_ref_in_item(&mut tv, copy_id, ht_stack, list_stack) }
+            unsafe { set_ref_in_item(&tv, copy_id, ht_stack, list_stack) }
         }
         // A Lua reference is the Lua garbage collector's, not this one's,
         // and nothing that reaches here should hold one.
@@ -249,9 +249,9 @@ pub(crate) unsafe fn set_ref_in_callback_reader(
     if !self_dict.is_null() {
         // As above: the reader keeps the reference.
         // SAFETY: the reader's own dictionary, which it keeps.
-        let mut tv = ManuallyDrop::new(TypVal::dict(unsafe { DictRef::owning(self_dict) }));
+        let tv = ManuallyDrop::new(TypVal::dict(unsafe { DictRef::owning(self_dict) }));
         // SAFETY: `tv` is this frame's, and the stacks are the caller's.
-        return unsafe { set_ref_in_item(&mut tv, copy_id, ht_stack, list_stack) };
+        return unsafe { set_ref_in_item(&tv, copy_id, ht_stack, list_stack) };
     }
     false
 }
