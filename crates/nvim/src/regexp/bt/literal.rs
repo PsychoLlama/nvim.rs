@@ -157,24 +157,19 @@ fn emit_combining_marks() {
 /// `\~`: the text of the last `:substitute` replacement, as literal
 /// characters.
 pub(crate) fn previous_substitute(flagp: &mut c_int) -> *mut uint8_t {
-    // SAFETY: `reg_prev_sub` is either null or a NUL-terminated copy of the
-    // replacement, owned by the substitute code.
-    let sub = reg_prev_sub.get().cast::<uint8_t>();
-    if sub.is_null() {
+    let Some(sub) = reg_prev_sub.with(Clone::clone) else {
         emsg(gettext(e_nopresub));
         rc_did_emsg.set(true);
         return core::ptr::null_mut();
-    }
+    };
     let ret = regnode(BtOp::Exactly);
-    let mut end = sub;
-    while c_int::from(unsafe { *end }) != NUL {
-        regc(c_int::from(unsafe { *end }));
-        end = unsafe { end.add(1) };
+    for &byte in sub.iter() {
+        regc(c_int::from(byte));
     }
     regc(NUL);
-    if c_int::from(unsafe { *sub }) != NUL {
+    if !sub.is_empty() {
         *flagp |= HASWIDTH;
-        if unsafe { end.offset_from(sub) } == 1 {
+        if sub.len() == 1 {
             *flagp |= SIMPLE;
         }
     }

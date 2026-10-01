@@ -1,17 +1,17 @@
 count	callee	no_raw	defs	def
-843	xfree	0	1	crates/nvim/src/memory/mod.rs
-727	.add	0	3	
+840	xfree	0	1	crates/nvim/src/memory/mod.rs
+725	.add	0	3	
 447	.offset	0	0	
 444	bytes_at	0	1	crates/nvim/src/cstr.rs
 340	c_str	0	1	crates/nvim/src/message_fmt/mod.rs
 319	at	0	3	
 280	CStr::from_ptr	0	2	
-238	.offset_from	0	0	
+237	.offset_from	0	0	
 179	xstrdup	0	1	crates/nvim/src/memory/mod.rs
 171	.as_ref	0	0	
 171	dispatch	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
-154	from_raw_parts	0	0	
-151	xmalloc	0	1	crates/nvim/src/memory/mod.rs
+155	from_raw_parts	0	0	
+150	xmalloc	0	1	crates/nvim/src/memory/mod.rs
 130	skipwhite	0	1	crates/nvim/src/charset/walk.rs
 117	utf_ptr2char	0	1	crates/nvim/src/mbyte/utf8/mod.rs
 112	utfc_ptr2len	0	1	crates/nvim/src/mbyte/utf8/mod.rs
@@ -41,10 +41,10 @@ count	callee	no_raw	defs	def
 45	fprintf	0	0	
 44	eq	0	1	crates/nvim/src/cstr.rs
 44	pop_keydict	0	1	crates/nvim/src/lua/api_wrappers/mod.rs
-43	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
 42	key_bytes	0	1	crates/nvim/src/api/private/dispatch/mod.rs
+42	xstrnsave	0	1	crates/nvim/src/strings/mod.rs
 40	copy_option_part	0	1	crates/nvim/src/option/query.rs
-40	strcpy	0	0	
+39	strcpy	0	0	
 39	tv_copy	0	0	
 38	Tv::new	0	67	
 38	shada_free_shada_entry	0	1	crates/nvim/src/shada/read.rs

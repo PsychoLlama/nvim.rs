@@ -21,13 +21,14 @@
 
 pub(crate) mod state;
 use crate::global_cell::GlobalCell;
+use crate::memory::XString;
 use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     ColNr, LPos, LineNr, Magic, MarkGet, ProfTime, RegEngine, RegMMatch, RegMatch, int16_t,
-    int64_t, size_t, uint8_t,
+    int64_t, uint8_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -303,8 +304,10 @@ crate::flag_set! {
     /// neither is in any of the ranges above.
     const WHITE = 0x100;
 }
-static reg_prev_sub: GlobalCell<*mut c_char> = GlobalCell::new(core::ptr::null_mut::<c_char>());
-static reg_prev_sublen: GlobalCell<size_t> = GlobalCell::new(0);
+/// The last `:substitute` replacement, after its own `~`s were expanded:
+/// what the next `~` (and a `\~` in a pattern) stands for. `None` until a
+/// substitution has run, and after one with an empty replacement.
+static reg_prev_sub: GlobalCell<Option<XString>> = GlobalCell::new(None);
 const REGEXP_INRANGE: &CStr = c"]^-n\\";
 const REGEXP_ABBR: &CStr = c"nrtebdoxuU";
 pub const RF_ICASE: c_int = 1;
@@ -332,8 +335,6 @@ pub const REG_NPAREN: c_int = 3;
 static reg_cpo_lit: GlobalCell<c_int> = GlobalCell::new(0);
 static at_start: GlobalCell<c_int> = GlobalCell::new(0);
 static prev_at_start: GlobalCell<c_int> = GlobalCell::new(0);
-static reg_tofree: GlobalCell<*mut uint8_t> = GlobalCell::new(core::ptr::null_mut::<uint8_t>());
-static reg_tofreelen: GlobalCell<c_uint> = GlobalCell::new(0);
 static rex: GlobalCell<RegExec> = GlobalCell::new(RegExec {
     reg_match: core::ptr::null_mut::<RegMatch>(),
     reg_mmatch: core::ptr::null_mut::<RegMMatch>(),

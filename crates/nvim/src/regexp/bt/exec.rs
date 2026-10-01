@@ -23,7 +23,6 @@ use super::matcher::regmatch;
 use super::state::{BT_STATE, capture_slot};
 use crate::getchar::state::got_int;
 use crate::mbyte::{mb_tolower, utf_fold, utf_ptr2char, utfc_ptr2len};
-use crate::memory::xfree;
 use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
@@ -33,7 +32,7 @@ use crate::regexp::{
     MatchPos, NSUBEXP, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN, Rex,
     cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec, init_regexec_multi,
     make_extmatch, prog_magic_wrong, reg_endzp, reg_endzpos, reg_getline, reg_startzp,
-    reg_startzpos, reg_tofree, reg_tofreelen, reg_toolong, unref_extmatch,
+    reg_startzpos, reg_toolong, trim_line_copy, unref_extmatch,
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
@@ -43,10 +42,6 @@ use crate::types::{
 /// How many start columns may be tried between two reads of the caller's
 /// time limit.
 const TIME_CHECK_INTERVAL: c_int = 20;
-
-/// How large `reg_tofree` — the copy of the line a `\n`-crossing match works
-/// over — may be left lying around between matches.
-const REG_TOFREE_KEEP: u32 = 400;
 
 /// Try to match the whole pattern starting at column `col`.
 ///
@@ -174,11 +169,7 @@ unsafe fn aim_at_capture_arrays(rex: Rex, line: *mut uint8_t) -> *mut uint8_t {
 /// gives them back. `bt_regexec_both` is not re-entered — nothing the matcher
 /// runs calls back into the editor — so one set of them is enough.
 fn trim_working_set() {
-    if reg_tofreelen.get() > REG_TOFREE_KEEP {
-        // SAFETY: `reg_tofree` is this engine's own line copy.
-        unsafe { xfree(reg_tofree.get().cast()) };
-        reg_tofree.set(core::ptr::null_mut());
-    }
+    trim_line_copy();
     // SAFETY: no match is running, so nothing else holds the state — see
     // `BT_STATE` for why it is taken raw.
     unsafe { (*BT_STATE.ptr()).trim() };

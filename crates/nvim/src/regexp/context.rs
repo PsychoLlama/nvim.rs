@@ -26,13 +26,13 @@ use super::submatch::Rsm;
 use super::{
     BtProg, MULTI_MULT, NSUBEXP, RA_FAIL, RA_MATCH, RA_NOMATCH, REGMAGIC, Rex, cstrncmp,
     nfa_regengine, peekchr, re_multi_type, reg_endzp, reg_endzpos, reg_startzp, reg_startzpos,
-    reg_tofree, reg_tofreelen,
 };
 use crate::charset::vim_iswordc_buf;
 use crate::getchar::state::got_int;
+use crate::global_cell::GlobalCell;
 use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
-use crate::memory::{xcalloc, xfree, xmalloc};
+use crate::memory::{xcalloc, xfree};
 use crate::message::e_re_corr;
 use crate::message::emsg;
 use crate::normal::{VisualMode, visual_ever_started, visual_selection};
@@ -44,7 +44,6 @@ use crate::regexp::RE_NOBREAK;
 use crate::regexp::state::rc_did_emsg;
 use crate::semsg;
 use crate::types::{ColNr, LPos, LineNr, RegExtMatch, RegMMatch, RegMatch, uint8_t};
-use ::libc::strcpy;
 
 use crate::winlayer::{Buf, Win};
 /// Let the user interrupt a long match, unless the caller asked for an
@@ -421,28 +420,45 @@ pub(crate) fn match_with_backref(
     }
 }
 
-/// Move the line being matched into this module's scratch buffer, growing it
-/// when the line no longer fits, and re-anchor the cursor onto the copy.
+/// The copy of the line a back-reference match works over: see
+/// [`take_line_copy`]. Kept between matches so an ordinary one never
+/// allocates; [`trim_line_copy`] gives back what a long line grew it to.
+static LINE_COPY: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
+
+/// How much of [`LINE_COPY`] may be left lying around between matches.
+const LINE_COPY_KEEP: usize = 400;
+
+/// Move the line being matched into this module's scratch buffer and
+/// re-anchor the cursor onto the copy.
 ///
 /// Fetching another line hands out the memline's own buffer, which can
 /// invalidate the one the match is standing on; the copy is what makes a
 /// back-reference able to read both.
 fn take_line_copy(rex: Rex) {
-    if rex.line() == reg_tofree.get() {
-        return;
-    }
-    // SAFETY: `rex.line` is the NUL-terminated line being matched, and
-    // `reg_tofree` is this module's own allocation, grown to fit it here.
-    let mut len = unsafe { cstr::bytes_at(rex.line().cast()) }.len() as c_int;
-    if reg_tofree.get().is_null() || len >= reg_tofreelen.get() as c_int {
-        len += 50;
-        unsafe { xfree(reg_tofree.get().cast()) };
-        reg_tofree.set(unsafe { xmalloc(len as usize) } as *mut uint8_t);
-        reg_tofreelen.set(len as u32);
-    }
-    unsafe { strcpy(reg_tofree.get().cast(), rex.line().cast()) };
     let col = rex.col();
-    rex.seek(reg_tofree.get(), col);
+    LINE_COPY.with_mut(|copy| {
+        if rex.line() == copy.as_mut_ptr() {
+            return;
+        }
+        // SAFETY: `rex.line` is the NUL-terminated line being matched, and
+        // not the copy, so refilling the copy cannot move it.
+        let line = unsafe { cstr::bytes_at(rex.line().cast()) };
+        copy.clear();
+        copy.extend_from_slice(line);
+        copy.push(0);
+        rex.seek(copy.as_mut_ptr(), col);
+    });
+}
+
+/// Give back the line copy if a long line grew it past what is worth
+/// keeping. Called between matches only: the running match's line may be
+/// the copy.
+pub(crate) fn trim_line_copy() {
+    LINE_COPY.with_mut(|copy| {
+        if copy.capacity() > LINE_COPY_KEEP {
+            *copy = Vec::new();
+        }
+    });
 }
 
 /// Reject a repeat applied to `what`, a zero-width atom such as `\zs`.

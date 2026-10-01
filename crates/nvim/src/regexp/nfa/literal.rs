@@ -19,7 +19,7 @@ use crate::siemsg;
 use core::ffi::{c_char, c_int};
 
 use super::{Parsed, Rejected, cursor, postfix};
-use crate::mbyte::{utf_char2len, utf_ptr2char, utf_ptr2len};
+use crate::mbyte::{char_at, char_len, utf_char2len};
 use crate::message::e_nopresub;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -27,7 +27,6 @@ use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     RF_HASNL, Rex, getchr, magic, peekchr, reg_prev_sub, regflags, seen_endbrace, unmagic,
 };
-use crate::types::NUL;
 
 /// The `\x` class shorthands, in the order upstream's two parallel tables
 /// (`classchars` and `nfa_classcodes`) paired them. The `\_x` form of each is
@@ -123,24 +122,22 @@ pub(crate) fn back_reference(rex: Rex, c: c_int) -> Parsed {
 /// characters wrapped in a group so that a repeat after it applies to the
 /// whole run.
 pub(crate) fn previous_substitute() -> Parsed {
-    // SAFETY: `reg_prev_sub` is either null or a NUL-terminated copy of the
-    // replacement, owned by the substitute code.
-    let sub = reg_prev_sub.get();
-    if sub.is_null() {
+    let Some(sub) = reg_prev_sub.with(Clone::clone) else {
         emsg(gettext(e_nopresub));
         return Err(Rejected);
-    }
-    let mut p = sub;
-    while c_int::from(unsafe { *p }) != NUL {
-        let (c, len) = unsafe { (utf_ptr2char(p), utf_ptr2len(p)) };
-        let len = usize::try_from(len).expect("a character is at least one byte");
+    };
+    let mut rest: &[u8] = &sub;
+    let mut first = true;
+    while !rest.is_empty() {
+        let (c, len) = (char_at(rest), char_len(rest));
         postfix::emit(c);
         // The join goes after the second and every later character, so
         // the run reads as `a b CONCAT c CONCAT …`.
-        if p != sub {
+        if !first {
             postfix::emit_op(NfaOp::Concat);
         }
-        p = unsafe { p.add(len) };
+        first = false;
+        rest = &rest[len..];
     }
     postfix::emit_op(NfaOp::Nopen);
     Ok(())

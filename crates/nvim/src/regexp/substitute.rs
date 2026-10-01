@@ -31,7 +31,7 @@ use super::submatch::{Rsm, fill_submatch_list};
 use super::{
     CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC,
     RegSubMatch, Rex, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
-    reg_prev_sub, reg_prev_sublen, rsm,
+    reg_prev_sub, rsm,
 };
 use crate::eval::typval::{ListRef, NumBuf, TV_INITIAL_VALUE, list_init_static, tv_clear};
 use crate::eval::userfunc::call_func;
@@ -41,12 +41,12 @@ use crate::keycodes::{Ctrl_H, K_SPECIAL};
 use crate::mbyte::{
     mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::{XString, xfree, xmalloc, xstrdup};
 use crate::message::{e_null, e_re_damg, e_resulting_text_too_long};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
-use crate::strings::{vim_strsave_escaped, xstrnsave};
+use crate::strings::vim_strsave_escaped;
 use crate::types::{
     FuncExe, LineNr, List, NUL, Partial, RegMMatch, RegMatch, TypVal, VAR_FUNC, VAR_PARTIAL,
     VAR_UNKNOWN, uint8_t,
@@ -248,9 +248,10 @@ enum Outcome {
 ///
 /// `source` must point at a NUL-terminated string, unaliased for the call.
 pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) -> *mut c_char {
-    // SAFETY: `source` is the caller's NUL-terminated replacement text, and
-    // `reg_prev_sub` is null or a NUL-terminated string of `reg_prev_sublen`
-    // bytes that this function is the sole writer of.
+    // SAFETY: `source` is the caller's NUL-terminated replacement text.
+    // What a `~` expands into is a copy, so storing the new text below cannot
+    // pull it out from under the expansion.
+    let prev: Option<XString> = reg_prev_sub.with(Clone::clone);
     let tilde = if magic != 0 { c"~" } else { c"\\~" };
     let tildelen = tilde.count_bytes();
 
@@ -278,14 +279,15 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
         }
         newsublen -= tildelen;
         let postfixlen = newsublen - prefixlen;
-        let tmpsublen = prefixlen + reg_prev_sublen.get() + postfixlen;
+        let prev_len = prev.as_ref().map_or(0, |prev| prev.len());
+        let tmpsublen = prefixlen + prev_len + postfixlen;
 
-        if tmpsublen == 0 || reg_prev_sub.get().is_null() {
+        let Some(prev) = prev.as_ref().filter(|_| tmpsublen != 0) else {
             // Nothing to expand into: drop the tilde, NUL included, and
             // rescan from where it was.
             unsafe { p.cast::<u8>().copy_from(postfix.cast(), postfixlen + 1) };
             continue;
-        }
+        };
         // Text longer than MAXCOL causes trouble further downstream.
         if tmpsublen > MAXCOL as usize {
             emsg(gettext(e_resulting_text_too_long));
@@ -297,8 +299,8 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
         unsafe { tmpsub.cast::<u8>().copy_from(newsub.cast(), prefixlen) };
         let dest = unsafe { tmpsub.add(prefixlen) };
         let into = dest.cast::<u8>();
-        unsafe { into.copy_from(reg_prev_sub.get().cast(), reg_prev_sublen.get()) };
-        let expanded = prefixlen + reg_prev_sublen.get();
+        unsafe { into.copy_from(prev.as_ptr().cast(), prev_len) };
+        let expanded = prefixlen + prev_len;
         unsafe { strcpy(tmpsub.add(expanded), postfix) };
 
         if newsub != source {
@@ -322,13 +324,10 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
     // text `newsub` points into.
     if !preview {
         newsublen = unsafe { p.offset_from(newsub) } as usize;
-        unsafe { xfree(reg_prev_sub.get().cast()) };
-        reg_prev_sub.set(if newsublen == 0 {
-            core::ptr::null_mut()
-        } else {
-            unsafe { xstrnsave(newsub, newsublen) }
-        });
-        reg_prev_sublen.set(newsublen);
+        // SAFETY: `newsub` holds `newsublen` bytes of replacement text.
+        reg_prev_sub.set((newsublen != 0).then(|| {
+            XString::from_bytes(unsafe { core::slice::from_raw_parts(newsub.cast(), newsublen) })
+        }));
     }
     newsub
 }
