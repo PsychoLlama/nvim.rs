@@ -122,7 +122,7 @@ impl Unset {
 /// for an immutable option, which has nowhere to keep one — its own current
 /// default, read in place.
 ///
-/// This is the only place [`OptVar`] becomes an address.
+/// This is the only place [`OptVar`] becomes a slot.
 pub(crate) fn option_var(opt_idx: OptIndex) -> OptSlot {
     match get_option(opt_idx).var {
         OptVar::NoGlobal => OptSlot::None,
