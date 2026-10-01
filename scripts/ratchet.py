@@ -460,7 +460,10 @@ plus these whole-tree metrics, which are not per-file:
                         undefined behaviour the moment its argument is the
                         current one. The handle (`Win`/`Buf`/`TabPage`) is the
                         parameter type — `Copy`, and borrowing only for the
-                        length of one field access.
+                        length of one field access. With the same `winlayer/`
+                        carve-out: the handles' own `DerefMut` impls are
+                        where that one-field borrow is made, so they are the
+                        handle and not a parameter.
                       abbrev_params   the transpiler's parameter
                         abbreviations (`wp`, `eap`, `rettv`, `ptr` …)
                         bound in a `fn` signature, over the same span, with
@@ -778,6 +781,9 @@ plus these whole-tree metrics, which are not per-file:
                       untested_dirs  top-level modules under crates/nvim/src
                         with no `#[test]` anywhere beneath them and no file or
                         directory of their name in crates/nvim/tests/unit.
+                        A module's `X.rs` beside its `X/` is beneath it, and a
+                        unit file that drives two modules names the second in
+                        UNIT_TEST_ALSO_COVERS.
                         The ground rule is oracle-first, and this is the list
                         of families that have no oracle at all. It shrinks
                         every slice, by construction: a slice that touches a
@@ -872,6 +878,11 @@ API_SPEC = ROOT / "tools" / "apigen" / "functions.txt"
 # `#[test]`, or when the unit suite drives it from `crates/nvim/tests/unit`.
 CRATE_SRC = "crates/nvim/src/"
 UNIT_TESTS = ROOT / "crates" / "nvim" / "tests" / "unit"
+# A unit file named for one top-level module that also drives another, which
+# its name cannot say: `options.rs` round-trips values through `options/`'s
+# table *and* `option/`'s scopes and setters (both `pub(crate)`, so it reaches
+# them through the API and `:set`). unit file stem -> the other modules.
+UNIT_TEST_ALSO_COVERS = {"options": ("option",)}
 
 LINE_CAP = 1000
 # name -> needles counted in the masked source, summed.
@@ -2881,7 +2892,7 @@ def vocabulary(tree):
         if not in_home(file, WINLAYER):
             signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
             frames += sum(len(RAW_FRAME.findall(sig)) for sig in spans)
-        mut_refs += sum(len(MUT_WIN_BUF_REF.findall(sig)) for sig in spans)
+            mut_refs += sum(len(MUT_WIN_BUF_REF.findall(sig)) for sig in spans)
         if not in_home(file, ABBREV_PARAM_EXEMPT):
             frozen = exported if file.startswith(API_DIR) else ()
             spans = [sig.text for sig in declarations if sig.name not in frozen]
@@ -3003,14 +3014,23 @@ def instrument_sites(tree, sources, wrappers=None):
         for match in CONST_DECL.finditer(masked):
             value = " ".join(source[match.start(2) : match.end(2)].split())
             consts.setdefault((match.group(1), value), set()).add(file)
-        if file.startswith(CRATE_SRC) and "/" in file[len(CRATE_SRC) :]:
-            top = file[len(CRATE_SRC) :].split("/", 1)[0]
-            tops.add(top)
+        if file.startswith(CRATE_SRC):
+            # `X.rs` at the top is `X/`'s module file when the directory
+            # exists (`state.rs` beside `state/`), and its tests are that
+            # module's; a lone top-level file is not a directory and is not
+            # asked, which `tops` (directories only) already says.
+            rest = file[len(CRATE_SRC) :]
+            top = rest.split("/", 1)[0] if "/" in rest else rest.removesuffix(".rs")
+            if "/" in rest:
+                tops.add(top)
             if "#[test]" in masked:
                 tested.add(top)
     for (name, _), files in consts.items():
         if len(files) > 1:
             sites["dup_consts"][name] += len(files) - 1
+    for unit, others in UNIT_TEST_ALSO_COVERS.items():
+        if (UNIT_TESTS / f"{unit}.rs").exists():
+            tested.update(others)
     for top in tops - tested:
         if not (UNIT_TESTS / f"{top}.rs").exists() and not (UNIT_TESTS / top).is_dir():
             sites["untested_dirs"][top] = 1
@@ -4096,7 +4116,9 @@ SELF_TEST_VOCABULARY = [
             "    let x: *mut Window = q;\n}\n"
             "type Cb = fn(*mut Window);\n"
             "fn g(wp: &mut Window, other: &Window, tp: &mut Tabpage) {\n}\n"
-            "fn h(fr: *mut Frame, out: *mut *mut Frame) -> *const Frame {\n}\n"
+            "fn h(fr: *mut Frame, out: *mut *mut Frame) -> *const Frame {\n}\n",
+            # The handles' own `DerefMut` is where the borrow is made.
+            "crates/nvim/src/winlayer/handles.rs": "fn deref_mut(&mut self) -> &mut Window {\n}\n",
         },
         {"raw_win_buf_sigs": 3, "raw_frame_sigs": 3, "mut_win_buf_refs": 2},
     ),
@@ -4309,6 +4331,15 @@ SELF_TEST_INSTRUMENTS = [
             "crates/nvim/src/alone.rs": "fn h() {\n}\n",
         },
         {"untested_dirs": 1},
+    ),
+    # ... and a module file beside its directory is beneath it.
+    (
+        {
+            "crates/nvim/src/split/inner.rs": "fn f() {\n}\n",
+            "crates/nvim/src/split.rs": "#[cfg(test)]\nmod tests {\n"
+            "    #[test]\n    fn t() {}\n}\n",
+        },
+        {"untested_dirs": 0},
     ),
     # `types/` is counted by the file, and `lua_raw_stack` is tree-wide until
     # LUA_STACK_HOME names the module phase 33 writes.
