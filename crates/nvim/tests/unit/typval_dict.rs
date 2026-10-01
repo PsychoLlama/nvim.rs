@@ -820,13 +820,13 @@ fn adding_a_typed_value_takes_the_key_by_length() {
             log.clear();
 
             // And with messages skipped, silently.
-            let skipped = Suppress::emsg_skip();
-            assert_eq!(
-                check_emsg(log.editor(), || add(d, 2), None),
-                Err(Failed),
-                "{name}"
-            );
-            drop(skipped);
+            Suppress::emsg_skip_during(&mut || {
+                assert_eq!(
+                    check_emsg(log.editor(), || add(d, 2), None),
+                    Err(Failed),
+                    "{name}"
+                );
+            });
             // Everything the failed add allocated it also released — except
             // the string `allocated_str` was handed, which it owns.
             if name == "allocated_str" {

@@ -115,13 +115,12 @@
 
 use crate::autocmd::state::{autocmd_no_enter, autocmd_no_leave};
 use crate::drawscreen::state::RedrawingDisabled;
-use crate::ex_docmd::state::ExField;
 use crate::ex_getln::state::cmdline_star;
 use crate::extmark::curbuf_splice_pending;
 use crate::fileio::state::no_check_timestamps;
 use crate::fold::disable_fold_update;
 use crate::getchar::state::{GetcharField, allow_keys, expr_map_lock, no_mapping, no_zero_mapping};
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{GlobalCell, Level};
 use crate::memline::inhibit_delete_count;
 use crate::message::state::{
     MsgField, emsg_off, emsg_silent, emsg_skip, msg_listdo_overwrite, msg_silent, no_wait_return,
@@ -142,95 +141,42 @@ pub(crate) static textlock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static allbuf_lock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static sandbox: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
-/// Where a counter lives: a cell of its own, or a field of the message
-/// state's record (`msg_silent`, `emsg_off`, ...), which is one cell for
-/// fifty counters and flags.
-#[derive(Clone, Copy)]
-pub(crate) enum Counter {
-    /// A `static` of its own.
-    Cell(&'static GlobalCell<c_int>),
-    /// A field of [`MsgState`](crate::message::state::MsgState).
-    Msg(MsgField<c_int>),
-    /// A field of [`GetcharState`](crate::getchar::state::GetcharState).
-    Getchar(GetcharField<c_int>),
-    /// A field of [`ExState`](crate::ex_docmd::state::ExState).
-    Ex(ExField<c_int>),
-}
-
-impl Counter {
-    /// The counter's level. (A level, not a status code: the `-> c_int`
-    /// below is the type of the cells it reads.)
-    #[inline]
-    fn get(self) -> c_int {
-        match self {
-            Counter::Cell(cell) => cell.get(),
-            Counter::Msg(field) => field.get(),
-            Counter::Getchar(field) => field.get(),
-            Counter::Ex(field) => field.get(),
-        }
-    }
-
-    #[inline]
-    fn set(self, level: c_int) {
-        match self {
-            Counter::Cell(cell) => cell.set(level),
-            Counter::Msg(field) => field.set(level),
-            Counter::Getchar(field) => field.set(level),
-            Counter::Ex(field) => field.set(level),
-        }
-    }
-}
-
-impl From<&'static GlobalCell<c_int>> for Counter {
-    fn from(cell: &'static GlobalCell<c_int>) -> Self {
-        Counter::Cell(cell)
-    }
-}
-
-impl From<MsgField<c_int>> for Counter {
-    fn from(field: MsgField<c_int>) -> Self {
-        Counter::Msg(field)
-    }
-}
-
-impl From<GetcharField<c_int>> for Counter {
-    fn from(field: GetcharField<c_int>) -> Self {
-        Counter::Getchar(field)
-    }
-}
-
-impl From<ExField<c_int>> for Counter {
-    fn from(field: ExField<c_int>) -> Self {
-        Counter::Ex(field)
-    }
-}
-
-/// A counter held one higher for the lifetime of the guard.
+/// A guard that holds a counter one higher for its lifetime.
 ///
 /// Drop subtracts what the constructor added, so a `Bump` nests: the
 /// counter is only back at rest once the outermost one is gone.
+///
+/// Generic over where the counter lives -- a cell of its own (the default)
+/// or a field of a state record ([`Level`]) -- so that each guard compiles
+/// to its own counter's arithmetic. One enum over every kind made the drop
+/// a dispatch, too big to inline: the hundreds of sites that bump a cell
+/// of their own went from one `dec` to a guard on the stack and a call.
+/// Crate-private, as its constructors are: an inlined drop reachable from
+/// outside the crate would export the records it writes.
 #[must_use = "the counter is released as soon as the guard is dropped"]
-pub struct Bump {
-    counter: Counter,
+pub(crate) struct Bump<C: Level = &'static GlobalCell<c_int>> {
+    counter: C,
     by: c_int,
 }
 
-impl Bump {
-    fn new(counter: impl Into<Counter>) -> Self {
+impl<C: Level> Bump<C> {
+    #[inline(always)]
+    fn new(counter: C) -> Self {
         Self::by(counter, 1)
     }
 
     /// A bump of `by` rather than 1, for the two sites that add a boolean.
-    fn by(counter: impl Into<Counter>, by: c_int) -> Self {
-        let counter = counter.into();
-        counter.set(counter.get() + by);
+    #[inline(always)]
+    fn by(counter: C, by: c_int) -> Self {
+        counter.set_level(counter.level() + by);
         Bump { counter, by }
     }
 }
 
-impl Drop for Bump {
+impl<C: Level> Drop for Bump<C> {
+    #[inline(always)]
     fn drop(&mut self) {
-        self.counter.set(self.counter.get() - self.by);
+        self.counter.set_level(self.counter.level() - self.by);
     }
 }
 
@@ -240,13 +186,14 @@ impl Drop for Bump {
 /// constructor saw, whatever happened in between. That is what the C does
 /// at these sites and why they are spelled differently.
 #[must_use = "the old value is restored as soon as the guard is dropped"]
-pub struct Saved {
-    counter: Counter,
+pub(crate) struct Saved<C: Level = &'static GlobalCell<c_int>> {
+    counter: C,
     saved: c_int,
 }
 
-impl Saved {
-    fn new(counter: impl Into<Counter>, value: c_int) -> Self {
+impl<C: Level> Saved<C> {
+    #[inline(always)]
+    fn new(counter: C, value: c_int) -> Self {
         Self::when(true, counter, value)
     }
 
@@ -254,21 +201,29 @@ impl Saved {
     ///
     /// Not the same as `cond.then(…)`: the restore happens either way,
     /// which is what a scope that hands control to arbitrary Lua wants.
-    fn when(cond: bool, counter: impl Into<Counter>, value: c_int) -> Self {
-        let counter = counter.into();
-        let saved = counter.get();
+    #[inline(always)]
+    fn when(cond: bool, counter: C, value: c_int) -> Self {
+        let saved = counter.level();
         if cond {
-            counter.set(value);
+            counter.set_level(value);
         }
         Saved { counter, saved }
     }
 }
 
-impl Drop for Saved {
+impl<C: Level> Drop for Saved<C> {
+    #[inline(always)]
     fn drop(&mut self) {
-        self.counter.set(self.saved);
+        self.counter.set_level(self.saved);
     }
 }
+
+/// A guard over one of [`MsgState`](crate::message::state::MsgState)'s
+/// counters.
+pub(crate) type MsgBump = Bump<MsgField<c_int>>;
+/// A guard over one of
+/// [`GetcharState`](crate::getchar::state::GetcharState)'s counters.
+pub(crate) type KeyBump = Bump<GetcharField<c_int>>;
 
 /// [`Saved`] over a cell holding something other than an `int`.
 ///
@@ -310,16 +265,16 @@ impl<T: Copy + 'static> Drop for Restore<T> {
 
 /// Both halves of the "read a key literally" pair, released together.
 #[must_use = "the counters are released as soon as the guard is dropped"]
-pub struct RawKeys {
-    _no_mapping: Bump,
-    _allow_keys: Bump,
+pub(crate) struct RawKeys {
+    _no_mapping: KeyBump,
+    _allow_keys: KeyBump,
 }
 
 /// `emsg_off` and `msg_silent` together: "run this and tell me nothing".
 #[must_use = "the counters are released as soon as the guard is dropped"]
-pub struct Quiet {
-    _emsg: Bump,
-    _messages: Bump,
+pub(crate) struct Quiet {
+    _emsg: MsgBump,
+    _messages: MsgBump,
 }
 
 /// Guards that turn some part of the editor's output off for a scope.
@@ -330,19 +285,19 @@ impl Suppress {
     ///
     /// For the caller who evaluates something it expects to fail and does
     /// not want the user to hear about it.
-    pub fn emsg() -> Bump {
+    pub(crate) fn emsg() -> MsgBump {
         Bump::new(emsg_off)
     }
 
     /// `emsg_skip` — errors from an expression that is only being parsed,
     /// not executed (a skipped `:if` branch, a `:for` over a bad list).
-    pub fn emsg_skip() -> Bump {
+    pub(crate) fn emsg_skip() -> MsgBump {
         Bump::new(emsg_skip)
     }
 
     /// `msg_silent` — messages are computed but not shown, as under
     /// `:silent`.
-    pub fn messages() -> Bump {
+    pub(crate) fn messages() -> MsgBump {
         Bump::new(msg_silent)
     }
 
@@ -352,7 +307,7 @@ impl Suppress {
     /// The API's two output-capturing entry points do it this way: they
     /// put the whole message state back in one block afterwards, so a
     /// script that leaked a `:silent` cannot escape through them.
-    pub fn messages_saved() -> Saved {
+    pub(crate) fn messages_saved() -> Saved<MsgField<c_int>> {
         Saved::new(msg_silent, msg_silent.get() + 1)
     }
 
@@ -360,18 +315,18 @@ impl Suppress {
     /// but restores it either way — `execute()`'s `{silent}` argument, where
     /// an explicit empty value asks for output *and* still resets whatever
     /// the executed commands left behind.
-    pub fn messages_saved_when(cond: bool) -> Saved {
+    pub(crate) fn messages_saved_when(cond: bool) -> Saved<MsgField<c_int>> {
         Saved::when(cond, msg_silent, msg_silent.get() + 1)
     }
 
     /// `no_wait_return` — a message shown in this scope does not stop for
     /// the hit-enter prompt.
-    pub fn wait_return() -> Bump {
+    pub(crate) fn wait_return() -> MsgBump {
         Bump::new(no_wait_return)
     }
 
     /// `RedrawingDisabled` — the screen is not updated while this is held.
-    pub fn redraw() -> Bump {
+    pub(crate) fn redraw() -> Bump {
         Bump::new(&RedrawingDisabled)
     }
 
@@ -379,13 +334,13 @@ impl Suppress {
     /// was in effect rather than decrementing it. The one site spelled this
     /// way compiles a user's tag pattern, where an error raised by a
     /// *nested* evaluation must not survive the scope either.
-    pub fn emsg_outright() -> Saved {
+    pub(crate) fn emsg_outright() -> Saved<MsgField<c_int>> {
         Saved::new(emsg_off, 1)
     }
 
     /// [`Suppress::emsg`] + [`Suppress::messages`]: the recurring "compile
     /// and run this pattern, and say nothing whatever it does" pair.
-    pub fn output() -> Quiet {
+    pub(crate) fn output() -> Quiet {
         Quiet {
             _emsg: Self::emsg(),
             _messages: Self::messages(),
@@ -398,8 +353,28 @@ impl Suppress {
     /// Weaker than [`Suppress::emsg`], which stops the error being raised
     /// at all: `:silent!`, `'debug'` and `assert_fails()` all read this
     /// counter rather than that one.
-    pub fn emsg_silent() -> Bump {
+    pub(crate) fn emsg_silent() -> MsgBump {
         Bump::new(emsg_silent)
+    }
+
+    /// Run `f` under [`Suppress::emsg_silent`], for the unit suite.
+    ///
+    /// The suite links the crate from outside, and the guards are
+    /// crate-private (see [`Bump`]), so it cannot hold one. A closure
+    /// rather than a generic: a generic body would be shipped for inlining
+    /// and export the message record it writes.
+    #[doc(hidden)]
+    pub fn emsg_silent_during(f: &mut dyn FnMut()) {
+        let _silent = Self::emsg_silent();
+        f();
+    }
+
+    /// Run `f` under [`Suppress::emsg_skip`], for the unit suite; see
+    /// [`Suppress::emsg_silent_during`].
+    #[doc(hidden)]
+    pub fn emsg_skip_during(f: &mut dyn FnMut()) {
+        let _skipped = Self::emsg_skip();
+        f();
     }
 
     /// `no_u_sync` — undo does not start a new change while this is held.
@@ -407,7 +382,7 @@ impl Suppress {
     /// Everything typed inside the scope joins the change that was already
     /// open, which is what makes an expression register, a `CTRL-V` and a
     /// `:s///c` prompt one undoable edit rather than several.
-    pub fn undo_sync() -> Bump {
+    pub(crate) fn undo_sync() -> Bump {
         Bump::new(&no_u_sync)
     }
 
@@ -417,7 +392,7 @@ impl Suppress {
     /// The scope's caller sends one `extmark_splice` for the whole thing
     /// afterwards, so extmarks and the buffer-update RPC see one change
     /// where the code made three or four.
-    pub fn splice() -> Bump {
+    pub(crate) fn splice() -> Bump {
         Bump::new(&curbuf_splice_pending)
     }
 
@@ -426,13 +401,13 @@ impl Suppress {
     /// For the operation that leaves the buffer half-moved part way
     /// through, where a `'foldexpr'` re-evaluated on it would see lines
     /// that are about to move again.
-    pub fn fold_update() -> Bump {
+    pub(crate) fn fold_update() -> Bump {
         Bump::new(&disable_fold_update)
     }
 
     /// `inhibit_delete_count` — a line deleted in this scope does not count
     /// towards the "N fewer lines" report.
-    pub fn delete_count() -> Bump {
+    pub(crate) fn delete_count() -> Bump {
         Bump::new(&inhibit_delete_count)
     }
 
@@ -441,36 +416,36 @@ impl Suppress {
     ///
     /// `:argdo` and its siblings hold this so that the per-file header
     /// stays on screen above the command's own output.
-    pub fn message_overwrite() -> Bump {
+    pub(crate) fn message_overwrite() -> MsgBump {
         Bump::new(msg_listdo_overwrite)
     }
 
     /// `cmdline_star` — the command line shows `*` for each character
     /// instead of what was typed, and nothing typed in the scope is
     /// recorded, echoed or completed. `inputsecret()`'s guard.
-    pub fn cmdline_echo() -> Bump {
+    pub(crate) fn cmdline_echo() -> Bump {
         Bump::new(&cmdline_star)
     }
 
     /// `no_check_timestamps` — a file whose timestamp changed under the
     /// editor during this scope raises no warning.
-    pub fn timestamp_checks() -> Bump {
+    pub(crate) fn timestamp_checks() -> Bump {
         Bump::new(&no_check_timestamps)
     }
 
     /// `no_zero_mapping` — a `0` read in this scope is a count digit, not
     /// the "go to column 0" command, so it must not resolve a mapping.
-    pub fn zero_mapping() -> Bump {
+    pub(crate) fn zero_mapping() -> KeyBump {
         Bump::new(no_zero_mapping)
     }
 
     /// `autocmd_no_enter` — no `WinEnter`/`BufEnter` fires in this scope.
-    pub fn win_enter_autocmds() -> Bump {
+    pub(crate) fn win_enter_autocmds() -> Bump {
         Bump::new(&autocmd_no_enter)
     }
 
     /// `autocmd_no_leave` — no `WinLeave`/`BufLeave` fires in this scope.
-    pub fn win_leave_autocmds() -> Bump {
+    pub(crate) fn win_leave_autocmds() -> Bump {
         Bump::new(&autocmd_no_leave)
     }
 
@@ -481,7 +456,7 @@ impl Suppress {
     /// order is load-bearing at three sites, which enter a window with one
     /// of the pair already down — take them separately and `drop` each at
     /// the point the C decremented it.
-    pub fn win_enter_leave_autocmds() -> WinAutocmds {
+    pub(crate) fn win_enter_leave_autocmds() -> WinAutocmds {
         WinAutocmds {
             _enter: Self::win_enter_autocmds(),
             _leave: Self::win_leave_autocmds(),
@@ -494,7 +469,7 @@ impl Suppress {
     /// The constructors above exist so that a *global* counter's intended
     /// direction is greppable from one file; a `static` private to the
     /// module that reads it is already that, and does not earn a name here.
-    pub(crate) fn counter(counter: impl Into<Counter>) -> Bump {
+    pub(crate) fn counter<C: Level>(counter: C) -> Bump<C> {
         Bump::new(counter)
     }
 }
@@ -515,7 +490,7 @@ pub struct Depth;
 
 impl Depth {
     /// Hold `cell` one higher until the guard is dropped.
-    pub(crate) fn of(counter: impl Into<Counter>) -> Bump {
+    pub(crate) fn of<C: Level>(counter: C) -> Bump<C> {
         Bump::new(counter)
     }
 }
@@ -530,62 +505,62 @@ pub struct Allow;
 impl Allow {
     /// `msg_silent = 0` — this scope's messages reach the user even inside
     /// `:silent`.
-    pub fn messages() -> Saved {
+    pub(crate) fn messages() -> Saved<MsgField<c_int>> {
         Saved::new(msg_silent, 0)
     }
 
     /// `RedrawingDisabled = 0` — this scope redraws even inside an
     /// operation that had disabled it.
-    pub fn redraw() -> Saved {
+    pub(crate) fn redraw() -> Saved {
         Saved::new(&RedrawingDisabled, 0)
     }
 
     /// `no_wait_return = 0` — the hit-enter prompt is armed again for this
     /// scope, whatever the caller had asked for.
-    pub fn wait_return() -> Saved {
+    pub(crate) fn wait_return() -> Saved<MsgField<c_int>> {
         Saved::new(no_wait_return, 0)
     }
 
     /// `textlock = 0` — the callback about to run is allowed to change
     /// text even though the caller was inside a text-locked operation.
-    pub fn text_changes() -> Saved {
+    pub(crate) fn text_changes() -> Saved {
         Saved::new(&textlock, 0)
     }
 
     /// [`Allow::text_changes`], lifting the lock only when `cond`, but
     /// restoring it either way.
-    pub fn text_changes_when(cond: bool) -> Saved {
+    pub(crate) fn text_changes_when(cond: bool) -> Saved {
         Saved::when(cond, &textlock, 0)
     }
 
     /// `expr_map_lock = 0` — [`Allow::text_changes`]'s companion; the two
     /// sites that invite arbitrary Lua in lift both locks together.
-    pub fn expr_map() -> Saved {
+    pub(crate) fn expr_map() -> Saved<GetcharField<c_int>> {
         Saved::new(expr_map_lock, 0)
     }
 
     /// [`Allow::expr_map`], lifting the lock only when `cond`, but
     /// restoring it either way.
-    pub fn expr_map_when(cond: bool) -> Saved {
+    pub(crate) fn expr_map_when(cond: bool) -> Saved<GetcharField<c_int>> {
         Saved::when(cond, expr_map_lock, 0)
     }
 
     /// `allow_keys = 0` — key codes are *not* recognised in this scope, so
     /// a raw `<BS>` byte stays a byte.
-    pub fn no_key_codes() -> Saved {
+    pub(crate) fn no_key_codes() -> Saved<GetcharField<c_int>> {
         Saved::new(allow_keys, 0)
     }
 
     /// `no_mapping -= 1` — the inverse of [`Keys::unmapped`], for the
     /// callee that has to read a *mapped* key back out of a caller that
     /// had suppressed mapping (`'langmap'`, composing characters).
-    pub fn mapping() -> Bump {
+    pub(crate) fn mapping() -> KeyBump {
         Bump::by(no_mapping, -1)
     }
 
     /// [`Allow::mapping`] for both halves of the pair — the inverse of
     /// [`Keys::unmapped_with_codes`].
-    pub fn mapping_with_codes() -> RawKeys {
+    pub(crate) fn mapping_with_codes() -> RawKeys {
         RawKeys {
             _no_mapping: Bump::by(no_mapping, -1),
             _allow_keys: Bump::by(allow_keys, -1),
@@ -595,20 +570,20 @@ impl Allow {
     /// `autocmd_no_enter -= 1` — the inverse of
     /// [`Suppress::win_enter_autocmds`], for the callee that has to let one
     /// `BufEnter` through a caller that had switched them off.
-    pub fn win_enter_autocmds() -> Bump {
+    pub(crate) fn win_enter_autocmds() -> Bump {
         Bump::by(&autocmd_no_enter, -1)
     }
 
     /// `autocmd_no_leave -= 1` — the inverse of
     /// [`Suppress::win_leave_autocmds`].
-    pub fn win_leave_autocmds() -> Bump {
+    pub(crate) fn win_leave_autocmds() -> Bump {
         Bump::by(&autocmd_no_leave, -1)
     }
 
     /// `no_check_timestamps = 0` — this scope checks file timestamps even
     /// inside an operation that had switched the check off, restoring the
     /// level afterwards.
-    pub fn timestamp_checks() -> Saved {
+    pub(crate) fn timestamp_checks() -> Saved {
         Saved::new(&no_check_timestamps, 0)
     }
 }
@@ -620,21 +595,21 @@ pub struct Lock;
 impl Lock {
     /// `textlock` — buffer text, window layout and the current
     /// buffer/window must not change while this is held.
-    pub fn text() -> Bump {
+    pub(crate) fn text() -> Bump {
         Bump::new(&textlock)
     }
 
     /// `sandbox` — the code about to run came from somewhere untrusted
     /// (a modeline, a `'foldexpr'`, a tag command) and the operations
     /// marked unsafe-in-sandbox are refused.
-    pub fn sandbox() -> Bump {
+    pub(crate) fn sandbox() -> Bump {
         Bump::new(&sandbox)
     }
 
     /// `expr_map_lock` — [`Lock::text`]'s companion for the `<expr>`
     /// mapping and abbreviation expansions, which additionally must not
     /// change the mapping tables they are being read from.
-    pub fn expr_map() -> Bump {
+    pub(crate) fn expr_map() -> KeyBump {
         Bump::new(expr_map_lock)
     }
 
@@ -643,20 +618,20 @@ impl Lock {
     ///
     /// The scopes that take it hand control to an autocommand while
     /// holding a raw `Buffer *`.
-    pub fn all_buffers() -> Bump {
+    pub(crate) fn all_buffers() -> Bump {
         Bump::new(&allbuf_lock)
     }
 
     /// `tabpage_move_disallowed` — an autocommand fired in this scope may
     /// not reorder the tab pages the scope is walking.
-    pub fn tabpage_move() -> Bump {
+    pub(crate) fn tabpage_move() -> Bump {
         Bump::new(&tabpage_move_disallowed)
     }
 
     /// A lock counter that belongs to one module rather than to the editor
     /// as a whole, named by its own `static` — [`Suppress::counter`]'s
     /// sibling, for a counter whose sense is "refuse this operation".
-    pub(crate) fn held(counter: impl Into<Counter>) -> Bump {
+    pub(crate) fn held<C: Level>(counter: C) -> Bump<C> {
         Bump::new(counter)
     }
 }
@@ -664,7 +639,7 @@ impl Lock {
 /// Both halves of the "walk the windows without the user noticing" pair,
 /// released together.
 #[must_use = "the counters are released as soon as the guard is dropped"]
-pub struct WinAutocmds {
+pub(crate) struct WinAutocmds {
     _enter: Bump,
     _leave: Bump,
 }
@@ -675,13 +650,13 @@ pub struct Keys;
 impl Keys {
     /// `no_mapping` — the keys read in this scope do not go through
     /// mappings or abbreviations.
-    pub fn unmapped() -> Bump {
+    pub(crate) fn unmapped() -> KeyBump {
         Bump::new(no_mapping)
     }
 
     /// `no_mapping` + `allow_keys`: the recurring pair. Read the next key
     /// literally, but still decode the multi-byte key codes.
-    pub fn unmapped_with_codes() -> RawKeys {
+    pub(crate) fn unmapped_with_codes() -> RawKeys {
         RawKeys {
             _no_mapping: Self::unmapped(),
             _allow_keys: Bump::new(allow_keys),

@@ -151,7 +151,9 @@ state_record! {
     /// How many bytes the last `vgetc` recorded. Peeking can record more,
     /// so `last_recorded_len` may have grown past it since.
     pub(super) last_vgetc_recorded_len: size_t = 0;
-    /// What `gotchars` has half a key of, between calls.
+    /// What `gotchars` has half a key of, between calls. Changed through
+    /// `with_mut`: the state machine is a leaf, and moving the key buffer
+    /// out and back per typed byte showed in the input benchmark.
     pub(super) gotchars_pending: GotcharsState = GotcharsState::new();
     /// What the 'showcmd' echo of a partial mapping has half a key of.
     pub(super) showcmd_pending: GotcharsState = GotcharsState::new();

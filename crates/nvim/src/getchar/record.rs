@@ -101,7 +101,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
         // SAFETY (this body): the caller's promise -- `chars` is `len`
         // readable bytes.
         let byte = unsafe { *chars.add(i) };
-        if !gotchars_pending.update(|st| gotchars_add_byte(st, byte)) {
+        if !gotchars_pending.with_mut(|st| gotchars_add_byte(st, byte)) {
             continue;
         }
         // A copy of the finished key, so that nothing below holds the
@@ -133,7 +133,7 @@ pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
             last_recorded_len.set(last_recorded_len.get().wrapping_add(buflen));
         }
 
-        gotchars_pending.update(|st| st.buflen = 0);
+        gotchars_pending.with_mut(|st| st.buflen = 0);
     }
 
     may_sync_undo();
@@ -164,7 +164,7 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
     if !p_sc() || msg_silent.get() != 0 {
         return;
     }
-    if !showcmd_pending.update(|st| gotchars_add_byte(st, byte)) {
+    if !showcmd_pending.with_mut(|st| gotchars_add_byte(st, byte)) {
         return;
     }
     // A copy of the finished key: `add_to_showcmd` below can reach the
@@ -172,7 +172,7 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
     let mut key = showcmd_pending.get();
     let buflen = key.buflen;
     key.buf[buflen] = 0;
-    showcmd_pending.update(|st| st.buflen = 0);
+    showcmd_pending.with_mut(|st| st.buflen = 0);
 
     // Split the key into its modifier prefix and the key itself.
     let mut ptr: *const c_char = key.buf.as_ptr().cast();

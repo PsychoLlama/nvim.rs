@@ -133,7 +133,9 @@ impl KeyBuffer {
     /// [`contents`](Self::contents) answers, without the terminator and with
     /// nothing for the caller to free.
     pub(crate) fn bytes(&self) -> Vec<u8> {
-        let mut out = Vec::new();
+        // Room for a typical redo up front: `save_redobuff` copies the redo
+        // buffer at every user function call.
+        let mut out = Vec::with_capacity(64);
         let mut block = self.first;
         while !block.is_null() {
             // SAFETY: every block on the chain is live and NUL-terminated.

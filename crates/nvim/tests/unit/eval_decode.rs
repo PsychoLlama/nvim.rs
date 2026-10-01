@@ -30,10 +30,9 @@ fn decoding_reads_no_further_than_the_length_it_was_given() {
     let _log = AllocLog::start();
     // Raised for the case and put back on drop: the Lua harness forked a
     // child per case, so it never had to lower it.
-    let _silent = Suppress::emsg_silent();
     // SAFETY: every buffer outlives the call that reads it, and `rettv` is
     // this case's own.
-    unsafe {
+    Suppress::emsg_silent_during(&mut || unsafe {
         let mut rettv = unset();
         for (text, len) in [
             ("null", 1),
@@ -58,7 +57,7 @@ fn decoding_reads_no_further_than_the_length_it_was_given() {
             );
             assert_eq!(rettv.v_type(), VAR_UNKNOWN, "{text:?} at {len}");
         }
-    }
+    });
 }
 
 /// The same `describe`'s two "does not overflow and crash" cases, spec
@@ -73,10 +72,9 @@ fn decoding_a_lone_byte_reads_only_that_byte() {
     let _log = AllocLog::start();
     // Raised for the case and put back on drop: the Lua harness forked a
     // child per case, so it never had to lower it.
-    let _silent = Suppress::emsg_silent();
     // SAFETY: `one` is a one-byte allocation, freed below; nothing reads
     // past it unless the decoder is wrong, which is the assertion.
-    unsafe {
+    Suppress::emsg_silent_during(&mut || unsafe {
         let mut rettv = unset();
         for &byte in b"ntf\"" {
             let one = xmemdup((&raw const byte).cast(), 1);
@@ -89,7 +87,7 @@ fn decoding_a_lone_byte_reads_only_that_byte() {
             assert_eq!(rettv.v_type(), VAR_UNKNOWN);
             xfree(one);
         }
-    }
+    });
 }
 
 /// The same `describe`'s `itp('does not overflow in error messages')`, spec

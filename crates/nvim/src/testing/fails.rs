@@ -31,7 +31,7 @@ use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{suppress_errthrow, trylevel};
 use crate::getchar::state::got_int;
-use crate::guard::{Bump, Suppress};
+use crate::guard::{MsgBump, Suppress};
 use crate::memory::{XString, xfree, xstrdup};
 use crate::message::state::{
     called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
@@ -254,7 +254,7 @@ unsafe fn report_fails_mismatch(
 ///
 /// # Safety
 /// Called once, at the end of `assert_fails()`.
-unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prompt: Bump) {
+unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prompt: MsgBump) {
     trylevel.set(save_trylevel);
     suppress_errthrow.set(false);
     in_assert_fails.set(false);

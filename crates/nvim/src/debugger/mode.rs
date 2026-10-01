@@ -24,8 +24,9 @@
 
 use super::*;
 use crate::ex_docmd::DoCmdOpts;
-use crate::guard::{Allow, Bump, Saved, Suppress};
+use crate::guard::{Allow, Bump, MsgBump, Saved, Suppress};
 use crate::message::msg_ptr;
+use crate::message::state::MsgField;
 use crate::message_fmt::{c_str, msg_cstr, report_msg};
 use crate::os::cshim::strstr;
 use crate::smsg;
@@ -45,9 +46,9 @@ struct SavedState {
     /// Released at the top of [`SavedState::leave`], before the redraw is
     /// queued — and by dropping the whole state if the prompt panics out.
     redraw_off: Bump,
-    no_prompt: Bump,
+    no_prompt: MsgBump,
     /// `msg_silent`, put back late with the rest of the message state.
-    loud: Saved,
+    loud: Saved<MsgField<c_int>>,
 }
 
 impl SavedState {

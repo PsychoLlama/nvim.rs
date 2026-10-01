@@ -316,6 +316,28 @@ macro_rules! field {
 }
 pub(crate) use field;
 
+/// A `c_int` level a [`crate::guard`] guard raises and puts back: a cell
+/// of its own, or a field of a state record (every [`state_record!`]
+/// implements it for its `c_int` fields).
+pub(crate) trait Level: Copy {
+    /// The level now.
+    fn level(self) -> core::ffi::c_int;
+    /// Overwrite the level.
+    fn set_level(self, level: core::ffi::c_int);
+}
+
+impl Level for &'static GlobalCell<core::ffi::c_int> {
+    #[inline(always)]
+    fn level(self) -> core::ffi::c_int {
+        self.get()
+    }
+
+    #[inline(always)]
+    fn set_level(self, level: core::ffi::c_int) {
+        self.set(level);
+    }
+}
+
 /// One record of editor-wide state behind one cell, with a `const`
 /// [`Field`] selector per field **under the field's own name**.
 ///
@@ -331,7 +353,7 @@ pub(crate) use field;
 /// writes the struct, `static MODE: GlobalCell<ModeState>`, the alias
 /// `ModeField<T> = Field<ModeState, T>`, a `const State: ModeField<c_int>`,
 /// and one generic inherent impl giving every selector `get`, `set`,
-/// `replace`, `take`, `with` and `update` -- so a reader still spells
+/// `replace`, `take`, `with`, `update` and `with_mut` -- so a reader still spells
 /// `State.get()`, and what changed is that nothing can take a field's
 /// address.
 ///
@@ -422,6 +444,26 @@ macro_rules! state_record {
                 let answer = f(&mut value);
                 self.set(value);
                 answer
+            }
+
+            /// Change the field in place, with the record borrowed for the
+            /// duration -- tracked, so in a debug build anything `f`
+            /// reaches that touches the record panics. For a field too
+            /// large to move out and back on a hot path (`gotchars`'s
+            /// per-byte key assembly); `f` must be a leaf.
+            #[inline(always)]
+            $rvis fn with_mut<R>(self, f: impl FnOnce(&mut T) -> R) -> R {
+                $cell.with_mut(|record| f(self.of(record)))
+            }
+        }
+
+        impl $crate::global_cell::Level for $crate::global_cell::Field<$record, ::core::ffi::c_int> {
+            fn level(self) -> ::core::ffi::c_int {
+                $cell.get_at(self)
+            }
+
+            fn set_level(self, level: ::core::ffi::c_int) {
+                $cell.set_at(self, level);
             }
         }
 

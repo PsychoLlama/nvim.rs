@@ -53,7 +53,7 @@ use crate::ex_eval::state::{
 };
 use crate::garray::{ga_clear, ga_init};
 use crate::getchar::state::{KeyTyped, got_int};
-use crate::guard::{Bump, Depth, Suppress};
+use crate::guard::{Bump, Depth, MsgBump, Suppress};
 use crate::message::state::{did_emsg, msg_didany, msg_didout, msg_scroll, need_wait_return};
 use crate::message::{e_command_too_recursive, e_endfor, e_endif, e_endtry, e_endwhile};
 use crate::option::vars::p_verbose;
@@ -465,7 +465,7 @@ struct Run {
     /// first `msg_start`; the suppression held from it to the run's end.
     did_block: bool,
     msg_didout_before: bool,
-    quiet_output: Option<(Bump, Bump)>,
+    quiet_output: Option<(MsgBump, Bump)>,
     /// The `trylevel` this run started from, and its answer.
     initial_trylevel: c_int,
     retval: Result<(), Failed>,
