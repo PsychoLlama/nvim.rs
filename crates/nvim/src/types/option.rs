@@ -337,8 +337,9 @@ impl OptVar {
 
 #[derive(Copy, Clone)]
 pub struct VimOption {
-    pub fullname: *mut ::core::ffi::c_char,
-    pub shortname: *mut ::core::ffi::c_char,
+    pub fullname: &'static ::core::ffi::CStr,
+    /// The abbreviation, for an option that has one.
+    pub shortname: Option<&'static ::core::ffi::CStr>,
     pub flags: uint32_t,
     pub type_0: OptValType,
     pub scope_flags: OptScopeFlags,

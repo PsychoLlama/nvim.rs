@@ -209,12 +209,14 @@ pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
     }
 }
 
-/// 'formatlistpat', local where set.
-///
-pub(crate) fn get_flp_value(buffer: Buf) -> *mut c_char {
-    // The answer is the option's own buffer; the callers read it straight
-    // through `vim_regcomp`.
-    local_or_global(&buffer.b_p_flp, P_FLP).value_ptr()
+impl Buf {
+    /// 'formatlistpat', local where set.
+    ///
+    /// The answer is the option's own buffer; the callers read it straight
+    /// through `vim_regcomp`.
+    pub(crate) fn formatlistpat(self) -> *mut c_char {
+        local_or_global(&self.b_p_flp, P_FLP).value_ptr()
+    }
 }
 
 /// 'virtualedit' as flags, local where set. The two "none" bits only exist
@@ -229,17 +231,26 @@ pub(crate) fn get_ve_flags(window: Win) -> c_uint {
     flags & !(kOptVeFlagNone | kOptVeFlagNoneU)
 }
 
-/// 'showbreak', local where set. `"NONE"` is how a window says "no leader"
-/// against a global value that has one.
-///
-pub(crate) fn get_showbreak_value(win: Win) -> *mut c_char {
-    let local = &win.w_onebuf_opt.wo_sbr;
-    if local.bytes() == b"NONE" {
-        return empty_option();
+impl Win {
+    /// 'showbreak', local where set. `"NONE"` is how a window says "no
+    /// leader" against a global value that has one.
+    ///
+    /// The answer is the option's own buffer, and the draw path reads it
+    /// before anything can set an option.
+    pub(crate) fn showbreak_leader(self) -> *mut c_char {
+        let local = &self.w_onebuf_opt.wo_sbr;
+        if local.bytes() == b"NONE" {
+            return empty_option();
+        }
+        local_or_global(local, P_SBR).value_ptr()
     }
-    // The answer is the option's own buffer, and the draw path reads it
-    // before anything can set an option.
-    local_or_global(local, P_SBR).value_ptr()
+
+    /// Whether the window draws a 'showbreak' leader at all: upstream's
+    /// `*get_showbreak_value(wp) != NUL`, without the pointer.
+    pub(crate) fn has_showbreak(self) -> bool {
+        let local = &self.w_onebuf_opt.wo_sbr;
+        local.bytes() != b"NONE" && local_or_global(local, P_SBR).first_byte() != 0
+    }
 }
 
 /// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.
@@ -431,7 +442,7 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
         // copy, so this releases nothing.
         let tv = ManuallyDrop::new(optval_as_tv(optval_from_varp(opt_idx, varp), true));
         let name = get_option(opt_idx).fullname;
-        let _ = unsafe { (*d).add_tv(cstr::bytes_at(name), &tv) };
+        let _ = unsafe { (*d).add_tv(name.to_bytes(), &tv) };
     }
     // The caller takes the reference over.
     d_held.into_raw()

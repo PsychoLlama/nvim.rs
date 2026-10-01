@@ -35,7 +35,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 
 pub mod arith;
 
@@ -60,14 +60,14 @@ use crate::drawscreen::{
 };
 use crate::fold::fold_adjust_cursor;
 use crate::normal::visual_active;
-use crate::option::{cpo_has, get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
+use crate::option::{cpo_has, get_scrolloff_value, get_sidescrolloff_value};
 use crate::options::kOptCuloptFlagScreenline;
 use crate::optionstr::OptString;
 use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
     win_may_fill,
 };
-use crate::types::{ColNr, CpoFlag, LineNr, MotionType, NUL, WLine, int64_t};
+use crate::types::{ColNr, CpoFlag, LineNr, MotionType, WLine, int64_t};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
@@ -168,12 +168,6 @@ impl Win {
 
     pub(super) fn fdccol_count(self) -> c_int {
         win_fdccol_count(self)
-    }
-
-    /// Whether 'showbreak' is unset for this window.
-    pub(super) fn showbreak_empty(self) -> bool {
-        // SAFETY: 'showbreak' answers a NUL-terminated string.
-        unsafe { *get_showbreak_value(self) == NUL as c_char }
     }
 
     /// Screen lines line `lnum` takes with 'wrap' and folds accounted for but
@@ -423,7 +417,7 @@ impl Win {
         };
         arith::marker_overlap(
             extra2,
-            !self.showbreak_empty(),
+            self.has_showbreak(),
             self.w_onebuf_opt.wo_list != 0 && self.w_p_lcs_chars.prec != 0,
         )
     }

@@ -31,7 +31,7 @@ use crate::normal::{
     unadjust_for_sel, visual_active, visual_mode,
 };
 use crate::option::vars::{P_SEL, p_sel, p_ww};
-use crate::option::{cpo_has, get_showbreak_value, get_ve_flags};
+use crate::option::{cpo_has, get_ve_flags};
 use crate::options::{
     kOptFdoFlagBlock, kOptFdoFlagHor, kOptFdoFlagJump, kOptFdoFlagPercent, kOptVeFlagOnemore,
 };
@@ -168,8 +168,8 @@ pub(crate) unsafe fn nv_screengo(
         let mut virtcol = win.w_virtcol;
         // 'showbreak' is drawn in front of every continuation row and is
         // not part of the text.
-        if virtcol > width1 && unsafe { *get_showbreak_value(wp) } as c_int != NUL {
-            virtcol -= unsafe { vim_strsize(get_showbreak_value(wp)) };
+        if virtcol > width1 && wp.has_showbreak() {
+            virtcol -= unsafe { vim_strsize(wp.showbreak_leader()) };
         }
         let c = unsafe { utf_ptr2char(get_cursor_pos_ptr()) };
         // A wide unprintable character is drawn as `<xxxx>`, which is

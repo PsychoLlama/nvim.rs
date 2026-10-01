@@ -51,8 +51,8 @@ use crate::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc};
 use crate::message::state::did_emsg;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off2};
+use crate::option::kOptFlagInsecure;
 use crate::option::vars::dy_flags;
-use crate::option::{get_showbreak_value, kOptFlagInsecure};
 use crate::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,
     kOptSpoFlagNoplainbuffer,
@@ -285,7 +285,7 @@ fn wlv_put_linebuf(
     if wlv.row == 0
         && window.w_skipcol > 0
         // Do not overwrite the 'showbreak' text with "<<<" ...
-        && unsafe { *get_showbreak_value(window) } as ::core::ffi::c_int == NUL
+        && !window.has_showbreak()
         // ... nor the 'listchars' "precedes" text.
         && !(window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.prec != 0)
     {

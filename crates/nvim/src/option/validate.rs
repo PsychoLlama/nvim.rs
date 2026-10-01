@@ -244,7 +244,7 @@ pub(crate) fn validate_option_value(
         let fmt = gettext(fmt);
         let want = optval_type_name(opt.type_0).as_ptr();
         let got = optval_type_name(newval.kind()).as_ptr();
-        let name = opt.fullname;
+        let name = opt.fullname.as_ptr();
         // SAFETY: `message` is the buffer the formatter is told the size
         // of, and every argument is a NUL-terminated string.
         let message = XString::filled(OptError::ROOM, |buf| unsafe {

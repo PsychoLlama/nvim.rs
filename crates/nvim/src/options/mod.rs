@@ -43,8 +43,7 @@ pub use self::lookup::*;
 pub use self::values::*;
 pub use self::vars::*;
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint};
 
 use crate::ex_docmd::did_set_findfunc;
 use crate::ex_getln::did_set_cedit;
@@ -117,8 +116,8 @@ const BUF: OptScopeFlags = 1 << kOptScopeBuf;
 /// boolean that defaults to false and belongs to no scope. Each row below
 /// fills in what it needs and takes the rest from here.
 const BLANK: VimOption = VimOption {
-    fullname: ptr::null_mut(),
-    shortname: ptr::null_mut(),
+    fullname: c"",
+    shortname: None,
     flags: 0,
     type_0: kOptValTypeBoolean,
     scope_flags: 0,
@@ -131,10 +130,6 @@ const BLANK: VimOption = VimOption {
     opt_expand_cb: None,
     def_val: boolean(false),
 };
-
-const fn name(s: &'static CStr) -> *mut c_char {
-    s.as_ptr().cast_mut()
-}
 
 const fn scope_idx(global: GlobalOptIndex, win: WinOptIndex, buf: BufOptIndex) -> [ssize_t; 3] {
     [global as ssize_t, win as ssize_t, buf as ssize_t]

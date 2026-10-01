@@ -23,7 +23,6 @@ use crate::memory::{xfree, xstrdup};
 use crate::r#move::win_col_off2;
 use crate::narrow::number_as_int;
 use crate::option::vars::dy_flags;
-use crate::option::{get_flp_value, get_showbreak_value};
 use crate::optionstr::OptString;
 use crate::plines::win_chartabsize;
 use crate::regexp::{RE_AUTO, RE_MAGIC, RE_STRICT, RE_STRING};
@@ -328,7 +327,7 @@ pub unsafe fn get_breakindent_win(window: Win, line: *mut c_char) -> c_int {
         vcol: win.w_briopt_vcol,
     };
     // SAFETY: a live window.
-    let (col_off2, flp) = (win_col_off2(win), get_flp_value(buf));
+    let (col_off2, flp) = (win_col_off2(win), buf.formatlistpat());
     // The window width minus its margins: what is left for text.
     let eff_wwidth = win.w_view_width - (window).col_off() + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
@@ -356,7 +355,7 @@ pub unsafe fn get_breakindent_win(window: Win, line: *mut c_char) -> c_int {
     });
     if opt.sbr {
         // SAFETY: 'showbreak' is a NUL-terminated option value.
-        bri -= unsafe { vim_strsize(get_showbreak_value(win)) };
+        bri -= unsafe { vim_strsize(win.showbreak_leader()) };
     }
     // Never indent past the left window margin, and always leave `min`
     // columns for the text when the window is wide enough for them.

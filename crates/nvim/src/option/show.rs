@@ -26,7 +26,6 @@ use crate::strings::has_char;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::charset::{transchar, vim_strsize};
 use crate::ex_session::{put_eol, put_eol_unchecked, put_line};
 use crate::getchar::state::got_int;
@@ -48,7 +47,8 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::startup::silent_mode;
 use crate::types::{
-    FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, WinOpt, size_t, uint32_t,
+    FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, WinOpt,
+    size_t, uint32_t,
 };
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
@@ -101,7 +101,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
         items.clear();
         for opt_idx in all_options() {
             let opt = get_option(opt_idx);
-            if message_filtered(unsafe { cstr::at(opt.fullname) }) {
+            if message_filtered(opt.fullname) {
                 continue;
             }
             // An explicit `:setlocal`/`:setglobal` listing skips the
@@ -125,7 +125,7 @@ pub(crate) fn showoptions(all: bool, opt_flags: OptionSetFlags) {
                 1
             } else {
                 option_value2string(opt_idx, opt_flags, &mut rendered);
-                let fullname_len = unsafe { cstr::bytes_at(opt.fullname) }.len();
+                let fullname_len = opt.fullname.count_bytes();
                 unsafe { fullname_len as c_int + vim_strsize(rendered.as_mut_ptr()) + 1 }
             };
             let fits = len <= INC - GAP;
@@ -172,7 +172,7 @@ pub(crate) fn ui_refresh_options() {
         if opt.flags & kOptFlagUIOption as uint32_t == 0 {
             continue;
         }
-        let name = unsafe { cstr_to_string(opt.fullname) };
+        let name = String_0::from_cstr(opt.fullname);
         let value = optval_as_object(optval_from_varp(opt_idx, option_var(opt_idx)));
         ui_call_option_set(name, value);
     }
@@ -214,7 +214,7 @@ pub(crate) fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
         c"  "
     };
     msg_str(prefix);
-    msg_str(unsafe { cstr::at(opt.fullname) });
+    msg_str(opt.fullname);
 
     if !boolean {
         msg_putchar('=' as c_int);
@@ -306,7 +306,10 @@ pub(crate) unsafe fn makeset(
                 // undo the rest of the session, so they are only set
                 // when they are not already right.
                 let guarded = opt_idx == kOptSyntax || opt_idx == kOptFiletype;
-                let (guard, name) = (c"if &%s != '%s'".as_ptr(), get_option(opt_idx).fullname);
+                let (guard, name) = (
+                    c"if &%s != '%s'".as_ptr(),
+                    get_option(opt_idx).fullname.as_ptr(),
+                );
                 if guarded
                     && (unsafe { fprintf!(fd, guard, name, varp.string_var().value_ptr()) } < 0
                         || !unsafe { put_eol_unchecked(fd) })
@@ -389,7 +392,7 @@ pub(crate) unsafe fn put_set(
     // SAFETY: the caller's file and variable, and the option table.
     let value: OptVal = optval_from_varp(opt_idx, varp);
     let opt = get_option(opt_idx);
-    let name = opt.fullname;
+    let name = opt.fullname.as_ptr().cast_mut();
     let flags = opt.flags;
 
     // A global-local option with no local value has nothing to say.

@@ -20,7 +20,7 @@ use crate::winlayer::Win;
 use core::ffi::c_char;
 
 use crate::global_cell::Field;
-use crate::option::{Local, StrVar, WinOptSet};
+use crate::option::StrVar;
 
 use crate::memory::XString;
 use crate::message::e_invarg;
@@ -66,13 +66,7 @@ pub(crate) fn local_window(
     window: Win,
     field: Field<WinOpt, Option<XString>>,
 ) -> Option<Win> {
-    (varp == win_local(window, field)).then_some(window)
-}
-
-/// The variable naming `field` of `window`'s `w_onebuf_opt` -- the copy a
-/// `:setlocal` writes.
-pub(crate) fn win_local(window: Win, field: Field<WinOpt, Option<XString>>) -> StrVar {
-    StrVar::Local(Local::Win(window, WinOptSet::One, field))
+    (varp == StrVar::of_window(window, field)).then_some(window)
 }
 
 /// The value the option held before this set, as a C string.

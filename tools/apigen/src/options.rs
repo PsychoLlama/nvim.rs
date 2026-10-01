@@ -1177,14 +1177,9 @@ fn emit_empty_before_defaults(out: &mut String, opts: &[Opt]) {
 fn emit_row(out: &mut String, o: &Opt) {
     writeln!(out, "    // '{}'", o.full_name).unwrap();
     writeln!(out, "    VimOption {{").unwrap();
-    writeln!(
-        out,
-        "        fullname: name(c\"{}\"),",
-        c_literal(&o.full_name)
-    )
-    .unwrap();
+    writeln!(out, "        fullname: c\"{}\",", c_literal(&o.full_name)).unwrap();
     if let Some(abbr) = &o.abbreviation {
-        writeln!(out, "        shortname: name(c\"{}\"),", c_literal(abbr)).unwrap();
+        writeln!(out, "        shortname: Some(c\"{}\"),", c_literal(abbr)).unwrap();
     }
     if !o.flags.is_empty() {
         writeln!(out, "        flags: {},", o.flags.join(" | ")).unwrap();
@@ -1280,8 +1275,8 @@ const BUF: OptScopeFlags = 1 << kOptScopeBuf;
 /// boolean that defaults to false and belongs to no scope. Each row below
 /// fills in what it needs and takes the rest from here.
 const BLANK: VimOption = VimOption {
-    fullname: ptr::null_mut(),
-    shortname: ptr::null_mut(),
+    fullname: c"",
+    shortname: None,
     flags: 0,
     type_0: kOptValTypeBoolean,
     scope_flags: 0,
@@ -1294,10 +1289,6 @@ const BLANK: VimOption = VimOption {
     opt_expand_cb: None,
     def_val: boolean(false),
 };
-
-const fn name(s: &'static CStr) -> *mut c_char {
-    s.as_ptr().cast_mut()
-}
 
 const fn scope_idx(
     global: GlobalOptIndex,
@@ -1361,13 +1352,13 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
             .insert(name);
     }
 
-    let mut ffi = vec!["CStr", "c_char", "c_int"];
+    let mut ffi = vec!["CStr", "c_int"];
     if opts.iter().any(|o| !o.flag_enum.is_empty()) {
         ffi.push("c_uint");
     }
     ffi.sort_by_key(|name| (name.starts_with("c_"), *name));
     writeln!(out, "use core::ffi::{{{}}};", ffi.join(", ")).unwrap();
-    out.push_str("use core::ptr;\n\n");
+    out.push('\n');
     out.push_str("use crate::global_cell::ConstTable;\n");
     for (module, names) in &by_module {
         writeln!(

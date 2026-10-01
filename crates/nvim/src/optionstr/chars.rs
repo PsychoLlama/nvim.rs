@@ -50,8 +50,8 @@ use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{XString, xfree, xmalloc};
 use crate::message::{e_invarg, e_leadtab_requires_tab};
 use crate::narrow::number_as_int;
-use crate::option::option_var;
 use crate::option::vars::{P_FCS, P_LCS, p_fcs, p_lcs};
+use crate::option::{StrVar, option_var};
 use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::types::{
@@ -60,7 +60,6 @@ use crate::types::{
 };
 use crate::winlayer;
 
-use super::frame::win_local;
 use super::{
     OptString, OptStringRef, e_conflicts_with_value_of_fillchars,
     e_conflicts_with_value_of_listchars, e_wrong_character_width_for_field_str,
@@ -727,8 +726,8 @@ pub fn did_set_chars_option(args: &mut OptSet) -> Result<(), OptError> {
     // Which variable it is, not what it says.
     if varp == option_var(idx).string_var() {
         unsafe { did_set_global_chars_option(win, varp.value_ptr(), which, flags) }
-    } else if varp == win_local(win, field!(WinOpt, wo_lcs))
-        || varp == win_local(win, field!(WinOpt, wo_fcs))
+    } else if varp == StrVar::of_window(win, field!(WinOpt, wo_lcs))
+        || varp == StrVar::of_window(win, field!(WinOpt, wo_fcs))
     {
         unsafe { set_chars_option(win, varp.value_ptr(), which, true) }
     } else {

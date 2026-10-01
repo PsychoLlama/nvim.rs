@@ -31,7 +31,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::ptr;
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::autocmd::{apply_autocmds, do_filetype_autocmd};
 use crate::charset::buf_init_chartab;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, redraw_all_later};
@@ -188,7 +187,7 @@ fn apply_optionset_autocmd(
     unsafe {
         apply_autocmds(
             AutoEvent::OptionSet,
-            get_option(opt_idx).fullname,
+            get_option(opt_idx).fullname.as_ptr().cast_mut(),
             ptr::null_mut(),
             false,
             None,
@@ -635,7 +634,7 @@ pub(crate) fn set_option(
         }
         if opt.flags & kOptFlagUIOption as uint32_t != 0 {
             ui_call_option_set(
-                unsafe { cstr_to_string(opt.fullname) },
+                String_0::from_cstr(opt.fullname),
                 super::optval_as_object(saved_new_value),
             );
         }

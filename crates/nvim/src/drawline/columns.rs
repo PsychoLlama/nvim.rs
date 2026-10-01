@@ -757,7 +757,7 @@ impl WinLineVars {
             );
         }
 
-        let sbr = get_showbreak_value(window);
+        let sbr = window.showbreak_leader();
         if unsafe { *sbr } != NUL as ::core::ffi::c_char && self.need_showbreak {
             // 'showbreak' combined with 'cursorline', 'showbreak' winning.
             let attr = hl_combine_attr(self.cursorline_attr, win_hl_attr(window, HLF_AT));

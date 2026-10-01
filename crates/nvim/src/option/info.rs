@@ -4,8 +4,7 @@
 //! and their order are API surface — the oracle byte-compares them — so the
 //! push order below is deliberate and must not be sorted.
 
-#![deny(unsafe_op_in_unsafe_fn)]
-#![allow(unsafe_code)]
+#![forbid(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,
@@ -15,9 +14,8 @@
 )]
 
 use crate::winlayer::{Buf, Win};
-use core::ffi::c_char;
+use core::ffi::CStr;
 
-use crate::api::private::helpers::cstr_to_string;
 use crate::options::*;
 use crate::types::{
     ApiDict, Error, Integer, Object, OptIndex, OptionSetFlags, ScriptCtx, String_0, size_t,
@@ -33,19 +31,15 @@ use super::{
 
 /// Append `key: value` to the dictionary.
 ///
-fn push(dict: &mut ApiDict, key: &'static core::ffi::CStr, value: Object) {
+fn push(dict: &mut ApiDict, key: &'static CStr, value: Object) {
     dict.insert(key, value);
 }
 
-/// A `String` value naming one of the option table's static strings.
-///
-/// Every `*const c_char` this module hands over comes from the generated
-/// table or from a `c"..."` literal, so it is a live NUL-terminated string
-/// for the whole run — which is the whole of `cstr_to_string`'s promise, and
-/// why it is paid once here rather than at each of the four keys below.
-fn name_value(name: *const c_char) -> Object {
-    // SAFETY: a static NUL-terminated string.
-    Object::string(unsafe { cstr_to_string(name) })
+/// A `String` value naming one of the option table's static strings, or
+/// nil's string -- the API's `NULL` string -- for an option with no
+/// abbreviation.
+fn name_value(name: Option<&CStr>) -> Object {
+    Object::string(name.map_or(String_0::NULL, String_0::from_cstr))
 }
 
 /// A `Boolean` value.
@@ -83,8 +77,7 @@ pub(crate) fn get_all_vimoptions() -> ApiDict {
     for opt_idx in kOptAleph..kOptCount {
         let (scope, buf, win) = (OptionSetFlags::GLOBAL, Buf::current(), Win::current());
         let opt_dict = vimoption2dict(opt_idx, scope, buf, win);
-        // SAFETY: the option table's names are static C strings.
-        let key = unsafe { crate::cstr::bytes_at(get_option(opt_idx).fullname) };
+        let key = get_option(opt_idx).fullname.to_bytes();
         retval.insert(key, Object::dict(opt_dict));
     }
     retval
@@ -141,9 +134,9 @@ pub(crate) fn vimoption2dict(
     // values first and pushing afterwards is the same sequence: an array
     // evaluates left to right, and `push` only writes into the dictionary.
     let entries = [
-        (c"name", name_value(opt.fullname)),
+        (c"name", name_value(Some(opt.fullname))),
         (c"shortname", name_value(opt.shortname)),
-        (c"scope", name_value(scope.as_ptr())),
+        (c"scope", name_value(Some(scope))),
         (c"global_local", bool_value(option_is_global_local(opt_idx))),
         (c"commalist", bool_value(opt.flags & kOptFlagComma != 0)),
         (c"flaglist", bool_value(opt.flags & kOptFlagFlagList != 0)),
@@ -157,7 +150,7 @@ pub(crate) fn vimoption2dict(
             c"last_set_chan",
             int_value(script_ctx.sc_chan.cast_signed()),
         ),
-        (c"type", name_value(type_name.as_ptr())),
+        (c"type", name_value(Some(type_name))),
         (c"default", optval_as_object(option_default(opt_idx))),
         (
             c"allows_duplicates",

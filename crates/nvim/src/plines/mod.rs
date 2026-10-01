@@ -29,7 +29,6 @@ use crate::marktree::meta::MetaCount;
 use crate::mbyte::{utf_ptr2char, utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::win_col_off2;
-use crate::option::get_showbreak_value;
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
@@ -67,7 +66,7 @@ impl Win {
     /// The 'showbreak' in effect here — window-local or global — and whether
     /// it is non-empty, which is the only thing most callers ask.
     fn showbreak(self) -> (*mut c_char, bool) {
-        let sbr = get_showbreak_value(self);
+        let sbr = self.showbreak_leader();
         // SAFETY: 'showbreak' is a NUL-terminated option string.
         (sbr, unsafe { byte_at(sbr) } != NUL as c_int)
     }

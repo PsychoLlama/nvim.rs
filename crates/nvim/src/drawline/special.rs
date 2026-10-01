@@ -263,7 +263,7 @@ impl Cells {
 
         // The Tab's width depends on the column, with `'showbreak'`
         // removed: it is not part of the buffer line.
-        let sbr = get_showbreak_value(window);
+        let sbr = window.showbreak_leader();
         let vcol_adjusted = if unsafe { *sbr } != NUL as ::core::ffi::c_char
             && wlv.vcol == wlv.showbreak_vcol
             && window.w_onebuf_opt.wo_wrap != 0

@@ -266,6 +266,12 @@ fn own_default_bytes(idx: OptIndex) -> &'static [u8] {
 }
 
 impl StrVar {
+    /// The variable naming `field` of `window`'s `w_onebuf_opt` -- the copy
+    /// a `:setlocal` writes.
+    pub(crate) fn of_window(window: Win, field: Field<WinOpt, Option<XString>>) -> Self {
+        StrVar::Local(Local::Win(window, WinOptSet::One, field))
+    }
+
     /// Give the variable a value of its own -- or none -- and answer what it
     /// held. The move out and the move in are one step.
     ///

@@ -538,22 +538,31 @@ pub(crate) unsafe fn expand_settings(
             {
                 continue;
             }
-            if unsafe { match_str(opt.fullname, count, counting, regmatch, m) } {
+            if unsafe {
+                match_str(
+                    opt.fullname.as_ptr().cast_mut(),
+                    count,
+                    counting,
+                    regmatch,
+                    m,
+                )
+            } {
                 if counting {
                     num_normal += 1;
                 } else {
                     count += 1;
                 }
             } else if !fuzzy
-                && !opt.shortname.is_null()
-                && vim_regexec(regmatch, unsafe { cstr::at(opt.shortname) }, 0)
+                && opt
+                    .shortname
+                    .is_some_and(|short| vim_regexec(regmatch, short, 0))
             {
                 // A short name matches, but what is offered is the
                 // full one.
                 if counting {
                     num_normal += 1;
                 } else {
-                    unsafe { *(*matches).offset(count as isize) = xstrdup(opt.fullname) };
+                    unsafe { *(*matches).offset(count as isize) = xstrdup(opt.fullname.as_ptr()) };
                     count += 1;
                 }
             }
