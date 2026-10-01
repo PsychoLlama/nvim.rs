@@ -14,6 +14,7 @@ use super::*;
 use crate::guard::{Allow, Keys};
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, key_unescape};
+use crate::mbyte::char_at;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::c_int;
 use core::ptr;
@@ -109,7 +110,7 @@ pub fn vgetc() -> c_int {
     // The character has to be processed before anything else is safe.
     if c != Key::Ignore.code() {
         // SAFETY: a NUL-terminated string literal.
-        unsafe { state_no_longer_safe(c"key typed".as_ptr()) };
+        state_no_longer_safe(Some(c"key typed"));
     }
 
     c
@@ -181,9 +182,8 @@ fn vgetc_from_typeahead() -> c_int {
                 }
             }
             drop(unmapped);
-            // SAFETY: `n <= MB_MAXBYTES` bytes were written into a buffer
-            // one longer that started out zeroed, so it is NUL-terminated.
-            c = unsafe { utf_ptr2char(buf.as_ptr().cast()) };
+            // The bytes are followed by the rest of the zeroed buffer.
+            c = char_at(&buf);
         }
 
         // When mappings are enabled (so not after i_CTRL-V) and the user

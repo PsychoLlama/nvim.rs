@@ -556,7 +556,7 @@ pub(crate) unsafe fn normal_check(s: *mut NormalState) -> c_int {
         msg_scroll.set(0);
     }
     quit_more.set(false);
-    unsafe { state_no_longer_safe(ptr::null()) };
+    state_no_longer_safe(None);
 
     if skip_redraw.get() || exmode_active.get() {
         skip_redraw.set(false);

@@ -548,7 +548,7 @@ pub unsafe fn ins_typebuf(
     typeahead().note_change();
     // SAFETY (this body): the caller's promise -- `str` is NUL-terminated and
     // `offset` within the current typeahead.
-    unsafe { state_no_longer_safe(c"ins_typebuf()".as_ptr()) };
+    state_no_longer_safe(Some(c"ins_typebuf()"));
 
     let addlen = unsafe { cstr::bytes_at(str) }.len() as c_int;
     let inserted =

@@ -24,7 +24,7 @@ use crate::cstr;
 use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
 use crate::types::AutoEvent;
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use crate::autocmd::{apply_autocmds, has_event};
@@ -571,18 +571,16 @@ pub fn may_trigger_safestate(safe: bool) {
 }
 
 /// Withdraw `SafeState`: something is pending again. `reason` is logged.
-///
-/// # Safety
-/// `reason` must be null or NUL-terminated.
-pub unsafe fn state_no_longer_safe(reason: *const c_char) {
-    if was_safe.get() && !reason.is_null() {
-        // SAFETY: the caller's NUL-terminated string.
+pub(crate) fn state_no_longer_safe(reason: Option<&CStr>) {
+    if was_safe.get()
+        && let Some(reason) = reason
+    {
         logmsg!(
             LOGLVL_DBG,
             c"state_no_longer_safe",
             319,
             "SafeState reset: {}",
-            unsafe { c_str(reason) }
+            reason.to_string_lossy()
         );
     }
     was_safe.set(false);
